@@ -2,6 +2,7 @@
   "Wireless Node block implementation - energy network node with item charging"
   (:require [my-mod.block.dsl :as bdsl]
             [my-mod.energy.stub :as energy]
+            [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.util.log :as log]))
 
 ;; Node type specifications
@@ -62,24 +63,48 @@
     world
     pos))
 
-;; Getters based on node type
-(defn get-max-energy [tile]
-  (get-in node-types [(:node-type tile) :max-energy]))
+;; Additional helper functions for node management
+(defn set-node-name! [tile name]
+  (assoc tile :node-name name))
 
-(defn get-bandwidth [tile]
-  (get-in node-types [(:node-type tile) :bandwidth]))
+(defn set-password-str! [tile password]
+  (assoc tile :password password))
 
-(defn get-range [tile]
-  (get-in node-types [(:node-type tile) :range]))
+;; ============================================================================
+;; IWirelessNode Protocol Implementation
+;; ============================================================================
 
-(defn get-capacity [tile]
-  (get-in node-types [(:node-type tile) :capacity]))
+(extend-protocol winterfaces/IWirelessNode
+  NodeTileEntity
+  
+  (get-max-energy [this]
+    (get-in node-types [(:node-type this) :max-energy]))
+  
+  (get-energy [this]
+    @(:energy this))
+  
+  (set-energy [this energy]
+    (reset! (:energy this) 
+            (max 0.0 (min energy (winterfaces/get-max-energy this)))))
+  
+  (get-bandwidth [this]
+    (get-in node-types [(:node-type this) :bandwidth]))
+  
+  (get-capacity [this]
+    (get-in node-types [(:node-type this) :capacity]))
+  
+  (get-range [this]
+    (get-in node-types [(:node-type this) :range]))
+  
+  (get-node-name [this]
+    (:node-name this))
+  
+  (get-password [this]
+    (:password this)))
 
-(defn get-energy [tile]
-  @(:energy tile))
-
-(defn set-energy! [tile value]
-  (reset! (:energy tile) (max 0.0 (min value (get-max-energy tile)))))
+;; Also implement IWirelessTile (marker interface via metadata)
+(alter-meta! #'->NodeTileEntity assoc :wireless-tile true)
+(alter-meta! #'map->NodeTileEntity assoc :wireless-tile true)
 
 (defn get-inventory-slot [tile slot-index]
   (get @(:inventory tile) slot-index))
@@ -89,8 +114,8 @@
 
 ;; Energy percentage for display (0-4 levels)
 (defn get-energy-percentage-level [tile]
-  (let [energy (get-energy tile)
-        max-energy (get-max-energy tile)
+  (let [energy (winterfaces/get-energy tile)
+        max-energy (winterfaces/get-max-energy tile)
         pct (/ energy max-energy)]
     (min 4 (Math/round (* 4 pct)))))
 
@@ -100,13 +125,13 @@
   [tile]
   (let [input-item (get-inventory-slot tile 0)]
     (if (and input-item (energy/is-energy-item-supported? input-item))
-      (let [current-energy (get-energy tile)
-            max-energy (get-max-energy tile)
-            bandwidth (get-bandwidth tile)
+      (let [current-energy (winterfaces/get-energy tile)
+            max-energy (winterfaces/get-max-energy tile)
+            bandwidth (winterfaces/get-bandwidth tile)
             needed (min bandwidth (- max-energy current-energy))
             pulled (energy/pull-energy-from-item input-item needed false)]
         (when (> pulled 0)
-          (set-energy! tile (+ current-energy pulled))
+          (winterfaces/set-energy tile (+ current-energy pulled))
           (reset! (:charging-in tile) true)
           (log/info "Node charging IN:" pulled "energy"))
         (when (<= pulled 0)
@@ -118,14 +143,14 @@
   [tile]
   (let [output-item (get-inventory-slot tile 1)]
     (if (and output-item (energy/is-energy-item-supported? output-item))
-      (let [current-energy (get-energy tile)]
+      (let [current-energy (winterfaces/get-energy tile)]
         (when (> current-energy 0)
-          (let [bandwidth (get-bandwidth tile)
+          (let [bandwidth (winterfaces/get-bandwidth tile)
                 to-charge (min bandwidth current-energy)
-                leftover (energy/charge-energy-to-item output-item to-charge)
+                leftover (energy/charge-energy-to-item output-item to-charge false)
                 charged (- to-charge leftover)]
             (when (> charged 0)
-              (set-energy! tile (- current-energy charged))
+              (winterfaces/set-energy tile (- current-energy charged))
               (reset! (:charging-out tile) true)
               (log/info "Node charging OUT:" charged "energy"))
             (when (<= charged 0)
@@ -135,21 +160,23 @@
 (defn check-network-connection!
   "Check if node is connected to wireless network"
   [tile]
-  (let [connected? (energy/is-node-connected? (:pos tile) (:password tile))]
+  ;; TODO: Integrate with WirelessNet system
+  (let [connected? false] ; Placeholder
     (reset! (:enabled tile) connected?)
     connected?))
 
 (defn sync-to-clients!
   "Synchronize node state to nearby clients"
   [tile]
+  ;; TODO: Implement network sync
   (let [sync-data {:enabled @(:enabled tile)
                    :charging-in @(:charging-in tile)
                    :charging-out @(:charging-out tile)
-                   :energy (get-energy tile)
-                   :node-name (:node-name tile)
-                   :password (:password tile)
+                   :energy (winterfaces/get-energy tile)
+                   :node-name (winterfaces/get-node-name tile)
+                   :password (winterfaces/get-password tile)
                    :placer-name (:placer-name tile)}]
-    (energy/send-sync-message tile 20 sync-data)))
+    (log/debug "Sync node data:" sync-data)))
 
 (defn update-node-tile!
   "Main update function - called every tick"
@@ -218,11 +245,11 @@
       (if tile
         (do
           (log/info "Node status:")
-          (log/info "  Energy:" (get-energy tile) "/" (get-max-energy tile))
+          (log/info "  Energy:" (winterfaces/get-energy tile) "/" (winterfaces/get-max-energy tile))
           (log/info "  Connected:" @(:enabled tile))
           (log/info "  Charging In:" @(:charging-in tile))
           (log/info "  Charging Out:" @(:charging-out tile))
-          (log/info "  Name:" (:node-name tile))
+          (log/info "  Name:" (winterfaces/get-node-name tile))
           ;; TODO: Open GUI
           )
         (log/info "No tile entity found!")))))
