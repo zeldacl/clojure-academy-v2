@@ -1,0 +1,64 @@
+plugins {
+  id 'java'
+  id 'fabric-loom' version '1.4-SNAPSHOT'
+  id 'dev.clojurephant.clojure' version '0.7.1'
+}
+
+group = rootProject.findProperty('mod_group')
+version = "${rootProject.findProperty('mod_version')}-fabric-1.20.1"
+
+java {
+  toolchain { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+loom {
+  // Configure Fabric Loom settings
+}
+
+repositories {
+  mavenCentral()
+  maven { url 'https://maven.fabricmc.net/' }
+}
+
+dependencies {
+  // Fabric dependencies
+  minecraft "com.mojang:minecraft:${rootProject.findProperty('minecraft_1201_version')}"
+  mappings loom.officialMojangMappings()
+  modImplementation "net.fabricmc:fabric-loader:${rootProject.findProperty('fabric_loader_version')}"
+  modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.findProperty('fabric_api_version')}"
+  
+  // Clojure
+  implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version')}"
+  include "org.clojure:clojure:${rootProject.findProperty('clojure_version')}"
+  include "org.clojure:spec.alpha:0.3.218"
+  include "org.clojure:core.specs.alpha:0.2.62"
+  
+  // Core module
+  implementation project(':core')
+}
+
+// Pull in core resources
+sourceSets {
+  main {
+    java { srcDirs += ["src/main/java"] }
+    clojure { srcDirs += ["src/main/clojure"] }
+    resources { srcDirs += ["src/main/resources", "../core/src/main/resources"] }
+  }
+}
+
+tasks.withType(JavaCompile).configureEach {
+  options.encoding = 'UTF-8'
+}
+
+processResources {
+  inputs.property "version", project.version
+  
+  filesMatching("fabric.mod.json") {
+    expand "version": project.version
+  }
+}
+
+// AOT compile Clojure namespaces
+tasks.named('clojureCompile').configure {
+  aotCompile = true
+}

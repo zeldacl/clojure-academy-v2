@@ -1,0 +1,31 @@
+plugins {
+  id 'java'
+  id 'dev.clojurephant.clojure' version '0.7.1'
+}
+
+java {
+  toolchain { languageVersion = JavaLanguageVersion.of(8) }
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version') ?: '1.11.1'}"
+}
+
+clojure {
+  builds {
+    main {
+      aotAll()
+    }
+  }
+}
+
+sourceSets {
+  main {
+    clojure { srcDirs = ["src/main/clojure"] }
+    resources { srcDirs = ["src/main/resources"] }
+  }
+}

@@ -1,0 +1,51 @@
+plugins {
+  id 'java'
+  id 'net.minecraftforge.gradle' version '4.1.+'
+  id 'dev.clojurephant.clojure' version '0.7.1'
+}
+
+group = rootProject.findProperty('mod_group')
+version = "${rootProject.findProperty('mod_version')}-forge-1.16.5"
+
+java {
+  toolchain { languageVersion = JavaLanguageVersion.of(8) }
+}
+
+minecraft {
+  mappings channel: rootProject.findProperty('mappings_1165_channel'), version: rootProject.findProperty('mappings_1165_version')
+  runs {
+    client {
+      workingDirectory project.file('run/client')
+      args '--username', 'Dev1165'
+      mods { my_mod { source sourceSets.main } }
+    }
+    server {
+      workingDirectory project.file('run/server')
+      mods { my_mod { source sourceSets.main } }
+    }
+  }
+}
+
+repositories {
+  mavenCentral()
+  maven { url 'https://maven.minecraftforge.net' }
+}
+
+dependencies {
+  minecraft "net.minecraftforge:forge:${rootProject.findProperty('minecraft_1165_version')}-${rootProject.findProperty('forge_1165_version')}"
+  implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version')}"
+  implementation project(':core')
+}
+
+// Pull in core sources/resources directly
+sourceSets {
+  main {
+    java { srcDirs += ["src/main/java"] }
+    clojure { srcDirs += ["src/main/clojure"] }
+    resources { srcDirs += ["src/main/resources", "../core/src/main/resources"] }
+  }
+}
+
+tasks.withType(JavaCompile).configureEach {
+  options.encoding = 'UTF-8'
+}

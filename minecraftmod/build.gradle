@@ -1,0 +1,27 @@
+// Root aggregator: common repos; subprojects define their own plugins
+
+allprojects {
+  group = findProperty('mod_group') ?: 'com.example'
+  version = findProperty('mod_version') ?: '1.0.0'
+
+  repositories {
+    mavenCentral()
+    maven { url 'https://maven.minecraftforge.net' }
+  }
+}
+
+// Convenience task to copy built jars to distributions
+tasks.register('gatherJars', Copy) {
+  into "$buildDir/distributions"
+  subprojects.each { sp ->
+    def shadowTask = sp.tasks.findByName('shadowJar') ?: sp.tasks.findByName('jar')
+    if (shadowTask != null) {
+      from shadowTask.archiveFile
+    }
+  }
+}
+
+tasks.register('buildAll') {
+  dependsOn subprojects.collect { it.path + ":build" }
+  finalizedBy 'gatherJars'
+}
