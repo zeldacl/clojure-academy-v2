@@ -1,16 +1,19 @@
 (ns my-mod.items
-  "Item definitions and factory functions")
+  "Item definitions - migrated to Item DSL
+  
+  This namespace is deprecated and kept only for backward compatibility.
+  
+  For modern item definitions, use:
+  - my-mod.item.dsl/defitem - DSL macro for defining items
+  - my-mod.item.demo - Example items showing various use cases
+  
+  Example:
+  (require '[my-mod.item.dsl :as idsl])
+  
+  (idsl/defitem my-custom-item
+    :max-stack-size 16
+    :creative-tab :tools
+    :durability 500
+    :on-use (fn [data] (println \"Used!\")))")
 
-(defn create-demo-item-properties
-  "Return a map of properties for the demo item (version-agnostic)"
-  []
-  {:max-stack-size 64
-   :tab :misc})
-
-(defn create-demo-item
-  "Factory function to create demo item - actual implementation by adapter"
-  [properties]
-  ;; Placeholder; actual Item instance created by version adapter
-  {:type :item
-   :id "demo_item"
-   :properties properties})
+;; All item definitions have been migrated to my-mod.item.dsl and my-mod.item.demo

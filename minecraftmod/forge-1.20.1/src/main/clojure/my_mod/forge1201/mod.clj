@@ -6,6 +6,8 @@
             [my-mod.forge1201.gui.impl :as gui]
             [my-mod.block.dsl :as bdsl]
             [my-mod.block.demo :as block-demo]
+            [my-mod.item.dsl :as idsl]
+            [my-mod.item.demo :as item-demo]
             [my-mod.util.log :as log])
   (:import [net.minecraft.world.level.block Block Blocks]
            [net.minecraft.world.level.block.state BlockBehaviour]
@@ -44,11 +46,13 @@
             (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))))
 
 ;; Register items
+;; Register items using DSL
 (defonce demo-item
-  (.register items-register "demo_item"
-    (reify java.util.function.Supplier
-      (get [_]
-        (Item. (Item$Properties.))))))
+  (let [item-spec (idsl/get-item "demo-item")]
+    (.register items-register "demo_item"
+      (reify java.util.function.Supplier
+        (get [_]
+          (Item. (Item$Properties.)))))))
 
 (defonce demo-block-item
   (.register items-register "demo_block"
@@ -62,6 +66,9 @@
   
   ;; Initialize block DSL
   (block-demo/init-demo-blocks!)
+  
+  ;; Initialize item DSL
+  (item-demo/init-demo-items!)
   
   (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
     ;; Register DeferredRegisters

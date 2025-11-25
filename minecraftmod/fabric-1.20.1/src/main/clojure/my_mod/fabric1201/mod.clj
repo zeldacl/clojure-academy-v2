@@ -6,6 +6,8 @@
             [my-mod.fabric1201.gui.impl :as gui]
             [my-mod.block.dsl :as bdsl]
             [my-mod.block.demo :as block-demo]
+            [my-mod.item.dsl :as idsl]
+            [my-mod.item.demo :as item-demo]
             [my-mod.util.log :as log]
             [my-mod.defs :as defs])
   (:import [net.minecraft.core Registry]
@@ -23,10 +25,10 @@
   (let [block-spec (bdsl/get-block "demo-block")]
     (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))
 
-;; Create demo item
+;; Create demo item using DSL
 (defonce demo-item
-  (Item. (.. (Item$Properties.)
-             (stacksTo 64))))
+  (let [item-spec (idsl/get-item "demo-item")]
+    (Item. (Item$Properties.))))
 
 ;; Create demo block item
 (defonce demo-block-item
@@ -51,6 +53,9 @@
   
   ;; Initialize block DSL
   (block-demo/init-demo-blocks!)
+  
+  ;; Initialize item DSL
+  (item-demo/init-demo-items!)
   
   ;; Initialize Clojure adapters
   (init/init-from-java)

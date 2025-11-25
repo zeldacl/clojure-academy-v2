@@ -6,6 +6,8 @@
             [my-mod.forge1165.gui.impl :as gui]
             [my-mod.block.dsl :as bdsl]
             [my-mod.block.demo :as block-demo]
+            [my-mod.item.dsl :as idsl]
+            [my-mod.item.demo :as item-demo]
             [my-mod.util.log :as log])
   (:import [net.minecraft.block Block AbstractBlock Material]
            [net.minecraft.block.material Material]
@@ -44,12 +46,13 @@
             (Block. (.. (AbstractBlock$Properties/of Material/STONE)
                         (strength (:hardness props) (:resistance props)))))))))))
 
-;; Register items
+;; Register items using DSL
 (defonce demo-item
-  (.register items-register "demo_item"
-    (reify java.util.function.Supplier
-      (get [_]
-        (Item. (.tab (Item$Properties.) ItemGroup/TAB_MISC))))))
+  (let [item-spec (idsl/get-item "demo-item")]
+    (.register items-register "demo_item"
+      (reify java.util.function.Supplier
+        (get [_]
+          (Item. (.tab (Item$Properties.) ItemGroup/TAB_MISC)))))))
 
 (defonce demo-block-item
   (.register items-register "demo_block"
@@ -64,6 +67,9 @@
   
   ;; Initialize block DSL
   (block-demo/init-demo-blocks!)
+  
+  ;; Initialize item DSL
+  (item-demo/init-demo-items!)
   
   (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
     ;; Register DeferredRegisters

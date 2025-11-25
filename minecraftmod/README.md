@@ -8,6 +8,8 @@
 - ✅ **单一代码库**：核心逻辑只写一次，通过 multimethod 分发版本特定实现
 - ✅ **纯 Clojure 实现**：99% 代码使用 Clojure，只有最小的 Java 桥接
 - ✅ **声明式 GUI DSL**：使用 Clojure 宏定义 GUI，无需编写繁琐的 Java 代码
+- ✅ **声明式 Block DSL**：简洁的方块定义语法，支持预设和交互处理器
+- ✅ **声明式 Item DSL**：快速定义物品，支持工具、食物、护甲等多种类型
 - ✅ **类型安全**：Clojure 与 Java API 无缝互操作
 - ✅ **易于扩展**：添加新版本只需实现对应的 multimethod
 - ✅ **REPL 友好**：支持交互式开发和热重载
@@ -88,6 +90,28 @@ Get-ChildItem .\build\distributions
   :on-right-click (fn [data] (println "Clicked!")))
 ```
 
+### Item DSL
+
+```clojure
+(ns my-mod.my-items
+  (:require [my-mod.item.dsl :as idsl]))
+
+;; 声明式定义物品
+(idsl/defitem my-custom-item
+  :max-stack-size 16
+  :creative-tab :tools
+  :durability 500
+  :rarity :rare
+  :on-use (fn [data] (println "Used!")))
+
+;; 使用预设快速创建
+(def my-sword
+  (idsl/merge-presets
+    (idsl/tool-preset :diamond 1561 8.0 -2.4)
+    (idsl/rare-item-preset :epic)
+    {:on-use (fn [data] (println "Special attack!"))}))
+```
+
 ## What's included
 - **core**: Pure Clojure namespaces with multimethod-based abstractions
   - `my-mod.core`: Init hook and game logic
@@ -101,6 +125,8 @@ Get-ChildItem .\build\distributions
   - `my-mod.gui.demo`: 示例 GUI（demo、crafting、furnace、storage）
   - `my-mod.block.dsl`: 🎨 声明式 Block DSL 系统
   - `my-mod.block.demo`: 示例方块（16+ 种不同类型）
+  - `my-mod.item.dsl`: 🎨 声明式 Item DSL 系统
+  - `my-mod.item.demo`: 示例物品（19+ 种不同类型）
   - Shared assets (models, blockstates using vanilla textures)
   
 - **forge-1.16.5**: Java @Mod entry + Clojure adapters
@@ -125,6 +151,7 @@ Get-ChildItem .\build\distributions
 - [GUI 演示](GUI_DEMO_CN.md) - GUI 功能说明
 - [GUI DSL 指南](GUI_DSL_GUIDE_CN.md) - 🎨 **声明式 GUI 开发完整教程**
 - [Block DSL 指南](BLOCK_DSL_GUIDE_CN.md) - 🎨 **声明式方块定义完整教程**
+- [Item DSL 指南](ITEM_DSL_GUIDE_CN.md) - 🎨 **声明式物品定义完整教程**
 - [Fabric 支持](FABRIC_SUPPORT_CN.md) - Fabric 模组加载器适配说明
 - [迁移报告](MIGRATION_REPORT_CN.md) - Java 到 Clojure 迁移记录
 - [项目总结](SUMMARY_CN.md) - 整体架构和实现总结

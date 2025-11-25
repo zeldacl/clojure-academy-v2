@@ -1,18 +1,21 @@
 (ns my-mod.blocks
-  "Block definitions and factory functions")
+  "Block definitions - migrated to Block DSL
+  
+  This namespace is deprecated and kept only for backward compatibility.
+  
+  For modern block definitions, use:
+  - my-mod.block.dsl/defblock - DSL macro for defining blocks
+  - my-mod.block.demo - Example blocks showing various use cases
+  
+  Example:
+  (require '[my-mod.block.dsl :as bdsl])
+  
+  (bdsl/defblock my-custom-block
+    :material :stone
+    :hardness 3.0
+    :resistance 10.0
+    :light-level 15
+    :requires-tool true
+    :on-right-click (fn [data] (println \"Clicked!\")))")
 
-(defn create-demo-block-properties
-  "Return a map of properties for the demo block (version-agnostic)"
-  []
-  {:material :stone
-   :hardness 1.5
-   :resistance 6.0
-   :requires-tool true})
-
-(defn create-demo-block
-  "Factory function to create demo block - actual implementation by adapter"
-  [properties]
-  ;; This is a placeholder; actual Block instance created by version adapter
-  {:type :block
-   :id "demo_block"
-   :properties properties})
+;; All block definitions have been migrated to my-mod.block.dsl and my-mod.block.demo
