@@ -142,6 +142,169 @@
   (assert (contains? bdsl/tool-types :shovel))
   (log/info "✓ Tool types enum works"))
 
+;; Test multi-block support
+(defn test-multi-block []
+  (log/info "Testing multi-block support...")
+  (let [spec (bdsl/create-block-spec "test-multiblock"
+               {:multi-block? true
+                :multi-block-size {:width 2 :height 3 :depth 2}
+                :material :metal})]
+    (assert (= (:multi-block? spec) true))
+    (assert (= (:multi-block-size spec) {:width 2 :height 3 :depth 2}))
+    (assert (= (:multi-block-origin spec) {:x 0 :y 0 :z 0}))
+    (log/info "✓ Multi-block definition works")))
+
+;; Test multi-block position calculation
+(defn test-multi-block-positions []
+  (log/info "Testing multi-block position calculation...")
+  (let [size {:width 2 :height 2 :depth 2}
+        origin {:x 0 :y 0 :z 0}
+        positions (bdsl/calculate-multi-block-positions size origin)]
+    (assert (= (count positions) 8)) ; 2*2*2 = 8 blocks
+    (assert (some :is-origin? positions))
+    (assert (every? #(contains? % :relative-x) positions))
+    (assert (every? #(contains? % :relative-y) positions))
+    (assert (every? #(contains? % :relative-z) positions))
+    (log/info "✓ Multi-block position calculation works")))
+
+;; Test multi-block master position
+(defn test-multi-block-master-pos []
+  (log/info "Testing multi-block master position...")
+  (let [part-pos {:x 5 :y 10 :z 3}
+        relative-pos {:relative-x 1 :relative-y 2 :relative-z 1}
+        master-pos (bdsl/get-multi-block-master-pos part-pos relative-pos)]
+    (assert (= master-pos {:x 4 :y 8 :z 2}))
+    (log/info "✓ Multi-block master position calculation works")))
+
+;; Test multi-block validation
+(defn test-multi-block-validation []
+  (log/info "Testing multi-block validation...")
+  ;; Should fail without size
+  (try
+    (let [spec (bdsl/create-block-spec "bad-multiblock"
+                 {:multi-block? true})]
+      (bdsl/validate-block-spec spec)
+      (assert false "Should have thrown exception for missing size"))
+    (catch Exception e
+      (assert (.contains (.getMessage e) "must have :multi-block-size"))))
+  
+  ;; Should fail with invalid size
+  (try
+    (let [spec (bdsl/create-block-spec "bad-multiblock2"
+                 {:multi-block? true
+                  :multi-block-size {:width 0 :height 2 :depth 2}})]
+      (bdsl/validate-block-spec spec)
+      (assert false "Should have thrown exception for invalid size"))
+    (catch Exception e
+      (assert (.contains (.getMessage e) "positive"))))
+  
+  (log/info "✓ Multi-block validation works"))
+
+;; Test multi-block preset
+(defn test-multi-block-preset []
+  (log/info "Testing multi-block preset...")
+  (let [preset (bdsl/multi-block-preset {:width 3 :height 4 :depth 3})]
+    (assert (= (:multi-block? preset) true))
+    (assert (= (:multi-block-size preset) {:width 3 :height 4 :depth 3}))
+    (assert (= (:material preset) :metal))
+    (assert (some? (:hardness preset)))
+    (log/info "✓ Multi-block preset works")))
+
+;; Test demo multi-block structures
+(defn test-demo-multi-blocks []
+  (log/info "Testing demo multi-block structures...")
+  (assert (some? demo/large-furnace))
+  (assert (some? demo/reactor-core))
+  (assert (= (:multi-block? demo/large-furnace) true))
+  (assert (= (:multi-block-size demo/large-furnace) {:width 2 :height 3 :depth 2}))
+  (assert (= (:multi-block-size demo/reactor-core) {:width 3 :height 3 :depth 3}))
+  (log/info "✓ Demo multi-block structures work"))
+
+;; Test irregular multi-block
+(defn test-irregular-multi-block []
+  (log/info "Testing irregular multi-block...")
+  (let [spec (bdsl/create-block-spec "test-irregular"
+               {:multi-block? true
+                :multi-block-positions [{:x 0 :y 0 :z 0}
+                                        {:x 1 :y 0 :z 0}
+                                        {:x 0 :y 1 :z 0}]
+                :material :stone})]
+    (assert (= (:multi-block? spec) true))
+    (assert (= (:multi-block-positions spec) [{:x 0 :y 0 :z 0}
+                                               {:x 1 :y 0 :z 0}
+                                               {:x 0 :y 1 :z 0}]))
+    (assert (nil? (:multi-block-size spec)))
+    (log/info "✓ Irregular multi-block definition works")))
+
+;; Test position normalization
+(defn test-normalize-positions []
+  (log/info "Testing position normalization...")
+  (let [positions [{:x 5 :y 10 :z 3}
+                   {:x 6 :y 10 :z 3}
+                   {:x 5 :y 11 :z 3}]
+        normalized (bdsl/normalize-positions positions)]
+    (assert (= normalized [{:x 0 :y 0 :z 0}
+                           {:x 1 :y 0 :z 0}
+                           {:x 0 :y 1 :z 0}]))
+    (log/info "✓ Position normalization works")))
+
+;; Test irregular multi-block preset
+(defn test-irregular-preset []
+  (log/info "Testing irregular multi-block preset...")
+  (let [positions [{:x 0 :y 0 :z 0} {:x 1 :y 0 :z 0} {:x 0 :y 1 :z 0}]
+        preset (bdsl/irregular-multi-block-preset positions)]
+    (assert (= (:multi-block? preset) true))
+    (assert (some? (:multi-block-positions preset)))
+    (assert (= (:material preset) :metal))
+    (log/info "✓ Irregular multi-block preset works")))
+
+;; Test shape helpers
+(defn test-shape-helpers []
+  (log/info "Testing shape helper functions...")
+  ;; Test cross shape
+  (let [cross (flatten (bdsl/create-cross-shape 2))]
+    (assert (seq cross))
+    (assert (some #(and (= (:x %) 0) (= (:y %) 0) (= (:z %) 0)) cross)))
+  ;; Test L shape
+  (let [l-shape (bdsl/create-l-shape 3 3)]
+    (assert (= (count l-shape) 5))) ; 3 horizontal + 2 vertical (excluding overlap)
+  ;; Test pyramid
+  (let [pyramid (bdsl/create-pyramid-shape 5 3)]
+    (assert (> (count pyramid) 0)))
+  ;; Test hollow cube
+  (let [hollow (bdsl/create-hollow-cube 5)]
+    (assert (< (count hollow) (* 5 5 5)))) ; Less than solid cube
+  (log/info "✓ Shape helper functions work"))
+
+;; Test irregular validation
+(defn test-irregular-validation []
+  (log/info "Testing irregular multi-block validation...")
+  ;; Should fail with empty positions
+  (try
+    (bdsl/validate-multi-block-positions [])
+    (assert false "Should have thrown for empty positions")
+    (catch Exception e
+      (assert (.contains (.getMessage e) "cannot be empty"))))
+  ;; Should fail without origin
+  (try
+    (bdsl/validate-multi-block-positions [{:x 1 :y 0 :z 0} {:x 2 :y 0 :z 0}])
+    (assert false "Should have thrown for missing origin")
+    (catch Exception e
+      (assert (.contains (.getMessage e) "origin"))))
+  ;; Should pass with valid positions
+  (assert (bdsl/validate-multi-block-positions [{:x 0 :y 0 :z 0} {:x 1 :y 0 :z 0}]))
+  (log/info "✓ Irregular multi-block validation works"))
+
+;; Test demo irregular multi-blocks
+(defn test-demo-irregular-blocks []
+  (log/info "Testing demo irregular multi-block structures...")
+  (assert (some? demo/cross-altar))
+  (assert (some? demo/pyramid-shrine))
+  (assert (= (:multi-block? demo/cross-altar) true))
+  (assert (some? (:multi-block-positions demo/cross-altar)))
+  (assert (= (count (:multi-block-positions demo/cross-altar)) 5)) ; center + 4 arms
+  (log/info "✓ Demo irregular multi-block structures work"))
+
 ;; Run all tests
 (defn run-all-tests []
   (log/info "=== Running Block DSL Tests ===")
@@ -157,6 +320,18 @@
     (test-demo-blocks)
     (test-materials)
     (test-tool-types)
+    (test-multi-block)
+    (test-multi-block-positions)
+    (test-multi-block-master-pos)
+    (test-multi-block-validation)
+    (test-multi-block-preset)
+    (test-demo-multi-blocks)
+    (test-irregular-multi-block)
+    (test-normalize-positions)
+    (test-irregular-preset)
+    (test-shape-helpers)
+    (test-irregular-validation)
+    (test-demo-irregular-blocks)
     (log/info "=== All Tests Passed! ===")
     true
     (catch Exception e

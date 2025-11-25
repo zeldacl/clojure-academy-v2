@@ -208,6 +208,20 @@ DSL 提供了预设函数来快速创建常见类型的方块。
 ;;     :sounds :glass}
 ```
 
+### 多方格方块预设
+
+```clojure
+(def my-multiblock-preset (bdsl/multi-block-preset {:width 3 :height 4 :depth 3}))
+;; => {:multi-block? true
+;;     :multi-block-size {:width 3 :height 4 :depth 3}
+;;     :multi-block-origin {:x 0 :y 0 :z 0}
+;;     :material :metal
+;;     :hardness 5.0
+;;     :resistance 10.0
+;;     :requires-tool true
+;;     :harvest-tool :pickaxe}
+```
+
 ## 预设合并
 
 可以组合多个预设和自定义选项：
@@ -248,6 +262,422 @@ DSL 提供了预设函数来快速创建常见类型的方块。
 ```clojure
 (bdsl/defblock explosive-block
   :material :sand
+  :hardness 0.5
+  :on-break (fn [event-data]
+              (let [{:keys [world pos]} event-data]
+                (log/info "Boom at" pos)
+                ;; 触发爆炸效果
+                )))
+```
+
+### 方块放置
+
+```clojure
+(bdsl/defblock special-block
+  :material :stone
+  :hardness 2.0
+  :on-place (fn [event-data]
+              (let [{:keys [world pos player]} event-data]
+                (log/info "Block placed by" player "at" pos)
+                ;; 放置时的特殊逻辑
+                )))
+```
+
+## 多方格方块（Multi-Block Structures）
+
+多方格方块允许创建占据多个方格的大型结构，如大型熔炉、反应堆核心、风力涡轮机等。
+
+### 基本语法
+
+```clojure
+(bdsl/defblock large-furnace
+  :multi-block? true                           ; 启用多方格
+  :multi-block-size {:width 2 :height 3 :depth 2}  ; 尺寸（宽x高x深）
+  :material :metal
+  :hardness 5.0
+  :resistance 10.0
+  :on-right-click (fn [event-data]
+                    (log/info "Large furnace clicked!"))
+  :on-place (fn [event-data]
+              (log/info "Placing large furnace structure..."))
+  :on-multi-block-break (fn [event-data]
+                          (log/info "Breaking entire structure!")))
+```
+
+### 多方格尺寸说明
+
+#### 规则形状（长方体）
+
+- `:width` - 宽度（X 轴方向，方块数）
+- `:height` - 高度（Y 轴方向，方块数）
+- `:depth` - 深度（Z 轴方向，方块数）
+
+例如：`{:width 3 :height 4 :depth 3}` 创建一个 3x4x3 的结构（共 36 个方块）
+
+#### 不规则形状（自定义位置）
+
+对于不规则形状，使用 `:multi-block-positions` 指定每个方块的相对位置：
+
+```clojure
+:multi-block-positions [{:x 0 :y 0 :z 0}   ; 原点（必须包含）
+                        {:x 1 :y 0 :z 0}   ; 相对于原点的位置
+                        {:x 0 :y 1 :z 0}
+                        ...]
+```
+
+**注意**：
+- 必须包含原点 `{:x 0 :y 0 :z 0}`
+- 所有坐标必须是整数
+- 坐标是相对于原点的偏移量
+
+### 规则多方格示例
+
+#### 示例 1：工业储罐（3x4x3）
+
+```clojure
+(bdsl/defblock industrial-tank
+  :multi-block? true
+  :multi-block-size {:width 3 :height 4 :depth 3}
+  :material :metal
+  :hardness 5.0
+  :resistance 15.0
+  :requires-tool true
+  :harvest-tool :pickaxe
+  :sounds :metal
+  :on-right-click (fn [event-data]
+                    (log/info "Opening tank GUI...")
+                    ;; 打开液体管理界面
+                    ))
+```
+
+#### 示例 2：反应堆核心（3x3x3）
+
+```clojure
+(bdsl/defblock reactor-core
+  :multi-block? true
+  :multi-block-size {:width 3 :height 3 :depth 3}
+  :material :metal
+  :hardness 10.0
+  :resistance 1200.0
+  :requires-tool true
+  :harvest-tool :pickaxe
+  :harvest-level 3
+  :sounds :metal
+  :light-level 15
+  :on-right-click (fn [event-data]
+                    (log/info "Reactor core accessed!")
+                    (log/info "WARNING: High radiation!"))
+  :on-multi-block-break (fn [event-data]
+                          (log/info "CRITICAL: Reactor core destroyed!")
+                          ;; 触发爆炸效果
+                          ))
+```
+
+#### 示例 3：望远镜（2x5x2 - 高塔结构）
+
+```clojure
+(bdsl/defblock telescope
+  :multi-block? true
+  :multi-block-size {:width 2 :height 5 :depth 2}
+  :material :metal
+  :hardness 3.0
+  :resistance 5.0
+  :requires-tool true
+  :harvest-tool :pickaxe
+  :sounds :metal
+  :on-right-click (fn [event-data]
+                    (log/info "Looking through telescope...")
+                    ;; 显示天空观察界面
+                    ))
+```
+
+#### 示例 4：风力涡轮机（5x7x5 - 大型结构）
+
+```clojure
+(bdsl/defblock wind-turbine
+  :multi-block? true
+  :multi-block-size {:width 5 :height 7 :depth 5}
+  :material :metal
+  :hardness 4.0
+  :resistance 8.0
+  :requires-tool true
+  :harvest-tool :pickaxe
+  :sounds :metal
+  :on-place (fn [event-data]
+              (log/info "Constructing wind turbine...")
+              (log/info "Size: 5x7x5 blocks (175 blocks total)"))
+  :on-right-click (fn [event-data]
+                    (log/info "Wind turbine energy output: 100 FE/t")))
+```
+
+### 使用多方格预设
+
+```clojure
+;; 使用预设快速创建
+(def custom-machine
+  (bdsl/merge-presets
+    (bdsl/multi-block-preset {:width 3 :height 2 :depth 3})
+    {:light-level 10
+     :on-right-click (fn [_] (log/info "Custom machine activated!"))}))
+
+;; 应用预设创建方块
+(bdsl/defblock my-custom-machine
+  :multi-block? (:multi-block? custom-machine)
+  :multi-block-size (:multi-block-size custom-machine)
+  :material (:material custom-machine)
+  :hardness (:hardness custom-machine)
+  :light-level (:light-level custom-machine)
+  :on-right-click (:on-right-click custom-machine))
+```
+
+### 多方格辅助函数
+
+#### 计算所有方块位置
+
+```clojure
+;; 规则多方格
+(bdsl/calculate-multi-block-positions 
+  {:width 2 :height 3 :depth 2}  ; 尺寸
+  {:x 0 :y 0 :z 0})               ; 原点
+;; => [{:x 0 :y 0 :z 0 :relative-x 0 :relative-y 0 :relative-z 0 :is-origin? true}
+;;     {:x 1 :y 0 :z 0 :relative-x 1 :relative-y 0 :relative-z 0 :is-origin? false}
+;;     ...]
+
+;; 不规则多方格
+(bdsl/calculate-multi-block-positions 
+  [{:x 0 :y 0 :z 0} {:x 1 :y 0 :z 0} {:x 0 :y 1 :z 0}]  ; 自定义位置
+  {:x 0 :y 0 :z 0})                                      ; 原点
+```
+
+#### 规范化位置
+
+将绝对坐标转换为相对坐标，确保原点在 (0,0,0)：
+
+```clojure
+(bdsl/normalize-positions 
+  [{:x 5 :y 10 :z 3}
+   {:x 6 :y 10 :z 3}
+   {:x 5 :y 11 :z 3}])
+;; => [{:x 0 :y 0 :z 0}
+;;     {:x 1 :y 0 :z 0}
+;;     {:x 0 :y 1 :z 0}]
+```
+
+#### 获取主方块位置
+
+```clojure
+(bdsl/get-multi-block-master-pos 
+  {:x 5 :y 10 :z 3}                 ; 部分方块的位置
+  {:relative-x 1 :relative-y 2 :relative-z 1})  ; 相对位置
+;; => {:x 4 :y 8 :z 2}  ; 主方块（原点）位置
+```
+
+## 不规则多方格结构
+
+### 基本用法
+
+```clojure
+(bdsl/defblock cross-altar
+  :multi-block? true
+  :multi-block-positions [{:x 0 :y 0 :z 0}   ; 中心
+                          {:x 1 :y 0 :z 0}   ; 东
+                          {:x -1 :y 0 :z 0}  ; 西
+                          {:x 0 :y 0 :z 1}   ; 南
+                          {:x 0 :y 0 :z -1}] ; 北
+  :material :stone
+  :hardness 3.0
+  :light-level 10
+  :on-right-click (fn [event-data]
+                    (log/info "Cross altar activated!")))
+```
+
+### 形状辅助函数
+
+Block DSL 提供了多个辅助函数来生成常见的不规则形状：
+
+#### 1. 十字形（Cross Shape）
+
+```clojure
+(bdsl/create-cross-shape 3)
+;; 创建一个十字形，每条臂长度为 3
+;; 结果：中心 + 4个方向各3个方块
+
+(bdsl/defblock cross-platform
+  :multi-block? true
+  :multi-block-positions (flatten (bdsl/create-cross-shape 2))
+  :material :metal
+  :hardness 4.0)
+```
+
+#### 2. L形（L Shape）
+
+```clojure
+(bdsl/create-l-shape 3 3)
+;; 创建 L 形：宽度3，高度3
+
+(bdsl/defblock l-workbench
+  :multi-block? true
+  :multi-block-positions (bdsl/create-l-shape 4 4)
+  :material :wood
+  :hardness 2.5)
+```
+
+#### 3. T形（T Shape）
+
+```clojure
+(bdsl/create-t-shape 5 3)
+;; 创建 T 形：顶部横条宽度5，竖条高度3
+
+(bdsl/defblock t-beacon
+  :multi-block? true
+  :multi-block-positions (bdsl/create-t-shape 3 4)
+  :material :metal
+  :light-level 15)
+```
+
+#### 4. 金字塔（Pyramid）
+
+```clojure
+(bdsl/create-pyramid-shape 5 4)
+;; 创建金字塔：底座5x5，高度4层
+
+(bdsl/defblock pyramid-shrine
+  :multi-block? true
+  :multi-block-positions (bdsl/create-pyramid-shape 5 4)
+  :material :stone
+  :hardness 4.0
+  :light-level 12
+  :on-right-click (fn [_] (log/info "Ancient power activated!")))
+```
+
+#### 5. 空心立方体（Hollow Cube）
+
+```clojure
+(bdsl/create-hollow-cube 5)
+;; 创建 5x5x5 的空心立方体（只有外壳）
+
+(bdsl/defblock energy-chamber
+  :multi-block? true
+  :multi-block-positions (bdsl/create-hollow-cube 5)
+  :material :metal
+  :hardness 8.0
+  :light-level 15
+  :on-right-click (fn [_] (log/info "Energy chamber accessed!")))
+```
+
+### 不规则多方格示例
+
+#### 示例 1：星形传送门
+
+```clojure
+(bdsl/defblock star-portal
+  :multi-block? true
+  :multi-block-positions [{:x 0 :y 0 :z 0}    ; 中心
+                          ;; 四个主方向
+                          {:x 1 :y 0 :z 0}
+                          {:x 2 :y 0 :z 0}
+                          {:x -1 :y 0 :z 0}
+                          {:x -2 :y 0 :z 0}
+                          {:x 0 :y 0 :z 1}
+                          {:x 0 :y 0 :z 2}
+                          {:x 0 :y 0 :z -1}
+                          {:x 0 :y 0 :z -2}
+                          ;; 四个对角
+                          {:x 1 :y 0 :z 1}
+                          {:x 1 :y 0 :z -1}
+                          {:x -1 :y 0 :z 1}
+                          {:x -1 :y 0 :z -1}]
+  :material :metal
+  :hardness 10.0
+  :resistance 100.0
+  :light-level 15
+  :on-right-click (fn [event-data]
+                    (log/info "Dimensional gateway opening!")))
+```
+
+#### 示例 2：螺旋楼梯
+
+```clojure
+(bdsl/defblock spiral-staircase
+  :multi-block? true
+  :multi-block-positions [{:x 0 :y 0 :z 0}
+                          {:x 1 :y 1 :z 0}
+                          {:x 1 :y 2 :z 1}
+                          {:x 0 :y 3 :z 1}
+                          {:x -1 :y 4 :z 1}
+                          {:x -1 :y 5 :z 0}
+                          {:x -1 :y 6 :z -1}
+                          {:x 0 :y 7 :z -1}]
+  :material :stone
+  :hardness 3.0
+  :on-place (fn [_]
+              (log/info "Building spiral staircase...")
+              (log/info "Height: 8 blocks")))
+```
+
+#### 示例 3：使用预设和形状函数
+
+```clojure
+;; 使用不规则多方格预设
+(def cross-platform
+  (bdsl/merge-presets
+    (bdsl/irregular-multi-block-preset 
+      (flatten (bdsl/create-cross-shape 3)))
+    {:id "cross-platform"
+     :material :metal
+     :light-level 8
+     :on-right-click (fn [_] (log/info "Platform activated!"))}))
+
+;; 组合多个形状
+(def complex-structure-positions
+  (concat
+    (bdsl/create-cross-shape 2)
+    (map #(update % :y inc) (bdsl/create-cross-shape 1))))
+
+(bdsl/defblock complex-structure
+  :multi-block? true
+  :multi-block-positions (flatten complex-structure-positions)
+  :material :metal
+  :hardness 5.0)
+```
+
+### 多方格交互处理器
+
+多方格方块支持特殊的 `:on-multi-block-break` 处理器，当结构的任何部分被破坏时触发：
+
+```clojure
+(bdsl/defblock fragile-structure
+  :multi-block? true
+  :multi-block-size {:width 3 :height 3 :depth 3}
+  :material :glass
+  :hardness 0.5
+  :on-multi-block-break (fn [event-data]
+                          (log/info "Entire structure collapsing!")
+                          ;; 平台适配器会自动破坏所有部分
+                          ;; 这里可以添加额外的效果
+                          ))
+```
+
+### 多方格最佳实践
+
+#### 规则多方格
+1. **合理的尺寸**：不要创建过大的结构（建议不超过 7x7x7）
+2. **对称设计**：规则形状适合对称结构（熔炉、储罐、反应堆）
+
+#### 不规则多方格
+1. **明确的形状**：使用有意义的形状（十字、L形、星形）
+2. **位置验证**：确保包含原点 `{:x 0 :y 0 :z 0}`
+3. **使用辅助函数**：利用 `create-*-shape` 函数快速生成形状
+4. **位置规范化**：使用 `normalize-positions` 处理绝对坐标
+
+#### 通用最佳实践
+1. **清晰的视觉反馈**：使用不同纹理标识结构的各个部分
+2. **一致的交互**：无论点击哪个部分，都应该有相同的响应
+3. **完整性检查**：在交互前检查结构是否完整
+4. **优雅降级**：结构破坏时给予适当的反馈
+5. **性能考虑**：避免创建过于复杂的不规则形状（建议不超过50个方块）
+
+## 高级用法
   :hardness 0.5
   :on-break (fn [event-data]
               (let [{:keys [world pos]} event-data]
@@ -409,7 +839,15 @@ DSL 提供了预设函数来快速创建常见类型的方块。
 - `(metal-preset harvest-level)` - 金属预设
 - `(glass-preset)` - 玻璃预设
 - `(light-block-preset light-level)` - 发光方块预设
+- `(multi-block-preset size & options)` - 多方格方块预设
 - `(merge-presets & presets)` - 合并预设
+
+### 多方格函数
+
+- `(calculate-multi-block-positions size origin)` - 计算多方格所有位置
+- `(get-multi-block-master-pos part-pos relative-pos)` - 获取主方块位置
+- `(is-multi-block-complete? world master-pos size)` - 检查结构完整性
+- `(handle-multi-block-break spec data)` - 处理多方格结构破坏
 
 ## 优势
 
@@ -433,6 +871,9 @@ DSL 提供了预设函数来快速创建常见类型的方块。
 - 支持所有方块属性
 - 交互处理器
 - GUI 集成
+- **规则多方格结构**（长方体）
+- **不规则多方格结构**（自定义形状）
+- **形状辅助函数**（十字、L形、T形、金字塔、空心立方体）
 
 ## 代码对比
 
@@ -483,7 +924,10 @@ Block DSL 提供了：
 1. **简洁的语法** - 10 行代替 50+ 行 Java
 2. **预设系统** - 快速创建常见方块类型
 3. **交互处理** - 内置右键、破坏、放置处理器
-4. **跨平台** - 统一定义，多版本支持
-5. **类型安全** - 编译时验证，运行时检查
+4. **规则多方格** - 长方体结构（如 3x4x3 熔炉）
+5. **不规则多方格** - 自定义形状（十字、L形、星形、金字塔等）
+6. **形状辅助函数** - 快速生成常见几何形状
+7. **跨平台** - 统一定义，多版本支持
+8. **类型安全** - 编译时验证，运行时检查
 
 使用 Block DSL，你可以专注于方块的功能，而不是繁琐的样板代码！
