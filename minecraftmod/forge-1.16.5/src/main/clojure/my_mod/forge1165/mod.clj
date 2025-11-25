@@ -4,6 +4,8 @@
             [my-mod.forge1165.registry :as registry]
             [my-mod.forge1165.events :as events]
             [my-mod.forge1165.gui.impl :as gui]
+            [my-mod.block.dsl :as bdsl]
+            [my-mod.block.demo :as block-demo]
             [my-mod.util.log :as log])
   (:import [net.minecraft.block Block AbstractBlock Material]
            [net.minecraft.block.material Material]
@@ -32,13 +34,15 @@
 (defonce items-register 
   (DeferredRegister/create ForgeRegistries/ITEMS mod-id))
 
-;; Register blocks
+;; Register blocks using DSL
 (defonce demo-block
-  (.register blocks-register "demo_block"
-    (reify java.util.function.Supplier
-      (get [_]
-        (Block. (.. (AbstractBlock$Properties/of Material/STONE)
-                    (strength 1.5 6.0)))))))
+  (let [block-spec (bdsl/get-block "demo-block")]
+    (.register blocks-register "demo_block"
+      (reify java.util.function.Supplier
+        (get [_]
+          (let [props (bdsl/get-block-properties block-spec)]
+            (Block. (.. (AbstractBlock$Properties/of Material/STONE)
+                        (strength (:hardness props) (:resistance props)))))))))))
 
 ;; Register items
 (defonce demo-item
@@ -57,6 +61,9 @@
 ;; Constructor implementation
 (defn mod-init []
   (log/info "Initializing MyMod1165 from Clojure...")
+  
+  ;; Initialize block DSL
+  (block-demo/init-demo-blocks!)
   
   (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
     ;; Register DeferredRegisters

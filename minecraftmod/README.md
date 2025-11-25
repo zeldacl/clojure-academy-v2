@@ -44,7 +44,9 @@ Get-ChildItem .\build\distributions
 ./gradlew :fabric-1.20.1:runClient
 ```
 
-## 快速开始：使用 GUI DSL
+## 快速开始：使用 DSL
+
+### GUI DSL
 
 ```clojure
 (ns my-mod.my-gui
@@ -69,17 +71,36 @@ Get-ChildItem .\build\distributions
   :labels [{:x 8 :y 6 :text "My GUI"}])
 ```
 
+### Block DSL
+
+```clojure
+(ns my-mod.my-blocks
+  (:require [my-mod.block.dsl :as bdsl]))
+
+;; 声明式定义方块
+(bdsl/defblock my-custom-block
+  :material :stone
+  :hardness 3.0
+  :resistance 10.0
+  :light-level 15
+  :requires-tool true
+  :harvest-tool :pickaxe
+  :on-right-click (fn [data] (println "Clicked!")))
+```
+
 ## What's included
 - **core**: Pure Clojure namespaces with multimethod-based abstractions
   - `my-mod.core`: Init hook and game logic
   - `my-mod.registry`: Multimethod registry abstraction
   - `my-mod.blocks/items`: Factory functions and definitions
   - `my-mod.gui.api/core`: GUI abstractions and handlers
-  - `my-mod.gui.dsl`: 声明式 GUI DSL 系统
+  - `my-mod.gui.dsl`: 🎨 声明式 GUI DSL 系统
   - `my-mod.gui.renderer`: 跨版本渲染抽象
   - `my-mod.gui.container`: 容器/菜单管理
   - `my-mod.gui.network`: 网络通信抽象
   - `my-mod.gui.demo`: 示例 GUI（demo、crafting、furnace、storage）
+  - `my-mod.block.dsl`: 🎨 声明式 Block DSL 系统
+  - `my-mod.block.demo`: 示例方块（16+ 种不同类型）
   - Shared assets (models, blockstates using vanilla textures)
   
 - **forge-1.16.5**: Java @Mod entry + Clojure adapters
@@ -103,6 +124,7 @@ Get-ChildItem .\build\distributions
 - [构建指南](BUILD.md) - 编译和打包说明
 - [GUI 演示](GUI_DEMO_CN.md) - GUI 功能说明
 - [GUI DSL 指南](GUI_DSL_GUIDE_CN.md) - 🎨 **声明式 GUI 开发完整教程**
+- [Block DSL 指南](BLOCK_DSL_GUIDE_CN.md) - 🎨 **声明式方块定义完整教程**
 - [Fabric 支持](FABRIC_SUPPORT_CN.md) - Fabric 模组加载器适配说明
 - [迁移报告](MIGRATION_REPORT_CN.md) - Java 到 Clojure 迁移记录
 - [项目总结](SUMMARY_CN.md) - 整体架构和实现总结

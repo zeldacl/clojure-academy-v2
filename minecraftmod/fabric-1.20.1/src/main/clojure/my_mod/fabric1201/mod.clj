@@ -4,6 +4,8 @@
             [my-mod.fabric1201.registry :as registry]
             [my-mod.fabric1201.events :as events]
             [my-mod.fabric1201.gui.impl :as gui]
+            [my-mod.block.dsl :as bdsl]
+            [my-mod.block.demo :as block-demo]
             [my-mod.util.log :as log]
             [my-mod.defs :as defs])
   (:import [net.minecraft.core Registry]
@@ -16,9 +18,10 @@
 ;; Mod ID constant
 (def mod-id "my_mod")
 
-;; Create demo block
+;; Create demo block using DSL
 (defonce demo-block
-  (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))
+  (let [block-spec (bdsl/get-block "demo-block")]
+    (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))
 
 ;; Create demo item
 (defonce demo-item
@@ -45,6 +48,9 @@
 (defn mod-init []
   "Main mod initialization called from Java ModInitializer"
   (log/info "Initializing MyMod (Fabric 1.20.1) from Clojure...")
+  
+  ;; Initialize block DSL
+  (block-demo/init-demo-blocks!)
   
   ;; Initialize Clojure adapters
   (init/init-from-java)
