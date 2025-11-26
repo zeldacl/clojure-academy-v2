@@ -2,7 +2,7 @@
   "Fabric 1.20.1 event handlers"
   (:require [my-mod.core :as core]
             [my-mod.util.log :as log]
-            [my-mod.defs :as defs])
+            [my-mod.events.metadata :as event-metadata])
   (:import [net.fabricmc.fabric.api.event.player UseBlockCallback]
            [net.minecraft.world InteractionResult]))
 
@@ -10,15 +10,15 @@
   "Handle right-click block event from event data map"
   [event-data]
   (let [{:keys [x y z player world block]} event-data
-        block-name (str block)]
+        block-name (str block)
+        ;; Identify block ID from Minecraft block name
+        block-id (event-metadata/identify-block-from-full-name block-name)]
     (log/info "Fabric 1.20.1 Right-click event at (" x "," y "," z ") block:" block-name)
     
-    ;; Check if it's our demo block
-    (when (and block-name 
-               (or (.contains block-name "demo_block")
-                   (.contains block-name (str "my_mod:" defs/demo-block-id))))
-      (log/info "Demo block detected! Triggering GUI open logic...")
-      (core/on-block-right-click event-data))))
+    ;; Check if this block has a registered right-click handler
+    (when (and block-id (event-metadata/has-event-handler? block-id :on-right-click))
+      (log/info "Block has registered handler, dispatching...")
+      (core/on-block-right-click (assoc event-data :block-id block-id)))))
 
 (defn handle-use-block
   "Handle Fabric UseBlockCallback event"

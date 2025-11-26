@@ -7,8 +7,7 @@
             [my-mod.block.dsl :as bdsl]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
-            [my-mod.util.log :as log]
-            [my-mod.defs :as defs])
+            [my-mod.util.log :as log])
   (:import [net.minecraft.core Registry]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]

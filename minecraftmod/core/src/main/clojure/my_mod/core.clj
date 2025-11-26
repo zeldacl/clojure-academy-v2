@@ -2,24 +2,28 @@
   (:require [my-mod.defs :as defs]
             [my-mod.util.log :as log]
             [my-mod.gui.api :as gui-api]
-            [my-mod.gui.core :as gui-core]))
+            [my-mod.gui.core :as gui-core]
+            [my-mod.events.metadata :as event-metadata]))
 
 (defn init
   "Core init hook invoked by per-version entry classes."
   []
-  (log/info "Initializing core for mod-id=" defs/mod-id
-            ", demo-item=" defs/demo-item-id
-            ", demo-block=" defs/demo-block-id))
+  (log/info "Initializing core for mod-id=" defs/mod-id)
+  ;; Initialize event metadata system
+  (event-metadata/init-event-metadata!))
 
 (defn on-block-right-click
-  "Optional hook from adapters when player right-clicks a block."
-  [{:keys [x y z side player world block] :as ctx}]
-  (log/info "Right-click on block at (" x "," y "," z ") by player")
+  "Generic block right-click event handler.
   
-  ;; Check if it's our demo block and open GUI
-  (when (gui-core/validate-gui-open player world [x y z] block)
-    (log/info "Opening demo GUI for player at block position")
-    (try
-      (gui-api/open-gui player 1 world [x y z])
-      (catch Exception e
-        (log/info "Error opening GUI:" (.getMessage e))))))
+  Dispatches to block-specific handlers registered in event metadata system.
+  Platform code does not know which blocks have handlers.
+  
+  Args:
+    ctx: Event context map with :x :y :z :player :world :block :block-id"
+  [{:keys [x y z player world block block-id] :as ctx}]
+  (log/info "Right-click event at (" x "," y "," z ") for block-id:" block-id)
+  
+  ;; Dispatch to block-specific handler if registered
+  (when-let [handler (event-metadata/get-block-event-handler block-id :on-right-click)]
+    (log/info "Dispatching to registered handler for block:" block-id)
+    (handler ctx)))
