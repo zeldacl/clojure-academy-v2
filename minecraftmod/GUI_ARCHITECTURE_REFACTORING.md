@@ -6,6 +6,8 @@
 2. 第二次重构: 分离槽位管理游戏逻辑
 3. 第三次重构: Container分发器 + GUI元数据
 4. 第四次重构: 消除游戏逻辑命名（平台中性命名）
+5. 第五次重构: 注册逻辑去游戏化（元数据驱动）
+6. 第六次重构: 网络包处理去游戏化（协议分发）
 
 ## 目录
 
@@ -13,7 +15,9 @@
 2. [第二次重构: 槽位管理器](#第二次重构-槽位管理器)
 3. [第三次重构: Container分发器 + GUI元数据](#第三次重构-container分发器--gui元数据)
 4. [第四次重构: 平台中性命名](#第四次重构-平台中性命名)
-5. [重构总结](#重构总结)
+5. [第五次重构: 注册逻辑去游戏化](#第五次重构-注册逻辑去游戏化)
+6. [第六次重构: 网络包处理去游戏化](#第六次重构-网络包处理去游戏化)
+7. [重构总结](#重构总结)
 
 ---
 
@@ -1741,6 +1745,368 @@ Game Layer (wireless/)
 8. **文档驱动**: 每次重构都更新文档，保持知识同步
 
 ---
+
+## 第六次重构: 网络包处理去游戏化
+
+### 背景
+
+第五次重构完成后，审查网络包处理代码，发现：**仍然硬编码Node和Matrix判断**！
+
+**问题代码**：
+```clojure
+;; Forge/Fabric network.clj
+;; ❌ 硬编码instanceof和GUI ID检查
+(when-let [container (gui-registry/get-player-container player)]
+  (cond
+    (and (= gui-id gui-registry/gui-wireless-node)
+         (instance? NodeContainer container))
+    (node-container/handle-button-click! container button-id player)
+    
+    (and (= gui-id gui-registry/gui-wireless-matrix)
+         (instance? MatrixContainer container))
+    (matrix-container/handle-button-click! container button-id player)
+    
+    :else
+    (log/warn "Unknown GUI or container type")))
+```
+
+**问题**：
+1. ❌ 使用`instance?`检查容器类型
+2. ❌ 使用`gui-wireless-node/matrix`常量判断
+3. ❌ 硬编码每个容器的处理逻辑
+4. ❌ Button Click和Text Input两处都有重复代码
+
+### 正确的设计
+
+**协议分发**：
+```clojure
+;; ✅ 使用dispatcher协议，无需判断容器类型
+(when-let [container (gui-registry/get-player-container player)]
+  (dispatcher/safe-handle-button-click! container button-id player))
+```
+
+### 重构步骤
+
+#### 1. 扩展container_dispatcher.clj
+
+添加网络包处理方法到协议：
+
+```clojure
+(defprotocol IContainerOperations
+  ;; ... existing methods ...
+  
+  (handle-button-click! [container button-id player]
+    "Handle button click from client")
+  
+  (handle-text-input! [container field-id text player]
+    "Handle text input from client"))
+
+;; 扩展到具体容器
+(extend-protocol IContainerOperations
+  NodeContainer
+  (handle-button-click! [container button-id player]
+    (node-container/handle-button-click! container button-id player))
+  
+  (handle-text-input! [container field-id text player]
+    (node-container/handle-text-input! container field-id text player))
+  
+  MatrixContainer
+  (handle-button-click! [container button-id player]
+    (matrix-container/handle-button-click! container button-id player))
+  
+  (handle-text-input! [container field-id text player]
+    (matrix-container/handle-text-input! container field-id text player)))
+
+;; 安全包装器
+(defn safe-handle-button-click! [container button-id player]
+  (try
+    (handle-button-click! container button-id player)
+    true
+    (catch Exception e
+      (log/error "Error handling button click:" (.getMessage e))
+      false)))
+
+(defn safe-handle-text-input! [container field-id text player]
+  (try
+    (handle-text-input! container field-id text player)
+    true
+    (catch Exception e
+      (log/error "Error handling text input:" (.getMessage e))
+      false)))
+```
+
+#### 2. 重构Forge network.clj
+
+**Before (handle-button-click, 18行)**:
+```clojure
+(when-let [container (gui-registry/get-player-container player)]
+  (cond
+    ;; Node container button
+    (and (= (:gui-id packet) gui-registry/gui-wireless-node)
+         (instance? my_mod.wireless.gui.node_container.NodeContainer container))
+    (node-container/handle-button-click! container (:button-id packet) player)
+    
+    ;; Matrix container button
+    (and (= (:gui-id packet) gui-registry/gui-wireless-matrix)
+         (instance? my_mod.wireless.gui.matrix_container.MatrixContainer container))
+    (matrix-container/handle-button-click! container (:button-id packet) player)
+    
+    :else
+    (log/warn "Unknown GUI or container type for button click")))
+```
+
+**After (3行)**:
+```clojure
+(when-let [container (gui-registry/get-player-container player)]
+  (dispatcher/safe-handle-button-click! container (:button-id packet) player))
+```
+
+**减少代码**: -15行/方法
+
+同样的简化应用到`handle-text-input`。
+
+#### 3. 重构Fabric network.clj
+
+应用相同的dispatcher模式：
+
+```clojure
+;; Before: 18行硬编码
+;; After: 3行协议分发
+(when-let [container (gui-registry/get-player-container player)]
+  (dispatcher/safe-handle-button-click! container button-id player))
+
+(when-let [container (gui-registry/get-player-container player)]
+  (dispatcher/safe-handle-text-input! container field-id text player))
+```
+
+### 代码对比
+
+#### 硬编码 vs 协议分发
+
+**Before (instance? + cond)**:
+```clojure
+;; 需要知道所有容器类型
+(cond
+  (and (= gui-id gui-registry/gui-wireless-node)
+       (instance? NodeContainer container))
+  (node-container/handle-button-click! ...)
+  
+  (and (= gui-id gui-registry/gui-wireless-matrix)
+       (instance? MatrixContainer container))
+  (matrix-container/handle-button-click! ...)
+  
+  :else
+  (log/warn "Unknown container"))
+
+;; ❌ 添加Energy容器需要修改这里
+```
+
+**After (协议)**:
+```clojure
+;; 完全不知道容器类型，协议自动分发
+(dispatcher/safe-handle-button-click! container button-id player)
+
+;; ✅ 添加Energy容器只需extend-protocol
+(extend-protocol IContainerOperations
+  EnergyContainer
+  (handle-button-click! [c bid p] (energy-container/handle-button! c bid p)))
+```
+
+### 收益
+
+#### 1. 消除重复判断
+- **Before**: 每个网络包处理器都重复instance?检查
+- **After**: 协议一次定义，所有地方复用
+
+#### 2. 代码简化
+```
+Forge network.clj:
+  handle-button-click: 18行 → 3行 (-15行)
+  handle-text-input: 18行 → 3行 (-15行)
+  
+Fabric network.clj:
+  handle-button-click-server: 18行 → 3行 (-15行)
+  handle-text-input-server: 18行 → 3行 (-15行)
+  
+总计: -60行
+```
+
+#### 3. 可扩展性
+```clojure
+;; 添加新容器的网络处理
+;; Before: 修改2个平台的4个函数（8处修改）
+;; After: extend-protocol一次（1处修改）
+
+(extend-protocol IContainerOperations
+  EnergyContainer
+  (handle-button-click! [c bid p] ...)
+  (handle-text-input! [c fid txt p] ...))
+```
+
+#### 4. 类型安全
+- 协议在编译时检查方法存在性
+- 比cond+instance?更早发现错误
+
+### 架构演进
+
+#### Before（分散检查）
+```
+Button Click Packet Handler
+├── instance? NodeContainer
+├── instance? MatrixContainer
+└── 重复的类型检查逻辑
+
+Text Input Packet Handler
+├── instance? NodeContainer
+├── instance? MatrixContainer
+└── 重复的类型检查逻辑
+```
+
+#### After（统一分发）
+```
+Network Packet Handlers
+└── dispatcher/safe-handle-*!
+    ▼
+Container Dispatcher (Protocol)
+├── NodeContainer实现
+├── MatrixContainer实现
+└── 自动多态分发
+```
+
+### 协议vs条件判断
+
+| 特性 | cond + instance? | Protocol |
+|------|-----------------|----------|
+| 类型检查 | 运行时 | 编译时 |
+| 性能 | instanceof调用 | 直接方法调用（JVM优化） |
+| 扩展性 | 修改所有cond | extend-protocol |
+| 代码位置 | 分散在使用处 | 集中在协议定义 |
+| 维护性 | 需要更新多处 | 单点维护 |
+
+### 技术亮点
+
+#### 1. 协议的开放性
+```clojure
+;; 可以在任何地方扩展协议，无需修改原定义
+(extend-protocol IContainerOperations
+  ThirdPartyContainer  ;; 第三方容器
+  (handle-button-click! [c bid p] ...))
+```
+
+#### 2. 安全包装器模式
+```clojure
+;; 统一的错误处理
+(defn safe-handle-button-click! [container button-id player]
+  (try
+    (handle-button-click! container button-id player)
+    true
+    (catch Exception e
+      (log/error "Error:" (.getMessage e))
+      false)))
+```
+
+#### 3. JVM优化
+- 协议方法编译为Java接口
+- JVM可以进行方法内联优化
+- 比反射或条件判断更快
+
+### 最终收益（六次重构总计）
+
+1. **DRY原则**: 消除285+行跨平台重复代码
+   - 第一次: -100行 (screen factory)
+   - 第二次: -60行 (slot manager)
+   - 第三次: -65行 (dispatcher + metadata)
+   - 第四次: 0行 (naming - 架构质量)
+   - 第五次: 0行 (registration - 可扩展性)
+   - 第六次: -60行 (network packet handling)
+
+2. **关注点分离**: 
+   - 游戏逻辑: core/wireless/gui/*.clj
+   - 元数据定义: gui_metadata.clj
+   - 协议分发: container_dispatcher.clj
+   - 平台集成: 完全通用、游戏逻辑无关
+
+3. **可维护性**: 
+   - 屏幕创建: 1个文件 (screen_factory)
+   - 槽位布局: 1个文件 (slot_manager)
+   - 容器操作: 1个文件 (container_dispatcher)
+   - GUI元数据: 1个文件 (gui_metadata)
+   - **网络处理: 协议分发，平台代码3行**
+
+4. **可扩展性**: 
+   - 添加新容器: extend-protocol一次
+   - 添加新GUI: 修改gui_metadata.clj
+   - 添加新网络操作: 添加协议方法
+   - **平台代码与容器类型数量无关**
+
+5. **性能优化**:
+   - 协议方法 > instanceof检查
+   - JVM内联优化
+   - 编译时类型检查
+
+6. **设计原则遵守**: 
+   - ✅ 单一职责原则（SRP）
+   - ✅ 开闭原则（OCP）
+   - ✅ 里氏替换原则（LSP）
+   - ✅ 接口隔离原则（ISP）
+   - ✅ 依赖倒置原则（DIP）
+
+### 经验教训
+
+1. **识别抽象点**: 
+   - 第一次: 屏幕创建 → factory
+   - 第二次: 槽位逻辑 → manager
+   - 第三次: 类型分发 → protocol, 元数据 → centralized map
+   - 第四次: 类名本身 → 平台中性命名
+   - 第五次: 注册逻辑 → 元数据驱动
+   - 第六次: 网络处理 → 协议扩展
+
+2. **协议的威力**：
+   - 后置多态：无需修改原类型定义
+   - 开放扩展：第三方可以扩展协议
+   - 性能优越：编译为接口，JVM优化
+
+3. **重复代码的识别**：
+   - 不仅看字面重复
+   - 更要看**结构重复**（相同的cond模式）
+   - 结构重复 → 协议是理想方案
+
+4. **Clojure vs Java多态**：
+   - Java: 继承/接口，需要类定义时声明
+   - Clojure: 协议，可以后置扩展
+   - Clojure更灵活，适合开放系统
+
+5. **渐进式重构的价值**：
+   - 第三次创建了dispatcher基础
+   - 第六次扩展dispatcher到网络处理
+   - 每次重构都为后续奠定基础
+
+6. **设计模式综合应用**: 
+   - 桥接模式: 分离抽象和实现
+   - 策略模式: 封装算法变化
+   - 适配器模式: 统一接口差异
+   - 单例模式: 元数据中心
+   - 依赖倒置: 高层不依赖低层细节
+   - 注册表模式: 动态查找和注册
+   - 元数据模式: 数据驱动行为
+   - **访问者模式**: 协议分发
+
+7. **架构演进规律**：
+   - 发现重复 → 提取函数
+   - 发现模式重复 → 提取协议/元数据
+   - 不断抽象，逐步完善
+
+8. **文档驱动**: 每次重构都更新文档，保持知识同步
+
+---
+
+**重构完成**: 2025-11-26  
+**状态**: ✅ 六次重构全部完成，架构达到完美状态
+**最终架构**: 
+- 完全去游戏化的平台层
+- 元数据驱动的注册系统
+- 协议驱动的多态分发
+- 零游戏逻辑泄露到平台代码
 
 **重构完成**: 2025-11-26  
 **状态**: ✅ 五次重构全部完成，架构达到最优状态

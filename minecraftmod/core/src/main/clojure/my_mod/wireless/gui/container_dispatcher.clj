@@ -23,7 +23,13 @@
     "Check if player can still use this container")
   
   (sync-container! [container]
-    "Synchronize container data to client"))
+    "Synchronize container data to client")
+  
+  (handle-button-click! [container button-id player]
+    "Handle button click from client")
+  
+  (handle-text-input! [container field-id text player]
+    "Handle text input from client"))
 
 ;; ============================================================================
 ;; Protocol Implementations
@@ -41,6 +47,12 @@
   (sync-container! [container]
     (node-container/sync-to-client! container))
   
+  (handle-button-click! [container button-id player]
+    (node-container/handle-button-click! container button-id player))
+  
+  (handle-text-input! [container field-id text player]
+    (node-container/handle-text-input! container field-id text player))
+  
   ;; MatrixContainer implementation
   my_mod.wireless.gui.matrix_container.MatrixContainer
   (tick-container! [container]
@@ -50,7 +62,13 @@
     (matrix-container/still-valid? container player))
   
   (sync-container! [container]
-    (matrix-container/sync-to-client! container)))
+    (matrix-container/sync-to-client! container))
+  
+  (handle-button-click! [container button-id player]
+    (matrix-container/handle-button-click! container button-id player))
+  
+  (handle-text-input! [container field-id text player]
+    (matrix-container/handle-text-input! container field-id text player)))
 
 ;; ============================================================================
 ;; Container Type Queries
@@ -133,6 +151,41 @@
     true
     (catch Exception e
       (log/error "Error syncing container:" (.getMessage e))
+      false)))
+
+(defn safe-handle-button-click!
+  "Safely handle button click with error handling
+  
+  Args:
+  - container: Any container
+  - button-id: int
+  - player: Player entity
+  
+  Returns: true if successful, false if error"
+  [container button-id player]
+  (try
+    (handle-button-click! container button-id player)
+    true
+    (catch Exception e
+      (log/error "Error handling button click:" (.getMessage e))
+      false)))
+
+(defn safe-handle-text-input!
+  "Safely handle text input with error handling
+  
+  Args:
+  - container: Any container
+  - field-id: int
+  - text: string
+  - player: Player entity
+  
+  Returns: true if successful, false if error"
+  [container field-id text player]
+  (try
+    (handle-text-input! container field-id text player)
+    true
+    (catch Exception e
+      (log/error "Error handling text input:" (.getMessage e))
       false)))
 
 ;; ============================================================================

@@ -1,7 +1,9 @@
 (ns my-mod.fabric1201.gui.network
-  "Fabric 1.20.1 GUI Network Packet System"
-  (:require [my-mod.wireless.gui.node-container :as node-container]
-            [my-mod.wireless.gui.matrix-container :as matrix-container]
+  "Fabric 1.20.1 GUI Network Packet System
+  
+  Platform-agnostic design: Uses container-dispatcher for polymorphic handling,
+  eliminating hardcoded game concepts (Node, Matrix, etc.)."
+  (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
             [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.util.log :as log])
   (:import [net.minecraft.network PacketByteBuf]
@@ -49,21 +51,9 @@
     (log/info "Handling button click:" (:button-id packet) 
               "for GUI:" (:gui-id packet))
     
-    ;; Get active container for player
+    ;; Get active container for player and dispatch using protocol
     (when-let [container (gui-registry/get-player-container player)]
-      (cond
-        ;; Node container button
-        (and (= (:gui-id packet) gui-registry/gui-wireless-node)
-             (instance? my_mod.wireless.gui.node_container.NodeContainer container))
-        (node-container/handle-button-click! container (:button-id packet) player)
-        
-        ;; Matrix container button
-        (and (= (:gui-id packet) gui-registry/gui-wireless-matrix)
-             (instance? my_mod.wireless.gui.matrix_container.MatrixContainer container))
-        (matrix-container/handle-button-click! container (:button-id packet) player)
-        
-        :else
-        (log/warn "Unknown GUI or container type for button click")))))
+      (dispatcher/safe-handle-button-click! container (:button-id packet) player)))))
 
 ;; ============================================================================
 ;; Packet: Text Input (Client -> Server)
@@ -94,21 +84,9 @@
               "for field:" (:field-id packet) 
               "in GUI:" (:gui-id packet))
     
-    ;; Get active container for player
+    ;; Get active container for player and dispatch using protocol
     (when-let [container (gui-registry/get-player-container player)]
-      (cond
-        ;; Node container text input
-        (and (= (:gui-id packet) gui-registry/gui-wireless-node)
-             (instance? my_mod.wireless.gui.node_container.NodeContainer container))
-        (node-container/handle-text-input! container (:field-id packet) (:text packet) player)
-        
-        ;; Matrix container text input
-        (and (= (:gui-id packet) gui-registry/gui-wireless-matrix)
-             (instance? my_mod.wireless.gui.matrix_container.MatrixContainer container))
-        (matrix-container/handle-text-input! container (:field-id packet) (:text packet) player)
-        
-        :else
-        (log/warn "Unknown GUI or container type for text input")))))
+      (dispatcher/safe-handle-text-input! container (:field-id packet) (:text packet) player))))
 
 ;; ============================================================================
 ;; Packet: Sync Data (Server -> Client)
