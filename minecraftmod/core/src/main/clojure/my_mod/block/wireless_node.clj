@@ -360,27 +360,18 @@
 (nbt/defnbt node
   ;; Energy (uses protocol getter/setter)
   [:energy "energy" :double
-   :custom-write (fn [tile nbt key _]
-                   (.setDouble nbt key (winterfaces/get-energy tile)))
-   :custom-read (fn [tile nbt key]
-                  (when (.hasKey nbt key)
-                    (winterfaces/set-energy tile (.getDouble nbt key))))]
+   :getter winterfaces/get-energy
+   :setter winterfaces/set-energy]
   
   ;; Node name (uses protocol getter and helper setter)
   [:node-name "nodeName" :string
-   :custom-write (fn [tile nbt key _]
-                   (.setString nbt key (winterfaces/get-node-name tile)))
-   :custom-read (fn [tile nbt key]
-                  (when (.hasKey nbt key)
-                    (set-node-name! tile (.getString nbt key))))]
+   :getter winterfaces/get-node-name
+   :setter set-node-name!]
   
   ;; Password (uses protocol getter and helper setter)
   [:password "password" :string
-   :custom-write (fn [tile nbt key _]
-                   (.setString nbt key (winterfaces/get-password tile)))
-   :custom-read (fn [tile nbt key]
-                  (when (.hasKey nbt key)
-                    (set-password-str! tile (.getString nbt key))))]
+   :getter winterfaces/get-password
+   :setter set-password-str!]
   
   ;; Placer name (direct field access)
   [:placer-name "placer" :string]

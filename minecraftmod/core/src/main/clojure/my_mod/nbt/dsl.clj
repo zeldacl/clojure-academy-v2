@@ -113,6 +113,8 @@
    type            ; Keyword - field type (:double, :string, :int, etc.)
    atom?           ; Boolean - is field an atom?
    default         ; Any - default value if not present in NBT
+   getter          ; Function - getter function (tile) -> value (optional)
+   setter          ; Function - setter function (tile value) -> tile (optional)
    custom-write    ; Function - custom write function (optional)
    custom-read     ; Function - custom read function (optional)
    skip-on-write?  ; Function - predicate to skip writing (optional)
@@ -127,9 +129,11 @@
 (defn write-nbt-field
   "Write a single field to NBT according to its specification"
   [tile nbt field-spec]
-  (let [{:keys [field-key nbt-key type atom? custom-write skip-on-write? transform-write]} field-spec]
+  (let [{:keys [field-key nbt-key type atom? getter custom-write skip-on-write? transform-write]} field-spec]
     (when-not (and skip-on-write? (skip-on-write? tile))
-      (let [value (get-field-value tile [field-key] atom?)
+      (let [value (if getter
+                    (getter tile)
+                    (get-field-value tile [field-key] atom?))
             value (if transform-write (transform-write value) value)]
         (if custom-write
           (custom-write tile nbt nbt-key value)
@@ -139,7 +143,7 @@
 (defn read-nbt-field
   "Read a single field from NBT according to its specification"
   [tile nbt field-spec]
-  (let [{:keys [field-key nbt-key type atom? custom-read default transform-read]} field-spec
+  (let [{:keys [field-key nbt-key type atom? setter custom-read default transform-read]} field-spec
         has-key? (if-let [converter (get type-converters type)]
                    ((:has-key? converter) nbt nbt-key)
                    (.hasKey nbt nbt-key))]
@@ -150,7 +154,9 @@
                       ((:read converter) nbt nbt-key)))
             value (if transform-read (transform-read value) value)
             value (or value default)]
-        (set-field-value! tile [field-key] value atom?)))))
+        (if setter
+          (setter tile value)
+          (set-field-value! tile [field-key] value atom?))))))
 
 (defn write-nbt-fields
   "Write all fields to NBT according to specifications"
@@ -191,6 +197,8 @@
   Options:
     :atom? true         - Field is an atom (default: false)
     :default value      - Default value if not in NBT
+    :getter fn          - Getter function (tile) -> value
+    :setter fn          - Setter function (tile value) -> tile
     :custom-write fn    - Custom write function (tile nbt key value) -> void
     :custom-read fn     - Custom read function (tile nbt key) -> value
     :skip-on-write? fn  - Predicate (tile) -> bool, skip if true
@@ -219,6 +227,8 @@
                                   :type type
                                   :atom? (get options-map :atom? false)
                                   :default (get options-map :default)
+                                  :getter (get options-map :getter)
+                                  :setter (get options-map :setter)
                                   :custom-write (get options-map :custom-write)
                                   :custom-read (get options-map :custom-read)
                                   :skip-on-write? (get options-map :skip-on-write?)
