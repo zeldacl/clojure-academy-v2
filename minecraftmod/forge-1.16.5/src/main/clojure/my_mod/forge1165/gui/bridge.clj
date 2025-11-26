@@ -1,5 +1,12 @@
 (ns my-mod.forge1165.gui.bridge
-  "Forge 1.16.5 GUI Bridge - Java Container wrapper for Clojure containers"
+  "Forge 1.16.5 GUI Bridge - Platform-neutral Container wrapper
+  
+  This module provides platform-specific Java interop without game logic.
+  Game-specific concepts (Wireless, Node, Matrix) are abstracted away.
+  
+  Classes:
+  - ForgeContainerBridge: Generic Container wrapper
+  - ForgeContainerProviderBridge: Generic INamedContainerProvider"
   (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
             [my-mod.wireless.gui.gui-metadata :as gui-metadata]
             [my-mod.wireless.gui.slot-manager :as slot-manager]
@@ -14,7 +21,7 @@
 ;; ============================================================================
 
 (gen-class
-  :name my_mod.forge1165.gui.WirelessContainer
+  :name my_mod.forge1165.gui.ForgeContainerBridge
   :extends net.minecraft.inventory.container.Container
   :state state
   :init init
@@ -108,7 +115,7 @@
 ;; ============================================================================
 
 (gen-class
-  :name my_mod.forge1165.gui.WirelessContainerProvider
+  :name my_mod.forge1165.gui.ForgeContainerProviderBridge
   :implements [net.minecraft.inventory.container.INamedContainerProvider]
   :state state
   :init init
@@ -168,7 +175,7 @@
           (throw (ex-info "MenuType not registered" {:gui-id gui-id})))
         
         ;; Create Java Container wrapper
-        (my_mod.forge1165.gui.WirelessContainer. window-id menu-type clj-container))))))
+        (my_mod.forge1165.gui.ForgeContainerBridge. window-id menu-type clj-container))))))
 
 ;; ============================================================================
 ;; Helper Functions
@@ -183,7 +190,7 @@
   
   Returns: INamedContainerProvider instance"
   [gui-id tile-entity]
-  (my_mod.forge1165.gui.WirelessContainerProvider. gui-id tile-entity))
+  (my_mod.forge1165.gui.ForgeContainerProviderBridge. gui-id tile-entity))
 
 (defn wrap-clojure-container
   "Wrap a Clojure container in Java Container
@@ -195,4 +202,4 @@
   
   Returns: Container instance"
   [window-id menu-type clj-container]
-  (my_mod.forge1165.gui.WirelessContainer. window-id menu-type clj-container))
+  (my_mod.forge1165.gui.ForgeContainerBridge. window-id menu-type clj-container))

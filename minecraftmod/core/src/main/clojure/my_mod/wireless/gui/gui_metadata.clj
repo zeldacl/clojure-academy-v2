@@ -34,9 +34,25 @@
   {gui-wireless-node "wireless_node_gui"
    gui-wireless-matrix "wireless_matrix_gui"})
 
+;; Screen factory function mapping
+(def gui-screen-factories
+  "Map from GUI ID to screen factory function keyword
+  
+  Platform code can use this to get the correct factory function
+  from screen-factory namespace dynamically."
+  {gui-wireless-node :create-node-screen
+   gui-wireless-matrix :create-matrix-screen})
+
 ;; ============================================================================
 ;; Query Functions
 ;; ============================================================================
+
+(defn get-all-gui-ids
+  "Get all registered GUI IDs
+  
+  Returns: seq of int"
+  []
+  (seq valid-gui-ids))
 
 (defn valid-gui-id?
   "Check if GUI ID is valid
@@ -69,14 +85,28 @@
   (get gui-types gui-id :unknown))
 
 (defn get-registry-name
-  "Get registry identifier for GUI ID
+  "Get registry identifier for GUI
   
   Args:
   - gui-id: int
   
-  Returns: string or nil if invalid"
+  Returns: string (registry name) or \"unknown_gui\""
   [gui-id]
-  (get gui-registry-names gui-id))
+  (get gui-registry-names gui-id "unknown_gui"))
+
+(defn get-screen-factory-fn
+  "Get screen factory function keyword for GUI
+  
+  Args:
+  - gui-id: int
+  
+  Returns: keyword (:create-node-screen, :create-matrix-screen, etc.) or nil"
+  [gui-id]
+  (get gui-screen-factories gui-id))
+
+;; ============================================================================
+;; Reverse Lookups
+;; ============================================================================
 
 ;; ============================================================================
 ;; Reverse Lookups

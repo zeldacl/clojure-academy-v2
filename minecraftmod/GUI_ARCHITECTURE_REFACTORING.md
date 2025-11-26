@@ -2,14 +2,18 @@
 
 **日期**: 2025-11-26  
 **重构内容**: 
-1. 分离屏幕创建游戏逻辑与平台特定代码
-2. 分离槽位管理游戏逻辑与平台特定代码
+1. 第一次重构: 分离屏幕创建游戏逻辑
+2. 第二次重构: 分离槽位管理游戏逻辑
+3. 第三次重构: Container分发器 + GUI元数据
+4. 第四次重构: 消除游戏逻辑命名（平台中性命名）
 
 ## 目录
 
 1. [第一次重构: 屏幕工厂](#第一次重构-屏幕工厂)
 2. [第二次重构: 槽位管理器](#第二次重构-槽位管理器)
-3. [重构总结](#重构总结)
+3. [第三次重构: Container分发器 + GUI元数据](#第三次重构-container分发器--gui元数据)
+4. [第四次重构: 平台中性命名](#第四次重构-平台中性命名)
+5. [重构总结](#重构总结)
 
 ---
 
@@ -1049,5 +1053,695 @@ class NodeContainer implements IContainerOps { ... }
 
 ---
 
+## 第四次重构: 平台中性命名
+
+### 背景
+
+第三次重构完成后，代码审查发现：**类名包含游戏逻辑概念**！
+
+**问题**：
+- ❌ `WirelessContainer` - "Wireless"是游戏系统名称
+- ❌ `WirelessScreenHandler` - 包含游戏概念
+- ❌ `WirelessContainerProvider` - 不通用
+- ❌ `WirelessScreenHandlerFactory` - 不可复用
+
+**根本原因**：平台桥接层应该是**完全通用的技术组件**，不应该包含任何游戏业务概念。
+
+### 正确的架构分层
+
+```
+游戏层 (Game Logic)
+├── Wireless系统
+├── Node容器
+└── Matrix容器
+    │
+    ▼ 通过抽象接口
+    
+平台层 (Platform Bridge)
+├── ForgeContainerBridge       ← 通用的Java Container包装器
+├── FabricScreenHandlerBridge  ← 通用的ScreenHandler包装器
+└── 完全不知道"Wireless"的存在
+```
+
+### 重构方案
+
+#### Forge 1.16.5
+
+**Before**:
+```clojure
+(gen-class
+  :name my_mod.forge1165.gui.WirelessContainer
+  :extends net.minecraft.inventory.container.Container)
+
+(gen-class
+  :name my_mod.forge1165.gui.WirelessContainerProvider
+  :implements [net.minecraft.inventory.container.INamedContainerProvider])
+```
+
+**After**:
+```clojure
+(gen-class
+  :name my_mod.forge1165.gui.ForgeContainerBridge
+  :extends net.minecraft.inventory.container.Container)
+
+(gen-class
+  :name my_mod.forge1165.gui.ForgeContainerProviderBridge
+  :implements [net.minecraft.inventory.container.INamedContainerProvider])
+```
+
+#### Fabric 1.20.1
+
+**Before**:
+```clojure
+(gen-class
+  :name my_mod.fabric1201.gui.WirelessScreenHandler
+  :extends net.minecraft.screen.ScreenHandler)
+
+(gen-class
+  :name my_mod.fabric1201.gui.WirelessScreenHandlerFactory
+  :implements [net.minecraft.screen.NamedScreenHandlerFactory])
+
+(gen-class
+  :name my_mod.fabric1201.gui.ExtendedWirelessScreenHandlerFactory
+  :implements [net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory])
+```
+
+**After**:
+```clojure
+(gen-class
+  :name my_mod.fabric1201.gui.FabricScreenHandlerBridge
+  :extends net.minecraft.screen.ScreenHandler)
+
+(gen-class
+  :name my_mod.fabric1201.gui.FabricScreenHandlerFactoryBridge
+  :implements [net.minecraft.screen.NamedScreenHandlerFactory])
+
+(gen-class
+  :name my_mod.fabric1201.gui.FabricExtendedScreenHandlerFactoryBridge
+  :implements [net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory])
+```
+
+### 命名规范
+
+**平台桥接类命名**：
+```
+格式: {Platform}{Component}Bridge
+
+示例:
+- ForgeContainerBridge          # Forge的Container包装器
+- FabricScreenHandlerBridge     # Fabric的ScreenHandler包装器
+- ForgeContainerProviderBridge  # Forge的MenuProvider
+- FabricScreenHandlerFactoryBridge  # Fabric的Factory
+```
+
+**核心原则**：
+1. ✅ **平台前缀**: 明确标识平台（Forge/Fabric）
+2. ✅ **技术概念**: 使用平台的技术术语（Container/ScreenHandler）
+3. ✅ **Bridge后缀**: 明确标识为桥接层
+4. ❌ **禁止游戏概念**: 不包含Wireless/Node/Matrix等业务术语
+
+### 更新的文件
+
+**Forge 1.16.5**:
+- `forge-1.16.5/gui/bridge.clj`: 更新gen-class定义和所有引用
+
+**Fabric 1.20.1**:
+- `fabric-1.20.1/gui/bridge.clj`: 更新gen-class定义和所有引用
+
+### 收益
+
+#### 1. 可复用性
+**Before**: 类名暗示只能用于Wireless系统
+```clojure
+WirelessContainer  ;; 听起来只能处理Wireless相关的GUI
+```
+
+**After**: 类名表明是通用桥接组件
+```clojure
+ForgeContainerBridge  ;; 可以包装任何Clojure容器
+```
+
+#### 2. 清晰的职责边界
+```
+ForgeContainerBridge的职责:
+✅ 实现Forge Container接口
+✅ 委托给Clojure容器（任意类型）
+✅ 处理Java/Clojure互操作
+❌ 不知道容器的业务逻辑
+❌ 不知道Wireless/Node/Matrix
+```
+
+#### 3. 未来扩展性
+
+假设将来添加新的游戏系统（例如Energy系统）：
+
+**Before**: 需要创建新的类
+```clojure
+;; 不好的设计
+EnergyContainer extends Container
+EnergyContainerProvider implements INamedContainerProvider
+```
+
+**After**: 直接复用现有桥接
+```clojure
+;; 好的设计 - 完全复用
+(ForgeContainerBridge. window-id menu-type energy-container)
+```
+
+#### 4. 架构一致性
+
+所有平台桥接都遵循统一命名：
+```
+forge-1.16.5/
+  ├── gui/
+  │   ├── ForgeContainerBridge           # 桥接层
+  │   ├── ForgeContainerProviderBridge   # 桥接层
+  │   └── bridge.clj                     # 实现文件
+
+fabric-1.20.1/
+  ├── gui/
+  │   ├── FabricScreenHandlerBridge      # 桥接层
+  │   ├── FabricScreenHandlerFactoryBridge  # 桥接层
+  │   └── bridge.clj                     # 实现文件
+```
+
+### 架构对比
+
+#### Before（混淆的架构）
+```
+┌─────────────────────────────────────┐
+│  WirelessContainer (Forge)          │  ← 游戏概念泄露到平台层
+│  ├── 知道Wireless系统               │
+│  ├── 硬编码Node/Matrix               │
+│  └── 不可复用                       │
+└─────────────────────────────────────┘
+```
+
+#### After（清晰的分层）
+```
+┌─────────────────────────────────────┐
+│  Game Logic (core/wireless/)        │  ← 游戏逻辑层
+│  ├── Wireless系统                   │
+│  ├── Node容器                       │
+│  └── Matrix容器                     │
+└─────────────────────────────────────┘
+           │ (通过抽象接口)
+           ▼
+┌─────────────────────────────────────┐
+│  Platform Bridge (forge/fabric)     │  ← 平台桥接层
+│  ├── ForgeContainerBridge           │
+│  ├── FabricScreenHandlerBridge      │
+│  └── 完全游戏逻辑无关               │
+└─────────────────────────────────────┘
+```
+
+### 最终收益（四次重构总计）
+
+1. **DRY原则**: 消除225行跨平台重复代码
+   - 第一次重构: -100行 (screen factory)
+   - 第二次重构: -60行 (slot manager)
+   - 第三次重构: -65行 (dispatcher + metadata)
+   - 第四次重构: 0行（重命名，提升架构质量）
+
+2. **关注点分离**: 
+   - 游戏逻辑: core/wireless/gui/*.clj
+   - 平台集成: forge/fabric bridge.clj（完全平台中性）
+
+3. **可维护性**: 
+   - 屏幕创建: 1个文件 (screen_factory)
+   - 槽位布局: 1个文件 (slot_manager)
+   - 容器分发: 1个文件 (container_dispatcher)
+   - GUI元数据: 1个文件 (gui_metadata)
+   - **平台桥接: 通用组件，可复用**
+
+4. **可测试性**: 核心逻辑完全平台无关
+
+5. **可扩展性**: 
+   - 添加新容器: extend-protocol
+   - 添加新GUI: 修改metadata映射
+   - 添加新平台: 实现桥接层
+   - **添加新游戏系统: 无需修改平台桥接**
+
+6. **架构清晰度**: 
+   - 平台层完全不包含游戏概念
+   - 命名清晰表达组件职责
+   - 符合依赖倒置原则（DIP）
+
+### 经验教训
+
+1. **识别抽象点**: 
+   - 第一次: 屏幕创建 → factory
+   - 第二次: 槽位逻辑 → manager
+   - 第三次: 类型分发 → protocol, 元数据 → centralized map
+   - 第四次: 类名本身 → 平台中性命名
+
+2. **架构分层原则**：
+   - **上层可以依赖下层**：游戏逻辑可以使用平台桥接
+   - **下层不能依赖上层**：平台桥接不能知道游戏概念
+   - **命名反映边界**：类名应该清晰表达所属层次
+
+3. **命名的重要性**：
+   - 好的命名 = 自文档化代码
+   - 类名应该表达"是什么"，不是"为谁服务"
+   - `ForgeContainerBridge`比`WirelessContainer`更准确
+
+4. **渐进式重构**: 每次重构都基于前一次的发现
+
+5. **设计模式**: 
+   - 桥接模式: 分离抽象和实现
+   - 策略模式: 封装算法变化
+   - 适配器模式: 统一接口差异
+   - 单例模式: 元数据中心
+   - **依赖倒置**: 高层模块不依赖低层细节
+
+6. **Clojure优势**: 
+   - 协议: 后置多态，无需修改原类型
+   - 不可变数据: 线程安全的元数据映射
+   - 高阶函数: 安全包装器组合
+   - gen-class: 灵活的Java互操作
+
+7. **文档驱动**: 每次重构都更新文档，保持知识同步
+
+---
+
+## 第五次重构: 注册逻辑去游戏化
+
+### 背景
+
+第四次重构完成后，代码审查发现：**注册逻辑仍然硬编码游戏概念**！
+
+**问题代码**：
+```clojure
+;; Forge screen_impl.clj
+;; ❌ 硬编码Node和Matrix
+;; Register Node screen
+(.registerFactory screen-manager NODE_MENU_TYPE
+  (create [_ container ...] (screen-factory/create-node-screen ...)))
+
+;; Register Matrix screen
+(.registerFactory screen-manager MATRIX_MENU_TYPE
+  (create [_ container ...] (screen-factory/create-matrix-screen ...)))
+```
+
+**问题**：
+1. ❌ 平台代码需要"知道"有Node和Matrix
+2. ❌ 添加新GUI需要修改平台代码
+3. ❌ 注册逻辑与游戏概念紧密耦合
+4. ❌ 违反开闭原则（OCP）
+
+### 正确的设计
+
+**元数据驱动的注册**：
+```clojure
+;; ✅ 从元数据读取，循环注册
+(doseq [gui-id (gui-metadata/get-all-gui-ids)]
+  (let [menu-type (gui-metadata/get-menu-type platform gui-id)
+        factory-fn (get-screen-factory-fn gui-id)]
+    (register! menu-type factory-fn)))
+```
+
+**优势**：
+- 平台代码完全不知道具体有哪些GUI
+- 添加新GUI只需更新元数据
+- 注册逻辑是通用的、可复用的
+
+### 重构步骤
+
+#### 1. 扩展gui_metadata.clj
+
+添加屏幕工厂函数映射：
+
+```clojure
+;; 新增：屏幕工厂函数映射
+(def gui-screen-factories
+  "Map from GUI ID to screen factory function keyword"
+  {gui-wireless-node :create-node-screen
+   gui-wireless-matrix :create-matrix-screen})
+
+(defn get-all-gui-ids
+  "Get all registered GUI IDs"
+  []
+  (seq valid-gui-ids))
+
+(defn get-screen-factory-fn
+  "Get screen factory function keyword for GUI
+  
+  Returns: keyword (:create-node-screen, :create-matrix-screen, etc.) or nil"
+  [gui-id]
+  (get gui-screen-factories gui-id))
+```
+
+#### 2. 重构Forge screen_impl.clj
+
+**Before (26行)**:
+```clojure
+(defn register-screens! []
+  (log/info "Registering Wireless GUI screens for Forge 1.16.5")
+  
+  (try
+    (let [screen-manager net.minecraft.client.gui.ScreenManager]
+      
+      ;; Register Node screen
+      (.registerFactory screen-manager
+                       @my_mod.forge1165.gui.registry_impl/NODE_MENU_TYPE
+                       (reify net.minecraft.client.gui.IScreenFactory
+                         (create [_ container player-inventory title]
+                           (screen-factory/create-node-screen container player-inventory title))))
+      
+      ;; Register Matrix screen
+      (.registerFactory screen-manager
+                       @my_mod.forge1165.gui.registry_impl/MATRIX_MENU_TYPE
+                       (reify net.minecraft.client.gui.IScreenFactory
+                         (create [_ container player-inventory title]
+                           (screen-factory/create-matrix-screen container player-inventory title))))
+      
+      (log/info "Screen factories registered successfully"))
+    
+    (catch Exception e
+      (log/error "Failed to register screen factories:" (.getMessage e))
+      (.printStackTrace e))))
+```
+
+**After (30行，但通用可复用)**:
+```clojure
+(defn register-screens! []
+  (log/info "Registering GUI screens for Forge 1.16.5")
+  
+  (try
+    (let [screen-manager net.minecraft.client.gui.ScreenManager
+          platform :forge-1.16.5]
+      
+      ;; Loop through all registered GUIs from metadata
+      (doseq [gui-id (gui-metadata/get-all-gui-ids)]
+        (let [menu-type (gui-metadata/get-menu-type platform gui-id)
+              factory-fn-kw (gui-metadata/get-screen-factory-fn gui-id)]
+          
+          (when (and menu-type factory-fn-kw)
+            ;; Dynamically resolve factory function
+            (let [factory-fn (ns-resolve 'my-mod.wireless.gui.screen-factory factory-fn-kw)]
+              (if factory-fn
+                (do
+                  (.registerFactory screen-manager
+                                   menu-type
+                                   (reify net.minecraft.client.gui.IScreenFactory
+                                     (create [_ container player-inventory title]
+                                       (factory-fn container player-inventory title))))
+                  (log/info "Registered screen factory for GUI ID" gui-id))
+                (log/warn "Screen factory function not found:" factory-fn-kw))))))
+      
+      (log/info "Screen factories registered successfully"))
+    
+    (catch Exception e
+      (log/error "Failed to register screen factories:" (.getMessage e))
+      (.printStackTrace e))))
+```
+
+#### 3. 重构Fabric screen_impl.clj
+
+应用相同的元数据驱动模式：
+
+```clojure
+(defn register-screens! []
+  (log/info "Registering GUI screens for Fabric 1.20.1")
+  
+  (try
+    (let [platform :fabric-1.20.1]
+      
+      ;; Loop through all registered GUIs from metadata
+      (doseq [gui-id (gui-metadata/get-all-gui-ids)]
+        (let [handler-type (gui-metadata/get-menu-type platform gui-id)
+              factory-fn-kw (gui-metadata/get-screen-factory-fn gui-id)]
+          
+          (when (and handler-type factory-fn-kw)
+            (let [factory-fn (ns-resolve 'my-mod.wireless.gui.screen-factory factory-fn-kw)]
+              (if factory-fn
+                (do
+                  (ScreenRegistry/register
+                    handler-type
+                    (reify ScreenRegistry$Factory
+                      (create [_ handler player-inventory title]
+                        (factory-fn handler player-inventory title))))
+                  (log/info "Registered screen factory for GUI ID" gui-id))
+                (log/warn "Screen factory function not found:" factory-fn-kw))))))
+    
+    (log/info "Screen factories registered successfully (Fabric)")
+    
+    (catch Exception e
+      (log/error "Failed to register screen factories:" (.getMessage e))
+      (.printStackTrace e))))
+```
+
+### 代码对比
+
+#### 硬编码 vs 元数据驱动
+
+**Before (硬编码)**:
+```clojure
+;; 平台代码"知道"有Node和Matrix
+;; Register Node screen
+(.registerFactory screen-manager NODE_MENU_TYPE
+  (create [_] (screen-factory/create-node-screen ...)))
+
+;; Register Matrix screen
+(.registerFactory screen-manager MATRIX_MENU_TYPE
+  (create [_] (screen-factory/create-matrix-screen ...)))
+
+;; ❌ 添加Energy GUI需要修改这里
+```
+
+**After (元数据驱动)**:
+```clojure
+;; 平台代码不知道具体GUI类型
+(doseq [gui-id (gui-metadata/get-all-gui-ids)]
+  (let [menu-type (gui-metadata/get-menu-type platform gui-id)
+        factory-fn-kw (gui-metadata/get-screen-factory-fn gui-id)
+        factory-fn (ns-resolve 'my-mod.wireless.gui.screen-factory factory-fn-kw)]
+    (.registerFactory screen-manager menu-type
+      (create [_] (factory-fn ...)))))
+
+;; ✅ 添加Energy GUI只需更新gui_metadata.clj
+```
+
+### 可扩展性提升
+
+**添加新GUI的步骤**：
+
+**Before**: 需要修改3个文件
+```clojure
+;; 1. gui_metadata.clj - 添加元数据
+(def gui-energy 2)
+
+;; 2. screen_factory.clj - 添加工厂函数
+(defn create-energy-screen [container inventory title] ...)
+
+;; 3. forge/screen_impl.clj - 添加注册代码 ❌
+;; Register Energy screen
+(.registerFactory screen-manager ENERGY_MENU_TYPE ...)
+
+;; 4. fabric/screen_impl.clj - 添加注册代码 ❌
+(ScreenRegistry/register ENERGY_HANDLER_TYPE ...)
+```
+
+**After**: 只需修改2个文件
+```clojure
+;; 1. gui_metadata.clj - 添加元数据
+(def gui-energy 2)
+(def gui-screen-factories
+  {...existing...
+   2 :create-energy-screen})  ;; ✅ 新增映射
+
+;; 2. screen_factory.clj - 添加工厂函数
+(defn create-energy-screen [container inventory title] ...)
+
+;; 3. 平台代码自动处理 - 无需修改！✅
+```
+
+### 收益
+
+#### 1. 消除硬编码
+- **Before**: 每个GUI都需要手写注册代码
+- **After**: 通过元数据自动注册
+
+#### 2. 开闭原则（OCP）
+- **对扩展开放**: 添加新GUI只需修改元数据
+- **对修改关闭**: 平台注册逻辑永不修改
+
+#### 3. 单一职责
+```
+gui_metadata.clj    → 定义有哪些GUI
+screen_factory.clj  → 定义如何创建屏幕
+screen_impl.clj     → 定义如何注册（通用逻辑）
+```
+
+#### 4. 代码可复用性
+```clojure
+;; 注册逻辑完全通用，可以复制到其他Mod
+(doseq [gui-id (get-all-gui-ids)]
+  (register-screen! gui-id))
+```
+
+### 技术亮点
+
+#### 1. ns-resolve 动态函数查找
+```clojure
+;; 从关键字字符串动态获取函数
+(let [factory-fn-kw :create-node-screen
+      factory-fn (ns-resolve 'my-mod.wireless.gui.screen-factory factory-fn-kw)]
+  (factory-fn container inventory title))
+
+;; 等价于直接调用
+(screen-factory/create-node-screen container inventory title)
+```
+
+#### 2. 元数据驱动的架构
+```
+元数据定义 (gui_metadata.clj)
+  ├── GUI ID → 显示名称
+  ├── GUI ID → 类型
+  ├── GUI ID → 注册名
+  └── GUI ID → 工厂函数
+      │
+      ▼
+平台代码读取并执行
+  ├── 循环所有GUI ID
+  ├── 查找对应的MenuType
+  ├── 查找对应的工厂函数
+  └── 动态注册
+```
+
+#### 3. 声明式配置
+```clojure
+;; 声明式：在一个地方定义所有GUI
+(def gui-screen-factories
+  {0 :create-node-screen
+   1 :create-matrix-screen
+   2 :create-energy-screen})  ;; 添加新GUI
+
+;; 命令式（旧方式）：在多个地方重复代码
+;; Register Node...
+;; Register Matrix...
+;; Register Energy...  ;; 需要手写
+```
+
+### 架构演进
+
+#### Before（紧耦合）
+```
+Platform Layer (screen_impl.clj)
+├── 知道Node GUI存在
+├── 知道Matrix GUI存在
+├── 知道create-node-screen函数
+├── 知道create-matrix-screen函数
+└── 硬编码注册逻辑
+    ▲
+    │ 紧耦合
+    ▼
+Game Layer (wireless/)
+├── Node GUI定义
+└── Matrix GUI定义
+```
+
+#### After（松耦合）
+```
+Platform Layer (screen_impl.clj)
+├── 读取元数据
+├── 循环注册
+└── 完全通用逻辑
+    ▲
+    │ 通过抽象接口（元数据）
+    ▼
+Metadata Layer (gui_metadata.clj)
+├── GUI列表
+├── 工厂函数映射
+└── 单一数据源
+    ▲
+    │
+    ▼
+Game Layer (wireless/)
+├── Node GUI实现
+└── Matrix GUI实现
+```
+
+### 最终收益（五次重构总计）
+
+1. **DRY原则**: 消除225+行跨平台重复代码
+   - 第一次: -100行 (screen factory)
+   - 第二次: -60行 (slot manager)
+   - 第三次: -65行 (dispatcher + metadata)
+   - 第四次: 0行 (naming - 架构质量)
+   - 第五次: 0行 (registration - 可扩展性)
+
+2. **关注点分离**: 
+   - 游戏逻辑: core/wireless/gui/*.clj
+   - 元数据定义: gui_metadata.clj
+   - 平台注册: 完全通用、元数据驱动
+
+3. **可维护性**: 
+   - 屏幕创建: 1个文件 (screen_factory)
+   - 槽位布局: 1个文件 (slot_manager)
+   - 容器分发: 1个文件 (container_dispatcher)
+   - GUI元数据: 1个文件 (gui_metadata)
+   - **平台注册: 完全通用，永不修改**
+
+4. **可扩展性**: 
+   - 添加新容器: extend-protocol
+   - 添加新GUI: 修改gui_metadata.clj（2行）
+   - 添加新平台: 复制通用注册逻辑
+   - **平台代码与游戏GUI数量无关**
+
+5. **设计原则遵守**: 
+   - ✅ 单一职责原则（SRP）
+   - ✅ 开闭原则（OCP）
+   - ✅ 依赖倒置原则（DIP）
+   - ✅ 接口隔离原则（ISP）
+
+### 经验教训
+
+1. **识别抽象点**: 
+   - 第一次: 屏幕创建 → factory
+   - 第二次: 槽位逻辑 → manager
+   - 第三次: 类型分发 → protocol, 元数据 → centralized map
+   - 第四次: 类名本身 → 平台中性命名
+   - 第五次: 注册逻辑 → 元数据驱动
+
+2. **数据驱动设计**：
+   - 用数据表达配置，而非代码
+   - 元数据集中管理，行为通用化
+   - 添加功能 = 添加数据，而非代码
+
+3. **开闭原则的实践**：
+   - Before: 添加功能需要修改多处代码
+   - After: 添加功能只需修改元数据
+   - 核心：让代码"对扩展开放，对修改关闭"
+
+4. **Clojure动态特性**：
+   - `ns-resolve`: 运行时函数查找
+   - 关键字作为函数标识符
+   - 数据即代码的哲学
+
+5. **渐进式重构价值**：
+   - 每次重构都解决一个具体问题
+   - 每次重构都基于前一次的成功
+   - 最终形成优雅、可扩展的架构
+
+6. **架构分层原则**：
+   - **上层可以依赖下层**：游戏逻辑使用平台桥接
+   - **下层不能依赖上层**：平台桥接不知道游戏概念
+   - **中间层作为解耦**：元数据层分离游戏定义和平台实现
+
+7. **设计模式综合应用**: 
+   - 桥接模式: 分离抽象和实现
+   - 策略模式: 封装算法变化
+   - 适配器模式: 统一接口差异
+   - 单例模式: 元数据中心
+   - 依赖倒置: 高层不依赖低层细节
+   - **注册表模式**: 动态查找和注册
+   - **元数据模式**: 数据驱动行为
+
+8. **文档驱动**: 每次重构都更新文档，保持知识同步
+
+---
+
 **重构完成**: 2025-11-26  
-**状态**: ✅ 三次重构全部完成，文档已同步
+**状态**: ✅ 五次重构全部完成，架构达到最优状态
+**最终架构**: 完全去游戏化的平台层，元数据驱动的可扩展设计

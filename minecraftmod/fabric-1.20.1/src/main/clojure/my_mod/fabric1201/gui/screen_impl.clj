@@ -2,8 +2,12 @@
   "Fabric 1.20.1 Client-side Screen Implementation
   
   This namespace handles Fabric-specific screen registration mechanics.
-  Core screen creation logic is in my-mod.wireless.gui.screen-factory."
+  Core screen creation logic is in my-mod.wireless.gui.screen-factory.
+  
+  Platform-agnostic design: Reads GUI metadata and loops through all GUIs
+  to register, eliminating hardcoded game concepts (Node, Matrix, etc.)."
   (:require [my-mod.wireless.gui.screen-factory :as screen-factory]
+            [my-mod.wireless.gui.gui-metadata :as gui-metadata]
             [my-mod.util.log :as log])
   (:import [net.minecraft.client.gui.screen.ingame HandledScreen]
            [net.minecraft.entity.player PlayerInventory]
@@ -17,28 +21,35 @@
 (defn register-screens!
   "Register screen factories with Fabric
   
-  Delegates to platform-agnostic screen-factory for actual screen creation.
-  This function only handles Fabric-specific registration mechanics.
+  Platform-agnostic implementation: Loops through all GUI IDs from metadata
+  and registers corresponding screen factories dynamically.
+  
+  No hardcoded game concepts - adding new GUIs requires only updating metadata.
   
   Should be called during client initialization"
   []
-  (log/info "Registering Wireless GUI screens for Fabric 1.20.1")
+  (log/info "Registering GUI screens for Fabric 1.20.1")
   
-  ;; Use Fabric's ScreenRegistry (or HandledScreens in newer versions)
   (try
-    ;; Register Node screen
-    (net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry/register
-      @my_mod.fabric1201.gui.registry_impl/NODE_HANDLER_TYPE
-      (reify net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry$Factory
-        (create [_ handler player-inventory title]
-          (screen-factory/create-node-screen handler player-inventory title))))
-    
-    ;; Register Matrix screen
-    (net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry/register
-      @my_mod.fabric1201.gui.registry_impl/MATRIX_HANDLER_TYPE
-      (reify net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry$Factory
-        (create [_ handler player-inventory title]
-          (screen-factory/create-matrix-screen handler player-inventory title))))
+    (let [platform :fabric-1.20.1]
+      
+      ;; Loop through all registered GUIs from metadata
+      (doseq [gui-id (gui-metadata/get-all-gui-ids)]
+        (let [handler-type (gui-metadata/get-menu-type platform gui-id)
+              factory-fn-kw (gui-metadata/get-screen-factory-fn gui-id)]
+          
+          (when (and handler-type factory-fn-kw)
+            ;; Get the actual factory function from screen-factory namespace
+            (let [factory-fn (ns-resolve 'my-mod.wireless.gui.screen-factory factory-fn-kw)]
+              (if factory-fn
+                (do
+                  (net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry/register
+                    handler-type
+                    (reify net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry$Factory
+                      (create [_ handler player-inventory title]
+                        (factory-fn handler player-inventory title))))
+                  (log/info "Registered screen factory for GUI ID" gui-id))
+                (log/warn "Screen factory function not found:" factory-fn-kw "for GUI ID" gui-id))))))
     
     (log/info "Screen factories registered successfully (Fabric)")
     

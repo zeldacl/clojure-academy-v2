@@ -1,5 +1,13 @@
 (ns my-mod.fabric1201.gui.bridge
-  "Fabric 1.20.1 GUI Bridge - ScreenHandler wrapper for Clojure containers"
+  "Fabric 1.20.1 GUI Bridge - Platform-neutral ScreenHandler wrapper
+  
+  This module provides platform-specific Java interop without game logic.
+  Game-specific concepts (Wireless, Node, Matrix) are abstracted away.
+  
+  Classes:
+  - FabricScreenHandlerBridge: Generic ScreenHandler wrapper
+  - FabricScreenHandlerFactoryBridge: Generic NamedScreenHandlerFactory
+  - FabricExtendedScreenHandlerFactoryBridge: Extended factory with packet data"
   (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
             [my-mod.wireless.gui.gui-metadata :as gui-metadata]
             [my-mod.wireless.gui.slot-manager :as slot-manager]
@@ -17,7 +25,7 @@
 ;; ============================================================================
 
 (gen-class
-  :name my_mod.fabric1201.gui.WirelessScreenHandler
+  :name my_mod.fabric1201.gui.FabricScreenHandlerBridge
   :extends net.minecraft.screen.ScreenHandler
   :state state
   :init init
@@ -101,7 +109,7 @@
 ;; ============================================================================
 
 (gen-class
-  :name my_mod.fabric1201.gui.WirelessScreenHandlerFactory
+  :name my_mod.fabric1201.gui.FabricScreenHandlerFactoryBridge
   :implements [net.minecraft.screen.NamedScreenHandlerFactory]
   :state state
   :init init
@@ -155,7 +163,7 @@
 ;; ============================================================================
 
 (gen-class
-  :name my_mod.fabric1201.gui.ExtendedWirelessScreenHandlerFactory
+  :name my_mod.fabric1201.gui.FabricExtendedScreenHandlerFactoryBridge
   :implements [net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory]
   :state state
   :init init-extended
@@ -192,7 +200,7 @@
         (when-not handler-type
           (throw (ex-info "ScreenHandlerType not registered" {:gui-id gui-id})))
         
-        (my_mod.fabric1201.gui.WirelessScreenHandler. sync-id handler-type clj-container))))))
+        (my_mod.fabric1201.gui.FabricScreenHandlerBridge. sync-id handler-type clj-container))))))
 
 (defn -writeScreenOpeningData
   "Write additional data to packet buffer (sent to client)"
@@ -214,35 +222,35 @@
 ;; ============================================================================
 
 (defn create-screen-handler-factory
-  "Create a ScreenHandler Factory for opening GUI
-  
-  Args:
-  - gui-id: int (0=Node, 1=Matrix)
-  - tile-entity: TileEntity instance
-  
-  Returns: NamedScreenHandlerFactory instance"
-  [gui-id tile-entity]
-  (my_mod.fabric1201.gui.WirelessScreenHandlerFactory. gui-id tile-entity))
-
-(defn create-extended-screen-handler-factory
-  "Create an Extended ScreenHandler Factory (with packet data)
+  "Create a simple ScreenHandler Factory
   
   Args:
   - gui-id: int
   - tile-entity: TileEntity
   
-  Returns: ExtendedScreenHandlerFactory instance"
+  Returns: NamedScreenHandlerFactory"
   [gui-id tile-entity]
-  (my_mod.fabric1201.gui.ExtendedWirelessScreenHandlerFactory. gui-id tile-entity))
+  (my_mod.fabric1201.gui.FabricScreenHandlerFactoryBridge. gui-id tile-entity))
+
+(defn create-extended-factory
+  "Create an extended factory with packet data
+  
+  Args:
+  - gui-id: int
+  - tile-entity: TileEntity
+  
+  Returns: ExtendedScreenHandlerFactory"
+  [gui-id tile-entity]
+  (my_mod.fabric1201.gui.FabricExtendedScreenHandlerFactoryBridge. gui-id tile-entity))
 
 (defn wrap-clojure-container
-  "Wrap a Clojure container in ScreenHandler
+  "Wrap Clojure container in Fabric ScreenHandler
   
   Args:
   - sync-id: int
   - handler-type: ScreenHandlerType
   - clj-container: Clojure container
   
-  Returns: ScreenHandler instance"
+  Returns: ScreenHandler"
   [sync-id handler-type clj-container]
-  (my_mod.fabric1201.gui.WirelessScreenHandler. sync-id handler-type clj-container))
+  (my_mod.fabric1201.gui.FabricScreenHandlerBridge. sync-id handler-type clj-container))

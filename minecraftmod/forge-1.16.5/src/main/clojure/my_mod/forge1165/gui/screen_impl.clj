@@ -2,8 +2,12 @@
   "Forge 1.16.5 Client-side Screen Implementation
   
   This namespace handles Forge-specific screen registration mechanics.
-  Core screen creation logic is in my-mod.wireless.gui.screen-factory."
+  Core screen creation logic is in my-mod.wireless.gui.screen-factory.
+  
+  Platform-agnostic design: Reads GUI metadata and loops through all GUIs
+  to register, eliminating hardcoded game concepts (Node, Matrix, etc.)."
   (:require [my-mod.wireless.gui.screen-factory :as screen-factory]
+            [my-mod.wireless.gui.gui-metadata :as gui-metadata]
             [my-mod.util.log :as log])
   (:import [net.minecraft.client.gui.screen.inventory ContainerScreen]
            [net.minecraft.entity.player PlayerInventory]
@@ -16,30 +20,36 @@
 (defn register-screens!
   "Register screen factories with Minecraft
   
-  Delegates to platform-agnostic screen-factory for actual screen creation.
-  This function only handles Forge-specific registration mechanics.
+  Platform-agnostic implementation: Loops through all GUI IDs from metadata
+  and registers corresponding screen factories dynamically.
+  
+  No hardcoded game concepts - adding new GUIs requires only updating metadata.
   
   Should be called during client initialization (FMLClientSetupEvent)"
   []
-  (log/info "Registering Wireless GUI screens for Forge 1.16.5")
+  (log/info "Registering GUI screens for Forge 1.16.5")
   
-  ;; Use ScreenManager to register screen factories
   (try
-    (let [screen-manager net.minecraft.client.gui.ScreenManager]
+    (let [screen-manager net.minecraft.client.gui.ScreenManager
+          platform :forge-1.16.5]
       
-      ;; Register Node screen
-      (.registerFactory screen-manager
-                       @my_mod.forge1165.gui.registry_impl/NODE_MENU_TYPE
-                       (reify net.minecraft.client.gui.IScreenFactory
-                         (create [_ container player-inventory title]
-                           (screen-factory/create-node-screen container player-inventory title))))
-      
-      ;; Register Matrix screen
-      (.registerFactory screen-manager
-                       @my_mod.forge1165.gui.registry_impl/MATRIX_MENU_TYPE
-                       (reify net.minecraft.client.gui.IScreenFactory
-                         (create [_ container player-inventory title]
-                           (screen-factory/create-matrix-screen container player-inventory title))))
+      ;; Loop through all registered GUIs from metadata
+      (doseq [gui-id (gui-metadata/get-all-gui-ids)]
+        (let [menu-type (gui-metadata/get-menu-type platform gui-id)
+              factory-fn-kw (gui-metadata/get-screen-factory-fn gui-id)]
+          
+          (when (and menu-type factory-fn-kw)
+            ;; Get the actual factory function from screen-factory namespace
+            (let [factory-fn (ns-resolve 'my-mod.wireless.gui.screen-factory factory-fn-kw)]
+              (if factory-fn
+                (do
+                  (.registerFactory screen-manager
+                                   menu-type
+                                   (reify net.minecraft.client.gui.IScreenFactory
+                                     (create [_ container player-inventory title]
+                                       (factory-fn container player-inventory title))))
+                  (log/info \"Registered screen factory for GUI ID\" gui-id))
+                (log/warn \"Screen factory function not found:\" factory-fn-kw \"for GUI ID\" gui-id))))))
       
       (log/info "Screen factories registered successfully"))
     
