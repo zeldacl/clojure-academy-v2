@@ -5,6 +5,7 @@
   (:require [my-mod.block.dsl :as bdsl]
             [my-mod.energy.stub :as energy]
             [my-mod.wireless.interfaces :as winterfaces]
+            [my-mod.inventory.core :as inv]
             [my-mod.util.log :as log]))
 
 ;; Node type specifications
@@ -209,6 +210,55 @@
 (alter-meta! #'->NodeTileEntity assoc :wireless-tile true)
 (alter-meta! #'map->NodeTileEntity assoc :wireless-tile true)
 
+;; ============================================================================
+;; IInventory Protocol Implementation
+;; ============================================================================
+
+(extend-protocol inv/IInventory
+  NodeTileEntity
+  
+  (get-size-inventory [this]
+    2)  ; 2 slots: input and output
+  
+  (get-stack-in-slot [this slot]
+    (get-inventory-slot this slot))
+  
+  (decr-stack-size [this slot count]
+    (when-let [stack (get-inventory-slot this slot)]
+      (let [stack-count (.getCount stack)]
+        (if (<= stack-count count)
+          ;; Remove entire stack
+          (let [result stack]
+            (set-inventory-slot! this slot nil)
+            result)
+          ;; Split stack
+          (let [result (.splitStack stack count)]
+            result)))))
+  
+  (remove-stack-from-slot [this slot]
+    (let [stack (get-inventory-slot this slot)]
+      (set-inventory-slot! this slot nil)
+      stack))
+  
+  (set-inventory-slot-contents [this slot stack]
+    (set-inventory-slot! this slot stack))
+  
+  (get-inventory-stack-limit [this]
+    64)
+  
+  (is-usable-by-player? [this player]
+    true)
+  
+  (is-item-valid-for-slot? [this slot stack]
+    ;; Only energy items are valid
+    (energy/is-energy-item-supported? stack))
+  
+  (get-inventory-name [this]
+    "wireless_node")
+  
+  (has-custom-name? [this]
+    false))
+
 (defn get-inventory-slot [tile slot-index]
   (get @(:inventory tile) slot-index))
 
@@ -291,8 +341,7 @@
     (update-charge-out! tile)
     
     ;; Check network connection every 20 ticks (1 second)
-    (when (zero? (mod tick 20))
-      (check-network-connection! tile)
+    (when (zero? (mod tick 20))\n      (check-network-connection! tile)
       (sync-to-clients! tile)
       
       ;; Update block state for visual feedback
@@ -301,6 +350,48 @@
     ;; Also update block state when energy changes significantly
     (when (zero? (mod tick 10))
       (rebuild-block-state! tile))))
+
+;; ============================================================================
+;; NBT Persistence
+;; ============================================================================
+
+(defn write-node-to-nbt
+  "Save NodeTileEntity to NBT
+  
+  Saves:
+  - Energy
+  - Node name
+  - Password
+  - Placer name
+  - Inventory (2 slots)"
+  [tile nbt]
+  (.setDouble nbt "energy" (winterfaces/get-energy tile))
+  (.setString nbt "nodeName" (winterfaces/get-node-name tile))
+  (.setString nbt "password" (winterfaces/get-password tile))
+  (.setString nbt "placer" (:placer-name tile))
+  (inv/write-inventory-to-nbt tile nbt)
+  nbt)
+
+(defn read-node-from-nbt
+  "Load NodeTileEntity from NBT
+  
+  Restores:
+  - Energy
+  - Node name
+  - Password
+  - Placer name
+  - Inventory (2 slots)"
+  [tile nbt]
+  (when (.hasKey nbt "energy")
+    (winterfaces/set-energy tile (.getDouble nbt "energy")))
+  (when (.hasKey nbt "nodeName")
+    (set-node-name! tile (.getString nbt "nodeName")))
+  (when (.hasKey nbt "password")
+    (set-password-str! tile (.getString nbt "password")))
+  (when (.hasKey nbt "placer")
+    (assoc tile :placer-name (.getString nbt "placer")))
+  (inv/read-inventory-from-nbt tile nbt)
+  tile)
 
 ;; ============================================================================
 ;; ITickable Implementation

@@ -4,6 +4,7 @@
   Core component of wireless energy network providing capacity, bandwidth and range."
   (:require [my-mod.block.dsl :as bdsl]
             [my-mod.wireless.interfaces :as winterfaces]
+            [my-mod.inventory.core :as inv]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
             [my-mod.util.log :as log]))
@@ -138,6 +139,54 @@
 (alter-meta! #'map->TileMatrix assoc :wireless-tile true :wireless-matrix true)
 
 ;; ============================================================================
+;; IInventory Protocol Implementation
+;; ============================================================================
+
+(extend-protocol inv/IInventory
+  TileMatrix
+  
+  (get-size-inventory [this]
+    4)  ; 4 slots: 3 plates + 1 core
+  
+  (get-stack-in-slot [this slot]
+    (get-inventory-slot this slot))
+  
+  (decr-stack-size [this slot count]
+    (when-let [stack (get-inventory-slot this slot)]
+      (let [stack-count (.getCount stack)]
+        (if (<= stack-count count)
+          ;; Remove entire stack
+          (let [result stack]
+            (set-inventory-slot! this slot nil)
+            result)
+          ;; Split stack
+          (let [result (.splitStack stack count)]
+            result)))))
+  
+  (remove-stack-from-slot [this slot]
+    (let [stack (get-inventory-slot this slot)]
+      (set-inventory-slot! this slot nil)
+      stack))
+  
+  (set-inventory-slot-contents [this slot stack]
+    (set-inventory-slot! this slot stack))
+  
+  (get-inventory-stack-limit [this]
+    1)  ; Matrix: max 1 item per slot
+  
+  (is-usable-by-player? [this player]
+    true)
+  
+  (is-item-valid-for-slot? [this slot stack]
+    (is-item-valid-for-slot? this slot stack))  ; Use existing function
+  
+  (get-inventory-name [this]
+    "wireless_matrix")
+  
+  (has-custom-name? [this]
+    false))
+
+;; ============================================================================
 ;; Update Logic
 ;; ============================================================================
 
@@ -174,6 +223,48 @@
   ;; TODO: Implement structure verification
   ;; For now, just log
   (log/debug "Verifying structure at" (:pos tile)))
+
+;; ============================================================================
+;; NBT Persistence
+;; ============================================================================
+
+(defn write-matrix-to-nbt
+  "Save TileMatrix to NBT
+  
+  Saves:
+  - Placer name
+  - Plate count
+  - Sub ID
+  - Direction
+  - Inventory (4 slots)"
+  [tile nbt]
+  (.setString nbt "placer" (:placer-name tile))
+  (.setInteger nbt "plateCount" @(:plate-count tile))
+  (.setInteger nbt "subId" (:sub-id tile))
+  (.setString nbt "direction" (name (:direction tile)))
+  (inv/write-inventory-to-nbt tile nbt)
+  nbt)
+
+(defn read-matrix-from-nbt
+  "Load TileMatrix from NBT
+  
+  Restores:
+  - Placer name
+  - Plate count
+  - Sub ID
+  - Direction
+  - Inventory (4 slots)"
+  [tile nbt]
+  (when (.hasKey nbt "placer")
+    (assoc tile :placer-name (.getString nbt "placer")))
+  (when (.hasKey nbt "plateCount")
+    (reset! (:plate-count tile) (.getInteger nbt "plateCount")))
+  (when (.hasKey nbt "subId")
+    (assoc tile :sub-id (.getInteger nbt "subId")))
+  (when (.hasKey nbt "direction")
+    (assoc tile :direction (keyword (.getString nbt "direction"))))
+  (inv/read-inventory-from-nbt tile nbt)
+  tile)
 
 ;; ============================================================================
 ;; TileEntity Registry
