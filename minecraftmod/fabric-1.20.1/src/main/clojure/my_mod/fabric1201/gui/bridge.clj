@@ -1,7 +1,7 @@
 (ns my-mod.fabric1201.gui.bridge
   "Fabric 1.20.1 GUI Bridge - ScreenHandler wrapper for Clojure containers"
-  (:require [my-mod.wireless.gui.node-container :as node-container]
-            [my-mod.wireless.gui.matrix-container :as matrix-container]
+  (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
+            [my-mod.wireless.gui.gui-metadata :as gui-metadata]
             [my-mod.wireless.gui.slot-manager :as slot-manager]
             [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.util.log :as log])
@@ -43,30 +43,12 @@
 (defn -tick
   "Tick the screen handler (called every frame on server)"
   [this]
-  (let [clj-container (-getClojureContainer this)]
-    (cond
-      (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-      (node-container/tick! clj-container)
-      
-      (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-      (matrix-container/tick! clj-container)
-      
-      :else
-      (log/warn "Unknown container type in tick:" (type clj-container)))))
+  (dispatcher/safe-tick! (-getClojureContainer this)))
 
 (defn -canUse
   "Check if player can use this screen handler (Fabric's stillValid)"
   [this player]
-  (let [clj-container (-getClojureContainer this)]
-    (cond
-      (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-      (node-container/still-valid? clj-container player)
-      
-      (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-      (matrix-container/still-valid? clj-container player)
-      
-      :else
-      false)))
+  (dispatcher/safe-validate (-getClojureContainer this) player))
 
 (defn -close
   "Called when screen handler is closed"
@@ -82,14 +64,8 @@
   ;; Call superclass
   (.sendContentUpdates (.superclass (class this)) this)
   
-  ;; Sync Clojure container
-  (let [clj-container (-getClojureContainer this)]
-    (cond
-      (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-      (node-container/sync-to-client! clj-container)
-      
-      (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-      (matrix-container/sync-to-client! clj-container))))
+  ;; Sync Clojure container using dispatcher
+  (dispatcher/safe-sync! (-getClojureContainer this)))
 
 (defn -addSlot
   "Add a slot to the screen handler"
@@ -148,51 +124,31 @@
 (defn -getTileEntity [this]
   (:tile-entity (.state this)))
 
-(defn -getDisplayName
-  "Get display name for GUI"
-  [this]
-  (let [gui-id (-getGuiId this)]
-    (Text/literal
-      (case gui-id
-        0 "Wireless Node"
-        1 "Wireless Matrix"
-        "Wireless GUI"))))
+(defn -getDisplayName [this]
+  (Text/literal (gui-metadata/get-display-name (-getGuiId this))))
 
-(defn -createMenu
-  "Create the server-side screen handler
+(defn create-node-handler
+  "Create a Fabric ScreenHandler for Node containers
   
-  This is called by Fabric when opening the GUI"
-  [this sync-id player-inventory player]
-  (let [gui-id (-getGuiId this)
-        tile-entity (-getTileEntity this)
-        handler (gui-registry/get-gui-handler)
-        world (.getWorld player)
-        pos (if tile-entity
-              (:pos tile-entity)
-              (.getBlockPos player))]
-    
-    (log/info "Creating screen handler for GUI" gui-id)
-    
-    ;; Create Clojure container
-    (let [clj-container (.get-server-container handler gui-id player world pos)]
-      (when-not clj-container
-        (throw (ex-info "Failed to create Clojure container"
-                       {:gui-id gui-id :player player})))
-      
-      ;; Register active container
-      (gui-registry/register-active-container! clj-container)
-      
-      ;; Get ScreenHandlerType (should be registered in init)
-      (let [handler-type (case gui-id
-                           0 my_mod.fabric1201.gui.GuiRegistry/NODE_HANDLER_TYPE
-                           1 my_mod.fabric1201.gui.GuiRegistry/MATRIX_HANDLER_TYPE
-                           nil)]
-        
-        (when-not handler-type
-          (throw (ex-info "ScreenHandlerType not registered" {:gui-id gui-id})))
-        
-        ;; Create ScreenHandler wrapper
-        (my_mod.fabric1201.gui.WirelessScreenHandler. sync-id handler-type clj-container)))))
+  Implementation notes:
+  - Uses dispatcher for polymorphic container operations (tick, validate, sync)
+  - Uses gui-metadata for display names and MenuType lookups
+  - Uses slot-manager for inventory layout and quick-move
+  - Eliminates hardcoded instance? checks and case statements
+  
+  Container lifecycle:
+  1. tick() - dispatcher/safe-tick! handles container updates
+  2. canUse() - dispatcher/safe-validate checks player distance
+  3. sendContentUpdates() - dispatcher/safe-sync! syncs to client
+  
+  Args:
+    handler-type: ScreenHandlerType
+    sync-id: int - synchronization ID
+    player-inventory: PlayerInventory
+    pos: BlockPos (packed as long for Fabric)
+  
+  Returns:
+    ScreenHandler instance wrapping NodeContainer"
 
 ;; ============================================================================
 ;; ExtendedScreenHandlerFactory (for additional data)
@@ -217,12 +173,7 @@
   (:tile-entity (.state this)))
 
 (defn -getDisplayName [this]
-  (let [gui-id (-getGuiId this)]
-    (Text/literal
-      (case gui-id
-        0 "Wireless Node"
-        1 "Wireless Matrix"
-        "Wireless GUI"))))
+  (Text/literal (gui-metadata/get-display-name (-getGuiId this))))
 
 (defn -createMenu [this sync-id player-inventory player]
   (let [gui-id (-getGuiId this)
@@ -237,14 +188,11 @@
       
       (gui-registry/register-active-container! clj-container)
       
-      (let [handler-type (case gui-id
-                           0 my_mod.fabric1201.gui.GuiRegistry/NODE_HANDLER_TYPE
-                           1 my_mod.fabric1201.gui.GuiRegistry/MATRIX_HANDLER_TYPE
-                           nil)]
+      (let [handler-type (gui-metadata/get-menu-type :fabric-1.20.1 gui-id)]
         (when-not handler-type
           (throw (ex-info "ScreenHandlerType not registered" {:gui-id gui-id})))
         
-        (my_mod.fabric1201.gui.WirelessScreenHandler. sync-id handler-type clj-container)))))
+        (my_mod.fabric1201.gui.WirelessScreenHandler. sync-id handler-type clj-container))))))
 
 (defn -writeScreenOpeningData
   "Write additional data to packet buffer (sent to client)"

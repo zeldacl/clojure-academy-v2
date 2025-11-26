@@ -1,7 +1,7 @@
 (ns my-mod.forge1165.gui.bridge
   "Forge 1.16.5 GUI Bridge - Java Container wrapper for Clojure containers"
-  (:require [my-mod.wireless.gui.node-container :as node-container]
-            [my-mod.wireless.gui.matrix-container :as matrix-container]
+  (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
+            [my-mod.wireless.gui.gui-metadata :as gui-metadata]
             [my-mod.wireless.gui.slot-manager :as slot-manager]
             [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.util.log :as log])
@@ -9,7 +9,6 @@
            [net.minecraft.inventory.container Container INamedContainerProvider]
            [net.minecraft.util.text ITextComponent StringTextComponent]
            [net.minecraft.network PacketBuffer]))
-
 ;; ============================================================================
 ;; Java Container Wrapper
 ;; ============================================================================
@@ -43,32 +42,12 @@
 (defn -tick
   "Tick the container (called every frame on server)"
   [this]
-  (let [clj-container (-getClojureContainer this)]
-    (cond
-      ;; Node container
-      (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-      (node-container/tick! clj-container)
-      
-      ;; Matrix container
-      (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-      (matrix-container/tick! clj-container)
-      
-      :else
-      (log/warn "Unknown container type in tick:" (type clj-container)))))
+  (dispatcher/safe-tick! (-getClojureContainer this)))
 
 (defn -stillValid
   "Check if player can still use this container"
   [this player]
-  (let [clj-container (-getClojureContainer this)]
-    (cond
-      (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-      (node-container/still-valid? clj-container player)
-      
-      (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-      (matrix-container/still-valid? clj-container player)
-      
-      :else
-      false)))
+  (dispatcher/safe-validate (-getClojureContainer this) player))
 
 (defn -removed
   "Called when container is closed"
@@ -83,14 +62,8 @@
   ;; Call superclass method to handle listener notifications
   (.detectAndSendChanges (.superclass (class this)) this)
   
-  ;; Sync Clojure container data
-  (let [clj-container (-getClojureContainer this)]
-    (cond
-      (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-      (node-container/sync-to-client! clj-container)
-      
-      (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-      (matrix-container/sync-to-client! clj-container))))
+  ;; Sync Clojure container data using dispatcher
+  (dispatcher/safe-sync! (-getClojureContainer this)))
 
 (defn -addSlot
   "Add a slot to the container"
@@ -161,12 +134,8 @@
 (defn -getDisplayName
   "Get display name for GUI"
   [this]
-  (let [gui-id (-getGuiId this)]
-    (StringTextComponent.
-      (case gui-id
-        0 "Wireless Node"
-        1 "Wireless Matrix"
-        "Wireless GUI"))))
+  (StringTextComponent.
+    (gui-metadata/get-display-name (-getGuiId this))))
 
 (defn -createMenu
   "Create the server-side container
@@ -192,17 +161,14 @@
       ;; Register active container
       (gui-registry/register-active-container! clj-container)
       
-      ;; Get or create MenuType (should be registered in init)
-      (let [menu-type (case gui-id
-                        0 my_mod.forge1165.gui.GuiRegistry/NODE_MENU_TYPE
-                        1 my_mod.forge1165.gui.GuiRegistry/MATRIX_MENU_TYPE
-                        nil)]
+      ;; Get MenuType from metadata registry
+      (let [menu-type (gui-metadata/get-menu-type :forge-1.16.5 gui-id)]
         
         (when-not menu-type
           (throw (ex-info "MenuType not registered" {:gui-id gui-id})))
         
         ;; Create Java Container wrapper
-        (my_mod.forge1165.gui.WirelessContainer. window-id menu-type clj-container)))))
+        (my_mod.forge1165.gui.WirelessContainer. window-id menu-type clj-container))))))
 
 ;; ============================================================================
 ;; Helper Functions

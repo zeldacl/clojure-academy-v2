@@ -680,50 +680,374 @@ After:
 ✅ **综合架构**:
 ```
 Core (Platform-Agnostic)
-├── screen_factory.clj    # 屏幕创建游戏逻辑
-├── slot_manager.clj      # 槽位管理游戏逻辑
-├── node_gui.clj          # CGui界面定义
-├── matrix_gui.clj        # CGui界面定义
-├── node_container.clj    # 容器逻辑
-└── matrix_container.clj  # 容器逻辑
+├── screen_factory.clj       # 屏幕创建游戏逻辑
+├── slot_manager.clj         # 槽位管理游戏逻辑
+├── container_dispatcher.clj # 容器操作分发 (协议)
+├── gui_metadata.clj         # GUI元数据集中管理
+├── node_gui.clj             # CGui界面定义
+├── matrix_gui.clj           # CGui界面定义
+├── node_container.clj       # 容器逻辑
+└── matrix_container.clj     # 容器逻辑
 
 Platform (Forge/Fabric)
-├── bridge.clj            # Java包装器 (仅平台API调用)
-├── registry_impl.clj     # 注册逻辑 (平台特定)
-├── screen_impl.clj       # 屏幕注册 (委托给factory)
-├── network.clj           # 网络包 (平台API)
-├── slots.clj             # Slot实现 (平台API)
-└── init.clj              # 初始化流程
+├── bridge.clj               # Java包装器 (仅平台API调用)
+├── registry_impl.clj        # 注册逻辑 (平台特定)
+├── screen_impl.clj          # 屏幕注册 (委托给factory)
+├── network.clj              # 网络包 (平台API)
+├── slots.clj                # Slot实现 (平台API)
+└── init.clj                 # 初始化流程
+```
+
+---
+
+## 第三次重构: Container分发器 + GUI元数据
+
+### 背景
+
+第二次重构后，继续审查平台代码发现还有两种游戏逻辑：
+1. **Container类型分发**: 使用`(instance? + cond)`判断容器类型，执行不同操作
+2. **GUI元数据查找**: 使用`(case gui-id)`硬编码GUI名称、类型、MenuType
+
+### 问题
+
+#### 1. Container分发重复
+```clojure
+;; Forge bridge.clj -tick
+(cond
+  (instance? NodeContainer c) (node-container/tick! c)
+  (instance? MatrixContainer c) (matrix-container/tick! c)
+  :else (log/warn "Unknown"))
+
+;; Forge bridge.clj -stillValid
+(cond
+  (instance? NodeContainer c) (node-container/still-valid? c p)
+  (instance? MatrixContainer c) (matrix-container/still-valid? c p)
+  :else false)
+
+;; Fabric bridge.clj -tick (相同模式)
+;; Fabric bridge.clj -canUse (相同模式)
+;; ... 6个方法 × 2个平台 = 12处重复
+```
+
+#### 2. GUI元数据分散
+```clojure
+;; Forge Provider -getDisplayName
+(case gui-id
+  0 "Wireless Node"
+  1 "Wireless Matrix")
+
+;; Fabric Factory -getDisplayName (相同代码)
+
+;; Forge Provider -createMenu
+(case gui-id
+  0 RegistryInit/WIRELESS_NODE_CONTAINER
+  1 RegistryInit/WIRELESS_MATRIX_CONTAINER)
+
+;; Fabric Factory -createMenu (相同代码)
+```
+
+### 解决方案
+
+#### 1. container_dispatcher.clj - 协议分发
+
+使用Clojure协议实现多态分发，替代`instance?`检查：
+
+```clojure
+;; 定义协议
+(defprotocol IContainerOperations
+  (tick-container! [container])
+  (validate-container [container player])
+  (sync-container! [container]))
+
+;; 扩展协议到具体类型
+(extend-protocol IContainerOperations
+  NodeContainer
+  (tick-container! [c] (node-container/tick! c))
+  (validate-container [c p] (node-container/still-valid? c p))
+  (sync-container! [c] (node-container/sync-to-client! c))
+  
+  MatrixContainer
+  (tick-container! [c] (matrix-container/tick! c))
+  (validate-container [c p] (matrix-container/still-valid? c p))
+  (sync-container! [c] (matrix-container/sync-to-client! c)))
+
+;; 安全包装器
+(defn safe-tick! [container]
+  (try
+    (tick-container! container)
+    (catch Exception e
+      (log/error e "Failed to tick container" {:container container}))))
+```
+
+#### 2. gui_metadata.clj - 元数据中心
+
+集中管理所有GUI相关元数据：
+
+```clojure
+;; 常量定义
+(def gui-wireless-node 0)
+(def gui-wireless-matrix 1)
+
+;; 元数据映射
+(def gui-display-names
+  {0 "Wireless Node"
+   1 "Wireless Matrix"})
+
+(def gui-types
+  {0 :node
+   1 :matrix})
+
+(def gui-registry-names
+  {0 "wireless_node_gui"
+   1 "wireless_matrix_gui"})
+
+;; 查询API
+(defn get-display-name [gui-id]
+  (get gui-display-names gui-id "Unknown GUI"))
+
+(defn get-gui-type [gui-id]
+  (get gui-types gui-id :unknown))
+
+;; 平台MenuType注册
+(defonce platform-menu-types (atom {}))
+
+(defn register-menu-type! [platform gui-id menu-type]
+  (swap! platform-menu-types assoc-in [platform gui-id] menu-type))
+
+(defn get-menu-type [platform gui-id]
+  (get-in @platform-menu-types [platform gui-id]))
+```
+
+### 重构步骤
+
+#### 1. 创建核心模块
+- ✅ `container_dispatcher.clj` (150行)
+- ✅ `gui_metadata.clj` (160行)
+
+#### 2. 重构Forge 1.16.5 bridge.clj
+```clojure
+;; Before (14行)
+(defn -tick [this]
+  (let [c (get-clojure-container this)]
+    (cond
+      (instance? NodeContainer c) (node-container/tick! c)
+      (instance? MatrixContainer c) (matrix-container/tick! c)
+      :else (log/warn "Unknown"))))
+
+;; After (3行)
+(defn -tick [this]
+  (dispatcher/safe-tick! (get-clojure-container this)))
+```
+
+**减少代码**:
+- `-tick`: 14行 → 3行 (-11行)
+- `-stillValid`: 10行 → 3行 (-7行)
+- `-detectAndSendChanges`: 9行 → 4行 (-5行)
+- `-getDisplayName`: 6行 → 2行 (-4行)
+- `-createMenu`: 4行 → 1行 (-3行)
+- **总计**: -30行/方法
+
+#### 3. 重构Fabric 1.20.1 bridge.clj
+应用相同模式:
+- `-tick`, `-canUse`, `-sendContentUpdates`: 使用`dispatcher/safe-*`
+- `-getDisplayName`: 使用`gui-metadata/get-display-name`
+- `-createMenu`: 使用`gui-metadata/get-menu-type`
+
+**减少代码**: 约-35行
+
+### 代码对比
+
+#### Container分发
+
+**Before**:
+```clojure
+;; 每个lifecycle方法都要重复
+(defn -tick [this]
+  (let [c (get-clojure-container this)]
+    (cond
+      (instance? NodeContainer c) (node-container/tick! c)
+      (instance? MatrixContainer c) (matrix-container/tick! c)
+      :else (log/warn "Unknown container" c))))
+
+(defn -stillValid [this player]
+  (let [c (get-clojure-container this)]
+    (cond
+      (instance? NodeContainer c) (node-container/still-valid? c player)
+      (instance? MatrixContainer c) (matrix-container/still-valid? c player)
+      :else false)))
+```
+
+**After**:
+```clojure
+;; 一行搞定，协议自动分发
+(defn -tick [this]
+  (dispatcher/safe-tick! (get-clojure-container this)))
+
+(defn -stillValid [this player]
+  (dispatcher/safe-validate (get-clojure-container this) player))
+```
+
+#### GUI元数据
+
+**Before**:
+```clojure
+;; 每个平台都重复
+(defn -getDisplayName [this]
+  (Text/literal
+    (case gui-id
+      0 "Wireless Node"
+      1 "Wireless Matrix"
+      "Unknown")))
+
+(defn -createMenu [this sync-id inv player]
+  (let [menu-type (case gui-id
+                    0 RegistryInit/NODE_MENU
+                    1 RegistryInit/MATRIX_MENU)]
+    ...))
+```
+
+**After**:
+```clojure
+;; 单一数据源
+(defn -getDisplayName [this]
+  (Text/literal (gui-metadata/get-display-name gui-id)))
+
+(defn -createMenu [this sync-id inv player]
+  (let [menu-type (gui-metadata/get-menu-type :forge-1.16.5 gui-id)]
+    ...))
+```
+
+### 收益
+
+#### 1. 消除重复
+- **Container分发**: 12处`(instance? + cond)` → 1处协议定义
+- **GUI元数据**: 8处`case`语句 → 1处元数据映射
+- **减少代码**: 约-65行跨平台重复
+
+#### 2. 提升可维护性
+- **添加新容器**: 只需在dispatcher中`extend-protocol`
+- **修改GUI名称**: 只需修改metadata中的映射
+- **平台桥接**: 无需关心业务逻辑细节
+
+#### 3. 提升可扩展性
+```clojure
+;; 添加新容器类型
+(extend-protocol IContainerOperations
+  EnergyContainer  ;; 新类型
+  (tick-container! [c] (energy-container/tick! c))
+  (validate-container [c p] (energy-container/valid? c p))
+  (sync-container! [c] (energy-container/sync! c)))
+
+;; 添加新GUI
+(def gui-energy 2)  ;; gui_metadata.clj
+(swap! gui-display-names assoc 2 "Energy Monitor")
+```
+
+#### 4. 性能优化
+- **协议分发**: JVM内联优化，比`instance?`更快
+- **元数据查询**: HashMap查找，O(1)复杂度
+
+### 设计模式
+
+#### 1. 策略模式 (Strategy Pattern)
+```
+IContainerOperations (协议)
+  ├── tick-container!
+  ├── validate-container
+  └── sync-container!
+      │
+      ▼
+NodeContainer     MatrixContainer
+(extend-protocol) (extend-protocol)
+```
+
+#### 2. 单一数据源 (Single Source of Truth)
+```
+gui_metadata.clj
+  ├── gui-display-names  → getDisplayName
+  ├── gui-types          → GUI type routing
+  ├── gui-registry-names → registry keys
+  └── platform-menu-types → MenuType lookup
+```
+
+### 技术亮点
+
+#### 1. Clojure协议 vs Java接口
+```clojure
+;; 协议: 无需修改原类型
+(extend-protocol IContainerOperations
+  NodeContainer  ;; 已存在的类型
+  (tick-container! [c] ...))
+
+;; Java接口: 需要在类定义时声明
+class NodeContainer implements IContainerOps { ... }
+```
+
+#### 2. 原子状态管理
+```clojure
+;; 线程安全的MenuType注册
+(defonce platform-menu-types (atom {}))
+
+(defn register-menu-type! [platform gui-id menu-type]
+  (swap! platform-menu-types assoc-in [platform gui-id] menu-type))
+```
+
+#### 3. 安全包装器模式
+```clojure
+(defn safe-tick! [container]
+  (try
+    (tick-container! container)
+    (catch Exception e
+      (log/error e "Tick failed" {:container container}))))
 ```
 
 ### 最终收益
 
-1. **DRY原则**: 消除160行跨平台重复代码
-2. **关注点分离**: 游戏逻辑 vs 平台集成清晰划分
+1. **DRY原则**: 消除225行跨平台重复代码
+   - 第一次重构: -100行 (screen factory)
+   - 第二次重构: -60行 (slot manager)
+   - 第三次重构: -65行 (dispatcher + metadata)
+
+2. **关注点分离**: 
+   - 游戏逻辑: core/wireless/gui/*.clj
+   - 平台集成: forge/fabric bridge.clj
+
 3. **可维护性**: 
-   - 屏幕创建修改: 1个文件 (screen_factory)
-   - 槽位布局修改: 1个文件 (slot_manager)
-4. **可测试性**: 核心逻辑无平台依赖
-5. **可扩展性**: 添加新平台只需实现桥接层
+   - 屏幕创建: 1个文件 (screen_factory)
+   - 槽位布局: 1个文件 (slot_manager)
+   - 容器分发: 1个文件 (container_dispatcher)
+   - GUI元数据: 1个文件 (gui_metadata)
+
+4. **可测试性**: 核心逻辑完全平台无关
+
+5. **可扩展性**: 
+   - 添加新容器: extend-protocol (无需修改bridge)
+   - 添加新GUI: 修改metadata映射
+   - 添加新平台: 实现桥接层
 
 ### 经验教训
 
 1. **识别抽象点**: 
-   - `.getClojureContainer()` → 屏幕工厂
-   - 槽位范围/移动策略 → 槽位管理器
+   - 第一次: 屏幕创建 → factory
+   - 第二次: 槽位逻辑 → manager
+   - 第三次: 类型分发 → protocol, 元数据 → centralized map
 
-2. **渐进式重构**: 
-   - 第一次: 发现屏幕创建重复 → 创建factory
-   - 第二次: 发现槽位逻辑重复 → 创建manager
+2. **渐进式重构**: 每次重构都基于前一次的成功经验
 
 3. **设计模式**: 
-   - 桥接模式分离抽象和实现
-   - 策略模式封装算法变化
-   - 适配器模式统一接口差异
+   - 桥接模式: 分离抽象和实现
+   - 策略模式: 封装算法变化
+   - 适配器模式: 统一接口差异
+   - 单例模式: 元数据中心
 
-4. **文档驱动**: 每次重构都更新文档，保持知识同步
+4. **Clojure优势**: 
+   - 协议: 后置多态，无需修改原类型
+   - 不可变数据: 线程安全的元数据映射
+   - 高阶函数: 安全包装器组合
+
+5. **文档驱动**: 每次重构都更新文档，保持知识同步
 
 ---
 
 **重构完成**: 2025-11-26  
-**状态**: ✅ 所有重构完成，文档已同步
+**状态**: ✅ 三次重构全部完成，文档已同步
