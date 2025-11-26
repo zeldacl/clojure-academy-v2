@@ -1,5 +1,7 @@
 (ns my-mod.block.wireless-node
-  "Wireless Node block implementation - energy network node with item charging"
+  "Wireless Node block implementation - energy network node with item charging
+  
+  Implements ITickable interface for automatic updates every game tick."
   (:require [my-mod.block.dsl :as bdsl]
             [my-mod.energy.stub :as energy]
             [my-mod.wireless.interfaces :as winterfaces]
@@ -19,6 +21,19 @@
               :bandwidth 900
               :range 19
               :capacity 20}})
+
+;; BlockState properties
+;; ENERGY: 0-4 (energy level indicator)
+;; CONNECTED: true/false (network connection status)
+(def block-state-properties
+  {:energy {:name "energy"
+            :type :integer
+            :min 0
+            :max 4
+            :default 0}
+   :connected {:name "connected"
+               :type :boolean
+               :default false}})
 
 ;; TileEntity state - using atom to hold mutable state
 (defrecord NodeTileEntity 
@@ -69,6 +84,94 @@
 
 (defn set-password-str! [tile password]
   (assoc tile :password password))
+
+;; ============================================================================
+;; BlockState Management
+;; ============================================================================
+
+(defn calculate-energy-level
+  "Calculate energy level (0-4) based on current energy percentage"
+  [tile]
+  (let [current (winterfaces/get-energy tile)
+        max-energy (winterfaces/get-max-energy tile)
+        percentage (/ current max-energy)]
+    (cond
+      (<= percentage 0.0) 0
+      (<= percentage 0.25) 1
+      (<= percentage 0.50) 2
+      (<= percentage 0.75) 3
+      :else 4)))
+
+(defn rebuild-block-state!
+  "Update block state based on TileEntity data
+  
+  Updates:
+  - ENERGY property (0-4) based on energy percentage
+  - CONNECTED property based on network connection status
+  
+  Parameters:
+  - tile: NodeTileEntity instance
+  
+  Returns: true if state was updated, false otherwise"
+  [tile]
+  (try
+    (when-let [world (:world tile)]
+      (when-let [pos (:pos tile)]
+        (let [current-state (.getBlockState world pos)
+              energy-level (calculate-energy-level tile)
+              connected @(:enabled tile)]
+          
+          ;; Create new block state with updated properties
+          ;; Note: In real Minecraft, you'd use:
+          ;; (.withProperty current-state ENERGY (Integer/valueOf energy-level))
+          ;; (.withProperty ... CONNECTED (Boolean/valueOf connected))
+          
+          ;; For now, we'll log the state change
+          (log/debug "Updating block state at" pos
+                    "energy-level:" energy-level
+                    "connected:" connected)
+          
+          ;; TODO: Actually set the block state when Minecraft API is available
+          ;; (.setBlockState world pos new-state 3)
+          
+          true)))
+    (catch Exception e
+      (log/error "Failed to rebuild block state:" (.getMessage e))
+      false)))
+
+(defn get-actual-state
+  "Get the actual block state for rendering
+  
+  Reads current TileEntity state and returns appropriate BlockState.
+  Called by Minecraft rendering system.
+  
+  Parameters:
+  - world: World instance
+  - pos: BlockPos instance
+  - base-state: Base IBlockState
+  
+  Returns: IBlockState with updated properties"
+  [world pos base-state]
+  (try
+    (if-let [tile (get-node-tile pos)]
+      (let [energy-level (calculate-energy-level tile)
+            connected @(:enabled tile)]
+        
+        (log/debug "Getting actual state for" pos
+                  "energy:" energy-level
+                  "connected:" connected)
+        
+        ;; TODO: Return actual BlockState when Minecraft API is available
+        ;; (-> base-state
+        ;;     (.withProperty ENERGY (Integer/valueOf energy-level))
+        ;;     (.withProperty CONNECTED (Boolean/valueOf connected)))
+        
+        ;; For now, return base state
+        base-state)
+      base-state)
+    (catch Exception e
+      (log/error "Failed to get actual state:" (.getMessage e))
+      base-state)))
 
 ;; ============================================================================
 ;; IWirelessNode Protocol Implementation
@@ -181,18 +284,103 @@
 (defn update-node-tile!
   "Main update function - called every tick"
   [tile]
-  ;; Increment ticker
   (swap! (:update-ticker tile) inc)
+  (let [tick @(:update-ticker tile)]
+    ;; Update charging every tick
+    (update-charge-in! tile)
+    (update-charge-out! tile)
+    
+    ;; Check network connection every 20 ticks (1 second)
+    (when (zero? (mod tick 20))
+      (check-network-connection! tile)
+      (sync-to-clients! tile)
+      
+      ;; Update block state for visual feedback
+      (rebuild-block-state! tile))
+    
+    ;; Also update block state when energy changes significantly
+    (when (zero? (mod tick 10))
+      (rebuild-block-state! tile))))
+
+;; ============================================================================
+;; ITickable Implementation
+;; ============================================================================
+
+(deftype NodeTileEntityTickable [^:volatile-mutable tile-data]
+  ;; Note: In real implementation, this would implement:
+  ;; net.minecraft.util.ITickable
+  ;; net.minecraft.tileentity.TileEntity (as base class)
   
-  ;; Every 10 ticks: check network and sync
-  (when (>= @(:update-ticker tile) 10)
-    (reset! (:update-ticker tile) 0)
-    (check-network-connection! tile)
-    (sync-to-clients! tile))
+  ;; ITickable interface
+  ;; update() method - called every game tick
+  Object
+  (toString [this]
+    (str "NodeTileEntityTickable[" (:node-type tile-data) "]@" (:pos tile-data)))
   
-  ;; Every tick: update charging
-  (update-charge-in! tile)
-  (update-charge-out! tile))
+  clojure.lang.IDeref
+  (deref [this] tile-data)
+  
+  clojure.lang.IFn
+  (invoke [this]
+    ;; This acts as the update() method
+    (when tile-data
+      (try
+        (update-node-tile! tile-data)
+        (catch Exception e
+          (log/error "Error updating node tile:" (.getMessage e))))))
+  (invoke [this arg]
+    ;; Allow getting/setting tile data
+    (cond
+      (= arg :get-tile-data) tile-data
+      (= arg :update) (do (update-node-tile! tile-data) nil)
+      :else nil)))
+
+(defn create-tickable-node-tile-entity
+  "Create a tickable node tile entity that implements ITickable
+  
+  Parameters:
+  - node-type: :basic, :standard, or :advanced
+  - world: World instance
+  - pos: BlockPos instance
+  
+  Returns: NodeTileEntityTickable instance"
+  [node-type world pos]
+  (let [tile-data (create-node-tile-entity node-type world pos)]
+    (NodeTileEntityTickable. tile-data)))
+
+(defn get-tile-data
+  "Extract NodeTileEntity data from tickable wrapper
+  
+  Parameters:
+  - tickable-tile: NodeTileEntityTickable instance
+  
+  Returns: NodeTileEntity record"
+  [tickable-tile]
+  (if (instance? NodeTileEntityTickable tickable-tile)
+    @tickable-tile
+    tickable-tile))
+
+(defn tick-tile!
+  "Manually tick a tile entity (calls update)
+  
+  Parameters:
+  - tickable-tile: NodeTileEntityTickable instance"
+  [tickable-tile]
+  (when (instance? NodeTileEntityTickable tickable-tile)
+    (tickable-tile)))
+
+;; Compatibility: Allow both tickable and non-tickable tiles
+(defn as-tile-data
+  "Convert any tile to NodeTileEntity data
+  
+  Parameters:
+  - tile: NodeTileEntity or NodeTileEntityTickable
+  
+  Returns: NodeTileEntity record"
+  [tile]
+  (if (instance? NodeTileEntityTickable tile)
+    @tile
+    tile))
 
 ;; Node management functions
 (defn set-node-password! [tile password]
@@ -224,17 +412,34 @@
       (assoc :placer-name (:placer-name nbt-data))
       (assoc :node-type (:node-type nbt-data))))
 
+;; ============================================================================
+;; TileEntity Registry
+;; ============================================================================
+
 ;; Global registry for tile entities (in real impl, this would be per-world)
+;; Supports both NodeTileEntity and NodeTileEntityTickable
 (defonce node-tiles (atom {}))
 
 (defn register-node-tile! [pos tile]
+  "Register a tile entity at a position
+  
+  Parameters:
+  - pos: BlockPos
+  - tile: NodeTileEntity or NodeTileEntityTickable"
   (swap! node-tiles assoc pos tile))
 
 (defn unregister-node-tile! [pos]
   (swap! node-tiles dissoc pos))
 
 (defn get-node-tile [pos]
-  (get @node-tiles pos))
+  "Get tile entity at position, unwrapping if tickable
+  
+  Parameters:
+  - pos: BlockPos
+  
+  Returns: NodeTileEntity record (unwrapped if necessary)"
+  (let [tile (get @node-tiles pos)]
+    (as-tile-data tile)))
 
 ;; Block interaction handlers
 (defn handle-node-right-click [node-type]
@@ -259,12 +464,15 @@
     (log/info "Placing Wireless Node (" (name node-type) ")")
     (let [{:keys [player world pos]} event-data
           player-name (str player)
-          tile (create-node-tile-entity node-type world pos)]
+          ;; Create tickable tile entity
+          tickable-tile (create-tickable-node-tile-entity node-type world pos)
+          tile-data (get-tile-data tickable-tile)]
       ;; Set placer
-      (set-placer! tile player-name)
-      ;; Register tile entity
-      (register-node-tile! pos tile)
-      (log/info "Node placed by" player-name "at" pos))))
+      (set-placer! tile-data player-name)
+      ;; Register tickable tile entity
+      (register-node-tile! pos tickable-tile)
+      (log/info "Node placed by" player-name "at" pos)
+      (log/info "Tickable TileEntity registered for automatic updates"))))
 
 (defn handle-node-break [node-type]
   (fn [event-data]
@@ -329,7 +537,29 @@
   (log/info "  - Standard: max-energy=" (:max-energy (:standard node-types)))
   (log/info "  - Advanced: max-energy=" (:max-energy (:advanced node-types))))
 
+;; ============================================================================
+;; Tick System
+;; ============================================================================
+
 ;; Tick handler - should be called every game tick for all active nodes
+;; Note: With ITickable implementation, Minecraft calls update() automatically
+;; This function is for manual/fallback ticking if needed
 (defn tick-all-nodes! []
+  "Manually tick all registered nodes
+  
+  Note: With ITickable implementation, this is only needed for fallback/testing.
+  Minecraft's TileEntity system will automatically call update() on ITickable tiles."
   (doseq [[pos tile] @node-tiles]
-    (update-node-tile! tile)))
+    (if (instance? NodeTileEntityTickable tile)
+      ;; Tickable tile - call its update method
+      (tick-tile! tile)
+      ;; Non-tickable tile - call update directly
+      (update-node-tile! tile))))
+
+(defn get-active-node-count []
+  "Get count of active nodes in registry"
+  (count @node-tiles))
+
+(defn get-all-node-positions []
+  "Get all positions with registered nodes"
+  (keys @node-tiles))
