@@ -63,14 +63,22 @@
 (defn verify-initialization
   "Verify that GUI system is properly initialized
   
+  Platform-agnostic design: Dynamically verifies all GUI IDs from metadata.
+  
   Returns: boolean (true if all checks pass)"
   []
   (log/info "Verifying GUI system initialization...")
   
-  (let [checks
-        {:network-channel (some? @network/network-channel)
-         :node-menu-type (some? @registry-impl/node-menu-type)
-         :matrix-menu-type (some? @registry-impl/matrix-menu-type)}]
+  (let [network-check {:network-channel (some? @network/network-channel)}
+        
+        ;; Dynamically check all GUI IDs from metadata
+        gui-checks (into {}
+                        (for [gui-id (my-mod.wireless.gui.gui-metadata/get-all-gui-ids)]
+                          (let [check-key (keyword (str "gui-" gui-id "-menu-type"))
+                                menu-type (registry-impl/get-menu-type gui-id)]
+                            [check-key (some? menu-type)])))
+        
+        checks (merge network-check gui-checks)]
     
     (doseq [[check-name result] checks]
       (log/info "  " check-name ":" (if result "✓" "✗")))

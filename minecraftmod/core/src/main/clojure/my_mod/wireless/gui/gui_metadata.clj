@@ -43,6 +43,29 @@
   {gui-wireless-node :create-node-screen
    gui-wireless-matrix :create-matrix-screen})
 
+;; Slot layout definitions
+(def gui-slot-layouts
+  "Map from GUI ID to slot layout configuration
+  
+  Each layout contains:
+  - :slots - Vector of slot definitions with {:type :index :x :y}
+  - :ranges - Map of section ranges {:tile [start end] :player-main [...] :player-hotbar [...]}"
+  {gui-wireless-node
+   {:slots [{:type :energy :index 0 :x 0 :y 0}
+            {:type :energy :index 1 :x 26 :y 0}]
+    :ranges {:tile [0 1]
+             :player-main [2 28]
+             :player-hotbar [29 37]}}
+   
+   gui-wireless-matrix
+   {:slots [{:type :plate :index 0 :x 0 :y 0}
+            {:type :plate :index 1 :x 34 :y 0}
+            {:type :plate :index 2 :x 68 :y 0}
+            {:type :core :index 3 :x 47 :y 24}]
+    :ranges {:tile [0 3]
+             :player-main [4 30]
+             :player-hotbar [31 39]}}})
+
 ;; ============================================================================
 ;; Query Functions
 ;; ============================================================================
@@ -103,6 +126,29 @@
   Returns: keyword (:create-node-screen, :create-matrix-screen, etc.) or nil"
   [gui-id]
   (get gui-screen-factories gui-id))
+
+(defn get-slot-layout
+  "Get slot layout configuration for GUI
+  
+  Args:
+  - gui-id: int
+  
+  Returns: map with {:slots [...] :ranges {...}} or nil"
+  [gui-id]
+  (get gui-slot-layouts gui-id))
+
+(defn get-slot-range
+  "Get slot index range for a GUI section
+  
+  Args:
+  - gui-id: int
+  - section: :tile, :player-main, :player-hotbar
+  
+  Returns: [start-index end-index] (inclusive) or [0 0] if not found"
+  [gui-id section]
+  (if-let [layout (get-slot-layout gui-id)]
+    (get-in layout [:ranges section] [0 0])
+    [0 0]))
 
 ;; ============================================================================
 ;; Reverse Lookups

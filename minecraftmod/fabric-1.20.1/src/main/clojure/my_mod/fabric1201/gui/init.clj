@@ -63,13 +63,20 @@
 (defn verify-initialization
   "Verify that GUI system is properly initialized
   
+  Platform-agnostic design: Dynamically verifies all GUI IDs from metadata.
+  
   Returns: boolean (true if all checks pass)"
   []
   (log/info "Verifying Fabric GUI system initialization...")
   
-  (let [checks
-        {:node-handler-type (some? @registry-impl/node-handler-type)
-         :matrix-handler-type (some? @registry-impl/matrix-handler-type)}]
+  (let [;; Dynamically check all GUI IDs from metadata
+        gui-checks (into {}
+                        (for [gui-id (my-mod.wireless.gui.gui-metadata/get-all-gui-ids)]
+                          (let [check-key (keyword (str "gui-" gui-id "-handler-type"))
+                                handler-type (registry-impl/get-handler-type gui-id)]
+                            [check-key (some? handler-type)])))
+        
+        checks gui-checks]
     
     (doseq [[check-name result] checks]
       (log/info "  " check-name ":" (if result "✓" "✗")))

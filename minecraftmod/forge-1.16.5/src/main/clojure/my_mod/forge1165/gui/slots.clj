@@ -1,6 +1,10 @@
 (ns my-mod.forge1165.gui.slots
-  "Forge 1.16.5 GUI Slot Implementations"
-  (:require [my-mod.energy.stub :as energy]
+  "Forge 1.16.5 GUI Slot Implementations
+  
+  Platform-agnostic design: Uses gui-metadata for slot layouts,
+  eliminating hardcoded game concepts (Node, Matrix, etc.)."
+  (:require [my-mod.wireless.gui.gui-metadata :as gui-metadata]
+            [my-mod.energy.stub :as energy]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
             [my-mod.util.log :as log])
@@ -185,46 +189,33 @@
           y (+ y-offset 58)]  ; 58 = 3 rows * 18 + 4px gap
       (.addSlot container (create-standard-slot player-inventory slot-index x y)))))
 
-(defn add-node-slots
-  "Add wireless node slots (input + output)
+(defn add-gui-slots
+  "Add GUI-specific slots based on metadata-driven layout
+  
+  Platform-agnostic implementation: Reads slot layout from gui-metadata
+  and creates appropriate slot types dynamically.
   
   Args:
-  - container: Container
-  - node-inventory: IInventory
-  - x-offset: int
-  - y-offset: int"
-  [container node-inventory x-offset y-offset]
+  - container: Container to add slots to
+  - inventory: IInventory for the GUI
+  - gui-id: int (GUI identifier)
+  - x-offset: int (base x position)
+  - y-offset: int (base y position)
   
-  ;; Input slot (left)
-  (.addSlot container 
-    (create-energy-slot node-inventory 0 x-offset y-offset))
-  
-  ;; Output slot (right)
-  (.addSlot container 
-    (create-energy-slot node-inventory 1 (+ x-offset 26) y-offset)))
-
-(defn add-matrix-slots
-  "Add wireless matrix slots (3 plates + 1 core)
-  
-  Args:
-  - container: Container
-  - matrix-inventory: IInventory
-  - x-offset: int
-  - y-offset: int"
-  [container matrix-inventory x-offset y-offset]
-  
-  ;; Plate slots (horizontal row)
-  (doseq [i (range 3)]
-    (.addSlot container 
-      (create-plate-slot matrix-inventory i 
-                        (+ x-offset (* i 34)) 
-                        y-offset)))
-  
-  ;; Core slot (centered below plates)
-  (.addSlot container 
-    (create-core-slot matrix-inventory 3 
-                     (+ x-offset 47)  ; Center of 3 slots
-                     (+ y-offset 24))))
+  Side effects: Adds slots to container based on layout"
+  [container inventory gui-id x-offset y-offset]
+  (when-let [layout (gui-metadata/get-slot-layout gui-id)]
+    (doseq [slot-def (:slots layout)]
+      (let [{:keys [type index x y]} slot-def
+            abs-x (+ x-offset x)
+            abs-y (+ y-offset y)
+            slot (case type
+                   :energy (create-energy-slot inventory index abs-x abs-y)
+                   :plate (create-plate-slot inventory index abs-x abs-y)
+                   :core (create-core-slot inventory index abs-x abs-y)
+                   :output (create-output-slot inventory index abs-x abs-y)
+                   (create-standard-slot inventory index abs-x abs-y))]
+        (.addSlot container slot)))))
 
 ;; ============================================================================
 ;; Slot Index Helpers
@@ -233,38 +224,27 @@
 (defn get-slot-range
   "Get slot index range for different inventory sections
   
+  Platform-agnostic implementation: Delegates to gui-metadata.
+  
   Args:
-  - container-type: :node or :matrix
+  - gui-id: int (GUI identifier)
   - section: :tile, :player-main, :player-hotbar
   
   Returns: [start-index end-index] (inclusive)"
-  [container-type section]
-  (case container-type
-    :node
-    (case section
-      :tile [0 1]
-      :player-main [2 28]
-      :player-hotbar [29 37]
-      [0 0])
-    
-    :matrix
-    (case section
-      :tile [0 3]
-      :player-main [4 30]
-      :player-hotbar [31 39]
-      [0 0])))
+  [gui-id section]
+  (gui-metadata/get-slot-range gui-id section))
 
 (defn slot-in-range?
   "Check if slot index is in given section
   
   Args:
   - slot-index: int
-  - container-type: :node or :matrix
+  - gui-id: int (GUI identifier)
   - section: :tile, :player-main, :player-hotbar
   
   Returns: boolean"
-  [slot-index container-type section]
-  (let [[start end] (get-slot-range container-type section)]
+  [slot-index gui-id section]
+  (let [[start end] (get-slot-range gui-id section)]
     (<= start slot-index end)))
 
 ;; ============================================================================

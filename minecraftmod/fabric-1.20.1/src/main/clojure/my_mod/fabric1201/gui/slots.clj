@@ -5,7 +5,8 @@
   (:require [my-mod.energy.stub :as energy]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
-            [my-mod.util.log :as log])
+            [my-mod.util.log :as log]
+            [my-mod.wireless.gui.gui-metadata :as gui-metadata])
   (:import [net.minecraft.screen.slot Slot]
            [net.minecraft.inventory Inventory]
            [net.minecraft.item ItemStack]
@@ -157,7 +158,63 @@
   (Slot. inventory slot-index x y))
 
 ;; ============================================================================
-;; Slot Layout Helpers
+;; Slot Layout Helpers (Metadata-Driven)
+;; ============================================================================
+
+(defn create-slot-by-type
+  "Create a slot based on metadata type definition
+  
+  Args:
+  - handler: ScreenHandler to add slot to
+  - inventory: Inventory
+  - slot-def: {:type :energy/:plate/:core, :index int, :x int, :y int}
+  - x-offset: int (additional x offset)
+  - y-offset: int (additional y offset)
+  
+  Side effects: Adds slot to handler"
+  [handler inventory slot-def x-offset y-offset]
+  (let [{:keys [type index x y]} slot-def]
+    (.addSlot handler
+      (case type
+        :energy (create-energy-slot inventory index (+ x x-offset) (+ y y-offset))
+        :plate (create-plate-slot inventory index (+ x x-offset) (+ y y-offset))
+        :core (create-core-slot inventory index (+ x x-offset) (+ y y-offset))
+        (throw (ex-info "Unknown slot type" {:type type}))))))
+
+(defn add-gui-slots
+  "Generic function to add GUI-specific slots based on metadata
+  
+  Replaces add-node-slots and add-matrix-slots with metadata-driven approach.
+  
+  Args:
+  - handler: ScreenHandler
+  - inventory: Inventory
+  - gui-id: int (0 for node, 1 for matrix, etc.)
+  - x-offset: int
+  - y-offset: int
+  
+  Side effects: Adds all GUI slots to handler based on layout in gui_metadata.clj"
+  [handler inventory gui-id x-offset y-offset]
+  (let [layout (gui-metadata/get-slot-layout gui-id)]
+    (when layout
+      (doseq [slot-def (:slots layout)]
+        (create-slot-by-type handler inventory slot-def x-offset y-offset)))))
+
+(defn get-gui-slot-ranges
+  "Get slot index ranges for GUI type from metadata
+  
+  Replaces get-slot-range with metadata-driven approach.
+  
+  Args:
+  - gui-id: int (0 for node, 1 for matrix, etc.)
+  - section: :tile, :player-main, :player-hotbar
+  
+  Returns: [start-index end-index] (inclusive)"
+  [gui-id section]
+  (get-in (gui-metadata/get-slot-ranges gui-id) [section] [0 0]))
+
+;; ============================================================================
+;; Slot Layout Helpers (Legacy - Will Be Deprecated)
 ;; ============================================================================
 
 (defn add-player-inventory-slots
@@ -186,47 +243,6 @@
           x (+ x-offset (* col 18))
           y (+ y-offset 58)]  ; 58 = 3 rows * 18 + 4px gap
       (.addSlot handler (create-standard-slot player-inventory slot-index x y)))))
-
-(defn add-node-slots
-  "Add wireless node slots (input + output)
-  
-  Args:
-  - handler: ScreenHandler
-  - node-inventory: Inventory
-  - x-offset: int
-  - y-offset: int"
-  [handler node-inventory x-offset y-offset]
-  
-  ;; Input slot (left)
-  (.addSlot handler 
-    (create-energy-slot node-inventory 0 x-offset y-offset))
-  
-  ;; Output slot (right)
-  (.addSlot handler 
-    (create-energy-slot node-inventory 1 (+ x-offset 26) y-offset)))
-
-(defn add-matrix-slots
-  "Add wireless matrix slots (3 plates + 1 core)
-  
-  Args:
-  - handler: ScreenHandler
-  - matrix-inventory: Inventory
-  - x-offset: int
-  - y-offset: int"
-  [handler matrix-inventory x-offset y-offset]
-  
-  ;; Plate slots (horizontal row)
-  (doseq [i (range 3)]
-    (.addSlot handler 
-      (create-plate-slot matrix-inventory i 
-                        (+ x-offset (* i 34)) 
-                        y-offset)))
-  
-  ;; Core slot (centered below plates)
-  (.addSlot handler 
-    (create-core-slot matrix-inventory 3 
-                     (+ x-offset 47)  ; Center of 3 slots
-                     (+ y-offset 24))))
 
 ;; ============================================================================
 ;; Slot Index Helpers

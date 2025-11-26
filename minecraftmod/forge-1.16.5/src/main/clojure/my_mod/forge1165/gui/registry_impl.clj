@@ -12,8 +12,22 @@
 ;; MenuType Registry
 ;; ============================================================================
 
-(defonce node-menu-type (atom nil))
-(defonce matrix-menu-type (atom nil))
+(defonce gui-menu-types
+  "Map from GUI ID to registered MenuType instances
+  
+  Platform-agnostic design: Uses GUI IDs instead of game-specific names.
+  Structure: {gui-id ContainerType, ...}"
+  (atom {}))
+
+(defn get-menu-type
+  "Get registered MenuType for a GUI ID
+  
+  Args:
+  - gui-id: int
+  
+  Returns: ContainerType or nil"
+  [gui-id]
+  (get @gui-menu-types gui-id))
 
 (defn create-menu-type
   "Create a ContainerType for a GUI
@@ -33,31 +47,34 @@
               pos (.getPosition player)
               clj-container (.get-server-container handler gui-id player world pos)]
           (if clj-container
-            (bridge/wrap-clojure-container window-id @node-menu-type clj-container)
+            (bridge/wrap-clojure-container window-id (get-menu-type gui-id) clj-container)
             (do
               (log/error "Failed to create container for GUI" gui-id)
               nil)))))))
 
 (defn register-menu-types!
-  "Register all menu types with Forge registry"
+  "Register all menu types with Forge registry
+  
+  Platform-agnostic design: Dynamically registers all GUI IDs from metadata."
   []
-  (log/info "Registering Wireless GUI menu types for Forge 1.16.5")
+  (log/info "Registering GUI menu types for Forge 1.16.5")
   
-  ;; Create menu types
-  (reset! node-menu-type (create-menu-type gui-registry/gui-wireless-node))
-  (reset! matrix-menu-type (create-menu-type gui-registry/gui-wireless-matrix))
+  ;; Create and register menu types for all GUI IDs
+  (doseq [gui-id (gui-metadata/get-all-gui-ids)]
+    (let [menu-type (create-menu-type gui-id)
+          registry-name (gui-metadata/get-registry-name gui-id)
+          resource-loc (ResourceLocation. "my_mod" registry-name)]
+      
+      ;; Store in our map
+      (swap! gui-menu-types assoc gui-id menu-type)
+      
+      ;; Register with Forge
+      (.setRegistryName menu-type resource-loc)
+      (.register ForgeRegistries/CONTAINERS resource-loc menu-type)
+      
+      (log/info "Registered menu type:" registry-name "for GUI ID" gui-id)))
   
-  ;; Register with Forge
-  (let [node-loc (ResourceLocation. "my_mod" "wireless_node_gui")
-        matrix-loc (ResourceLocation. "my_mod" "wireless_matrix_gui")]
-    
-    (.setRegistryName @node-menu-type node-loc)
-    (.setRegistryName @matrix-menu-type matrix-loc)
-    
-    (.register ForgeRegistries/CONTAINERS node-loc @node-menu-type)
-    (.register ForgeRegistries/CONTAINERS matrix-loc @matrix-menu-type)
-    
-    (log/info "Registered menu types: wireless_node_gui, wireless_matrix_gui")))
+  (log/info "Registered" (count @gui-menu-types) "menu types"))
 
 ;; ============================================================================
 ;; GUI Opening
@@ -103,27 +120,6 @@
   (log/info "Forge 1.16.5 GUI handler registered"))
 
 ;; ============================================================================
-;; Platform-Specific GUI Opening
-;; ============================================================================
-
-(defn open-node-gui-forge
-  "Open Node GUI (Forge 1.16.5 specific)
-  
-  Args:
-  - player: ServerPlayerEntity
-  - world: World
-  - pos: BlockPos"
-  [player world pos]
-  (let [tile-entity (.getTileEntity world pos)]
-    (open-gui-for-player player gui-registry/gui-wireless-node tile-entity)))
-
-(defn open-matrix-gui-forge
-  "Open Matrix GUI (Forge 1.16.5 specific)"
-  [player world pos]
-  (let [tile-entity (.getTileEntity world pos)]
-    (open-gui-for-player player gui-registry/gui-wireless-matrix tile-entity)))
-
-;; ============================================================================
 ;; Initialization
 ;; ============================================================================
 
@@ -138,7 +134,3 @@
   (gui-registry/register-gui-handler :forge-1.16.5)
   
   (log/info "Forge 1.16.5 GUI system initialized"))
-
-;; Export menu types for Java bridge access
-(def NODE_MENU_TYPE node-menu-type)
-(def MATRIX_MENU_TYPE matrix-menu-type)

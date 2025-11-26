@@ -58,35 +58,39 @@
       (.printStackTrace e))))
 
 ;; Alternative: Using HandledScreens (newer Fabric API)
+;; Alternative: Using HandledScreens (newer Fabric API)
 (defn register-screens-alt!
-  "Register screens using HandledScreens API (alternative method)
+  \"Register screens using HandledScreens API (alternative method)
   
-  Delegates to platform-agnostic screen-factory for actual screen creation."
+  Platform-agnostic design: Loops through all GUI IDs from metadata.
+  Delegates to platform-agnostic screen-factory for actual screen creation.\"
   []
-  (log/info "Registering Wireless GUI screens using HandledScreens API")
+  (log/info \"Registering Wireless GUI screens using HandledScreens API\")
   
   (try
     ;; This is the newer Fabric API method
-    (net.minecraft.client.gui.screen.ingame.HandledScreens/register
-      @my_mod.fabric1201.gui.registry_impl/NODE_HANDLER_TYPE
-      (reify java.util.function.Function
-        (apply [_ handler-and-inventory]
-          (let [handler (.getLeft handler-and-inventory)
-                player-inventory (.getRight handler-and-inventory)]
-            (screen-factory/create-node-screen handler player-inventory (Text/literal "Wireless Node"))))))
+    (let [registry-impl (ns-resolve 'my-mod.fabric1201.gui.registry-impl 'get-handler-type)]
+      (doseq [gui-id (gui-metadata/get-all-gui-ids)]
+        (let [handler-type (registry-impl gui-id)
+              factory-fn-kw (gui-metadata/get-screen-factory-fn gui-id)
+              display-name (gui-metadata/get-display-name gui-id)]
+          
+          (when (and handler-type factory-fn-kw)
+            (let [factory-fn (ns-resolve 'my-mod.wireless.gui.screen-factory factory-fn-kw)]
+              (when factory-fn
+                (net.minecraft.client.gui.screen.ingame.HandledScreens/register
+                  handler-type
+                  (reify java.util.function.Function
+                    (apply [_ handler-and-inventory]
+                      (let [handler (.getLeft handler-and-inventory)
+                            player-inventory (.getRight handler-and-inventory)]
+                        (factory-fn handler player-inventory (Text/literal display-name))))))
+                (log/info \"Registered screen for GUI ID\" gui-id)))))))
     
-    (net.minecraft.client.gui.screen.ingame.HandledScreens/register
-      @my_mod.fabric1201.gui.registry_impl/MATRIX_HANDLER_TYPE
-      (reify java.util.function.Function
-        (apply [_ handler-and-inventory]
-          (let [handler (.getLeft handler-and-inventory)
-                player-inventory (.getRight handler-and-inventory)]
-            (screen-factory/create-matrix-screen handler player-inventory (Text/literal "Wireless Matrix"))))))
-    
-    (log/info "Screen factories registered successfully (HandledScreens)")
+    (log/info \"Screen factories registered successfully (HandledScreens)\")
     
     (catch Exception e
-      (log/warn "HandledScreens API not available, falling back to ScreenRegistry")
+      (log/warn \"HandledScreens API not available, falling back to ScreenRegistry\")
       (register-screens!))))
 
 ;; ============================================================================
