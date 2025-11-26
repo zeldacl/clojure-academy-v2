@@ -8,6 +8,7 @@
             [my-mod.nbt.dsl :as nbt]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
+            [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
@@ -318,8 +319,12 @@
             (log/info "  Capacity:" (winterfaces/get-matrix-capacity tile))
             (log/info "  Bandwidth:" (winterfaces/get-matrix-bandwidth tile))
             (log/info "  Range:" (winterfaces/get-matrix-range tile))
-            ;; TODO: Open GUI
-            )
+            ;; Open GUI
+            (try
+              (gui-registry/open-matrix-gui player world pos)
+              (log/info "Opened Matrix GUI")
+              (catch Exception e
+                (log/error "Failed to open Matrix GUI:" (.getMessage e)))))
           (log/info "Sneaking - no action"))
         (log/info "No tile entity found!")))))
 

@@ -491,17 +491,381 @@
 
 ## 待完成项目
 
-### 10. GUI系统
+### 10. GUI 系统（基于 LambdaLib2 CGui）
 
-### 10. GUI系统
-- ⏳ **ContainerNode**: 容器逻辑
-  - 2个槽位布局
-  - 能量显示同步
-- ⏳ **GuiNode**: GUI界面
-  - 库存槽位渲染
-  - 能量条显示
-  - 节点名称/密码输入框
-  - 连接状态指示器
+#### 10.1 GUI 架构分析
+
+**核心组件：**
+
+1. **CGui (Component GUI) 系统**
+   - 基于组件的 GUI 框架
+   - Widget 树形结构（父子层次）
+   - 事件驱动架构
+   - 支持动态布局和变换
+
+2. **Widget 体系**
+   - `Widget`: 基础 GUI 元素类
+   - `WidgetContainer`: 容器组件，管理子 Widget
+   - 层次化组织，支持任意深度嵌套
+   - 组件化设计：Transform、Draggable、DrawTexture 等
+
+3. **事件系统 (GuiEventBus)**
+   - 鼠标事件：
+     - `LeftClickEvent` / `RightClickEvent`
+     - `MouseClickEvent`
+   - 键盘事件：
+     - `KeyEvent`
+   - 拖拽事件：
+     - `DragEvent` / `DragStopEvent`
+   - 焦点事件：
+     - `GainFocusEvent` / `LostFocusEvent`
+   - 生命周期事件：
+     - `FrameEvent` (每帧更新)
+     - `RefreshEvent` (数据刷新)
+     - `AddWidgetEvent` (Widget 添加)
+   - `IGuiEventHandler`: 事件处理器接口
+
+4. **内置组件库**
+   - `DrawTexture`: 纹理渲染组件
+   - `TextBox`: 文本输入/显示框
+   - `ProgressBar`: 进度条（适合能量条）
+   - `ElementList`: 滚动列表组件
+   - `DragBar`: 可拖拽标题栏
+   - `Draggable`: 拖拽功能组件
+   - `Outline`: 边框绘制
+   - `Tint`: 颜色着色
+   - `Transform`: 位置/缩放变换
+
+5. **GUI 注册系统**
+   - `RegGuiHandler`: 注解驱动的 GUI 处理器注册
+   - `GuiHandlerBase`: GUI 处理器基类
+     - `getServerContainer()`: 服务端 Container
+     - `getClientContainer()`: 客户端 GUI
+   - `RegAuxGui`: 辅助 GUI 注册（无 Container）
+   - `AuxGui`: 轻量级 GUI（不需要库存）
+   - `AuxGuiHandler`: 辅助 GUI 处理器
+
+6. **屏幕类型**
+   - `CGuiScreen`: 纯 GUI 屏幕（无库存交互）
+   - `CGuiScreenContainer`: 带 Container 的 GUI（有库存槽位）
+   - 自动集成 Minecraft 的库存系统
+
+7. **加载系统**
+   - `CGUIDocument`: XML/配置文件加载器
+   - 支持从文件定义 GUI 布局
+   - 热重载支持（开发模式）
+
+#### 10.2 Wireless Node GUI 设计
+
+**容器层 (ContainerNode):**
+```clojure
+;; 服务端 Container
+(defrecord ContainerNode
+  [tile-entity          ; NodeTileEntity 引用
+   player-inventory])   ; 玩家库存
+
+;; 槽位布局
+- Slot 0: 输入槽（左侧，用于充电到节点）
+- Slot 1: 输出槽（右侧，用于从节点充电）
+- Slot 2-29: 玩家物品栏（3×9）
+- Slot 30-38: 玩家快捷栏（1×9）
+
+;; 数据同步 (IContainerListener)
+- Energy (int): 当前能量值
+- MaxEnergy (int): 最大能量
+- NodeName (String): 节点名称
+- Password (String): 密码
+- Connected (boolean): 连接状态
+- ChargingIn (boolean): 输入充电状态
+- ChargingOut (boolean): 输出充电状态
+```
+
+**GUI 层 (GuiNode):**
+```clojure
+;; Widget 树结构
+root-widget (WidgetContainer 176×166)
+├── background (DrawTexture)
+│   └── texture: "gui/wireless_node.png"
+├── title-bar (DragBar)
+│   └── title-text (TextBox "无线节点")
+├── energy-panel (WidgetContainer 60×70, pos: 8, 20)
+│   ├── energy-bar (ProgressBar 纵向)
+│   │   ├── size: 16×52
+│   │   ├── texture: "gui/energy_bar.png"
+│   │   └── value: energy / maxEnergy
+│   └── energy-text (TextBox 只读)
+│       └── text: "{energy} / {maxEnergy} IF"
+├── slots-panel (WidgetContainer 60×60, pos: 80, 20)
+│   ├── slot-input (WidgetContainer 18×18)
+│   │   └── pos: 8, 8
+│   └── slot-output (WidgetContainer 18×18)
+│       └── pos: 34, 8
+├── info-panel (WidgetContainer 176×50, pos: 0, 90)
+│   ├── name-label (TextBox "名称:")
+│   ├── name-input (TextBox 可编辑)
+│   │   ├── size: 100×12
+│   │   ├── max-length: 32
+│   │   └── on-change: send-name-packet
+│   ├── password-label (TextBox "密码:")
+│   └── password-input (TextBox 可编辑, 密码模式)
+│       ├── size: 100×12
+│       ├── max-length: 16
+│       └── on-change: send-password-packet
+└── status-panel (WidgetContainer 60×30, pos: 8, 140)
+    ├── connected-indicator (DrawTexture + Tint)
+    │   ├── texture: "gui/icon_network.png"
+    │   ├── tint: green (connected) / red (disconnected)
+    │   └── tooltip: "网络状态: {status}"
+    ├── charging-in-indicator (DrawTexture + Tint)
+    │   ├── texture: "gui/icon_charge_in.png"
+    │   ├── tint: yellow (active) / gray (inactive)
+    │   └── tooltip: "输入充电: {status}"
+    └── charging-out-indicator (DrawTexture + Tint)
+        ├── texture: "gui/icon_charge_out.png"
+        ├── tint: cyan (active) / gray (inactive)
+        └── tooltip: "输出充电: {status}"
+```
+
+**事件处理:**
+```clojure
+;; 文本框输入
+(listen root-widget KeyEvent
+  (fn [event]
+    (when (= (:source event) name-input)
+      (send-update-packet :name (.getText name-input)))))
+
+;; 帧更新
+(listen root-widget FrameEvent
+  (fn [event]
+    ;; 更新能量条
+    (.setProgress energy-bar (/ @energy @max-energy))
+    ;; 更新状态指示器
+    (update-status-indicators)))
+
+;; 工具提示
+(listen connected-indicator MouseHoverEvent
+  (fn [event]
+    (show-tooltip (str "网络状态: " 
+                       (if @connected "已连接" "未连接")))))
+```
+
+#### 10.3 Wireless Matrix GUI 设计
+
+**容器层 (ContainerMatrix):**
+```clojure
+;; 服务端 Container
+(defrecord ContainerMatrix
+  [tile-entity          ; TileMatrix 引用
+   player-inventory])   ; 玩家库存
+
+;; 槽位布局
+- Slot 0-2: 限制板槽位（横排）
+- Slot 3: 核心槽位（中央）
+- Slot 4-31: 玩家物品栏
+- Slot 32-40: 玩家快捷栏
+
+;; 数据同步
+- CoreLevel (int): 核心等级 (0-4)
+- PlateCount (int): 板数量 (0-3)
+- IsWorking (boolean): 工作状态
+- Capacity (int): 容量
+- Bandwidth (int): 带宽
+- Range (double): 范围
+```
+
+**GUI 层 (GuiMatrix):**
+```clojure
+;; Widget 树结构
+root-widget (WidgetContainer 176×200)
+├── background (DrawTexture)
+│   └── texture: "gui/wireless_matrix.png"
+├── title-bar (DragBar)
+│   └── title-text (TextBox "无线矩阵")
+├── status-panel (WidgetContainer 160×40, pos: 8, 20)
+│   ├── working-indicator (DrawTexture + Tint)
+│   │   ├── texture: "gui/icon_matrix.png"
+│   │   ├── tint: green (working) / gray (inactive)
+│   │   └── size: 32×32
+│   ├── core-level-display (WidgetContainer)
+│   │   ├── label: "核心等级:"
+│   │   └── value-text: "Tier {level}"
+│   └── plate-count-display (WidgetContainer)
+│       ├── label: "限制板:"
+│       └── value-text: "{count} / 3"
+├── slots-panel (WidgetContainer 120×50, pos: 28, 70)
+│   ├── slot-plate-1 (WidgetContainer 18×18, pos: 0, 0)
+│   ├── slot-plate-2 (WidgetContainer 18×18, pos: 34, 0)
+│   ├── slot-plate-3 (WidgetContainer 18×18, pos: 68, 0)
+│   └── slot-core (WidgetContainer 26×26, pos: 47, 24)
+│       └── outline: gold (强调核心槽)
+└── stats-panel (WidgetContainer 160×50, pos: 8, 130)
+    ├── capacity-bar (ProgressBar 横向)
+    │   ├── label: "容量:"
+    │   ├── size: 140×8
+    │   └── value: capacity / maxCapacity
+    ├── bandwidth-display (TextBox)
+    │   └── text: "带宽: {bandwidth} IF/t"
+    └── range-display (TextBox)
+        └── text: "范围: {range} 格"
+```
+
+**动态更新:**
+```clojure
+;; 槽位变化监听
+(listen slots-panel RefreshEvent
+  (fn [event]
+    ;; 检查板数量
+    (let [plates (count-plates tile-entity)
+          core-level (get-core-level tile-entity)]
+      ;; 更新显示
+      (.setText plate-count-display (str plates " / 3"))
+      (.setText core-level-display (str "Tier " core-level))
+      ;; 更新工作状态
+      (let [working? (and (= plates 3) (> core-level 0))]
+        (.setTint working-indicator 
+                  (if working? Color/GREEN Color/GRAY))
+        ;; 更新统计数据
+        (when working?
+          (.setText capacity-display 
+                    (str "容量: " (* 8 core-level)))
+          (.setText bandwidth-display 
+                    (str "带宽: " (* core-level core-level 60) " IF/t"))
+          (.setText range-display 
+                    (str "范围: " 
+                         (format "%.1f" (* 24 (Math/sqrt core-level))) 
+                         " 格")))))))
+```
+
+#### 10.4 实现计划
+
+**Phase 1: Clojure GUI 封装**
+- ⏳ 创建 `gui/core.clj` - CGui 系统封装
+  - Widget 创建和管理
+  - 事件监听器注册
+  - 布局辅助函数
+- ⏳ 创建 `gui/widget.clj` - Widget 协议
+  - IWidget 协议（位置、大小、渲染）
+  - Widget 工厂函数
+  - 组件附加/移除
+- ⏳ 创建 `gui/components.clj` - 常用组件
+  - 进度条组件
+  - 文本框组件
+  - 图标组件
+  - 槽位组件
+- ⏳ 创建 `gui/events.clj` - 事件处理
+  - 事件监听器 DSL
+  - 事件过滤和路由
+  - 自定义事件类型
+
+**Phase 2: Container 实现**
+- ⏳ 实现 `container/node.clj` - 节点容器
+  - 2 槽位布局（SlotEnergyItem）
+  - 能量数据同步（IContainerListener）
+  - 网络数据包（名称、密码更新）
+  - 槽位验证（仅能量物品）
+- ⏳ 实现 `container/matrix.clj` - 矩阵容器
+  - 4 槽位布局（3 板 + 1 核心）
+  - 状态数据同步
+  - 网络数据包
+  - 槽位验证（板/核心）
+
+**Phase 3: GUI 实现**
+- ⏳ 实现 `gui/node.clj` - 节点 GUI
+  - Widget 树构建
+  - 能量条更新
+  - 文本框事件处理
+  - 状态指示器渲染
+  - 网络消息发送
+- ⏳ 实现 `gui/matrix.clj` - 矩阵 GUI
+  - Widget 树构建
+  - 槽位布局渲染
+  - 统计数据计算和显示
+  - 工作状态指示
+  - 动态更新逻辑
+
+**Phase 4: 注册和集成**
+- ⏳ 创建 `gui/registry.clj` - GUI 注册
+  - GuiHandler 实现
+  - GUI ID 分配
+  - 服务端/客户端 GUI 创建
+- ⏳ 更新方块交互
+  - 右键打开 GUI
+  - 传递 TileEntity 数据
+- ⏳ 网络同步测试
+  - 多人游戏测试
+  - 数据包完整性验证
+
+#### 10.5 技术要点
+
+**网络同步策略：**
+```clojure
+;; Container 数据同步（自动）
+(detectAndSendChanges [container]
+  (doseq [listener listeners]
+    ;; 同步简单数据（int, boolean）
+    (.sendProgressBarUpdate listener container 0 @energy)
+    (.sendProgressBarUpdate listener container 1 @max-energy)
+    (.sendProgressBarUpdate listener container 2 (if @connected 1 0))))
+
+;; 复杂数据（String）需要自定义包
+(send-custom-packet [container]
+  (let [packet (PacketBuffer/...)]
+    (.writeString packet @node-name)
+    (.writeString packet @password)
+    (NetworkRegistry/sendToPlayer player packet)))
+```
+
+**事件处理模式：**
+```clojure
+;; DSL 风格事件监听
+(defn setup-events [gui]
+  (on-event gui FrameEvent
+    (update-energy-bar gui))
+  
+  (on-event gui KeyEvent
+    (when (text-box-focused? gui :name)
+      (send-name-update gui)))
+  
+  (on-event gui LeftClickEvent
+    (handle-button-click gui)))
+```
+
+**组件复用：**
+```clojure
+;; 能量条组件（Node 和 Matrix 共用）
+(defn create-energy-bar [x y width height]
+  (doto (ProgressBar.)
+    (.setPos x y)
+    (.setSize width height)
+    (.setTexture "textures/gui/energy_bar.png")
+    (.setDirection :vertical)))
+
+;; 槽位组件（标准化）
+(defn create-slot-widget [slot-index x y]
+  (doto (WidgetContainer.)
+    (.setPos x y)
+    (.setSize 18 18)
+    (.addComponent (DrawTexture. "textures/gui/slot.png"))
+    (.addComponent (Outline. Color/GRAY))))
+```
+
+**性能优化：**
+- 仅在数据变化时更新 Widget
+- 使用 `FrameEvent` 批量更新，避免每帧重绘
+- 缓存纹理对象和 OpenGL 状态
+- 延迟网络数据包发送（合并连续更新）
+- 客户端预测（输入即时响应）
+
+**调试工具：**
+```clojure
+;; 使用 HierarchyDebugger
+(when debug-mode?
+  (HierarchyDebugger/debug root-widget))
+
+;; 输出 Widget 树结构
+;; 显示事件传播路径
+;; 检查组件状态
+```
 
 ### 11. 网络系统集成
 - ⏳ **WorldSavedData集成**: 将 `WiWorldData` 与 Minecraft 保存系统连接
@@ -587,20 +951,22 @@
 - ✅ ITickable 更新机制
 - ✅ IInventory 槽位操作
 - ✅ NBT 序列化/反序列化
+- ✅ GUI 组件封装
+- ✅ 事件系统封装
 - ⏳ 节点能量转移
 - ⏳ 网络连接验证
 
 ### 集成测试
 - ⏳ 节点与电池交互
 - ⏳ 多节点网络测试
-- ⏳ GUI交互测试
+- ⏳ GUI交互测试（Container + Screen）
 - ⏳ 持久化测试
 
 ### 游戏内测试
 - ⏳ 放置节点并充电
 - ⏳ 物品充放电
 - ⏳ 网络连接与能量传输
-- ⏳ GUI操作
+- ⏳ GUI操作（打开界面、槽位交互、数据同步）
 
 ## 注意事项
 
@@ -613,11 +979,13 @@
 - 原子操作的线程安全性
 - 每tick更新的性能影响
 - 网络同步频率控制
+- GUI事件处理优化（避免每帧重建Widget）
 
 ### 兼容性
 - 协议与 Java 接口的互操作性
 - Minecraft API 版本兼容
 - 现有DSL系统集成
+- LambdaLib2 CGui系统依赖
 
 ## 文档更新日志
 
@@ -628,3 +996,320 @@
 - **2025-11-26**: 完成Wireless Matrix实现（2x2x2多方块结构，IWirelessMatrix协议）
 - **2025-11-26**: 完成IInventory实现（协议定义、NBT持久化、Node和Matrix集成）
 - **2025-11-26**: 完成NBT DSL系统（defnbt宏、类型转换器、声明式序列化，代码减少82.5%）
+- **2025-11-26**: **完成GUI系统实现**（基于LambdaLib2 CGui，8个新文件，完整的Container+GUI架构）
+
+---
+
+## GUI 系统实现详情（✅ 已完成）
+
+### 实现概况
+
+基于 LambdaLib2 的 CGui 系统，为无线节点和矩阵实现了完整的图形界面。
+
+**文件结构：**
+```
+gui/
+  ├── cgui.clj          (240 行) - CGui 系统封装
+  ├── events.clj        (200 行) - 事件系统封装
+  └── components.clj    (330 行) - 组件库封装
+wireless/gui/
+  ├── node_container.clj   (220 行) - Node Container
+  ├── node_gui.clj         (220 行) - Node GUI
+  ├── matrix_container.clj (240 行) - Matrix Container
+  ├── matrix_gui.clj       (250 行) - Matrix GUI
+  └── registry.clj         (230 行) - GUI 注册系统
+
+总计：~1930 行代码，8 个文件
+```
+
+### 核心模块
+
+#### 1. CGui 系统封装 (`gui/cgui.clj`)
+
+**功能：**
+- Widget 创建和管理（Widget, WidgetContainer）
+- Widget 树操作（添加/删除子widget）
+- Widget 属性设置（位置、大小、可见性、z-level）
+- CGui 和 Screen 创建
+- Widget 树构建器 DSL
+
+**关键函数：**
+```clojure
+(create-widget :pos [x y] :size [w h] :scale 1.0 :z-level 0)
+(create-container ...)  ; 可包含子widget
+(add-widget! container widget)
+(build-widget-tree {:type :container :children [...]})
+(create-cgui-screen cgui)
+(create-cgui-screen-container cgui minecraft-container)
+```
+
+#### 2. 事件系统封装 (`gui/events.clj`)
+
+**功能：**
+- 事件监听器注册（listen!, unlisten!）
+- 常用事件处理器构造函数
+- 事件链式DSL（events->, with-events）
+- 通用事件处理器（click, hover, text-input）
+
+**支持的事件类型：**
+- 鼠标事件：LeftClickEvent, RightClickEvent, DragEvent, DragStopEvent
+- 键盘事件：KeyEvent
+- 焦点事件：GainFocusEvent, LostFocusEvent
+- 生命周期事件：FrameEvent, RefreshEvent, AddWidgetEvent
+
+**关键函数：**
+```clojure
+(on-left-click widget handler)
+(on-frame widget handler)  ; 每帧调用
+(on-key-press widget handler)
+(with-events widget {LeftClickEvent handler1 KeyEvent handler2})
+```
+
+#### 3. 组件库封装 (`gui/components.clj`)
+
+**功能：**
+- 封装 LambdaLib2 所有内置组件
+- 提供 Clojure 友好的工厂函数
+- 组件属性设置和获取
+
+**支持的组件：**
+- **DrawTexture**: 纹理渲染
+- **TextBox**: 文本显示
+- **ProgressBar**: 进度条（横向/纵向）
+- **Transform**: 位置/缩放/旋转
+- **Outline**: 边框绘制
+- **Tint**: 颜色着色
+- **Draggable**: 拖拽功能
+- **DragBar**: 标题栏拖拽
+- **ElementList**: 滚动列表
+
+**关键函数：**
+```clojure
+(texture "my_mod:textures/gui/bg.png")
+(text-box :text "Hello" :color 0xFFFFFF :scale 0.9)
+(progress-bar :direction :horizontal :progress 0.75)
+(outline :color 0xFFD700 :width 2.0)
+(tint 0x80FF0000)  ; 半透明红色
+```
+
+#### 4. Wireless Node Container (`wireless/gui/node_container.clj`)
+
+**功能：**
+- 2槽位布局（输入槽 + 输出槽）
+- 7字段数据同步（energy, maxEnergy, nodeType, isOnline, ssid, password, transferRate）
+- 物品充放电逻辑
+- 按钮处理（连接切换、SSID/密码设置）
+- Shift+Click 快速移动
+
+**数据同步：**
+```clojure
+(defrecord NodeContainer
+  [tile-entity player
+   energy max-energy node-type is-online
+   ssid password transfer-rate])
+
+(sync-to-client! container)  ; 每tick调用
+(get-sync-data container)    ; 生成同步包
+```
+
+#### 5. Wireless Node GUI (`wireless/gui/node_gui.clj`)
+
+**功能：**
+- 176×166 GUI尺寸
+- 5个面板：背景、能量、槽位、信息、状态
+- 实时数据更新（FrameEvent）
+- 可拖拽标题栏
+
+**Widget 树结构：**
+```
+root (176×166)
+├── background (DrawTexture)
+├── energy-panel (60×70)
+│   ├── energy-bar (16×52, vertical ProgressBar)
+│   └── energy-text ("1000 / 15000 IF")
+├── slot-panel (70×18)
+│   ├── input-slot (18×18)
+│   └── output-slot (18×18)
+├── info-panel (160×60)
+│   ├── ssid-label ("SSID: MyNetwork")
+│   ├── password-label ("Password: ***")
+│   ├── type-label ("Type: Basic")
+│   └── transfer-label ("Transfer: 100 IF/t")
+├── status-indicator (16×16, green/red)
+└── title-bar (176×14, draggable)
+```
+
+#### 6. Wireless Matrix Container (`wireless/gui/matrix_container.clj`)
+
+**功能：**
+- 4槽位布局（3 plates + 1 core）
+- 7字段数据同步（coreLevel, plateCount, isWorking, capacity, maxCapacity, bandwidth, range）
+- 多方块结构验证
+- 动态统计计算（根据核心和板数量）
+- 按钮处理（工作切换、弹出核心/板）
+
+**统计计算：**
+```clojure
+(calculate-matrix-stats core-level plate-count)
+;; Returns: {:capacity (* base-cap (+ 1.0 (* plates 0.2)))
+;;           :bandwidth (* base-bw (+ 1.0 (* plates 0.2)))
+;;           :range (* base-range (+ 1.0 (* plates 0.2)))}
+```
+
+#### 7. Wireless Matrix GUI (`wireless/gui/matrix_gui.clj`)
+
+**功能：**
+- 176×200 GUI尺寸
+- 5个面板：背景、状态、槽位、统计、多方块指示器
+- 实时统计更新
+- 核心槽金色边框强调
+
+**Widget 树结构：**
+```
+root (176×200)
+├── background (DrawTexture)
+├── status-panel (160×40)
+│   ├── working-indicator (32×32, green/red)
+│   ├── core-level ("Core: Tier 2")
+│   └── plate-count ("Plates: 3 / 3")
+├── slot-panel (120×50)
+│   ├── plate-1 (18×18)
+│   ├── plate-2 (18×18)
+│   ├── plate-3 (18×18)
+│   └── core-slot (26×26, gold outline)
+├── stats-panel (160×50)
+│   ├── capacity-bar (140×8, horizontal)
+│   ├── bandwidth-text ("Bandwidth: 1200 IF/t")
+│   └── range-text ("Range: 38.4 blocks")
+├── multiblock-status ("Structure: Formed ✓")
+└── title-bar (176×14, draggable)
+```
+
+#### 8. GUI 注册系统 (`wireless/gui/registry.clj`)
+
+**功能：**
+- GuiHandler 协议实现
+- GUI ID 管理（0=Node, 1=Matrix）
+- 平台无关的 GUI 打开 API
+- Container 生命周期管理
+- 数据同步包生成/应用
+- 多方法注册系统（支持 Forge/Fabric）
+
+**关键函数：**
+```clojure
+(open-node-gui player world pos)   ; 打开节点GUI
+(open-matrix-gui player world pos) ; 打开矩阵GUI
+(tick-all-containers!)             ; Tick所有活动容器
+(get-container-sync-packet container)  ; 生成同步包
+(apply-container-sync-packet container data) ; 应用同步数据
+(register-gui-handler platform-type)  ; 平台注册
+```
+
+### Block 系统集成
+
+**已更新文件：**
+- `wireless_node.clj` - 添加 `gui-registry` require，更新 `handle-node-right-click`
+- `wireless_matrix.clj` - 添加 `gui-registry` require，更新 `handle-matrix-right-click`
+
+**右键交互：**
+```clojure
+;; Node
+(handle-node-right-click :basic)
+  -> (gui-registry/open-node-gui player world pos)
+  -> 创建 NodeContainer + NodeGUI
+  -> 打开 CGuiScreenContainer
+
+;; Matrix
+(handle-matrix-right-click)
+  -> (gui-registry/open-matrix-gui player world pos)
+  -> 创建 MatrixContainer + MatrixGUI
+  -> 打开 CGuiScreenContainer
+```
+
+### 技术特性
+
+#### 数据同步
+- **服务端**: Container 每tick调用 `sync-to-client!` 更新atoms
+- **客户端**: GUI 通过 `on-frame` 事件读取atoms并更新显示
+- **网络**: `get-container-sync-packet` 生成同步数据包
+
+#### 事件驱动更新
+```clojure
+;; 能量条实时更新
+(events/on-frame energy-bar-widget
+  (fn [_]
+    (let [progress (/ @energy @max-energy)]
+      (comp/set-progress! progress-bar progress))))
+
+;; 文本实时更新
+(events/on-frame info-panel
+  (fn [_]
+    (comp/set-text! ssid-text (str "SSID: " @ssid))))
+```
+
+#### Widget 复用
+- 能量条组件（Node 和 Matrix 都使用 ProgressBar）
+- 槽位组件（统一的 18×18 outline）
+- 文本标签（统一的 TextBox + FrameEvent 模式）
+
+#### 性能优化
+- Widget 只创建一次（在 `create-*-gui` 中）
+- 组件更新而非重建（`set-progress!`, `set-text!`）
+- FrameEvent 中只更新变化的数据
+- Container tick 只在服务端执行
+
+### 使用示例
+
+#### 打开 GUI
+```clojure
+;; 在 Block 右键事件中
+(gui-registry/open-node-gui player world pos)
+
+;; 或直接调用
+(gui-registry/open-gui player 0 world pos)  ; 0 = Node
+```
+
+#### 自定义 Widget
+```clojure
+(let [widget (cgui/create-widget :pos [10 20] :size [50 30])]
+  (comp/add-component! widget (comp/texture "gui/my_icon.png"))
+  (comp/add-component! widget (comp/outline :color 0xFF0000))
+  (events/on-left-click widget #(println "Clicked!")))
+```
+
+#### 动态更新
+```clojure
+;; Container 端
+(reset! (:energy container) new-energy)
+
+;; GUI 自动更新（通过 FrameEvent）
+(events/on-frame widget
+  (fn [_] (update-display @(:energy container))))
+```
+
+### 待办事项
+
+- ⏳ 实现平台特定的 GUI 注册（Forge 1.16.5, 1.20.1, Fabric 1.20.1）
+- ⏳ 实现网络数据包（ButtonClickPacket, TextInputPacket）
+- ⏳ 添加 GUI 材质文件（wireless_node.png, wireless_matrix.png）
+- ⏳ 实现文本输入功能（SSID/Password 编辑）
+- ⏳ 测试 Container 生命周期（打开、关闭、验证）
+
+### 技术债务
+
+- Container 使用 record 而非 Java Container 子类（需平台适配器）
+- 事件处理器可能需要 Minecraft 线程检查
+- 文本输入需要更复杂的 KeyEvent 处理
+- 网络同步包需要平台特定序列化
+
+### 架构优势
+
+1. **声明式 UI**: Widget 树结构清晰，易于理解和维护
+2. **数据驱动**: Container atoms + FrameEvent 自动更新
+3. **组件化**: 可复用的组件和事件处理器
+4. **类型安全**: Clojure records 提供结构化数据
+5. **平台无关**: 核心逻辑不依赖特定 Minecraft 版本
+
+---
+
+```

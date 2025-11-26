@@ -7,6 +7,7 @@
             [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.inventory.core :as inv]
             [my-mod.nbt.dsl :as nbt]
+            [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.util.log :as log]))
 
 ;; Node type specifications
@@ -532,8 +533,12 @@
           (log/info "  Charging In:" @(:charging-in tile))
           (log/info "  Charging Out:" @(:charging-out tile))
           (log/info "  Name:" (winterfaces/get-node-name tile))
-          ;; TODO: Open GUI
-          )
+          ;; Open GUI
+          (try
+            (gui-registry/open-node-gui player world pos)
+            (log/info "Opened Node GUI")
+            (catch Exception e
+              (log/error "Failed to open Node GUI:" (.getMessage e)))))
         (log/info "No tile entity found!")))))
 
 (defn handle-node-place [node-type]
