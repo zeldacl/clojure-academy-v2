@@ -40,11 +40,11 @@
   1)
 
 ;; ============================================================================
-;; Custom Slot: Constraint Plate Only
+;; Custom Slot: Filtered Plate Items
 ;; ============================================================================
 
 (gen-class
-  :name my_mod.fabric1201.gui.SlotConstraintPlate
+  :name my_mod.fabric1201.gui.SlotFilteredPlate
   :extends net.minecraft.screen.slot.Slot
   :constructors {[net.minecraft.inventory.Inventory int int int] 
                  [net.minecraft.inventory.Inventory int int int]}
@@ -52,26 +52,26 @@
   :init init-plate)
 
 (defn -init-plate
-  "Initialize constraint plate slot"
+  "Initialize filtered plate slot"
   [inventory slot-index x y]
   [[inventory slot-index x y] {}])
 
 (defn -canInsert
-  "Only allow constraint plates in this slot"
+  "Only allow plate-type items in this slot"
   [this stack]
   (plate/is-constraint-plate? stack))
 
 (defn -getMaxItemCount
-  "Plates can stack but matrix only needs one per slot"
+  "Plate items limited to single stack"
   [this]
   1)
 
 ;; ============================================================================
-;; Custom Slot: Matrix Core Only
+;; Custom Slot: Filtered Core Items
 ;; ============================================================================
 
 (gen-class
-  :name my_mod.fabric1201.gui.SlotMatrixCore
+  :name my_mod.fabric1201.gui.SlotFilteredCore
   :extends net.minecraft.screen.slot.Slot
   :constructors {[net.minecraft.inventory.Inventory int int int] 
                  [net.minecraft.inventory.Inventory int int int]}
@@ -79,17 +79,17 @@
   :init init-core)
 
 (defn -init-core
-  "Initialize matrix core slot"
+  "Initialize filtered core slot"
   [inventory slot-index x y]
   [[inventory slot-index x y] {}])
 
 (defn -canInsert
-  "Only allow matrix cores in this slot"
+  "Only allow core-type items in this slot"
   [this stack]
   (core/is-mat-core? stack))
 
 (defn -getMaxItemCount
-  "Cores never stack"
+  "Core items never stack"
   [this]
   1)
 
@@ -138,14 +138,14 @@
   (my_mod.fabric1201.gui.SlotEnergyItem. inventory slot-index x y))
 
 (defn create-plate-slot
-  "Create a slot that only accepts constraint plates"
+  "Create a slot that filters for plate-type items"
   [inventory slot-index x y]
-  (my_mod.fabric1201.gui.SlotConstraintPlate. inventory slot-index x y))
+  (my_mod.fabric1201.gui.SlotFilteredPlate. inventory slot-index x y))
 
 (defn create-core-slot
-  "Create a slot that only accepts matrix cores"
+  "Create a slot that filters for core-type items"
   [inventory slot-index x y]
-  (my_mod.fabric1201.gui.SlotMatrixCore. inventory slot-index x y))
+  (my_mod.fabric1201.gui.SlotFilteredCore. inventory slot-index x y))
 
 (defn create-output-slot
   "Create an output-only slot (no insertion allowed)"
@@ -184,12 +184,12 @@
 (defn add-gui-slots
   "Generic function to add GUI-specific slots based on metadata
   
-  Replaces add-node-slots and add-matrix-slots with metadata-driven approach.
+  Platform-agnostic implementation: Uses metadata-driven approach.
   
   Args:
   - handler: ScreenHandler
   - inventory: Inventory
-  - gui-id: int (0 for node, 1 for matrix, etc.)
+  - gui-id: int (GUI identifier from gui-metadata)
   - x-offset: int
   - y-offset: int
   
@@ -203,10 +203,10 @@
 (defn get-gui-slot-ranges
   "Get slot index ranges for GUI type from metadata
   
-  Replaces get-slot-range with metadata-driven approach.
+  Platform-agnostic implementation: Uses metadata-driven approach.
   
   Args:
-  - gui-id: int (0 for node, 1 for matrix, etc.)
+  - gui-id: int (GUI identifier from gui-metadata)
   - section: :tile, :player-main, :player-hotbar
   
   Returns: [start-index end-index] (inclusive)"
@@ -249,35 +249,24 @@
 ;; ============================================================================
 
 (defn get-slot-range
-  "Get slot index range for different inventory sections
+  "DEPRECATED: Use get-gui-slot-ranges instead
+  
+  Get slot index range for different inventory sections
   
   Args:
-  - handler-type: :node or :matrix
+  - gui-id: int (GUI identifier)
   - section: :tile, :player-main, :player-hotbar
   
   Returns: [start-index end-index] (inclusive)"
-  [handler-type section]
-  (case handler-type
-    :node
-    (case section
-      :tile [0 1]
-      :player-main [2 28]
-      :player-hotbar [29 37]
-      [0 0])
-    
-    :matrix
-    (case section
-      :tile [0 3]
-      :player-main [4 30]
-      :player-hotbar [31 39]
-      [0 0])))
+  [gui-id section]
+  (get-gui-slot-ranges gui-id section))
 
 (defn slot-in-range?
   "Check if slot index is in given section
   
   Args:
   - slot-index: int
-  - handler-type: :node or :matrix
+  - gui-id: int (GUI identifier)
   - section: :tile, :player-main, :player-hotbar
   
   Returns: boolean"

@@ -41,11 +41,11 @@
   1)
 
 ;; ============================================================================
-;; Custom Slot: Constraint Plate Only
+;; Custom Slot: Filtered Plate Items
 ;; ============================================================================
 
 (gen-class
-  :name my_mod.forge1165.gui.SlotConstraintPlate
+  :name my_mod.forge1165.gui.SlotFilteredPlate
   :extends net.minecraft.inventory.container.Slot
   :constructors {[net.minecraft.inventory.IInventory int int int] 
                  [net.minecraft.inventory.IInventory int int int]}
@@ -53,26 +53,26 @@
   :init init-plate)
 
 (defn -init-plate
-  "Initialize constraint plate slot"
+  "Initialize filtered plate slot"
   [inventory slot-index x y]
   [[inventory slot-index x y] {}])
 
 (defn -isItemValid
-  "Only allow constraint plates in this slot"
+  "Only allow plate-type items in this slot"
   [this stack]
   (plate/is-constraint-plate? stack))
 
 (defn -getMaxStackSize
-  "Plates can stack but matrix only needs one per slot"
+  "Plate items limited to single stack"
   [this]
   1)
 
 ;; ============================================================================
-;; Custom Slot: Matrix Core Only
+;; Custom Slot: Filtered Core Items
 ;; ============================================================================
 
 (gen-class
-  :name my_mod.forge1165.gui.SlotMatrixCore
+  :name my_mod.forge1165.gui.SlotFilteredCore
   :extends net.minecraft.inventory.container.Slot
   :constructors {[net.minecraft.inventory.IInventory int int int] 
                  [net.minecraft.inventory.IInventory int int int]}
@@ -80,17 +80,17 @@
   :init init-core)
 
 (defn -init-core
-  "Initialize matrix core slot"
+  "Initialize filtered core slot"
   [inventory slot-index x y]
   [[inventory slot-index x y] {}])
 
 (defn -isItemValid
-  "Only allow matrix cores in this slot"
+  "Only allow core-type items in this slot"
   [this stack]
   (core/is-mat-core? stack))
 
 (defn -getMaxStackSize
-  "Cores never stack"
+  "Core items never stack"
   [this]
   1)
 
@@ -139,14 +139,14 @@
   (my_mod.forge1165.gui.SlotEnergyItem. inventory slot-index x y))
 
 (defn create-plate-slot
-  "Create a slot that only accepts constraint plates"
+  "Create a slot that filters for plate-type items"
   [inventory slot-index x y]
-  (my_mod.forge1165.gui.SlotConstraintPlate. inventory slot-index x y))
+  (my_mod.forge1165.gui.SlotFilteredPlate. inventory slot-index x y))
 
 (defn create-core-slot
-  "Create a slot that only accepts matrix cores"
+  "Create a slot that filters for core-type items"
   [inventory slot-index x y]
-  (my_mod.forge1165.gui.SlotMatrixCore. inventory slot-index x y))
+  (my_mod.forge1165.gui.SlotFilteredCore. inventory slot-index x y))
 
 (defn create-output-slot
   "Create an output-only slot (no insertion allowed)"
