@@ -5,9 +5,8 @@
             [my-mod.fabric1201.events :as events]
             [my-mod.fabric1201.gui.impl :as gui]
             [my-mod.block.dsl :as bdsl]
-            [my-mod.block.demo :as block-demo]
             [my-mod.item.dsl :as idsl]
-            [my-mod.item.demo :as item-demo]
+            [my-mod.registry.metadata :as registry-metadata]
             [my-mod.util.log :as log]
             [my-mod.defs :as defs])
   (:import [net.minecraft.core Registry]
@@ -20,47 +19,51 @@
 ;; Mod ID constant
 (def mod-id "my_mod")
 
-;; Create demo block using DSL
-(defonce demo-block
-  (let [block-spec (bdsl/get-block "demo-block")]
-    (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))
-
-;; Create demo item using DSL
-(defonce demo-item
-  (let [item-spec (idsl/get-item "demo-item")]
-    (Item. (Item$Properties.))))
-
-;; Create demo block item
-(defonce demo-block-item
-  (BlockItem. demo-block
-              (.. (Item$Properties.)
-                  (stacksTo 64))))
+;; Storage for registered blocks and items (populated during initialization)
+(defonce registered-blocks (atom {}))
+(defonce registered-items (atom {}))
 
 (defn register-blocks []
-  "Register all blocks"
+  "Register all blocks using metadata-driven approach.
+  Platform code does not know specific block names."
   (log/info "Registering Fabric blocks...")
-  (registry/register-block defs/demo-block-id demo-block))
+  (doseq [block-id (registry-metadata/get-all-block-ids)]
+    (let [registry-name (registry-metadata/get-block-registry-name block-id)
+          block-spec (registry-metadata/get-block-spec block-id)
+          block-obj (Block. (BlockBehaviour$Properties/copy Blocks/STONE))]
+      (registry/register-block registry-name block-obj)
+      (swap! registered-blocks assoc block-id block-obj))))
 
 (defn register-items []
-  "Register all items"
+  "Register all items using metadata-driven approach.
+  Platform code does not know specific item names."
   (log/info "Registering Fabric items...")
-  (registry/register-item defs/demo-item-id demo-item)
-  (registry/register-item defs/demo-block-id demo-block-item))
+  ;; Register standalone items
+  (doseq [item-id (registry-metadata/get-all-item-ids)]
+    (let [registry-name (registry-metadata/get-item-registry-name item-id)
+          item-spec (registry-metadata/get-item-spec item-id)
+          item-obj (Item. (Item$Properties.))]
+      (registry/register-item registry-name item-obj)
+      (swap! registered-items assoc item-id item-obj)))
+  
+  ;; Register BlockItems for all blocks
+  (doseq [block-id (registry-metadata/get-all-block-ids)]
+    (when (registry-metadata/should-create-block-item? block-id)
+      (let [registry-name (registry-metadata/get-block-registry-name block-id)
+            block-obj (get @registered-blocks block-id)
+            block-item-obj (BlockItem. block-obj (.. (Item$Properties.) (stacksTo 64)))]
+        (registry/register-item registry-name block-item-obj)
+        (swap! registered-items assoc (str block-id "-item") block-item-obj)))))
 
 (defn mod-init []
   "Main mod initialization called from Java ModInitializer"
   (log/info "Initializing MyMod (Fabric 1.20.1) from Clojure...")
   
-  ;; Initialize block DSL
-  (block-demo/init-demo-blocks!)
-  
-  ;; Initialize item DSL
-  (item-demo/init-demo-items!)
-  
   ;; Initialize Clojure adapters
   (init/init-from-java)
   
-  ;; Register blocks and items
+  ;; Register blocks and items using metadata-driven approach
+  ;; DSL systems are automatically initialized when namespaces load
   (register-blocks)
   (register-items)
   
@@ -69,12 +72,36 @@
   
   (log/info "MyMod (Fabric 1.20.1) initialization complete"))
 
-;; Helper to get registered block/item
-(defn get-demo-block []
-  demo-block)
+;; Generic helpers to query registered blocks/items by ID
+(defn get-registered-block
+  "Get a registered block by its DSL ID.
+  
+  Args:
+    block-id: String - DSL block identifier (e.g., \"demo-block\")
+  
+  Returns:
+    Block - The registered block, or nil if not found"
+  [block-id]
+  (get @registered-blocks block-id))
 
-(defn get-demo-item []
-  demo-item)
+(defn get-registered-item
+  "Get a registered item by its DSL ID.
+  
+  Args:
+    item-id: String - DSL item identifier (e.g., \"demo-item\")
+  
+  Returns:
+    Item - The registered item, or nil if not found"
+  [item-id]
+  (get @registered-items item-id))
 
-(defn get-demo-block-item []
-  demo-block-item)
+(defn get-registered-block-item
+  "Get a registered block item by its block ID.
+  
+  Args:
+    block-id: String - DSL block identifier (e.g., \"demo-block\")
+  
+  Returns:
+    BlockItem - The registered block item, or nil if not found"
+  [block-id]
+  (get @registered-items (str block-id "-item")))

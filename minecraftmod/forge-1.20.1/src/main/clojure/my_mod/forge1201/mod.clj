@@ -5,9 +5,8 @@
             [my-mod.forge1201.events :as events]
             [my-mod.forge1201.gui.impl :as gui]
             [my-mod.block.dsl :as bdsl]
-            [my-mod.block.demo :as block-demo]
             [my-mod.item.dsl :as idsl]
-            [my-mod.item.demo :as item-demo]
+            [my-mod.registry.metadata :as registry-metadata]
             [my-mod.util.log :as log])
   (:import [net.minecraft.world.level.block Block Blocks]
            [net.minecraft.world.level.block.state BlockBehaviour]
@@ -36,39 +35,58 @@
 (defonce items-register 
   (DeferredRegister/create ForgeRegistries/ITEMS mod-id))
 
-;; Register blocks using DSL
-(defonce demo-block
-  (let [block-spec (bdsl/get-block "demo-block")]
-    (.register blocks-register "demo_block"
-      (reify java.util.function.Supplier
-        (get [_]
-          (let [props (bdsl/get-block-properties block-spec)]
-            (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))))
+;; Storage for registered blocks and items (populated during initialization)
+(defonce registered-blocks (atom {}))
+(defonce registered-items (atom {}))
 
-;; Register items
-;; Register items using DSL
-(defonce demo-item
-  (let [item-spec (idsl/get-item "demo-item")]
-    (.register items-register "demo_item"
-      (reify java.util.function.Supplier
-        (get [_]
-          (Item. (Item$Properties.)))))))
+;; Dynamic block registration using metadata
+(defn register-all-blocks!
+  "Register all blocks defined in DSL using metadata-driven approach.
+  Platform code does not know specific block names."
+  []
+  (doseq [block-id (registry-metadata/get-all-block-ids)]
+    (let [registry-name (registry-metadata/get-block-registry-name block-id)
+          block-spec (registry-metadata/get-block-spec block-id)
+          registered-obj (.register blocks-register registry-name
+                          (reify java.util.function.Supplier
+                            (get [_]
+                              (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))))]
+      (swap! registered-blocks assoc block-id registered-obj))))
 
-(defonce demo-block-item
-  (.register items-register "demo_block"
-    (reify java.util.function.Supplier
-      (get [_]
-        (BlockItem. (.get demo-block) (Item$Properties.))))))
+;; Dynamic item registration using metadata
+(defn register-all-items!
+  "Register all items defined in DSL using metadata-driven approach.
+  Platform code does not know specific item names."
+  []
+  ;; Register standalone items
+  (doseq [item-id (registry-metadata/get-all-item-ids)]
+    (let [registry-name (registry-metadata/get-item-registry-name item-id)
+          item-spec (registry-metadata/get-item-spec item-id)
+          registered-obj (.register items-register registry-name
+                          (reify java.util.function.Supplier
+                            (get [_]
+                              (Item. (Item$Properties.)))))]
+      (swap! registered-items assoc item-id registered-obj)))
+  
+  ;; Register BlockItems for all blocks
+  (doseq [block-id (registry-metadata/get-all-block-ids)]
+    (when (registry-metadata/should-create-block-item? block-id)
+      (let [registry-name (registry-metadata/get-block-registry-name block-id)
+            block-registered (get @registered-blocks block-id)
+            registered-obj (.register items-register registry-name
+                            (reify java.util.function.Supplier
+                              (get [_]
+                                (BlockItem. (.get block-registered) (Item$Properties.)))))]
+        (swap! registered-items assoc (str block-id "-item") registered-obj)))))
 
 ;; Constructor implementation
 (defn mod-init []
   (log/info "Initializing MyMod1201 from Clojure...")
   
-  ;; Initialize block DSL
-  (block-demo/init-demo-blocks!)
-  
-  ;; Initialize item DSL
-  (item-demo/init-demo-items!)
+  ;; Register all blocks and items using metadata-driven approach
+  ;; DSL systems are automatically initialized when namespaces load
+  (register-all-blocks!)
+  (register-all-items!)
   
   (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
     ;; Register DeferredRegisters
@@ -97,12 +115,39 @@
 (defn mod-setup [this event]
   (log/info "Common setup phase"))
 
-;; Helper to get registered block/item
-(defn get-demo-block []
-  (.get demo-block))
+;; Generic helpers to query registered blocks/items by ID
+(defn get-registered-block
+  "Get a registered block by its DSL ID.
+  
+  Args:
+    block-id: String - DSL block identifier (e.g., \"demo-block\")
+  
+  Returns:
+    RegistryObject - The registered block, or nil if not found"
+  [block-id]
+  (when-let [registered-obj (get @registered-blocks block-id)]
+    (.get registered-obj)))
 
-(defn get-demo-item []
-  (.get demo-item))
+(defn get-registered-item
+  "Get a registered item by its DSL ID.
+  
+  Args:
+    item-id: String - DSL item identifier (e.g., \"demo-item\")
+  
+  Returns:
+    RegistryObject - The registered item, or nil if not found"
+  [item-id]
+  (when-let [registered-obj (get @registered-items item-id)]
+    (.get registered-obj)))
 
-(defn get-demo-block-item []
-  (.get demo-block-item))
+(defn get-registered-block-item
+  "Get a registered block item by its block ID.
+  
+  Args:
+    block-id: String - DSL block identifier (e.g., \"demo-block\")
+  
+  Returns:
+    RegistryObject - The registered block item, or nil if not found"
+  [block-id]
+  (when-let [registered-obj (get @registered-items (str block-id "-item"))]
+    (.get registered-obj)))
