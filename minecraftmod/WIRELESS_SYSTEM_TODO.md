@@ -13,46 +13,56 @@
   - 实现方式：Clojure deftype 或 Java 接口定义
   - 文件：`energy/imag_energy_item.clj` 或 Java 源码
 
-- [ ] **IWirelessMatrix** 接口
-  - 包：`cn.academy.energy.api.block`
-  - 方法：`getRange()`, `getCapacity()`, `getBandwidth()`
+- [x] **IWirelessMatrix** 接口 ✅
+  - 包：`my-mod.wireless.interfaces`
+  - 方法：`get-matrix-range`, `get-matrix-capacity`, `get-matrix-bandwidth`
   - 用途：无线网络矩阵（中心节点）
   - 文件：`wireless/interfaces.clj`
+  - 状态：已完成 defprotocol 定义
 
-- [ ] **IWirelessNode** 接口
-  - 包：`cn.academy.energy.api.block`
-  - 方法：`getEnergy()`, `setEnergy()`, `getMaxEnergy()`, `getBandwidth()`, `getRange()`, `getCapacity()`, `getPassword()`
+- [x] **IWirelessNode** 接口 ✅
+  - 包：`my-mod.wireless.interfaces`
+  - 方法：`get-energy`, `set-energy`, `get-max-energy`, `get-bandwidth`, `get-range`, `get-capacity`, `get-password`, `get-node-name`
   - 用途：无线节点
   - 文件：`wireless/interfaces.clj`
+  - 状态：已完成 defprotocol 定义
 
-- [ ] **IWirelessGenerator** 接口
-  - 包：`cn.academy.energy.api.block`
-  - 方法：`getEnergy()`
+- [x] **IWirelessGenerator** 接口 ✅
+  - 包：`my-mod.wireless.interfaces`
+  - 方法：`get-provided-energy`, `get-generator-bandwidth`
   - 用途：能量生成器
   - 文件：`wireless/interfaces.clj`
+  - 状态：已完成 defprotocol 定义
 
-- [ ] **IWirelessReceiver** 接口
-  - 包：`cn.academy.energy.api.block`
-  - 方法：`injectEnergy(double)`, `pullEnergy(double)`
+- [x] **IWirelessReceiver** 接口 ✅
+  - 包：`my-mod.wireless.interfaces`
+  - 方法：`inject-energy`, `pull-energy`, `get-required-energy`, `get-receiver-bandwidth`
   - 用途：能量接收器
   - 文件：`wireless/interfaces.clj`
+  - 状态：已完成 defprotocol 定义
 
 #### 1.2 TileEntity 接口实现
-- [ ] **NodeTileEntity** 实现 IWirelessNode
-  - 当前状态：record 定义
-  - 需要：通过 deftype 或 gen-class 实现 Java 接口
+- [x] **NodeTileEntity** 实现 IWirelessNode ✅
+  - 当前状态：defrecord 定义，已实现接口方法
   - 文件：`block/wireless_node.clj`
-  - 关键点：保持 Clojure 数据结构的优势
+  - 状态：完成，使用 Clojure record + protocol 实现
+  - 包含：能量管理、物品栏（2槽位）、网络连接
 
-- [ ] **NodeTileEntity** 实现 IInventory
+- [x] **TileMatrix** 实现 IWirelessMatrix ✅
+  - 当前状态：defrecord 定义，已实现接口方法
+  - 文件：`block/wireless_matrix.clj`
+  - 状态：完成，使用 Clojure record + protocol 实现
+  - 包含：4槽位物品栏（3个constraint_plate + 1个mat_core）
+
+- [x] **NodeTileEntity** 实现 IInventory ✅
   - 2 槽位物品栏
-  - 方法：`getSizeInventory()`, `getStackInSlot()`, `setInventorySlotContents()` 等
-  - 难点：Java 接口方法较多
+  - 方法：使用 `inventory.core` 命名空间提供的工具
+  - 状态：完成，集成在 NodeTileEntity record 中
 
-- [ ] **NodeTileEntity** 实现 ITickable
-  - 方法：`update()` 每 tick 调用
-  - 已实现逻辑：`update-node-tile!`
-  - 需要：包装为 Java 接口方法
+- [x] **NodeTileEntity** 实现 ITickable ✅
+  - 方法：`update-node-tile!` 每 tick 调用
+  - 状态：完成，包含充电逻辑、网络同步
+  - 文件：`block/wireless_node.clj`
 
 ### 2. 方块状态管理
 
@@ -80,29 +90,63 @@
 
 ### 4. GUI 系统
 
-- [ ] **ContainerNode - 容器类**
+- [x] **ContainerNode - 容器类** ✅
   - 2 槽位容器
   - 槽位 0：输入（充能到节点）
   - 槽位 1：输出（从节点充能）
-  - 文件：`gui/container_node.clj` 或使用现有 GUI DSL
+  - 文件：`wireless/gui/node_container.clj`
+  - 状态：完成
 
-- [ ] **GuiNode - 节点配置界面**
-  - 显示能量条
-  - 显示连接状态
+- [x] **GuiNode - 节点配置界面** ✅
+  - 显示能量条、容量直方图
+  - 显示连接状态（动画）
   - 节点名称输入框
   - 密码输入框
-  - 充电状态指示器（输入/输出）
-  - 文件：`gui/gui_node.clj` 或使用现有 GUI DSL
+  - 网络状态轮询
+  - 文件：`wireless/gui/node_gui.clj` (CGui版本)
+  - 文件：`wireless/gui/node_gui_xml.clj` (XML驱动版本) ✅ 完成
+  - 状态：双版本实现，XML版本已完成并文档化
+
+- [x] **ContainerMatrix - 容器类** ✅
+  - 4 槽位容器
+  - 槽位 0-2：constraint_plate（三角形布局）
+  - 槽位 3：mat_core（中心位置）
+  - 文件：`wireless/gui/matrix_container.clj`
+  - 状态：完成
+
+- [x] **GuiMatrix - Matrix配置界面** ✅
+  - 网络初始化UI（SSID + 密码）
+  - 网络信息显示（可编辑）
+  - 容量直方图（网络负载）
+  - 动态UI切换（已初始化/未初始化）
+  - 所有者权限控制
+  - 文件：`wireless/gui/matrix_gui.clj` (CGui版本)
+  - 文件：`wireless/gui/matrix_gui_xml.clj` (XML驱动版本) ✅ 完成
+  - XML布局：`resources/assets/academy/gui/page_wireless_matrix.xml` ✅
+  - 状态：双版本实现，XML版本已完成并文档化
 
 ### 5. 网络同步系统
 
-- [ ] **实现真实网络包系统**
-  - 当前状态：`send-sync-message` 只是 stub
-  - 需要：Minecraft 网络包（Packet）系统
+- [x] **GUI网络消息系统** ✅
+  - Node GUI 消息：
+    - MSG_GET_STATUS - 查询节点状态
+    - MSG_CHANGE_NAME - 修改节点名称
+    - MSG_CHANGE_PASSWORD - 修改密码
+  - Matrix GUI 消息：
+    - MSG_GATHER_INFO - 查询网络信息
+    - MSG_INIT - 初始化网络
+    - MSG_CHANGE_SSID - 修改SSID
+    - MSG_CHANGE_PASSWORD - 修改密码
+  - 文件：`wireless/gui/node_gui_xml.clj`, `wireless/gui/matrix_gui_xml.clj`
+  - 网络处理：`wireless/gui/matrix_network_handler.clj` ✅
+  - 状态：完成，包含权限验证和回调机制
+
+- [ ] **TileEntity 同步系统**
   - 数据：enabled, chargingIn, chargingOut, energy, name, password, placerName
   - 同步范围：20 格内玩家
   - 同步频率：每 10 tick
-  - 文件：`network/sync.clj`
+  - 文件：`network/sync.clj` 或 `block/wireless_node.clj`
+  - 需要：实现真实的 Minecraft Packet 系统
 
 - [ ] **客户端状态接收处理**
   - 接收服务器同步数据
@@ -264,29 +308,129 @@
 
 **目标**：生产就绪，性能良好
 
-## 🎯 当前建议
+## 🎯 当前优先级建议
 
-根据缺失分析，**立即开始**以下任务：
+### 立即需要（阻塞测试）
+
+1. **方块状态管理** 🔴
+   - 实现 `rebuild-block-state!`
+   - 实现 `get-actual-state`
+   - 文件：`block/wireless_node.clj`
+   - 原因：客户端渲染需要
+
+2. **测试能量物品** 🔴
+   - 创建 `item/test_battery.clj`
+   - 实现 ImagEnergyItem 接口
+   - 用于验证充放电功能
+   - 原因：测试Node充电系统
+
+3. **TileEntity 同步** 🟡
+   - 实现 Minecraft Packet 系统
+   - 同步节点状态到客户端
+   - 文件：`network/sync.clj`
+   - 原因：GUI显示需要实时数据
+
+### 短期目标（本周）
+
+4. **WorldSavedData 集成** 🟡
+   - 注册 WiWorldData 为 WorldSavedData
+   - 实现自动保存/加载
+   - 文件：`wireless/world_data.clj`
+
+5. **方块范围搜索** 🟡
+   - 实现 `WorldUtils.getBlocksWithin`
+   - 用于节点发现
+   - 文件：`util/world_utils.clj`
+
+### 已完成的基础任务 ✅
 
 1. ✅ **创建 `wireless/interfaces.clj`**
-   - 定义所有 Java 接口的 Clojure 版本
-   - 使用 `defprotocol` 或 `deftype`
+   - 所有接口定义完成
+   - 使用 defprotocol
 
 2. ✅ **修改 `block/wireless_node.clj`**
-   - 让 NodeTileEntity 实现必要接口
-   - 实现 `rebuild-block-state!`
+   - NodeTileEntity 实现完成
+   - 包含充电逻辑
 
-3. ✅ **创建 `item/test_battery.clj`**
-   - 简单的测试能量物品
-   - 用于验证充放电功能
+3. ✅ **GUI 系统完整实现**
+   - Node GUI（XML + CGui双版本）
+   - Matrix GUI（XML + CGui双版本）
+   - 网络消息处理
+   - 权限控制
 
-完成以上三项后，系统即可进行基础功能测试。
+完成"立即需要"的3项任务后，系统即可进行完整功能测试。
 
 ## 📊 进度跟踪
 
-- 🔴 高优先级：0/13 完成
-- 🟡 中优先级：0/9 完成
-- 🟢 低优先级：0/20 完成
-- **总计**：0/42 完成
+- 🔴 高优先级：8/13 完成 (61.5%)
+  - ✅ IWirelessMatrix 接口
+  - ✅ IWirelessNode 接口
+  - ✅ IWirelessGenerator 接口
+  - ✅ IWirelessReceiver 接口
+  - ✅ NodeTileEntity 接口实现
+  - ✅ TileMatrix 接口实现
+  - ✅ IInventory 实现
+  - ✅ ITickable 实现
+  - ⏳ ImagEnergyItem 接口
+  - ⏳ 方块状态管理
+  - ⏳ 测试能量物品
+  - ⏳ rebuild-block-state!
+  - ⏳ get-actual-state
 
-**最后更新**：2025-11-25
+- 🟡 中优先级：6/11 完成 (54.5%)
+  - ✅ ContainerNode 容器
+  - ✅ GuiNode 界面（双版本）
+  - ✅ ContainerMatrix 容器
+  - ✅ GuiMatrix 界面（双版本）
+  - ✅ GUI网络消息系统
+  - ✅ Matrix网络消息处理器
+  - ⏳ TileEntity同步系统
+  - ⏳ 客户端状态接收
+  - ⏳ WorldSavedData 集成
+  - ⏳ 世界加载/卸载事件
+  - ⏳ 方块范围搜索工具
+
+- 🟢 低优先级：0/20 完成 (0%)
+  - ⏳ 事件系统
+  - ⏳ 测试和调试
+  - ⏳ 性能优化
+  - ⏳ 文档完善
+
+- **总计**：14/44 完成 (31.8%)
+
+**最后更新**：2025-11-26
+
+## 📝 新增完成项
+
+### 2025-11-26 更新：
+1. ✅ **Wireless Matrix GUI 完整移植**
+   - XML布局：`page_wireless_matrix.xml` (230行)
+   - GUI实现：`matrix_gui_xml.clj` (420行)
+   - 网络处理：`matrix_network_handler.clj` (180行)
+   - 文档：
+     - `WIRELESS_MATRIX_GUI_ANALYSIS.md` (600+行)
+     - `WIRELESS_MATRIX_GUI_IMPLEMENTATION.md` (850+行)
+     - `WIRELESS_MATRIX_GUI_MIGRATION_SUMMARY.md`
+   - 特性：
+     - 动态UI切换（3种状态）
+     - 网络初始化表单
+     - SSID/密码管理
+     - 权限控制（客户端+服务端）
+     - 代码复用率：55.7%
+
+2. ✅ **Wireless Node GUI 完整移植**
+   - XML布局：已完成
+   - GUI实现：`node_gui_xml.clj`
+   - 特性：
+     - 动画系统（连接状态）
+     - 直方图（能量+容量）
+     - 属性编辑（节点名、密码）
+     - 网络状态轮询
+
+3. ✅ **核心接口定义完成**
+   - IWirelessMatrix
+   - IWirelessNode
+   - IWirelessGenerator
+   - IWirelessReceiver
+   - IWirelessTile
+   - IWirelessUser

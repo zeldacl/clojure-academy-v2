@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Wireless Matrix GUI Layout
+  
+  功能：网络矩阵管理界面
+  特点：
+  - 4个插槽（三角形 + 中心布局）
+  - 网络初始化UI（未初始化状态）
+  - 网络信息编辑（已初始化状态）
+  - 容量直方图（网络负载）
+-->
+
+<GUI>
+  <name>wireless_matrix</name>
+  <size>
+    <width>230</width>
+    <height>200</height>
+  </size>
+  
+  <!-- ==================== 主容器 ==================== -->
+  <Widget name="root">
+    <x>0</x>
+    <y>0</y>
+    <width>230</width>
+    <height>200</height>
+    
+    <!-- ==================== 左侧：插槽区域 ==================== -->
+    <Widget name="slots_panel">
+      <x>10</x>
+      <y>20</y>
+      <width>130</width>
+      <height>90</height>
+      
+      <!-- 背景纹理（可选） -->
+      <DrawTexture name="slots_background">
+        <texture>academy:textures/guis/matrix_slots.png</texture>
+        <u>0</u>
+        <v>0</v>
+        <width>130</width>
+        <height>90</height>
+      </DrawTexture>
+      
+      <!-- ==================== 三角形布局：3个Constraint Plate插槽 ==================== -->
+      
+      <!-- 顶部插槽 -->
+      <Slot name="slot_plate_top">
+        <index>0</index>
+        <x>60</x>
+        <y>0</y>
+        <type>matrix_constraint_plate</type>
+      </Slot>
+      
+      <!-- 左下插槽 -->
+      <Slot name="slot_plate_left">
+        <index>1</index>
+        <x>35</x>
+        <y>49</y>
+        <type>matrix_constraint_plate</type>
+      </Slot>
+      
+      <!-- 右下插槽 -->
+      <Slot name="slot_plate_right">
+        <index>2</index>
+        <x>86</x>
+        <y>49</y>
+        <type>matrix_constraint_plate</type>
+      </Slot>
+      
+      <!-- ==================== 中心：Matrix Core插槽 ==================== -->
+      <Slot name="slot_core_center">
+        <index>3</index>
+        <x>60</x>
+        <y>25</y>
+        <type>matrix_core</type>
+      </Slot>
+      
+      <!-- 连接线装饰（可选，使用DrawTexture绘制三角形连线） -->
+      <DrawTexture name="triangle_lines">
+        <texture>academy:textures/guis/matrix_triangle.png</texture>
+        <x>35</x>
+        <y>10</y>
+        <u>0</u>
+        <v>0</v>
+        <width>77</width>
+        <height>55</height>
+      </DrawTexture>
+    </Widget>
+    
+    <!-- ==================== 右侧：信息面板 ==================== -->
+    <Widget name="info_panel">
+      <x>145</x>
+      <y>10</y>
+      <width>75</width>
+      <height>180</height>
+      
+      <!-- ==================== 容量直方图（网络负载） ==================== -->
+      <Histogram name="hist_capacity">
+        <label>Load</label>
+        <x>5</x>
+        <y>5</y>
+        <width>65</width>
+        <height>45</height>
+        <type>capacity</type>
+        <color>#ff6c00</color>
+        <direction>vertical</direction>
+      </Histogram>
+      
+      <!-- 分隔线 -->
+      <DrawTexture name="sep_line_1">
+        <texture>academy:textures/guis/gui_components.png</texture>
+        <x>0</x>
+        <y>55</y>
+        <u>223</u>
+        <v>5</v>
+        <width>75</width>
+        <height>2</height>
+      </DrawTexture>
+      
+      <!-- ==================== 基本属性区域 ==================== -->
+      <Widget name="basic_properties">
+        <x>0</x>
+        <y>60</y>
+        <width>75</width>
+        <height>60</height>
+        
+        <!-- 所有者 -->
+        <Property name="prop_owner">
+          <label>Owner</label>
+          <x>2</x>
+          <y>0</y>
+          <width>71</width>
+          <editable>false</editable>
+          <labelColor>#aaaaaa</labelColor>
+          <valueColor>#ffffff</valueColor>
+        </Property>
+        
+        <!-- 范围 -->
+        <Property name="prop_range">
+          <label>Range</label>
+          <x>2</x>
+          <y>20</y>
+          <width>71</width>
+          <editable>false</editable>
+          <labelColor>#aaaaaa</labelColor>
+          <valueColor>#ffffff</valueColor>
+        </Property>
+        
+        <!-- 带宽 -->
+        <Property name="prop_bandwidth">
+          <label>Bandwidth</label>
+          <x>2</x>
+          <y>40</y>
+          <width>71</width>
+          <editable>false</editable>
+          <labelColor>#aaaaaa</labelColor>
+          <valueColor>#ffffff</valueColor>
+        </Property>
+      </Widget>
+      
+      <!-- 分隔线 -->
+      <DrawTexture name="sep_line_2">
+        <texture>academy:textures/guis/gui_components.png</texture>
+        <x>0</x>
+        <y>125</y>
+        <u>223</u>
+        <v>5</v>
+        <width>75</width>
+        <height>2</height>
+      </DrawTexture>
+      
+      <!-- ==================== 网络信息区域（已初始化状态） ==================== -->
+      <Widget name="network_info_panel">
+        <x>0</x>
+        <y>130</y>
+        <width>75</width>
+        <height>50</height>
+        <visible>true</visible>
+        
+        <!-- SSID属性（可编辑） -->
+        <Property name="prop_ssid">
+          <label>SSID</label>
+          <x>2</x>
+          <y>0</y>
+          <width>71</width>
+          <editable>true</editable>
+          <maxLength>32</maxLength>
+          <requiresOwner>true</requiresOwner>
+          <labelColor>#aaaaaa</labelColor>
+          <valueColor>#00ff00</valueColor>
+        </Property>
+        
+        <!-- 密码属性（可编辑，遮罩显示） -->
+        <Property name="prop_password">
+          <label>Password</label>
+          <x>2</x>
+          <y>25</y>
+          <width>71</width>
+          <editable>true</editable>
+          <maxLength>16</maxLength>
+          <masked>true</masked>
+          <requiresOwner>true</requiresOwner>
+          <labelColor>#aaaaaa</labelColor>
+          <valueColor>#00ff00</valueColor>
+        </Property>
+      </Widget>
+      
+      <!-- ==================== 初始化表单（未初始化状态） ==================== -->
+      <Widget name="init_form_panel">
+        <x>0</x>
+        <y>130</y>
+        <width>75</width>
+        <height>50</height>
+        <visible>false</visible>
+        
+        <!-- SSID输入框 -->
+        <TextField name="input_ssid">
+          <label>Network Name</label>
+          <x>2</x>
+          <y>0</y>
+          <width>71</width>
+          <height>10</height>
+          <maxLength>32</maxLength>
+          <placeholder>Enter SSID</placeholder>
+          <labelColor>#aaaaaa</labelColor>
+          <textColor>#ffffff</textColor>
+          <backgroundColor>#333333</backgroundColor>
+        </TextField>
+        
+        <!-- 密码输入框 -->
+        <TextField name="input_password">
+          <label>Password</label>
+          <x>2</x>
+          <y>15</y>
+          <width>71</width>
+          <height>10</height>
+          <maxLength>16</maxLength>
+          <masked>true</masked>
+          <placeholder>Enter Password</placeholder>
+          <labelColor>#aaaaaa</labelColor>
+          <textColor>#ffffff</textColor>
+          <backgroundColor>#333333</backgroundColor>
+        </TextField>
+        
+        <!-- 初始化按钮 -->
+        <Button name="btn_initialize">
+          <text>Initialize</text>
+          <x>2</x>
+          <y>30</y>
+          <width>71</width>
+          <height>15</height>
+          <color>#00cc00</color>
+          <hoverColor>#00ff00</hoverColor>
+          <textColor>#ffffff</textColor>
+          <requiresOwner>true</requiresOwner>
+        </Button>
+      </Widget>
+      
+      <!-- 非所有者提示（未初始化状态） -->
+      <Widget name="no_init_message">
+        <x>5</x>
+        <y>140</y>
+        <width>65</width>
+        <height>30</height>
+        <visible>false</visible>
+        
+        <DrawText name="msg_not_initialized">
+          <text>Network not initialized</text>
+          <x>0</x>
+          <y>0</y>
+          <color>#ff0000</color>
+          <scale>0.5</scale>
+        </DrawText>
+      </Widget>
+    </Widget>
+  </Widget>
+</GUI>
