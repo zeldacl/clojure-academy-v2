@@ -1,12 +1,20 @@
 (ns my-mod.forge1201.gui.bridge
-  "Forge 1.20.1 GUI Bridge - Java Container wrapper for Clojure containers
+  "Forge 1.20.1 GUI Bridge - Platform-neutral Menu wrapper
+  
+  This module provides platform-specific Java interop without game logic.
+  Game-specific concepts abstracted away through dispatcher and metadata.
   
   API Changes from 1.16.5:
   - Container → AbstractContainerMenu
   - INamedContainerProvider → MenuProvider
-  - Package: net.minecraft.inventory.container → net.minecraft.world.inventory"
-  (:require [my-mod.wireless.gui.node-container :as node-container]
-            [my-mod.wireless.gui.matrix-container :as matrix-container]
+  - Package: net.minecraft.inventory.container → net.minecraft.world.inventory
+  
+  Classes:
+  - ForgeMenuBridge: Generic AbstractContainerMenu wrapper
+  - ForgeMenuProviderBridge: Generic MenuProvider"
+  (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
+            [my-mod.wireless.gui.gui-metadata :as gui-metadata]
+            [my-mod.wireless.gui.slot-manager :as slot-manager]
             [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.util.log :as log])
   (:import [net.minecraft.world.entity.player Player Inventory]
@@ -19,7 +27,7 @@
 ;; ============================================================================
 
 (gen-class
-  :name my_mod.forge1201.gui.WirelessMenu
+  :name my_mod.forge1201.gui.ForgeMenuBridge
   :extends net.minecraft.world.inventory.AbstractContainerMenu
   :state state
   :init init
@@ -38,27 +46,10 @@
   @(.state this))
 
 (defn -tick [this]
-  (let [clj-container (-getClojureContainer this)]
-    (cond
-      (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-      (node-container/tick! clj-container)
-      
-      (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-      (matrix-container/tick! clj-container)
-      
-      :else
-      (log/warn "Unknown container type in tick:" (type clj-container)))))
+  (dispatcher/safe-tick! (-getClojureContainer this)))
 
 (defn -stillValid [this player]
-  (let [clj-container (-getClojureContainer this)]
-    (cond
-      (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-      (node-container/still-valid? clj-container player)
-      
-      (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-      (matrix-container/still-valid? clj-container player)
-      
-      :else false)))
+  (dispatcher/safe-validate (-getClojureContainer this) player))
 
 (defn -removed [this player]
   (let [clj-container (-getClojureContainer this)]
@@ -69,44 +60,23 @@
   ;; Call superclass
   (.broadcastChanges (.superclass (class this)) this)
   
-  ;; Sync Clojure container
-  (let [clj-container (-getClojureContainer this)]
-    (cond
-      (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-      (node-container/sync-to-client! clj-container)
-      
-      (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-      (matrix-container/sync-to-client! clj-container))))
+  ;; Sync Clojure container using dispatcher
+  (dispatcher/safe-sync! (-getClojureContainer this)))
 
 (defn -addSlot [this slot]
   (.addSlot (.superclass (class this)) this slot))
 
 (defn -quickMoveStack [this player slot-index]
+  "Handle Shift+Click item movement
+  
+  Delegates to slot-manager for platform-agnostic logic."
   (try
     (let [slot (.getSlot this slot-index)]
       (if (and slot (.hasItem slot))
         (let [stack (.getItem slot)
               clj-container (-getClojureContainer this)]
-          (cond
-            (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-            (if (< slot-index 2)
-              (if (.moveItemStackTo this stack 2 38 true)
-                (do (.setChanged slot) net.minecraft.world.item.ItemStack/EMPTY)
-                stack)
-              (if (.moveItemStackTo this stack 0 2 false)
-                (do (.setChanged slot) net.minecraft.world.item.ItemStack/EMPTY)
-                stack))
-            
-            (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-            (if (< slot-index 4)
-              (if (.moveItemStackTo this stack 4 40 true)
-                (do (.setChanged slot) net.minecraft.world.item.ItemStack/EMPTY)
-                stack)
-              (if (.moveItemStackTo this stack 0 4 false)
-                (do (.setChanged slot) net.minecraft.world.item.ItemStack/EMPTY)
-                stack))
-            
-            :else stack))
+          ;; Delegate to slot-manager for quick-move logic
+          (slot-manager/execute-quick-move-forge this clj-container slot-index slot stack))
         net.minecraft.world.item.ItemStack/EMPTY))
     (catch Exception e
       (log/error "Error in quickMoveStack:" (.getMessage e))
@@ -120,7 +90,7 @@
 ;; ============================================================================
 
 (gen-class
-  :name my_mod.forge1201.gui.WirelessMenuProvider
+  :name my_mod.forge1201.gui.ForgeMenuProviderBridge
   :implements [net.minecraft.world.MenuProvider]
   :state state
   :init init
@@ -138,14 +108,12 @@
   (:tile-entity (.state this)))
 
 (defn -getDisplayName [this]
-  (let [gui-id (-getGuiId this)]
-    (Component/literal
-      (case gui-id
-        0 "Wireless Node"
-        1 "Wireless Matrix"
-        "Wireless GUI"))))
+  "Get display name from metadata"
+  (Component/literal
+    (gui-metadata/get-display-name (-getGuiId this))))
 
 (defn -createMenu [this window-id player-inventory player]
+  "Create server-side menu using metadata-driven approach"
   (let [gui-id (-getGuiId this)
         tile-entity (-getTileEntity this)
         handler (gui-registry/get-gui-handler)
@@ -161,22 +129,36 @@
       
       (gui-registry/register-active-container! clj-container)
       
-      (let [menu-type (case gui-id
-                        0 my_mod.forge1201.gui.GuiRegistry/NODE_MENU_TYPE
-                        1 my_mod.forge1201.gui.GuiRegistry/MATRIX_MENU_TYPE
-                        nil)]
+      (let [menu-type (gui-metadata/get-menu-type :forge-1.20.1 gui-id)]
         
         (when-not menu-type
           (throw (ex-info "MenuType not registered" {:gui-id gui-id})))
         
-        (my_mod.forge1201.gui.WirelessMenu. window-id menu-type clj-container)))))
+        (my_mod.forge1201.gui.ForgeMenuBridge. window-id menu-type clj-container)))))
 
 ;; ============================================================================
 ;; Helper Functions
 ;; ============================================================================
 
-(defn create-menu-provider [gui-id tile-entity]
-  (my_mod.forge1201.gui.WirelessMenuProvider. gui-id tile-entity))
+(defn create-menu-provider
+  "Create a Menu Provider for opening GUI
+  
+  Args:
+  - gui-id: int (GUI identifier)
+  - tile-entity: TileEntity instance
+  
+  Returns: MenuProvider instance"
+  [gui-id tile-entity]
+  (my_mod.forge1201.gui.ForgeMenuProviderBridge. gui-id tile-entity))
 
-(defn wrap-clojure-container [window-id menu-type clj-container]
-  (my_mod.forge1201.gui.WirelessMenu. window-id menu-type clj-container))
+(defn wrap-clojure-container
+  "Wrap a Clojure container in Java AbstractContainerMenu
+  
+  Args:
+  - window-id: int
+  - menu-type: MenuType
+  - clj-container: Clojure container
+  
+  Returns: AbstractContainerMenu instance"
+  [window-id menu-type clj-container]
+  (my_mod.forge1201.gui.ForgeMenuBridge. window-id menu-type clj-container))
