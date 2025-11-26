@@ -1,14 +1,59 @@
-# Forge 1.16.5 与 1.20.1 GUI完整实现总结
+# GUI系统完整实现总结
+
+## 架构改进 (2025-11-26)
+
+### 代码组织优化
+
+**问题**：`create-node-screen`和`create-matrix-screen`函数包含游戏逻辑，但被放置在平台特定的`screen_impl.clj`中，导致跨平台代码重复。
+
+**解决方案**：引入`screen_factory.clj`作为平台无关的屏幕工厂：
+
+1. **core/my_mod/wireless/gui/screen_factory.clj** (新增，103行)
+   - `create-node-screen`: 平台无关的节点屏幕创建逻辑
+   - `create-matrix-screen`: 平台无关的矩阵屏幕创建逻辑
+   - 从平台包装器提取Clojure容器
+   - 委托给`node-gui`和`matrix-gui`创建CGui屏幕
+   - 统一错误处理和日志
+
+2. **平台特定screen_impl.clj重构**：
+   - Forge 1.16.5: 移除重复游戏逻辑，调用`screen-factory`命名空间
+   - Fabric 1.20.1: 移除重复游戏逻辑，调用`screen-factory`命名空间
+   - 仅保留平台特定注册机制（ScreenManager, ScreenRegistry, HandledScreens）
+
+**优势**：
+- ✅ **DRY原则**：游戏逻辑在一个地方实现
+- ✅ **可测试性**：核心逻辑无平台依赖，可独立测试
+- ✅ **可维护性**：屏幕创建逻辑变更只需修改一处
+- ✅ **清晰的边界**：游戏逻辑vs平台集成界限明确
+
+---
 
 ## 已完成的文件
 
+### 核心系统 (Platform-Agnostic)
+
+1. **screen_factory.clj** (103行) - **新增 (2025-11-26 重构1)**
+   - create-node-screen (平台无关)
+   - create-matrix-screen (平台无关)
+   - 从Container/ScreenHandler提取Clojure容器
+   - 委托给node-gui/matrix-gui
+   - 统一错误处理
+
+2. **slot_manager.clj** (180行) - **新增 (2025-11-26 重构2)**
+   - 槽位布局常量 (node/matrix × tile/player)
+   - get-tile-slot-range, get-player-slot-range
+   - is-tile-slot?, is-player-slot?
+   - get-quick-move-strategy (移动策略)
+   - execute-quick-move-forge (Forge桥接)
+   - execute-quick-move-fabric (Fabric桥接)
+
 ### Forge 1.16.5 (完整实现 - 6个文件)
 
-1. **bridge.clj** (250行)
+1. **bridge.clj** (220行) - **重构**
    - WirelessContainer (gen-class extending Container)
    - WirelessContainerProvider (INamedContainerProvider)
    - 完整生命周期管理
-   - quickMoveStack Shift+Click支持
+   - quickMoveStack **委托给slot-manager** (重构2)
    - detectAndSendChanges数据同步
    - canTakeItemForPickAll, canDragTo支持
 
@@ -18,9 +63,10 @@
    - 平台multimethod实现
    - open-node-gui-forge, open-matrix-gui-forge
 
-3. **screen_impl.clj** (108行)
-   - create-node-screen, create-matrix-screen
-   - ScreenManager.registerFactory
+3. **screen_impl.clj** (60行) - **重构**
+   - 调用screen-factory/create-node-screen (游戏逻辑)
+   - 调用screen-factory/create-matrix-screen (游戏逻辑)
+   - ScreenManager.registerFactory (平台特定)
    - init-client!客户端初始化
 
 4. **network.clj** (280行) - **新增**
@@ -186,12 +232,12 @@ Fabric使用完全不同的API，已完成全新实现：
 
 ### 实现文件
 
-#### 1. bridge.clj (380行) ✨
+#### 1. bridge.clj (293行) ✨ **重构**
 - **WirelessScreenHandler** (gen-class extending ScreenHandler)
   - `-canUse`: 检查玩家权限（Fabric的stillValid）
   - `-close`: 关闭时清理
   - `-sendContentUpdates`: 数据同步（Fabric的broadcastChanges）
-  - `-quickMove`: Shift+Click处理（Fabric的transferSlot）
+  - `-quickMove`: **委托给slot-manager** (重构2)
   
 - **WirelessScreenHandlerFactory** + **ExtendedWirelessScreenHandlerFactory**
   - 支持标准和扩展工厂模式
@@ -202,7 +248,8 @@ Fabric使用完全不同的API，已完成全新实现：
 - `open-gui-for-player`: 使用 `openHandledScreen()`
 - 平台注册: `defmethod register-gui-handler :fabric-1.20.1`
 
-#### 3. screen_impl.clj (130行) ✨
+#### 3. screen_impl.clj (85行) ✨ **重构**
+- **委托给screen-factory** (重构1)
 - 双重注册支持: `ScreenRegistry` + `HandledScreens`
 - 自动fallback机制
 
@@ -249,16 +296,20 @@ Fabric使用完全不同的API，已完成全新实现：
 
 ## 总结
 
-**总代码量**: ~3460行高质量代码
-- Forge 1.16.5: ~1200行（6个文件）
-- Forge 1.20.1: ~900行（2个新文件 + 600行复用）
-- Fabric 1.20.1: ~1360行（6个文件）
+**总代码量**: ~2636行高质量代码（重构后）
+- 核心系统: ~283行（平台无关）
+- Forge 1.16.5: ~1125行（6个文件）
+- Fabric 1.20.1: ~1228行（6个文件）
+
+**重构效果**: 消除~160行跨平台重复代码
+- 屏幕工厂重构: -100行重复
+- 槽位管理器重构: -60行重复
 
 **功能完整度**: 🟢 生产就绪
 
 所有平台均实现：
 - ✅ 完整容器生命周期（init/tick/close）
-- ✅ Shift+Click快速移动（智能路由）
+- ✅ Shift+Click快速移动（委托给slot-manager）
 - ✅ 网络数据包系统（按钮、文本、同步）
 - ✅ 类型安全的槽位验证（4种自定义槽位）
 - ✅ 初始化验证和错误处理（safe-init-*）
@@ -329,6 +380,50 @@ Fabric使用完全不同的API，已完成全新实现：
     1 (do-something!)
     (log/warn "Unknown button")))
 ```
+
+## 架构概览
+
+### 代码组织层次
+
+```
+核心系统 (Platform-Agnostic)
+├── screen_factory.clj        # 屏幕创建游戏逻辑
+├── node_gui.clj              # Node CGui界面定义
+├── matrix_gui.clj            # Matrix CGui界面定义
+├── node_container.clj        # Node容器逻辑
+└── matrix_container.clj      # Matrix容器逻辑
+
+平台特定 (Forge 1.16.5)
+├── bridge.clj                # Container/MenuType Java包装
+├── registry_impl.clj         # 注册和GUI打开
+├── screen_impl.clj           # Screen工厂注册 (调用screen_factory)
+├── network.clj               # SimpleChannel网络包
+├── slots.clj                 # Slot实现
+└── init.clj                  # 初始化流程
+
+平台特定 (Fabric 1.20.1)
+├── bridge.clj                # ScreenHandler/Type包装
+├── registry_impl.clj         # 注册和GUI打开
+├── screen_impl.clj           # Screen工厂注册 (调用screen_factory)
+├── network.clj               # Fabric Networking API
+├── slots.clj                 # Slot实现
+└── init.clj                  # 初始化流程
+```
+
+### 关键设计模式
+
+1. **桥接模式 (Bridge Pattern)**
+   - `screen_factory.clj`作为平台无关抽象
+   - `screen_impl.clj`作为平台特定实现
+   - 通过`.getClojureContainer()`统一接口
+
+2. **工厂模式 (Factory Pattern)**
+   - `create-node-screen`和`create-matrix-screen`作为工厂方法
+   - 平台注册代码提供lambda/reify作为工厂
+
+3. **依赖注入**
+   - 平台代码注入`container-or-handler`
+   - 工厂提取Clojure容器并委托给GUI代码
 
 ## 性能优化
 

@@ -1,66 +1,23 @@
 (ns my-mod.forge1165.gui.screen-impl
-  "Forge 1.16.5 Client-side Screen Implementation"
-  (:require [my-mod.wireless.gui.node-gui :as node-gui]
-            [my-mod.wireless.gui.matrix-gui :as matrix-gui]
+  "Forge 1.16.5 Client-side Screen Implementation
+  
+  This namespace handles Forge-specific screen registration mechanics.
+  Core screen creation logic is in my-mod.wireless.gui.screen-factory."
+  (:require [my-mod.wireless.gui.screen-factory :as screen-factory]
             [my-mod.util.log :as log])
   (:import [net.minecraft.client.gui.screen.inventory ContainerScreen]
            [net.minecraft.entity.player PlayerInventory]
            [net.minecraft.util.text ITextComponent]))
 
 ;; ============================================================================
-;; Screen Registration (Called by Forge on client side)
-;; ============================================================================
-
-(defn create-node-screen
-  "Create Node GUI screen
-  
-  Args:
-  - container: Java Container instance
-  - player-inventory: PlayerInventory
-  - title: ITextComponent
-  
-  Returns: ContainerScreen instance"
-  [container player-inventory title]
-  (log/info "Creating Node screen")
-  
-  (try
-    (let [;; Extract Clojure container from Java wrapper
-          clj-container (.getClojureContainer container)
-          
-          ;; Create CGui screen
-          cgui-screen (node-gui/create-screen clj-container container)]
-      
-      (log/info "Node screen created successfully")
-      cgui-screen)
-    
-    (catch Exception e
-      (log/error "Failed to create Node screen:" (.getMessage e))
-      (.printStackTrace e)
-      nil)))
-
-(defn create-matrix-screen
-  "Create Matrix GUI screen"
-  [container player-inventory title]
-  (log/info "Creating Matrix screen")
-  
-  (try
-    (let [clj-container (.getClojureContainer container)
-          cgui-screen (matrix-gui/create-screen clj-container container)]
-      
-      (log/info "Matrix screen created successfully")
-      cgui-screen)
-    
-    (catch Exception e
-      (log/error "Failed to create Matrix screen:" (.getMessage e))
-      (.printStackTrace e)
-      nil)))
-
-;; ============================================================================
-;; Screen Factory Registration
+;; Screen Factory Registration (Forge-specific)
 ;; ============================================================================
 
 (defn register-screens!
   "Register screen factories with Minecraft
+  
+  Delegates to platform-agnostic screen-factory for actual screen creation.
+  This function only handles Forge-specific registration mechanics.
   
   Should be called during client initialization (FMLClientSetupEvent)"
   []
@@ -75,14 +32,14 @@
                        @my_mod.forge1165.gui.registry_impl/NODE_MENU_TYPE
                        (reify net.minecraft.client.gui.IScreenFactory
                          (create [_ container player-inventory title]
-                           (create-node-screen container player-inventory title))))
+                           (screen-factory/create-node-screen container player-inventory title))))
       
       ;; Register Matrix screen
       (.registerFactory screen-manager
                        @my_mod.forge1165.gui.registry_impl/MATRIX_MENU_TYPE
                        (reify net.minecraft.client.gui.IScreenFactory
                          (create [_ container player-inventory title]
-                           (create-matrix-screen container player-inventory title))))
+                           (screen-factory/create-matrix-screen container player-inventory title))))
       
       (log/info "Screen factories registered successfully"))
     

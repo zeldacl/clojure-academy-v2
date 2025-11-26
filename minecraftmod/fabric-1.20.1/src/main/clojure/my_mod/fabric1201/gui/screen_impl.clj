@@ -1,7 +1,9 @@
 (ns my-mod.fabric1201.gui.screen-impl
-  "Fabric 1.20.1 Client-side Screen Implementation"
-  (:require [my-mod.wireless.gui.node-gui :as node-gui]
-            [my-mod.wireless.gui.matrix-gui :as matrix-gui]
+  "Fabric 1.20.1 Client-side Screen Implementation
+  
+  This namespace handles Fabric-specific screen registration mechanics.
+  Core screen creation logic is in my-mod.wireless.gui.screen-factory."
+  (:require [my-mod.wireless.gui.screen-factory :as screen-factory]
             [my-mod.util.log :as log])
   (:import [net.minecraft.client.gui.screen.ingame HandledScreen]
            [net.minecraft.entity.player PlayerInventory]
@@ -9,59 +11,14 @@
            [net.fabricmc.fabric.api.client.screenhandler.v1 ScreenRegistry]))
 
 ;; ============================================================================
-;; Screen Creation (Called by Fabric on client side)
-;; ============================================================================
-
-(defn create-node-screen
-  "Create Node GUI screen
-  
-  Args:
-  - handler: ScreenHandler instance
-  - player-inventory: PlayerInventory
-  - title: Text
-  
-  Returns: HandledScreen instance"
-  [handler player-inventory title]
-  (log/info "Creating Node screen (Fabric)")
-  
-  (try
-    (let [;; Extract Clojure container from handler
-          clj-container (.getClojureContainer handler)
-          
-          ;; Create CGui screen
-          cgui-screen (node-gui/create-screen clj-container handler)]
-      
-      (log/info "Node screen created successfully")
-      cgui-screen)
-    
-    (catch Exception e
-      (log/error "Failed to create Node screen:" (.getMessage e))
-      (.printStackTrace e)
-      nil)))
-
-(defn create-matrix-screen
-  "Create Matrix GUI screen"
-  [handler player-inventory title]
-  (log/info "Creating Matrix screen (Fabric)")
-  
-  (try
-    (let [clj-container (.getClojureContainer handler)
-          cgui-screen (matrix-gui/create-screen clj-container handler)]
-      
-      (log/info "Matrix screen created successfully")
-      cgui-screen)
-    
-    (catch Exception e
-      (log/error "Failed to create Matrix screen:" (.getMessage e))
-      (.printStackTrace e)
-      nil)))
-
-;; ============================================================================
-;; Screen Factory Registration
+;; Screen Factory Registration (Fabric-specific)
 ;; ============================================================================
 
 (defn register-screens!
   "Register screen factories with Fabric
+  
+  Delegates to platform-agnostic screen-factory for actual screen creation.
+  This function only handles Fabric-specific registration mechanics.
   
   Should be called during client initialization"
   []
@@ -74,14 +31,14 @@
       @my_mod.fabric1201.gui.registry_impl/NODE_HANDLER_TYPE
       (reify net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry$Factory
         (create [_ handler player-inventory title]
-          (create-node-screen handler player-inventory title))))
+          (screen-factory/create-node-screen handler player-inventory title))))
     
     ;; Register Matrix screen
     (net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry/register
       @my_mod.fabric1201.gui.registry_impl/MATRIX_HANDLER_TYPE
       (reify net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry$Factory
         (create [_ handler player-inventory title]
-          (create-matrix-screen handler player-inventory title))))
+          (screen-factory/create-matrix-screen handler player-inventory title))))
     
     (log/info "Screen factories registered successfully (Fabric)")
     
@@ -91,7 +48,9 @@
 
 ;; Alternative: Using HandledScreens (newer Fabric API)
 (defn register-screens-alt!
-  "Register screens using HandledScreens API (alternative method)"
+  "Register screens using HandledScreens API (alternative method)
+  
+  Delegates to platform-agnostic screen-factory for actual screen creation."
   []
   (log/info "Registering Wireless GUI screens using HandledScreens API")
   
@@ -103,7 +62,7 @@
         (apply [_ handler-and-inventory]
           (let [handler (.getLeft handler-and-inventory)
                 player-inventory (.getRight handler-and-inventory)]
-            (create-node-screen handler player-inventory (Text/literal "Wireless Node"))))))
+            (screen-factory/create-node-screen handler player-inventory (Text/literal "Wireless Node"))))))
     
     (net.minecraft.client.gui.screen.ingame.HandledScreens/register
       @my_mod.fabric1201.gui.registry_impl/MATRIX_HANDLER_TYPE
@@ -111,7 +70,7 @@
         (apply [_ handler-and-inventory]
           (let [handler (.getLeft handler-and-inventory)
                 player-inventory (.getRight handler-and-inventory)]
-            (create-matrix-screen handler player-inventory (Text/literal "Wireless Matrix"))))))
+            (screen-factory/create-matrix-screen handler player-inventory (Text/literal "Wireless Matrix"))))))
     
     (log/info "Screen factories registered successfully (HandledScreens)")
     

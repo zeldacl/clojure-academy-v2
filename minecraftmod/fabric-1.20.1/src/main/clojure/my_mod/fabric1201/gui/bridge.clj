@@ -2,14 +2,15 @@
   "Fabric 1.20.1 GUI Bridge - ScreenHandler wrapper for Clojure containers"
   (:require [my-mod.wireless.gui.node-container :as node-container]
             [my-mod.wireless.gui.matrix-container :as matrix-container]
+            [my-mod.wireless.gui.slot-manager :as slot-manager]
             [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.world.entity.player Player Inventory]
+  (:import [net.minecraft.entity.player PlayerEntity PlayerInventory]
            [net.minecraft.screen ScreenHandler ScreenHandlerType]
            [net.minecraft.screen.slot Slot]
            [net.minecraft.text Text]
-           [net.minecraft.util Identifier]
-           [net.minecraft.network PacketByteBuf]))
+           [net.minecraft.network PacketByteBuf]
+           [net.minecraft.util Identifier]))
 
 ;; ============================================================================
 ;; ScreenHandler Wrapper (Fabric's equivalent to Container/Menu)
@@ -98,6 +99,8 @@
 (defn -quickMove
   "Handle Shift+Click item movement (Fabric's transferSlot)
   
+  Delegates to slot-manager for platform-agnostic logic.
+  
   Returns: ItemStack that couldn't be moved (or EMPTY)"
   [this player slot-index]
   (try
@@ -105,33 +108,8 @@
       (if (and slot (.hasStack slot))
         (let [stack (.getStack slot)
               clj-container (-getClojureContainer this)]
-          (cond
-            ;; Node container: 2 slots (0-1 tile, 2-38 player)
-            (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-            (if (< slot-index 2)
-              ;; From tile to player
-              (if (.insertItem this stack 2 38 true)
-                (do (.markDirty slot) net.minecraft.item.ItemStack/EMPTY)
-                stack)
-              ;; From player to tile
-              (if (.insertItem this stack 0 2 false)
-                (do (.markDirty slot) net.minecraft.item.ItemStack/EMPTY)
-                stack))
-            
-            ;; Matrix container: 4 slots (0-3 tile, 4-40 player)
-            (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-            (if (< slot-index 4)
-              ;; From tile to player
-              (if (.insertItem this stack 4 40 true)
-                (do (.markDirty slot) net.minecraft.item.ItemStack/EMPTY)
-                stack)
-              ;; From player to tile
-              (if (.insertItem this stack 0 4 false)
-                (do (.markDirty slot) net.minecraft.item.ItemStack/EMPTY)
-                stack))
-            
-            :else
-            stack))
+          ;; Delegate to slot-manager for quick-move logic
+          (slot-manager/execute-quick-move-fabric this clj-container slot-index slot stack))
         net.minecraft.item.ItemStack/EMPTY))
     (catch Exception e
       (log/error "Error in quickMove:" (.getMessage e))

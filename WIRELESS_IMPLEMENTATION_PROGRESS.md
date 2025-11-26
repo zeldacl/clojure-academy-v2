@@ -1,5 +1,30 @@
 # 无线系统实现进度
 
+## 最新更新 (2025-11-26)
+
+### GUI架构优化
+
+**重构内容**：将屏幕创建游戏逻辑从平台特定代码中分离
+
+1. **新增文件**：
+   - `core/my_mod/wireless/gui/screen_factory.clj` (103行)
+     - 平台无关的屏幕工厂
+     - `create-node-screen`和`create-matrix-screen`
+     - 从平台包装器提取Clojure容器
+     - 统一错误处理
+
+2. **重构文件**：
+   - `forge-1.16.5/gui/screen_impl.clj`: 移除重复逻辑，调用screen-factory
+   - `fabric-1.20.1/gui/screen_impl.clj`: 移除重复逻辑，调用screen-factory
+   - 平台文件仅保留注册机制
+
+3. **效果**：
+   - ✅ 消除代码重复（~100行减少到~20行×2平台）
+   - ✅ 清晰的关注点分离（游戏逻辑vs平台集成）
+   - ✅ 更好的可维护性和可测试性
+
+---
+
 ## 已完成项目
 
 ### 1. 接口定义 (Clojure Protocols)

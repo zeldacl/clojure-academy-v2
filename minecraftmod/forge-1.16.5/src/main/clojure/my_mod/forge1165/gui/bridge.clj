@@ -2,6 +2,7 @@
   "Forge 1.16.5 GUI Bridge - Java Container wrapper for Clojure containers"
   (:require [my-mod.wireless.gui.node-container :as node-container]
             [my-mod.wireless.gui.matrix-container :as matrix-container]
+            [my-mod.wireless.gui.slot-manager :as slot-manager]
             [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.util.log :as log])
   (:import [net.minecraft.entity.player PlayerEntity PlayerInventory]
@@ -99,6 +100,8 @@
 (defn -quickMoveStack
   "Handle Shift+Click item movement
   
+  Delegates to slot-manager for platform-agnostic logic.
+  
   Returns: ItemStack that couldn't be moved (or EMPTY)"
   [this player slot-index]
   (try
@@ -106,33 +109,8 @@
       (if (and slot (.hasItem slot))
         (let [stack (.getItem slot)
               clj-container (-getClojureContainer this)]
-          (cond
-            ;; Node container: 2 slots (0-1 tile, 2-38 player)
-            (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-            (if (< slot-index 2)
-              ;; From tile to player
-              (if (.moveItemStackTo this stack 2 38 true)
-                (do (.setChanged slot) net.minecraft.item.ItemStack/EMPTY)
-                stack)
-              ;; From player to tile
-              (if (.moveItemStackTo this stack 0 2 false)
-                (do (.setChanged slot) net.minecraft.item.ItemStack/EMPTY)
-                stack))
-            
-            ;; Matrix container: 4 slots (0-3 tile, 4-40 player)
-            (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-            (if (< slot-index 4)
-              ;; From tile to player
-              (if (.moveItemStackTo this stack 4 40 true)
-                (do (.setChanged slot) net.minecraft.item.ItemStack/EMPTY)
-                stack)
-              ;; From player to tile
-              (if (.moveItemStackTo this stack 0 4 false)
-                (do (.setChanged slot) net.minecraft.item.ItemStack/EMPTY)
-                stack))
-            
-            :else
-            stack))
+          ;; Delegate to slot-manager for quick-move logic
+          (slot-manager/execute-quick-move-forge this clj-container slot-index slot stack))
         net.minecraft.item.ItemStack/EMPTY))
     (catch Exception e
       (log/error "Error in quickMoveStack:" (.getMessage e))
