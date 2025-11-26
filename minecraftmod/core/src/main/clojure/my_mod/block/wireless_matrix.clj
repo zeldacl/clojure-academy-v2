@@ -5,6 +5,7 @@
   (:require [my-mod.block.dsl :as bdsl]
             [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.inventory.core :as inv]
+            [my-mod.nbt.dsl :as nbt]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
             [my-mod.util.log :as log]))
@@ -225,46 +226,25 @@
   (log/debug "Verifying structure at" (:pos tile)))
 
 ;; ============================================================================
-;; NBT Persistence
+;; NBT Persistence (using NBT DSL)
 ;; ============================================================================
 
-(defn write-matrix-to-nbt
-  "Save TileMatrix to NBT
+;; Define NBT serialization using declarative DSL
+(nbt/defnbt matrix
+  ;; Placer name (direct field access)
+  [:placer-name "placer" :string]
   
-  Saves:
-  - Placer name
-  - Plate count
-  - Sub ID
-  - Direction
-  - Inventory (4 slots)"
-  [tile nbt]
-  (.setString nbt "placer" (:placer-name tile))
-  (.setInteger nbt "plateCount" @(:plate-count tile))
-  (.setInteger nbt "subId" (:sub-id tile))
-  (.setString nbt "direction" (name (:direction tile)))
-  (inv/write-inventory-to-nbt tile nbt)
-  nbt)
-
-(defn read-matrix-from-nbt
-  "Load TileMatrix from NBT
+  ;; Plate count (atom of integer)
+  [:plate-count "plateCount" :int :atom? true]
   
-  Restores:
-  - Placer name
-  - Plate count
-  - Sub ID
-  - Direction
-  - Inventory (4 slots)"
-  [tile nbt]
-  (when (.hasKey nbt "placer")
-    (assoc tile :placer-name (.getString nbt "placer")))
-  (when (.hasKey nbt "plateCount")
-    (reset! (:plate-count tile) (.getInteger nbt "plateCount")))
-  (when (.hasKey nbt "subId")
-    (assoc tile :sub-id (.getInteger nbt "subId")))
-  (when (.hasKey nbt "direction")
-    (assoc tile :direction (keyword (.getString nbt "direction"))))
-  (inv/read-inventory-from-nbt tile nbt)
-  tile)
+  ;; Sub ID (direct field access)
+  [:sub-id "subId" :int]
+  
+  ;; Direction (keyword - needs conversion)
+  [:direction "direction" :keyword]
+  
+  ;; Inventory (uses inventory protocol)
+  [:inventory "inventory" :inventory])
 
 ;; ============================================================================
 ;; TileEntity Registry

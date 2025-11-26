@@ -6,6 +6,7 @@
             [my-mod.energy.stub :as energy]
             [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.inventory.core :as inv]
+            [my-mod.nbt.dsl :as nbt]
             [my-mod.util.log :as log]))
 
 ;; Node type specifications
@@ -352,46 +353,40 @@
       (rebuild-block-state! tile))))
 
 ;; ============================================================================
-;; NBT Persistence
+;; NBT Persistence (using NBT DSL)
 ;; ============================================================================
 
-(defn write-node-to-nbt
-  "Save NodeTileEntity to NBT
+;; Define NBT serialization using declarative DSL
+(nbt/defnbt node
+  ;; Energy (uses protocol getter/setter)
+  [:energy "energy" :double
+   :custom-write (fn [tile nbt key _]
+                   (.setDouble nbt key (winterfaces/get-energy tile)))
+   :custom-read (fn [tile nbt key]
+                  (when (.hasKey nbt key)
+                    (winterfaces/set-energy tile (.getDouble nbt key))))]
   
-  Saves:
-  - Energy
-  - Node name
-  - Password
-  - Placer name
-  - Inventory (2 slots)"
-  [tile nbt]
-  (.setDouble nbt "energy" (winterfaces/get-energy tile))
-  (.setString nbt "nodeName" (winterfaces/get-node-name tile))
-  (.setString nbt "password" (winterfaces/get-password tile))
-  (.setString nbt "placer" (:placer-name tile))
-  (inv/write-inventory-to-nbt tile nbt)
-  nbt)
-
-(defn read-node-from-nbt
-  "Load NodeTileEntity from NBT
+  ;; Node name (uses protocol getter and helper setter)
+  [:node-name "nodeName" :string
+   :custom-write (fn [tile nbt key _]
+                   (.setString nbt key (winterfaces/get-node-name tile)))
+   :custom-read (fn [tile nbt key]
+                  (when (.hasKey nbt key)
+                    (set-node-name! tile (.getString nbt key))))]
   
-  Restores:
-  - Energy
-  - Node name
-  - Password
-  - Placer name
-  - Inventory (2 slots)"
-  [tile nbt]
-  (when (.hasKey nbt "energy")
-    (winterfaces/set-energy tile (.getDouble nbt "energy")))
-  (when (.hasKey nbt "nodeName")
-    (set-node-name! tile (.getString nbt "nodeName")))
-  (when (.hasKey nbt "password")
-    (set-password-str! tile (.getString nbt "password")))
-  (when (.hasKey nbt "placer")
-    (assoc tile :placer-name (.getString nbt "placer")))
-  (inv/read-inventory-from-nbt tile nbt)
-  tile)
+  ;; Password (uses protocol getter and helper setter)
+  [:password "password" :string
+   :custom-write (fn [tile nbt key _]
+                   (.setString nbt key (winterfaces/get-password tile)))
+   :custom-read (fn [tile nbt key]
+                  (when (.hasKey nbt key)
+                    (set-password-str! tile (.getString nbt key))))]
+  
+  ;; Placer name (direct field access)
+  [:placer-name "placer" :string]
+  
+  ;; Inventory (uses inventory protocol)
+  [:inventory "inventory" :inventory])
 
 ;; ============================================================================
 ;; ITickable Implementation
