@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  Wireless Node GUI Layout
+  
+  This XML layout defines the structure and positioning of GUI elements for the Wireless Node interface.
+  The layout is parsed by the Clojure GUI DSL system and combined with runtime logic.
+  
+  Coordinate System: Top-left origin (0, 0), X-right, Y-down
+  Default Size: 176x187 (standard container GUI)
+-->
+<Root>
+  <Widget name="main">
+    <!-- Transform Component: Defines size and position -->
+    <Component class="Transform">
+      <width>176.0</width>
+      <height>187.0</height>
+      <x>0.0</x>
+      <y>0.0</y>
+      <pivotX>0.0</pivotX>
+      <pivotY>0.0</pivotY>
+      <scale>1.0</scale>
+      <doesDraw>true</doesDraw>
+      <doesListenKey>true</doesListenKey>
+      <alignWidth>CENTER</alignWidth>
+      <alignHeight>CENTER</alignHeight>
+      <enabled>true</enabled>
+    </Component>
+    
+    <!-- Background Layer: Base GUI background -->
+    <Component class="DrawTexture">
+      <texture>my_mod:textures/gui/node_background.png</texture>
+      <color>
+        <red>255</red>
+        <green>255</green>
+        <blue>255</blue>
+        <alpha>255</alpha>
+      </color>
+      <zLevel>0.0</zLevel>
+      <writeDepth>true</writeDepth>
+      <enabled>true</enabled>
+    </Component>
+    
+    <!-- Inventory UI Layer: Player inventory overlay -->
+    <Widget name="ui_inventory">
+      <Component class="Transform">
+        <width>176.0</width>
+        <height>187.0</height>
+        <x>0.0</x>
+        <y>0.0</y>
+      </Component>
+      <Component class="DrawTexture">
+        <texture>my_mod:textures/gui/ui_inventory.png</texture>
+        <color>
+          <red>255</red>
+          <green>255</green>
+          <blue>255</blue>
+          <alpha>255</alpha>
+        </color>
+        <zLevel>1.0</zLevel>
+      </Component>
+    </Widget>
+    
+    <!-- Node-specific UI Layer: Slot positions and decorations -->
+    <Widget name="ui_node">
+      <Component class="Transform">
+        <width>176.0</width>
+        <height>187.0</height>
+        <x>0.0</x>
+        <y>0.0</y>
+      </Component>
+      <Component class="DrawTexture">
+        <texture>my_mod:textures/gui/ui_wireless_node.png</texture>
+        <color>
+          <red>255</red>
+          <green>255</green>
+          <blue>255</blue>
+          <alpha>255</alpha>
+        </color>
+        <zLevel>2.0</zLevel>
+      </Component>
+    </Widget>
+    
+    <!-- Slot Definitions -->
+    <Widget name="slots">
+      <!-- Input Slot: Energy items for charging (top position) -->
+      <Slot name="slot_input">
+        <index>0</index>
+        <x>42</x>
+        <y>10</y>
+        <filter>energy_item</filter>
+        <tooltip>Place energy items here to charge</tooltip>
+      </Slot>
+      
+      <!-- Output Slot: Energy items for discharging (bottom position) -->
+      <Slot name="slot_output">
+        <index>1</index>
+        <x>42</x>
+        <y>80</y>
+        <filter>energy_item</filter>
+        <tooltip>Place energy items here to discharge</tooltip>
+      </Slot>
+    </Widget>
+    
+    <!-- Animation Area: Connection status animation -->
+    <Widget name="anim_area">
+      <Component class="Transform">
+        <width>186.0</width>
+        <height>75.0</height>
+        <x>42.0</x>
+        <y>35.5</y>
+        <scale>0.5</scale>
+      </Component>
+      <Animation name="connection_status">
+        <texture>my_mod:textures/gui/effect_node.png</texture>
+        <totalFrames>10</totalFrames>
+        <!-- State: LINKED (connected to network) -->
+        <state id="linked">
+          <beginFrame>0</beginFrame>
+          <frameCount>8</frameCount>
+          <frameTime>800</frameTime><!-- milliseconds per frame -->
+        </state>
+        <!-- State: UNLINKED (not connected) -->
+        <state id="unlinked">
+          <beginFrame>8</beginFrame>
+          <frameCount>2</frameCount>
+          <frameTime>3000</frameTime><!-- milliseconds per frame -->
+        </state>
+      </Animation>
+    </Widget>
+    
+    <!-- Information Panel Area: Displays stats and properties -->
+    <Widget name="info_panel">
+      <Component class="Transform">
+        <width>100.0</width>
+        <height>180.0</height>
+        <x>183.0</x>
+        <y>5.0</y>
+      </Component>
+      
+      <!-- Energy Histogram -->
+      <Histogram name="hist_energy">
+        <label>Energy</label>
+        <type>energy</type>
+        <color>#25c4ff</color><!-- Cyan color -->
+        <y>10</y>
+        <height>40</height>
+      </Histogram>
+      
+      <!-- Capacity Histogram -->
+      <Histogram name="hist_capacity">
+        <label>Capacity</label>
+        <type>capacity</type>
+        <color>#ff6c00</color><!-- Orange color -->
+        <y>60</y>
+        <height>40</height>
+      </Histogram>
+      
+      <!-- Separator Line -->
+      <Separator name="sep_info">
+        <y>110</y>
+      </Separator>
+      
+      <!-- Property List -->
+      <PropertyList name="properties">
+        <y>120</y>
+        
+        <!-- Range (read-only) -->
+        <Property name="range">
+          <label>Range</label>
+          <editable>false</editable>
+        </Property>
+        
+        <!-- Owner (read-only) -->
+        <Property name="owner">
+          <label>Owner</label>
+          <editable>false</editable>
+        </Property>
+        
+        <!-- Node Name (editable by owner) -->
+        <Property name="node_name">
+          <label>Node Name</label>
+          <editable>true</editable>
+          <maxLength>32</maxLength>
+          <requiresOwner>true</requiresOwner>
+        </Property>
+        
+        <!-- Password (editable by owner, masked input) -->
+        <Property name="password">
+          <label>Password</label>
+          <editable>true</editable>
+          <masked>true</masked>
+          <maxLength>16</maxLength>
+          <requiresOwner>true</requiresOwner>
+        </Property>
+      </PropertyList>
+    </Widget>
+    
+    <!-- Wireless Connection Panel: Network selection (separate page) -->
+    <Widget name="wireless_panel">
+      <Component class="Transform">
+        <width>176.0</width>
+        <height>187.0</height>
+        <x>0.0</x>
+        <y>0.0</y>
+        <doesDraw>false</doesDraw><!-- Hidden by default, shown on page switch -->
+      </Component>
+      
+      <!-- Logo Icon -->
+      <Widget name="icon_logo">
+        <Component class="Transform">
+          <width>32.0</width>
+          <height>32.0</height>
+          <x>8.0</x>
+          <y>8.0</y>
+        </Component>
+        <Component class="DrawTexture">
+          <texture>my_mod:textures/gui/icons/icon_tomatrix.png</texture>
+        </Component>
+      </Widget>
+      
+      <!-- Network List Area -->
+      <Widget name="zone_elementlist">
+        <Component class="Transform">
+          <width>150.0</width>
+          <height>120.0</height>
+          <x>13.0</x>
+          <y>50.0</y>
+        </Component>
+        
+        <!-- Element Template (dynamically populated) -->
+        <Widget name="element">
+          <Component class="Transform">
+            <width>140.0</width>
+            <height>20.0</height>
+            <doesDraw>false</doesDraw><!-- Template, not rendered directly -->
+          </Component>
+          <Label name="label_ssid">
+            <x>5</x>
+            <y>5</y>
+            <color>#ffffff</color>
+          </Label>
+          <Icon name="icon_encrypted">
+            <x>120</x>
+            <y>2</y>
+            <texture>my_mod:textures/gui/icons/icon_lock.png</texture>
+          </Icon>
+        </Widget>
+      </Widget>
+      
+      <!-- Navigation Buttons -->
+      <Button name="btn_arrowup">
+        <x>165</x>
+        <y>50</y>
+        <width>10</width>
+        <height>10</height>
+        <texture>my_mod:textures/gui/icons/arrow_up.png</texture>
+      </Button>
+      
+      <Button name="btn_arrowdown">
+        <x>165</x>
+        <y>160</y>
+        <width>10</width>
+        <height>10</height>
+        <texture>my_mod:textures/gui/icons/arrow_down.png</texture>
+      </Button>
+      
+      <!-- Connected Network Display -->
+      <Widget name="elem_connected">
+        <Component class="Transform">
+          <width>160.0</width>
+          <height>25.0</height>
+          <x>8.0</x>
+          <y>10.0</y>
+        </Component>
+        <Label name="label_connected">
+          <text>Connected to:</text>
+          <x>5</x>
+          <y>5</y>
+          <color>#00ff00</color><!-- Green for connected -->
+        </Label>
+        <Button name="icon_connect">
+          <x>135</x>
+          <y>5</y>
+          <width>15</width>
+          <height>15</height>
+          <texture>my_mod:textures/gui/icons/icon_connected.png</texture>
+          <tooltip>Click to disconnect</tooltip>
+        </Button>
+      </Widget>
+    </Widget>
+    
+    <!-- Page Selection Buttons (left side) -->
+    <Widget name="page_buttons">
+      <!-- Inventory Page Button -->
+      <Button name="btn_page_inv">
+        <x>-20</x>
+        <y>0</y>
+        <width>18</width>
+        <height>18</height>
+        <texture>my_mod:textures/gui/icons/icon_inv.png</texture>
+        <scale>0.7</scale>
+        <pageId>inv</pageId>
+      </Button>
+      
+      <!-- Wireless Page Button -->
+      <Button name="btn_page_wireless">
+        <x>-20</x>
+        <y>22</y>
+        <width>18</width>
+        <height>18</height>
+        <texture>my_mod:textures/gui/icons/icon_wireless.png</texture>
+        <scale>0.7</scale>
+        <pageId>wireless</pageId>
+      </Button>
+    </Widget>
+  </Widget>
+</Root>

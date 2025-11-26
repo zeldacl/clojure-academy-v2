@@ -1,5 +1,7 @@
 (ns my-mod.gui.dsl
-  "GUI DSL - Declarative GUI definition using Clojure macros"
+  "GUI DSL - Declarative GUI definition using Clojure macros
+  
+  Supports both inline DSL and XML-based layout definitions."
   (:require [my-mod.util.log :as log]))
 
 ;; GUI Registry - stores all defined GUIs
@@ -115,6 +117,25 @@
     `(def ~gui-name
        (register-gui!
          (create-gui-spec ~gui-id ~options-map)))))
+
+;; XML-based GUI macro
+(defmacro defgui-from-xml
+  "Define a GUI from XML layout file
+  
+  Example:
+  (defgui-from-xml node-gui
+    :xml-layout \"page_wireless_node\"
+    :on-init (fn [gui] ...)
+    :on-render (fn [gui dt] ...))"
+  [gui-name & options]
+  (let [options-map (apply hash-map options)
+        xml-layout (:xml-layout options-map)
+        gui-id (name gui-name)]
+    `(def ~gui-name
+       (let [xml-parser# (requiring-resolve 'my-mod.gui.xml-parser/load-gui-from-xml)
+             base-spec# (xml-parser# ~gui-id ~xml-layout)
+             merged-spec# (merge base-spec# ~(dissoc options-map :xml-layout))]
+         (register-gui! (create-gui-spec (:id base-spec#) merged-spec#))))))
 
 ;; Helper: create slot handler that updates atom
 (defn slot-change-handler [slots-atom slot-index]
