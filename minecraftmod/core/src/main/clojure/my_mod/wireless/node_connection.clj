@@ -83,34 +83,36 @@
   "Add a receiver to this node connection
   Returns true if successful"
   [conn receiver-vb]
-  ;; Check capacity
-  (when (>= (get-load conn) (get-capacity conn))
-    (log/info "Receiver add failed: node at capacity")
-    (return false))
-  
-  ;; Check range
-  (when-not (check-range conn receiver-vb)
-    (log/info "Receiver add failed: out of range")
-    (return false))
-  
-  ;; Remove from old connection if exists
-  (let [world (:world (:world-data conn))
-        old-conn (my-mod.wireless.world-data/get-node-connection
-                   (:world-data conn) receiver-vb)]
-    (when old-conn
-      (remove-receiver! old-conn receiver-vb)))
-  
-  ;; Add to this connection
-  (swap! (:receivers conn) conj receiver-vb)
-  
-  ;; Update lookup
-  (swap! (:node-lookup (:world-data conn))
-         assoc receiver-vb conn)
-  
-  (log/info (format "Added receiver %s to node %s"
-                    (vb/vblock-to-string receiver-vb)
-                    (vb/vblock-to-string (:node conn))))
-  true)
+  (cond
+    (>= (get-load conn) (get-capacity conn))
+    (do
+      (log/info "Receiver add failed: node at capacity")
+      false)
+
+    (not (check-range conn receiver-vb))
+    (do
+      (log/info "Receiver add failed: out of range")
+      false)
+
+    :else
+    (do
+      ;; Remove from old connection if exists
+      (let [old-conn (my-mod.wireless.world-data/get-node-connection
+                       (:world-data conn) receiver-vb)]
+        (when old-conn
+          (remove-receiver! old-conn receiver-vb)))
+
+      ;; Add to this connection
+      (swap! (:receivers conn) conj receiver-vb)
+
+      ;; Update lookup
+      (swap! (:node-lookup (:world-data conn))
+             assoc receiver-vb conn)
+
+      (log/info (format "Added receiver %s to node %s"
+                        (vb/vblock-to-string receiver-vb)
+                        (vb/vblock-to-string (:node conn))))
+      true))
 
 (defn remove-receiver!
   "Mark receiver for removal"
@@ -125,33 +127,36 @@
   "Add a generator to this node connection
   Returns true if successful"
   [conn generator-vb]
-  ;; Check capacity
-  (when (>= (get-load conn) (get-capacity conn))
-    (log/info "Generator add failed: node at capacity")
-    (return false))
-  
-  ;; Check range
-  (when-not (check-range conn generator-vb)
-    (log/info "Generator add failed: out of range")
-    (return false))
-  
-  ;; Remove from old connection if exists
-  (let [old-conn (my-mod.wireless.world-data/get-node-connection
-                   (:world-data conn) generator-vb)]
-    (when old-conn
-      (remove-generator! old-conn generator-vb)))
-  
-  ;; Add to this connection
-  (swap! (:generators conn) conj generator-vb)
-  
-  ;; Update lookup
-  (swap! (:node-lookup (:world-data conn))
-         assoc generator-vb conn)
-  
-  (log/info (format "Added generator %s to node %s"
-                    (vb/vblock-to-string generator-vb)
-                    (vb/vblock-to-string (:node conn))))
-  true)
+  (cond
+    (>= (get-load conn) (get-capacity conn))
+    (do
+      (log/info "Generator add failed: node at capacity")
+      false)
+
+    (not (check-range conn generator-vb))
+    (do
+      (log/info "Generator add failed: out of range")
+      false)
+
+    :else
+    (do
+      ;; Remove from old connection if exists
+      (let [old-conn (my-mod.wireless.world-data/get-node-connection
+                       (:world-data conn) generator-vb)]
+        (when old-conn
+          (remove-generator! old-conn generator-vb)))
+
+      ;; Add to this connection
+      (swap! (:generators conn) conj generator-vb)
+
+      ;; Update lookup
+      (swap! (:node-lookup (:world-data conn))
+             assoc generator-vb conn)
+
+      (log/info (format "Added generator %s to node %s"
+            (vb/vblock-to-string generator-vb)
+            (vb/vblock-to-string (:node conn))))
+      true))
 
 (defn remove-generator!
   "Mark generator for removal"

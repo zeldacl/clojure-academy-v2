@@ -64,6 +64,7 @@
   (.close (.superclass (class this)) this player)
   (let [clj-container (-getClojureContainer this)]
     (gui-registry/unregister-active-container! clj-container)
+    (gui-registry/unregister-player-container! player)
     (log/info "ScreenHandler closed for player" (.getName player))))
 
 (defn -sendContentUpdates
@@ -195,6 +196,7 @@
         (throw (ex-info "Failed to create Clojure container" {:gui-id gui-id})))
       
       (gui-registry/register-active-container! clj-container)
+      (gui-registry/register-player-container! player clj-container)
       
       (let [handler-type (gui-metadata/get-menu-type :fabric-1.20.1 gui-id)]
         (when-not handler-type

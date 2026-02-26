@@ -8,6 +8,7 @@
   and only handle platform-specific registration mechanics."
   (:require [my-mod.wireless.gui.node-gui :as node-gui]
             [my-mod.wireless.gui.matrix-gui :as matrix-gui]
+            [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
@@ -33,11 +34,12 @@
   (log/info "Creating Node screen (platform-agnostic factory)")
   
   (try
-    (let [;; Extract Clojure container from platform wrapper
+        (let [;; Extract Clojure container from platform wrapper
           ;; Works for both Forge Container and Fabric ScreenHandler
           clj-container (.getClojureContainer container-or-handler)
           
           ;; Create CGui screen using platform-agnostic GUI code
+          _ (gui-registry/set-client-container! clj-container)
           cgui-screen (node-gui/create-screen clj-container container-or-handler)]
       
       (log/info "Node screen created successfully")
@@ -67,10 +69,11 @@
   (log/info "Creating Matrix screen (platform-agnostic factory)")
   
   (try
-    (let [;; Extract Clojure container from platform wrapper
+        (let [;; Extract Clojure container from platform wrapper
           clj-container (.getClojureContainer container-or-handler)
           
           ;; Create CGui screen
+          _ (gui-registry/set-client-container! clj-container)
           cgui-screen (matrix-gui/create-screen clj-container container-or-handler)]
       
       (log/info "Matrix screen created successfully")

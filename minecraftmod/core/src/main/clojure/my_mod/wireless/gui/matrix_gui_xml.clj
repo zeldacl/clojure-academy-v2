@@ -22,8 +22,7 @@
             [my-mod.network.client :as net-client]
             [my-mod.wireless.network :as wireless-net])
   (:import [net.minecraft.entity.player EntityPlayer]
-           [net.minecraft.client Minecraft]
-           [cn.academy.block.tileentity TileMatrix]))
+           [net.minecraft.client Minecraft]))
 
 ;; ==================== 网络消息通道 ====================
 
@@ -45,6 +44,14 @@
   "判断网络是否已初始化"
   (boolean (:ssid init-data)))
 
+(defn- tile-pos-payload
+  "Extract position payload from a tile entity"
+  [tile]
+  (let [pos (.getPos tile)]
+    {:pos-x (.getX pos)
+     :pos-y (.getY pos)
+     :pos-z (.getZ pos)}))
+
 ;; ==================== 网络消息发送 ====================
 
 (defn send-gather-info
@@ -56,10 +63,10 @@
   参数：
   - tile: TileMatrix实例
   - callback: (fn [NetworkInitData] ...) - 接收查询结果"
-  [^TileMatrix tile callback]
+  [tile callback]
   (net-client/send-to-server
     MSG_GATHER_INFO
-    {:tile tile}
+    (tile-pos-payload tile)
     (fn [response]
       (let [init-data (map->NetworkInitData
                         {:ssid (:ssid response)
@@ -78,12 +85,12 @@
   - ssid: String - 网络名称
   - password: String - 网络密码
   - callback: (fn [success?] ...) - 接收初始化结果（true/false）"
-  [^TileMatrix tile ^String ssid ^String password callback]
+  [tile ^String ssid ^String password callback]
   (net-client/send-to-server
     MSG_INIT
-    {:tile tile
-     :ssid ssid
-     :password password}
+    (assoc (tile-pos-payload tile)
+           :ssid ssid
+           :password password)
     (fn [response]
       (callback (:success response false)))))
 
@@ -96,11 +103,11 @@
   参数：
   - tile: TileMatrix实例
   - new-ssid: String - 新的SSID"
-  [^TileMatrix tile ^String new-ssid]
+  [tile ^String new-ssid]
   (net-client/send-to-server
     MSG_CHANGE_SSID
-    {:tile tile
-     :new-ssid new-ssid}))
+    (assoc (tile-pos-payload tile)
+           :new-ssid new-ssid)))
 
 (defn send-change-password
   "修改网络密码
@@ -111,11 +118,11 @@
   参数：
   - tile: TileMatrix实例
   - new-password: String - 新的密码"
-  [^TileMatrix tile ^String new-password]
+  [tile ^String new-password]
   (net-client/send-to-server
     MSG_CHANGE_PASSWORD
-    {:tile tile
-     :new-password new-password}))
+    (assoc (tile-pos-payload tile)
+           :new-password new-password)))
 
 ;; ==================== 组件创建 ====================
 
@@ -128,7 +135,7 @@
   - spec: XML解析的Histogram规格
   - tile: TileMatrix实例
   - type: :capacity - 容量类型"
-  [spec ^TileMatrix tile type]
+  [spec tile type]
   (let [label (get-in spec [:content :label])
         color (get-in spec [:content :color] "#ff6c00")
         x (get-in spec [:content :x] 0)
@@ -157,7 +164,7 @@
   - tile: TileMatrix实例
   - player: EntityPlayer - 当前玩家
   - on-change: (fn [new-value] ...) - 值改变回调（可编辑模式）"
-  [spec ^TileMatrix tile ^EntityPlayer player on-change]
+  [spec tile ^EntityPlayer player on-change]
   (let [label (get-in spec [:content :label])
         x (get-in spec [:content :x] 0)
         y (get-in spec [:content :y] 0)
@@ -249,7 +256,7 @@
   - tile: TileMatrix实例
   - player: EntityPlayer
   - init-data: NetworkInitData - 当前网络信息"
-  [xml-spec ^TileMatrix tile ^EntityPlayer player init-data]
+  [xml-spec tile ^EntityPlayer player init-data]
   (let [ssid-spec (xml/find-child-by-name xml-spec "prop_ssid")
         password-spec (xml/find-child-by-name xml-spec "prop_password")]
     {:type :container
@@ -280,7 +287,7 @@
   - tile: TileMatrix实例
   - player: EntityPlayer
   - rebuild-callback: (fn [] ...) - 重建UI的回调（初始化成功后调用）"
-  [xml-spec ^TileMatrix tile ^EntityPlayer player rebuild-callback]
+  [xml-spec tile ^EntityPlayer player rebuild-callback]
   (let [ssid-input-spec (xml/find-child-by-name xml-spec "input_ssid")
         password-input-spec (xml/find-child-by-name xml-spec "input_password")
         button-spec (xml/find-child-by-name xml-spec "btn_initialize")
@@ -351,7 +358,7 @@
   - tile: TileMatrix实例
   - player: EntityPlayer
   - init-data: NetworkInitData - 当前网络信息"
-  [container-atom xml-layout ^TileMatrix tile ^EntityPlayer player init-data]
+  [container-atom xml-layout tile ^EntityPlayer player init-data]
   (let [is-owner? (= (.getPlacerName tile) (.getName player))
         info-panel-spec (xml/find-child-by-name xml-layout "info_panel")
         network-info-spec (xml/find-child-by-name info-panel-spec "network_info_panel")
@@ -407,7 +414,8 @@
   返回：
   - GUI组件树"
   [container ^EntityPlayer player]
-  (let [tile (.tile container)
+  (let [tile (or (:tile-entity container)
+                 (try (.tile container) (catch Exception _ nil)))
         
         ;; 加载XML布局
         xml-layout (xml/load-gui-xml "page_wireless_matrix.xml")

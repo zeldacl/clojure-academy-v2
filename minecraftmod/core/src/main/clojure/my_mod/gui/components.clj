@@ -1,6 +1,7 @@
 (ns my-mod.gui.components
   "LambdaLib2 Component library wrapper - Common UI components"
-  (:require [my-mod.gui.cgui :as cgui])
+  (:require [my-mod.gui.cgui :as cgui]
+            [my-mod.gui.events :as events])
   (:import [cn.lambdalib2.cgui.component Component
             DrawTexture TextBox ProgressBar ElementList
             DragBar Draggable Outline Tint Transform]
@@ -338,6 +339,103 @@
   [^ElementList elem-list]
   (.clear elem-list)
   elem-list)
+
+;; =========================================================================
+;; Higher-level Widgets
+;; =========================================================================
+
+(defn text-field
+  "Create a TextBox component that behaves like a simple text field.
+
+  Note: This is a lightweight wrapper; advanced input handling should be
+  attached via events in caller code.
+
+  Options:
+  - :text
+  - :max-length (unused, kept for API compatibility)
+  - :masked (unused, kept for API compatibility)
+  - :placeholder (used as initial content if :text is empty)
+  - :on-confirm (unused, kept for API compatibility)"
+  [& {:keys [text placeholder]
+      :or {text "" placeholder ""}}]
+  (text-box :text (if (empty? text) placeholder text)))
+
+(defn set-placeholder!
+  "Set placeholder text if current content is empty"
+  [^TextBox text-box placeholder]
+  (when (empty? (.getContent text-box))
+    (.setContent text-box placeholder))
+  text-box)
+
+(defn button
+  "Create a simple clickable button widget.
+
+  Options:
+  - :text
+  - :x :y :width :height
+  - :color (unused, kept for API compatibility)
+  - :hover-color (unused)
+  - :text-color
+  - :on-click"
+  [& {:keys [text x y width height text-color on-click]
+      :or {text "Button" x 0 y 0 width 60 height 14 text-color 0xFFFFFF}}]
+  (let [widget (cgui/create-widget :pos [x y] :size [width height])
+        label (text-box :text text :color text-color :scale 0.7 :shadow? true)]
+    (add-component! widget (outline :color 0x404040 :width 1.0))
+    (add-component! widget label)
+    (when on-click
+      (events/on-left-click widget (events/make-click-handler on-click)))
+    widget))
+
+(defn histogram
+  "Create a simple histogram widget with a progress bar.
+
+  Options:
+  - :label
+  - :x :y :width :height
+  - :color
+  - :value-fn :max-fn
+  - :direction (:horizontal or :vertical)"
+  [& {:keys [label x y width height color value-fn max-fn direction]
+      :or {label "" x 0 y 0 width 60 height 40 color 0x00FF00
+           value-fn (constantly 0) max-fn (constantly 1)
+           direction :vertical}}]
+  (let [panel (cgui/create-widget :pos [x y] :size [width height])
+        bar (progress-bar :direction direction
+                          :progress 0.0
+                          :color-full color
+                          :color-empty 0x404040)
+        label-box (text-box :text label :color 0xFFFFFF :scale 0.6 :shadow? true)]
+    (add-component! panel bar)
+    (add-component! panel label-box)
+    (events/on-frame panel
+      (fn [_]
+        (let [current (double (value-fn))
+              max-val (double (max-fn))
+              progress (if (> max-val 0.0) (/ current max-val) 0.0)]
+          (set-progress! bar progress))))
+    panel))
+
+(defn property-field
+  "Create a simple label/value property widget.
+
+  Options:
+  - :label
+  - :x :y :width
+  - :editable (unused, kept for API compatibility)
+  - :masked (unused)
+  - :label-color :value-color
+  - :max-length (unused)
+  - :on-change (unused)
+  "
+  [& {:keys [label x y width label-color value-color]
+      :or {label "" x 0 y 0 width 70 label-color 0xAAAAAA value-color 0xFFFFFF}}]
+  (let [widget (cgui/create-widget :pos [x y] :size [width 12])
+        label-box (text-box :text (str label ": ") :color label-color :scale 0.7 :shadow? true)
+        value-box (text-box :text "" :color value-color :scale 0.7 :shadow? true)]
+    (add-component! widget label-box)
+    (add-component! widget value-box)
+    widget))
 
 ;; ============================================================================
 ;; Component Builder DSL

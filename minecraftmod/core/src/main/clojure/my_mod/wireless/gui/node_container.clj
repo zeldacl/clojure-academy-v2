@@ -42,8 +42,8 @@
     (atom (int (winterfaces/get-max-energy tile)))
     (atom (:node-type tile))
     (atom @(:enabled tile))
-    (atom (:node-name tile))
-    (atom (:password tile))
+    (atom (winterfaces/get-node-name tile))
+    (atom (winterfaces/get-password tile))
     (atom 0))) ; Transfer rate computed on update
 
 ;; ============================================================================
@@ -57,6 +57,11 @@
   "Get total slot count (2 for node)"
   [_container]
   2)
+
+(defn get-owner
+  "Get node owner name"
+  [container]
+  (:placer-name (:tile-entity container)))
 
 (defn can-place-item?
   "Check if item can be placed in slot
@@ -105,8 +110,8 @@
     (reset! (:is-online container) @(:enabled tile))
     
     ;; Update node info
-    (reset! (:ssid container) (:node-name tile))
-    (reset! (:password container) (:password tile))
+    (reset! (:ssid container) (winterfaces/get-node-name tile))
+    (reset! (:password container) (winterfaces/get-password tile))
     
     ;; Compute transfer rate (charging speed)
     (let [charging-in? @(:charging-in tile)

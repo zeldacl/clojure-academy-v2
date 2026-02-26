@@ -12,12 +12,9 @@
   - 修改SSID/密码：只有放置者"
   
   (:require [my-mod.network.server :as net-server]
-            [my-mod.wireless.network :as wireless-net])
-  (:import [net.minecraft.entity.player EntityPlayer]
-           [cn.academy.block.tileentity TileMatrix]
-           [cn.academy.wireless WirelessHelper]
-           [net.minecraftforge.common MinecraftForge]
-           [cn.academy.event.wireless CreateNetworkEvent ChangePassEvent]))
+            [my-mod.wireless.helper :as helper]
+            [my-mod.wireless.network :as wireless-net]
+            [my-mod.util.log :as log]))
 
 ;; ==================== 消息通道常量 ====================
 
@@ -28,28 +25,29 @@
 
 ;; ==================== 工具函数 ====================
 
+(defn- get-world [player]
+  (or (try (.getWorld player) (catch Exception _ nil))
+      (try (.level player) (catch Exception _ nil))
+      (try (.getEntityWorld player) (catch Exception _ nil))))
+
+(defn- get-tile-at
+  "Fetch tile entity at payload position"
+  [world {:keys [pos-x pos-y pos-z]}]
+  (when (and world (number? pos-x) (number? pos-y) (number? pos-z))
+    (let [pos (net.minecraft.util.math.BlockPos. (int pos-x) (int pos-y) (int pos-z))]
+      (or (try (.getTileEntity world pos) (catch Exception _ nil))
+          (try (.getBlockEntity world pos) (catch Exception _ nil))))))
+
 (defn get-wireless-network
-  "获取Matrix绑定的无线网络
-  
-  参数：
-  - tile: TileMatrix实例
-  
-  返回：
-  - WirelessNetwork实例或nil"
-  [^TileMatrix tile]
-  (WirelessHelper/getWirelessNet tile))
+  "获取Matrix绑定的无线网络"
+  [tile]
+  (helper/get-wireless-net-by-matrix tile))
 
 (defn is-owner?
-  "检查玩家是否是Matrix的所有者
-  
-  参数：
-  - tile: TileMatrix实例
-  - player: EntityPlayer实例
-  
-  返回：
-  - boolean"
-  [^TileMatrix tile ^EntityPlayer player]
-  (= (.getPlacerName tile) (.getName player)))
+  "检查玩家是否是Matrix的所有者"
+  [tile player]
+  (let [player-name (try (.getName player) (catch Exception _ (str player)))]
+    (= (:placer-name tile) player-name)))
 
 ;; ==================== 消息处理器 ====================
 
@@ -66,19 +64,21 @@
   - :password - String | nil
   - :load - int（当前连接的设备数）
   - :initialized - boolean"
-  [{:keys [tile]} player]
-  (if-let [network (get-wireless-network tile)]
+  [payload player]
+  (let [world (get-world player)
+        tile (get-tile-at world payload)]
+    (if-let [network (and tile (get-wireless-network tile))]
     ;; 网络已创建
-    {:ssid (.getSSID network)
-     :password (.getPassword network)
-     :load (.getLoad network)
+    {:ssid (:ssid network)
+     :password (:password network)
+     :load (wireless-net/get-load network)
      :initialized true}
     
     ;; 网络未创建
     {:ssid nil
      :password nil
      :load 0
-     :initialized false}))
+     :initialized false})))
 
 (defn handle-init-network
   "处理MSG_INIT消息
@@ -93,22 +93,16 @@
   
   响应数据：
   - :success - boolean"
-  [{:keys [tile ssid password]} player]
-  (if (is-owner? tile player)
-    (try
-      ;; 发送CreateNetworkEvent事件
-      ;; 实际的网络创建由事件监听器处理
-      (let [event (CreateNetworkEvent. tile ssid password)]
-        (MinecraftForge/EVENT_BUS.post event)
-        {:success true})
-      
-      (catch Exception e
-        (println "Failed to initialize network:" (.getMessage e))
-        {:success false}))
-    
-    ;; 非所有者：拒绝操作
-    (do
-      (println "Player" (.getName player) "attempted to initialize network without permission")
+  [payload player]
+  (let [world (get-world player)
+        tile (get-tile-at world payload)
+        {:keys [ssid password]} payload]
+    (if (and tile (is-owner? tile player))
+      (try
+        {:success (boolean (helper/create-network! tile ssid password))}
+        (catch Exception e
+          (log/error "Failed to initialize network:" (.getMessage e))
+          {:success false}))
       {:success false})))
 
 (defn handle-change-ssid
@@ -123,26 +117,22 @@
   
   响应数据：
   - :success - boolean"
-  [{:keys [tile new-ssid]} player]
-  (if (is-owner? tile player)
-    (if-let [network (get-wireless-network tile)]
-      (try
-        ;; 直接修改SSID
-        (.setSSID network new-ssid)
-        {:success true}
-        
-        (catch Exception e
-          (println "Failed to change SSID:" (.getMessage e))
-          {:success false}))
-      
-      ;; 网络不存在
-      (do
-        (println "Cannot change SSID: network not initialized")
-        {:success false}))
-    
-    ;; 非所有者：拒绝操作
-    (do
-      (println "Player" (.getName player) "attempted to change SSID without permission")
+  [payload player]
+  (let [world (get-world player)
+        tile (get-tile-at world payload)
+        new-ssid (:new-ssid payload)]
+    (if (and tile (is-owner? tile player))
+      (if-let [network (get-wireless-network tile)]
+        (try
+          (let [old-ssid (:ssid network)]
+            (wireless-net/reset-ssid! network new-ssid)
+            (swap! (:net-lookup (:world-data network)) dissoc old-ssid)
+            (swap! (:net-lookup (:world-data network)) assoc new-ssid network)
+            {:success true})
+          (catch Exception e
+            (log/error "Failed to change SSID:" (.getMessage e))
+            {:success false}))
+        {:success false})
       {:success false})))
 
 (defn handle-change-password
@@ -157,28 +147,19 @@
   
   响应数据：
   - :success - boolean"
-  [{:keys [tile new-password]} player]
-  (if (is-owner? tile player)
-    (if-let [network (get-wireless-network tile)]
-      (try
-        ;; 发送ChangePassEvent事件
-        ;; 实际的密码修改由事件监听器处理
-        (let [event (ChangePassEvent. tile new-password)]
-          (MinecraftForge/EVENT_BUS.post event)
-          {:success true})
-        
-        (catch Exception e
-          (println "Failed to change password:" (.getMessage e))
-          {:success false}))
-      
-      ;; 网络不存在
-      (do
-        (println "Cannot change password: network not initialized")
-        {:success false}))
-    
-    ;; 非所有者：拒绝操作
-    (do
-      (println "Player" (.getName player) "attempted to change password without permission")
+  [payload player]
+  (let [world (get-world player)
+        tile (get-tile-at world payload)
+        new-password (:new-password payload)]
+    (if (and tile (is-owner? tile player))
+      (if-let [network (get-wireless-network tile)]
+        (try
+          (wireless-net/reset-password! network new-password)
+          {:success true}
+          (catch Exception e
+            (log/error "Failed to change password:" (.getMessage e))
+            {:success false}))
+        {:success false})
       {:success false})))
 
 ;; ==================== 注册 ====================
@@ -208,7 +189,7 @@
     MSG_CHANGE_PASSWORD
     handle-change-password)
   
-  (println "Matrix GUI network handlers registered"))
+  (log/info "Matrix GUI network handlers registered"))
 
 ;; ==================== 导出 ====================
 

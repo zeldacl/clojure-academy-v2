@@ -5,6 +5,8 @@
   eliminating hardcoded game concepts (Node, Matrix, etc.)."
   (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
             [my-mod.wireless.gui.registry :as gui-registry]
+            [my-mod.network.client :as rpc-client]
+            [my-mod.network.server :as rpc-server]
             [my-mod.util.log :as log])
   (:import [net.minecraft.network PacketByteBuf]
            [net.minecraft.server.network ServerPlayerEntity]
@@ -24,6 +26,58 @@
 
 (def SYNC_DATA_PACKET_ID 
   (Identifier. "my_mod" "gui_sync_data"))
+
+(def RPC_REQUEST_PACKET_ID
+  (Identifier. "my_mod" "rpc_request"))
+
+(def RPC_RESPONSE_PACKET_ID
+  (Identifier. "my_mod" "rpc_response"))
+
+;; =========================================================================
+;; Shared Map Encoding Helpers
+;; =========================================================================
+
+(defn- write-value
+  "Write a single value with type tag"
+  [^PacketByteBuf buffer value]
+  (cond
+    (integer? value) (do (.writeByte buffer 0) (.writeInt buffer value))
+    (float? value) (do (.writeByte buffer 1) (.writeFloat buffer value))
+    (string? value) (do (.writeByte buffer 2) (.writeString buffer value))
+    (boolean? value) (do (.writeByte buffer 3) (.writeBoolean buffer value))
+    (nil? value) (do (.writeByte buffer 4))
+    :else (do (.writeByte buffer 5) (.writeString buffer (pr-str value)))))
+
+(defn- read-value
+  "Read a single value with type tag"
+  [^PacketByteBuf buffer]
+  (let [type-id (.readByte buffer)]
+    (case type-id
+      0 (.readInt buffer)
+      1 (.readFloat buffer)
+      2 (.readString buffer)
+      3 (.readBoolean buffer)
+      4 nil
+      5 (.readString buffer)
+      nil)))
+
+(defn- write-data-map
+  "Write a map of keyword->primitive values"
+  [^PacketByteBuf buffer data]
+  (.writeInt buffer (count data))
+  (doseq [[k v] data]
+    (.writeString buffer (name k))
+    (write-value buffer v)))
+
+(defn- read-data-map
+  "Read a map of keyword->primitive values"
+  [^PacketByteBuf buffer]
+  (let [count (.readInt buffer)]
+    (into {}
+          (for [_ (range count)]
+            (let [key (keyword (.readString buffer))
+                  value (read-value buffer)]
+              [key value])))))
 
 ;; ============================================================================
 ;; Packet: Button Click (Client -> Server)
@@ -98,36 +152,49 @@
   "Encode sync data packet to buffer"
   [^SyncDataPacket packet ^PacketByteBuf buffer]
   (.writeInt buffer (:gui-id packet))
-  
-  ;; Encode data map
-  (let [data (:data packet)]
-    (.writeInt buffer (count data))
-    (doseq [[k v] data]
-      (.writeString buffer (name k))
-      (cond
-        (integer? v) (do (.writeByte buffer 0) (.writeInt buffer v))
-        (float? v) (do (.writeByte buffer 1) (.writeFloat buffer v))
-        (string? v) (do (.writeByte buffer 2) (.writeString buffer v))
-        (boolean? v) (do (.writeByte buffer 3) (.writeBoolean buffer v))
-        :else (log/warn "Unknown data type for sync:" (type v))))))
+  (write-data-map buffer (:data packet)))
 
 (defn decode-sync-data
   "Decode sync data packet from buffer"
   [^PacketByteBuf buffer]
   (let [gui-id (.readInt buffer)
-        count (.readInt buffer)
-        data (into {}
-               (for [_ (range count)]
-                 (let [key (keyword (.readString buffer))
-                       type-id (.readByte buffer)
-                       value (case type-id
-                               0 (.readInt buffer)
-                               1 (.readFloat buffer)
-                               2 (.readString buffer)
-                               3 (.readBoolean buffer)
-                               nil)]
-                   [key value])))]
+        data (read-data-map buffer)]
     (->SyncDataPacket gui-id data)))
+
+;; =========================================================================
+;; RPC: Request/Response
+;; =========================================================================
+
+(defrecord RpcRequestPacket [msg-id request-id payload])
+(defrecord RpcResponsePacket [request-id payload])
+
+(defn encode-rpc-request
+  "Encode RPC request to buffer"
+  [^RpcRequestPacket packet ^PacketByteBuf buffer]
+  (.writeString buffer (:msg-id packet))
+  (.writeInt buffer (:request-id packet))
+  (write-data-map buffer (:payload packet)))
+
+(defn decode-rpc-request
+  "Decode RPC request from buffer"
+  [^PacketByteBuf buffer]
+  (let [msg-id (.readString buffer)
+        request-id (.readInt buffer)
+        payload (read-data-map buffer)]
+    (->RpcRequestPacket msg-id request-id payload)))
+
+(defn encode-rpc-response
+  "Encode RPC response to buffer"
+  [^RpcResponsePacket packet ^PacketByteBuf buffer]
+  (.writeInt buffer (:request-id packet))
+  (write-data-map buffer (:payload packet)))
+
+(defn decode-rpc-response
+  "Decode RPC response from buffer"
+  [^PacketByteBuf buffer]
+  (let [request-id (.readInt buffer)
+        payload (read-data-map buffer)]
+    (->RpcResponsePacket request-id payload)))
 
 (defn handle-sync-data-client
   "Handle sync data packet on client"
@@ -168,6 +235,26 @@
           (.execute server
             (fn []
               (handle-text-input-server player packet-data)))))))
+
+  ;; Register RPC Request handler
+  (ServerPlayNetworking/registerGlobalReceiver
+    RPC_REQUEST_PACKET_ID
+    (reify net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking$PlayChannelHandler
+      (receive [_ server player handler buf sender]
+        (let [packet-data (.copy buf)]
+          (.execute server
+            (fn []
+              (let [packet (decode-rpc-request packet-data)]
+                (rpc-server/handle-request
+                  (:msg-id packet)
+                  (:request-id packet)
+                  (:payload packet)
+                  player
+                  (fn [request-id response]
+                    (let [resp-buf (PacketByteBufs/create)
+                          resp (->RpcResponsePacket request-id response)]
+                      (encode-rpc-response resp resp-buf)
+                      (ServerPlayNetworking/send player RPC_RESPONSE_PACKET_ID resp-buf)))))))))))
   
   (log/info "Server-side GUI network packets registered (Fabric)"))
 
@@ -186,6 +273,17 @@
           (.execute client
             (fn []
               (handle-sync-data-client packet-data)))))))
+
+  ;; Register RPC Response handler
+  (ClientPlayNetworking/registerGlobalReceiver
+    RPC_RESPONSE_PACKET_ID
+    (reify net.fabricmc.fabric.api.networking.v1.ClientPlayNetworking$PlayChannelHandler
+      (receive [_ client handler buf sender]
+        (let [packet-data (.copy buf)]
+          (.execute client
+            (fn []
+              (let [packet (decode-rpc-response packet-data)]
+                (rpc-client/handle-response (:request-id packet) (:payload packet))))))))))
   
   (log/info "Client-side GUI network packets registered (Fabric)"))
 
@@ -219,6 +317,19 @@
     (encode-sync-data packet buf)
     (ServerPlayNetworking/send player SYNC_DATA_PACKET_ID buf)
     (log/debug "Sent sync data to client:" (keys data))))
+
+(defn send-rpc-request-to-server
+  "Send RPC request from client to server"
+  [msg-id payload request-id]
+  (let [buf (PacketByteBufs/create)
+        packet (->RpcRequestPacket msg-id request-id payload)]
+    (encode-rpc-request packet buf)
+    (ClientPlayNetworking/send RPC_REQUEST_PACKET_ID buf)
+    (log/debug "Sent RPC request to server:" msg-id)))
+
+(defmethod rpc-client/send-request :fabric-1.20.1
+  [msg-id payload request-id]
+  (send-rpc-request-to-server msg-id payload request-id))
 
 ;; ============================================================================
 ;; Initialization

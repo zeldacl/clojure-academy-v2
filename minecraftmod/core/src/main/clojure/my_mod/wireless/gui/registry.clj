@@ -166,6 +166,8 @@
 ;; ============================================================================
 
 (defonce ^:private active-containers (atom #{}))
+(defonce ^:private player-containers (atom {}))
+(defonce ^:private client-container (atom nil))
 
 (defn register-active-container!
   "Register a container as active (for tick updates)"
@@ -173,11 +175,43 @@
   (swap! active-containers conj container)
   (log/info "Registered active container, total:" (count @active-containers)))
 
+(defn register-player-container!
+  "Register a container for a specific player"
+  [player container]
+  (swap! player-containers assoc player container)
+  (log/debug "Registered player container for" player))
+
 (defn unregister-active-container!
   "Unregister a container when closed"
   [container]
   (swap! active-containers disj container)
   (log/info "Unregistered container, remaining:" (count @active-containers)))
+
+(defn unregister-player-container!
+  "Unregister a container for a specific player"
+  [player]
+  (swap! player-containers dissoc player)
+  (log/debug "Unregistered player container for" player))
+
+(defn get-player-container
+  "Get the active container for a player"
+  [player]
+  (get @player-containers player))
+
+(defn set-client-container!
+  "Set the client-side active container"
+  [container]
+  (reset! client-container container))
+
+(defn clear-client-container!
+  "Clear the client-side active container"
+  []
+  (reset! client-container nil))
+
+(defn get-client-container
+  "Get the client-side active container"
+  []
+  @client-container)
 
 (defn tick-all-containers!
   "Tick all active containers (called from server tick event)

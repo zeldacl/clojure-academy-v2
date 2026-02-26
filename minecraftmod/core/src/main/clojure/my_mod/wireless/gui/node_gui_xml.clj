@@ -13,8 +13,28 @@
             [my-mod.gui.cgui :as cgui]
             [my-mod.gui.components :as comp]
             [my-mod.gui.events :as events]
+            [my-mod.network.client :as net-client]
             [my-mod.wireless.gui.node-container :as container]
             [my-mod.util.log :as log]))
+
+;; =========================================================================
+;; Network Message IDs
+;; =========================================================================
+
+(def ^:const MSG_GET_STATUS "wireless_node_get_status")
+(def ^:const MSG_CHANGE_NAME "wireless_node_change_name")
+(def ^:const MSG_CHANGE_PASSWORD "wireless_node_change_password")
+(def ^:const MSG_LIST_NETWORKS "wireless_node_list_networks")
+(def ^:const MSG_CONNECT "wireless_node_connect")
+(def ^:const MSG_DISCONNECT "wireless_node_disconnect")
+
+(defn- tile-pos-payload
+  "Extract position payload from a tile entity or map"
+  [tile]
+  (let [pos (or (:pos tile) (when tile (.getPos tile)))]
+    {:pos-x (when pos (.getX pos))
+     :pos-y (when pos (.getY pos))
+     :pos-z (when pos (.getZ pos))}))
 
 ;; ============================================================================
 ;; XML Layout Loading
@@ -106,12 +126,13 @@
                         dt (- now @last-query)]
                     (when (> dt 2000) ; Query every 2 seconds
                       (reset! last-query now)
-                      ;; Query network link status
-                      ;; TODO: Implement network query
-                      ;; For now, simulate with tile state
-                      (let [is-linked @(:enabled tile)]
-                        (reset! (:current-state anim-state)
-                                (if is-linked :linked :unlinked))))))}))
+                      (net-client/send-to-server
+                        MSG_GET_STATUS
+                        (tile-pos-payload tile)
+                        (fn [response]
+                          (let [is-linked (boolean (:linked response))]
+                            (reset! (:current-state anim-state)
+                                    (if is-linked :linked :unlinked))))))))}))
 
 ;; ============================================================================
 ;; Info Panel Components
@@ -171,7 +192,8 @@
         prop-name (:name prop-spec)
         
         ;; Check if player is owner (for editable fields)
-        is-owner (= (container/get-owner container) player)
+        player-name (try (.getName player) (catch Exception _ (str player)))
+        is-owner (= (container/get-owner container) player-name)
         can-edit (and editable (or (not requires-owner) is-owner))
         
         ;; Create label
@@ -188,10 +210,20 @@
                          :max-length (:max-length prop-spec 32)
                          :masked masked
                          :on-confirm (fn [new-value]
-                                       ;; Send network update
-                                       (log/info "Property" prop-name "updated to:" new-value)
-                                       ;; TODO: Implement network send
-                                       ))
+                                       (case (keyword prop-name)
+                                         :node_name
+                                         (net-client/send-to-server
+                                           MSG_CHANGE_NAME
+                                           (assoc (tile-pos-payload (:tile-entity container))
+                                                  :node-name new-value))
+
+                                         :password
+                                         (net-client/send-to-server
+                                           MSG_CHANGE_PASSWORD
+                                           (assoc (tile-pos-payload (:tile-entity container))
+                                                  :password new-value))
+
+                                         nil)))
                        (comp/text-box
                          :text ""
                          :color 0xFFFFFF
@@ -232,8 +264,11 @@
     ;; Add histograms
     (doseq [hist-spec histograms]
       (cgui/add-widget! panel (create-histogram-widget hist-spec container)))
-    
-    ;; Add separator (TODO: implement)
+
+    ;; Add separator
+    (let [sep-widget (cgui/create-widget :pos [0 110] :size [96 1])]
+      (comp/add-component! sep-widget (comp/outline :color 0x505050 :width 1.0))
+      (cgui/add-widget! panel sep-widget))
     
     ;; Add properties
     (let [prop-y-start 120]
@@ -253,14 +288,71 @@
   
   TODO: Implement network discovery and connection logic"
   [xml-spec container]
-  (let [panel (cgui/create-container :pos [0 0] :size [176 187])]
-    ;; For now, placeholder
-    (cgui/add-widget! panel
-      (comp/text-box
-        :text "Wireless Panel (TODO)"
-        :color 0xFFFFFF
-        :scale 1.0
-        :shadow? true))
+  (let [panel (cgui/create-container :pos [0 0] :size [176 187])
+        networks (atom [])
+        selected (atom nil)
+        list-widget (cgui/create-widget :pos [13 50] :size [150 120])
+        list-comp (comp/element-list :spacing 2)]
+
+    (comp/add-component! list-widget list-comp)
+
+    (let [refresh-list
+          (fn []
+            (comp/list-clear! list-comp)
+            (doseq [net @networks]
+              (let [ssid (:ssid net)
+                    load (:load net)
+                    item (cgui/create-widget :pos [0 0] :size [140 18])
+                    label (comp/text-box
+                            :text (str ssid " (" load ")")
+                            :color 0xFFFFFF
+                            :scale 0.7
+                            :shadow? true)]
+                (comp/add-component! item label)
+                (events/on-left-click item
+                  (events/make-click-handler
+                    (fn [] (reset! selected ssid))))
+                (comp/list-add! list-comp item))))
+
+          query-networks
+          (fn []
+            (net-client/send-to-server
+              MSG_LIST_NETWORKS
+              (tile-pos-payload (:tile-entity container))
+              (fn [response]
+                (reset! networks (vec (:networks response [])))
+                (refresh-list))))]
+
+      (let [btn-refresh (comp/button
+                          :text "Refresh"
+                          :x 120 :y 10 :width 48 :height 12
+                          :on-click query-networks)
+            btn-connect (comp/button
+                          :text "Connect"
+                          :x 120 :y 25 :width 48 :height 12
+                          :on-click (fn []
+                                      (when @selected
+                                        (net-client/send-to-server
+                                          MSG_CONNECT
+                                          (assoc (tile-pos-payload (:tile-entity container))
+                                                 :ssid @selected
+                                                 :password @(:password container))))))
+            btn-disconnect (comp/button
+                             :text "Disconnect"
+                             :x 120 :y 40 :width 48 :height 12
+                             :on-click (fn []
+                                         (net-client/send-to-server
+                                           MSG_DISCONNECT
+                                           (tile-pos-payload (:tile-entity container)))))]
+        (cgui/add-widget! panel btn-refresh)
+        (cgui/add-widget! panel btn-connect)
+        (cgui/add-widget! panel btn-disconnect))
+
+      (cgui/add-widget! panel list-widget)
+
+      ;; Initial query
+      (query-networks))
+
     panel))
 
 ;; ============================================================================
@@ -316,14 +408,27 @@
       (cgui/add-widget! root anim-widget))
     
     ;; Info panel (right side)
-    (cgui/add-widget! root (create-info-panel xml-spec container player))
+    (let [info-panel (create-info-panel xml-spec container player)]
+      (cgui/add-widget! root info-panel)
     
-    ;; Wireless panel (separate page, initially hidden)
-    (let [wireless-widget (create-wireless-panel xml-spec container)]
-      (cgui/set-visible! wireless-widget false)
-      (cgui/add-widget! root wireless-widget))
-    
-    ;; TODO: Page switching buttons
+      ;; Wireless panel (separate page, initially hidden)
+      (let [wireless-widget (create-wireless-panel xml-spec container)
+        show-info! (fn []
+             (cgui/set-visible! info-panel true)
+             (cgui/set-visible! wireless-widget false))
+        show-wireless! (fn []
+                 (cgui/set-visible! info-panel false)
+                 (cgui/set-visible! wireless-widget true))]
+        (cgui/set-visible! wireless-widget false)
+        (cgui/add-widget! root wireless-widget)
+
+        ;; Page switching buttons
+        (let [btn-info (comp/button :text "Info" :x 8 :y 172 :width 40 :height 12
+                :on-click show-info!)
+          btn-wireless (comp/button :text "Wireless" :x 52 :y 172 :width 60 :height 12
+                    :on-click show-wireless!)]
+          (cgui/add-widget! root btn-info)
+          (cgui/add-widget! root btn-wireless))))
     
     (log/info "Created Wireless Node GUI from XML layout")
     root))

@@ -3,14 +3,19 @@
             [my-mod.util.log :as log]
             [my-mod.gui.api :as gui-api]
             [my-mod.gui.core :as gui-core]
-            [my-mod.events.metadata :as event-metadata]))
+            [my-mod.events.metadata :as event-metadata]
+            [my-mod.wireless.gui.matrix-network-handler :as matrix-net]
+            [my-mod.wireless.gui.node-network-handler :as node-net]))
 
 (defn init
   "Core init hook invoked by per-version entry classes."
   []
   (log/info "Initializing core for mod-id=" defs/mod-id)
   ;; Initialize event metadata system
-  (event-metadata/init-event-metadata!))
+  (event-metadata/init-event-metadata!)
+  ;; Register GUI network handlers
+  (matrix-net/init!)
+  (node-net/init!))
 
 (defn on-block-right-click
   "Generic block right-click event handler.

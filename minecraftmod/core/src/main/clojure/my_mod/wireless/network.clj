@@ -81,6 +81,13 @@
   (log/info (format "Network '%s' password changed" (:ssid network)))
   true)
 
+(defn reset-ssid!
+  "Change network ssid"
+  [network new-ssid]
+  (set! (. network ssid) new-ssid)
+  (log/info (format "Network ssid changed to '%s'" new-ssid))
+  true)
+
 ;; ============================================================================
 ;; Node Management
 ;; ============================================================================
@@ -89,48 +96,49 @@
   "Add a node to the network
   Returns true if successful, false otherwise"
   [network node-vblock password-attempt]
-  ;; Validate password
-  (when (not= password-attempt (:password network))
-    (log/info (format "Node add failed: incorrect password for '%s'" (:ssid network)))
-    (return false))
-  
-  ;; Check capacity
-  (when (>= (get-load network) (get-capacity network))
-    (log/info (format "Node add failed: network '%s' at capacity" (:ssid network)))
-    (return false))
-  
-  ;; Check matrix exists
-  (let [matrix (get-matrix network)]
-    (when-not matrix
-      (log/info "Node add failed: matrix not found")
-      (return false))
-    
-    ;; Check range
-    (let [range (.getRange matrix)
-          dist-sq (vb/dist-sq node-vblock (:matrix network))]
-      (when (> dist-sq (* range range))
-        (log/info (format "Node add failed: out of range (%.1f > %.1f)"
-                          (Math/sqrt dist-sq) range))
-        (return false))
-      
-      ;; Remove from old network if exists
-      (let [world-data (:world-data network)
-            old-net (my-mod.wireless.world-data/get-network-by-node
-                      world-data node-vblock)]
-        (when old-net
-          (remove-node! old-net node-vblock)))
-      
-      ;; Add to this network
-      (swap! (:nodes network) conj node-vblock)
-      
-      ;; Update lookup
-      (swap! (:net-lookup (:world-data network))
-             assoc node-vblock network)
-      
-      (log/info (format "Added node %s to network '%s'"
-                        (vb/vblock-to-string node-vblock)
-                        (:ssid network)))
-      true)))
+  (cond
+    (not= password-attempt (:password network))
+    (do
+      (log/info (format "Node add failed: incorrect password for '%s'" (:ssid network)))
+      false)
+
+    (>= (get-load network) (get-capacity network))
+    (do
+      (log/info (format "Node add failed: network '%s' at capacity" (:ssid network)))
+      false)
+
+    :else
+    (let [matrix (get-matrix network)]
+      (if-not matrix
+        (do
+          (log/info "Node add failed: matrix not found")
+          false)
+        (let [range (.getRange matrix)
+              dist-sq (vb/dist-sq node-vblock (:matrix network))]
+          (if (> dist-sq (* range range))
+            (do
+              (log/info (format "Node add failed: out of range (%.1f > %.1f)"
+                                (Math/sqrt dist-sq) range))
+              false)
+            (do
+              ;; Remove from old network if exists
+              (let [world-data (:world-data network)
+                    old-net (my-mod.wireless.world-data/get-network-by-node
+                              world-data node-vblock)]
+                (when old-net
+                  (remove-node! old-net node-vblock)))
+
+              ;; Add to this network
+              (swap! (:nodes network) conj node-vblock)
+
+              ;; Update lookup
+              (swap! (:net-lookup (:world-data network))
+                     assoc node-vblock network)
+
+              (log/info (format "Added node %s to network '%s'"
+                                (vb/vblock-to-string node-vblock)
+                                (:ssid network)))
+              true)))))))
 
 (defn remove-node!
   "Remove a node from the network"

@@ -133,11 +133,18 @@
                         node-dist-sq (vb/dist-sq-pos node-vb x y z)]
                     (if (and (<= node-dist-sq (* node-range node-range))
                              (< (my-mod.wireless.node-connection/get-load conn)
+          (defn- tile-world [tile]
+            (or (try (.getWorld tile) (catch Exception _ nil))
+              (:world tile)))
+
+          (defn- tile-pos [tile]
+            (or (try (.getPos tile) (catch Exception _ nil))
+              (:pos tile)))
                                 (my-mod.wireless.node-connection/get-capacity conn)))
                       (conj acc node)
                       acc))
                   acc)
-                acc)))
+            (let [world (tile-world matrix-tile)
           []
           all-conns)]
     
@@ -145,7 +152,7 @@
 
 ;; ============================================================================
 ;; Network Operations (Event-based)
-;; ============================================================================
+            (let [world (tile-world node-tile)
 
 (defn create-network!
   "Create a new wireless network
@@ -153,7 +160,7 @@
   Parameters:
   - matrix-tile: IWirelessMatrix TileEntity
   - ssid: network name (String)
-  - password: network password (String)
+            (let [world (tile-world node-tile)
   
   Returns: true if successful"
   [matrix-tile ssid password]
@@ -161,7 +168,7 @@
         world-data (wd/get-world-data world)
         matrix-vb (vb/create-vmatrix matrix-tile)]
     (wd/create-network! world-data matrix-vb ssid password)))
-
+            (let [world (tile-world gen-tile)
 (defn destroy-network!
   "Destroy a wireless network"
   [matrix-tile]
@@ -169,7 +176,7 @@
     (let [world (.getWorld matrix-tile)
           world-data (wd/get-world-data world)]
       (wd/destroy-network! world-data network))))
-
+            (let [world (tile-world rec-tile)
 (defn link-node-to-network!
   "Link a node to a wireless network
   
@@ -231,7 +238,7 @@
   Returns: true if successful"
   [rec-tile node-tile password need-auth]
   ;; Check password if needed
-  (when (or (not need-auth)
+            (let [world (tile-world matrix-tile)
             (= password (.getPassword node-tile)))
     (let [world (.getWorld node-tile)
           world-data (wd/get-world-data world)
@@ -240,7 +247,7 @@
           rec-vb (vb/create-vreceiver rec-tile)]
       (my-mod.wireless.node-connection/add-receiver! conn rec-vb))))
 
-(defn unlink-receiver-from-node!
+            (let [world (tile-world matrix-tile)
   "Unlink a receiver from its node"
   [rec-tile]
   (when-let [conn (get-node-conn-by-receiver rec-tile)]

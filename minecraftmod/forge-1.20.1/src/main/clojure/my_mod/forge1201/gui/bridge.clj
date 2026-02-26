@@ -54,6 +54,7 @@
 (defn -removed [this player]
   (let [clj-container (-getClojureContainer this)]
     (gui-registry/unregister-active-container! clj-container)
+    (gui-registry/unregister-player-container! player)
     (log/info "Menu closed for player" (.getName player))))
 
 (defn -broadcastChanges [this]
@@ -128,6 +129,7 @@
                        {:gui-id gui-id :player player})))
       
       (gui-registry/register-active-container! clj-container)
+      (gui-registry/register-player-container! player clj-container)
       
       (let [menu-type (gui-metadata/get-menu-type :forge-1.20.1 gui-id)]
         

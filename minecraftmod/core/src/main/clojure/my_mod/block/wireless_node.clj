@@ -42,9 +42,9 @@
 (defrecord NodeTileEntity 
   [;; Identity
    node-type          ; :basic, :standard, or :advanced
-   node-name          ; String - node name
-   password           ; String - network password
-   placer-name        ; String - who placed this node
+  node-name          ; atom<String> - node name
+  password           ; atom<String> - network password
+  placer-name        ; String - who placed this node
    
    ;; Energy
    energy             ; atom<double> - current energy
@@ -69,8 +69,8 @@
   [node-type world pos]
   (->NodeTileEntity
     node-type
-    "Unnamed"
-    ""
+    (atom "Unnamed")
+    (atom "")
     ""
     (atom 0.0)
     (atom [nil nil])  ; [input-slot output-slot]
@@ -83,10 +83,17 @@
 
 ;; Additional helper functions for node management
 (defn set-node-name! [tile name]
-  (assoc tile :node-name name))
+  (if (instance? clojure.lang.IDeref (:node-name tile))
+    (do (reset! (:node-name tile) name) tile)
+    (assoc tile :node-name name)))
 
 (defn set-password-str! [tile password]
-  (assoc tile :password password))
+  (if (instance? clojure.lang.IDeref (:password tile))
+    (do (reset! (:password tile) password) tile)
+    (assoc tile :password password)))
+
+(defn- deref-if-atom [value]
+  (if (instance? clojure.lang.IDeref value) @value value))
 
 ;; ============================================================================
 ;; BlockState Management
@@ -203,10 +210,10 @@
     (get-in node-types [(:node-type this) :range]))
   
   (get-node-name [this]
-    (:node-name this))
+    (deref-if-atom (:node-name this)))
   
   (get-password [this]
-    (:password this)))
+    (deref-if-atom (:password this))))
 
 ;; Also implement IWirelessTile (marker interface via metadata)
 (alter-meta! #'->NodeTileEntity assoc :wireless-tile true)
@@ -461,12 +468,6 @@
     tile))
 
 ;; Node management functions
-(defn set-node-password! [tile password]
-  (assoc tile :password password))
-
-(defn set-node-name! [tile name]
-  (assoc tile :node-name name))
-
 (defn set-placer! [tile player-name]
   (assoc tile :placer-name player-name))
 
@@ -475,8 +476,8 @@
   "Convert node tile entity to NBT-like map"
   [tile]
   {:energy (get-energy tile)
-   :node-name (:node-name tile)
-   :password (:password tile)
+  :node-name (winterfaces/get-node-name tile)
+  :password (winterfaces/get-password tile)
    :placer-name (:placer-name tile)
    :node-type (:node-type tile)})
 
@@ -484,9 +485,9 @@
   "Restore node tile entity from NBT-like map"
   [tile nbt-data]
   (set-energy! tile (:energy nbt-data))
+  (set-node-name! tile (:node-name nbt-data))
+  (set-password-str! tile (:password nbt-data))
   (-> tile
-      (assoc :node-name (:node-name nbt-data))
-      (assoc :password (:password nbt-data))
       (assoc :placer-name (:placer-name nbt-data))
       (assoc :node-type (:node-type nbt-data))))
 

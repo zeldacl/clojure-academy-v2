@@ -61,6 +61,7 @@
   [this player]
   (let [clj-container (-getClojureContainer this)]
     (gui-registry/unregister-active-container! clj-container)
+    (gui-registry/unregister-player-container! player)
     (log/info "Container closed for player" (.getName player))))
 
 (defn -detectAndSendChanges
@@ -167,6 +168,7 @@
       
       ;; Register active container
       (gui-registry/register-active-container! clj-container)
+      (gui-registry/register-player-container! player clj-container)
       
       ;; Get MenuType from metadata registry
       (let [menu-type (gui-metadata/get-menu-type :forge-1.16.5 gui-id)]
