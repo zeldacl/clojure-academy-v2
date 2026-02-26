@@ -3,6 +3,7 @@
   (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
             [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.wireless.gui.matrix-sync :as sync]
+            [my-mod.wireless.gui.node-sync :as node-sync]
             [my-mod.network.client :as rpc-client]
             [my-mod.network.server :as rpc-server]
             [my-mod.util.log :as log])
@@ -73,6 +74,9 @@
 
 ;; Matrix State Sync Packet
 (defrecord MatrixStatePacket [pos-x pos-y pos-z plate-count placer-name is-working core-level capacity bandwidth range])
+
+;; Node State Sync Packet
+(defrecord NodeStatePacket [pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name])
 
 (defn encode-rpc-request [^RpcRequestPacket packet ^FriendlyByteBuf buffer]
   (.writeUtf buffer (:msg-id packet))
@@ -171,6 +175,65 @@
     (.setPacketHandled ctx true)))
 
 ;; =========================================================================
+;; Node State Sync Packets
+;; =========================================================================
+
+(defn encode-node-state
+  [^NodeStatePacket packet ^FriendlyByteBuf buffer]
+  (.writeInt buffer (.intValue (:pos-x packet)))
+  (.writeInt buffer (.intValue (:pos-y packet)))
+  (.writeInt buffer (.intValue (:pos-z packet)))
+  (.writeDouble buffer (:energy packet))
+  (.writeDouble buffer (:max-energy packet))
+  (.writeBoolean buffer (:enabled packet))
+  (.writeUtf buffer (str (:node-name packet)))
+  (.writeUtf buffer (name (:node-type packet)))
+  (.writeUtf buffer (str (:password packet)))
+  (.writeBoolean buffer (:charging-in packet))
+  (.writeBoolean buffer (:charging-out packet))
+  (.writeUtf buffer (str (:placer-name packet))))
+
+(defn decode-node-state
+  [^FriendlyByteBuf buffer]
+  (let [pos-x (.readInt buffer)
+        pos-y (.readInt buffer)
+        pos-z (.readInt buffer)
+        energy (.readDouble buffer)
+        max-energy (.readDouble buffer)
+        enabled (.readBoolean buffer)
+        node-name (.readUtf buffer)
+        node-type (keyword (.readUtf buffer))
+        password (.readUtf buffer)
+        charging-in (.readBoolean buffer)
+        charging-out (.readBoolean buffer)
+        placer-name (.readUtf buffer)]
+    (->NodeStatePacket pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name)))
+
+(defn handle-node-state
+  [^NodeStatePacket packet ^Supplier context-supplier]
+  (let [ctx (.get context-supplier)]
+    (.enqueueWork ctx
+      (fn []
+        ;; Update client-side container with new state
+        (when-let [container @gui-registry/client-container]
+          (when (= (:pos-x packet) (try (.getX (.getPos (:tile-entity container))) (catch Exception _ nil)))
+            ;; Position matches - update atoms
+            (when (contains? container :energy)
+              (reset! (:energy container) (:energy packet)))
+            (when (contains? container :max-energy)
+              (reset! (:max-energy container) (:max-energy packet)))
+            (when (contains? container :is-online)
+              (reset! (:is-online container) (:enabled packet)))
+            (when (contains? container :node-type)
+              (reset! (:node-type container) (:node-type packet)))
+            (when (contains? container :ssid)
+              (reset! (:ssid container) (:node-name packet)))
+            (when (contains? container :password)
+              (reset! (:password container) (:password packet)))
+            (log/debug "Updated node state on client")))))
+    (.setPacketHandled ctx true)))
+
+;; =========================================================================
 ;; Registration
 ;; =========================================================================
 
@@ -218,7 +281,20 @@
                    (handle-matrix-state packet ctx-supplier))))
     (.add)
 
-    (log/info "Forge 1.20.1 GUI packets registered (RPC + Matrix Sync)")))
+    ;; Node State Sync
+    (.messageBuilder channel NodeStatePacket 3)
+    (.encoder (reify BiConsumer
+                (accept [_ packet buffer]
+                  (encode-node-state packet buffer))))
+    (.decoder (reify java.util.function.Function
+                (apply [_ buffer]
+                  (decode-node-state buffer))))
+    (.consumer (reify BiConsumer
+                 (accept [_ packet ctx-supplier]
+                   (handle-node-state packet ctx-supplier))))
+    (.add)
+
+    (log/info "Forge 1.20.1 GUI packets registered (RPC + Matrix + Node Sync)")))
 
 (defn broadcast-matrix-state-forge
   "Broadcast matrix state to nearby players (Forge 1.20.1 implementation)"
@@ -242,6 +318,30 @@
              matrix-state)
       (log/debug "Broadcast matrix state to chunk:" pos))))
 
+(defn broadcast-node-state-forge
+  "Broadcast node state to nearby players (Forge 1.20.1 implementation)"
+  [world pos sync-data]
+  (when @network-channel
+    (let [node-state (->NodeStatePacket
+                       (:pos-x sync-data)
+                       (:pos-y sync-data)
+                       (:pos-z sync-data)
+                       (:energy sync-data)
+                       (:max-energy sync-data)
+                       (:enabled sync-data)
+                       (:node-name sync-data)
+                       (:node-type sync-data)
+                       (:password sync-data)
+                       (:charging-in sync-data)
+                       (:charging-out sync-data)
+                       (:placer-name sync-data))]
+      ;; Send to all players tracking this chunk
+      (.send @network-channel
+             PacketDistributor/TRACKING_CHUNK
+             (.getChunkAt world pos)
+             node-state)
+      (log/debug "Broadcast node state to chunk:" pos))))
+
 
 
 (defn send-rpc-request-to-server
@@ -256,6 +356,7 @@
 
 (defn init! []
   (register-packets!)
-  ;; Register Forge sync implementation for matrix state
+  ;; Register Forge sync implementations
   (sync/register-sync-impl! :forge-1.20.1 broadcast-matrix-state-forge)
+  (node-sync/register-sync-impl! :forge-1.20.1 broadcast-node-state-forge)
   (log/info "Forge 1.20.1 GUI network initialized"))

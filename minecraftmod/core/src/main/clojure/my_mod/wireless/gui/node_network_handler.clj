@@ -5,6 +5,7 @@
             [my-mod.wireless.network :as wireless-net]
             [my-mod.wireless.world-data :as world-data]
             [my-mod.wireless.virtual-blocks :as vb]
+            [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.block.wireless-node :as node]
             [my-mod.util.log :as log]))
 
@@ -74,8 +75,20 @@
             range (try (.getRange tile) (catch Exception _ 20.0))
             nets (helper/get-nets-in-range world (.getX pos) (.getY pos) (.getZ pos) range 100)]
         {:networks (mapv (fn [net]
-                           {:ssid (:ssid net)
-                            :load (wireless-net/get-load net)})
+                           (let [matrix (when (:matrix net)
+                                         (vb/vblock-get (:matrix net) world))]
+                             {:ssid (:ssid net)
+                              :load (wireless-net/get-load net)
+                              :capacity (if matrix
+                                         (try (winterfaces/get-capacity matrix) (catch Exception _ 0))
+                                         0)
+                              :is-encrypted? (not (empty? (str (:password net))))
+                              :bandwidth (if matrix
+                                          (try (winterfaces/get-bandwidth matrix) (catch Exception _ 0))
+                                          0)
+                              :range (if matrix
+                                      (try (winterfaces/get-range matrix) (catch Exception _ 0.0))
+                                      0.0)}))
                          nets)})
       {:networks []})))
 

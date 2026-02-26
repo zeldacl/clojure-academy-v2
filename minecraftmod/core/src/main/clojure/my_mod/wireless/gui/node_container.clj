@@ -264,9 +264,16 @@
     ;; From player inventory to input slot
     (>= slot-index player-inventory-start)
     (let [item (get-slot-item container slot-index)]
-      (when (and item (winterfaces/has-energy-capability? item))
-        (when (nil? (get-slot-item container slot-input))
-          (set-slot-item! container slot-input item)
-          (set-slot-item! container slot-index nil))))
+      (if (and item (winterfaces/has-energy-capability? item))
+        (if (nil? (get-slot-item container slot-input))
+          ;; Successfully moved to input slot
+          (do
+            (set-slot-item! container slot-input item)
+            (set-slot-item! container slot-index nil)
+            nil)  ; Return nil to indicate successful transfer
+          ;; Input slot occupied, return original item
+          item)
+        ;; Not an energy item, return it unchanged
+        item))
     
     :else nil))

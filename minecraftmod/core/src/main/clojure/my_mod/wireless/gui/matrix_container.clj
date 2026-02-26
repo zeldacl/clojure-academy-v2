@@ -299,20 +299,30 @@
     ;; From player inventory to matrix
     (>= slot-index player-inventory-start)
     (let [item (get-slot-item container slot-index)]
-      (when item
+      (if item
         (cond
           ;; Try to place in core slot
           (can-place-item? container slot-core item)
-          (when (nil? (get-slot-item container slot-core))
-            (set-slot-item! container slot-core item)
-            (set-slot-item! container slot-index nil))
+          (if (nil? (get-slot-item container slot-core))
+            (do
+              (set-slot-item! container slot-core item)
+              (set-slot-item! container slot-index nil)
+              nil)  ; Return nil to indicate successful transfer
+            item)  ; Return item if core slot occupied
           
           ;; Try to place in first empty plate slot
           (can-place-item? container slot-plate-1 item)
           (let [empty-plate-slot (first (filter #(nil? (get-slot-item container %))
                                                 [slot-plate-1 slot-plate-2 slot-plate-3]))]
-            (when empty-plate-slot
-              (set-slot-item! container empty-plate-slot item)
-              (set-slot-item! container slot-index nil))))))
+            (if empty-plate-slot
+              (do
+                (set-slot-item! container empty-plate-slot item)
+                (set-slot-item! container slot-index nil)
+                nil)  ; Return nil to indicate successful transfer
+              item))  ; Return item if no empty plate slots
+          
+          ;; Can't place anywhere, return item unchanged
+          :else item)
+        nil))  ; No item in slot
     
     :else nil))

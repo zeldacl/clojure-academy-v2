@@ -6,6 +6,7 @@
   (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
             [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.wireless.gui.matrix-sync :as sync]
+            [my-mod.wireless.gui.node-sync :as node-sync]
             [my-mod.network.client :as rpc-client]
             [my-mod.network.server :as rpc-server]
             [my-mod.util.log :as log])
@@ -36,6 +37,9 @@
 
 (def MATRIX_STATE_SYNC_PACKET_ID
   (Identifier. "my_mod" "matrix_state_sync"))
+
+(def NODE_STATE_SYNC_PACKET_ID
+  (Identifier. "my_mod" "node_state_sync"))
 
 ;; =========================================================================
 ;; Shared Map Encoding Helpers
@@ -338,6 +342,94 @@
       (catch Exception e
         (log/debug "Error broadcasting matrix state:" (.getMessage e))))))
 
+;; ============================================================================
+;; Node State Sync Packet (Server -> Client)
+;; ============================================================================
+
+(defrecord NodeStateSyncPacket [pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name])
+
+(defn encode-node-state-sync
+  [^NodeStateSyncPacket packet ^PacketByteBuf buffer]
+  (.writeInt buffer (:pos-x packet))
+  (.writeInt buffer (:pos-y packet))
+  (.writeInt buffer (:pos-z packet))
+  (.writeDouble buffer (:energy packet))
+  (.writeDouble buffer (:max-energy packet))
+  (.writeBoolean buffer (:enabled packet))
+  (.writeString buffer (str (:node-name packet)))
+  (.writeString buffer (name (:node-type packet)))
+  (.writeString buffer (str (:password packet)))
+  (.writeBoolean buffer (:charging-in packet))
+  (.writeBoolean buffer (:charging-out packet))
+  (.writeString buffer (str (:placer-name packet))))
+
+(defn decode-node-state-sync
+  [^PacketByteBuf buffer]
+  (let [pos-x (.readInt buffer)
+        pos-y (.readInt buffer)
+        pos-z (.readInt buffer)
+        energy (.readDouble buffer)
+        max-energy (.readDouble buffer)
+        enabled (.readBoolean buffer)
+        node-name (.readString buffer)
+        node-type (keyword (.readString buffer))
+        password (.readString buffer)
+        charging-in (.readBoolean buffer)
+        charging-out (.readBoolean buffer)
+        placer-name (.readString buffer)]
+    (->NodeStateSyncPacket pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name)))
+
+(defn handle-node-state-sync-client
+  [^NodeStateSyncPacket packet]
+  ;; Update client-side container with new state
+  (when-let [container @gui-registry/client-container]
+    ;; Check if position matches current container
+    (when (and (:tile-entity container)
+              (= (:pos-x packet) (try (.getX (.getPos (:tile-entity container))) (catch Exception _ nil))))
+      ;; Update atoms
+      (when (contains? container :energy)
+        (reset! (:energy container) (:energy packet)))
+      (when (contains? container :max-energy)
+        (reset! (:max-energy container) (:max-energy packet)))
+      (when (contains? container :is-online)
+        (reset! (:is-online container) (:enabled packet)))
+      (when (contains? container :node-type)
+        (reset! (:node-type container) (:node-type packet)))
+      (when (contains? container :ssid)
+        (reset! (:ssid container) (:node-name packet)))
+      (when (contains? container :password)
+        (reset! (:password container) (:password packet)))
+      (log/debug "Updated node state on client"))))
+
+(defn broadcast-node-state-fabric
+  "Broadcast node state to nearby players (Fabric 1.20.1 implementation)"
+  [world pos sync-data]
+  (let [node-state (->NodeStateSyncPacket
+                     (:pos-x sync-data)
+                     (:pos-y sync-data)
+                     (:pos-z sync-data)
+                     (:energy sync-data)
+                     (:max-energy sync-data)
+                     (:enabled sync-data)
+                     (:node-name sync-data)
+                     (:node-type sync-data)
+                     (:password sync-data)
+                     (:charging-in sync-data)
+                     (:charging-out sync-data)
+                     (:placer-name sync-data))
+        buf (PacketByteBufs/create)]
+    (encode-node-state-sync node-state buf)
+    ;; Send to all players tracking chunk
+    (try
+      (let [server (try (.getServer world) (catch Exception _ nil))]
+        (when server
+          (doseq [player (try (.getPlayerManager (.getWorldProperties server (try (.getRegistryKey world) (catch Exception _ nil))))
+                             (catch Exception _ nil))]
+            (ServerPlayNetworking/send player NODE_STATE_SYNC_PACKET_ID buf))))
+      (log/debug "Broadcast node state to players:" pos))
+      (catch Exception e
+        (log/debug "Error broadcasting node state:" (.getMessage e)))))))
+
 
 
 (defn register-client-packets!
@@ -377,6 +469,17 @@
             (fn []
               (let [packet (decode-matrix-state-sync packet-data)]
                 (handle-matrix-state-sync-client packet))))))))
+
+  ;; Register Node State Sync handler
+  (ClientPlayNetworking/registerGlobalReceiver
+    NODE_STATE_SYNC_PACKET_ID
+    (reify net.fabricmc.fabric.api.networking.v1.ClientPlayNetworking$PlayChannelHandler
+      (receive [_ client handler buf sender]
+        (let [packet-data (.copy buf)]
+          (.execute client
+            (fn []
+              (let [packet (decode-node-state-sync packet-data)]
+                (handle-node-state-sync-client packet))))))))
   
   (log/info "Client-side GUI network packets registered (Fabric)"))
 
@@ -433,8 +536,9 @@
   []
   (log/info "Initializing Fabric 1.20.1 GUI network system (server)")
   (register-server-packets!)
-  ;; Register Fabric sync implementation for matrix state
+  ;; Register Fabric sync implementations
   (sync/register-sync-impl! :fabric-1.20.1 broadcast-matrix-state-fabric)
+  (node-sync/register-sync-impl! :fabric-1.20.1 broadcast-node-state-fabric)
   (log/info "Fabric 1.20.1 GUI network system initialized (server)"))
 
 (defn init-client!

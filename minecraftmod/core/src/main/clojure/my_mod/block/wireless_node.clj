@@ -8,6 +8,8 @@
             [my-mod.inventory.core :as inv]
             [my-mod.nbt.dsl :as nbt]
             [my-mod.wireless.gui.registry :as gui-registry]
+            [my-mod.wireless.world-data :as wd]
+            [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.util.log :as log]))
 
 ;; Node type specifications
@@ -322,23 +324,44 @@
 (defn check-network-connection!
   "Check if node is connected to wireless network"
   [tile]
-  ;; TODO: Integrate with WirelessNet system
-  (let [connected? false] ; Placeholder
-    (reset! (:enabled tile) connected?)
-    connected?))
+  (try
+    (let [world (:world tile)
+          pos (:pos tile)
+          node-vblock (vb/create-vnode (.getX pos) (.getY pos) (.getZ pos))
+          world-data (wd/get-world-data world)
+          network (wd/get-network-by-node world-data node-vblock)
+          connected? (and network (not @(:disposed network)))]
+      (reset! (:enabled tile) connected?)
+      connected?)
+    (catch Exception e
+      (log/debug "Failed to check network connection:" (.getMessage e))
+      (reset! (:enabled tile) false)
+      false)))
 
 (defn sync-to-clients!
   "Synchronize node state to nearby clients"
   [tile]
-  ;; TODO: Implement network sync
-  (let [sync-data {:enabled @(:enabled tile)
-                   :charging-in @(:charging-in tile)
-                   :charging-out @(:charging-out tile)
-                   :energy (winterfaces/get-energy tile)
-                   :node-name (winterfaces/get-node-name tile)
-                   :password (winterfaces/get-password tile)
-                   :placer-name (:placer-name tile)}]
-    (log/debug "Sync node data:" sync-data)))
+  (try
+    (let [world (:world tile)
+          pos (:pos tile)
+          sync-data {:pos-x (.getX pos)
+                     :pos-y (.getY pos)
+                     :pos-z (.getZ pos)
+                     :energy (winterfaces/get-energy tile)
+                     :max-energy (winterfaces/get-max-energy tile)
+                     :enabled @(:enabled tile)
+                     :node-name (winterfaces/get-node-name tile)
+                     :node-type (:node-type tile)
+                     :password (winterfaces/get-password tile)
+                     :charging-in @(:charging-in tile)
+                     :charging-out @(:charging-out tile)
+                     :placer-name (:placer-name tile)}]
+      ;; Use dynamic require to avoid circular dependencies
+      (require 'my-mod.wireless.gui.node-sync)
+      ((resolve 'my-mod.wireless.gui.node-sync/broadcast-node-state) 
+       world pos sync-data))
+    (catch Exception e
+      (log/debug \"Node sync not yet implemented:\" (.getMessage e)))))
 
 (defn update-node-tile!
   "Main update function - called every tick"
