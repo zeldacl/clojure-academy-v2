@@ -76,7 +76,7 @@
 (defrecord MatrixStatePacket [pos-x pos-y pos-z plate-count placer-name is-working core-level capacity bandwidth range])
 
 ;; Node State Sync Packet
-(defrecord NodeStatePacket [pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name])
+(defrecord NodeStatePacket [pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name capacity max-capacity])
 
 (defn encode-rpc-request [^RpcRequestPacket packet ^FriendlyByteBuf buffer]
   (.writeUtf buffer (:msg-id packet))
@@ -191,7 +191,9 @@
   (.writeUtf buffer (str (:password packet)))
   (.writeBoolean buffer (:charging-in packet))
   (.writeBoolean buffer (:charging-out packet))
-  (.writeUtf buffer (str (:placer-name packet))))
+  (.writeUtf buffer (str (:placer-name packet)))
+  (.writeInt buffer (.intValue (:capacity packet)))
+  (.writeInt buffer (.intValue (:max-capacity packet))))
 
 (defn decode-node-state
   [^FriendlyByteBuf buffer]
@@ -206,8 +208,10 @@
         password (.readUtf buffer)
         charging-in (.readBoolean buffer)
         charging-out (.readBoolean buffer)
-        placer-name (.readUtf buffer)]
-    (->NodeStatePacket pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name)))
+        placer-name (.readUtf buffer)
+        capacity (.readInt buffer)
+        max-capacity (.readInt buffer)]
+    (->NodeStatePacket pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name capacity max-capacity)))
 
 (defn handle-node-state
   [^NodeStatePacket packet ^Supplier context-supplier]
@@ -230,6 +234,10 @@
               (reset! (:ssid container) (:node-name packet)))
             (when (contains? container :password)
               (reset! (:password container) (:password packet)))
+            (when (contains? container :capacity)
+              (reset! (:capacity container) (:capacity packet)))
+            (when (contains? container :max-capacity)
+              (reset! (:max-capacity container) (:max-capacity packet)))
             (log/debug "Updated node state on client")))))
     (.setPacketHandled ctx true)))
 

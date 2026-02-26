@@ -52,7 +52,7 @@
   - :ranges - Map of section ranges {:tile [start end] :player-main [...] :player-hotbar [...]}"
   {gui-wireless-node
    {:slots [{:type :energy :index 0 :x 0 :y 0}
-            {:type :energy :index 1 :x 26 :y 0}]
+            {:type :output :index 1 :x 26 :y 0}]
     :ranges {:tile [0 1]
              :player-main [2 28]
              :player-hotbar [29 37]}}

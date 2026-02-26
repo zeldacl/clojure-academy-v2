@@ -1,6 +1,8 @@
 (ns my-mod.wireless.gui.node-container
   "Wireless Node GUI Container - handles server-side inventory and data sync"
   (:require [my-mod.wireless.interfaces :as winterfaces]
+            [my-mod.wireless.world-data :as wd]
+            [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.inventory.core :as inv]
             [my-mod.util.log :as log]))
 
@@ -19,7 +21,11 @@
    is-online          ; atom<boolean> - connected to network?
    ssid               ; atom<string> - network name
    password           ; atom<string> - network password
-   transfer-rate])    ; atom<int> - current IF/t transfer
+   transfer-rate      ; atom<int> - current IF/t transfer
+   capacity           ; atom<int> - current network node count
+   max-capacity       ; atom<int> - maximum network capacity
+   charge-ticker      ; atom<int> - tick counter for charging
+   sync-ticker])      ; atom<int> - tick counter for network sync (5s timeout)
 
 ;; ============================================================================
 ;; Container Creation
@@ -44,7 +50,11 @@
     (atom @(:enabled tile))
     (atom (winterfaces/get-node-name tile))
     (atom (winterfaces/get-password tile))
-    (atom 0))) ; Transfer rate computed on update
+    (atom 0)      ; Transfer rate computed on update
+    (atom 0)      ; Capacity - network node count
+    (atom 0)      ; Max capacity - from matrix
+    (atom 0)      ; Charge ticker - for throttling charging
+    (atom 0)))    ; Sync ticker - for throttling network sync
 
 ;; ============================================================================
 ;; Slot Management
@@ -99,19 +109,45 @@
 (defn sync-to-client!
   "Update container data from tile entity (server -> client)
   
-  Called every tick on server side"
+  Called every tick on server side. Network capacity queries are throttled 
+  to every 5 seconds (100 ticks) to reduce performance impact."
   [container]
   (let [tile (:tile-entity container)]
-    ;; Update energy
+    ;; Update energy (every tick)
     (reset! (:energy container) (int (winterfaces/get-energy tile)))
     (reset! (:max-energy container) (int (winterfaces/get-max-energy tile)))
     
-    ;; Update connection status
+    ;; Update connection status (every tick)
     (reset! (:is-online container) @(:enabled tile))
     
-    ;; Update node info
+    ;; Update node info (every tick)
     (reset! (:ssid container) (winterfaces/get-node-name tile))
     (reset! (:password container) (winterfaces/get-password tile))
+    
+    ;; Update network capacity info (throttled to every 100 ticks = 5 seconds)
+    (swap! (:sync-ticker container) inc)
+    (when (>= @(:sync-ticker container) 100)
+      (reset! (:sync-ticker container) 0)
+      (try
+        (let [world (:world tile)
+              pos (:pos tile)
+              node-vblock (vb/create-vnode (.getX pos) (.getY pos) (.getZ pos))
+              world-data (wd/get-world-data world)
+              network (wd/get-network-by-node world-data node-vblock)]
+          (if network
+            (do
+              (reset! (:capacity container) (count @(:nodes network)))
+              ;; Get matrix capacity
+              (when-let [matrix-vb (:matrix network)]
+                (when-let [matrix (vb/vblock-get matrix-vb world)]
+                  (reset! (:max-capacity container) 
+                         (try (winterfaces/get-capacity matrix) (catch Exception _ 0))))))
+            (do
+              (reset! (:capacity container) 0)
+              (reset! (:max-capacity container) 0))))
+        (catch Exception e
+          (reset! (:capacity container) 0)
+          (reset! (:max-capacity container) 0))))
     
     ;; Compute transfer rate (charging speed)
     (let [charging-in? @(:charging-in tile)
@@ -134,7 +170,9 @@
    :is-online @(:is-online container)
    :ssid @(:ssid container)
    :password @(:password container)
-   :transfer-rate @(:transfer-rate container)})
+   :transfer-rate @(:transfer-rate container)
+   :capacity @(:capacity container)
+   :max-capacity @(:max-capacity container)})
 
 ;; ============================================================================
 ;; Container Validation
@@ -169,29 +207,37 @@
   ;; Sync data to client
   (sync-to-client! container)
   
-  ;; Handle item charging in input slot
-  (let [tile (:tile-entity container)
-        input-item (get-slot-item container slot-input)
-        output-item (get-slot-item container slot-output)]
+  ;; Increment charge ticker
+  (swap! (:charge-ticker container) inc)
+  
+  ;; Only perform charging operations every 10 ticks (0.5 seconds)
+  ;; This prevents overly fast energy transfer
+  (when (>= @(:charge-ticker container) 10)
+    (reset! (:charge-ticker container) 0)
     
-    ;; Charge items from node energy
-    (when (and output-item
-               (winterfaces/has-energy-capability? output-item)
-               (> (winterfaces/get-energy tile) 0))
-      (let [to-give (min 100 (winterfaces/get-energy tile))
-            given (winterfaces/give-energy output-item to-give false)]
-        (winterfaces/take-energy tile given false)
-        (reset! (:charging-out tile) (> given 0))))
-    
-    ;; Charge node from items
-    (when (and input-item
-               (winterfaces/has-energy-capability? input-item)
-               (< (winterfaces/get-energy tile) (winterfaces/get-max-energy tile)))
-      (let [to-take (min 100 (- (winterfaces/get-max-energy tile)
-                                 (winterfaces/get-energy tile)))
-            taken (winterfaces/take-energy input-item to-take false)]
-        (winterfaces/give-energy tile taken false)
-        (reset! (:charging-in tile) (> taken 0))))))
+    ;; Handle item charging in input slot
+    (let [tile (:tile-entity container)
+          input-item (get-slot-item container slot-input)
+          output-item (get-slot-item container slot-output)]
+      
+      ;; Charge items from node energy
+      (when (and output-item
+                 (winterfaces/has-energy-capability? output-item)
+                 (> (winterfaces/get-energy tile) 0))
+        (let [to-give (min 100 (winterfaces/get-energy tile))
+              given (winterfaces/give-energy output-item to-give false)]
+          (winterfaces/take-energy tile given false)
+          (reset! (:charging-out tile) (> given 0))))
+      
+      ;; Charge node from items
+      (when (and input-item
+                 (winterfaces/has-energy-capability? input-item)
+                 (< (winterfaces/get-energy tile) (winterfaces/get-max-energy tile)))
+        (let [to-take (min 100 (- (winterfaces/get-max-energy tile)
+                                   (winterfaces/get-energy tile)))
+              taken (winterfaces/take-energy input-item to-take false)]
+          (winterfaces/give-energy tile taken false)
+          (reset! (:charging-in tile) (> taken 0)))))))
 
 ;; ============================================================================
 ;; Button Actions
@@ -277,3 +323,27 @@
         item))
     
     :else nil))
+
+;; ============================================================================
+;; Container Lifecycle
+;; ============================================================================
+
+(defn on-close
+  "Cleanup when container is closed
+  
+  Args:
+  - container: NodeContainer instance
+  
+  Returns: nil"
+  [container]
+  (log/debug "Closing wireless node container")
+  ;; Reset all atoms to default states
+  (reset! (:energy container) 0)
+  (reset! (:max-energy container) 0)
+  (reset! (:is-online container) false)
+  (reset! (:transfer-rate container) 0)
+  (reset! (:capacity container) 0)
+  (reset! (:max-capacity container) 0)
+  (reset! (:charge-ticker container) 0)
+  (reset! (:sync-ticker container) 0)
+  nil)

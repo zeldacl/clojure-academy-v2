@@ -346,7 +346,7 @@
 ;; Node State Sync Packet (Server -> Client)
 ;; ============================================================================
 
-(defrecord NodeStateSyncPacket [pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name])
+(defrecord NodeStateSyncPacket [pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name capacity max-capacity])
 
 (defn encode-node-state-sync
   [^NodeStateSyncPacket packet ^PacketByteBuf buffer]
@@ -361,7 +361,9 @@
   (.writeString buffer (str (:password packet)))
   (.writeBoolean buffer (:charging-in packet))
   (.writeBoolean buffer (:charging-out packet))
-  (.writeString buffer (str (:placer-name packet))))
+  (.writeString buffer (str (:placer-name packet)))
+  (.writeInt buffer (:capacity packet))
+  (.writeInt buffer (:max-capacity packet)))
 
 (defn decode-node-state-sync
   [^PacketByteBuf buffer]
@@ -376,8 +378,10 @@
         password (.readString buffer)
         charging-in (.readBoolean buffer)
         charging-out (.readBoolean buffer)
-        placer-name (.readString buffer)]
-    (->NodeStateSyncPacket pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name)))
+        placer-name (.readString buffer)
+        capacity (.readInt buffer)
+        max-capacity (.readInt buffer)]
+    (->NodeStateSyncPacket pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name capacity max-capacity)))
 
 (defn handle-node-state-sync-client
   [^NodeStateSyncPacket packet]
@@ -399,6 +403,10 @@
         (reset! (:ssid container) (:node-name packet)))
       (when (contains? container :password)
         (reset! (:password container) (:password packet)))
+      (when (contains? container :capacity)
+        (reset! (:capacity container) (:capacity packet)))
+      (when (contains? container :max-capacity)
+        (reset! (:max-capacity container) (:max-capacity packet)))
       (log/debug "Updated node state on client"))))
 
 (defn broadcast-node-state-fabric
