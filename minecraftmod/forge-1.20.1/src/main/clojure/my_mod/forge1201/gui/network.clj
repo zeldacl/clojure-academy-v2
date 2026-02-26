@@ -1,9 +1,9 @@
 (ns my-mod.forge1201.gui.network
-  "Forge 1.20.1 GUI Network Packet System"
-  (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
-            [my-mod.wireless.gui.registry :as gui-registry]
-            [my-mod.wireless.gui.matrix-sync :as sync]
-            [my-mod.wireless.gui.node-sync :as node-sync]
+  "Forge 1.20.1 GUI Network Packet System
+  
+  Platform-agnostic design: All GUI framework functionality accessed through
+  the platform-adapter, eliminating hardcoded game concepts."
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.network.client :as rpc-client]
             [my-mod.network.server :as rpc-server]
             [my-mod.util.log :as log])
@@ -368,6 +368,6 @@
 (defn init! []
   (register-packets!)
   ;; Register Forge sync implementations
-  (sync/register-sync-impl! :forge-1.20.1 broadcast-matrix-state-forge)
-  (node-sync/register-sync-impl! :forge-1.20.1 broadcast-node-state-forge)
+  (gui/register-matrix-sync-impl! :forge-1.20.1 broadcast-matrix-state-forge)
+  (gui/register-node-sync-impl! :forge-1.20.1 broadcast-node-state-forge)
   (log/info "Forge 1.20.1 GUI network initialized"))

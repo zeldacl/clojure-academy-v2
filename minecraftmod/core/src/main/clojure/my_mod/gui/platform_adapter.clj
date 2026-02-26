@@ -21,7 +21,9 @@
   (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
             [my-mod.wireless.gui.gui-metadata :as metadata]
             [my-mod.wireless.gui.slot-manager :as slot-mgr]
-            [my-mod.wireless.gui.registry :as registry]))
+            [my-mod.wireless.gui.registry :as registry]
+            [my-mod.wireless.gui.matrix-sync :as matrix-sync]
+            [my-mod.wireless.gui.node-sync :as node-sync]))
 
 ;; ============================================================================
 ;; Re-export Container Dispatcher (polymorphic operations)
@@ -79,6 +81,28 @@
 (def unregister-player-container! registry/unregister-player-container!)
 (def get-active-container registry/get-active-container)
 (def list-active-containers registry/list-active-containers)
+(def get-player-container registry/get-player-container)
+(def get-client-container registry/get-client-container)
+(def set-client-container! registry/set-client-container!)
+(def clear-client-container! registry/clear-client-container!)
+(def apply-container-sync-packet registry/apply-container-sync-packet)
+(def client-container registry/client-container)
+
+;; ============================================================================
+;; Re-export Sync Modules (Matrix and Node state synchronization)
+;; ============================================================================
+
+;; Matrix state sync
+(def register-matrix-sync-impl! matrix-sync/register-sync-impl!)
+(def get-matrix-sync-impl matrix-sync/get-sync-impl)
+(def broadcast-matrix-state matrix-sync/broadcast-matrix-state)
+(def make-matrix-sync-packet matrix-sync/make-sync-packet)
+
+;; Node state sync
+(def register-node-sync-impl! node-sync/register-sync-impl!)
+(def get-node-sync-impl node-sync/get-sync-impl)
+(def broadcast-node-state node-sync/broadcast-node-state)
+(def make-node-sync-packet node-sync/make-sync-packet)
 
 ;; ============================================================================
 ;; Adapter Guarantees

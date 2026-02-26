@@ -1,12 +1,9 @@
 (ns my-mod.fabric1201.gui.network
   "Fabric 1.20.1 GUI Network Packet System
   
-  Platform-agnostic design: Uses container-dispatcher for polymorphic handling,
-  eliminating hardcoded game concepts (Node, Matrix, etc.)."
-  (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
-            [my-mod.wireless.gui.registry :as gui-registry]
-            [my-mod.wireless.gui.matrix-sync :as sync]
-            [my-mod.wireless.gui.node-sync :as node-sync]
+  Platform-agnostic design: All GUI framework functionality accessed through
+  the platform-adapter, eliminating hardcoded game concepts."
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.network.client :as rpc-client]
             [my-mod.network.server :as rpc-server]
             [my-mod.util.log :as log])
@@ -114,8 +111,8 @@
               "for GUI:" (:gui-id packet))
     
     ;; Get active container for player and dispatch using protocol
-    (when-let [container (gui-registry/get-player-container player)]
-      (dispatcher/safe-handle-button-click! container (:button-id packet) player)))))
+    (when-let [container (gui/get-player-container player)]
+      (gui/safe-handle-button-click! container (:button-id packet) player)))))
 
 ;; ============================================================================
 ;; Packet: Text Input (Client -> Server)
@@ -147,8 +144,8 @@
               "in GUI:" (:gui-id packet))
     
     ;; Get active container for player and dispatch using protocol
-    (when-let [container (gui-registry/get-player-container player)]
-      (dispatcher/safe-handle-text-input! container (:field-id packet) (:text packet) player))))
+    (when-let [container (gui/get-player-container player)]
+      (gui/safe-handle-text-input! container (:field-id packet) (:text packet) player))))
 
 ;; ============================================================================
 ;; Packet: Sync Data (Server -> Client)
@@ -211,8 +208,8 @@
     (log/debug "Handling sync data for GUI:" (:gui-id packet))
     
     ;; Get client container
-    (when-let [container (gui-registry/get-client-container)]
-      (gui-registry/apply-container-sync-packet container (:data packet)))))
+    (when-let [container (gui/get-client-container)]
+      (gui/apply-container-sync-packet container (:data packet))))))
 
 ;; ============================================================================
 ;; Registration
@@ -304,7 +301,7 @@
 (defn handle-matrix-state-sync-client
   [^MatrixStateSyncPacket packet]
   ;; Update client-side container with new state
-  (when-let [container @gui-registry/client-container]
+  (when-let [container @gui/client-container]
     ;; Check if position matches current container
     (when (and (:tile-entity container)
               (= (:pos-x packet) (try (.getX (.getPos (:tile-entity container))) (catch Exception _ nil))))
@@ -390,7 +387,7 @@
 (defn handle-node-state-sync-client
   [^NodeStateSyncPacket packet]
   ;; Update client-side container with new state
-  (when-let [container @gui-registry/client-container]
+  (when-let [container @gui/client-container]
     ;; Check if position matches current container
     (when (and (:tile-entity container)
               (= (:pos-x packet) (try (.getX (.getPos (:tile-entity container))) (catch Exception _ nil))))
@@ -549,8 +546,8 @@
   (log/info "Initializing Fabric 1.20.1 GUI network system (server)")
   (register-server-packets!)
   ;; Register Fabric sync implementations
-  (sync/register-sync-impl! :fabric-1.20.1 broadcast-matrix-state-fabric)
-  (node-sync/register-sync-impl! :fabric-1.20.1 broadcast-node-state-fabric)
+  (gui/register-matrix-sync-impl! :fabric-1.20.1 broadcast-matrix-state-fabric)
+  (gui/register-node-sync-impl! :fabric-1.20.1 broadcast-node-state-fabric)
   (log/info "Fabric 1.20.1 GUI network system initialized (server)"))
 
 (defn init-client!
