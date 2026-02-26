@@ -2,7 +2,9 @@
   "Forge 1.20.1 GUI Bridge - Platform-neutral Menu wrapper
   
   This module provides platform-specific Java interop without game logic.
-  Game-specific concepts abstracted away through dispatcher and metadata.
+  
+  All GUI framework functionality is accessed through the platform-adapter,
+  which abstracts away wireless-specific implementation details.
   
   API Changes from 1.16.5:
   - Container → AbstractContainerMenu
@@ -12,10 +14,7 @@
   Classes:
   - ForgeMenuBridge: Generic AbstractContainerMenu wrapper
   - ForgeMenuProviderBridge: Generic MenuProvider"
-  (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
-            [my-mod.wireless.gui.gui-metadata :as gui-metadata]
-            [my-mod.wireless.gui.slot-manager :as slot-manager]
-            [my-mod.wireless.gui.registry :as gui-registry]
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.util.log :as log])
   (:import [net.minecraft.world.entity.player Player Inventory]
            [net.minecraft.world.inventory AbstractContainerMenu MenuType]
@@ -46,19 +45,19 @@
   @(.state this))
 
 (defn -tick [this]
-  (dispatcher/safe-tick! (-getClojureContainer this)))
+  (gui/safe-tick! (-getClojureContainer this)))
 
 (defn -stillValid [this player]
-  (dispatcher/safe-validate (-getClojureContainer this) player))
+  (gui/safe-validate (-getClojureContainer this) player))
 
 (defn -removed [this player]
   (let [clj-container (-getClojureContainer this)]
     ;; Safely close container using dispatcher abstraction
-    (dispatcher/safe-close! clj-container)
+    (gui/safe-close! clj-container)
     
     ;; Unregister from global registries
-    (gui-registry/unregister-active-container! clj-container)
-    (gui-registry/unregister-player-container! player)
+    (gui/unregister-active-container! clj-container)
+    (gui/unregister-player-container! player)
     (log/info "Menu closed for player" (.getName player))))
 
 (defn -broadcastChanges [this]
@@ -66,7 +65,7 @@
   (.broadcastChanges (.superclass (class this)) this)
   
   ;; Sync Clojure container using dispatcher
-  (dispatcher/safe-sync! (-getClojureContainer this)))
+  (gui/safe-sync! (-getClojureContainer this)))
 
 (defn -addSlot [this slot]
   (.addSlot (.superclass (class this)) this slot))
@@ -81,7 +80,7 @@
         (let [stack (.getItem slot)
               clj-container (-getClojureContainer this)]
           ;; Delegate to slot-manager for quick-move logic
-          (slot-manager/execute-quick-move-forge this clj-container slot-index slot stack))
+          (gui/execute-quick-move-forge this clj-container slot-index slot stack))
         net.minecraft.world.item.ItemStack/EMPTY))
     (catch Exception e
       (log/error "Error in quickMoveStack:" (.getMessage e))
@@ -115,13 +114,13 @@
 (defn -getDisplayName [this]
   "Get display name from metadata"
   (Component/literal
-    (gui-metadata/get-display-name (-getGuiId this))))
+    (gui/get-display-name (-getGuiId this))))
 
 (defn -createMenu [this window-id player-inventory player]
   "Create server-side menu using metadata-driven approach"
   (let [gui-id (-getGuiId this)
         tile-entity (-getTileEntity this)
-        handler (gui-registry/get-gui-handler)
+        handler (gui/get-gui-handler)
         world (.level player)
         pos (if tile-entity (:pos tile-entity) (.blockPosition player))]
     
@@ -132,10 +131,10 @@
         (throw (ex-info "Failed to create Clojure container"
                        {:gui-id gui-id :player player})))
       
-      (gui-registry/register-active-container! clj-container)
-      (gui-registry/register-player-container! player clj-container)
+      (gui/register-active-container! clj-container)
+      (gui/register-player-container! player clj-container)
       
-      (let [menu-type (gui-metadata/get-menu-type :forge-1.20.1 gui-id)]
+      (let [menu-type (gui/get-menu-type :forge-1.20.1 gui-id)]
         
         (when-not menu-type
           (throw (ex-info "MenuType not registered" {:gui-id gui-id})))

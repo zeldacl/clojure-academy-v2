@@ -2,16 +2,15 @@
   "Fabric 1.20.1 GUI Bridge - Platform-neutral ScreenHandler wrapper
   
   This module provides platform-specific Java interop without game logic.
-  Game-specific concepts (Wireless, Node, Matrix) are abstracted away.
+  
+  All GUI framework functionality is accessed through the platform-adapter,
+  which abstracts away wireless-specific implementation details.
   
   Classes:
   - FabricScreenHandlerBridge: Generic ScreenHandler wrapper
   - FabricScreenHandlerFactoryBridge: Generic NamedScreenHandlerFactory
   - FabricExtendedScreenHandlerFactoryBridge: Extended factory with packet data"
-  (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
-            [my-mod.wireless.gui.gui-metadata :as gui-metadata]
-            [my-mod.wireless.gui.slot-manager :as slot-manager]
-            [my-mod.wireless.gui.registry :as gui-registry]
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.util.log :as log])
   (:import [net.minecraft.entity.player PlayerEntity PlayerInventory]
            [net.minecraft.screen ScreenHandler ScreenHandlerType]
@@ -51,12 +50,12 @@
 (defn -tick
   "Tick the screen handler (called every frame on server)"
   [this]
-  (dispatcher/safe-tick! (-getClojureContainer this)))
+  (gui/safe-tick! (-getClojureContainer this)))
 
 (defn -canUse
   "Check if player can use this screen handler (Fabric's stillValid)"
   [this player]
-  (dispatcher/safe-validate (-getClojureContainer this) player))
+  (gui/safe-validate (-getClojureContainer this) player))
 
 (defn -close
   "Called when screen handler is closed"
@@ -64,11 +63,11 @@
   (.close (.superclass (class this)) this player)
   (let [clj-container (-getClojureContainer this)]
     ;; Safely close container using dispatcher abstraction
-    (dispatcher/safe-close! clj-container)
+    (gui/safe-close! clj-container)
     
     ;; Unregister from global registries
-    (gui-registry/unregister-active-container! clj-container)
-    (gui-registry/unregister-player-container! player)
+    (gui/unregister-active-container! clj-container)
+    (gui/unregister-player-container! player)
     (log/info "ScreenHandler closed for player" (.getName player))))
 
 (defn -sendContentUpdates
@@ -78,7 +77,7 @@
   (.sendContentUpdates (.superclass (class this)) this)
   
   ;; Sync Clojure container using dispatcher
-  (dispatcher/safe-sync! (-getClojureContainer this)))
+  (gui/safe-sync! (-getClojureContainer this)))
 
 (defn -addSlot
   "Add a slot to the screen handler"
@@ -98,7 +97,7 @@
         (let [stack (.getStack slot)
               clj-container (-getClojureContainer this)]
           ;; Delegate to slot-manager for quick-move logic
-          (slot-manager/execute-quick-move-fabric this clj-container slot-index slot stack))
+          (gui/execute-quick-move-fabric this clj-container slot-index slot stack))
         net.minecraft.item.ItemStack/EMPTY))
     (catch Exception e
       (log/error "Error in quickMove:" (.getMessage e))
@@ -138,7 +137,7 @@
   (:tile-entity (.state this)))
 
 (defn -getDisplayName [this]
-  (Text/literal (gui-metadata/get-display-name (-getGuiId this))))
+  (Text/literal (gui/get-display-name (-getGuiId this))))
 
 (defn create-node-handler
   "Create a Fabric ScreenHandler for Node containers
@@ -186,12 +185,12 @@
   (:tile-entity (.state this)))
 
 (defn -getDisplayName [this]
-  (Text/literal (gui-metadata/get-display-name (-getGuiId this))))
+  (Text/literal (gui/get-display-name (-getGuiId this))))
 
 (defn -createMenu [this sync-id player-inventory player]
   (let [gui-id (-getGuiId this)
         tile-entity (-getTileEntity this)
-        handler (gui-registry/get-gui-handler)
+        handler (gui/get-gui-handler)
         world (.getWorld player)
         pos (if tile-entity (:pos tile-entity) (.getBlockPos player))]
     
@@ -199,10 +198,10 @@
       (when-not clj-container
         (throw (ex-info "Failed to create Clojure container" {:gui-id gui-id})))
       
-      (gui-registry/register-active-container! clj-container)
-      (gui-registry/register-player-container! player clj-container)
+      (gui/register-active-container! clj-container)
+      (gui/register-player-container! player clj-container)
       
-      (let [handler-type (gui-metadata/get-menu-type :fabric-1.20.1 gui-id)]
+      (let [handler-type (gui/get-menu-type :fabric-1.20.1 gui-id)]
         (when-not handler-type
           (throw (ex-info "ScreenHandlerType not registered" {:gui-id gui-id})))
         
