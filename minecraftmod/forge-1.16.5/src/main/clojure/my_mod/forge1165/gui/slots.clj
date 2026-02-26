@@ -4,9 +4,7 @@
   Platform-agnostic design: Uses gui-metadata for slot layouts,
   eliminating hardcoded game concepts (Node, Matrix, etc.)."
   (:require [my-mod.gui.platform-adapter :as gui]
-            [my-mod.energy.stub :as energy]
-            [my-mod.item.constraint-plate :as plate]
-            [my-mod.item.mat-core :as core]
+            [my-mod.gui.slot-validators :as slot-validators]
             [my-mod.util.log :as log])
   (:import [net.minecraft.inventory.container Slot]
            [net.minecraft.inventory IInventory]
@@ -33,7 +31,7 @@
 (defn -isItemValid
   "Only allow energy items in this slot"
   [this stack]
-  (energy/is-energy-item-supported? stack))
+  (slot-validators/energy-item-validator stack))
 
 (defn -getMaxStackSize
   "Energy items usually don't stack, but allow it if they do"
@@ -60,7 +58,7 @@
 (defn -isItemValid
   "Only allow plate-type items in this slot"
   [this stack]
-  (plate/is-constraint-plate? stack))
+  (slot-validators/constraint-plate-validator stack))
 
 (defn -getMaxStackSize
   "Plate items limited to single stack"
@@ -87,7 +85,7 @@
 (defn -isItemValid
   "Only allow core-type items in this slot"
   [this stack]
-  (core/is-mat-core? stack))
+  (slot-validators/matrix-core-validator stack))
 
 (defn -getMaxStackSize
   "Core items never stack"
@@ -114,7 +112,7 @@
 (defn -isItemValid
   "Never allow direct insertion into output slot"
   [this stack]
-  false)
+  (slot-validators/output-slot-validator stack))
 
 (defn -canTakeStack
   "Allow taking items from output slot"

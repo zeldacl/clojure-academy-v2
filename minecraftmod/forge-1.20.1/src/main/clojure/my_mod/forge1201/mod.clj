@@ -4,6 +4,7 @@
             [my-mod.forge1201.registry :as registry]
             [my-mod.forge1201.events :as events]
             [my-mod.forge1201.gui.impl :as gui]
+            [my-mod.forge1201.gui.init :as gui-init]
             [my-mod.block.dsl :as bdsl]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
@@ -13,6 +14,7 @@
            [net.minecraft.world.item Item BlockItem]
            [net.minecraftforge.fml.common Mod]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
+           [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent]
            [net.minecraftforge.registries DeferredRegister ForgeRegistries]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock])
@@ -97,7 +99,13 @@
     (.addListener mod-bus 
       (reify java.util.function.Consumer
         (accept [_ event]
-          (log/info "FMLCommonSetupEvent called")))))
+          (log/info "FMLCommonSetupEvent called"))))
+
+    ;; Add client setup listener for screen registration
+    (.addListener mod-bus
+      (reify java.util.function.Consumer
+        (accept [_ event]
+          (gui-init/init-client!)))))
   
   ;; Register to gameplay event bus
   (.register (MinecraftForge/EVENT_BUS) 
