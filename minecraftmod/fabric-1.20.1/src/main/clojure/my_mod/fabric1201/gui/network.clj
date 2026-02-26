@@ -14,7 +14,7 @@
             ClientPlayNetworking PacketByteBufs]))
 
 ;; ============================================================================
-;; Network Channel IDs
+;; Network Channel IDs (Fixed set - business-agnostic)
 ;; ============================================================================
 
 (def BUTTON_CLICK_PACKET_ID 
@@ -22,9 +22,6 @@
 
 (def TEXT_INPUT_PACKET_ID 
   (Identifier. "my_mod" "gui_text_input"))
-
-(def SYNC_DATA_PACKET_ID 
-  (Identifier. "my_mod" "gui_sync_data"))
 
 (def RPC_REQUEST_PACKET_ID
   (Identifier. "my_mod" "rpc_request"))
@@ -144,25 +141,6 @@
     (when-let [container (gui/get-player-container player)]
       (gui/safe-handle-text-input! container (:field-id packet) (:text packet) player))))
 
-;; ============================================================================
-;; Packet: Sync Data (Server -> Client)
-;; ============================================================================
-
-(defrecord SyncDataPacket [gui-id data])
-
-(defn encode-sync-data
-  "Encode sync data packet to buffer"
-  [^SyncDataPacket packet ^PacketByteBuf buffer]
-  (.writeInt buffer (:gui-id packet))
-  (write-data-map buffer (:data packet)))
-
-(defn decode-sync-data
-  "Decode sync data packet from buffer"
-  [^PacketByteBuf buffer]
-  (let [gui-id (.readInt buffer)
-        data (read-data-map buffer)]
-    (->SyncDataPacket gui-id data)))
-
 ;; =========================================================================
 ;; RPC: Request/Response
 ;; =========================================================================
@@ -198,15 +176,37 @@
         payload (read-data-map buffer)]
     (->RpcResponsePacket request-id payload)))
 
-(defn handle-sync-data-client
-  "Handle sync data packet on client"
-  [packet-data]
-  (let [packet (decode-sync-data packet-data)]
-    (log/debug "Handling sync data for GUI:" (:gui-id packet))
-    
-    ;; Get client container
-    (when-let [container (gui/get-client-container)]
-      (gui/apply-container-sync-packet container (:data packet))))))
+;; ============================================================================
+;; Registration Helpers (DRY principle for Fabric's callback-heavy API)
+;; ============================================================================
+
+(defmacro register-server-receiver!
+  "Macro to register a server-side packet receiver with less boilerplate.
+  
+  Usage: (register-server-receiver! packet-id handler-fn)"
+  [packet-id handler-fn]
+  `(ServerPlayNetworking/registerGlobalReceiver
+     ~packet-id
+     (reify net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking$PlayChannelHandler
+       (receive [_# server# player# handler# buf# sender#]
+         (let [packet-data# (.copy buf#)]
+           (.execute server#
+             (fn []
+               (~handler-fn player# packet-data#))))))))
+
+(defmacro register-client-receiver!
+  "Macro to register a client-side packet receiver with less boilerplate.
+  
+  Usage: (register-client-receiver! packet-id handler-fn)"
+  [packet-id handler-fn]
+  `(ClientPlayNetworking/registerGlobalReceiver
+     ~packet-id
+     (reify net.fabricmc.fabric.api.networking.v1.ClientPlayNetworking$PlayChannelHandler
+       (receive [_# client# handler# buf# sender#]
+         (let [packet-data# (.copy buf#)]
+           (.execute client#
+             (fn []
+               (~handler-fn packet-data#))))))))
 
 ;; ============================================================================
 ;; Registration
@@ -278,8 +278,9 @@
 
 (defn handle-gui-state-sync-client
   "Handle GUI state sync packet on client (routes by gui-id)"
-  [^GuiStateSyncPacket packet]
-  (gui/apply-gui-sync-payload! (:payload packet)))
+  [packet-data]
+  (let [packet (decode-gui-state-sync packet-data)]
+    (gui/apply-gui-sync-payload! (:payload packet))))
 
 (defn broadcast-gui-state-fabric
   "Universal GUI state broadcast (Fabric 1.20.1 implementation)
@@ -303,42 +304,21 @@
 
 
 (defn register-client-packets!
-  "Register client-side packet receivers"
+  "Register client-side packet receivers.
+  
+  Fixed packet set - business-agnostic:
+  - RPC Response (S→C)
+  - GUI State Sync (S→C)"
   []
   (log/info "Registering client-side GUI network packets (Fabric)")
+
+  ;; Fixed receiver registry
+  (register-client-receiver! RPC_RESPONSE_PACKET_ID
+    (fn [packet-data]
+      (let [packet (decode-rpc-response packet-data)]
+        (rpc-client/handle-response (:request-id packet) (:payload packet)))))
   
-  ;; Register Sync Data handler
-  (ClientPlayNetworking/registerGlobalReceiver
-    SYNC_DATA_PACKET_ID
-    (reify net.fabricmc.fabric.api.networking.v1.ClientPlayNetworking$PlayChannelHandler
-      (receive [_ client handler buf sender]
-        (let [packet-data (.copy buf)]
-          ;; Execute on client thread
-          (.execute client
-            (fn []
-              (handle-sync-data-client packet-data)))))))
-
-  ;; Register RPC Response handler
-  (ClientPlayNetworking/registerGlobalReceiver
-    RPC_RESPONSE_PACKET_ID
-    (reify net.fabricmc.fabric.api.networking.v1.ClientPlayNetworking$PlayChannelHandler
-      (receive [_ client handler buf sender]
-        (let [packet-data (.copy buf)]
-          (.execute client
-            (fn []
-              (let [packet (decode-rpc-response packet-data)]
-                (rpc-client/handle-response (:request-id packet) (:payload packet)))))))))
-
-  ;; Register GUI State Sync handler (universal)
-  (ClientPlayNetworking/registerGlobalReceiver
-    GUI_STATE_SYNC_PACKET_ID
-    (reify net.fabricmc.fabric.api.networking.v1.ClientPlayNetworking$PlayChannelHandler
-      (receive [_ client handler buf sender]
-        (let [packet-data (.copy buf)]
-          (.execute client
-            (fn []
-              (let [packet (decode-gui-state-sync packet-data)]
-                (handle-gui-state-sync-client packet))))))))
+  (register-client-receiver! GUI_STATE_SYNC_PACKET_ID handle-gui-state-sync-client)
   
   (log/info "Client-side GUI network packets registered (Fabric)"))
 
@@ -363,15 +343,6 @@
     (encode-text-input packet buf)
     (ClientPlayNetworking/send TEXT_INPUT_PACKET_ID buf)
     (log/debug "Sent text input to server:" text)))
-
-(defn send-sync-data-to-client
-  "Send sync data packet from server to client"
-  [player gui-id data]
-  (let [buf (PacketByteBufs/create)
-        packet (->SyncDataPacket gui-id data)]
-    (encode-sync-data packet buf)
-    (ServerPlayNetworking/send player SYNC_DATA_PACKET_ID buf)
-    (log/debug "Sent sync data to client:" (keys data))))
 
 (defn send-rpc-request-to-server
   "Send RPC request from client to server"

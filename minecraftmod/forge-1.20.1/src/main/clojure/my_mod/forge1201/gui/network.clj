@@ -64,7 +64,74 @@
             (let [key (keyword (.readUtf buffer))
                   value (read-value buffer)]
               [key value])))))
+;; ============================================================================
+;; Packet: Button Click (Client -> Server)
+;; ============================================================================
 
+(defrecord ButtonClickPacket [gui-id button-id])
+
+(defn encode-button-click
+  "Encode button click packet to buffer"
+  [^ButtonClickPacket packet ^FriendlyByteBuf buffer]
+  (.writeInt buffer (:gui-id packet))
+  (.writeInt buffer (:button-id packet)))
+
+(defn decode-button-click
+  "Decode button click packet from buffer"
+  [^FriendlyByteBuf buffer]
+  (let [gui-id (.readInt buffer)
+        button-id (.readInt buffer)]
+    (->ButtonClickPacket gui-id button-id)))
+
+(defn handle-button-click
+  "Handle button click packet on server"
+  [^ButtonClickPacket packet ^Supplier context-supplier]
+  (let [ctx (.get context-supplier)
+        player (.getSender ctx)]
+    (.enqueueWork ctx
+      (fn []
+        (log/info "Handling button click:" (:button-id packet) 
+                  "for GUI:" (:gui-id packet))
+        ;; Get active container for player and dispatch using protocol
+        (when-let [container (gui/get-player-container player)]
+          (gui/safe-handle-button-click! container (:button-id packet) player))))
+    (.setPacketHandled ctx true)))
+
+;; ============================================================================
+;; Packet: Text Input (Client -> Server)
+;; ============================================================================
+
+(defrecord TextInputPacket [gui-id field-id text])
+
+(defn encode-text-input
+  "Encode text input packet to buffer"
+  [^TextInputPacket packet ^FriendlyByteBuf buffer]
+  (.writeInt buffer (:gui-id packet))
+  (.writeInt buffer (:field-id packet))
+  (.writeUtf buffer (:text packet)))
+
+(defn decode-text-input
+  "Decode text input packet from buffer"
+  [^FriendlyByteBuf buffer]
+  (let [gui-id (.readInt buffer)
+        field-id (.readInt buffer)
+        text (.readUtf buffer)]
+    (->TextInputPacket gui-id field-id text)))
+
+(defn handle-text-input
+  "Handle text input packet on server"
+  [^TextInputPacket packet ^Supplier context-supplier]
+  (let [ctx (.get context-supplier)
+        player (.getSender ctx)]
+    (.enqueueWork ctx
+      (fn []
+        (log/info "Handling text input:" (:text packet) 
+                  "for field:" (:field-id packet) 
+                  "in GUI:" (:gui-id packet))
+        ;; Get active container for player and dispatch using protocol
+        (when-let [container (gui/get-player-container player)]
+          (gui/safe-handle-text-input! container (:field-id packet) (:text packet) player))))
+    (.setPacketHandled ctx true)))
 ;; =========================================================================
 ;; RPC: Request/Response
 ;; =========================================================================
@@ -73,7 +140,7 @@
 (defrecord RpcResponsePacket [request-id payload])
 
 ;; Universal GUI State Sync Packet (handles all GUI types via gui-id routing)
-(defrecord GuiStatePacket [payload])
+(defrecord GuiStateSyncPacket [payload])
 
 (defn encode-rpc-request [^RpcRequestPacket packet ^FriendlyByteBuf buffer]
   (.writeUtf buffer (:msg-id packet))
@@ -126,24 +193,46 @@
 ;; GUI State Sync Packet (Universal)
 ;; =========================================================================
 
-(defn encode-gui-state
-  "Encode GUI state packet to buffer"
-  [^GuiStatePacket packet ^FriendlyByteBuf buffer]
+(defn encode-gui-state-sync
+  "Encode GUI state sync packet to buffer"
+  [^GuiStateSyncPacket packet ^FriendlyByteBuf buffer]
   (write-data-map buffer (:payload packet)))
 
-(defn decode-gui-state
-  "Decode GUI state packet from buffer"
+(defn decode-gui-state-sync
+  "Decode GUI state sync packet from buffer"
   [^FriendlyByteBuf buffer]
-  (->GuiStatePacket (read-data-map buffer)))
+  (->GuiStateSyncPacket (read-data-map buffer)))
 
-(defn handle-gui-state
-  "Handle GUI state packet on client (routes by gui-id)"
-  [^GuiStatePacket packet ^Supplier context-supplier]
+(defn handle-gui-state-sync
+  "Handle GUI state sync packet on client (routes by gui-id)"
+  [^GuiStateSyncPacket packet ^Supplier context-supplier]
   (let [ctx (.get context-supplier)]
     (.enqueueWork ctx
       (fn []
         (gui/apply-gui-sync-payload! (:payload packet))))
     (.setPacketHandled ctx true)))
+
+;; =========================================================================
+;; Registration Macro (DRY principle)
+;; =========================================================================
+
+(defmacro register-packet!
+  "Macro to register a packet with encoder, decoder, and handler.
+  
+  Usage: (register-packet! channel PacketType id encode-fn decode-fn handle-fn)"
+  [channel packet-type id encode-fn decode-fn handle-fn]
+  `(do
+     (.messageBuilder ~channel ~packet-type ~id)
+     (.encoder (reify BiConsumer
+                 (accept [_# packet# buffer#]
+                   (~encode-fn packet# buffer#))))
+     (.decoder (reify java.util.function.Function
+                 (apply [_# buffer#]
+                   (~decode-fn buffer#))))
+     (.consumer (reify BiConsumer
+                  (accept [_# packet# ctx-supplier#]
+                    (~handle-fn packet# ctx-supplier#))))
+     (.add)))
 
 ;; =========================================================================
 ;; Registration
@@ -154,46 +243,15 @@
   (let [channel (create-channel)]
     (reset! network-channel channel)
 
-    ;; RPC Request
-    (.messageBuilder channel RpcRequestPacket 0)
-    (.encoder (reify BiConsumer
-                (accept [_ packet buffer]
-                  (encode-rpc-request packet buffer))))
-    (.decoder (reify java.util.function.Function
-                (apply [_ buffer]
-                  (decode-rpc-request buffer))))
-    (.consumer (reify BiConsumer
-                 (accept [_ packet ctx-supplier]
-                   (handle-rpc-request packet ctx-supplier))))
-    (.add)
+    ;; Fixed packet registry - business-agnostic (5 packet types, unified across all platforms)
+    ;; Packet order must match Forge 1.16.5 and Fabric 1.20.1
+    (register-packet! channel ButtonClickPacket     0 encode-button-click     decode-button-click     handle-button-click)
+    (register-packet! channel TextInputPacket       1 encode-text-input       decode-text-input       handle-text-input)
+    (register-packet! channel RpcRequestPacket      2 encode-rpc-request      decode-rpc-request      handle-rpc-request)
+    (register-packet! channel RpcResponsePacket     3 encode-rpc-response     decode-rpc-response     handle-rpc-response)
+    (register-packet! channel GuiStateSyncPacket    4 encode-gui-state-sync   decode-gui-state-sync   handle-gui-state-sync)
 
-    ;; RPC Response
-    (.messageBuilder channel RpcResponsePacket 1)
-    (.encoder (reify BiConsumer
-                (accept [_ packet buffer]
-                  (encode-rpc-response packet buffer))))
-    (.decoder (reify java.util.function.Function
-                (apply [_ buffer]
-                  (decode-rpc-response buffer))))
-    (.consumer (reify BiConsumer
-                 (accept [_ packet ctx-supplier]
-                   (handle-rpc-response packet ctx-supplier))))
-    (.add)
-
-    ;; GUI State Sync (universal packet for all GUI types)
-    (.messageBuilder channel GuiStatePacket 2)
-    (.encoder (reify BiConsumer
-                (accept [_ packet buffer]
-                  (encode-gui-state packet buffer))))
-    (.decoder (reify java.util.function.Function
-                (apply [_ buffer]
-                  (decode-gui-state buffer))))
-    (.consumer (reify BiConsumer
-                 (accept [_ packet ctx-supplier]
-                   (handle-gui-state packet ctx-supplier))))
-    (.add)
-
-    (log/info "Forge 1.20.1 GUI packets registered (RPC + GUI sync)")))
+    (log/info "Forge 1.20.1 GUI packets registered (5 packets: ButtonClick, TextInput, RPC, GuiStateSync)")))
 
 (defn broadcast-gui-state
   "Universal GUI state broadcast (Forge 1.20.1 implementation)
@@ -201,13 +259,27 @@
   Platform-agnostic: Accepts payload with gui-id and routes on client side."
   [world pos sync-data]
   (when @network-channel
-    (let [gui-state (->GuiStatePacket sync-data)]
+    (let [gui-state (->GuiStateSyncPacket sync-data)]
       ;; Send to all players tracking this chunk
       (.send @network-channel
              PacketDistributor/TRACKING_CHUNK
              (.getChunkAt world pos)
              gui-state)
       (log/debug "Broadcast GUI state (gui-id:" (:gui-id sync-data) ") to chunk:" pos))))
+
+(defn send-button-click-to-server
+  "Send button click packet from client to server"
+  [gui-id button-id]
+  (when @network-channel
+    (.sendToServer @network-channel (->ButtonClickPacket gui-id button-id))
+    (log/debug "Sent button click to server:" button-id)))
+
+(defn send-text-input-to-server
+  "Send text input packet from client to server"
+  [gui-id field-id text]
+  (when @network-channel
+    (.sendToServer @network-channel (->TextInputPacket gui-id field-id text))
+    (log/debug "Sent text input to server:" text)))
 
 (defn send-rpc-request-to-server
   [msg-id payload request-id]

@@ -151,25 +151,6 @@
     
     (.setPacketHandled ctx true)))
 
-;; ============================================================================
-;; Packet: Sync Data (Server -> Client)
-;; ============================================================================
-
-(defrecord SyncDataPacket [gui-id data])
-
-(defn encode-sync-data
-  "Encode sync data packet to buffer"
-  [^SyncDataPacket packet ^PacketBuffer buffer]
-  (.writeInt buffer (:gui-id packet))
-  (write-data-map buffer (:data packet)))
-
-(defn decode-sync-data
-  "Decode sync data packet from buffer"
-  [^PacketBuffer buffer]
-  (let [gui-id (.readInt buffer)
-        data (read-data-map buffer)]
-    (->SyncDataPacket gui-id data)))
-
 ;; =========================================================================
 ;; RPC: Request/Response
 ;; =========================================================================
@@ -234,21 +215,6 @@
         (rpc-client/handle-response (:request-id packet) (:payload packet))))
     (.setPacketHandled ctx true)))
 
-(defn handle-sync-data
-  "Handle sync data packet on client"
-  [^SyncDataPacket packet ^Supplier context-supplier]
-  (let [ctx (.get context-supplier)]
-    
-    (.enqueueWork ctx
-      (fn []
-        (log/debug "Handling sync data for GUI:" (:gui-id packet))
-        
-        ;; Get client container
-        (when-let [container (gui/get-client-container)]
-          (gui/apply-container-sync-packet container (:data packet)))))
-
-    (.setPacketHandled ctx true)))
-
 ;; ============================================================================
 ;; Packet: GUI State Sync (Server -> Client)
 ;; Universal packet that handles all GUI types via gui-id routing
@@ -302,95 +268,54 @@
           (log/debug "Error broadcasting GUI state:" (.getMessage e))))))))
 
 ;; ============================================================================
+;; Registration Macro (DRY principle)
+;; ============================================================================
+
+(defmacro register-packet!
+  "Macro to register a packet with encoder, decoder, and handler.
+  
+  Usage: (register-packet! channel PacketType id encode-fn decode-fn handle-fn)"
+  [channel packet-type id encode-fn decode-fn handle-fn]
+  `(do
+     (.messageBuilder ~channel ~packet-type ~id)
+     (.encoder (reify BiConsumer
+                 (accept [_# packet# buffer#]
+                   (~encode-fn packet# buffer#))))
+     (.decoder (reify java.util.function.Function
+                 (apply [_# buffer#]
+                   (~decode-fn buffer#))))
+     (.consumer (reify BiConsumer
+                  (accept [_# packet# ctx-supplier#]
+                    (~handle-fn packet# ctx-supplier#))))
+     (.add)))
+
+;; ============================================================================
 ;; Registration
 ;; ============================================================================
 
 (defn register-packets!
-  "Register all GUI packets"
+  "Register all GUI network packets.
+  
+  Platform layer maintains a fixed set of 5 packet types:
+  0 - ButtonClickPacket      (C→S: GUI button interactions)
+  1 - TextInputPacket        (C→S: GUI text field inputs)
+  2 - RpcRequestPacket       (C→S: Generic RPC calls)
+  3 - RpcResponsePacket      (S→C: RPC responses)
+  4 - GuiStateSyncPacket     (S→C: Universal GUI state sync)
+  
+  This set is complete and should not grow with business logic."
   []
   (log/info "Registering GUI network packets")
   
   (let [channel (create-channel)]
     (reset! network-channel channel)
     
-    ;; Register Button Click Packet (Client -> Server)
-    (.messageBuilder channel ButtonClickPacket 0)
-    (.encoder (reify BiConsumer
-                (accept [_ packet buffer]
-                  (encode-button-click packet buffer))))
-    (.decoder (reify java.util.function.Function
-                (apply [_ buffer]
-                  (decode-button-click buffer))))
-    (.consumer (reify BiConsumer
-                 (accept [_ packet ctx-supplier]
-                   (handle-button-click packet ctx-supplier))))
-    (.add)
-    
-    ;; Register Text Input Packet (Client -> Server)
-    (.messageBuilder channel TextInputPacket 1)
-    (.encoder (reify BiConsumer
-                (accept [_ packet buffer]
-                  (encode-text-input packet buffer))))
-    (.decoder (reify java.util.function.Function
-                (apply [_ buffer]
-                  (decode-text-input buffer))))
-    (.consumer (reify BiConsumer
-                 (accept [_ packet ctx-supplier]
-                   (handle-text-input packet ctx-supplier))))
-    (.add)
-    
-    ;; Register Sync Data Packet (Server -> Client)
-    (.messageBuilder channel SyncDataPacket 2)
-    (.encoder (reify BiConsumer
-                (accept [_ packet buffer]
-                  (encode-sync-data packet buffer))))
-    (.decoder (reify java.util.function.Function
-                (apply [_ buffer]
-                  (decode-sync-data buffer))))
-    (.consumer (reify BiConsumer
-                 (accept [_ packet ctx-supplier]
-                   (handle-sync-data packet ctx-supplier))))
-    (.add)
-
-    ;; Register RPC Request Packet (Client -> Server)
-    (.messageBuilder channel RpcRequestPacket 3)
-    (.encoder (reify BiConsumer
-                (accept [_ packet buffer]
-                  (encode-rpc-request packet buffer))))
-    (.decoder (reify java.util.function.Function
-                (apply [_ buffer]
-                  (decode-rpc-request buffer))))
-    (.consumer (reify BiConsumer
-                 (accept [_ packet ctx-supplier]
-                   (handle-rpc-request packet ctx-supplier))))
-    (.add)
-
-    ;; Register RPC Response Packet (Server -> Client)
-    (.messageBuilder channel RpcResponsePacket 4)
-    (.encoder (reify BiConsumer
-                (accept [_ packet buffer]
-                  (encode-rpc-response packet buffer))))
-    (.decoder (reify java.util.function.Function
-                (apply [_ buffer]
-                  (decode-rpc-response buffer))))
-    (.consumer (reify BiConsumer
-                 (accept [_ packet ctx-supplier]
-                   (handle-rpc-response packet ctx-supplier))))
-    (.add)
-
-    ;; Register GUI State Sync Packet (Server -> Client)
-    ;; Universal packet that handles all GUI types via gui-id routing
-    (.messageBuilder channel GuiStateSyncPacket 5)
-    (.encoder (reify BiConsumer
-                (accept [_ packet buffer]
-                  (encode-gui-state-sync packet buffer))))
-    (.decoder (reify java.util.function.Function
-                (apply [_ buffer]
-                  (decode-gui-state-sync buffer))))
-    (.consumer (reify BiConsumer
-                 (accept [_ packet ctx-supplier]
-                   (handle-gui-state-sync packet ctx-supplier))))
-    (.add)
+    ;; Fixed packet registry - business-agnostic
+    (register-packet! channel ButtonClickPacket    0 encode-button-click    decode-button-click    handle-button-click)
+    (register-packet! channel TextInputPacket      1 encode-text-input      decode-text-input      handle-text-input)
+    (register-packet! channel RpcRequestPacket     2 encode-rpc-request     decode-rpc-request     handle-rpc-request)
+    (register-packet! channel RpcResponsePacket    3 encode-rpc-response    decode-rpc-response    handle-rpc-response)
+    (register-packet! channel GuiStateSyncPacket   4 encode-gui-state-sync  decode-gui-state-sync  handle-gui-state-sync)
     
     (log/info "GUI network packets registered successfully")))
 
@@ -411,16 +336,6 @@
   (when @network-channel
     (.sendToServer @network-channel (->TextInputPacket gui-id field-id text))
     (log/debug "Sent text input to server:" text)))
-
-(defn send-sync-data-to-client
-  "Send sync data packet from server to client"
-  [player gui-id data]
-  (when @network-channel
-    (.send @network-channel 
-           net.minecraftforge.fml.network.PacketDistributor/PLAYER 
-           player
-           (->SyncDataPacket gui-id data))
-    (log/debug "Sent sync data to client:" (keys data))))
 
 (defn send-rpc-request-to-server
   "Send RPC request from client to server"
