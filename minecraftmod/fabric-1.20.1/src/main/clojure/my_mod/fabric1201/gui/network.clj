@@ -32,11 +32,8 @@
 (def RPC_RESPONSE_PACKET_ID
   (Identifier. "my_mod" "rpc_response"))
 
-(def GUI_STATE_SYNC_A_PACKET_ID
-  (Identifier. "my_mod" "gui_state_sync_a"))
-
-(def GUI_STATE_SYNC_B_PACKET_ID
-  (Identifier. "my_mod" "gui_state_sync_b"))
+(def GUI_STATE_SYNC_PACKET_ID
+  (Identifier. "my_mod" "gui_state_sync"))
 
 ;; =========================================================================
 ;; Shared Map Encoding Helpers
@@ -264,72 +261,42 @@
   (log/info "Server-side GUI network packets registered (Fabric)"))
 
 ;; ============================================================================
-;; GUI State Sync Packet A (Server -> Client)
+;; GUI State Sync Packet (Universal - Server -> Client)
 ;; ============================================================================
 
-(defrecord GuiStateSyncPacketA [payload])
+(defrecord GuiStateSyncPacket [payload])
 
-(defn encode-gui-state-sync-a
-  [^GuiStateSyncPacketA packet ^PacketByteBuf buffer]
+(defn encode-gui-state-sync
+  "Encode GUI state sync packet to buffer"
+  [^GuiStateSyncPacket packet ^PacketByteBuf buffer]
   (write-data-map buffer (:payload packet)))
 
-(defn decode-gui-state-sync-a
+(defn decode-gui-state-sync
+  "Decode GUI state sync packet from buffer"
   [^PacketByteBuf buffer]
-  (->GuiStateSyncPacketA (read-data-map buffer)))
+  (->GuiStateSyncPacket (read-data-map buffer)))
 
-(defn handle-gui-state-sync-a-client
-  [^GuiStateSyncPacketA packet]
+(defn handle-gui-state-sync-client
+  "Handle GUI state sync packet on client (routes by gui-id)"
+  [^GuiStateSyncPacket packet]
   (gui/apply-gui-sync-payload! (:payload packet)))
 
-(defn broadcast-gui-state-a-fabric
-  "Broadcast GUI state to nearby players (Fabric 1.20.1 implementation)"
+(defn broadcast-gui-state-fabric
+  "Universal GUI state broadcast (Fabric 1.20.1 implementation)
+  
+  Platform-agnostic: Accepts payload with gui-id and routes on client side."
   [world pos sync-data]
-  (let [gui-state (->GuiStateSyncPacketA sync-data)
+  (let [gui-state (->GuiStateSyncPacket sync-data)
         buf (PacketByteBufs/create)]
-    (encode-gui-state-sync-a gui-state buf)
+    (encode-gui-state-sync gui-state buf)
     ;; Send to all players tracking chunk
     (try
       (let [server (try (.getServer world) (catch Exception _ nil))]
         (when server
           (doseq [player (try (.getPlayerManager (.getWorldProperties server (try (.getRegistryKey world) (catch Exception _ nil))))
                              (catch Exception _ nil))]
-            (ServerPlayNetworking/send player GUI_STATE_SYNC_A_PACKET_ID buf))))
-      (log/debug "Broadcast GUI state to players:" pos))
-      (catch Exception e
-        (log/debug "Error broadcasting GUI state:" (.getMessage e))))))
-
-;; ============================================================================
-;; GUI State Sync Packet B (Server -> Client)
-;; ============================================================================
-
-(defrecord GuiStateSyncPacketB [payload])
-
-(defn encode-gui-state-sync-b
-  [^GuiStateSyncPacketB packet ^PacketByteBuf buffer]
-  (write-data-map buffer (:payload packet)))
-
-(defn decode-gui-state-sync-b
-  [^PacketByteBuf buffer]
-  (->GuiStateSyncPacketB (read-data-map buffer)))
-
-(defn handle-gui-state-sync-b-client
-  [^GuiStateSyncPacketB packet]
-  (gui/apply-gui-sync-payload! (:payload packet)))
-
-(defn broadcast-gui-state-b-fabric
-  "Broadcast GUI state to nearby players (Fabric 1.20.1 implementation)"
-  [world pos sync-data]
-  (let [gui-state (->GuiStateSyncPacketB sync-data)
-        buf (PacketByteBufs/create)]
-    (encode-gui-state-sync-b gui-state buf)
-    ;; Send to all players tracking chunk
-    (try
-      (let [server (try (.getServer world) (catch Exception _ nil))]
-        (when server
-          (doseq [player (try (.getPlayerManager (.getWorldProperties server (try (.getRegistryKey world) (catch Exception _ nil))))
-                             (catch Exception _ nil))]
-            (ServerPlayNetworking/send player GUI_STATE_SYNC_B_PACKET_ID buf))))
-      (log/debug "Broadcast GUI state to players:" pos))
+            (ServerPlayNetworking/send player GUI_STATE_SYNC_PACKET_ID buf))))
+      (log/debug "Broadcast GUI state (gui-id:" (:gui-id sync-data) ") to players:" pos))
       (catch Exception e
         (log/debug "Error broadcasting GUI state:" (.getMessage e))))))
 
@@ -362,27 +329,16 @@
               (let [packet (decode-rpc-response packet-data)]
                 (rpc-client/handle-response (:request-id packet) (:payload packet)))))))))
 
-  ;; Register GUI State Sync handler A
+  ;; Register GUI State Sync handler (universal)
   (ClientPlayNetworking/registerGlobalReceiver
-    GUI_STATE_SYNC_A_PACKET_ID
+    GUI_STATE_SYNC_PACKET_ID
     (reify net.fabricmc.fabric.api.networking.v1.ClientPlayNetworking$PlayChannelHandler
       (receive [_ client handler buf sender]
         (let [packet-data (.copy buf)]
           (.execute client
             (fn []
-              (let [packet (decode-gui-state-sync-a packet-data)]
-                (handle-gui-state-sync-a-client packet))))))))
-
-  ;; Register GUI State Sync handler B
-  (ClientPlayNetworking/registerGlobalReceiver
-    GUI_STATE_SYNC_B_PACKET_ID
-    (reify net.fabricmc.fabric.api.networking.v1.ClientPlayNetworking$PlayChannelHandler
-      (receive [_ client handler buf sender]
-        (let [packet-data (.copy buf)]
-          (.execute client
-            (fn []
-              (let [packet (decode-gui-state-sync-b packet-data)]
-                (handle-gui-state-sync-b-client packet))))))))
+              (let [packet (decode-gui-state-sync packet-data)]
+                (handle-gui-state-sync-client packet))))))))
   
   (log/info "Client-side GUI network packets registered (Fabric)"))
 
@@ -439,8 +395,8 @@
   []
   (log/info "Initializing Fabric 1.20.1 GUI network system (server)")
   (register-server-packets!)
-  ;; Register Fabric sync implementations
-  (gui/register-gui-sync-impls! :fabric-1.20.1 broadcast-gui-state-a-fabric broadcast-gui-state-b-fabric)
+  ;; Register unified GUI state broadcast implementation
+  (gui/register-gui-sync-impl! broadcast-gui-state-fabric)
   (log/info "Fabric 1.20.1 GUI network system initialized (server)"))
 
 (defn init-client!

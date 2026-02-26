@@ -7,61 +7,29 @@
             [my-mod.wireless.gui.registry :as registry]))
 
 ;; ============================================================================
-;; State Synchronization Registry
-;; ============================================================================
-
-;; Dynamic dispatch - each platform registers its sync implementation
-(defonce ^:private sync-implementations (atom {}))
-
-(defn register-sync-impl!
-  "Register a platform-specific sync implementation
-  
-  Args:
-  - platform: keyword (:forge-1.16.5, :forge-1.20.1, :fabric-1.20.1)
-  - impl-fn: (fn [world pos sync-data] ...) - broadcasts state to nearby players"
-  [platform impl-fn]
-  (swap! sync-implementations assoc platform impl-fn)
-  (log/info "Registered matrix sync implementation for" platform))
-
-(defn get-sync-impl
-  "Get the registered sync implementation for current platform"
-  [platform]
-  (get @sync-implementations platform))
-
-;; ============================================================================
 ;; Universal Sync Interface
 ;; ============================================================================
 
 (defn broadcast-matrix-state
   "Broadcast matrix state to nearby players
   
-  Universal interface that delegates to platform-specific implementation.
+  Delegates to platform-specific implementation registered via platform-adapter.
   
   Args:
   - world: World object
   - pos: BlockPos object  
-  - sync-data: Map containing matrix state:
-    {:pos-x, :pos-y, :pos-z, :plate-count, :placer-name, :is-working, 
-     :core-level, :capacity, :bandwidth, :range}
+  - sync-data: Map containing matrix state (must include :gui-id)
   
   Returns: nil"
   [world pos sync-data]
   (try
-    ;; Try to detect platform from available classes
-    (let [platform (cond
-                     (try (Class/forName "net.minecraftforge.api.distmarker.Dist") 
-                          :forge-1.20.1)
-                     (try (Class/forName "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking")
-                          :fabric-1.20.1)
-                     :else :unknown)
-          impl-fn (get-sync-impl platform)]
-      
-      (if impl-fn
-        (impl-fn world pos sync-data)
-        (log/debug "No sync implementation registered for platform" platform)))
-    
+    ;; Get the unified platform broadcast function from platform-adapter
+    ;; We use dynamic require to break circular dependency
+    (require 'my-mod.gui.platform-adapter)
+    (when-let [broadcast-fn @(resolve 'my-mod.gui.platform-adapter/platform-broadcast-fn)]
+      (broadcast-fn world pos sync-data))
     (catch Exception e
-      (log/debug "Error broadcasting matrix state:" (.getMessage e)))))
+      (log/debug "Error broadcasting matrix  state:" (.getMessage e)))))
 
 ;; ============================================================================
 ;; Payload Helpers

@@ -250,35 +250,41 @@
     (.setPacketHandled ctx true)))
 
 ;; ============================================================================
-;; Packet: GUI State Sync A (Server -> Client)
+;; Packet: GUI State Sync (Server -> Client)
+;; Universal packet that handles all GUI types via gui-id routing
 ;; ============================================================================
 
-(defrecord GuiStateSyncPacketA [payload])
+(defrecord GuiStateSyncPacket [payload])
 
-(defn encode-gui-state-sync-a
+(defn encode-gui-state-sync
   "Encode GUI state sync packet to buffer"
-  [^GuiStateSyncPacketA packet ^PacketBuffer buffer]
+  [^GuiStateSyncPacket packet ^PacketBuffer buffer]
   (write-data-map buffer (:payload packet)))
 
-(defn decode-gui-state-sync-a
+(defn decode-gui-state-sync
   "Decode GUI state sync packet from buffer"
   [^PacketBuffer buffer]
-  (->GuiStateSyncPacketA (read-data-map buffer)))
+  (->GuiStateSyncPacket (read-data-map buffer)))
 
-(defn handle-gui-state-sync-a
-  "Handle GUI state sync packet on client"
-  [^GuiStateSyncPacketA packet ^Supplier context-supplier]
+(defn handle-gui-state-sync
+  "Handle GUI state sync packet on client
+  
+  Routes to correct GUI handler via gui-id in payload."
+  [^GuiStateSyncPacket packet ^Supplier context-supplier]
   (let [ctx (.get context-supplier)]
     (.enqueueWork ctx
       (fn []
         (gui/apply-gui-sync-payload! (:payload packet))))
     (.setPacketHandled ctx true)))
 
-(defn broadcast-gui-state-a
-  "Broadcast GUI state to nearby players (Forge 1.16.5 implementation)"
+(defn broadcast-gui-state
+  "Universal GUI state broadcast function (Forge 1.16.5 implementation)
+  
+  Accepts payload with gui-id and routes to correct client handler.
+  Platform code doesn't need to know about specific GUI types."
   [world pos sync-data]
   (when @network-channel
-    (let [gui-state (->GuiStateSyncPacketA sync-data)]
+    (let [gui-state (->GuiStateSyncPacket sync-data)]
       (try
         ;; Send to all players tracking the chunk
         (let [chunk-pos (try 
@@ -291,55 +297,9 @@
                      (catch Exception _ 
                        net.minecraftforge.fml.network.PacketDistributor/ALL))
                    gui-state)
-            (log/debug "Broadcast GUI state to players tracking chunk at" pos)))
+            (log/debug "Broadcast GUI state (gui-id:" (:gui-id sync-data) ") to chunk at" pos)))
         (catch Exception e
-          (log/debug "Error broadcasting GUI state:" (.getMessage e)))))))
-
-;; ============================================================================
-;; Packet: GUI State Sync B (Server -> Client)
-;; ============================================================================
-
-(defrecord GuiStateSyncPacketB [payload])
-
-(defn encode-gui-state-sync-b
-  "Encode GUI state sync packet to buffer"
-  [^GuiStateSyncPacketB packet ^PacketBuffer buffer]
-  (write-data-map buffer (:payload packet)))
-
-(defn decode-gui-state-sync-b
-  "Decode GUI state sync packet from buffer"
-  [^PacketBuffer buffer]
-  (->GuiStateSyncPacketB (read-data-map buffer)))
-
-(defn handle-gui-state-sync-b
-  "Handle GUI state sync packet on client"
-  [^GuiStateSyncPacketB packet ^Supplier context-supplier]
-  (let [ctx (.get context-supplier)]
-    (.enqueueWork ctx
-      (fn []
-        (gui/apply-gui-sync-payload! (:payload packet))))
-    (.setPacketHandled ctx true)))
-
-(defn broadcast-gui-state-b
-  "Broadcast GUI state to nearby players (Forge 1.16.5 implementation)"
-  [world pos sync-data]
-  (when @network-channel
-    (let [gui-state (->GuiStateSyncPacketB sync-data)]
-      (try
-        ;; Send to all players tracking the chunk
-        (let [chunk-pos (try 
-                         (.chunk (.getChunk world pos))
-                         (catch Exception _ nil))]
-          (when chunk-pos
-            (.send @network-channel
-                   (try 
-                     (.TRACKING_CHUNK net.minecraftforge.fml.network.PacketDistributor chunk-pos)
-                     (catch Exception _ 
-                       net.minecraftforge.fml.network.PacketDistributor/ALL))
-                   gui-state)
-            (log/debug "Broadcast GUI state to players tracking chunk at" pos)))
-        (catch Exception e
-          (log/debug "Error broadcasting GUI state:" (.getMessage e)))))))
+          (log/debug "Error broadcasting GUI state:" (.getMessage e))))))))
 
 ;; ============================================================================
 ;; Registration
@@ -418,30 +378,18 @@
                    (handle-rpc-response packet ctx-supplier))))
     (.add)
 
-    ;; Register GUI State Sync Packet A (Server -> Client)
-    (.messageBuilder channel GuiStateSyncPacketA 5)
+    ;; Register GUI State Sync Packet (Server -> Client)
+    ;; Universal packet that handles all GUI types via gui-id routing
+    (.messageBuilder channel GuiStateSyncPacket 5)
     (.encoder (reify BiConsumer
                 (accept [_ packet buffer]
-                  (encode-gui-state-sync-a packet buffer))))
+                  (encode-gui-state-sync packet buffer))))
     (.decoder (reify java.util.function.Function
                 (apply [_ buffer]
-                  (decode-gui-state-sync-a buffer))))
+                  (decode-gui-state-sync buffer))))
     (.consumer (reify BiConsumer
                  (accept [_ packet ctx-supplier]
-                   (handle-gui-state-sync-a packet ctx-supplier))))
-    (.add)
-
-    ;; Register GUI State Sync Packet B (Server -> Client)
-    (.messageBuilder channel GuiStateSyncPacketB 6)
-    (.encoder (reify BiConsumer
-                (accept [_ packet buffer]
-                  (encode-gui-state-sync-b packet buffer))))
-    (.decoder (reify java.util.function.Function
-                (apply [_ buffer]
-                  (decode-gui-state-sync-b buffer))))
-    (.consumer (reify BiConsumer
-                 (accept [_ packet ctx-supplier]
-                   (handle-gui-state-sync-b packet ctx-supplier))))
+                   (handle-gui-state-sync packet ctx-supplier))))
     (.add)
     
     (log/info "GUI network packets registered successfully")))
@@ -494,6 +442,7 @@
   []
   (log/info "Initializing GUI network system (Forge 1.16.5)")
   (register-packets!)
-  ;; Register Forge 1.16.5 sync implementations
-  (gui/register-gui-sync-impls! :forge-1.16.5 broadcast-gui-state-a broadcast-gui-state-b)
+  ;; Register unified GUI state broadcast implementation
+  ;; Platform code doesn't need to know about specific GUI types (matrix/node/etc)
+  (gui/register-gui-sync-impl! broadcast-gui-state)
   (log/info "GUI network system initialized (Forge 1.16.5)"))

@@ -91,35 +91,53 @@
 (def client-container registry/client-container)
 
 ;; ============================================================================
-;; Re-export Sync Modules (Matrix and Node state synchronization)
+;; Re-export Sync Modules (Payload creation and application)
 ;; ============================================================================
 
-;; Matrix state sync
-(def register-matrix-sync-impl! matrix-sync/register-sync-impl!)
-(def get-matrix-sync-impl matrix-sync/get-sync-impl)
-(def broadcast-matrix-state matrix-sync/broadcast-matrix-state)
+;; Matrix sync packet helpers
 (def make-matrix-sync-packet matrix-sync/make-sync-packet)
 (def apply-matrix-sync-payload! matrix-sync/apply-matrix-sync-payload!)
 
-;; Node state sync
-(def register-node-sync-impl! node-sync/register-sync-impl!)
-(def get-node-sync-impl node-sync/get-sync-impl)
-(def broadcast-node-state node-sync/broadcast-node-state)
+;; Node sync packet helpers  
 (def make-node-sync-packet node-sync/make-sync-packet)
 (def apply-node-sync-payload! node-sync/apply-node-sync-payload!)
 
-;; Unified sync helpers to keep platform code free of business naming
-(defn register-gui-sync-impls!
-  [platform impl-a impl-b]
-  (register-matrix-sync-impl! platform impl-a)
-  (register-node-sync-impl! platform impl-b))
+;; ============================================================================
+;; Unified GUI Sync System (Platform-Business Separation)
+;; ============================================================================
+
+;; Universal broadcast function registry
+;; Platform code registers ONE broadcast function that handles all GUI types
+(defonce ^:private platform-broadcast-fn (atom nil))
+
+(defn register-gui-sync-impl!
+  "Register a unified GUI state broadcast implementation for the current platform.
+  
+  The broadcast function should accept [payload player] where:
+  - payload: Map containing :gui-id and GUI-specific state data
+  - player: ServerPlayerEntity to send packet to
+  
+  Platform code should route by gui-id internally using apply-gui-sync-payload!
+  This eliminates the need to add new packet types when adding new GUIs."
+  [broadcast-fn]
+  (reset! platform-broadcast-fn broadcast-fn)
+  (log/info "Registered unified GUI sync implementation"))
+
+(defn get-platform-broadcast-fn
+  "Get the registered platform broadcast function"
+  []
+  @platform-broadcast-fn)
 
 (defn apply-gui-sync-payload!
+  "Apply GUI sync payload on client by routing to correct business handler.
+  
+  This function is called by platform packet handlers with the decoded payload.
+  It routes to the appropriate GUI-specific sync handler based on gui-id."
   [payload]
   (case (:gui-id payload)
     metadata/gui-wireless-node (apply-node-sync-payload! payload)
     metadata/gui-wireless-matrix (apply-matrix-sync-payload! payload)
-    nil))
+    (log/debug "Unknown gui-id in sync payload:" (:gui-id payload))))
 
 ;; ============================================================================
 ;; Re-export Screen Factory (screen creation on client)

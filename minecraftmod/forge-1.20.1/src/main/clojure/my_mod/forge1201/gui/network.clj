@@ -72,11 +72,8 @@
 (defrecord RpcRequestPacket [msg-id request-id payload])
 (defrecord RpcResponsePacket [request-id payload])
 
-;; GUI State Sync Packet A
-(defrecord GuiStatePacketA [payload])
-
-;; GUI State Sync Packet B
-(defrecord GuiStatePacketB [payload])
+;; Universal GUI State Sync Packet (handles all GUI types via gui-id routing)
+(defrecord GuiStatePacket [payload])
 
 (defn encode-rpc-request [^RpcRequestPacket packet ^FriendlyByteBuf buffer]
   (.writeUtf buffer (:msg-id packet))
@@ -126,39 +123,22 @@
     (.setPacketHandled ctx true)))
 
 ;; =========================================================================
-;; GUI State Sync Packets (A)
+;; GUI State Sync Packet (Universal)
 ;; =========================================================================
 
-(defn encode-gui-state-a
-  [^GuiStatePacketA packet ^FriendlyByteBuf buffer]
+(defn encode-gui-state
+  "Encode GUI state packet to buffer"
+  [^GuiStatePacket packet ^FriendlyByteBuf buffer]
   (write-data-map buffer (:payload packet)))
 
-(defn decode-gui-state-a
+(defn decode-gui-state
+  "Decode GUI state packet from buffer"
   [^FriendlyByteBuf buffer]
-  (->GuiStatePacketA (read-data-map buffer)))
+  (->GuiStatePacket (read-data-map buffer)))
 
-(defn handle-gui-state-a
-  [^GuiStatePacketA packet ^Supplier context-supplier]
-  (let [ctx (.get context-supplier)]
-    (.enqueueWork ctx
-      (fn []
-        (gui/apply-gui-sync-payload! (:payload packet))))
-    (.setPacketHandled ctx true)))
-
-;; =========================================================================
-;; GUI State Sync Packets (B)
-;; =========================================================================
-
-(defn encode-gui-state-b
-  [^GuiStatePacketB packet ^FriendlyByteBuf buffer]
-  (write-data-map buffer (:payload packet)))
-
-(defn decode-gui-state-b
-  [^FriendlyByteBuf buffer]
-  (->GuiStatePacketB (read-data-map buffer)))
-
-(defn handle-gui-state-b
-  [^GuiStatePacketB packet ^Supplier context-supplier]
+(defn handle-gui-state
+  "Handle GUI state packet on client (routes by gui-id)"
+  [^GuiStatePacket packet ^Supplier context-supplier]
   (let [ctx (.get context-supplier)]
     (.enqueueWork ctx
       (fn []
@@ -200,59 +180,34 @@
                    (handle-rpc-response packet ctx-supplier))))
     (.add)
 
-    ;; GUI State Sync A
-    (.messageBuilder channel GuiStatePacketA 2)
+    ;; GUI State Sync (universal packet for all GUI types)
+    (.messageBuilder channel GuiStatePacket 2)
     (.encoder (reify BiConsumer
                 (accept [_ packet buffer]
-                  (encode-gui-state-a packet buffer))))
+                  (encode-gui-state packet buffer))))
     (.decoder (reify java.util.function.Function
                 (apply [_ buffer]
-                  (decode-gui-state-a buffer))))
+                  (decode-gui-state buffer))))
     (.consumer (reify BiConsumer
                  (accept [_ packet ctx-supplier]
-                   (handle-gui-state-a packet ctx-supplier))))
-    (.add)
-
-    ;; GUI State Sync B
-    (.messageBuilder channel GuiStatePacketB 3)
-    (.encoder (reify BiConsumer
-                (accept [_ packet buffer]
-                  (encode-gui-state-b packet buffer))))
-    (.decoder (reify java.util.function.Function
-                (apply [_ buffer]
-                  (decode-gui-state-b buffer))))
-    (.consumer (reify BiConsumer
-                 (accept [_ packet ctx-supplier]
-                   (handle-gui-state-b packet ctx-supplier))))
+                   (handle-gui-state packet ctx-supplier))))
     (.add)
 
     (log/info "Forge 1.20.1 GUI packets registered (RPC + GUI sync)")))
 
-(defn broadcast-gui-state-a
-  "Broadcast GUI state to nearby players (Forge 1.20.1 implementation)"
+(defn broadcast-gui-state
+  "Universal GUI state broadcast (Forge 1.20.1 implementation)
+  
+  Platform-agnostic: Accepts payload with gui-id and routes on client side."
   [world pos sync-data]
   (when @network-channel
-    (let [gui-state (->GuiStatePacketA sync-data)]
+    (let [gui-state (->GuiStatePacket sync-data)]
       ;; Send to all players tracking this chunk
       (.send @network-channel
              PacketDistributor/TRACKING_CHUNK
              (.getChunkAt world pos)
              gui-state)
-      (log/debug "Broadcast GUI state to chunk:" pos))))
-
-(defn broadcast-gui-state-b
-  "Broadcast GUI state to nearby players (Forge 1.20.1 implementation)"
-  [world pos sync-data]
-  (when @network-channel
-    (let [gui-state (->GuiStatePacketB sync-data)]
-      ;; Send to all players tracking this chunk
-      (.send @network-channel
-             PacketDistributor/TRACKING_CHUNK
-             (.getChunkAt world pos)
-             gui-state)
-      (log/debug "Broadcast GUI state to chunk:" pos))))
-
-
+      (log/debug "Broadcast GUI state (gui-id:" (:gui-id sync-data) ") to chunk:" pos))))
 
 (defn send-rpc-request-to-server
   [msg-id payload request-id]
@@ -266,6 +221,6 @@
 
 (defn init! []
   (register-packets!)
-  ;; Register Forge sync implementations
-  (gui/register-gui-sync-impls! :forge-1.20.1 broadcast-gui-state-a broadcast-gui-state-b)
+  ;; Register unified GUI state broadcast implementation
+  (gui/register-gui-sync-impl! broadcast-gui-state)
   (log/info "Forge 1.20.1 GUI network initialized"))
