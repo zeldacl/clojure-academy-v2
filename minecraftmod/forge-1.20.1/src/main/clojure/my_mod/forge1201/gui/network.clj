@@ -72,11 +72,11 @@
 (defrecord RpcRequestPacket [msg-id request-id payload])
 (defrecord RpcResponsePacket [request-id payload])
 
-;; Matrix State Sync Packet
-(defrecord MatrixStatePacket [pos-x pos-y pos-z plate-count placer-name is-working core-level capacity max-capacity bandwidth range])
+;; GUI State Sync Packet A
+(defrecord GuiStatePacketA [payload])
 
-;; Node State Sync Packet
-(defrecord NodeStatePacket [pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name capacity max-capacity])
+;; GUI State Sync Packet B
+(defrecord GuiStatePacketB [payload])
 
 (defn encode-rpc-request [^RpcRequestPacket packet ^FriendlyByteBuf buffer]
   (.writeUtf buffer (:msg-id packet))
@@ -126,122 +126,43 @@
     (.setPacketHandled ctx true)))
 
 ;; =========================================================================
-;; Matrix State Sync Packets
+;; GUI State Sync Packets (A)
 ;; =========================================================================
 
-(defn encode-matrix-state
-  [^MatrixStatePacket packet ^FriendlyByteBuf buffer]
-  (.writeInt buffer (.intValue (:pos-x packet)))
-  (.writeInt buffer (.intValue (:pos-y packet)))
-  (.writeInt buffer (.intValue (:pos-z packet)))
-  (.writeInt buffer (.intValue (:plate-count packet)))
-  (.writeUtf buffer (:placer-name packet))
-  (.writeBoolean buffer (:is-working packet))
-  (.writeInt buffer (.intValue (:core-level packet)))
-  (.writeLong buffer (.longValue (:capacity packet)))
-  (.writeLong buffer (.longValue (:max-capacity packet)))
-  (.writeLong buffer (.longValue (:bandwidth packet)))
-  (.writeDouble buffer (:range packet)))
+(defn encode-gui-state-a
+  [^GuiStatePacketA packet ^FriendlyByteBuf buffer]
+  (write-data-map buffer (:payload packet)))
 
-(defn decode-matrix-state
+(defn decode-gui-state-a
   [^FriendlyByteBuf buffer]
-  (let [pos-x (.readInt buffer)
-        pos-y (.readInt buffer)
-        pos-z (.readInt buffer)
-        plate-count (.readInt buffer)
-        placer-name (.readUtf buffer)
-        is-working (.readBoolean buffer)
-        core-level (.readInt buffer)
-        capacity (.readLong buffer)
-        max-capacity (.readLong buffer)
-        bandwidth (.readLong buffer)
-        range (.readDouble buffer)]
-    (->MatrixStatePacket pos-x pos-y pos-z plate-count placer-name is-working core-level capacity max-capacity bandwidth range)))
+  (->GuiStatePacketA (read-data-map buffer)))
 
-(defn handle-matrix-state
-  [^MatrixStatePacket packet ^Supplier context-supplier]
+(defn handle-gui-state-a
+  [^GuiStatePacketA packet ^Supplier context-supplier]
   (let [ctx (.get context-supplier)]
     (.enqueueWork ctx
       (fn []
-        ;; Update client-side container with new state
-        (when-let [container @gui-registry/client-container]
-          (when (= (:pos-x packet) (try (.getX (.getPos (:tile-entity container))) (catch Exception _ nil)))
-            ;; Position matches - update atoms
-            (reset! (:plate-count container) (:plate-count packet))
-            (reset! (:core-level container) (:core-level packet))
-            (reset! (:is-working container) (:is-working packet))
-            (reset! (:capacity container) (:capacity packet))
-            (reset! (:max-capacity container) (:max-capacity packet))
-            (reset! (:bandwidth container) (:bandwidth packet))
-            (reset! (:range container) (:range packet))
-            (log/debug "Updated matrix state on client")))))
+        (gui/apply-gui-sync-payload! (:payload packet))))
     (.setPacketHandled ctx true)))
 
 ;; =========================================================================
-;; Node State Sync Packets
+;; GUI State Sync Packets (B)
 ;; =========================================================================
 
-(defn encode-node-state
-  [^NodeStatePacket packet ^FriendlyByteBuf buffer]
-  (.writeInt buffer (.intValue (:pos-x packet)))
-  (.writeInt buffer (.intValue (:pos-y packet)))
-  (.writeInt buffer (.intValue (:pos-z packet)))
-  (.writeDouble buffer (:energy packet))
-  (.writeDouble buffer (:max-energy packet))
-  (.writeBoolean buffer (:enabled packet))
-  (.writeUtf buffer (str (:node-name packet)))
-  (.writeUtf buffer (name (:node-type packet)))
-  (.writeUtf buffer (str (:password packet)))
-  (.writeBoolean buffer (:charging-in packet))
-  (.writeBoolean buffer (:charging-out packet))
-  (.writeUtf buffer (str (:placer-name packet)))
-  (.writeInt buffer (.intValue (:capacity packet)))
-  (.writeInt buffer (.intValue (:max-capacity packet))))
+(defn encode-gui-state-b
+  [^GuiStatePacketB packet ^FriendlyByteBuf buffer]
+  (write-data-map buffer (:payload packet)))
 
-(defn decode-node-state
+(defn decode-gui-state-b
   [^FriendlyByteBuf buffer]
-  (let [pos-x (.readInt buffer)
-        pos-y (.readInt buffer)
-        pos-z (.readInt buffer)
-        energy (.readDouble buffer)
-        max-energy (.readDouble buffer)
-        enabled (.readBoolean buffer)
-        node-name (.readUtf buffer)
-        node-type (keyword (.readUtf buffer))
-        password (.readUtf buffer)
-        charging-in (.readBoolean buffer)
-        charging-out (.readBoolean buffer)
-        placer-name (.readUtf buffer)
-        capacity (.readInt buffer)
-        max-capacity (.readInt buffer)]
-    (->NodeStatePacket pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name capacity max-capacity)))
+  (->GuiStatePacketB (read-data-map buffer)))
 
-(defn handle-node-state
-  [^NodeStatePacket packet ^Supplier context-supplier]
+(defn handle-gui-state-b
+  [^GuiStatePacketB packet ^Supplier context-supplier]
   (let [ctx (.get context-supplier)]
     (.enqueueWork ctx
       (fn []
-        ;; Update client-side container with new state
-        (when-let [container @gui-registry/client-container]
-          (when (= (:pos-x packet) (try (.getX (.getPos (:tile-entity container))) (catch Exception _ nil)))
-            ;; Position matches - update atoms
-            (when (contains? container :energy)
-              (reset! (:energy container) (:energy packet)))
-            (when (contains? container :max-energy)
-              (reset! (:max-energy container) (:max-energy packet)))
-            (when (contains? container :is-online)
-              (reset! (:is-online container) (:enabled packet)))
-            (when (contains? container :node-type)
-              (reset! (:node-type container) (:node-type packet)))
-            (when (contains? container :ssid)
-              (reset! (:ssid container) (:node-name packet)))
-            (when (contains? container :password)
-              (reset! (:password container) (:password packet)))
-            (when (contains? container :capacity)
-              (reset! (:capacity container) (:capacity packet)))
-            (when (contains? container :max-capacity)
-              (reset! (:max-capacity container) (:max-capacity packet)))
-            (log/debug "Updated node state on client")))))
+        (gui/apply-gui-sync-payload! (:payload packet))))
     (.setPacketHandled ctx true)))
 
 ;; =========================================================================
@@ -279,79 +200,57 @@
                    (handle-rpc-response packet ctx-supplier))))
     (.add)
 
-    ;; Matrix State Sync
-    (.messageBuilder channel MatrixStatePacket 2)
+    ;; GUI State Sync A
+    (.messageBuilder channel GuiStatePacketA 2)
     (.encoder (reify BiConsumer
                 (accept [_ packet buffer]
-                  (encode-matrix-state packet buffer))))
+                  (encode-gui-state-a packet buffer))))
     (.decoder (reify java.util.function.Function
                 (apply [_ buffer]
-                  (decode-matrix-state buffer))))
+                  (decode-gui-state-a buffer))))
     (.consumer (reify BiConsumer
                  (accept [_ packet ctx-supplier]
-                   (handle-matrix-state packet ctx-supplier))))
+                   (handle-gui-state-a packet ctx-supplier))))
     (.add)
 
-    ;; Node State Sync
-    (.messageBuilder channel NodeStatePacket 3)
+    ;; GUI State Sync B
+    (.messageBuilder channel GuiStatePacketB 3)
     (.encoder (reify BiConsumer
                 (accept [_ packet buffer]
-                  (encode-node-state packet buffer))))
+                  (encode-gui-state-b packet buffer))))
     (.decoder (reify java.util.function.Function
                 (apply [_ buffer]
-                  (decode-node-state buffer))))
+                  (decode-gui-state-b buffer))))
     (.consumer (reify BiConsumer
                  (accept [_ packet ctx-supplier]
-                   (handle-node-state packet ctx-supplier))))
+                   (handle-gui-state-b packet ctx-supplier))))
     (.add)
 
-    (log/info "Forge 1.20.1 GUI packets registered (RPC + Matrix + Node Sync)")))
+    (log/info "Forge 1.20.1 GUI packets registered (RPC + GUI sync)")))
 
-(defn broadcast-matrix-state-forge
-  "Broadcast matrix state to nearby players (Forge 1.20.1 implementation)"
+(defn broadcast-gui-state-a
+  "Broadcast GUI state to nearby players (Forge 1.20.1 implementation)"
   [world pos sync-data]
   (when @network-channel
-    (let [matrix-state (->MatrixStatePacket
-                         (:pos-x sync-data)
-                         (:pos-y sync-data)
-                         (:pos-z sync-data)
-                         (:plate-count sync-data)
-                         (:placer-name sync-data)
-                         (:is-working sync-data)
-                         (:core-level sync-data)
-                         (:capacity sync-data)
-                         (:bandwidth sync-data)
-                         (:range sync-data))]
+    (let [gui-state (->GuiStatePacketA sync-data)]
       ;; Send to all players tracking this chunk
       (.send @network-channel
              PacketDistributor/TRACKING_CHUNK
              (.getChunkAt world pos)
-             matrix-state)
-      (log/debug "Broadcast matrix state to chunk:" pos))))
+             gui-state)
+      (log/debug "Broadcast GUI state to chunk:" pos))))
 
-(defn broadcast-node-state-forge
-  "Broadcast node state to nearby players (Forge 1.20.1 implementation)"
+(defn broadcast-gui-state-b
+  "Broadcast GUI state to nearby players (Forge 1.20.1 implementation)"
   [world pos sync-data]
   (when @network-channel
-    (let [node-state (->NodeStatePacket
-                       (:pos-x sync-data)
-                       (:pos-y sync-data)
-                       (:pos-z sync-data)
-                       (:energy sync-data)
-                       (:max-energy sync-data)
-                       (:enabled sync-data)
-                       (:node-name sync-data)
-                       (:node-type sync-data)
-                       (:password sync-data)
-                       (:charging-in sync-data)
-                       (:charging-out sync-data)
-                       (:placer-name sync-data))]
+    (let [gui-state (->GuiStatePacketB sync-data)]
       ;; Send to all players tracking this chunk
       (.send @network-channel
              PacketDistributor/TRACKING_CHUNK
              (.getChunkAt world pos)
-             node-state)
-      (log/debug "Broadcast node state to chunk:" pos))))
+             gui-state)
+      (log/debug "Broadcast GUI state to chunk:" pos))))
 
 
 
@@ -368,6 +267,5 @@
 (defn init! []
   (register-packets!)
   ;; Register Forge sync implementations
-  (gui/register-matrix-sync-impl! :forge-1.20.1 broadcast-matrix-state-forge)
-  (gui/register-node-sync-impl! :forge-1.20.1 broadcast-node-state-forge)
+  (gui/register-gui-sync-impls! :forge-1.20.1 broadcast-gui-state-a broadcast-gui-state-b)
   (log/info "Forge 1.20.1 GUI network initialized"))

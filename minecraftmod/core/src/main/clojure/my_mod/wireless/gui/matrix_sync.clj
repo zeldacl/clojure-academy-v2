@@ -2,7 +2,9 @@
   "Cross-platform matrix state synchronization
   
   Provides platform-agnostic interface for syncing matrix tile state to clients."
-  (:require [my-mod.util.log :as log]))
+  (:require [my-mod.util.log :as log]
+            [my-mod.wireless.gui.gui-metadata :as metadata]
+            [my-mod.wireless.gui.registry :as registry]))
 
 ;; ============================================================================
 ;; State Synchronization Registry
@@ -76,7 +78,8 @@
         container (when (instance? my_mod.wireless.gui.matrix_container.MatrixContainer source)
                     source)
         pos (:pos tile)]
-    {:pos-x (.getX pos)
+    {:gui-id metadata/gui-wireless-matrix
+     :pos-x (.getX pos)
      :pos-y (.getY pos)
      :pos-z (.getZ pos)
      :plate-count (if container @(:plate-count container) 0)
@@ -87,6 +90,33 @@
      :max-capacity (if container @(:max-capacity container) 0)
      :bandwidth (if container @(:bandwidth container) 0)
      :range (if container @(:range container) 0.0)}))
+
+(defn apply-matrix-sync-payload!
+  "Apply matrix sync payload to the current client container"
+  [payload]
+  (try
+    (when-let [container @registry/client-container]
+      (when (and (:tile-entity container)
+                 (= (:pos-x payload)
+                    (try (.getX (.getPos (:tile-entity container)))
+                         (catch Exception _ nil))))
+        (when (contains? container :plate-count)
+          (reset! (:plate-count container) (:plate-count payload)))
+        (when (contains? container :core-level)
+          (reset! (:core-level container) (:core-level payload)))
+        (when (contains? container :is-working)
+          (reset! (:is-working container) (:is-working payload)))
+        (when (contains? container :capacity)
+          (reset! (:capacity container) (:capacity payload)))
+        (when (contains? container :max-capacity)
+          (reset! (:max-capacity container) (:max-capacity payload)))
+        (when (contains? container :bandwidth)
+          (reset! (:bandwidth container) (:bandwidth payload)))
+        (when (contains? container :range)
+          (reset! (:range container) (:range payload)))
+        (log/debug "Applied matrix sync payload on client")))
+    (catch Exception e
+      (log/debug "Failed to apply matrix sync payload:" (.getMessage e)))))
 
 (defn extract-position
   "Extract BlockPos from sync payload"

@@ -99,12 +99,27 @@
 (def get-matrix-sync-impl matrix-sync/get-sync-impl)
 (def broadcast-matrix-state matrix-sync/broadcast-matrix-state)
 (def make-matrix-sync-packet matrix-sync/make-sync-packet)
+(def apply-matrix-sync-payload! matrix-sync/apply-matrix-sync-payload!)
 
 ;; Node state sync
 (def register-node-sync-impl! node-sync/register-sync-impl!)
 (def get-node-sync-impl node-sync/get-sync-impl)
 (def broadcast-node-state node-sync/broadcast-node-state)
 (def make-node-sync-packet node-sync/make-sync-packet)
+(def apply-node-sync-payload! node-sync/apply-node-sync-payload!)
+
+;; Unified sync helpers to keep platform code free of business naming
+(defn register-gui-sync-impls!
+  [platform impl-a impl-b]
+  (register-matrix-sync-impl! platform impl-a)
+  (register-node-sync-impl! platform impl-b))
+
+(defn apply-gui-sync-payload!
+  [payload]
+  (case (:gui-id payload)
+    metadata/gui-wireless-node (apply-node-sync-payload! payload)
+    metadata/gui-wireless-matrix (apply-matrix-sync-payload! payload)
+    nil))
 
 ;; ============================================================================
 ;; Re-export Screen Factory (screen creation on client)

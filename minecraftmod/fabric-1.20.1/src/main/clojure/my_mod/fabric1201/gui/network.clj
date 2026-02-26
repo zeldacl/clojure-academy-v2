@@ -32,11 +32,11 @@
 (def RPC_RESPONSE_PACKET_ID
   (Identifier. "my_mod" "rpc_response"))
 
-(def MATRIX_STATE_SYNC_PACKET_ID
-  (Identifier. "my_mod" "matrix_state_sync"))
+(def GUI_STATE_SYNC_A_PACKET_ID
+  (Identifier. "my_mod" "gui_state_sync_a"))
 
-(def NODE_STATE_SYNC_PACKET_ID
-  (Identifier. "my_mod" "node_state_sync"))
+(def GUI_STATE_SYNC_B_PACKET_ID
+  (Identifier. "my_mod" "gui_state_sync_b"))
 
 ;; =========================================================================
 ;; Shared Map Encoding Helpers
@@ -264,180 +264,74 @@
   (log/info "Server-side GUI network packets registered (Fabric)"))
 
 ;; ============================================================================
-;; Matrix State Sync Packet (Server -> Client)
+;; GUI State Sync Packet A (Server -> Client)
 ;; ============================================================================
 
-(defrecord MatrixStateSyncPacket [pos-x pos-y pos-z plate-count placer-name is-working core-level capacity max-capacity bandwidth range])
+(defrecord GuiStateSyncPacketA [payload])
 
-(defn encode-matrix-state-sync
-  [^MatrixStateSyncPacket packet ^PacketByteBuf buffer]
-  (.writeInt buffer (:pos-x packet))
-  (.writeInt buffer (:pos-y packet))
-  (.writeInt buffer (:pos-z packet))
-  (.writeInt buffer (:plate-count packet))
-  (.writeString buffer (:placer-name packet))
-  (.writeBoolean buffer (:is-working packet))
-  (.writeInt buffer (:core-level packet))
-  (.writeLong buffer (:capacity packet))
-  (.writeLong buffer (:max-capacity packet))
-  (.writeLong buffer (:bandwidth packet))
-  (.writeDouble buffer (:range packet)))
+(defn encode-gui-state-sync-a
+  [^GuiStateSyncPacketA packet ^PacketByteBuf buffer]
+  (write-data-map buffer (:payload packet)))
 
-(defn decode-matrix-state-sync
+(defn decode-gui-state-sync-a
   [^PacketByteBuf buffer]
-  (let [pos-x (.readInt buffer)
-        pos-y (.readInt buffer)
-        pos-z (.readInt buffer)
-        plate-count (.readInt buffer)
-        placer-name (.readString buffer)
-        is-working (.readBoolean buffer)
-        core-level (.readInt buffer)
-        capacity (.readLong buffer)
-        max-capacity (.readLong buffer)
-        bandwidth (.readLong buffer)
-        range (.readDouble buffer)]
-    (->MatrixStateSyncPacket pos-x pos-y pos-z plate-count placer-name is-working core-level capacity max-capacity bandwidth range)))
+  (->GuiStateSyncPacketA (read-data-map buffer)))
 
-(defn handle-matrix-state-sync-client
-  [^MatrixStateSyncPacket packet]
-  ;; Update client-side container with new state
-  (when-let [container @gui/client-container]
-    ;; Check if position matches current container
-    (when (and (:tile-entity container)
-              (= (:pos-x packet) (try (.getX (.getPos (:tile-entity container))) (catch Exception _ nil))))
-      ;; Update atoms
-      (reset! (:plate-count container) (:plate-count packet))
-      (reset! (:core-level container) (:core-level packet))
-      (reset! (:is-working container) (:is-working packet))
-      (reset! (:capacity container) (:capacity packet))
-      (reset! (:max-capacity container) (:max-capacity packet))
-      (reset! (:bandwidth container) (:bandwidth packet))
-      (reset! (:range container) (:range packet))
-      (log/debug "Updated matrix state on client"))))
+(defn handle-gui-state-sync-a-client
+  [^GuiStateSyncPacketA packet]
+  (gui/apply-gui-sync-payload! (:payload packet)))
 
-(defn broadcast-matrix-state-fabric
-  "Broadcast matrix state to nearby players (Fabric 1.20.1 implementation)"
+(defn broadcast-gui-state-a-fabric
+  "Broadcast GUI state to nearby players (Fabric 1.20.1 implementation)"
   [world pos sync-data]
-  (let [matrix-state (->MatrixStateSyncPacket
-                       (:pos-x sync-data)
-                       (:pos-y sync-data)
-                       (:pos-z sync-data)
-                       (:plate-count sync-data)
-                       (:placer-name sync-data)
-                       (:is-working sync-data)
-                       (:core-level sync-data)
-                       (:capacity sync-data)
-                       (:max-capacity sync-data)
-                       (:bandwidth sync-data)
-                       (:range sync-data))
+  (let [gui-state (->GuiStateSyncPacketA sync-data)
         buf (PacketByteBufs/create)]
-    (encode-matrix-state-sync matrix-state buf)
+    (encode-gui-state-sync-a gui-state buf)
     ;; Send to all players tracking chunk
     (try
       (let [server (try (.getServer world) (catch Exception _ nil))]
         (when server
           (doseq [player (try (.getPlayerManager (.getWorldProperties server (try (.getRegistryKey world) (catch Exception _ nil))))
                              (catch Exception _ nil))]
-            (ServerPlayNetworking/send player MATRIX_STATE_SYNC_PACKET_ID buf))))
-      (log/debug "Broadcast matrix state to players:" pos))
+            (ServerPlayNetworking/send player GUI_STATE_SYNC_A_PACKET_ID buf))))
+      (log/debug "Broadcast GUI state to players:" pos))
       (catch Exception e
-        (log/debug "Error broadcasting matrix state:" (.getMessage e))))))
+        (log/debug "Error broadcasting GUI state:" (.getMessage e))))))
 
 ;; ============================================================================
-;; Node State Sync Packet (Server -> Client)
+;; GUI State Sync Packet B (Server -> Client)
 ;; ============================================================================
 
-(defrecord NodeStateSyncPacket [pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name capacity max-capacity])
+(defrecord GuiStateSyncPacketB [payload])
 
-(defn encode-node-state-sync
-  [^NodeStateSyncPacket packet ^PacketByteBuf buffer]
-  (.writeInt buffer (:pos-x packet))
-  (.writeInt buffer (:pos-y packet))
-  (.writeInt buffer (:pos-z packet))
-  (.writeDouble buffer (:energy packet))
-  (.writeDouble buffer (:max-energy packet))
-  (.writeBoolean buffer (:enabled packet))
-  (.writeString buffer (str (:node-name packet)))
-  (.writeString buffer (name (:node-type packet)))
-  (.writeString buffer (str (:password packet)))
-  (.writeBoolean buffer (:charging-in packet))
-  (.writeBoolean buffer (:charging-out packet))
-  (.writeString buffer (str (:placer-name packet)))
-  (.writeInt buffer (:capacity packet))
-  (.writeInt buffer (:max-capacity packet)))
+(defn encode-gui-state-sync-b
+  [^GuiStateSyncPacketB packet ^PacketByteBuf buffer]
+  (write-data-map buffer (:payload packet)))
 
-(defn decode-node-state-sync
+(defn decode-gui-state-sync-b
   [^PacketByteBuf buffer]
-  (let [pos-x (.readInt buffer)
-        pos-y (.readInt buffer)
-        pos-z (.readInt buffer)
-        energy (.readDouble buffer)
-        max-energy (.readDouble buffer)
-        enabled (.readBoolean buffer)
-        node-name (.readString buffer)
-        node-type (keyword (.readString buffer))
-        password (.readString buffer)
-        charging-in (.readBoolean buffer)
-        charging-out (.readBoolean buffer)
-        placer-name (.readString buffer)
-        capacity (.readInt buffer)
-        max-capacity (.readInt buffer)]
-    (->NodeStateSyncPacket pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name capacity max-capacity)))
+  (->GuiStateSyncPacketB (read-data-map buffer)))
 
-(defn handle-node-state-sync-client
-  [^NodeStateSyncPacket packet]
-  ;; Update client-side container with new state
-  (when-let [container @gui/client-container]
-    ;; Check if position matches current container
-    (when (and (:tile-entity container)
-              (= (:pos-x packet) (try (.getX (.getPos (:tile-entity container))) (catch Exception _ nil))))
-      ;; Update atoms
-      (when (contains? container :energy)
-        (reset! (:energy container) (:energy packet)))
-      (when (contains? container :max-energy)
-        (reset! (:max-energy container) (:max-energy packet)))
-      (when (contains? container :is-online)
-        (reset! (:is-online container) (:enabled packet)))
-      (when (contains? container :node-type)
-        (reset! (:node-type container) (:node-type packet)))
-      (when (contains? container :ssid)
-        (reset! (:ssid container) (:node-name packet)))
-      (when (contains? container :password)
-        (reset! (:password container) (:password packet)))
-      (when (contains? container :capacity)
-        (reset! (:capacity container) (:capacity packet)))
-      (when (contains? container :max-capacity)
-        (reset! (:max-capacity container) (:max-capacity packet)))
-      (log/debug "Updated node state on client"))))
+(defn handle-gui-state-sync-b-client
+  [^GuiStateSyncPacketB packet]
+  (gui/apply-gui-sync-payload! (:payload packet)))
 
-(defn broadcast-node-state-fabric
-  "Broadcast node state to nearby players (Fabric 1.20.1 implementation)"
+(defn broadcast-gui-state-b-fabric
+  "Broadcast GUI state to nearby players (Fabric 1.20.1 implementation)"
   [world pos sync-data]
-  (let [node-state (->NodeStateSyncPacket
-                     (:pos-x sync-data)
-                     (:pos-y sync-data)
-                     (:pos-z sync-data)
-                     (:energy sync-data)
-                     (:max-energy sync-data)
-                     (:enabled sync-data)
-                     (:node-name sync-data)
-                     (:node-type sync-data)
-                     (:password sync-data)
-                     (:charging-in sync-data)
-                     (:charging-out sync-data)
-                     (:placer-name sync-data))
+  (let [gui-state (->GuiStateSyncPacketB sync-data)
         buf (PacketByteBufs/create)]
-    (encode-node-state-sync node-state buf)
+    (encode-gui-state-sync-b gui-state buf)
     ;; Send to all players tracking chunk
     (try
       (let [server (try (.getServer world) (catch Exception _ nil))]
         (when server
           (doseq [player (try (.getPlayerManager (.getWorldProperties server (try (.getRegistryKey world) (catch Exception _ nil))))
                              (catch Exception _ nil))]
-            (ServerPlayNetworking/send player NODE_STATE_SYNC_PACKET_ID buf))))
-      (log/debug "Broadcast node state to players:" pos))
+            (ServerPlayNetworking/send player GUI_STATE_SYNC_B_PACKET_ID buf))))
+      (log/debug "Broadcast GUI state to players:" pos))
       (catch Exception e
-        (log/debug "Error broadcasting node state:" (.getMessage e)))))))
+        (log/debug "Error broadcasting GUI state:" (.getMessage e))))))
 
 
 
@@ -468,27 +362,27 @@
               (let [packet (decode-rpc-response packet-data)]
                 (rpc-client/handle-response (:request-id packet) (:payload packet)))))))))
 
-  ;; Register Matrix State Sync handler
+  ;; Register GUI State Sync handler A
   (ClientPlayNetworking/registerGlobalReceiver
-    MATRIX_STATE_SYNC_PACKET_ID
+    GUI_STATE_SYNC_A_PACKET_ID
     (reify net.fabricmc.fabric.api.networking.v1.ClientPlayNetworking$PlayChannelHandler
       (receive [_ client handler buf sender]
         (let [packet-data (.copy buf)]
           (.execute client
             (fn []
-              (let [packet (decode-matrix-state-sync packet-data)]
-                (handle-matrix-state-sync-client packet))))))))
+              (let [packet (decode-gui-state-sync-a packet-data)]
+                (handle-gui-state-sync-a-client packet))))))))
 
-  ;; Register Node State Sync handler
+  ;; Register GUI State Sync handler B
   (ClientPlayNetworking/registerGlobalReceiver
-    NODE_STATE_SYNC_PACKET_ID
+    GUI_STATE_SYNC_B_PACKET_ID
     (reify net.fabricmc.fabric.api.networking.v1.ClientPlayNetworking$PlayChannelHandler
       (receive [_ client handler buf sender]
         (let [packet-data (.copy buf)]
           (.execute client
             (fn []
-              (let [packet (decode-node-state-sync packet-data)]
-                (handle-node-state-sync-client packet))))))))
+              (let [packet (decode-gui-state-sync-b packet-data)]
+                (handle-gui-state-sync-b-client packet))))))))
   
   (log/info "Client-side GUI network packets registered (Fabric)"))
 
@@ -546,8 +440,7 @@
   (log/info "Initializing Fabric 1.20.1 GUI network system (server)")
   (register-server-packets!)
   ;; Register Fabric sync implementations
-  (gui/register-matrix-sync-impl! :fabric-1.20.1 broadcast-matrix-state-fabric)
-  (gui/register-node-sync-impl! :fabric-1.20.1 broadcast-node-state-fabric)
+  (gui/register-gui-sync-impls! :fabric-1.20.1 broadcast-gui-state-a-fabric broadcast-gui-state-b-fabric)
   (log/info "Fabric 1.20.1 GUI network system initialized (server)"))
 
 (defn init-client!

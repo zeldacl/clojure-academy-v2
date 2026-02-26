@@ -3,7 +3,9 @@
   
   Provides platform-agnostic interface for syncing node tile state to clients."
   (:require [my-mod.util.log :as log]
-            [my-mod.wireless.interfaces :as winterfaces]))
+            [my-mod.wireless.interfaces :as winterfaces]
+            [my-mod.wireless.gui.gui-metadata :as metadata]
+            [my-mod.wireless.gui.registry :as registry]))
 
 ;; ============================================================================
 ;; State Synchronization Registry
@@ -78,7 +80,8 @@
                (:tile-entity source)
                source)
         pos (:pos tile)]
-    {:pos-x (.getX pos)
+    {:gui-id metadata/gui-wireless-node
+     :pos-x (.getX pos)
      :pos-y (.getY pos)
      :pos-z (.getZ pos)
      :energy (winterfaces/get-energy tile)
@@ -97,6 +100,35 @@
      :max-capacity (if (instance? my_mod.wireless.gui.node_container.NodeContainer source)
                      @(:max-capacity source)
                      0)}))
+
+(defn apply-node-sync-payload!
+  "Apply node sync payload to the current client container"
+  [payload]
+  (try
+    (when-let [container @registry/client-container]
+      (when (and (:tile-entity container)
+                 (= (:pos-x payload)
+                    (try (.getX (.getPos (:tile-entity container)))
+                         (catch Exception _ nil))))
+        (when (contains? container :energy)
+          (reset! (:energy container) (:energy payload)))
+        (when (contains? container :max-energy)
+          (reset! (:max-energy container) (:max-energy payload)))
+        (when (contains? container :is-online)
+          (reset! (:is-online container) (:enabled payload)))
+        (when (contains? container :node-type)
+          (reset! (:node-type container) (:node-type payload)))
+        (when (contains? container :ssid)
+          (reset! (:ssid container) (:node-name payload)))
+        (when (contains? container :password)
+          (reset! (:password container) (:password payload)))
+        (when (contains? container :capacity)
+          (reset! (:capacity container) (:capacity payload)))
+        (when (contains? container :max-capacity)
+          (reset! (:max-capacity container) (:max-capacity payload)))
+        (log/debug "Applied node sync payload on client")))
+    (catch Exception e
+      (log/debug "Failed to apply node sync payload:" (.getMessage e)))))
 
 (defn extract-position
   "Extract BlockPos from sync payload"

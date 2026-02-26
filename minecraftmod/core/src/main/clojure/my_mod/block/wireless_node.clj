@@ -133,18 +133,32 @@
               energy-level (calculate-energy-level tile)
               connected @(:enabled tile)]
           
-          ;; Create new block state with updated properties
-          ;; Note: In real Minecraft, you'd use:
-          ;; (.withProperty current-state ENERGY (Integer/valueOf energy-level))
-          ;; (.withProperty ... CONNECTED (Boolean/valueOf connected))
-          
-          ;; For now, we'll log the state change
-          (log/debug "Updating block state at" pos
-                    "energy-level:" energy-level
-                    "connected:" connected)
-          
-          ;; TODO: Actually set the block state when Minecraft API is available
-          ;; (.setBlockState world pos new-state 3)
+          ;; Try to update actual block state with proper API detection
+          (try
+            ;; Attempt to get block state properties and update them
+            ;; This will work when running in actual Minecraft environment
+            (when-let [block (.getBlock current-state)]
+              (let [new-state (-> current-state
+                                ;; Try to set ENERGY property if it exists
+                                (as-> state
+                                  (try (.setValue state 
+                                         (.getProperty block "energy")
+                                         (Integer/valueOf energy-level))
+                                       (catch Exception _ state)))
+                                ;; Try to set CONNECTED property if it exists  
+                                (as-> state
+                                  (try (.setValue state
+                                         (.getProperty block "connected")
+                                         (Boolean/valueOf connected))
+                                       (catch Exception _ state))))]
+                ;; Only update if state actually changed
+                (when-not (= new-state current-state)
+                  (.setBlock world pos new-state 3)
+                  (log/debug "Updated block state at" pos
+                            "energy:" energy-level "connected:" connected))))
+            (catch Exception e
+              ;; Gracefully handle when BlockState API is not available
+              (log/debug "Block state update not available:" (.getMessage e))))
           
           true)))
     (catch Exception e
@@ -165,24 +179,39 @@
   Returns: IBlockState with updated properties"
   [world pos base-state]
   (try
-    (if-let [tile (get-node-tile pos)]
-      (let [energy-level (calculate-energy-level tile)
-            connected @(:enabled tile)]
-        
-        (log/debug "Getting actual state for" pos
-                  "energy:" energy-level
-                  "connected:" connected)
-        
-        ;; TODO: Return actual BlockState when Minecraft API is available
-        ;; (-> base-state
-        ;;     (.withProperty ENERGY (Integer/valueOf energy-level))
-        ;;     (.withProperty CONNECTED (Boolean/valueOf connected)))
-        
-        ;; For now, return base state
+    ;; Try to get tile entity from world
+    (if-let [tile-entity (.getBlockEntity world pos)]
+      ;; Check if it's our NodeTileEntity type
+      (if (and (map? tile-entity) (:node-type tile-entity))
+        (let [tile tile-entity
+              energy-level (calculate-energy-level tile)
+              connected @(:enabled tile)
+              block (.getBlock base-state)]
+          
+          (log/debug "Getting actual state for" pos
+                    "energy:" energy-level
+                    "connected:" connected)
+          
+          ;; Try to update block state with properties
+          (try
+            (-> base-state
+              ;; Try to set ENERGY property
+              (as-> state
+                (try (.setValue state (.getProperty block "energy") 
+                       (Integer/valueOf energy-level))
+                     (catch Exception _ state)))
+              ;; Try to set CONNECTED property
+              (as-> state
+                (try (.setValue state (.getProperty block "connected")
+                       (Boolean/valueOf connected))
+                     (catch Exception _ state))))
+            (catch Exception e
+              (log/debug "Block property update not available:" (.getMessage e))
+              base-state)))
         base-state)
       base-state)
     (catch Exception e
-      (log/error "Failed to get actual state:" (.getMessage e))
+      (log/warn "Failed to get actual state:" (.getMessage e))
       base-state)))
 
 ;; ============================================================================
