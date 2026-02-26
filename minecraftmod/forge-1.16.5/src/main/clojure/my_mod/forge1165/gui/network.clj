@@ -3,8 +3,7 @@
   
   Platform-agnostic design: Uses container-dispatcher for polymorphic handling,
   eliminating hardcoded game concepts (Node, Matrix, etc.)."
-  (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
-            [my-mod.wireless.gui.registry :as gui-registry]
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.network.client :as rpc-client]
             [my-mod.network.server :as rpc-server]
             [my-mod.util.log :as log])

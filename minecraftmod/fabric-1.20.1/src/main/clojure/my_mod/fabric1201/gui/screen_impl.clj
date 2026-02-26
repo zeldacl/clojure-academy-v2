@@ -1,13 +1,9 @@
 (ns my-mod.fabric1201.gui.screen-impl
   "Fabric 1.20.1 Client-side Screen Implementation
   
-  This namespace handles Fabric-specific screen registration mechanics.
-  Core screen creation logic is in my-mod.wireless.gui.screen-factory.
-  
   Platform-agnostic design: Reads GUI metadata and loops through all GUIs
-  to register, eliminating hardcoded game concepts (Node, Matrix, etc.)."
-  (:require [my-mod.wireless.gui.screen-factory :as screen-factory]
-            [my-mod.wireless.gui.gui-metadata :as gui-metadata]
+  to register, eliminating hardcoded game concepts."
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.util.log :as log])
   (:import [net.minecraft.client.gui.screen.ingame HandledScreen]
            [net.minecraft.entity.player PlayerInventory]
@@ -34,13 +30,13 @@
     (let [platform :fabric-1.20.1]
       
       ;; Loop through all registered GUIs from metadata
-      (doseq [gui-id (gui-metadata/get-all-gui-ids)]
-        (let [handler-type (gui-metadata/get-menu-type platform gui-id)
-              factory-fn-kw (gui-metadata/get-screen-factory-fn gui-id)]
+      (doseq [gui-id (gui/get-all-gui-ids)]
+        (let [handler-type (gui/get-menu-type platform gui-id)
+              factory-fn-kw (gui/get-screen-factory-fn-kw gui-id)]
           
           (when (and handler-type factory-fn-kw)
             ;; Get the actual factory function from screen-factory namespace
-            (let [factory-fn (ns-resolve 'my-mod.wireless.gui.screen-factory factory-fn-kw)]
+            (let [factory-fn (ns-resolve 'my-mod.gui.platform-adapter factory-fn-kw)]
               (if factory-fn
                 (do
                   (net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry/register
@@ -70,13 +66,13 @@
   (try
     ;; This is the newer Fabric API method
     (let [registry-impl (ns-resolve 'my-mod.fabric1201.gui.registry-impl 'get-handler-type)]
-      (doseq [gui-id (gui-metadata/get-all-gui-ids)]
+      (doseq [gui-id (gui/get-all-gui-ids)]
         (let [handler-type (registry-impl gui-id)
-              factory-fn-kw (gui-metadata/get-screen-factory-fn gui-id)
-              display-name (gui-metadata/get-display-name gui-id)]
+              factory-fn-kw (gui/get-screen-factory-fn-kw gui-id)
+              display-name (gui/get-display-name gui-id)]
           
           (when (and handler-type factory-fn-kw)
-            (let [factory-fn (ns-resolve 'my-mod.wireless.gui.screen-factory factory-fn-kw)]
+            (let [factory-fn (ns-resolve 'my-mod.gui.platform-adapter factory-fn-kw)]
               (when factory-fn
                 (net.minecraft.client.gui.screen.ingame.HandledScreens/register
                   handler-type

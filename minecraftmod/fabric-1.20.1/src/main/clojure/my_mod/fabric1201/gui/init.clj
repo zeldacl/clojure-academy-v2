@@ -1,6 +1,7 @@
 (ns my-mod.fabric1201.gui.init
   "Fabric 1.20.1 GUI System Initialization"
-  (:require [my-mod.fabric1201.gui.registry-impl :as registry-impl]
+  (:require [my-mod.gui.platform-adapter :as gui]
+            [my-mod.fabric1201.gui.registry-impl :as registry-impl]
             [my-mod.fabric1201.gui.screen-impl :as screen-impl]
             [my-mod.fabric1201.gui.network :as network]
             [my-mod.util.log :as log]))
@@ -71,7 +72,7 @@
   
   (let [;; Dynamically check all GUI IDs from metadata
         gui-checks (into {}
-                        (for [gui-id (my-mod.wireless.gui.gui-metadata/get-all-gui-ids)]
+                        (for [gui-id (gui/get-all-gui-ids)]
                           (let [check-key (keyword (str "gui-" gui-id "-handler-type"))
                                 handler-type (registry-impl/get-handler-type gui-id)]
                             [check-key (some? handler-type)])))

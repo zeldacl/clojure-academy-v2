@@ -7,10 +7,7 @@
   Classes:
   - ForgeContainerBridge: Generic Container wrapper
   - ForgeContainerProviderBridge: Generic INamedContainerProvider"
-  (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
-            [my-mod.wireless.gui.gui-metadata :as gui-metadata]
-            [my-mod.wireless.gui.slot-manager :as slot-manager]
-            [my-mod.wireless.gui.registry :as gui-registry]
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.util.log :as log])
   (:import [net.minecraft.entity.player PlayerEntity PlayerInventory]
            [net.minecraft.inventory.container Container INamedContainerProvider]

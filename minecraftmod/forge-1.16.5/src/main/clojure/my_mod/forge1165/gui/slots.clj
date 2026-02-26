@@ -3,7 +3,7 @@
   
   Platform-agnostic design: Uses gui-metadata for slot layouts,
   eliminating hardcoded game concepts (Node, Matrix, etc.)."
-  (:require [my-mod.wireless.gui.gui-metadata :as gui-metadata]
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.energy.stub :as energy]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]

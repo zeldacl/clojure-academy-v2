@@ -1,6 +1,6 @@
 (ns my-mod.fabric1201.gui.registry-impl
   "Fabric 1.20.1 GUI Registration Implementation"
-  (:require [my-mod.wireless.gui.registry :as gui-registry]
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.fabric1201.gui.bridge :as bridge]
             [my-mod.util.log :as log])
   (:import [net.minecraft.screen ScreenHandlerType]
@@ -39,13 +39,13 @@
   
   Returns: ScreenHandlerType instance"
   [gui-id]
-  (let [registry-name (my-mod.wireless.gui.gui-metadata/get-registry-name gui-id)]
+  (let [registry-name (gui/get-registry-name gui-id)]
     ;; Use ScreenHandlerRegistry.SimpleClientHandlerFactory
     (ScreenHandlerRegistry/registerSimple
       (Identifier. "my_mod" registry-name)
       (reify net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry$SimpleClientHandlerFactory
         (create [_ sync-id player-inventory]
-          (let [handler (gui-registry/get-gui-handler)
+          (let [handler (gui/get-gui-handler)
                 player (.player player-inventory)
                 world (.getWorld player)
                 pos (.getBlockPos player)
@@ -66,7 +66,7 @@
   
   Returns: ScreenHandlerType instance"
   [gui-id]
-  (let [registry-name (my-mod.wireless.gui.gui-metadata/get-registry-name gui-id)]
+  (let [registry-name (gui/get-registry-name gui-id)]
     ;; Use ScreenHandlerRegistry.ExtendedClientHandlerFactory
     (ScreenHandlerRegistry/registerExtended
       (Identifier. "my_mod" registry-name)
@@ -94,9 +94,9 @@
   (log/info "Registering GUI screen handler types for Fabric 1.20.1")
   
   ;; Create and register handler types for all GUI IDs
-  (doseq [gui-id (my-mod.wireless.gui.gui-metadata/get-all-gui-ids)]
+  (doseq [gui-id (gui/get-all-gui-ids)]
     (let [handler-type (create-extended-screen-handler-type gui-id)
-          registry-name (my-mod.wireless.gui.gui-metadata/get-registry-name gui-id)]
+          registry-name (gui/get-registry-name gui-id)]
       
       ;; Store in our map
       (swap! gui-handler-types assoc gui-id handler-type)

@@ -1,6 +1,7 @@
 (ns my-mod.forge1165.gui.init
   "Forge 1.16.5 GUI System Initialization"
-  (:require [my-mod.forge1165.gui.registry-impl :as registry-impl]
+  (:require [my-mod.gui.platform-adapter :as gui]
+            [my-mod.forge1165.gui.registry-impl :as registry-impl]
             [my-mod.forge1165.gui.screen-impl :as screen-impl]
             [my-mod.forge1165.gui.network :as network]
             [my-mod.util.log :as log]))
@@ -73,7 +74,7 @@
         
         ;; Dynamically check all GUI IDs from metadata
         gui-checks (into {}
-                        (for [gui-id (my-mod.wireless.gui.gui-metadata/get-all-gui-ids)]
+                        (for [gui-id (gui/get-all-gui-ids)]
                           (let [check-key (keyword (str "gui-" gui-id "-menu-type"))
                                 menu-type (registry-impl/get-menu-type gui-id)]
                             [check-key (some? menu-type)])))

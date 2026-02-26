@@ -1,6 +1,6 @@
 (ns my-mod.forge1165.gui.registry-impl
   "Forge 1.16.5 GUI Registration Implementation"
-  (:require [my-mod.wireless.gui.registry :as gui-registry]
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.forge1165.gui.bridge :as bridge]
             [my-mod.util.log :as log])
   (:import [net.minecraftforge.fml.network NetworkHooks]
@@ -41,7 +41,7 @@
     (reify java.util.function.BiFunction
       (apply [_ window-id player-inventory]
         ;; This creates a dummy container - actual creation happens in Provider
-        (let [handler (gui-registry/get-gui-handler)
+        (let [handler (gui/get-gui-handler)
               player (.player player-inventory)
               world (.getWorld player)
               pos (.getPosition player)
@@ -60,9 +60,9 @@
   (log/info "Registering GUI menu types for Forge 1.16.5")
   
   ;; Create and register menu types for all GUI IDs
-  (doseq [gui-id (gui-metadata/get-all-gui-ids)]
+  (doseq [gui-id (gui/get-all-gui-ids)]
     (let [menu-type (create-menu-type gui-id)
-          registry-name (gui-metadata/get-registry-name gui-id)
+          registry-name (gui/get-registry-name gui-id)
           resource-loc (ResourceLocation. "my_mod" registry-name)]
       
       ;; Store in our map

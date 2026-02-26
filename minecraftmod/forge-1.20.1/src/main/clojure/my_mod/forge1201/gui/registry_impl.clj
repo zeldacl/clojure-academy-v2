@@ -2,8 +2,7 @@
   "Forge 1.20.1 GUI Registration Implementation
   
   Platform-agnostic design: Uses metadata-driven approach."
-  (:require [my-mod.wireless.gui.registry :as gui-registry]
-            [my-mod.wireless.gui.gui-metadata :as gui-metadata]
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.forge1201.gui.bridge :as bridge]
             [my-mod.util.log :as log])
   (:import [net.minecraftforge.network NetworkHooks]
@@ -43,7 +42,7 @@
   (MenuType.
     (reify java.util.function.BiFunction
       (apply [_ window-id player-inventory]
-        (let [handler (gui-registry/get-gui-handler)
+        (let [handler (gui/get-gui-handler)
               player (.player player-inventory)
               world (.level player)
               pos (.blockPosition player)
@@ -60,9 +59,9 @@
   (log/info "Registering GUI menu types for Forge 1.20.1")
   
   ;; Create and register menu types for all GUI IDs
-  (doseq [gui-id (gui-metadata/get-all-gui-ids)]
+  (doseq [gui-id (gui/get-all-gui-ids)]
     (let [menu-type (create-menu-type gui-id)
-          registry-name (gui-metadata/get-registry-name gui-id)
+          registry-name (gui/get-registry-name gui-id)
           resource-loc (ResourceLocation. "my_mod" registry-name)]
       
       ;; Store in our map

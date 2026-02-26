@@ -23,7 +23,8 @@
             [my-mod.wireless.gui.slot-manager :as slot-mgr]
             [my-mod.wireless.gui.registry :as registry]
             [my-mod.wireless.gui.matrix-sync :as matrix-sync]
-            [my-mod.wireless.gui.node-sync :as node-sync]))
+            [my-mod.wireless.gui.node-sync :as node-sync]
+            [my-mod.wireless.gui.screen-factory :as screen-factory]))
 
 ;; ============================================================================
 ;; Re-export Container Dispatcher (polymorphic operations)
@@ -58,6 +59,7 @@
 
 (def gui-slot-layouts metadata/gui-slot-layouts)
 (def get-slot-layout metadata/get-slot-layout)
+(def get-slot-range metadata/get-slot-range)
 
 ;; ============================================================================
 ;; Re-export Slot Manager
@@ -103,6 +105,13 @@
 (def get-node-sync-impl node-sync/get-sync-impl)
 (def broadcast-node-state node-sync/broadcast-node-state)
 (def make-node-sync-packet node-sync/make-sync-packet)
+
+;; ============================================================================
+;; Re-export Screen Factory (screen creation on client)
+;; ============================================================================
+
+(def create-node-screen screen-factory/create-node-screen)
+(def create-matrix-screen screen-factory/create-matrix-screen)
 
 ;; ============================================================================
 ;; Adapter Guarantees

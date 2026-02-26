@@ -2,11 +2,11 @@
   "Fabric 1.20.1 GUI Slot Implementations
   
   This is adapted from Forge's slot system with Fabric API compatibility"
-  (:require [my-mod.energy.stub :as energy]
+  (:require [my-mod.gui.platform-adapter :as gui]
+            [my-mod.energy.stub :as energy]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
-            [my-mod.util.log :as log]
-            [my-mod.wireless.gui.gui-metadata :as gui-metadata])
+            [my-mod.util.log :as log])
   (:import [net.minecraft.screen.slot Slot]
            [net.minecraft.inventory Inventory]
            [net.minecraft.item ItemStack]
@@ -195,7 +195,7 @@
   
   Side effects: Adds all GUI slots to handler based on layout in gui_metadata.clj"
   [handler inventory gui-id x-offset y-offset]
-  (let [layout (gui-metadata/get-slot-layout gui-id)]
+  (let [layout (gui/get-slot-layout gui-id)]
     (when layout
       (doseq [slot-def (:slots layout)]
         (create-slot-by-type handler inventory slot-def x-offset y-offset)))))
@@ -211,7 +211,7 @@
   
   Returns: [start-index end-index] (inclusive)"
   [gui-id section]
-  (get-in (gui-metadata/get-slot-ranges gui-id) [section] [0 0]))
+  (gui/get-slot-range gui-id section))
 
 ;; ============================================================================
 ;; Slot Layout Helpers (Legacy - Will Be Deprecated)

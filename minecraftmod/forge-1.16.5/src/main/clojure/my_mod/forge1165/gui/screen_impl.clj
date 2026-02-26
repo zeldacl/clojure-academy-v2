@@ -6,8 +6,7 @@
   
   Platform-agnostic design: Reads GUI metadata and loops through all GUIs
   to register, eliminating hardcoded game concepts (Node, Matrix, etc.)."
-  (:require [my-mod.wireless.gui.screen-factory :as screen-factory]
-            [my-mod.wireless.gui.gui-metadata :as gui-metadata]
+  (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.util.log :as log])
   (:import [net.minecraft.client.gui.screen.inventory ContainerScreen]
            [net.minecraft.entity.player PlayerInventory]
@@ -34,13 +33,13 @@
           platform :forge-1.16.5]
       
       ;; Loop through all registered GUIs from metadata
-      (doseq [gui-id (gui-metadata/get-all-gui-ids)]
-        (let [menu-type (gui-metadata/get-menu-type platform gui-id)
-              factory-fn-kw (gui-metadata/get-screen-factory-fn gui-id)]
+      (doseq [gui-id (gui/get-all-gui-ids)]
+        (let [menu-type (gui/get-menu-type platform gui-id)
+              factory-fn-kw (gui/get-screen-factory-fn-kw gui-id)]
           
           (when (and menu-type factory-fn-kw)
             ;; Get the actual factory function from screen-factory namespace
-            (let [factory-fn (ns-resolve 'my-mod.wireless.gui.screen-factory factory-fn-kw)]
+            (let [factory-fn (ns-resolve 'my-mod.gui.platform-adapter factory-fn-kw)]
               (if factory-fn
                 (do
                   (.registerFactory screen-manager
