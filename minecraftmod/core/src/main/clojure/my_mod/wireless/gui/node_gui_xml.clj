@@ -286,11 +286,14 @@
 (defn create-wireless-panel
   "Create wireless connection panel (network list + connect/disconnect)
   
-  TODO: Implement network discovery and connection logic"
+  TODO: Add proper password input UI component"
   [xml-spec container]
   (let [panel (cgui/create-container :pos [0 0] :size [176 187])
         networks (atom [])
         selected (atom nil)
+        ;; TODO: Replace with actual text input component when available
+        ;; For now, use empty password for connection attempts
+        input-password (atom "")
         list-widget (cgui/create-widget :pos [13 50] :size [150 120])
         list-comp (comp/element-list :spacing 2)]
 
@@ -332,11 +335,13 @@
                           :x 120 :y 25 :width 48 :height 12
                           :on-click (fn []
                                       (when @selected
+                                        ;; TODO: Use password from text input UI when implemented
+                                        ;; Currently uses empty password (open networks only)
                                         (net-client/send-to-server
                                           MSG_CONNECT
                                           (assoc (tile-pos-payload (:tile-entity container))
                                                  :ssid @selected
-                                                 :password @(:password container))))))
+                                                 :password @input-password)))))
             btn-disconnect (comp/button
                              :text "Disconnect"
                              :x 120 :y 40 :width 48 :height 12
@@ -346,7 +351,17 @@
                                            (tile-pos-payload (:tile-entity container)))))]
         (cgui/add-widget! panel btn-refresh)
         (cgui/add-widget! panel btn-connect)
-        (cgui/add-widget! panel btn-disconnect))
+        (cgui/add-widget! panel btn-disconnect)
+        
+        ;; Add password notice for encrypted networks
+        (let [notice-widget (cgui/create-widget :pos [13 170] :size [150 14])
+              notice-label (comp/text-box
+                             :text "Note: Only open networks supported"
+                             :color 0xFFAA00
+                             :scale 0.6
+                             :shadow? true)]
+          (comp/add-component! notice-widget notice-label)
+          (cgui/add-widget! panel notice-widget)))
 
       (cgui/add-widget! panel list-widget)
 
