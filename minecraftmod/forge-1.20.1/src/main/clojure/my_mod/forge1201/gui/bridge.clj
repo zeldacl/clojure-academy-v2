@@ -53,22 +53,8 @@
 
 (defn -removed [this player]
   (let [clj-container (-getClojureContainer this)]
-    ;; Call container-specific cleanup if available
-    (when (and clj-container 
-               (or (contains? clj-container :node-type)      ; NodeContainer
-                   (contains? clj-container :core-level)))   ; MatrixContainer
-      ;; This is a wireless node or matrix container
-      (when-let [on-close-fn (try
-                               (if (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)
-                                 (resolve 'my-mod.wireless.gui.node-container/on-close)
-                                 (when (instance? my_mod.wireless.gui.matrix_container.MatrixContainer clj-container)
-                                   (resolve 'my-mod.wireless.gui.matrix-container/on-close)))
-                               (catch Exception _ nil))]
-        (when on-close-fn
-          (try
-            (on-close-fn clj-container)
-            (catch Exception e
-              (log/warn "Error in container on-close:" (.getMessage e)))))))
+    ;; Safely close container using dispatcher abstraction
+    (dispatcher/safe-close! clj-container)
     
     ;; Unregister from global registries
     (gui-registry/unregister-active-container! clj-container)

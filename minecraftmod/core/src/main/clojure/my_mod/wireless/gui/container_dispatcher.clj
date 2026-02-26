@@ -29,7 +29,10 @@
     "Handle button click from client")
   
   (handle-text-input! [container field-id text player]
-    "Handle text input from client"))
+    "Handle text input from client")
+  
+  (close-container! [container]
+    "Close container and perform cleanup"))
 
 ;; ============================================================================
 ;; Protocol Implementations
@@ -53,6 +56,9 @@
   (handle-text-input! [container field-id text player]
     (node-container/handle-text-input! container field-id text player))
   
+  (close-container! [container]
+    (node-container/on-close container))
+  
   ;; MatrixContainer implementation
   my_mod.wireless.gui.matrix_container.MatrixContainer
   (tick-container! [container]
@@ -68,7 +74,10 @@
     (matrix-container/handle-button-click! container button-id player))
   
   (handle-text-input! [container field-id text player]
-    (matrix-container/handle-text-input! container field-id text player)))
+    (matrix-container/handle-text-input! container field-id text player))
+  
+  (close-container! [container]
+    (matrix-container/on-close container)))
 
 ;; ============================================================================
 ;; Container Type Queries
@@ -188,9 +197,24 @@
       (log/error "Error handling text input:" (.getMessage e))
       false)))
 
+(defn safe-close!
+  "Safely close container with error handling
+  
+  Args:
+  - container: Any container implementing IContainerOperations
+  
+  Returns: true if successful, false if error"
+  [container]
+  (try
+    (close-container! container)
+    true
+    (catch Exception e
+      (log/error "Error closing container:" (.getMessage e))
+      false)))
+
 ;; ============================================================================
 ;; Design Notes
-;; ============================================================================
+;; ============================================================================;
 
 ;; This dispatcher provides:
 ;;
