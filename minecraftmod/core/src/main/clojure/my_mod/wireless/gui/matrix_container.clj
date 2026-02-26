@@ -1,6 +1,9 @@
 (ns my-mod.wireless.gui.matrix-container
   "Wireless Matrix GUI Container - handles 4 slots and multiblock data sync"
-  (:require [my-mod.util.log :as log]))
+  (:require [my-mod.util.log :as log]
+            [my-mod.block.wireless-matrix :as wm]
+            [my-mod.item.constraint-plate :as plate]
+            [my-mod.item.mat-core :as core]))
 
 ;; ============================================================================
 ;; Container Data Structure
@@ -8,6 +11,7 @@
 
 (defrecord MatrixContainer
   [tile-entity        ; Matrix master TileEntity reference
+   tile-java          ; MatrixJavaProxy - Java-compatible accessor wrapper
    player             ; Player who opened GUI
    
    ;; Synced data (updated from server -> client)
@@ -34,6 +38,7 @@
   [tile player]
   (->MatrixContainer
     tile
+    (wm/MatrixJavaProxy. tile)  ; Wrap tile in Java accessor proxy
     player
     ;; Initialize synced data
     (atom 0)    ; core-level
@@ -71,21 +76,17 @@
 (defn can-place-item?
   "Check if item can be placed in slot
   
-  Slots 0-2 (plates): Only wireless range limit plates
+  Slots 0-2 (plates): Only wireless constraint plates
   Slot 3 (core): Only wireless matrix cores"
   [container slot-index item-stack]
   (cond
     (is-plate-slot? slot-index)
-    ;; Check if item is a range limit plate
-    ;; (placeholder - real implementation would check item type)
-    (and item-stack
-         (or (.contains (.getTranslationKey item-stack) "wireless_plate")
-             (.contains (.getTranslationKey item-stack) "range_limit")))
+    ;; Check if item is a constraint plate
+    (plate/is-constraint-plate? item-stack)
     
     (is-core-slot? slot-index)
     ;; Check if item is a wireless matrix core
-    (and item-stack
-         (.contains (.getTranslationKey item-stack) "wireless_core"))
+    (core/is-mat-core? item-stack)
     
     :else false))
 
@@ -131,10 +132,9 @@
   Returns: int 0-4 (0 if no core)"
   [container]
   (let [core-item (get-slot-item container slot-core)]
-    (if core-item
-      ;; Parse core level from item name/NBT
-      ;; Placeholder: return 1 for any core
-      1
+    (if (and core-item (core/is-mat-core? core-item))
+      ;; Get actual core level from item damage/NBT
+      (core/get-core-level core-item)
       0)))
 
 (defn calculate-matrix-stats

@@ -5,7 +5,8 @@
             [my-mod.gui.core :as gui-core]
             [my-mod.events.metadata :as event-metadata]
             [my-mod.wireless.gui.matrix-network-handler :as matrix-net]
-            [my-mod.wireless.gui.node-network-handler :as node-net]))
+            [my-mod.wireless.gui.node-network-handler :as node-net]
+            [my-mod.wireless.world-data :as wd]))
 
 (defn init
   "Core init hook invoked by per-version entry classes."
@@ -13,6 +14,8 @@
   (log/info "Initializing core for mod-id=" defs/mod-id)
   ;; Initialize event metadata system
   (event-metadata/init-event-metadata!)
+  ;; Initialize wireless world data system
+  (wd/init-world-data!)
   ;; Register GUI network handlers
   (matrix-net/init!)
   (node-net/init!))

@@ -316,8 +316,84 @@
     world-data))
 
 ;; ============================================================================
-;; Statistics and Debug
+;; WorldSavedData Integration
 ;; ============================================================================
+
+;; Wrapper for platform-specific SavedData / WorldSavedData
+(deftype WiSavedDataWrapper
+  [^:volatile-mutable wi-data]
+  
+  ;; IDataManager interface (platform-neutral base)
+  Object
+  (toString [this]
+    (str "WiSavedDataWrapper["
+         (if wi-data (str (count @(:networks wi-data)) " networks") "uninitialized")
+         "]"))
+  
+  ;; Marker to indicate this is our wireless data
+  (markDirty [this]
+    ;; Called when data changed
+    true))
+
+(defn create-saved-data
+  "Create a saved data wrapper for a world"
+  [world]
+  (let [world-data (create-world-data world)]
+    (WiSavedDataWrapper. world-data)))
+
+(defn get-saved-data-world-data
+  "Extract WiWorldData from SavedData wrapper"
+  [saved-data]
+  (when saved-data
+    (try
+      (.-wi-data saved-data)
+      (catch Exception _ nil))))
+
+;; ============================================================================
+;; Platform Hooks
+;; ============================================================================
+
+;; These functions are called from platform-specific event handlers
+(defn on-world-load
+  "Called when world loads - restore from saved data"
+  [world saved-data]
+  (if saved-data
+    ;; Restore from saved data
+    (let [wi-data (get-saved-data-world-data saved-data)]
+      (if wi-data
+        (do
+          (swap! world-data-registry assoc world wi-data)
+          (log/info "Restored WiWorldData for world from save")
+          wi-data)
+        ;; Saved data corrupted - create fresh
+        (let [fresh (create-world-data world)]
+          (swap! world-data-registry assoc world fresh)
+          fresh)))
+    ;; No saved data yet - create new
+    (let [fresh (create-world-data world)]
+      (swap! world-data-registry assoc world fresh)
+      fresh)))
+
+(defn on-world-save
+  "Called before world save - prepare data for serialization"
+  [world]
+  (if-let [wi-data (get-world-data-non-create world)]
+    (do
+      (validate-networks! wi-data)
+      ;; Return wrapper to be saved
+      (let [wrapper (WiSavedDataWrapper. wi-data)]
+        (log/info "Prepared WiWorldData for save")
+        wrapper))
+    ;; No wireless data in this world
+    nil))
+
+(defn on-world-unload
+  "Called when world unloads - cleanup"
+  [world]
+  (remove-world-data! world)
+  (log/info "Cleaned up WiWorldData for unloaded world"))
+
+
 
 (defn get-statistics
   "Get statistics about this world's wireless system"

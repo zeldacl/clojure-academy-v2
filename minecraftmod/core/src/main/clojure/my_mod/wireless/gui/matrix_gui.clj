@@ -3,7 +3,8 @@
   (:require [my-mod.gui.cgui :as cgui]
             [my-mod.gui.components :as comp]
             [my-mod.gui.events :as events]
-            [my-mod.wireless.gui.matrix-container :as matrix-container]))
+            [my-mod.wireless.gui.matrix-container :as matrix-container]
+            [my-mod.block.wireless-matrix :as wm]))
 
 ;; ============================================================================
 ;; GUI Dimensions

@@ -19,3 +19,9 @@
 
 (defn init-constraint-plate! []
   (log/info "Constraint Plate initialized"))
+
+(defn is-constraint-plate?
+  "Check if ItemStack is a constraint plate"
+  [item-stack]
+  (when item-stack
+    (= (.getItem item-stack) constraint-plate)))

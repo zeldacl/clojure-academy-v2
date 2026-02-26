@@ -5,6 +5,7 @@
   eliminating hardcoded game concepts (Node, Matrix, etc.)."
   (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
             [my-mod.wireless.gui.registry :as gui-registry]
+            [my-mod.wireless.gui.matrix-sync :as sync]
             [my-mod.network.client :as rpc-client]
             [my-mod.network.server :as rpc-server]
             [my-mod.util.log :as log])
@@ -32,6 +33,9 @@
 
 (def RPC_RESPONSE_PACKET_ID
   (Identifier. "my_mod" "rpc_response"))
+
+(def MATRIX_STATE_SYNC_PACKET_ID
+  (Identifier. "my_mod" "matrix_state_sync"))
 
 ;; =========================================================================
 ;; Shared Map Encoding Helpers
@@ -258,6 +262,84 @@
   
   (log/info "Server-side GUI network packets registered (Fabric)"))
 
+;; ============================================================================
+;; Matrix State Sync Packet (Server -> Client)
+;; ============================================================================
+
+(defrecord MatrixStateSyncPacket [pos-x pos-y pos-z plate-count placer-name is-working core-level capacity bandwidth range])
+
+(defn encode-matrix-state-sync
+  [^MatrixStateSyncPacket packet ^PacketByteBuf buffer]
+  (.writeInt buffer (:pos-x packet))
+  (.writeInt buffer (:pos-y packet))
+  (.writeInt buffer (:pos-z packet))
+  (.writeInt buffer (:plate-count packet))
+  (.writeString buffer (:placer-name packet))
+  (.writeBoolean buffer (:is-working packet))
+  (.writeInt buffer (:core-level packet))
+  (.writeLong buffer (:capacity packet))
+  (.writeLong buffer (:bandwidth packet))
+  (.writeDouble buffer (:range packet)))
+
+(defn decode-matrix-state-sync
+  [^PacketByteBuf buffer]
+  (let [pos-x (.readInt buffer)
+        pos-y (.readInt buffer)
+        pos-z (.readInt buffer)
+        plate-count (.readInt buffer)
+        placer-name (.readString buffer)
+        is-working (.readBoolean buffer)
+        core-level (.readInt buffer)
+        capacity (.readLong buffer)
+        bandwidth (.readLong buffer)
+        range (.readDouble buffer)]
+    (->MatrixStateSyncPacket pos-x pos-y pos-z plate-count placer-name is-working core-level capacity bandwidth range)))
+
+(defn handle-matrix-state-sync-client
+  [^MatrixStateSyncPacket packet]
+  ;; Update client-side container with new state
+  (when-let [container @gui-registry/client-container]
+    ;; Check if position matches current container
+    (when (and (:tile-entity container)
+              (= (:pos-x packet) (try (.getX (.getPos (:tile-entity container))) (catch Exception _ nil))))
+      ;; Update atoms
+      (reset! (:plate-count container) (:plate-count packet))
+      (reset! (:core-level container) (:core-level packet))
+      (reset! (:is-working container) (:is-working packet))
+      (reset! (:capacity container) (:capacity packet))
+      (reset! (:bandwidth container) (:bandwidth packet))
+      (reset! (:range container) (:range packet))
+      (log/debug "Updated matrix state on client"))))
+
+(defn broadcast-matrix-state-fabric
+  "Broadcast matrix state to nearby players (Fabric 1.20.1 implementation)"
+  [world pos sync-data]
+  (let [matrix-state (->MatrixStateSyncPacket
+                       (:pos-x sync-data)
+                       (:pos-y sync-data)
+                       (:pos-z sync-data)
+                       (:plate-count sync-data)
+                       (:placer-name sync-data)
+                       (:is-working sync-data)
+                       (:core-level sync-data)
+                       (:capacity sync-data)
+                       (:bandwidth sync-data)
+                       (:range sync-data))
+        buf (PacketByteBufs/create)]
+    (encode-matrix-state-sync matrix-state buf)
+    ;; Send to all players tracking chunk
+    (try
+      (let [server (try (.getServer world) (catch Exception _ nil))]
+        (when server
+          (doseq [player (try (.getPlayerManager (.getWorldProperties server (try (.getRegistryKey world) (catch Exception _ nil))))
+                             (catch Exception _ nil))]
+            (ServerPlayNetworking/send player MATRIX_STATE_SYNC_PACKET_ID buf))))
+      (log/debug "Broadcast matrix state to players:" pos))
+      (catch Exception e
+        (log/debug "Error broadcasting matrix state:" (.getMessage e))))))
+
+
+
 (defn register-client-packets!
   "Register client-side packet receivers"
   []
@@ -283,7 +365,18 @@
           (.execute client
             (fn []
               (let [packet (decode-rpc-response packet-data)]
-                (rpc-client/handle-response (:request-id packet) (:payload packet))))))))))
+                (rpc-client/handle-response (:request-id packet) (:payload packet)))))))))
+
+  ;; Register Matrix State Sync handler
+  (ClientPlayNetworking/registerGlobalReceiver
+    MATRIX_STATE_SYNC_PACKET_ID
+    (reify net.fabricmc.fabric.api.networking.v1.ClientPlayNetworking$PlayChannelHandler
+      (receive [_ client handler buf sender]
+        (let [packet-data (.copy buf)]
+          (.execute client
+            (fn []
+              (let [packet (decode-matrix-state-sync packet-data)]
+                (handle-matrix-state-sync-client packet))))))))
   
   (log/info "Client-side GUI network packets registered (Fabric)"))
 
@@ -338,13 +431,15 @@
 (defn init-server!
   "Initialize server-side network system"
   []
-  (log/info "Initializing Fabric GUI network system (server)")
+  (log/info "Initializing Fabric 1.20.1 GUI network system (server)")
   (register-server-packets!)
-  (log/info "Fabric GUI network system initialized (server)"))
+  ;; Register Fabric sync implementation for matrix state
+  (sync/register-sync-impl! :fabric-1.20.1 broadcast-matrix-state-fabric)
+  (log/info "Fabric 1.20.1 GUI network system initialized (server)"))
 
 (defn init-client!
   "Initialize client-side network system"
   []
-  (log/info "Initializing Fabric GUI network system (client)")
+  (log/info "Initializing Fabric 1.20.1 GUI network system (client)")
   (register-client-packets!)
-  (log/info "Fabric GUI network system initialized (client)"))
+  (log/info "Fabric 1.20.1 GUI network system initialized (client)"))

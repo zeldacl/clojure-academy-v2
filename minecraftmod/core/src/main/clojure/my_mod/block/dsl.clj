@@ -120,12 +120,44 @@
 (defn is-multi-block-complete?
   "Check if all parts of a multi-block structure are present
    world: world object
-   master-pos: master block position
-   size: multi-block size"
-  [world master-pos size]
-  ;; This should be implemented by platform adapters
-  ;; Returns true if all blocks exist
-  true)
+   master-pos: master block position (origin)
+   block-spec: BlockSpec record containing multi-block configuration
+   
+   Returns true if all part blocks exist and are correct type"
+  [world master-pos block-spec]
+  (when (:multi-block? block-spec)
+    (try
+      ;; Get multi-block positions from spec
+      (let [multi-block (:multi-block block-spec)
+            positions (if (map? multi-block)
+                        (:positions multi-block)  ;; New format: {:positions [...]}
+                        multi-block)              ;; Old format: [...]
+            
+            ;; Function to calculate absolute position
+            abs-pos (fn [rel-pos]
+                      (let [x (+ (:x master-pos) (or (:relative-x rel-pos) (:x rel-pos) 0))
+                            y (+ (:y master-pos) (or (:relative-y rel-pos) (:y rel-pos) 0))
+                            z (+ (:z master-pos) (or (:relative-z rel-pos) (:z rel-pos) 0))]
+                        {:x x :y y :z z}))]
+        
+        ;; Check origin first
+        (if-not (.getBlockState world master-pos)
+          false
+          ;; Check all sub-block positions
+          (every?
+            (fn [rel-pos]
+              (try
+                (let [pos (abs-pos rel-pos)
+                      block-state (.getBlockState world pos)]
+                  (if block-state true false))
+                (catch Exception e
+                  (log/debug "Error checking block at" rel-pos ":" (.getMessage e))
+                  false)))
+            (or positions []))))
+      
+      (catch Exception e
+        (log/error "Error checking multi-block structure:" (.getMessage e))
+        false)))))
 
 ;; Create block specification
 (defn create-block-spec

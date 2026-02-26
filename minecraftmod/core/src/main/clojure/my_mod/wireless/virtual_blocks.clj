@@ -6,7 +6,8 @@
   - Lazy loading (only fetch when needed)
   - Chunk loading safety
   - Distance calculations"
-  (:require [my-mod.util.log :as log]))
+  (:require [my-mod.util.log :as log]
+            [my-mod.wireless.interfaces :as interfaces]))
 
 ;; ============================================================================
 ;; VBlock Record
@@ -81,20 +82,20 @@
   - Chunk not loaded (unless ignore-chunk)
   - World is nil
   - TileEntity doesn't exist
-  - TileEntity type doesn't match"
+  - TileEntity type doesn't match (protocol implementation)"
   [vblock world]
   (when world
     (when (or (:ignore-chunk vblock) (is-chunk-loaded? vblock world))
       (let [pos (vblock-pos vblock)
             tile (.getTileEntity world pos)]
         (when tile
-          ;; Type checking based on block-type
+          ;; Type checking based on block-type - using protocol satisfies? checks
           (case (:block-type vblock)
-            :matrix (when (instance? cn.academy.energy.api.block.IWirelessMatrix tile) tile)
-            :node (when (instance? cn.academy.energy.api.block.IWirelessNode tile) tile)
-            :node-conn (when (instance? cn.academy.energy.api.block.IWirelessNode tile) tile)
-            :generator (when (instance? cn.academy.energy.api.block.IWirelessGenerator tile) tile)
-            :receiver (when (instance? cn.academy.energy.api.block.IWirelessReceiver tile) tile)
+            :matrix (when (interfaces/wireless-matrix? tile) tile)
+            :node (when (interfaces/wireless-node? tile) tile)
+            :node-conn (when (interfaces/wireless-node? tile) tile)
+            :generator (when (interfaces/wireless-generator? tile) tile)
+            :receiver (when (interfaces/wireless-receiver? tile) tile)
             nil))))))
 
 (defn dist-sq

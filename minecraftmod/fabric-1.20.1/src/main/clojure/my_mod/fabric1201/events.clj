@@ -2,9 +2,11 @@
   "Fabric 1.20.1 event handlers"
   (:require [my-mod.core :as core]
             [my-mod.util.log :as log]
-            [my-mod.events.metadata :as event-metadata])
+            [my-mod.events.metadata :as event-metadata]
+            [my-mod.wireless.world-data :as wd])
   (:import [net.fabricmc.fabric.api.event.player UseBlockCallback]
-           [net.minecraft.world InteractionResult]))
+           [net.minecraft.world InteractionResult]
+           [net.fabricmc.fabric.api.event.lifecycle.v1 ServerWorldEvents]))
 
 (defn handle-right-click
   "Handle right-click block event from event data map"
@@ -43,7 +45,41 @@
 (defn register-events []
   "Register Fabric event listeners"
   (log/info "Registering Fabric event listeners...")
+  
+  ;; Register block interaction event
   (.register UseBlockCallback/EVENT
     (reify UseBlockCallback
       (interact [_ player world hand hit-result]
-        (handle-use-block player world hand hit-result)))))
+        (handle-use-block player world hand hit-result))))
+  
+  ;; Register world load event
+  (.register ServerWorldEvents/LOAD
+    (reify net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents$Load
+      (onServerWorldLoad [_ server world]
+        (try
+          (log/info "Fabric world load event, initializing wireless system")
+          (wd/on-world-load world nil)
+          (catch Throwable t
+            (log/error "Error handling fabric world load:" (.getMessage t)))))))
+  
+  ;; Register world save event
+  (.register ServerWorldEvents/SAVE
+    (reify net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents$Save
+      (onServerWorldSave [_ server world]
+        (try
+          (log/info "Fabric world save event, preparing wireless data")
+          (wd/on-world-save world)
+          (catch Throwable t
+            (log/error "Error handling fabric world save:" (.getMessage t)))))))
+  
+  ;; Register world unload event
+  (.register ServerWorldEvents/UNLOAD
+    (reify net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents$Unload
+      (onServerWorldUnload [_ server world]
+        (try
+          (log/info "Fabric world unload event, cleaning up wireless system")
+          (wd/on-world-unload world)
+          (catch Throwable t
+            (log/error "Error handling fabric world unload:" (.getMessage t)))))))
+  
+  (log/info "Fabric event listeners registered"))

@@ -2,6 +2,7 @@
   "Forge 1.20.1 GUI Network Packet System"
   (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
             [my-mod.wireless.gui.registry :as gui-registry]
+            [my-mod.wireless.gui.matrix-sync :as sync]
             [my-mod.network.client :as rpc-client]
             [my-mod.network.server :as rpc-server]
             [my-mod.util.log :as log])
@@ -70,6 +71,9 @@
 (defrecord RpcRequestPacket [msg-id request-id payload])
 (defrecord RpcResponsePacket [request-id payload])
 
+;; Matrix State Sync Packet
+(defrecord MatrixStatePacket [pos-x pos-y pos-z plate-count placer-name is-working core-level capacity bandwidth range])
+
 (defn encode-rpc-request [^RpcRequestPacket packet ^FriendlyByteBuf buffer]
   (.writeUtf buffer (:msg-id packet))
   (.writeInt buffer (:request-id packet))
@@ -118,6 +122,55 @@
     (.setPacketHandled ctx true)))
 
 ;; =========================================================================
+;; Matrix State Sync Packets
+;; =========================================================================
+
+(defn encode-matrix-state
+  [^MatrixStatePacket packet ^FriendlyByteBuf buffer]
+  (.writeInt buffer (.intValue (:pos-x packet)))
+  (.writeInt buffer (.intValue (:pos-y packet)))
+  (.writeInt buffer (.intValue (:pos-z packet)))
+  (.writeInt buffer (.intValue (:plate-count packet)))
+  (.writeUtf buffer (:placer-name packet))
+  (.writeBoolean buffer (:is-working packet))
+  (.writeInt buffer (.intValue (:core-level packet)))
+  (.writeLong buffer (.longValue (:capacity packet)))
+  (.writeLong buffer (.longValue (:bandwidth packet)))
+  (.writeDouble buffer (:range packet)))
+
+(defn decode-matrix-state
+  [^FriendlyByteBuf buffer]
+  (let [pos-x (.readInt buffer)
+        pos-y (.readInt buffer)
+        pos-z (.readInt buffer)
+        plate-count (.readInt buffer)
+        placer-name (.readUtf buffer)
+        is-working (.readBoolean buffer)
+        core-level (.readInt buffer)
+        capacity (.readLong buffer)
+        bandwidth (.readLong buffer)
+        range (.readDouble buffer)]
+    (->MatrixStatePacket pos-x pos-y pos-z plate-count placer-name is-working core-level capacity bandwidth range)))
+
+(defn handle-matrix-state
+  [^MatrixStatePacket packet ^Supplier context-supplier]
+  (let [ctx (.get context-supplier)]
+    (.enqueueWork ctx
+      (fn []
+        ;; Update client-side container with new state
+        (when-let [container @gui-registry/client-container]
+          (when (= (:pos-x packet) (try (.getX (.getPos (:tile-entity container))) (catch Exception _ nil)))
+            ;; Position matches - update atoms
+            (reset! (:plate-count container) (:plate-count packet))
+            (reset! (:core-level container) (:core-level packet))
+            (reset! (:is-working container) (:is-working packet))
+            (reset! (:capacity container) (:capacity packet))
+            (reset! (:bandwidth container) (:bandwidth packet))
+            (reset! (:range container) (:range packet))
+            (log/debug "Updated matrix state on client")))))
+    (.setPacketHandled ctx true)))
+
+;; =========================================================================
 ;; Registration
 ;; =========================================================================
 
@@ -152,7 +205,44 @@
                    (handle-rpc-response packet ctx-supplier))))
     (.add)
 
-    (log/info "Forge 1.20.1 RPC packets registered")))
+    ;; Matrix State Sync
+    (.messageBuilder channel MatrixStatePacket 2)
+    (.encoder (reify BiConsumer
+                (accept [_ packet buffer]
+                  (encode-matrix-state packet buffer))))
+    (.decoder (reify java.util.function.Function
+                (apply [_ buffer]
+                  (decode-matrix-state buffer))))
+    (.consumer (reify BiConsumer
+                 (accept [_ packet ctx-supplier]
+                   (handle-matrix-state packet ctx-supplier))))
+    (.add)
+
+    (log/info "Forge 1.20.1 GUI packets registered (RPC + Matrix Sync)")))
+
+(defn broadcast-matrix-state-forge
+  "Broadcast matrix state to nearby players (Forge 1.20.1 implementation)"
+  [world pos sync-data]
+  (when @network-channel
+    (let [matrix-state (->MatrixStatePacket
+                         (:pos-x sync-data)
+                         (:pos-y sync-data)
+                         (:pos-z sync-data)
+                         (:plate-count sync-data)
+                         (:placer-name sync-data)
+                         (:is-working sync-data)
+                         (:core-level sync-data)
+                         (:capacity sync-data)
+                         (:bandwidth sync-data)
+                         (:range sync-data))]
+      ;; Send to all players tracking this chunk
+      (.send @network-channel
+             PacketDistributor/TRACKING_CHUNK
+             (.getChunkAt world pos)
+             matrix-state)
+      (log/debug "Broadcast matrix state to chunk:" pos))))
+
+
 
 (defn send-rpc-request-to-server
   [msg-id payload request-id]
@@ -165,4 +255,7 @@
   (send-rpc-request-to-server msg-id payload request-id))
 
 (defn init! []
-  (register-packets!))
+  (register-packets!)
+  ;; Register Forge sync implementation for matrix state
+  (sync/register-sync-impl! :forge-1.20.1 broadcast-matrix-state-forge)
+  (log/info "Forge 1.20.1 GUI network initialized"))
