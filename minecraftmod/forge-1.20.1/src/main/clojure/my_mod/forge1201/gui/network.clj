@@ -73,7 +73,7 @@
 (defrecord RpcResponsePacket [request-id payload])
 
 ;; Matrix State Sync Packet
-(defrecord MatrixStatePacket [pos-x pos-y pos-z plate-count placer-name is-working core-level capacity bandwidth range])
+(defrecord MatrixStatePacket [pos-x pos-y pos-z plate-count placer-name is-working core-level capacity max-capacity bandwidth range])
 
 ;; Node State Sync Packet
 (defrecord NodeStatePacket [pos-x pos-y pos-z energy max-energy enabled node-name node-type password charging-in charging-out placer-name capacity max-capacity])
@@ -139,6 +139,7 @@
   (.writeBoolean buffer (:is-working packet))
   (.writeInt buffer (.intValue (:core-level packet)))
   (.writeLong buffer (.longValue (:capacity packet)))
+  (.writeLong buffer (.longValue (:max-capacity packet)))
   (.writeLong buffer (.longValue (:bandwidth packet)))
   (.writeDouble buffer (:range packet)))
 
@@ -152,9 +153,10 @@
         is-working (.readBoolean buffer)
         core-level (.readInt buffer)
         capacity (.readLong buffer)
+        max-capacity (.readLong buffer)
         bandwidth (.readLong buffer)
         range (.readDouble buffer)]
-    (->MatrixStatePacket pos-x pos-y pos-z plate-count placer-name is-working core-level capacity bandwidth range)))
+    (->MatrixStatePacket pos-x pos-y pos-z plate-count placer-name is-working core-level capacity max-capacity bandwidth range)))
 
 (defn handle-matrix-state
   [^MatrixStatePacket packet ^Supplier context-supplier]
@@ -169,6 +171,7 @@
             (reset! (:core-level container) (:core-level packet))
             (reset! (:is-working container) (:is-working packet))
             (reset! (:capacity container) (:capacity packet))
+            (reset! (:max-capacity container) (:max-capacity packet))
             (reset! (:bandwidth container) (:bandwidth packet))
             (reset! (:range container) (:range packet))
             (log/debug "Updated matrix state on client")))))

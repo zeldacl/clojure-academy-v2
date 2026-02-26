@@ -64,7 +64,9 @@
   (.close (.superclass (class this)) this player)
   (let [clj-container (-getClojureContainer this)]
     ;; Call container-specific cleanup if available
-    (when (and clj-container (contains? clj-container :node-type))
+    (when (and clj-container 
+               (or (contains? clj-container :node-type)      ; NodeContainer
+                   (contains? clj-container :core-level)))   ; MatrixContainer
       ;; This is a wireless node or matrix container
       (when-let [on-close-fn (try
                                (if (instance? my_mod.wireless.gui.node_container.NodeContainer clj-container)

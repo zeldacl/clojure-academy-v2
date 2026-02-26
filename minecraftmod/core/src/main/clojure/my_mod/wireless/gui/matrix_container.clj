@@ -3,7 +3,9 @@
   (:require [my-mod.util.log :as log]
             [my-mod.block.wireless-matrix :as wm]
             [my-mod.item.constraint-plate :as plate]
-            [my-mod.item.mat-core :as core]))
+            [my-mod.item.mat-core :as core]
+            [my-mod.wireless.world-data :as wd]
+            [my-mod.wireless.virtual-blocks :as vb]))
 
 ;; ============================================================================
 ;; Container Data Structure
@@ -21,7 +23,8 @@
    capacity           ; atom<int> - Current capacity
    max-capacity       ; atom<int> - Maximum capacity
    bandwidth          ; atom<int> - IF/t transfer rate
-   range])            ; atom<double> - Network range
+   range              ; atom<double> - Network range
+   sync-ticker])      ; atom<int> - tick counter for network sync (5s timeout)
 
 ;; ============================================================================
 ;; Container Creation
@@ -47,7 +50,8 @@
     (atom 0)    ; capacity
     (atom 0)    ; max-capacity
     (atom 0)    ; bandwidth
-    (atom 0.0))) ; range
+    (atom 0.0)  ; range
+    (atom 0)))  ; sync-ticker - for throttling network sync
 
 ;; ============================================================================
 ;; Slot Management
@@ -162,30 +166,54 @@
 (defn sync-to-client!
   "Update container data from tile entity (server -> client)
   
-  Called every tick on server side"
+  Called every tick on server side. Network capacity queries are throttled 
+  to every 5 seconds (100 ticks) to reduce performance impact."
   [container]
   (let [tile (:tile-entity container)
         
-        ;; Count components
+        ;; Count components (every tick - lightweight)
         plates (count-plates container)
         core-lvl (get-core-level container)
         
         ;; Check if multiblock is formed
         working? (and (> core-lvl 0)
-                     (>= plates 0)) ; At least a core is required
-        
-        ;; Calculate stats
-        stats (calculate-matrix-stats core-lvl plates)]
+                     (>= plates 0))] ; At least a core is required
     
-    ;; Update synced data
+    ;; Update basic data (every tick)
     (reset! (:core-level container) core-lvl)
     (reset! (:plate-count container) plates)
     (reset! (:is-working container) working?)
     
-    (reset! (:capacity container) (:current-capacity tile 0))
-    (reset! (:max-capacity container) (:capacity stats))
-    (reset! (:bandwidth container) (:bandwidth stats))
-    (reset! (:range container) (:range stats))))
+    ;; Update network capacity and stats (throttled to every 100 ticks = 5 seconds)
+    (swap! (:sync-ticker container) inc)
+    (when (>= @(:sync-ticker container) 100)
+      (reset! (:sync-ticker container) 0)
+      
+      ;; Calculate stats based on components
+      (let [stats (calculate-matrix-stats core-lvl plates)]
+        (reset! (:bandwidth container) (:bandwidth stats))
+        (reset! (:range container) (:range stats))
+        
+        ;; Query actual network capacity from WirelessNet
+        (try
+          (let [world (:world tile)
+                pos (:pos tile)
+                matrix-vblock (vb/create-vmatrix (.getX pos) (.getY pos) (.getZ pos))
+                world-data (wd/get-world-data world)
+                network (wd/get-network-by-matrix world-data matrix-vblock)]
+            (if network
+              (do
+                ;; Real network capacity (current number of nodes)
+                (reset! (:capacity container) (count @(:nodes network)))
+                ;; Max capacity from calculated stats
+                (reset! (:max-capacity container) (:capacity stats)))
+              (do
+                (reset! (:capacity container) 0)
+                (reset! (:max-capacity container) (:capacity stats)))))
+          (catch Exception e
+            (log/debug "Error querying network capacity:" (.getMessage e))
+            (reset! (:capacity container) 0)
+            (reset! (:max-capacity container) 0)))))))
 
 (defn get-sync-data
   "Get data to sync to client
@@ -326,3 +354,27 @@
         nil))  ; No item in slot
     
     :else nil))
+
+;; ============================================================================
+;; Container Lifecycle
+;; ============================================================================
+
+(defn on-close
+  "Cleanup when container is closed
+  
+  Args:
+  - container: MatrixContainer instance
+  
+  Returns: nil"
+  [container]
+  (log/debug "Closing wireless matrix container")
+  ;; Reset all atoms to default states
+  (reset! (:core-level container) 0)
+  (reset! (:plate-count container) 0)
+  (reset! (:is-working container) false)
+  (reset! (:capacity container) 0)
+  (reset! (:max-capacity container) 0)
+  (reset! (:bandwidth container) 0)
+  (reset! (:range container) 0.0)
+  (reset! (:sync-ticker container) 0)
+  nil)

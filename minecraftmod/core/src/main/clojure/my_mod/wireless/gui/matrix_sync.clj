@@ -66,11 +66,27 @@
 ;; ============================================================================
 
 (defn make-sync-packet
-  "Create matrix state sync packet payload map"
-  [tile]
-  {:pos-x (.getX (:pos tile))
-   :pos-y (.getY (:pos tile))
-   :pos-z (.getZ (:pos tile))})
+  "Create matrix state sync packet payload map from container or tile entity
+  
+  Accepts either a MatrixContainer or a tile entity directly"
+  [source]
+  (let [tile (if (instance? my_mod.wireless.gui.matrix_container.MatrixContainer source)
+               (:tile-entity source)
+               source)
+        container (when (instance? my_mod.wireless.gui.matrix_container.MatrixContainer source)
+                    source)
+        pos (:pos tile)]
+    {:pos-x (.getX pos)
+     :pos-y (.getY pos)
+     :pos-z (.getZ pos)
+     :plate-count (if container @(:plate-count container) 0)
+     :placer-name (or (:placer-name tile) "Unknown")
+     :is-working (if container @(:is-working container) false)
+     :core-level (if container @(:core-level container) 0)
+     :capacity (if container @(:capacity container) 0)
+     :max-capacity (if container @(:max-capacity container) 0)
+     :bandwidth (if container @(:bandwidth container) 0)
+     :range (if container @(:range container) 0.0)}))
 
 (defn extract-position
   "Extract BlockPos from sync payload"

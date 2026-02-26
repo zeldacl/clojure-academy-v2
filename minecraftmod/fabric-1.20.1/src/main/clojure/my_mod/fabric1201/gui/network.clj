@@ -270,7 +270,7 @@
 ;; Matrix State Sync Packet (Server -> Client)
 ;; ============================================================================
 
-(defrecord MatrixStateSyncPacket [pos-x pos-y pos-z plate-count placer-name is-working core-level capacity bandwidth range])
+(defrecord MatrixStateSyncPacket [pos-x pos-y pos-z plate-count placer-name is-working core-level capacity max-capacity bandwidth range])
 
 (defn encode-matrix-state-sync
   [^MatrixStateSyncPacket packet ^PacketByteBuf buffer]
@@ -282,6 +282,7 @@
   (.writeBoolean buffer (:is-working packet))
   (.writeInt buffer (:core-level packet))
   (.writeLong buffer (:capacity packet))
+  (.writeLong buffer (:max-capacity packet))
   (.writeLong buffer (:bandwidth packet))
   (.writeDouble buffer (:range packet)))
 
@@ -295,9 +296,10 @@
         is-working (.readBoolean buffer)
         core-level (.readInt buffer)
         capacity (.readLong buffer)
+        max-capacity (.readLong buffer)
         bandwidth (.readLong buffer)
         range (.readDouble buffer)]
-    (->MatrixStateSyncPacket pos-x pos-y pos-z plate-count placer-name is-working core-level capacity bandwidth range)))
+    (->MatrixStateSyncPacket pos-x pos-y pos-z plate-count placer-name is-working core-level capacity max-capacity bandwidth range)))
 
 (defn handle-matrix-state-sync-client
   [^MatrixStateSyncPacket packet]
@@ -311,6 +313,7 @@
       (reset! (:core-level container) (:core-level packet))
       (reset! (:is-working container) (:is-working packet))
       (reset! (:capacity container) (:capacity packet))
+      (reset! (:max-capacity container) (:max-capacity packet))
       (reset! (:bandwidth container) (:bandwidth packet))
       (reset! (:range container) (:range packet))
       (log/debug "Updated matrix state on client"))))
@@ -327,6 +330,7 @@
                        (:is-working sync-data)
                        (:core-level sync-data)
                        (:capacity sync-data)
+                       (:max-capacity sync-data)
                        (:bandwidth sync-data)
                        (:range sync-data))
         buf (PacketByteBufs/create)]
