@@ -319,60 +319,46 @@
                     (vb/vblock-to-string (:node conn)))))
 
 ;; ============================================================================
+;; Connection Schema Definition
+;; ============================================================================
+
+(def conn-schema
+  '{:collection-name :node-connection
+    :atom-name :connections
+    :lookup-atom :node-lookup
+    :factory {:fn create-node-conn
+              :args [world-data node]}
+    :nbt-fields [{:name :node :type :vblock :nbt-key "node" :factory-arg true}
+                 {:name :receivers :type :vblock-list :nbt-key "receivers" :atom? true}
+                 {:name :generators :type :vblock-list :nbt-key "generators" :atom? true}]
+    :create {:args [node-vblock]
+             :expr '(my-mod.wireless.node-connection/create-node-conn world-data node-vblock)
+             :return 'item
+             :return-on-unique-fail false
+             :log-create "Created node connection: %s"
+             :log-create-key-expr 'node-vblock}
+    :destroy {:log-destroy "Destroyed node connection: %s"
+              :log-destroy-key-expr '(:node item)}
+    :direct-keys [:node]
+    :collection-keys [:generators :receivers]
+    :log-key-fn 'my-mod.wireless.virtual-blocks/vblock-to-string
+    :validator {:vblock-key :node
+                :log-label "connections"}
+    :tick {:fn 'my-mod.wireless.node-connection/tick-node-conn!}
+    :nbt {:tag "connections"
+          :atom :connections
+          :to-nbt 'my-mod.wireless.node-connection/conn-to-nbt
+          :from-nbt 'my-mod.wireless.node-connection/conn-from-nbt
+          :skip? '(fn [conn] @(:disposed conn))
+          :rebuild {:lookup-atom :node-lookup
+                    :direct-keys [:node]
+                    :collection-keys [:generators :receivers]}}})
+
+;; ============================================================================
 ;; NBT Serialization
 ;; ============================================================================
 
-(defn conn-to-nbt
-  "Serialize connection to NBT"
-  [conn]
-  (let [nbt (net.minecraft.nbt.NBTTagCompound.)
-        world (:world (:world-data conn))]
-    ;; Node
-    (.setTag nbt "node" (vb/vblock-to-nbt (:node conn)))
-    
-    ;; Receivers
-    (let [recs-list (net.minecraft.nbt.NBTTagList.)]
-      (doseq [rec-vb @(:receivers conn)]
-        (when (or (not (vb/is-chunk-loaded? rec-vb world))
-                  (vb/vblock-get rec-vb world))
-          (.appendTag recs-list (vb/vblock-to-nbt rec-vb))))
-      (.setTag nbt "receivers" recs-list))
-    
-    ;; Generators
-    (let [gens-list (net.minecraft.nbt.NBTTagList.)]
-      (doseq [gen-vb @(:generators conn)]
-        (when (or (not (vb/is-chunk-loaded? gen-vb world))
-                  (vb/vblock-get gen-vb world))
-          (.appendTag gens-list (vb/vblock-to-nbt gen-vb))))
-      (.setTag nbt "generators" gens-list))
-    
-    nbt))
-
-(defn conn-from-nbt
-  "Deserialize connection from NBT"
-  [world-data nbt]
-  (let [;; Load node
-        node-vb (vb/vblock-from-nbt (.getCompoundTag nbt "node"))
-        
-        ;; Create connection
-        conn (create-node-conn world-data node-vb)]
-    
-    ;; Load receivers
-    (let [recs-list (.getTagList nbt "receivers" 10)]
-      (dotimes [i (.tagCount recs-list)]
-        (let [rec-vb (vb/vblock-from-nbt (.getCompoundTagAt recs-list i))]
-          (swap! (:receivers conn) conj rec-vb))))
-    
-    ;; Load generators
-    (let [gens-list (.getTagList nbt "generators" 10)]
-      (dotimes [i (.tagCount gens-list)]
-        (let [gen-vb (vb/vblock-from-nbt (.getCompoundTagAt gens-list i))]
-          (swap! (:generators conn) conj gen-vb))))
-    
-    (log/info (format "Loaded node connection: %d generators, %d receivers"
-                      (count @(:generators conn))
-                      (count @(:receivers conn))))
-    conn))
+(my-mod.wireless.world-schema/defnbt-handlers-from-schema conn-schema)
 
 ;; ============================================================================
 ;; Debug

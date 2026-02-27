@@ -3,11 +3,103 @@
   
   This namespace defines the schema and macros to generate world-data
   operations (create/destroy, validate, tick, and NBT read/write)."
-  (:require [my-mod.nbt.dsl :as nbt]))
+  (:require [my-mod.nbt.dsl :as nbt]
+            [my-mod.wireless.virtual-blocks :as vb]
+            [my-mod.util.log :as log]))
 
 ;; =========================================================================
-;; Collection Ops Macro
+;; NBT Handlers Generator Macro
 ;; =========================================================================
+
+(defmacro defnbt-handlers-from-schema
+  "Generate to-nbt and from-nbt functions from schema's :nbt-fields definition.
+  
+  Schema should contain:
+    :nbt-fields - vector of field specs
+    :factory - {:fn factory-name :args [arg1 arg2 ...]}
+  
+  Field spec: {:name :field :type :type-key :nbt-key \"key\" :atom? false :factory-arg false}"
+  [schema-var]
+  (let [schema (if (symbol? schema-var) (var-get (resolve schema-var)) schema-var)
+        fields (:nbt-fields schema)
+        factory-fn (get-in schema [:factory :fn])
+        factory-args (get-in schema [:factory :args])
+        to-nbt-name (symbol (str (name (:collection-name schema)) "-to-nbt"))
+        from-nbt-name (symbol (str (name (:collection-name schema)) "-from-nbt"))
+        
+        ;; to-nbt forms for each field
+        to-nbt-forms (mapv (fn [field]
+                             (let [name (:name field)
+                                   type (:type field)
+                                   nbt-key (:nbt-key field)
+                                   atom? (:atom? field false)]
+                               (case type
+                                 :string
+                                 `(.setString ~'nbt ~nbt-key (~(if atom? `deref `identity) (~name ~'item)))
+                                 
+                                 :double
+                                 `(.setDouble ~'nbt ~nbt-key (~(if atom? `deref `identity) (~name ~'item)))
+                                 
+                                 :vblock
+                                 `(.setTag ~'nbt ~nbt-key (~'vb/vblock-to-nbt (~name ~'item)))
+                                 
+                                 :vblock-list
+                                 `(let [~'list-obj (net.minecraft.nbt.NBTTagList.)
+                                        ~'world (:world (:world-data ~'item))]
+                                    (doseq [~'vb-item @(~name ~'item)]
+                                      (when (or (not (~'vb/is-chunk-loaded? ~'vb-item ~'world))
+                                                (~'vb/vblock-get ~'vb-item ~'world))
+                                        (.appendTag ~'list-obj (~'vb/vblock-to-nbt ~'vb-item))))
+                                    (.setTag ~'nbt ~nbt-key ~'list-obj)))))
+                           fields)
+        
+        ;; from-nbt read forms
+        from-nbt-reads (mapv (fn [field]
+                               (let [name (:name field)
+                                     type (:type field)
+                                     nbt-key (:nbt-key field)]
+                                 [name (case type
+                                         :string `(.getString ~'nbt ~nbt-key)
+                                         :double `(.getDouble ~'nbt ~nbt-key)
+                                         :vblock `(~'vb/vblock-from-nbt (.getCompoundTag ~'nbt ~nbt-key))
+                                         :vblock-list
+                                         `(let [~'list-obj (.getTagList ~'nbt ~nbt-key 10)]
+                                            (vec (for [~'i (range (.tagCount ~'list-obj))]
+                                                   (~'vb/vblock-from-nbt (.getCompoundTagAt ~'list-obj ~'i)))))
+                                         nil)]))
+                             fields)
+        
+        ;; Separate factory args from other fields
+        factory-arg-fields (filter :factory-arg fields)
+        atom-fields (filter :atom? fields)
+        factory-arg-names (mapv :name factory-arg-fields)
+        
+        ;; Build factory call with args
+        factory-call (if factory-fn
+                       `(~factory-fn ~@factory-args ~@factory-arg-names)
+                       `(throw (Exception. "No factory function defined in schema")))
+        
+        ;; Restore atom fields
+        restore-atoms (mapv (fn [field]
+                              (let [name (:name field)]
+                                `(reset! (~name ~'item) ~name)))
+                            atom-fields)]
+    
+    `(do
+       (defn ~to-nbt-name
+         ~(format "Serialize to NBT - auto-generated from schema")
+         [~'item]
+         (let [~'nbt (net.minecraft.nbt.NBTTagCompound.)]
+           ~@to-nbt-forms
+           ~'nbt))
+       
+       (defn ~from-nbt-name
+         ~(format "Deserialize from NBT - auto-generated from schema")
+         [~'world-data ~'nbt]
+         (let [~@(apply concat from-nbt-reads)
+               ~'item ~factory-call]
+           ~@restore-atoms
+           ~'item)))))
 
 (defmacro defworld-collection-ops
   "Define create/destroy functions for a world-data collection using a spec.
@@ -164,6 +256,107 @@
            ~'removed)))))
 
 ;; =========================================================================
+;; Collection Definition Macro
+;; =========================================================================
+
+(defmacro defcollection
+  "Define a complete collection using a schema definition.
+  
+  Takes a schema var and generates collection operations and validator."
+  [schema-var]
+  (let [schema (if (symbol? schema-var) (var-get (resolve schema-var)) schema-var)
+        impl-base (symbol (str (name (:collection-name schema)) "-impl"))
+        create-args (:args (:create schema))
+        create-expr (:expr (:create schema))
+        list-atom (:atom-name schema)
+        lookup-atom (:lookup-atom schema)
+        direct-keys (:direct-keys schema)
+        collection-keys (:collection-keys schema)
+        key-sources (:key-sources schema)
+        log-key-fn (:log-key-fn schema)
+        create-return (:return (:create schema))
+        return-on-unique-fail (:return-on-unique-fail (:create schema))
+        unique-keys (:unique (:create schema))
+        log-create (:log-create (:create schema))
+        log-create-key-expr (:log-create-key-expr (:create schema))
+        log-create-fail (:log-create-fail (:create schema))
+        log-destroy (:log-destroy (:destroy schema))
+        log-destroy-key-expr (:log-destroy-key-expr (:destroy schema))
+        vblock-key (:vblock-key (:validator schema))
+        log-label (:log-label (:validator schema))]
+    `(do
+       (defworld-collection-ops ~impl-base
+         {:create-args ~create-args
+          :create-expr ~create-expr
+          :list-atom ~list-atom
+          :lookup-atom ~lookup-atom
+          :direct-keys ~direct-keys
+          :collection-keys ~collection-keys
+          :key-sources ~key-sources
+          :unique-keys ~unique-keys
+          :return-on-unique-fail ~return-on-unique-fail
+          :create-return ~create-return
+          :log-create ~log-create
+          :log-create-key-expr ~log-create-key-expr
+          :log-create-fail ~log-create-fail
+          :log-destroy ~log-destroy
+          :log-destroy-key-expr ~log-destroy-key-expr
+          :log-key-fn ~log-key-fn})
+       (defworld-validator ~(symbol (str impl-base "-validator"))
+         {:list-atom ~list-atom
+          :vblock-key ~vblock-key
+          :destroy-fn ~(symbol (str "destroy-" (name impl-base) "!"))
+          :log-label ~log-label}))))
+
+;; =========================================================================
+;; World Schema From Schemas Macro
+;; =========================================================================
+
+(defmacro defworld-from-schemas
+  "Define world-data functions from schema definitions.
+  
+  Takes a schema def (with :collections vector) and a create-fn."
+  [schema-def create-fn-sym]
+  (let [schema (if (symbol? schema-def) (var-get (resolve schema-def)) schema-def)
+        schema-vars (:collections schema)
+        schemas (mapv (fn [var-sym]
+                        (if (symbol? var-sym) (var-get (resolve var-sym)) var-sym))
+                      schema-vars)
+        nbt-after-read (:nbt-after-read schema)
+        tick-name (or (:tick-name schema) 'tick-world-data-impl!)
+        nbt-write-name (or (:nbt-write-name schema) 'world-data-to-nbt-impl)
+        nbt-read-name (or (:nbt-read-name schema) 'world-data-from-nbt-impl)
+        nbt-lists (vec (map (fn [s]
+                              (let [nbt (:nbt s)]
+                                {:tag (:tag nbt)
+                                 :atom (:atom-name s)
+                                 :to-nbt (:to-nbt nbt)
+                                 :from-nbt (:from-nbt nbt)
+                                 :skip? (:skip? nbt)
+                                 :rebuild (:rebuild nbt)}))
+                            schemas))
+        tick-forms (vec (map (fn [s]
+                               (let [atom-kw (:atom-name s)
+                                     tick-fn (:fn (:tick s))]
+                                 `(doseq [~'item @(~atom-kw ~'world-data)]
+                                    (when-not @(:disposed ~'item)
+                                      (~tick-fn ~'item)))))
+                             schemas))]
+    `(do
+       ~@(map (fn [var-sym] `(defcollection ~var-sym)) schema-vars)
+       (nbt/defworldnbt world-data
+         :create ~create-fn-sym
+         :write-name ~nbt-write-name
+         :read-name ~nbt-read-name
+         :lists ~nbt-lists
+         :after-read ~nbt-after-read)
+       (defn ~tick-name [~'world-data]
+         ~@tick-forms)
+       (defn tick-world-data! [~'world-data] (~tick-name ~'world-data))
+       (defn world-data-to-nbt [~'world-data] (~nbt-write-name ~'world-data))
+       (defn world-data-from-nbt [~'world ~'nbt] (~nbt-read-name ~'world ~'nbt)))))
+
+;; =========================================================================
 ;; Schema Macro
 ;; =========================================================================
 
@@ -291,51 +484,11 @@
 ;;   - connections (vector) + node-lookup (map: vblock -> connection)
 
 (def world-data-schema
-  '{:collections
-    [{:name network
-      :impl-base network-impl
-      :list-atom :networks, :lookup-atom :net-lookup
-      :public {:create create-network!, :destroy destroy-network!, :validate validate-networks!}
-      :impl {:create create-network-impl!, :destroy destroy-network-impl!, :validate validate-networks-impl!}
-      :create
-      {:args [matrix-vblock ssid password]
-       :expr (my-mod.wireless.network/create-wireless-net world-data matrix-vblock ssid password)
-       :return true, :return-on-unique-fail false
-       :unique [{:label "SSID", :value-expr ssid, :value-fn identity}
-                {:label "matrix", :value-expr matrix-vblock, :value-fn vb/vblock-to-string}]
-       :log-create "Created network: SSID='%s'", :log-create-key-expr ssid
-       :log-create-fail "Cannot create network: %s '%s' already exists"}
-      :destroy {:log-destroy "Destroyed network: SSID='%s'", :log-destroy-key-expr (:ssid item)}
-      :direct-keys [:matrix :ssid], :key-sources [{:values-expr @(:nodes item)}], :log-key-fn identity
-      :validator {:vblock-key :matrix, :log-label "networks"}
-      :tick {:fn my-mod.wireless.network/tick-wireless-net!}
-      :nbt {:tag "networks", :atom :networks
-            :to-nbt my-mod.wireless.network/network-to-nbt
-            :from-nbt my-mod.wireless.network/network-from-nbt
-            :skip? (fn [net] @(:disposed net))
-            :rebuild {:lookup-atom :net-lookup, :direct-keys [:matrix :ssid], :collection-keys [:nodes]}}}
-     {:name node-connection
-      :impl-base node-connection-impl
-      :list-atom :connections, :lookup-atom :node-lookup
-      :public {:create create-node-connection!, :destroy destroy-node-connection!, :validate validate-connections!}
-      :impl {:create create-node-connection-impl!, :destroy destroy-node-connection-impl!, :validate validate-connections-impl!}
-      :create
-      {:args [node-vblock]
-       :expr (my-mod.wireless.node-connection/create-node-conn world-data node-vblock)
-       :return item}
-      :destroy {:log-destroy "Destroyed node connection: %s", :log-destroy-key-expr (:node item)}
-      :direct-keys [:node], :collection-keys [:generators :receivers]
-      :log-create "Created node connection: %s", :log-create-key-expr node-vblock, :log-key-fn vb/vblock-to-string
-      :validator {:vblock-key :node, :log-label "connections"}
-      :tick {:fn my-mod.wireless.node-connection/tick-node-conn!}
-      :nbt {:tag "connections", :atom :connections
-            :to-nbt my-mod.wireless.node-connection/conn-to-nbt
-            :from-nbt my-mod.wireless.node-connection/conn-from-nbt
-            :skip? (fn [conn] @(:disposed conn))
-            :rebuild {:lookup-atom :node-lookup, :direct-keys [:node], :collection-keys [:generators :receivers]}}}]
+  '{:collections [my-mod.wireless.network/network-schema
+                  my-mod.wireless.node-connection/conn-schema]
     :tick-name tick-world-data-impl!
     :nbt-write-name world-data-to-nbt-impl
     :nbt-read-name world-data-from-nbt-impl
-    :nbt-after-read [(log/info (format "Loaded %d networks and %d connections from NBT"
-                                         (count @(:networks world-data))
-                                         (count @(:connections world-data))))]})
+    :nbt-after-read [(~'log/info (format "Loaded %d networks and %d connections from NBT"
+                                          (count @(:networks world-data))
+                                          (count @(:connections world-data))))]})

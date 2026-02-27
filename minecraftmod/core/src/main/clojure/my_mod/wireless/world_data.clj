@@ -66,7 +66,7 @@
 ;; Schema
 ;; ============================================================================
 
-(ws/defworld-schema ws/world-data-schema create-world-data)
+(ws/defworld-from-schemas ws/world-data-schema create-world-data)
 
 ;; ============================================================================
 ;; Network Operations

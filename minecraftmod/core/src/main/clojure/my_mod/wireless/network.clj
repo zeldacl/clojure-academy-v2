@@ -300,61 +300,51 @@
   (log/info (format "Network '%s' disposed" (:ssid network))))
 
 ;; ============================================================================
+;; Network Schema Definition
+;; ============================================================================
+
+(def network-schema
+  '{:collection-name :network
+    :atom-name :networks
+    :lookup-atom :net-lookup
+    :factory {:fn create-wireless-net
+              :args [world-data matrix ssid password]}
+    :nbt-fields [{:name :matrix :type :vblock :nbt-key "matrix" :factory-arg true}
+                 {:name :ssid :type :string :nbt-key "ssid" :factory-arg true}
+                 {:name :password :type :string :nbt-key "password" :factory-arg true}
+                 {:name :buffer :type :double :nbt-key "buffer" :atom? true}
+                 {:name :nodes :type :vblock-list :nbt-key "list" :atom? true}]
+    :create {:args [matrix-vblock ssid password]
+             :expr '(my-mod.wireless.network/create-wireless-net world-data matrix-vblock ssid password)
+             :return true
+             :return-on-unique-fail false
+             :unique [{:label "SSID" :value-expr 'ssid :value-fn 'identity}
+                      {:label "matrix" :value-expr 'matrix-vblock :value-fn 'my-mod.wireless.virtual-blocks/vblock-to-string}]
+             :log-create "Created network: SSID='%s'"
+             :log-create-key-expr 'ssid
+             :log-create-fail "Cannot create network: %s '%s' already exists"}
+    :destroy {:log-destroy "Destroyed network: SSID='%s'"
+              :log-destroy-key-expr '(:ssid item)}
+    :direct-keys [:matrix :ssid]
+    :key-sources [{:values-expr '@(:nodes item)}]
+    :log-key-fn 'identity
+    :validator {:vblock-key :matrix
+                :log-label "networks"}
+    :tick {:fn 'my-mod.wireless.network/tick-wireless-net!}
+    :nbt {:tag "networks"
+          :atom :networks
+          :to-nbt 'my-mod.wireless.network/network-to-nbt
+          :from-nbt 'my-mod.wireless.network/network-from-nbt
+          :skip? '(fn [net] @(:disposed net))
+          :rebuild {:lookup-atom :net-lookup
+                    :direct-keys [:matrix :ssid]
+                    :collection-keys [:nodes]}}})
+
+;; ============================================================================
 ;; NBT Serialization
 ;; ============================================================================
 
-(defn network-to-nbt
-  "Serialize network to NBT"
-  [network]
-  (let [nbt (net.minecraft.nbt.NBTTagCompound.)]
-    ;; Matrix
-    (.setTag nbt "matrix" (vb/vblock-to-nbt (:matrix network)))
-    
-    ;; Info
-    (.setString nbt "ssid" (:ssid network))
-    (.setString nbt "password" (:password network))
-    (.setDouble nbt "buffer" @(:buffer network))
-    
-    ;; Nodes list
-    (let [nodes-list (net.minecraft.nbt.NBTTagList.)
-          world (:world (:world-data network))]
-      (doseq [node-vb @(:nodes network)]
-        ;; Only save valid nodes
-        (when (or (not (vb/is-chunk-loaded? node-vb world))
-                  (vb/vblock-get node-vb world))
-          (.appendTag nodes-list (vb/vblock-to-nbt node-vb))))
-      (.setTag nbt "list" nodes-list))
-    
-    (log/info (format "Saved network '%s' to NBT (%d nodes)"
-                      (:ssid network)
-                      (count @(:nodes network))))
-    nbt))
-
-(defn network-from-nbt
-  "Deserialize network from NBT"
-  [world-data nbt]
-  (let [;; Load basic data
-        matrix (vb/vblock-from-nbt (.getCompoundTag nbt "matrix"))
-        ssid (.getString nbt "ssid")
-        password (.getString nbt "password")
-        buffer (.getDouble nbt "buffer")
-        
-        ;; Create network
-        network (create-wireless-net world-data matrix ssid password)]
-    
-    ;; Restore buffer
-    (reset! (:buffer network) buffer)
-    
-    ;; Load nodes
-    (let [nodes-list (.getTagList nbt "list" 10)] ; 10 = compound
-      (dotimes [i (.tagCount nodes-list)]
-        (let [node-vb (vb/vblock-from-nbt (.getCompoundTagAt nodes-list i))]
-          (swap! (:nodes network) conj node-vb))))
-    
-    (log/info (format "Loaded network '%s' from NBT (%d nodes)"
-                      ssid
-                      (count @(:nodes network))))
-    network))
+(my-mod.wireless.world-schema/defnbt-handlers-from-schema network-schema)
 
 ;; ============================================================================
 ;; Debug
