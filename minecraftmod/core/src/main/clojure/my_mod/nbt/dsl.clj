@@ -172,6 +172,44 @@
     (read-nbt-field tile nbt field-spec))
   tile)
 
+;; =========================================================================
+;; List Helpers for World Data
+;; =========================================================================
+
+(defn write-nbt-list-field
+  "Write a list of items to NBT under a tag
+  
+  - nbt: NBTTagCompound
+  - tag: String tag name
+  - items: collection of items
+  - to-nbt-fn: (fn [item] -> NBTTagCompound)
+  - skip?: optional predicate (fn [item] -> bool)"
+  [nbt tag items to-nbt-fn skip?]
+  (let [list (net.minecraft.nbt.NBTTagList.)]
+    (doseq [item items]
+      (when-not (and skip? (skip? item))
+        (.appendTag list (to-nbt-fn item))))
+    (.setTag nbt tag list))
+  nbt)
+
+(defn read-nbt-list-field!
+  "Read a list of items from NBT and append to a collection atom
+  
+  - nbt: NBTTagCompound
+  - tag: String tag name
+  - world-data: world data container passed to from-nbt-fn
+  - collection-atom: atom to append items to
+  - from-nbt-fn: (fn [world-data item-nbt] -> item)
+  - rebuild-fn: optional (fn [world-data item] -> void)"
+  [nbt tag world-data collection-atom from-nbt-fn rebuild-fn]
+  (let [list (.getTagList nbt tag 10)]
+    (dotimes [i (.tagCount list)]
+      (let [item-nbt (.getCompoundTagAt list i)
+            item (from-nbt-fn world-data item-nbt)]
+        (swap! collection-atom conj item)
+        (when rebuild-fn
+          (rebuild-fn world-data item))))))
+
 ;; ============================================================================
 ;; Macro: defnbt
 ;; ============================================================================
@@ -261,6 +299,89 @@
        
        ;; Log registration
        (log/info ~(str "Registered NBT serialization for: " name-str)))))
+
+;; ============================================================================
+;; Macro: defworldnbt
+;; ============================================================================
+
+(defmacro defworldnbt
+  "Define NBT serialization for world data using list specs.
+  
+  Options:
+    :create     - function to create world-data (fn [world] -> data)
+    :lists      - vector of list specs
+    :write-name - optional name for write function (default: {name}-to-nbt)
+    :read-name  - optional name for read function (default: {name}-from-nbt)
+    :after-read - optional seq of forms executed after lists are read
+  
+  List spec keys:
+    :tag        - NBT tag name (string)
+    :atom       - keyword for collection atom in world-data
+    :to-nbt     - item serializer (fn [item] -> NBTTagCompound)
+    :from-nbt   - item deserializer (fn [world-data item-nbt] -> item)
+    :skip?      - optional predicate to skip writing an item
+    :rebuild    - optional lookup rebuild config passed to caller-supplied rebuild function
+  
+  Example:
+    (defworldnbt world-data
+      :create create-world-data
+      :lists [{:tag "networks"
+               :atom :networks
+               :to-nbt my-mod.wireless.network/network-to-nbt
+               :from-nbt my-mod.wireless.network/network-from-nbt
+               :skip? (fn [net] @(:disposed net))
+               :rebuild {:lookup-atom :net-lookup
+                         :direct-keys [:matrix :ssid]
+                         :collection-keys [:nodes]}}])"
+  [name & options]
+  (let [opts (apply hash-map options)
+        create-fn (:create opts)
+        lists (:lists opts)
+        after-read (or (:after-read opts) [])
+        name-str (clojure.core/name name)
+        write-fn-name (or (:write-name opts) (symbol (str name-str "-to-nbt")))
+        read-fn-name (or (:read-name opts) (symbol (str name-str "-from-nbt")))
+        write-forms (mapv (fn [spec]
+                            (let [{:keys [tag atom to-nbt skip?]} spec]
+                              `(write-nbt-list-field
+                                 ~'nbt
+                                 ~tag
+                                 @(~atom ~'world-data)
+                                 ~to-nbt
+                                 ~skip?)))
+                          lists)
+        read-forms (mapv (fn [spec]
+                           (let [{:keys [tag atom from-nbt rebuild]} spec
+                                 rebuild-fn (when rebuild
+                                              `(fn [~'world-data ~'item]
+                                                 (rebuild-item-lookups!
+                                                   ~'world-data
+                                                   ~'item
+                                                   ~rebuild)))]
+                             `(read-nbt-list-field!
+                                ~'nbt
+                                ~tag
+                                ~'world-data
+                                (~atom ~'world-data)
+                                ~from-nbt
+                                ~rebuild-fn)))
+                         lists)]
+    `(do
+       (defn ~write-fn-name
+         ~(str "Serialize " name-str " to NBT\n\n"
+               "Auto-generated by defworldnbt macro.")
+         [~'world-data]
+         (let [~'nbt (net.minecraft.nbt.NBTTagCompound.)]
+           ~@write-forms
+           ~'nbt))
+       (defn ~read-fn-name
+         ~(str "Deserialize " name-str " from NBT\n\n"
+               "Auto-generated by defworldnbt macro.")
+         [~'world ~'nbt]
+         (let [~'world-data (~create-fn ~'world)]
+           ~@read-forms
+           ~@after-read
+           ~'world-data)))))
 
 ;; ============================================================================
 ;; Convenience Macros for Common Patterns

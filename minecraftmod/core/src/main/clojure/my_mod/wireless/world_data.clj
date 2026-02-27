@@ -7,7 +7,8 @@
   - Persistence (NBT serialization)
   - Tick coordination"
   (:require [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log]
+            [my-mod.nbt.dsl :as nbt]))
 
 ;; ============================================================================
 ;; WiWorldData Record
@@ -16,14 +17,14 @@
 (defrecord WiWorldData
   [world           ; World - the world this data belongs to
    net-lookup      ; atom<map> - lookups for WirelessNet
-                   ;   vblock → WirelessNet
-                   ;   ssid-string → WirelessNet
+                   ;   vblock -> WirelessNet
+                   ;   ssid-string -> WirelessNet
    node-lookup     ; atom<map> - lookups for NodeConn
-                   ;   vblock → NodeConn
+                   ;   vblock -> NodeConn
    networks        ; atom<vector<WirelessNet>> - all networks
    connections])   ; atom<vector<NodeConn>> - all node connections
 
-;; Global registry: world → WiWorldData
+;; Global registry: world -> WiWorldData
 (def ^:private world-data-registry (atom {}))
 
 ;; ============================================================================
@@ -62,46 +63,156 @@
   (log/info (format "Removed WiWorldData for world: %s" world)))
 
 ;; ============================================================================
+;; Collection Ops Macro
+;; ============================================================================
+
+(defmacro defworld-collection-ops
+  "Define create/destroy functions for a world-data collection using a spec.
+  
+  Required keys in spec:
+    :create-args    - vector of symbols for create fn args (excluding world-data)
+    :create-expr    - form that creates the item
+    :list-atom      - keyword for the collection atom in world-data
+    :lookup-atom    - keyword for the lookup atom in world-data
+  Optional keys:
+    :direct-keys     - vector of keywords for direct lookup keys on the item
+    :collection-keys - vector of keywords for collection fields on the item
+    :key-sources     - vector of maps {:values-expr <form> :when-expr <form>}
+    :unique-keys    - vector of maps {:label "..." :value-expr <form> :value-fn <fn>}
+    :return-on-unique-fail - return value when uniqueness check fails
+    :create-return  - value to return on successful create (default: item)
+    :log-create     - format string for create log
+    :log-create-key-expr - form for create log key
+    :log-destroy    - format string for destroy log
+    :log-destroy-key-expr - form for destroy log key
+    :log-key-fn     - function to format keys in logs
+    :log-create-fail - format string for uniqueness failure log
+  
+  Example:
+    (defworld-collection-ops node-connection
+      {:create-args [node-vblock]
+       :create-expr (my-mod.wireless.node-connection/create-node-conn world-data node-vblock)
+       :list-atom :connections
+       :lookup-atom :node-lookup
+       :direct-keys [:node]
+       :collection-keys [:generators :receivers]
+       :log-create "Created node connection: %s"
+       :log-create-key-expr node-vblock
+       :log-destroy "Destroyed node connection: %s"
+       :log-destroy-key-expr (:node item)
+       :log-key-fn vb/vblock-to-string})"
+  [base-name spec]
+  (let [create-name (symbol (str "create-" (name base-name) "!"))
+        destroy-name (symbol (str "destroy-" (name base-name) "!"))
+        {:keys [create-args create-expr list-atom lookup-atom direct-keys collection-keys key-sources
+                unique-keys return-on-unique-fail create-return log-create log-create-key-expr
+                log-destroy log-destroy-key-expr log-key-fn log-create-fail]} spec
+        create-args (or create-args [])
+        direct-keys (or direct-keys [])
+        collection-keys (or collection-keys [])
+        unique-keys (or unique-keys [])
+        key-sources (or key-sources [])
+        log-key-fn (or log-key-fn 'identity)
+        create-return (or create-return 'item)
+        direct-key-forms (mapv (fn [k]
+                                 `(when-let [~'value (get ~'item ~k)]
+                                    (swap! ~'lookup-atom assoc ~'value ~'item)))
+                               direct-keys)
+        collection-key-forms (mapv (fn [k]
+                                     `(when-let [~'coll (get ~'item ~k)]
+                                        (doseq [~'val @~'coll]
+                                          (swap! ~'lookup-atom assoc ~'val ~'item))))
+                                   collection-keys)
+        key-source-forms (mapv (fn [entry]
+                                 (let [{:keys [values-expr when-expr]} entry
+                                       when-expr (or when-expr true)]
+                                   `(when ~when-expr
+                                      (doseq [~'val ~values-expr]
+                                        (swap! ~'lookup-atom assoc ~'val ~'item)))))
+                               key-sources)
+        direct-key-remove-forms (mapv (fn [k]
+                                        `(when-let [~'value (get ~'item ~k)]
+                                           (swap! ~'lookup-atom dissoc ~'value)))
+                                      direct-keys)
+        collection-key-remove-forms (mapv (fn [k]
+                                            `(when-let [~'coll (get ~'item ~k)]
+                                               (doseq [~'val @~'coll]
+                                                 (swap! ~'lookup-atom dissoc ~'val))))
+                                          collection-keys)
+        key-source-remove-forms (mapv (fn [entry]
+                                        (let [{:keys [values-expr when-expr]} entry
+                                              when-expr (or when-expr true)]
+                                          `(when ~when-expr
+                                             (doseq [~'val ~values-expr]
+                                               (swap! ~'lookup-atom dissoc ~'val)))))
+                                      key-sources)
+        unique-check-forms (mapv (fn [entry]
+                       (let [{:keys [label value-expr value-fn]} entry
+                         value-fn (or value-fn 'identity)
+                         label (or label "key")]
+                       `(let [~'value ~value-expr
+                          ~'formatted (~value-fn ~'value)]
+                        (when (contains? @~'lookup-atom ~'value)
+                          {:label ~label :value ~'formatted}))))
+                     unique-keys)]
+    `(do
+       (defn ~create-name
+         ~(str "Create a new " (name base-name) "\n"
+               "Returns the created item")
+         [~'world-data ~@create-args]
+         (let [~'list-atom (get ~'world-data ~list-atom)
+               ~'lookup-atom (get ~'world-data ~lookup-atom)
+               ~'conflict ~(if (seq unique-check-forms)
+                             `(or ~@unique-check-forms)
+                             nil)]
+           (if ~'conflict
+             (do
+               (when ~log-create-fail
+                 (log/info (format ~log-create-fail (:label ~'conflict) (:value ~'conflict))))
+               ~return-on-unique-fail)
+             (let [~'item ~create-expr]
+               (swap! ~'list-atom conj ~'item)
+               ~@direct-key-forms
+               ~@collection-key-forms
+               ~@key-source-forms
+               (when ~log-create
+                 (log/info (format ~log-create (~log-key-fn ~log-create-key-expr))))
+               ~create-return))))
+       (defn ~destroy-name
+         ~(str "Destroy a " (name base-name))
+         [~'world-data ~'item]
+         (let [~'list-atom (get ~'world-data ~list-atom)
+               ~'lookup-atom (get ~'world-data ~lookup-atom)]
+           (reset! (:disposed ~'item) true)
+           ~@direct-key-remove-forms
+           ~@collection-key-remove-forms
+           ~@key-source-remove-forms
+           (swap! ~'list-atom (fn [~'items] (filterv #(not= % ~'item) ~'items)))
+           (when ~log-destroy
+             (log/info (format ~log-destroy (~log-key-fn ~log-destroy-key-expr)))))))))
+
+;; ============================================================================
 ;; Network Operations
 ;; ============================================================================
 
-(defn create-network!
-  "Create a new wireless network
-  Returns true if successful, false if SSID already exists"
-  [world-data matrix-vblock ssid password]
-  (let [net-lookup @(:net-lookup world-data)]
-    (if (contains? net-lookup ssid)
-      (do
-        (log/info (format "Cannot create network: SSID '%s' already exists" ssid))
-        false)
-      (let [;; Create network (forward declaration, will be defined in network.clj)
-            network (my-mod.wireless.network/create-wireless-net
-                      world-data matrix-vblock ssid password)]
-        ;; Add to networks list
-        (swap! (:networks world-data) conj network)
-        ;; Add to lookup tables
-        (swap! (:net-lookup world-data) assoc matrix-vblock network)
-        (swap! (:net-lookup world-data) assoc ssid network)
-        (log/info (format "Created network: SSID='%s'" ssid))
-        true))))
-
-(defn destroy-network!
-  "Destroy a wireless network"
-  [world-data network]
-  (let [ssid (:ssid network)
-        matrix (:matrix network)]
-    ;; Mark as disposed
-    (reset! (:disposed network) true)
-    ;; Remove from lookup
-    (swap! (:net-lookup world-data) dissoc matrix)
-    (swap! (:net-lookup world-data) dissoc ssid)
-    ;; Remove all node lookups
-    (doseq [node @(:nodes network)]
-      (swap! (:net-lookup world-data) dissoc node))
-    ;; Remove from networks list
-    (swap! (:networks world-data)
-           (fn [nets] (filterv #(not= % network) nets)))
-    (log/info (format "Destroyed network: SSID='%s'" ssid))))
+(defworld-collection-ops network
+  {:create-args [matrix-vblock ssid password]
+   :create-expr (my-mod.wireless.network/create-wireless-net
+                  world-data matrix-vblock ssid password)
+   :list-atom :networks
+   :lookup-atom :net-lookup
+   :direct-keys [:matrix :ssid]
+  :key-sources [{:values-expr @(:nodes item)}]
+   :unique-keys [{:label "SSID" :value-expr ssid :value-fn identity}
+                 {:label "matrix" :value-expr matrix-vblock :value-fn vb/vblock-to-string}]
+   :return-on-unique-fail false
+   :create-return true
+   :log-create "Created network: SSID='%s'"
+   :log-create-key-expr ssid
+   :log-destroy "Destroyed network: SSID='%s'"
+   :log-destroy-key-expr (:ssid item)
+   :log-key-fn identity
+   :log-create-fail "Cannot create network: %s '%s' already exists"})
 
 (defn get-network-by-matrix
   "Get network by matrix vblock"
@@ -134,37 +245,19 @@
 ;; Node Connection Operations
 ;; ============================================================================
 
-(defn create-node-connection!
-  "Create a new node connection
-  Returns the created NodeConn"
-  [world-data node-vblock]
-  (let [;; Create connection (forward declaration)
-        conn (my-mod.wireless.node-connection/create-node-conn
-               world-data node-vblock)]
-    ;; Add to connections list
-    (swap! (:connections world-data) conj conn)
-    ;; Add to lookup
-    (swap! (:node-lookup world-data) assoc node-vblock conn)
-    (log/info (format "Created node connection: %s" (vb/vblock-to-string node-vblock)))
-    conn))
-
-(defn destroy-node-connection!
-  "Destroy a node connection"
-  [world-data conn]
-  (let [node (:node conn)]
-    ;; Mark as disposed
-    (reset! (:disposed conn) true)
-    ;; Remove from lookup
-    (swap! (:node-lookup world-data) dissoc node)
-    ;; Remove all generator/receiver lookups
-    (doseq [gen @(:generators conn)]
-      (swap! (:node-lookup world-data) dissoc gen))
-    (doseq [rec @(:receivers conn)]
-      (swap! (:node-lookup world-data) dissoc rec))
-    ;; Remove from connections list
-    (swap! (:connections world-data)
-           (fn [conns] (filterv #(not= % conn) conns)))
-    (log/info (format "Destroyed node connection: %s" (vb/vblock-to-string node)))))
+(defworld-collection-ops node-connection
+  {:create-args [node-vblock]
+   :create-expr (my-mod.wireless.node-connection/create-node-conn
+                  world-data node-vblock)
+   :list-atom :connections
+   :lookup-atom :node-lookup
+   :direct-keys [:node]
+   :collection-keys [:generators :receivers]
+   :log-create "Created node connection: %s"
+   :log-create-key-expr node-vblock
+   :log-destroy "Destroyed node connection: %s"
+   :log-destroy-key-expr (:node item)
+   :log-key-fn vb/vblock-to-string})
 
 (defn get-node-connection
   "Get node connection by node/generator/receiver vblock"
@@ -286,82 +379,28 @@
         (doseq [val @coll]
           (swap! lookup-atom assoc val item))))))
 
-(defmacro load-from-nbt-list!
-  "Macro to simplify loading and rebuilding lookups from NBT list
-  
-  Args:
-  - nbt: NBT compound containing the list
-  - tag-name: String name of the NBT list tag
-  - world-data: WiWorldData instance
-  - deserialize-fn: Function to deserialize item from NBT (receives world-data and item-nbt)
-  - collection-atom: Atom to add items to
-  - lookup-rebuild-forms: Forms to rebuild lookup tables (can reference 'item' symbol)
-  
-  Example:
-    (load-from-nbt-list! nbt \"networks\" world-data
-      my-mod.wireless.network/network-from-nbt
-      (:networks world-data)
-      (rebuild-item-lookups! world-data item
-        {:lookup-atom :net-lookup
-         :direct-keys [:matrix :ssid]
-         :collection-keys [:nodes]}))"
-  [nbt tag-name world-data deserialize-fn collection-atom & lookup-rebuild-forms]
-  `(let [list# (.getTagList ~nbt ~tag-name 10)] ; 10 = compound tag
-     (dotimes [i# (.tagCount list#)]
-       (let [item-nbt# (.getCompoundTagAt list# i#)
-             ~'item (~deserialize-fn ~world-data item-nbt#)]
-         (swap! ~collection-atom conj ~'item)
-         ~@lookup-rebuild-forms))))
-
-(defn world-data-to-nbt
-  "Serialize world data to NBT"
-  [world-data]
-  (let [nbt (net.minecraft.nbt.NBTTagCompound.)
-        
-        ;; Save networks
-        networks-list (net.minecraft.nbt.NBTTagList.)
-        _ (doseq [net @(:networks world-data)]
-            (when-not @(:disposed net)
-              (.appendTag networks-list
-                         (my-mod.wireless.network/network-to-nbt net))))
-        _ (.setTag nbt "networks" networks-list)
-        
-        ;; Save connections
-        conns-list (net.minecraft.nbt.NBTTagList.)
-        _ (doseq [conn @(:connections world-data)]
-            (when-not @(:disposed conn)
-              (.appendTag conns-list
-                         (my-mod.wireless.node-connection/conn-to-nbt conn))))
-        _ (.setTag nbt "connections" conns-list)]
-    nbt))
-
-(defn world-data-from-nbt
-  "Deserialize world data from NBT"
-  [world nbt]
-  (let [world-data (create-world-data world)]
-    
-    ;; Load networks
-    (load-from-nbt-list! nbt "networks" world-data
-      my-mod.wireless.network/network-from-nbt
-      (:networks world-data)
-      (rebuild-item-lookups! world-data item
-        {:lookup-atom :net-lookup
-         :direct-keys [:matrix :ssid]
-         :collection-keys [:nodes]}))
-    
-    ;; Load connections
-    (load-from-nbt-list! nbt "connections" world-data
-      my-mod.wireless.node-connection/conn-from-nbt
-      (:connections world-data)
-      (rebuild-item-lookups! world-data item
-        {:lookup-atom :node-lookup
-         :direct-keys [:node]
-         :collection-keys [:generators :receivers]}))
-    
-    (log/info (format "Loaded %d networks and %d connections from NBT"
-                      (count @(:networks world-data))
-                      (count @(:connections world-data))))
-    world-data))
+(nbt/defworldnbt world-data
+  :create create-world-data
+  :lists [{:tag "networks"
+           :atom :networks
+           :to-nbt my-mod.wireless.network/network-to-nbt
+           :from-nbt my-mod.wireless.network/network-from-nbt
+           :skip? (fn [net] @(:disposed net))
+           :rebuild {:lookup-atom :net-lookup
+                     :direct-keys [:matrix :ssid]
+                     :collection-keys [:nodes]}}
+          {:tag "connections"
+           :atom :connections
+           :to-nbt my-mod.wireless.node-connection/conn-to-nbt
+           :from-nbt my-mod.wireless.node-connection/conn-from-nbt
+           :skip? (fn [conn] @(:disposed conn))
+           :rebuild {:lookup-atom :node-lookup
+                     :direct-keys [:node]
+                     :collection-keys [:generators :receivers]}}]
+  :after-read
+  [(log/info (format "Loaded %d networks and %d connections from NBT"
+                     (count @(:networks world-data))
+                     (count @(:connections world-data))))])
 
 ;; ============================================================================
 ;; WorldSavedData Integration
@@ -440,8 +479,6 @@
   [world]
   (remove-world-data! world)
   (log/info "Cleaned up WiWorldData for unloaded world"))
-
-
 
 (defn get-statistics
   "Get statistics about this world's wireless system"
