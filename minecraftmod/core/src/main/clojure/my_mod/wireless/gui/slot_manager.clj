@@ -144,75 +144,36 @@
 ;; Platform Bridge Helpers
 ;; ============================================================================
 
-(defn execute-quick-move-forge
-  "Execute quick-move using Forge's Container API
-  
-  This is a helper for Forge bridge code to implement quickMoveStack.
-  
-  Args:
-  - container-wrapper: Forge Container (with .moveItemStackTo method)
-  - clj-container: Clojure NodeContainer or MatrixContainer
-  - slot-index: int
-  - slot: Forge Slot object
-  - stack: ItemStack
-  
-  Returns: ItemStack (EMPTY if moved, original if failed)"
-  [container-wrapper clj-container slot-index slot stack]
-  (if-let [strategy (get-quick-move-strategy clj-container slot-index)]
-    (let [{:keys [target-start target-end reverse]} strategy]
-      (if (.moveItemStackTo container-wrapper stack target-start target-end reverse)
-        (do
-          (.setChanged slot)
-          net.minecraft.item.ItemStack/EMPTY)
-        stack))
-    stack))
-
-(defn execute-quick-move-fabric
-  "Execute quick-move using Fabric's ScreenHandler API
-  
-  This is a helper for Fabric bridge code to implement quickMove (transferSlot).
-  
-  Args:
-  - handler-wrapper: Fabric ScreenHandler (with .insertItem method)
-  - clj-container: Clojure NodeContainer or MatrixContainer
-  - slot-index: int
-  - slot: Fabric Slot object
-  - stack: ItemStack
-  
-  Returns: ItemStack (EMPTY if moved, original if failed)"
-  [handler-wrapper clj-container slot-index slot stack]
-  (if-let [strategy (get-quick-move-strategy clj-container slot-index)]
-    (let [{:keys [target-start target-end reverse]} strategy]
-      (if (.insertItem handler-wrapper stack target-start target-end reverse)
-        (do
-          (.markDirty slot)
-          net.minecraft.item.ItemStack/EMPTY)
-        stack))
-    stack))
+;; Platform-specific quick-move implementations should be in:
+;; - forge-1.*.*/src/main/clojure/.../slot_manager_impl.clj
+;; - fabric-1.*.*/src/main/clojure/.../slot_manager_impl.clj
+;;
+;; These implementations should delegate to get-quick-move-strategy
+;; and use platform-specific APIs (Forge .moveItemStackTo or Fabric .insertItem)
 
 ;; ============================================================================
 ;; Design Notes
 ;; ============================================================================
 
-;; This slot manager provides:
+;; This slot manager provides platform-agnostic slot management:
 ;;
-;; 1. **Slot Layout Information**:
+;; 1. **Slot Layout Information** (Platform-Independent):
 ;;    - Tile slot ranges (node: 0-1, matrix: 0-3)
 ;;    - Player slot ranges (always 36 slots, but offset varies)
 ;;    - Queries: is-tile-slot?, is-player-slot?
 ;;
-;; 2. **Quick-Move Strategy**:
+;; 2. **Quick-Move Strategy** (Platform-Independent):
 ;;    - Determines target range for Shift+Click
 ;;    - Handles reverse insertion (hotbar-first for tile->player)
-;;    - Platform-agnostic logic
+;;    - No platform-specific APIs used
 ;;
-;; 3. **Platform Bridge Helpers**:
-;;    - execute-quick-move-forge: Uses .moveItemStackTo
-;;    - execute-quick-move-fabric: Uses .insertItem
-;;    - Both delegate to same strategy logic
+;; 3. **Platform Bridge Hook Points**:
+;;    - Each platform implements execute-quick-move-* in their own module
+;;    - Uses get-quick-move-strategy to access business logic
+;;    - Calls platform-specific APIs (.moveItemStackTo for Forge, .insertItem for Fabric)
 ;;
 ;; Benefits:
-;; - DRY: Slot layout defined once
-;; - Platform-agnostic: Core logic independent of Forge/Fabric
-;; - Maintainable: Changes to slot layout in one place
+;; - DRY: Slot layout and strategy defined once
+;; - Platform-agnostic core: Independent of Forge/Fabric APIs
+;; - Modular: Platform code in platform-specific modules
 ;; - Testable: Pure functions without platform dependencies
