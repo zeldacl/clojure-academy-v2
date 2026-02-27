@@ -274,57 +274,70 @@
 ;; Validation and Cleanup
 ;; ============================================================================
 
-(defn validate-networks!
-  "Validate all networks, removing invalid ones
-  Returns number of networks removed"
-  [world-data]
-  (let [world (:world world-data)
-        networks-before (count @(:networks world-data))]
-    ;; Filter out disposed or invalid networks
-    (swap! (:networks world-data)
-           (fn [nets]
-             (filterv (fn [net]
-                        (and (not @(:disposed net))
-                             ;; Check if matrix still exists
-                             (let [matrix (:matrix net)]
-                               (or (not (vb/is-chunk-loaded? matrix world))
-                                   (some? (vb/vblock-get matrix world))))))
-                      nets)))
-    ;; Cleanup disposed networks
-    (doseq [net @(:networks world-data)]
-      (when @(:disposed net)
-        (destroy-network! world-data net)))
-    (let [networks-after (count @(:networks world-data))
-          removed (- networks-before networks-after)]
-      (when (> removed 0)
-        (log/info (format "Removed %d invalid networks" removed)))
-      removed)))
+(defmacro defworld-validator
+  "Define a validator function for a world-data collection.
+  
+  Required keys in spec:
+    :list-atom   - keyword for the collection atom in world-data
+    :vblock-key  - keyword for the vblock on each item
+    :destroy-fn  - function to destroy an invalid item
+  Optional keys:
+    :log-label   - label used in removed log
+    :invalid?    - predicate (fn [item world] -> bool) for validity check
+  
+  The default validity check matches existing behavior:
+    item not disposed AND (chunk not loaded OR vblock exists).
+  
+  Example with custom :invalid?:
+    (defworld-validator validate-future!
+      {:list-atom :future-items
+       :vblock-key :core
+       :destroy-fn destroy-future!
+       :log-label "future-items"
+       :invalid? (fn [item world]
+                   (and (not @(:disposed item))
+                        (> (count @(:nodes item)) 0)
+                        (some? (vb/vblock-get (:core item) world))))})"
+  [fn-name spec]
+  (let [{:keys [list-atom vblock-key destroy-fn log-label invalid?]} spec
+        log-label (or log-label "items")
+        invalid? (or invalid?
+                     `(fn [~'item ~'world]
+                        (and (not @(:disposed ~'item))
+                             (let [~'vblock (~vblock-key ~'item)]
+                               (or (not (vb/is-chunk-loaded? ~'vblock ~'world))
+                                   (some? (vb/vblock-get ~'vblock ~'world)))))))]
+    `(defn ~fn-name
+       ~(str "Validate " log-label ", removing invalid ones\n"
+             "Returns number of items removed")
+       [~'world-data]
+       (let [~'world (:world ~'world-data)
+             ~'before (count @(~list-atom ~'world-data))]
+         (swap! (~list-atom ~'world-data)
+                (fn [~'items]
+                  (filterv (fn [~'item]
+                             (~invalid? ~'item ~'world))
+                           ~'items)))
+         (doseq [~'item @(~list-atom ~'world-data)]
+           (when @(:disposed ~'item)
+             (~destroy-fn ~'world-data ~'item)))
+         (let [~'after (count @(~list-atom ~'world-data))
+               ~'removed (- ~'before ~'after)]
+           (when (> ~'removed 0)
+             (log/info (format "Removed %d invalid %s" ~'removed ~log-label)))
+           ~'removed)))))
 
-(defn validate-connections!
-  "Validate all node connections, removing invalid ones
-  Returns number of connections removed"
-  [world-data]
-  (let [world (:world world-data)
-        conns-before (count @(:connections world-data))]
-    ;; Filter out disposed or invalid connections
-    (swap! (:connections world-data)
-           (fn [conns]
-             (filterv (fn [conn]
-                        (and (not @(:disposed conn))
-                             ;; Check if node still exists
-                             (let [node (:node conn)]
-                               (or (not (vb/is-chunk-loaded? node world))
-                                   (some? (vb/vblock-get node world))))))
-                      conns)))
-    ;; Cleanup disposed connections
-    (doseq [conn @(:connections world-data)]
-      (when @(:disposed conn)
-        (destroy-node-connection! world-data conn)))
-    (let [conns-after (count @(:connections world-data))
-          removed (- conns-before conns-after)]
-      (when (> removed 0)
-        (log/info (format "Removed %d invalid connections" removed)))
-      removed)))
+(defworld-validator validate-networks!
+  {:list-atom :networks
+   :vblock-key :matrix
+   :destroy-fn destroy-network!
+   :log-label "networks"})
+
+(defworld-validator validate-connections!
+  {:list-atom :connections
+   :vblock-key :node
+   :destroy-fn destroy-node-connection!
+   :log-label "connections"})
 
 ;; ============================================================================
 ;; Tick System
