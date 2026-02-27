@@ -286,82 +286,56 @@
 ;; =========================================================================
 ;; Schema Definition
 ;; =========================================================================
+;; Result: WiWorldData record with these atoms:
+;;   - networks (vector) + net-lookup (map: vblock/ssid -> network)
+;;   - connections (vector) + node-lookup (map: vblock -> connection)
 
 (def world-data-schema
   '{:collections
     [{:name network
       :impl-base network-impl
-      :public {:create create-network!
-         :destroy destroy-network!
-         :validate validate-networks!}
-      :impl {:create create-network-impl!
-       :destroy destroy-network-impl!
-       :validate validate-networks-impl!}
-      :create {:args [matrix-vblock ssid password]
-         :expr (my-mod.wireless.network/create-wireless-net
-           world-data matrix-vblock ssid password)
-         :return true
-         :return-on-unique-fail false
-         :unique [{:label "SSID" :value-expr ssid :value-fn identity}
-      {:label "matrix" :value-expr matrix-vblock
-       :value-fn vb/vblock-to-string}]
-         :log-create "Created network: SSID='%s'"
-         :log-create-key-expr ssid
-         :log-create-fail "Cannot create network: %s '%s' already exists"}
-      :destroy {:log-destroy "Destroyed network: SSID='%s'"
-    :log-destroy-key-expr (:ssid item)}
-      :list-atom :networks
-      :lookup-atom :net-lookup
-      :direct-keys [:matrix :ssid]
-      :key-sources [{:values-expr @(:nodes item)}]
-      :log-key-fn identity
-      :validator {:vblock-key :matrix
-      :log-label "networks"}
+      :list-atom :networks, :lookup-atom :net-lookup
+      :public {:create create-network!, :destroy destroy-network!, :validate validate-networks!}
+      :impl {:create create-network-impl!, :destroy destroy-network-impl!, :validate validate-networks-impl!}
+      :create
+      {:args [matrix-vblock ssid password]
+       :expr (my-mod.wireless.network/create-wireless-net world-data matrix-vblock ssid password)
+       :return true, :return-on-unique-fail false
+       :unique [{:label "SSID", :value-expr ssid, :value-fn identity}
+                {:label "matrix", :value-expr matrix-vblock, :value-fn vb/vblock-to-string}]
+       :log-create "Created network: SSID='%s'", :log-create-key-expr ssid
+       :log-create-fail "Cannot create network: %s '%s' already exists"}
+      :destroy {:log-destroy "Destroyed network: SSID='%s'", :log-destroy-key-expr (:ssid item)}
+      :direct-keys [:matrix :ssid], :key-sources [{:values-expr @(:nodes item)}], :log-key-fn identity
+      :validator {:vblock-key :matrix, :log-label "networks"}
       :tick {:fn my-mod.wireless.network/tick-wireless-net!}
-      :nbt {:tag "networks"
-      :atom :networks
-      :to-nbt my-mod.wireless.network/network-to-nbt
-      :from-nbt my-mod.wireless.network/network-from-nbt
-      :skip? (fn [net] @(:disposed net))
-      :rebuild {:lookup-atom :net-lookup
-          :direct-keys [:matrix :ssid]
-          :collection-keys [:nodes]}}}
+      :nbt {:tag "networks", :atom :networks
+            :to-nbt my-mod.wireless.network/network-to-nbt
+            :from-nbt my-mod.wireless.network/network-from-nbt
+            :skip? (fn [net] @(:disposed net))
+            :rebuild {:lookup-atom :net-lookup, :direct-keys [:matrix :ssid], :collection-keys [:nodes]}}}
      {:name node-connection
       :impl-base node-connection-impl
-      :public {:create create-node-connection!
-         :destroy destroy-node-connection!
-         :validate validate-connections!}
-      :impl {:create create-node-connection-impl!
-       :destroy destroy-node-connection-impl!
-       :validate validate-connections-impl!}
-      :create {:args [node-vblock]
-         :expr (my-mod.wireless.node-connection/create-node-conn
-           world-data node-vblock)
-         :return item}
-      :destroy {:log-destroy "Destroyed node connection: %s"
-    :log-destroy-key-expr (:node item)}
-      :list-atom :connections
-      :lookup-atom :node-lookup
-      :direct-keys [:node]
-      :collection-keys [:generators :receivers]
-      :log-create "Created node connection: %s"
-      :log-create-key-expr node-vblock
-      :log-key-fn vb/vblock-to-string
-      :validator {:vblock-key :node
-      :log-label "connections"}
+      :list-atom :connections, :lookup-atom :node-lookup
+      :public {:create create-node-connection!, :destroy destroy-node-connection!, :validate validate-connections!}
+      :impl {:create create-node-connection-impl!, :destroy destroy-node-connection-impl!, :validate validate-connections-impl!}
+      :create
+      {:args [node-vblock]
+       :expr (my-mod.wireless.node-connection/create-node-conn world-data node-vblock)
+       :return item}
+      :destroy {:log-destroy "Destroyed node connection: %s", :log-destroy-key-expr (:node item)}
+      :direct-keys [:node], :collection-keys [:generators :receivers]
+      :log-create "Created node connection: %s", :log-create-key-expr node-vblock, :log-key-fn vb/vblock-to-string
+      :validator {:vblock-key :node, :log-label "connections"}
       :tick {:fn my-mod.wireless.node-connection/tick-node-conn!}
-      :nbt {:tag "connections"
-      :atom :connections
-      :to-nbt my-mod.wireless.node-connection/conn-to-nbt
-      :from-nbt my-mod.wireless.node-connection/conn-from-nbt
-      :skip? (fn [conn] @(:disposed conn))
-      :rebuild {:lookup-atom :node-lookup
-          :direct-keys [:node]
-          :collection-keys [:generators :receivers]}}}]
+      :nbt {:tag "connections", :atom :connections
+            :to-nbt my-mod.wireless.node-connection/conn-to-nbt
+            :from-nbt my-mod.wireless.node-connection/conn-from-nbt
+            :skip? (fn [conn] @(:disposed conn))
+            :rebuild {:lookup-atom :node-lookup, :direct-keys [:node], :collection-keys [:generators :receivers]}}}]
     :tick-name tick-world-data-impl!
     :nbt-write-name world-data-to-nbt-impl
     :nbt-read-name world-data-from-nbt-impl
-    :nbt-after-read
-    [(log/info (format "Loaded %d networks and %d connections from NBT"
-           (count @(:networks world-data))
-           (count @(:connections world-data))))]})
+    :nbt-after-read [(log/info (format "Loaded %d networks and %d connections from NBT"
+                                         (count @(:networks world-data))
+                                         (count @(:connections world-data))))]})
