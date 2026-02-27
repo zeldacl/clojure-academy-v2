@@ -5,7 +5,6 @@
   
   For modern block definitions, use:
   - my-mod.block.dsl/defblock - DSL macro for defining blocks
-  - my-mod.block.demo - Example blocks showing various use cases
   
   Example:
   (require '[my-mod.block.dsl :as bdsl])
@@ -18,4 +17,4 @@
     :requires-tool true
     :on-right-click (fn [data] (println \"Clicked!\")))")
 
-;; All block definitions have been migrated to my-mod.block.dsl and my-mod.block.demo
+;; All block definitions have been migrated to my-mod.block.dsl

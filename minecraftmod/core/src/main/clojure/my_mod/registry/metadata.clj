@@ -116,6 +116,6 @@
   Called during mod initialization to ensure DSL systems are ready.
   Platform code should call this before attempting registration."
   []
-  ;; DSL systems are already initialized by block-demo/item-demo
+  ;; DSL systems are initialized when their namespaces are loaded
   ;; This function exists for future initialization needs
   nil)

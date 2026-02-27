@@ -1,7 +1,6 @@
 (ns my-mod.gui.dsl-test
   "Unit tests for GUI DSL"
   (:require [my-mod.gui.dsl :as dsl]
-            [my-mod.gui.demo :as demo]
             [my-mod.util.log :as log]))
 
 ;; Test basic GUI definition
@@ -96,18 +95,9 @@
     (assert (dsl/button-enabled? instance 0))
     (log/info "✓ Button state management works")))
 
-;; Test demo GUIs
-(defn test-demo-guis []
-  (log/info "Testing demo GUIs...")
-  (assert (some? demo/demo-gui))
-  (assert (some? demo/crafting-gui))
-  (assert (some? demo/furnace-gui))
-  (assert (some? demo/storage-gui))
-  (assert (= (:id demo/demo-gui) "demo-gui"))
-  (assert (= (count (:slots demo/crafting-gui)) 10))
-  (assert (= (count (:slots demo/furnace-gui)) 3))
-  (assert (= (count (:slots demo/storage-gui)) 54))
-  (log/info "✓ Demo GUIs work"))
+;; Test demo GUIs - REMOVED (gui/demo.clj deleted)
+;; Demo GUIs were example implementations, core DSL functionality
+;; is tested by other test functions in this file
 
 ;; Test validation
 (defn test-validation []
@@ -150,7 +140,6 @@
     (test-gui-instance)
     (test-slot-state)
     (test-button-state)
-    (test-demo-guis)
     (test-validation)
     (test-processing-handler)
     (log/info "=== All Tests Passed! ===")

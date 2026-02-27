@@ -1,7 +1,7 @@
 (ns my-mod.wireless.gui.registry
   "Wireless GUI registration and opening system"
   (:require [my-mod.wireless.gui.node-container :as node-container]
-            [my-mod.wireless.gui.node-gui :as node-gui]
+            [my-mod.wireless.gui.node-gui-xml :as node-gui]
             [my-mod.wireless.gui.matrix-container :as matrix-container]
             [my-mod.wireless.gui.matrix-gui :as matrix-gui]
             [my-mod.util.log :as log]))
@@ -61,7 +61,7 @@
           (log/info "Creating Node GUI for player" (.getName player))
           (let [container (node-container/create-container tile-entity player)
                 minecraft-container nil] ; Will be set by platform impl
-            (node-gui/create-screen container minecraft-container))))
+            (node-gui/create-screen container minecraft-container player))))
       
       ;; Wireless Matrix
       1

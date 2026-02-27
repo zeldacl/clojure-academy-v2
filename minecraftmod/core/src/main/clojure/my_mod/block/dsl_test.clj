@@ -1,7 +1,6 @@
 (ns my-mod.block.dsl-test
   "Unit tests for Block DSL"
   (:require [my-mod.block.dsl :as bdsl]
-            [my-mod.block.demo :as demo]
             [my-mod.util.log :as log]))
 
 ;; Test basic block definition
@@ -114,16 +113,9 @@
     (assert (= (:requires-tool props) true))
     (log/info "✓ Properties extraction works")))
 
-;; Test demo blocks
-(defn test-demo-blocks []
-  (log/info "Testing demo blocks...")
-  (assert (some? demo/demo-block))
-  (assert (some? demo/copper-ore))
-  (assert (some? demo/glowing-stone))
-  (assert (= (:id demo/demo-block) "demo-block"))
-  (assert (= (:material demo/copper-ore) :stone))
-  (assert (= (:light-level demo/glowing-stone) 15))
-  (log/info "✓ Demo blocks work"))
+;; Test demo blocks - REMOVED (demo.clj deleted)
+;; Demo blocks were example implementations, core DSL functionality
+;; is tested by other test functions in this file
 
 ;; Test materials enum
 (defn test-materials []
@@ -210,15 +202,8 @@
     (assert (some? (:hardness preset)))
     (log/info "✓ Multi-block preset works")))
 
-;; Test demo multi-block structures
-(defn test-demo-multi-blocks []
-  (log/info "Testing demo multi-block structures...")
-  (assert (some? demo/large-furnace))
-  (assert (some? demo/reactor-core))
-  (assert (= (:multi-block? demo/large-furnace) true))
-  (assert (= (:multi-block-size demo/large-furnace) {:width 2 :height 3 :depth 2}))
-  (assert (= (:multi-block-size demo/reactor-core) {:width 3 :height 3 :depth 3}))
-  (log/info "✓ Demo multi-block structures work"))
+;; Test demo multi-block structures - REMOVED (demo.clj deleted)
+;; Multi-block functionality is tested by other test functions
 
 ;; Test irregular multi-block
 (defn test-irregular-multi-block []
@@ -317,7 +302,6 @@
     (test-validation)
     (test-handlers)
     (test-properties)
-    (test-demo-blocks)
     (test-materials)
     (test-tool-types)
     (test-multi-block)
@@ -325,13 +309,11 @@
     (test-multi-block-master-pos)
     (test-multi-block-validation)
     (test-multi-block-preset)
-    (test-demo-multi-blocks)
     (test-irregular-multi-block)
     (test-normalize-positions)
     (test-irregular-preset)
     (test-shape-helpers)
     (test-irregular-validation)
-    (test-demo-irregular-blocks)
     (log/info "=== All Tests Passed! ===")
     true
     (catch Exception e

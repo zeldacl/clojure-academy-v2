@@ -412,6 +412,23 @@
     root))
 
 ;; ============================================================================
+;; GUI Screen Creation
+;; ============================================================================
+
+(defn create-screen
+  "Create CGuiScreenContainer for Node GUI (XML)
+  
+  Args:
+  - container: NodeContainer instance
+  - minecraft-container: Minecraft Container object
+  - player: Player who opened GUI
+  
+  Returns: CGuiScreenContainer instance"
+  [container minecraft-container player]
+  (let [root (create-node-gui container player)]
+    (cgui/create-cgui-screen-container root minecraft-container)))
+
+;; ============================================================================
 ;; Public API
 ;; ============================================================================
 
