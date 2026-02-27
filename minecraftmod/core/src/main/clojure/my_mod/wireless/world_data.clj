@@ -258,6 +258,61 @@
 ;; NBT Serialization
 ;; ============================================================================
 
+(defn rebuild-item-lookups!
+  "Rebuild lookup tables for a loaded item using a configuration map
+  
+  Args:
+  - world-data: WiWorldData instance
+  - item: The loaded item (network or connection)
+  - config: Configuration map with:
+      :lookup-atom - keyword for the lookup atom in world-data (e.g., :net-lookup)
+      :direct-keys - vector of keywords for direct key-value associations
+      :collection-keys - vector of keywords for collection-based associations
+  
+  Example:
+    (rebuild-item-lookups! world-data network
+      {:lookup-atom :net-lookup
+       :direct-keys [:matrix :ssid]
+       :collection-keys [:nodes]})"
+  [world-data item config]
+  (let [lookup-atom (get world-data (:lookup-atom config))]
+    ;; Add direct key-value associations
+    (doseq [k (:direct-keys config)]
+      (when-let [v (get item k)]
+        (swap! lookup-atom assoc v item)))
+    ;; Add collection-based associations
+    (doseq [k (:collection-keys config)]
+      (when-let [coll (get item k)]
+        (doseq [val @coll]
+          (swap! lookup-atom assoc val item))))))
+
+(defmacro load-from-nbt-list!
+  "Macro to simplify loading and rebuilding lookups from NBT list
+  
+  Args:
+  - nbt: NBT compound containing the list
+  - tag-name: String name of the NBT list tag
+  - world-data: WiWorldData instance
+  - deserialize-fn: Function to deserialize item from NBT (receives world-data and item-nbt)
+  - collection-atom: Atom to add items to
+  - lookup-rebuild-forms: Forms to rebuild lookup tables (can reference 'item' symbol)
+  
+  Example:
+    (load-from-nbt-list! nbt \"networks\" world-data
+      my-mod.wireless.network/network-from-nbt
+      (:networks world-data)
+      (rebuild-item-lookups! world-data item
+        {:lookup-atom :net-lookup
+         :direct-keys [:matrix :ssid]
+         :collection-keys [:nodes]}))"
+  [nbt tag-name world-data deserialize-fn collection-atom & lookup-rebuild-forms]
+  `(let [list# (.getTagList ~nbt ~tag-name 10)] ; 10 = compound tag
+     (dotimes [i# (.tagCount list#)]
+       (let [item-nbt# (.getCompoundTagAt list# i#)
+             ~'item (~deserialize-fn ~world-data item-nbt#)]
+         (swap! ~collection-atom conj ~'item)
+         ~@lookup-rebuild-forms))))
+
 (defn world-data-to-nbt
   "Serialize world data to NBT"
   [world-data]
@@ -283,32 +338,25 @@
 (defn world-data-from-nbt
   "Deserialize world data from NBT"
   [world nbt]
-  (let [world-data (create-world-data world)
-        
-        ;; Load networks
-        networks-list (.getTagList nbt "networks" 10) ; 10 = compound tag
-        _ (dotimes [i (.tagCount networks-list)]
-            (let [net-nbt (.getCompoundTagAt networks-list i)
-                  net (my-mod.wireless.network/network-from-nbt world-data net-nbt)]
-              (swap! (:networks world-data) conj net)
-              ;; Rebuild lookup tables
-              (swap! (:net-lookup world-data) assoc (:matrix net) net)
-              (swap! (:net-lookup world-data) assoc (:ssid net) net)
-              (doseq [node @(:nodes net)]
-                (swap! (:net-lookup world-data) assoc node net))))
-        
-        ;; Load connections
-        conns-list (.getTagList nbt "connections" 10)
-        _ (dotimes [i (.tagCount conns-list)]
-            (let [conn-nbt (.getCompoundTagAt conns-list i)
-                  conn (my-mod.wireless.node-connection/conn-from-nbt world-data conn-nbt)]
-              (swap! (:connections world-data) conj conn)
-              ;; Rebuild lookup tables
-              (swap! (:node-lookup world-data) assoc (:node conn) conn)
-              (doseq [gen @(:generators conn)]
-                (swap! (:node-lookup world-data) assoc gen conn))
-              (doseq [rec @(:receivers conn)]
-                (swap! (:node-lookup world-data) assoc rec conn))))]
+  (let [world-data (create-world-data world)]
+    
+    ;; Load networks
+    (load-from-nbt-list! nbt "networks" world-data
+      my-mod.wireless.network/network-from-nbt
+      (:networks world-data)
+      (rebuild-item-lookups! world-data item
+        {:lookup-atom :net-lookup
+         :direct-keys [:matrix :ssid]
+         :collection-keys [:nodes]}))
+    
+    ;; Load connections
+    (load-from-nbt-list! nbt "connections" world-data
+      my-mod.wireless.node-connection/conn-from-nbt
+      (:connections world-data)
+      (rebuild-item-lookups! world-data item
+        {:lookup-atom :node-lookup
+         :direct-keys [:node]
+         :collection-keys [:generators :receivers]}))
     
     (log/info (format "Loaded %d networks and %d connections from NBT"
                       (count @(:networks world-data))
