@@ -20,7 +20,8 @@
             [my-mod.gui.components :as comp]
             [my-mod.gui.dsl :as dsl]
             [my-mod.network.client :as net-client]
-            [my-mod.wireless.network :as wireless-net])
+            [my-mod.wireless.network :as wireless-net]
+            [my-mod.wireless.gui.network-handler-helpers :as net-helpers])
   (:import [net.minecraft.entity.player EntityPlayer]
            [net.minecraft.client Minecraft]))
 
@@ -44,14 +45,6 @@
   "判断网络是否已初始化"
   (boolean (:ssid init-data)))
 
-(defn- tile-pos-payload
-  "Extract position payload from a tile entity"
-  [tile]
-  (let [pos (.getPos tile)]
-    {:pos-x (.getX pos)
-     :pos-y (.getY pos)
-     :pos-z (.getZ pos)}))
-
 ;; ==================== 网络消息发送 ====================
 
 (defn send-gather-info
@@ -66,7 +59,7 @@
   [tile callback]
   (net-client/send-to-server
     MSG_GATHER_INFO
-    (tile-pos-payload tile)
+    (net-helpers/tile-pos-payload tile)
     (fn [response]
       (let [init-data (map->NetworkInitData
                         {:ssid (:ssid response)
@@ -88,7 +81,7 @@
   [tile ^String ssid ^String password callback]
   (net-client/send-to-server
     MSG_INIT
-    (assoc (tile-pos-payload tile)
+    (assoc (net-helpers/tile-pos-payload tile)
            :ssid ssid
            :password password)
     (fn [response]
@@ -106,7 +99,7 @@
   [tile ^String new-ssid]
   (net-client/send-to-server
     MSG_CHANGE_SSID
-    (assoc (tile-pos-payload tile)
+    (assoc (net-helpers/tile-pos-payload tile)
            :new-ssid new-ssid)))
 
 (defn send-change-password
@@ -121,7 +114,7 @@
   [tile ^String new-password]
   (net-client/send-to-server
     MSG_CHANGE_PASSWORD
-    (assoc (tile-pos-payload tile)
+    (assoc (net-helpers/tile-pos-payload tile)
            :new-password new-password)))
 
 ;; ==================== 组件创建 ====================

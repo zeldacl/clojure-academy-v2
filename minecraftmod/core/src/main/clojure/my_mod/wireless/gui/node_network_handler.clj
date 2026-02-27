@@ -7,6 +7,7 @@
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.block.wireless-node :as node]
+            [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.util.log :as log]))
 
 (def ^:const MSG_GET_STATUS "wireless_node_get_status")
@@ -15,19 +16,6 @@
 (def ^:const MSG_LIST_NETWORKS "wireless_node_list_networks")
 (def ^:const MSG_CONNECT "wireless_node_connect")
 (def ^:const MSG_DISCONNECT "wireless_node_disconnect")
-
-(defn- get-world [player]
-  (or (try (.getWorld player) (catch Exception _ nil))
-      (try (.level player) (catch Exception _ nil))
-      (try (.getEntityWorld player) (catch Exception _ nil))))
-
-(defn- get-tile-at
-  "Fetch tile entity at payload position"
-  [world {:keys [pos-x pos-y pos-z]}]
-  (when (and world (number? pos-x) (number? pos-y) (number? pos-z))
-    (let [pos (net.minecraft.util.math.BlockPos. (int pos-x) (int pos-y) (int pos-z))]
-      (or (try (.getTileEntity world pos) (catch Exception _ nil))
-          (try (.getBlockEntity world pos) (catch Exception _ nil))))))
 
 (defn- update-node-field!
   [tile field value]
@@ -38,16 +26,16 @@
 
 (defn handle-get-status
   [payload player]
-  (let [world (get-world player)
-        tile (get-tile-at world payload)]
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)]
     (if tile
       {:linked (boolean (helper/is-node-linked? tile))}
       {:linked false})))
 
 (defn handle-change-name
   [payload player]
-  (let [world (get-world player)
-        tile (get-tile-at world payload)
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)
         new-name (:node-name payload)]
     (if (and tile new-name)
       (do
@@ -57,8 +45,8 @@
 
 (defn handle-change-password
   [payload player]
-  (let [world (get-world player)
-        tile (get-tile-at world payload)
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)
         new-password (:password payload)]
     (if (and tile new-password)
       (do
@@ -68,8 +56,8 @@
 
 (defn handle-list-networks
   [payload player]
-  (let [world (get-world player)
-        tile (get-tile-at world payload)]
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)]
     (if tile
       (let [pos (.getPos tile)
             range (try (.getRange tile) (catch Exception _ 20.0))
@@ -94,8 +82,8 @@
 
 (defn handle-connect
   [payload player]
-  (let [world (get-world player)
-        tile (get-tile-at world payload)
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)
         ssid (:ssid payload)
         password (:password payload)]
     (if (and world tile ssid)
@@ -109,8 +97,8 @@
 
 (defn handle-disconnect
   [payload player]
-  (let [world (get-world player)
-        tile (get-tile-at world payload)]
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)]
     (if (and world tile)
       (do
         (helper/unlink-node-from-network! tile)

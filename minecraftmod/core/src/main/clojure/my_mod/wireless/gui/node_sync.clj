@@ -5,16 +5,17 @@
   (:require [my-mod.util.log :as log]
             [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.wireless.gui.gui-metadata :as metadata]
-            [my-mod.wireless.gui.registry :as registry]))
+            [my-mod.wireless.gui.registry :as registry]
+            [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
 
 ;; ============================================================================
 ;; Universal Sync Interface
 ;; ============================================================================
 
 (defn broadcast-node-state
-  "Broadcast node state to nearby players
+  "Broadcast node state to nearby players.
   
-  Delegates to platform-specific implementation registered via platform-adapter.
+  Delegates to shared sync-helpers implementation.
   
   Args:
   - world: World object
@@ -23,14 +24,7 @@
   
   Returns: nil"
   [world pos sync-data]
-  (try
-    ;; Get the unified platform broadcast function from platform-adapter
-    ;; We use dynamic require to break circular dependency
-    (require 'my-mod.gui.platform-adapter)
-    (when-let [broadcast-fn @(resolve 'my-mod.gui.platform-adapter/platform-broadcast-fn)]
-      (broadcast-fn world pos sync-data))
-    (catch Exception e
-      (log/debug "Error broadcasting node state:" (.getMessage e)))))
+  (sync-helpers/broadcast-state world pos sync-data "node"))
 
 ;; ============================================================================
 ;; Payload Helpers
@@ -67,44 +61,25 @@
                      0)}))
 
 (defn apply-node-sync-payload!
-  "Apply node sync payload to the current client container"
+  "Apply node sync payload to the current client container.
+  
+  Uses shared sync-helpers template for consistent behavior."
   [payload]
-  (try
-    (when-let [container @registry/client-container]
-      (when (and (:tile-entity container)
-                 (= (:pos-x payload)
-                    (try (.getX (.getPos (:tile-entity container)))
-                         (catch Exception _ nil))))
-        (when (contains? container :energy)
-          (reset! (:energy container) (:energy payload)))
-        (when (contains? container :max-energy)
-          (reset! (:max-energy container) (:max-energy payload)))
-        (when (contains? container :is-online)
-          (reset! (:is-online container) (:enabled payload)))
-        (when (contains? container :node-type)
-          (reset! (:node-type container) (:node-type payload)))
-        (when (contains? container :ssid)
-          (reset! (:ssid container) (:node-name payload)))
-        (when (contains? container :password)
-          (reset! (:password container) (:password payload)))
-        (when (contains? container :capacity)
-          (reset! (:capacity container) (:capacity payload)))
-        (when (contains? container :max-capacity)
-          (reset! (:max-capacity container) (:max-capacity payload)))
-        (log/debug "Applied node sync payload on client")))
-    (catch Exception e
-      (log/debug "Failed to apply node sync payload:" (.getMessage e)))))
+  (sync-helpers/apply-sync-payload-template!
+    payload
+    [:energy
+     :max-energy
+     [:is-online :enabled]
+     :node-type
+     [:ssid :node-name]
+     :password
+     :capacity
+     :max-capacity]
+    "node"))
 
 (defn extract-position
-  "Extract BlockPos from sync payload"
+  "Extract BlockPos from sync payload.
+  
+  Delegates to shared sync-helpers implementation."
   [sync-data world]
-  (try
-    (let [x (:pos-x sync-data)
-          y (:pos-y sync-data)
-          z (:pos-z sync-data)]
-      ;; Try different BlockPos constructors for cross-version compatibility
-      (or (try (eval `(new ~'net.minecraft.core.BlockPos ~x ~y ~z)) (catch Exception _ nil))
-          (try (eval `(new ~'net.minecraft.util.math.BlockPos ~x ~y ~z)) (catch Exception _ nil))))
-    (catch Exception e
-      (log/debug "Failed to extract position:" (.getMessage e))
-      nil)))
+  (sync-helpers/extract-position sync-data world))

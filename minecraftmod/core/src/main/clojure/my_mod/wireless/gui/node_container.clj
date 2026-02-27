@@ -4,6 +4,8 @@
             [my-mod.wireless.world-data :as wd]
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.inventory.core :as inv]
+            [my-mod.wireless.gui.container-helpers :as helpers]
+            [my-mod.wireless.gui.sync-helpers :as sync-helpers]
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
@@ -87,15 +89,12 @@
 (defn get-slot-item
   "Get item from slot"
   [container slot-index]
-  (let [inventory @(:inventory (:tile-entity container))]
-    (get inventory slot-index)))
+  (helpers/get-slot-item container slot-index))
 
 (defn set-slot-item!
   "Set item in slot"
   [container slot-index item-stack]
-  (let [tile (:tile-entity container)
-        inventory-atom (:inventory tile)]
-    (swap! inventory-atom assoc slot-index item-stack)))
+  (helpers/set-slot-item! container slot-index item-stack))
 
 (defn slot-changed!
   "Called when slot contents change"
@@ -125,29 +124,9 @@
     (reset! (:password container) (winterfaces/get-password tile))
     
     ;; Update network capacity info (throttled to every 100 ticks = 5 seconds)
-    (swap! (:sync-ticker container) inc)
-    (when (>= @(:sync-ticker container) 100)
-      (reset! (:sync-ticker container) 0)
-      (try
-        (let [world (:world tile)
-              pos (:pos tile)
-              node-vblock (vb/create-vnode (.getX pos) (.getY pos) (.getZ pos))
-              world-data (wd/get-world-data world)
-              network (wd/get-network-by-node world-data node-vblock)]
-          (if network
-            (do
-              (reset! (:capacity container) (count @(:nodes network)))
-              ;; Get matrix capacity
-              (when-let [matrix-vb (:matrix network)]
-                (when-let [matrix (vb/vblock-get matrix-vb world)]
-                  (reset! (:max-capacity container) 
-                         (try (winterfaces/get-capacity matrix) (catch Exception _ 0))))))
-            (do
-              (reset! (:capacity container) 0)
-              (reset! (:max-capacity container) 0))))
-        (catch Exception e
-          (reset! (:capacity container) 0)
-          (reset! (:max-capacity container) 0))))
+    (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
+      (fn []
+        (sync-helpers/query-node-network-capacity! container vb wd winterfaces)))
     
     ;; Compute transfer rate (charging speed)
     (let [charging-in? @(:charging-in tile)
@@ -187,13 +166,7 @@
   
   Returns: boolean"
   [container player]
-  (let [tile (:tile-entity container)
-        world (:world tile)
-        pos (:pos tile)
-        max-distance 8.0]
-    ;; Check if player is still close enough
-    (and (= player (:player container))
-         (< (.distanceSq (.getPos player) pos) (* max-distance max-distance)))))
+  (helpers/still-valid? container player))
 
 ;; ============================================================================
 ;; Container Update Tick
@@ -337,13 +310,12 @@
   Returns: nil"
   [container]
   (log/debug "Closing wireless node container")
-  ;; Reset all atoms to default states
-  (reset! (:energy container) 0)
-  (reset! (:max-energy container) 0)
-  (reset! (:is-online container) false)
-  (reset! (:transfer-rate container) 0)
-  (reset! (:capacity container) 0)
-  (reset! (:max-capacity container) 0)
-  (reset! (:charge-ticker container) 0)
-  (reset! (:sync-ticker container) 0)
-  nil)
+  (helpers/reset-container-atoms!
+    [(:energy container) 0]
+    [(:max-energy container) 0]
+    [(:is-online container) false]
+    [(:transfer-rate container) 0]
+    [(:capacity container) 0]
+    [(:max-capacity container) 0]
+    [(:charge-ticker container) 0]
+    [(:sync-ticker container) 0]))

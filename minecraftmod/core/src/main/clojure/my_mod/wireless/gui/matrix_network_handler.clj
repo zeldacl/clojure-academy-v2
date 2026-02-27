@@ -14,6 +14,7 @@
   (:require [my-mod.network.server :as net-server]
             [my-mod.wireless.helper :as helper]
             [my-mod.wireless.network :as wireless-net]
+            [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.util.log :as log]))
 
 ;; ==================== 消息通道常量 ====================
@@ -24,19 +25,6 @@
 (def ^:const MSG_CHANGE_PASSWORD "wireless_matrix_change_password")
 
 ;; ==================== 工具函数 ====================
-
-(defn- get-world [player]
-  (or (try (.getWorld player) (catch Exception _ nil))
-      (try (.level player) (catch Exception _ nil))
-      (try (.getEntityWorld player) (catch Exception _ nil))))
-
-(defn- get-tile-at
-  "Fetch tile entity at payload position"
-  [world {:keys [pos-x pos-y pos-z]}]
-  (when (and world (number? pos-x) (number? pos-y) (number? pos-z))
-    (let [pos (net.minecraft.util.math.BlockPos. (int pos-x) (int pos-y) (int pos-z))]
-      (or (try (.getTileEntity world pos) (catch Exception _ nil))
-          (try (.getBlockEntity world pos) (catch Exception _ nil))))))
 
 (defn get-wireless-network
   "获取Matrix绑定的无线网络"
@@ -65,8 +53,8 @@
   - :load - int（当前连接的设备数）
   - :initialized - boolean"
   [payload player]
-  (let [world (get-world player)
-        tile (get-tile-at world payload)]
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)]
     (if-let [network (and tile (get-wireless-network tile))]
     ;; 网络已创建
     {:ssid (:ssid network)
@@ -94,8 +82,8 @@
   响应数据：
   - :success - boolean"
   [payload player]
-  (let [world (get-world player)
-        tile (get-tile-at world payload)
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)
         {:keys [ssid password]} payload]
     (if (and tile (is-owner? tile player))
       (try
@@ -118,8 +106,8 @@
   响应数据：
   - :success - boolean"
   [payload player]
-  (let [world (get-world player)
-        tile (get-tile-at world payload)
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)
         new-ssid (:new-ssid payload)]
     (if (and tile (is-owner? tile player))
       (if-let [network (get-wireless-network tile)]
@@ -148,8 +136,8 @@
   响应数据：
   - :success - boolean"
   [payload player]
-  (let [world (get-world player)
-        tile (get-tile-at world payload)
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)
         new-password (:new-password payload)]
     (if (and tile (is-owner? tile player))
       (if-let [network (get-wireless-network tile)]

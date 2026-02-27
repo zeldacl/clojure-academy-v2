@@ -4,16 +4,17 @@
   Provides platform-agnostic interface for syncing matrix tile state to clients."
   (:require [my-mod.util.log :as log]
             [my-mod.wireless.gui.gui-metadata :as metadata]
-            [my-mod.wireless.gui.registry :as registry]))
+            [my-mod.wireless.gui.registry :as registry]
+            [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
 
 ;; ============================================================================
 ;; Universal Sync Interface
 ;; ============================================================================
 
 (defn broadcast-matrix-state
-  "Broadcast matrix state to nearby players
+  "Broadcast matrix state to nearby players.
   
-  Delegates to platform-specific implementation registered via platform-adapter.
+  Delegates to shared sync-helpers implementation.
   
   Args:
   - world: World object
@@ -22,14 +23,7 @@
   
   Returns: nil"
   [world pos sync-data]
-  (try
-    ;; Get the unified platform broadcast function from platform-adapter
-    ;; We use dynamic require to break circular dependency
-    (require 'my-mod.gui.platform-adapter)
-    (when-let [broadcast-fn @(resolve 'my-mod.gui.platform-adapter/platform-broadcast-fn)]
-      (broadcast-fn world pos sync-data))
-    (catch Exception e
-      (log/debug "Error broadcasting matrix  state:" (.getMessage e)))))
+  (sync-helpers/broadcast-state world pos sync-data "matrix"))
 
 ;; ============================================================================
 ;; Payload Helpers
@@ -60,39 +54,25 @@
      :range (if container @(:range container) 0.0)}))
 
 (defn apply-matrix-sync-payload!
-  "Apply matrix sync payload to the current client container"
+  "Apply matrix sync payload to the current client container.
+  
+  Uses shared sync-helpers template for consistent behavior."
   [payload]
-  (try
-    (when-let [container @registry/client-container]
-      (when (and (:tile-entity container)
-                 (= (:pos-x payload)
-                    (try (.getX (.getPos (:tile-entity container)))
-                         (catch Exception _ nil))))
-        (when (contains? container :plate-count)
-          (reset! (:plate-count container) (:plate-count payload)))
-        (when (contains? container :core-level)
-          (reset! (:core-level container) (:core-level payload)))
-        (when (contains? container :is-working)
-          (reset! (:is-working container) (:is-working payload)))
-        (when (contains? container :capacity)
-          (reset! (:capacity container) (:capacity payload)))
-        (when (contains? container :max-capacity)
-          (reset! (:max-capacity container) (:max-capacity payload)))
-        (when (contains? container :bandwidth)
-          (reset! (:bandwidth container) (:bandwidth payload)))
-        (when (contains? container :range)
-          (reset! (:range container) (:range payload)))
-        (log/debug "Applied matrix sync payload on client")))
-    (catch Exception e
-      (log/debug "Failed to apply matrix sync payload:" (.getMessage e)))))
+  (sync-helpers/apply-sync-payload-template!
+    payload
+    [:plate-count
+     :core-level
+     :is-working
+     :capacity
+     :max-capacity
+     :bandwidth
+     :range]
+    "matrix"))
 
 (defn extract-position
-  "Extract BlockPos from sync payload"
+  "Extract BlockPos from sync payload.
+  
+  Delegates to shared sync-helpers implementation."
   [sync-data world]
-  (try
-    (let [x (:pos-x sync-data)
-          y (:pos-y sync-data)
-          z (:pos-z sync-data)]
-      (net.minecraft.util.math.BlockPos. (int x) (int y) (int z)))
-    (catch Exception _ nil)))
+  (sync-helpers/extract-position sync-data world))
 

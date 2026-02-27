@@ -15,6 +15,7 @@
             [my-mod.gui.events :as events]
             [my-mod.network.client :as net-client]
             [my-mod.wireless.gui.node-container :as container]
+            [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.util.log :as log]))
 
 ;; =========================================================================
@@ -27,14 +28,6 @@
 (def ^:const MSG_LIST_NETWORKS "wireless_node_list_networks")
 (def ^:const MSG_CONNECT "wireless_node_connect")
 (def ^:const MSG_DISCONNECT "wireless_node_disconnect")
-
-(defn- tile-pos-payload
-  "Extract position payload from a tile entity or map"
-  [tile]
-  (let [pos (or (:pos tile) (when tile (.getPos tile)))]
-    {:pos-x (when pos (.getX pos))
-     :pos-y (when pos (.getY pos))
-     :pos-z (when pos (.getZ pos))}))
 
 ;; ============================================================================
 ;; XML Layout Loading
@@ -128,7 +121,7 @@
                       (reset! last-query now)
                       (net-client/send-to-server
                         MSG_GET_STATUS
-                        (tile-pos-payload tile)
+                        (net-helpers/tile-pos-payload tile)
                         (fn [response]
                           (let [is-linked (boolean (:linked response))]
                             (reset! (:current-state anim-state)
@@ -214,13 +207,13 @@
                                          :node_name
                                          (net-client/send-to-server
                                            MSG_CHANGE_NAME
-                                           (assoc (tile-pos-payload (:tile-entity container))
+                                           (assoc (net-helpers/tile-pos-payload (:tile-entity container))
                                                   :node-name new-value))
 
                                          :password
                                          (net-client/send-to-server
                                            MSG_CHANGE_PASSWORD
-                                           (assoc (tile-pos-payload (:tile-entity container))
+                                           (assoc (net-helpers/tile-pos-payload (:tile-entity container))
                                                   :password new-value))
 
                                          nil)))
@@ -321,7 +314,7 @@
           (fn []
             (net-client/send-to-server
               MSG_LIST_NETWORKS
-              (tile-pos-payload (:tile-entity container))
+              (net-helpers/tile-pos-payload (:tile-entity container))
               (fn [response]
                 (reset! networks (vec (:networks response [])))
                 (refresh-list))))]
@@ -339,7 +332,7 @@
                                         ;; Currently uses empty password (open networks only)
                                         (net-client/send-to-server
                                           MSG_CONNECT
-                                          (assoc (tile-pos-payload (:tile-entity container))
+                                          (assoc (net-helpers/tile-pos-payload (:tile-entity container))
                                                  :ssid @selected
                                                  :password @input-password)))))
             btn-disconnect (comp/button
@@ -348,7 +341,7 @@
                              :on-click (fn []
                                          (net-client/send-to-server
                                            MSG_DISCONNECT
-                                           (tile-pos-payload (:tile-entity container)))))]
+                                           (net-helpers/tile-pos-payload (:tile-entity container)))))]
         (cgui/add-widget! panel btn-refresh)
         (cgui/add-widget! panel btn-connect)
         (cgui/add-widget! panel btn-disconnect)

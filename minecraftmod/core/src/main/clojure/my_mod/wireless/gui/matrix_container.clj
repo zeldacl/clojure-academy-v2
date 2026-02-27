@@ -5,7 +5,9 @@
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
             [my-mod.wireless.world-data :as wd]
-            [my-mod.wireless.virtual-blocks :as vb]))
+            [my-mod.wireless.virtual-blocks :as vb]
+            [my-mod.wireless.gui.container-helpers :as helpers]
+            [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
 
 ;; ============================================================================
 ;; Container Data Structure
@@ -97,15 +99,12 @@
 (defn get-slot-item
   "Get item from slot"
   [container slot-index]
-  (let [inventory @(:inventory (:tile-entity container))]
-    (get inventory slot-index)))
+  (helpers/get-slot-item container slot-index))
 
 (defn set-slot-item!
   "Set item in slot"
   [container slot-index item-stack]
-  (let [tile (:tile-entity container)
-        inventory-atom (:inventory tile)]
-    (swap! inventory-atom assoc slot-index item-stack)))
+  (helpers/set-slot-item! container slot-index item-stack))
 
 (defn slot-changed!
   "Called when slot contents change - triggers multiblock revalidation"
@@ -185,35 +184,14 @@
     (reset! (:is-working container) working?)
     
     ;; Update network capacity and stats (throttled to every 100 ticks = 5 seconds)
-    (swap! (:sync-ticker container) inc)
-    (when (>= @(:sync-ticker container) 100)
-      (reset! (:sync-ticker container) 0)
-      
-      ;; Calculate stats based on components
-      (let [stats (calculate-matrix-stats core-lvl plates)]
-        (reset! (:bandwidth container) (:bandwidth stats))
-        (reset! (:range container) (:range stats))
-        
-        ;; Query actual network capacity from WirelessNet
-        (try
-          (let [world (:world tile)
-                pos (:pos tile)
-                matrix-vblock (vb/create-vmatrix (.getX pos) (.getY pos) (.getZ pos))
-                world-data (wd/get-world-data world)
-                network (wd/get-network-by-matrix world-data matrix-vblock)]
-            (if network
-              (do
-                ;; Real network capacity (current number of nodes)
-                (reset! (:capacity container) (count @(:nodes network)))
-                ;; Max capacity from calculated stats
-                (reset! (:max-capacity container) (:capacity stats)))
-              (do
-                (reset! (:capacity container) 0)
-                (reset! (:max-capacity container) (:capacity stats)))))
-          (catch Exception e
-            (log/debug "Error querying network capacity:" (.getMessage e))
-            (reset! (:capacity container) 0)
-            (reset! (:max-capacity container) 0)))))))
+    (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
+      (fn []
+        ;; Calculate stats based on components
+        (let [stats (calculate-matrix-stats core-lvl plates)]
+          (reset! (:bandwidth container) (:bandwidth stats))
+          (reset! (:range container) (:range stats))
+          ;; Query actual network capacity from WirelessNet
+          (sync-helpers/query-matrix-network-capacity! container stats vb wd))))))))
 
 (defn get-sync-data
   "Get data to sync to client
@@ -241,13 +219,7 @@
   
   Returns: boolean"
   [container player]
-  (let [tile (:tile-entity container)
-        world (:world tile)
-        pos (:pos tile)
-        max-distance 8.0]
-    ;; Check if player is still close enough
-    (and (= player (:player container))
-         (< (.distanceSq (.getPos player) pos) (* max-distance max-distance)))))
+  (helpers/still-valid? container player))
 
 ;; ============================================================================
 ;; Container Update Tick
@@ -368,13 +340,12 @@
   Returns: nil"
   [container]
   (log/debug "Closing wireless matrix container")
-  ;; Reset all atoms to default states
-  (reset! (:core-level container) 0)
-  (reset! (:plate-count container) 0)
-  (reset! (:is-working container) false)
-  (reset! (:capacity container) 0)
-  (reset! (:max-capacity container) 0)
-  (reset! (:bandwidth container) 0)
-  (reset! (:range container) 0.0)
-  (reset! (:sync-ticker container) 0)
-  nil)
+  (helpers/reset-container-atoms!
+    [(:core-level container) 0]
+    [(:plate-count container) 0]
+    [(:is-working container) false]
+    [(:capacity container) 0]
+    [(:max-capacity container) 0]
+    [(:bandwidth container) 0]
+    [(:range container) 0.0]
+    [(:sync-ticker container) 0]))
