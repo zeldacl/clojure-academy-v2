@@ -6,7 +6,9 @@
             [my-mod.item.mat-core :as core]
             [my-mod.wireless.world-data :as wd]
             [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.wireless.gui.container-helpers :as helpers]
+            [my-mod.wireless.gui.container-common :as common]
+            [my-mod.wireless.gui.container-move-common :as move-common
+             :refer [defquick-move-stack-config]]
             [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
 
 ;; ============================================================================
@@ -99,12 +101,12 @@
 (defn get-slot-item
   "Get item from slot"
   [container slot-index]
-  (helpers/get-slot-item container slot-index))
+  (common/get-slot-item container slot-index))
 
 (defn set-slot-item!
   "Set item in slot"
   [container slot-index item-stack]
-  (helpers/set-slot-item! container slot-index item-stack))
+  (common/set-slot-item! container slot-index item-stack))
 
 (defn slot-changed!
   "Called when slot contents change - triggers multiblock revalidation"
@@ -219,7 +221,7 @@
   
   Returns: boolean"
   [container player]
-  (helpers/still-valid? container player))
+  (common/still-valid? container player))
 
 ;; ============================================================================
 ;; Container Update Tick
@@ -278,54 +280,14 @@
 ;; Quick Move (Shift+Click)
 ;; ============================================================================
 
-(defn quick-move-stack
-  "Handle shift-click on slot
-  
-  Logic:
-  - Plate slots -> Player inventory
-  - Core slot -> Player inventory
-  - Player inventory -> Appropriate slot (plates or core)
-  
-  Returns: ItemStack or nil"
-  [container slot-index player-inventory-start]
-  (cond
-    ;; From matrix slots to player
-    (< slot-index 4)
-    (let [item (get-slot-item container slot-index)]
-      (when item
-        (set-slot-item! container slot-index nil)
-        item))
-    
-    ;; From player inventory to matrix
-    (>= slot-index player-inventory-start)
-    (let [item (get-slot-item container slot-index)]
-      (if item
-        (cond
-          ;; Try to place in core slot
-          (can-place-item? container slot-core item)
-          (if (nil? (get-slot-item container slot-core))
-            (do
-              (set-slot-item! container slot-core item)
-              (set-slot-item! container slot-index nil)
-              nil)  ; Return nil to indicate successful transfer
-            item)  ; Return item if core slot occupied
-          
-          ;; Try to place in first empty plate slot
-          (can-place-item? container slot-plate-1 item)
-          (let [empty-plate-slot (first (filter #(nil? (get-slot-item container %))
-                                                [slot-plate-1 slot-plate-2 slot-plate-3]))]
-            (if empty-plate-slot
-              (do
-                (set-slot-item! container empty-plate-slot item)
-                (set-slot-item! container slot-index nil)
-                nil)  ; Return nil to indicate successful transfer
-              item))  ; Return item if no empty plate slots
-          
-          ;; Can't place anywhere, return item unchanged
-          :else item)
-        nil))  ; No item in slot
-    
-    :else nil))
+(defquick-move-stack-config quick-move-stack
+  {:container-slots #{slot-plate-1 slot-plate-2 slot-plate-3 slot-core}
+   :inventory-pred (fn [slot-index player-inventory-start]
+                     (>= slot-index player-inventory-start))
+   :rules [{:accept? (fn [item] (can-place-item? container slot-core item))
+            :slots [slot-core]}
+           {:accept? (fn [item] (can-place-item? container slot-plate-1 item))
+            :slots [slot-plate-1 slot-plate-2 slot-plate-3]}]})
 
 ;; ============================================================================
 ;; Container Lifecycle
@@ -340,7 +302,7 @@
   Returns: nil"
   [container]
   (log/debug "Closing wireless matrix container")
-  (helpers/reset-container-atoms!
+  (common/reset-container-atoms!
     [(:core-level container) 0]
     [(:plate-count container) 0]
     [(:is-working container) false]
