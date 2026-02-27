@@ -62,6 +62,31 @@
 ;; Payload Application Helpers
 ;; ============================================================================
 
+(defn apply-sync-data!
+  "Universal sync data application.
+  
+  Automatically applies data from get-sync-data to container atoms.
+  For each key in data map, finds corresponding atom in container and resets it.
+  
+  Args:
+  - container: Container record (with atoms as fields)
+  - data: Map of sync data (keys match container field names)
+  
+  Side effects: Updates all matching atoms in container
+  
+  Example:
+    ;; Instead of:
+    ; :sync-apply (fn [container data]
+    ;   (reset! (:energy container) (:energy data))
+    ;   (reset! (:max-energy container) (:max-energy data)))
+    
+    ;; Use:
+    ; :sync-apply apply-sync-data!"
+  [container data]
+  (doseq [[k v] data]
+    (when-let [atom-ref (get container k)]
+      (reset! atom-ref v))))
+
 (defn apply-sync-field!
   "Apply a single sync field to container if it exists.
   

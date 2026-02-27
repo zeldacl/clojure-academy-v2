@@ -155,6 +155,19 @@
    :capacity @(:capacity container)
    :max-capacity @(:max-capacity container)})
 
+(defn apply-sync-data!
+  "Apply sync data from server to container atoms.
+  
+  Args:
+  - container: NodeContainer instance
+  - data: Map of synced values (from get-sync-data)
+  
+  Side effects: Updates all container atoms from data"
+  [container data]
+  (doseq [[k v] data]
+    (when-let [atom-ref (get container k)]
+      (reset! atom-ref v))))
+
 ;; ============================================================================
 ;; Container Validation
 ;; ============================================================================

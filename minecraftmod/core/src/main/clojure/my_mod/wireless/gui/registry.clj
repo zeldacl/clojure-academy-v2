@@ -7,11 +7,37 @@
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
-;; GUI ID Constants
+;; GUI Config Table
 ;; ============================================================================
 
-(def gui-wireless-node 0)
-(def gui-wireless-matrix 1)
+(def gui-config
+  {:node {:id 0
+          :container-class my_mod.wireless.gui.node_container.NodeContainer
+          :container-fn node-container/create-container
+          :screen-fn (fn [tile player]
+                       (let [container (node-container/create-container tile player)
+                             minecraft-container nil]
+                         (node-gui/create-screen container minecraft-container player)))
+          :tick-fn node-container/tick!
+          :sync-get node-container/get-sync-data
+          :sync-apply node-container/apply-sync-data!}
+   :matrix {:id 1
+            :container-class my_mod.wireless.gui.matrix_container.MatrixContainer
+            :container-fn matrix-container/create-container
+            :screen-fn (fn [tile player]
+                         (let [container (matrix-container/create-container tile player)
+                               minecraft-container nil]
+                           (matrix-gui/create-screen container minecraft-container)))
+            :tick-fn matrix-container/tick!
+            :sync-get matrix-container/get-sync-data
+            :sync-apply matrix-container/apply-sync-data!}})
+
+;; ============================================================================
+;; GUI ID Constants (derived from gui-config)
+;; ============================================================================
+
+(def gui-wireless-node (get-in gui-config [:node :id]))
+(def gui-wireless-matrix (get-in gui-config [:matrix :id]))
 
 ;; ============================================================================
 ;; GUI Handler Protocol
@@ -25,54 +51,61 @@
     "Create client-side GUI screen"))
 
 ;; ============================================================================
-;; Wireless GUI Handler Implementation
+;; GUI Handler Implementation
 ;; ============================================================================
 
+;; ============================================================================
+;; Helper Functions
+;; ============================================================================
+
+(def gui-config-by-id
+  (into {}
+        (map (fn [[k v]] [(:id v) (assoc v :key k)]) gui-config)))
+
+(defn get-gui-config
+  "Get GUI config by id"
+  [gui-id]
+  (get gui-config-by-id gui-id))
+
+(defn get-config-by-container
+  "Get GUI config by container type"
+  [container]
+  (some (fn [[_ cfg]]
+          (when (instance? (:container-class cfg) container)
+            cfg))
+        gui-config))
+
 (defmacro defwireless-gui-handler
-  "Define a GUI handler with table-driven config.
-  
-  Config keys:
-  - :server {gui-id {:container-fn (fn [tile player])}}
-  - :client {gui-id {:screen-fn (fn [tile player])}}
+  "Define a GUI handler driven by gui-config table.
   
   Each function is called only when tile-entity exists." 
-  [name {:keys [server client]}]
+  [name]
   `(defrecord ~name []
      IGuiHandler
      (get-server-container [_# gui-id# player# world# pos#]
        (let [tile-entity# (.getTileEntity world# pos#)
-             handler# (get ~server gui-id#)]
-         (if (and tile-entity# handler#)
+             cfg# (get-gui-config gui-id#)]
+         (if (and tile-entity# cfg#)
            (do
              (log/info "Creating container for player" (.getName player#) "gui" gui-id#)
-             ((:container-fn handler#) tile-entity# player#))
+             ((:container-fn cfg#) tile-entity# player#))
            (do
-             (when-not handler#
+             (when-not cfg#
                (log/warn "Unknown GUI ID:" gui-id#))
              nil))))
      (get-client-gui [_# gui-id# player# world# pos#]
        (let [tile-entity# (.getTileEntity world# pos#)
-             handler# (get ~client gui-id#)]
-         (if (and tile-entity# handler#)
+             cfg# (get-gui-config gui-id#)]
+         (if (and tile-entity# cfg#)
            (do
              (log/info "Creating GUI for player" (.getName player#) "gui" gui-id#)
-             ((:screen-fn handler#) tile-entity# player#))
+             ((:screen-fn cfg#) tile-entity# player#))
            (do
-             (when-not handler#
+             (when-not cfg#
                (log/warn "Unknown GUI ID:" gui-id#))
              nil))))))
 
-(defwireless-gui-handler WirelessGuiHandler
-  {:server {gui-wireless-node {:container-fn node-container/create-container}
-            gui-wireless-matrix {:container-fn matrix-container/create-container}}
-   :client {gui-wireless-node {:screen-fn (fn [tile player]
-                                           (let [container (node-container/create-container tile player)
-                                                 minecraft-container nil]
-                                             (node-gui/create-screen container minecraft-container player)))}
-            gui-wireless-matrix {:screen-fn (fn [tile player]
-                                             (let [container (matrix-container/create-container tile player)
-                                                   minecraft-container nil]
-                                               (matrix-gui/create-screen container minecraft-container)))}}})
+(defwireless-gui-handler WirelessGuiHandler)
 
 ;; ============================================================================
 ;; Global Handler Instance
@@ -105,7 +138,7 @@
   (log/info "Opening GUI" gui-id "for player" (.getName player) "at" pos)
   
   ;; Validate GUI ID
-  (when-not (contains? #{gui-wireless-node gui-wireless-matrix} gui-id)
+  (when-not (get-gui-config gui-id)
     (log/warn "Invalid GUI ID:" gui-id)
     (throw (ex-info "Invalid GUI ID" {:gui-id gui-id})))
   
@@ -122,15 +155,18 @@
    :world world
    :pos pos})
 
-(defn open-node-gui
-  "Convenience function to open Wireless Node GUI"
-  [player world pos]
-  (open-gui player gui-wireless-node world pos))
+(defmacro defopen-gui-fns
+  "Define open-<key>-gui functions from gui-config.
+  
+  Each generated function calls open-gui with the configured :id."
+  [config-var]
+  `(doseq [[k# v#] ~config-var]
+     (let [fname# (symbol (str "open-" (name k#) "-gui"))]
+       (intern *ns* fname#
+         (fn [player# world# pos#]
+           (open-gui player# (:id v#) world# pos#))))))
 
-(defn open-matrix-gui
-  "Convenience function to open Wireless Matrix GUI"
-  [player world pos]
-  (open-gui player gui-wireless-matrix world pos))
+(defopen-gui-fns gui-config)
 
 ;; ============================================================================
 ;; Registration (for platform-specific implementations)
@@ -217,16 +253,8 @@
   []
   (doseq [container @active-containers]
     (try
-      (cond
-        ;; Node container
-        (instance? my_mod.wireless.gui.node_container.NodeContainer container)
-        (node-container/tick! container)
-        
-        ;; Matrix container
-        (instance? my_mod.wireless.gui.matrix_container.MatrixContainer container)
-        (matrix-container/tick! container)
-        
-        :else
+      (if-let [cfg (get-config-by-container container)]
+        ((:tick-fn cfg) container)
         (log/warn "Unknown container type:" (type container)))
       (catch Exception e
         (log/error "Error ticking container:" e)))))
@@ -243,18 +271,9 @@
   
   Returns: Map with sync data"
   [container]
-  (cond
-    ;; Node container
-    (instance? my_mod.wireless.gui.node_container.NodeContainer container)
-    {:type :node
-     :data (node-container/get-sync-data container)}
-    
-    ;; Matrix container
-    (instance? my_mod.wireless.gui.matrix_container.MatrixContainer container)
-    {:type :matrix
-     :data (matrix-container/get-sync-data container)}
-    
-    :else
+  (if-let [cfg (get-config-by-container container)]
+    {:type (:key cfg)
+     :data ((:sync-get cfg) container)}
     (do
       (log/warn "Cannot sync unknown container type:" (type container))
       nil)))
@@ -266,30 +285,10 @@
   - container: Client-side container instance
   - packet-data: Data from server sync packet"
   [container packet-data]
-  (let [{:keys [type data]} packet-data]
-    (case type
-      :node
-      (do
-        ;; Update node container atoms
-        (reset! (:energy container) (:energy data))
-        (reset! (:max-energy container) (:max-energy data))
-        (reset! (:node-type container) (:node-type data))
-        (reset! (:is-online container) (:is-online data))
-        (reset! (:ssid container) (:ssid data))
-        (reset! (:password container) (:password data))
-        (reset! (:transfer-rate container) (:transfer-rate data)))
-      
-      :matrix
-      (do
-        ;; Update matrix container atoms
-        (reset! (:core-level container) (:core-level data))
-        (reset! (:plate-count container) (:plate-count data))
-        (reset! (:is-working container) (:is-working data))
-        (reset! (:capacity container) (:capacity data))
-        (reset! (:max-capacity container) (:max-capacity data))
-        (reset! (:bandwidth container) (:bandwidth data))
-        (reset! (:range container) (:range data)))
-      
+  (let [{:keys [type data]} packet-data
+        cfg (get gui-config type)]
+    (if cfg
+      ((:sync-apply cfg) container data)
       (log/warn "Unknown sync packet type:" type))))
 
 ;; ============================================================================
