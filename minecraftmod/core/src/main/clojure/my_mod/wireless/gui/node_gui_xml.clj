@@ -11,6 +11,7 @@
   - No XML parsing
   - Uses existing resources only"
   (:require [my-mod.gui.cgui :as cgui]
+            [my-mod.gui.cgui-document :as cgui-doc]
             [my-mod.gui.components :as comp]
             [my-mod.gui.events :as events]
             [my-mod.gui.tech-ui-common :as tech-ui]
@@ -18,7 +19,9 @@
             [my-mod.wireless.gui.node-container :as node-container]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.entity.player EntityPlayer]))
+  (:import [net.minecraft.entity.player EntityPlayer]
+           [cn.lambdalib2.cgui Widget]
+           [cn.lambdalib2.cgui.component TextBox DrawTexture Tint ElementList]))
 
 ;; ============================================================================
 ;; Network Message IDs (match node_network_handler.clj)
@@ -107,83 +110,141 @@
 ;; Wireless Page (network list + connect)
 ;; ============================================================================
 
+(defn- widget-textbox
+  [^Widget widget]
+  (comp/get-component widget TextBox))
+
+(defn- widget-drawtexture
+  [^Widget widget]
+  (comp/get-component widget DrawTexture))
+
+(defn- widget-tint
+  [^Widget widget]
+  (comp/get-component widget Tint))
+
+(defn- set-textbox-text!
+  [^Widget widget text]
+  (when-let [tb (widget-textbox widget)]
+    (comp/set-text! tb text)))
+
+(defn- set-drawtexture!
+  [^Widget widget texture-path]
+  (when-let [dt (widget-drawtexture widget)]
+    (comp/set-texture! dt texture-path)))
+
 (defn create-wireless-panel
-  "Create wireless connection panel (list + connect/disconnect)"
+  "Create wireless connection panel from page_wireless.xml (Scala WirelessPage style)"
   [container]
-  (let [panel (cgui/create-container :pos [0 0] :size [gui-width gui-height])
-        networks (atom [])
-        selected (atom nil)
-        input-password (atom "")
-        list-widget (cgui/create-widget :pos [13 50] :size [150 120])
-        list-comp (comp/element-list :spacing 2)]
+  (let [doc (cgui-doc/read-xml "my_mod:guis/rework/page_wireless.xml")
+        root (cgui-doc/get-widget doc "main")
+        wlist (cgui/find-widget root "panel_wireless/zone_elementlist")
+        elem-template (cgui/find-widget root "panel_wireless/zone_elementlist/element")
+        connected-elem (cgui/find-widget root "panel_wireless/elem_connected")
+        btn-up (cgui/find-widget root "panel_wireless/btn_arrowup")
+        btn-down (cgui/find-widget root "panel_wireless/btn_arrowdown")
+        elist (comp/element-list :spacing 2)
+        payload (net-helpers/tile-pos-payload (:tile-entity container))]
 
-    (comp/add-component! list-widget list-comp)
+    (when wlist
+      (comp/add-component! wlist elist))
 
-    (let [refresh-list
-          (fn []
-            (comp/list-clear! list-comp)
-            (doseq [net @networks]
-              (let [ssid (:ssid net)
-                    load (:load net)
-                    item (cgui/create-widget :pos [0 0] :size [140 18])
-                    label (comp/text-box
-                            :text (str ssid " (" load ")")
-                            :color 0xFFFFFFFF
-                            :scale 0.7
-                            :shadow? true)]
-                (comp/add-component! item label)
-                (events/on-left-click item
-                  (events/make-click-handler
-                    (fn [] (reset! selected ssid))))
-                (comp/list-add! list-comp item))))
+    (when elem-template
+      (cgui/set-visible! elem-template false))
 
-          query-networks
-          (fn []
-            (net-client/send-to-server
-              MSG_LIST_NETWORKS
-              (net-helpers/tile-pos-payload (:tile-entity container))
-              (fn [response]
-                (reset! networks (vec (:networks response [])))
-                (refresh-list))))]
+    (when (and btn-up elist)
+      (events/on-left-click btn-up (fn [_] (.progressLast ^ElementList elist))))
+    (when (and btn-down elist)
+      (events/on-left-click btn-down (fn [_] (.progressNext ^ElementList elist))))
 
-      (let [btn-refresh (comp/button
-                          :text "Refresh"
-                          :x 120 :y 10 :width 48 :height 12
-                          :on-click query-networks)
-            btn-connect (comp/button
-                          :text "Connect"
-                          :x 120 :y 25 :width 48 :height 12
-                          :on-click (fn []
-                                      (when @selected
-                                        (net-client/send-to-server
-                                          MSG_CONNECT
-                                          (assoc (net-helpers/tile-pos-payload (:tile-entity container))
-                                                 :ssid @selected
-                                                 :password @input-password)))) )
-            btn-disconnect (comp/button
-                             :text "Disconnect"
-                             :x 120 :y 40 :width 48 :height 12
-                             :on-click (fn []
-                                         (net-client/send-to-server
-                                           MSG_DISCONNECT
-                                           (net-helpers/tile-pos-payload (:tile-entity container)))))
-            notice-widget (cgui/create-widget :pos [13 170] :size [150 14])
-            notice-label (comp/text-box
-                           :text "Note: Only open networks supported"
-                           :color 0xFFFFAA00
-                           :scale 0.6
-                           :shadow? true)]
+    (letfn [(update-connected! [linked?]
+              (when connected-elem
+                (let [icon-connect (cgui/find-widget connected-elem "icon_connect")
+                      text-name (cgui/find-widget connected-elem "text_name")]
+                  (set-textbox-text! text-name (if linked? "Connected" "Not Connected"))
+                  (set-drawtexture! icon-connect
+                    (if linked?
+                      "academy:textures/guis/icons/icon_connected.png"
+                      "academy:textures/guis/icons/icon_unconnected.png")))))
 
-        (cgui/add-widget! panel btn-refresh)
-        (cgui/add-widget! panel btn-connect)
-        (cgui/add-widget! panel btn-disconnect)
-        (comp/add-component! notice-widget notice-label)
-        (cgui/add-widget! panel notice-widget))
+            (query-linked! []
+              (net-client/send-to-server
+                MSG_GET_STATUS
+                payload
+                (fn [response]
+                  (update-connected! (boolean (:linked response))))))
 
-      (cgui/add-widget! panel list-widget)
-      (query-networks))
+            (connect-network! [ssid pass]
+              (net-client/send-to-server
+                MSG_CONNECT
+                (assoc payload :ssid ssid :password pass)
+                (fn [_]
+                  (query-networks!)
+                  (query-linked!))))
 
-    panel))
+            (disconnect-network! []
+              (net-client/send-to-server
+                MSG_DISCONNECT
+                payload
+                (fn [_]
+                  (query-networks!)
+                  (query-linked!))))
+
+            (build-element! [net]
+              (when elem-template
+                (let [elem (.copy ^Widget elem-template)
+                      ssid (:ssid net)
+                      encrypted? (boolean (:is-encrypted? net))
+                      text-name (cgui/find-widget elem "text_name")
+                      icon-key (cgui/find-widget elem "icon_key")
+                      input-pass (cgui/find-widget elem "input_pass")
+                      icon-connect (cgui/find-widget elem "icon_connect")
+                      pass-box (when input-pass (widget-textbox input-pass))]
+
+                  (set-textbox-text! text-name (str ssid))
+
+                  (if encrypted?
+                    (do
+                      (when icon-key (cgui/set-visible! icon-key true))
+                      (when input-pass (cgui/set-visible! input-pass true)))
+                    (do
+                      (when icon-key (cgui/set-visible! icon-key false))
+                      (when input-pass (cgui/set-visible! input-pass false))))
+
+                  (when icon-connect
+                    (events/on-left-click icon-connect
+                      (fn [_]
+                        (let [pwd (if (and encrypted? pass-box)
+                                    (comp/get-text pass-box)
+                                    "")]
+                          (connect-network! ssid pwd)
+                          (when pass-box
+                            (comp/set-text! pass-box ""))))))
+
+                  (when elist
+                    (comp/list-add! elist elem)))))
+
+            (rebuild-list! [nets]
+              (when elist
+                (comp/list-clear! elist)
+                (doseq [net nets]
+                  (build-element! net))))
+
+            (query-networks! []
+              (net-client/send-to-server
+                MSG_LIST_NETWORKS
+                payload
+                (fn [response]
+                  (rebuild-list! (vec (:networks response []))))))]
+
+      (when connected-elem
+        (let [icon-connect (cgui/find-widget connected-elem "icon_connect")]
+          (when icon-connect
+            (events/on-left-click icon-connect (fn [_] (disconnect-network!))))))
+
+      (query-networks!)
+      (query-linked!))
+
+    root))
 
 ;; ============================================================================
 ;; InfoArea Builder (TechUI)

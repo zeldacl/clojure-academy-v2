@@ -1,5 +1,6 @@
 (ns my-mod.gui.cgui
   "LambdaLib2 CGui system wrapper - Clojure-friendly interface"
+  (:require [clojure.string :as str])
   (:import [cn.lambdalib2.cgui Widget WidgetContainer CGui CGuiScreen CGuiScreenContainer]))
 
 ;; ============================================================================
@@ -72,6 +73,20 @@
   "Get all child widgets from container"
   [^WidgetContainer container]
   (vec (.getDrawList container)))
+
+(defn find-widget
+  "Find a widget by name or path (e.g. "
+  "panel/child/grandchild") under root
+  
+  Returns: widget or nil"
+  [^Widget root name-or-path]
+  (let [parts (str/split (str name-or-path) #"/")]
+    (reduce (fn [node part]
+              (when node
+                (first (filter #(= part (.getName ^Widget %))
+                               (get-widgets node)))))
+            root
+            parts)))
 
 ;; ============================================================================
 ;; Widget Properties
