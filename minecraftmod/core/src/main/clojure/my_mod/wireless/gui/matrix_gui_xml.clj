@@ -122,7 +122,7 @@
 (defn create-histogram-widget
   "创建直方图组件
   
-  复用自Node GUI的实现，用于显示网络负载。
+  用于显示网络负载。
   
   参数：
   - spec: XML解析的Histogram规格
@@ -134,18 +134,21 @@
         x (get-in spec [:content :x] 0)
         y (get-in spec [:content :y] 0)
         width (get-in spec [:content :width] 65)
-        height (get-in spec [:content :height] 45)]
-    (case type
-      :capacity
-      (comp/histogram
-        :label label
-        :x x :y y :width width :height height
-        :color color
-        :value-fn (fn [] (.getLoad tile))
-        :max-fn (fn [] (.getCapacity tile))
-        :direction :vertical)
-      
-      (throw (ex-info "Unknown histogram type" {:type type})))))
+        height (get-in spec [:content :height] 45)
+        [value-fn max-fn direction] (case type
+                                       :capacity
+                                       [(fn [] (.getLoad tile))
+                                        (fn [] (.getCapacity tile))
+                                        :vertical]
+                                       
+                                       (throw (ex-info "Unknown histogram type" {:type type})))]
+    (comp/histogram
+      :label label
+      :x x :y y :width width :height height
+      :color color
+      :value-fn value-fn
+      :max-fn max-fn
+      :direction direction)))
 
 (defn create-property-widget
   "创建属性字段组件
@@ -191,26 +194,18 @@
   参数：
   - spec: XML解析的TextField规格"
   [spec]
-  (let [label (get-in spec [:content :label])
-        x (get-in spec [:content :x] 0)
-        y (get-in spec [:content :y] 0)
-        width (get-in spec [:content :width] 71)
-        height (get-in spec [:content :height] 10)
-        max-length (get-in spec [:content :maxLength] 32)
-        masked? (get-in spec [:content :masked] false)
-        placeholder (get-in spec [:content :placeholder] "")
-        label-color (get-in spec [:content :labelColor] "#aaaaaa")
-        text-color (get-in spec [:content :textColor] "#ffffff")
-        bg-color (get-in spec [:content :backgroundColor] "#333333")]
-    (comp/text-field
-      :label label
-      :x x :y y :width width :height height
-      :max-length max-length
-      :masked masked?
-      :placeholder placeholder
-      :label-color label-color
-      :text-color text-color
-      :background-color bg-color)))
+  (comp/text-field
+    :label (get-in spec [:content :label])
+    :x (get-in spec [:content :x] 0)
+    :y (get-in spec [:content :y] 0)
+    :width (get-in spec [:content :width] 71)
+    :height (get-in spec [:content :height] 10)
+    :max-length (get-in spec [:content :maxLength] 32)
+    :masked (get-in spec [:content :masked] false)
+    :placeholder (get-in spec [:content :placeholder] "")
+    :label-color (get-in spec [:content :labelColor] "#aaaaaa")
+    :text-color (get-in spec [:content :textColor] "#ffffff")
+    :background-color (get-in spec [:content :backgroundColor] "#333333")))
 
 (defn create-button-widget
   "创建按钮组件
@@ -221,21 +216,16 @@
   - spec: XML解析的Button规格
   - on-click: (fn [] ...) - 点击回调"
   [spec on-click]
-  (let [text (get-in spec [:content :text])
-        x (get-in spec [:content :x] 0)
-        y (get-in spec [:content :y] 0)
-        width (get-in spec [:content :width] 71)
-        height (get-in spec [:content :height] 15)
-        color (get-in spec [:content :color] "#00cc00")
-        hover-color (get-in spec [:content :hoverColor] "#00ff00")
-        text-color (get-in spec [:content :textColor] "#ffffff")]
-    (comp/button
-      :text text
-      :x x :y y :width width :height height
-      :color color
-      :hover-color hover-color
-      :text-color text-color
-      :on-click on-click)))
+  (comp/button
+    :text (get-in spec [:content :text])
+    :x (get-in spec [:content :x] 0)
+    :y (get-in spec [:content :y] 0)
+    :width (get-in spec [:content :width] 71)
+    :height (get-in spec [:content :height] 15)
+    :color (get-in spec [:content :color] "#00cc00")
+    :hover-color (get-in spec [:content :hoverColor] "#00ff00")
+    :text-color (get-in spec [:content :textColor] "#ffffff")
+    :on-click on-click))
 
 ;; ==================== 动态面板构建 ====================
 

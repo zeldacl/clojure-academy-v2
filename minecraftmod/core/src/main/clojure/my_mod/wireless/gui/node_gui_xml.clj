@@ -134,54 +134,41 @@
 (defn create-histogram-widget
   "Create histogram widget from XML specification
   
+  Uses comp/histogram for cleaner implementation with automatic updates.
+  
   Args:
   - hist-spec: Histogram spec from XML {:name :label :type :color :y :height}
   - container: NodeContainer for data access"
   [hist-spec container]
-  (let [widget (cgui/create-widget :pos [0 (:y hist-spec 0)] :size [100 (:height hist-spec 40)])
-        {:keys [label type color]} hist-spec
-        
-        ;; Create progress bar component
-        bar (comp/progress-bar
-              :direction :horizontal
-              :progress 0.0
-              :color-full color
-              :color-empty 0x404040)
-        
-        ;; Create label
-        label-text (comp/text-box
-                     :text label
-                     :color 0xFFFFFF
-                     :scale 0.7
-                     :shadow? true)]
-    
-    ;; Add components
-    (comp/add-component! widget label-text)
-    (comp/add-component! widget bar)
-    
-    ;; Add update logic based on type
-    (events/on-frame widget
-      (fn [_]
-        (let [[current max-val] (case type
-                                  :energy [@(:energy container) @(:max-energy container)]
-                                  :capacity [@(:capacity container) @(:max-capacity container)]
-                                  [0 1])
-              progress (if (> max-val 0) (/ (double current) (double max-val)) 0.0)]
-          (comp/set-progress! bar progress)
-          (comp/set-text! label-text (str label ": " current "/" max-val)))))
-    
-    widget))
+  (let [{:keys [label type color y height]} hist-spec
+        [value-fn max-fn] (case type
+                            :energy [(fn [] @(:energy container))
+                                     (fn [] @(:max-energy container))]
+                            :capacity [(fn [] @(:capacity container))
+                                       (fn [] @(:max-capacity container))]
+                            [(fn [] 0) (fn [] 1)])]
+    (comp/histogram
+      :label label
+      :x 0
+      :y (or y 0)
+      :width 100
+      :height (or height 40)
+      :color color
+      :value-fn value-fn
+      :max-fn max-fn
+      :direction :horizontal)))
 
 (defn create-property-widget
   "Create property widget from XML specification
+  
+  Simplified version using declarative value mapping.
   
   Args:
   - prop-spec: Property spec from XML {:name :label :editable :masked :max-length :requires-owner}
   - container: NodeContainer
   - player: Player who opened GUI"
   [prop-spec container player]
-  (let [widget (cgui/create-widget :pos [0 0] :size [100 12])
-        {:keys [label editable masked requires-owner]} prop-spec
+  (let [{:keys [label editable masked requires-owner]} prop-spec
         prop-name (:name prop-spec)
         
         ;; Check if player is owner (for editable fields)
@@ -189,58 +176,41 @@
         is-owner (= (container/get-owner container) player-name)
         can-edit (and editable (or (not requires-owner) is-owner))
         
-        ;; Create label
-        label-widget (comp/text-box
-                       :text (str label ": ")
-                       :color 0xCCCCCC
-                       :scale 0.7
-                       :shadow? true)
+        ;; Value accessor based on property name
+        get-value (fn []
+                    (case (keyword prop-name)
+                      :range (str @(:range container) " blocks")
+                      :owner @(:owner container)
+                      :node_name @(:ssid container)
+                      :password (if masked "••••••" @(:password container))
+                      ""))
         
-        ;; Create value display/edit field
-        value-widget (if can-edit
-                       (comp/text-field
-                         :text ""
-                         :max-length (:max-length prop-spec 32)
-                         :masked masked
-                         :on-confirm (fn [new-value]
-                                       (case (keyword prop-name)
-                                         :node_name
-                                         (net-client/send-to-server
-                                           MSG_CHANGE_NAME
-                                           (assoc (net-helpers/tile-pos-payload (:tile-entity container))
-                                                  :node-name new-value))
-
-                                         :password
-                                         (net-client/send-to-server
-                                           MSG_CHANGE_PASSWORD
-                                           (assoc (net-helpers/tile-pos-payload (:tile-entity container))
-                                                  :password new-value))
-
-                                         nil)))
-                       (comp/text-box
-                         :text ""
-                         :color 0xFFFFFF
-                         :scale 0.7
-                         :shadow? true))]
+        ;; Change handler for editable fields
+        on-change (when can-edit
+                    (fn [new-value]
+                      (case (keyword prop-name)
+                        :node_name
+                        (net-client/send-to-server
+                          MSG_CHANGE_NAME
+                          (assoc (net-helpers/tile-pos-payload (:tile-entity container))
+                                 :node-name new-value))
+                        
+                        :password
+                        (net-client/send-to-server
+                          MSG_CHANGE_PASSWORD
+                          (assoc (net-helpers/tile-pos-payload (:tile-entity container))
+                                 :password new-value))
+                        
+                        nil)))]
     
-    ;; Add components
-    (comp/add-component! widget label-widget)
-    (comp/add-component! widget value-widget)
-    
-    ;; Add update logic to display current value
-    (events/on-frame widget
-      (fn [_]
-        (let [current-value (case (keyword prop-name)
-                              :range (str @(:range container) " blocks")
-                              :owner @(:owner container)
-                              :node_name @(:ssid container)
-                              :password (if masked "••••••" @(:password container))
-                              "")]
-          (if can-edit
-            (comp/set-placeholder! value-widget current-value)
-            (comp/set-text! value-widget current-value)))))
-    
-    widget))
+    ;; Use comp/property-field for cleaner implementation
+    (comp/property-field
+      :label label
+      :value-fn get-value
+      :editable can-edit
+      :masked masked
+      :max-length (:max-length prop-spec 32)
+      :on-change on-change)))
 
 (defn create-info-panel
   "Create information panel from XML specification
