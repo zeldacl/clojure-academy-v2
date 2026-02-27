@@ -15,74 +15,61 @@
 ;; Screen Creation - Core Game Logic
 ;; ============================================================================
 
-(defn create-node-screen
-  "Create Node GUI screen (platform-agnostic)
-  
-  This function contains the core game logic for creating a Node screen:
-  1. Extract Clojure container from platform wrapper
-  2. Delegate to node-gui/create-screen for CGui creation
-  3. Handle errors gracefully
+(defn create-screen
+  "Generic screen creation function (platform-agnostic factory)
   
   Args:
+  - gui-type: Keyword (:node, :matrix, etc.)
   - container-or-handler: Platform-specific container/handler wrapper
                           Must have .getClojureContainer() method
   - player-inventory: Player inventory (not currently used but required by platform APIs)
   - title: Text component (not currently used but required by platform APIs)
   
   Returns: CGuiScreenContainer instance or nil on error"
-  [container-or-handler player-inventory title]
-  (log/info "Creating Node screen (platform-agnostic factory)")
+  [gui-type container-or-handler player-inventory title]
+  (log/info "Creating" (name gui-type) "screen (platform-agnostic factory)")
   
   (try
-        (let [;; Extract Clojure container from platform wrapper
-          ;; Works for both Forge Container and Fabric ScreenHandler
+    (let [cfg (get gui-registry/gui-config gui-type)
           clj-container (.getClojureContainer container-or-handler)
-          
-          ;; Create CGui screen using platform-agnostic GUI code
           _ (gui-registry/set-client-container! clj-container)
-          cgui-screen (node-gui/create-screen clj-container container-or-handler)]
+          cgui-screen ((:screen-fn cfg) clj-container container-or-handler)]
       
-      (log/info "Node screen created successfully")
+      (log/info (str (name gui-type) " screen created successfully"))
       cgui-screen)
     
     (catch Exception e
-      (log/error "Failed to create Node screen:" (.getMessage e))
+      (log/error (str "Failed to create " (name gui-type) " screen:") (.getMessage e))
       (.printStackTrace e)
       nil)))
+
+(defn create-node-screen
+  "Create Node GUI screen (platform-agnostic)
+  
+  Delegates to generic create-screen with :node configuration.
+  
+  Args:
+  - container-or-handler: Platform-specific container/handler wrapper
+  - player-inventory: Player inventory
+  - title: Text component
+  
+  Returns: CGuiScreenContainer instance or nil on error"
+  [container-or-handler player-inventory title]
+  (create-screen :node container-or-handler player-inventory title))
 
 (defn create-matrix-screen
   "Create Matrix GUI screen (platform-agnostic)
   
-  This function contains the core game logic for creating a Matrix screen:
-  1. Extract Clojure container from platform wrapper
-  2. Delegate to matrix-gui/create-screen for CGui creation
-  3. Handle errors gracefully
+  Delegates to generic create-screen with :matrix configuration.
   
   Args:
   - container-or-handler: Platform-specific container/handler wrapper
-                          Must have .getClojureContainer() method
-  - player-inventory: Player inventory (not currently used but required by platform APIs)
-  - title: Text component (not currently used but required by platform APIs)
+  - player-inventory: Player inventory
+  - title: Text component
   
   Returns: CGuiScreenContainer instance or nil on error"
   [container-or-handler player-inventory title]
-  (log/info "Creating Matrix screen (platform-agnostic factory)")
-  
-  (try
-        (let [;; Extract Clojure container from platform wrapper
-          clj-container (.getClojureContainer container-or-handler)
-          
-          ;; Create CGui screen
-          _ (gui-registry/set-client-container! clj-container)
-          cgui-screen (matrix-gui/create-screen clj-container container-or-handler)]
-      
-      (log/info "Matrix screen created successfully")
-      cgui-screen)
-    
-    (catch Exception e
-      (log/error "Failed to create Matrix screen:" (.getMessage e))
-      (.printStackTrace e)
-      nil)))
+  (create-screen :matrix container-or-handler player-inventory title))
 
 ;; ============================================================================
 ;; Design Notes
