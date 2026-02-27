@@ -28,54 +28,51 @@
 ;; Wireless GUI Handler Implementation
 ;; ============================================================================
 
-(defrecord WirelessGuiHandler []
-  IGuiHandler
+(defmacro defwireless-gui-handler
+  "Define a GUI handler with table-driven config.
   
-  (get-server-container [_ gui-id player world pos]
-    (case gui-id
-      ;; Wireless Node
-      0
-      (let [tile-entity (.getTileEntity world pos)]
-        (when tile-entity
-          (log/info "Creating Node container for player" (.getName player))
-          (node-container/create-container tile-entity player)))
-      
-      ;; Wireless Matrix
-      1
-      (let [tile-entity (.getTileEntity world pos)]
-        (when tile-entity
-          (log/info "Creating Matrix container for player" (.getName player))
-          (matrix-container/create-container tile-entity player)))
-      
-      ;; Unknown GUI
-      (do
-        (log/warn "Unknown GUI ID:" gui-id)
-        nil)))
+  Config keys:
+  - :server {gui-id {:container-fn (fn [tile player])}}
+  - :client {gui-id {:screen-fn (fn [tile player])}}
   
-  (get-client-gui [_ gui-id player world pos]
-    (case gui-id
-      ;; Wireless Node
-      0
-      (let [tile-entity (.getTileEntity world pos)]
-        (when tile-entity
-          (log/info "Creating Node GUI for player" (.getName player))
-          (let [container (node-container/create-container tile-entity player)
-                minecraft-container nil] ; Will be set by platform impl
-            (node-gui/create-screen container minecraft-container player))))
-      
-      ;; Wireless Matrix
-      1
-      (let [tile-entity (.getTileEntity world pos)]
-        (when tile-entity
-          (log/info "Creating Matrix GUI for player" (.getName player))
-          (let [container (matrix-container/create-container tile-entity player)
-                minecraft-container nil] ; Will be set by platform impl
-            (matrix-gui/create-screen container minecraft-container))))
-      
-      ;; Unknown GUI
-      (do
-        (log/warn "Unknown GUI ID:" gui-id)
-        nil))))
+  Each function is called only when tile-entity exists." 
+  [name {:keys [server client]}]
+  `(defrecord ~name []
+     IGuiHandler
+     (get-server-container [_# gui-id# player# world# pos#]
+       (let [tile-entity# (.getTileEntity world# pos#)
+             handler# (get ~server gui-id#)]
+         (if (and tile-entity# handler#)
+           (do
+             (log/info "Creating container for player" (.getName player#) "gui" gui-id#)
+             ((:container-fn handler#) tile-entity# player#))
+           (do
+             (when-not handler#
+               (log/warn "Unknown GUI ID:" gui-id#))
+             nil))))
+     (get-client-gui [_# gui-id# player# world# pos#]
+       (let [tile-entity# (.getTileEntity world# pos#)
+             handler# (get ~client gui-id#)]
+         (if (and tile-entity# handler#)
+           (do
+             (log/info "Creating GUI for player" (.getName player#) "gui" gui-id#)
+             ((:screen-fn handler#) tile-entity# player#))
+           (do
+             (when-not handler#
+               (log/warn "Unknown GUI ID:" gui-id#))
+             nil))))))
+
+(defwireless-gui-handler WirelessGuiHandler
+  {:server {gui-wireless-node {:container-fn node-container/create-container}
+            gui-wireless-matrix {:container-fn matrix-container/create-container}}
+   :client {gui-wireless-node {:screen-fn (fn [tile player]
+                                           (let [container (node-container/create-container tile player)
+                                                 minecraft-container nil]
+                                             (node-gui/create-screen container minecraft-container player)))}
+            gui-wireless-matrix {:screen-fn (fn [tile player]
+                                             (let [container (matrix-container/create-container tile player)
+                                                   minecraft-container nil]
+                                               (matrix-gui/create-screen container minecraft-container)))}}})
 
 ;; ============================================================================
 ;; Global Handler Instance
