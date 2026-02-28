@@ -159,7 +159,7 @@
       
       (catch Exception e
         (log/error "Error checking multi-block structure:" (.getMessage e))
-        false)))))
+        false))))
 
 ;; Create block specification
 (defn create-block-spec
@@ -361,7 +361,7 @@
            [{:x i :y 0 :z 0}   ; +X
             {:x (- i) :y 0 :z 0}  ; -X
             {:x 0 :y 0 :z i}   ; +Z
-            {:x 0 :y 0 :z (- i)}])))))  ; -Z
+            {:x 0 :y 0 :z (- i)}]))))  ; -Z
 
 (defn create-l-shape
   "Create an L-shape multi-block positions

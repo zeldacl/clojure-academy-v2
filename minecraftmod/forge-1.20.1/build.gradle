@@ -84,6 +84,10 @@ tasks.withType(JavaCompile).configureEach {
   options.encoding = 'UTF-8'
 }
 
+tasks.named('processResources').configure {
+  duplicatesStrategy = 'include'
+}
+
 tasks.matching { it.name == 'checkClojure' }.configureEach {
   enabled = false
 }
