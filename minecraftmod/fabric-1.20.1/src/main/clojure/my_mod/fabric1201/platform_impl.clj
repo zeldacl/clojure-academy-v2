@@ -13,10 +13,12 @@
   (:require [my-mod.platform.nbt :as nbt]
             [my-mod.platform.position :as pos]
             [my-mod.platform.world :as world]
+                        [my-mod.platform.item :as item]
             [my-mod.util.log :as log])
   (:import [net.minecraft.nbt NbtCompound NbtList]
            [net.minecraft.util.math BlockPos]
-           [net.minecraft.world World]))
+           [net.minecraft.world World]
+           [net.minecraft.item ItemStack]))
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Fabric 1.20.1)
@@ -59,6 +61,9 @@
   
   (nbt-get-tag [this key]
     (.get this key))
+  
+    (nbt-get-compound [this key]
+      (.getCompound this key))
   
   (nbt-has-key? [this key]
     (.contains this key)))
@@ -133,5 +138,10 @@
   (alter-var-root #'pos/*position-factory*
     (constantly (fn [x y z]
                   (BlockPos. (int x) (int y) (int z)))))
+  
+    ;; Register item factory
+    (alter-var-root #'item/*item-factory*
+      (constantly (fn [nbt]
+                    (ItemStack/fromNbt nbt))))
   
   (log/info "Fabric 1.20.1 platform implementations initialized successfully"))

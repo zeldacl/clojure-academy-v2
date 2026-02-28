@@ -12,10 +12,12 @@
   (:require [my-mod.platform.nbt :as nbt]
             [my-mod.platform.position :as pos]
             [my-mod.platform.world :as world]
+                        [my-mod.platform.item :as item]
             [my-mod.util.log :as log])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
-           [net.minecraft.world.level Level]))
+           [net.minecraft.world.level Level]
+           [net.minecraft.world.item ItemStack]))
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Forge 1.20.1)
@@ -59,6 +61,9 @@
   (nbt-get-tag [this key]
     (.get this key))
   
+    (nbt-get-compound [this key]
+      (.getCompound this key))
+  
   (nbt-has-key? [this key]
     (.contains this key)))
 
@@ -94,6 +99,32 @@
 
 ;; ============================================================================
 ;; World Protocol Implementation (Forge 1.20.1)
+
+;; ============================================================================
+;; ItemStack Protocol Implementation (Forge 1.20.1)
+;; ============================================================================
+
+(extend-type ItemStack
+  item/IItemStack
+  
+  (item-is-empty? [this]
+    (.isEmpty this))
+  
+  (item-get-count [this]
+    (.getCount this))
+  
+  (item-get-max-stack-size [this]
+    (.getMaxStackSize this))
+  
+  (item-is-equal? [this other]
+    (.sameItem this other))
+  
+  (item-save-to-nbt [this nbt]
+    (.save this nbt)))
+
+;; ============================================================================
+;; World Protocol Implementation (Forge 1.20.1)
+;; ============================================================================
 ;; ============================================================================
 
 (extend-type Level
@@ -132,5 +163,9 @@
   (alter-var-root #'pos/*position-factory*
     (constantly (fn [x y z]
                   (BlockPos. (int x) (int y) (int z)))))
+  
+    ;; Register ItemStack factory
+    (alter-var-root #'item/*item-factory*
+      (constantly (fn [nbt] (ItemStack/of nbt))))
   
   (log/info "Forge 1.20.1 platform implementations initialized successfully"))

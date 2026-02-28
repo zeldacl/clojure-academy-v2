@@ -33,8 +33,8 @@
 ;; Platform Factory Registration
 ;; ============================================================================
 
-(defonce ^:dynamic *position-factory*
-  ^{:doc "Platform-specific position factory function.
+(defonce ^{:dynamic true
+           :doc "Platform-specific position factory function.
          
          Must be initialized by platform code before core code runs.
          
@@ -43,6 +43,7 @@
          Example platform initialization:
          (alter-var-root #'my-mod.platform.position/*position-factory*
            (constantly (fn [x y z] (BlockPos. x y z))))"}
+  *position-factory*
   nil)
 
 ;; ============================================================================

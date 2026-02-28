@@ -51,6 +51,9 @@
   (nbt-get-tag [this key]
     "Get a nested NBT tag. Returns nil if key doesn't exist.")
   
+    (nbt-get-compound [this key]
+      "Get a nested compound tag. Returns compound or nil if key doesn't exist.")
+  
   (nbt-has-key? [this key]
     "Check if a key exists in the compound."))
 
@@ -74,8 +77,8 @@
 ;; Platform Factory Registration
 ;; ============================================================================
 
-(defonce ^:dynamic *nbt-factory*
-  ^{:doc "Platform-specific NBT factory functions.
+(defonce ^{:dynamic true
+           :doc "Platform-specific NBT factory functions.
          
          Must be initialized by platform code before core code runs.
          
@@ -87,6 +90,7 @@
          (alter-var-root #'my-mod.platform.nbt/*nbt-factory*
            (constantly {:create-compound #(CompoundTag.)
                         :create-list #(ListTag.)}))"}
+  *nbt-factory*
   nil)
 
 ;; ============================================================================
@@ -134,7 +138,7 @@
   
   Only converts primitive types directly stored in the compound.
   Nested compounds/lists remain as NBT objects."
-  [^INBTCompound compound keys]
+  [compound keys]
   (into {}
         (for [k keys]
           [k (cond

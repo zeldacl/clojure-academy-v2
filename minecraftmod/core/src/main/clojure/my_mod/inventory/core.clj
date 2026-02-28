@@ -2,7 +2,9 @@
   "Inventory system - IInventory protocol and utilities
   
   Provides Clojure protocol equivalent to Minecraft's IInventory interface."
-  (:require [my-mod.util.log :as log]))
+  (:require [my-mod.util.log :as log]
+            [my-mod.platform.nbt :as nbt]
+            [my-mod.platform.item :as item]))
 
 ;; ============================================================================
 ;; IInventory Protocol
@@ -70,7 +72,7 @@
   (reduce + 0
           (for [i (range (get-size-inventory inventory))]
             (if-let [stack (get-stack-in-slot inventory i)]
-              (.getCount stack)
+              (item/item-get-count stack)
               0))))
 
 (defn has-space?
@@ -80,9 +82,9 @@
     (some (fn [slot]
             (let [existing (get-stack-in-slot inventory slot)]
               (or (nil? existing)
-                  (and (.isItemEqual existing item-stack)
-                       (< (.getCount existing) 
-                          (min (.getMaxStackSize item-stack)
+                  (and (item/item-is-equal? existing item-stack)
+                      (< (item/item-get-count existing) 
+                        (min (item/item-get-max-stack-size item-stack)
                                (get-inventory-stack-limit inventory)))))))
           (range size))))
 
@@ -102,15 +104,15 @@
   ([inventory nbt]
    (write-inventory-to-nbt inventory nbt "inventory"))
   ([inventory nbt key]
-   (let [inv-tag (net.minecraft.nbt.NBTTagCompound.)
+  (let [inv-tag (nbt/create-nbt-compound)
          size (get-size-inventory inventory)]
      (doseq [i (range size)]
        (when-let [stack (get-stack-in-slot inventory i)]
-         (when-not (.isEmpty stack)
-           (let [stack-tag (net.minecraft.nbt.NBTTagCompound.)]
-             (.writeToNBT stack stack-tag)
-             (.setTag inv-tag (str i) stack-tag)))))
-     (.setTag nbt key inv-tag)
+         (when-not (item/item-is-empty? stack)
+           (let [stack-tag (nbt/create-nbt-compound)]
+             (item/item-save-to-nbt stack stack-tag)
+             (nbt/nbt-set-tag! inv-tag (str i) stack-tag)))))
+     (nbt/nbt-set-tag! nbt key inv-tag)
      nbt)))
 
 (defn read-inventory-from-nbt
@@ -125,14 +127,14 @@
   ([inventory nbt]
    (read-inventory-from-nbt inventory nbt "inventory"))
   ([inventory nbt key]
-   (when (.hasKey nbt key)
-     (let [inv-tag (.getCompoundTag nbt key)
+   (when (nbt/nbt-has-key? nbt key)
+     (let [inv-tag (nbt/nbt-get-compound nbt key)
            size (get-size-inventory inventory)]
        (doseq [i (range size)]
          (let [slot-key (str i)]
-           (if (.hasKey inv-tag slot-key)
-             (let [stack-tag (.getCompoundTag inv-tag slot-key)
-                   stack (net.minecraft.item.ItemStack. stack-tag)]
+           (if (nbt/nbt-has-key? inv-tag slot-key)
+             (let [stack-tag (nbt/nbt-get-compound inv-tag slot-key)
+                   stack (item/create-item-from-nbt stack-tag)]
                (set-inventory-slot-contents inventory i stack))
              (set-inventory-slot-contents inventory i nil))))))))
 
