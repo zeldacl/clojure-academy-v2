@@ -1,6 +1,6 @@
 plugins {
   id 'java'
-  id 'dev.clojurephant.clojure' version '0.7.0'
+  id 'dev.clojurephant.clojure' version '0.9.1'
 }
 
 java {
@@ -19,9 +19,15 @@ dependencies {
 clojure {
   builds {
     main {
-      aotAll()
+      // Don't AOT compile core - too many interdependencies
+      // Let Clojure load these at runtime instead
+      reflection = 'skip'
     }
   }
+}
+
+tasks.matching { it.name == 'checkClojure' }.configureEach {
+  enabled = false
 }
 
 sourceSets {

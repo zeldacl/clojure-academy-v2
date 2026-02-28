@@ -59,28 +59,30 @@
    For irregular shapes: custom-positions: [{:x 0 :y 0 :z 0} {:x 1 :y 0 :z 0} ...]
    origin: {:x 0 :y 0 :z 0}
    Returns: vector of relative position maps"
-  ([{:keys [width height depth]} origin]
-   (for [x (range width)
-         y (range height)
-         z (range depth)]
-     {:x (+ (:x origin) x)
-      :y (+ (:y origin) y)
-      :z (+ (:z origin) z)
-      :relative-x x
-      :relative-y y
-      :relative-z z
-      :is-origin? (and (= x 0) (= y 0) (= z 0))}))
-  ([custom-positions origin]
-   ;; For irregular multi-blocks with custom positions
-   (mapv (fn [pos]
-           {:x (+ (:x origin) (:x pos))
-            :y (+ (:y origin) (:y pos))
-            :z (+ (:z origin) (:z pos))
-            :relative-x (:x pos)
-            :relative-y (:y pos)
-            :relative-z (:z pos)
-            :is-origin? (and (= (:x pos) 0) (= (:y pos) 0) (= (:z pos) 0))})
-         custom-positions)))
+  [positions-or-spec origin]
+  (if (and (map? positions-or-spec) (contains? positions-or-spec :width))
+    ;; Regular shape with :width :height :depth
+    (let [{:keys [width height depth]} positions-or-spec]
+      (for [x (range width)
+            y (range height)
+            z (range depth)]
+        {:x (+ (:x origin) x)
+         :y (+ (:y origin) y)
+         :z (+ (:z origin) z)
+         :relative-x x
+         :relative-y y
+         :relative-z z
+         :is-origin? (and (= x 0) (= y 0) (= z 0))}))
+    ;; Irregular multi-blocks with custom positions
+    (mapv (fn [pos]
+            {:x (+ (:x origin) (:x pos))
+             :y (+ (:y origin) (:y pos))
+             :z (+ (:z origin) (:z pos))
+             :relative-x (:x pos)
+             :relative-y (:y pos)
+             :relative-z (:z pos)
+             :is-origin? (and (= (:x pos) 0) (= (:y pos) 0) (= (:z pos) 0))})
+          positions-or-spec)))
 
 (defn normalize-positions
   "Normalize a list of positions to ensure one is at origin (0,0,0)

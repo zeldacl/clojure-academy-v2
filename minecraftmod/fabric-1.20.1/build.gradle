@@ -1,7 +1,7 @@
 plugins {
   id 'java'
-  id 'fabric-loom' version '1.4-SNAPSHOT'
-  id 'dev.clojurephant.clojure' version '0.7.0'
+  id 'fabric-loom' version '1.3.9'
+  id 'dev.clojurephant.clojure' version '0.9.1'
 }
 
 group = rootProject.findProperty('mod_group')
@@ -13,6 +13,16 @@ java {
 
 loom {
   // Configure Fabric Loom settings
+}
+
+clojure {
+  builds {
+    main {
+      aotNamespaces.add('my-mod')
+      // Allow reflection for Minecraft classes that may not be available at compile time
+      reflection = 'skip'
+    }
+  }
 }
 
 repositories {
@@ -55,17 +65,3 @@ processResources {
   }
 }
 
-// AOT compile Clojure namespaces
-tasks.named('clojureCompile').configure {
-  aotCompile = true
-}
-
-// DataGenerator task for Fabric
-// Note: Fabric uses genSources for data generation
-task runData(dependsOn: genSources) {
-  group = 'fabric'
-  description = 'Run Fabric DataGenerator to generate JSON files'
-}
-
-// Expose genSources as runData for compatibility with Forge workflow
-genSources.dependsOn build

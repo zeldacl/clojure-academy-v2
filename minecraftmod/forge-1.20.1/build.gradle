@@ -11,6 +11,16 @@ java {
   toolchain { languageVersion = JavaLanguageVersion.of(17) }
 }
 
+clojure {
+  builds {
+    main {
+      // Don't AOT compile - load Clojure code at runtime instead
+      // This avoids compile-time dependency issues in the core library
+      reflection = 'skip'
+    }
+  }
+}
+
 minecraft {
   // mappings channel: rootProject.findProperty('mappings_1201_channel'), version: rootProject.findProperty('mappings_1201_version')
   mappings channel: mapping_channel, version: mapping_version
@@ -52,15 +62,19 @@ dependencies {
   // implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version')}"
 }
 
-// Pull in core resources and source
+// Make Minecraft libraries available for Clojure compilation (for gen-class)
+configurations {
+  clojureCompile.extendsFrom implementation
+}
+
+// Pull in core resources and source  
 sourceSets {
   main {
     java { srcDirs += ["src/main/java"] }
     clojure {
       srcDirs += ["src/main/clojure", "../core/src/main/clojure"]
-      include "my_mod/forge1201/datagen/**"
-      include "my_mod/datagen/**"
-      include "my_mod/config/**"
+      // Only include forge-1.20.1 code for compilation; core will be available at runtime
+      include "my_mod/forge1201/**"
     }
     resources { srcDirs += ["../core/src/main/resources"] }
   }
