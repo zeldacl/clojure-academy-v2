@@ -2,8 +2,8 @@
   "Platform-agnostic position abstraction layer.
   
   This namespace provides protocols and factory functions for block positions
-  without depending on any specific Minecraft version (BlockPos class location
-  changed from net.minecraft.util.math to net.minecraft.core in 1.18+).
+  without depending on any specific Minecraft version (BlockPos package
+  location changed across versions).
   
   Design Philosophy:
   - VBlocks store raw coordinates (x, y, z) as integers

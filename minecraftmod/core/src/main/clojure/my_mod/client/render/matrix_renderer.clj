@@ -140,12 +140,12 @@
 ;; Forge 1.16.5:
 ;;   forge-1.16.5/src/.../my_mod/forge1165/client/render/matrix_tesr.clj
 ;;   - Generates: my_mod.forge1165.client.render.MatrixTESR
-;;   - Extends: net.minecraft.client.renderer.tileentity.TileEntityRenderer
+;;   - Extends: platform tile-entity renderer base class
 ;;
 ;; Fabric 1.20.1:
 ;;   fabric-1.20.1/src/.../my_mod/fabric1201/client/render/matrix_renderer.clj
 ;;   - Generates: my_mod.fabric1201.client.render.MatrixBlockEntityRenderer
-;;   - Implements: net.minecraft.client.render.block.entity.BlockEntityRenderer
+;;   - Implements: platform block-entity renderer interface
 ;;
 ;; Both delegate to:
 ;;   - multiblock-helper/render-multiblock-tesr (coordinate transformation)

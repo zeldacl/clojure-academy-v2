@@ -445,8 +445,8 @@
 
 (deftype NodeTileEntityTickable [^:volatile-mutable tile-data]
   ;; Note: In real implementation, this would implement:
-  ;; net.minecraft.util.ITickable
-  ;; net.minecraft.tileentity.TileEntity (as base class)
+  ;; platform tick interface
+  ;; platform tile-entity base class
   
   ;; ITickable interface
   ;; update() method - called every game tick
