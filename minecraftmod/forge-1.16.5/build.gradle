@@ -1,7 +1,7 @@
 plugins {
   id 'java'
   id 'net.minecraftforge.gradle' version '4.1.+'
-  id 'dev.clojurephant.clojure' version '0.7.1'
+  id 'dev.clojurephant.clojure' version '0.7.0'
 }
 
 group = rootProject.findProperty('mod_group')
@@ -61,7 +61,6 @@ tasks.withType(JavaCompile).configureEach {
 
 // DataGenerator task - alias to runData for convenience
 task runData(type: JavaExec) {
-  dependsOn ':forge-1.16.5:cleanData'
   group = 'forge'
   description = 'Run Forge DataGenerator to generate JSON files'
   mainClass = 'net.minecraftforge.gradle.GradleStartCommon'

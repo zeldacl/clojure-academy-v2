@@ -1,10 +1,11 @@
 plugins {
   id 'java'
-  id 'dev.clojurephant.clojure' version '0.7.1'
+  id 'dev.clojurephant.clojure' version '0.7.0'
 }
 
 java {
-  toolchain { languageVersion = JavaLanguageVersion.of(8) }
+  // Gradle 9.2.1 requires Java 17+; Clojure 1.11.1 supports Java 17
+  toolchain { languageVersion = JavaLanguageVersion.of(17) }
 }
 
 repositories {
