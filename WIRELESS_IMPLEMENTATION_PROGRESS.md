@@ -14,7 +14,7 @@
      - 统一错误处理
 
 2. **重构文件**：
-   - `forge-1.16.5/gui/screen_impl.clj`: 移除重复逻辑，调用screen-factory
+   - `forge-1.20.1/gui/screen_impl.clj`: 移除重复逻辑，调用screen-factory
    - `fabric-1.20.1/gui/screen_impl.clj`: 移除重复逻辑，调用screen-factory
    - 平台文件仅保留注册机制
 

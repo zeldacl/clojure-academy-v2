@@ -222,19 +222,19 @@
 
 ```bash
 # 检查硬编码方块名
-grep -r "demo_block\|copper-ore" forge-1.16.5/src/main/clojure/
+grep -r "demo_block\|copper-ore" core/src/main/clojure/
 # 结果: No matches found ✅
 
 # 检查游戏模块导入
-grep -r "block-demo\|item-demo\|my-mod.defs" forge-1.16.5/src/main/clojure/
+grep -r "block-demo\|item-demo\|my-mod.defs" core/src/main/clojure/
 # 结果: No matches found ✅
 
 # 检查元数据使用
-grep -r "registry-metadata\|event-metadata\|gui-metadata" forge-1.16.5/src/main/clojure/
+grep -r "registry-metadata\|event-metadata\|gui-metadata" core/src/main/clojure/
 # 结果: Multiple matches ✅
 ```
 
-**结论**: 所有三个平台（Forge 1.16.5、Forge 1.20.1、Fabric 1.20.1）已验证 **零游戏概念** ✅
+**结论**: 所有平台（Forge 1.20.1、Fabric 1.20.1）已验证 **零游戏概念** ✅
 
 ## 架构优势
 

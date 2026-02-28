@@ -71,34 +71,30 @@
 
 ### 2. 平台特定的 DataGenerator 设置（Clojure + Java 混合）
 
-#### Forge 1.16.5
+#### Forge 1.20.1
 
 **Clojure 事件监听器**:
-- 文件: [forge-1.16.5/src/main/clojure/my_mod/forge1165/datagen/setup.clj](./forge-1.16.5/src/main/clojure/my_mod/forge1165/datagen/setup.clj)
+- 文件: [forge-1.20.1/src/main/clojure/my_mod/forge1201/datagen/setup.clj](./forge-1.20.1/src/main/clojure/my_mod/forge1201/datagen/setup.clj)
 - 作用: `-gatherData` 函数注册所有三个 provider
 
 **Java 包装器**:
-- 文件: [forge-1.16.5/src/main/java/com/example/my_mod1165/datagen/DataGeneratorSetup.java](./forge-1.16.5/src/main/java/com/example/my_mod1165/datagen/DataGeneratorSetup.java)
+- 文件: [forge-1.20.1/src/main/java/com/example/my_mod1201/datagen/DataGeneratorSetup.java](./forge-1.20.1/src/main/java/com/example/my_mod1201/datagen/DataGeneratorSetup.java)
 - 特点:
   - ✅ `@Mod.EventBusSubscriber` 注解用于事件总线注册
   - ✅ 通过反射调用 Clojure 实现（保持纯 Clojure 设计）
   - ✅ 中间层角色（bridge pattern）
 
-#### Forge 1.20.1
+#### Fabric 1.20.1
 
-**Clojure 事件监听器**:
-- 文件: [forge-1.20.1/src/main/clojure/my_mod/forge1201/datagen/setup.clj](./forge-1.20.1/src/main/clojure/my_mod/forge1201/datagen/setup.clj)
-- 作用: 与 1.16.5 相同，但针对 1.20.1 API
-
-**Java 包装器**:
-- 文件: [forge-1.20.1/src/main/java/com/example/my_mod1201/datagen/DataGeneratorSetup.java](./forge-1.20.1/src/main/java/com/example/my_mod1201/datagen/DataGeneratorSetup.java)
-- 特点: 同 1.16.5，适配 1.20.1
+**Clojure DataGenerator 设置**:
+- 文件: [fabric-1.20.1/src/main/clojure/my_mod/fabric1201/datagen/setup.clj](./fabric-1.20.1/src/main/clojure/my_mod/fabric1201/datagen/setup.clj)
+- 作用: 与 Forge 相同，但针对 Fabric API
 
 ---
 
 ### 3. Build Configuration 更新
 
-#### forge-1.16.5/build.gradle
+#### forge-1.20.1/build.gradle
 
 添加 `data` 运行配置:
 ```gradle
@@ -118,9 +114,9 @@ data {
 task runData(type: JavaExec) { ... }
 ```
 
-#### forge-1.20.1/build.gradle
+#### fabric-1.20.1/build.gradle
 
-相同配置，适配 Forge 5.1+ 的梯度版本。
+相同配置，适配 Fabric API。
 
 ---
 
@@ -128,17 +124,17 @@ task runData(type: JavaExec) { ... }
 
 更新了 mod.clj 文件以导入 datagen 设置：
 
-**forge-1.16.5/src/main/clojure/my_mod/forge1165/mod.clj**:
-```clojure
-(:require [...
-          [my-mod.forge1165.datagen.setup :as datagen]
-          ...])
-```
-
 **forge-1.20.1/src/main/clojure/my_mod/forge1201/mod.clj**:
 ```clojure
 (:require [...
           [my-mod.forge1201.datagen.setup :as datagen]
+          ...])
+```
+
+**fabric-1.20.1/src/main/clojure/my_mod/fabric1201/mod.clj**:
+```clojure
+(:require [...
+          [my-mod.fabric1201.datagen.setup :as datagen]
           ...])
 ```
 
@@ -152,8 +148,8 @@ task runData(type: JavaExec) { ... }
 │  GatherDataEvent                                        │
 └──────────────────────────┬────────────────────────────────┘
                            │
-                    triggers (on :forge-1.16.5:runData)
-                           │
+                    triggers (on :forge-1.20.1:runData)
+                           ∆
                            ▼
         ┌─────────────────────────────────────┐
         │  Java EventBusSubscriber            │
@@ -166,7 +162,7 @@ task runData(type: JavaExec) { ... }
                      ▼
         ┌─────────────────────────────────────┐
         │  Clojure Setup Module               │
-        │  my-mod.forge1165.datagen.setup     │
+        │  my-mod.forge1201.datagen.setup     │
         │  -gatherData [event]                │
         └────────────┬────────────────────────┘
                      │
@@ -215,18 +211,18 @@ cd minecraftmod
 
 2. **生成 JSON 文件**：
 
-For Forge 1.16.5:
-```bash
-.\gradlew.bat :forge-1.16.5:runData
-```
-
 For Forge 1.20.1:
 ```bash
-.\gradlew.bat :forge-1.20.1:runData
+.\.gradlew.bat :forge-1.20.1:runData
+```
+
+For Fabric 1.20.1:
+```bash
+.\.gradlew.bat :fabric-1.20.1:runData
 ```
 
 3. **验证输出**：
-检查是否在 `forge-1.16.5/src/main/resources/assets/my_mod/` 下生成了 JSON 文件。
+检查是否在 `forge-1.20.1/src/main/resources/assets/my_mod/` 下生成了 JSON 文件。
 
 ### 修改 mod-id
 
@@ -241,7 +237,7 @@ For Forge 1.20.1:
 **方法 2: 环境变量**
 ```bash
 $env:MOD_ID="your_mod_id"
-.\gradlew.bat :forge-1.16.5:runData
+.\.gradlew.bat :forge-1.20.1:runData
 ```
 
 修改后重新运行 runData，所有 JSON 文件都会自动更新。
@@ -249,7 +245,7 @@ $env:MOD_ID="your_mod_id"
 ### 添加新的方块/物品
 
 1. 在对应的 provider 中添加配置
-2. 运行 `.\gradlew.bat :forge-1.16.5:runData`
+2. 运行 `.\.gradlew.bat :forge-1.20.1:runData`
 3. 生成的 JSON 自动位于正确的目录
 
 例如，添加新方块 "example_block"：
@@ -300,15 +296,6 @@ core/src/main/clojure/my_mod/datagen/
 └── item_model_provider.clj      (170+ 行)
 ```
 
-### Forge 1.16.5
-```
-forge-1.16.5/src/main/
-├── clojure/my_mod/forge1165/datagen/
-│   └── setup.clj                (50 行)
-└── java/com/example/my_mod1165/datagen/
-    └── DataGeneratorSetup.java  (30 行)
-```
-
 ### Forge 1.20.1
 ```
 forge-1.20.1/src/main/
@@ -318,12 +305,21 @@ forge-1.20.1/src/main/
     └── DataGeneratorSetup.java  (30 行)
 ```
 
+### Fabric 1.20.1
+```
+fabric-1.20.1/src/main/
+├── clojure/my_mod/fabric1201/datagen/
+│   └── setup.clj                (50 行)
+└── java/com/example/my_modfabric/datagen/
+    └── DataGeneratorSetup.java  (30 行)
+```
+
 ### 配置文件
 ```
-forge-1.16.5/build.gradle        (更新: data 运行配置 + runData 任务)
 forge-1.20.1/build.gradle        (更新: data 运行配置 + runData 任务)
-forge-1.16.5/src/main/clojure/my_mod/forge1165/mod.clj    (添加 datagen import)
+fabric-1.20.1/build.gradle       (更新: data 运行配置 + runData 任务)
 forge-1.20.1/src/main/clojure/my_mod/forge1201/mod.clj    (添加 datagen import)
+fabric-1.20.1/src/main/clojure/my_mod/fabric1201/mod.clj  (添加 datagen import)
 ```
 
 ### 文档

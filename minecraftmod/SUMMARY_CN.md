@@ -4,7 +4,7 @@
 
 ✅ **完整的多项目 Gradle 构建系统**
 - 根项目配置：`settings.gradle`, `gradle.properties`, `build.gradle`
-- 三个子项目：`core`, `forge-1.16.5`, `forge-1.20.1`
+- 三个子项目：`core`, `forge-1.20.1`, `fabric-1.20.1`
 - 统一构建命令：`.\gradlew buildAll`
 
 ✅ **核心抽象层 (Core)**
@@ -14,17 +14,6 @@
 - `my-mod.gui.api/core`: GUI 抽象接口和核心逻辑
 - `my-mod.defs`: 共享常量定义
 - `my-mod.util.log`: 日志工具
-
-✅ **Forge 1.16.5 适配层**
-- Java 入口：`MyMod1165.java`
-  - 使用 DeferredRegister 注册方块和物品
-  - 订阅右键点击事件
-  - 加载 Clojure 命名空间并调用初始化
-- Clojure 适配器：
-  - `my-mod.forge1165.init`: 版本分发设置
-  - `my-mod.forge1165.registry`: 注册系统 multimethod 实现
-  - `my-mod.forge1165.events`: 事件处理器
-  - `my-mod.forge1165.gui.impl`: GUI multimethod 实现
 
 ✅ **Forge 1.20.1 适配层**
 - Java 入口：`MyMod1201.java`
@@ -44,8 +33,8 @@
   - `assets/my_mod/models/item/demo_item.json`
   - 使用 Minecraft 原版纹理（stone, iron_ingot）
 - 版本专属资源：
-  - `forge-1.16.5/src/main/resources/META-INF/mods.toml`
   - `forge-1.20.1/src/main/resources/META-INF/mods.toml`
+  - `fabric-1.20.1/src/main/resources/fabric.mod.json`
 
 ✅ **文档**
 - `README.md`: 项目概述和快速开始
@@ -99,11 +88,11 @@ Get-ChildItem .\build\distributions
 
 ### 运行开发客户端
 ```powershell
-# Forge 1.16.5 (需要 Java 8/11)
-.\gradlew :forge-1.16.5:runClient
-
-# Forge 1.20.1 (需要 Java 17+)
+# Forge 1.20.1
 .\gradlew :forge-1.20.1:runClient
+
+# Fabric 1.20.1
+.\gradlew :fabric-1.20.1:runClient
 ```
 
 ### 游戏内测试
@@ -145,29 +134,29 @@ Get-ChildItem .\build\distributions
 
 ## 如何添加新版本
 
-以添加 Forge 1.19.2 为例：
+以添加 Forge 1.21 为例：
 
 1. **更新 `settings.gradle`**：
    ```groovy
-   include 'forge-1.19.2'
+   include 'forge-1.21'
    ```
 
 2. **添加属性到 `gradle.properties`**：
    ```properties
-   forge_1192_version=43.2.0
-   minecraft_1192_version=1.19.2
-   mappings_1192_channel=official
-   mappings_1192_version=1.19.2
+   forge_121_version=...
+   minecraft_121_version=1.21
+   mappings_121_channel=official
+   mappings_121_version=1.21
    ```
 
 3. **创建子项目**：
-   - 复制 `forge-1.16.5/` → `forge-1.19.2/`
+   - 复制 `forge-1.20.1/` → `forge-1.21/`
    - 修改 `build.gradle` 中的版本引用
-   - 更新 Java 类名为 `MyMod1192`
+   - 更新 Java 类名为 `MyMod121`
 
 4. **创建 Clojure 适配器**：
    ```
-   forge-1.19.2/src/main/clojure/my_mod/forge1192/
+   forge-1.21/src/main/clojure/my_mod/forge121/
    ├── init.clj
    ├── registry.clj
    ├── events.clj
@@ -177,7 +166,7 @@ Get-ChildItem .\build\distributions
 
 5. **实现 multimethod**：
    ```clojure
-   (defmethod register-item :forge-1.19.2 [id obj]
+   (defmethod register-item :forge-1.20.1 [id obj]
      ;; 1.19.2 特定实现
      ...)
    ```

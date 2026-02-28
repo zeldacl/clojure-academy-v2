@@ -24,17 +24,15 @@
 
 ### 平台模块（Platform-Specific）
 
-#### Forge 1.16.5
-- **`my-mod.forge1165.datagen.setup`** - 事件监听器
-- **`com.example.my_mod1165.datagen.DataGeneratorSetup`** (Java wrapper)
-  - @Mod.EventBusSubscriber 注解
-  - 委托给 Clojure 实现
-
 #### Forge 1.20.1
 - **`my-mod.forge1201.datagen.setup`** - 事件监听器
 - **`com.example.my_mod1201.datagen.DataGeneratorSetup`** (Java wrapper)
   - @Mod.EventBusSubscriber 注解
   - 委托给 Clojure 实现
+
+#### Fabric 1.20.1
+- **`my-mod.fabric1201.datagen.setup`** - DataGenerator 设置
+- 使用 Fabric 的 DataGeneratorEntrypoint
 
 ## 使用方法
 
@@ -47,24 +45,24 @@ cd minecraftmod
 
 ### 2. 执行 DataGenerator
 
-#### Forge 1.16.5
-```bash
-.\gradlew.bat :forge-1.16.5:runData
-```
-
 #### Forge 1.20.1
 ```bash
 .\gradlew.bat :forge-1.20.1:runData
 ```
 
+#### Fabric 1.20.1
+```bash
+.\gradlew.bat :fabric-1.20.1:runData
+```
+
 或使用通用的 `data` 运行配置：
 ```bash
-.\gradlew.bat :forge-1.16.5:runData --console=plain
+.\gradlew.bat :forge-1.20.1:runData --console=plain
 ```
 
 #### 输出示例
 ```
-> Task :forge-1.16.5:runData
+> Task :forge-1.20.1:runData
 [my_mod] Registering BlockState DataGenerator...
 [my_mod] Registering Block Model DataGenerator...
 [my_mod] Registering Item Model DataGenerator...
@@ -86,7 +84,7 @@ BUILD SUCCESSFUL
 ### 3. 验证生成的文件
 生成的文件位于:
 ```
-forge-1.16.5/src/main/resources/assets/my_mod/
+forge-1.20.1/src/main/resources/assets/my_mod/
 ├── blockstates/
 │   ├── matrix.json
 │   ├── windgen_main.json
@@ -124,15 +122,15 @@ forge-1.16.5/src/main/resources/assets/my_mod/
 ```bash
 # Windows PowerShell
 $env:MOD_ID="custom_mod"
-.\gradlew.bat :forge-1.16.5:runData
+.\gradlew.bat :forge-1.20.1:runData
 
 # Linux/macOS bash
-MOD_ID=custom_mod ./gradlew :forge-1.16.5:runData
+MOD_ID=custom_mod ./gradlew :forge-1.20.1:runData
 ```
 
 ### 3. 重新生成 JSON
 ```bash
-.\gradlew.bat :forge-1.16.5:runData
+.\gradlew.bat :forge-1.20.1:runData
 ```
 
 所有 JSON 文件都会自动使用新的 mod-id。
@@ -142,11 +140,11 @@ MOD_ID=custom_mod ./gradlew :forge-1.16.5:runData
 ### 添加新方块
 1. 在 [core/src/main/clojure/my_mod/datagen/blockstate_provider.clj](../core/src/main/clojure/my_mod/datagen/blockstate_provider.clj) 中的 `BLOCKS_TO_GENERATE` 列表中添加块名称
 2. 在 [core/src/main/clojure/my_mod/datagen/model_provider.clj](../core/src/main/clojure/my_mod/datagen/model_provider.clj) 中的 `BLOCK_MODELS` 映射中添加模型规范
-3. 运行 `.\gradlew.bat :forge-1.16.5:runData` 生成 JSON
+3. 运行 `.\.gradlew.bat :forge-1.20.1:runData` 生成 JSON
 
 ### 添加新物品
 1. 在 [core/src/main/clojure/my_mod/datagen/item_model_provider.clj](../core/src/main/clojure/my_mod/datagen/item_model_provider.clj) 中的 `ITEM_MODELS` 映射中添加物品规范
-2. 运行 `.\gradlew.bat :forge-1.16.5:runData` 生成 JSON
+2. 运行 `.\.gradlew.bat :forge-1.20.1:runData` 生成 JSON
 
 ## 工作流程
 
@@ -167,7 +165,7 @@ Gradle 将 JSON 包含在构建中
 ## 故障排除
 
 ### "Failed to load Clojure DataGenerator setup"
-- 确保 [forge-1.16.5/src/main/clojure/my_mod/forge1165/datagen/setup.clj](./setup.clj) 正确编译
+- 确保 [forge-1.20.1/src/main/clojure/my_mod/forge1201/datagen/setup.clj](./setup.clj) 正确编译
 - 检查 `build.gradle` 中的 clojure 源路径配置
 - 运行 `.\gradlew.bat clean build` 重新编译
 
@@ -192,17 +190,17 @@ core/src/main/clojure/my_mod/
     ├── model_provider.clj           ← 生成方块模型 JSON
     └── item_model_provider.clj      ← 生成物品模型 JSON
 
-forge-1.16.5/src/main/
-├── clojure/my_mod/forge1165/datagen/
-│   └── setup.clj                    ← Clojure 事件监听器
-└── java/com/example/my_mod1165/datagen/
-    └── DataGeneratorSetup.java      ← Java 包装器（@Mod.EventBusSubscriber）
-
 forge-1.20.1/src/main/
 ├── clojure/my_mod/forge1201/datagen/
 │   └── setup.clj                    ← Clojure 事件监听器
 └── java/com/example/my_mod1201/datagen/
     └── DataGeneratorSetup.java      ← Java 包装器（@Mod.EventBusSubscriber）
+
+fabric-1.20.1/src/main/
+├── clojure/my_mod/fabric1201/datagen/
+│   └── setup.clj                    ← Clojure DataGenerator 设置
+└── java/com/example/my_modfabric/datagen/
+    └── DataGeneratorSetup.java      ← Java 入口点
 ```
 
 ## 优势
@@ -211,12 +209,12 @@ forge-1.20.1/src/main/
 ✅ **纯 Clojure 实现** - 保持项目一致性  
 ✅ **完全自动化** - 修改配置后自动生成所有 JSON  
 ✅ **易于维护** - 添加新的方块/物品只需修改 Clojure 映射  
-✅ **多平台支持** - 同一实现支持 Forge 1.16.5 和 1.20.1  
+✅ **多平台支持** - 同一实现支持 Forge 1.20.1 和 Fabric 1.20.1  
 ✅ **版本无关** - JSON 格式自动适应 Minecraft 版本
 
 ## 下一步
 
-1. 运行 `.\gradlew.bat :forge-1.16.5:runData` 生成初始 JSON
-2. 验证 `forge-1.16.5/src/main/resources/assets/my_mod/blockstates/` 中的文件
+1. 运行 `.\.gradlew.bat :forge-1.20.1:runData` 生成初始 JSON
+2. 验证 `forge-1.20.1/src/main/resources/assets/my_mod/blockstates/` 中的文件
 3. 根据需要修改 Clojure datagen 配置
 4. 重新运行 `runData` 更新所有 JSON 文件

@@ -1,10 +1,10 @@
 # Clojure Minecraft Mod Framework
 
-一个使用 Clojure 实现的多模组加载器 Minecraft Mod 框架，支持 **Forge 1.16.5**、**Forge 1.20.1** 和 **Fabric 1.20.1**。
+一个使用 Clojure 实现的多模组加载器 Minecraft Mod 框架，支持 **Forge 1.20.1** 和 **Fabric 1.20.1**。
 
 ## 项目特性
 
-- ✅ **多版本支持**：Forge 1.16.5、Forge 1.20.1、Fabric 1.20.1
+- ✅ **多版本支持**：Forge 1.20.1、Fabric 1.20.1
 - ✅ **单一代码库**：核心逻辑只写一次，通过 multimethod 分发版本特定实现
 - ✅ **纯 Clojure 实现**：99% 代码使用 Clojure，只有最小的 Java 桥接
 - ✅ **声明式 GUI DSL**：使用 Clojure 宏定义 GUI，无需编写繁琐的 Java 代码
@@ -15,34 +15,32 @@
 - ✅ **REPL 友好**：支持交互式开发和热重载
 
 Notes:
-- 1.16.5 builds with Java 8. 1.20.1 builds with Java 17.
-- Core logic is in Clojure, with per-version Java adapters handling Forge APIs.
-- This repo intentionally does not include Forge 1.12.2 in the unified build because ForgeGradle 2.x is incompatible with modern Gradle. If needed, create a separate, standalone Gradle project for 1.12.2.
+- All platforms build with Java 17.
+- Core logic is in Clojure, with per-version Java adapters handling Forge/Fabric APIs.
 
 ## Build (Windows PowerShell)
 
 ```powershell
-# Build all versions (Forge 1.16.5 + 1.20.1 + Fabric 1.20.1)
-./gradlew buildAll
+# Compile core module
+./gradlew.bat :core:compileClojure
 
-# Or build individual
-./gradlew :forge-1.16.5:build
-./gradlew :forge-1.20.1:build
-./gradlew :fabric-1.20.1:build
+# Compile individual platforms (from platform directory)
+cd forge-1.20.1
+../gradlew.bat compileClojure
+cd ../fabric-1.20.1
+../gradlew.bat compileClojure
 
-# Collected jars
-Get-ChildItem .\build\distributions
+# Or compile all from root
+cd ..
+./gradlew.bat compileClojure
 ```
 
 ## Run dev clients
 ```powershell
-# 1.16.5 client
-./gradlew :forge-1.16.5:runClient
-
-# 1.20.1 Forge client
+# Forge 1.20.1 client
 ./gradlew :forge-1.20.1:runClient
 
-# 1.20.1 Fabric client
+# Fabric 1.20.1 client
 ./gradlew :fabric-1.20.1:runClient
 ```
 
@@ -129,11 +127,6 @@ Get-ChildItem .\build\distributions
   - `my-mod.item.demo`: 示例物品（19+ 种不同类型）
   - Shared assets (models, blockstates using vanilla textures)
   
-- **forge-1.16.5**: Java @Mod entry + Clojure adapters
-  - `MyMod1165.java`: Minimal @Mod bridge (20 lines)
-  - `my-mod.forge1165.mod`: Complete Clojure mod implementation
-  - `my-mod.forge1165.*`: Multimethod implementations for 1.16.5 API
-  
 - **forge-1.20.1**: Java @Mod entry + Clojure adapters
   - `MyMod1201.java`: Minimal @Mod bridge (20 lines)
   - `my-mod.forge1201.mod`: Complete Clojure mod implementation
@@ -160,7 +153,7 @@ Get-ChildItem .\build\distributions
 
 The framework uses Clojure multimethods for version dispatch:
 1. Core defines abstract operations (register-item, register-block, open-gui)
-2. Each Forge adapter implements these multimethods keyed by version (`:forge-1.16.5`, `:forge-1.20.1`)
+2. Each Forge/Fabric adapter implements these multimethods keyed by version (`:forge-1.20.1`, `:fabric-1.20.1`)
 3. Java @Mod classes handle Forge lifecycle and call Clojure hooks
 4. At runtime, the correct implementation is selected based on the loaded version
 

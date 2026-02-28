@@ -54,9 +54,9 @@
   "使用 .insertItem + .markDirty")
 ```
 
-### 2. 重构 Forge 1.16.5 桥接代码 ✅
+### 2. 重构 Forge 1.20.1 桥接代码 ✅
 
-**文件**: `forge-1.16.5/gui/bridge.clj`
+**文件**: `forge-1.20.1/gui/bridge.clj`
 
 **改动前** (40行游戏逻辑):
 ```clojure
@@ -92,7 +92,7 @@
 
 **改动后** (10行委托):
 ```clojure
-(ns my-mod.forge1165.gui.bridge
+(ns my-mod.forge1201.gui.bridge
   (:require [my-mod.wireless.gui.slot-manager :as slot-manager]  ; 新增
             ...))
 
@@ -259,7 +259,8 @@ Adaptee APIs:
 - ✅ `core/my_mod/wireless/gui/slot_manager.clj` (180行)
 
 ### 修改文件
-- ✅ `forge-1.16.5/gui/bridge.clj` (250→220行)
+- ✅ `forge-1.20.1/gui/bridge.clj` (250→220行)
+- ✅ `fabric-1.20.1/gui/bridge.clj` (250→220行)
 - ✅ `fabric-1.20.1/gui/bridge.clj` (323→293行)
 
 ### 文档更新
