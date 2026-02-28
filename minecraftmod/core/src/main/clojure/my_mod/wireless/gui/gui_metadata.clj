@@ -20,36 +20,36 @@
 ;; ============================================================================
 
 (def gui-display-names
-  "Map from GUI ID to display name"
+  ^{:doc "Map from GUI ID to display name"}
   {gui-wireless-node "Wireless Node"
    gui-wireless-matrix "Wireless Matrix"})
 
 (def gui-types
-  "Map from GUI ID to container type keyword"
+  ^{:doc "Map from GUI ID to container type keyword"}
   {gui-wireless-node :node
    gui-wireless-matrix :matrix})
 
 (def gui-registry-names
-  "Map from GUI ID to registry identifier"
+  ^{:doc "Map from GUI ID to registry identifier"}
   {gui-wireless-node "wireless_node_gui"
    gui-wireless-matrix "wireless_matrix_gui"})
 
 ;; Screen factory function mapping
 (def gui-screen-factories
-  "Map from GUI ID to screen factory function keyword
-  
+  ^{:doc "Map from GUI ID to screen factory function keyword
+
   Platform code can use this to get the correct factory function
-  from screen-factory namespace dynamically."
+  from screen-factory namespace dynamically."}
   {gui-wireless-node :create-node-screen
    gui-wireless-matrix :create-matrix-screen})
 
 ;; Slot layout definitions
 (def gui-slot-layouts
-  "Map from GUI ID to slot layout configuration
-  
+  ^{:doc "Map from GUI ID to slot layout configuration
+
   Each layout contains:
   - :slots - Vector of slot definitions with {:type :index :x :y}
-  - :ranges - Map of section ranges {:tile [start end] :player-main [...] :player-hotbar [...]}"
+  - :ranges - Map of section ranges {:tile [start end] :player-main [...] :player-hotbar [...]}"}
   {gui-wireless-node
    {:slots [{:type :energy :index 0 :x 0 :y 0}
             {:type :output :index 1 :x 26 :y 0}]
@@ -159,7 +159,7 @@
 ;; ============================================================================
 
 (def type-to-gui-id
-  "Map from container type to GUI ID"
+  ^{:doc "Map from container type to GUI ID"}
   {:node gui-wireless-node
    :matrix gui-wireless-matrix})
 
@@ -178,9 +178,9 @@
 ;; ============================================================================
 
 (defonce platform-menu-types
-  "Platform-specific MenuType/ScreenHandlerType registry
-  
-  Structure: {:platform {:gui-id MenuType}}"
+  ^{:doc "Platform-specific MenuType/ScreenHandlerType registry
+
+  Structure: {:platform {:gui-id MenuType}}"}
   (atom {}))
 
 (defn register-menu-type!

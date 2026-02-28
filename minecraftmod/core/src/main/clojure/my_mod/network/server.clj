@@ -36,4 +36,4 @@
     (do
       (log/warn "No handler registered for" msg-id)
       (when (and respond-fn (>= request-id 0))
-        (respond-fn request-id {:success false :error "no-handler"}))))
+        (respond-fn request-id {:success false :error "no-handler"})))))

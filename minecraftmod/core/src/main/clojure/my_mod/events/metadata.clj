@@ -16,8 +16,9 @@
 ;; ============================================================
 
 (defonce block-event-handlers
-  "Registry of block event handlers.
-  Structure: {block-id -> {:on-right-click fn, :on-break fn, ...}}"
+  ^{
+     :doc "Registry of block event handlers.
+  Structure: {block-id -> {:on-right-click fn, :on-break fn, ...}}"}
   (atom {}))
 
 ;; Registration API

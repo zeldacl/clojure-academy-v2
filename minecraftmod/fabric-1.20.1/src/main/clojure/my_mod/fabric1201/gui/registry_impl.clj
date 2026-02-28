@@ -14,10 +14,10 @@
 ;; ============================================================================
 
 (defonce gui-handler-types
-  "Map from GUI ID to registered ScreenHandlerType instances
-  
+  ^{:doc "Map from GUI ID to registered ScreenHandlerType instances
+
   Platform-agnostic design: Uses GUI IDs instead of game-specific names.
-  Structure: {gui-id ScreenHandlerType, ...}"
+  Structure: {gui-id ScreenHandlerType, ...}"}
   (atom {}))
 
 (defn get-handler-type

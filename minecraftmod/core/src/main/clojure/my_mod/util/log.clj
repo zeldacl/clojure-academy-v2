@@ -8,6 +8,11 @@
   (locking System/out
     (println (str "[my_mod DEBUG] " (apply str xs)))))
 
+(defn warn [& xs]
+  (locking System/err
+    (binding [*out* *err*]
+      (println (str "[my_mod WARN] " (apply str xs))))))
+
 (defn error [& xs]
   (locking System/err
     (binding [*out* *err*]

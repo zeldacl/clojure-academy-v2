@@ -21,7 +21,7 @@
 ;; ============================================================================
 
 (def battery-configs
-  "Battery configurations: name -> [max-energy bandwidth]"
+  ^{:doc "Battery configurations: name -> [max-energy bandwidth]"}
   {:basic    [10000.0  100.0]   ; Basic battery: 10k energy, 100/tick
    :advanced [50000.0  500.0]   ; Advanced battery: 50k energy, 500/tick
    :ultimate [250000.0 2500.0]}) ; Ultimate battery: 250k energy, 2500/tick
@@ -39,7 +39,7 @@
 ;; ============================================================================
 
 (def basic-battery
-  "Basic energy battery - 10,000 IF capacity"
+  ^{:doc "Basic energy battery - 10,000 IF capacity"}
   (item-dsl/defitem
     {:id "basic_battery"
      :name "Basic Energy Battery"
@@ -52,7 +52,7 @@
                   :battery-type :basic}}))
 
 (def advanced-battery
-  "Advanced energy battery - 50,000 IF capacity"
+  ^{:doc "Advanced energy battery - 50,000 IF capacity"}
   (item-dsl/defitem
     {:id "advanced_battery"
      :name "Advanced Energy Battery"
@@ -65,7 +65,7 @@
                   :battery-type :advanced}}))
 
 (def ultimate-battery
-  "Ultimate energy battery - 250,000 IF capacity"
+  ^{:doc "Ultimate energy battery - 250,000 IF capacity"}
   (item-dsl/defitem
     {:id "ultimate_battery"
      :name "Ultimate Energy Battery"
