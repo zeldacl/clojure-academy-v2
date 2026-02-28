@@ -12,12 +12,14 @@
   (:require [my-mod.platform.nbt :as nbt]
             [my-mod.platform.position :as pos]
             [my-mod.platform.world :as world]
-                        [my-mod.platform.item :as item]
+            [my-mod.platform.item :as item]
+            [my-mod.platform.resource :as resource]
             [my-mod.util.log :as log])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
-           [net.minecraft.world.item ItemStack]))
+           [net.minecraft.world.item ItemStack]
+           [net.minecraft.resources ResourceLocation]))
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Forge 1.20.1)
@@ -64,6 +66,9 @@
     (nbt-get-compound [this key]
       (.getCompound this key))
   
+  (nbt-get-list [this key]
+    (.getList this key 10))
+  
   (nbt-has-key? [this key]
     (.contains this key)))
 
@@ -79,7 +84,11 @@
   
   (nbt-list-get [this index]
     (when (and (>= index 0) (< index (.size this)))
-      (.get this index))))
+      (.get this index)))
+  
+  (nbt-list-get-compound [this index]
+    (when (and (>= index 0) (< index (.size this)))
+      (.getCompound this index))))
 
 ;; ============================================================================
 ;; Position Protocol Implementation (Forge 1.20.1)
@@ -120,7 +129,16 @@
     (.sameItem this other))
   
   (item-save-to-nbt [this nbt]
-    (.save this nbt)))
+    (.save this nbt))
+  
+  (item-get-or-create-tag [this]
+    (.getOrCreateTag this))
+  
+  (item-get-max-damage [this]
+    (.getMaxDamage this))
+  
+  (item-set-damage! [this damage]
+    (.setDamageValue this (int damage))))
 
 ;; ============================================================================
 ;; World Protocol Implementation (Forge 1.20.1)
@@ -164,8 +182,13 @@
     (constantly (fn [x y z]
                   (BlockPos. (int x) (int y) (int z)))))
   
-    ;; Register ItemStack factory
-    (alter-var-root #'item/*item-factory*
-      (constantly (fn [nbt] (ItemStack/of nbt))))
+  ;; Register ItemStack factory
+  (alter-var-root #'item/*item-factory*
+    (constantly (fn [nbt] (ItemStack/of nbt))))
+
+  ;; Register resource identifier factory
+  (alter-var-root #'resource/*resource-factory*
+    (constantly (fn [namespace path]
+                  (ResourceLocation. namespace path))))
   
   (log/info "Forge 1.20.1 platform implementations initialized successfully"))

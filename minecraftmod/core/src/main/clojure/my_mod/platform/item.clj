@@ -31,7 +31,16 @@
     "Check if two ItemStacks are same item (ignoring count). Returns boolean.")
   
   (item-save-to-nbt [this nbt]
-    "Write ItemStack to NBT compound. Returns nbt for chaining."))
+    "Write ItemStack to NBT compound. Returns nbt for chaining.")
+  
+  (item-get-or-create-tag [this]
+    "Get NBT tag compound from ItemStack, creating if necessary. Returns INBTCompound.")
+  
+  (item-get-max-damage [this]
+    "Get maximum damage value for this item. Returns int.")
+  
+  (item-set-damage! [this damage]
+    "Set item damage value for durability bar display. Returns nil."))
 
 ;; ============================================================================
 ;; Platform Factory Registration

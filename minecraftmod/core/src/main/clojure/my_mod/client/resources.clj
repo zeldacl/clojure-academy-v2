@@ -1,21 +1,21 @@
 (ns my-mod.client.resources
   "Client-side resource loading utilities for models and textures"
-  (:import [cn.lambdalib2.render.obj ObjLegacyRender]
-           [net.minecraft.util ResourceLocation]))
+  (:require [my-mod.config.modid :as modid])
+  (:import [cn.lambdalib2.render.obj ObjLegacyRender]))
 
 ;; ============================================================================
 ;; ResourceLocation Helpers
 ;; ============================================================================
 
 (defn resource-location
-  "Create a ResourceLocation in my_mod namespace
+  "Create a platform resource identifier in my_mod namespace
   
   Args:
   - loc: String path (e.g., 'textures/models/matrix.png')
   
-  Returns: ResourceLocation"
+  Returns: resource identifier"
   [loc]
-  (ResourceLocation. "my_mod" loc))
+  (modid/resource-location "my_mod" loc))
 
 ;; ============================================================================
 ;; Model Loading

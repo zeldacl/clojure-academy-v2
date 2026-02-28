@@ -3,7 +3,8 @@
   
   This namespace defines the schema and macros to generate world-data
   operations (create/destroy, validate, tick, and NBT read/write)."
-  (:require [my-mod.nbt.dsl :as nbt]
+  (:require [my-mod.nbt.dsl :as nbt-dsl]
+            [my-mod.platform.nbt :as nbt]
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.util.log :as log]))
 
@@ -35,22 +36,22 @@
                                    atom? (:atom? field false)]
                                (case type
                                  :string
-                                 `(.setString ~'nbt ~nbt-key (~(if atom? `deref `identity) (~name ~'item)))
+                                 `(nbt/nbt-set-string! ~'nbt ~nbt-key (~(if atom? `deref `identity) (~name ~'item)))
                                  
                                  :double
-                                 `(.setDouble ~'nbt ~nbt-key (~(if atom? `deref `identity) (~name ~'item)))
+                                 `(nbt/nbt-set-double! ~'nbt ~nbt-key (~(if atom? `deref `identity) (~name ~'item)))
                                  
                                  :vblock
-                                 `(.setTag ~'nbt ~nbt-key (~'vb/vblock-to-nbt (~name ~'item)))
+                                 `(nbt/nbt-set-tag! ~'nbt ~nbt-key (~'vb/vblock-to-nbt (~name ~'item)))
                                  
                                  :vblock-list
-                                 `(let [~'list-obj (net.minecraft.nbt.NBTTagList.)
+                                 `(let [~'list-obj (nbt/create-nbt-list)
                                         ~'world (:world (:world-data ~'item))]
                                     (doseq [~'vb-item @(~name ~'item)]
                                       (when (or (not (~'vb/is-chunk-loaded? ~'vb-item ~'world))
                                                 (~'vb/vblock-get ~'vb-item ~'world))
-                                        (.appendTag ~'list-obj (~'vb/vblock-to-nbt ~'vb-item))))
-                                    (.setTag ~'nbt ~nbt-key ~'list-obj)))))
+                                        (nbt/nbt-append! ~'list-obj (~'vb/vblock-to-nbt ~'vb-item))))
+                                    (nbt/nbt-set-tag! ~'nbt ~nbt-key ~'list-obj))))))
                            fields)
         
         ;; from-nbt read forms
@@ -59,13 +60,14 @@
                                      type (:type field)
                                      nbt-key (:nbt-key field)]
                                  [name (case type
-                                         :string `(.getString ~'nbt ~nbt-key)
-                                         :double `(.getDouble ~'nbt ~nbt-key)
-                                         :vblock `(~'vb/vblock-from-nbt (.getCompoundTag ~'nbt ~nbt-key))
+                                         :string `(nbt/nbt-get-string ~'nbt ~nbt-key)
+                                         :double `(nbt/nbt-get-double ~'nbt ~nbt-key)
+                                         :vblock `(~'vb/vblock-from-nbt (nbt/nbt-get-compound ~'nbt ~nbt-key))
                                          :vblock-list
-                                         `(let [~'list-obj (.getTagList ~'nbt ~nbt-key 10)]
-                                            (vec (for [~'i (range (.tagCount ~'list-obj))]
-                                                   (~'vb/vblock-from-nbt (.getCompoundTagAt ~'list-obj ~'i)))))
+                                         `(let [~'list-obj (nbt/nbt-get-list ~'nbt ~nbt-key)
+                                                ~'size (nbt/nbt-list-size ~'list-obj)]
+                                            (vec (for [~'i (range ~'size)]
+                                                   (~'vb/vblock-from-nbt (nbt/nbt-list-get-compound ~'list-obj ~'i)))))
                                          nil)]))
                              fields)
         
@@ -89,7 +91,7 @@
        (defn ~to-nbt-name
          ~(format "Serialize to NBT - auto-generated from schema")
          [~'item]
-         (let [~'nbt (net.minecraft.nbt.NBTTagCompound.)]
+         (let [~'nbt (nbt/create-nbt-compound)]
            ~@to-nbt-forms
            ~'nbt))
        

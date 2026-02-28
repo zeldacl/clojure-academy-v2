@@ -1,8 +1,7 @@
 (ns my-mod.util.render
   "Rendering utilities - OpenGL and texture helpers"
   (:import [org.lwjgl.opengl GL11]
-           [cn.lambdalib2.util RenderUtils]
-           [net.minecraft.util ResourceLocation]))
+           [cn.lambdalib2.util RenderUtils]))
 
 ;; ============================================================================
 ;; Time Helper

@@ -19,8 +19,7 @@
             [my-mod.wireless.gui.node-container :as node-container]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.entity.player EntityPlayer]
-           [cn.lambdalib2.cgui Widget]
+  (:import [cn.lambdalib2.cgui Widget]
            [cn.lambdalib2.cgui.component TextBox DrawTexture Tint ElementList]))
 
 ;; ============================================================================

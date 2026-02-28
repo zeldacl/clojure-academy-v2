@@ -2,7 +2,9 @@
   "Shared network handler utility functions
   
   Provides common helper functions for server-side network message handlers,
-  eliminating duplication between node_network_handler and matrix_network_handler.")
+  eliminating duplication between node_network_handler and matrix_network_handler."
+  (:require [my-mod.platform.position :as pos]
+            [my-mod.platform.world :as world]))
 
 ;; ============================================================================
 ;; World and Tile Access Helpers
@@ -30,9 +32,8 @@
   Returns: TileEntity/BlockEntity or nil if not found"
   [world {:keys [pos-x pos-y pos-z]}]
   (when (and world (number? pos-x) (number? pos-y) (number? pos-z))
-    (let [pos (net.minecraft.util.math.BlockPos. (int pos-x) (int pos-y) (int pos-z))]
-      (or (try (.getTileEntity world pos) (catch Exception _ nil))
-          (try (.getBlockEntity world pos) (catch Exception _ nil))))))
+    (let [block-pos (pos/create-block-pos pos-x pos-y pos-z)]
+      (world/world-get-tile-entity world block-pos))))
 
 ;; ============================================================================
 ;; Payload Construction Helpers
@@ -47,6 +48,6 @@
   Returns: Map with :pos-x, :pos-y, :pos-z keys"
   [tile]
   (let [pos (:pos tile)]
-    {:pos-x (.getX pos)
-     :pos-y (.getY pos)
-     :pos-z (.getZ pos)}))
+    {:pos-x (pos/pos-x pos)
+     :pos-y (pos/pos-y pos)
+     :pos-z (pos/pos-z pos)}))

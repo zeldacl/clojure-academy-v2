@@ -5,6 +5,8 @@
   Implements ImagEnergyItem protocol."
   (:require [my-mod.energy.imag-energy-item :as energy-item]
             [my-mod.item.dsl :as item-dsl]
+            [my-mod.platform.item :as item]
+            [my-mod.platform.nbt :as nbt]
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
@@ -117,18 +119,15 @@
     (let [config (get-battery-config item-stack)
           max-energy (energy-item/get-max-energy config)
           clamped-energy (min max-energy (max 0.0 energy))
-          nbt (or (.getTagCompound item-stack)
-                  (let [new-nbt (net.minecraft.nbt.NBTTagCompound.)]
-                    (.setTagCompound item-stack new-nbt)
-                    new-nbt))]
+          tag (item/item-get-or-create-tag item-stack)]
       ;; Set energy in NBT
-      (.setDouble nbt "energy" clamped-energy)
+      (nbt/nbt-set-double! tag "energy" clamped-energy)
       
       ;; Update durability bar (inverse: empty = full damage)
-      (let [max-damage (.getMaxDamage item-stack)
+      (let [max-damage (item/item-get-max-damage item-stack)
             damage-percent (- 1.0 (/ clamped-energy max-energy))
             damage (int (* damage-percent max-damage))]
-        (.setItemDamage item-stack damage)))))
+        (item/item-set-damage! item-stack damage)))))
 
 (defn charge-battery!
   "Charge energy into battery

@@ -13,12 +13,14 @@
   (:require [my-mod.platform.nbt :as nbt]
             [my-mod.platform.position :as pos]
             [my-mod.platform.world :as world]
-                        [my-mod.platform.item :as item]
+            [my-mod.platform.item :as item]
+            [my-mod.platform.resource :as resource]
             [my-mod.util.log :as log])
   (:import [net.minecraft.nbt NbtCompound NbtList]
            [net.minecraft.util.math BlockPos]
            [net.minecraft.world World]
-           [net.minecraft.item ItemStack]))
+           [net.minecraft.item ItemStack]
+           [net.minecraft.util Identifier]))
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Fabric 1.20.1)
@@ -65,6 +67,9 @@
     (nbt-get-compound [this key]
       (.getCompound this key))
   
+  (nbt-get-list [this key]
+    (.getList this key 10))
+  
   (nbt-has-key? [this key]
     (.contains this key)))
 
@@ -80,7 +85,42 @@
   
   (nbt-list-get [this index]
     (when (and (>= index 0) (< index (.size this)))
-      (.get this index))))
+      (.get this index)))
+  
+  (nbt-list-get-compound [this index]
+    (when (and (>= index 0) (< index (.size this)))
+      (.getCompound this index))))
+
+;; ============================================================================
+;; ItemStack Protocol Implementation (Fabric 1.20.1)
+;; ============================================================================
+
+(extend-type ItemStack
+  item/IItemStack
+  
+  (item-is-empty? [this]
+    (.isEmpty this))
+  
+  (item-get-count [this]
+    (.getCount this))
+  
+  (item-get-max-stack-size [this]
+    (.getMaxStackSize this))
+  
+  (item-is-equal? [this other]
+    (ItemStack/areItemsEqual this other))
+  
+  (item-save-to-nbt [this nbt]
+    (.writeNbt this nbt))
+  
+  (item-get-or-create-tag [this]
+    (.getOrCreateNbt this))
+  
+  (item-get-max-damage [this]
+    (.getMaxDamage this))
+  
+  (item-set-damage! [this damage]
+    (.setDamage this (int damage))))
 
 ;; ============================================================================
 ;; Position Protocol Implementation (Fabric 1.20.1)
@@ -139,9 +179,14 @@
     (constantly (fn [x y z]
                   (BlockPos. (int x) (int y) (int z)))))
   
-    ;; Register item factory
-    (alter-var-root #'item/*item-factory*
-      (constantly (fn [nbt]
-                    (ItemStack/fromNbt nbt))))
+  ;; Register item factory
+  (alter-var-root #'item/*item-factory*
+    (constantly (fn [nbt]
+                  (ItemStack/fromNbt nbt))))
+
+  ;; Register resource identifier factory
+  (alter-var-root #'resource/*resource-factory*
+    (constantly (fn [namespace path]
+                  (Identifier. namespace path))))
   
   (log/info "Fabric 1.20.1 platform implementations initialized successfully"))

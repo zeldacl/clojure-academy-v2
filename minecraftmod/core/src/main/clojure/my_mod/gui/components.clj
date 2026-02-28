@@ -1,12 +1,21 @@
 (ns my-mod.gui.components
   "LambdaLib2 Component library wrapper - Common UI components"
   (:require [my-mod.gui.cgui :as cgui]
-            [my-mod.gui.events :as events])
+            [my-mod.gui.events :as events]
+            [my-mod.config.modid :as modid])
   (:import [cn.lambdalib2.cgui.component Component
             DrawTexture TextBox ProgressBar ElementList
             DragBar Draggable Outline Tint Transform]
-           [cn.lambdalib2.cgui Widget]
-           [net.minecraft.util ResourceLocation]))
+           [cn.lambdalib2.cgui Widget]))
+
+(defn- ensure-resource-location
+  [texture-path]
+  (if (string? texture-path)
+    (if (re-find #":" texture-path)
+      (let [[namespace path] (clojure.string/split texture-path #":" 2)]
+        (modid/resource-location namespace path))
+      (modid/resource-location texture-path))
+    texture-path))
 
 ;; ============================================================================
 ;; Component Attachment
@@ -45,14 +54,10 @@
   (texture \"my_mod:textures/gui/node.png\")
   (texture texture-loc 0 0 176 166)"
   ([texture-path]
-   (let [texture (if (instance? ResourceLocation texture-path)
-                   texture-path
-                   (ResourceLocation. texture-path))]
+    (let [texture (ensure-resource-location texture-path)]
      (DrawTexture. texture)))
   ([texture-path u v w h]
-   (let [texture (if (instance? ResourceLocation texture-path)
-                   texture-path
-                   (ResourceLocation. texture-path))
+    (let [texture (ensure-resource-location texture-path)
          draw-tex (DrawTexture. texture)]
      (doto draw-tex
        (.setUV u v)
@@ -61,9 +66,7 @@
 (defn set-texture!
   "Set texture on DrawTexture component"
   [^DrawTexture draw-tex texture-path]
-  (let [texture (if (instance? ResourceLocation texture-path)
-                  texture-path
-                  (ResourceLocation. texture-path))]
+  (let [texture (ensure-resource-location texture-path)]
     (.setTexture draw-tex texture))
   draw-tex)
 

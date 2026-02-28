@@ -54,6 +54,9 @@
     (nbt-get-compound [this key]
       "Get a nested compound tag. Returns compound or nil if key doesn't exist.")
   
+  (nbt-get-list [this key]
+    "Get a nested list tag. Returns list or nil if key doesn't exist.")
+  
   (nbt-has-key? [this key]
     "Check if a key exists in the compound."))
 
@@ -71,7 +74,10 @@
     "Get the number of elements in the list.")
   
   (nbt-list-get [this index]
-    "Get element at index. Returns nil if out of bounds."))
+    "Get element at index. Returns nil if out of bounds.")
+  
+  (nbt-list-get-compound [this index]
+    "Get compound tag at index. Returns compound or nil if out of bounds."))
 
 ;; ============================================================================
 ;; Platform Factory Registration

@@ -23,8 +23,7 @@
             [my-mod.gui.tech-ui-common :as tech-ui]
             [my-mod.network.client :as net-client]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
-            [my-mod.util.log :as log])
-  (:import [net.minecraft.entity.player EntityPlayer]))
+            [my-mod.util.log :as log]))
 
 ;; ============================================================================
 ;; Constants

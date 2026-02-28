@@ -4,7 +4,8 @@
   Provides common functions for broadcasting state and applying sync payloads
   to reduce code duplication between node and matrix sync implementations."
   (:require [my-mod.util.log :as log]
-            [my-mod.wireless.gui.registry :as registry]))
+            [my-mod.wireless.gui.registry :as registry]
+            [my-mod.platform.position :as pos]))
 
 ;; ============================================================================
 ;; Universal Broadcast
@@ -37,23 +38,20 @@
 ;; ============================================================================
 
 (defn extract-position
-  "Extract BlockPos from sync payload with cross-version compatibility.
-  
-  Tries multiple BlockPos constructor paths to support different MC versions.
+  "Extract position from sync payload using platform abstraction.
   
   Args:
   - sync-data: Map with :pos-x :pos-y :pos-z keys
   - world: World object (unused but kept for API compatibility)
   
-  Returns: BlockPos object or nil"
+  Returns: platform-specific BlockPos object or nil"
   [sync-data world]
   (try
     (let [x (:pos-x sync-data)
           y (:pos-y sync-data)
           z (:pos-z sync-data)]
-      ;; Try different BlockPos constructors for cross-version compatibility
-      (or (try (eval `(new ~'net.minecraft.core.BlockPos ~x ~y ~z)) (catch Exception _ nil))
-          (try (eval `(new ~'net.minecraft.util.math.BlockPos ~x ~y ~z)) (catch Exception _ nil))))
+      (when (and (number? x) (number? y) (number? z))
+        (pos/create-block-pos x y z)))
     (catch Exception e
       (log/debug "Failed to extract position:" (.getMessage e))
       nil)))

@@ -5,10 +5,7 @@
    
    Fabric uses different event system than Forge, so this module
    provides utilities to be called during data generation phase."
-  (:require [my-mod.datagen.blockstate-provider :as bs-provider]
-            [my-mod.datagen.model-provider :as model-provider]
-            [my-mod.datagen.item-model-provider :as item-provider]
-            [my-mod.config.modid :as modid])
+  (:require [my-mod.config.modid :as modid])
   (:import [net.minecraft.data DataGenerator DirectoryCache]))
 
 ;; ============================================================================
@@ -28,24 +25,7 @@
      (register-data-generators! data-generator nil)"
   [^DataGenerator generator exfile-helper]
   
-  (println (str "[" modid/MOD-ID "] Registering Fabric DataGenerators..."))
-  
-  ;; Register BlockState provider
-  (println (str "[" modid/MOD-ID "] Registering BlockState DataGenerator..."))
-  (.addProvider generator
-    (bs-provider/->BlockStateProvider generator exfile-helper))
-  
-  ;; Register Block Model provider
-  (println (str "[" modid/MOD-ID "] Registering Block Model DataGenerator..."))
-  (.addProvider generator
-    (model-provider/->ModelProvider generator exfile-helper))
-  
-  ;; Register Item Model provider
-  (println (str "[" modid/MOD-ID "] Registering Item Model DataGenerator..."))
-  (.addProvider generator
-    (item-provider/->ItemModelProvider generator exfile-helper))
-  
-  (println (str "[" modid/MOD-ID "] Fabric DataGenerator setup complete!")))
+  (println (str "[" modid/MOD-ID "] Fabric DataGenerator setup is currently no-op (providers are platform-specific).")))
 
 ;; ============================================================================
 ;; For Direct Invocation (if needed)
@@ -56,6 +36,4 @@
    
    Returns: vector of [blockstate-provider, model-provider, item-provider]"
   [^DataGenerator generator exfile-helper]
-  [(bs-provider/->BlockStateProvider generator exfile-helper)
-   (model-provider/->ModelProvider generator exfile-helper)
-   (item-provider/->ItemModelProvider generator exfile-helper)])
+  [])

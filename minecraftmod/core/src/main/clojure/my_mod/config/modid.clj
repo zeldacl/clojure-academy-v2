@@ -1,7 +1,7 @@
 (ns my-mod.config.modid
   "Centralized mod-id configuration for easy portability across projects.
    Change MOD-ID here to update mod identification across all modules."
-  (:require [clojure.string :as str]))
+  (:require [my-mod.platform.resource :as resource]))
 
 ;; ============================================================================
 ;; Central Mod ID Configuration
@@ -18,13 +18,13 @@
 ;; ============================================================================
 
 (defn resource-location
-  "Create a Minecraft ResourceLocation (net.minecraft.util.ResourceLocation).
+  "Create a platform-specific resource identifier.
    
    Args:
      - path: String path (e.g., 'blocks/matrix')
      - modid (optional): String mod identifier, defaults to MOD-ID
    
-   Returns: ResourceLocation instance with correct namespace
+  Returns: Resource identifier object with correct namespace
    
    Example:
      (resource-location 'blocks/matrix')
@@ -32,28 +32,17 @@
   ([path]
    (resource-location MOD-ID path))
   ([modid path]
-   (let [new-ctor (fn []
-                    (let [cls (Class/forName "net.minecraft.resources.ResourceLocation")
-                          ctor (.getConstructor cls (into-array Class [String String]))]
-                      (.newInstance ctor (object-array [modid path]))))
-         old-ctor (fn []
-                    (let [cls (Class/forName "net.minecraft.util.ResourceLocation")
-                          ctor (.getConstructor cls (into-array Class [String String]))]
-                      (.newInstance ctor (object-array [modid path]))))]
-     (try
-       (new-ctor)
-       (catch Exception _
-         (old-ctor))))))
+   (resource/create-resource-location modid path)))
 
 (defn identifier
-  "Create a Fabric Identifier (net.minecraft.util.Identifier).
-   This is Fabric's equivalent to ResourceLocation.
+  "Create a platform-specific resource identifier.
+   Kept for backward compatibility with existing call sites.
    
    Args:
      - path: String path (e.g., 'blocks/matrix')
      - modid (optional): String mod identifier, defaults to MOD-ID
    
-   Returns: Identifier instance with correct namespace
+  Returns: Resource identifier object with correct namespace
    
    Example:
      (identifier 'blocks/matrix')
@@ -61,14 +50,7 @@
   ([path]
    (identifier MOD-ID path))
   ([modid path]
-   ;; Use reflection for compatibility - class name varies by platform/mappings
-   (try
-     (let [id-cls (Class/forName "net.minecraft.util.Identifier")
-           ctor (.getConstructor id-cls (into-array Class [String String]))]
-       (.newInstance ctor (object-array [modid path])))
-     (catch Exception _
-       ;; Fallback: Use ResourceLocation on Forge/MojMap
-       (resource-location modid path)))))
+   (resource/create-resource-location modid path)))
 
 (defn namespaced-path
   "Create a fully qualified resource path with mod namespace.
