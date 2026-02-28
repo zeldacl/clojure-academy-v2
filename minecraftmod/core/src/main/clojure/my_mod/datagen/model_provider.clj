@@ -55,7 +55,20 @@
    
    "reso_ore"
    {:parent "block/cube_all"
-    :textures {:all (str modid/MOD-ID ":blocks/reso_ore")}}})
+    :textures {:all (str modid/MOD-ID ":blocks/reso_ore")}}
+   
+   ;; Node base model - uses parameterized textures (#vert, #side)
+   ;; Actual textures are provided by blockstate variants
+   "node_base"
+   {:parent "block/cube"
+    :textures
+    {:down "#vert"
+     :up "#vert"
+     :north "#side"
+     :south "#side"
+     :east "#side"
+     :west "#side"
+     :particle "#side"}}})
 
 ;; ============================================================================
 ;; Constructor

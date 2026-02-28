@@ -32,6 +32,12 @@
    "phase_gen"
    "reso_ore"])
 
+(def NODE_BLOCKS_TO_GENERATE
+  "List of node block names - have complex blockstate configurations"
+  ["node_standard"
+   "node_basic"
+   "node_advanced"])
+
 ;; ============================================================================
 ;; Constructor
 ;; ============================================================================
@@ -54,8 +60,13 @@
      cache: DirectoryCache for tracking written files"
   [this ^DirectoryCache cache]
   (let [{:keys [generator exfileHelper]} (.state this)]
+    ;; Generate simple blockstates (matrix, power generation, etc.)
     (doseq [block-name BLOCKS_TO_GENERATE]
-      (generate-blockstate! generator block-name))))
+      (generate-blockstate! generator block-name))
+    
+    ;; Generate node blockstates (with complex energy/connection textures)
+    (doseq [block-name NODE_BLOCKS_TO_GENERATE]
+      (generate-node-blockstate! generator block-name))))
 
 (defn -getName
   "Get provider name for logging"
@@ -77,7 +88,7 @@
   [^DataGenerator generator block-name]
   (let [blockstate-data
         {:variants
-         {"" {:model (str modid/MOD-ID ":" block-name)}}}
+         {"normal" {:model (str modid/MOD-ID ":" block-name)}}}
         
         output-folder (.getOutputFolder generator)
         blockstates-dir (.. output-folder
@@ -94,3 +105,69 @@
     (spit (.toFile file-path) (json/write-str blockstate-data))
     
     (println (str "Generated blockstate: " (.relativize output-folder file-path)))))
+
+;; ============================================================================
+;; Node BlockState Generation (with energy/connection variants)
+;; ============================================================================
+
+(defn get-node-blockstate-config
+  "Get blockstate configuration for a node type
+   
+   Args:
+     node-type: String - 'node_standard', 'node_basic', or 'node_advanced'
+   
+   Returns:
+     Map with blockstate JSON structure"
+  [node-type]
+  (let [;; Extract the variant name (standard, basic, advanced)
+        variant-name (.substring node-type 5)  ; Remove 'node_' prefix
+        
+        ;; Create side texture names for each energy level
+        energy-textures (into {}
+          (for [level (range 5)]
+            [(str level) 
+             {:textures 
+              {:side (str modid/MOD-ID ":blocks/node_" variant-name "_side_" level)}}]))
+        
+        ;; Default inventory representation
+        inventory-config
+        [{:textures 
+          {:side (str modid/MOD-ID ":blocks/node_" variant-name "_side_0")
+           :vert (str modid/MOD-ID ":blocks/node_top_0")}}]]
+    
+    {:defaults {:model (str modid/MOD-ID ":node_base")}
+     :forge_marker 1
+     :variants
+     {:connected
+      {"false" {:textures {:vert (str modid/MOD-ID ":blocks/node_top_0")}}
+       "true"  {:textures {:vert (str modid/MOD-ID ":blocks/node_top_1")}}}
+      :energy energy-textures
+      :inventory inventory-config}
+     }))
+
+(defn generate-node-blockstate!
+  "Generate node blockstate JSON file with energy/connection variants
+   
+   Args:
+     generator: DataGenerator instance
+     block-name: String node block registry name
+   
+   Output path: assets/{modid}/blockstates/{block-name}.json"
+  [^DataGenerator generator block-name]
+  (let [blockstate-data (get-node-blockstate-config block-name)
+        
+        output-folder (.getOutputFolder generator)
+        blockstates-dir (.. output-folder
+                          (resolve "assets")
+                          (resolve modid/MOD-ID)
+                          (resolve "blockstates"))
+        
+        file-path (.resolve blockstates-dir (str block-name ".json"))]
+    
+    ;; Create parent directories
+    (java.nio.file.Files/createDirectories blockstates-dir)
+    
+    ;; Write JSON file
+    (spit (.toFile file-path) (json/write-str blockstate-data))
+    
+    (println (str "Generated node blockstate: " (.relativize output-folder file-path)))))
