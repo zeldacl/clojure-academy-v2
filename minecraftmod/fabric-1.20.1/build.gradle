@@ -32,16 +32,13 @@ dependencies {
   include "org.clojure:clojure:${rootProject.findProperty('clojure_version')}"
   include "org.clojure:spec.alpha:0.3.218"
   include "org.clojure:core.specs.alpha:0.2.62"
-  
-  // Core module
-  implementation project(':core')
 }
 
-// Pull in core resources
+// Pull in core resources and source
 sourceSets {
   main {
     java { srcDirs += ["src/main/java"] }
-    clojure { srcDirs += ["src/main/clojure"] }
+    clojure { srcDirs += ["src/main/clojure", "../core/src/main/clojure"] }
     resources { srcDirs += ["src/main/resources", "../core/src/main/resources"] }
   }
 }
