@@ -7,6 +7,7 @@
             [my-mod.forge1201.events :as events]
             [my-mod.forge1201.gui.impl :as gui]
             [my-mod.forge1201.gui.init :as gui-init]
+            [my-mod.forge1201.platform-impl :as platform-impl]
             [my-mod.block.dsl :as bdsl]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
@@ -87,6 +88,10 @@
 ;; Constructor implementation
 (defn mod-init []
   (log/info "Initializing MyMod1201 from Clojure...")
+  
+  ;; CRITICAL: Initialize platform abstractions FIRST
+  ;; This must happen before any core code runs that uses NBT/BlockPos/World
+  (platform-impl/init-platform!)
   
   ;; Register all blocks and items using metadata-driven approach
   ;; DSL systems are automatically initialized when namespaces load

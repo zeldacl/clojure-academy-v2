@@ -7,7 +7,10 @@
   - Chunk loading safety
   - Distance calculations"
   (:require [my-mod.util.log :as log]
-            [my-mod.wireless.interfaces :as interfaces]))
+            [my-mod.wireless.interfaces :as interfaces]
+            [my-mod.platform.nbt :as nbt]
+            [my-mod.platform.position :as pos]
+            [my-mod.platform.world :as world]))
 
 ;; ============================================================================
 ;; VBlock Record
@@ -65,16 +68,16 @@
 ;; ============================================================================
 
 (defn vblock-pos
-  "Get BlockPos for vblock"
+  "Get BlockPos for vblock using platform abstraction"
   [vblock]
-  (net.minecraft.util.math.BlockPos. (:x vblock) (:y vblock) (:z vblock)))
+  (pos/create-block-pos (:x vblock) (:y vblock) (:z vblock)))
 
 (defn is-chunk-loaded?
   "Check if the chunk containing this vblock is loaded"
-  [vblock world]
+  [vblock w]
   (let [chunk-x (bit-shift-right (:x vblock) 4)
         chunk-z (bit-shift-right (:z vblock) 4)]
-    (.isChunkGeneratedAt world chunk-x chunk-z)))
+    (world/world-is-chunk-loaded? w chunk-x chunk-z)))
 
 (defn vblock-get
   "Get the TileEntity for this vblock (lazy loading)
@@ -83,11 +86,11 @@
   - World is nil
   - TileEntity doesn't exist
   - TileEntity type doesn't match (protocol implementation)"
-  [vblock world]
-  (when world
-    (when (or (:ignore-chunk vblock) (is-chunk-loaded? vblock world))
-      (let [pos (vblock-pos vblock)
-            tile (.getTileEntity world pos)]
+  [vblock w]
+  (when w
+    (when (or (:ignore-chunk vblock) (is-chunk-loaded? vblock w))
+      (let [block-pos (vblock-pos vblock)
+            tile (world/world-get-tile-entity w block-pos)]
         (when tile
           ;; Type checking based on block-type - using protocol satisfies? checks
           (case (:block-type vblock)
@@ -119,24 +122,24 @@
 ;; ============================================================================
 
 (defn vblock-to-nbt
-  "Serialize vblock to NBT"
+  "Serialize vblock to NBT using platform abstraction"
   [vblock]
-  (doto (net.minecraft.nbt.NBTTagCompound.)
-    (.setInteger "x" (:x vblock))
-    (.setInteger "y" (:y vblock))
-    (.setInteger "z" (:z vblock))
-    (.setString "type" (name (:block-type vblock)))
-    (.setBoolean "ignoreChunk" (:ignore-chunk vblock))))
+  (doto (nbt/create-nbt-compound)
+    (nbt/nbt-set-int! "x" (:x vblock))
+    (nbt/nbt-set-int! "y" (:y vblock))
+    (nbt/nbt-set-int! "z" (:z vblock))
+    (nbt/nbt-set-string! "type" (name (:block-type vblock)))
+    (nbt/nbt-set-boolean! "ignoreChunk" (:ignore-chunk vblock))))
 
 (defn vblock-from-nbt
-  "Deserialize vblock from NBT"
-  [nbt]
+  "Deserialize vblock from NBT using platform abstraction"
+  [compound]
   (->VBlock
-    (.getInteger nbt "x")
-    (.getInteger nbt "y")
-    (.getInteger nbt "z")
-    (keyword (.getString nbt "type"))
-    (.getBoolean nbt "ignoreChunk")))
+    (nbt/nbt-get-int compound "x")
+    (nbt/nbt-get-int compound "y")
+    (nbt/nbt-get-int compound "z")
+    (keyword (nbt/nbt-get-string compound "type"))
+    (nbt/nbt-get-boolean compound "ignoreChunk")))
 
 ;; ============================================================================
 ;; Equality and Hashing
@@ -186,8 +189,8 @@
 
 (defn remove-invalid-vblocks
   "Remove vblocks that don't resolve to valid TileEntities"
-  [vblocks world]
-  (filterv #(some? (vblock-get % world)) vblocks))
+  [vblocks w]
+  (filterv #(some? (vblock-get % w)) vblocks))
 
 (defn find-vblock-by-pos
   "Find vblock in collection by coordinates"

@@ -5,6 +5,7 @@
             [my-mod.fabric1201.registry :as registry]
             [my-mod.fabric1201.events :as events]
             [my-mod.fabric1201.gui.impl :as gui]
+            [my-mod.fabric1201.platform-impl :as platform-impl]
             [my-mod.block.dsl :as bdsl]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
@@ -59,6 +60,10 @@
 (defn mod-init []
   "Main mod initialization called from Java ModInitializer"
   (log/info "Initializing MyMod (Fabric 1.20.1) from Clojure...")
+  
+  ;; CRITICAL: Initialize platform abstractions FIRST
+  ;; This must happen before any core code runs that uses NBT/BlockPos/World
+  (platform-impl/init-platform!)
   
   ;; Initialize Clojure adapters
   (init/init-from-java)
