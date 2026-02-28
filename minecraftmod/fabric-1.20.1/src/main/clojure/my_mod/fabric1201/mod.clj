@@ -1,12 +1,14 @@
 (ns my-mod.fabric1201.mod
   "Fabric 1.20.1 main mod initialization"
   (:require [my-mod.fabric1201.init :as init]
+            [my-mod.fabric1201.datagen.setup :as datagen]
             [my-mod.fabric1201.registry :as registry]
             [my-mod.fabric1201.events :as events]
             [my-mod.fabric1201.gui.impl :as gui]
             [my-mod.block.dsl :as bdsl]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
+            [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
   (:import [net.minecraft.core Registry]
            [net.minecraft.core.registries BuiltInRegistries]
@@ -16,7 +18,7 @@
            [net.minecraft.world.level.block.state BlockBehaviour]))
 
 ;; Mod ID constant
-(def mod-id "my_mod")
+(def mod-id modid/MOD-ID)
 
 ;; Storage for registered blocks and items (populated during initialization)
 (defonce registered-blocks (atom {}))

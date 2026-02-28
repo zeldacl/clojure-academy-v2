@@ -18,6 +18,9 @@
     ],
     "client": [
       "com.example.my_mod1201.MyModFabricClient"
+    ],
+    "fabric-datagen": [
+      "com.example.fabric1201.datagen.DataGeneratorSetup"
     ]
   },
   "mixins": [],

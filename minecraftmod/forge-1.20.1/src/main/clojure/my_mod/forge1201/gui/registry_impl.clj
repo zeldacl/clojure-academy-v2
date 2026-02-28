@@ -4,6 +4,7 @@
   Platform-agnostic design: Uses metadata-driven approach."
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.forge1201.gui.bridge :as bridge]
+            [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
   (:import [net.minecraftforge.network NetworkHooks]
            [net.minecraft.world.inventory MenuType]
@@ -62,7 +63,7 @@
   (doseq [gui-id (gui/get-all-gui-ids)]
     (let [menu-type (create-menu-type gui-id)
           registry-name (gui/get-registry-name gui-id)
-          resource-loc (ResourceLocation. "my_mod" registry-name)]
+          resource-loc (ResourceLocation. modid/MOD-ID registry-name)]
       
       ;; Store in our map
       (swap! gui-menu-types assoc gui-id menu-type)

@@ -23,6 +23,15 @@ minecraft {
       workingDirectory project.file('run/server')
       mods { my_mod { source sourceSets.main } }
     }
+    data {
+      workingDirectory project.file('run/data')
+      args '--client', '--server'
+      args '--mod', 'my_mod'
+      args '--all'
+      args '--output', file('src/main/resources')
+      args '--existing', file('src/main/resources')
+      mods { my_mod { source sourceSets.main } }
+    }
   }
 }
 
@@ -48,4 +57,15 @@ sourceSets {
 
 tasks.withType(JavaCompile).configureEach {
   options.encoding = 'UTF-8'
+}
+
+// DataGenerator task - alias to runData for convenience
+task runData(type: JavaExec) {
+  dependsOn ':forge-1.20.1:cleanData'
+  group = 'forge'
+  description = 'Run Forge DataGenerator to generate JSON files'
+  mainClass = 'net.minecraftforge.gradle.GradleStartCommon'
+  classpath sourceSets.main.compileClasspath
+  args '--client', '--server', '--mod', 'my_mod', '--all', '--output', file('src/main/resources'), '--existing', file('src/main/resources')
+  systemProperties = ['forge.logging.markers': 'SCAN', 'forge.logging.level': 'debug']
 }

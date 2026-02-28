@@ -2,6 +2,7 @@
   "Fabric 1.20.1 GUI Registration Implementation"
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.fabric1201.gui.bridge :as bridge]
+            [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
   (:import [net.minecraft.screen ScreenHandlerType]
            [net.minecraft.util Identifier]
@@ -42,7 +43,7 @@
   (let [registry-name (gui/get-registry-name gui-id)]
     ;; Use ScreenHandlerRegistry.SimpleClientHandlerFactory
     (ScreenHandlerRegistry/registerSimple
-      (Identifier. "my_mod" registry-name)
+      (Identifier. modid/MOD-ID registry-name)
       (reify net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry$SimpleClientHandlerFactory
         (create [_ sync-id player-inventory]
           (let [handler (gui/get-gui-handler)

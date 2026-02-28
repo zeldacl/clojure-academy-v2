@@ -6,6 +6,7 @@
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.network.client :as rpc-client]
             [my-mod.network.server :as rpc-server]
+            [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
   (:import [net.minecraft.network PacketBuffer]
            [net.minecraft.entity.player ServerPlayerEntity]
@@ -25,7 +26,7 @@
 (defn create-channel []
   "Create the network channel for GUI packets"
   (NetworkRegistry/newSimpleChannel
-    (ResourceLocation. "my_mod" "gui_channel")
+    (ResourceLocation. modid/MOD-ID "gui_channel")
     (constantly PROTOCOL_VERSION)
     (fn [version] (= version PROTOCOL_VERSION))
     (fn [version] (= version PROTOCOL_VERSION))))

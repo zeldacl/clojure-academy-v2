@@ -2,6 +2,7 @@
   "Forge 1.16.5 main mod class - generated with gen-class"
   (:require [my-mod.forge1165.init :as init]
             [my-mod.forge1165.client.init :as client-init]
+            [my-mod.forge1165.datagen.setup :as datagen]
             [my-mod.forge1165.registry :as registry]
             [my-mod.forge1165.events :as events]
             [my-mod.forge1165.gui.impl :as gui]
@@ -9,6 +10,7 @@
             [my-mod.block.dsl :as bdsl]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
+            [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
   (:import [net.minecraft.block Block AbstractBlock Material]
            [net.minecraft.block.material Material]
@@ -29,7 +31,7 @@
              [setup [net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent] void]]))
 
 ;; Mod ID constant
-(def mod-id "my_mod")
+(def mod-id modid/MOD-ID)
 
 ;; DeferredRegister instances
 (defonce blocks-register 

@@ -62,3 +62,13 @@ processResources {
 tasks.named('clojureCompile').configure {
   aotCompile = true
 }
+
+// DataGenerator task for Fabric
+// Note: Fabric uses genSources for data generation
+task runData(dependsOn: genSources) {
+  group = 'fabric'
+  description = 'Run Fabric DataGenerator to generate JSON files'
+}
+
+// Expose genSources as runData for compatibility with Forge workflow
+genSources.dependsOn build

@@ -6,6 +6,7 @@
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.network.client :as rpc-client]
             [my-mod.network.server :as rpc-server]
+            [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
   (:import [net.minecraft.network PacketByteBuf]
            [net.minecraft.server.network ServerPlayerEntity]
@@ -18,19 +19,19 @@
 ;; ============================================================================
 
 (def BUTTON_CLICK_PACKET_ID 
-  (Identifier. "my_mod" "gui_button_click"))
+  (Identifier. modid/MOD-ID "gui_button_click"))
 
 (def TEXT_INPUT_PACKET_ID 
-  (Identifier. "my_mod" "gui_text_input"))
+  (Identifier. modid/MOD-ID "gui_text_input"))
 
 (def RPC_REQUEST_PACKET_ID
-  (Identifier. "my_mod" "rpc_request"))
+  (Identifier. modid/MOD-ID "rpc_request"))
 
 (def RPC_RESPONSE_PACKET_ID
-  (Identifier. "my_mod" "rpc_response"))
+  (Identifier. modid/MOD-ID "rpc_response"))
 
 (def GUI_STATE_SYNC_PACKET_ID
-  (Identifier. "my_mod" "gui_state_sync"))
+  (Identifier. modid/MOD-ID "gui_state_sync"))
 
 ;; =========================================================================
 ;; Shared Map Encoding Helpers
