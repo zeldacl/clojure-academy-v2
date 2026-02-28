@@ -15,6 +15,9 @@
   "entrypoints": {
     "main": [
       "com.example.my_mod1201.MyModFabric"
+    ],
+    "client": [
+      "com.example.my_mod1201.MyModFabricClient"
     ]
   },
   "mixins": [],

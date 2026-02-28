@@ -1,6 +1,7 @@
 (ns my-mod.forge1165.mod
   "Forge 1.16.5 main mod class - generated with gen-class"
   (:require [my-mod.forge1165.init :as init]
+            [my-mod.forge1165.client.init :as client-init]
             [my-mod.forge1165.registry :as registry]
             [my-mod.forge1165.events :as events]
             [my-mod.forge1165.gui.impl :as gui]
@@ -105,11 +106,12 @@
         (accept [_ event]
           (log/info "FMLCommonSetupEvent called"))))
 
-    ;; Add client setup listener for screen registration
+    ;; Add client setup listener for screen registration and renderer registration
     (.addListener mod-bus
       (reify java.util.function.Consumer
         (accept [_ event]
-          (gui-init/init-client!)))))
+          (gui-init/init-client!)
+          (client-init/init-client)))))
   
   ;; Register to gameplay event bus
   (.register (MinecraftForge/EVENT_BUS) 
