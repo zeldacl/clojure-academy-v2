@@ -1,7 +1,7 @@
-package com.example.my_mod1201.datagen;
+package my_mod1201.datagen;
 
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.GatherDataEvent;
+import net.minecraftforge.data.event.GatherDataEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.api.distmarker.Dist;
 import clojure.lang.RT;

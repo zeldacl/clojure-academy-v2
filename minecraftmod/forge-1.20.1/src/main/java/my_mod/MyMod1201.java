@@ -1,4 +1,4 @@
-package com.example.my_mod1201;
+package my_mod;
 
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
