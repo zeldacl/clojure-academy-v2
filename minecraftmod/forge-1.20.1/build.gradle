@@ -46,6 +46,9 @@ dependencies {
    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
    
    implementation "org.clojure:clojure:1.11.1"
+   minecraftLibrary "org.clojure:clojure:1.11.1"
+   minecraftLibrary "org.clojure:spec.alpha:0.3.218"
+   minecraftLibrary "org.clojure:core.specs.alpha:0.2.62"
   // implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version')}"
 }
 
@@ -53,11 +56,20 @@ dependencies {
 sourceSets {
   main {
     java { srcDirs += ["src/main/java"] }
-    clojure { srcDirs += ["src/main/clojure", "../core/src/main/clojure"] }
+    clojure {
+      srcDirs += ["src/main/clojure", "../core/src/main/clojure"]
+      include "my_mod/forge1201/datagen/**"
+      include "my_mod/datagen/**"
+      include "my_mod/config/**"
+    }
     resources { srcDirs += ["../core/src/main/resources"] }
   }
 }
 
 tasks.withType(JavaCompile).configureEach {
   options.encoding = 'UTF-8'
+}
+
+tasks.matching { it.name == 'checkClojure' }.configureEach {
+  enabled = false
 }

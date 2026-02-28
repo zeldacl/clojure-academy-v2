@@ -8,7 +8,7 @@
    The wrapper class with @Mod.EventBusSubscriber just delegates to this namespace."
   (:require [my-mod.forge1201.datagen.setup :as dg-setup]
             [my-mod.config.modid :as modid])
-  (:import [net.minecraftforge.fml.event.lifecycle GatherDataEvent]))
+  (:import [net.minecraftforge.data.event GatherDataEvent]))
 
 ;; ============================================================================
 ;; Event Handler Logic

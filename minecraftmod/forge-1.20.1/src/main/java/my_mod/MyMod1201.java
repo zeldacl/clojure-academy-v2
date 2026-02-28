@@ -3,6 +3,8 @@ package my_mod;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import my_mod1201.datagen.DataGeneratorSetup;
 
 /**
  * Minimal Java bridge for @Mod annotation.
@@ -12,7 +14,17 @@ import net.minecraftforge.fml.common.Mod;
 public class MyMod1201 {
     public static final String MODID = "my_mod";
 
+    private static boolean isDataGenRun() {
+        String cmd = System.getProperty("sun.java.command", "");
+        return cmd.contains("forgedata") || cmd.contains("runData");
+    }
+
     public MyMod1201() {
+        if (isDataGenRun()) {
+            FMLJavaModLoadingContext.get().getModEventBus().addListener(DataGeneratorSetup::onGatherData);
+            return;
+        }
+
         // Load and instantiate the Clojure mod class
         try {
             IFn require = Clojure.var("clojure.core", "require");

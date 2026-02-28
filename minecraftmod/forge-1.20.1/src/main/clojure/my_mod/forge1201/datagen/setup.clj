@@ -8,14 +8,7 @@
             [my-mod.datagen.model-provider :as model-provider]
             [my-mod.datagen.item-model-provider :as item-provider]
             [my-mod.config.modid :as modid])
-  (:import [net.minecraftforge.fml.common Mod]
-           [net.minecraftforge.api.distmarker Dist]
-           [net.minecraftforge.fml.event.lifecycle GatherDataEvent])
-  (:gen-class
-   :name my-mod.forge1201.datagen.DataGeneratorSetup
-   :prefix "dg-"
-   :methods [[gatherData [net.minecraftforge.fml.event.lifecycle.GatherDataEvent] void
-              :static]]))
+  (:import [net.minecraftforge.data.event GatherDataEvent]))
 
 ;; ============================================================================
 ;; EventBusSubscriber Configuration

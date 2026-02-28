@@ -1,8 +1,6 @@
 (ns my-mod.config.modid
   "Centralized mod-id configuration for easy portability across projects.
    Change MOD-ID here to update mod identification across all modules."
-  (:import [net.minecraft.util ResourceLocation]
-           [net.fabricmc.fabric.api.client Namespaces])
   (:require [clojure.string :as str]))
 
 ;; ============================================================================
@@ -34,7 +32,18 @@
   ([path]
    (resource-location MOD-ID path))
   ([modid path]
-   (ResourceLocation. modid path)))
+   (let [new-ctor (fn []
+                    (let [cls (Class/forName "net.minecraft.resources.ResourceLocation")
+                          ctor (.getConstructor cls (into-array Class [String String]))]
+                      (.newInstance ctor (object-array [modid path]))))
+         old-ctor (fn []
+                    (let [cls (Class/forName "net.minecraft.util.ResourceLocation")
+                          ctor (.getConstructor cls (into-array Class [String String]))]
+                      (.newInstance ctor (object-array [modid path]))))]
+     (try
+       (new-ctor)
+       (catch Exception _
+         (old-ctor))))))
 
 (defn identifier
   "Create a Fabric Identifier (net.minecraft.util.Identifier).
@@ -52,12 +61,14 @@
   ([path]
    (identifier MOD-ID path))
   ([modid path]
-   ;; Use reflection for compatibility - Identifier constructor may vary
+   ;; Use reflection for compatibility - class name varies by platform/mappings
    (try
-     (eval `(net.minecraft.util.Identifier. ~modid ~path))
+     (let [id-cls (Class/forName "net.minecraft.util.Identifier")
+           ctor (.getConstructor id-cls (into-array Class [String String]))]
+       (.newInstance ctor (object-array [modid path])))
      (catch Exception _
-       ;; Fallback: Use ResourceLocation for older Minecraft versions
-       (ResourceLocation. modid path)))))
+       ;; Fallback: Use ResourceLocation on Forge/MojMap
+       (resource-location modid path)))))
 
 (defn namespaced-path
   "Create a fully qualified resource path with mod namespace.
