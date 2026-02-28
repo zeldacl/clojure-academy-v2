@@ -79,8 +79,8 @@
    :inventory
    {:write (fn [nbt key value]
              (inv/write-inventory-to-nbt value nbt key))
-    :read (fn [nbt key]
-            (inv/read-inventory-from-nbt value nbt key))
+      :read (fn [nbt key]
+        nil)
     :has-key? (fn [nbt key]
                 (.hasKey nbt key))}})
 
@@ -131,14 +131,16 @@
   [tile nbt field-spec]
   (let [{:keys [field-key nbt-key type atom? getter custom-write skip-on-write? transform-write]} field-spec]
     (when-not (and skip-on-write? (skip-on-write? tile))
-      (let [value (if getter
-                    (getter tile)
-                    (get-field-value tile [field-key] atom?))
-            value (if transform-write (transform-write value) value)]
-        (if custom-write
-          (custom-write tile nbt nbt-key value)
-          (when-let [converter (get type-converters type)]
-            ((:write converter) nbt nbt-key value)))))))
+      (if (= type :inventory)
+        (inv/write-inventory-to-nbt tile nbt nbt-key)
+        (let [value (if getter
+                      (getter tile)
+                      (get-field-value tile [field-key] atom?))
+              value (if transform-write (transform-write value) value)]
+          (if custom-write
+            (custom-write tile nbt nbt-key value)
+            (when-let [converter (get type-converters type)]
+              ((:write converter) nbt nbt-key value))))))))
 
 (defn read-nbt-field
   "Read a single field from NBT according to its specification"
@@ -148,15 +150,17 @@
                    ((:has-key? converter) nbt nbt-key)
                    (.hasKey nbt nbt-key))]
     (when has-key?
-      (let [value (if custom-read
-                    (custom-read tile nbt nbt-key)
-                    (when-let [converter (get type-converters type)]
-                      ((:read converter) nbt nbt-key)))
-            value (if transform-read (transform-read value) value)
-            value (or value default)]
-        (if setter
-          (setter tile value)
-          (set-field-value! tile [field-key] value atom?))))))
+      (if (= type :inventory)
+        (inv/read-inventory-from-nbt tile nbt nbt-key)
+        (let [value (if custom-read
+                      (custom-read tile nbt nbt-key)
+                      (when-let [converter (get type-converters type)]
+                        ((:read converter) nbt nbt-key)))
+              value (if transform-read (transform-read value) value)
+              value (or value default)]
+          (if setter
+            (setter tile value)
+            (set-field-value! tile [field-key] value atom?)))))))
 
 (defn write-nbt-fields
   "Write all fields to NBT according to specifications"
