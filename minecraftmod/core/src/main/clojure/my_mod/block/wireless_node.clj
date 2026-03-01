@@ -96,6 +96,8 @@
 (defn- deref-if-atom [value]
   (if (instance? clojure.lang.IDeref value) @value value))
 
+(declare get-inventory-slot set-inventory-slot!)
+
 ;; ============================================================================
 ;; BlockState Management
 ;; ============================================================================
@@ -389,7 +391,7 @@
       ((resolve 'my-mod.wireless.gui.node-sync/broadcast-node-state) 
        world pos sync-data))
     (catch Exception e
-      (log/debug \"Node sync not yet implemented:\" (.getMessage e)))))
+      (log/debug "Node sync not yet implemented:" (.getMessage e)))))
 
 (defn update-node-tile!
   "Main update function - called every tick"
@@ -401,7 +403,8 @@
     (update-charge-out! tile)
     
     ;; Check network connection every 20 ticks (1 second)
-    (when (zero? (mod tick 20))\n      (check-network-connection! tile)
+    (when (zero? (mod tick 20))
+      (check-network-connection! tile)
       (sync-to-clients! tile)
       
       ;; Update block state for visual feedback
@@ -526,7 +529,7 @@
 (defn node-to-nbt
   "Convert node tile entity to NBT-like map"
   [tile]
-  {:energy (get-energy tile)
+  {:energy (winterfaces/get-energy tile)
   :node-name (winterfaces/get-node-name tile)
   :password (winterfaces/get-password tile)
    :placer-name (:placer-name tile)
@@ -535,7 +538,7 @@
 (defn node-from-nbt
   "Restore node tile entity from NBT-like map"
   [tile nbt-data]
-  (set-energy! tile (:energy nbt-data))
+  (winterfaces/set-energy tile (:energy nbt-data))
   (set-node-name! tile (:node-name nbt-data))
   (set-password-str! tile (:password nbt-data))
   (-> tile
