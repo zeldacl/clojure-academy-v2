@@ -1,234 +1,260 @@
 (ns my-mod.gui.cgui
-  "LambdaLib2 CGui system wrapper - Clojure-friendly interface"
-  (:require [clojure.string :as str])
-  (:import [cn.lambdalib2.cgui Widget WidgetContainer CGui CGuiScreen CGuiScreenContainer]))
+  "Pure Clojure CGui model and operations."
+  (:require [clojure.string :as str]))
 
-;; ============================================================================
-;; Widget Creation and Management
-;; ============================================================================
+(defn- new-widget
+  [{:keys [name pos size scale z-level visible? widget-type]
+    :or {name nil pos [0 0] size [0 0] scale 1.0 z-level 0 visible? true widget-type :widget}}]
+  {:id (str (java.util.UUID/randomUUID))
+   :widget-type widget-type
+   :name (atom name)
+   :pos (atom (vec pos))
+   :size (atom (vec size))
+   :scale (atom scale)
+   :z-level (atom z-level)
+   :visible? (atom visible?)
+   :children (atom [])
+   :components (atom [])
+   :events (atom {})
+   :metadata (atom {})})
+
+(defn- widget? [x]
+  (and (map? x) (contains? x :children) (contains? x :components)))
+
+(defn- component-kind [component]
+  (or (:kind component) (::kind component) :unknown))
+
+(defn invoke-method!
+  "Compatibility helper for legacy dynamic calls.
+   Supports map-based component methods used by GUI code."
+  [target method-name & args]
+  (case method-name
+    "getName" (if (widget? target) (or @(-> target :name) "") nil)
+    "setName" (do (when (widget? target) (reset! (:name target) (first args))) target)
+    "copy" (if (widget? target)
+             (let [clone (new-widget {:name @(-> target :name)
+                                      :pos @(-> target :pos)
+                                      :size @(-> target :size)
+                                      :scale @(-> target :scale)
+                                      :z-level @(-> target :z-level)
+                                      :visible? @(-> target :visible?)
+                                      :widget-type (:widget-type target)})]
+               (reset! (:components clone)
+                       (mapv (fn [comp]
+                               (if (and (map? comp) (:state comp))
+                                 (assoc comp :state (atom @(:state comp)))
+                                 comp))
+                             @(:components target)))
+               (doseq [child @(:children target)]
+                 (add-widget! clone (invoke-method! child "copy")))
+               clone)
+             target)
+    (throw (ex-info "Unsupported invoke-method! call in pure Clojure backend"
+                    {:method method-name :args-count (count args)}))))
 
 (defn create-widget
-  "Create a basic Widget instance
-  
-  Options:
-  - :pos [x y] - Position (default [0 0])
-  - :size [w h] - Size (default [0 0])
-  - :scale s - Scale factor (default 1.0)
-  - :z-level z - Z-level for rendering order (default 0)"
-  [& {:keys [pos size scale z-level]
-      :or {pos [0 0] size [0 0] scale 1.0 z-level 0}}]
-  (let [[x y] pos
-        [w h] size
-        widget (Widget.)]
-    (doto widget
-      (.pos x y)
-      (.size w h)
-      (.scale scale)
-      (.zLevel z-level))))
+  [& {:keys [name pos size scale z-level]
+      :or {name nil pos [0 0] size [0 0] scale 1.0 z-level 0}}]
+  (new-widget {:name name :pos pos :size size :scale scale :z-level z-level :widget-type :widget}))
 
 (defn create-container
-  "Create a WidgetContainer (can hold child widgets)
-  
-  Options: same as create-widget"
-  [& {:keys [pos size scale z-level]
-      :or {pos [0 0] size [0 0] scale 1.0 z-level 0}}]
-  (let [[x y] pos
-        [w h] size
-        container (WidgetContainer.)]
-    (doto container
-      (.pos x y)
-      (.size w h)
-      (.scale scale)
-      (.zLevel z-level))))
+  [& {:keys [name pos size scale z-level]
+      :or {name nil pos [0 0] size [0 0] scale 1.0 z-level 0}}]
+  (new-widget {:name name :pos pos :size size :scale scale :z-level z-level :widget-type :container}))
 
-;; ============================================================================
-;; Widget Tree Operations
-;; ============================================================================
+(defn copy-widget [widget]
+  (invoke-method! widget "copy"))
 
 (defn add-widget!
-  "Add a child widget to a container
-  
-  Args:
-  - container: WidgetContainer instance
-  - widget: Widget instance to add
-  
-  Returns: the container (for chaining)"
-  [^WidgetContainer container ^Widget widget]
-  (.addWidget container widget)
+  [container widget]
+  (swap! (:children container) conj widget)
   container)
 
 (defn remove-widget!
-  "Remove a child widget from container"
-  [^WidgetContainer container ^Widget widget]
-  (.removeWidget container widget)
+  [container widget]
+  (swap! (:children container) (fn [xs] (vec (remove #(= (:id %) (:id widget)) xs))))
   container)
 
 (defn clear-widgets!
-  "Remove all child widgets from container"
-  [^WidgetContainer container]
-  (.removeAllWidgets container)
+  [container]
+  (reset! (:children container) [])
   container)
 
-(defn get-widgets
-  "Get all child widgets from container"
-  [^WidgetContainer container]
-  (vec (.getDrawList container)))
+(defn get-widgets [container]
+  (vec @(:children container)))
+
+(defn get-draw-list [container]
+  (get-widgets container))
+
+(defn- find-child-by-name [node child-name]
+  (first (filter #(= child-name (or @(:name %) "")) (get-widgets node))))
 
 (defn find-widget
-  "Find a widget by name or path (e.g. "
-  "panel/child/grandchild") under root
-  
-  Returns: widget or nil"
-  [^Widget root name-or-path]
+  [root name-or-path]
   (let [parts (str/split (str name-or-path) #"/")]
     (reduce (fn [node part]
-              (when node
-                (first (filter #(= part (.getName ^Widget %))
-                               (get-widgets node)))))
+              (when (and node (widget? node))
+                (find-child-by-name node part)))
             root
             parts)))
 
-;; ============================================================================
-;; Widget Properties
-;; ============================================================================
+(defn set-name!
+  [widget name]
+  (reset! (:name widget) name)
+  widget)
+
+(defn get-name [widget]
+  (or @(:name widget) ""))
 
 (defn set-pos!
-  "Set widget position"
-  [^Widget widget x y]
-  (.pos widget x y)
+  [widget x y]
+  (reset! (:pos widget) [x y])
   widget)
 
-(defn get-pos
-  "Get widget position as [x y]"
-  [^Widget widget]
-  [(.x widget) (.y widget)])
+(defn set-position! [widget x y]
+  (set-pos! widget x y))
+
+(defn get-pos [widget]
+  @(:pos widget))
 
 (defn set-size!
-  "Set widget size"
-  [^Widget widget w h]
-  (.size widget w h)
+  [widget w h]
+  (reset! (:size widget) [w h])
   widget)
 
-(defn get-size
-  "Get widget size as [w h]"
-  [^Widget widget]
-  [(.transform widget.width) (.transform widget.height)])
+(defn get-size [widget]
+  @(:size widget))
+
+(defn get-width [widget]
+  (double (first (get-size widget))))
+
+(defn get-height [widget]
+  (double (second (get-size widget))))
 
 (defn set-scale!
-  "Set widget scale"
-  [^Widget widget scale]
-  (.scale widget scale)
+  [widget scale]
+  (reset! (:scale widget) scale)
   widget)
 
 (defn set-z-level!
-  "Set widget z-level (rendering order)"
-  [^Widget widget z]
-  (.zLevel widget z)
+  [widget z]
+  (reset! (:z-level widget) z)
   widget)
 
 (defn set-visible!
-  "Set widget visibility"
-  [^Widget widget visible?]
-  (set! (.doesDraw widget) visible?)
+  [widget visible?]
+  (reset! (:visible? widget) (boolean visible?))
   widget)
 
-(defn visible?
-  "Check if widget is visible"
-  [^Widget widget]
-  (.doesDraw widget))
+(defn visible? [widget]
+  (boolean @(:visible? widget)))
 
-;; ============================================================================
-;; CGui Creation
-;; ============================================================================
+(defn add-widget-component!
+  [widget component]
+  (swap! (:components widget) conj component)
+  widget)
 
-(defn create-cgui
-  "Create a CGui (root container for component-based GUI)
-  
-  Returns: CGui instance"
-  []
-  (CGui.))
+(defn remove-widget-component!
+  [widget component]
+  (swap! (:components widget)
+         (fn [xs] (vec (remove #(= % component) xs))))
+  widget)
 
-(defn get-root
-  "Get root widget container from CGui"
-  [^CGui cgui]
-  (.getRoot cgui))
+(defn get-widget-component
+  [widget kind]
+  (first (filter #(= (component-kind %) kind) @(:components widget))))
 
-(defn cgui-add-widget!
-  "Add widget to CGui root"
-  [^CGui cgui ^Widget widget]
-  (add-widget! (get-root cgui) widget))
+(defn get-widget-component-by-class
+  [widget component-class]
+  (let [kind (keyword (str/lower-case (or (some-> component-class .getSimpleName) "")))]
+    (get-widget-component widget kind)))
 
-;; ============================================================================
-;; Screen Creation
-;; ============================================================================
+(defn create-component-instance
+  [kind]
+  {:kind kind :state (atom {})})
 
-(defn create-cgui-screen
-  "Create a CGuiScreen (pure GUI, no Container)
-  
-  Args:
-  - cgui: CGui instance
-  
-  Returns: CGuiScreen instance"
-  [^CGui cgui]
-  (CGuiScreen. cgui))
-
-(defn create-cgui-screen-container
-  "Create a CGuiScreenContainer (GUI with Container)
-  
-  Args:
-  - cgui: CGui instance
-  - container: Minecraft Container instance
-  
-  Returns: CGuiScreenContainer instance"
-  [^CGui cgui container]
-  (CGuiScreenContainer. cgui container))
-
-;; ============================================================================
-;; Widget Builder DSL
-;; ============================================================================
-
-(defn build-widget-tree
-  "Build a widget tree from Clojure data structure
-  
-  Format:
-  {:type :container | :widget
-   :pos [x y]
-   :size [w h]
-   :components [...] ; Component instances to add
-   :children [...]}  ; Recursive widget specs
-  
-  Example:
-  {:type :container
-   :pos [0 0]
-   :size [176 166]
-   :children [{:type :widget :pos [10 10] :size [50 50]}]}"
-  [spec]
-  (let [{:keys [type pos size scale z-level components children]
-         :or {type :widget pos [0 0] size [0 0] scale 1.0 z-level 0}} spec
-        widget-fn (if (= type :container) create-container create-widget)
-        widget (widget-fn :pos pos :size size :scale scale :z-level z-level)]
-    
-    ;; Add components
-    (doseq [component components]
-      (.addComponent widget component))
-    
-    ;; Add children (only for containers)
-    (when (and (= type :container) (seq children))
-      (doseq [child-spec children]
-        (add-widget! widget (build-widget-tree child-spec))))
-    
+(defn listen-widget-event!
+  [widget event-klass-or-key handler]
+  (let [event-key (if (keyword? event-klass-or-key)
+                    event-klass-or-key
+                    (keyword (str/lower-case (str event-klass-or-key))))]
+    (swap! (:events widget) update event-key (fnil conj []) handler)
     widget))
 
-;; ============================================================================
-;; Utility Functions
-;; ============================================================================
+(defn unlisten-widget-event!
+  [widget event-klass-or-key]
+  (let [event-key (if (keyword? event-klass-or-key)
+                    event-klass-or-key
+                    (keyword (str/lower-case (str event-klass-or-key))))]
+    (swap! (:events widget) dissoc event-key)
+    widget))
+
+(defn clear-widget-events!
+  [widget]
+  (reset! (:events widget) {})
+  widget)
+
+(defn emit-widget-event!
+  [widget event-key event]
+  (doseq [handler (get @(:events widget) event-key)]
+    (handler event))
+  event)
+
+(defn stop-event-propagation!
+  [event]
+  (if (map? event)
+    (assoc event :canceled? true)
+    event))
+
+(defn create-cgui []
+  {:type :cgui
+   :root (create-container :name "root" :pos [0 0] :size [0 0])})
+
+(defn get-root [cgui]
+  (:root cgui))
+
+(defn cgui-add-widget!
+  [cgui widget]
+  (add-widget! (get-root cgui) widget)
+  cgui)
+
+(defn create-cgui-screen
+  [cgui]
+  {:type :cgui-screen :cgui cgui})
+
+(defn create-cgui-screen-container
+  [cgui container]
+  {:type :cgui-screen-container :cgui cgui :minecraft-container container})
+
+(defn read-cgui-document
+  [doc]
+  doc)
+
+(defn get-cgui-document-widget
+  [doc name]
+  (find-widget doc name))
+
+(defn progressbar-direction-enum [direction]
+  direction)
+
+(defn build-widget-tree
+  [spec]
+  (let [{:keys [type name pos size scale z-level components children]
+         :or {type :widget name nil pos [0 0] size [0 0] scale 1.0 z-level 0}} spec
+        widget-fn (if (= type :container) create-container create-widget)
+        widget (widget-fn :name name :pos pos :size size :scale scale :z-level z-level)]
+    (doseq [component components]
+      (add-widget-component! widget component))
+    (doseq [child-spec children]
+      (add-widget! widget (build-widget-tree child-spec)))
+    widget))
 
 (defn widget->map
-  "Convert widget to Clojure map (for debugging)"
-  [^Widget widget]
-  {:class (.getSimpleName (.getClass widget))
+  [widget]
+  {:id (:id widget)
+   :name (get-name widget)
+   :widget-type (:widget-type widget)
    :pos (get-pos widget)
    :size (get-size widget)
    :visible? (visible? widget)
-   :children (when (instance? WidgetContainer widget)
-               (mapv widget->map (get-widgets widget)))})
+   :children (mapv widget->map (get-widgets widget))})

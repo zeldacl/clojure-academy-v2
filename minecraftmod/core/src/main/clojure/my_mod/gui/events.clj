@@ -1,11 +1,6 @@
 (ns my-mod.gui.events
   "LambdaLib2 GuiEventBus wrapper - Event handling DSL"
-  (:import [cn.lambdalib2.cgui.event GuiEventBus GuiEvent IGuiEventHandler
-            LeftClickEvent RightClickEvent MouseClickEvent
-            KeyEvent DragEvent DragStopEvent
-            GainFocusEvent LostFocusEvent
-            FrameEvent RefreshEvent AddWidgetEvent]
-           [cn.lambdalib2.cgui Widget]))
+  (:require [my-mod.gui.cgui :as cgui]))
 
 ;; ============================================================================
 ;; Event Listener Registration
@@ -25,11 +20,8 @@
   (listen! widget LeftClickEvent
     (fn [event]
       (println \"Clicked at\" (.x event) (.y event))))"
-  [^Widget widget event-class handler]
-  (let [event-handler (reify IGuiEventHandler
-                        (handleEvent [_ event]
-                          (handler event)))]
-    (.regEventHandler widget event-class event-handler))
+  [widget event-class handler]
+  (cgui/listen-widget-event! widget event-class handler)
   widget)
 
 (defn unlisten!
@@ -38,11 +30,11 @@
   Args:
   - widget: Widget instance
   - event-class: Event class to remove (optional, removes all if nil)"
-  ([^Widget widget]
-   (.clearEventHandlers widget)
+  ([widget]
+   (cgui/clear-widget-events! widget)
    widget)
-  ([^Widget widget event-class]
-   (.unregEventHandler widget event-class)
+  ([widget event-class]
+   (cgui/unlisten-widget-event! widget event-class)
    widget))
 
 ;; ============================================================================
@@ -60,12 +52,12 @@
   (on-left-click widget
     (fn [e] (println \"Left clicked at\" (.x e) (.y e))))"
   [widget handler]
-  (listen! widget LeftClickEvent handler))
+  (listen! widget :left-click handler))
 
 (defn on-right-click
   "Create right-click event handler"
   [widget handler]
-  (listen! widget RightClickEvent handler))
+  (listen! widget :right-click handler))
 
 (defn on-key-press
   "Create keyboard event handler
@@ -74,7 +66,7 @@
   - .keyCode: int keycode
   - .typedChar: char typed"
   [widget handler]
-  (listen! widget KeyEvent handler))
+  (listen! widget :key handler))
 
 (defn on-drag
   "Create drag event handler
@@ -83,22 +75,22 @@
   - .dx .dy: drag delta
   - .x .y: current position"
   [widget handler]
-  (listen! widget DragEvent handler))
+  (listen! widget :drag handler))
 
 (defn on-drag-stop
   "Create drag-stop event handler"
   [widget handler]
-  (listen! widget DragStopEvent handler))
+  (listen! widget :drag-stop handler))
 
 (defn on-gain-focus
   "Create focus-gained event handler"
   [widget handler]
-  (listen! widget GainFocusEvent handler))
+  (listen! widget :gain-focus handler))
 
 (defn on-lost-focus
   "Create focus-lost event handler"
   [widget handler]
-  (listen! widget LostFocusEvent handler))
+  (listen! widget :lost-focus handler))
 
 (defn on-frame
   "Create frame event handler (called every frame)
@@ -106,17 +98,35 @@
   Handler receives event with:
   - .partialTicks: float for smooth animation"
   [widget handler]
-  (listen! widget FrameEvent handler))
+  (listen! widget :frame handler))
 
 (defn on-refresh
   "Create refresh event handler (called when GUI needs update)"
   [widget handler]
-  (listen! widget RefreshEvent handler))
+  (listen! widget :refresh handler))
+
+(defn on-confirm-input
+  "Register confirm-input handler on a TextBox component or its owner widget."
+  [target handler]
+  (let [owner (if (and (map? target) (contains? target :state))
+                (:owner-widget @(-> target :state))
+                target)]
+    (listen! owner :confirm-input
+      (fn [event]
+        (handler (:value event))))))
+
+(defn on-change-content
+  "Register content-change handler on a TextBox component or its owner widget."
+  [target handler]
+  (let [owner (if (and (map? target) (contains? target :state))
+                (:owner-widget @(-> target :state))
+                target)]
+    (listen! owner :change-content handler)))
 
 (defn on-widget-added
   "Create widget-added event handler"
   [widget handler]
-  (listen! widget AddWidgetEvent handler))
+  (listen! widget :add-widget handler))
 
 ;; ============================================================================
 ;; Event Chaining DSL
@@ -198,8 +208,8 @@
 
 (defn stop-propagation!
   "Stop event from propagating to parent widgets"
-  [^GuiEvent event]
-  (.setCanceled event true))
+  [event]
+  (cgui/stop-event-propagation! event))
 
 (defn event-pos
   "Extract [x y] position from mouse event"

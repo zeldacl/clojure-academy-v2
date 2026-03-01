@@ -18,9 +18,7 @@
             [my-mod.network.client :as net-client]
             [my-mod.wireless.gui.node-container :as node-container]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
-            [my-mod.util.log :as log])
-  (:import [cn.lambdalib2.cgui Widget]
-           [cn.lambdalib2.cgui.component TextBox DrawTexture Tint ElementList]))
+            [my-mod.util.log :as log]))
 
 ;; ============================================================================
 ;; Network Message IDs (match node_network_handler.clj)
@@ -110,24 +108,20 @@
 ;; ============================================================================
 
 (defn- widget-textbox
-  [^Widget widget]
-  (comp/get-component widget TextBox))
+  [widget]
+  (comp/get-textbox-component widget))
 
 (defn- widget-drawtexture
-  [^Widget widget]
-  (comp/get-component widget DrawTexture))
-
-(defn- widget-tint
-  [^Widget widget]
-  (comp/get-component widget Tint))
+  [widget]
+  (comp/get-drawtexture-component widget))
 
 (defn- set-textbox-text!
-  [^Widget widget text]
+  [widget text]
   (when-let [tb (widget-textbox widget)]
     (comp/set-text! tb text)))
 
 (defn- set-drawtexture!
-  [^Widget widget texture-path]
+  [widget texture-path]
   (when-let [dt (widget-drawtexture widget)]
     (comp/set-texture! dt texture-path)))
 
@@ -151,9 +145,9 @@
       (cgui/set-visible! elem-template false))
 
     (when (and btn-up elist)
-      (events/on-left-click btn-up (fn [_] (.progressLast ^ElementList elist))))
+      (events/on-left-click btn-up (fn [_] (comp/list-progress-last! elist))))
     (when (and btn-down elist)
-      (events/on-left-click btn-down (fn [_] (.progressNext ^ElementList elist))))
+      (events/on-left-click btn-down (fn [_] (comp/list-progress-next! elist))))
 
     (letfn [(update-connected! [linked?]
               (when connected-elem
@@ -190,7 +184,7 @@
 
             (build-element! [net]
               (when elem-template
-                (let [elem (.copy ^Widget elem-template)
+                (let [elem (cgui/copy-widget elem-template)
                       ssid (:ssid net)
                       encrypted? (boolean (:is-encrypted? net))
                       text-name (cgui/find-widget elem "text_name")

@@ -6,7 +6,8 @@
   - InfoArea辅助函数（histogram, property, sepline, button）
   - 通用样式和动画
   - Histogram元素构建器"
-  (:require [my-mod.gui.cgui :as cgui]
+  (:require [clojure.string :as str]
+            [my-mod.gui.cgui :as cgui]
             [my-mod.gui.components :as comp]
             [my-mod.gui.events :as events]
             [my-mod.gui.cgui-document :as cgui-doc]
@@ -37,7 +38,7 @@
       
       ;; Add breathing effect to all UI elements
       (doseq [widget (cgui/get-draw-list page-widget)]
-        (when (.startsWith (.getName widget) "ui_")
+        (when (str/starts-with? (cgui/get-name widget) "ui_")
           (comp/add-component! widget (comp/breathe-effect))))
       
       ;; Set UI block texture based on name
