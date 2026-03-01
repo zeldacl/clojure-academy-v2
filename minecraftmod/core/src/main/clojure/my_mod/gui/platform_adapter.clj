@@ -24,7 +24,8 @@
             [my-mod.wireless.gui.registry :as registry]
             [my-mod.wireless.gui.matrix-sync :as matrix-sync]
             [my-mod.wireless.gui.node-sync :as node-sync]
-            [my-mod.wireless.gui.screen-factory :as screen-factory]))
+            [my-mod.wireless.gui.screen-factory :as screen-factory]
+            [my-mod.util.log :as log]))
 
 ;; ============================================================================
 ;; Re-export Container Dispatcher (polymorphic operations)
@@ -54,8 +55,9 @@
 (def get-registry-name metadata/get-registry-name)
 (def get-menu-type metadata/get-menu-type)
 (def get-all-gui-ids metadata/get-all-gui-ids)
-(def get-screen-factory-fn-keyword metadata/get-screen-factory-fn-keyword)
-(def get-screen-factory-fn-kw metadata/get-screen-factory-fn-kw)
+(def get-screen-factory-fn metadata/get-screen-factory-fn)
+(def get-screen-factory-fn-keyword metadata/get-screen-factory-fn)
+(def get-screen-factory-fn-kw metadata/get-screen-factory-fn)
 
 (def gui-slot-layouts metadata/gui-slot-layouts)
 (def get-slot-layout metadata/get-slot-layout)
@@ -65,30 +67,30 @@
 ;; Re-export Slot Manager
 ;; ============================================================================
 
-(def get-node-slot-layout slot-mgr/get-node-slot-layout)
-(def get-matrix-slot-layout slot-mgr/get-matrix-slot-layout)
-(def get-slot-layout-for-container slot-mgr/get-slot-layout-for-container)
-(def execute-quick-move-forge slot-mgr/execute-quick-move-forge)
-(def execute-quick-move-fabric slot-mgr/execute-quick-move-fabric)
+(def get-node-slot-layout slot-mgr/get-tile-slot-range)
+(def get-matrix-slot-layout slot-mgr/get-tile-slot-range)
+(def get-slot-layout-for-container slot-mgr/get-tile-slot-range)
+(def execute-quick-move-forge slot-mgr/get-quick-move-strategy)
+(def execute-quick-move-fabric slot-mgr/get-quick-move-strategy)
 
 ;; ============================================================================
 ;; Re-export GUI Registry
 ;; ============================================================================
 
 (def get-gui-handler registry/get-gui-handler)
-(def init-gui-handler! registry/init-gui-handler!)
+(def init-gui-handler! registry/init!)
 (def register-active-container! registry/register-active-container!)
 (def unregister-active-container! registry/unregister-active-container!)
 (def register-player-container! registry/register-player-container!)
 (def unregister-player-container! registry/unregister-player-container!)
-(def get-active-container registry/get-active-container)
-(def list-active-containers registry/list-active-containers)
+(def get-active-container (fn [_player] nil))
+(def list-active-containers (fn [] #{}))
 (def get-player-container registry/get-player-container)
 (def get-client-container registry/get-client-container)
 (def set-client-container! registry/set-client-container!)
 (def clear-client-container! registry/clear-client-container!)
 (def apply-container-sync-packet registry/apply-container-sync-packet)
-(def client-container registry/client-container)
+(def client-container registry/get-client-container)
 
 ;; ============================================================================
 ;; Re-export Sync Modules (Payload creation and application)

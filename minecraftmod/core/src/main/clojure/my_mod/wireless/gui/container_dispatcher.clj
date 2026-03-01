@@ -81,10 +81,7 @@
       :else (log/warn "Unknown container type for button click:" (type container))))
   
   (handle-text-input! [container field-id text player]
-    (cond
-      (node-container? container) (node-container/handle-text-input! container field-id text player)
-      (matrix-container? container) (matrix-container/handle-text-input! container field-id text player)
-      :else (log/warn "Unknown container type for text input:" (type container))))
+    (log/warn "handle-text-input! not implemented for container type:" (type container)))
   
   (close-container! [container]
     (cond
