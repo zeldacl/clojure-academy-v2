@@ -10,6 +10,20 @@
             [my-mod.wireless.gui.matrix-container :as matrix-container]
             [my-mod.util.log :as log]))
 
+  (defn- node-container?
+    [container]
+    (and (map? container)
+      (contains? container :tile-entity)
+      (contains? container :ssid)
+      (contains? container :password)))
+
+  (defn- matrix-container?
+    [container]
+    (and (map? container)
+      (contains? container :tile-entity)
+      (contains? container :plate-count)
+      (contains? container :core-level)))
+
 ;; ============================================================================
 ;; Slot Layout Constants
 ;; ============================================================================
@@ -45,10 +59,10 @@
   Returns: {:start int :end int :count int}"
   [container]
   (cond
-    (instance? my_mod.wireless.gui.node_container.NodeContainer container)
+    (node-container? container)
     node-tile-slots
     
-    (instance? my_mod.wireless.gui.matrix_container.MatrixContainer container)
+    (matrix-container? container)
     matrix-tile-slots
     
     :else
@@ -65,10 +79,10 @@
   Returns: {:start int :end int :count int}"
   [container]
   (cond
-    (instance? my_mod.wireless.gui.node_container.NodeContainer container)
+    (node-container? container)
     node-player-slots
     
-    (instance? my_mod.wireless.gui.matrix_container.MatrixContainer container)
+    (matrix-container? container)
     matrix-player-slots
     
     :else

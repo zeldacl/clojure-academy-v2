@@ -10,9 +10,23 @@
 ;; GUI Config Table
 ;; ============================================================================
 
+(defn- node-container?
+  [container]
+  (and (map? container)
+       (contains? container :tile-entity)
+       (contains? container :ssid)
+       (contains? container :password)))
+
+(defn- matrix-container?
+  [container]
+  (and (map? container)
+       (contains? container :tile-entity)
+       (contains? container :plate-count)
+       (contains? container :core-level)))
+
 (def gui-config
   {:node {:id 0
-          :container-class my_mod.wireless.gui.node_container.NodeContainer
+          :container-predicate node-container?
           :container-fn node-container/create-container
           :screen-fn (fn [tile player]
                        (let [container (node-container/create-container tile player)
@@ -22,7 +36,7 @@
           :sync-get node-container/get-sync-data
           :sync-apply node-container/apply-sync-data!}
    :matrix {:id 1
-            :container-class my_mod.wireless.gui.matrix_container.MatrixContainer
+            :container-predicate matrix-container?
             :container-fn matrix-container/create-container
             :screen-fn (fn [tile player]
                          (let [container (matrix-container/create-container tile player)
@@ -71,7 +85,7 @@
   "Get GUI config by container type"
   [container]
   (some (fn [[_ cfg]]
-          (when (instance? (:container-class cfg) container)
+          (when ((:container-predicate cfg) container)
             cfg))
         gui-config))
 

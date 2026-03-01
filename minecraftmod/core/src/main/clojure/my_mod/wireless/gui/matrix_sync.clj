@@ -28,15 +28,24 @@
 ;; Payload Helpers
 ;; ============================================================================
 
+(defn- matrix-container?
+  "Best-effort structural check for MatrixContainer without class loading."
+  [source]
+  (and (map? source)
+       (contains? source :tile-entity)
+       (contains? source :plate-count)
+       (contains? source :core-level)))
+
 (defn make-sync-packet
   "Create matrix state sync packet payload map from container or tile entity
   
   Accepts either a MatrixContainer or a tile entity directly"
   [source]
-  (let [tile (if (instance? my_mod.wireless.gui.matrix_container.MatrixContainer source)
+    (let [container? (matrix-container? source)
+      tile (if container?
                (:tile-entity source)
                source)
-        container (when (instance? my_mod.wireless.gui.matrix_container.MatrixContainer source)
+      container (when container?
                     source)
         pos (:pos tile)]
     {:gui-id metadata/gui-wireless-matrix

@@ -5,7 +5,7 @@
             [my-mod.events.metadata :as event-metadata]
             [my-mod.wireless.world-data :as wd])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
-           [net.minecraftforge.event.level.LevelEvent$Load LevelEvent$Unload]))
+           [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload]))
 
 (defn handle-right-click
   "Handle right-click block event from event data map"

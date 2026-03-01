@@ -9,6 +9,22 @@
             [my-mod.wireless.gui.matrix-container :as matrix-container]
             [my-mod.util.log :as log]))
 
+  (defn node-container?
+    "Best-effort structural check for node container without class loading."
+    [container]
+    (and (map? container)
+      (contains? container :tile-entity)
+      (contains? container :ssid)
+      (contains? container :password)))
+
+  (defn matrix-container?
+    "Best-effort structural check for matrix container without class loading."
+    [container]
+    (and (map? container)
+      (contains? container :tile-entity)
+      (contains? container :plate-count)
+      (contains? container :core-level)))
+
 ;; ============================================================================
 ;; Container Operation Protocol
 ;; ============================================================================
@@ -39,45 +55,42 @@
 ;; ============================================================================
 
 (extend-protocol IContainerOperations
-  ;; NodeContainer implementation
-  my_mod.wireless.gui.node_container.NodeContainer
+  Object
   (tick-container! [container]
-    (node-container/tick! container))
+    (cond
+      (node-container? container) (node-container/tick! container)
+      (matrix-container? container) (matrix-container/tick! container)
+      :else (log/warn "Unknown container type for tick:" (type container))))
   
   (validate-container [container player]
-    (node-container/still-valid? container player))
+    (cond
+      (node-container? container) (node-container/still-valid? container player)
+      (matrix-container? container) (matrix-container/still-valid? container player)
+      :else false))
   
   (sync-container! [container]
-    (node-container/sync-to-client! container))
+    (cond
+      (node-container? container) (node-container/sync-to-client! container)
+      (matrix-container? container) (matrix-container/sync-to-client! container)
+      :else (log/warn "Unknown container type for sync:" (type container))))
   
   (handle-button-click! [container button-id player]
-    (node-container/handle-button-click! container button-id player))
+    (cond
+      (node-container? container) (node-container/handle-button-click! container button-id player)
+      (matrix-container? container) (matrix-container/handle-button-click! container button-id player)
+      :else (log/warn "Unknown container type for button click:" (type container))))
   
   (handle-text-input! [container field-id text player]
-    (node-container/handle-text-input! container field-id text player))
+    (cond
+      (node-container? container) (node-container/handle-text-input! container field-id text player)
+      (matrix-container? container) (matrix-container/handle-text-input! container field-id text player)
+      :else (log/warn "Unknown container type for text input:" (type container))))
   
   (close-container! [container]
-    (node-container/on-close container))
-  
-  ;; MatrixContainer implementation
-  my_mod.wireless.gui.matrix_container.MatrixContainer
-  (tick-container! [container]
-    (matrix-container/tick! container))
-  
-  (validate-container [container player]
-    (matrix-container/still-valid? container player))
-  
-  (sync-container! [container]
-    (matrix-container/sync-to-client! container))
-  
-  (handle-button-click! [container button-id player]
-    (matrix-container/handle-button-click! container button-id player))
-  
-  (handle-text-input! [container field-id text player]
-    (matrix-container/handle-text-input! container field-id text player))
-  
-  (close-container! [container]
-    (matrix-container/on-close container)))
+    (cond
+      (node-container? container) (node-container/on-close container)
+      (matrix-container? container) (matrix-container/on-close container)
+      :else (log/warn "Unknown container type for close:" (type container)))))
 
 ;; ============================================================================
 ;; Container Type Queries
@@ -92,26 +105,16 @@
   Returns: :node or :matrix"
   [container]
   (cond
-    (instance? my_mod.wireless.gui.node_container.NodeContainer container)
+    (node-container? container)
     :node
     
-    (instance? my_mod.wireless.gui.matrix_container.MatrixContainer container)
+    (matrix-container? container)
     :matrix
     
     :else
     (do
       (log/warn "Unknown container type:" (type container))
       :unknown)))
-
-(defn node-container?
-  "Check if container is a NodeContainer"
-  [container]
-  (instance? my_mod.wireless.gui.node_container.NodeContainer container))
-
-(defn matrix-container?
-  "Check if container is a MatrixContainer"
-  [container]
-  (instance? my_mod.wireless.gui.matrix_container.MatrixContainer container))
 
 ;; ============================================================================
 ;; Safe Operation Wrappers

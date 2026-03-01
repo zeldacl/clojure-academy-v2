@@ -29,12 +29,21 @@
 ;; Payload Helpers
 ;; ============================================================================
 
+(defn- node-container?
+  "Best-effort structural check for NodeContainer without class loading."
+  [source]
+  (and (map? source)
+       (contains? source :tile-entity)
+       (contains? source :capacity)
+       (contains? source :max-capacity)))
+
 (defn make-sync-packet
   "Create node state sync packet payload map from container or tile entity
   
   Accepts either a NodeContainer or a tile entity directly"
   [source]
-  (let [tile (if (instance? my_mod.wireless.gui.node_container.NodeContainer source)
+    (let [container? (node-container? source)
+      tile (if container?
                (:tile-entity source)
                source)
         pos (:pos tile)]
@@ -52,10 +61,10 @@
      :charging-out @(:charging-out tile)
      :placer-name (:placer-name tile)
      ;; Network capacity fields (added for GUI histogram widgets)
-     :capacity (if (instance? my_mod.wireless.gui.node_container.NodeContainer source)
+    :capacity (if container?
                  @(:capacity source)
                  0)
-     :max-capacity (if (instance? my_mod.wireless.gui.node_container.NodeContainer source)
+    :max-capacity (if container?
                      @(:max-capacity source)
                      0)}))
 
