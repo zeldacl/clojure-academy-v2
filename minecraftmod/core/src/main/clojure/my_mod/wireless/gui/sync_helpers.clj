@@ -211,11 +211,8 @@
   - max-capacity: Matrix max capacity (from matrix tile)
   
   Args:
-  - container: NodeContainer with :tile-entity, :capacity, :max-capacity atoms
-  - vb: Virtual blocks namespace
-  - wd: World data namespace
-  - winterfaces: Wireless interfaces namespace"
-  [container vb wd winterfaces]
+  - container: NodeContainer with :tile-entity, :capacity, :max-capacity atoms"
+  [container]
   (try
     (let [tile (:tile-entity container)
           world (:world tile)
@@ -248,10 +245,8 @@
   
   Args:
   - container: MatrixContainer with :tile-entity, :capacity, :max-capacity atoms
-  - stats: Map with :capacity key (calculated stats)
-  - vb: Virtual blocks namespace
-  - wd: World data namespace"
-  [container stats vb wd]
+  - stats: Map with :capacity key (calculated stats)"
+  [container stats]
   (try
     (let [tile (:tile-entity container)
           world (:world tile)

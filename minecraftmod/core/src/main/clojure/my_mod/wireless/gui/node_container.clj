@@ -1,6 +1,7 @@
 (ns my-mod.wireless.gui.node-container
   "Wireless Node GUI Container - handles server-side inventory and data sync"
   (:require [my-mod.wireless.interfaces :as winterfaces]
+            [my-mod.energy.stub :as energy-stub]
             [my-mod.wireless.world-data :as wd]
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.inventory.core :as inv]
@@ -84,7 +85,7 @@
   Slot 1 (output): No direct placement (output only)"
   [container slot-index item-stack]
   (case slot-index
-    0 (winterfaces/has-energy-capability? item-stack)
+    0 (energy-stub/is-energy-item-supported? item-stack)
     1 false ; Output slot cannot be placed into
     false))
 
@@ -128,15 +129,15 @@
     ;; Update network capacity info (throttled to every 100 ticks = 5 seconds)
     (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
       (fn []
-        (sync-helpers/query-node-network-capacity! container vb wd winterfaces)))
+        (sync-helpers/query-node-network-capacity! container)))
     
     ;; Compute transfer rate (charging speed)
     (let [charging-in? @(:charging-in tile)
           charging-out? @(:charging-out tile)
           rate (cond
-                 (and charging-in charging-out) 200 ; Bidirectional
-                 charging-in 100  ; Charging from slot
-                 charging-out 100 ; Charging to slot
+             (and charging-in? charging-out?) 200 ; Bidirectional
+             charging-in? 100  ; Charging from slot
+             charging-out? 100 ; Charging to slot
                  :else 0)]
       (reset! (:transfer-rate container) rate))))
 
@@ -210,22 +211,28 @@
       
       ;; Charge items from node energy
       (when (and output-item
-                 (winterfaces/has-energy-capability? output-item)
+                 (energy-stub/is-energy-item-supported? output-item)
                  (> (winterfaces/get-energy tile) 0))
         (let [to-give (min 100 (winterfaces/get-energy tile))
-              given (winterfaces/give-energy output-item to-give false)]
-          (winterfaces/take-energy tile given false)
+              pulled (energy-stub/pull-from-node tile to-give false)
+              leftover (energy-stub/charge-energy-to-item output-item pulled false)
+              given (- pulled leftover)]
+          (when (> leftover 0)
+            (energy-stub/charge-node tile leftover false))
           (reset! (:charging-out tile) (> given 0))))
       
       ;; Charge node from items
       (when (and input-item
-                 (winterfaces/has-energy-capability? input-item)
+                 (energy-stub/is-energy-item-supported? input-item)
                  (< (winterfaces/get-energy tile) (winterfaces/get-max-energy tile)))
         (let [to-take (min 100 (- (winterfaces/get-max-energy tile)
                                    (winterfaces/get-energy tile)))
-              taken (winterfaces/take-energy input-item to-take false)]
-          (winterfaces/give-energy tile taken false)
-          (reset! (:charging-in tile) (> taken 0)))))))
+              taken (energy-stub/pull-energy-from-item input-item to-take false)
+              leftover (energy-stub/charge-node tile taken false)
+              accepted (- taken leftover)]
+          (when (> leftover 0)
+            (energy-stub/charge-energy-to-item input-item leftover false))
+          (reset! (:charging-in tile) (> accepted 0)))))))
 
 ;; ============================================================================
 ;; Button Actions
@@ -274,7 +281,7 @@
   {:container-slots #{slot-input slot-output}
    :inventory-pred (fn [slot-index player-inventory-start]
                      (>= slot-index player-inventory-start))
-   :rules [{:accept? (fn [item] (winterfaces/has-energy-capability? item))
+  :rules [{:accept? (fn [item] (energy-stub/is-energy-item-supported? item))
             :slots [slot-input]}]})
 
 ;; ============================================================================

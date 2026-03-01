@@ -193,7 +193,7 @@
           (reset! (:bandwidth container) (:bandwidth stats))
           (reset! (:range container) (:range stats))
           ;; Query actual network capacity from WirelessNet
-          (sync-helpers/query-matrix-network-capacity! container stats vb wd))))))))
+          (sync-helpers/query-matrix-network-capacity! container stats))))))))
 
 (defn get-sync-data
   "Get data to sync to client

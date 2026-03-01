@@ -24,6 +24,8 @@
 (defn- component-kind [component]
   (or (:kind component) (::kind component) :unknown))
 
+(declare add-widget!)
+
 (defn invoke-method!
   "Compatibility helper for legacy dynamic calls.
    Supports map-based component methods used by GUI code."
