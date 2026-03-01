@@ -112,7 +112,7 @@
   "Get or create node connection for a node"
   [world-data node-vblock]
   (or (get-node-connection world-data node-vblock)
-      (create-node-connection! world-data node-vblock)))
+  (create-node-connection-impl! world-data node-vblock)))
 
 ;; ============================================================================
 ;; Validation and Cleanup
@@ -165,12 +165,7 @@
   (toString [this]
     (str "WiSavedDataWrapper["
          (if wi-data (str (count @(:networks wi-data)) " networks") "uninitialized")
-         "]"))
-  
-  ;; Marker to indicate this is our wireless data
-  (markDirty [this]
-    ;; Called when data changed
-    true))
+         "]")))
 
 (defn create-saved-data
   "Create a saved data wrapper for a world"
@@ -216,7 +211,10 @@
   [world]
   (if-let [wi-data (get-world-data-non-create world)]
     (do
-      (validate-networks! wi-data)
+      (when-let [network-validator (resolve 'network-impl-validator)]
+        (network-validator wi-data))
+      (when-let [connection-validator (resolve 'node-connection-impl-validator)]
+        (connection-validator wi-data))
       ;; Return wrapper to be saved
       (let [wrapper (WiSavedDataWrapper. wi-data)]
         (log/info "Prepared WiWorldData for save")

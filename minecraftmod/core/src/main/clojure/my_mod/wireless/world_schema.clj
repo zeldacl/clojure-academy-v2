@@ -33,6 +33,11 @@
   [schema-var]
   (let [schema (resolve-var-value schema-var)
         fields (:nbt-fields schema)
+        field-locals (into {}
+                           (map (fn [field]
+                                  (let [n (:name field)]
+                                    [n (if (symbol? n) n (symbol (name n)))]))
+                                fields))
         factory-fn (get-in schema [:factory :fn])
         factory-args (get-in schema [:factory :args])
         to-nbt-name (symbol (str (name (:collection-name schema)) "-to-nbt"))
@@ -67,34 +72,36 @@
         ;; from-nbt read forms
         from-nbt-reads (mapv (fn [field]
                                (let [name (:name field)
+                       local-sym (get field-locals name)
                                      type (:type field)
                                      nbt-key (:nbt-key field)]
-                                 [name (case type
-                                         :string `(nbt/nbt-get-string ~'nbt ~nbt-key)
-                                         :double `(nbt/nbt-get-double ~'nbt ~nbt-key)
-                                         :vblock `(~'vb/vblock-from-nbt (nbt/nbt-get-compound ~'nbt ~nbt-key))
-                                         :vblock-list
-                                         `(let [~'list-obj (nbt/nbt-get-list ~'nbt ~nbt-key)
-                                                ~'size (nbt/nbt-list-size ~'list-obj)]
-                                            (vec (for [~'i (range ~'size)]
-                                                   (~'vb/vblock-from-nbt (nbt/nbt-list-get-compound ~'list-obj ~'i)))))
-                                         nil)]))
+                     [local-sym (case type
+                            :string `(nbt/nbt-get-string ~'nbt ~nbt-key)
+                            :double `(nbt/nbt-get-double ~'nbt ~nbt-key)
+                            :vblock `(~'vb/vblock-from-nbt (nbt/nbt-get-compound ~'nbt ~nbt-key))
+                            :vblock-list
+                            `(let [~'list-obj (nbt/nbt-get-list ~'nbt ~nbt-key)
+                               ~'size (nbt/nbt-list-size ~'list-obj)]
+                             (vec (for [~'i (range ~'size)]
+                                (~'vb/vblock-from-nbt (nbt/nbt-list-get-compound ~'list-obj ~'i)))))
+                            nil)]))
                              fields)
         
         ;; Separate factory args from other fields
         factory-arg-fields (filter :factory-arg fields)
         atom-fields (filter :atom? fields)
-        factory-arg-names (mapv :name factory-arg-fields)
+        factory-arg-locals (mapv (fn [f] (get field-locals (:name f))) factory-arg-fields)
         
         ;; Build factory call with args
         factory-call (if factory-fn
-                       `(~factory-fn ~@factory-args ~@factory-arg-names)
+                       `(~factory-fn ~@factory-args ~@factory-arg-locals)
                        `(throw (Exception. "No factory function defined in schema")))
         
         ;; Restore atom fields
         restore-atoms (mapv (fn [field]
-                              (let [name (:name field)]
-                                `(reset! (~name ~'item) ~name)))
+                              (let [name (:name field)
+                                    local-sym (get field-locals name)]
+                                `(reset! (~name ~'item) ~local-sym)))
                             atom-fields)]
     
     `(do
@@ -316,9 +323,9 @@
                         (resolve-var-value var-sym))
                       schema-vars)
         nbt-after-read (:nbt-after-read schema)
-        tick-name (or (:tick-name schema) 'tick-world-data-impl!)
-        nbt-write-name (or (:nbt-write-name schema) 'world-data-to-nbt-impl)
-        nbt-read-name (or (:nbt-read-name schema) 'world-data-from-nbt-impl)
+        tick-name (symbol (name (or (:tick-name schema) 'tick-world-data-impl!)))
+        nbt-write-name (symbol (name (or (:nbt-write-name schema) 'world-data-to-nbt-impl)))
+        nbt-read-name (symbol (name (or (:nbt-read-name schema) 'world-data-from-nbt-impl)))
         nbt-lists (vec (map (fn [s]
                               (let [nbt (:nbt s)]
                                 {:tag (:tag nbt)
@@ -337,7 +344,7 @@
                              schemas))]
     `(do
        ~@(map (fn [var-sym] `(defcollection ~var-sym)) schema-vars)
-       (nbt/defworldnbt world-data
+       (nbt-dsl/defworldnbt world-data
          :create ~create-fn-sym
          :write-name ~nbt-write-name
          :read-name ~nbt-read-name
@@ -345,9 +352,9 @@
          :after-read ~nbt-after-read)
        (defn ~tick-name [~'world-data]
          ~@tick-forms)
-       (defn tick-world-data! [~'world-data] (~tick-name ~'world-data))
-       (defn world-data-to-nbt [~'world-data] (~nbt-write-name ~'world-data))
-       (defn world-data-from-nbt [~'world ~'nbt] (~nbt-read-name ~'world ~'nbt)))))
+       (defn ~'tick-world-data! [~'world-data] (~tick-name ~'world-data))
+       (defn ~'world-data-to-nbt [~'world-data] (~nbt-write-name ~'world-data))
+       (defn ~'world-data-from-nbt [~'world ~'nbt] (~nbt-read-name ~'world ~'nbt)))))
 
 ;; =========================================================================
 ;; Schema Macro
@@ -362,9 +369,9 @@
   (let [schema (resolve-var-value schema)
         collections (:collections schema)
         nbt-after-read (:nbt-after-read schema)
-        tick-name (or (:tick-name schema) 'tick-world-data-impl!)
-        nbt-write-name (or (:nbt-write-name schema) 'world-data-to-nbt-impl)
-        nbt-read-name (or (:nbt-read-name schema) 'world-data-from-nbt-impl)
+      tick-name (symbol (name (or (:tick-name schema) 'tick-world-data-impl!)))
+      nbt-write-name (symbol (name (or (:nbt-write-name schema) 'world-data-to-nbt-impl)))
+      nbt-read-name (symbol (name (or (:nbt-read-name schema) 'world-data-from-nbt-impl)))
         nbt-lists (vec (keep (fn [c]
                                (when-let [nbt (:nbt c)]
                                  {:tag (:tag nbt)
@@ -445,7 +452,7 @@
                          collections)]
     `(do
        ~@collection-forms
-       (nbt/defworldnbt world-data
+       (nbt-dsl/defworldnbt world-data
          :create ~create-fn
          :write-name ~nbt-write-name
          :read-name ~nbt-read-name
@@ -456,15 +463,15 @@
          [~'world-data]
          ~@(map (fn [vfn] `(~vfn ~'world-data)) validate-impls)
          ~@tick-forms)
-       (defn tick-world-data!
+       (defn ~'tick-world-data!
          "Tick all networks and connections in this world data"
          [~'world-data]
          (~tick-name ~'world-data))
-       (defn world-data-to-nbt
+       (defn ~'world-data-to-nbt
          "Serialize world data to NBT"
          [~'world-data]
          (~nbt-write-name ~'world-data))
-       (defn world-data-from-nbt
+       (defn ~'world-data-from-nbt
          "Deserialize world data from NBT"
          [~'world ~'nbt]
          (~nbt-read-name ~'world ~'nbt)))))

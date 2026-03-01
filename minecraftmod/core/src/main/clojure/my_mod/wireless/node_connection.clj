@@ -62,6 +62,16 @@
     (.getCapacity node)
     Integer/MAX_VALUE))
 
+(declare remove-receiver! remove-generator!)
+
+(defn- find-existing-node-connection
+  "Lookup existing node connection via world-data namespace at runtime.
+  Uses requiring-resolve to avoid compile-time circular dependency."
+  [world-data vblock]
+  (if-let [lookup-fn (requiring-resolve 'my-mod.wireless.world-data/get-node-connection)]
+    (lookup-fn world-data vblock)
+    nil))
+
 ;; ============================================================================
 ;; Range Checking
 ;; ============================================================================
@@ -97,8 +107,7 @@
     :else
     (do
       ;; Remove from old connection if exists
-      (let [old-conn (my-mod.wireless.world-data/get-node-connection
-                       (:world-data conn) receiver-vb)]
+      (let [old-conn (find-existing-node-connection (:world-data conn) receiver-vb)]
         (when old-conn
           (remove-receiver! old-conn receiver-vb)))
 
@@ -112,7 +121,7 @@
       (log/info (format "Added receiver %s to node %s"
                         (vb/vblock-to-string receiver-vb)
                         (vb/vblock-to-string (:node conn))))
-      true))
+      true)))
 
 (defn remove-receiver!
   "Mark receiver for removal"
@@ -141,8 +150,7 @@
     :else
     (do
       ;; Remove from old connection if exists
-      (let [old-conn (my-mod.wireless.world-data/get-node-connection
-                       (:world-data conn) generator-vb)]
+      (let [old-conn (find-existing-node-connection (:world-data conn) generator-vb)]
         (when old-conn
           (remove-generator! old-conn generator-vb)))
 
@@ -156,7 +164,7 @@
       (log/info (format "Added generator %s to node %s"
             (vb/vblock-to-string generator-vb)
             (vb/vblock-to-string (:node conn))))
-      true))
+      true)))
 
 (defn remove-generator!
   "Mark generator for removal"

@@ -70,6 +70,14 @@
     (.getCapacity matrix)
     0))
 
+(defn- find-existing-network-by-node
+  "Lookup existing network for a node via world-data namespace at runtime.
+  Uses requiring-resolve to avoid compile-time circular dependency."
+  [world-data node-vblock]
+  (if-let [lookup-fn (requiring-resolve 'my-mod.wireless.world-data/get-network-by-node)]
+    (lookup-fn world-data node-vblock)
+    nil))
+
 ;; ============================================================================
 ;; Password Management
 ;; ============================================================================
@@ -91,6 +99,8 @@
 ;; ============================================================================
 ;; Node Management
 ;; ============================================================================
+
+(declare remove-node!)
 
 (defn add-node!
   "Add a node to the network
@@ -123,8 +133,7 @@
             (do
               ;; Remove from old network if exists
               (let [world-data (:world-data network)
-                    old-net (my-mod.wireless.world-data/get-network-by-node
-                              world-data node-vblock)]
+                  old-net (find-existing-network-by-node world-data node-vblock)]
                 (when old-net
                   (remove-node! old-net node-vblock)))
 
@@ -229,44 +238,46 @@
                   buffer-current @(:buffer network)]
               
               ;; Transfer energy
-              (loop [nodes-remaining nodes-shuffled
-                     transfer-left bandwidth
-                     buffer-val buffer-current]
-                (when (and (seq nodes-remaining) (> transfer-left 0))
-                  (let [node-vb (first nodes-remaining)]
-                    (if (vb/is-chunk-loaded? node-vb world)
-                      (if-let [node (vb/vblock-get node-vb world)]
-                        (let [current (.getEnergy node)
-                              max-energy (.getMaxEnergy node)
-                              target (* max-energy average-percent)
-                              diff (- current target)]
-                          
-                          (if (> diff 0)
-                            ;; Node has excess energy → pull to buffer
-                            (let [to-pull (min diff transfer-left)
-                                  buffer-space (- BUFFER_MAX buffer-val)
-                                  actual-pull (min to-pull buffer-space)]
-                              (.setEnergy node (- current actual-pull))
-                              (recur (rest nodes-remaining)
-                                     (- transfer-left actual-pull)
-                                     (+ buffer-val actual-pull)))
-                            
-                            ;; Node needs energy → push from buffer
-                            (let [to-push (min (- diff) transfer-left buffer-val)]
-                              (.setEnergy node (+ current to-push))
-                              (recur (rest nodes-remaining)
-                                     (- transfer-left to-push)
-                                     (- buffer-val to-push)))))
-                        
-                        ;; Node destroyed, remove
-                        (do (remove-node! network node-vb)
+              (let [final-buffer
+                    (loop [nodes-remaining nodes-shuffled
+                           transfer-left bandwidth
+                           buffer-val buffer-current]
+                      (if (and (seq nodes-remaining) (> transfer-left 0))
+                        (let [node-vb (first nodes-remaining)]
+                          (if (vb/is-chunk-loaded? node-vb world)
+                            (if-let [node (vb/vblock-get node-vb world)]
+                              (let [current (.getEnergy node)
+                                    max-energy (.getMaxEnergy node)
+                                    target (* max-energy average-percent)
+                                    diff (- current target)]
+                                (if (> diff 0)
+                                  ;; Node has excess energy → pull to buffer
+                                  (let [to-pull (min diff transfer-left)
+                                        buffer-space (- BUFFER_MAX buffer-val)
+                                        actual-pull (min to-pull buffer-space)]
+                                    (.setEnergy node (- current actual-pull))
+                                    (recur (rest nodes-remaining)
+                                           (- transfer-left actual-pull)
+                                           (+ buffer-val actual-pull)))
+
+                                  ;; Node needs energy → push from buffer
+                                  (let [to-push (min (- diff) transfer-left buffer-val)]
+                                    (.setEnergy node (+ current to-push))
+                                    (recur (rest nodes-remaining)
+                                           (- transfer-left to-push)
+                                           (- buffer-val to-push)))))
+
+                              ;; Node destroyed, remove
+                              (do (remove-node! network node-vb)
+                                  (recur (rest nodes-remaining) transfer-left buffer-val)))
+
+                            ;; Chunk not loaded, skip
                             (recur (rest nodes-remaining) transfer-left buffer-val)))
-                      
-                      ;; Chunk not loaded, skip
-                      (recur (rest nodes-remaining) transfer-left buffer-val))))
-                
+
+                        buffer-val))]
+
                 ;; Update buffer
-                (reset! (:buffer network) buffer-val)))))))))
+                (reset! (:buffer network) final-buffer)))))))))
 
 ;; ============================================================================
 ;; Tick System

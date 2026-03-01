@@ -104,6 +104,24 @@
     (reset! (get-in tile field-path) value)
     (assoc-in tile field-path value)))
 
+(defn rebuild-item-lookups!
+  "Rebuild lookup atom entries for a loaded item using a config map.
+
+  Config keys:
+  - :lookup-atom (keyword on world-data pointing to an atom map)
+  - :direct-keys (vector of item keys mapped directly)
+  - :collection-keys (vector of item keys whose deref'ed collections are mapped)"
+  [world-data item config]
+  (let [lookup-atom (get world-data (:lookup-atom config))]
+    (when lookup-atom
+      (doseq [k (:direct-keys config)]
+        (when-let [v (get item k)]
+          (swap! lookup-atom assoc v item)))
+      (doseq [k (:collection-keys config)]
+        (when-let [coll (get item k)]
+          (doseq [val @coll]
+            (swap! lookup-atom assoc val item)))))))
+
 ;; ============================================================================
 ;; NBT Field Specification
 ;; ============================================================================
