@@ -49,6 +49,9 @@
      :world world
      :pos pos}))
 
+  (declare recalculate-plate-count!)
+  (declare sync-to-clients! verify-structure! unregister-matrix-tile!)
+
 ;; ============================================================================
 ;; Inventory Management
 ;; ============================================================================
@@ -144,35 +147,40 @@
 ;; Java Accessor Bridge (for XML GUI Integration)
 ;; ============================================================================
 
+(definterface IMatrixJavaProxy
+  (^String getPlacerName [])
+  (^long getMatrixCapacity [])
+  (^long getMatrixBandwidth [])
+  (^double getMatrixRange [])
+  (^long getLoad [])
+  (^Object getPos []))
+
 (deftype MatrixJavaProxy
-  "Wraps TileMatrix to provide Java-compatible method accessors
-   Used by XML GUI framework that expects .getMethod() calls"
   [tile-entity]
   
-  Object
-  (toString [this]
-    (str "MatrixJavaProxy[" (:pos tile-entity) "]"))
+  IMatrixJavaProxy
   
-  ;; Java-compatible accessor methods
   (^String getPlacerName [this]
     (:placer-name tile-entity))
   
   (^long getMatrixCapacity [this]
-    (long (get-matrix-capacity tile-entity)))
+    (long (winterfaces/get-matrix-capacity tile-entity)))
   
   (^long getMatrixBandwidth [this]
-    (long (get-matrix-bandwidth tile-entity)))
+    (long (winterfaces/get-matrix-bandwidth tile-entity)))
   
   (^double getMatrixRange [this]
-    (double (get-matrix-range tile-entity)))
+    (double (winterfaces/get-matrix-range tile-entity)))
   
   (^long getLoad [this]
-    ;; TODO: Query from WirelessNet in WiWorldData
-    ;; For now return 0 (no nodes connected)
     0)
   
   (^Object getPos [this]
-    (:pos tile-entity)))
+    (:pos tile-entity))
+  
+  Object
+  (toString [this]
+    (str "MatrixJavaProxy[" (:pos tile-entity) "]")))
 
 ;; ============================================================================
 ;; IInventory Protocol Implementation
@@ -436,7 +444,7 @@
 ;; ============================================================================
 
 (bdsl/defblock wireless-matrix
-  :material :rock
+  :material :stone
   :hardness 3.0
   :resistance 6.0
   :requires-tool true

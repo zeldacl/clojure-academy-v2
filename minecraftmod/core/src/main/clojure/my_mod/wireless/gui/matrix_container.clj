@@ -45,7 +45,7 @@
   [tile player]
   (->MatrixContainer
     tile
-    (wm/MatrixJavaProxy. tile)  ; Wrap tile in Java accessor proxy
+    (wm/->MatrixJavaProxy tile)  ; Wrap tile in Java accessor proxy
     player
     ;; Initialize synced data
     (atom 0)    ; core-level
@@ -193,7 +193,7 @@
           (reset! (:bandwidth container) (:bandwidth stats))
           (reset! (:range container) (:range stats))
           ;; Query actual network capacity from WirelessNet
-          (sync-helpers/query-matrix-network-capacity! container stats))))))))
+          (sync-helpers/query-matrix-network-capacity! container stats))))))
 
 (defn get-sync-data
   "Get data to sync to client
