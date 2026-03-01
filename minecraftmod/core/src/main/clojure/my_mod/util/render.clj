@@ -1,7 +1,23 @@
 (ns my-mod.util.render
   "Rendering utilities - OpenGL and texture helpers"
-  (:import [org.lwjgl.opengl GL11]
-           [cn.lambdalib2.util RenderUtils]))
+  (:require [my-mod.util.log :as log]))
+
+(defonce ^:private gl11-class (delay (Class/forName "org.lwjgl.opengl.GL11")))
+(defonce ^:private texture-binder* (atom nil))
+(defonce ^:private texture-binder-warned* (atom false))
+
+(defn register-texture-binder!
+  "Register platform/client texture bind function.
+
+  Signature: (fn [texture] ... )"
+  [binder-fn]
+  (reset! texture-binder* binder-fn))
+
+(defn- gl-static [method-name arg-types args]
+  (clojure.lang.Reflector/invokeStaticMethod
+   @gl11-class
+   method-name
+   (to-array args)))
 
 ;; ============================================================================
 ;; Time Helper
@@ -23,14 +39,14 @@
   
   Returns: nil"
   []
-  (GL11/glPushMatrix))
+  (gl-static "glPushMatrix" [] []))
 
 (defn gl-pop-matrix
   "Pop matrix from matrix stack
   
   Returns: nil"
   []
-  (GL11/glPopMatrix))
+  (gl-static "glPopMatrix" [] []))
 
 ;; ============================================================================
 ;; Transformations
@@ -46,7 +62,8 @@
   
   Returns: nil"
   [x y z]
-  (GL11/glTranslated (double x) (double y) (double z)))
+  (gl-static "glTranslated" [Double/TYPE Double/TYPE Double/TYPE]
+             [(double x) (double y) (double z)]))
 
 (defn gl-rotate
   "Rotate the current matrix around an axis
@@ -59,7 +76,8 @@
   
   Returns: nil"
   [angle x y z]
-  (GL11/glRotated (double angle) (double x) (double y) (double z)))
+  (gl-static "glRotated" [Double/TYPE Double/TYPE Double/TYPE Double/TYPE]
+             [(double angle) (double x) (double y) (double z)]))
 
 (defn gl-scale
   "Scale the current matrix
@@ -71,7 +89,37 @@
   
   Returns: nil"
   [x y z]
-  (GL11/glScaled (double x) (double y) (double z)))
+  (gl-static "glScaled" [Double/TYPE Double/TYPE Double/TYPE]
+             [(double x) (double y) (double z)]))
+
+(defn gl-begin-triangles
+  "Begin GL triangle drawing." 
+  []
+  (let [mode (int 4)]
+    (gl-static "glBegin" [Integer/TYPE] [mode])))
+
+(defn gl-end
+  "End current GL drawing block." 
+  []
+  (gl-static "glEnd" [] []))
+
+(defn gl-normal
+  "Submit vertex normal." 
+  [x y z]
+  (gl-static "glNormal3f" [Float/TYPE Float/TYPE Float/TYPE]
+             [(float x) (float y) (float z)]))
+
+(defn gl-tex-coord
+  "Submit UV coordinate." 
+  [u v]
+  (gl-static "glTexCoord2f" [Float/TYPE Float/TYPE]
+             [(float u) (float v)]))
+
+(defn gl-vertex
+  "Submit vertex position." 
+  [x y z]
+  (gl-static "glVertex3f" [Float/TYPE Float/TYPE Float/TYPE]
+             [(float x) (float y) (float z)]))
 
 ;; ============================================================================
 ;; Texture Binding
@@ -85,7 +133,10 @@
   
   Returns: nil"
   [texture]
-  (RenderUtils/loadTexture texture))
+  (if-let [binder @texture-binder*]
+    (binder texture)
+    (when (compare-and-set! texture-binder-warned* false true)
+      (log/warn "Texture binder not registered; skipping bind" texture))))
 
 ;; ============================================================================
 ;; Convenience Macros

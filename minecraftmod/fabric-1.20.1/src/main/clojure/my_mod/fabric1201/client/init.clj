@@ -1,6 +1,7 @@
 (ns my-mod.fabric1201.client.init
   "Fabric 1.20.1 client-side initialization and registration"
   (:require [my-mod.util.log :as log]
+            [my-mod.util.render :as render]
             [my-mod.client.render.matrix-renderer :as matrix-renderer])
   (:import [net.fabricmc.fabric.api.client.rendering.v1 BlockEntityRendererRegistry]
            [net.minecraft.client.render.block.entity BlockEntityRenderer BlockEntityRendererFactory]))
@@ -8,6 +9,16 @@
 ;; ============================================================================
 ;; Client Registration
 ;; ============================================================================
+
+(defn- bind-texture-fabric!
+  [texture]
+  (let [mc-class (Class/forName "net.minecraft.client.MinecraftClient")
+        minecraft (clojure.lang.Reflector/invokeStaticMethod mc-class "getInstance" (to-array []))
+        texture-manager (clojure.lang.Reflector/invokeInstanceMethod minecraft "getTextureManager" (to-array []))]
+    (try
+      (clojure.lang.Reflector/invokeInstanceMethod texture-manager "bindTexture" (to-array [texture]))
+      (catch Exception _
+        (clojure.lang.Reflector/invokeInstanceMethod texture-manager "bind" (to-array [texture]))))))
 
 (defn register-renderers
   "Register platform-agnostic renderers with the universal BlockEntityRenderer dispatcher
@@ -17,6 +28,8 @@
   []
   (log/info "Registering block renderers for Fabric 1.20.1...")
   (try
+    (render/register-texture-binder! bind-texture-fabric!)
+
     ;; Register Matrix block renderer
     ;; The matrix-renderer/register! function:
     ;; - Registers TileMatrix with the core renderer dispatcher

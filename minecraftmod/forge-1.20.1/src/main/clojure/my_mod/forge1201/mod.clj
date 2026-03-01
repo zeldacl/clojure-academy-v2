@@ -1,7 +1,6 @@
 (ns my-mod.forge1201.mod
   "Forge 1.20.1 main mod class - generated with gen-class"
   (:require [my-mod.forge1201.init :as init]
-            [my-mod.forge1201.client.init :as client-init]
             [my-mod.forge1201.datagen.setup :as datagen]
             [my-mod.forge1201.registry :as registry]
             [my-mod.forge1201.events :as events]
@@ -114,7 +113,9 @@
       (reify java.util.function.Consumer
         (accept [_ event]
           (gui-init/init-client!)
-          (client-init/init-client)))))
+          (if-let [init-client! (requiring-resolve 'my-mod.forge1201.client.init/init-client)]
+            (init-client!)
+            (log/warn "Forge client init namespace unavailable on current side"))))))
   
   ;; Register to gameplay event bus
   (.register (MinecraftForge/EVENT_BUS) 

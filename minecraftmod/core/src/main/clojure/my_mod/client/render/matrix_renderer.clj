@@ -8,6 +8,7 @@
   Platform-agnostic rendering logic. Platform-specific TESR classes
   should be defined in forge/fabric modules using gen-class."
   (:require [my-mod.client.resources :as res]
+            [my-mod.client.obj :as obj]
             [my-mod.util.render :as render]
             [my-mod.client.render.tesr-api :as tesr-api]
             [my-mod.client.render.multiblock-helper :as mb-helper]
@@ -37,8 +38,8 @@
   Args:
   - tile: TileMatrix instance"
   [tile]
-  (.renderPart @model "Main")
-  (.renderPart @model "Core"))
+  (obj/render-part! @model "Main")
+  (obj/render-part! @model "Core"))
 
 (defn render-shields
   "Render animated shield plates
@@ -83,7 +84,7 @@
         (render/gl-rotate (+ phase (* dtheta i)) 0.0 1.0 0.0)
         
         ;; Render shield part
-        (.renderPart @model "Shield")))))
+        (obj/render-part! @model "Shield")))))
 
 (defn render-at-origin
   "Main render function - renders complete matrix at multiblock origin

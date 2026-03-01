@@ -1,7 +1,7 @@
 (ns my-mod.client.resources
   "Client-side resource loading utilities for models and textures"
-  (:require [my-mod.config.modid :as modid])
-  (:import [cn.lambdalib2.render.obj ObjLegacyRender]))
+  (:require [my-mod.config.modid :as modid]
+            [my-mod.client.obj :as obj]))
 
 ;; ============================================================================
 ;; ResourceLocation Helpers
@@ -27,9 +27,9 @@
   Args:
   - model-name: String name without extension (e.g., 'matrix')
   
-  Returns: ObjLegacyRender instance"
+  Returns: parsed OBJ model map"
   [model-name]
-  (ObjLegacyRender. (resource-location (str "models/" model-name ".obj"))))
+  (obj/load-obj-model (str "models/" model-name ".obj")))
 
 ;; ============================================================================
 ;; Texture Loading

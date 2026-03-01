@@ -1,6 +1,7 @@
 (ns my-mod.forge1201.client.init
   "Forge 1.20.1 client-side initialization and registration"
   (:require [my-mod.util.log :as log]
+            [my-mod.util.render :as render]
             [my-mod.client.render.matrix-renderer :as matrix-renderer])
   (:import [net.minecraftforge.api.distmarker Dist]
            [net.minecraftforge.fml.common.eventhandler SubscribeEvent]
@@ -13,6 +14,16 @@
 ;; Client Registration
 ;; ============================================================================
 
+(defn- bind-texture-forge!
+  [texture]
+  (let [mc-class (Class/forName "net.minecraft.client.Minecraft")
+        minecraft (clojure.lang.Reflector/invokeStaticMethod mc-class "getInstance" (to-array []))
+        texture-manager (clojure.lang.Reflector/invokeInstanceMethod minecraft "getTextureManager" (to-array []))]
+    (try
+      (clojure.lang.Reflector/invokeInstanceMethod texture-manager "bindForSetup" (to-array [texture]))
+      (catch Exception _
+        (clojure.lang.Reflector/invokeInstanceMethod texture-manager "bind" (to-array [texture]))))))
+
 (defn register-renderers
   "Register platform-agnostic renderers with the universal BlockEntityRenderer dispatcher
   
@@ -21,6 +32,8 @@
   []
   (log/info "Registering block renderers for Forge 1.20.1...")
   (try
+    (render/register-texture-binder! bind-texture-forge!)
+
     ;; Register Matrix block renderer
     ;; The matrix-renderer/register! function:
     ;; - Registers TileMatrix with the core renderer dispatcher

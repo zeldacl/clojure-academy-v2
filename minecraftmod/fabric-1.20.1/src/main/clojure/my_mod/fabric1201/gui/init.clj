@@ -2,7 +2,6 @@
   "Fabric 1.20.1 GUI System Initialization"
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.fabric1201.gui.registry-impl :as registry-impl]
-            [my-mod.fabric1201.gui.screen-impl :as screen-impl]
             [my-mod.fabric1201.gui.network :as network]
             [my-mod.util.log :as log]))
 
@@ -50,7 +49,9 @@
   (log/info "=== Initializing Fabric 1.20.1 GUI System (Client) ===")
   
   ;; Register screen factories
-  (screen-impl/init-client!)
+  (if-let [init-screen! (requiring-resolve 'my-mod.fabric1201.gui.screen-impl/init-client!)]
+    (init-screen!)
+    (log/warn "Fabric GUI screen impl not available on current side"))
   
   ;; Register client-side network packets
   (network/init-client!)
