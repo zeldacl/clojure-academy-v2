@@ -8,6 +8,16 @@
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.util.log :as log]))
 
+(defn- resolve-var-value
+  "Resolve symbol to var value, auto-loading namespaces when needed."
+  [sym]
+  (if-not (symbol? sym)
+    sym
+    (if-let [v (or (resolve sym) (requiring-resolve sym))]
+      (var-get v)
+      (throw (ex-info (str "Unable to resolve symbol: " sym)
+                      {:symbol sym :ns (str *ns*)})))))
+
 ;; =========================================================================
 ;; NBT Handlers Generator Macro
 ;; =========================================================================
@@ -21,7 +31,7 @@
   
   Field spec: {:name :field :type :type-key :nbt-key \"key\" :atom? false :factory-arg false}"
   [schema-var]
-  (let [schema (if (symbol? schema-var) (var-get (resolve schema-var)) schema-var)
+  (let [schema (resolve-var-value schema-var)
         fields (:nbt-fields schema)
         factory-fn (get-in schema [:factory :fn])
         factory-args (get-in schema [:factory :args])
@@ -51,7 +61,7 @@
                                       (when (or (not (~'vb/is-chunk-loaded? ~'vb-item ~'world))
                                                 (~'vb/vblock-get ~'vb-item ~'world))
                                         (nbt/nbt-append! ~'list-obj (~'vb/vblock-to-nbt ~'vb-item))))
-                                    (nbt/nbt-set-tag! ~'nbt ~nbt-key ~'list-obj))))))
+                                    (nbt/nbt-set-tag! ~'nbt ~nbt-key ~'list-obj)))))
                            fields)
         
         ;; from-nbt read forms
@@ -104,26 +114,7 @@
            ~'item)))))
 
 (defmacro defworld-collection-ops
-  "Define create/destroy functions for a world-data collection using a spec.
-  
-  Required keys in spec:
-    :create-args    - vector of symbols for create fn args (excluding world-data)
-    :create-expr    - form that creates the item
-    :list-atom      - keyword for the collection atom in world-data
-    :lookup-atom    - keyword for the lookup atom in world-data
-  Optional keys:
-    :direct-keys     - vector of keywords for direct lookup keys on the item
-    :collection-keys - vector of keywords for collection fields on the item
-    :key-sources     - vector of maps {:values-expr <form> :when-expr <form>}
-    :unique-keys    - vector of maps {:label "..." :value-expr <form> :value-fn <fn>}
-    :return-on-unique-fail - return value when uniqueness check fails
-    :create-return  - value to return on successful create (default: item)
-    :log-create     - format string for create log
-    :log-create-key-expr - form for create log key
-    :log-destroy    - format string for destroy log
-    :log-destroy-key-expr - form for destroy log key
-    :log-key-fn     - function to format keys in logs
-    :log-create-fail - format string for uniqueness failure log"
+  "Define create/destroy functions for a world-data collection from a spec map."
   [base-name spec]
   (let [create-name (symbol (str "create-" (name base-name) "!"))
         destroy-name (symbol (str "destroy-" (name base-name) "!"))
@@ -266,7 +257,7 @@
   
   Takes a schema var and generates collection operations and validator."
   [schema-var]
-  (let [schema (if (symbol? schema-var) (var-get (resolve schema-var)) schema-var)
+  (let [schema (resolve-var-value schema-var)
         impl-base (symbol (str (name (:collection-name schema)) "-impl"))
         create-args (:args (:create schema))
         create-expr (:expr (:create schema))
@@ -319,10 +310,10 @@
   
   Takes a schema def (with :collections vector) and a create-fn."
   [schema-def create-fn-sym]
-  (let [schema (if (symbol? schema-def) (var-get (resolve schema-def)) schema-def)
+  (let [schema (resolve-var-value schema-def)
         schema-vars (:collections schema)
         schemas (mapv (fn [var-sym]
-                        (if (symbol? var-sym) (var-get (resolve var-sym)) var-sym))
+                        (resolve-var-value var-sym))
                       schema-vars)
         nbt-after-read (:nbt-after-read schema)
         tick-name (or (:tick-name schema) 'tick-world-data-impl!)
@@ -368,7 +359,7 @@
   Usage:
     (defworld-schema world-data-schema create-world-data)"
   [schema create-fn]
-  (let [schema (if (symbol? schema) (var-get (resolve schema)) schema)
+  (let [schema (resolve-var-value schema)
         collections (:collections schema)
         nbt-after-read (:nbt-after-read schema)
         tick-name (or (:tick-name schema) 'tick-world-data-impl!)
