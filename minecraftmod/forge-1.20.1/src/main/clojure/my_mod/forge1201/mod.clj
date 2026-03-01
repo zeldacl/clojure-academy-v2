@@ -1,7 +1,6 @@
 (ns my-mod.forge1201.mod
   "Forge 1.20.1 main mod class - generated with gen-class"
   (:require [my-mod.forge1201.init :as init]
-            [my-mod.forge1201.datagen.setup :as datagen]
             [my-mod.forge1201.registry :as registry]
             [my-mod.forge1201.events :as events]
             [my-mod.forge1201.gui.impl :as gui]

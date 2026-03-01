@@ -1,6 +1,6 @@
 (ns my-mod.forge1201.datagen.model-provider
   (:require [my-mod.config.modid :as modid]
-            [clojure.data.json :as json])
+            [my-mod.forge1201.datagen.json-util :as json])
   (:import [net.minecraftforge.common.data ExistingFileHelper]
            [net.minecraft.data DataGenerator DirectoryCache IDataProvider])
   (:gen-class
@@ -45,5 +45,5 @@
         models-dir (.. output-folder (resolve "assets") (resolve modid/MOD-ID) (resolve "models") (resolve "block"))
         file-path (.resolve models-dir (str block-name ".json"))]
     (java.nio.file.Files/createDirectories models-dir)
-    (spit (.toFile file-path) (json/write-str model-data))
+    (spit (.toFile file-path) (json/write-json model-data))
     (println (str "Generated model: " (.relativize output-folder file-path)))))

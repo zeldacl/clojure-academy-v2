@@ -1,6 +1,6 @@
 (ns my-mod.forge1201.datagen.blockstate-provider
   (:require [my-mod.config.modid :as modid]
-            [clojure.data.json :as json])
+            [my-mod.forge1201.datagen.json-util :as json])
   (:import [net.minecraftforge.common.data ExistingFileHelper]
            [net.minecraft.data DataGenerator DirectoryCache IDataProvider])
   (:gen-class
@@ -39,7 +39,7 @@
         blockstates-dir (.. output-folder (resolve "assets") (resolve modid/MOD-ID) (resolve "blockstates"))
         file-path (.resolve blockstates-dir (str block-name ".json"))]
     (java.nio.file.Files/createDirectories blockstates-dir)
-    (spit (.toFile file-path) (json/write-str blockstate-data))
+    (spit (.toFile file-path) (json/write-json blockstate-data))
     (println (str "Generated blockstate: " (.relativize output-folder file-path)))))
 
 (defn get-node-blockstate-config [node-type]
@@ -63,5 +63,5 @@
         blockstates-dir (.. output-folder (resolve "assets") (resolve modid/MOD-ID) (resolve "blockstates"))
         file-path (.resolve blockstates-dir (str block-name ".json"))]
     (java.nio.file.Files/createDirectories blockstates-dir)
-    (spit (.toFile file-path) (json/write-str blockstate-data))
+    (spit (.toFile file-path) (json/write-json blockstate-data))
     (println (str "Generated node blockstate: " (.relativize output-folder file-path)))))
