@@ -23,6 +23,8 @@
 (defn- make-component [kind initial-state]
   {:kind kind :state (atom initial-state)})
 
+(declare create-native-component)
+
 (defn add-component!
   "Add a component to a widget"
   [widget component]

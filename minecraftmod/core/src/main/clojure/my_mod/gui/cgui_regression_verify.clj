@@ -1,7 +1,7 @@
 (ns my-mod.gui.cgui-regression-verify
   "Quick regression verification script for cgui_document XML loading.
    Runs independently to verify all migrated XML files can be loaded."
-  (:require [clojure.data.xml :as xml]
+  (:require [clojure.xml :as xml]
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
@@ -32,8 +32,7 @@
   "Try to parse the XML file to verify it's well-formed."
   (try
     (let [resource (io/resource file-path)
-          content (slurp resource)
-          parsed (xml/parse-str content)]
+          parsed (xml/parse (io/input-stream resource))]
       (println (format "  ✓ %s parses successfully" file-path))
       true)
     (catch Exception e

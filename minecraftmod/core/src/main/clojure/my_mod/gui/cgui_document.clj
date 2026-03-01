@@ -1,6 +1,6 @@
 (ns my-mod.gui.cgui-document
   "Pure Clojure XML document loader for CGUI-like layouts."
-  (:require [clojure.data.xml :as xml]
+  (:require [clojure.xml :as xml]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [my-mod.gui.cgui :as cgui]
@@ -149,7 +149,7 @@
                (str "assets/" (str/replace resource-loc #":" "/") ".xml")
                resource-loc)
         xml-resource (io/resource path)
-        parsed (xml/parse-str (slurp xml-resource))
+      parsed (xml/parse (io/input-stream xml-resource))
         root-widget-node (first-child parsed :Widget)]
     (build-widget root-widget-node)))
 

@@ -4,7 +4,6 @@
   Provides platform-agnostic interface for syncing matrix tile state to clients."
   (:require [my-mod.util.log :as log]
             [my-mod.wireless.gui.gui-metadata :as metadata]
-            [my-mod.wireless.gui.registry :as registry]
             [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
 
 ;; ============================================================================

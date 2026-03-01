@@ -7,7 +7,6 @@
             [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.inventory.core :as inv]
             [my-mod.nbt.dsl :as nbt]
-            [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.wireless.world-data :as wd]
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.util.log :as log]))
@@ -588,8 +587,11 @@
           (log/info "  Name:" (winterfaces/get-node-name tile))
           ;; Open GUI
           (try
-            (gui-registry/open-node-gui player world pos)
-            (log/info "Opened Node GUI")
+            (if-let [open-node-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-node-gui)]
+              (do
+                (open-node-gui player world pos)
+                (log/info "Opened Node GUI"))
+              (log/error "Node GUI registry function not found"))
             (catch Exception e
               (log/error "Failed to open Node GUI:" (.getMessage e)))))
         (log/info "No tile entity found!")))))

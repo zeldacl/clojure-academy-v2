@@ -5,7 +5,6 @@
   (:require [my-mod.util.log :as log]
             [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.wireless.gui.gui-metadata :as metadata]
-            [my-mod.wireless.gui.registry :as registry]
             [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
 
 ;; ============================================================================

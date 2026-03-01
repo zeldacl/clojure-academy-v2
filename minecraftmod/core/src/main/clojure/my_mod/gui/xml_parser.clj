@@ -11,7 +11,7 @@
   
   Conversion Flow:
   XML File → XML AST → GuiSpec Map → DSL Registration"
-  (:require [clojure.data.xml :as xml]
+  (:require [clojure.xml :as xml]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [my-mod.util.log :as log]))
@@ -239,8 +239,7 @@
     (let [xml-resource (io/resource xml-path)
           _ (when-not xml-resource
               (throw (ex-info (str "XML file not found: " xml-path) {:path xml-path})))
-          xml-str (slurp xml-resource)
-          parsed (xml/parse-str xml-str)
+        parsed (xml/parse (io/input-stream xml-resource))
           root-widget (get-element parsed :Widget)]
       (when-not root-widget
         (throw (ex-info "No Widget element found in XML" {:path xml-path})))

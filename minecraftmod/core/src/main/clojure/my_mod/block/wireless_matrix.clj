@@ -8,7 +8,6 @@
             [my-mod.nbt.dsl :as nbt]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
-            [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.wireless.gui.matrix-sync :as sync]
             [my-mod.util.log :as log]))
 
@@ -395,8 +394,11 @@
             (log/info "  Range:" (winterfaces/get-matrix-range tile))
             ;; Open GUI
             (try
-              (gui-registry/open-matrix-gui player world pos)
-              (log/info "Opened Matrix GUI")
+              (if-let [open-matrix-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-matrix-gui)]
+                (do
+                  (open-matrix-gui player world pos)
+                  (log/info "Opened Matrix GUI"))
+                (log/error "Failed to open Matrix GUI: open-matrix-gui not resolved"))
               (catch Exception e
                 (log/error "Failed to open Matrix GUI:" (.getMessage e)))))
           (log/info "Sneaking - no action"))
