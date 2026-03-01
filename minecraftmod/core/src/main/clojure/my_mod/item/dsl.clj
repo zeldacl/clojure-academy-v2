@@ -111,11 +111,21 @@
     :durability 500
     :on-use (fn [data] (println \"Used!\")))"
   [item-name & options]
-  (let [item-id (name item-name)
-        options-map (apply hash-map options)]
-    `(def ~item-name
-       (register-item!
-         (create-item-spec ~item-id ~options-map)))))
+  (if (map? item-name)
+    (let [options-map item-name
+          item-id (:id options-map)]
+      (when-not (string? item-id)
+        (throw (ex-info "Map-form defitem requires string :id"
+                        {:form options-map})))
+      `(register-item!
+         (create-item-spec ~item-id ~(dissoc options-map :id))))
+    (let [item-id (name item-name)
+          options-map (if (and (= 1 (count options)) (map? (first options)))
+                        (first options)
+                        (apply hash-map options))]
+      `(def ~item-name
+         (register-item!
+           (create-item-spec ~item-id ~options-map))))))
 
 ;; Helper: food properties
 (defn food-properties

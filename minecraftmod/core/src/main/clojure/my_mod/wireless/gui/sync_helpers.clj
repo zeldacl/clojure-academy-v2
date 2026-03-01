@@ -4,8 +4,19 @@
   Provides common functions for broadcasting state and applying sync payloads
   to reduce code duplication between node and matrix sync implementations."
   (:require [my-mod.util.log :as log]
-            [my-mod.wireless.gui.registry :as registry]
+            [my-mod.wireless.virtual-blocks :as vb]
+            [my-mod.wireless.world-data :as wd]
+            [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.platform.position :as pos]))
+
+(defn- get-active-client-container
+  "Get active client container from gui.registry without creating compile-time cycle."
+  []
+  (try
+    (when-let [container-var (requiring-resolve 'my-mod.wireless.gui.registry/client-container)]
+      @container-var)
+    (catch Exception _
+      nil)))
 
 ;; ============================================================================
 ;; Universal Broadcast
@@ -130,7 +141,7 @@
   Returns: nil"
   [payload field-mappings log-prefix]
   (try
-    (when-let [container @registry/client-container]
+    (when-let [container (get-active-client-container)]
       (when (and (:tile-entity container)
                  (= (:pos-x payload)
                     (try (.getX (.getPos (:tile-entity container)))

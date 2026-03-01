@@ -1,6 +1,6 @@
 (ns my-mod.wireless.helper
   "Wireless system helper functions
-  
+
   Provides utility functions for querying the wireless system:
   - Network lookups
   - Node connection lookups
@@ -8,6 +8,8 @@
   - Link status checks"
   (:require [my-mod.wireless.world-data :as wd]
             [my-mod.wireless.virtual-blocks :as vb]
+            [my-mod.wireless.network :as network]
+            [my-mod.wireless.node-connection :as node-conn]
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
@@ -42,13 +44,13 @@
 
 (defn get-nets-in-range
   "Get wireless networks within range of coordinates
-  
+
   Parameters:
   - world: World
   - x, y, z: coordinates
   - range: search radius
-  - max: maximum results to return
-  
+  - max-results: maximum results to return
+
   Returns: collection of WirelessNet"
   [world x y z range max-results]
   (let [world-data (wd/get-world-data world)]
@@ -98,118 +100,102 @@
 
 (defn get-nodes-in-range
   "Get all linkable nodes within range of a position
-  
+
   Searches for IWirelessNode TileEntities that:
   - Are within their range of the position
   - Have available capacity (load < capacity)
-  
+
   Parameters:
   - world: World
   - pos: BlockPos
-  
+
   Returns: list of IWirelessNode TileEntities"
   [world pos]
-  (let [search-range 20.0 ; Fixed search range
+  (let [search-range 20.0
         max-results 100
         x (.getX pos)
         y (.getY pos)
         z (.getZ pos)
         world-data (wd/get-world-data world)
-        
-        ;; Get all connections (nodes with connections are registered)
         all-conns @(:connections world-data)
-        
-        ;; Filter by range and capacity
         matching-nodes
         (reduce
           (fn [acc conn]
             (let [node-vb (:node conn)
-                  ;; Check if in search range
                   dist-sq (vb/dist-sq-pos node-vb x y z)]
               (if (<= dist-sq (* search-range search-range))
-                ;; Check if node can reach the position
                 (if-let [node (vb/vblock-get node-vb world)]
                   (let [node-range (.getRange node)
                         node-dist-sq (vb/dist-sq-pos node-vb x y z)]
                     (if (and (<= node-dist-sq (* node-range node-range))
-                             (< (my-mod.wireless.node-connection/get-load conn)
-          (defn- tile-world [tile]
-            (or (try (.getWorld tile) (catch Exception _ nil))
-              (:world tile)))
-
-          (defn- tile-pos [tile]
-            (or (try (.getPos tile) (catch Exception _ nil))
-              (:pos tile)))
-                                (my-mod.wireless.node-connection/get-capacity conn)))
+                             (< (node-conn/get-load conn)
+                                (node-conn/get-capacity conn)))
                       (conj acc node)
                       acc))
                   acc)
-            (let [world (tile-world matrix-tile)
+                acc)))
           []
           all-conns)]
-    
     (take max-results matching-nodes)))
 
 ;; ============================================================================
 ;; Network Operations (Event-based)
-            (let [world (tile-world node-tile)
+;; ============================================================================
 
 (defn create-network!
   "Create a new wireless network
-  
+
   Parameters:
   - matrix-tile: IWirelessMatrix TileEntity
   - ssid: network name (String)
-            (let [world (tile-world node-tile)
-  
+
   Returns: true if successful"
   [matrix-tile ssid password]
   (let [world (.getWorld matrix-tile)
         world-data (wd/get-world-data world)
         matrix-vb (vb/create-vmatrix matrix-tile)]
-    (wd/create-network! world-data matrix-vb ssid password)))
-            (let [world (tile-world gen-tile)
+    (wd/create-network-impl! world-data matrix-vb ssid password)))
+
 (defn destroy-network!
   "Destroy a wireless network"
   [matrix-tile]
-  (when-let [network (get-wireless-net-by-matrix matrix-tile)]
+  (when-let [network-item (get-wireless-net-by-matrix matrix-tile)]
     (let [world (.getWorld matrix-tile)
           world-data (wd/get-world-data world)]
-      (wd/destroy-network! world-data network))))
-            (let [world (tile-world rec-tile)
+      (wd/destroy-network-impl! world-data network-item))))
+
 (defn link-node-to-network!
   "Link a node to a wireless network
-  
+
   Parameters:
   - node-tile: IWirelessNode TileEntity
   - matrix-tile: IWirelessMatrix TileEntity
   - password: network password
-  
+
   Returns: true if successful"
   [node-tile matrix-tile password]
-  (when-let [network (get-wireless-net-by-matrix matrix-tile)]
+  (when-let [network-item (get-wireless-net-by-matrix matrix-tile)]
     (let [node-vb (vb/create-vnode node-tile)]
-      (my-mod.wireless.network/add-node! network node-vb password))))
+      (network/add-node! network-item node-vb password))))
 
 (defn unlink-node-from-network!
   "Unlink a node from its network"
   [node-tile]
-  (when-let [network (get-wireless-net-by-node node-tile)]
+  (when-let [network-item (get-wireless-net-by-node node-tile)]
     (let [node-vb (vb/create-vnode node-tile)]
-      (my-mod.wireless.network/remove-node! network node-vb))))
+      (network/remove-node! network-item node-vb))))
 
 (defn link-generator-to-node!
   "Link a generator to a node
-  
+
   Parameters:
   - gen-tile: IWirelessGenerator TileEntity
   - node-tile: IWirelessNode TileEntity
   - password: node password
   - need-auth: whether authentication is required
-  
+
   Returns: true if successful"
   [gen-tile node-tile password need-auth]
-  ;; Check password if needed
   (when (or (not need-auth)
             (= password (.getPassword node-tile)))
     (let [world (.getWorld node-tile)
@@ -217,42 +203,41 @@
           node-vb (vb/create-vnode-conn node-tile)
           conn (wd/ensure-node-connection! world-data node-vb)
           gen-vb (vb/create-vgenerator gen-tile)]
-      (my-mod.wireless.node-connection/add-generator! conn gen-vb))))
+      (node-conn/add-generator! conn gen-vb))))
 
 (defn unlink-generator-from-node!
   "Unlink a generator from its node"
   [gen-tile]
   (when-let [conn (get-node-conn-by-generator gen-tile)]
     (let [gen-vb (vb/create-vgenerator gen-tile)]
-      (my-mod.wireless.node-connection/remove-generator! conn gen-vb))))
+      (node-conn/remove-generator! conn gen-vb))))
 
 (defn link-receiver-to-node!
   "Link a receiver to a node
-  
+
   Parameters:
   - rec-tile: IWirelessReceiver TileEntity
   - node-tile: IWirelessNode TileEntity
   - password: node password
   - need-auth: whether authentication is required
-  
+
   Returns: true if successful"
   [rec-tile node-tile password need-auth]
-  ;; Check password if needed
-            (let [world (tile-world matrix-tile)
+  (when (or (not need-auth)
             (= password (.getPassword node-tile)))
     (let [world (.getWorld node-tile)
           world-data (wd/get-world-data world)
           node-vb (vb/create-vnode-conn node-tile)
           conn (wd/ensure-node-connection! world-data node-vb)
           rec-vb (vb/create-vreceiver rec-tile)]
-      (my-mod.wireless.node-connection/add-receiver! conn rec-vb))))
+      (node-conn/add-receiver! conn rec-vb))))
 
-            (let [world (tile-world matrix-tile)
+(defn unlink-receiver-from-node!
   "Unlink a receiver from its node"
   [rec-tile]
   (when-let [conn (get-node-conn-by-receiver rec-tile)]
     (let [rec-vb (vb/create-vreceiver rec-tile)]
-      (my-mod.wireless.node-connection/remove-receiver! conn rec-vb))))
+      (node-conn/remove-receiver! conn rec-vb))))
 
 ;; ============================================================================
 ;; System-wide Operations
