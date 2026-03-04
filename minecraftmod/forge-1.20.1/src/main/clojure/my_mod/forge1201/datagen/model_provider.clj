@@ -8,6 +8,7 @@
    优势：定义层复用，易于支持新的Forge版本"
   (:require [my-mod.config.modid :as modid]
             [my-mod.block.blockstate-definition :as blockstate-def]
+            [my-mod.registry.metadata :as registry-metadata]
             [my-mod.forge1201.datagen.json-util :as json])
   (:import [net.minecraftforge.common.data ExistingFileHelper]
            [net.minecraft.data DataGenerator CachedOutput DataProvider]
@@ -27,6 +28,55 @@
 ;; Model对象创建（从core定义提取）
 ;; ============================================================================
 
+(defn- model-id->model-name
+  [model-id]
+  (clojure.string/replace model-id #".*:block/" ""))
+
+(defn- infer-registry-name-from-model
+  "将模型名映射回对应的block registry name。
+   例如：
+   - node_basic_energy_3 -> node_basic
+   - matrix -> matrix"
+  [model-name]
+  (if-let [[_ node-registry] (re-matches #"(node_(?:basic|standard|advanced))_(?:base|energy_\d+|connected)" model-name)]
+    node-registry
+    model-name))
+
+(defn- registry-name->block-spec
+  "根据registry name反查DSL block spec。"
+  [registry-name]
+  (some (fn [block-id]
+          (when (= registry-name (registry-metadata/get-block-registry-name block-id))
+            (registry-metadata/get-block-spec block-id)))
+        (registry-metadata/get-all-block-ids)))
+
+(defn- texture-from-spec
+  "从DSL spec推导模型纹理：
+   优先级：
+   1) :model-textures {model-name texture} (官方字段)
+   2) :textures {:all texture} (官方字段)
+   3) :properties :model-textures {model-name texture} (兼容)
+   4) :properties :textures {:all texture} (兼容)
+   5) :properties :texture texture (兼容)
+   4) 默认 my_mod:blocks/<model-name>"
+  [block-spec model-name]
+  (or (get-in block-spec [:model-textures model-name])
+    (get-in block-spec [:model-textures (keyword model-name)])
+    (get-in block-spec [:textures :all])
+    (get-in block-spec [:properties :model-textures model-name])
+    (get-in block-spec [:properties :model-textures (keyword model-name)])
+      (get-in block-spec [:properties :textures :all])
+      (get-in block-spec [:properties :texture])
+      (str modid/MOD-ID ":blocks/" model-name)))
+
+(defn- parent-from-spec
+  "从DSL spec推导model parent，默认使用minecraft:block/cube_all。
+   优先使用官方字段 :model-parent，兼容旧字段 :properties :model-parent。"
+  [block-spec]
+  (or (:model-parent block-spec)
+    (get-in block-spec [:properties :model-parent])
+      "minecraft:block/cube_all"))
+
 (defn- extract-unique-models
   "从blockstate定义中提取所有唯一的model名称"
   [all-definitions]
@@ -34,17 +84,16 @@
                  (mapcat :models (:parts definition)))
                all-definitions)))
 
-(defn- model-name->json
-  "根据model名称创建model JSON结构
-   
-   简化版：所有model都使用标准的cube_all父类和简单纹理映射
-   在实际项目中，可能需要更复杂的处理（如cube vs cube_all等）"
-  [model-name]
-  (let [;; 从model名称解析：my_mod:block/node_basic_energy_0 -> node_basic_energy_0
-        texture-name (-> model-name
-                        (clojure.string/replace #".*:block/" ""))]
-    {:parent "minecraft:block/cube_all"
-     :textures {:all (str modid/MOD-ID ":blocks/" texture-name)}}))
+(defn- model-id->json
+  "根据model-id创建model JSON结构（优先读取DSL/spec，回退自动推导）。"
+  [model-id]
+  (let [model-name (model-id->model-name model-id)
+        registry-name (infer-registry-name-from-model model-name)
+        block-spec (registry-name->block-spec registry-name)
+        texture-all (texture-from-spec block-spec model-name)
+        parent (parent-from-spec block-spec)]
+    {:parent parent
+     :textures {:all texture-all}}))
 
 ;; ============================================================================
 ;; 生成器实现
@@ -79,9 +128,8 @@
   [^DataGenerator generator model-id]
   (try
     (let [;; 从model-id解析文件名：去掉 my_mod:block/ 前缀
-          model-name (-> model-id
-                        (clojure.string/replace #".*:block/" ""))
-          model-data (model-name->json model-id)
+          model-name (model-id->model-name model-id)
+          model-data (model-id->json model-id)
           output-folder (.getOutputFolder generator)
           models-dir (.. output-folder (resolve "assets") (resolve modid/MOD-ID) (resolve "models") (resolve "block"))
           file-path (.resolve models-dir (str model-name ".json"))]

@@ -4,7 +4,10 @@
    定义所有block的blockstate结构、属性和model对应关系。
    这些定义在core中，可被所有平台（forge, fabric）使用。
    
-   每个平台的datagen实现可以根据这些定义调用对应的API生成JSON文件。")
+  每个平台的datagen实现可以根据这些定义调用对应的API生成JSON文件。"
+  (:require [my-mod.registry.metadata :as registry-metadata]
+              [my-mod.block.wireless-node :as wireless-node]
+              [my-mod.block.wireless-matrix]))
 
 ;; ============================================================================
 ;; BlockState部分定义
@@ -30,99 +33,50 @@
 ;; ============================================================================
 
 (def MOD-ID "my_mod")
-
 ;; 基础blocks (简单单一model)
+;; 从 DSL/注册元数据自动推导，避免在此处重复维护定义。
 (def SIMPLE_BLOCKS
-  {
-   :matrix
-   (BlockStateDefinition.
-    "matrix"
-    {}
-    [{:condition nil :models [(str MOD-ID ":block/matrix")]}])
-   
-   :windgen-main
-   (BlockStateDefinition.
-    "windgen_main"
-    {}
-    [{:condition nil :models [(str MOD-ID ":block/windgen_main")]}])
-   
-   :windgen-pillar
-   (BlockStateDefinition.
-    "windgen_pillar"
-    {}
-    [{:condition nil :models [(str MOD-ID ":block/windgen_pillar")]}])
-   
-   :windgen-base
-   (BlockStateDefinition.
-    "windgen_base"
-    {}
-    [{:condition nil :models [(str MOD-ID ":block/windgen_base")]}])
-   
-   :windgen-fan
-   (BlockStateDefinition.
-    "windgen_fan"
-    {}
-    [{:condition nil :models [(str MOD-ID ":block/windgen_fan")]}])
-   
-   :solar-gen
-   (BlockStateDefinition.
-    "solar_gen"
-    {}
-    [{:condition nil :models [(str MOD-ID ":block/solar_gen")]}])
-   
-   :phase-gen
-   (BlockStateDefinition.
-    "phase_gen"
-    {}
-    [{:condition nil :models [(str MOD-ID ":block/phase_gen")]}])
-   
-   :reso-ore
-   (BlockStateDefinition.
-    "reso_ore"
-    {}
-    [{:condition nil :models [(str MOD-ID ":block/reso_ore")]}])})
+  (into {}
+        (for [block-id (registry-metadata/get-all-block-ids)
+              :let [registry-name (registry-metadata/get-block-registry-name block-id)
+                    simple-block? (not (.startsWith registry-name "node_"))]
+              :when simple-block?]
+          [(keyword block-id)
+           (BlockStateDefinition.
+            registry-name
+            {}
+            [{:condition nil
+              :models [(str MOD-ID ":block/" registry-name)]}])])))
 
 ;; ============================================================================
 ;; Node Blocks (多维度动态BlockState)
+;; 统一从 wireless_node.clj 读取定义，避免重复来源
 ;; ============================================================================
 
-(defn- create-node-definition
-  "创建node block的multipart blockstate定义
-   
-   参数：
-     node-type: basic, standard, advanced
-   
-   返回：
-     BlockStateDefinition with multipart structure
-     
-   结构：
-     - 1个base part (始终应用)
-     - 5个energy overlays (根据energy值 0-4)
-     - 1个connected overlay (connected=true时应用)"
-  [node-type]
-  (let [base-model (str MOD-ID ":block/node_" node-type "_base")
-        energy-models (vec (for [level (range 5)]
-                             {:condition {:energy (str level)}
-                              :models [(str MOD-ID ":block/node_" node-type "_energy_" level)]}))
-        connected-model {:condition {:connected "true"}
-                        :models [(str MOD-ID ":block/node_" node-type "_connected")]}]
-    (BlockStateDefinition.
-     (str "node_" node-type)
-     {:energy {:min 0 :max 4}  ; IntegerProperty
-      :connected {:type :boolean}}  ; BooleanProperty
-     (vec (concat
-           ;; Base part - 始终应用，提供基础结构
-           [{:condition nil :models [base-model]}]
-           ;; Energy overlays - 根据能量等级
-           energy-models
-           ;; Connected overlay - 连接状态
-           [connected-model])))))
-
 (def NODE_BLOCKS
-  {
-   :node-basic (create-node-definition "basic")
-   :node-standard (create-node-definition "standard")
-   :node-advanced (create-node-definition "advanced")})
+  (let [energy-min (get-in wireless-node/block-state-properties [:energy :min])
+        energy-max (get-in wireless-node/block-state-properties [:energy :max])
+        connected-type (get-in wireless-node/block-state-properties [:connected :type])]
+    (into {}
+          (for [node-type (sort (keys wireless-node/node-types))
+                :let [node-type-name (name node-type)
+                      block-key (keyword (str "node-" node-type-name))
+                      registry-name (str "node_" node-type-name)
+                      base-model (str MOD-ID ":block/" registry-name "_base")
+                      energy-models (vec (for [level (range energy-min (inc energy-max))]
+                                           {:condition {:energy (str level)}
+                                            :models [(str MOD-ID ":block/" registry-name "_energy_" level)]}))
+                      connected-model {:condition {:connected "true"}
+                                       :models [(str MOD-ID ":block/" registry-name "_connected")]}]]
+            [block-key
+             (BlockStateDefinition.
+              registry-name
+              {:energy {:min energy-min :max energy-max}
+               :connected {:type connected-type}}
+              (vec (concat
+                    [{:condition nil :models [base-model]}]
+                    energy-models
+                    [connected-model])))]))))
 
 ;; ============================================================================
 ;; 查询接口

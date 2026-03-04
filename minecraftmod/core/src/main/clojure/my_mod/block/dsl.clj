@@ -10,6 +10,8 @@
 (defrecord BlockSpec [id registry-name material hardness resistance light-level requires-tool
                       sounds harvest-level harvest-tool friction slip-factor
                       on-right-click on-break on-place properties
+                      ;; Model/datagen fields (official DSL options)
+                      model-parent textures model-textures
                       ;; Multi-block support
                       multi-block? multi-block-size multi-block-origin
                       multi-block-positions  ; Custom positions for irregular shapes
@@ -187,6 +189,9 @@
        :on-break (or (:on-break options) (fn [_] nil))
        :on-place (or (:on-place options) (fn [_] nil))
        :properties (or (:properties options) {})
+      :model-parent (:model-parent options)
+      :textures (:textures options)
+      :model-textures (:model-textures options)
        ;; Multi-block properties
        :multi-block? multi-block?
        :multi-block-size multi-block-size
@@ -210,6 +215,39 @@
   (when-not (get materials (:material block-spec))
     (throw (ex-info "Invalid material" {:material (:material block-spec)
                                         :valid materials})))
+
+  ;; Validate model/datagen fields
+  (when (and (:model-parent block-spec)
+             (or (not (string? (:model-parent block-spec)))
+                 (str/blank? (:model-parent block-spec))))
+    (throw (ex-info "Block :model-parent must be a non-empty string when provided"
+                    {:model-parent (:model-parent block-spec)
+                     :id (:id block-spec)})))
+
+  (when (and (:textures block-spec)
+             (not (map? (:textures block-spec))))
+    (throw (ex-info "Block :textures must be a map when provided"
+                    {:textures (:textures block-spec)
+                     :id (:id block-spec)})))
+
+  (when (and (:model-textures block-spec)
+             (not (map? (:model-textures block-spec))))
+    (throw (ex-info "Block :model-textures must be a map when provided"
+                    {:model-textures (:model-textures block-spec)
+                     :id (:id block-spec)})))
+
+  (when (map? (:model-textures block-spec))
+    (doseq [[model-name texture-path] (:model-textures block-spec)]
+      (when-not (or (string? model-name) (keyword? model-name))
+        (throw (ex-info "Block :model-textures keys must be string/keyword"
+                        {:invalid-key model-name
+                         :id (:id block-spec)})))
+      (when-not (and (string? texture-path) (not (str/blank? texture-path)))
+        (throw (ex-info "Block :model-textures values must be non-empty texture path strings"
+                        {:invalid-value texture-path
+                         :model-name model-name
+                         :id (:id block-spec)})))))
+
   ;; Validate multi-block configuration
   (when (:multi-block? block-spec)
     (let [has-size? (:multi-block-size block-spec)
