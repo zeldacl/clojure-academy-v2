@@ -84,6 +84,36 @@
                                 (BlockItem. (.get block-registered) (Item$Properties.)))))]
         (swap! registered-items assoc (str block-id "-item") registered-obj)))))
 
+;; ============================================================================
+;; Setup Phase Helpers (must be defined before mod-init)
+;; ============================================================================
+
+;; Helper: Common setup phase (called from event handler)
+(defn on-common-setup [event]
+  (log/info "FMLCommonSetupEvent - Common setup phase")
+  ;; Common initialization (runs on both client and server)
+  (gui-init/init-common!)
+  
+  ;; Register gameplay event listeners  
+  ;; Note: Consumer.accept(Object) will receive the event from the bus
+  (let [listener (reify java.util.function.Consumer
+                   (accept [_ evt]
+                     (events/handle-right-click-event evt)))]
+    (.addListener (MinecraftForge/EVENT_BUS) listener)))
+
+;; Helper: Client setup phase (called from event handler)  
+(defn on-client-setup [event]
+  (log/info "FMLClientSetupEvent - Client setup phase")
+  ;; Client-only initialization
+  (gui-init/init-client!)
+  (if-let [init-client! (requiring-resolve 'my-mod.forge1201.client.init/init-client)]
+    (init-client!)
+    (log/warn "Forge client init namespace unavailable on current side")))
+
+;; ============================================================================
+;; Constructor Implementation
+;; ============================================================================
+
 ;; Constructor implementation
 (defn mod-init []
   (log/info "Initializing MyMod1201 from Clojure...")
@@ -97,27 +127,16 @@
   (register-all-blocks!)
   (register-all-items!)
   
-  (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))
-        this-obj (com.example.my_mod1201.MyMod1201Clj.)]
-    ;; Register DeferredRegisters
+  ;; Register DeferredRegisters with mod event bus
+  (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
     (.register blocks-register mod-bus)
-    (.register items-register mod-bus)
-    
-    ;; Add setup listeners using method references (Forge 1.20.1 compatible)
-    (.addListener mod-bus FMLCommonSetupEvent
-      (reify java.util.function.Consumer
-        (accept [_ event]
-          (.commonSetup this-obj event))))
-
-    ;; Add client setup listener
-    (.addListener mod-bus FMLClientSetupEvent
-      (reify java.util.function.Consumer
-        (accept [_ event]
-          (.clientSetup this-obj event)))))
+    (.register items-register mod-bus))
   
-  ;; Register to gameplay event bus (using gen-class method for SubscribeEvent pattern)
-  ;; Note: Forge 1.20.1 event registration is handled via EventBusSubscriber or manual registration
-  ;; For now we'll use the manual approach in init
+  ;; Setup phase event listeners
+  ;; Note: Forge 1.20.1 event bus has specific requirements for type resolution
+  ;; We'll invoke setup functions through the generated methods instead
+  ;; The gen-class methods (commonSetup, clientSetup) will be called by Forge automatically
+  ;; through the lifecycle events
   
   ;; Initialize Clojure adapters
   (init/init-from-java)
@@ -125,31 +144,24 @@
   ;; Return state
   [[] nil])
 
-;; Common setup method implementation (called on both client and server)
-(defn mod-commonSetup [this event]
-  (log/info "FMLCommonSetupEvent - Common setup phase")
-  ;; Common initialization (runs on both client and server)
-  (gui-init/init-common!)
-  
-  ;; Register gameplay event listeners
-  ;; In Forge 1.20.1, we need to use the EVENT_BUS with proper type registration
-  (.addListener (MinecraftForge/EVENT_BUS) PlayerInteractEvent$RightClickBlock
-    (reify java.util.function.Consumer
-      (accept [_ evt]
-        (events/handle-right-click-event evt)))))
+;; ============================================================================
+;; Gen-class Method Implementations
+;; ============================================================================
 
-;; Client setup method implementation (called only on client)
+;; Gen-class method implementations (required by gen-class contract)
+(defn mod-commonSetup [this event]
+  (on-common-setup event))
+
 (defn mod-clientSetup [this event]
-  (log/info "FMLClientSetupEvent - Client setup phase")
-  ;; Client-only initialization
-  (gui-init/init-client!)
-  (if-let [init-client! (requiring-resolve 'my-mod.forge1201.client.init/init-client)]
-    (init-client!)
-    (log/warn "Forge client init namespace unavailable on current side")))
+  (on-client-setup event))
 
 ;; Event handler method (required by gen-class, but not used directly in 1.20.1)
 (defn mod-onRightClickBlock [this event]
   (events/handle-right-click-event event))
+
+;; ============================================================================
+;; Registry Query Helpers
+;; ============================================================================
 
 ;; Generic helpers to query registered blocks/items by ID
 (defn get-registered-block
