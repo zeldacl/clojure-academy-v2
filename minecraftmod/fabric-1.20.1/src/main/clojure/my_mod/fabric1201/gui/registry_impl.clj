@@ -2,6 +2,7 @@
   "Fabric 1.20.1 GUI Registration Implementation"
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.fabric1201.gui.bridge :as bridge]
+            [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
   (:import [net.minecraft.screen ScreenHandlerType]

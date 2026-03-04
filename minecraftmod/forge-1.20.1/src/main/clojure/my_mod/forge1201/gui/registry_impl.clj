@@ -4,12 +4,14 @@
   Platform-agnostic design: Uses metadata-driven approach."
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.forge1201.gui.bridge :as bridge]
+            [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
   (:import [net.minecraftforge.network NetworkHooks]
            [net.minecraft.world.inventory MenuType MenuType$MenuSupplier]
            [net.minecraft.world.flag FeatureFlags]
-           [net.minecraftforge.registries ForgeRegistries]
+           [net.minecraft.core.registries BuiltInRegistries]
+           [net.minecraft.core Registry]
            [net.minecraft.resources ResourceLocation]))
 
 ;; ============================================================================
@@ -70,9 +72,8 @@
       ;; Store in our map
       (swap! gui-menu-types assoc gui-id menu-type)
       
-      ;; Register with Forge
-      (.setRegistryName menu-type resource-loc)
-      (.register ForgeRegistries/MENUS resource-loc menu-type)
+      ;; Register with vanilla registry (Forge 1.20.1 uses vanilla registries)
+      (Registry/register BuiltInRegistries/MENU resource-loc menu-type)
       
       (log/info "Registered menu type:" registry-name "for GUI ID" gui-id)))
   

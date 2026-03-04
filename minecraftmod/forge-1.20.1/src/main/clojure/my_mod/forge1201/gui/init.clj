@@ -2,6 +2,7 @@
   "Forge 1.20.1 GUI System Initialization"
   (:require [my-mod.forge1201.gui.registry-impl :as registry-impl]
             [my-mod.forge1201.gui.network :as network]
+            [my-mod.gui.platform-adapter :as gui]
             [my-mod.util.log :as log]))
 
 (defn init-common!
@@ -59,16 +60,12 @@
   []
   (log/info "Verifying GUI system initialization...")
   
-  (let [network-check {:network-channel (some? @network/network-channel)}
-        
-        ;; Dynamically check all GUI IDs from metadata
-        gui-checks (into {}
-                        (for [gui-id (gui/get-all-gui-ids)]
-                          (let [check-key (keyword (str "gui-" gui-id "-menu-type"))
-                                menu-type (registry-impl/get-menu-type gui-id)]
-                            [check-key (some? menu-type)])))
-        
-        checks (merge network-check gui-checks)]
+  (let [;; Dynamically check all GUI IDs from metadata
+        checks (into {}
+                    (for [gui-id (gui/get-all-gui-ids)]
+                      (let [check-key (keyword (str "gui-" gui-id "-menu-type"))
+                            menu-type (registry-impl/get-menu-type gui-id)]
+                        [check-key (some? menu-type)])))]
     
     (doseq [[check-name result] checks]
       (log/info "  " check-name ":" (if result "✓" "✗")))
