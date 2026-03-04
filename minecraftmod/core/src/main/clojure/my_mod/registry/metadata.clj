@@ -27,6 +27,8 @@
   []
   (bdsl/list-blocks))
 
+(declare get-block-spec)
+
 (defn get-block-registry-name
   "Returns the Minecraft registry name for a block ID.
   
