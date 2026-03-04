@@ -14,6 +14,7 @@
   (:import [net.minecraft.world.level.block Block Blocks]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [net.minecraft.world.item Item Item$Properties BlockItem]
+           [my_mod.block NodeDynamicBlock]
            [net.minecraftforge.fml.common Mod]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
            [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
@@ -44,6 +45,10 @@
 (defonce registered-blocks (atom {}))
 (defonce registered-items (atom {}))
 
+(defn- node-block-registry-name?
+  [registry-name]
+  (contains? #{"node_basic" "node_standard" "node_advanced"} registry-name))
+
 ;; Dynamic block registration using metadata
 (defn register-all-blocks!
   "Register all blocks defined in DSL using metadata-driven approach.
@@ -55,7 +60,9 @@
           registered-obj (.register blocks-register registry-name
                           (reify java.util.function.Supplier
                             (get [_]
-                              (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))))]
+                              (if (node-block-registry-name? registry-name)
+                                (NodeDynamicBlock. (BlockBehaviour$Properties/copy Blocks/STONE))
+                                (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
 
 ;; Dynamic item registration using metadata

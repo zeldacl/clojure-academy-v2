@@ -1,1 +1,7 @@
-{"variants":{"normal":{"model":"my_mod:matrix"}},"__xconfgen":true}
+﻿{
+    "variants":  {
+                     "":  {
+                              "model":  "my_mod:block/matrix"
+                          }
+                 }
+}

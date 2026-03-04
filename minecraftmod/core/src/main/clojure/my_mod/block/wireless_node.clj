@@ -139,19 +139,18 @@
             ;; Attempt to get block state properties and update them
             ;; This will work when running in actual Minecraft environment
             (when-let [block (.getBlock current-state)]
-              (let [new-state (-> current-state
-                                ;; Try to set ENERGY property if it exists
+              (let [state-def (.getStateDefinition block)
+                    energy-prop (when state-def (.getProperty state-def "energy"))
+                    connected-prop (when state-def (.getProperty state-def "connected"))
+                    new-state (-> current-state
                                 (as-> state
-                                  (try (.setValue state 
-                                         (.getProperty block "energy")
-                                         (Integer/valueOf energy-level))
-                                       (catch Exception _ state)))
-                                ;; Try to set CONNECTED property if it exists  
+                                  (if energy-prop
+                                    (.setValue state energy-prop (Integer/valueOf energy-level))
+                                    state))
                                 (as-> state
-                                  (try (.setValue state
-                                         (.getProperty block "connected")
-                                         (Boolean/valueOf connected))
-                                       (catch Exception _ state))))]
+                                  (if connected-prop
+                                    (.setValue state connected-prop (Boolean/valueOf connected))
+                                    state))) ]
                 ;; Only update if state actually changed
                 (when-not (= new-state current-state)
                   (.setBlock world pos new-state 3)
@@ -187,7 +186,10 @@
         (let [tile tile-entity
               energy-level (calculate-energy-level tile)
               connected @(:enabled tile)
-              block (.getBlock base-state)]
+            block (.getBlock base-state)
+            state-def (.getStateDefinition block)
+            energy-prop (when state-def (.getProperty state-def "energy"))
+            connected-prop (when state-def (.getProperty state-def "connected"))]
           
           (log/debug "Getting actual state for" pos
                     "energy:" energy-level
@@ -198,14 +200,14 @@
             (-> base-state
               ;; Try to set ENERGY property
               (as-> state
-                (try (.setValue state (.getProperty block "energy") 
-                       (Integer/valueOf energy-level))
-                     (catch Exception _ state)))
+                (if energy-prop
+                  (.setValue state energy-prop (Integer/valueOf energy-level))
+                  state))
               ;; Try to set CONNECTED property
               (as-> state
-                (try (.setValue state (.getProperty block "connected")
-                       (Boolean/valueOf connected))
-                     (catch Exception _ state))))
+                (if connected-prop
+                  (.setValue state connected-prop (Boolean/valueOf connected))
+                  state)))
             (catch Exception e
               (log/debug "Block property update not available:" (.getMessage e))
               base-state)))

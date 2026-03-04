@@ -1,67 +1,121 @@
 (ns my-mod.forge1201.datagen.blockstate-provider
+  "Forge 1.20.1 BlockState生成器 - 使用core中的定义
+   
+   架构：
+   - core/blockstate_definition.clj: 定义block的blockstate结构（平台无关）
+   - 本文件: 使用Forge/Minecraft API和定义生成JSON（平台特定）
+   
+   优势：定义层复用，易于支持新的Forge版本"
   (:require [my-mod.config.modid :as modid]
+            [my-mod.block.blockstate-definition :as blockstate-def]
             [my-mod.forge1201.datagen.json-util :as json])
   (:import [net.minecraftforge.common.data ExistingFileHelper]
-           [net.minecraft.data DataGenerator DirectoryCache IDataProvider])
+           [net.minecraft.data DataGenerator IDataProvider]
+           [net.minecraft.data CachedOutput]
+           [java.nio.file Files]
+           [java.nio.file.attribute FileAttribute])
   (:gen-class
    :name my-mod.forge1201.datagen.BlockStateProvider
    :extends Object
-   :implements [net.minecraft.data.IDataProvider]
+   :implements [net.minecraft.data.DataProvider]
    :init init
    :state state
    :constructors {[net.minecraft.data.DataGenerator net.minecraftforge.common.data.ExistingFileHelper] []}
-   :methods [[run [net.minecraft.data.DirectoryCache] void]
+   :methods [[run [net.minecraft.data.CachedOutput] void]
              [getName [] String]]))
 
-(def BLOCKS_TO_GENERATE
-  ["matrix" "windgen_main" "windgen_pillar" "windgen_base"
-   "windgen_fan" "solar_gen" "phase_gen" "reso_ore"])
+;; ============================================================================
+;; BlockState JSON生成（核心逻辑 - 调用core定义）
+;; ============================================================================
 
-(def NODE_BLOCKS_TO_GENERATE
-  ["node_standard" "node_basic" "node_advanced"])
+(defn- blockstate-definition->json
+  "将BlockStateDefinition转换为blockstate JSON结构
+   
+   参数：
+     definition: BlockStateDefinition from core
+   
+   返回：
+     标准blockstate JSON map (variants或multipart格式)"
+  [definition]
+  (let [parts (:parts definition)]
+    (if (blockstate-def/is-multipart-block? definition)
+      ;; Multipart格式
+      {:multipart (vec (map (fn [part]
+                              (let [base {:apply {:model (first (:models part))}}]
+                                (if (:condition part)
+                                  ;; 有条件
+                                  (assoc base :when (:condition part))
+                                  ;; 无条件
+                                  base)))
+                            parts))}
+      ;; 单一variant格式（简单blocks）
+      {:variants {"" {:model (first (:models (first parts)))}}})))
+
+;; ============================================================================
+;; 生成器实现 - 使用高级API的骨架
+;; ============================================================================
 
 (defn -init [generator exfileHelper]
   [[] {:generator generator :exfileHelper exfileHelper}])
 
-(defn -run [this ^DirectoryCache cache]
-  (let [{:keys [generator]} (.state this)]
-    (doseq [block-name BLOCKS_TO_GENERATE]
-      (generate-blockstate! generator block-name))
-    (doseq [block-name NODE_BLOCKS_TO_GENERATE]
-      (generate-node-blockstate! generator block-name))))
+(defn -run [this ^CachedOutput cache]
+  (let [{:keys [generator]} (.state this)
+        all-defs (blockstate-def/get-all-definitions)]
+    (doseq [[block-key definition] all-defs]
+      (generate-blockstate! generator definition))))
 
 (defn -getName [this]
-  "MyMod BlockStates")
+  "MyMod BlockStates (from core definitions)")
 
-(defn generate-blockstate! [^DataGenerator generator block-name]
-  (let [blockstate-data {:variants {"normal" {:model (str modid/MOD-ID ":" block-name)}}}
+;; ============================================================================
+;; 文件生成
+;; ============================================================================
+
+(defn generate-blockstate!
+  "生成单个block的blockstate JSON
+   
+   参数：
+     generator: DataGenerator
+     definition: BlockStateDefinition
+   
+   副作用：
+     向输出目录写入blockstate JSON文件"
+  [^DataGenerator generator definition]
+  (let [registry-name (:registry-name definition)
+        blockstate-data (blockstate-definition->json definition)
         output-folder (.getOutputFolder generator)
         blockstates-dir (.. output-folder (resolve "assets") (resolve modid/MOD-ID) (resolve "blockstates"))
-        file-path (.resolve blockstates-dir (str block-name ".json"))]
-    (java.nio.file.Files/createDirectories blockstates-dir)
-    (spit (.toFile file-path) (json/write-json blockstate-data))
-    (println (str "Generated blockstate: " (.relativize output-folder file-path)))))
+        file-path (.resolve blockstates-dir (str registry-name ".json"))]
+    
+    (try
+      (Files/createDirectories blockstates-dir (make-array FileAttribute 0))
+      (spit (.toFile file-path) (json/write-json blockstate-data))
+      (println (str "[" modid/MOD-ID "] Generated blockstate: " registry-name ".json"))
+    (catch Exception e
+      (println (str "[" modid/MOD-ID "] Error generating blockstate " registry-name ": " e))
+      (.printStackTrace e)))))
 
-(defn get-node-blockstate-config [node-type]
-  (let [variant-name (.substring node-type 5)
-        energy-textures (into {}
-                              (for [level (range 5)]
-                                [(str level)
-                                 {:textures {:side (str modid/MOD-ID ":blocks/node_" variant-name "_side_" level)}}]))
-        inventory-config [{:textures {:side (str modid/MOD-ID ":blocks/node_" variant-name "_side_0")
-                                      :vert (str modid/MOD-ID ":blocks/node_top_0")}}]]
-    {:defaults {:model (str modid/MOD-ID ":node_base")}
-     :forge_marker 1
-     :variants {:connected {"false" {:textures {:vert (str modid/MOD-ID ":blocks/node_top_0")}}
-                            "true"  {:textures {:vert (str modid/MOD-ID ":blocks/node_top_1")}}}
-                :energy energy-textures
-                :inventory inventory-config}}))
+;; ============================================================================
+;; 关键点
+;; ============================================================================
 
-(defn generate-node-blockstate! [^DataGenerator generator block-name]
-  (let [blockstate-data (get-node-blockstate-config block-name)
-        output-folder (.getOutputFolder generator)
-        blockstates-dir (.. output-folder (resolve "assets") (resolve modid/MOD-ID) (resolve "blockstates"))
-        file-path (.resolve blockstates-dir (str block-name ".json"))]
-    (java.nio.file.Files/createDirectories blockstates-dir)
-    (spit (.toFile file-path) (json/write-json blockstate-data))
-    (println (str "Generated node blockstate: " (.relativize output-folder file-path)))))
+(comment
+  ;; 这个实现的优势：
+  ;; 
+  ;; 1. 定义与实现分离
+  ;;    - core/*.clj: BlockState定义（独立平台）
+  ;;    - forge-1.20.1/*.clj: 生成实现（Forge特定）
+  ;;
+  ;; 2. 易于扩展
+  ;;    - 添加fabric-1.20.1时，可复用blockstate_definition
+  ;;    - 只需创建fabric版的datagen实现
+  ;;
+  ;; 3. 类型安全
+  ;;    - BlockStateDefinition是明确的数据结构
+  ;;    - 避免了手动拼接JSON的错误
+  ;;
+  ;; 4. 可维护性
+  ;;    - 如果要修改blockstate结构，只需改core定义
+  ;;    - 所有平台自动获得修改
+  )
+

@@ -1,0 +1,6 @@
+﻿{
+    "textures":  {
+                     "all":  "my_mod:blocks/node_standard_base"
+                 },
+    "parent":  "minecraft:block/cube_all"
+}

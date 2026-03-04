@@ -1,4 +1,4 @@
-package my_mod1201.datagen;
+package my_mod.datagen;
 
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.data.event.GatherDataEvent;
