@@ -7,7 +7,8 @@
             [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
   (:import [net.minecraftforge.network NetworkHooks]
-           [net.minecraft.world.inventory MenuType]
+           [net.minecraft.world.inventory MenuType MenuType$MenuSupplier]
+           [net.minecraft.world.flag FeatureFlags]
            [net.minecraftforge.registries ForgeRegistries]
            [net.minecraft.resources ResourceLocation]))
 
@@ -41,8 +42,8 @@
   Returns: MenuType instance"
   [gui-id]
   (MenuType.
-    (reify java.util.function.BiFunction
-      (apply [_ window-id player-inventory]
+    (reify MenuType$MenuSupplier
+      (create [_ window-id player-inventory]
         (let [handler (gui/get-gui-handler)
               player (.player player-inventory)
               world (.level player)
@@ -50,7 +51,8 @@
               clj-container (.get-server-container handler gui-id player world pos)]
           (if clj-container
             (bridge/wrap-clojure-container window-id (get-menu-type gui-id) clj-container)
-            (do (log/error "Failed to create container for GUI" gui-id) nil)))))))
+            (do (log/error "Failed to create container for GUI" gui-id) nil)))))
+    FeatureFlags/DEFAULT_FLAGS))
 
 (defn register-menu-types!
   "Register all menu types with Forge registry
