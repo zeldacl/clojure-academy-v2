@@ -8,7 +8,17 @@
             [my-mod.forge1201.datagen.blockstate-provider :as bsp]
             [my-mod.forge1201.datagen.model-provider :as mp]
             [my-mod.forge1201.datagen.item-model-provider :as imp])
-  (:import [net.minecraftforge.data.event GatherDataEvent]))
+  (:import [net.minecraftforge.data.event GatherDataEvent]
+           [net.minecraft.data DataProvider DataProvider$Factory DataGenerator]))
+
+(defn- add-provider!
+  "Registers a DataProvider via Factory, correctly using Minecraft 1.20.1 API.
+   DataGenerator.addProvider expects a DataProvider.Factory<T> (PackOutput -> DataProvider)."
+  [^DataGenerator generator create-fn exfile-helper]
+  (.addProvider generator true
+    (reify DataProvider$Factory
+      (create [_ pack-output]
+        (create-fn pack-output exfile-helper)))))
 
 ;; ============================================================================
 ;; EventBusSubscriber Configuration
@@ -34,17 +44,14 @@
     
     ;; Register BlockState provider
     (println (str "[" modid/MOD-ID "] Registering BlockState DataGenerator..."))
-    (.addProvider generator true
-      (bsp/->BlockStateProvider generator exfile-helper))
+    (add-provider! generator bsp/create exfile-helper)
     
     ;; Register Block Model provider
     (println (str "[" modid/MOD-ID "] Registering Block Model DataGenerator..."))
-    (.addProvider generator true
-      (mp/->ModelProvider generator exfile-helper))
+    (add-provider! generator mp/create exfile-helper)
     
     ;; Register Item Model provider
     (println (str "[" modid/MOD-ID "] Registering Item Model DataGenerator..."))
-    (.addProvider generator true
-      (imp/->ItemModelProvider generator exfile-helper))
+    (add-provider! generator imp/create exfile-helper)
     
     (println (str "[" modid/MOD-ID "] DataGenerator setup complete!"))))

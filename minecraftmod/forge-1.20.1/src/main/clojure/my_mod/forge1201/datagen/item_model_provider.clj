@@ -9,36 +9,39 @@
   (:require [my-mod.config.modid :as modid]
             [my-mod.item.dsl :as item-dsl]
             [my-mod.forge1201.datagen.json-util :as json])
-  (:import [net.minecraftforge.common.data ExistingFileHelper]
-           [net.minecraft.data DataGenerator CachedOutput]
-           [java.nio.file Files]
-           [java.nio.file.attribute FileAttribute])
-  (:gen-class
-   :name my-mod.forge1201.datagen.ItemModelProvider
-   :extends Object
-   :implements [net.minecraft.data.DataProvider]
-   :init init
-   :state state
-   :constructors {[net.minecraft.data.DataGenerator net.minecraftforge.common.data.ExistingFileHelper] []}
-   :methods [[run [net.minecraft.data.CachedOutput] void]
-             [getName [] String]]))
-
-(defn -init [generator exfileHelper]
-  [[] {:generator generator :exfileHelper exfileHelper}])
+  (:import [net.minecraft.data DataGenerator DataProvider DataProvider$Factory CachedOutput PackOutput PackOutput$Target]
+           [com.google.common.hash Hashing]
+           [java.nio.charset StandardCharsets]
+           [java.util.concurrent CompletableFuture]))
 
 (declare generate-item-model!)
 
-(defn -run [this ^CachedOutput cache]
-  (let [{:keys [generator]} (.state this)
-        all-item-names (item-dsl/list-items)]
-    (doseq [item-name all-item-names]
-      (let [item-spec (item-dsl/get-item item-name)]
-        (when-let [model-texture (get-in item-spec [:properties :model-texture])]
-          (let [model-parent (get-in item-spec [:properties :model-parent] "item/generated")]
-            (generate-item-model! generator item-name model-texture model-parent)))))))
-
-(defn -getName [this]
-  "MyMod Item Models (from item registry)")
+(defn create
+  "创建Item Model DataProvider实例 (factory signature: PackOutput -> DataProvider)"
+  [^PackOutput pack-output _exfile-helper]
+  (reify DataProvider
+    (run [_this cache]
+      (let [all-item-names (item-dsl/list-items)
+            items-with-model (keep (fn [item-name]
+                                     (let [item-spec      (item-dsl/get-item item-name)
+                                           model-texture (get-in item-spec [:properties :model-texture])]
+                                       (when model-texture
+                                         {:item-name item-name
+                                          :model-texture model-texture
+                                          :model-parent (get-in item-spec [:properties :model-parent] "item/generated")})))
+                                   all-item-names)
+            written-count (reduce (fn [acc {:keys [item-name model-texture model-parent]}]
+                                    (if (generate-item-model! cache pack-output item-name model-texture model-parent)
+                                      (inc acc)
+                                      acc))
+                                  0
+                                  items-with-model)]
+        (println (str "[item-model-provider] run called, items: " (count all-item-names)
+                      ", with-model: " (count items-with-model)
+                      ", written=" written-count))
+        (CompletableFuture/completedFuture nil)))
+    (getName [_this]
+      "MyMod Item Models (from item registry)")))
 
 ;; ============================================================================
 ;; Item Model JSON生成（核心逻辑 - 从定义推导）
@@ -83,15 +86,20 @@
    
    副作用：
      向输出目录写入item model JSON文件"
-  [^DataGenerator generator item-name texture-name model-parent]
-  (let [model-data (texture-name->model-json texture-name model-parent)
-        output-folder (.getOutputFolder generator)
-        models-dir (.. output-folder (resolve "assets") (resolve modid/MOD-ID) (resolve "models") (resolve "item"))
-        file-path (.resolve models-dir (str item-name ".json"))]
-    
-    (try
-      (Files/createDirectories models-dir (make-array FileAttribute 0))
-      (spit (.toFile file-path) (json/write-json model-data))
-      (println (str "[" modid/MOD-ID "] Generated item model: " item-name ".json"))
-      (catch Exception e
-        (println (str "[" modid/MOD-ID "] ERROR generating item model " item-name ": " (.getMessage e)))))))))
+  [^CachedOutput cache ^PackOutput pack-output item-name texture-name model-parent]
+  (try
+    (let [model-data (texture-name->model-json texture-name model-parent)
+          json-str   (json/write-json model-data)
+          bytes      (.getBytes ^String json-str StandardCharsets/UTF_8)
+          hash       (.hashBytes (Hashing/sha1) bytes)
+          file-path  (.. (.getOutputFolder pack-output PackOutput$Target/RESOURCE_PACK)
+                         (resolve modid/MOD-ID)
+                         (resolve "models")
+                         (resolve "item")
+                         (resolve (str item-name ".json")))]
+      (println (str "[" modid/MOD-ID "] Writing item model: " file-path))
+      (.writeIfNeeded cache file-path bytes hash)
+      true)
+    (catch Exception e
+      (println (str "[" modid/MOD-ID "] ERROR generating item model " item-name ": " (.getMessage e)))
+      false)))

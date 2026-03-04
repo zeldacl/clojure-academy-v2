@@ -52,7 +52,7 @@
                   :energy-item true
                   :battery-type :basic
                   :model-parent "item/handheld"
-                  :model-texture "basic_battery"}})))
+                  :model-texture "basic_battery"}}))
 
 (def advanced-battery
   ^{:doc "Advanced energy battery - 50,000 IF capacity"}
@@ -66,7 +66,7 @@
                   :energy-item true
                   :battery-type :advanced
                   :model-parent "item/handheld"
-                  :model-texture "advanced_battery"}})))
+                  :model-texture "advanced_battery"}}))
 
 (def ultimate-battery
   ^{:doc "Ultimate energy battery - 250,000 IF capacity"}
@@ -81,7 +81,7 @@
                   :energy-item true
                   :battery-type :ultimate
                   :model-parent "item/handheld"
-                  :model-texture "ultimate_battery"}})))
+                  :model-texture "ultimate_battery"}}))
 
 ;; ============================================================================
 ;; Battery Helper Functions

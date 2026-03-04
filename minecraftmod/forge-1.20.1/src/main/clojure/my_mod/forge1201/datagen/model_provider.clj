@@ -10,19 +10,10 @@
             [my-mod.block.blockstate-definition :as blockstate-def]
             [my-mod.registry.metadata :as registry-metadata]
             [my-mod.forge1201.datagen.json-util :as json])
-  (:import [net.minecraftforge.common.data ExistingFileHelper]
-           [net.minecraft.data DataGenerator CachedOutput DataProvider]
-           [java.nio.file Files]
-           [java.nio.file.attribute FileAttribute])
-  (:gen-class
-   :name my-mod.forge1201.datagen.ModelProvider
-   :extends Object
-   :implements [net.minecraft.data.DataProvider]
-   :init init
-   :state state
-   :constructors {[net.minecraft.data.DataGenerator net.minecraftforge.common.data.ExistingFileHelper] []}
-   :methods [[run [net.minecraft.data.CachedOutput] void]
-             [getName [] String]]))
+  (:import [net.minecraft.data DataGenerator DataProvider DataProvider$Factory CachedOutput PackOutput PackOutput$Target]
+           [com.google.common.hash Hashing]
+           [java.nio.charset StandardCharsets]
+           [java.util.concurrent CompletableFuture]))
 
 ;; ============================================================================
 ;; Model对象创建（从core定义提取）
@@ -101,18 +92,24 @@
 
 (declare generate-model!)
 
-(defn -init [generator exfileHelper]
-  [[] {:generator generator :exfileHelper exfileHelper}])
-
-(defn -run [this ^CachedOutput cache]
-  (let [{:keys [generator]} (.state this)
-        all-defs (blockstate-def/get-all-definitions)
-        models (extract-unique-models all-defs)]
-    (doseq [model-id models]
-      (generate-model! generator model-id))))
-
-(defn -getName [this]
-  "MyMod Block Models (from core definitions)")
+(defn create
+  "创建Block Model DataProvider实例 (factory signature: PackOutput -> DataProvider)"
+  [^PackOutput pack-output _exfile-helper]
+  (reify DataProvider
+    (run [_this cache]
+      (let [all-defs (blockstate-def/get-all-definitions)
+            models   (extract-unique-models all-defs)
+            written-count (reduce (fn [acc model-id]
+                                    (if (generate-model! cache pack-output model-id)
+                                      (inc acc)
+                                      acc))
+                                  0
+                                  models)]
+        (println (str "[model-provider] summary: models=" (count models)
+                      ", written=" written-count))
+        (CompletableFuture/completedFuture nil)))
+    (getName [_this]
+      "MyMod Block Models (from core definitions)")))
 
 ;; ============================================================================
 ;; 文件生成
@@ -127,22 +124,25 @@
    
    副作用：
      向输出目录写入model JSON文件"
-  [^DataGenerator generator model-id]
+  [^CachedOutput cache ^PackOutput pack-output model-id]
   (try
-    (let [;; 从model-id解析文件名：去掉 my_mod:block/ 前缀
-          model-name (model-id->model-name model-id)
+    (let [model-name (model-id->model-name model-id)
           model-data (model-id->json model-id)
-          output-folder (.getOutputFolder generator)
-          models-dir (.. output-folder (resolve "assets") (resolve modid/MOD-ID) (resolve "models") (resolve "block"))
-          file-path (.resolve models-dir (str model-name ".json"))]
-      
-      (Files/createDirectories models-dir (make-array FileAttribute 0))
-      (spit (.toFile file-path) (json/write-json model-data))
-      (println (str "[" modid/MOD-ID "] Generated model: " model-name ".json")))
-    
+          json-str   (json/write-json model-data)
+          bytes      (.getBytes ^String json-str StandardCharsets/UTF_8)
+          hash       (.hashBytes (Hashing/sha1) bytes)
+          file-path  (.. (.getOutputFolder pack-output PackOutput$Target/RESOURCE_PACK)
+                         (resolve modid/MOD-ID)
+                         (resolve "models")
+                         (resolve "block")
+                         (resolve (str model-name ".json")))]
+      (println (str "[" modid/MOD-ID "] Writing block model: " file-path))
+      (.writeIfNeeded cache file-path bytes hash)
+      true)
     (catch Exception e
       (println (str "[" modid/MOD-ID "] Error generating model " model-id ": " e))
-      (.printStackTrace e))))
+      (.printStackTrace e)
+      false)))
 
 ;; ============================================================================
 ;; 关键设计

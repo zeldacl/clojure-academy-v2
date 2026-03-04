@@ -9,20 +9,10 @@
   (:require [my-mod.config.modid :as modid]
             [my-mod.block.blockstate-definition :as blockstate-def]
             [my-mod.forge1201.datagen.json-util :as json])
-  (:import [net.minecraftforge.common.data ExistingFileHelper]
-           [net.minecraft.data DataGenerator]
-           [net.minecraft.data CachedOutput]
-           [java.nio.file Files]
-           [java.nio.file.attribute FileAttribute])
-  (:gen-class
-   :name my-mod.forge1201.datagen.BlockStateProvider
-   :extends Object
-   :implements [net.minecraft.data.DataProvider]
-   :init init
-   :state state
-   :constructors {[net.minecraft.data.DataGenerator net.minecraftforge.common.data.ExistingFileHelper] []}
-   :methods [[run [net.minecraft.data.CachedOutput] void]
-             [getName [] String]]))
+  (:import [net.minecraft.data DataGenerator DataProvider DataProvider$Factory CachedOutput PackOutput PackOutput$Target]
+           [com.google.common.hash Hashing]
+           [java.nio.charset StandardCharsets]
+           [java.util.concurrent CompletableFuture]))
 
 ;; ============================================================================
 ;; BlockState JSON生成（核心逻辑 - 调用core定义）
@@ -52,22 +42,28 @@
       {:variants {"" {:model (first (:models (first parts)))}}})))
 
 ;; ============================================================================
-;; 生成器实现 - 使用高级API的骨架
+;; 生成器实现
 ;; ============================================================================
 
 (declare generate-blockstate!)
 
-(defn -init [generator exfileHelper]
-  [[] {:generator generator :exfileHelper exfileHelper}])
-
-(defn -run [this ^CachedOutput cache]
-  (let [{:keys [generator]} (.state this)
-        all-defs (blockstate-def/get-all-definitions)]
-    (doseq [[block-key definition] all-defs]
-      (generate-blockstate! generator definition))))
-
-(defn -getName [this]
-  "MyMod BlockStates (from core definitions)")
+(defn create
+  "创建BlockState DataProvider实例 (factory signature: PackOutput -> DataProvider)"
+  [^PackOutput pack-output _exfile-helper]
+  (reify DataProvider
+    (run [_this cache]
+      (let [all-defs (blockstate-def/get-all-definitions)
+            written-count (reduce (fn [acc [_block-key definition]]
+                                    (if (generate-blockstate! cache pack-output definition)
+                                      (inc acc)
+                                      acc))
+                                  0
+                                  all-defs)]
+        (println (str "[blockstate-provider] summary: defs=" (count all-defs)
+                      ", written=" written-count))
+        (CompletableFuture/completedFuture nil)))
+    (getName [_this]
+      "MyMod BlockStates (from core definitions)")))
 
 ;; ============================================================================
 ;; 文件生成
@@ -82,20 +78,25 @@
    
    副作用：
      向输出目录写入blockstate JSON文件"
-  [^DataGenerator generator definition]
-  (let [registry-name (:registry-name definition)
-        blockstate-data (blockstate-definition->json definition)
-        output-folder (.getOutputFolder generator)
-        blockstates-dir (.. output-folder (resolve "assets") (resolve modid/MOD-ID) (resolve "blockstates"))
-        file-path (.resolve blockstates-dir (str registry-name ".json"))]
-    
-    (try
-      (Files/createDirectories blockstates-dir (make-array FileAttribute 0))
-      (spit (.toFile file-path) (json/write-json blockstate-data))
-      (println (str "[" modid/MOD-ID "] Generated blockstate: " registry-name ".json"))
+  [^CachedOutput cache ^PackOutput pack-output definition]
+  (try
+    (let [registry-name (:registry-name definition)
+          blockstate-data (blockstate-definition->json definition)
+          json-str   (json/write-json blockstate-data)
+          bytes      (.getBytes ^String json-str StandardCharsets/UTF_8)
+          hash       (.hashBytes (Hashing/sha1) bytes)
+          output-folder (.getOutputFolder pack-output PackOutput$Target/RESOURCE_PACK)
+          file-path  (.. output-folder
+                         (resolve modid/MOD-ID)
+                         (resolve "blockstates")
+                         (resolve (str registry-name ".json")))]
+      (println (str "[" modid/MOD-ID "] Writing blockstate: " file-path))
+      (.writeIfNeeded cache file-path bytes hash)
+      true)
     (catch Exception e
-      (println (str "[" modid/MOD-ID "] Error generating blockstate " registry-name ": " e))
-      (.printStackTrace e)))))
+      (println (str "[" modid/MOD-ID "] Error generating blockstate: " e))
+      (.printStackTrace e)
+      false)))
 
 ;; ============================================================================
 ;; 关键点

@@ -130,7 +130,7 @@
           item-id (or (:id options-map) (name item-name))]
       `(def ~item-name
          (register-item!
-           (create-item-spec ~item-id ~(dissoc options-map :id))))))))
+           (create-item-spec ~item-id ~(dissoc options-map :id)))))))
 
 ;; Helper: food properties
 (defn food-properties
