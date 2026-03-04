@@ -129,11 +129,10 @@
 (comment
   ;; 使用示例
   (get-block-state-definition :node-basic)
-  => #my_mod.block.blockstate_definition.BlockStateDefinition{...}
   
   (get-all-definitions)
-  => {:matrix ... :node-basic ... ...}
+  (keys (get-all-definitions))
   
   (-> :node-basic get-block-state-definition :parts)
-  => [{:condition nil :models [...]} {:condition {:energy "0"} :models [...]} ...]
+  (-> :node-basic get-block-state-definition :parts first)
   )

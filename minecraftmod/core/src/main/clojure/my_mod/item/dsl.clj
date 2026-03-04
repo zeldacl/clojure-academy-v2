@@ -104,8 +104,13 @@
 (defmacro defitem
   "Define an item with declarative syntax
   
+  Supports two forms:
+  1. Map form: (defitem {:id \"item_name\" :max-stack-size 16 ...})
+  2. Symbol + options form: (defitem my-item :id \"item_name\" :max-stack-size 16 ...)
+  
   Example:
   (defitem my-item
+    :id \"my_item\"
     :max-stack-size 16
     :creative-tab :tools
     :durability 500
@@ -119,13 +124,13 @@
                         {:form options-map})))
       `(register-item!
          (create-item-spec ~item-id ~(dissoc options-map :id))))
-    (let [item-id (name item-name)
-          options-map (if (and (= 1 (count options)) (map? (first options)))
+    (let [options-map (if (and (= 1 (count options)) (map? (first options)))
                         (first options)
-                        (apply hash-map options))]
+                        (apply hash-map options))
+          item-id (or (:id options-map) (name item-name))]
       `(def ~item-name
          (register-item!
-           (create-item-spec ~item-id ~options-map))))))
+           (create-item-spec ~item-id ~(dissoc options-map :id))))))))
 
 ;; Helper: food properties
 (defn food-properties

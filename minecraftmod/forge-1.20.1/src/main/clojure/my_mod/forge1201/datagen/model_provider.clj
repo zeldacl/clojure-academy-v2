@@ -99,6 +99,8 @@
 ;; 生成器实现
 ;; ============================================================================
 
+(declare generate-model!)
+
 (defn -init [generator exfileHelper]
   [[] {:generator generator :exfileHelper exfileHelper}])
 

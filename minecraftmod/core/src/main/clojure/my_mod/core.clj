@@ -6,7 +6,13 @@
             [my-mod.events.metadata :as event-metadata]
             [my-mod.wireless.gui.matrix-network-handler :as matrix-net]
             [my-mod.wireless.gui.node-network-handler :as node-net]
-            [my-mod.wireless.world-data :as wd]))
+            [my-mod.wireless.world-data :as wd]
+            ;; Load all item definitions (so item-dsl registry is populated)
+            [my-mod.item.components]
+            [my-mod.item.constraint-plate]
+            [my-mod.item.mat-core]
+            [my-mod.item.media]
+            [my-mod.item.test-battery]))
 
 (defn init
   "Core init hook invoked by per-version entry classes."

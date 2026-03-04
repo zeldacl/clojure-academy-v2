@@ -10,10 +10,12 @@
 ;; ============================================================================
 
 (idsl/defitem constraint-plate
+  :id "constraint_plate"
   :max-stack-size 64
   :creative-tab :misc
   :properties {:tooltip ["用于无线矩阵的限制板"
-                         "需要3个才能激活矩阵"]}
+                         "需要3个才能激活矩阵"]
+               :model-texture "constraint_plate"}
   :on-use (fn [event-data]
             (log/debug "Using constraint plate")))
 

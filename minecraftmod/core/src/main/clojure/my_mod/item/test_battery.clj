@@ -44,33 +44,34 @@
   ^{:doc "Basic energy battery - 10,000 IF capacity"}
   (item-dsl/defitem
     {:id "basic_battery"
-     :name "Basic Energy Battery"
      :max-stack-size 1
      :creative-tab :misc
      :tooltip ["Stores up to 10,000 IF"
                "Transfer rate: 100 IF/tick"]
      :properties {:max-damage 100  ; Used for energy display
                   :energy-item true
-                  :battery-type :basic}}))
+                  :battery-type :basic
+                  :model-parent "item/handheld"
+                  :model-texture "basic_battery"}})))
 
 (def advanced-battery
   ^{:doc "Advanced energy battery - 50,000 IF capacity"}
   (item-dsl/defitem
     {:id "advanced_battery"
-     :name "Advanced Energy Battery"
      :max-stack-size 1
      :creative-tab :misc
      :tooltip ["Stores up to 50,000 IF"
                "Transfer rate: 500 IF/tick"]
      :properties {:max-damage 100
                   :energy-item true
-                  :battery-type :advanced}}))
+                  :battery-type :advanced
+                  :model-parent "item/handheld"
+                  :model-texture "advanced_battery"}})))
 
 (def ultimate-battery
   ^{:doc "Ultimate energy battery - 250,000 IF capacity"}
   (item-dsl/defitem
     {:id "ultimate_battery"
-     :name "Ultimate Energy Battery"
      :max-stack-size 1
      :creative-tab :misc
      :tooltip ["Stores up to 250,000 IF"
@@ -78,7 +79,9 @@
                "§6Ultimate tier§r"]
      :properties {:max-damage 100
                   :energy-item true
-                  :battery-type :ultimate}}))
+                  :battery-type :ultimate
+                  :model-parent "item/handheld"
+                  :model-texture "ultimate_battery"}})))
 
 ;; ============================================================================
 ;; Battery Helper Functions

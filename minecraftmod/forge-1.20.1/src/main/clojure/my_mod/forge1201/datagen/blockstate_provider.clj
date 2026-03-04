@@ -10,7 +10,7 @@
             [my-mod.block.blockstate-definition :as blockstate-def]
             [my-mod.forge1201.datagen.json-util :as json])
   (:import [net.minecraftforge.common.data ExistingFileHelper]
-           [net.minecraft.data DataGenerator IDataProvider]
+           [net.minecraft.data DataGenerator]
            [net.minecraft.data CachedOutput]
            [java.nio.file Files]
            [java.nio.file.attribute FileAttribute])
@@ -54,6 +54,8 @@
 ;; ============================================================================
 ;; 生成器实现 - 使用高级API的骨架
 ;; ============================================================================
+
+(declare generate-blockstate!)
 
 (defn -init [generator exfileHelper]
   [[] {:generator generator :exfileHelper exfileHelper}])

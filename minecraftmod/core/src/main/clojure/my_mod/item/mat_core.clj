@@ -44,32 +44,40 @@
 ;; ============================================================================
 
 (idsl/defitem mat-core-tier-1
+  :id "mat_core_0"
   :max-stack-size 1
   :creative-tab :misc
   :max-damage 0
   :properties {:tooltip (get-in core-tiers [:tier-1 :tooltip])
-               :display-name (get-in core-tiers [:tier-1 :name])})
+               :display-name (get-in core-tiers [:tier-1 :name])
+               :model-texture "mat_core_0"})
 
 (idsl/defitem mat-core-tier-2
+  :id "mat_core_1"
   :max-stack-size 1
   :creative-tab :misc
   :max-damage 1
   :properties {:tooltip (get-in core-tiers [:tier-2 :tooltip])
-               :display-name (get-in core-tiers [:tier-2 :name])})
+               :display-name (get-in core-tiers [:tier-2 :name])
+               :model-texture "mat_core_1"})
 
 (idsl/defitem mat-core-tier-3
+  :id "mat_core_2"
   :max-stack-size 1
   :creative-tab :misc
   :max-damage 2
   :properties {:tooltip (get-in core-tiers [:tier-3 :tooltip])
-               :display-name (get-in core-tiers [:tier-3 :name])})
+               :display-name (get-in core-tiers [:tier-3 :name])
+               :model-texture "mat_core_2"})
 
 (idsl/defitem mat-core-tier-4
+  :id "mat_core_3"
   :max-stack-size 1
   :creative-tab :misc
   :max-damage 3
   :properties {:tooltip (get-in core-tiers [:tier-4 :tooltip])
-               :display-name (get-in core-tiers [:tier-4 :name])})
+               :display-name (get-in core-tiers [:tier-4 :name])
+               :model-texture "mat_core_3"})
 
 ;; ============================================================================
 ;; Helper Functions

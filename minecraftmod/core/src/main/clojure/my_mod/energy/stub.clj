@@ -10,7 +10,8 @@
             [my-mod.item.test-battery :as battery]
             [my-mod.platform.item :as item]
             [my-mod.platform.nbt :as nbt]
-            [my-mod.wireless.interfaces :as winterfaces]))
+            [my-mod.wireless.interfaces :as winterfaces]
+            [my-mod.wireless.helper :as whelper]))
 
 ;; ============================================================================
 ;; IFItemManager Implementation
@@ -159,7 +160,7 @@
   [node password]
   (try
     ;; Try to use real wireless system
-    (my-mod.wireless.helper/get-wireless-net-by-node node)
+    (whelper/get-wireless-net-by-node node)
     (catch Exception e
       ;; Fallback stub
       (log/info (format "Using stub wireless network for node with password: %s" password))
@@ -173,7 +174,7 @@
   [node password]
   (try
     ;; Try to use real wireless system
-    (my-mod.wireless.helper/is-node-linked? node)
+    (whelper/is-node-linked? node)
     (catch Exception e
       ;; Fallback stub: connected if has password
       (not (empty? password)))))
