@@ -629,6 +629,7 @@
 
 ;; Define the three node blocks
 (bdsl/defblock wireless-node-basic
+  :registry-name "node_basic"
   :material :metal
   :hardness 2.5
   :resistance 6.0
@@ -641,6 +642,7 @@
   :on-break (handle-node-break :basic))
 
 (bdsl/defblock wireless-node-standard
+  :registry-name "node_standard"
   :material :metal
   :hardness 2.5
   :resistance 6.0
@@ -653,6 +655,7 @@
   :on-break (handle-node-break :standard))
 
 (bdsl/defblock wireless-node-advanced
+  :registry-name "node_advanced"
   :material :metal
   :hardness 2.5
   :resistance 6.0

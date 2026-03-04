@@ -9,7 +9,8 @@
   - Platform code queries this module for what to register
   - This module queries DSL systems for available blocks/items
   - Game logic remains in core, platform code remains generic"
-  (:require [my-mod.block.dsl :as bdsl]
+  (:require [clojure.string :as str]
+            [my-mod.block.dsl :as bdsl]
             [my-mod.item.dsl :as idsl]))
 
 ;; Block Registration Metadata
@@ -29,7 +30,9 @@
 (defn get-block-registry-name
   "Returns the Minecraft registry name for a block ID.
   
-  Converts DSL block ID (kebab-case) to Minecraft registry format (snake_case).
+  Uses explicit :registry-name override from block spec when provided,
+  otherwise converts DSL block ID (kebab-case) to Minecraft registry format
+  (snake_case).
   
   Args:
     block-id: String - DSL block identifier (e.g., \"demo-block\")
@@ -37,7 +40,11 @@
   Returns:
     String - Registry name (e.g., \"demo_block\")"
   [block-id]
-  (clojure.string/replace block-id #"-" "_"))
+  (let [block-spec (get-block-spec block-id)
+        explicit-name (:registry-name block-spec)]
+    (if (and (string? explicit-name) (not (str/blank? explicit-name)))
+      explicit-name
+      (str/replace block-id #"-" "_"))))
 
 (defn get-block-spec
   "Retrieves the full block specification from the DSL.

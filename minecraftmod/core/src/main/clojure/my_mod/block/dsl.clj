@@ -1,12 +1,13 @@
 (ns my-mod.block.dsl
   "Block DSL - Declarative block definition using Clojure macros"
-  (:require [my-mod.util.log :as log]))
+  (:require [clojure.string :as str]
+            [my-mod.util.log :as log]))
 
 ;; Block Registry - stores all defined blocks
 (defonce block-registry (atom {}))
 
 ;; Block specifications
-(defrecord BlockSpec [id material hardness resistance light-level requires-tool
+(defrecord BlockSpec [id registry-name material hardness resistance light-level requires-tool
                       sounds harvest-level harvest-tool friction slip-factor
                       on-right-click on-break on-place properties
                       ;; Multi-block support
@@ -171,6 +172,7 @@
         multi-block-origin (:multi-block-origin options {:x 0 :y 0 :z 0})]
     (map->BlockSpec
       {:id block-id
+       :registry-name (:registry-name options)
        :material (or (:material options) :stone)
        :hardness (or (:hardness options) default-hardness)
        :resistance (or (:resistance options) default-resistance)
@@ -199,6 +201,12 @@
     (throw (ex-info "Block must have an :id" {:spec block-spec})))
   (when-not (string? (:id block-spec))
     (throw (ex-info "Block :id must be a string" {:id (:id block-spec)})))
+  (when (and (:registry-name block-spec)
+             (or (not (string? (:registry-name block-spec)))
+                 (str/blank? (:registry-name block-spec))))
+    (throw (ex-info "Block :registry-name must be a non-empty string when provided"
+                    {:registry-name (:registry-name block-spec)
+                     :id (:id block-spec)})))
   (when-not (get materials (:material block-spec))
     (throw (ex-info "Invalid material" {:material (:material block-spec)
                                         :valid materials})))
@@ -232,7 +240,8 @@
 
 ;; Get block from registry
 (defn get-block [block-id]
-  (get @block-registry block-id))
+  (let [id-str (if (keyword? block-id) (name block-id) block-id)]
+    (get @block-registry id-str)))
 
 ;; List all registered blocks
 (defn list-blocks []

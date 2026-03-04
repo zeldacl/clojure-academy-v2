@@ -288,7 +288,7 @@
             pos (:pos tile)
             ;; Get block spec for multiblock config
             block-spec (bdsl/get-block :wireless-matrix)]
-        
+
         (when (and block-spec world pos)
           ;; Check if structure is still valid
           (if-not (bdsl/is-multi-block-complete? world pos block-spec)
@@ -444,6 +444,7 @@
 ;; ============================================================================
 
 (bdsl/defblock wireless-matrix
+  :registry-name "matrix"
   :material :stone
   :hardness 3.0
   :resistance 6.0
