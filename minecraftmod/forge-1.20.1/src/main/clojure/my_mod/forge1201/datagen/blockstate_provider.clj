@@ -8,8 +8,15 @@
    优势：定义层复用，易于支持新的Forge版本"
   (:require [my-mod.config.modid :as modid]
             [my-mod.block.blockstate-definition :as blockstate-def]
+            [my-mod.forge1201.mod :as forge-mod]
+            [clojure.string :as str]
             [my-mod.forge1201.datagen.json-util :as json])
-  (:import [net.minecraft.data DataGenerator DataProvider DataProvider$Factory CachedOutput PackOutput PackOutput$Target]
+  (:import [net.minecraft.data DataProvider CachedOutput PackOutput PackOutput$Target]
+           [net.minecraft.resources ResourceLocation]
+           [net.minecraft.world.level.block Blocks]
+           [net.minecraftforge.client.model.generators BlockStateProvider ModelFile$UncheckedModelFile]
+           [net.minecraftforge.common.data ExistingFileHelper]
+           [net.minecraftforge.registries ForgeRegistries]
            [com.google.common.hash Hashing]
            [java.nio.charset StandardCharsets]
            [java.util.concurrent CompletableFuture]))
@@ -39,7 +46,7 @@
                                   base)))
                             parts))}
       ;; 单一variant格式（简单blocks）
-      {:variants {"" {:model (first (:models (first parts)))}}})))
+      {:variants {"normal" {:model (first (:models (first parts)))}}})))
 
 ;; ============================================================================
 ;; 生成器实现
@@ -47,21 +54,106 @@
 
 (declare generate-blockstate!)
 
+(defn- normalize-candidates
+  [s]
+  (when (and s (not (str/blank? s)))
+    [s
+     (str/replace s "-" "_")
+     (str/replace s "_" "-")]))
+
+(defn- registry-object->block
+  [registry-object]
+  (try
+    (when (and registry-object (.isPresent registry-object))
+      (.get registry-object))
+    (catch Throwable _
+      nil)))
+
+(defn- resolve-from-registered-map
+  [block-key registry-name]
+  (let [key-name (name block-key)
+        candidates (distinct (concat (normalize-candidates key-name)
+                                     (normalize-candidates registry-name)))]
+    (some (fn [candidate]
+            (when-let [registry-object (get @forge-mod/registered-blocks candidate)]
+              (registry-object->block registry-object)))
+          candidates)))
+
+(defn- resolve-from-forge-registry
+  [block-key registry-name]
+  (let [key-name (name block-key)
+        candidates (distinct (concat (normalize-candidates registry-name)
+                                     (normalize-candidates key-name)))]
+    (some (fn [candidate]
+            (.getValue ForgeRegistries/BLOCKS
+                       (ResourceLocation. modid/MOD-ID candidate)))
+          candidates)))
+
+(defn- resolve-registered-block
+  "Resolve Forge Block for datagen builder.
+   Prefer DSL-key based lookup (same key used during registration),
+   fallback to registry-name lookup for compatibility."
+  [block-key registry-name]
+  (or (resolve-from-registered-map block-key registry-name)
+      (resolve-from-forge-registry block-key registry-name)))
+
+(defn- generate-simple-blockstates-with-forge!
+  "Use Forge BlockStateProvider builder for simple (single-variant) blocks."
+  [^CachedOutput cache ^PackOutput pack-output ^ExistingFileHelper exfile-helper simple-defs]
+  (let [registered-count (atom 0)
+        fallback-defs (atom [])
+        provider (proxy [BlockStateProvider] [pack-output modid/MOD-ID exfile-helper]
+                   (registerStatesAndModels []
+                     (doseq [[block-key definition] simple-defs
+                             :let [registry-name (:registry-name definition)
+                                   model-id (first (:models (first (:parts definition))))
+                                   block (resolve-registered-block block-key registry-name)]]
+                       (if (and block (not= block Blocks/AIR))
+                         (do
+                           (.simpleBlock this block (ModelFile$UncheckedModelFile. ^String model-id))
+                           (swap! registered-count inc))
+                         (do
+                           (swap! fallback-defs conj definition)
+                           (println (str "[" modid/MOD-ID "] Fallback simple blockstate JSON: block-key=" (name block-key)
+                                         ", registry=" registry-name
+                                         ", rl=" modid/MOD-ID ":" registry-name)))))))]
+    {:future (.run provider cache)
+     :registered @registered-count
+     :fallback-defs @fallback-defs}))
+
 (defn create
   "创建BlockState DataProvider实例 (factory signature: PackOutput -> DataProvider)"
-  [^PackOutput pack-output _exfile-helper]
+  [^PackOutput pack-output exfile-helper]
   (reify DataProvider
     (run [_this cache]
       (let [all-defs (blockstate-def/get-all-definitions)
-            written-count (reduce (fn [acc [_block-key definition]]
-                                    (if (generate-blockstate! cache pack-output definition)
-                                      (inc acc)
-                                      acc))
-                                  0
-                                  all-defs)]
+            simple-defs (into {} (remove (fn [[_block-key definition]]
+                                           (blockstate-def/is-multipart-block? definition))
+                                         all-defs))
+            multipart-defs (into {} (filter (fn [[_block-key definition]]
+                                              (blockstate-def/is-multipart-block? definition))
+                                            all-defs))
+            {:keys [future registered fallback-defs]} (generate-simple-blockstates-with-forge!
+                                                       cache pack-output exfile-helper simple-defs)
+            fallback-written (reduce (fn [acc definition]
+                                       (if (generate-blockstate! cache pack-output definition)
+                                         (inc acc)
+                                         acc))
+                                     0
+                                     fallback-defs)
+            multipart-written (reduce (fn [acc [_block-key definition]]
+                                        (if (generate-blockstate! cache pack-output definition)
+                                          (inc acc)
+                                          acc))
+                                      0
+                                      multipart-defs)
+            written-count (+ registered fallback-written multipart-written)]
         (println (str "[blockstate-provider] summary: defs=" (count all-defs)
+                      ", simple=" (count simple-defs)
+                      ", simple-fallback=" (count fallback-defs)
+                      ", multipart=" (count multipart-defs)
                       ", written=" written-count))
-        (CompletableFuture/completedFuture nil)))
+        (CompletableFuture/allOf (into-array CompletableFuture [future]))))
     (getName [_this]
       "MyMod BlockStates (from core definitions)")))
 
