@@ -9,50 +9,26 @@
   (:require [my-mod.config.modid :as modid]
             [my-mod.block.blockstate-definition :as blockstate-def]
             [my-mod.forge1201.mod :as forge-mod]
-            [clojure.string :as str]
-            [my-mod.forge1201.datagen.json-util :as json])
-  (:import [net.minecraft.data DataProvider CachedOutput PackOutput PackOutput$Target]
+            [my-mod.registry.metadata :as registry-metadata]
+            [clojure.string :as str])
+  (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world.level.block Blocks]
-           [net.minecraftforge.client.model.generators BlockStateProvider ModelFile$UncheckedModelFile]
+           [net.minecraftforge.client.model.generators BlockStateProvider]
            [net.minecraftforge.common.data ExistingFileHelper]
            [net.minecraftforge.registries ForgeRegistries]
-           [com.google.common.hash Hashing]
-           [java.nio.charset StandardCharsets]
+           [my_mod.block NodeDynamicBlock]
            [java.util.concurrent CompletableFuture]))
 
-;; ============================================================================
-;; BlockState JSON生成（核心逻辑 - 调用core定义）
-;; ============================================================================
 
-(defn- blockstate-definition->json
-  "将BlockStateDefinition转换为blockstate JSON结构
-   
-   参数：
-     definition: BlockStateDefinition from core
-   
-   返回：
-     标准blockstate JSON map (variants或multipart格式)"
-  [definition]
-  (let [parts (:parts definition)]
-    (if (blockstate-def/is-multipart-block? definition)
-      ;; Multipart格式
-      {:multipart (vec (map (fn [part]
-                              (let [base {:apply {:model (first (:models part))}}]
-                                (if (:condition part)
-                                  ;; 有条件
-                                  (assoc base :when (:condition part))
-                                  ;; 无条件
-                                  base)))
-                            parts))}
-      ;; 单一variant格式（简单blocks）
-      {:variants {"normal" {:model (first (:models (first parts)))}}})))
-
-;; ============================================================================
-;; 生成器实现
-;; ============================================================================
-
-(declare generate-blockstate!)
+(defn- parse-rl
+  ([s] (parse-rl s modid/MOD-ID))
+  ([s default-namespace]
+   (let [value (str s)]
+     (if (str/includes? value ":")
+       (let [[namespace path] (str/split value #":" 2)]
+         (ResourceLocation. namespace path))
+       (ResourceLocation. default-namespace value)))))
 
 (defn- normalize-candidates
   [s]
@@ -90,36 +66,140 @@
           candidates)))
 
 (defn- resolve-registered-block
-  "Resolve Forge Block for datagen builder.
-   Prefer DSL-key based lookup (same key used during registration),
-   fallback to registry-name lookup for compatibility."
+  "Resolve block object for datagen builder."
   [block-key registry-name]
   (or (resolve-from-registered-map block-key registry-name)
       (resolve-from-forge-registry block-key registry-name)))
 
-(defn- generate-simple-blockstates-with-forge!
-  "Use Forge BlockStateProvider builder for simple (single-variant) blocks."
-  [^CachedOutput cache ^PackOutput pack-output ^ExistingFileHelper exfile-helper simple-defs]
-  (let [registered-count (atom 0)
-        fallback-defs (atom [])
+(defn- infer-registry-name-from-model
+  [model-name]
+  (if-let [[_ node-registry] (re-matches #"(node_(?:basic|standard|advanced))_(?:base|energy_\d+|connected)" model-name)]
+    node-registry
+    model-name))
+
+(defn- registry-name->block-spec
+  [registry-name]
+  (some (fn [block-id]
+          (when (= registry-name (registry-metadata/get-block-registry-name block-id))
+            (registry-metadata/get-block-spec block-id)))
+        (registry-metadata/get-all-block-ids)))
+
+(defn- normalize-block-texture
+  "Keep texture paths as-is for ExistingFileHelper validation.
+   Physical textures are in textures/blocks/, not textures/block/."
+  [texture]
+  (when texture
+    (str texture)))
+
+(defn- texture-from-spec
+  [block-spec model-name]
+  (or (get-in block-spec [:model-textures model-name])
+      (get-in block-spec [:model-textures (keyword model-name)])
+      (get-in block-spec [:textures :all])
+      (get-in block-spec [:properties :model-textures model-name])
+      (get-in block-spec [:properties :model-textures (keyword model-name)])
+      (get-in block-spec [:properties :textures :all])
+      (get-in block-spec [:properties :texture])
+      (str modid/MOD-ID ":blocks/" model-name)))
+
+(defn- parent-from-spec
+  [block-spec]
+  (or (:model-parent block-spec)
+      (get-in block-spec [:properties :model-parent])
+      "minecraft:block/cube_all"))
+
+(defn- model-id->model-name
+  [model-id]
+  (str/replace model-id #".*:block/" ""))
+
+(defn- ensure-block-model!
+  "Get block model reference. For node blocks, use existing manually-maintained models.
+   For other blocks, generate simple cube_all models."
+  [^BlockStateProvider provider model-id]
+  (let [model-name (model-id->model-name model-id)]
+    ;; Node blocks: use existing models, don't generate
+    (if (re-find #"^node_(basic|standard|advanced)_" model-name)
+      (.getExistingFile (.models provider) (parse-rl model-id))
+      ;; Other blocks: generate cube_all model
+      (let [registry-name (infer-registry-name-from-model model-name)
+            block-spec (registry-name->block-spec registry-name)
+            parent (parse-rl (parent-from-spec block-spec) "minecraft")
+            texture-all (parse-rl (texture-from-spec block-spec model-name))
+            builder (.withExistingParent (.models provider) model-name parent)]
+        (.texture builder "all" texture-all)
+        builder))))
+
+(defn- condition->typed
+  [property-key value]
+  (case property-key
+    :energy (Integer/valueOf (int (if (string? value) (Integer/parseInt value) value)))
+    :connected (Boolean/valueOf (str value))
+    value))
+
+(defn- apply-node-condition!
+  [part-builder condition]
+  (doseq [[property-key raw-value] condition]
+    (case property-key
+      :energy (.condition part-builder NodeDynamicBlock/ENERGY
+                         (into-array Comparable [(condition->typed property-key raw-value)]))
+      :connected (.condition part-builder NodeDynamicBlock/CONNECTED
+                            (into-array Comparable [(condition->typed property-key raw-value)]))
+      nil))
+  part-builder)
+
+(defn- build-simple-block!
+  [^BlockStateProvider provider block-key definition]
+  (let [registry-name (:registry-name definition)
+        block (resolve-registered-block block-key registry-name)]
+    (when (or (nil? block) (= block Blocks/AIR))
+      (throw (ex-info "Simple block not resolvable for datagen"
+                      {:block-key block-key :registry-name registry-name})))
+    (let [model-id (first (:models (first (:parts definition))))
+          model-file (ensure-block-model! provider model-id)]
+      (.simpleBlockWithItem provider block model-file))))
+
+(defn- build-multipart-block!
+  [^BlockStateProvider provider block-key definition]
+  (let [registry-name (:registry-name definition)
+        block (resolve-registered-block block-key registry-name)]
+    (when (or (nil? block) (= block Blocks/AIR))
+      (throw (ex-info "Multipart block not resolvable for datagen"
+                      {:block-key block-key :registry-name registry-name})))
+    (let [builder (.getMultipartBuilder provider block)]
+      (doseq [part (:parts definition)]
+        (let [model-id (first (:models part))
+              model-file (ensure-block-model! provider model-id)
+              part-builder (-> (.part builder)
+                               (.modelFile model-file)
+                               (.addModel))]
+          (if-let [condition (:condition part)]
+            (-> part-builder
+                (apply-node-condition! condition)
+                (.end))
+            (.end part-builder))))
+      ;; For node blocks, use _base variant for item model
+      (let [item-model-id (if (re-find #"^node_(basic|standard|advanced)" registry-name)
+                            (str modid/MOD-ID ":block/" registry-name "_base")
+                            (str modid/MOD-ID ":block/" registry-name))]
+        (.simpleBlockItem provider block (ensure-block-model! provider item-model-id))))))
+
+(defn- generate-with-forge-builder!
+  [^CachedOutput cache ^PackOutput pack-output ^ExistingFileHelper exfile-helper all-defs]
+  (let [simple-count (atom 0)
+        multipart-count (atom 0)
         provider (proxy [BlockStateProvider] [pack-output modid/MOD-ID exfile-helper]
                    (registerStatesAndModels []
-                     (doseq [[block-key definition] simple-defs
-                             :let [registry-name (:registry-name definition)
-                                   model-id (first (:models (first (:parts definition))))
-                                   block (resolve-registered-block block-key registry-name)]]
-                       (if (and block (not= block Blocks/AIR))
+                     (doseq [[block-key definition] all-defs]
+                       (if (blockstate-def/is-multipart-block? definition)
                          (do
-                           (.simpleBlock this block (ModelFile$UncheckedModelFile. ^String model-id))
-                           (swap! registered-count inc))
+                           (build-multipart-block! this block-key definition)
+                           (swap! multipart-count inc))
                          (do
-                           (swap! fallback-defs conj definition)
-                           (println (str "[" modid/MOD-ID "] Fallback simple blockstate JSON: block-key=" (name block-key)
-                                         ", registry=" registry-name
-                                         ", rl=" modid/MOD-ID ":" registry-name)))))))]
+                           (build-simple-block! this block-key definition)
+                           (swap! simple-count inc))))))]
     {:future (.run provider cache)
-     :registered @registered-count
-     :fallback-defs @fallback-defs}))
+     :simple @simple-count
+     :multipart @multipart-count}))
 
 (defn create
   "创建BlockState DataProvider实例 (factory signature: PackOutput -> DataProvider)"
@@ -127,68 +207,17 @@
   (reify DataProvider
     (run [_this cache]
       (let [all-defs (blockstate-def/get-all-definitions)
-            simple-defs (into {} (remove (fn [[_block-key definition]]
-                                           (blockstate-def/is-multipart-block? definition))
-                                         all-defs))
-            multipart-defs (into {} (filter (fn [[_block-key definition]]
-                                              (blockstate-def/is-multipart-block? definition))
-                                            all-defs))
-            {:keys [future registered fallback-defs]} (generate-simple-blockstates-with-forge!
-                                                       cache pack-output exfile-helper simple-defs)
-            fallback-written (reduce (fn [acc definition]
-                                       (if (generate-blockstate! cache pack-output definition)
-                                         (inc acc)
-                                         acc))
-                                     0
-                                     fallback-defs)
-            multipart-written (reduce (fn [acc [_block-key definition]]
-                                        (if (generate-blockstate! cache pack-output definition)
-                                          (inc acc)
-                                          acc))
-                                      0
-                                      multipart-defs)
-            written-count (+ registered fallback-written multipart-written)]
+            {:keys [future simple multipart]} (generate-with-forge-builder!
+                                               cache pack-output exfile-helper all-defs)
+            written-count (+ simple multipart)]
         (println (str "[blockstate-provider] summary: defs=" (count all-defs)
-                      ", simple=" (count simple-defs)
-                      ", simple-fallback=" (count fallback-defs)
-                      ", multipart=" (count multipart-defs)
+                      ", simple=" simple
+                      ", simple-fallback=0"
+                      ", multipart=" multipart
                       ", written=" written-count))
         (CompletableFuture/allOf (into-array CompletableFuture [future]))))
     (getName [_this]
       "MyMod BlockStates (from core definitions)")))
-
-;; ============================================================================
-;; 文件生成
-;; ============================================================================
-
-(defn generate-blockstate!
-  "生成单个block的blockstate JSON
-   
-   参数：
-     generator: DataGenerator
-     definition: BlockStateDefinition
-   
-   副作用：
-     向输出目录写入blockstate JSON文件"
-  [^CachedOutput cache ^PackOutput pack-output definition]
-  (try
-    (let [registry-name (:registry-name definition)
-          blockstate-data (blockstate-definition->json definition)
-          json-str   (json/write-json blockstate-data)
-          bytes      (.getBytes ^String json-str StandardCharsets/UTF_8)
-          hash       (.hashBytes (Hashing/sha1) bytes)
-          output-folder (.getOutputFolder pack-output PackOutput$Target/RESOURCE_PACK)
-          file-path  (.. output-folder
-                         (resolve modid/MOD-ID)
-                         (resolve "blockstates")
-                         (resolve (str registry-name ".json")))]
-      (println (str "[" modid/MOD-ID "] Writing blockstate: " file-path))
-      (.writeIfNeeded cache file-path bytes hash)
-      true)
-    (catch Exception e
-      (println (str "[" modid/MOD-ID "] Error generating blockstate: " e))
-      (.printStackTrace e)
-      false)))
 
 ;; ============================================================================
 ;; 关键点

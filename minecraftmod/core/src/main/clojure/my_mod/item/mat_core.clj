@@ -70,14 +70,8 @@
                :display-name (get-in core-tiers [:tier-3 :name])
                :model-texture "mat_core_2"})
 
-(idsl/defitem mat-core-tier-4
-  :id "mat_core_3"
-  :max-stack-size 1
-  :creative-tab :misc
-  :max-damage 3
-  :properties {:tooltip (get-in core-tiers [:tier-4 :tooltip])
-               :display-name (get-in core-tiers [:tier-4 :name])
-               :model-texture "mat_core_3"})
+;; Tier 4 disabled - missing mat_core_3.png texture
+;; (idsl/defitem mat-core-tier-4 ...)
 
 ;; ============================================================================
 ;; Helper Functions
@@ -90,11 +84,10 @@
     (let [item (.getItem item-stack)]
       (or (= item mat-core-tier-1)
           (= item mat-core-tier-2)
-          (= item mat-core-tier-3)
-          (= item mat-core-tier-4)))))
+          (= item mat-core-tier-3)))))
 
 (defn get-core-level
-  "Get core level from ItemStack (1-4)
+  "Get core level from ItemStack (1-3)
   Returns 0 if not a core or empty"
   [item-stack]
   (if (and item-stack (is-mat-core? item-stack))
@@ -102,4 +95,4 @@
     0))
 
 (defn init-mat-cores! []
-  (log/info "Matrix Cores initialized: 4 tiers"))
+  (log/info "Matrix Cores initialized: 3 tiers"))

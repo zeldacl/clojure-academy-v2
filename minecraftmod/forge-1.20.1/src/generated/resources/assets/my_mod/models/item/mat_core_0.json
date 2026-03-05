@@ -1,1 +1,6 @@
-{"parent":"item/generated","textures":{"layer0":"my_mod:items/mat_core_0"}}
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "my_mod:items/mat_core_0"
+  }
+}

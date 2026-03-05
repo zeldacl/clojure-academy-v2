@@ -1,1 +1,6 @@
-{"parent":"minecraft:block/cube_all","textures":{"all":"my_mod:blocks/matrix"}}
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "my_mod:blocks/matrix"
+  }
+}

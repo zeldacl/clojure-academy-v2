@@ -6,7 +6,6 @@
      ./gradlew :forge-1.20.1:runData"
   (:require [my-mod.config.modid :as modid]
             [my-mod.forge1201.datagen.blockstate-provider :as bsp]
-            [my-mod.forge1201.datagen.model-provider :as mp]
             [my-mod.forge1201.datagen.item-model-provider :as imp])
   (:import [net.minecraftforge.data.event GatherDataEvent]
            [net.minecraft.data DataProvider DataProvider$Factory DataGenerator]))
@@ -45,11 +44,7 @@
     ;; Register BlockState provider
     (println (str "[" modid/MOD-ID "] Registering BlockState DataGenerator..."))
     (add-provider! generator bsp/create exfile-helper)
-    
-    ;; Register Block Model provider
-    (println (str "[" modid/MOD-ID "] Registering Block Model DataGenerator..."))
-    (add-provider! generator mp/create exfile-helper)
-    
+
     ;; Register Item Model provider
     (println (str "[" modid/MOD-ID "] Registering Item Model DataGenerator..."))
     (add-provider! generator imp/create exfile-helper)

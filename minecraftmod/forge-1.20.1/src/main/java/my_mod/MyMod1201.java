@@ -18,17 +18,12 @@ public class MyMod1201 {
     }
 
     public MyMod1201() {
-        if (isDataGenRun()) {
-            // DataGeneratorSetup is registered automatically via @Mod.EventBusSubscriber
-            return;
-        }
-
-        // Load and instantiate the Clojure mod class
+        // Load and instantiate the Clojure mod class for both normal run and datagen.
+        // Datagen also needs platform registration state for official Forge model providers.
         try {
             IFn require = Clojure.var("clojure.core", "require");
             require.invoke(Clojure.read("my-mod.forge1201.mod"));
-            
-            // The Clojure namespace handles all initialization
+
             IFn initFn = Clojure.var("my-mod.forge1201.mod", "mod-init");
             initFn.invoke();
         } catch (Throwable t) {

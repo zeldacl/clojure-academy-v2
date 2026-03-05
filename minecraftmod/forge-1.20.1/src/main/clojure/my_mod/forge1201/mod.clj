@@ -7,6 +7,8 @@
             [my-mod.forge1201.gui.init :as gui-init]
             [my-mod.forge1201.platform-impl :as platform-impl]
             [my-mod.block.dsl :as bdsl]
+            [my-mod.block.wireless-node]
+            [my-mod.block.wireless-matrix]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
             [my-mod.config.modid :as modid]

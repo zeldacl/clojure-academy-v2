@@ -39,49 +39,11 @@
 ;; ============================================================================
 ;; Battery Items using Item DSL
 ;; ============================================================================
-
-(def basic-battery
-  ^{:doc "Basic energy battery - 10,000 IF capacity"}
-  (item-dsl/defitem
-    {:id "basic_battery"
-     :max-stack-size 1
-     :creative-tab :misc
-     :tooltip ["Stores up to 10,000 IF"
-               "Transfer rate: 100 IF/tick"]
-     :properties {:max-damage 100  ; Used for energy display
-                  :energy-item true
-                  :battery-type :basic
-                  :model-parent "item/handheld"
-                  :model-texture "basic_battery"}}))
-
-(def advanced-battery
-  ^{:doc "Advanced energy battery - 50,000 IF capacity"}
-  (item-dsl/defitem
-    {:id "advanced_battery"
-     :max-stack-size 1
-     :creative-tab :misc
-     :tooltip ["Stores up to 50,000 IF"
-               "Transfer rate: 500 IF/tick"]
-     :properties {:max-damage 100
-                  :energy-item true
-                  :battery-type :advanced
-                  :model-parent "item/handheld"
-                  :model-texture "advanced_battery"}}))
-
-(def ultimate-battery
-  ^{:doc "Ultimate energy battery - 250,000 IF capacity"}
-  (item-dsl/defitem
-    {:id "ultimate_battery"
-     :max-stack-size 1
-     :creative-tab :misc
-     :tooltip ["Stores up to 250,000 IF"
-               "Transfer rate: 2,500 IF/tick"
-               "§6Ultimate tier§r"]
-     :properties {:max-damage 100
-                  :energy-item true
-                  :battery-type :ultimate
-                  :model-parent "item/handheld"
-                  :model-texture "ultimate_battery"}}))
+;; TODO: Battery items disabled - missing texture resources
+;; Re-enable when textures are available:
+;; - basic_battery.png
+;; - advanced_battery.png  
+;; - ultimate_battery.png
 
 ;; ============================================================================
 ;; Battery Helper Functions
@@ -100,11 +62,8 @@
 (defn is-battery?
   "Check if ItemStack is a battery"
   [item-stack]
-  (when item-stack
-    (let [item (.getItem item-stack)]
-      (or (= item basic-battery)
-          (= item advanced-battery)
-          (= item ultimate-battery)))))
+  ;; All battery items currently disabled (missing textures)
+  false)
 
 (defn get-battery-energy
   "Get current energy from battery ItemStack"
