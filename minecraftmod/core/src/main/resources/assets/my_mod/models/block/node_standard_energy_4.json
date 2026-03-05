@@ -1,6 +1,0 @@
-﻿{
-    "textures":  {
-                     "all":  "my_mod:blocks/node_standard_energy_4"
-                 },
-    "parent":  "minecraft:block/cube_all"
-}

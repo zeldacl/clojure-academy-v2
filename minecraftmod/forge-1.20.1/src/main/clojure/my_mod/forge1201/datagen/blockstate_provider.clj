@@ -72,10 +72,10 @@
       (resolve-from-forge-registry block-key registry-name)))
 
 (defn- infer-registry-name-from-model
+  "Infer block registry name from model name.
+   For default blocks, model name = registry name."
   [model-name]
-  (if-let [[_ node-registry] (re-matches #"(node_(?:basic|standard|advanced))_(?:base|energy_\d+|connected)" model-name)]
-    node-registry
-    model-name))
+  model-name)
 
 (defn- registry-name->block-spec
   [registry-name]
@@ -100,7 +100,7 @@
       (get-in block-spec [:properties :model-textures (keyword model-name)])
       (get-in block-spec [:properties :textures :all])
       (get-in block-spec [:properties :texture])
-      (str modid/MOD-ID ":blocks/" model-name)))
+      (str modid/MOD-ID ":block/" model-name)))
 
 (defn- parent-from-spec
   [block-spec]
@@ -113,20 +113,31 @@
   (str/replace model-id #".*:block/" ""))
 
 (defn- ensure-block-model!
-  "Get block model reference. For node blocks, use existing manually-maintained models.
-   For other blocks, generate simple cube_all models."
+  "Generate block model using Forge API.
+   Queries business layer for texture configuration, then uses appropriate Forge API:
+   - .cube() for models with custom side/vert textures (e.g., node blocks)
+   - .cubeAll() for models with single texture"
   [^BlockStateProvider provider model-id]
   (let [model-name (model-id->model-name model-id)]
-    ;; Node blocks: use existing models, don't generate
-    (if (re-find #"^node_(basic|standard|advanced)_" model-name)
-      (.getExistingFile (.models provider) (parse-rl model-id))
-      ;; Other blocks: generate cube_all model
+    ;; Query business layer for texture configuration
+    (if-let [tex-cfg (blockstate-def/get-model-texture-config model-name)]
+      ;; Special model: use .cube() with side/vert textures
+      (let [side-texture (parse-rl (:side tex-cfg))
+            vert-texture (parse-rl (:vert tex-cfg))
+            builder (.cube (.models provider)
+                          model-name
+                          vert-texture   ; down
+                          vert-texture   ; up
+                          side-texture   ; north
+                          side-texture   ; south
+                          side-texture   ; east
+                          side-texture)] ; west
+        builder)
+      ;; Default model: use .cubeAll() with single texture
       (let [registry-name (infer-registry-name-from-model model-name)
             block-spec (registry-name->block-spec registry-name)
-            parent (parse-rl (parent-from-spec block-spec) "minecraft")
             texture-all (parse-rl (texture-from-spec block-spec model-name))
-            builder (.withExistingParent (.models provider) model-name parent)]
-        (.texture builder "all" texture-all)
+            builder (.cubeAll (.models provider) model-name texture-all)]
         builder))))
 
 (defn- condition->typed

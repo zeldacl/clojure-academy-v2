@@ -24,7 +24,7 @@
 
 (defn- texture-rl
   [texture-name]
-  (ResourceLocation. modid/MOD-ID (str "items/" texture-name)))
+  (ResourceLocation. modid/MOD-ID (str "item/" texture-name)))
 
 (defn create
   "创建Item Model DataProvider实例 (factory signature: PackOutput -> DataProvider)"

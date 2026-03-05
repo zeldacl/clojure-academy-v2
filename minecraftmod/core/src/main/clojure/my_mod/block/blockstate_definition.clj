@@ -79,6 +79,39 @@
                     [connected-model])))]))))
 
 ;; ============================================================================
+;; 模型纹理配置 (业务逻辑)
+;; ============================================================================
+
+(defn get-model-texture-config
+  "获取模型的纹理配置
+   
+   此函数包含所有与模型纹理相关的业务逻辑。
+   框架层调用此函数获取纹理配置，然后使用Forge API生成模型。
+   
+   参数：
+     model-name: 模型名称（不含命名空间），如 \"node_basic_base\"
+   
+   返回：
+     {:side \"texture-path\" :vert \"texture-path\"} - cube模型的纹理配置
+     nil - 使用默认处理（cubeAll）"
+  [model-name]
+  (when-let [[_ node-type variant] (re-matches #"node_(basic|standard|advanced)_(base|energy_\d+|connected)" model-name)]
+    (let [;; 解析能量等级
+          energy-level (cond
+                         (= variant "base") 0
+                         (.startsWith variant "energy_") (Integer/parseInt (subs variant 7))
+                         (= variant "connected") 0
+                         :else 0)
+          ;; 解析顶部纹理
+          top-texture (if (= variant "connected") 
+                        (str MOD-ID ":block/node_top_1")
+                        (str MOD-ID ":block/node_top_0"))
+          ;; 侧面纹理
+          side-texture (str MOD-ID ":block/node_" node-type "_side_" energy-level)]
+      {:side side-texture
+       :vert top-texture})))
+
+;; ============================================================================
 ;; 查询接口
 ;; ============================================================================
 
