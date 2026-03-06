@@ -23,18 +23,13 @@
     (obj/render-all! @model)))
 
 (defn register!
-  "Register SolarGen renderer for whichever platform class is present."
+  "Register SolarGen renderer by block-id for generic ScriptedBlockEntity."
   []
-  (try
-    (let [cls (Class/forName "my_mod.block.entity.SolarGenBlockEntity")]
-      (tesr-api/register-tile-renderer!
-        cls
-        (reify tesr-api/ITileEntityRenderer
-          (render-tile [_ tile-entity x y z]
-            ;; Position is already tile-relative in platform render impls.
-            (render/with-matrix
-              (render/gl-translate x y z)
-              (render-at-origin tile-entity))))))
-    (catch Exception e
-      (log/warn "Solar renderer not registered (class not found yet):" (.getMessage e)))))
+  (tesr-api/register-scripted-tile-renderer!
+    "solar-gen"
+    (reify tesr-api/ITileEntityRenderer
+      (render-tile [_ _tile-entity x y z]
+        (render/with-matrix
+          (render/gl-translate x y z)
+          (render-at-origin nil))))))
 

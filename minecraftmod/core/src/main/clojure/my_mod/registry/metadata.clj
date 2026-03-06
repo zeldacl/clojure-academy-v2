@@ -71,6 +71,24 @@
   (let [block-spec (get-block-spec block-id)]
     (some? (:block-state-properties block-spec))))
 
+(defn has-block-entity?
+  "Checks if a block uses the generic scripted BlockEntity (ScriptedEntityBlock/ScriptedBlockEntity).
+  
+  Args:
+    block-id: String - DSL block identifier
+  
+  Returns:
+    Boolean - true if block has :has-block-entity? in its spec"
+  [block-id]
+  (let [block-spec (get-block-spec block-id)]
+    (boolean (:has-block-entity? block-spec))))
+
+(defn get-scripted-block-ids
+  "Returns block IDs that use the generic scripted BlockEntity.
+  Platform uses this to register ScriptedEntityBlock and BlockEntityType per block-id."
+  []
+  (filter has-block-entity? (get-all-block-ids)))
+
 (defn get-block-state-properties
   "Returns the block state properties definition for a block.
   

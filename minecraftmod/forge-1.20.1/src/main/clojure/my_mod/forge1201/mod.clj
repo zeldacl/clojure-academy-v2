@@ -20,9 +20,8 @@
            [net.minecraft.world.level.block.entity BlockEntityType BlockEntityType$Builder BlockEntityType$BlockEntitySupplier]
            [net.minecraft.core.registries Registries]
            [net.minecraft.network.chat Component]
-           [my_mod.block NodeDynamicBlock]
-           [my_mod.block SolarGenBlock]
-           [my_mod.block.entity SolarGenBlockEntity]
+           [my_mod.block NodeDynamicBlock ScriptedEntityBlock]
+           [my_mod.block.entity ScriptedBlockEntity]
            [net.minecraftforge.fml.common Mod]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
            [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
@@ -76,41 +75,44 @@
   (doseq [block-id (registry-metadata/get-all-block-ids)]
     (let [registry-name (registry-metadata/get-block-registry-name block-id)
           block-spec (registry-metadata/get-block-spec block-id)
-          ;; Query business layer for block state properties
           needs-dynamic-properties? (has-block-state-properties? block-id)
+          has-be? (registry-metadata/has-block-entity? block-id)
           registered-obj (.register blocks-register registry-name
                           (reify java.util.function.Supplier
                             (get [_]
-                              (if needs-dynamic-properties?
-                                ;; Create NodeDynamicBlock with dynamic BlockState properties.
-                                ;; Properties are injected during construction via the static
-                                ;; factory to ensure they are visible when the Block's
-                                ;; StateDefinition is built.
+                              (cond
+                                needs-dynamic-properties?
                                 (let [props (bsp/get-all-properties block-id)]
                                   (NodeDynamicBlock/create block-id
                                                            (java.util.ArrayList. props)
                                                            (BlockBehaviour$Properties/copy Blocks/STONE)))
-                                (if (= block-id "solar-gen")
-                                  (SolarGenBlock. (BlockBehaviour$Properties/copy Blocks/STONE))
-                                ;; Use standard Block for simple blocks
-                                (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))))))]
+                                has-be?
+                                (ScriptedEntityBlock. block-id (BlockBehaviour$Properties/copy Blocks/STONE))
+                                :else
+                                (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
 
-;; BlockEntity registration (minimal: SolarGen only for now)
+;; BlockEntity registration: one BlockEntityType per scripted block-id
 (defn register-block-entities!
   []
-  (when-let [solar-block-ro (get @registered-blocks "solar-gen")]
-    (let [registry-name (registry-metadata/get-block-registry-name "solar-gen")
-          registered-obj (.register block-entities-register registry-name
-                          (reify java.util.function.Supplier
-                            (get [_]
-                              (-> (BlockEntityType$Builder/of
-                                    (reify BlockEntityType$BlockEntitySupplier
-                                      (create [_ pos state]
-                                        (SolarGenBlockEntity. pos state)))
-                                    (into-array Block [(.get solar-block-ro)]))
-                                  (.build nil)))))]
-      (swap! registered-block-entities assoc "solar-gen" registered-obj))))
+  (doseq [block-id (registry-metadata/get-scripted-block-ids)]
+    (when-let [block-ro (get @registered-blocks block-id)]
+      (let [registry-name (registry-metadata/get-block-registry-name block-id)
+            block-inst (.get block-ro)
+            registered-obj (.register block-entities-register registry-name
+                            (reify java.util.function.Supplier
+                              (get [_]
+                                (let [type-holder (object-array 1)
+                                      be-type (-> (BlockEntityType$Builder/of
+                                                    (reify BlockEntityType$BlockEntitySupplier
+                                                      (create [_ pos state]
+                                                        (ScriptedBlockEntity. (aget type-holder 0) pos state block-id)))
+                                                    (into-array Block [block-inst]))
+                                                  (.build nil))]
+                                  (aset type-holder 0 be-type)
+                                  (ScriptedBlockEntity/registerType block-id be-type)
+                                  be-type))))]
+        (swap! registered-block-entities assoc block-id registered-obj)))))
 
 (defn get-registered-block-entity-type
   "Get a registered BlockEntityType by DSL block-id (e.g. \"solar-gen\")."
@@ -225,17 +227,6 @@
   ;; Common initialization (runs on both client and server)
   (gui-init/init-common!)
 
-  ;; Ensure BlockEntityType static holders are initialized for Java BlockEntities
-  (try
-    (when-let [solar-type (get-registered-block-entity-type "solar-gen")]
-      (clojure.lang.Reflector/setStaticField
-        my_mod.block.entity.SolarGenBlockEntity
-        "TYPE"
-        solar-type)
-      (log/info "SolarGen BlockEntityType injected"))
-    (catch Exception e
-      (log/error "Failed to inject SolarGen BlockEntityType:" (.getMessage e))))
-  
   ;; Register gameplay event listeners  
   ;; Note: Consumer.accept(Object) will receive the event from the bus
   (let [listener (reify java.util.function.Consumer

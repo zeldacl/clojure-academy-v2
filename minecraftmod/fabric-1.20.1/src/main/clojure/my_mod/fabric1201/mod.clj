@@ -21,8 +21,8 @@
            [net.minecraft.world.level.block.entity BlockEntityType BlockEntityType$Builder BlockEntityType$BlockEntitySupplier]
            [net.fabricmc.fabric.api.itemgroup.v1 FabricItemGroup ItemGroupEvents]
            [net.minecraft.network.chat Component]
-           [my_mod.block NodeDynamicBlock SolarGenBlock]
-           [my_mod.block.entity SolarGenBlockEntity]))
+           [my_mod.block NodeDynamicBlock ScriptedEntityBlock]
+           [my_mod.block.entity ScriptedBlockEntity]))
 
 ;; Mod ID constant
 (def mod-id modid/MOD-ID)
@@ -38,43 +38,39 @@
   (log/info "Registering Fabric blocks...")
   (doseq [block-id (registry-metadata/get-all-block-ids)]
     (let [registry-name (registry-metadata/get-block-registry-name block-id)
-          block-spec (registry-metadata/get-block-spec block-id)
-          ;; Query business layer for block state properties
           needs-dynamic-properties? (registry-metadata/has-block-state-properties? block-id)
-          block-obj (if needs-dynamic-properties?
-                      ;; Create NodeDynamicBlock with dynamic BlockState properties.
-                      ;; Properties are injected during construction via the static
-                      ;; factory to ensure they are visible when the Block's
-                      ;; StateDefinition is built.
+          has-be? (registry-metadata/has-block-entity? block-id)
+          block-obj (cond
+                      needs-dynamic-properties?
                       (let [props (bsp/get-all-properties block-id)]
                         (NodeDynamicBlock/create block-id
                                                  (java.util.ArrayList. props)
                                                  (BlockBehaviour$Properties/copy Blocks/STONE)))
-                      (if (= block-id "solar-gen")
-                        (SolarGenBlock. (BlockBehaviour$Properties/copy Blocks/STONE))
-                        ;; Use standard Block for simple blocks
-                        (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))]
+                      has-be?
+                      (ScriptedEntityBlock. block-id (BlockBehaviour$Properties/copy Blocks/STONE))
+                      :else
+                      (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))]
       (registry/register-block registry-name block-obj)
       (swap! registered-blocks assoc block-id block-obj))))
 
 (defn register-block-entities []
-  "Register BlockEntityTypes (minimal: SolarGen only)."
-  (when-let [solar-block (get @registered-blocks "solar-gen")]
-    (let [registry-name (registry-metadata/get-block-registry-name "solar-gen")
-          be-type (-> (BlockEntityType$Builder/of
-                        (reify BlockEntityType$BlockEntitySupplier
-                          (create [_ pos state]
-                            (SolarGenBlockEntity. pos state)))
-                        (into-array Block [solar-block]))
-                      (.build nil))
-          res-loc (ResourceLocation. modid/MOD-ID registry-name)]
-      (Registry/register BuiltInRegistries/BLOCK_ENTITY_TYPE res-loc be-type)
-      (swap! registered-block-entities assoc "solar-gen" be-type)
-      (clojure.lang.Reflector/setStaticField
-        my_mod.block.entity.SolarGenBlockEntity
-        "TYPE"
-        be-type)
-      (log/info "Registered SolarGen BlockEntityType:" registry-name))))
+  "Register BlockEntityTypes: one per scripted block-id."
+  (doseq [block-id (registry-metadata/get-scripted-block-ids)]
+    (when-let [block-inst (get @registered-blocks block-id)]
+      (let [registry-name (registry-metadata/get-block-registry-name block-id)
+            type-holder (object-array 1)
+            be-type (-> (BlockEntityType$Builder/of
+                          (reify BlockEntityType$BlockEntitySupplier
+                            (create [_ pos state]
+                              (ScriptedBlockEntity. (aget type-holder 0) pos state block-id)))
+                          (into-array Block [block-inst]))
+                        (.build nil))]
+        (aset type-holder 0 be-type)
+        (ScriptedBlockEntity/registerType block-id be-type)
+        (let [res-loc (ResourceLocation. modid/MOD-ID registry-name)]
+          (Registry/register BuiltInRegistries/BLOCK_ENTITY_TYPE res-loc be-type)
+          (swap! registered-block-entities assoc block-id be-type)
+          (log/info "Registered scripted BlockEntityType:" block-id registry-name))))))
 
 (defn register-items []
   "Register all items using metadata-driven approach.

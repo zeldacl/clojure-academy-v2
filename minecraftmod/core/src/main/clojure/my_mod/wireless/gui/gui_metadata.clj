@@ -78,6 +78,48 @@
              :player-hotbar [28 36]}}})
 
 ;; ============================================================================
+;; Registration API (for new GUIs)
+;; ============================================================================
+
+(defn register-gui!
+  "Register a new GUI's metadata.
+
+  This is intended for new GUI modules so that adding a GUI does not require
+  editing this file by hand each time. Existing built-in GUIs (node/matrix/solar)
+  are seeded via the static maps above; register-gui! extends those maps.
+
+  Args:
+  - gui-key: keyword identifying the GUI type, e.g. :solar
+  - cfg: map with keys
+    {:id           int
+     :display-name string
+     :type         keyword
+     :registry-name string
+     :screen-fn-kw keyword
+     :slot-layout  {:slots [...] :ranges {...}}}"
+  [gui-key {:keys [id display-name type registry-name screen-fn-kw slot-layout] :as cfg}]
+  (when-not (integer? id)
+    (throw (ex-info "register-gui!: :id must be an integer" {:gui-key gui-key :cfg cfg})))
+  (if (contains? valid-gui-ids id)
+    (do
+      (log/warn "register-gui!: GUI ID is already present in valid-gui-ids, skipping seed of base tables"
+                {:gui-key gui-key :id id})
+      ;; Even if ID exists, still extend type->gui-id so new gui-key can map to same id.
+      (alter-var-root #'type-to-gui-id assoc type id)
+      nil)
+    (do
+      (log/info "Registering GUI metadata" {:gui-key gui-key :id id})
+      ;; Extend ID set and all metadata maps.
+      (alter-var-root #'valid-gui-ids conj id)
+      (alter-var-root #'gui-display-names assoc id display-name)
+      (alter-var-root #'gui-types assoc id type)
+      (alter-var-root #'gui-registry-names assoc id registry-name)
+      (alter-var-root #'gui-screen-factories assoc id screen-fn-kw)
+      (alter-var-root #'gui-slot-layouts assoc id slot-layout)
+      (alter-var-root #'type-to-gui-id assoc type id)
+      nil)))
+
+;; ============================================================================
 ;; Query Functions
 ;; ============================================================================
 

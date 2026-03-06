@@ -14,6 +14,8 @@
                       on-right-click on-break on-place properties
                       ;; Model/datagen fields (official DSL options)
                       model-parent textures model-textures
+                      ;; BlockEntity: when true, platform uses generic ScriptedEntityBlock/ScriptedBlockEntity
+                      has-block-entity?
                       ;; Multi-block support
                       multi-block? multi-block-size multi-block-origin
                       multi-block-positions  ; Custom positions for irregular shapes
@@ -194,9 +196,10 @@
        :on-break (or (:on-break options) (fn [_] nil))
        :on-place (or (:on-place options) (fn [_] nil))
        :properties (or (:properties options) {})
-      :model-parent (:model-parent options)
-      :textures (:textures options)
-      :model-textures (:model-textures options)
+       :model-parent (:model-parent options)
+       :textures (:textures options)
+       :model-textures (:model-textures options)
+       :has-block-entity? (boolean (:has-block-entity? options))
        ;; Multi-block properties
        :multi-block? multi-block?
        :multi-block-size multi-block-size

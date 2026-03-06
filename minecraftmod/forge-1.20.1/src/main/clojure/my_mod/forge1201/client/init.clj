@@ -2,8 +2,8 @@
   "Forge 1.20.1 client-side initialization and registration"
   (:require [my-mod.util.log :as log]
             [my-mod.util.render :as render]
-            [my-mod.client.render.matrix-renderer :as matrix-renderer]
-            [my-mod.client.render.solar-renderer :as solar-renderer]
+            [my-mod.registry.metadata :as registry-metadata]
+            [my-mod.client.render.init :as render-init]
             [my-mod.forge1201.client.render.tesr-impl]
             [my-mod.forge1201.mod :as forge-mod])
   (:import [net.minecraftforge.api.distmarker Dist]
@@ -46,21 +46,16 @@
   (try
     (render/register-texture-binder! bind-texture-forge!)
 
-    ;; Register Matrix block renderer
-    ;; The matrix-renderer/register! function:
-    ;; - Registers TileMatrix with the core renderer dispatcher
-    ;; - The universal BlockEntityRenderer (TileEntityRendererImpl class) will dispatch to this renderer
-    (matrix-renderer/register!)
-    (solar-renderer/register!)
-    (log/info "Matrix block renderer registered successfully")
+    (render-init/register-all-renderers!)
 
-    ;; Bind universal BER dispatcher to BlockEntityTypes
-    (when-let [solar-type (forge-mod/get-registered-block-entity-type "solar-gen")]
-      (BlockEntityRenderers/register
-        solar-type
-        (reify BlockEntityRendererProvider
-          (create [_ctx]
-            (my_mod.forge1201.client.render.TileEntityRendererImpl.)))))
+    ;; Bind universal BER to all scripted BlockEntityTypes (dispatcher uses block-id)
+    (doseq [block-id (registry-metadata/get-scripted-block-ids)]
+      (when-let [be-type (forge-mod/get-registered-block-entity-type block-id)]
+        (BlockEntityRenderers/register
+          be-type
+          (reify BlockEntityRendererProvider
+            (create [_ctx]
+              (my_mod.forge1201.client.render.TileEntityRendererImpl.))))))
     
     (catch Exception e
       (log/error "Failed to register block renderers" e))))
