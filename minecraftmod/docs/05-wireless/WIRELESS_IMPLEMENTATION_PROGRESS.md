@@ -87,7 +87,7 @@
 
 ### 3. 能量系统管理器
 
-#### 3.1 能量系统Stub (`energy/stub.clj`)
+#### 3.1 能量操作层 (`energy/operations.clj`)
 - ✅ **IFItemManager**: 物品能量操作
   - `is-energy-item-supported?`: 检查物品支持
   - `get-item-energy`: 获取物品能量
@@ -933,7 +933,7 @@ root-widget (WidgetContainer 176×200)
 8. `nbt/dsl.clj` (380 lines) - NBT序列化DSL系统
 
 ### 更新文件
-1. `energy/stub.clj` (140 lines) - 能量管理器实现
+1. `energy/operations.clj` (约 220 lines) - 能量操作层（物品/节点/接收器充放电与无线传输）
 2. `block/wireless_node.clj` (640 lines) - 节点方块协议实现 + 状态管理 + ITickable + IInventory + NBT DSL
 
 ### 无线系统现有文件

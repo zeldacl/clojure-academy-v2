@@ -149,7 +149,7 @@
 (defn init-test-batteries! []
   (log/info "Test batteries initialized: basic, advanced, ultimate"))
 
-;; Export for use in energy/stub.clj
+;; Export for use in energy/operations.clj
 (def ^:export is-battery? is-battery?)
 (def ^:export get-battery-energy get-battery-energy)
 (def ^:export set-battery-energy! set-battery-energy!)

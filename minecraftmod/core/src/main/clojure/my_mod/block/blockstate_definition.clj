@@ -5,9 +5,10 @@
    这些定义在core中，可被所有平台（forge, fabric）使用。
    
   每个平台的datagen实现可以根据这些定义调用对应的API生成JSON文件。"
-  (:require [my-mod.registry.metadata :as registry-metadata]
-              [my-mod.block.wireless-node :as wireless-node]
-              [my-mod.block.wireless-matrix]))
+  (:require [clojure.string :as str]
+            [my-mod.registry.metadata :as registry-metadata]
+            [my-mod.block.wireless-node :as wireless-node]
+            [my-mod.block.wireless-matrix]))
 
 ;; ============================================================================
 ;; BlockState部分定义
@@ -79,6 +80,35 @@
                     [connected-model])))]))))
 
 ;; ============================================================================
+;; Node 模型名解析（与 NODE_BLOCKS 共用 wireless-node 为单一数据源）
+;; ============================================================================
+
+(defn- node-model-pattern
+  "从 wireless-node 生成 node 模型名的正则，避免与 NODE_BLOCKS 重复维护 node 类型与变体。"
+  []
+  (let [node-type-str (str "(" (str/join "|" (map name (sort (keys wireless-node/node-types)))) ")")
+        variant-str   "(base|energy_\\d+|connected)"]
+    (re-pattern (str "node_" node-type-str "_" variant-str))))
+
+(defn- parse-node-model-name
+  "解析 node 模型名，返回 [node-type variant] 或 nil。
+   energy 范围来自 wireless-node/block-state-properties，与 NODE_BLOCKS 一致。"
+  [model-name]
+  (when-let [[_ node-type variant] (re-matches (node-model-pattern) model-name)]
+    [node-type variant]))
+
+(defn- variant->energy-level
+  "根据 variant 字符串得到能量等级（用于纹理）。
+   范围与 wireless-node/block-state-properties 一致，与 NODE_BLOCKS 生成的 model 一致。"
+  [variant]
+  (let [raw (cond
+              (#{"base" "connected"} variant) 0
+              (str/starts-with? variant "energy_") (Integer/parseInt (subs variant 7))
+              :else 0)
+        {:keys [min max]} (get-in wireless-node/block-state-properties [:energy])]
+    (max (or min 0) (min (or max 4) raw))))
+
+;; ============================================================================
 ;; 模型纹理配置 (业务逻辑)
 ;; ============================================================================
 
@@ -88,6 +118,8 @@
    此函数包含所有与模型纹理相关的业务逻辑。
    框架层调用此函数获取纹理配置，然后使用Forge API生成模型。
    
+   node 的 energy/connected 变体与 NODE_BLOCKS 一致，均以 wireless-node 为单一数据源。
+   
    参数：
      model-name: 模型名称（不含命名空间），如 \"node_basic_base\"
    
@@ -95,18 +127,11 @@
      {:side \"texture-path\" :vert \"texture-path\"} - cube模型的纹理配置
      nil - 使用默认处理（cubeAll）"
   [model-name]
-  (when-let [[_ node-type variant] (re-matches #"node_(basic|standard|advanced)_(base|energy_\d+|connected)" model-name)]
-    (let [;; 解析能量等级
-          energy-level (cond
-                         (= variant "base") 0
-                         (.startsWith variant "energy_") (Integer/parseInt (subs variant 7))
-                         (= variant "connected") 0
-                         :else 0)
-          ;; 解析顶部纹理
-          top-texture (if (= variant "connected") 
+  (when-let [[node-type variant] (parse-node-model-name model-name)]
+    (let [energy-level (variant->energy-level variant)
+          top-texture  (if (= variant "connected")
                         (str MOD-ID ":block/node_top_1")
                         (str MOD-ID ":block/node_top_0"))
-          ;; 侧面纹理
           side-texture (str MOD-ID ":block/node_" node-type "_side_" energy-level)]
       {:side side-texture
        :vert top-texture})))

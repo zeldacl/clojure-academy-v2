@@ -1,10 +1,12 @@
-(ns my-mod.energy.stub
-  "Energy system implementations
-  
-  Implementations for:
-  - IFItemManager (item energy operations)
-  - IFNodeManager (node energy operations)
-  - IFReceiverManager (receiver energy operations)"
+(ns my-mod.energy.operations
+  "Energy operations - 物品/节点/接收器的充放电与无线传输
+
+  实现并统一对外提供：
+  - IFItemManager：物品能量（电池充放电、容量、带宽）
+  - IFNodeManager：节点能量（Wireless Node 充放电）
+  - IFReceiverManager：接收器能量（inject/pull）
+  - 无线网络：获取网络、连接状态、无线传输（含 fallback stub）
+  - 网络同步：send-sync-message（当前为 stub 实现）"
   (:require [my-mod.util.log :as log]
             [my-mod.energy.imag-energy-item :as energy-item]
             [my-mod.item.test-battery :as battery]
@@ -146,11 +148,8 @@
     0.0))
 
 ;; ============================================================================
-;; Wireless Network Stub (delegates to wireless.helper)
+;; Wireless Network (delegates to wireless.helper; fallback stub when unavailable)
 ;; ============================================================================
-
-;; These functions delegate to the wireless.helper namespace
-;; which implements the actual wireless network logic
 
 (defrecord StubWirelessNetwork
   [ssid password node-list])
@@ -159,10 +158,8 @@
   "Get wireless network for a node (delegates to wireless.helper)"
   [node password]
   (try
-    ;; Try to use real wireless system
     (whelper/get-wireless-net-by-node node)
     (catch Exception e
-      ;; Fallback stub
       (log/info (format "Using stub wireless network for node with password: %s" password))
       (->StubWirelessNetwork
         (str "Network-" password)
@@ -173,10 +170,8 @@
   "Check if node is connected to wireless network (delegates to wireless.helper)"
   [node password]
   (try
-    ;; Try to use real wireless system
     (whelper/is-node-linked? node)
     (catch Exception e
-      ;; Fallback stub: connected if has password
       (not (empty? password)))))
 
 (defn transfer-energy-wireless
@@ -184,8 +179,6 @@
   Returns the amount that couldn't be transferred"
   [network from-node to-node amount]
   (try
-    ;; In real implementation, this would go through WirelessNet energy balancing
-    ;; For stub, simulate 90% efficiency
     (let [actual-transfer (* amount 0.9)
           leftover (* amount 0.1)]
       (log/info (format "Wireless transfer: %.1f energy, %.1f loss (simulated)"
@@ -196,14 +189,12 @@
       amount)))
 
 ;; ============================================================================
-;; Network Synchronization Stub
+;; Network Synchronization (stub: logs only)
 ;; ============================================================================
 
 (defn send-sync-message
   "Send synchronization message to client (stub implementation)"
   [player data]
-  ;; In real implementation, this would use Minecraft's packet system
-  ;; For stub, just log
   (log/info (format "Sync to %s: enabled=%s, chargingIn=%s, chargingOut=%s, energy=%.1f"
                     player
                     (:enabled data)
@@ -217,4 +208,3 @@
 
 (defn init-energy-system! []
   (log/info "Energy system initialized"))
-

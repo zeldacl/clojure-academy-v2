@@ -1,7 +1,7 @@
 (ns my-mod.block.wireless-node-test
   "Unit tests for Wireless Node implementation"
   (:require [my-mod.block.wireless-node :as wnode]
-            [my-mod.energy.stub :as energy]
+            [my-mod.energy.operations :as energy]
             [my-mod.util.log :as log]))
 
 ;; Test node creation

@@ -1,7 +1,7 @@
 (ns my-mod.wireless.gui.node-container
   "Wireless Node GUI Container - handles server-side inventory and data sync"
   (:require [my-mod.wireless.interfaces :as winterfaces]
-            [my-mod.energy.stub :as energy-stub]
+            [my-mod.energy.operations :as energy-stub]
             [my-mod.wireless.world-data :as wd]
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.inventory.core :as inv]

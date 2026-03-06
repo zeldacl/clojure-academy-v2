@@ -1,6 +1,6 @@
 (ns my-mod.gui.slot-validators
   "Shared slot validation helpers for all platforms."
-  (:require [my-mod.energy.stub :as energy]
+  (:require [my-mod.energy.operations :as energy]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]))
 

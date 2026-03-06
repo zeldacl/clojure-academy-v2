@@ -3,7 +3,7 @@
   
   Implements ITickable interface for automatic updates every game tick."
   (:require [my-mod.block.dsl :as bdsl]
-            [my-mod.energy.stub :as energy]
+            [my-mod.energy.operations :as energy]
             [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.inventory.core :as inv]
             [my-mod.nbt.dsl :as nbt]
