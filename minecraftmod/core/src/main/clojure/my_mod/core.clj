@@ -7,6 +7,9 @@
             [my-mod.wireless.gui.matrix-network-handler :as matrix-net]
             [my-mod.wireless.gui.node-network-handler :as node-net]
             [my-mod.wireless.world-data :as wd]
+            ;; Load all block definitions (so block-dsl registry is populated)
+            [my-mod.block.wireless-node]
+            [my-mod.block.wireless-matrix]
             ;; Load all item definitions (so item-dsl registry is populated)
             [my-mod.item.components]
             [my-mod.item.constraint-plate]

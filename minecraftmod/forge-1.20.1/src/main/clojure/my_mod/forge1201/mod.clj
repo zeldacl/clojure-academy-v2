@@ -9,20 +9,24 @@
             [my-mod.block.dsl :as bdsl]
             [my-mod.block.wireless-node]
             [my-mod.block.wireless-matrix]
+            [my-mod.block.blockstate-properties :as bsp]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
             [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
   (:import [net.minecraft.world.level.block Block Blocks]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
-           [net.minecraft.world.item Item Item$Properties BlockItem]
+           [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab CreativeModeTabs]
+           [net.minecraft.core.registries Registries]
+           [net.minecraft.network.chat Component]
            [my_mod.block NodeDynamicBlock]
            [net.minecraftforge.fml.common Mod]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
            [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
            [net.minecraftforge.registries DeferredRegister ForgeRegistries]
            [net.minecraftforge.common MinecraftForge]
-           [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock])
+           [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
+           [net.minecraftforge.event BuildCreativeModeTabContentsEvent])
   (:gen-class
    :name com.example.my_mod1201.MyMod1201Clj
    :prefix "mod-"
@@ -43,13 +47,18 @@
 (defonce items-register 
   (DeferredRegister/create ForgeRegistries/ITEMS mod-id))
 
+(defonce creative-tabs-register
+  (DeferredRegister/create Registries/CREATIVE_MODE_TAB mod-id))
+
 ;; Storage for registered blocks and items (populated during initialization)
 (defonce registered-blocks (atom {}))
 (defonce registered-items (atom {}))
 
-(defn- node-block-registry-name?
-  [registry-name]
-  (contains? #{"node_basic" "node_standard" "node_advanced"} registry-name))
+(defn- has-block-state-properties?
+  "Check if a block needs dynamic block state properties (via metadata).
+  Platform code queries business layer instead of hardcoding block names."
+  [block-id]
+  (registry-metadata/has-block-state-properties? block-id))
 
 ;; Dynamic block registration using metadata
 (defn register-all-blocks!
@@ -59,11 +68,20 @@
   (doseq [block-id (registry-metadata/get-all-block-ids)]
     (let [registry-name (registry-metadata/get-block-registry-name block-id)
           block-spec (registry-metadata/get-block-spec block-id)
+          ;; Query business layer for block state properties
+          needs-dynamic-properties? (has-block-state-properties? block-id)
           registered-obj (.register blocks-register registry-name
                           (reify java.util.function.Supplier
                             (get [_]
-                              (if (node-block-registry-name? registry-name)
-                                (NodeDynamicBlock. (BlockBehaviour$Properties/copy Blocks/STONE))
+                              (if needs-dynamic-properties?
+                                ;; Create NodeDynamicBlock and inject properties
+                                (let [block (NodeDynamicBlock. (BlockBehaviour$Properties/copy Blocks/STONE))
+                                      ;; Get property objects from registry
+                                      props (bsp/get-all-properties block-id)]
+                                  ;; Inject block ID and properties (called before initStateDefinition)
+                                  (.setBlockIdAndProperties block block-id (java.util.ArrayList. props))
+                                  block)
+                                ;; Use standard Block for simple blocks
                                 (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
 
@@ -94,85 +112,9 @@
         (swap! registered-items assoc (str block-id "-item") registered-obj)))))
 
 ;; ============================================================================
-;; Setup Phase Helpers (must be defined before mod-init)
+;; Helper Functions for Registry Queries
 ;; ============================================================================
 
-;; Helper: Common setup phase (called from event handler)
-(defn on-common-setup [event]
-  (log/info "FMLCommonSetupEvent - Common setup phase")
-  ;; Common initialization (runs on both client and server)
-  (gui-init/init-common!)
-  
-  ;; Register gameplay event listeners  
-  ;; Note: Consumer.accept(Object) will receive the event from the bus
-  (let [listener (reify java.util.function.Consumer
-                   (accept [_ evt]
-                     (events/handle-right-click-event evt)))]
-    (.addListener (MinecraftForge/EVENT_BUS) listener)))
-
-;; Helper: Client setup phase (called from event handler)  
-(defn on-client-setup [event]
-  (log/info "FMLClientSetupEvent - Client setup phase")
-  ;; Client-only initialization
-  (gui-init/init-client!)
-  (if-let [init-client! (requiring-resolve 'my-mod.forge1201.client.init/init-client)]
-    (init-client!)
-    (log/warn "Forge client init namespace unavailable on current side")))
-
-;; ============================================================================
-;; Constructor Implementation
-;; ============================================================================
-
-;; Constructor implementation
-(defn mod-init []
-  (log/info "Initializing MyMod1201 from Clojure...")
-  
-  ;; CRITICAL: Initialize platform abstractions FIRST
-  ;; This must happen before any core code runs that uses NBT/BlockPos/World
-  (platform-impl/init-platform!)
-  
-  ;; Register all blocks and items using metadata-driven approach
-  ;; DSL systems are automatically initialized when namespaces load
-  (register-all-blocks!)
-  (register-all-items!)
-  
-  ;; Register DeferredRegisters with mod event bus
-  (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
-    (.register blocks-register mod-bus)
-    (.register items-register mod-bus))
-  
-  ;; Setup phase event listeners
-  ;; Note: Forge 1.20.1 event bus has specific requirements for type resolution
-  ;; We'll invoke setup functions through the generated methods instead
-  ;; The gen-class methods (commonSetup, clientSetup) will be called by Forge automatically
-  ;; through the lifecycle events
-  
-  ;; Initialize Clojure adapters
-  (init/init-from-java)
-  
-  ;; Return state
-  [[] nil])
-
-;; ============================================================================
-;; Gen-class Method Implementations
-;; ============================================================================
-
-;; Gen-class method implementations (required by gen-class contract)
-(defn mod-commonSetup [this event]
-  (on-common-setup event))
-
-(defn mod-clientSetup [this event]
-  (on-client-setup event))
-
-;; Event handler method (required by gen-class, but not used directly in 1.20.1)
-(defn mod-onRightClickBlock [this event]
-  (events/handle-right-click-event event))
-
-;; ============================================================================
-;; Registry Query Helpers
-;; ============================================================================
-
-;; Generic helpers to query registered blocks/items by ID
 (defn get-registered-block
   "Get a registered block by its DSL ID.
   
@@ -208,3 +150,131 @@
   [block-id]
   (when-let [registered-obj (get @registered-items (str block-id "-item"))]
     (.get registered-obj)))
+
+;; Creative Tab registration
+(defn register-creative-tab!
+  "Register custom creative mode tab for all mod items.
+  Uses metadata-driven approach to populate tab contents."
+  []
+  (log/info "Registering Forge creative tab...")
+  (.register creative-tabs-register "items"
+             (reify java.util.function.Supplier
+               (get [_]
+                 (-> (CreativeModeTab/builder)
+                     (.title (Component/translatable (str "itemGroup." mod-id ".items")))
+                     (.icon (reify java.util.function.Supplier
+                              (get [_]
+                                ;; Use first available item as icon, fallback to barrier
+                                (let [entries (registry-metadata/get-all-creative-tab-entries)]
+                                  (if-let [first-entry (first entries)]
+                                    (let [item-id (:id first-entry)
+                                          item-obj (if (= (:type first-entry) :block-item)
+                                                     (get-registered-block-item item-id)
+                                                     (get-registered-item item-id))]
+                                      (if item-obj
+                                        (.getDefaultInstance item-obj)
+                                        (.getDefaultInstance net.minecraft.world.item.Items/BARRIER)))
+                                    (.getDefaultInstance net.minecraft.world.item.Items/BARRIER))))))
+                     (.displayItems (reify net.minecraft.world.item.CreativeModeTab$DisplayItemsGenerator
+                                      (accept [_ params output]
+                                        ;; This will be called when the tab is opened
+                                        ;; We'll populate it via BuildCreativeModeTabContentsEvent instead
+                                        nil)))
+                     (.build))))))
+
+;; ============================================================================
+;; Setup Phase Helpers (must be defined before mod-init)
+;; ============================================================================
+
+;; Helper: Common setup phase (called from event handler)
+(defn on-common-setup [event]
+  (log/info "FMLCommonSetupEvent - Common setup phase")
+  ;; Common initialization (runs on both client and server)
+  (gui-init/init-common!)
+  
+  ;; Register gameplay event listeners  
+  ;; Note: Consumer.accept(Object) will receive the event from the bus
+  (let [listener (reify java.util.function.Consumer
+                   (accept [_ evt]
+                     (events/handle-right-click-event evt)))]
+    (.addListener (MinecraftForge/EVENT_BUS) listener))
+  
+  ;; Register creative tab content population listener
+  (let [tab-listener (reify java.util.function.Consumer
+                       (accept [_ evt]
+                         (log/info "Populating creative tab with mod items...")
+                         (doseq [entry (registry-metadata/get-all-creative-tab-entries)]
+                           (let [item-id (:id entry)
+                                 item-obj (if (= (:type entry) :block-item)
+                                            (get-registered-block-item item-id)
+                                            (get-registered-item item-id))]
+                             (when item-obj
+                               (.accept (.getEntries evt) item-obj)
+                               (log/debug "Added to creative tab:" item-id))))))]
+    (.addListener (MinecraftForge/EVENT_BUS) BuildCreativeModeTabContentsEvent tab-listener)))
+
+;; Helper: Client setup phase (called from event handler)  
+(defn on-client-setup [event]
+  (log/info "FMLClientSetupEvent - Client setup phase")
+  ;; Client-only initialization
+  (gui-init/init-client!)
+  (if-let [init-client! (requiring-resolve 'my-mod.forge1201.client.init/init-client)]
+    (init-client!)
+    (log/warn "Forge client init namespace unavailable on current side")))
+
+;; ============================================================================
+;; Constructor Implementation
+;; ============================================================================
+
+;; Constructor implementation
+(defn mod-init []
+  (log/info "Initializing MyMod1201 from Clojure...")
+  
+  ;; CRITICAL: Initialize platform abstractions FIRST
+  ;; This must happen before any core code runs that uses NBT/BlockPos/World
+  (platform-impl/init-platform!)
+  
+  ;; Initialize BlockState properties from Clojure metadata
+  ;; Must happen before block registration so Property objects are ready
+  (bsp/init-all-properties!)
+  
+  ;; Register all blocks and items using metadata-driven approach
+  ;; DSL systems are automatically initialized when namespaces load
+  (register-all-blocks!)
+  (register-all-items!)
+  
+  ;; Register creative mode tab
+  (register-creative-tab!)
+  
+  ;; Register DeferredRegisters with mod event bus
+  (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
+    (.register blocks-register mod-bus)
+    (.register items-register mod-bus)
+    (.register creative-tabs-register mod-bus))
+  
+  ;; Setup phase event listeners
+  ;; Note: Forge 1.20.1 event bus has specific requirements for type resolution
+  ;; We'll invoke setup functions through the generated methods instead
+  ;; The gen-class methods (commonSetup, clientSetup) will be called by Forge automatically
+  ;; through the lifecycle events
+  
+  ;; Initialize Clojure adapters
+  (init/init-from-java)
+  
+  ;; Return state
+  [[] nil])
+
+;; ============================================================================
+;; Gen-class Method Implementations
+;; ============================================================================
+
+;; Gen-class method implementations (required by gen-class contract)
+(defn mod-commonSetup [this event]
+  (on-common-setup event))
+
+(defn mod-clientSetup [this event]
+  (on-client-setup event))
+
+;; Event handler method (required by gen-class, but not used directly in 1.20.1)
+(defn mod-onRightClickBlock [this event]
+  (events/handle-right-click-event event))

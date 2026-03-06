@@ -7,6 +7,8 @@
            [net.minecraftforge.fml.common.eventhandler SubscribeEvent]
            [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent]
            [net.minecraftforge.fml.javafxmod FMLJavaModLoadingContext]
+           [net.minecraft.client Minecraft]
+           [net.minecraft.client.renderer.texture TextureManager]
            [net.minecraft.client.renderer.blockentity BlockEntityRenderer BlockEntityRenderDispatcher]
            [net.minecraft.world.level.block.entity BlockEntity]))
 
@@ -15,14 +17,21 @@
 ;; ============================================================================
 
 (defn- bind-texture-forge!
+  "Bind a texture for rendering.
+  
+  Args:
+    texture: ResourceLocation - texture to bind
+  
+  Uses direct method calls (no reflection) for better performance."
   [texture]
-  (let [mc-class (Class/forName "net.minecraft.client.Minecraft")
-        minecraft (clojure.lang.Reflector/invokeStaticMethod mc-class "getInstance" (to-array []))
-        texture-manager (clojure.lang.Reflector/invokeInstanceMethod minecraft "getTextureManager" (to-array []))]
+  (let [minecraft (Minecraft/getInstance)
+        texture-manager (.getTextureManager minecraft)]
     (try
-      (clojure.lang.Reflector/invokeInstanceMethod texture-manager "bindForSetup" (to-array [texture]))
+      ;; Prefer bindForSetup if available (clears previous bindings)
+      (.bindForSetup texture-manager texture)
       (catch Exception _
-        (clojure.lang.Reflector/invokeInstanceMethod texture-manager "bind" (to-array [texture]))))))
+        ;; Fallback to bind() if bindForSetup doesn't exist
+        (.bind texture-manager texture)))))
 
 (defn register-renderers
   "Register platform-agnostic renderers with the universal BlockEntityRenderer dispatcher

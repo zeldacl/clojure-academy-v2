@@ -4,6 +4,8 @@
             [my-mod.util.render :as render]
             [my-mod.client.render.matrix-renderer :as matrix-renderer])
   (:import [net.fabricmc.fabric.api.client.rendering.v1 BlockEntityRendererRegistry]
+           [net.minecraft.client MinecraftClient]
+           [net.minecraft.client.texture TextureManager]
            [net.minecraft.client.render.block.entity BlockEntityRenderer BlockEntityRendererFactory]))
 
 ;; ============================================================================
@@ -11,14 +13,21 @@
 ;; ============================================================================
 
 (defn- bind-texture-fabric!
+  "Bind a texture for rendering.
+  
+  Args:
+    texture: Identifier - texture to bind
+  
+  Uses direct method calls (no reflection) for better performance."
   [texture]
-  (let [mc-class (Class/forName "net.minecraft.client.MinecraftClient")
-        minecraft (clojure.lang.Reflector/invokeStaticMethod mc-class "getInstance" (to-array []))
-        texture-manager (clojure.lang.Reflector/invokeInstanceMethod minecraft "getTextureManager" (to-array []))]
+  (let [minecraft (MinecraftClient/getInstance)
+        texture-manager (.getTextureManager minecraft)]
     (try
-      (clojure.lang.Reflector/invokeInstanceMethod texture-manager "bindTexture" (to-array [texture]))
+      ;; Try bindTexture first (some versions use this)
+      (.bindTexture texture-manager texture)
       (catch Exception _
-        (clojure.lang.Reflector/invokeInstanceMethod texture-manager "bind" (to-array [texture]))))))
+        ;; Fallback to bind() if bindTexture doesn't exist
+        (.bind texture-manager texture))))))
 
 (defn register-renderers
   "Register platform-agnostic renderers with the universal BlockEntityRenderer dispatcher

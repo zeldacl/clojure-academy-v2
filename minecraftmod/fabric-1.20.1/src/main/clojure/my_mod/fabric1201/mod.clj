@@ -7,6 +7,7 @@
             [my-mod.fabric1201.gui.impl :as gui]
             [my-mod.fabric1201.platform-impl :as platform-impl]
             [my-mod.block.dsl :as bdsl]
+            [my-mod.block.blockstate-properties :as bsp]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
             [my-mod.config.modid :as modid]
@@ -16,7 +17,10 @@
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world.item Item BlockItem CreativeModeTabs]
            [net.minecraft.world.level.block Block Blocks]
-           [net.minecraft.world.level.block.state BlockBehaviour]))
+           [net.minecraft.world.level.block.state BlockBehaviour]
+           [net.fabricmc.fabric.api.itemgroup.v1 FabricItemGroup ItemGroupEvents]
+           [net.minecraft.network.chat Component]
+           [my_mod.block NodeDynamicBlock]))
 
 ;; Mod ID constant
 (def mod-id modid/MOD-ID)
@@ -32,7 +36,18 @@
   (doseq [block-id (registry-metadata/get-all-block-ids)]
     (let [registry-name (registry-metadata/get-block-registry-name block-id)
           block-spec (registry-metadata/get-block-spec block-id)
-          block-obj (Block. (BlockBehaviour$Properties/copy Blocks/STONE))]
+          ;; Query business layer for block state properties
+          needs-dynamic-properties? (registry-metadata/has-block-state-properties? block-id)
+          block-obj (if needs-dynamic-properties?
+                      ;; Create NodeDynamicBlock and inject properties
+                      (let [block (NodeDynamicBlock. (BlockBehaviour$Properties/copy Blocks/STONE))
+                            ;; Get property objects from registry
+                            props (bsp/get-all-properties block-id)]
+                        ;; Inject block ID and properties (called before initStateDefinition)
+                        (.setBlockIdAndProperties block block-id (java.util.ArrayList. props))
+                        block)
+                      ;; Use standard Block for simple blocks
+                      (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))]
       (registry/register-block registry-name block-obj)
       (swap! registered-blocks assoc block-id block-obj))))
 
@@ -57,6 +72,49 @@
         (registry/register-item registry-name block-item-obj)
         (swap! registered-items assoc (str block-id "-item") block-item-obj)))))
 
+;; Creative Tab storage
+(defonce creative-tab (atom nil))
+
+(defn register-creative-tab []
+  "Register custom creative mode tab for all mod items.
+  Uses metadata-driven approach to populate tab contents."
+  (log/info "Registering Fabric creative tab...")
+  
+  ;; Create custom creative tab using FabricItemGroup
+  (let [tab-id (ResourceLocation. mod-id "items")
+        tab (-> (FabricItemGroup/builder)
+                (.icon (fn []
+                         ;; Use first available item as icon, fallback to barrier
+                         (let [entries (registry-metadata/get-all-creative-tab-entries)]
+                           (if-let [first-entry (first entries)]
+                             (let [item-name (:registry-name first-entry)
+                                   item-obj (get @registered-items (:id first-entry))]
+                               (if item-obj
+                                 (.getDefaultInstance item-obj)
+                                 (.getDefaultInstance net.minecraft.world.item.Items/BARRIER)))
+                             (.getDefaultInstance net.minecraft.world.item.Items/BARRIER)))))
+                (.title (Component/translatable (str "itemGroup." mod-id ".items")))
+                (.build))]
+    
+    ;; Register the tab
+    (Registry/register BuiltInRegistries/CREATIVE_MODE_TAB tab-id tab)
+    (reset! creative-tab tab)
+    (log/info "Creative tab registered:" tab-id)
+    
+    ;; Populate tab with all items and block items
+    (ItemGroupEvents/modifyEntriesEvent tab
+      (reify java.util.function.Consumer
+        (accept [_ entries]
+          (log/info "Populating creative tab with mod items...")
+          (doseq [entry (registry-metadata/get-all-creative-tab-entries)]
+            (let [item-id (:id entry)
+                  item-obj (if (= (:type entry) :block-item)
+                             (get @registered-items (str item-id "-item"))
+                             (get @registered-items item-id))]
+              (when item-obj
+                (.accept entries item-obj)
+                (log/debug "Added to creative tab:" item-id)))))))))
+
 (defn mod-init []
   "Main mod initialization called from Java ModInitializer"
   (log/info "Initializing MyMod (Fabric 1.20.1) from Clojure...")
@@ -68,10 +126,17 @@
   ;; Initialize Clojure adapters
   (init/init-from-java)
   
+  ;; Initialize BlockState properties from Clojure metadata
+  ;; Must happen before block registration so Property objects are ready
+  (bsp/init-all-properties!)
+  
   ;; Register blocks and items using metadata-driven approach
   ;; DSL systems are automatically initialized when namespaces load
   (register-blocks)
   (register-items)
+  
+  ;; Register creative mode tab and populate with all items
+  (register-creative-tab)
   
   ;; Register event listeners
   (events/register-events)

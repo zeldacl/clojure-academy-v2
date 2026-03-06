@@ -640,6 +640,7 @@
   :harvest-level 1
   :sounds :metal
   :model-parent "minecraft:block/cube_all"
+  :block-state-properties block-state-properties  ;; Dynamic properties: energy (0-4), connected (boolean)
   :on-right-click (handle-node-right-click :basic)
   :on-place (handle-node-place :basic)
   :on-break (handle-node-break :basic))
@@ -654,6 +655,7 @@
   :harvest-level 1
   :sounds :metal
   :model-parent "minecraft:block/cube_all"
+  :block-state-properties block-state-properties  ;; Dynamic properties: energy (0-4), connected (boolean)
   :on-right-click (handle-node-right-click :standard)
   :on-place (handle-node-place :standard)
   :on-break (handle-node-break :standard))
@@ -668,6 +670,7 @@
   :harvest-level 1
   :sounds :metal
   :model-parent "minecraft:block/cube_all"
+  :block-state-properties block-state-properties  ;; Dynamic properties: energy (0-4), connected (boolean)
   :on-right-click (handle-node-right-click :advanced)
   :on-place (handle-node-place :advanced)
   :on-break (handle-node-break :advanced))

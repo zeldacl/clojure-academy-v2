@@ -59,6 +59,30 @@
   [block-id]
   (bdsl/get-block block-id))
 
+(defn has-block-state-properties?
+  "Checks if a block has dynamic block state properties.
+  
+  Args:
+    block-id: String - DSL block identifier
+  
+  Returns:
+    Boolean - true if block has block-state-properties defined"
+  [block-id]
+  (let [block-spec (get-block-spec block-id)]
+    (some? (:block-state-properties block-spec))))
+
+(defn get-block-state-properties
+  "Returns the block state properties definition for a block.
+  
+  Args:
+    block-id: String - DSL block identifier
+  
+  Returns:
+    Map - Block state properties (e.g., {:energy {...} :connected {...}}), or nil"
+  [block-id]
+  (let [block-spec (get-block-spec block-id)]
+    (:block-state-properties block-spec)))
+
 ;; Item Registration Metadata
 ;; ============================================================
 
@@ -115,6 +139,68 @@
   ;; Default: all blocks get BlockItems
   ;; Future: could check block spec for :has-item-form property
   true)
+
+;; Creative Tab Metadata
+;; ============================================================
+
+(defn get-item-creative-tab
+  "Returns the creative tab for an item.
+  
+  Args:
+    item-id: String - DSL item identifier
+  
+  Returns:
+    Keyword - Creative tab (e.g., :misc, :tools, :combat)"
+  [item-id]
+  (let [item-spec (get-item-spec item-id)]
+    (or (:creative-tab item-spec) :misc)))
+
+(defn get-block-creative-tab
+  "Returns the creative tab for a block (used for block items).
+  
+  Args:
+    block-id: String - DSL block identifier
+  
+  Returns:
+    Keyword - Creative tab (e.g., :misc, :building-blocks)"
+  [block-id]
+  (let [block-spec (get-block-spec block-id)]
+    (or (:creative-tab block-spec) :misc)))
+
+(defn get-all-creative-tab-entries
+  "Returns all items and block-items that should be added to creative tabs.
+  
+  Platform code should use this to populate creative mode tabs without
+  knowing specific item/block names.
+  
+  Returns:
+    Sequence of maps with:
+      :type - :item or :block-item
+      :id - registry ID (string)
+      :tab - creative tab keyword
+      :registry-name - Minecraft registry name
+  
+  Example:
+    [{:type :item :id \"demo-item\" :tab :misc :registry-name \"demo_item\"}
+     {:type :block-item :id \"demo-block\" :tab :building-blocks :registry-name \"demo_block\"}]"
+  []
+  (let [;; Get all standalone items
+        item-entries (for [item-id (get-all-item-ids)]
+                       {:type :item
+                        :id item-id
+                        :tab (get-item-creative-tab item-id)
+                        :registry-name (get-item-registry-name item-id)})
+        
+        ;; Get all block items
+        block-item-entries (for [block-id (get-all-block-ids)
+                                 :when (should-create-block-item? block-id)]
+                             {:type :block-item
+                              :id block-id
+                              :tab (get-block-creative-tab block-id)
+                              :registry-name (get-block-registry-name block-id)})]
+    
+    ;; Combine and return all entries
+    (concat item-entries block-item-entries)))
 
 ;; Initialization
 ;; ============================================================

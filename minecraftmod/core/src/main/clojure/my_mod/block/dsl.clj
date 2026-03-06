@@ -9,6 +9,8 @@
 ;; Block specifications
 (defrecord BlockSpec [id registry-name material hardness resistance light-level requires-tool
                       sounds harvest-level harvest-tool friction slip-factor
+                      creative-tab  ;; Creative tab for block items
+                      block-state-properties  ;; Dynamic block state properties (e.g., energy, connected)
                       on-right-click on-break on-place properties
                       ;; Model/datagen fields (official DSL options)
                       model-parent textures model-textures
@@ -54,6 +56,7 @@
 (def default-resistance 6.0)
 (def default-light-level 0)
 (def default-friction 0.6)
+(def default-creative-tab :misc)
 
 ;; Multi-block helper functions
 (defn calculate-multi-block-positions
@@ -185,6 +188,8 @@
        :harvest-tool (or (:harvest-tool options) :pickaxe)
        :friction (or (:friction options) default-friction)
        :slip-factor (or (:slip-factor options) default-friction)
+       :creative-tab (or (:creative-tab options) default-creative-tab)
+       :block-state-properties (:block-state-properties options)
        :on-right-click (or (:on-right-click options) (fn [_] nil))
        :on-break (or (:on-break options) (fn [_] nil))
        :on-place (or (:on-place options) (fn [_] nil))

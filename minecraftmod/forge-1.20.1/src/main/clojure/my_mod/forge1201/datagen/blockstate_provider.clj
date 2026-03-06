@@ -8,6 +8,7 @@
    优势：定义层复用，易于支持新的Forge版本"
   (:require [my-mod.config.modid :as modid]
             [my-mod.block.blockstate-definition :as blockstate-def]
+            [my-mod.block.blockstate-properties :as bsp]
             [my-mod.forge1201.mod :as forge-mod]
             [my-mod.registry.metadata :as registry-metadata]
             [clojure.string :as str])
@@ -148,14 +149,16 @@
     value))
 
 (defn- apply-node-condition!
-  [part-builder condition]
+  "Apply block state condition for a block.
+  Gets Property objects dynamically from blockstate-properties module."
+  [part-builder block-id condition]
   (doseq [[property-key raw-value] condition]
-    (case property-key
-      :energy (.condition part-builder NodeDynamicBlock/ENERGY
-                         (into-array Comparable [(condition->typed property-key raw-value)]))
-      :connected (.condition part-builder NodeDynamicBlock/CONNECTED
-                            (into-array Comparable [(condition->typed property-key raw-value)]))
-      nil))
+    (if-let [property (bsp/get-property block-id property-key)]
+      ;; Use the dynamically retrieved property object
+      (.condition part-builder property
+                 (into-array Comparable [(condition->typed property-key raw-value)]))
+      ;; Fallback: warn if property not found
+      (log/warn "Property not found for block" block-id ":" property-key)))
   part-builder)
 
 (defn- build-simple-block!
@@ -189,9 +192,7 @@
                 (.end))
             (.end part-builder))))
       ;; For node blocks, use _base variant for item model
-      (let [item-model-id (if (re-find #"^node_(basic|standard|advanced)" registry-name)
-                            (str modid/MOD-ID ":block/" registry-name "_base")
-                            (str modid/MOD-ID ":block/" registry-name))]
+      (let [item-model-id (blockstate-def/get-item-model-id modid/MOD-ID registry-name)]
         (.simpleBlockItem provider block (ensure-block-model! provider item-model-id))))))
 
 (defn- generate-with-forge-builder!

@@ -159,6 +159,33 @@
   [definition]
   (> (count (:parts definition)) 1))
 
+(defn is-node-block?
+  "判断block是否为node块（basic/standard/advanced）
+   
+   参数：
+     registry-name: block的registry name
+   
+   返回：
+     true 如果是node块"
+  [registry-name]
+  (boolean (re-find #"^node_(basic|standard|advanced)" registry-name)))
+
+(defn get-item-model-id
+  "获取block对应的物品模型ID
+   
+   对于node块，使用_base变体；其他块使用registry-name
+   
+   参数：
+     mod-id: 模组ID
+     registry-name: block的registry name
+   
+   返回：
+     物品模型ID字符串"
+  [mod-id registry-name]
+  (if (is-node-block? registry-name)
+    (str mod-id ":block/" registry-name "_base")
+    (str mod-id ":block/" registry-name)))
+
 (comment
   ;; 使用示例
   (get-block-state-definition :node-basic)
