@@ -1,0 +1,30 @@
+---
+description: Project structure and where new code should live
+alwaysApply: true
+---
+
+# Project structure
+
+- **Top-level layout**
+  - `minecraftmod/` is the Gradle root for this mod.
+  - `core/` contains all platform-neutral Clojure game logic and metadata systems.
+  - `forge-1.20.1/` and `fabric-1.20.1/` contain loader-specific adapters, entrypoints, and resources.
+
+- **Core module (`core/`)**
+  - Put all game/content logic under `core/src/main/clojure/my_mod/...` with `my-mod.*` namespaces.
+  - Use dedicated folders for domains (e.g. `block`, `item`, `gui`, `events`, `registry`, `network`, `platform`, `util`, `wireless`).
+  - Keep these namespaces platform-neutral: they may use metadata and DSLs but must not import Forge/Fabric APIs directly.
+  - Shared data/asset files that are not loader-specific go under `core/src/main/resources`.
+
+- **Platform modules (`forge-1.20.1/`, `fabric-1.20.1/`)**
+  - `src/main/java` holds Java entrypoint classes and any Java-only integration needed by the loader.
+  - `src/main/clojure/my_mod/forge1201` and `src/main/clojure/my_mod/fabric1201` hold adapter namespaces that:
+    - Translate loader events into calls into `my-mod.*` core namespaces.
+    - Query metadata/DSL in `core` instead of hardcoding game content IDs or registry names.
+  - Loader-specific assets and metadata (e.g. `mods.toml`, `fabric.mod.json`, loader-specific lang/model files) live in each module’s `src/main/resources`.
+
+- **Adding new content**
+  - When adding blocks/items/GUIs or gameplay systems, start by extending DSL + metadata in `core` (e.g. under `my_mod/block`, `my_mod/item`, `my_mod/gui`, `my_mod/registry`, `my_mod/events`).
+  - Only change platform modules when a feature cannot be expressed via existing metadata/DSL; in that case, prefer:
+    - Add or extend a metadata/DSL layer in `core`.
+    - Add the minimal adapter glue in the appropriate platform module to call into that metadata.

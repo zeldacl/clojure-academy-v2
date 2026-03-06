@@ -74,13 +74,14 @@
                           (reify java.util.function.Supplier
                             (get [_]
                               (if needs-dynamic-properties?
-                                ;; Create NodeDynamicBlock and inject properties
-                                (let [block (NodeDynamicBlock. (BlockBehaviour$Properties/copy Blocks/STONE))
-                                      ;; Get property objects from registry
-                                      props (bsp/get-all-properties block-id)]
-                                  ;; Inject block ID and properties (called before initStateDefinition)
-                                  (.setBlockIdAndProperties block block-id (java.util.ArrayList. props))
-                                  block)
+                                ;; Create NodeDynamicBlock with dynamic BlockState properties.
+                                ;; Properties are injected during construction via the static
+                                ;; factory to ensure they are visible when the Block's
+                                ;; StateDefinition is built.
+                                (let [props (bsp/get-all-properties block-id)]
+                                  (NodeDynamicBlock/create block-id
+                                                           (java.util.ArrayList. props)
+                                                           (BlockBehaviour$Properties/copy Blocks/STONE)))
                                 ;; Use standard Block for simple blocks
                                 (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))]
       (swap! registered-blocks assoc block-id registered-obj))))

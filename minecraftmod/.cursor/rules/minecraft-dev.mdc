@@ -1,0 +1,17 @@
+---
+description: Conventions for Minecraft mod development in this project
+alwaysApply: true
+---
+
+# Minecraft Dev
+
+- **Target version**: Assume the existing Gradle and mappings configuration define the supported Minecraft version; do not change Minecraft/Forge/Fabric versions unless explicitly asked.
+- **Side separation**: Keep server logic, client-only logic (rendering, keybinds, GUIs), and shared code clearly separated. Never call client-only APIs from dedicated server code.
+- **Threading**: Avoid heavy or blocking work on the main game thread. Use appropriate async or scheduled tasks for long-running operations and world generation.
+- **World access**: Only read or mutate world state on the correct server thread or inside the provided callbacks/events. Do not cache world or entity references across reloads without checking validity.
+- **Registries & IDs**: Treat registry names, resource locations, and `modid` values as stable API. Do not change them casually, as this can corrupt worlds or break saves.
+- **Data integrity**: When changing block/entity data formats, provide backward-compatible reads where possible and avoid breaking existing worlds without migrations.
+- **Performance**: Be conservative with per-tick logic. Prefer event-driven hooks, caching, and configuration over constant polling.
+- **Config & commands**: Prefer configurable behavior (config files, commands) over hardcoded values. Avoid introducing magic numbers in gameplay logic.
+- **Error handling**: Fail fast and log clearly rather than silently ignoring exceptions; avoid crashing the server/client where a graceful fallback is possible.
+- **Interop**: Assume this project may interoperate with other mods; avoid global state and respect vanilla and API invariants.

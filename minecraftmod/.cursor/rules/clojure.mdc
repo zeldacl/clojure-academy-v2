@@ -1,0 +1,60 @@
+---
+alwaysApply: true
+---
+
+## Clojure Agent Rules
+
+## Project Context
+You are an expert Clojure developer.
+
+## Code Style & Structure
+## Clojure Defaults
+- Use `kebab-case` for function and variable names, `PascalCase` for protocols and records, and `SCREAMING_KEBAB-CASE` for constants defined with `def`.
+- Prefer pure functions with `defn`; isolate side effects to explicit boundaries and label impure functions with a `!` suffix (e.g., `save-user!`).
+- Keep functions small and composable — a function that does one thing is easier to test, reuse, and name accurately.
+- Use `let` bindings to name intermediate values in complex expressions — avoid deeply nested anonymous function calls.
+- Prefer Clojure's persistent data structures (`map`, `vector`, `set`, `list`) over mutable Java collections — they are structurally shared and thread-safe by default.
+- Use `defprotocol` and `defrecord`/`deftype` for polymorphism instead of multi-level inheritance from Java classes.
+- Use `spec` or `malli` to validate function inputs and outputs at REPL and test time — attach specs to public functions with `fdef`.
+- Use `clojure.string` functions (`str/split`, `str/join`, `str/trim`) instead of Java `String` methods for portability to ClojureScript.
+- Prefer `reduce` over manual recursion; when manual recursion is needed, use `loop`/`recur` for tail-call optimisation.
+- Use `->` and `->>` threading macros to express data transformations as left-to-right pipelines rather than deeply nested function calls.
+
+## Security
+## Security Guidelines
+- Validate and sanitize all user inputs from external sources.
+- NEVER hardcode secrets (API keys, passwords) in the codebase. Use environment variables.
+- Use parameterized queries for all database access — never concatenate user input into SQL, command strings, or template expressions.
+- If you detect a hardcoded secret, stop immediately and prompt the user to remove it.
+- Use parameterized queries or ORMs to prevent SQL injection.
+- Ensure code handles edge cases and failures gracefully, not just the happy path.
+- Never call `(eval user-input)` or `(load-string user-input)` — Clojure's reader and evaluator execute arbitrary code without sandboxing.
+- Use `clojure.spec.alpha/valid?` or `malli` schemas to validate all external inputs at the entry point before processing.
+
+## Performance
+## Clojure Performance
+- Use `transient`/`persistent!` for building large collections in tight loops — they mutate in-place then return an immutable result.
+- Use `^long` and `^double` type hints on numeric local bindings in hot loops to eliminate autoboxing overhead.
+- Use `(into [] xf coll)` with transducer `xf` instead of chained `(map f (filter g coll))` to avoid intermediate lazy sequences.
+- Use `reducers` library (`clojure.core.reducers/fold`) for parallel reduction over large collections on multi-core machines.
+- Avoid holding the head of a lazy sequence in a `let` binding inside a loop — it prevents the GC from reclaiming already-processed elements.
+- Use `aset`/`aget` on primitive Java arrays (`int-array`, `double-array`) in numeric algorithms — they are significantly faster than persistent vectors.
+- Profile with `criterium` (`bench` macro) before optimising — measure actual allocation and time rather than guessing hotspots.
+
+## Agent Workflow
+## Planning & Task Execution
+- Always plan before coding — break complex tasks into small, verifiable steps before writing code.
+- After each step, verify the result works (run tests, check output) before moving to the next.
+- Break tasks into verifiable subtasks — each subtask should produce a testable output that can be validated before proceeding.
+- Decompose large tasks into subtasks of 1–3 files each — smaller scope means fewer errors.
+- State assumptions explicitly before starting — verify them with the user if uncertain.
+- When exploring unfamiliar code, read tests first — they document intended behavior.
+
+## Project Management
+## Linear Integration
+- Link every PR and commit to a Linear issue — use identifiers (e.g., `ENG-123`) in branch names.
+- Update issue status as work progresses: In Progress → In Review → Done.
+- Reference issue IDs in commit messages and PR titles (`Fixes AGE-123`) — Linear auto-links commits and transitions issue states.
+- Create sub-issues for complex tasks — break epics into implementable chunks with clear acceptance criteria.
+- Use labels consistently — categorize by type (bug, feature, chore) and area (frontend, backend, infra).
+- Write issue descriptions with context, acceptance criteria, and technical approach when known.
