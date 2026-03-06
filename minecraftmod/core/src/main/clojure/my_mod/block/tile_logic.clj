@@ -3,7 +3,7 @@
 
   Used by generic ScriptedBlockEntity: Java calls invoke-tick, read-nbt, write-nbt;
   this namespace looks up the block-id's registered logic and runs it.
-  Platform must ensure this namespace is loaded before any scripted BE ticks.")
+  Platform must ensure this namespace is loaded before any scripted BE ticks."
   (:require [my-mod.util.log :as log]))
 
 (defonce tile-logic-registry (atom {}))

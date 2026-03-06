@@ -31,7 +31,7 @@
   :has-block-entity? true
   ;; Datagen source of truth (models/block/solar_gen.json)
   :model-parent "minecraft:block/cube_all"
-  :textures {:all "my_mod:blocks/solar_gen"}
+  :textures {:all "my_mod:block/solar_gen"}
   :on-right-click open-solar-gui!)
 
 ;; ---------------------------------------------------------------------------

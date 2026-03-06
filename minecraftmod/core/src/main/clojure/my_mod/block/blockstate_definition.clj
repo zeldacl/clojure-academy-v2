@@ -7,8 +7,7 @@
   每个平台的datagen实现可以根据这些定义调用对应的API生成JSON文件。"
   (:require [clojure.string :as str]
             [my-mod.registry.metadata :as registry-metadata]
-            [my-mod.block.wireless-node :as wireless-node]
-            [my-mod.block.wireless-matrix]))
+            [my-mod.block.wireless-node :as wireless-node]))
 
 ;; ============================================================================
 ;; BlockState部分定义
@@ -105,8 +104,10 @@
               (#{"base" "connected"} variant) 0
               (str/starts-with? variant "energy_") (Integer/parseInt (subs variant 7))
               :else 0)
-        {:keys [min max]} (get-in wireless-node/block-state-properties [:energy])]
-    (max (or min 0) (min (or max 4) raw))))
+        {:keys [min max]} (get-in wireless-node/block-state-properties [:energy])
+        min-v (or min 0)
+        max-v (or max 4)]
+    (clojure.core/max min-v (clojure.core/min max-v raw))))
 
 ;; ============================================================================
 ;; 模型纹理配置 (业务逻辑)

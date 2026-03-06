@@ -11,6 +11,7 @@
             [my-mod.block.blockstate-properties :as bsp]
             [my-mod.forge1201.mod :as forge-mod]
             [my-mod.registry.metadata :as registry-metadata]
+            [my-mod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [net.minecraft.resources ResourceLocation]
@@ -152,13 +153,19 @@
   "Apply block state condition for a block.
   Gets Property objects dynamically from blockstate-properties module."
   [part-builder block-id condition]
-  (doseq [[property-key raw-value] condition]
-    (if-let [property (bsp/get-property block-id property-key)]
+  (let [block-id-str (if (keyword? block-id) (name block-id) block-id)
+        compat-block-id (if (str/starts-with? block-id-str "node-")
+                          (str "wireless-" block-id-str)
+                          nil)]
+    (doseq [[property-key raw-value] condition]
+      (if-let [property (or (bsp/get-property block-id-str property-key)
+                            (when compat-block-id
+                              (bsp/get-property compat-block-id property-key)))]
       ;; Use the dynamically retrieved property object
       (.condition part-builder property
                  (into-array Comparable [(condition->typed property-key raw-value)]))
       ;; Fallback: warn if property not found
-      (log/warn "Property not found for block" block-id ":" property-key)))
+      (log/warn "Property not found for block" block-id-str ":" property-key))))
   part-builder)
 
 (defn- build-simple-block!
@@ -188,7 +195,7 @@
                                (.addModel))]
           (if-let [condition (:condition part)]
             (-> part-builder
-                (apply-node-condition! condition)
+                (apply-node-condition! block-key condition)
                 (.end))
             (.end part-builder))))
       ;; For node blocks, use _base variant for item model
@@ -218,6 +225,8 @@
   [^PackOutput pack-output exfile-helper]
   (reify DataProvider
     (run [_this cache]
+      ;; Datagen runs outside normal mod init order; ensure Property registry is seeded.
+      (bsp/init-all-properties!)
       (let [all-defs (blockstate-def/get-all-definitions)
             {:keys [future simple multipart]} (generate-with-forge-builder!
                                                cache pack-output exfile-helper all-defs)

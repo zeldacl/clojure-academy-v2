@@ -8,9 +8,8 @@
             [my-mod.wireless.gui.gui-metadata :as gui-meta]
             [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
-  (:import [net.minecraftforge.network NetworkHooks]
+  (:import [net.minecraftforge.network NetworkHooks IContainerFactory]
            [net.minecraftforge.common.extensions IForgeMenuType]
-           [net.minecraftforge.network.IContainerFactory]
            [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.world.inventory MenuType]
            [net.minecraft.core.registries BuiltInRegistries]
@@ -48,12 +47,12 @@
   [gui-id]
   (IForgeMenuType/create
     (reify IContainerFactory
-      (create [_ window-id player-inventory ^FriendlyByteBuf buf]
+      (create [_ window-id player-inventory buf]
         (let [handler (gui/get-gui-handler)
               player (.player player-inventory)
               world (.level player)
               pos (.readBlockPos buf)
-              clj-container (.get-server-container handler gui-id player world pos)]
+              clj-container (gui-registry/get-server-container handler gui-id player world pos)]
           (if clj-container
             (bridge/wrap-clojure-container window-id (get-menu-type gui-id) clj-container)
             (do (log/error "Failed to create container for GUI" gui-id) nil)))))))

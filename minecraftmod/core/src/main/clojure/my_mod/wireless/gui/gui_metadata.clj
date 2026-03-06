@@ -81,6 +81,8 @@
 ;; Registration API (for new GUIs)
 ;; ============================================================================
 
+(declare type-to-gui-id)
+
 (defn register-gui!
   "Register a new GUI's metadata.
 

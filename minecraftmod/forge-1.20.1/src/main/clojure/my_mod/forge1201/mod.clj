@@ -98,11 +98,11 @@
   (doseq [block-id (registry-metadata/get-scripted-block-ids)]
     (when-let [block-ro (get @registered-blocks block-id)]
       (let [registry-name (registry-metadata/get-block-registry-name block-id)
-            block-inst (.get block-ro)
             registered-obj (.register block-entities-register registry-name
                             (reify java.util.function.Supplier
                               (get [_]
-                                (let [type-holder (object-array 1)
+                                (let [block-inst (.get block-ro)
+                                      type-holder (object-array 1)
                                       be-type (-> (BlockEntityType$Builder/of
                                                     (reify BlockEntityType$BlockEntitySupplier
                                                       (create [_ pos state]
