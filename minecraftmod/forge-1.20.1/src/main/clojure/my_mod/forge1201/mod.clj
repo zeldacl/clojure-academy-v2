@@ -9,6 +9,7 @@
             [my-mod.block.dsl :as bdsl]
             [my-mod.block.wireless-node]
             [my-mod.block.wireless-matrix]
+            [my-mod.block.tile-logic :as tile-logic]
             [my-mod.block.blockstate-properties :as bsp]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
@@ -20,7 +21,7 @@
            [net.minecraft.world.level.block.entity BlockEntityType BlockEntityType$Builder BlockEntityType$BlockEntitySupplier]
            [net.minecraft.core.registries Registries]
            [net.minecraft.network.chat Component]
-           [my_mod.block NodeDynamicBlock ScriptedEntityBlock]
+           [my_mod.block NodeDynamicBlock ScriptedEntityBlock ScriptedDynamicEntityBlock]
            [my_mod.block.entity ScriptedBlockEntity]
            [net.minecraftforge.fml.common Mod]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
@@ -81,6 +82,11 @@
                           (reify java.util.function.Supplier
                             (get [_]
                               (cond
+                                (and needs-dynamic-properties? has-be?)
+                                (let [props (bsp/get-all-properties block-id)]
+                                  (ScriptedDynamicEntityBlock/create block-id
+                                                                    (java.util.ArrayList. props)
+                                                                    (BlockBehaviour$Properties/copy Blocks/STONE)))
                                 needs-dynamic-properties?
                                 (let [props (bsp/get-all-properties block-id)]
                                   (NodeDynamicBlock/create block-id
@@ -91,6 +97,20 @@
                                 :else
                                 (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
+
+(defn register-scripted-tile-hooks!
+  "Register metadata-driven scripted tile hooks from block DSL.
+  This allows Node/Matrix/Solar to bind lifecycle logic without platform-specific hardcoding."
+  []
+  (doseq [block-id (registry-metadata/get-scripted-block-ids)]
+    (let [{:keys [tick-fn read-nbt-fn write-nbt-fn]} (registry-metadata/get-scripted-tile-hooks block-id)
+          tile-kind (registry-metadata/get-tile-kind block-id)]
+      (when (or tick-fn read-nbt-fn write-nbt-fn tile-kind)
+        (tile-logic/register-tile-logic! block-id
+                                         {:tile-kind tile-kind
+                                          :tick-fn tick-fn
+                                          :read-nbt-fn read-nbt-fn
+                                          :write-nbt-fn write-nbt-fn})))))
 
 ;; BlockEntity registration: one BlockEntityType per scripted block-id
 (defn register-block-entities!
@@ -275,6 +295,7 @@
   
   ;; Register all blocks and items using metadata-driven approach
   ;; DSL systems are automatically initialized when namespaces load
+  (register-scripted-tile-hooks!)
   (register-all-blocks!)
   (register-block-entities!)
   (register-all-items!)

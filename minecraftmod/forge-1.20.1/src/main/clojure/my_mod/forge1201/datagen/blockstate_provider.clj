@@ -153,14 +153,9 @@
   "Apply block state condition for a block.
   Gets Property objects dynamically from blockstate-properties module."
   [part-builder block-id condition]
-  (let [block-id-str (if (keyword? block-id) (name block-id) block-id)
-        compat-block-id (if (str/starts-with? block-id-str "node-")
-                          (str "wireless-" block-id-str)
-                          nil)]
+  (let [block-id-str (if (keyword? block-id) (name block-id) block-id)]
     (doseq [[property-key raw-value] condition]
-      (if-let [property (or (bsp/get-property block-id-str property-key)
-                            (when compat-block-id
-                              (bsp/get-property compat-block-id property-key)))]
+      (if-let [property (bsp/get-property block-id-str property-key)]
       ;; Use the dynamically retrieved property object
       (.condition part-builder property
                  (into-array Comparable [(condition->typed property-key raw-value)]))

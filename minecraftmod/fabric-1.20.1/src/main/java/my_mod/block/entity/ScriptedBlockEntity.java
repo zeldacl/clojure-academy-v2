@@ -4,13 +4,13 @@ import clojure.lang.RT;
 import clojure.lang.Var;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 
-import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,7 +26,6 @@ public class ScriptedBlockEntity extends BlockEntity {
         TYPES.put(blockId, type);
     }
 
-    @Nullable
     public static BlockEntityType<ScriptedBlockEntity> getType(String blockId) {
         return TYPES.get(blockId);
     }
@@ -36,6 +35,7 @@ public class ScriptedBlockEntity extends BlockEntity {
     private double maxEnergy = 1000.0;
     private String status = "STOPPED";
     private ItemStack battery = ItemStack.EMPTY;
+    private final Map<String, Object> scriptedState = new HashMap<>();
 
     public ScriptedBlockEntity(BlockEntityType<ScriptedBlockEntity> type, BlockPos pos, BlockState state, String blockId) {
         super(type, pos, state);
@@ -82,16 +82,89 @@ public class ScriptedBlockEntity extends BlockEntity {
         setChanged();
     }
 
+    public void setScriptData(String key, Object value) {
+        if (key == null || key.isBlank()) return;
+        if (value == null) {
+            scriptedState.remove(key);
+        } else {
+            scriptedState.put(key, value);
+        }
+        setChanged();
+    }
+
+    public Object getScriptData(String key) {
+        return scriptedState.get(key);
+    }
+
+    public Map<String, Object> getScriptDataSnapshot() {
+        return new HashMap<>(scriptedState);
+    }
+
+    private void writeScriptData(CompoundTag tag) {
+        if (scriptedState.isEmpty()) return;
+        CompoundTag dataTag = new CompoundTag();
+        for (Map.Entry<String, Object> entry : scriptedState.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (value instanceof Number n) {
+                dataTag.putDouble(key, n.doubleValue());
+            } else if (value instanceof Boolean b) {
+                dataTag.putBoolean(key, b);
+            } else if (value instanceof String s) {
+                dataTag.putString(key, s);
+            }
+        }
+        if (!dataTag.isEmpty()) {
+            tag.put("ScriptedData", dataTag);
+        }
+    }
+
+    private void readScriptData(CompoundTag tag) {
+        scriptedState.clear();
+        if (!tag.contains("ScriptedData")) return;
+        CompoundTag dataTag = tag.getCompound("ScriptedData");
+        for (String key : dataTag.getAllKeys()) {
+            if (dataTag.contains(key, Tag.TAG_STRING)) {
+                scriptedState.put(key, dataTag.getString(key));
+            } else if (dataTag.contains(key, Tag.TAG_BYTE)) {
+                scriptedState.put(key, dataTag.getBoolean(key));
+            } else if (dataTag.contains(key, Tag.TAG_DOUBLE)
+                    || dataTag.contains(key, Tag.TAG_FLOAT)
+                    || dataTag.contains(key, Tag.TAG_INT)
+                    || dataTag.contains(key, Tag.TAG_LONG)
+                    || dataTag.contains(key, Tag.TAG_SHORT)) {
+                scriptedState.put(key, dataTag.getDouble(key));
+            }
+        }
+    }
+
     /** Apply data map returned from Clojure read-nbt. */
-    @SuppressWarnings("unchecked")
     public void setFromData(Object data) {
         if (data == null) return;
+        if (data instanceof Map<?, ?> dataMap) {
+            for (Map.Entry<?, ?> entry : dataMap.entrySet()) {
+                String key = String.valueOf(entry.getKey());
+                Object value = entry.getValue();
+                switch (key) {
+                    case "energy" -> {
+                        if (value instanceof Number n) this.energy = n.doubleValue();
+                    }
+                    case "battery" -> this.battery = (value instanceof ItemStack stack) ? stack : ItemStack.EMPTY;
+                    case "max-energy" -> {
+                        if (value instanceof Number n) this.maxEnergy = n.doubleValue();
+                    }
+                    case "status" -> this.status = value != null ? String.valueOf(value) : this.status;
+                    default -> setScriptData(key, value);
+                }
+            }
+            return;
+        }
         Object e = RT.get(data, "energy");
-        if (e instanceof Number) this.energy = ((Number) e).doubleValue();
+        if (e instanceof Number n) this.energy = n.doubleValue();
         Object b = RT.get(data, "battery");
-        this.battery = (b instanceof ItemStack) ? (ItemStack) b : ItemStack.EMPTY;
+        this.battery = (b instanceof ItemStack stack) ? stack : ItemStack.EMPTY;
         Object m = RT.get(data, "max-energy");
-        if (m instanceof Number) this.maxEnergy = ((Number) m).doubleValue();
+        if (m instanceof Number n) this.maxEnergy = n.doubleValue();
         Object s = RT.get(data, "status");
         if (s != null) this.status = String.valueOf(s);
     }
@@ -103,9 +176,11 @@ public class ScriptedBlockEntity extends BlockEntity {
             Var readNbt = RT.var("my-mod.block.tile-logic", "read-nbt");
             Object data = readNbt.invoke(blockId, tag);
             setFromData(data);
+            readScriptData(tag);
         } catch (Exception e) {
             if (tag.contains("Energy")) this.energy = tag.getDouble("Energy");
             if (tag.contains("Battery")) this.battery = ItemStack.of(tag.getCompound("Battery"));
+            readScriptData(tag);
         }
     }
 
@@ -115,11 +190,13 @@ public class ScriptedBlockEntity extends BlockEntity {
         try {
             Var writeNbt = RT.var("my-mod.block.tile-logic", "write-nbt");
             writeNbt.invoke(blockId, this, tag);
+            writeScriptData(tag);
         } catch (Exception e) {
             tag.putDouble("Energy", energy);
             if (battery != null && !battery.isEmpty()) {
                 tag.put("Battery", battery.save(new CompoundTag()));
             }
+            writeScriptData(tag);
         }
     }
 

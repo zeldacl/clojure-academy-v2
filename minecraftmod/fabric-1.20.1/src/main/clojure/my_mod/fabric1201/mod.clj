@@ -7,6 +7,7 @@
             [my-mod.fabric1201.gui.impl :as gui]
             [my-mod.fabric1201.platform-impl :as platform-impl]
             [my-mod.block.dsl :as bdsl]
+            [my-mod.block.tile-logic :as tile-logic]
             [my-mod.block.blockstate-properties :as bsp]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
@@ -21,7 +22,7 @@
            [net.minecraft.world.level.block.entity BlockEntityType BlockEntityType$Builder BlockEntityType$BlockEntitySupplier]
            [net.fabricmc.fabric.api.itemgroup.v1 FabricItemGroup ItemGroupEvents]
            [net.minecraft.network.chat Component]
-           [my_mod.block NodeDynamicBlock ScriptedEntityBlock]
+           [my_mod.block NodeDynamicBlock ScriptedEntityBlock ScriptedDynamicEntityBlock]
            [my_mod.block.entity ScriptedBlockEntity]))
 
 ;; Mod ID constant
@@ -41,6 +42,11 @@
           needs-dynamic-properties? (registry-metadata/has-block-state-properties? block-id)
           has-be? (registry-metadata/has-block-entity? block-id)
           block-obj (cond
+                      (and needs-dynamic-properties? has-be?)
+                      (let [props (bsp/get-all-properties block-id)]
+                        (ScriptedDynamicEntityBlock/create block-id
+                                                           (java.util.ArrayList. props)
+                                                           (BlockBehaviour$Properties/copy Blocks/STONE)))
                       needs-dynamic-properties?
                       (let [props (bsp/get-all-properties block-id)]
                         (NodeDynamicBlock/create block-id
@@ -52,6 +58,19 @@
                       (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))]
       (registry/register-block registry-name block-obj)
       (swap! registered-blocks assoc block-id block-obj))))
+
+(defn register-scripted-tile-hooks!
+  "Register metadata-driven scripted tile hooks from block DSL."
+  []
+  (doseq [block-id (registry-metadata/get-scripted-block-ids)]
+    (let [{:keys [tick-fn read-nbt-fn write-nbt-fn]} (registry-metadata/get-scripted-tile-hooks block-id)
+          tile-kind (registry-metadata/get-tile-kind block-id)]
+      (when (or tick-fn read-nbt-fn write-nbt-fn tile-kind)
+        (tile-logic/register-tile-logic! block-id
+                                         {:tile-kind tile-kind
+                                          :tick-fn tick-fn
+                                          :read-nbt-fn read-nbt-fn
+                                          :write-nbt-fn write-nbt-fn})))))
 
 (defn register-block-entities []
   "Register BlockEntityTypes: one per scripted block-id."
@@ -153,6 +172,7 @@
   
   ;; Register blocks and items using metadata-driven approach
   ;; DSL systems are automatically initialized when namespaces load
+  (register-scripted-tile-hooks!)
   (register-blocks)
   (register-block-entities)
   (register-items)

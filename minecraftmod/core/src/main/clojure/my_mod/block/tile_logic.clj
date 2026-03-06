@@ -1,28 +1,51 @@
 (ns my-mod.block.tile-logic
-  "Registry and dispatch for scripted block entity logic (tick + NBT).
+  "Registry and dispatch for scripted block entity logic.
 
-  Used by generic ScriptedBlockEntity: Java calls invoke-tick, read-nbt, write-nbt;
-  this namespace looks up the block-id's registered logic and runs it.
-  Platform must ensure this namespace is loaded before any scripted BE ticks."
+  Supports both block-id direct registration and reusable tile-kind registration.
+  ScriptedBlockEntity calls into this namespace for tick/load/save lifecycle hooks."
   (:require [my-mod.util.log :as log]))
 
 (defonce tile-logic-registry (atom {}))
+(defonce tile-kind-registry (atom {}))
+
+(defn register-tile-kind!
+  "Register reusable tile logic by tile-kind keyword.
+
+  cfg uses normalized keys:
+  - :tick-fn (fn [level pos state be] ...)
+  - :read-nbt-fn (fn [tag] ...)
+  - :write-nbt-fn (fn [be tag] ...)"
+  [tile-kind cfg]
+  (when-not (keyword? tile-kind)
+    (throw (ex-info "register-tile-kind!: tile-kind must be keyword"
+                    {:tile-kind tile-kind})))
+  (swap! tile-kind-registry assoc tile-kind cfg)
+  (log/info "Registered tile-kind logic" tile-kind)
+  nil)
+
+(defn- normalize-cfg
+  [cfg]
+  (cond-> cfg
+    (contains? cfg :tile-tick-fn) (assoc :tick-fn (:tile-tick-fn cfg))
+    (contains? cfg :tile-load-fn) (assoc :read-nbt-fn (:tile-load-fn cfg))
+    (contains? cfg :tile-save-fn) (assoc :write-nbt-fn (:tile-save-fn cfg))))
 
 (defn register-tile-logic!
-  "Register tick and NBT logic for a scripted block.
+  "Register tile lifecycle logic for a block-id.
 
-  cfg: {:tick-fn (fn [level pos state be] ...)   ; side-effect: update be via setters
-        :read-nbt-fn (fn [tag] -> data map)     ; tag is INBTCompound; return {:energy _ :battery _ ...}
-        :write-nbt-fn (fn [be tag] ...)}       ; write be state to tag using nbt-set-*!
-  be for tick-fn and write-nbt-fn is the ScriptedBlockEntity (getEnergy, setEnergy, etc.)."
+  cfg supports keys:
+  - :tile-kind (keyword, optional) to reuse kind defaults
+  - :tick-fn / :read-nbt-fn / :write-nbt-fn (optional overrides)
+  Legacy aliases :tile-tick-fn/:tile-load-fn/:tile-save-fn are also accepted."
   [block-id cfg]
-  (when (nil? (:tick-fn cfg))
-    (throw (ex-info "register-tile-logic!: :tick-fn required" {:block-id block-id})))
-  (when (nil? (:read-nbt-fn cfg))
-    (throw (ex-info "register-tile-logic!: :read-nbt-fn required" {:block-id block-id})))
-  (when (nil? (:write-nbt-fn cfg))
-    (throw (ex-info "register-tile-logic!: :write-nbt-fn required" {:block-id block-id})))
-  (swap! tile-logic-registry assoc block-id cfg)
+  (let [normalized (normalize-cfg cfg)
+        tile-kind (:tile-kind normalized)
+        kind-cfg (when tile-kind (get @tile-kind-registry tile-kind))
+        merged (merge kind-cfg normalized)]
+    (when-not (or (:tick-fn merged) (:read-nbt-fn merged) (:write-nbt-fn merged))
+      (throw (ex-info "register-tile-logic!: at least one lifecycle hook required"
+                      {:block-id block-id :tile-kind tile-kind})))
+    (swap! tile-logic-registry assoc block-id merged))
   (log/info "Registered tile logic for block" block-id)
   nil)
 
@@ -34,21 +57,24 @@
   Invokes the registered :tick-fn for block-id with (level pos state be)."
   [block-id level pos state be]
   (when-let [cfg (get-tile-logic block-id)]
-    (try
-      ((:tick-fn cfg) level pos state be)
-      (catch Exception e
-        (log/error "Tile tick error" block-id (.getMessage e))))))
+    (when-let [tick-fn (:tick-fn cfg)]
+      (try
+        (tick-fn level pos state be)
+        (catch Exception e
+          (log/error "Tile tick error" block-id (.getMessage e)))))))
 
 (defn read-nbt
   "Called from ScriptedBlockEntity.load(tag). Returns a data map for the BE to apply (setFromData).
   tag is the platform NBT compound (INBTCompound)."
   [block-id tag]
   (if-let [cfg (get-tile-logic block-id)]
-    (try
-      ((:read-nbt-fn cfg) tag)
-      (catch Exception e
-        (log/error "Tile read-nbt error" block-id (.getMessage e))
-        {}))
+    (if-let [read-fn (:read-nbt-fn cfg)]
+      (try
+        (read-fn tag)
+        (catch Exception e
+          (log/error "Tile read-nbt error" block-id (.getMessage e))
+          {}))
+      {})
     {}))
 
 (defn write-nbt
@@ -56,7 +82,8 @@
   be has getEnergy(), getBatteryStack(), etc.; tag is INBTCompound."
   [block-id be tag]
   (when-let [cfg (get-tile-logic block-id)]
-    (try
-      ((:write-nbt-fn cfg) be tag)
-      (catch Exception e
-        (log/error "Tile write-nbt error" block-id (.getMessage e))))))
+    (when-let [write-fn (:write-nbt-fn cfg)]
+      (try
+        (write-fn be tag)
+        (catch Exception e
+          (log/error "Tile write-nbt error" block-id (.getMessage e)))))))

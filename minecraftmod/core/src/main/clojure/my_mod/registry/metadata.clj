@@ -89,6 +89,20 @@
   []
   (filter has-block-entity? (get-all-block-ids)))
 
+(defn get-tile-kind
+  "Returns optional :tile-kind metadata for a block."
+  [block-id]
+  (some-> (get-block-spec block-id) :tile-kind))
+
+(defn get-scripted-tile-hooks
+  "Returns optional scripted tile lifecycle hooks for a block.
+  Result keys: :tick-fn :read-nbt-fn :write-nbt-fn."
+  [block-id]
+  (let [spec (get-block-spec block-id)]
+    {:tick-fn (:tile-tick-fn spec)
+     :read-nbt-fn (:tile-load-fn spec)
+     :write-nbt-fn (:tile-save-fn spec)}))
+
 (defn get-block-state-properties
   "Returns the block state properties definition for a block.
   

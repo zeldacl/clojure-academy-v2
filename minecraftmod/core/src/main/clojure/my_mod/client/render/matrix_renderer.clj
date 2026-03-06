@@ -116,14 +116,23 @@
   
   Should be called during platform initialization."
   []
+  ;; Legacy path (record tile)
   (tesr-api/register-tile-renderer!
-    my_mod.block.wireless_matrix.TileMatrix
-    (reify tesr-api/ITileEntityRenderer
-      (render-tile [_ tile-entity x y z]
-        (mb-helper/render-multiblock-tesr
-          tile-entity
-          x y z
-          render-at-origin)))))
+   my_mod.block.wireless_matrix.TileMatrix
+   (reify tesr-api/ITileEntityRenderer
+     (render-tile [_ tile-entity x y z]
+       (mb-helper/render-multiblock-tesr
+        tile-entity
+        x y z
+        render-at-origin))))
+  ;; Scripted BE path (block-id dispatch). During migration we render static base/core.
+  (tesr-api/register-scripted-tile-renderer!
+   "wireless-matrix"
+   (reify tesr-api/ITileEntityRenderer
+     (render-tile [_ _tile-entity _x _y _z]
+       (render/with-matrix
+         (render/bind-texture @texture)
+         (render-base nil))))))
 
 ;; ============================================================================
 ;; Platform Integration Notes

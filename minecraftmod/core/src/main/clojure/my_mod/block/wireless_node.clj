@@ -3,6 +3,8 @@
   
   Implements ITickable interface for automatic updates every game tick."
   (:require [my-mod.block.dsl :as bdsl]
+            [my-mod.block.tile-logic :as tile-logic]
+            [clojure.string :as str]
             [my-mod.energy.operations :as energy]
             [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.inventory.core :as inv]
@@ -576,12 +578,64 @@
   (let [tile (get @node-tiles pos)]
     (as-tile-data tile)))
 
+(defn- parse-node-type-from-block-id
+  [block-id]
+  (cond
+    (str/includes? block-id "advanced") :advanced
+    (str/includes? block-id "standard") :standard
+    :else :basic))
+
+(defn- ensure-node-tile-for-be!
+  "Compatibility adapter: materialize legacy NodeTileEntity from scripted BE context."
+  [world pos block-id]
+  (or (get-node-tile pos)
+      (let [node-type (parse-node-type-from-block-id block-id)
+            tile (create-node-tile-entity node-type world pos)]
+        (register-node-tile! pos tile)
+        tile)))
+
+(defn node-scripted-tick-fn
+  [level pos _state be]
+  (let [block-id (.getBlockId be)
+        tile (ensure-node-tile-for-be! level pos block-id)]
+    (when tile
+      (winterfaces/set-energy tile (.getEnergy be))
+      (update-node-tile! tile)
+      (.setEnergy be (double (winterfaces/get-energy tile)))
+      (.setScriptData be "node-type" (name (:node-type tile)))
+      (.setScriptData be "enabled" @(:enabled tile))
+      (.setScriptData be "node-name" (winterfaces/get-node-name tile))
+      (.setScriptData be "password" (winterfaces/get-password tile))
+      (.setChanged be))))
+
+(defn node-scripted-load-fn
+  [tag]
+  {"energy" (if (.contains tag "Energy") (.getDouble tag "Energy") 0.0)
+   "node-type" (if (.contains tag "NodeType") (.getString tag "NodeType") "basic")
+   "node-name" (if (.contains tag "NodeName") (.getString tag "NodeName") "Unnamed")
+   "password" (if (.contains tag "Password") (.getString tag "Password") "")
+   "enabled" (if (.contains tag "Enabled") (.getBoolean tag "Enabled") false)})
+
+(defn node-scripted-save-fn
+  [be tag]
+  (.putDouble tag "Energy" (.getEnergy be))
+  (when-let [node-type (.getScriptData be "node-type")]
+    (.putString tag "NodeType" (str node-type)))
+  (when-let [node-name (.getScriptData be "node-name")]
+    (.putString tag "NodeName" (str node-name)))
+  (when-let [password (.getScriptData be "password")]
+    (.putString tag "Password" (str password)))
+  (when-let [enabled (.getScriptData be "enabled")]
+    (.putBoolean tag "Enabled" (boolean enabled))))
+
 ;; Block interaction handlers
 (defn handle-node-right-click [node-type]
   (fn [event-data]
     (log/info "Wireless Node (" (name node-type) ") right-clicked!")
     (let [{:keys [player world pos]} event-data
-          tile (get-node-tile pos)]
+          block-id (str "wireless-node-" (name node-type))
+          tile (or (get-node-tile pos)
+                   (ensure-node-tile-for-be! world pos block-id))]
       (if tile
         (do
           (log/info "Node status:")
@@ -606,15 +660,14 @@
     (log/info "Placing Wireless Node (" (name node-type) ")")
     (let [{:keys [player world pos]} event-data
           player-name (str player)
-          ;; Create tickable tile entity
-          tickable-tile (create-tickable-node-tile-entity node-type world pos)
-          tile-data (get-tile-data tickable-tile)]
+          block-id (str "wireless-node-" (name node-type))
+          tile-data (ensure-node-tile-for-be! world pos block-id)]
       ;; Set placer
       (set-placer! tile-data player-name)
-      ;; Register tickable tile entity
-      (register-node-tile! pos tickable-tile)
+      ;; Keep lightweight compatibility registration for GUI/network adapters
+      (register-node-tile! pos tile-data)
       (log/info "Node placed by" player-name "at" pos)
-      (log/info "Tickable TileEntity registered for automatic updates"))))
+      (log/info "Node compatibility tile registered"))))
 
 (defn handle-node-break [node-type]
   (fn [event-data]
@@ -640,6 +693,11 @@
   :harvest-level 1
   :sounds :metal
   :model-parent "minecraft:block/cube_all"
+  :has-block-entity? true
+  :tile-kind :wireless-node
+  :tile-tick-fn node-scripted-tick-fn
+  :tile-load-fn node-scripted-load-fn
+  :tile-save-fn node-scripted-save-fn
   :block-state-properties block-state-properties  ;; Dynamic properties: energy (0-4), connected (boolean)
   :on-right-click (handle-node-right-click :basic)
   :on-place (handle-node-place :basic)
@@ -655,6 +713,11 @@
   :harvest-level 1
   :sounds :metal
   :model-parent "minecraft:block/cube_all"
+  :has-block-entity? true
+  :tile-kind :wireless-node
+  :tile-tick-fn node-scripted-tick-fn
+  :tile-load-fn node-scripted-load-fn
+  :tile-save-fn node-scripted-save-fn
   :block-state-properties block-state-properties  ;; Dynamic properties: energy (0-4), connected (boolean)
   :on-right-click (handle-node-right-click :standard)
   :on-place (handle-node-place :standard)
@@ -670,6 +733,11 @@
   :harvest-level 1
   :sounds :metal
   :model-parent "minecraft:block/cube_all"
+  :has-block-entity? true
+  :tile-kind :wireless-node
+  :tile-tick-fn node-scripted-tick-fn
+  :tile-load-fn node-scripted-load-fn
+  :tile-save-fn node-scripted-save-fn
   :block-state-properties block-state-properties  ;; Dynamic properties: energy (0-4), connected (boolean)
   :on-right-click (handle-node-right-click :advanced)
   :on-place (handle-node-place :advanced)
@@ -683,6 +751,10 @@
 
 ;; Initialize wireless nodes
 (defn init-wireless-nodes! []
+  (tile-logic/register-tile-kind! :wireless-node
+                                   {:tick-fn node-scripted-tick-fn
+                                    :read-nbt-fn node-scripted-load-fn
+                                    :write-nbt-fn node-scripted-save-fn})
   (log/info "Initialized Wireless Nodes:")
   (log/info "  - Basic: max-energy=" (:max-energy (:basic node-types)))
   (log/info "  - Standard: max-energy=" (:max-energy (:standard node-types)))
@@ -696,16 +768,9 @@
 ;; Note: With ITickable implementation, Minecraft calls update() automatically
 ;; This function is for manual/fallback ticking if needed
 (defn tick-all-nodes! []
-  "Manually tick all registered nodes
-  
-  Note: With ITickable implementation, this is only needed for fallback/testing.
-  Minecraft's TileEntity system will automatically call update() on ITickable tiles."
-  (doseq [[pos tile] @node-tiles]
-    (if (instance? NodeTileEntityTickable tile)
-      ;; Tickable tile - call its update method
-      (tick-tile! tile)
-      ;; Non-tickable tile - call update directly
-      (update-node-tile! tile))))
+  "Compatibility no-op after migration to scripted BE tick path.
+  Node ticking now comes from ScriptedBlockEntity/serverTick -> tile-logic."
+  nil)
 
 (defn get-active-node-count []
   "Get count of active nodes in registry"

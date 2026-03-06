@@ -16,6 +16,8 @@
                       model-parent textures model-textures
                       ;; BlockEntity: when true, platform uses generic ScriptedEntityBlock/ScriptedBlockEntity
                       has-block-entity?
+                      ;; Scripted tile metadata/hooks (optional)
+                      tile-kind tile-tick-fn tile-load-fn tile-save-fn
                       ;; Multi-block support
                       multi-block? multi-block-size multi-block-origin
                       multi-block-positions  ; Custom positions for irregular shapes
@@ -200,6 +202,10 @@
        :textures (:textures options)
        :model-textures (:model-textures options)
        :has-block-entity? (boolean (:has-block-entity? options))
+       :tile-kind (:tile-kind options)
+       :tile-tick-fn (:tile-tick-fn options)
+       :tile-load-fn (:tile-load-fn options)
+       :tile-save-fn (:tile-save-fn options)
        ;; Multi-block properties
        :multi-block? multi-block?
        :multi-block-size multi-block-size
@@ -255,6 +261,25 @@
                         {:invalid-value texture-path
                          :model-name model-name
                          :id (:id block-spec)})))))
+
+  ;; Validate optional scripted tile hooks
+  (when (and (:tile-tick-fn block-spec)
+             (not (fn? (:tile-tick-fn block-spec))))
+    (throw (ex-info "Block :tile-tick-fn must be a function when provided"
+                    {:id (:id block-spec)})))
+  (when (and (:tile-load-fn block-spec)
+             (not (fn? (:tile-load-fn block-spec))))
+    (throw (ex-info "Block :tile-load-fn must be a function when provided"
+                    {:id (:id block-spec)})))
+  (when (and (:tile-save-fn block-spec)
+             (not (fn? (:tile-save-fn block-spec))))
+    (throw (ex-info "Block :tile-save-fn must be a function when provided"
+                    {:id (:id block-spec)})))
+  (when (and (:tile-kind block-spec)
+             (not (keyword? (:tile-kind block-spec))))
+    (throw (ex-info "Block :tile-kind must be a keyword when provided"
+                    {:id (:id block-spec)
+                     :tile-kind (:tile-kind block-spec)})))
 
   ;; Validate multi-block configuration
   (when (:multi-block? block-spec)

@@ -3,6 +3,7 @@
   
   Core component of wireless energy network providing capacity, bandwidth and range."
   (:require [my-mod.block.dsl :as bdsl]
+            [my-mod.block.tile-logic :as tile-logic]
             [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.inventory.core :as inv]
             [my-mod.nbt.dsl :as nbt]
@@ -343,6 +344,40 @@
 (defn get-matrix-tile [pos]
   (get @matrix-tiles pos))
 
+(defn- ensure-matrix-tile-for-be!
+  "Compatibility adapter: materialize legacy TileMatrix from scripted BE context."
+  [world pos]
+  (or (get-matrix-tile pos)
+      (let [tile (create-matrix-tile-entity world pos)]
+        (register-matrix-tile! pos tile)
+        tile)))
+
+(defn matrix-scripted-tick-fn
+  [level pos _state be]
+  (let [tile (ensure-matrix-tile-for-be! level pos)]
+    (when tile
+      (update-matrix-tile! tile)
+      (.setScriptData be "placer-name" (:placer-name tile))
+      (.setScriptData be "plate-count" (long (get-plate-count tile)))
+      (.setScriptData be "core-level" (long (get-core-level tile)))
+      (.setScriptData be "working" (boolean (is-working? tile)))
+      (.setChanged be))))
+
+(defn matrix-scripted-load-fn
+  [tag]
+  {"placer-name" (if (.contains tag "Placer") (.getString tag "Placer") "")
+   "plate-count" (if (.contains tag "PlateCount") (.getInt tag "PlateCount") 0)
+   "core-level" (if (.contains tag "CoreLevel") (.getInt tag "CoreLevel") 0)})
+
+(defn matrix-scripted-save-fn
+  [be tag]
+  (when-let [placer (.getScriptData be "placer-name")]
+    (.putString tag "Placer" (str placer)))
+  (when-let [plate-count (.getScriptData be "plate-count")]
+    (.putInt tag "PlateCount" (int plate-count)))
+  (when-let [core-level (.getScriptData be "core-level")]
+    (.putInt tag "CoreLevel" (int core-level))))
+
 ;; ============================================================================
 ;; ITickable Implementation
 ;; ============================================================================
@@ -389,7 +424,8 @@
   (fn [event-data]
     (log/info "Wireless Matrix right-clicked!")
     (let [{:keys [player world pos sneaking]} event-data
-          tile (get-matrix-tile pos)]
+          tile (or (get-matrix-tile pos)
+                   (ensure-matrix-tile-for-be! world pos))]
       (if tile
         (if-not sneaking
           (do
@@ -417,14 +453,11 @@
     (log/info "Placing Wireless Matrix")
     (let [{:keys [player world pos]} event-data
           player-name (str player)
-          tickable-tile (create-tickable-matrix-tile-entity world pos)
-          tile-data (get-tile-data tickable-tile)]
-      ;; Set placer - persist to atom for NBT serialization
-      (reset! tile-data (assoc @tile-data :placer-name player-name))
-      ;; Register tickable tile entity
-      (register-matrix-tile! pos tickable-tile)
+          tile-data (ensure-matrix-tile-for-be! world pos)]
+      ;; Compatibility registration for GUI/network adapters
+      (swap! matrix-tiles assoc pos (assoc tile-data :placer-name player-name))
       (log/info "Matrix placed by" player-name "at" pos)
-      (log/info "Tickable TileEntity registered"))))
+      (log/info "Matrix compatibility tile registered"))))
 
 (defn handle-matrix-break []
   (fn [event-data]
@@ -453,6 +486,11 @@
   :harvest-level 1
   :light-level 1.0
   :sounds :stone
+  :has-block-entity? true
+  :tile-kind :wireless-matrix
+  :tile-tick-fn matrix-scripted-tick-fn
+  :tile-load-fn matrix-scripted-load-fn
+  :tile-save-fn matrix-scripted-save-fn
   :multi-block {:positions [[0 0 1] [1 0 1] [1 0 0]
                             [0 1 0] [0 1 1] [1 1 1] [1 1 0]]
                 :rotation-center [1.0 0 1.0]}
@@ -465,6 +503,10 @@
 ;; ============================================================================
 
 (defn init-wireless-matrix! []
+  (tile-logic/register-tile-kind! :wireless-matrix
+                                   {:tick-fn matrix-scripted-tick-fn
+                                    :read-nbt-fn matrix-scripted-load-fn
+                                    :write-nbt-fn matrix-scripted-save-fn})
   (log/info "Initialized Wireless Matrix:")
   (log/info "  - 2x2x2 multiblock structure")
   (log/info "  - 4 inventory slots")
@@ -473,8 +515,5 @@
   (log/info "  - Range: 24 * √coreLevel"))
 
 (defn tick-all-matrices! []
-  "Tick all registered matrices"
-  (doseq [[pos tile] @matrix-tiles]
-    (if (instance? TileMatrixTickable tile)
-      (tile)
-      (update-matrix-tile! tile))))
+  "Compatibility no-op after migration to scripted BE tick path."
+  nil)

@@ -60,7 +60,7 @@
     (into {}
           (for [node-type (sort (keys wireless-node/node-types))
                 :let [node-type-name (name node-type)
-                      block-key (keyword (str "node-" node-type-name))
+                      block-key (keyword (str "wireless-node-" node-type-name))
                       registry-name (str "node_" node-type-name)
                       base-model (str MOD-ID ":block/" registry-name "_base")
                       energy-models (vec (for [level (range energy-min (inc energy-max))]
@@ -145,7 +145,7 @@
   "获取指定block的BlockState定义
    
    参数：
-     block-key: 关键字，如 :node-basic, :matrix
+     block-key: 关键字，如 :wireless-node-basic, :wireless-matrix
    
    返回：
      BlockStateDefinition 或 nil"
@@ -214,11 +214,11 @@
 
 (comment
   ;; 使用示例
-  (get-block-state-definition :node-basic)
+  (get-block-state-definition :wireless-node-basic)
   
   (get-all-definitions)
   (keys (get-all-definitions))
   
-  (-> :node-basic get-block-state-definition :parts)
-  (-> :node-basic get-block-state-definition :parts first)
+  (-> :wireless-node-basic get-block-state-definition :parts)
+  (-> :wireless-node-basic get-block-state-definition :parts first)
   )
