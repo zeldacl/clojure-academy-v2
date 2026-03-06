@@ -10,45 +10,33 @@
 ;; Block Entity Renderer Generation
 ;; ============================================================================
 
-;; Generate Java class implementing BlockEntityRenderer<T>
-;; Note: In Fabric 1.20.1, use BlockEntityRenderer interface
+;; Generate Java class implementing BlockEntityRenderer
+;; Note: This project uses official Mojang mappings on Fabric (Loom officialMojangMappings),
+;; so Minecraft class names/packages match Forge (net.minecraft.client.renderer...).
 (gen-class
   :name my_mod.fabric1201.client.render.BlockEntityRendererImpl
-  :implements [net.minecraft.client.render.block.entity.BlockEntityRenderer]
+  :implements [net.minecraft.client.renderer.blockentity.BlockEntityRenderer]
   :prefix "renderer-"
-  :init init
-  :state state
-  :constructors {[net.minecraft.client.render.block.entity.BlockEntityRendererFactory$Context]
-                 []})
+  :constructors {[] []})
 
 ;; ============================================================================
 ;; Renderer Methods
 ;; ============================================================================
 
-(defn renderer-init
-  "Constructor - stores rendering context
-  
-  Args:
-  - context: BlockEntityRendererFactory.Context
-  
-  Returns: [[parent-args] state]"
-  [context]
-  [[] {:context context}])
-
 (defn renderer-render
   "Main render method - called by Minecraft every frame
   
   Args:
-  - this: MatrixBlockEntityRenderer instance
-  - block-entity: TileMatrix instance
-  - tick-delta: float - interpolation value (partial ticks)
-  - matrices: MatrixStack
-  - vertex-consumers: VertexConsumerProvider
-  - light: int - lighting value
-  - overlay: int - overlay value
+  - this: BlockEntityRendererImpl instance
+  - block-entity: BlockEntity instance
+  - partial-ticks: float - interpolation value
+  - pose-stack: PoseStack
+  - buffer-source: MultiBufferSource
+  - packed-light: int - lighting value
+  - packed-overlay: int - overlay value
   
   Returns: nil"
-  [this block-entity tick-delta matrices vertex-consumers light overlay]
+  [this block-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (try
     ;; Universal dispatcher - doesn't know about specific block types
     ;; Position is (0,0,0) - engine handles translation to block position

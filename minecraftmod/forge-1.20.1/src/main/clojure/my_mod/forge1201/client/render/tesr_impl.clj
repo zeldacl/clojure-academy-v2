@@ -10,30 +10,17 @@
 ;; TESR Generation
 ;; ============================================================================
 
-;; Generate Java class extending BlockEntityRenderer
-;; Note: In Forge 1.20.1, TileEntityRenderer is deprecated, BlockEntityRenderer is used
+;; Generate Java class implementing BlockEntityRenderer
+;; Note: In 1.20.x, BlockEntityRenderer is an interface; Minecraft constructs renderers via provider.
 (gen-class
   :name my_mod.forge1201.client.render.TileEntityRendererImpl
-  :extends net.minecraft.client.renderer.blockentity.BlockEntityRenderer
+  :implements [net.minecraft.client.renderer.blockentity.BlockEntityRenderer]
   :prefix "renderer-"
-  :init init
-  :state state
-  :constructors {[net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher] 
-                 [net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher]})
+  :constructors {[] []})
 
 ;; ============================================================================
 ;; Renderer Methods
 ;; ============================================================================
-
-(defn renderer-init
-  "Constructor - calls parent BlockEntityRenderer constructor
-  
-  Args:
-  - dispatcher: BlockEntityRenderDispatcher
-  
-  Returns: [[parent-args] state]"
-  [dispatcher]
-  [[dispatcher] nil])
 
 (defn renderer-render
   "Main render method - called by Minecraft every frame

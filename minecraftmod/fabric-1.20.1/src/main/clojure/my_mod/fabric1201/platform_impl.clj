@@ -2,11 +2,11 @@
   "Fabric 1.20.1 platform implementation.
   
   Extends core platform protocols to Fabric 1.20.1's Minecraft classes.
-  Fabric uses similar class names to Forge 1.20.1 (both use modern mappings):
-  - NbtCompound (Fabric's name, similar to CompoundTag)
-  - NbtList (Fabric's name, similar to ListTag)
-  - BlockPos (same as Forge, in core package)
-  - World (Fabric keeps 'World' name unlike Forge's 'Level')
+  This project uses Loom official Mojang mappings on Fabric, so Minecraft class
+  names/packages match Forge 1.20.1:
+  - CompoundTag, ListTag
+  - BlockPos
+  - Level
   
   This module must be loaded during mod initialization to register
   platform implementations before any core code runs."
@@ -16,17 +16,17 @@
             [my-mod.platform.item :as item]
             [my-mod.platform.resource :as resource]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.nbt NbtCompound NbtList]
-           [net.minecraft.util.math BlockPos]
-           [net.minecraft.world World]
-           [net.minecraft.item ItemStack]
-           [net.minecraft.util Identifier]))
+  (:import [net.minecraft.nbt CompoundTag ListTag]
+           [net.minecraft.core BlockPos]
+           [net.minecraft.world.level Level]
+           [net.minecraft.world.item ItemStack]
+           [net.minecraft.resources ResourceLocation]))
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Fabric 1.20.1)
 ;; ============================================================================
 
-(extend-type NbtCompound
+(extend-type CompoundTag
   nbt/INBTCompound
   
   (nbt-set-int! [this key value]
@@ -73,7 +73,7 @@
   (nbt-has-key? [this key]
     (.contains this key)))
 
-(extend-type NbtList
+(extend-type ListTag
   nbt/INBTList
   
   (nbt-append! [this element]
@@ -108,19 +108,19 @@
     (.getMaxStackSize this))
   
   (item-is-equal? [this other]
-    (ItemStack/areItemsEqual this other))
+    (.sameItem this other))
   
   (item-save-to-nbt [this nbt]
-    (.writeNbt this nbt))
+    (.save this nbt))
   
   (item-get-or-create-tag [this]
-    (.getOrCreateNbt this))
+    (.getOrCreateTag this))
   
   (item-get-max-damage [this]
     (.getMaxDamage this))
   
   (item-set-damage! [this damage]
-    (.setDamage this (int damage))))
+    (.setDamageValue this (int damage))))
 
 ;; ============================================================================
 ;; Position Protocol Implementation (Fabric 1.20.1)
@@ -142,7 +142,7 @@
 ;; World Protocol Implementation (Fabric 1.20.1)
 ;; ============================================================================
 
-(extend-type World
+(extend-type Level
   world/IWorldAccess
   
   (world-get-tile-entity [this block-pos]
@@ -152,10 +152,10 @@
     (.getBlockState this block-pos))
   
   (world-set-block [this block-pos state flags]
-    (.setBlockState this block-pos state flags))
+    (.setBlock this block-pos state flags))
   
   (world-is-chunk-loaded? [this chunk-x chunk-z]
-    (.isChunkLoaded this chunk-x chunk-z)))
+    (.hasChunk this chunk-x chunk-z)))
 
 ;; ============================================================================
 ;; Platform Initialization
@@ -171,8 +171,8 @@
   
   ;; Register NBT factory
   (alter-var-root #'nbt/*nbt-factory*
-    (constantly {:create-compound #(NbtCompound.)
-                 :create-list #(NbtList.)}))
+    (constantly {:create-compound #(CompoundTag.)
+                 :create-list #(ListTag.)}))
   
   ;; Register position factory
   (alter-var-root #'pos/*position-factory*
@@ -182,11 +182,11 @@
   ;; Register item factory
   (alter-var-root #'item/*item-factory*
     (constantly (fn [nbt]
-                  (ItemStack/fromNbt nbt))))
+                  (ItemStack/of nbt))))
 
   ;; Register resource identifier factory
   (alter-var-root #'resource/*resource-factory*
     (constantly (fn [namespace path]
-                  (Identifier. namespace path))))
+                  (ResourceLocation. namespace path))))
   
   (log/info "Fabric 1.20.1 platform implementations initialized successfully"))

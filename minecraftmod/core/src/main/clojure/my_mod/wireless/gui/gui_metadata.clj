@@ -11,9 +11,10 @@
 
 (def gui-wireless-node 0)
 (def gui-wireless-matrix 1)
+(def gui-solar-gen 2)
 
 ;; All valid GUI IDs
-(def valid-gui-ids #{gui-wireless-node gui-wireless-matrix})
+(def valid-gui-ids #{gui-wireless-node gui-wireless-matrix gui-solar-gen})
 
 ;; ============================================================================
 ;; GUI Metadata Maps
@@ -22,17 +23,20 @@
 (def gui-display-names
   ^{:doc "Map from GUI ID to display name"}
   {gui-wireless-node "Wireless Node"
-   gui-wireless-matrix "Wireless Matrix"})
+   gui-wireless-matrix "Wireless Matrix"
+   gui-solar-gen "Solar Generator"})
 
 (def gui-types
   ^{:doc "Map from GUI ID to container type keyword"}
   {gui-wireless-node :node
-   gui-wireless-matrix :matrix})
+   gui-wireless-matrix :matrix
+   gui-solar-gen :solar})
 
 (def gui-registry-names
   ^{:doc "Map from GUI ID to registry identifier"}
   {gui-wireless-node "wireless_node_gui"
-   gui-wireless-matrix "wireless_matrix_gui"})
+   gui-wireless-matrix "wireless_matrix_gui"
+   gui-solar-gen "solar_gen_gui"})
 
 ;; Screen factory function mapping
 (def gui-screen-factories
@@ -41,7 +45,8 @@
   Platform code can use this to get the correct factory function
   from screen-factory namespace dynamically."}
   {gui-wireless-node :create-node-screen
-   gui-wireless-matrix :create-matrix-screen})
+   gui-wireless-matrix :create-matrix-screen
+   gui-solar-gen :create-solar-screen})
 
 ;; Slot layout definitions
 (def gui-slot-layouts
@@ -64,7 +69,13 @@
             {:type :core :index 3 :x 47 :y 24}]
     :ranges {:tile [0 3]
              :player-main [4 30]
-             :player-hotbar [31 39]}}})
+             :player-hotbar [31 39]}}
+
+   gui-solar-gen
+   {:slots [{:type :energy :index 0 :x 42 :y 81}]
+    :ranges {:tile [0 0]
+             :player-main [1 27]
+             :player-hotbar [28 36]}}})
 
 ;; ============================================================================
 ;; Query Functions
@@ -161,7 +172,8 @@
 (def type-to-gui-id
   ^{:doc "Map from container type to GUI ID"}
   {:node gui-wireless-node
-   :matrix gui-wireless-matrix})
+   :matrix gui-wireless-matrix
+   :solar gui-solar-gen})
 
 (defn get-gui-id-for-type
   "Get GUI ID for container type

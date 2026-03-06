@@ -110,27 +110,20 @@
 ;; TESR API Implementation
 ;; ============================================================================
 
-;; Implement ITileEntityRenderer protocol for TileMatrix
-(extend-protocol tesr-api/ITileEntityRenderer
-  my_mod.block.wireless_matrix.TileMatrix
-  (tesr-api/render-tile [tile-entity x y z]
-    ;; Delegate to multiblock helper for coordinate transformation
-    (mb-helper/render-multiblock-tesr
-      tile-entity
-      x y z
-      render-at-origin)))
-
 ;; Register the Matrix renderer
 (defn register!
   "Register this renderer for TileMatrix tiles
   
   Should be called during platform initialization."
   []
-  (tesr-api/register-tile-renderer! 
+  (tesr-api/register-tile-renderer!
     my_mod.block.wireless_matrix.TileMatrix
-    (proxy [Object] []
-      (render-tile [tile x y z]
-        (render-at-origin tile)))))
+    (reify tesr-api/ITileEntityRenderer
+      (render-tile [_ tile-entity x y z]
+        (mb-helper/render-multiblock-tesr
+          tile-entity
+          x y z
+          render-at-origin)))))
 
 ;; ============================================================================
 ;; Platform Integration Notes

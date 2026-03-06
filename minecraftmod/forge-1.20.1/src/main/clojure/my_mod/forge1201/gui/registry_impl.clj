@@ -5,11 +5,14 @@
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.forge1201.gui.bridge :as bridge]
             [my-mod.wireless.gui.registry :as gui-registry]
+            [my-mod.wireless.gui.gui-metadata :as gui-meta]
             [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
   (:import [net.minecraftforge.network NetworkHooks]
-           [net.minecraft.world.inventory MenuType MenuType$MenuSupplier]
-           [net.minecraft.world.flag FeatureFlags]
+           [net.minecraftforge.common.extensions IForgeMenuType]
+           [net.minecraftforge.network.IContainerFactory]
+           [net.minecraft.network FriendlyByteBuf]
+           [net.minecraft.world.inventory MenuType]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.core Registry]
            [net.minecraft.resources ResourceLocation]))
@@ -43,18 +46,17 @@
   
   Returns: MenuType instance"
   [gui-id]
-  (MenuType.
-    (reify MenuType$MenuSupplier
-      (create [_ window-id player-inventory]
+  (IForgeMenuType/create
+    (reify IContainerFactory
+      (create [_ window-id player-inventory ^FriendlyByteBuf buf]
         (let [handler (gui/get-gui-handler)
               player (.player player-inventory)
               world (.level player)
-              pos (.blockPosition player)
+              pos (.readBlockPos buf)
               clj-container (.get-server-container handler gui-id player world pos)]
           (if clj-container
             (bridge/wrap-clojure-container window-id (get-menu-type gui-id) clj-container)
-            (do (log/error "Failed to create container for GUI" gui-id) nil)))))
-    FeatureFlags/DEFAULT_FLAGS))
+            (do (log/error "Failed to create container for GUI" gui-id) nil)))))))
 
 (defn register-menu-types!
   "Register all menu types with Forge registry
@@ -71,6 +73,7 @@
       
       ;; Store in our map
       (swap! gui-menu-types assoc gui-id menu-type)
+      (gui-meta/register-menu-type! :forge-1.20.1 gui-id menu-type)
       
       ;; Register with vanilla registry (Forge 1.20.1 uses vanilla registries)
       (Registry/register BuiltInRegistries/MENU resource-loc menu-type)
@@ -93,8 +96,21 @@
   [player gui-id tile-entity]
   (log/info "Opening GUI" gui-id "for player" (.getName player))
   (try
-    (let [provider (bridge/create-menu-provider gui-id tile-entity)]
-      (NetworkHooks/openScreen player provider)
+    (let [provider (bridge/create-menu-provider gui-id tile-entity)
+          pos (when tile-entity
+                (try
+                  (if (map? tile-entity)
+                    (:pos tile-entity)
+                    (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array [])))
+                  (catch Exception _ nil)))]
+      (if pos
+        (NetworkHooks/openScreen
+          player
+          provider
+          (reify java.util.function.Consumer
+            (accept [_ buf]
+              (.writeBlockPos buf pos))))
+        (NetworkHooks/openScreen player provider))
       (log/info "GUI opened successfully"))
     (catch Exception e
       (log/error "Failed to open GUI:" (.getMessage e))

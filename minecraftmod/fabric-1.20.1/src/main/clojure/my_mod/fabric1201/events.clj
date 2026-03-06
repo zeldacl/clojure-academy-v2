@@ -3,6 +3,7 @@
   (:require [my-mod.core :as core]
             [my-mod.util.log :as log]
             [my-mod.events.metadata :as event-metadata]
+            [my-mod.fabric1201.gui.registry-impl :as gui-registry-impl]
             [my-mod.wireless.world-data :as wd])
   (:import [net.fabricmc.fabric.api.event.player UseBlockCallback]
            [net.minecraft.world InteractionResult]
@@ -20,7 +21,16 @@
     ;; Check if this block has a registered right-click handler
     (when (and block-id (event-metadata/has-event-handler? block-id :on-right-click))
       (log/info "Block has registered handler, dispatching...")
-      (core/on-block-right-click (assoc event-data :block-id block-id)))))
+      (let [ret (core/on-block-right-click (assoc event-data :block-id block-id))]
+        (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
+          (try
+            (let [{:keys [gui-id player world pos]} ret
+                  tile-entity (.getBlockEntity world pos)]
+              (when (and tile-entity (not (.isClientSide world)))
+                (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))
+            (catch Exception e
+              (log/error "Failed to open GUI from right-click handler:" (.getMessage e)))))
+        ret))))
 
 (defn handle-use-block
   "Handle Fabric UseBlockCallback event"
@@ -32,6 +42,8 @@
         {:x (.getX pos)
          :y (.getY pos)
          :z (.getZ pos)
+         :pos pos
+         :sneaking (.isShiftKeyDown player)
          :player player
          :world world
          :block (.getBlock block-state)})

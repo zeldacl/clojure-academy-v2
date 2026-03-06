@@ -5,10 +5,8 @@
   to register, eliminating hardcoded game concepts."
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.client.gui.screen.ingame HandledScreen]
-           [net.minecraft.entity.player PlayerInventory]
-           [net.minecraft.text Text]
-           [net.fabricmc.fabric.api.client.screenhandler.v1 ScreenRegistry]))
+  (:import [net.minecraft.client.gui.screens MenuScreens]
+           [net.minecraft.network.chat Component]))
 
 ;; ============================================================================
 ;; Screen Factory Registration (Fabric-specific)
@@ -31,19 +29,19 @@
       
       ;; Loop through all registered GUIs from metadata
       (doseq [gui-id (gui/get-all-gui-ids)]
-        (let [handler-type (gui/get-menu-type platform gui-id)
+        (let [menu-type (gui/get-menu-type platform gui-id)
               factory-fn-kw (gui/get-screen-factory-fn-kw gui-id)]
           
-          (when (and handler-type factory-fn-kw)
+          (when (and menu-type factory-fn-kw)
             ;; Get the actual factory function from screen-factory namespace
             (let [factory-fn (ns-resolve 'my-mod.gui.platform-adapter factory-fn-kw)]
               (if factory-fn
                 (do
-                  (net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry/register
-                    handler-type
-                    (reify net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry$Factory
-                      (create [_ handler player-inventory title]
-                        (factory-fn handler player-inventory title))))
+                  (MenuScreens/register
+                    menu-type
+                    (reify net.minecraft.client.gui.screens.MenuScreens$ScreenConstructor
+                      (create [_ menu player-inventory title]
+                        (factory-fn menu player-inventory title))))
                   (log/info "Registered screen factory for GUI ID" gui-id))
                 (log/warn "Screen factory function not found:" factory-fn-kw "for GUI ID" gui-id))))))
     
@@ -55,39 +53,7 @@
 
 ;; Alternative: Using HandledScreens (newer Fabric API)
 ;; Alternative: Using HandledScreens (newer Fabric API)
-(defn register-screens-alt!
-  \"Register screens using HandledScreens API (alternative method)
-  
-  Platform-agnostic design: Loops through all GUI IDs from metadata.
-  Delegates to platform-agnostic screen-factory for actual screen creation.\"
-  []
-  (log/info \"Registering Wireless GUI screens using HandledScreens API\")
-  
-  (try
-    ;; This is the newer Fabric API method
-    (let [registry-impl (ns-resolve 'my-mod.fabric1201.gui.registry-impl 'get-handler-type)]
-      (doseq [gui-id (gui/get-all-gui-ids)]
-        (let [handler-type (registry-impl gui-id)
-              factory-fn-kw (gui/get-screen-factory-fn-kw gui-id)
-              display-name (gui/get-display-name gui-id)]
-          
-          (when (and handler-type factory-fn-kw)
-            (let [factory-fn (ns-resolve 'my-mod.gui.platform-adapter factory-fn-kw)]
-              (when factory-fn
-                (net.minecraft.client.gui.screen.ingame.HandledScreens/register
-                  handler-type
-                  (reify java.util.function.Function
-                    (apply [_ handler-and-inventory]
-                      (let [handler (.getLeft handler-and-inventory)
-                            player-inventory (.getRight handler-and-inventory)]
-                        (factory-fn handler player-inventory (Text/literal display-name))))))
-                (log/info \"Registered screen for GUI ID\" gui-id)))))))
-    
-    (log/info \"Screen factories registered successfully (HandledScreens)\")
-    
-    (catch Exception e
-      (log/warn \"HandledScreens API not available, falling back to ScreenRegistry\")
-      (register-screens!))))
+;; (register-screens-alt!) was Yarn-era; MenuScreens works with official mappings.
 
 ;; ============================================================================
 ;; Initialization
@@ -99,12 +65,6 @@
   Should be called during client mod initialization"
   []
   (log/info "Initializing Fabric 1.20.1 client GUI system")
-  
-  ;; Try newer API first, fall back to legacy if needed
-  (try
-    (register-screens-alt!)
-    (catch Exception e
-      (log/warn "Using legacy ScreenRegistry API")
-      (register-screens!)))
+  (register-screens!)
   
   (log/info "Fabric 1.20.1 client GUI system initialized"))

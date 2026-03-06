@@ -8,6 +8,7 @@
   and only handle platform-specific registration mechanics."
   (:require [my-mod.wireless.gui.node-gui :as node-gui]
             [my-mod.wireless.gui.matrix-gui :as matrix-gui]
+            [my-mod.wireless.gui.solar-gui-xml :as solar-gui]
             [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.util.log :as log]))
 
@@ -70,6 +71,11 @@
   Returns: CGuiScreenContainer instance or nil on error"
   [container-or-handler player-inventory title]
   (create-screen :matrix container-or-handler player-inventory title))
+
+(defn create-solar-screen
+  "Create Solar Generator GUI screen (platform-agnostic)"
+  [container-or-handler player-inventory title]
+  (create-screen :solar container-or-handler player-inventory title))
 
 ;; ============================================================================
 ;; Design Notes

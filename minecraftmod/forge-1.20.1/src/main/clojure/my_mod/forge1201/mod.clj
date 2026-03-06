@@ -17,9 +17,12 @@
   (:import [net.minecraft.world.level.block Block Blocks]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab CreativeModeTabs]
+           [net.minecraft.world.level.block.entity BlockEntityType BlockEntityType$Builder BlockEntityType$BlockEntitySupplier]
            [net.minecraft.core.registries Registries]
            [net.minecraft.network.chat Component]
            [my_mod.block NodeDynamicBlock]
+           [my_mod.block SolarGenBlock]
+           [my_mod.block.entity SolarGenBlockEntity]
            [net.minecraftforge.fml.common Mod]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
            [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
@@ -50,9 +53,14 @@
 (defonce creative-tabs-register
   (DeferredRegister/create Registries/CREATIVE_MODE_TAB mod-id))
 
+;; BlockEntity types
+(defonce block-entities-register
+  (DeferredRegister/create ForgeRegistries/BLOCK_ENTITY_TYPES mod-id))
+
 ;; Storage for registered blocks and items (populated during initialization)
 (defonce registered-blocks (atom {}))
 (defonce registered-items (atom {}))
+(defonce registered-block-entities (atom {}))
 
 (defn- has-block-state-properties?
   "Check if a block needs dynamic block state properties (via metadata).
@@ -82,9 +90,33 @@
                                   (NodeDynamicBlock/create block-id
                                                            (java.util.ArrayList. props)
                                                            (BlockBehaviour$Properties/copy Blocks/STONE)))
+                                (if (= block-id "solar-gen")
+                                  (SolarGenBlock. (BlockBehaviour$Properties/copy Blocks/STONE))
                                 ;; Use standard Block for simple blocks
-                                (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))]
+                                (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
+
+;; BlockEntity registration (minimal: SolarGen only for now)
+(defn register-block-entities!
+  []
+  (when-let [solar-block-ro (get @registered-blocks "solar-gen")]
+    (let [registry-name (registry-metadata/get-block-registry-name "solar-gen")
+          registered-obj (.register block-entities-register registry-name
+                          (reify java.util.function.Supplier
+                            (get [_]
+                              (-> (BlockEntityType$Builder/of
+                                    (reify BlockEntityType$BlockEntitySupplier
+                                      (create [_ pos state]
+                                        (SolarGenBlockEntity. pos state)))
+                                    (into-array Block [(.get solar-block-ro)]))
+                                  (.build nil)))))]
+      (swap! registered-block-entities assoc "solar-gen" registered-obj))))
+
+(defn get-registered-block-entity-type
+  "Get a registered BlockEntityType by DSL block-id (e.g. \"solar-gen\")."
+  [block-id]
+  (when-let [registered-obj (get @registered-block-entities block-id)]
+    (.get registered-obj)))
 
 ;; Dynamic item registration using metadata
 (defn register-all-items!
@@ -192,6 +224,17 @@
   (log/info "FMLCommonSetupEvent - Common setup phase")
   ;; Common initialization (runs on both client and server)
   (gui-init/init-common!)
+
+  ;; Ensure BlockEntityType static holders are initialized for Java BlockEntities
+  (try
+    (when-let [solar-type (get-registered-block-entity-type "solar-gen")]
+      (clojure.lang.Reflector/setStaticField
+        my_mod.block.entity.SolarGenBlockEntity
+        "TYPE"
+        solar-type)
+      (log/info "SolarGen BlockEntityType injected"))
+    (catch Exception e
+      (log/error "Failed to inject SolarGen BlockEntityType:" (.getMessage e))))
   
   ;; Register gameplay event listeners  
   ;; Note: Consumer.accept(Object) will receive the event from the bus
@@ -242,6 +285,7 @@
   ;; Register all blocks and items using metadata-driven approach
   ;; DSL systems are automatically initialized when namespaces load
   (register-all-blocks!)
+  (register-block-entities!)
   (register-all-items!)
   
   ;; Register creative mode tab
@@ -251,6 +295,7 @@
   (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
     (.register blocks-register mod-bus)
     (.register items-register mod-bus)
+    (.register block-entities-register mod-bus)
     (.register creative-tabs-register mod-bus))
   
   ;; Setup phase event listeners

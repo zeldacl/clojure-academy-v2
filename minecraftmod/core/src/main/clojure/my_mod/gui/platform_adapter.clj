@@ -48,6 +48,7 @@
 
 (def gui-wireless-node metadata/gui-wireless-node)
 (def gui-wireless-matrix metadata/gui-wireless-matrix)
+(def gui-solar-gen metadata/gui-solar-gen)
 (def valid-gui-ids metadata/valid-gui-ids)
 
 (def get-display-name metadata/get-display-name)
@@ -147,6 +148,7 @@
 
 (def create-node-screen screen-factory/create-node-screen)
 (def create-matrix-screen screen-factory/create-matrix-screen)
+(def create-solar-screen screen-factory/create-solar-screen)
 
 ;; ============================================================================
 ;; Adapter Guarantees

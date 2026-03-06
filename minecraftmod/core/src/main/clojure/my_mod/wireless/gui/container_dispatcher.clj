@@ -7,6 +7,7 @@
   Uses protocols to achieve polymorphic dispatch based on container type."
   (:require [my-mod.wireless.gui.node-container :as node-container]
             [my-mod.wireless.gui.matrix-container :as matrix-container]
+            [my-mod.wireless.gui.solar-container :as solar-container]
             [my-mod.util.log :as log]))
 
   (defn node-container?
@@ -24,6 +25,14 @@
       (contains? container :tile-entity)
       (contains? container :plate-count)
       (contains? container :core-level)))
+
+  (defn solar-container?
+    "Best-effort structural check for solar container without class loading."
+    [container]
+    (and (map? container)
+         (contains? container :tile-entity)
+         (contains? container :energy)
+         (contains? container :status)))
 
 ;; ============================================================================
 ;; Container Operation Protocol
@@ -60,24 +69,28 @@
     (cond
       (node-container? container) (node-container/tick! container)
       (matrix-container? container) (matrix-container/tick! container)
+      (solar-container? container) (solar-container/tick! container)
       :else (log/warn "Unknown container type for tick:" (type container))))
   
   (validate-container [container player]
     (cond
       (node-container? container) (node-container/still-valid? container player)
       (matrix-container? container) (matrix-container/still-valid? container player)
+      (solar-container? container) (solar-container/still-valid? container player)
       :else false))
   
   (sync-container! [container]
     (cond
       (node-container? container) (node-container/sync-to-client! container)
       (matrix-container? container) (matrix-container/sync-to-client! container)
+      (solar-container? container) (solar-container/sync-to-client! container)
       :else (log/warn "Unknown container type for sync:" (type container))))
   
   (handle-button-click! [container button-id player]
     (cond
       (node-container? container) (node-container/handle-button-click! container button-id player)
       (matrix-container? container) (matrix-container/handle-button-click! container button-id player)
+      (solar-container? container) (solar-container/handle-button-click! container button-id player)
       :else (log/warn "Unknown container type for button click:" (type container))))
   
   (handle-text-input! [container field-id text player]
@@ -87,6 +100,7 @@
     (cond
       (node-container? container) (node-container/on-close container)
       (matrix-container? container) (matrix-container/on-close container)
+      (solar-container? container) (solar-container/on-close container)
       :else (log/warn "Unknown container type for close:" (type container)))))
 
 ;; ============================================================================
@@ -107,6 +121,9 @@
     
     (matrix-container? container)
     :matrix
+
+    (solar-container? container)
+    :solar
     
     :else
     (do

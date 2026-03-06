@@ -8,6 +8,21 @@
   (:import [net.minecraft.world MenuProvider]
            [net.minecraft.network.chat Component]))
 
+(defn- tile->pos
+  [tile-entity player]
+  (cond
+    (nil? tile-entity)
+    (.blockPosition player)
+
+    (map? tile-entity)
+    (or (:pos tile-entity) (.blockPosition player))
+
+    :else
+    (try
+      (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array []))
+      (catch Exception _
+        (.blockPosition player)))))
+
 (defn create-menu-provider
   "Create a MenuProvider for opening GUI.
 
@@ -24,7 +39,7 @@
     (createMenu [_ window-id player-inventory player]
       (let [handler (gui/get-gui-handler)
             world (.level player)
-            pos (if tile-entity (:pos tile-entity) (.blockPosition player))]
+            pos (tile->pos tile-entity player)]
         (log/info "Creating menu for GUI" gui-id)
         (let [clj-container (.get-server-container handler gui-id player world pos)]
           (when-not clj-container

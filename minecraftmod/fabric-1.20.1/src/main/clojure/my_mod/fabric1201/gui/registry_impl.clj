@@ -3,11 +3,11 @@
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.fabric1201.gui.bridge :as bridge]
             [my-mod.wireless.gui.registry :as gui-registry]
+            [my-mod.wireless.gui.gui-metadata :as gui-meta]
             [my-mod.config.modid :as modid]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.screen ScreenHandlerType]
-           [net.minecraft.util Identifier]
-           [net.minecraft.registry Registry Registries]
+  (:import [net.minecraft.world.inventory MenuType]
+           [net.minecraft.resources ResourceLocation]
            [net.fabricmc.fabric.api.screenhandler.v1 ScreenHandlerRegistry]))
 
 ;; ============================================================================
@@ -15,42 +15,42 @@
 ;; ============================================================================
 
 (defonce gui-handler-types
-  ^{:doc "Map from GUI ID to registered ScreenHandlerType instances
+  ^{:doc "Map from GUI ID to registered MenuType instances
 
   Platform-agnostic design: Uses GUI IDs instead of game-specific names.
-  Structure: {gui-id ScreenHandlerType, ...}"}
+  Structure: {gui-id MenuType, ...}"}
   (atom {}))
 
 (defn get-handler-type
-  "Get registered ScreenHandlerType for a GUI ID
+  "Get registered MenuType for a GUI ID
   
   Args:
   - gui-id: int
   
-  Returns: ScreenHandlerType or nil"
+  Returns: MenuType or nil"
   [gui-id]
   (get @gui-handler-types gui-id))
 
 (defn create-screen-handler-type
-  "Create a ScreenHandlerType for a GUI
+  "Create a MenuType for a GUI
   
   Platform-agnostic design: Uses gui-metadata for registry names.
   
   Args:
   - gui-id: int
   
-  Returns: ScreenHandlerType instance"
+  Returns: MenuType instance"
   [gui-id]
   (let [registry-name (gui/get-registry-name gui-id)]
     ;; Use ScreenHandlerRegistry.SimpleClientHandlerFactory
     (ScreenHandlerRegistry/registerSimple
-      (Identifier. modid/MOD-ID registry-name)
+      (ResourceLocation. modid/MOD-ID registry-name)
       (reify net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry$SimpleClientHandlerFactory
         (create [_ sync-id player-inventory]
           (let [handler (gui/get-gui-handler)
                 player (.player player-inventory)
-                world (.getWorld player)
-                pos (.getBlockPos player)
+                world (.level player)
+                pos (.blockPosition player)
                 clj-container (.get-server-container handler gui-id player world pos)]
             (if clj-container
               (bridge/wrap-clojure-container sync-id (get-handler-type gui-id) clj-container)
@@ -66,12 +66,12 @@
   Args:
   - gui-id: int
   
-  Returns: ScreenHandlerType instance"
+  Returns: MenuType instance"
   [gui-id]
   (let [registry-name (gui/get-registry-name gui-id)]
     ;; Use ScreenHandlerRegistry.ExtendedClientHandlerFactory
     (ScreenHandlerRegistry/registerExtended
-      (Identifier. "my_mod" registry-name)
+      (ResourceLocation. modid/MOD-ID registry-name)
       (reify net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry$ExtendedClientHandlerFactory
         (create [_ sync-id player-inventory buf]
           ;; Read GUI ID from buffer
@@ -80,7 +80,7 @@
                 pos (when has-tile (.readBlockPos buf))
                 handler (gui-registry/get-gui-handler)
                 player (.player player-inventory)
-                world (.getWorld player)
+                world (.level player)
                 clj-container (.get-server-container handler gui-id-from-buf player world pos)]
             (if clj-container
               (bridge/wrap-clojure-container sync-id (get-handler-type gui-id-from-buf) clj-container)
@@ -102,6 +102,7 @@
       
       ;; Store in our map
       (swap! gui-handler-types assoc gui-id handler-type)
+      (gui-meta/register-menu-type! :fabric-1.20.1 gui-id handler-type)
       
       (log/info "Registered screen handler type:" registry-name "for GUI ID" gui-id)))
   
@@ -128,7 +129,11 @@
     (let [factory (bridge/create-extended-screen-handler-factory gui-id tile-entity)]
       
       ;; Open GUI using Fabric API
-      (.openHandledScreen player factory)
+      (try
+        (clojure.lang.Reflector/invokeInstanceMethod player "openHandledScreen" (object-array [factory]))
+        (catch Exception _
+          ;; Fallback: some environments expose openMenu instead
+          (clojure.lang.Reflector/invokeInstanceMethod player "openMenu" (object-array [factory]))))
       
       (log/info "GUI opened successfully"))
     

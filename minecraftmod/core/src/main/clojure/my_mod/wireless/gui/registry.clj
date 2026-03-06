@@ -4,6 +4,9 @@
             [my-mod.wireless.gui.node-gui-xml :as node-gui]
             [my-mod.wireless.gui.matrix-container :as matrix-container]
             [my-mod.wireless.gui.matrix-gui :as matrix-gui]
+            [my-mod.wireless.gui.solar-container :as solar-container]
+            [my-mod.wireless.gui.solar-gui-xml :as solar-gui]
+            [my-mod.platform.world :as pworld]
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
@@ -23,6 +26,13 @@
        (contains? container :tile-entity)
        (contains? container :plate-count)
        (contains? container :core-level)))
+
+(defn- solar-container?
+  [container]
+  (and (map? container)
+       (contains? container :tile-entity)
+       (contains? container :energy)
+       (contains? container :status)))
 
 (def gui-config
   {:node {:id 0
@@ -44,7 +54,17 @@
                            (matrix-gui/create-screen container minecraft-container)))
             :tick-fn matrix-container/tick!
             :sync-get matrix-container/get-sync-data
-            :sync-apply matrix-container/apply-sync-data!}})
+            :sync-apply matrix-container/apply-sync-data!}
+   :solar {:id 2
+           :container-predicate solar-container?
+           :container-fn solar-container/create-container
+           :screen-fn (fn [tile player]
+                        (let [container (solar-container/create-container tile player)
+                              minecraft-container nil]
+                          (solar-gui/create-screen container minecraft-container player)))
+           :tick-fn solar-container/tick!
+           :sync-get solar-container/get-sync-data
+           :sync-apply solar-container/apply-sync-data!}})
 
 ;; ============================================================================
 ;; GUI ID Constants (derived from gui-config)
@@ -97,7 +117,7 @@
   `(defrecord ~name []
      IGuiHandler
      (get-server-container [_# gui-id# player# world# pos#]
-       (let [tile-entity# (.getTileEntity world# pos#)
+       (let [tile-entity# (pworld/world-get-tile-entity world# pos#)
              cfg# (get-gui-config gui-id#)]
          (if (and tile-entity# cfg#)
            (do
@@ -108,7 +128,7 @@
                (log/warn "Unknown GUI ID:" gui-id#))
              nil))))
      (get-client-gui [_# gui-id# player# world# pos#]
-       (let [tile-entity# (.getTileEntity world# pos#)
+       (let [tile-entity# (pworld/world-get-tile-entity world# pos#)
              cfg# (get-gui-config gui-id#)]
          (if (and tile-entity# cfg#)
            (do
@@ -157,7 +177,7 @@
     (throw (ex-info "Invalid GUI ID" {:gui-id gui-id})))
   
   ;; Validate tile entity exists
-  (let [tile-entity (.getTileEntity world pos)]
+  (let [tile-entity (pworld/world-get-tile-entity world pos)]
     (when-not tile-entity
       (log/warn "No tile entity at position:" pos)
       (throw (ex-info "No tile entity at position" {:pos pos}))))

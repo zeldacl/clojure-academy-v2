@@ -2,11 +2,13 @@
   "Fabric 1.20.1 client-side initialization and registration"
   (:require [my-mod.util.log :as log]
             [my-mod.util.render :as render]
-            [my-mod.client.render.matrix-renderer :as matrix-renderer])
-  (:import [net.fabricmc.fabric.api.client.rendering.v1 BlockEntityRendererRegistry]
-           [net.minecraft.client MinecraftClient]
-           [net.minecraft.client.texture TextureManager]
-           [net.minecraft.client.render.block.entity BlockEntityRenderer BlockEntityRendererFactory]))
+            [my-mod.client.render.matrix-renderer :as matrix-renderer]
+            [my-mod.client.render.solar-renderer :as solar-renderer]
+            [my-mod.fabric1201.client.render.block-entity-renderer-impl]
+            [my-mod.fabric1201.mod :as fabric-mod])
+  (:import [net.minecraft.client Minecraft]
+           [net.minecraft.client.renderer.texture TextureManager]
+           [net.minecraft.client.renderer.blockentity BlockEntityRenderers BlockEntityRendererProvider]))
 
 ;; ============================================================================
 ;; Client Registration
@@ -16,18 +18,16 @@
   "Bind a texture for rendering.
   
   Args:
-    texture: Identifier - texture to bind
+    texture: ResourceLocation - texture to bind
   
   Uses direct method calls (no reflection) for better performance."
   [texture]
-  (let [minecraft (MinecraftClient/getInstance)
+  (let [minecraft (Minecraft/getInstance)
         texture-manager (.getTextureManager minecraft)]
     (try
-      ;; Try bindTexture first (some versions use this)
-      (.bindTexture texture-manager texture)
+      (.bindForSetup texture-manager texture)
       (catch Exception _
-        ;; Fallback to bind() if bindTexture doesn't exist
-        (.bind texture-manager texture))))))
+        (.bind texture-manager texture)))))
 
 (defn register-renderers
   "Register platform-agnostic renderers with the universal BlockEntityRenderer dispatcher
@@ -42,9 +42,18 @@
     ;; Register Matrix block renderer
     ;; The matrix-renderer/register! function:
     ;; - Registers TileMatrix with the core renderer dispatcher
-    ;; - The universal BlockEntityRenderer (MatrixBlockEntityRenderer class) will dispatch to this renderer
+    ;; - The universal BlockEntityRendererImpl class will dispatch to this renderer
     (matrix-renderer/register!)
+    (solar-renderer/register!)
     (log/info "Matrix block renderer registered successfully")
+
+    ;; Bind universal BER dispatcher to BlockEntityTypes
+    (when-let [solar-type (fabric-mod/get-registered-block-entity-type "solar-gen")]
+      (BlockEntityRenderers/register
+        solar-type
+        (reify BlockEntityRendererProvider
+          (create [_ctx]
+            (my_mod.fabric1201.client.render.BlockEntityRendererImpl.)))))
     
     (catch Exception e
       (log/error "Failed to register block renderers" e))))

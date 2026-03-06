@@ -10,17 +10,19 @@
 ;; ============================================================================
 
 (defprotocol ITileEntityRenderer
-  "Protocol for rendering any TileEntity type
-  
-  Implementations should provide rendering logic for their specific tile entity."
-  
-  (render-tile [tile-entity x y z]
-    "Render the tile entity at the given world position
-    
+  "Protocol for rendering BlockEntities (tile entities).
+
+  This protocol is implemented by *renderer objects* stored in the
+  `renderer-registry`, not by the tile entities themselves."
+
+  (render-tile [renderer tile-entity x y z]
+    "Render the tile entity at the given position (tile-relative coordinates).
+
     Args:
-      tile-entity: The TileEntity object to render
-      x, y, z: World coordinates (floats)
-    
+      renderer: ITileEntityRenderer implementation
+      tile-entity: BlockEntity instance being rendered
+      x, y, z: tile-relative render coordinates (floats/doubles)
+
     Returns: nil"))
 
 ;; ============================================================================
@@ -37,7 +39,7 @@
     renderer-fn: Function that implements ITileEntityRenderer protocol
   
   Example:
-    (register-tile-renderer! TileMatrix matrix-renderer-impl)"
+    (register-tile-renderer! TileMatrix my-renderer-obj)"
   [tile-class renderer-fn]
   (log/info "Registering TileEntity renderer for" tile-class)
   (swap! renderer-registry assoc tile-class renderer-fn))

@@ -18,9 +18,11 @@
            [net.minecraft.world.item Item BlockItem CreativeModeTabs]
            [net.minecraft.world.level.block Block Blocks]
            [net.minecraft.world.level.block.state BlockBehaviour]
+           [net.minecraft.world.level.block.entity BlockEntityType BlockEntityType$Builder BlockEntityType$BlockEntitySupplier]
            [net.fabricmc.fabric.api.itemgroup.v1 FabricItemGroup ItemGroupEvents]
            [net.minecraft.network.chat Component]
-           [my_mod.block NodeDynamicBlock]))
+           [my_mod.block NodeDynamicBlock SolarGenBlock]
+           [my_mod.block.entity SolarGenBlockEntity]))
 
 ;; Mod ID constant
 (def mod-id modid/MOD-ID)
@@ -28,6 +30,7 @@
 ;; Storage for registered blocks and items (populated during initialization)
 (defonce registered-blocks (atom {}))
 (defonce registered-items (atom {}))
+(defonce registered-block-entities (atom {}))
 
 (defn register-blocks []
   "Register all blocks using metadata-driven approach.
@@ -47,10 +50,31 @@
                         (NodeDynamicBlock/create block-id
                                                  (java.util.ArrayList. props)
                                                  (BlockBehaviour$Properties/copy Blocks/STONE)))
-                      ;; Use standard Block for simple blocks
-                      (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))]
+                      (if (= block-id "solar-gen")
+                        (SolarGenBlock. (BlockBehaviour$Properties/copy Blocks/STONE))
+                        ;; Use standard Block for simple blocks
+                        (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))]
       (registry/register-block registry-name block-obj)
       (swap! registered-blocks assoc block-id block-obj))))
+
+(defn register-block-entities []
+  "Register BlockEntityTypes (minimal: SolarGen only)."
+  (when-let [solar-block (get @registered-blocks "solar-gen")]
+    (let [registry-name (registry-metadata/get-block-registry-name "solar-gen")
+          be-type (-> (BlockEntityType$Builder/of
+                        (reify BlockEntityType$BlockEntitySupplier
+                          (create [_ pos state]
+                            (SolarGenBlockEntity. pos state)))
+                        (into-array Block [solar-block]))
+                      (.build nil))
+          res-loc (ResourceLocation. modid/MOD-ID registry-name)]
+      (Registry/register BuiltInRegistries/BLOCK_ENTITY_TYPE res-loc be-type)
+      (swap! registered-block-entities assoc "solar-gen" be-type)
+      (clojure.lang.Reflector/setStaticField
+        my_mod.block.entity.SolarGenBlockEntity
+        "TYPE"
+        be-type)
+      (log/info "Registered SolarGen BlockEntityType:" registry-name))))
 
 (defn register-items []
   "Register all items using metadata-driven approach.
@@ -134,6 +158,7 @@
   ;; Register blocks and items using metadata-driven approach
   ;; DSL systems are automatically initialized when namespaces load
   (register-blocks)
+  (register-block-entities)
   (register-items)
   
   ;; Register creative mode tab and populate with all items
@@ -166,6 +191,11 @@
     Item - The registered item, or nil if not found"
   [item-id]
   (get @registered-items item-id))
+
+(defn get-registered-block-entity-type
+  "Get a registered BlockEntityType by DSL block-id (e.g. \"solar-gen\")."
+  [block-id]
+  (get @registered-block-entities block-id))
 
 (defn get-registered-block-item
   "Get a registered block item by its block ID.

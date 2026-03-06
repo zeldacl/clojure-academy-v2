@@ -1,25 +1,29 @@
 (ns my-mod.fabric1201.gui.menu-bridge
   "Fabric 1.20.1 menu bridge.
 
-  Keeps ScreenHandler gen-class isolated and exposes menu-bridge constructors."
+  Keeps AbstractContainerMenu gen-class isolated and exposes menu-bridge constructors.
+
+  NOTE: This project uses official Mojang mappings on Fabric, so the menu
+  base class is `net.minecraft.world.inventory.AbstractContainerMenu`."
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.screen ScreenHandler ScreenHandlerType]
-           [net.minecraft.screen.slot Slot]))
+  (:import [net.minecraft.world.inventory AbstractContainerMenu MenuType Slot]))
 
 (gen-class
-  :name my_mod.fabric1201.gui.FabricScreenHandlerBridge
-  :extends net.minecraft.screen.ScreenHandler
+  :name my_mod.fabric1201.gui.FabricMenuBridge
+  :extends net.minecraft.world.inventory.AbstractContainerMenu
   :state state
   :init init
-  :constructors {[int Object clojure.lang.IPersistentMap] [net.minecraft.screen.ScreenHandlerType int]}
+  :constructors {[int Object clojure.lang.IPersistentMap] [net.minecraft.world.inventory.MenuType]}
   :methods [[getClojureContainer [] Object]
-            [tick [] void]])
+            [tick [] void]
+            [broadcastChanges [] void]
+            [addSlot [net.minecraft.world.inventory.Slot] net.minecraft.world.inventory.Slot]])
 
 (defn -init
   "Initialize ScreenHandler wrapper"
-  [sync-id handler-type clj-container]
-  [[handler-type sync-id] (atom clj-container)])
+  [menu-id menu-type clj-container]
+  [[menu-type] (atom clj-container)])
 
 (defn -getClojureContainer [this]
   @(.state this))
@@ -27,46 +31,46 @@
 (defn -tick [this]
   (gui/safe-tick! (-getClojureContainer this)))
 
-(defn -canUse [this player]
+(defn -stillValid [this player]
   (gui/safe-validate (-getClojureContainer this) player))
 
-(defn -close [this player]
-  (.close (.superclass (class this)) this player)
+(defn -removed [this player]
   (let [clj-container (-getClojureContainer this)]
     (gui/safe-close! clj-container)
     (gui/unregister-active-container! clj-container)
     (gui/unregister-player-container! player)
-    (log/info "ScreenHandler closed for player" (.getName player))))
+    (log/info "Menu closed for player" (.getName player))))
 
-(defn -sendContentUpdates [this]
-  (.sendContentUpdates (.superclass (class this)) this)
+(defn -broadcastChanges [this]
+  (.broadcastChanges (.superclass (class this)) this)
   (gui/safe-sync! (-getClojureContainer this)))
 
 (defn -addSlot [this slot]
   (.addSlot (.superclass (class this)) this slot))
 
-(defn -quickMove [this player slot-index]
+(defn -quickMoveStack [this player slot-index]
   (try
     (let [slot (.getSlot this slot-index)]
-      (if (and slot (.hasStack slot))
-        (let [stack (.getStack slot)
+      (if (and slot (.hasItem slot))
+        (let [stack (.getItem slot)
               clj-container (-getClojureContainer this)]
           (gui/execute-quick-move-fabric this clj-container slot-index slot stack))
-        net.minecraft.item.ItemStack/EMPTY))
+        net.minecraft.world.item.ItemStack/EMPTY))
     (catch Exception e
-      (log/error "Error in quickMove:" (.getMessage e))
-      net.minecraft.item.ItemStack/EMPTY)))
+      (log/error "Error in quickMoveStack:" (.getMessage e))
+      net.minecraft.world.item.ItemStack/EMPTY)))
 
-(defn -canInsertIntoSlot [this stack slot] true)
+(defn -canTakeItemForPickAll [this stack slot] true)
+(defn -canDragTo [this slot] true)
 
 (defn create-menu-bridge
-  "Create FabricScreenHandlerBridge instance without ns-load class resolution."
-  [sync-id handler-type clj-container]
+  "Create FabricMenuBridge instance without ns-load class resolution."
+  [window-id menu-type clj-container]
   (clojure.lang.Reflector/invokeConstructor
-    (Class/forName "my_mod.fabric1201.gui.FabricScreenHandlerBridge")
-    (object-array [sync-id handler-type clj-container])))
+    (Class/forName "my_mod.fabric1201.gui.FabricMenuBridge")
+    (object-array [window-id menu-type clj-container])))
 
 (defn create-screen-handler-bridge
   "Backward-compatible alias."
-  [sync-id handler-type clj-container]
-  (create-menu-bridge sync-id handler-type clj-container))
+  [window-id menu-type clj-container]
+  (create-menu-bridge window-id menu-type clj-container))

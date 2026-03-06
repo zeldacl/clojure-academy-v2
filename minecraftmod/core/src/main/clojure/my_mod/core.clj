@@ -10,6 +10,7 @@
             ;; Load all block definitions (so block-dsl registry is populated)
             [my-mod.block.wireless-node]
             [my-mod.block.wireless-matrix]
+            [my-mod.block.solar-gen]
             ;; Load all item definitions (so item-dsl registry is populated)
             [my-mod.item.components]
             [my-mod.item.constraint-plate]
