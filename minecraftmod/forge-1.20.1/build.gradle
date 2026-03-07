@@ -4,6 +4,10 @@ plugins {
   id 'dev.clojurephant.clojure' version '0.9.1'
 }
 
+// Ensure mcmod and ac are configured before we reference their sourceSets in mods { }
+evaluationDependsOn(':mcmod')
+evaluationDependsOn(':ac')
+
 group = rootProject.findProperty('mod_group')
 version = "${rootProject.findProperty('mod_version')}-forge-1.20.1"
 
@@ -117,8 +121,6 @@ minecraft {
             mods {
                 "${mod_id}" {
                     source sourceSets.main
-                    // source project(':core').sourceSets.main
-                    // resources files('../core/src/main/resource')
                 }
             }
         }
@@ -147,7 +149,7 @@ minecraft {
             workingDirectory project.file('run-data')
 
             // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/'), '--existing', project(':core').file('src/main/resources/')
+            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/'), '--existing', project(':ac').file('src/main/resources/')
         }
     }
 }
@@ -163,7 +165,8 @@ dependencies {
   // minecraft "net.minecraftforge:forge:${rootProject.findProperty('minecraft_1201_version')}-${rootProject.findProperty('forge_1201_version')}"
    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
    
-   implementation project(':core')
+   implementation project(':ac')
+   implementation project(':mcmod')
    
    implementation "org.clojure:clojure:1.11.1"
    minecraftLibrary "org.clojure:clojure:1.11.1"
@@ -177,17 +180,22 @@ configurations {
   clojureCompile.extendsFrom implementation
 }
 
-// Pull in core resources and source  
+// mcmod and ac clojure source dirs are added to clojure.srcDirs so Clojurephant can compile
+// forge-specific code that depends on those namespaces.
+// The .clj files are published to build/resources/main by each subproject's processResources
+// task and reach the mod classpath transitively via implementation project(':ac') / project(':mcmod').
 sourceSets {
   main {
     java { srcDirs += ["src/main/java"] }
     clojure {
-      srcDirs += ["src/main/clojure", "../core/src/main/clojure"]
-      // Only include forge-1.20.1 code for compilation; core will be available at runtime
+      srcDirs += ["src/main/clojure",
+                  "../mcmod/src/main/clojure",
+                  "../ac/src/main/clojure"]
       include "my_mod/forge1201/**"
     }
     resources {
-      srcDirs += ["../core/src/main/resources", "src/generated/resources"]
+      srcDirs += [project(':ac').file('src/main/resources'),
+                  "src/generated/resources"]
     }
   }
 }
@@ -218,6 +226,7 @@ tasks.named('processResources', ProcessResources).configure {
 
 // Example for how to get properties into the manifest for reading at runtime.
 tasks.named('jar', Jar).configure {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
     manifest {
         attributes([
                 'Specification-Title'     : mod_id,

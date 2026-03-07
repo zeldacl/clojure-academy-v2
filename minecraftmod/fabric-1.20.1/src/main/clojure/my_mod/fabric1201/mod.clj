@@ -10,7 +10,7 @@
             [my-mod.fabric1201.platform-impl :as platform-impl]
             [my-mod.block.dsl :as bdsl]
             [my-mod.block.tile-logic :as tile-logic]
-            [my-mod.block.blockstate-properties :as bsp]
+            [my-mod.fabric1201.blockstate-properties :as bsp]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
             [my-mod.config.modid :as modid]

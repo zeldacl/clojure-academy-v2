@@ -10,7 +10,7 @@
             [my-mod.block.wireless-node]
             [my-mod.block.wireless-matrix]
             [my-mod.block.tile-logic :as tile-logic]
-            [my-mod.block.blockstate-properties :as bsp]
+            [my-mod.forge1201.blockstate-properties :as bsp]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
             [my-mod.config.modid :as modid]
@@ -316,7 +316,9 @@
   ;; CRITICAL: Initialize platform abstractions FIRST
   ;; This must happen before any core code runs that uses NBT/BlockPos/World
   (platform-impl/init-platform!)
-  
+  ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources
+  (init/init-from-java)
+
   ;; Initialize BlockState properties from Clojure metadata
   ;; Must happen before block registration so Property objects are ready
   (bsp/init-all-properties!)
@@ -358,9 +360,6 @@
   ;; We'll invoke setup functions through the generated methods instead
   ;; The gen-class methods (commonSetup, clientSetup) will be called by Forge automatically
   ;; through the lifecycle events
-  
-  ;; Initialize Clojure adapters
-  (init/init-from-java)
   
   ;; Return state
   [[] nil])

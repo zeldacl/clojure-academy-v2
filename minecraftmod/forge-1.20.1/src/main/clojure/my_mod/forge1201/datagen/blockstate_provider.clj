@@ -8,7 +8,7 @@
    优势：定义层复用，易于支持新的Forge版本"
   (:require [my-mod.config.modid :as modid]
             [my-mod.block.blockstate-definition :as blockstate-def]
-            [my-mod.block.blockstate-properties :as bsp]
+            [my-mod.forge1201.blockstate-properties :as bsp]
             [my-mod.forge1201.mod :as forge-mod]
             [my-mod.registry.metadata :as registry-metadata]
             [my-mod.util.log :as log]

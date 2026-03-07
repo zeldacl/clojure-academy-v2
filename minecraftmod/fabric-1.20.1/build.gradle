@@ -64,6 +64,9 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
   
+  // ac (and mcmod via ac) on classpath; ac provides resources
+  implementation project(':ac')
+
   // Clojure
   implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version')}"
   include "org.clojure:clojure:${rootProject.findProperty('clojure_version')}"
@@ -71,12 +74,12 @@ dependencies {
   include "org.clojure:core.specs.alpha:0.2.62"
 }
 
-// Pull in core resources and source
+// Fabric compiles only its own Clojure; ac/mcmod from implementation project(':ac')
 sourceSets {
   main {
     java { srcDirs += ["src/main/java"] }
-    clojure { srcDirs += ["src/main/clojure", "../core/src/main/clojure"] }
-    resources { srcDirs += ["src/main/resources", "../core/src/main/resources"] }
+    clojure { srcDirs += ["src/main/clojure"] }
+    resources { srcDirs += ["src/main/resources", project(':ac').file('src/main/resources')] }
   }
 }
 

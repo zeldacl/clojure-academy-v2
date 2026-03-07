@@ -1,0 +1,52 @@
+plugins {
+  id 'java'
+  id 'dev.clojurephant.clojure' version '0.9.1'
+}
+
+java {
+  toolchain { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version') ?: '1.11.1'}"
+  implementation "org.clojure:data.json:2.4.0"
+}
+
+clojure {
+  builds {
+    main {
+      reflection = 'skip'
+    }
+    // test {
+    //   sourceSet = sourceSets.test
+    //   reflection = 'skip'
+    // }
+  }
+}
+
+tasks.matching { it.name == 'checkClojure' }.configureEach {
+  enabled = false
+}
+
+sourceSets {
+  main {
+    clojure { srcDirs = ["src/main/clojure"] }
+    resources { srcDirs = [] }
+  }
+  test {
+    clojure { srcDirs = ["src/test/clojure"] }
+  }
+}
+
+tasks.named('processResources', ProcessResources).configure {
+  from(sourceSets.main.clojure.srcDirs) { include '**/*.clj' }
+  duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+tasks.named('jar', Jar).configure {
+  duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}

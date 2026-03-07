@@ -6,25 +6,31 @@ alwaysApply: true
 # Project structure
 
 - **Top-level layout**
-  - `minecraftmod/` is the Gradle root for this mod.
-  - `core/` contains all platform-neutral Clojure game logic and metadata systems.
-  - `forge-1.20.1/` and `fabric-1.20.1/` contain loader-specific adapters, entrypoints, and resources.
+  - `minecraftmod/` is the Gradle root for this mod (`settings.gradle` includes all subprojects).
+  - **mcmod** — platform-neutral foundation: DSLs, abstractions, and shared utilities (no Forge/Fabric or Minecraft runtime deps).
+  - **ac** — platform-neutral game logic and content; depends on `mcmod`.
+  - **forge-1.20.1** and **fabric-1.20.1** — loader-specific adapters, entrypoints, and resources.
 
-- **Core module (`core/`)**
-  - Put all game/content logic under `core/src/main/clojure/my_mod/...` with `my-mod.*` namespaces.
-  - Use dedicated folders for domains (e.g. `block`, `item`, `gui`, `events`, `registry`, `network`, `platform`, `util`, `wireless`).
-  - Keep these namespaces platform-neutral: they may use metadata and DSLs but must not import Forge/Fabric APIs directly.
-  - Shared data/asset files that are not loader-specific go under `core/src/main/resources`.
+- **mcmod (foundation)**
+  - Code lives under `mcmod/src/main/clojure/my_mod/...` with `my-mod.*` namespaces.
+  - Domain folders: `block` (dsl, tile_dsl, tile_logic), `client` (obj, render), `events`, `gui` (api, cgui, container, core, dsl, network, etc.), `inventory`, `item` (dsl), `nbt` (dsl), `network`, `platform` (item, nbt, position, resource, world), `registry`, `util`.
+  - Stays platform-neutral: no direct Forge/Fabric or Minecraft API imports; only Clojure and data libs.
+  - No `src/main/resources` in this module (per `build.gradle`).
 
-- **Platform modules (`forge-1.20.1/`, `fabric-1.20.1/`)**
-  - `src/main/java` holds Java entrypoint classes and any Java-only integration needed by the loader.
-  - `src/main/clojure/my_mod/forge1201` and `src/main/clojure/my_mod/fabric1201` hold adapter namespaces that:
-    - Translate loader events into calls into `my-mod.*` core namespaces.
-    - Query metadata/DSL in `core` instead of hardcoding game content IDs or registry names.
-  - Loader-specific assets and metadata (e.g. `mods.toml`, `fabric.mod.json`, loader-specific lang/model files) live in each module’s `src/main/resources`.
+- **ac (game content)**
+  - Code under `ac/src/main/clojure/my_mod/...` with `my-mod.*` namespaces.
+  - Domain folders: `block`, `client/render`, `config`, `energy`, `gui`, `item`, `registry`, `wireless` (network, gui, world data, etc.).
+  - Depends on `mcmod`; keeps logic platform-neutral and uses metadata/DSLs from mcmod.
+  - Shared assets and data go under `ac/src/main/resources` (e.g. `assets/my_mod/`, `data/my_mod/`).
+
+- **Platform modules (forge-1.20.1, fabric-1.20.1)**
+  - `src/main/java` — Java entrypoints and any Java-only integration for the loader.
+  - `src/main/clojure/my_mod/forge1201` and `src/main/clojure/my_mod/fabric1201` — adapter namespaces that:
+    - Translate loader events into calls into `my-mod.*` (mcmod and ac).
+    - Read metadata/DSL from ac/mcmod instead of hardcoding registry names or content IDs.
+  - Loader-specific assets and metadata (e.g. `mods.toml`, `fabric.mod.json`, loader-specific lang/models) live in each module’s `src/main/resources`.
 
 - **Adding new content**
-  - When adding blocks/items/GUIs or gameplay systems, start by extending DSL + metadata in `core` (e.g. under `my_mod/block`, `my_mod/item`, `my_mod/gui`, `my_mod/registry`, `my_mod/events`).
-  - Only change platform modules when a feature cannot be expressed via existing metadata/DSL; in that case, prefer:
-    - Add or extend a metadata/DSL layer in `core`.
-    - Add the minimal adapter glue in the appropriate platform module to call into that metadata.
+  - Add or extend DSL/metadata in **mcmod** for new abstractions (blocks, items, GUIs, etc.).
+  - Implement game content in **ac** (new blocks, items, GUIs, energy, wireless, etc.) using mcmod’s DSLs.
+  - Touch **forge** or **fabric** only when a feature needs loader-specific glue; then add or extend metadata in ac/mcmod and keep adapter code minimal in the platform module.
