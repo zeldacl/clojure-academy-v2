@@ -17,12 +17,12 @@
             [my-mod.util.log :as log])
   (:import [net.minecraft.world.level.block Block Blocks]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
+           [my_mod.block ScriptedBlock DynamicStateBlock]
+           [my_mod.block.entity ScriptedBlockEntity]
            [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab CreativeModeTabs]
            [net.minecraft.world.level.block.entity BlockEntityType BlockEntityType$Builder BlockEntityType$BlockEntitySupplier]
            [net.minecraft.core.registries Registries]
            [net.minecraft.network.chat Component]
-           [my_mod.block NodeDynamicBlock ScriptedEntityBlock ScriptedDynamicEntityBlock]
-           [my_mod.block.entity ScriptedBlockEntity]
            [net.minecraftforge.fml.common Mod]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
            [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
@@ -86,17 +86,17 @@
                               (cond
                                 (and needs-dynamic-properties? has-be?)
                                 (let [props (bsp/get-all-properties block-id)]
-                                  (ScriptedDynamicEntityBlock/create block-id
-                                                                    tile-id
-                                                                    (java.util.ArrayList. props)
-                                                                    (BlockBehaviour$Properties/copy Blocks/STONE)))
+                                  (ScriptedBlock/create block-id
+                                                        tile-id
+                                                        (java.util.ArrayList. props)
+                                                        (BlockBehaviour$Properties/copy Blocks/STONE)))
                                 needs-dynamic-properties?
                                 (let [props (bsp/get-all-properties block-id)]
-                                  (NodeDynamicBlock/create block-id
-                                                           (java.util.ArrayList. props)
-                                                           (BlockBehaviour$Properties/copy Blocks/STONE)))
+                                  (DynamicStateBlock/create block-id
+                                                            (java.util.ArrayList. props)
+                                                            (BlockBehaviour$Properties/copy Blocks/STONE)))
                                 has-be?
-                                (ScriptedEntityBlock. block-id tile-id (BlockBehaviour$Properties/copy Blocks/STONE))
+                                (ScriptedBlock. block-id tile-id (BlockBehaviour$Properties/copy Blocks/STONE))
                                 :else
                                 (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
@@ -145,19 +145,15 @@
                       (doseq [[block-id inst] pairs]
                         (.put block-id-by-inst inst block-id))
                       (let [type-holder (object-array 1)
-                            be-type (-> (BlockEntityType$Builder/of
+                            be-type (let [supplier
                                           (reify BlockEntityType$BlockEntitySupplier
                                             (create [_ pos state]
                                               (let [block-inst (.getBlock state)
                                                     block-id (or (.get block-id-by-inst block-inst)
                                                                  tile-id)]
-                                                (ScriptedBlockEntity.
-                                                  (aget type-holder 0)
-                                                  pos state
-                                                  tile-id
-                                                  block-id))))
-                                          (into-array Block block-insts))
-                                        (.build nil))]
+                                                (ScriptedBlockEntity. (aget type-holder 0) pos state tile-id block-id))))]
+                                      (-> (BlockEntityType$Builder/of supplier (into-array Block block-insts))
+                                          (.build nil)))]
                         (aset type-holder 0 be-type)
                         (ScriptedBlockEntity/registerType tile-id be-type)
                         be-type)))))]

@@ -1,0 +1,36 @@
+# eclipse
+bin
+*.launch
+.settings
+.metadata
+.classpath
+.project
+
+# idea
+out
+*.ipr
+*.iws
+*.iml
+.idea
+
+# gradle
+build
+.gradle
+
+# other
+eclipse
+run
+logs/*
+*.log
+*.Log
+*.Logs
+*.logs
+
+# Files from Forge MDK
+forge*changelog.txt
+
+importcode/*
+run-data
+minecraftmod/forge-1.20.1/src/generated
+gradle
+.gradle

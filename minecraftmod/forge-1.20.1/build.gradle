@@ -19,7 +19,6 @@ clojure {
   builds {
     main {
       // Don't AOT compile - load Clojure code at runtime instead
-      // This avoids compile-time dependency issues in the core library
       reflection = 'skip'
     }
   }

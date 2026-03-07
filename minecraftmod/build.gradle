@@ -1,5 +1,49 @@
 // Root aggregator: common repos; subprojects define their own plugins
 
+// 应用foojay工具链解析插件（全局生效）
+// plugins {
+//     id "org.gradle.toolchains.foojay-resolver-convention" version "0.8.0" apply false
+// }
+
+// // 所有子模块的通用配置
+// subprojects {
+//     // 统一应用foojay插件
+//     // apply plugin: "org.gradle.toolchains.foojay-resolver-convention"
+
+//     // 通用属性配置
+//     group = "com.yourmod"
+//     version = "1.0.0"
+//     description = "Your Mod Project"
+
+//     // JVM工具链配置（统一指定Java版本，MC 1.20.1推荐Java 17）
+//     // java {
+//     //     toolchain {
+//     //         languageVersion = JavaLanguageVersion.of(17)
+//     //         // vendor = JvmVendorSpec.AZUL // 可选，指定JDK厂商
+//     //     }
+//     // }
+
+//     // 通用仓库配置
+//     repositories {
+//         mavenCentral()
+//         maven { url "https://maven.minecraftforge.net/" }
+//         maven { url "https://maven.fabricmc.net/" }
+//         maven { url "https://oss.sonatype.org/content/repositories/snapshots/" }
+//     }
+
+//     // 编译编码和JVM参数
+//     tasks.withType(JavaCompile) {
+//         options.encoding = "UTF-8"
+//         options.release = 17 // 编译为Java 17字节码
+//     }
+
+//     // // 测试任务通用配置
+//     // tasks.test {
+//     //     useJUnitPlatform()
+//     //     maxHeapSize = "1G"
+//     // }
+// }
+
 allprojects {
   group = findProperty('mod_group') ?: 'com.example'
   version = findProperty('mod_version') ?: '1.0.0'
@@ -25,3 +69,17 @@ tasks.register('buildAll') {
   dependsOn subprojects.collect { it.path + ":build" }
   finalizedBy 'gatherJars'
 }
+
+
+
+
+// // 针对不同Gradle版本的子模块做兼容配置
+// project(":forge-1.20.1") {
+//     // Forge模块使用Gradle 8.4，单独指定兼容配置
+//     gradleVersion = "8.4"
+// }
+
+// project(":fabric-1.20.1") {
+//     // Fabric模块使用Gradle 9.2，单独指定兼容配置
+//     gradleVersion = "9.2"
+// }

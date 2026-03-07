@@ -19,7 +19,7 @@
            [net.minecraftforge.client.model.generators BlockStateProvider]
            [net.minecraftforge.common.data ExistingFileHelper]
            [net.minecraftforge.registries ForgeRegistries]
-           [my_mod.block NodeDynamicBlock]
+           [my_mod.block DynamicStateBlock]
            [java.util.concurrent CompletableFuture]))
 
 

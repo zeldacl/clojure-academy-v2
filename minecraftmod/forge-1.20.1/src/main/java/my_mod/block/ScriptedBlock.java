@@ -20,14 +20,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Generic scripted BE block that also supports dynamic BlockState properties.
+ * Merged block: generic block with ScriptedBlockEntity and optional dynamic BlockState.
+ * Replaces ScriptedEntityBlock and ScriptedDynamicEntityBlock.
  */
-public class ScriptedDynamicEntityBlock extends BaseEntityBlock {
+public class ScriptedBlock extends BaseEntityBlock {
+
     private static final Map<String, List<Property<?>>> BLOCK_PROPERTIES = new HashMap<>();
     private static final ThreadLocal<InitContext> INIT_CONTEXT = new ThreadLocal<>();
-
-    private final String blockId;
-    private final String tileId;
 
     private static final class InitContext {
         final String blockId;
@@ -41,37 +40,59 @@ public class ScriptedDynamicEntityBlock extends BaseEntityBlock {
         }
     }
 
-    public static ScriptedDynamicEntityBlock create(String blockId,
-                                                    String tileId,
-                                                    List<Property<?>> properties,
-                                                    BlockBehaviour.Properties behaviourProperties) {
-        INIT_CONTEXT.set(new InitContext(blockId, tileId, properties));
+    public static ScriptedBlock create(String blockId, String tileId,
+                                      List<Property<?>> properties,
+                                      BlockBehaviour.Properties behaviourProperties) {
+        INIT_CONTEXT.set(new InitContext(blockId, tileId, properties != null ? properties : Collections.emptyList()));
         try {
-            return new ScriptedDynamicEntityBlock(blockId, tileId, behaviourProperties);
+            return new ScriptedBlock(blockId, tileId, behaviourProperties);
         } finally {
             INIT_CONTEXT.remove();
         }
     }
 
-    public static ScriptedDynamicEntityBlock create(String blockId,
-                                                    List<Property<?>> properties,
-                                                    BlockBehaviour.Properties behaviourProperties) {
+    public static ScriptedBlock create(String blockId, List<Property<?>> properties,
+                                      BlockBehaviour.Properties behaviourProperties) {
         return create(blockId, blockId, properties, behaviourProperties);
     }
 
-    public ScriptedDynamicEntityBlock(String blockId, String tileId, Properties props) {
+    private final String blockId;
+    private final String tileId;
+    private final boolean hasDynamicProps;
+
+    public ScriptedBlock(String blockId, Properties props) {
+        this(blockId, blockId, props);
+    }
+
+    public ScriptedBlock(String blockId, String tileId, Properties props) {
         super(props);
         this.blockId = blockId;
         this.tileId = tileId;
+        InitContext ctx = INIT_CONTEXT.get();
+        if (ctx != null) {
+            this.hasDynamicProps = ctx.properties != null && !ctx.properties.isEmpty();
+        } else {
+            List<Property<?>> blockProps = BLOCK_PROPERTIES.getOrDefault(blockId, Collections.emptyList());
+            this.hasDynamicProps = blockProps != null && !blockProps.isEmpty();
+        }
+    }
+
+    public String getBlockId() {
+        return blockId;
+    }
+
+    public String getTileId() {
+        return tileId;
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState> builder) {
+        super.createBlockStateDefinition(builder);
         InitContext ctx = INIT_CONTEXT.get();
         List<Property<?>> properties = Collections.emptyList();
         if (ctx != null) {
-            properties = ctx.properties;
-            BLOCK_PROPERTIES.put(ctx.blockId, ctx.properties);
+            properties = ctx.properties != null ? ctx.properties : Collections.emptyList();
+            BLOCK_PROPERTIES.put(ctx.blockId, properties);
         } else if (blockId != null) {
             properties = BLOCK_PROPERTIES.getOrDefault(blockId, Collections.emptyList());
         }
@@ -82,7 +103,7 @@ public class ScriptedDynamicEntityBlock extends BaseEntityBlock {
 
     @Override
     public RenderShape getRenderShape(BlockState state) {
-        return RenderShape.MODEL;
+        return hasDynamicProps ? RenderShape.MODEL : RenderShape.INVISIBLE;
     }
 
     @Nullable
