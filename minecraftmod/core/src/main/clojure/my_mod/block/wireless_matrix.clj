@@ -3,7 +3,7 @@
   
   Core component of wireless energy network providing capacity, bandwidth and range."
   (:require [my-mod.block.dsl :as bdsl]
-            [my-mod.block.tile-logic :as tile-logic]
+            [my-mod.block.tile-dsl :as tdsl]
             [my-mod.wireless.interfaces :as winterfaces]
             [my-mod.inventory.core :as inv]
             [my-mod.nbt.dsl :as nbt]
@@ -379,6 +379,22 @@
     (.putInt tag "CoreLevel" (int core-level))))
 
 ;; ============================================================================
+;; Tile DSL (shared BlockEntityType metadata)
+;; ============================================================================
+
+(tdsl/deftile-kind :wireless-matrix
+  :tick-fn matrix-scripted-tick-fn
+  :read-nbt-fn matrix-scripted-load-fn
+  :write-nbt-fn matrix-scripted-save-fn)
+
+(tdsl/deftile wireless-matrix-tile
+  :id "wireless-matrix"
+  :registry-name "matrix"
+  :impl :scripted
+  :blocks ["wireless-matrix"]
+  :tile-kind :wireless-matrix)
+
+;; ============================================================================
 ;; ITickable Implementation
 ;; ============================================================================
 
@@ -486,11 +502,6 @@
   :harvest-level 1
   :light-level 1.0
   :sounds :stone
-  :has-block-entity? true
-  :tile-kind :wireless-matrix
-  :tile-tick-fn matrix-scripted-tick-fn
-  :tile-load-fn matrix-scripted-load-fn
-  :tile-save-fn matrix-scripted-save-fn
   :multi-block {:positions [[0 0 1] [1 0 1] [1 0 0]
                             [0 1 0] [0 1 1] [1 1 1] [1 1 0]]
                 :rotation-center [1.0 0 1.0]}
@@ -503,10 +514,6 @@
 ;; ============================================================================
 
 (defn init-wireless-matrix! []
-  (tile-logic/register-tile-kind! :wireless-matrix
-                                   {:tick-fn matrix-scripted-tick-fn
-                                    :read-nbt-fn matrix-scripted-load-fn
-                                    :write-nbt-fn matrix-scripted-save-fn})
   (log/info "Initialized Wireless Matrix:")
   (log/info "  - 2x2x2 multiblock structure")
   (log/info "  - 4 inventory slots")

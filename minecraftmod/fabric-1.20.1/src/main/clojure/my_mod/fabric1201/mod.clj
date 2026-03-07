@@ -1,10 +1,12 @@
 (ns my-mod.fabric1201.mod
   "Fabric 1.20.1 main mod initialization"
-  (:require [my-mod.fabric1201.init :as init]
+  (:require [my-mod.core :as core]
+            [my-mod.fabric1201.init :as init]
             [my-mod.fabric1201.datagen.setup :as datagen]
             [my-mod.fabric1201.registry :as registry]
             [my-mod.fabric1201.events :as events]
             [my-mod.fabric1201.gui.impl :as gui]
+            [my-mod.fabric1201.gui.init :as gui-init]
             [my-mod.fabric1201.platform-impl :as platform-impl]
             [my-mod.block.dsl :as bdsl]
             [my-mod.block.tile-logic :as tile-logic]
@@ -41,10 +43,13 @@
     (let [registry-name (registry-metadata/get-block-registry-name block-id)
           needs-dynamic-properties? (registry-metadata/has-block-state-properties? block-id)
           has-be? (registry-metadata/has-block-entity? block-id)
+          tile-id (when has-be?
+                    (or (registry-metadata/get-block-tile-id block-id) block-id))
           block-obj (cond
                       (and needs-dynamic-properties? has-be?)
                       (let [props (bsp/get-all-properties block-id)]
                         (ScriptedDynamicEntityBlock/create block-id
+                                                           tile-id
                                                            (java.util.ArrayList. props)
                                                            (BlockBehaviour$Properties/copy Blocks/STONE)))
                       needs-dynamic-properties?
@@ -53,43 +58,57 @@
                                                  (java.util.ArrayList. props)
                                                  (BlockBehaviour$Properties/copy Blocks/STONE)))
                       has-be?
-                      (ScriptedEntityBlock. block-id (BlockBehaviour$Properties/copy Blocks/STONE))
+                      (ScriptedEntityBlock. block-id tile-id (BlockBehaviour$Properties/copy Blocks/STONE))
                       :else
                       (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))]
       (registry/register-block registry-name block-obj)
       (swap! registered-blocks assoc block-id block-obj))))
 
 (defn register-scripted-tile-hooks!
-  "Register metadata-driven scripted tile hooks from block DSL."
+  "Register metadata-driven scripted tile hooks from Tile DSL (or legacy block DSL)."
   []
-  (doseq [block-id (registry-metadata/get-scripted-block-ids)]
-    (let [{:keys [tick-fn read-nbt-fn write-nbt-fn]} (registry-metadata/get-scripted-tile-hooks block-id)
-          tile-kind (registry-metadata/get-tile-kind block-id)]
-      (when (or tick-fn read-nbt-fn write-nbt-fn tile-kind)
-        (tile-logic/register-tile-logic! block-id
-                                         {:tile-kind tile-kind
-                                          :tick-fn tick-fn
-                                          :read-nbt-fn read-nbt-fn
-                                          :write-nbt-fn write-nbt-fn})))))
+  (doseq [tile-id (registry-metadata/get-all-tile-ids)]
+    (when-let [spec (registry-metadata/get-tile-spec tile-id)]
+      (let [tick-fn (:tick-fn spec)
+            read-nbt-fn (:read-nbt-fn spec)
+            write-nbt-fn (:write-nbt-fn spec)
+            tile-kind (:tile-kind spec)]
+        (when (or tick-fn read-nbt-fn write-nbt-fn tile-kind)
+          (tile-logic/register-tile-logic! tile-id
+                                           {:tile-kind tile-kind
+                                            :tick-fn tick-fn
+                                            :read-nbt-fn read-nbt-fn
+                                            :write-nbt-fn write-nbt-fn}))))))
 
 (defn register-block-entities []
-  "Register BlockEntityTypes: one per scripted block-id."
-  (doseq [block-id (registry-metadata/get-scripted-block-ids)]
-    (when-let [block-inst (get @registered-blocks block-id)]
-      (let [registry-name (registry-metadata/get-block-registry-name block-id)
-            type-holder (object-array 1)
-            be-type (-> (BlockEntityType$Builder/of
-                          (reify BlockEntityType$BlockEntitySupplier
-                            (create [_ pos state]
-                              (ScriptedBlockEntity. (aget type-holder 0) pos state block-id)))
-                          (into-array Block [block-inst]))
-                        (.build nil))]
-        (aset type-holder 0 be-type)
-        (ScriptedBlockEntity/registerType block-id be-type)
-        (let [res-loc (ResourceLocation. modid/MOD-ID registry-name)]
-          (Registry/register BuiltInRegistries/BLOCK_ENTITY_TYPE res-loc be-type)
-          (swap! registered-block-entities assoc block-id be-type)
-          (log/info "Registered scripted BlockEntityType:" block-id registry-name))))))
+  "Register BlockEntityTypes: one per tile-id."
+  (doseq [tile-id (registry-metadata/get-all-tile-ids)]
+    (let [registry-name (registry-metadata/get-tile-registry-name tile-id)
+          block-ids (registry-metadata/get-tile-block-ids tile-id)
+          pairs (keep (fn [block-id]
+                        (when-let [inst (get @registered-blocks block-id)]
+                          [block-id inst]))
+                      block-ids)
+          block-insts (mapv second pairs)]
+      (when (seq block-insts)
+        (let [block-id-by-inst (java.util.IdentityHashMap.)]
+          (doseq [[block-id inst] pairs]
+            (.put block-id-by-inst inst block-id))
+          (let [type-holder (object-array 1)
+                be-type (-> (BlockEntityType$Builder/of
+                              (reify BlockEntityType$BlockEntitySupplier
+                                (create [_ pos state]
+                                  (let [block-inst (.getBlock state)
+                                        block-id (or (.get block-id-by-inst block-inst) tile-id)]
+                                    (ScriptedBlockEntity. (aget type-holder 0) pos state tile-id block-id))))
+                              (into-array Block block-insts))
+                            (.build nil))]
+            (aset type-holder 0 be-type)
+            (ScriptedBlockEntity/registerType tile-id be-type)
+            (let [res-loc (ResourceLocation. modid/MOD-ID registry-name)]
+              (Registry/register BuiltInRegistries/BLOCK_ENTITY_TYPE res-loc be-type)
+              (swap! registered-block-entities assoc tile-id be-type)
+              (log/info "Registered scripted BlockEntityType:" tile-id registry-name))))))))
 
 (defn register-items []
   "Register all items using metadata-driven approach.
@@ -165,6 +184,10 @@
   
   ;; Initialize Clojure adapters
   (init/init-from-java)
+
+  ;; Initialize core systems and load all content namespaces (blocks/items/guis/tiles).
+  ;; This is required so metadata-driven registration sees the full registry.
+  (core/init)
   
   ;; Initialize BlockState properties from Clojure metadata
   ;; Must happen before block registration so Property objects are ready
@@ -176,6 +199,11 @@
   (register-blocks)
   (register-block-entities)
   (register-items)
+
+  ;; Initialize GUI system (common + server). Client-side screen registration is
+  ;; performed in the Fabric client entrypoint.
+  (gui-init/init-common!)
+  (gui-init/init-server!)
   
   ;; Register creative mode tab and populate with all items
   (register-creative-tab)
@@ -209,9 +237,12 @@
   (get @registered-items item-id))
 
 (defn get-registered-block-entity-type
-  "Get a registered BlockEntityType by DSL block-id (e.g. \"solar-gen\")."
-  [block-id]
-  (get @registered-block-entities block-id))
+  "Get a registered BlockEntityType by tile-id or block-id."
+  [tile-or-block-id]
+  (let [tile-id (or (when (contains? @registered-block-entities tile-or-block-id)
+                      tile-or-block-id)
+                    (registry-metadata/get-block-tile-id tile-or-block-id))]
+    (get @registered-block-entities tile-id)))
 
 (defn get-registered-block-item
   "Get a registered block item by its block ID.

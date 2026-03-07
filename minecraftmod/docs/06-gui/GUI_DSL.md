@@ -20,6 +20,26 @@
 - **辅助**：slot-change-handler、clear-slot-handler、processing-handler 等。
 - **defgui-from-xml**：从 XML 布局加载并转换为 DSL（与 wireless Node/Matrix GUI 共用）。
 
+#### 1.1 Wireless（平台可注册 GUI）的扩展字段
+
+当 `defgui` 提供 `:gui-id`（int）时，该 GUI 会进入“平台可见”注册集合，Forge/Fabric 适配层会通过元数据自动完成：
+- **MenuType/ScreenHandlerType 注册**（根据 `:registry-name`）
+- **Screen 注册**（根据 `:screen-factory-fn-kw`）
+- **容器 tick/sync 分发**（根据 `:container-predicate` / `:tick-fn` / `:sync-*`）
+
+常用字段：
+- `:gui-id`：稳定的整数 GUI id（用于打开 GUI / 网络 payload 中的 `:gui-id`）
+- `:registry-name`：注册名（snake_case）
+- `:display-name`：显示名（用于 debug/标题等）
+- `:gui-type`：类型关键字（如 `:node` / `:matrix` / `:solar`）
+- `:screen-factory-fn-kw`：平台侧 screen-factory 关键字（如 `:create-node-screen`）
+- `:slot-layout`：用于 quick-move/slot manager 的布局与范围
+- `:container-fn`：`(fn [tile player] -> container)`（服务端容器创建）
+- `:screen-fn`：`(fn [container minecraft-container player] -> screen)`（客户端 screen 创建）
+- `:payload-sync-apply-fn`：`(fn [payload] ...)`（客户端应用网络 payload，可选）
+
+实际项目中，Wireless GUI 的声明集中在 `core/src/main/clojure/my_mod/gui/definitions.clj`，新增 GUI 通常只需要新增一条 `defgui`，平台层不需要再改硬编码表。
+
 **Slot**：`{:index :x :y :filter :on-change}`；**Button**：`{:id :x :y :width :height :text :on-click}`；**Label**：`{:x :y :text :color}`。
 
 ### 2. `my-mod.gui.renderer` — 渲染抽象
@@ -61,3 +81,6 @@
 
 - Node/Matrix GUI 使用同一套 DSL 与 **xml_parser**（XML → GuiSpec）；布局路径为 `assets/my_mod/guis/`、`my_mod:guis/rework/` 等。
 - 详见 `05-wireless/Node_GUI.md`、`05-wireless/Matrix_GUI.md`。
+
+**更新（当前架构）**：
+- Wireless GUI 的“元数据源”已统一到 `my-mod.gui.dsl` 的 registry；`my-mod.wireless.gui.gui-metadata` 仅保留查询与平台 MenuType 存储，不再需要手工维护中心映射表。

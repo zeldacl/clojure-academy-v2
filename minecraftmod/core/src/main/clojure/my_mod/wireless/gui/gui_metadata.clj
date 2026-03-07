@@ -3,7 +3,8 @@
   
   This namespace contains all GUI-related constants and mappings,
   eliminating hardcoded case statements in platform-specific code."
-  (:require [my-mod.util.log :as log]))
+  (:require [my-mod.gui.dsl :as gui-dsl]
+            [my-mod.util.log :as log]))
 
 ;; ============================================================================
 ;; GUI ID Constants
@@ -13,75 +14,9 @@
 (def gui-wireless-matrix 1)
 (def gui-solar-gen 2)
 
-;; All valid GUI IDs
-(def valid-gui-ids #{gui-wireless-node gui-wireless-matrix gui-solar-gen})
-
-;; ============================================================================
-;; GUI Metadata Maps
-;; ============================================================================
-
-(def gui-display-names
-  ^{:doc "Map from GUI ID to display name"}
-  {gui-wireless-node "Wireless Node"
-   gui-wireless-matrix "Wireless Matrix"
-   gui-solar-gen "Solar Generator"})
-
-(def gui-types
-  ^{:doc "Map from GUI ID to container type keyword"}
-  {gui-wireless-node :node
-   gui-wireless-matrix :matrix
-   gui-solar-gen :solar})
-
-(def gui-registry-names
-  ^{:doc "Map from GUI ID to registry identifier"}
-  {gui-wireless-node "wireless_node_gui"
-   gui-wireless-matrix "wireless_matrix_gui"
-   gui-solar-gen "solar_gen_gui"})
-
-;; Screen factory function mapping
-(def gui-screen-factories
-  ^{:doc "Map from GUI ID to screen factory function keyword
-
-  Platform code can use this to get the correct factory function
-  from screen-factory namespace dynamically."}
-  {gui-wireless-node :create-node-screen
-   gui-wireless-matrix :create-matrix-screen
-   gui-solar-gen :create-solar-screen})
-
-;; Slot layout definitions
-(def gui-slot-layouts
-  ^{:doc "Map from GUI ID to slot layout configuration
-
-  Each layout contains:
-  - :slots - Vector of slot definitions with {:type :index :x :y}
-  - :ranges - Map of section ranges {:tile [start end] :player-main [...] :player-hotbar [...]}"}
-  {gui-wireless-node
-   {:slots [{:type :energy :index 0 :x 0 :y 0}
-            {:type :output :index 1 :x 26 :y 0}]
-    :ranges {:tile [0 1]
-             :player-main [2 28]
-             :player-hotbar [29 37]}}
-   
-   gui-wireless-matrix
-   {:slots [{:type :plate :index 0 :x 0 :y 0}
-            {:type :plate :index 1 :x 34 :y 0}
-            {:type :plate :index 2 :x 68 :y 0}
-            {:type :core :index 3 :x 47 :y 24}]
-    :ranges {:tile [0 3]
-             :player-main [4 30]
-             :player-hotbar [31 39]}}
-
-   gui-solar-gen
-   {:slots [{:type :energy :index 0 :x 42 :y 81}]
-    :ranges {:tile [0 0]
-             :player-main [1 27]
-             :player-hotbar [28 36]}}})
-
 ;; ============================================================================
 ;; Registration API (for new GUIs)
 ;; ============================================================================
-
-(declare type-to-gui-id)
 
 (defn register-gui!
   "Register a new GUI's metadata.
@@ -102,24 +37,16 @@
   [gui-key {:keys [id display-name type registry-name screen-fn-kw slot-layout] :as cfg}]
   (when-not (integer? id)
     (throw (ex-info "register-gui!: :id must be an integer" {:gui-key gui-key :cfg cfg})))
-  (if (contains? valid-gui-ids id)
-    (do
-      (log/warn "register-gui!: GUI ID is already present in valid-gui-ids, skipping seed of base tables"
-                {:gui-key gui-key :id id})
-      ;; Even if ID exists, still extend type->gui-id so new gui-key can map to same id.
-      (alter-var-root #'type-to-gui-id assoc type id)
-      nil)
-    (do
-      (log/info "Registering GUI metadata" {:gui-key gui-key :id id})
-      ;; Extend ID set and all metadata maps.
-      (alter-var-root #'valid-gui-ids conj id)
-      (alter-var-root #'gui-display-names assoc id display-name)
-      (alter-var-root #'gui-types assoc id type)
-      (alter-var-root #'gui-registry-names assoc id registry-name)
-      (alter-var-root #'gui-screen-factories assoc id screen-fn-kw)
-      (alter-var-root #'gui-slot-layouts assoc id slot-layout)
-      (alter-var-root #'type-to-gui-id assoc type id)
-      nil)))
+  (log/info "Registering GUI metadata (delegating to my-mod.gui.dsl)" {:gui-key gui-key :id id})
+  (gui-dsl/register-gui!
+    (gui-dsl/create-gui-spec (name gui-key)
+                             {:gui-id id
+                              :display-name display-name
+                              :gui-type type
+                              :registry-name registry-name
+                              :screen-factory-fn-kw screen-fn-kw
+                              :slot-layout slot-layout}))
+  nil)
 
 ;; ============================================================================
 ;; Query Functions
@@ -130,7 +57,7 @@
   
   Returns: seq of int"
   []
-  (seq valid-gui-ids))
+  (gui-dsl/get-all-gui-ids))
 
 (defn valid-gui-id?
   "Check if GUI ID is valid
@@ -140,7 +67,7 @@
   
   Returns: boolean"
   [gui-id]
-  (contains? valid-gui-ids gui-id))
+  (some? (gui-dsl/get-gui-by-gui-id gui-id)))
 
 (defn get-display-name
   "Get display name for GUI ID
@@ -150,7 +77,8 @@
   
   Returns: string or \"Unknown GUI\" if invalid"
   [gui-id]
-  (get gui-display-names gui-id "Unknown GUI"))
+  (or (:display-name (gui-dsl/get-gui-by-gui-id gui-id))
+      "Unknown GUI"))
 
 (defn get-gui-type
   "Get container type for GUI ID
@@ -160,7 +88,8 @@
   
   Returns: :node, :matrix, or :unknown"
   [gui-id]
-  (get gui-types gui-id :unknown))
+  (or (:gui-type (gui-dsl/get-gui-by-gui-id gui-id))
+      :unknown))
 
 (defn get-registry-name
   "Get registry identifier for GUI
@@ -170,7 +99,8 @@
   
   Returns: string (registry name) or \"unknown_gui\""
   [gui-id]
-  (get gui-registry-names gui-id "unknown_gui"))
+  (or (:registry-name (gui-dsl/get-gui-by-gui-id gui-id))
+      "unknown_gui"))
 
 (defn get-screen-factory-fn
   "Get screen factory function keyword for GUI
@@ -180,7 +110,7 @@
   
   Returns: keyword (:create-node-screen, :create-matrix-screen, etc.) or nil"
   [gui-id]
-  (get gui-screen-factories gui-id))
+  (:screen-factory-fn-kw (gui-dsl/get-gui-by-gui-id gui-id)))
 
 (defn get-slot-layout
   "Get slot layout configuration for GUI
@@ -190,7 +120,7 @@
   
   Returns: map with {:slots [...] :ranges {...}} or nil"
   [gui-id]
-  (get gui-slot-layouts gui-id))
+  (:slot-layout (gui-dsl/get-gui-by-gui-id gui-id)))
 
 (defn get-slot-range
   "Get slot index range for a GUI section
@@ -201,9 +131,7 @@
   
   Returns: [start-index end-index] (inclusive) or [0 0] if not found"
   [gui-id section]
-  (if-let [layout (get-slot-layout gui-id)]
-    (get-in layout [:ranges section] [0 0])
-    [0 0]))
+  (gui-dsl/get-slot-range gui-id section))
 
 ;; ============================================================================
 ;; Reverse Lookups
@@ -214,7 +142,7 @@
 ;; ============================================================================
 
 (def type-to-gui-id
-  ^{:doc "Map from container type to GUI ID"}
+  ^{:doc "Fallback map from container type to GUI ID (built-ins)."}
   {:node gui-wireless-node
    :matrix gui-wireless-matrix
    :solar gui-solar-gen})
@@ -227,7 +155,8 @@
   
   Returns: int or nil if unknown"
   [container-type]
-  (get type-to-gui-id container-type))
+  (or (gui-dsl/get-gui-id-for-type container-type)
+      (get type-to-gui-id container-type)))
 
 ;; ============================================================================
 ;; Platform-Specific Metadata Storage
@@ -276,15 +205,16 @@
   Returns: vector of error messages (empty if valid)"
   []
   (let [errors (atom [])]
-    (doseq [gui-id valid-gui-ids]
-      (when-not (get gui-display-names gui-id)
-        (swap! errors conj (str "Missing display name for GUI ID " gui-id)))
-      
-      (when-not (get gui-types gui-id)
-        (swap! errors conj (str "Missing type for GUI ID " gui-id)))
-      
-      (when-not (get gui-registry-names gui-id)
-        (swap! errors conj (str "Missing registry name for GUI ID " gui-id))))
+    (doseq [gui-id (get-all-gui-ids)]
+      (let [spec (gui-dsl/get-gui-by-gui-id gui-id)]
+        (when-not (:display-name spec)
+          (swap! errors conj (str "Missing display name for GUI ID " gui-id)))
+        (when-not (:gui-type spec)
+          (swap! errors conj (str "Missing type for GUI ID " gui-id)))
+        (when-not (:registry-name spec)
+          (swap! errors conj (str "Missing registry name for GUI ID " gui-id)))
+        (when-not (:screen-factory-fn-kw spec)
+          (swap! errors conj (str "Missing screen-factory-fn-kw for GUI ID " gui-id)))))
     
     @errors))
 

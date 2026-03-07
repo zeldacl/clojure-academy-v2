@@ -11,6 +11,8 @@
   - Game logic remains in core, platform code remains generic"
   (:require [clojure.string :as str]
             [my-mod.block.dsl :as bdsl]
+            [my-mod.block.tile-dsl :as tdsl]
+            [my-mod.gui.dsl :as gui-dsl]
             [my-mod.item.dsl :as idsl]))
 
 ;; Block Registration Metadata
@@ -81,7 +83,8 @@
     Boolean - true if block has :has-block-entity? in its spec"
   [block-id]
   (let [block-spec (get-block-spec block-id)]
-    (boolean (:has-block-entity? block-spec))))
+    (boolean (or (:has-block-entity? block-spec)
+                 (some? (tdsl/get-tile-id-for-block block-id))))))
 
 (defn get-scripted-block-ids
   "Returns block IDs that use the generic scripted BlockEntity.
@@ -90,18 +93,121 @@
   (filter has-block-entity? (get-all-block-ids)))
 
 (defn get-tile-kind
-  "Returns optional :tile-kind metadata for a block."
+  "Returns optional :tile-kind metadata for a block.
+
+  Prefers Tile DSL (`deftile`) when the block is bound to a tile-id."
   [block-id]
-  (some-> (get-block-spec block-id) :tile-kind))
+  (if-let [tile-id (tdsl/get-tile-id-for-block block-id)]
+    (some-> (tdsl/get-tile tile-id) :tile-kind)
+    (some-> (get-block-spec block-id) :tile-kind)))
 
 (defn get-scripted-tile-hooks
   "Returns optional scripted tile lifecycle hooks for a block.
   Result keys: :tick-fn :read-nbt-fn :write-nbt-fn."
   [block-id]
-  (let [spec (get-block-spec block-id)]
-    {:tick-fn (:tile-tick-fn spec)
-     :read-nbt-fn (:tile-load-fn spec)
-     :write-nbt-fn (:tile-save-fn spec)}))
+  (if-let [tile-id (tdsl/get-tile-id-for-block block-id)]
+    (let [spec (tdsl/get-tile tile-id)]
+      {:tick-fn (:tick-fn spec)
+       :read-nbt-fn (:read-nbt-fn spec)
+       :write-nbt-fn (:write-nbt-fn spec)})
+    (let [spec (get-block-spec block-id)]
+      {:tick-fn (:tile-tick-fn spec)
+       :read-nbt-fn (:tile-load-fn spec)
+       :write-nbt-fn (:tile-save-fn spec)})))
+
+;; Tile/BlockEntity Registration Metadata (Tile DSL + legacy block spec compatibility)
+;; ============================================================
+
+(defn get-all-tile-ids
+  "Return all registered tile ids.
+
+  Includes:
+  - explicit tile ids from Tile DSL
+  - implicit per-block tile ids for legacy blocks with :has-block-entity? true"
+  []
+  (let [explicit (set (tdsl/list-tiles))
+        implicit (->> (get-all-block-ids)
+                      (filter (fn [block-id]
+                                (boolean (:has-block-entity? (get-block-spec block-id)))))
+                      set)]
+    (seq (into explicit implicit))))
+
+(defn get-block-tile-id
+  "Get tile-id for a block-id, if the block has a BlockEntity.
+
+  Returns:
+  - tile-id string (explicit Tile DSL mapping if present, else block-id for legacy)
+  - nil if block has no BlockEntity"
+  [block-id]
+  (or (tdsl/get-tile-id-for-block block-id)
+      (when (boolean (:has-block-entity? (get-block-spec block-id)))
+        (str block-id))))
+
+(defn get-tile-spec
+  "Get TileSpec for a tile-id.
+
+  For implicit legacy tiles, returns a synthetic spec map."
+  [tile-id]
+  (if-let [spec (tdsl/get-tile tile-id)]
+    spec
+    (when-let [block-spec (get-block-spec tile-id)]
+      (when (boolean (:has-block-entity? block-spec))
+        {:id tile-id
+         :impl :scripted
+         :blocks [tile-id]
+         :tile-kind (:tile-kind block-spec)
+         :tick-fn (:tile-tick-fn block-spec)
+         :read-nbt-fn (:tile-load-fn block-spec)
+         :write-nbt-fn (:tile-save-fn block-spec)}))))
+
+(defn get-tile-block-ids
+  "Get block-ids bound to a tile-id."
+  [tile-id]
+  (when-let [spec (get-tile-spec tile-id)]
+    (:blocks spec)))
+
+(defn get-tile-registry-name
+  "Get the Minecraft registry name for a tile-id (BlockEntityType registry path).
+
+  Rules:
+  - explicit TileSpec: :registry-name override if present else kebab->snake
+  - implicit legacy tile-id==block-id: uses block registry name to preserve stability"
+  [tile-id]
+  (if-let [spec (tdsl/get-tile tile-id)]
+    (if-let [explicit (:registry-name spec)]
+      explicit
+      (str/replace tile-id #"-" "_"))
+    ;; implicit legacy
+    (get-block-registry-name tile-id)))
+
+;; GUI metadata (core single source of truth)
+;; ============================================================
+
+(defn get-all-gui-ids
+  "Return all registered wireless/platform GUI ids (ints)."
+  []
+  (gui-dsl/get-all-gui-ids))
+
+(defn get-gui-spec
+  "Get a GUI spec by gui-id (int)."
+  [gui-id]
+  (gui-dsl/get-gui-by-gui-id gui-id))
+
+(defn get-gui-registry-name
+  [gui-id]
+  (gui-dsl/get-registry-name gui-id))
+
+(defn get-gui-screen-factory-fn-kw
+  [gui-id]
+  (gui-dsl/get-screen-factory-fn-kw gui-id))
+
+(defn get-gui-slot-layout
+  [gui-id]
+  (gui-dsl/get-slot-layout gui-id))
+
+(defn get-gui-slot-range
+  [gui-id section]
+  (gui-dsl/get-slot-range gui-id section))
 
 (defn get-block-state-properties
   "Returns the block state properties definition for a block.

@@ -16,20 +16,21 @@ import java.util.Map;
 
 /**
  * Generic block entity driven by Clojure tile-logic (tick + NBT).
- * Platform registers BlockEntityType per block-id and stores types here for lookup.
+ * Platform registers BlockEntityType per tile-id and stores types here for lookup.
  */
 public class ScriptedBlockEntity extends BlockEntity {
 
     private static final Map<String, BlockEntityType<ScriptedBlockEntity>> TYPES = new HashMap<>();
 
-    public static void registerType(String blockId, BlockEntityType<ScriptedBlockEntity> type) {
-        TYPES.put(blockId, type);
+    public static void registerType(String tileId, BlockEntityType<ScriptedBlockEntity> type) {
+        TYPES.put(tileId, type);
     }
 
-    public static BlockEntityType<ScriptedBlockEntity> getType(String blockId) {
-        return TYPES.get(blockId);
+    public static BlockEntityType<ScriptedBlockEntity> getType(String tileId) {
+        return TYPES.get(tileId);
     }
 
+    private final String tileId;
     private final String blockId;
     private double energy = 0.0;
     private double maxEnergy = 1000.0;
@@ -37,9 +38,14 @@ public class ScriptedBlockEntity extends BlockEntity {
     private ItemStack battery = ItemStack.EMPTY;
     private final Map<String, Object> scriptedState = new HashMap<>();
 
-    public ScriptedBlockEntity(BlockEntityType<ScriptedBlockEntity> type, BlockPos pos, BlockState state, String blockId) {
+    public ScriptedBlockEntity(BlockEntityType<ScriptedBlockEntity> type, BlockPos pos, BlockState state, String tileId, String blockId) {
         super(type, pos, state);
+        this.tileId = tileId;
         this.blockId = blockId;
+    }
+
+    public String getTileId() {
+        return tileId;
     }
 
     public String getBlockId() {
@@ -174,7 +180,7 @@ public class ScriptedBlockEntity extends BlockEntity {
         super.load(tag);
         try {
             Var readNbt = RT.var("my-mod.block.tile-logic", "read-nbt");
-            Object data = readNbt.invoke(blockId, tag);
+            Object data = readNbt.invoke(tileId, tag);
             setFromData(data);
             readScriptData(tag);
         } catch (Exception e) {
@@ -189,7 +195,7 @@ public class ScriptedBlockEntity extends BlockEntity {
         super.saveAdditional(tag);
         try {
             Var writeNbt = RT.var("my-mod.block.tile-logic", "write-nbt");
-            writeNbt.invoke(blockId, this, tag);
+            writeNbt.invoke(tileId, this, tag);
             writeScriptData(tag);
         } catch (Exception e) {
             tag.putDouble("Energy", energy);
@@ -204,7 +210,7 @@ public class ScriptedBlockEntity extends BlockEntity {
         if (level == null || level.isClientSide) return;
         try {
             Var invokeTick = RT.var("my-mod.block.tile-logic", "invoke-tick");
-            invokeTick.invoke(be.blockId, level, pos, state, be);
+            invokeTick.invoke(be.tileId, level, pos, state, be);
         } catch (Exception e) {
             // Log if needed
         }

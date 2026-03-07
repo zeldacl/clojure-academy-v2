@@ -1,17 +1,51 @@
 (ns my-mod.gui.dsl
   "GUI DSL - Declarative GUI definition using Clojure macros
   
-  Supports both inline DSL and XML-based layout definitions."
-  (:require [my-mod.util.log :as log]))
+  Supports both:
+  - legacy \"generic\" GUI specs (string :id, slots/buttons/labels, XML layout)
+  - wireless GUI metadata + runtime hooks (int :gui-id, registry/screen/container/sync metadata)"
+  (:require [clojure.string :as str]
+            [my-mod.util.log :as log]))
 
 ;; GUI Registry - stores all defined GUIs
-(defonce gui-registry (atom {}))
+(defonce ^{:doc "Registry for GUI specs.
+
+Structure:
+- :by-id       {string-id -> GuiSpec}
+- :by-gui-id   {int-gui-id -> GuiSpec} (wireless/platform-visible GUIs only)"}
+  gui-registry
+  (atom {:by-id {} :by-gui-id {}}))
 
 ;; Component specifications
 (defrecord SlotSpec [index x y filter on-change])
 (defrecord ButtonSpec [id x y width height text on-click])
 (defrecord LabelSpec [x y text color])
-(defrecord GuiSpec [id title width height slots buttons labels background])
+(defrecord GuiSpec
+  [;; Legacy/generic ID used by XML/gui.container system (string)
+   id
+
+   ;; Wireless/platform-visible GUI ID (int). When present, platform layers
+   ;; can register MenuType/ScreenHandlerType and open GUIs using this id.
+   gui-id
+
+   ;; Metadata used by platform adapters (wireless GUIs)
+   display-name
+   gui-type
+   registry-name
+   screen-factory-fn-kw
+   slot-layout
+
+   ;; Runtime hooks for wireless GUIs
+   container-fn
+   container-predicate
+   screen-fn
+   tick-fn
+   sync-get
+   sync-apply
+   payload-sync-apply-fn
+
+   ;; Legacy/generic GUI layout fields
+   title width height slots buttons labels background])
 
 ;; Default values
 (def default-gui-width 176)
@@ -56,10 +90,23 @@
 
 ;; Validate GUI specification
 (defn validate-gui-spec [gui-spec]
-  (when-not (:id gui-spec)
-    (throw (ex-info "GUI must have an :id" {:spec gui-spec})))
-  (when-not (string? (:id gui-spec))
-    (throw (ex-info "GUI :id must be a string" {:id (:id gui-spec)})))
+  (when-not (and (:id gui-spec) (string? (:id gui-spec)) (not (str/blank? (:id gui-spec))))
+    (throw (ex-info "GUI must have a non-empty string :id" {:id (:id gui-spec) :spec gui-spec})))
+
+  ;; If this GUI participates in platform registration, require wireless metadata.
+  (when (some? (:gui-id gui-spec))
+    (when-not (integer? (:gui-id gui-spec))
+      (throw (ex-info "GUI :gui-id must be an integer when provided" {:gui-id (:gui-id gui-spec) :id (:id gui-spec)})))
+    (when-not (and (string? (:registry-name gui-spec)) (not (str/blank? (:registry-name gui-spec))))
+      (throw (ex-info "GUI :registry-name must be a non-empty string when :gui-id is present"
+                      {:id (:id gui-spec) :gui-id (:gui-id gui-spec) :registry-name (:registry-name gui-spec)})))
+    (when-not (keyword? (:gui-type gui-spec))
+      (throw (ex-info "GUI :gui-type must be a keyword when :gui-id is present"
+                      {:id (:id gui-spec) :gui-id (:gui-id gui-spec) :gui-type (:gui-type gui-spec)})))
+    (when-not (keyword? (:screen-factory-fn-kw gui-spec))
+      (throw (ex-info "GUI :screen-factory-fn-kw must be a keyword when :gui-id is present"
+                      {:id (:id gui-spec) :gui-id (:gui-id gui-spec) :screen-factory-fn-kw (:screen-factory-fn-kw gui-spec)}))))
+
   (doseq [slot (:slots gui-spec)]
     (when-not (number? (:index slot))
       (throw (ex-info "Slot must have an :index number" {:slot slot}))))
@@ -75,6 +122,22 @@
         labels (mapv parse-label (or (:labels options) []))
         spec (map->GuiSpec
                {:id gui-id
+                ;; Wireless metadata (optional)
+                :gui-id (:gui-id options)
+                :display-name (:display-name options)
+                :gui-type (:gui-type options)
+                :registry-name (:registry-name options)
+                :screen-factory-fn-kw (:screen-factory-fn-kw options)
+                :slot-layout (:slot-layout options)
+                ;; Wireless runtime hooks (optional)
+                :container-fn (:container-fn options)
+                :container-predicate (:container-predicate options)
+                :screen-fn (:screen-fn options)
+                :tick-fn (:tick-fn options)
+                :sync-get (:sync-get options)
+                :sync-apply (:sync-apply options)
+                :payload-sync-apply-fn (:payload-sync-apply-fn options)
+                ;; Legacy/generic fields
                 :title (or (:title options) "GUI")
                 :width (or (:width options) default-gui-width)
                 :height (or (:height options) default-gui-height)
@@ -88,16 +151,91 @@
 ;; Register GUI in registry
 (defn register-gui! [gui-spec]
   (log/info "Registering GUI:" (:id gui-spec))
-  (swap! gui-registry assoc (:id gui-spec) gui-spec)
+  (swap! gui-registry
+         (fn [reg]
+           (let [id (:id gui-spec)
+                 gui-id (:gui-id gui-spec)]
+             (when (and (some? gui-id) (contains? (:by-gui-id reg) gui-id))
+               (throw (ex-info "Duplicate :gui-id registered"
+                               {:gui-id gui-id
+                                :existing-id (get-in reg [:by-gui-id gui-id :id])
+                                :new-id id})))
+             (cond-> reg
+               true (assoc-in [:by-id id] gui-spec)
+               (some? gui-id) (assoc-in [:by-gui-id gui-id] gui-spec)))))
   gui-spec)
 
 ;; Get GUI from registry
 (defn get-gui [gui-id]
-  (get @gui-registry gui-id))
+  (get-in @gui-registry [:by-id gui-id]))
 
 ;; List all registered GUIs
 (defn list-guis []
-  (keys @gui-registry))
+  (keys (:by-id @gui-registry)))
+
+;; ============================================================================
+;; Wireless/platform-visible GUI query API (int gui-id)
+;; ============================================================================
+
+(defn get-gui-by-gui-id
+  "Get a GUI spec by wireless/platform GUI id (int)."
+  [gui-id]
+  (get-in @gui-registry [:by-gui-id gui-id]))
+
+(defn list-gui-ids
+  "List all registered wireless/platform GUI ids (ints)."
+  []
+  (keys (:by-gui-id @gui-registry)))
+
+(defn get-all-gui-ids
+  "Alias for platform adapters."
+  []
+  (seq (list-gui-ids)))
+
+(defn get-registry-name
+  "Get registry name for a wireless GUI by gui-id."
+  [gui-id]
+  (some-> (get-gui-by-gui-id gui-id) :registry-name))
+
+(defn get-screen-factory-fn-kw
+  "Get screen factory keyword for a wireless GUI by gui-id."
+  [gui-id]
+  (some-> (get-gui-by-gui-id gui-id) :screen-factory-fn-kw))
+
+(defn get-gui-type
+  "Get container/gui type keyword for a wireless GUI by gui-id."
+  [gui-id]
+  (some-> (get-gui-by-gui-id gui-id) :gui-type))
+
+(defn get-slot-layout
+  "Get slot layout for a wireless GUI by gui-id."
+  [gui-id]
+  (some-> (get-gui-by-gui-id gui-id) :slot-layout))
+
+(defn get-slot-range
+  "Get slot index range for a wireless GUI section.
+
+  Returns [start end] inclusive, or [0 0] when not found."
+  [gui-id section]
+  (if-let [layout (get-slot-layout gui-id)]
+    (get-in layout [:ranges section] [0 0])
+    [0 0]))
+
+(defn get-gui-by-type
+  "Get a registered wireless GUI spec by its :gui-type keyword."
+  [gui-type]
+  (some (fn [[_gui-id spec]]
+          (when (= (:gui-type spec) gui-type)
+            spec))
+        (:by-gui-id @gui-registry)))
+
+(defn get-gui-id-for-type
+  "Get GUI id (int) for a :gui-type keyword, or nil."
+  [gui-type]
+  (some (fn [[gui-id spec]]
+          (when (= (:gui-type spec) gui-type)
+            gui-id))
+        (:by-gui-id @gui-registry)))
 
 ;; Main macro: defgui
 (defmacro defgui

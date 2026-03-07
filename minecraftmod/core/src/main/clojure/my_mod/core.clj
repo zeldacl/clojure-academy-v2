@@ -3,6 +3,8 @@
             [my-mod.util.log :as log]
             [my-mod.gui.api :as gui-api]
             [my-mod.gui.core :as gui-core]
+            ;; Load all GUI definitions (so gui-dsl registry is populated)
+            [my-mod.gui.definitions]
             [my-mod.events.metadata :as event-metadata]
             [my-mod.wireless.gui.matrix-network-handler :as matrix-net]
             [my-mod.wireless.gui.node-network-handler :as node-net]

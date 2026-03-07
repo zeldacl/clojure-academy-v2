@@ -19,6 +19,7 @@
   (gui/get-display-name gui-id)
   ```"
   (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
+            [my-mod.gui.dsl :as gui-dsl]
             [my-mod.wireless.gui.gui-metadata :as metadata]
             [my-mod.wireless.gui.slot-manager :as slot-mgr]
             [my-mod.wireless.gui.registry :as registry]
@@ -49,7 +50,10 @@
 (def gui-wireless-node metadata/gui-wireless-node)
 (def gui-wireless-matrix metadata/gui-wireless-matrix)
 (def gui-solar-gen metadata/gui-solar-gen)
-(def valid-gui-ids metadata/valid-gui-ids)
+(defn valid-gui-ids
+  "Return a set of all registered wireless GUI ids."
+  []
+  (set (metadata/get-all-gui-ids)))
 
 (def get-display-name metadata/get-display-name)
 (def get-gui-type metadata/get-gui-type)
@@ -60,7 +64,14 @@
 (def get-screen-factory-fn-keyword metadata/get-screen-factory-fn)
 (def get-screen-factory-fn-kw metadata/get-screen-factory-fn)
 
-(def gui-slot-layouts metadata/gui-slot-layouts)
+(defn gui-slot-layouts
+  "Return a map of gui-id -> slot-layout for all registered GUIs."
+  []
+  (into {}
+        (keep (fn [gui-id]
+                (when-let [layout (metadata/get-slot-layout gui-id)]
+                  [gui-id layout])))
+        (metadata/get-all-gui-ids)))
 (def get-slot-layout metadata/get-slot-layout)
 (def get-slot-range metadata/get-slot-range)
 
@@ -137,10 +148,12 @@
   This function is called by platform packet handlers with the decoded payload.
   It routes to the appropriate GUI-specific sync handler based on gui-id."
   [payload]
-  (case (:gui-id payload)
-    metadata/gui-wireless-node (apply-node-sync-payload! payload)
-    metadata/gui-wireless-matrix (apply-matrix-sync-payload! payload)
-    (log/debug "Unknown gui-id in sync payload:" (:gui-id payload))))
+  (let [gui-id (:gui-id payload)
+        spec (when (integer? gui-id) (gui-dsl/get-gui-by-gui-id gui-id))
+        apply-fn (:payload-sync-apply-fn spec)]
+    (if apply-fn
+      (apply-fn payload)
+      (log/debug "Unknown gui-id in sync payload:" gui-id))))
 
 ;; ============================================================================
 ;; Re-export Screen Factory (screen creation on client)

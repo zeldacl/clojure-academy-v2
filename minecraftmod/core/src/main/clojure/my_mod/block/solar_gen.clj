@@ -4,7 +4,7 @@
   Uses generic ScriptedBlockEntity; tick and NBT logic are registered in this
   namespace. Block metadata and right-click (open GUI) are defined here."
   (:require [my-mod.block.dsl :as bdsl]
-            [my-mod.block.tile-logic :as tile-logic]
+            [my-mod.block.tile-dsl :as tdsl]
             [my-mod.platform.nbt :as nbt]
             [my-mod.platform.item :as item]
             [my-mod.util.log :as log]))
@@ -28,7 +28,6 @@
   :harvest-tool :pickaxe
   :harvest-level 1
   :sounds :stone
-  :has-block-entity? true
   ;; Datagen source of truth (models/block/solar_gen.json)
   :model-parent "minecraft:block/cube_all"
   :textures {:all "my_mod:block/solar_gen"}
@@ -89,10 +88,14 @@
         (item/item-save-to-nbt stack sub)
         (nbt/nbt-set-tag! tag "Battery" sub)))))
 
-(tile-logic/register-tile-logic! "solar-gen"
-  {:tick-fn solar-tick-fn
-   :read-nbt-fn solar-read-nbt-fn
-   :write-nbt-fn solar-write-nbt-fn})
+(tdsl/deftile solar-gen-tile
+  :id "solar-gen"
+  :registry-name "solar_gen"
+  :impl :scripted
+  :blocks ["solar-gen"]
+  :tick-fn solar-tick-fn
+  :read-nbt-fn solar-read-nbt-fn
+  :write-nbt-fn solar-write-nbt-fn)
 
 (defn init-solar-gen!
   []

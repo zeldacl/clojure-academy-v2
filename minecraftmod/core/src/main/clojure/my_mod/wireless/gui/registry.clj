@@ -1,77 +1,9 @@
 (ns my-mod.wireless.gui.registry
   "Wireless GUI registration and opening system"
-  (:require [my-mod.wireless.gui.node-container :as node-container]
-            [my-mod.wireless.gui.node-gui-xml :as node-gui]
-            [my-mod.wireless.gui.matrix-container :as matrix-container]
-            [my-mod.wireless.gui.matrix-gui :as matrix-gui]
-            [my-mod.wireless.gui.solar-container :as solar-container]
-            [my-mod.wireless.gui.solar-gui-xml :as solar-gui]
+  (:require [my-mod.gui.dsl :as gui-dsl]
+            [my-mod.wireless.gui.gui-metadata :as gui-meta]
             [my-mod.platform.world :as pworld]
             [my-mod.util.log :as log]))
-
-;; ============================================================================
-;; GUI Config Table
-;; ============================================================================
-
-(defn- node-container?
-  [container]
-  (and (map? container)
-       (contains? container :tile-entity)
-       (contains? container :ssid)
-       (contains? container :password)))
-
-(defn- matrix-container?
-  [container]
-  (and (map? container)
-       (contains? container :tile-entity)
-       (contains? container :plate-count)
-       (contains? container :core-level)))
-
-(defn- solar-container?
-  [container]
-  (and (map? container)
-       (contains? container :tile-entity)
-       (contains? container :energy)
-       (contains? container :status)))
-
-(def gui-config
-  {:node {:id 0
-          :container-predicate node-container?
-          :container-fn node-container/create-container
-          :screen-fn (fn [tile player]
-                       (let [container (node-container/create-container tile player)
-                             minecraft-container nil]
-                         (node-gui/create-screen container minecraft-container player)))
-          :tick-fn node-container/tick!
-          :sync-get node-container/get-sync-data
-          :sync-apply node-container/apply-sync-data!}
-   :matrix {:id 1
-            :container-predicate matrix-container?
-            :container-fn matrix-container/create-container
-            :screen-fn (fn [tile player]
-                         (let [container (matrix-container/create-container tile player)
-                               minecraft-container nil]
-                           (matrix-gui/create-screen container minecraft-container)))
-            :tick-fn matrix-container/tick!
-            :sync-get matrix-container/get-sync-data
-            :sync-apply matrix-container/apply-sync-data!}
-   :solar {:id 2
-           :container-predicate solar-container?
-           :container-fn solar-container/create-container
-           :screen-fn (fn [tile player]
-                        (let [container (solar-container/create-container tile player)
-                              minecraft-container nil]
-                          (solar-gui/create-screen container minecraft-container player)))
-           :tick-fn solar-container/tick!
-           :sync-get solar-container/get-sync-data
-           :sync-apply solar-container/apply-sync-data!}})
-
-;; ============================================================================
-;; GUI ID Constants (derived from gui-config)
-;; ============================================================================
-
-(def gui-wireless-node (get-in gui-config [:node :id]))
-(def gui-wireless-matrix (get-in gui-config [:matrix :id]))
 
 ;; ============================================================================
 ;; GUI Handler Protocol
@@ -92,22 +24,23 @@
 ;; Helper Functions
 ;; ============================================================================
 
-(def gui-config-by-id
-  (into {}
-        (map (fn [[k v]] [(:id v) (assoc v :key k)]) gui-config)))
-
 (defn get-gui-config
-  "Get GUI config by id"
+  "Get GUI spec/config by gui-id (int)."
   [gui-id]
-  (get gui-config-by-id gui-id))
+  (gui-dsl/get-gui-by-gui-id gui-id))
 
 (defn get-config-by-container
-  "Get GUI config by container type"
+  "Get GUI config by container structure.
+
+  This is used for ticking and syncing all active containers without
+  platform-specific knowledge of GUI kinds."
   [container]
-  (some (fn [[_ cfg]]
-          (when ((:container-predicate cfg) container)
-            cfg))
-        gui-config))
+  (some (fn [gui-id]
+          (let [cfg (get-gui-config gui-id)
+                pred (:container-predicate cfg)]
+            (when (and pred (pred container))
+              cfg)))
+        (gui-dsl/list-gui-ids)))
 
 (defmacro defwireless-gui-handler
   "Define a GUI handler driven by gui-config table.
@@ -133,7 +66,8 @@
          (if (and tile-entity# cfg#)
            (do
              (log/info "Creating GUI for player" (.getName player#) "gui" gui-id#)
-             ((:screen-fn cfg#) tile-entity# player#))
+             (let [container# ((:container-fn cfg#) tile-entity# player#)]
+               ((:screen-fn cfg#) container# nil player#)))
            (do
              (when-not cfg#
                (log/warn "Unknown GUI ID:" gui-id#))
@@ -189,18 +123,20 @@
    :world world
    :pos pos})
 
-(defmacro defopen-gui-fns
-  "Define open-<key>-gui functions from gui-config.
-  
-  Each generated function calls open-gui with the configured :id."
-  [config-var]
-  `(doseq [[k# v#] ~config-var]
-     (let [fname# (symbol (str "open-" (name k#) "-gui"))]
-       (intern *ns* fname#
-         (fn [player# world# pos#]
-           (open-gui player# (:id v#) world# pos#))))))
+(defn open-node-gui
+  "Open Wireless Node GUI (legacy entrypoint used by blocks)."
+  [player world pos]
+  (open-gui player gui-meta/gui-wireless-node world pos))
 
-(defopen-gui-fns gui-config)
+(defn open-matrix-gui
+  "Open Wireless Matrix GUI (legacy entrypoint used by blocks)."
+  [player world pos]
+  (open-gui player gui-meta/gui-wireless-matrix world pos))
+
+(defn open-solar-gui
+  "Open Solar Generator GUI (legacy entrypoint used by blocks)."
+  [player world pos]
+  (open-gui player gui-meta/gui-solar-gen world pos))
 
 ;; ============================================================================
 ;; Registration (for platform-specific implementations)
@@ -306,7 +242,7 @@
   Returns: Map with sync data"
   [container]
   (if-let [cfg (get-config-by-container container)]
-    {:type (:key cfg)
+    {:type (:gui-type cfg)
      :data ((:sync-get cfg) container)}
     (do
       (log/warn "Cannot sync unknown container type:" (type container))
@@ -320,7 +256,7 @@
   - packet-data: Data from server sync packet"
   [container packet-data]
   (let [{:keys [type data]} packet-data
-        cfg (get gui-config type)]
+        cfg (gui-dsl/get-gui-by-type type)]
     (if cfg
       ((:sync-apply cfg) container data)
       (log/warn "Unknown sync packet type:" type))))

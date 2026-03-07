@@ -27,31 +27,42 @@ public class ScriptedDynamicEntityBlock extends BaseEntityBlock {
     private static final ThreadLocal<InitContext> INIT_CONTEXT = new ThreadLocal<>();
 
     private final String blockId;
+    private final String tileId;
 
     private static final class InitContext {
         final String blockId;
+        final String tileId;
         final List<Property<?>> properties;
 
-        InitContext(String blockId, List<Property<?>> properties) {
+        InitContext(String blockId, String tileId, List<Property<?>> properties) {
             this.blockId = blockId;
+            this.tileId = tileId;
             this.properties = properties;
+        }
+    }
+
+    public static ScriptedDynamicEntityBlock create(String blockId,
+                                                    String tileId,
+                                                    List<Property<?>> properties,
+                                                    BlockBehaviour.Properties behaviourProperties) {
+        INIT_CONTEXT.set(new InitContext(blockId, tileId, properties));
+        try {
+            return new ScriptedDynamicEntityBlock(blockId, tileId, behaviourProperties);
+        } finally {
+            INIT_CONTEXT.remove();
         }
     }
 
     public static ScriptedDynamicEntityBlock create(String blockId,
                                                     List<Property<?>> properties,
                                                     BlockBehaviour.Properties behaviourProperties) {
-        INIT_CONTEXT.set(new InitContext(blockId, properties));
-        try {
-            return new ScriptedDynamicEntityBlock(blockId, behaviourProperties);
-        } finally {
-            INIT_CONTEXT.remove();
-        }
+        return create(blockId, blockId, properties, behaviourProperties);
     }
 
-    public ScriptedDynamicEntityBlock(String blockId, Properties props) {
+    public ScriptedDynamicEntityBlock(String blockId, String tileId, Properties props) {
         super(props);
         this.blockId = blockId;
+        this.tileId = tileId;
     }
 
     @Override
@@ -77,8 +88,8 @@ public class ScriptedDynamicEntityBlock extends BaseEntityBlock {
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(blockId);
-        return type != null ? new ScriptedBlockEntity(type, pos, state, blockId) : null;
+        BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(tileId);
+        return type != null ? new ScriptedBlockEntity(type, pos, state, tileId, blockId) : null;
     }
 
     @Nullable

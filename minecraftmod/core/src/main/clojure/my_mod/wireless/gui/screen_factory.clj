@@ -6,9 +6,7 @@
   
   Platform-specific screen_impl.clj files should delegate to this factory
   and only handle platform-specific registration mechanics."
-  (:require [my-mod.wireless.gui.node-gui :as node-gui]
-            [my-mod.wireless.gui.matrix-gui :as matrix-gui]
-            [my-mod.wireless.gui.solar-gui-xml :as solar-gui]
+  (:require [my-mod.gui.dsl :as gui-dsl]
             [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.util.log :as log]))
 
@@ -31,10 +29,13 @@
   (log/info "Creating" (name gui-type) "screen (platform-agnostic factory)")
   
   (try
-    (let [cfg (get gui-registry/gui-config gui-type)
+    (let [cfg (gui-dsl/get-gui-by-type gui-type)
+          _ (when-not cfg
+              (throw (ex-info "Unknown gui-type" {:gui-type gui-type})))
           clj-container (.getClojureContainer container-or-handler)
           _ (gui-registry/set-client-container! clj-container)
-          cgui-screen ((:screen-fn cfg) clj-container container-or-handler)]
+          player (.player player-inventory)
+          cgui-screen ((:screen-fn cfg) clj-container container-or-handler player)]
       
       (log/info (str (name gui-type) " screen created successfully"))
       cgui-screen)

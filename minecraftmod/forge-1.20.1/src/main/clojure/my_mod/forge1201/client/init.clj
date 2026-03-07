@@ -48,9 +48,10 @@
 
     (render-init/register-all-renderers!)
 
-    ;; Bind universal BER to all scripted BlockEntityTypes (dispatcher uses block-id)
-    (doseq [block-id (registry-metadata/get-scripted-block-ids)]
-      (when-let [be-type (forge-mod/get-registered-block-entity-type block-id)]
+    ;; Bind universal BER to all scripted BlockEntityTypes (dispatcher uses block-id).
+    ;; Register once per tile-id to support shared tiles across multiple blocks.
+    (doseq [tile-id (registry-metadata/get-all-tile-ids)]
+      (when-let [be-type (forge-mod/get-registered-block-entity-type tile-id)]
         (BlockEntityRenderers/register
           be-type
           (reify BlockEntityRendererProvider

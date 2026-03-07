@@ -78,6 +78,8 @@
           block-spec (registry-metadata/get-block-spec block-id)
           needs-dynamic-properties? (has-block-state-properties? block-id)
           has-be? (registry-metadata/has-block-entity? block-id)
+          tile-id (when has-be?
+                    (or (registry-metadata/get-block-tile-id block-id) block-id))
           registered-obj (.register blocks-register registry-name
                           (reify java.util.function.Supplier
                             (get [_]
@@ -85,6 +87,7 @@
                                 (and needs-dynamic-properties? has-be?)
                                 (let [props (bsp/get-all-properties block-id)]
                                   (ScriptedDynamicEntityBlock/create block-id
+                                                                    tile-id
                                                                     (java.util.ArrayList. props)
                                                                     (BlockBehaviour$Properties/copy Blocks/STONE)))
                                 needs-dynamic-properties?
@@ -93,52 +96,81 @@
                                                            (java.util.ArrayList. props)
                                                            (BlockBehaviour$Properties/copy Blocks/STONE)))
                                 has-be?
-                                (ScriptedEntityBlock. block-id (BlockBehaviour$Properties/copy Blocks/STONE))
+                                (ScriptedEntityBlock. block-id tile-id (BlockBehaviour$Properties/copy Blocks/STONE))
                                 :else
                                 (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
 
 (defn register-scripted-tile-hooks!
-  "Register metadata-driven scripted tile hooks from block DSL.
-  This allows Node/Matrix/Solar to bind lifecycle logic without platform-specific hardcoding."
+  "Register metadata-driven scripted tile hooks from Tile DSL (or legacy block DSL).
+  Registers lifecycle hooks under tile-id so one tile can be shared by many blocks."
   []
-  (doseq [block-id (registry-metadata/get-scripted-block-ids)]
-    (let [{:keys [tick-fn read-nbt-fn write-nbt-fn]} (registry-metadata/get-scripted-tile-hooks block-id)
-          tile-kind (registry-metadata/get-tile-kind block-id)]
-      (when (or tick-fn read-nbt-fn write-nbt-fn tile-kind)
-        (tile-logic/register-tile-logic! block-id
-                                         {:tile-kind tile-kind
-                                          :tick-fn tick-fn
-                                          :read-nbt-fn read-nbt-fn
-                                          :write-nbt-fn write-nbt-fn})))))
+  (doseq [tile-id (registry-metadata/get-all-tile-ids)]
+    (when-let [spec (registry-metadata/get-tile-spec tile-id)]
+      (let [tick-fn (:tick-fn spec)
+            read-nbt-fn (:read-nbt-fn spec)
+            write-nbt-fn (:write-nbt-fn spec)
+            tile-kind (:tile-kind spec)]
+        (when (or tick-fn read-nbt-fn write-nbt-fn tile-kind)
+          (tile-logic/register-tile-logic! tile-id
+                                           {:tile-kind tile-kind
+                                            :tick-fn tick-fn
+                                            :read-nbt-fn read-nbt-fn
+                                            :write-nbt-fn write-nbt-fn}))))))
 
-;; BlockEntity registration: one BlockEntityType per scripted block-id
+;; BlockEntity registration: one BlockEntityType per tile-id
 (defn register-block-entities!
   []
-  (doseq [block-id (registry-metadata/get-scripted-block-ids)]
-    (when-let [block-ro (get @registered-blocks block-id)]
-      (let [registry-name (registry-metadata/get-block-registry-name block-id)
-            registered-obj (.register block-entities-register registry-name
-                            (reify java.util.function.Supplier
-                              (get [_]
-                                (let [block-inst (.get block-ro)
-                                      type-holder (object-array 1)
-                                      be-type (-> (BlockEntityType$Builder/of
-                                                    (reify BlockEntityType$BlockEntitySupplier
-                                                      (create [_ pos state]
-                                                        (ScriptedBlockEntity. (aget type-holder 0) pos state block-id)))
-                                                    (into-array Block [block-inst]))
-                                                  (.build nil))]
-                                  (aset type-holder 0 be-type)
-                                  (ScriptedBlockEntity/registerType block-id be-type)
-                                  be-type))))]
-        (swap! registered-block-entities assoc block-id registered-obj)))))
+  (doseq [tile-id (registry-metadata/get-all-tile-ids)]
+    (let [registry-name (registry-metadata/get-tile-registry-name tile-id)
+          block-ids (registry-metadata/get-tile-block-ids tile-id)
+          ;; Capture RegistryObjects now; resolve to Blocks later inside Supplier.get
+          ros (keep (fn [block-id]
+                      (when-let [ro (get @registered-blocks block-id)]
+                        [block-id ro]))
+                    block-ids)]
+      (when (seq ros)
+        (let [registered-obj
+              (.register
+                block-entities-register
+                registry-name
+                (reify java.util.function.Supplier
+                  (get [_]
+                    ;; Resolve RegistryObjects to Blocks at registration time
+                    (let [pairs (map (fn [[block-id ro]]
+                                       [block-id (.get ro)])
+                                     ros)
+                          block-insts (mapv second pairs)
+                          block-id-by-inst (java.util.IdentityHashMap.)]
+                      (doseq [[block-id inst] pairs]
+                        (.put block-id-by-inst inst block-id))
+                      (let [type-holder (object-array 1)
+                            be-type (-> (BlockEntityType$Builder/of
+                                          (reify BlockEntityType$BlockEntitySupplier
+                                            (create [_ pos state]
+                                              (let [block-inst (.getBlock state)
+                                                    block-id (or (.get block-id-by-inst block-inst)
+                                                                 tile-id)]
+                                                (ScriptedBlockEntity.
+                                                  (aget type-holder 0)
+                                                  pos state
+                                                  tile-id
+                                                  block-id))))
+                                          (into-array Block block-insts))
+                                        (.build nil))]
+                        (aset type-holder 0 be-type)
+                        (ScriptedBlockEntity/registerType tile-id be-type)
+                        be-type)))))]
+          (swap! registered-block-entities assoc tile-id registered-obj))))))
 
 (defn get-registered-block-entity-type
-  "Get a registered BlockEntityType by DSL block-id (e.g. \"solar-gen\")."
-  [block-id]
-  (when-let [registered-obj (get @registered-block-entities block-id)]
-    (.get registered-obj)))
+  "Get a registered BlockEntityType by tile-id or block-id."
+  [tile-or-block-id]
+  (let [tile-id (or (when (contains? @registered-block-entities tile-or-block-id)
+                      tile-or-block-id)
+                    (registry-metadata/get-block-tile-id tile-or-block-id))]
+    (when-let [registered-obj (and tile-id (get @registered-block-entities tile-id))]
+      (.get registered-obj))))
 
 ;; Dynamic item registration using metadata
 (defn register-all-items!
@@ -293,6 +325,21 @@
   ;; Must happen before block registration so Property objects are ready
   (bsp/init-all-properties!)
   
+  ;; Ensure tile-kind defaults are registered before scripted tile hooks.
+  ;; This is a safety net in case tile-kind registration via Tile DSL has
+  ;; not yet populated the core tile-logic registry.
+  (tile-logic/register-tile-kind!
+    :wireless-node
+    {:tick-fn my-mod.block.wireless-node/node-scripted-tick-fn
+     :read-nbt-fn my-mod.block.wireless-node/node-scripted-load-fn
+     :write-nbt-fn my-mod.block.wireless-node/node-scripted-save-fn})
+
+  (tile-logic/register-tile-kind!
+    :wireless-matrix
+    {:tick-fn my-mod.block.wireless-matrix/matrix-scripted-tick-fn
+     :read-nbt-fn my-mod.block.wireless-matrix/matrix-scripted-load-fn
+     :write-nbt-fn my-mod.block.wireless-matrix/matrix-scripted-save-fn})
+
   ;; Register all blocks and items using metadata-driven approach
   ;; DSL systems are automatically initialized when namespaces load
   (register-scripted-tile-hooks!)

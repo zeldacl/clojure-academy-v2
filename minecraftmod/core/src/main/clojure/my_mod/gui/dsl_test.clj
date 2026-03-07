@@ -24,7 +24,7 @@
   (dsl/defgui registry-test-gui
     :title "Registry Test"
     :slots [{:index 0 :x 0 :y 0}])
-  (assert (contains? @dsl/gui-registry "registry-test-gui"))
+  (assert (contains? (:by-id @dsl/gui-registry) "registry-test-gui"))
   (assert (= (:id (dsl/get-gui "registry-test-gui")) "registry-test-gui"))
   (log/info "✓ GUI registry works"))
 
@@ -60,7 +60,10 @@
 ;; Test GUI instance creation
 (defn test-gui-instance []
   (log/info "Testing GUI instance creation...")
-  (let [gui-spec (dsl/get-gui "demo-gui")
+  (let [gui-spec (dsl/create-gui-spec "instance-test-gui"
+                                      {:title "Instance Test"
+                                       :slots [{:index 0 :x 0 :y 0}]
+                                       :buttons [{:id 0 :x 0 :y 0 :text "Btn"}]})
         mock-player "TestPlayer"
         mock-world "TestWorld"
         mock-pos [0 0 0]
@@ -74,7 +77,9 @@
 ;; Test slot state management
 (defn test-slot-state []
   (log/info "Testing slot state management...")
-  (let [gui-spec (dsl/get-gui "demo-gui")
+  (let [gui-spec (dsl/create-gui-spec "slot-state-test-gui"
+                                      {:title "Slot State Test"
+                                       :slots [{:index 0 :x 0 :y 0}]})
         instance (dsl/create-gui-instance gui-spec "Player" "World" [0 0 0])
         test-item "TestItem"]
     (dsl/set-slot-state! instance 0 test-item)
@@ -86,7 +91,9 @@
 ;; Test button state management
 (defn test-button-state []
   (log/info "Testing button state management...")
-  (let [gui-spec (dsl/get-gui "demo-gui")
+  (let [gui-spec (dsl/create-gui-spec "button-state-test-gui"
+                                      {:title "Button State Test"
+                                       :buttons [{:id 0 :x 0 :y 0 :text "Btn"}]})
         instance (dsl/create-gui-instance gui-spec "Player" "World" [0 0 0])]
     (assert (dsl/button-enabled? instance 0))
     (dsl/set-button-enabled! instance 0 false)
@@ -106,7 +113,7 @@
     (dsl/create-gui-spec nil {:title "Test"})
     (assert false "Should have thrown exception")
     (catch Exception e
-      (assert (.contains (.getMessage e) "must have an :id"))))
+      (assert (.contains (.getMessage e) "must have a non-empty string :id"))))
   
   (try
     (dsl/create-gui-spec "test" {:slots [{:x 10 :y 10}]})

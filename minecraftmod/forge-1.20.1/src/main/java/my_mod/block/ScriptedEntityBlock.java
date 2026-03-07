@@ -13,20 +13,31 @@ import net.minecraft.world.level.block.state.BlockState;
 import javax.annotation.Nullable;
 
 /**
- * Generic block that uses ScriptedBlockEntity for block-id–driven logic.
- * One class per mod; each block instance carries its block-id for BE creation and ticking.
+ * Generic block that uses ScriptedBlockEntity for tile-id–driven logic.
+ * Each block instance carries a block-id (for per-block behavior) and a tile-id
+ * (for shared BlockEntityType registration across multiple blocks).
  */
 public class ScriptedEntityBlock extends BaseEntityBlock {
 
     private final String blockId;
+    private final String tileId;
 
     public ScriptedEntityBlock(String blockId, Properties props) {
+        this(blockId, blockId, props);
+    }
+
+    public ScriptedEntityBlock(String blockId, String tileId, Properties props) {
         super(props);
         this.blockId = blockId;
+        this.tileId = tileId;
     }
 
     public String getBlockId() {
         return blockId;
+    }
+
+    public String getTileId() {
+        return tileId;
     }
 
     @Override
@@ -37,8 +48,8 @@ public class ScriptedEntityBlock extends BaseEntityBlock {
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(blockId);
-        return type != null ? new ScriptedBlockEntity(type, pos, state, blockId) : null;
+        BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(tileId);
+        return type != null ? new ScriptedBlockEntity(type, pos, state, tileId, blockId) : null;
     }
 
     @Nullable

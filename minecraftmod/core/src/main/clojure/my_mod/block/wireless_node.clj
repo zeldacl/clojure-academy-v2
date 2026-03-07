@@ -3,7 +3,7 @@
   
   Implements ITickable interface for automatic updates every game tick."
   (:require [my-mod.block.dsl :as bdsl]
-            [my-mod.block.tile-logic :as tile-logic]
+            [my-mod.block.tile-dsl :as tdsl]
             [clojure.string :as str]
             [my-mod.energy.operations :as energy]
             [my-mod.wireless.interfaces :as winterfaces]
@@ -628,6 +628,38 @@
   (when-let [enabled (.getScriptData be "enabled")]
     (.putBoolean tag "Enabled" (boolean enabled))))
 
+;; ============================================================================
+;; Tile DSL (shared BlockEntityType across node tiers)
+;; ============================================================================
+
+(tdsl/deftile-kind :wireless-node
+  :tick-fn node-scripted-tick-fn
+  :read-nbt-fn node-scripted-load-fn
+  :write-nbt-fn node-scripted-save-fn)
+
+(tdsl/deftile wireless-node-basic-tile
+  :id "wireless-node-basic"
+  :registry-name "node_basic"
+  :impl :scripted
+  :blocks ["wireless-node-basic"]
+  :tile-kind :wireless-node
+  ;; Lifecycle hooks provided by tile-kind defaults (no per-tile boilerplate)
+  )
+
+(tdsl/deftile wireless-node-standard-tile
+  :id "wireless-node-standard"
+  :registry-name "node_standard"
+  :impl :scripted
+  :blocks ["wireless-node-standard"]
+  :tile-kind :wireless-node)
+
+(tdsl/deftile wireless-node-advanced-tile
+  :id "wireless-node-advanced"
+  :registry-name "node_advanced"
+  :impl :scripted
+  :blocks ["wireless-node-advanced"]
+  :tile-kind :wireless-node)
+
 ;; Block interaction handlers
 (defn handle-node-right-click [node-type]
   (fn [event-data]
@@ -693,11 +725,6 @@
   :harvest-level 1
   :sounds :metal
   :model-parent "minecraft:block/cube_all"
-  :has-block-entity? true
-  :tile-kind :wireless-node
-  :tile-tick-fn node-scripted-tick-fn
-  :tile-load-fn node-scripted-load-fn
-  :tile-save-fn node-scripted-save-fn
   :block-state-properties block-state-properties  ;; Dynamic properties: energy (0-4), connected (boolean)
   :on-right-click (handle-node-right-click :basic)
   :on-place (handle-node-place :basic)
@@ -713,11 +740,6 @@
   :harvest-level 1
   :sounds :metal
   :model-parent "minecraft:block/cube_all"
-  :has-block-entity? true
-  :tile-kind :wireless-node
-  :tile-tick-fn node-scripted-tick-fn
-  :tile-load-fn node-scripted-load-fn
-  :tile-save-fn node-scripted-save-fn
   :block-state-properties block-state-properties  ;; Dynamic properties: energy (0-4), connected (boolean)
   :on-right-click (handle-node-right-click :standard)
   :on-place (handle-node-place :standard)
@@ -733,11 +755,6 @@
   :harvest-level 1
   :sounds :metal
   :model-parent "minecraft:block/cube_all"
-  :has-block-entity? true
-  :tile-kind :wireless-node
-  :tile-tick-fn node-scripted-tick-fn
-  :tile-load-fn node-scripted-load-fn
-  :tile-save-fn node-scripted-save-fn
   :block-state-properties block-state-properties  ;; Dynamic properties: energy (0-4), connected (boolean)
   :on-right-click (handle-node-right-click :advanced)
   :on-place (handle-node-place :advanced)
@@ -751,10 +768,6 @@
 
 ;; Initialize wireless nodes
 (defn init-wireless-nodes! []
-  (tile-logic/register-tile-kind! :wireless-node
-                                   {:tick-fn node-scripted-tick-fn
-                                    :read-nbt-fn node-scripted-load-fn
-                                    :write-nbt-fn node-scripted-save-fn})
   (log/info "Initialized Wireless Nodes:")
   (log/info "  - Basic: max-energy=" (:max-energy (:basic node-types)))
   (log/info "  - Standard: max-energy=" (:max-energy (:standard node-types)))
