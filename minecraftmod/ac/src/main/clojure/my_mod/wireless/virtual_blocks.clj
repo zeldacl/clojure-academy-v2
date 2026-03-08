@@ -40,13 +40,17 @@
 
 (defn create-vmatrix
   "Create virtual matrix reference (always ignore chunk)"
-  [matrix-tile]
-  (create-vblock matrix-tile :matrix true))
+  ([matrix-tile]
+   (create-vblock matrix-tile :matrix true))
+  ([x y z]
+   (->VBlock x y z :matrix true)))
 
 (defn create-vnode
   "Create virtual node reference for WirelessNet (check chunks)"
-  [node-tile]
-  (create-vblock node-tile :node false))
+  ([node-tile]
+   (create-vblock node-tile :node false))
+  ([x y z]
+   (->VBlock x y z :node false)))
 
 (defn create-vnode-conn
   "Create virtual node reference for NodeConn (ignore chunks)"

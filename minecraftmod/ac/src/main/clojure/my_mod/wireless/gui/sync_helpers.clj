@@ -38,9 +38,9 @@
   (try
     ;; Get the unified platform broadcast function from platform-adapter
     ;; We use dynamic require to break circular dependency
-    (require 'my-mod.gui.platform-adapter)
-    (when-let [broadcast-fn @(resolve 'my-mod.gui.platform-adapter/platform-broadcast-fn)]
-      (broadcast-fn world pos sync-data))
+    (when-let [get-fn (requiring-resolve 'my-mod.gui.platform-adapter/get-platform-broadcast-fn)]
+      (when-let [broadcast-fn (get-fn)]
+        (broadcast-fn world pos sync-data)))
     (catch Exception e
       (log/debug (str "Error broadcasting " log-prefix " state:") (.getMessage e)))))
 

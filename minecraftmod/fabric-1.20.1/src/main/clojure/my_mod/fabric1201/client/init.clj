@@ -4,6 +4,7 @@
             [my-mod.util.render :as render]
             [my-mod.registry.metadata :as registry-metadata]
             [my-mod.client.render.init :as render-init]
+            [my-mod.client.render.tesr-api :as tesr-api]
             [my-mod.fabric1201.client.render.block-entity-renderer-impl]
             [my-mod.fabric1201.mod :as fabric-mod])
   (:import [net.minecraft.client Minecraft]
@@ -41,15 +42,19 @@
 
     (render-init/register-all-renderers!)
 
-    ;; Bind universal BER to all scripted BlockEntityTypes (dispatcher uses block-id).
-    ;; Register once per tile-id to support shared tiles across multiple blocks.
+    ;; Bind universal BER only to tile-ids that have at least one block with a
+    ;; registered scripted renderer. Tiles using standard static models (e.g.
+    ;; wireless nodes) have no renderer and must be skipped to avoid per-frame
+    ;; "no renderer registered" log spam.
     (doseq [tile-id (registry-metadata/get-all-tile-ids)]
-      (when-let [be-type (fabric-mod/get-registered-block-entity-type tile-id)]
-        (BlockEntityRenderers/register
-          be-type
-          (reify BlockEntityRendererProvider
-            (create [_ctx]
-              (my_mod.fabric1201.client.render.BlockEntityRendererImpl.))))))
+      (let [block-ids (or (seq (registry-metadata/get-tile-block-ids tile-id)) [tile-id])]
+        (when (some tesr-api/get-scripted-tile-renderer block-ids)
+          (when-let [be-type (fabric-mod/get-registered-block-entity-type tile-id)]
+            (BlockEntityRenderers/register
+              be-type
+              (reify BlockEntityRendererProvider
+                (create [_ctx]
+                  (my_mod.fabric1201.client.render.BlockEntityRendererImpl.))))))))
     
     (catch Exception e
       (log/error "Failed to register block renderers" e))))
