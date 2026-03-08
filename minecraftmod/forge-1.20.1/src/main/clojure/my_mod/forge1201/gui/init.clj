@@ -6,11 +6,12 @@
             [my-mod.util.log :as log]))
 
 (defn init-common!
-  "Initialize common GUI system (server + client)"
+  "Initialize common GUI system (server + client).
+  MenuType registration is handled earlier via DeferredRegister in mod-init;
+  only non-registry setup belongs here."
   []
   (log/info "=== Initializing Forge 1.20.1 GUI System (Common) ===")
   (network/init!)
-  (registry-impl/init!)
   (log/info "=== Forge 1.20.1 GUI System (Common) Initialized ==="))
 
 ;; ============================================================================

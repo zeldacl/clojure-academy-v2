@@ -31,7 +31,7 @@
               factory-fn-kw (gui/get-screen-factory-fn-kw gui-id)]
           (when (and menu-type factory-fn-kw)
             ;; Get the actual factory function from screen-factory namespace
-            (let [factory-fn (ns-resolve 'my-mod.gui.platform-adapter factory-fn-kw)]
+            (let [factory-fn (ns-resolve 'my-mod.gui.platform-adapter (symbol (name factory-fn-kw)))]
               (if factory-fn
                 (do
                   (MenuScreens/register

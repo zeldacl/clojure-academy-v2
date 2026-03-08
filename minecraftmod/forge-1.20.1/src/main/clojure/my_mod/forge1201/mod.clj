@@ -5,6 +5,7 @@
             [my-mod.forge1201.events :as events]
             [my-mod.forge1201.gui.impl :as gui]
             [my-mod.forge1201.gui.init :as gui-init]
+            [my-mod.forge1201.gui.registry-impl :as gui-registry-impl]
             [my-mod.forge1201.platform-impl :as platform-impl]
             [my-mod.block.dsl :as bdsl]
             [my-mod.block.wireless-node]
@@ -19,17 +20,17 @@
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [my_mod.block ScriptedBlock DynamicStateBlock]
            [my_mod.block.entity ScriptedBlockEntity]
-           [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab CreativeModeTabs]
+           [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab]
            [net.minecraft.world.level.block.entity BlockEntityType BlockEntityType$Builder BlockEntityType$BlockEntitySupplier]
            [net.minecraft.core.registries Registries]
            [net.minecraft.network.chat Component]
            [net.minecraftforge.fml.common Mod]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
            [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
+           [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraftforge.registries DeferredRegister ForgeRegistries]
            [net.minecraftforge.common MinecraftForge]
-           [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
-           [net.minecraftforge.event BuildCreativeModeTabContentsEvent])
+           [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock])
   (:gen-class
    :name com.example.my_mod1201.MyMod1201Clj
    :prefix "mod-"
@@ -234,67 +235,37 @@
   (when-let [registered-obj (get @registered-items (str block-id "-item"))]
     (.get registered-obj)))
 
-;; Creative Tab registration
-(defn register-creative-tab!
-  "Register custom creative mode tab for all mod items.
-  Uses metadata-driven approach to populate tab contents."
-  []
-  (log/info "Registering Forge creative tab...")
-  (.register creative-tabs-register "items"
-             (reify java.util.function.Supplier
-               (get [_]
-                 (-> (CreativeModeTab/builder)
-                     (.title (Component/translatable (str "itemGroup." mod-id ".items")))
-                     (.icon (reify java.util.function.Supplier
-                              (get [_]
-                                ;; Use first available item as icon, fallback to barrier
-                                (let [entries (registry-metadata/get-all-creative-tab-entries)]
-                                  (if-let [first-entry (first entries)]
-                                    (let [item-id (:id first-entry)
-                                          item-obj (if (= (:type first-entry) :block-item)
-                                                     (get-registered-block-item item-id)
-                                                     (get-registered-item item-id))]
-                                      (if item-obj
-                                        (.getDefaultInstance item-obj)
-                                        (.getDefaultInstance net.minecraft.world.item.Items/BARRIER)))
-                                    (.getDefaultInstance net.minecraft.world.item.Items/BARRIER))))))
-                     (.displayItems (reify net.minecraft.world.item.CreativeModeTab$DisplayItemsGenerator
-                                      (accept [_ params output]
-                                        ;; This will be called when the tab is opened
-                                        ;; We'll populate it via BuildCreativeModeTabContentsEvent instead
-                                        nil)))
-                     (.build))))))
-
-;; ============================================================================
-;; Setup Phase Helpers (must be defined before mod-init)
-;; ============================================================================
-
-;; Helper: Common setup phase (called from event handler)
-(defn on-common-setup [event]
-  (log/info "FMLCommonSetupEvent - Common setup phase")
-  ;; Common initialization (runs on both client and server)
-  (gui-init/init-common!)
-
-  ;; Register gameplay event listeners  
-  ;; Note: Consumer.accept(Object) will receive the event from the bus
-  (let [listener (reify java.util.function.Consumer
-                   (accept [_ evt]
-                     (events/handle-right-click-event evt)))]
-    (.addListener (MinecraftForge/EVENT_BUS) listener))
-  
-  ;; Register creative tab content population listener
-  (let [tab-listener (reify java.util.function.Consumer
-                       (accept [_ evt]
-                         (log/info "Populating creative tab with mod items...")
+(defn- build-creative-tab []
+  "Build the mod creative tab. displayItems callback runs lazily (when tab is opened),
+  so registered-items/registered-blocks atoms are fully populated by then."
+  (-> (CreativeModeTab/builder)
+      (.title (Component/translatable (str "itemGroup." mod-id ".items")))
+      (.icon (reify java.util.function.Supplier
+               (get [_] (.getDefaultInstance net.minecraft.world.item.Items/BARRIER))))
+      (.displayItems (reify net.minecraft.world.item.CreativeModeTab$DisplayItemsGenerator
+                       (accept [_ _params output]
                          (doseq [entry (registry-metadata/get-all-creative-tab-entries)]
                            (let [item-id (:id entry)
                                  item-obj (if (= (:type entry) :block-item)
                                             (get-registered-block-item item-id)
                                             (get-registered-item item-id))]
                              (when item-obj
-                               (.accept (.getEntries evt) item-obj)
-                               (log/debug "Added to creative tab:" item-id))))))]
-    (.addListener (MinecraftForge/EVENT_BUS) BuildCreativeModeTabContentsEvent tab-listener)))
+                               (.accept output (net.minecraft.world.item.ItemStack. item-obj 1))))))))
+      (.build)))
+
+;; ============================================================================
+;; Setup Phase Helpers (must be defined before mod-init)
+;; ============================================================================
+
+;; Helper: Common setup phase (subscribed to FMLCommonSetupEvent in mod-init)
+(defn on-common-setup [_event]
+  (log/info "FMLCommonSetupEvent - Common setup phase")
+  (gui-init/init-common!)
+  (.addListener (MinecraftForge/EVENT_BUS)
+                EventPriority/NORMAL false PlayerInteractEvent$RightClickBlock
+                (reify java.util.function.Consumer
+                  (accept [_ evt]
+                    (events/handle-right-click-event evt)))))
 
 ;; Helper: Client setup phase (called from event handler)  
 (defn on-client-setup [event]
@@ -345,21 +316,32 @@
   (register-block-entities!)
   (register-all-items!)
   
-  ;; Register creative mode tab
-  (register-creative-tab!)
-  
-  ;; Register DeferredRegisters with mod event bus
+  ;; Register creative tab (safe icon = BARRIER so no dependency on item registry order)
+  (log/info "Registering Forge creative tab...")
+  (.register creative-tabs-register "items"
+             (reify java.util.function.Supplier
+               (get [_] (build-creative-tab))))
+
+  ;; Populate GUI DeferredRegister before it is registered with the bus.
+  ;; Must happen here (during mod-init) — registries are locked by FMLCommonSetupEvent.
+  (gui-registry-impl/register-menu-types!)
+
+  ;; Register DeferredRegisters and lifecycle event listeners on mod event bus.
+  ;; Must use addListener(EventPriority, boolean, Class<T>, Consumer<T>) overload:
+  ;; Clojure's reify erases generic type info, so Forge cannot infer the event
+  ;; type from the Consumer alone.
   (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
     (.register blocks-register mod-bus)
     (.register items-register mod-bus)
     (.register block-entities-register mod-bus)
-    (.register creative-tabs-register mod-bus))
-  
-  ;; Setup phase event listeners
-  ;; Note: Forge 1.20.1 event bus has specific requirements for type resolution
-  ;; We'll invoke setup functions through the generated methods instead
-  ;; The gen-class methods (commonSetup, clientSetup) will be called by Forge automatically
-  ;; through the lifecycle events
+    (.register creative-tabs-register mod-bus)
+    (.register gui-registry-impl/menu-register mod-bus)
+    (.addListener mod-bus EventPriority/NORMAL false FMLCommonSetupEvent
+                  (reify java.util.function.Consumer
+                    (accept [_ event] (on-common-setup event))))
+    (.addListener mod-bus EventPriority/NORMAL false FMLClientSetupEvent
+                  (reify java.util.function.Consumer
+                    (accept [_ event] (on-client-setup event)))))
   
   ;; Return state
   [[] nil])

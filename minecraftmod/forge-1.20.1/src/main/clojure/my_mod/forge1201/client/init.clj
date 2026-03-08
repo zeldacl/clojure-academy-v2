@@ -4,16 +4,12 @@
             [my-mod.util.render :as render]
             [my-mod.registry.metadata :as registry-metadata]
             [my-mod.client.render.init :as render-init]
-            [my-mod.forge1201.client.render.tesr-impl]
+            [my-mod.forge1201.client.render.tesr-impl :as tesr-impl]
             [my-mod.forge1201.mod :as forge-mod])
-  (:import [net.minecraftforge.api.distmarker Dist]
-           [net.minecraftforge.fml.common.eventhandler SubscribeEvent]
-           [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent]
-           [net.minecraftforge.fml.javafxmod FMLJavaModLoadingContext]
-           [net.minecraft.client Minecraft]
+  (:import [net.minecraft.client Minecraft]
            [net.minecraft.client.renderer.texture TextureManager]
            [net.minecraft.client.renderer.blockentity BlockEntityRenderers BlockEntityRendererProvider]
-           [net.minecraft.world.level.block.entity BlockEntity])))
+           [net.minecraft.world.level.block.entity BlockEntity]))
 
 ;; ============================================================================
 ;; Client Registration
@@ -55,29 +51,17 @@
         (BlockEntityRenderers/register
           be-type
           (reify BlockEntityRendererProvider
-            (create [_ctx]
-              (my_mod.forge1201.client.render.TileEntityRendererImpl.))))))
+            (create [_this _ctx]
+              (tesr-impl/new-renderer))))))
     
     (catch Exception e
       (log/error "Failed to register block renderers" e))))
 
-(defn on-client-setup
-  "Called when client initialization phase happens
-  
-  Args:
-    event: FMLClientSetupEvent"
-  [^FMLClientSetupEvent event]
-  (log/info "Client setup event triggered for Forge 1.20.1")
-  (register-renderers))
-
 (defn init-client
-  "Initialize client-side systems for Forge 1.20.1
-  
-  Called from mod initialization. Registers event listeners for client setup."
+  "Initialize client-side systems for Forge 1.20.1.
+  Called from within the FMLClientSetupEvent handler in mod.clj — do work directly,
+  do not attempt to register new event listeners (the event is already firing)."
   []
   (log/info "Initializing Forge 1.20.1 client-side systems")
-  ;; Register the event handler for client setup
-  (-> (FMLJavaModLoadingContext/getInstance)
-      (.getModEventBus)
-      (.addListener on-client-setup))
-  (log/info "Client event handler registered"))
+  (register-renderers)
+  (log/info "Forge 1.20.1 client-side systems initialized"))
