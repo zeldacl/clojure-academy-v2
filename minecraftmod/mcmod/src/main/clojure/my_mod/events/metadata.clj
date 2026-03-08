@@ -96,18 +96,27 @@
 
 (defn identify-block-from-registry-name
   "Identify block ID from Minecraft registry name.
-  
-  Converts registry name (snake_case) back to DSL block ID (kebab-case).
-  
+
+  First tries a simple snake_case -> kebab-case conversion. If that fails,
+  falls back to a reverse lookup over all registered blocks, matching the
+  explicit :registry-name field on the BlockSpec. This handles blocks whose
+  DSL symbol name differs from their Minecraft registry path (e.g.
+  wireless-node-advanced / \"node_advanced\").
+
   Args:
-    registry-name: String - Minecraft registry name (e.g., \"demo_block\")
-  
+    registry-name: String - Minecraft registry name (e.g., \"node_advanced\")
+
   Returns:
-    String - DSL block identifier (e.g., \"demo-block\"), or nil if not found"
+    String - DSL block identifier (e.g., \"wireless-node-advanced\"), or nil if not found"
   [registry-name]
-  (let [potential-id (clojure.string/replace registry-name #"_" "-")]
-    (when (bdsl/get-block potential-id)
-      potential-id)))
+  (when registry-name
+    (let [potential-id (clojure.string/replace registry-name #"_" "-")]
+      (or (when (bdsl/get-block potential-id) potential-id)
+          (some (fn [block-id]
+                  (when-let [spec (bdsl/get-block block-id)]
+                    (when (= registry-name (:registry-name spec))
+                      block-id)))
+                (bdsl/list-blocks))))))
 
 (defn identify-block-from-full-name
   "Identify block ID from full Minecraft block name string.

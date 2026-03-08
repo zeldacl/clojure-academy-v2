@@ -48,12 +48,17 @@
   Returns: boolean - true if player is within 8 blocks of tile"
   [container player]
   (let [tile (:tile-entity container)
-        world (:world tile)
         pos (:pos tile)
         max-distance 8.0]
-    ;; Check if player is still close enough
     (and (= player (:player container))
-         (< (.distanceSq (.getPos player) pos) (* max-distance max-distance)))))
+         (when pos
+           (let [bx (double (.getX pos))
+                 by (double (.getY pos))
+                 bz (double (.getZ pos))]
+             ;; MC 1.20.1: Entity.distanceToSqr(x,y,z) replaces old distanceSq/getPos
+             (< (.distanceToSqr player
+                                 (+ bx 0.5) by (+ bz 0.5))
+                (* max-distance max-distance)))))))
 
 (defn reset-container-atoms!
   "Reset container atoms to default values on close

@@ -34,19 +34,34 @@
 ;; Container Creation
 ;; ============================================================================
 
+(defn- resolve-tile
+  "If tile is a Java ScriptedBlockEntity (not a Clojure map), look up the
+  corresponding Clojure TileMatrix from the block's registry using its BlockPos."
+  [tile]
+  (if (map? tile)
+    tile
+    (try
+      (let [pos (.getBlockPos tile)]
+        (or (wm/get-matrix-tile pos)
+            (do (log/warn "No Clojure TileMatrix found at" pos "- using raw BE") tile)))
+      (catch Exception e
+        (log/warn "Could not resolve TileMatrix from Java BE:" (.getMessage e))
+        tile))))
+
 (defn create-container
   "Create a Matrix GUI container instance
   
   Args:
-  - tile: Matrix TileEntity instance
+  - tile: Matrix TileEntity instance (Clojure map or Java ScriptedBlockEntity)
   - player: Player who opened GUI
   
   Returns: MatrixContainer record"
   [tile player]
-  (->MatrixContainer
-    tile
-    (wm/->MatrixJavaProxy tile)  ; Wrap tile in Java accessor proxy
-    player
+  (let [tile (resolve-tile tile)]
+    (->MatrixContainer
+      tile
+      (wm/->MatrixJavaProxy tile)  ; Wrap tile in Java accessor proxy
+      player
     ;; Initialize synced data
     (atom 0)    ; core-level
     (atom 0)    ; plate-count
@@ -55,7 +70,7 @@
     (atom 0)    ; max-capacity
     (atom 0)    ; bandwidth
     (atom 0.0)  ; range
-    (atom 0)))  ; sync-ticker - for throttling network sync
+    (atom 0))))  ; sync-ticker - for throttling network sync
 
 ;; ============================================================================
 ;; Slot Management

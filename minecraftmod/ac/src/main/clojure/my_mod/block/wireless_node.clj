@@ -676,15 +676,17 @@
           (log/info "  Charging In:" @(:charging-in tile))
           (log/info "  Charging Out:" @(:charging-out tile))
           (log/info "  Name:" (winterfaces/get-node-name tile))
-          ;; Open GUI
+          ;; Open GUI — return the result map so the platform event dispatcher
+          ;; can call open-gui-for-player with :gui-id/:player/:world/:pos.
           (try
             (if-let [open-node-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-node-gui)]
-              (do
-                (open-node-gui player world pos)
-                (log/info "Opened Node GUI"))
-              (log/error "Node GUI registry function not found"))
+              (let [result (open-node-gui player world pos)]
+                (log/info "Opened Node GUI")
+                result)
+              (do (log/error "Node GUI registry function not found") nil))
             (catch Exception e
-              (log/error "Failed to open Node GUI:" (.getMessage e)))))
+              (log/error "Failed to open Node GUI:" (.getMessage e))
+              nil)))
         (log/info "No tile entity found!")))))
 
 (defn handle-node-place [node-type]

@@ -1,72 +1,51 @@
 (ns my-mod.forge1201.gui.menu-bridge
-  "ForgeMenuBridge gen-class - must be in its own namespace so callers can
-  require this namespace first, making the class available for direct
-  constructor calls without reflection."
+  "Forge 1.20.1 AbstractContainerMenu wrapper.
+
+  Uses runtime `proxy` instead of `gen-class` because gen-class is a
+  compile-time-only macro (guarded by *compile-files*) and produces no class
+  when Clojure source files are loaded dynamically without AOT compilation."
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.world.inventory AbstractContainerMenu MenuType Slot]))
-
-;; ============================================================================
-;; Java AbstractContainerMenu Wrapper (Forge 1.20.1)
-;; ============================================================================
-
-(gen-class
-  :name my_mod.forge1201.gui.ForgeMenuBridge
-  :extends net.minecraft.world.inventory.AbstractContainerMenu
-  :state state
-  :init init
-  :constructors {[int Object clojure.lang.IPersistentMap] [net.minecraft.world.inventory.MenuType]}
-  :methods [[getClojureContainer [] Object]
-            [tick [] void]
-            [broadcastChanges [] void]
-            [addSlot [net.minecraft.world.inventory.Slot] net.minecraft.world.inventory.Slot]])
-
-(defn -init
-  "Initialize Java Menu wrapper"
-  [menu-id menu-type clj-container]
-  [[menu-type] (atom clj-container)])
-
-(defn -getClojureContainer [this]
-  @(.state this))
-
-(defn -tick [this]
-  (gui/safe-tick! (-getClojureContainer this)))
-
-(defn -stillValid [this player]
-  (gui/safe-validate (-getClojureContainer this) player))
-
-(defn -removed [this player]
-  (let [clj-container (-getClojureContainer this)]
-    (gui/safe-close! clj-container)
-    (gui/unregister-active-container! clj-container)
-    (gui/unregister-player-container! player)
-    (log/info "Menu closed for player" (.getName player))))
-
-(defn -broadcastChanges [this]
-  (.broadcastChanges (.superclass (class this)) this)
-  (gui/safe-sync! (-getClojureContainer this)))
-
-(defn -addSlot [this slot]
-  (.addSlot (.superclass (class this)) this slot))
-
-(defn -quickMoveStack [this player slot-index]
-  (try
-    (let [slot (.getSlot this slot-index)]
-      (if (and slot (.hasItem slot))
-        (let [stack (.getItem slot)
-              clj-container (-getClojureContainer this)]
-          (gui/execute-quick-move-forge this clj-container slot-index slot stack))
-        net.minecraft.world.item.ItemStack/EMPTY))
-    (catch Exception e
-      (log/error "Error in quickMoveStack:" (.getMessage e))
-      net.minecraft.world.item.ItemStack/EMPTY)))
-
-(defn -canTakeItemForPickAll [this stack slot] true)
-(defn -canDragTo [this slot] true)
+  (:import [net.minecraft.world.inventory AbstractContainerMenu MenuType Slot]
+           [net.minecraft.world.item ItemStack]))
 
 (defn create-menu-bridge
-  "Create ForgeMenuBridge instance without forcing class resolution at ns load time."
+  "Create an AbstractContainerMenu proxy wrapping a Clojure container.
+
+  proxy generates the implementing class at runtime inside the current
+  DynamicClassLoader, so it works without AOT compilation.
+
+  Args:
+  - window-id:     int        — Forge menu container id
+  - menu-type:     MenuType   — registered MenuType for this GUI
+  - clj-container: map        — Clojure-side container (NodeContainer, etc.)"
   [window-id menu-type clj-container]
-  (clojure.lang.Reflector/invokeConstructor
-    (Class/forName "my_mod.forge1201.gui.ForgeMenuBridge")
-    (object-array [window-id menu-type clj-container])))
+  (proxy [AbstractContainerMenu] [menu-type (int window-id)]
+
+    (stillValid [player]
+      (gui/safe-validate clj-container player))
+
+    (removed [player]
+      (proxy-super removed player)
+      (gui/safe-close! clj-container)
+      (gui/unregister-active-container! clj-container)
+      (gui/unregister-player-container! player)
+      (log/info "Menu closed for player" (.getName player)))
+
+    (broadcastChanges []
+      (proxy-super broadcastChanges)
+      (gui/safe-sync! clj-container))
+
+    (quickMoveStack [player slot-index]
+      (try
+        (let [slot (.getSlot this slot-index)]
+          (if (and slot (.hasItem slot))
+            (let [stack (.getItem slot)]
+              (gui/execute-quick-move-forge this clj-container slot-index slot stack))
+            ItemStack/EMPTY))
+        (catch Exception e
+          (log/error "Error in quickMoveStack:" (.getMessage e))
+          ItemStack/EMPTY)))
+
+    (canTakeItemForPickAll [stack slot] true)
+    (canDragTo [slot] true)))

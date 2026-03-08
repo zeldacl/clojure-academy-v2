@@ -16,10 +16,17 @@
 ;; Network Queries
 ;; ============================================================================
 
+(defn- tile-level
+  "Get the Level/World from a BlockEntity.
+  MC 1.17+ renamed getWorld() to getLevel(); try both for compatibility."
+  [tile]
+  (or (try (.getLevel tile) (catch Exception _ nil))
+      (try (.getWorld tile) (catch Exception _ nil))))
+
 (defn get-wireless-net-by-matrix
   "Get wireless network by matrix TileEntity"
   [matrix-tile]
-  (let [world (.getWorld matrix-tile)
+  (let [world (tile-level matrix-tile)
         world-data (wd/get-world-data world)
         matrix-vb (vb/create-vmatrix matrix-tile)]
     (wd/get-network-by-matrix world-data matrix-vb)))
@@ -27,7 +34,7 @@
 (defn get-wireless-net-by-node
   "Get wireless network by node TileEntity"
   [node-tile]
-  (let [world (.getWorld node-tile)
+  (let [world (tile-level node-tile)
         world-data (wd/get-world-data world)
         node-vb (vb/create-vnode node-tile)]
     (wd/get-network-by-node world-data node-vb)))

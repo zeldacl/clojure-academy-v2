@@ -452,15 +452,17 @@
             (log/info "  Capacity:" (winterfaces/get-matrix-capacity tile))
             (log/info "  Bandwidth:" (winterfaces/get-matrix-bandwidth tile))
             (log/info "  Range:" (winterfaces/get-matrix-range tile))
-            ;; Open GUI
+            ;; Open GUI — return the result map so the platform event dispatcher
+            ;; can call open-gui-for-player with :gui-id/:player/:world/:pos.
             (try
               (if-let [open-matrix-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-matrix-gui)]
-                (do
-                  (open-matrix-gui player world pos)
-                  (log/info "Opened Matrix GUI"))
-                (log/error "Failed to open Matrix GUI: open-matrix-gui not resolved"))
+                (let [result (open-matrix-gui player world pos)]
+                  (log/info "Opened Matrix GUI")
+                  result)
+                (do (log/error "Failed to open Matrix GUI: open-matrix-gui not resolved") nil))
               (catch Exception e
-                (log/error "Failed to open Matrix GUI:" (.getMessage e)))))
+                (log/error "Failed to open Matrix GUI:" (.getMessage e))
+                nil)))
           (log/info "Sneaking - no action"))
         (log/info "No tile entity found!")))))
 

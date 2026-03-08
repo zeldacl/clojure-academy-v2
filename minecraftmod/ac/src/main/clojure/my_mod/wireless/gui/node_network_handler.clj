@@ -59,9 +59,13 @@
   (let [world (net-helpers/get-world player)
         tile (net-helpers/get-tile-at world payload)]
     (if tile
-      (let [pos (.getPos tile)
+      (let [;; Use coordinates from the payload directly — avoids calling
+            ;; getPos() on ScriptedBlockEntity (renamed getBlockPos() in 1.17+)
+            x (double (:pos-x payload))
+            y (double (:pos-y payload))
+            z (double (:pos-z payload))
             range (try (.getRange tile) (catch Exception _ 20.0))
-            nets (helper/get-nets-in-range world (.getX pos) (.getY pos) (.getZ pos) range 100)]
+            nets (helper/get-nets-in-range world x y z range 100)]
         {:networks (mapv (fn [net]
                            (let [matrix (when (:matrix net)
                                          (vb/vblock-get (:matrix net) world))]

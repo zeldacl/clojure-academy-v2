@@ -143,17 +143,34 @@
     widget))
 
 (defn read-xml
-  "Read XML layout and return root widget tree."
+  "Read XML layout and return root widget tree.
+
+  resource-loc formats accepted:
+    \"my_mod:guis/rework/page_inv.xml\"  → assets/my_mod/guis/rework/page_inv.xml
+    \"assets/my_mod/guis/rework/page_inv.xml\"  (passed through as-is)"
   [resource-loc]
   (let [path (if (str/includes? resource-loc ":")
-               (str "assets/" (str/replace resource-loc #":" "/") ".xml")
+               ;; Callers include the .xml extension already; do NOT append it again.
+               (str "assets/" (str/replace resource-loc #":" "/"))
                resource-loc)
-        xml-resource (io/resource path)
-      parsed (xml/parse (io/input-stream xml-resource))
+        ;; Try thread-context classloader first (works in most environments).
+        ;; Fall back to the DynamicClassLoader that loaded this namespace so
+        ;; Forge's module classloader hierarchy is also searched.
+        xml-resource (or (io/resource path)
+                         (io/resource path (.getClassLoader (class read-xml))))
+        _ (when-not xml-resource
+            (throw (ex-info (str "XML resource not found: " path)
+                            {:resource-loc resource-loc :path path})))
+        parsed (xml/parse (io/input-stream xml-resource))
         root-widget-node (first-child parsed :Widget)]
     (build-widget root-widget-node)))
 
 (defn get-widget
-  "Get named widget from parsed widget tree"
+  "Get named widget from parsed widget tree.
+  If the root widget's own name matches, return it directly.
+  Otherwise delegates to find-widget which searches children."
   [doc name]
-  (cgui/find-widget doc name))
+  (when doc
+    (if (= name (cgui/get-name doc))
+      doc
+      (cgui/find-widget doc name))))

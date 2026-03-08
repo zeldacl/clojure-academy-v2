@@ -36,18 +36,34 @@
 ;; Container Creation
 ;; ============================================================================
 
+(defn- resolve-tile
+  "If tile is a Java ScriptedBlockEntity (not a Clojure map), look up the
+  corresponding Clojure TileNode from the block's registry using its BlockPos."
+  [tile]
+  (if (map? tile)
+    tile
+    (try
+      (let [pos (.getBlockPos tile)
+            get-node-tile (requiring-resolve 'my-mod.block.wireless-node/get-node-tile)]
+        (or (get-node-tile pos)
+            (do (log/warn "No Clojure TileNode found at" pos "- using raw BE") tile)))
+      (catch Exception e
+        (log/warn "Could not resolve TileNode from Java BE:" (.getMessage e))
+        tile))))
+
 (defn create-container
   "Create a Node GUI container instance
   
   Args:
-  - tile: NodeTileEntity instance
+  - tile: NodeTileEntity instance (Clojure map or Java ScriptedBlockEntity)
   - player: Player who opened GUI
   
   Returns: NodeContainer record"
   [tile player]
-  (->NodeContainer
-    tile
-    player
+  (let [tile (resolve-tile tile)]
+    (->NodeContainer
+      tile
+      player
     ;; Initialize synced data from tile
     (atom (int (winterfaces/get-energy tile)))
     (atom (int (winterfaces/get-max-energy tile)))
@@ -59,7 +75,7 @@
     (atom 0)      ; Capacity - network node count
     (atom 0)      ; Max capacity - from matrix
     (atom 0)      ; Charge ticker - for throttling charging
-    (atom 0)))    ; Sync ticker - for throttling network sync
+    (atom 0))))   ; Sync ticker - for throttling network sync
 
 ;; ============================================================================
 ;; Slot Management

@@ -30,7 +30,9 @@
 (defn create-vblock
   "Create a virtual block reference from a TileEntity"
   [tile-entity block-type ignore-chunk]
-  (let [pos (.getPos tile-entity)]
+  ;; MC 1.17+ renamed getPos() to getBlockPos() on BlockEntity; try both.
+  (let [pos (or (try (.getBlockPos tile-entity) (catch Exception _ nil))
+                (try (.getPos tile-entity) (catch Exception _ nil)))]
     (->VBlock
       (.getX pos)
       (.getY pos)

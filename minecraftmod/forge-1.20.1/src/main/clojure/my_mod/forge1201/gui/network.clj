@@ -1,21 +1,72 @@
 (ns my-mod.forge1201.gui.network
-  "Forge 1.20.1 GUI Network Packet System
-  
-  NOTE: Forge 1.20.1 networking API has changed significantly.
-  This is currently a stub - custom packet handling will be reimplemented
-  using the new Forge 1.20.1 networking API when needed.
-  
-  For now, GUI synchronization uses the built-in MenuType system."
-  (:require [my-mod.util.log :as log]))
+  "Forge 1.20.1 GUI Network Packet System.
 
-;; ============================================================================
-;; Stub Implementation
-;; ============================================================================
+  Registers a SimpleChannel (via ClojureNetwork Java bridge) that carries
+  two packet types:
+    C2SPacket (0) – client → server RPC request
+    S2CPacket (1) – server → client RPC response
 
-(defn init! 
-  "Initialize network system (stub for Forge 1.20.1)
-  
-  TODO: Reimplement using Forge 1.20.1 networking API when custom packets are needed.
-  Current GUI system uses MenuType which handles synchronization internally."
+  Payload/response are EDN-serialized Clojure maps so that arbitrary data
+  (keywords, numbers, strings, vectors) is preserved round-trip.
+
+  Also extends the my-mod.network.client/send-request multimethod for the
+  :forge-1.20.1 dispatch value so the GUI's send-to-server calls work."
+  (:require [my-mod.network.client :as net-client]
+            [my-mod.network.server :as net-server]
+            [my-mod.util.log :as log]
+            [clojure.edn :as edn])
+  (:import [my_mod.network ClojureNetwork]))
+
+;; ---------------------------------------------------------------------------
+;; EDN serialization helpers
+;; ---------------------------------------------------------------------------
+
+(defn- serialize ^bytes [data]
+  (.getBytes (pr-str data) "UTF-8"))
+
+(defn- deserialize [^bytes bs]
+  (try
+    (edn/read-string (String. bs "UTF-8"))
+    (catch Exception e
+      (log/error "Failed to deserialize network payload:" (.getMessage e))
+      {})))
+
+;; ---------------------------------------------------------------------------
+;; Platform multimethod implementation
+;; ---------------------------------------------------------------------------
+
+(defmethod net-client/send-request :forge-1.20.1
+  [msg-id payload request-id]
+  (ClojureNetwork/sendToServer msg-id (int request-id) (serialize payload)))
+
+;; ---------------------------------------------------------------------------
+;; Initialization
+;; ---------------------------------------------------------------------------
+
+(defn init!
+  "Initialize the Forge 1.20.1 SimpleChannel and register packet handlers.
+  Called during common mod setup from forge1201.gui.init/init-common!."
   []
-  (log/info "Forge 1.20.1 GUI network system (stub) - using MenuType for synchronization"))
+  (let [req-handler
+        (fn [msg-id request-id payload-bytes player]
+          (let [payload (deserialize payload-bytes)
+                respond-fn (fn [req-id response]
+                             (ClojureNetwork/sendToClient
+                               player
+                               (int req-id)
+                               (serialize response)))]
+            (net-server/handle-request
+              msg-id
+              (int request-id)
+              payload
+              player
+              respond-fn)))
+
+        resp-handler
+        (fn [request-id response-bytes]
+          (net-client/handle-response
+            (int request-id)
+            (deserialize response-bytes)))]
+
+    (ClojureNetwork/init req-handler resp-handler))
+  (log/info "Forge 1.20.1 GUI network system initialized"))

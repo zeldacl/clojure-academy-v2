@@ -54,13 +54,20 @@
   (IForgeMenuType/create
     (reify IContainerFactory
       (create [_ window-id player-inventory buf]
+        ;; This factory is invoked on the CLIENT when Forge recreates the menu
+        ;; after receiving the open-screen packet.
         (let [handler (gui/get-gui-handler)
               player (.player player-inventory)
               world (.level player)
               pos (.readBlockPos buf)
               clj-container (gui-registry/get-server-container handler gui-id player world pos)]
           (if clj-container
-            (bridge/wrap-clojure-container window-id (get-menu-type gui-id) clj-container)
+            (do
+              ;; Store for screen_factory.clj which needs to read it back.
+              ;; (The proxy no longer has a getClojureContainer() method since
+              ;; we replaced gen-class with proxy.)
+              (gui-registry/set-client-container! clj-container)
+              (bridge/wrap-clojure-container window-id (get-menu-type gui-id) clj-container))
             (do (log/error "Failed to create container for GUI" gui-id) nil)))))))
 
 (defn register-menu-types!

@@ -14,10 +14,12 @@
   (when (and player world pos (not sneaking))
     (try
       (if-let [open-solar-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-solar-gui)]
+        ;; Return result map so the platform event dispatcher can call open-gui-for-player.
         (open-solar-gui player world pos)
-        (log/error "SolarGen GUI open fn not found: my-mod.wireless.gui.registry/open-solar-gui"))
+        (do (log/error "SolarGen GUI open fn not found: my-mod.wireless.gui.registry/open-solar-gui") nil))
       (catch Exception e
-        (log/error "Failed to open SolarGen GUI:" (.getMessage e))))))
+        (log/error "Failed to open SolarGen GUI:" (.getMessage e))
+        nil))))
 
 (bdsl/defblock solar-gen
   :registry-name "solar_gen"
