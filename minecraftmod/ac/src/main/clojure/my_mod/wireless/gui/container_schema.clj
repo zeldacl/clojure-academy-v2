@@ -112,3 +112,31 @@
           [key (if-let [a (and container (get container key))]
                  @a
                  close-reset)])))
+
+(defn build-sync-packet-payload
+  "Build the synced-fields portion of a network packet with payload keys.
+
+  Output keys use :payload-key when present, else :key. This matches what
+  apply-sync-payload-template! expects (it reads by payload-key).
+
+  When container is present: values from container atoms.
+  When container is nil: values from (init state) when state is present,
+  else :close-reset.
+
+  Args:
+  - fields:    vector of schema entry maps
+  - container: container map with atom values, or nil
+  - state:     tile state map (optional), used when container is nil or atom missing
+
+  Returns: map of payload-key -> value"
+  [fields container state]
+  (into {}
+        (for [{:keys [key init sync? close-reset payload-key]} fields
+              :when sync?]
+          (let [pk    (or payload-key key)
+                value (if-let [a (and container (get container key))]
+                        @a
+                        (if (and state init)
+                          (init state)
+                          close-reset))]
+            [pk value]))))

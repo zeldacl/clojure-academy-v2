@@ -2,9 +2,9 @@
   "Cross-platform node state synchronization
 
   Provides platform-agnostic interface for syncing node tile state to clients."
-  (:require [my-mod.wireless.interfaces :as winterfaces]
-            [my-mod.wireless.gui.gui-metadata :as metadata]
+  (:require [my-mod.wireless.gui.gui-metadata :as metadata]
             [my-mod.wireless.gui.node-container :as node-container]
+            [my-mod.wireless.gui.container-schema :as schema]
             [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
 
 ;; ============================================================================
@@ -34,31 +34,41 @@
   [source]
   (= (:container-type source) :node))
 
+(defn- tile-state
+  "Get current state map from tile-entity (BE or legacy map)."
+  [tile]
+  (when tile
+    (if (map? tile)
+      tile
+      (try (.getCustomState tile) (catch Exception _ {})))))
+
+(defn- get-pos
+  [tile]
+  (when tile
+    (or (:pos tile)
+        (try (.getBlockPos tile) (catch Exception _ nil))
+        (try (.getPos tile) (catch Exception _ nil)))))
+
 (defn make-sync-packet
   "Create node state sync packet payload map from container or tile entity.
 
   Accepts either a NodeContainer map or a tile entity directly.
-  Tile-sourced fields (energy, ssid, etc.) are read via winterfaces;
-  :capacity/:max-capacity come from container atoms when available."
+  All synced fields are derived from node-fields schema — no manual field
+  list to maintain here."
   [source]
   (let [container? (node-container? source)
-        tile       (if container? (:tile-entity source) source)
-        pos        (:pos tile)]
-    {:gui-id       metadata/gui-wireless-node
-     :pos-x        (.getX pos)
-     :pos-y        (.getY pos)
-     :pos-z        (.getZ pos)
-     :energy       (winterfaces/get-energy tile)
-     :max-energy   (winterfaces/get-max-energy tile)
-     :enabled      @(:enabled tile)
-     :node-name    (winterfaces/get-node-name tile)
-     :node-type    @(:node-type tile)
-     :password     (winterfaces/get-password tile)
-     :charging-in  @(:charging-in tile)
-     :charging-out @(:charging-out tile)
-     :placer-name  (:placer-name tile)
-     :capacity     (if container? @(:capacity source) 0)
-     :max-capacity (if container? @(:max-capacity source) 0)}))
+        tile      (if container? (:tile-entity source) source)
+        pos       (get-pos tile)
+        state     (tile-state tile)]
+    (when pos
+      (merge {:gui-id metadata/gui-wireless-node
+              :pos-x  (.getX pos)
+              :pos-y  (.getY pos)
+              :pos-z  (.getZ pos)}
+             (schema/build-sync-packet-payload
+              node-container/node-fields
+              (when container? source)
+              state)))))
 
 (defn apply-node-sync-payload!
   "Apply node sync payload to the current client container.
