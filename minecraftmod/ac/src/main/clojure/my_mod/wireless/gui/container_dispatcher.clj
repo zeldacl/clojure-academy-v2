@@ -11,28 +11,19 @@
             [my-mod.util.log :as log]))
 
   (defn node-container?
-    "Best-effort structural check for node container without class loading."
+    "Type check via :container-type — stable regardless of field changes."
     [container]
-    (and (map? container)
-      (contains? container :tile-entity)
-      (contains? container :ssid)
-      (contains? container :password)))
+    (= (:container-type container) :node))
 
   (defn matrix-container?
-    "Best-effort structural check for matrix container without class loading."
+    "Type check via :container-type — stable regardless of field changes."
     [container]
-    (and (map? container)
-      (contains? container :tile-entity)
-      (contains? container :plate-count)
-      (contains? container :core-level)))
+    (= (:container-type container) :matrix))
 
   (defn solar-container?
-    "Best-effort structural check for solar container without class loading."
+    "Type check via :container-type — stable regardless of field changes."
     [container]
-    (and (map? container)
-         (contains? container :tile-entity)
-         (contains? container :energy)
-         (contains? container :status)))
+    (= (:container-type container) :solar))
 
 ;; ============================================================================
 ;; Container Operation Protocol

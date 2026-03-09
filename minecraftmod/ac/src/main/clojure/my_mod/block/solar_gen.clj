@@ -14,7 +14,6 @@
   (when (and player world pos (not sneaking))
     (try
       (if-let [open-solar-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-solar-gui)]
-        ;; Return result map so the platform event dispatcher can call open-gui-for-player.
         (open-solar-gui player world pos)
         (do (log/error "SolarGen GUI open fn not found: my-mod.wireless.gui.registry/open-solar-gui") nil))
       (catch Exception e
@@ -30,7 +29,6 @@
   :harvest-tool :pickaxe
   :harvest-level 1
   :sounds :stone
-  ;; Datagen source of truth (models/block/solar_gen.json)
   :model-parent "minecraft:block/cube_all"
   :textures {:all "my_mod:block/solar_gen"}
   :on-right-click open-solar-gui!)
@@ -41,54 +39,61 @@
 
 (def ^:private max-energy 1000.0)
 
-(defn- safe-invoke [obj method & args]
-  (when obj
-    (try
-      (clojure.lang.Reflector/invokeInstanceMethod
-       obj method (object-array (or args [])))
-      (catch Exception _ nil))))
+(defn- can-generate?
+  "True when the level is daytime and the block above has sky access."
+  [level pos]
+  (when (and level pos)
+    (let [time (rem (long (.getDayTime level)) 24000)
+          day? (<= time 12500)]
+      (and day? (.canSeeSky level (.above pos))))))
 
-(defn- can-generate? [level pos]
-  (when level
-    (let [time (rem (long (safe-invoke level "getDayTime")) 24000)
-          day? (and (>= time 0) (<= time 12500))]
-      (and day? (safe-invoke level "canSeeSky" (safe-invoke pos "above"))))))
+(defn- solar-tick-fn
+  "Tick handler for solar generator ScriptedBlockEntity.
 
-(defn- solar-tick-fn [level _pos _state be]
-  (when (and level (not (safe-invoke level "isClientSide")))
-    (let [pos (safe-invoke be "getBlockPos")]
-      (when pos
-        (let [generating? (can-generate? level pos)
-              status (cond (not generating?) "STOPPED"
-                          (safe-invoke level "isRaining") "WEAK"
-                          :else "STRONG")]
-          (safe-invoke be "setStatus" status))
-        (let [bright (if (can-generate? level pos) 1.0 0.0)
-              bright* (if (and (> bright 0) (safe-invoke level "isRaining")) (* bright 0.2) bright)
-              gen (* bright* 3.0)
-              current (double (or (safe-invoke be "getEnergy") 0.0))
-              new-energy (min max-energy (+ current gen))]
-          (when (and (> gen 0) (not= new-energy current))
-            (safe-invoke be "setEnergy" new-energy)
-            (safe-invoke be "setChanged")))))))
+  All mutable state is stored in BE customState as a Clojure keyword map.
+  No reflection — uses direct Java interop and getCustomState/setCustomState."
+  [level pos _block-state be]
+  (when (and level (not (.isClientSide level)))
+    (let [state       (or (.getCustomState be) {})
+          generating? (can-generate? level pos)
+          raining?    (.isRaining level)
+          status      (cond (not generating?) "STOPPED"
+                            raining?          "WEAK"
+                            :else             "STRONG")
+          bright      (if generating? 1.0 0.0)
+          bright*     (if (and (> bright 0) raining?) (* bright 0.2) bright)
+          gen         (* bright* 3.0)
+          current     (double (get state :energy 0.0))
+          new-energy  (min max-energy (+ current gen))
+          changed?    (and (> gen 0) (not= new-energy current))
+          new-state   (cond-> (assoc state :status status :max-energy max-energy)
+                        changed? (assoc :energy new-energy))]
+      (when (not= new-state state)
+        (.setCustomState be new-state)
+        (when changed?
+          (.setChanged be))))))
 
-(defn- solar-read-nbt-fn [tag]
-  (let [energy (if (nbt/nbt-has-key? tag "Energy")
+(defn- solar-read-nbt-fn
+  "Deserialize CompoundTag → state keyword map (stored in BE customState)."
+  [tag]
+  {:energy     (if (nbt/nbt-has-key? tag "Energy")
                  (nbt/nbt-get-double tag "Energy")
                  0.0)
-        battery (when (nbt/nbt-has-key? tag "Battery")
-                  (nbt/nbt-get-compound tag "Battery"))]
-    ;; String keys so ScriptedBlockEntity setFromData (RT.get data "key") works
-    {"energy" energy
-     "battery" (when battery (item/create-item-from-nbt battery))}))
+   :max-energy max-energy
+   :status     "STOPPED"
+   :battery    (when (nbt/nbt-has-key? tag "Battery")
+                 (item/create-item-from-nbt (nbt/nbt-get-compound tag "Battery")))})
 
-(defn- solar-write-nbt-fn [be tag]
-  (nbt/nbt-set-double! tag "Energy" (double (or (safe-invoke be "getEnergy") 0.0)))
-  (let [stack (safe-invoke be "getBatteryStack")]
-    (when (and stack (not (item/item-is-empty? stack)))
-      (let [sub (nbt/create-nbt-compound)]
-        (item/item-save-to-nbt stack sub)
-        (nbt/nbt-set-tag! tag "Battery" sub)))))
+(defn- solar-write-nbt-fn
+  "Serialize BE customState → CompoundTag."
+  [be tag]
+  (let [state (or (.getCustomState be) {})]
+    (nbt/nbt-set-double! tag "Energy" (double (get state :energy 0.0)))
+    (let [stack (:battery state)]
+      (when (and stack (not (item/item-is-empty? stack)))
+        (let [sub (nbt/create-nbt-compound)]
+          (item/item-save-to-nbt stack sub)
+          (nbt/nbt-set-tag! tag "Battery" sub))))))
 
 (tdsl/deftile solar-gen-tile
   :id "solar-gen"
@@ -102,4 +107,3 @@
 (defn init-solar-gen!
   []
   (log/info "Initialized Solar Generator block"))
-

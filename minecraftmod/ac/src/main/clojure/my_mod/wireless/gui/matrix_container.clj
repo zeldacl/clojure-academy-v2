@@ -7,31 +7,34 @@
             [my-mod.block.wireless-matrix :as wm]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
-            [my-mod.wireless.world-data :as wd]
-            [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.wireless.gui.container-common :as common]
             [my-mod.wireless.gui.container-move-common :as move-common
              :refer [defquick-move-stack-config]]
+            [my-mod.wireless.gui.container-schema :as schema]
+            [my-mod.wireless.gui.matrix-fields :as mf]
             [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
 
 ;; ============================================================================
-;; Container Data Structure
+;; Field Schema — single source of truth for all atom fields
+;;
+;; To add/remove/rename a field, only edit this vector.
+;; create-container, get-sync-data, apply-sync-data!, on-close, and the
+;; client-side field-mappings all derive from it automatically.
+;;
+;; :key         - keyword used as the container map key
+;; :init        - (fn [tile-state]) -> initial atom value
+;; :sync?       - true = included in container<->container sync data
+;; :coerce      - type coercion applied when writing back from sync data
+;; :close-reset - value the atom is reset to in on-close
 ;; ============================================================================
 
-(defrecord MatrixContainer
-  [tile-entity        ; Matrix master TileEntity reference
-   tile-java          ; MatrixJavaProxy - Java-compatible accessor wrapper
-   player             ; Player who opened GUI
-   
-   ;; Synced data (updated from server -> client)
-   core-level         ; atom<int> - Core tier (0-4)
-   plate-count        ; atom<int> - Number of plates (0-3)
-   is-working         ; atom<boolean> - Multiblock formed?
-   capacity           ; atom<int> - Current capacity
-   max-capacity       ; atom<int> - Maximum capacity
-   bandwidth          ; atom<int> - IF/t transfer rate
-   range              ; atom<double> - Network range
-   sync-ticker])      ; atom<int> - tick counter for network sync (5s timeout)
+;; Field schema is defined in matrix-fields ns to avoid circular dependencies.
+(def matrix-fields mf/matrix-fields)
+
+(defn sync-field-mappings
+  "Return the field-mappings vector for apply-sync-payload-template!."
+  []
+  (mf/sync-field-mappings))
 
 ;; ============================================================================
 ;; Container Creation
@@ -57,24 +60,17 @@
   - tile: ScriptedBlockEntity or legacy Clojure map
   - player: Player who opened GUI
 
-  Returns: MatrixContainer record"
+  Returns: MatrixContainer map"
   [tile player]
   (let [[be state] (resolve-state tile)
         proxy      (if be
                      (wm/->MatrixJavaProxy be)
                      (wm/->MatrixJavaProxy tile))]
-    (->MatrixContainer
-      (or be tile)
-      proxy
-      player
-      (atom (:core-level state 0))
-      (atom (:plate-count state 0))
-      (atom (wm/is-working? state))
-      (atom (wm/get-matrix-capacity state))
-      (atom (wm/get-matrix-capacity state))
-      (atom (long (wm/get-matrix-bandwidth state)))
-      (atom (double (wm/get-matrix-range state)))
-      (atom 0))))
+    (merge {:tile-entity    (or be tile)
+            :tile-java      proxy
+            :player         player
+            :container-type :matrix}
+           (schema/build-atoms matrix-fields state))))
 
 ;; ============================================================================
 ;; Slot Management
@@ -102,19 +98,17 @@
 
 (defn can-place-item?
   "Check if item can be placed in slot
-  
+
   Slots 0-2 (plates): Only wireless constraint plates
   Slot 3 (core): Only wireless matrix cores"
-  [container slot-index item-stack]
+  [_container slot-index item-stack]
   (cond
     (is-plate-slot? slot-index)
-    ;; Check if item is a constraint plate
     (plate/is-constraint-plate? item-stack)
-    
+
     (is-core-slot? slot-index)
-    ;; Check if item is a wireless matrix core
     (core/is-mat-core? item-stack)
-    
+
     :else false))
 
 (defn get-slot-item
@@ -144,12 +138,9 @@
 
 (defn slot-changed!
   "Called when slot contents change - triggers multiblock revalidation"
-  [container slot-index]
+  [_container slot-index]
   (log/info "Matrix container slot" slot-index "changed")
-  ;; Trigger multiblock structure validation
-  (let [tile (:tile-entity container)]
-    ;; In real implementation, call validate-structure!
-    (log/info "Revalidating matrix structure...")))
+  (log/info "Revalidating matrix structure..."))
 
 ;; ============================================================================
 ;; Data Synchronization
@@ -167,106 +158,73 @@
 
 (defn get-core-level
   "Get core tier level from core slot item
-  
+
   Returns: int 0-4 (0 if no core)"
   [container]
   (let [core-item (get-slot-item container slot-core)]
     (if (and core-item (core/is-mat-core? core-item))
-      ;; Get actual core level from item damage/NBT
       (core/get-core-level core-item)
       0)))
 
 (defn calculate-matrix-stats
   "Calculate matrix stats based on core and plates
-  
+
   Returns: Map with :capacity, :bandwidth, :range"
   [core-level plate-count]
-  (let [;; Base stats from core
-        base-capacity (* core-level 50000)
+  (let [base-capacity  (* core-level 50000)
         base-bandwidth (* core-level 1000)
-        base-range (* core-level 16.0)
-        
-        ;; Bonus from plates (each plate adds 20%)
-        plate-multiplier (+ 1.0 (* plate-count 0.2))
-        
-        ;; Final stats
-        capacity (int (* base-capacity plate-multiplier))
-        bandwidth (int (* base-bandwidth plate-multiplier))
-        range (* base-range plate-multiplier)]
-    
+        base-range     (* core-level 16.0)
+        plate-mult     (+ 1.0 (* plate-count 0.2))
+        capacity       (int (* base-capacity plate-mult))
+        bandwidth      (int (* base-bandwidth plate-mult))
+        range          (* base-range plate-mult)]
     {:capacity capacity
      :bandwidth bandwidth
      :range range}))
 
 (defn sync-to-client!
-  "Update container data from tile entity (server -> client)
-  
-  Called every tick on server side. Network capacity queries are throttled 
+  "Update container data from tile entity (server -> client).
+
+  Called every tick on server side. Network capacity queries are throttled
   to every 5 seconds (100 ticks) to reduce performance impact."
   [container]
-  (let [tile (:tile-entity container)
-        
-        ;; Count components (every tick - lightweight)
-        plates (count-plates container)
+  (let [plates   (count-plates container)
         core-lvl (get-core-level container)
-        
-        ;; Check if multiblock is formed
-        working? (and (> core-lvl 0)
-                     (>= plates 0))] ; At least a core is required
-    
-    ;; Update basic data (every tick)
+        working? (> core-lvl 0)]
+
     (reset! (:core-level container) core-lvl)
     (reset! (:plate-count container) plates)
     (reset! (:is-working container) working?)
-    
-    ;; Update network capacity and stats (throttled to every 100 ticks = 5 seconds)
+
     (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
       (fn []
-        ;; Calculate stats based on components
         (let [stats (calculate-matrix-stats core-lvl plates)]
           (reset! (:bandwidth container) (:bandwidth stats))
           (reset! (:range container) (:range stats))
-          ;; Query actual network capacity from WirelessNet
           (sync-helpers/query-matrix-network-capacity! container stats))))))
 
 (defn get-sync-data
-  "Get data to sync to client
-  
-  Returns: Map of synced values"
+  "Get container→client sync data. Derived from matrix-fields schema.
+
+  Returns: map of all :sync? true fields with their current values"
   [container]
-  {:core-level @(:core-level container)
-   :plate-count @(:plate-count container)
-   :is-working @(:is-working container)
-   :capacity @(:capacity container)
-   :max-capacity @(:max-capacity container)
-   :bandwidth @(:bandwidth container)
-   :range @(:range container)})
+  (schema/get-sync-data matrix-fields container))
 
 (defn apply-sync-data!
-  "Apply sync data from server to container atoms.
-  
+  "Apply sync data from server into container atoms. Uses schema :coerce fns.
+
   Args:
-  - container: MatrixContainer instance
-  - data: Map of synced values (from get-sync-data)
-  
-  Side effects: Updates all container atoms from data"
+  - container: MatrixContainer map
+  - data:      map of synced values (from get-sync-data)"
   [container data]
-  (doseq [[k v] data]
-    (when-let [atom-ref (get container k)]
-      (reset! atom-ref v))))
+  (schema/apply-sync-data! matrix-fields container data))
 
 ;; ============================================================================
 ;; Container Validation
 ;; ============================================================================
 
 (defn still-valid?
-  "Check if container is still valid for player
-  
-  Args:
-  - container: MatrixContainer instance
-  - player: Player instance
-  
-  Returns: boolean"
+  "Check if container is still valid for player"
   [container player]
   (common/still-valid? container player))
 
@@ -275,16 +233,9 @@
 ;; ============================================================================
 
 (defn tick!
-  "Called every tick on server side
-  
-  Updates synced data and handles multiblock logic"
+  "Called every tick on server side. Updates synced data and handles multiblock logic."
   [container]
-  ;; Sync data to client
-  (sync-to-client! container)
-  
-  ;; Additional tick logic can go here
-  ;; (e.g., particle effects, sound effects)
-  )
+  (sync-to-client! container))
 
 ;; ============================================================================
 ;; Button Actions
@@ -295,33 +246,25 @@
 (def button-eject-plates 2)
 
 (defn handle-button-click!
-  "Handle button click from client
-  
-  Args:
-  - container: MatrixContainer instance
-  - button-id: int button ID
-  - data: optional data map from client"
-  [container button-id data]
-  (let [tile (:tile-entity container)]
-    (case button-id
-      0 ; Toggle working state (enable/disable)
-      (do
-        ;; In real implementation, toggle matrix enabled state
-        (log/info "Toggled matrix working state"))
-      
-      1 ; Eject core
-      (do
-        (set-slot-item! container slot-core nil)
-        (log/info "Ejected matrix core"))
-      
-      2 ; Eject all plates
-      (do
-        (set-slot-item! container slot-plate-1 nil)
-        (set-slot-item! container slot-plate-2 nil)
-        (set-slot-item! container slot-plate-3 nil)
-        (log/info "Ejected all plates"))
-      
-      (log/warn "Unknown button ID:" button-id))))
+  "Handle button click from client"
+  [container button-id _data]
+  (case button-id
+    0
+    (log/info "Toggled matrix working state")
+
+    1
+    (do
+      (set-slot-item! container slot-core nil)
+      (log/info "Ejected matrix core"))
+
+    2
+    (do
+      (set-slot-item! container slot-plate-1 nil)
+      (set-slot-item! container slot-plate-2 nil)
+      (set-slot-item! container slot-plate-3 nil)
+      (log/info "Ejected all plates"))
+
+    (log/warn "Unknown button ID:" button-id)))
 
 ;; ============================================================================
 ;; Quick Move (Shift+Click)
@@ -331,9 +274,9 @@
   {:container-slots #{slot-plate-1 slot-plate-2 slot-plate-3 slot-core}
    :inventory-pred (fn [slot-index player-inventory-start]
                      (>= slot-index player-inventory-start))
-   :rules [{:accept? (fn [item] (can-place-item? container slot-core item))
+   :rules [{:accept? (fn [item] (can-place-item? nil slot-core item))
             :slots [slot-core]}
-           {:accept? (fn [item] (can-place-item? container slot-plate-1 item))
+           {:accept? (fn [item] (can-place-item? nil slot-plate-1 item))
             :slots [slot-plate-1 slot-plate-2 slot-plate-3]}]})
 
 ;; ============================================================================
@@ -341,20 +284,7 @@
 ;; ============================================================================
 
 (defn on-close
-  "Cleanup when container is closed
-  
-  Args:
-  - container: MatrixContainer instance
-  
-  Returns: nil"
+  "Cleanup when container is closed. Resets all atom fields per schema."
   [container]
   (log/debug "Closing wireless matrix container")
-  (common/reset-container-atoms!
-    [(:core-level container) 0]
-    [(:plate-count container) 0]
-    [(:is-working container) false]
-    [(:capacity container) 0]
-    [(:max-capacity container) 0]
-    [(:bandwidth container) 0]
-    [(:range container) 0.0]
-    [(:sync-ticker container) 0]))
+  (schema/reset-atoms! matrix-fields container))

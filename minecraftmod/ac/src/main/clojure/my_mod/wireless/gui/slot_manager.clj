@@ -6,23 +6,15 @@
   
   Platform-specific bridge code should delegate to these functions instead of
   implementing slot logic directly."
-  (:require [my-mod.wireless.gui.node-container :as node-container]
-            [my-mod.wireless.gui.matrix-container :as matrix-container]
-            [my-mod.util.log :as log]))
+  (:require [my-mod.util.log :as log]))
 
   (defn- node-container?
     [container]
-    (and (map? container)
-      (contains? container :tile-entity)
-      (contains? container :ssid)
-      (contains? container :password)))
+    (= (:container-type container) :node))
 
   (defn- matrix-container?
     [container]
-    (and (map? container)
-      (contains? container :tile-entity)
-      (contains? container :plate-count)
-      (contains? container :core-level)))
+    (= (:container-type container) :matrix))
 
 ;; ============================================================================
 ;; Slot Layout Constants

@@ -1,36 +1,47 @@
 (ns my-mod.wireless.gui.node-container
   "Wireless Node GUI Container - handles server-side inventory and data sync"
-  (:require [my-mod.wireless.interfaces :as winterfaces]
-            [my-mod.energy.operations :as energy-stub]
-            [my-mod.wireless.world-data :as wd]
-            [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.inventory.core :as inv]
+  (:require [my-mod.energy.operations :as energy-stub]
             [my-mod.wireless.gui.container-common :as common]
             [my-mod.wireless.gui.container-move-common :as move-common
              :refer [defquick-move-stack-config]]
+            [my-mod.wireless.gui.container-schema :as schema]
             [my-mod.wireless.gui.sync-helpers :as sync-helpers]
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
-;; Container Data Structure
+;; Field Schema — single source of truth for all atom fields
+;;
+;; To add/remove/rename a field, only edit this vector.
+;; create-container, get-sync-data, apply-sync-data!, on-close, and the
+;; client-side field-mappings all derive from it automatically.
+;;
+;; :key         - keyword used as the container map key
+;; :init        - (fn [tile-state]) -> initial atom value
+;; :sync?       - true = included in container<->container sync data
+;; :payload-key - (optional) tile-broadcast packet key when different from :key
+;;                e.g. tile sends :node-name but container stores as :ssid
+;; :coerce      - type coercion applied when writing back from sync data
+;; :close-reset - value the atom is reset to in on-close
 ;; ============================================================================
 
-(defrecord NodeContainer
-  [tile-entity        ; NodeTileEntity reference
-   player             ; Player who opened GUI
-   
-   ;; Synced data (updated from server -> client)
-   energy             ; atom<int> - current energy
-   max-energy         ; atom<int> - maximum energy
-   node-type          ; atom<keyword> - :basic/:standard/:advanced
-   is-online          ; atom<boolean> - connected to network?
-   ssid               ; atom<string> - network name
-   password           ; atom<string> - network password
-   transfer-rate      ; atom<int> - current IF/t transfer
-   capacity           ; atom<int> - current network node count
-   max-capacity       ; atom<int> - maximum network capacity
-   charge-ticker      ; atom<int> - tick counter for charging
-   sync-ticker])      ; atom<int> - tick counter for network sync (5s timeout)
+(def node-fields
+  [{:key :energy        :init (fn [s] (int (get s :energy 0.0)))          :sync? true  :coerce int     :close-reset 0}
+   {:key :max-energy    :init (fn [s] (int (get s :max-energy 15000)))     :sync? true  :coerce int     :close-reset 0}
+   {:key :node-type     :init (fn [s] (keyword (get s :node-type :basic))) :sync? true  :coerce keyword :close-reset :basic}
+   {:key :is-online     :init (fn [s] (boolean (get s :enabled false)))    :sync? true  :payload-key :enabled :coerce boolean :close-reset false}
+   {:key :ssid          :init (fn [s] (str (get s :node-name "Unnamed")))  :sync? true  :payload-key :node-name :coerce str :close-reset ""}
+   {:key :password      :init (fn [s] (str (get s :password "")))          :sync? true  :coerce str     :close-reset ""}
+   {:key :transfer-rate :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}
+   {:key :capacity      :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}
+   {:key :max-capacity  :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}
+   {:key :charge-ticker :init (fn [_] 0)                                   :sync? false :coerce int     :close-reset 0}
+   {:key :sync-ticker   :init (fn [_] 0)                                   :sync? false :coerce int     :close-reset 0}])
+
+(defn sync-field-mappings
+  "Return the field-mappings vector for apply-sync-payload-template!.
+  Derived automatically from node-fields — no manual maintenance needed."
+  []
+  (schema/sync-field-mappings node-fields))
 
 ;; ============================================================================
 ;; Container Creation
@@ -54,24 +65,14 @@
   - tile: ScriptedBlockEntity or legacy Clojure state map
   - player: Player who opened GUI
 
-  Returns: NodeContainer record"
+  Returns: NodeContainer map"
   [tile player]
   (let [[be state] (resolve-state tile)
         entity     (or be tile)]
-    (->NodeContainer
-      entity
-      player
-      (atom (int (get state :energy 0.0)))
-      (atom (int (get state :max-energy 15000)))
-      (atom (keyword (get state :node-type :basic)))
-      (atom (boolean (get state :enabled false)))
-      (atom (str (get state :node-name "Unnamed")))
-      (atom (str (get state :password "")))
-      (atom 0)      ; transfer-rate
-      (atom 0)      ; capacity
-      (atom 0)      ; max-capacity
-      (atom 0)      ; charge-ticker
-      (atom 0))))
+    (merge {:tile-entity    entity
+            :player         player
+            :container-type :node}
+           (schema/build-atoms node-fields state))))
 
 ;; ============================================================================
 ;; Slot Management
@@ -100,13 +101,13 @@
 
 (defn can-place-item?
   "Check if item can be placed in slot
-  
+
   Slot 0 (input): Only items with energy capability
   Slot 1 (output): No direct placement (output only)"
-  [container slot-index item-stack]
+  [_container slot-index item-stack]
   (case slot-index
     0 (energy-stub/is-energy-item-supported? item-stack)
-    1 false ; Output slot cannot be placed into
+    1 false
     false))
 
 (defn get-slot-item
@@ -134,7 +135,7 @@
 
 (defn slot-changed!
   "Called when slot contents change"
-  [container slot-index]
+  [_container slot-index]
   (log/info "Node container slot" slot-index "changed"))
 
 ;; ============================================================================
@@ -147,22 +148,15 @@
   [container]
   (let [tile  (:tile-entity container)
         state (or (tile-state tile) {})]
-    ;; Update energy (every tick)
     (reset! (:energy container)     (int (get state :energy 0.0)))
     (reset! (:max-energy container) (int (get state :max-energy 15000)))
+    (reset! (:is-online container)  (boolean (get state :enabled false)))
+    (reset! (:ssid container)       (str (get state :node-name "Unnamed")))
+    (reset! (:password container)   (str (get state :password "")))
 
-    ;; Update connection status
-    (reset! (:is-online container) (boolean (get state :enabled false)))
-
-    ;; Update node info
-    (reset! (:ssid container)     (str (get state :node-name "Unnamed")))
-    (reset! (:password container) (str (get state :password "")))
-
-    ;; Update network capacity (throttled)
     (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
       (fn [] (sync-helpers/query-node-network-capacity! container)))
 
-    ;; Compute transfer rate
     (let [rate (cond
                  (and (get state :charging-in false) (get state :charging-out false)) 200
                  (get state :charging-in false)  100
@@ -171,45 +165,27 @@
       (reset! (:transfer-rate container) rate))))
 
 (defn get-sync-data
-  "Get data to sync to client
-  
-  Returns: Map of synced values"
+  "Get container→client sync data. Derived from node-fields schema.
+
+  Returns: map of all :sync? true fields with their current values"
   [container]
-  {:energy @(:energy container)
-   :max-energy @(:max-energy container)
-   :node-type @(:node-type container)
-   :is-online @(:is-online container)
-   :ssid @(:ssid container)
-   :password @(:password container)
-   :transfer-rate @(:transfer-rate container)
-   :capacity @(:capacity container)
-   :max-capacity @(:max-capacity container)})
+  (schema/get-sync-data node-fields container))
 
 (defn apply-sync-data!
-  "Apply sync data from server to container atoms.
-  
+  "Apply sync data from server into container atoms. Uses schema :coerce fns.
+
   Args:
-  - container: NodeContainer instance
-  - data: Map of synced values (from get-sync-data)
-  
-  Side effects: Updates all container atoms from data"
+  - container: NodeContainer map
+  - data:      map of synced values (from get-sync-data)"
   [container data]
-  (doseq [[k v] data]
-    (when-let [atom-ref (get container k)]
-      (reset! atom-ref v))))
+  (schema/apply-sync-data! node-fields container data))
 
 ;; ============================================================================
 ;; Container Validation
 ;; ============================================================================
 
 (defn still-valid?
-  "Check if container is still valid for player
-  
-  Args:
-  - container: NodeContainer instance
-  - player: Player instance
-  
-  Returns: boolean"
+  "Check if container is still valid for player"
   [container player]
   (common/still-valid? container player))
 
@@ -239,20 +215,20 @@
   (let [tile (:tile-entity container)]
     (when-not (map? tile)
       (case button-id
-        0 ; Toggle connection
+        0
         (let [state  (or (.getCustomState tile) {})
               state' (update state :enabled not)]
           (.setCustomState tile state')
           (log/info "Toggled node connection:" (:enabled state')))
 
-        1 ; Set SSID
+        1
         (when-let [new-ssid (:ssid data)]
           (let [state  (or (.getCustomState tile) {})
                 state' (assoc state :node-name new-ssid)]
             (.setCustomState tile state')
             (log/info "Set node SSID to:" new-ssid)))
 
-        2 ; Set password
+        2
         (when-let [new-password (:password data)]
           (let [state  (or (.getCustomState tile) {})
                 state' (assoc state :password new-password)]
@@ -277,20 +253,7 @@
 ;; ============================================================================
 
 (defn on-close
-  "Cleanup when container is closed
-  
-  Args:
-  - container: NodeContainer instance
-  
-  Returns: nil"
+  "Cleanup when container is closed. Resets all atom fields per schema."
   [container]
   (log/debug "Closing wireless node container")
-  (common/reset-container-atoms!
-    [(:energy container) 0]
-    [(:max-energy container) 0]
-    [(:is-online container) false]
-    [(:transfer-rate container) 0]
-    [(:capacity container) 0]
-    [(:max-capacity container) 0]
-    [(:charge-ticker container) 0]
-    [(:sync-ticker container) 0]))
+  (schema/reset-atoms! node-fields container))

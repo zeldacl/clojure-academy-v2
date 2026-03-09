@@ -1,46 +1,55 @@
 (ns my-mod.wireless.gui.solar-container
   "Solar Generator GUI container (server-side + synced atoms).
 
-  Unlike node/matrix, SolarGen uses a real Java BlockEntity. This container
-  talks to it via reflective method calls (getEnergy/getMaxEnergy/getStatusName)
-  to keep core platform-neutral."
-  (:require [my-mod.util.log :as log]))
+  Reads tile state via getCustomState like node/matrix containers —
+  no Java reflection needed."
+  (:require [my-mod.wireless.gui.container-schema :as schema]))
 
-(defrecord SolarContainer
-  [tile-entity
-   player
-   energy      ;; atom<double>
-   max-energy  ;; atom<double>
-   status      ;; atom<string>  \"STOPPED\"|\"WEAK\"|\"STRONG\"
-   sync-ticker])
+;; ============================================================================
+;; Field Schema — single source of truth for all atom fields
+;;
+;; To add/remove/rename a field, only edit this vector.
+;; create-container, get-sync-data, apply-sync-data!, sync-to-client!, and
+;; on-close all derive from it automatically.
+;;
+;; :key         - keyword used as the container map key (matches tile state key)
+;; :init        - (fn [tile-state]) -> initial atom value
+;; :sync?       - true = included in container<->container get/apply-sync-data
+;; :coerce      - type coercion applied when writing back from sync data
+;; :close-reset - value the atom is reset to in on-close
+;; ============================================================================
 
-(defn- safe-call
-  ([obj method] (safe-call obj method nil))
-  ([obj method arg]
-   (when obj
-     (try
-       (if (some? arg)
-         (clojure.lang.Reflector/invokeInstanceMethod obj method (object-array [arg]))
-         (clojure.lang.Reflector/invokeInstanceMethod obj method (object-array [])))
-       (catch Exception e
-         (log/debug "SolarContainer: call failed" method ":" (.getMessage e))
-         nil)))))
+(def solar-fields
+  [{:key :energy     :init (fn [s] (double (get s :energy 0.0)))     :sync? true  :coerce double :close-reset 0.0}
+   {:key :max-energy :init (fn [s] (double (get s :max-energy 1000.0))) :sync? true  :coerce double :close-reset 0.0}
+   {:key :status     :init (fn [s] (str (get s :status "STOPPED")))  :sync? true  :coerce str    :close-reset ""}
+   {:key :sync-ticker :init (fn [_] 0)                               :sync? false :coerce int    :close-reset 0}])
+
+;; ============================================================================
+;; Container Creation
+;; ============================================================================
+
+(defn- tile-state
+  "Get current Clojure state map from tile entity."
+  [tile]
+  (if (map? tile)
+    tile
+    (try (.getCustomState tile) (catch Exception _ {}))))
 
 (defn create-container
   "Create Solar Generator container instance.
 
-  tile: platform-specific Java BlockEntity (Forge/Fabric), expected methods:
-  - getEnergy() double
-  - getMaxEnergy() double
-  - getStatusName() String"
+  tile: platform-specific ScriptedBlockEntity; state is read via getCustomState."
   [tile player]
-  (->SolarContainer
-    tile
-    player
-    (atom (double (or (safe-call tile "getEnergy") 0.0)))
-    (atom (double (or (safe-call tile "getMaxEnergy") 1000.0)))
-    (atom (str (or (safe-call tile "getStatusName") "STOPPED")))
-    (atom 0)))
+  (let [state (or (tile-state tile) {})]
+    (merge {:tile-entity    tile
+            :player         player
+            :container-type :solar}
+           (schema/build-atoms solar-fields state))))
+
+;; ============================================================================
+;; Validation
+;; ============================================================================
 
 (defn still-valid?
   "Best-effort validity check.
@@ -48,25 +57,32 @@
   [_container _player]
   true)
 
+;; ============================================================================
+;; Data Synchronization
+;; ============================================================================
+
 (defn sync-to-client!
-  "Update synced atoms from tile entity (server -> client)."
+  "Update synced atoms from tile entity custom state (server -> client).
+  Reads from getCustomState like node/matrix — no reflection needed."
   [container]
-  (let [tile (:tile-entity container)]
-    (reset! (:energy container) (double (or (safe-call tile "getEnergy") 0.0)))
-    (reset! (:max-energy container) (double (or (safe-call tile "getMaxEnergy") 1000.0)))
-    (reset! (:status container) (str (or (safe-call tile "getStatusName") "STOPPED")))))
+  (let [state (or (tile-state (:tile-entity container)) {})]
+    (reset! (:energy container)     (double (get state :energy 0.0)))
+    (reset! (:max-energy container) (double (get state :max-energy 1000.0)))
+    (reset! (:status container)     (str (get state :status "STOPPED")))))
 
 (defn get-sync-data
+  "Get container→client sync data. Derived from solar-fields schema."
   [container]
-  {:energy @(:energy container)
-   :max-energy @(:max-energy container)
-   :status @(:status container)})
+  (schema/get-sync-data solar-fields container))
 
 (defn apply-sync-data!
+  "Apply sync data from server into container atoms. Uses schema :coerce fns."
   [container data]
-  (when (contains? data :energy) (reset! (:energy container) (double (:energy data))))
-  (when (contains? data :max-energy) (reset! (:max-energy container) (double (:max-energy data))))
-  (when (contains? data :status) (reset! (:status container) (str (:status data)))))
+  (schema/apply-sync-data! solar-fields container data))
+
+;; ============================================================================
+;; Container Tick
+;; ============================================================================
 
 (defn tick!
   "Container tick; called by platform menu bridge."
@@ -74,12 +90,19 @@
   (swap! (:sync-ticker container) inc)
   (sync-to-client! container))
 
+;; ============================================================================
+;; Button Actions
+;; ============================================================================
+
 (defn handle-button-click!
   [_container _button-id _player]
   nil)
 
-(defn on-close
-  "Cleanup when container is closed."
-  [container]
-  (reset! (:sync-ticker container) 0))
+;; ============================================================================
+;; Container Lifecycle
+;; ============================================================================
 
+(defn on-close
+  "Cleanup when container is closed. Resets all atom fields per schema."
+  [container]
+  (schema/reset-atoms! solar-fields container))
