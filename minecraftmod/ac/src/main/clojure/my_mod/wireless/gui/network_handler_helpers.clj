@@ -41,13 +41,18 @@
 
 (defn tile-pos-payload
   "Extract position payload from a tile entity for network messages
-  
+
   Args:
-  - tile: TileEntity instance with :pos field
+  - tile: ScriptedBlockEntity / BlockEntity instance
   
-  Returns: Map with :pos-x, :pos-y, :pos-z keys"
+  Returns: Map with :pos-x, :pos-y, :pos-z keys.
+  Throws ex-info if position cannot be resolved."
   [tile]
-  (let [pos (:pos tile)]
+  (let [pos (or (try (.getBlockPos tile) (catch Exception _ nil))
+                (try (.getPos tile) (catch Exception _ nil)))]
+    (when-not pos
+      (throw (ex-info "tile-pos-payload: tile has no position (getBlockPos/getPos returned nil)"
+                      {:tile tile})))
     {:pos-x (pos/pos-x pos)
      :pos-y (pos/pos-y pos)
      :pos-z (pos/pos-z pos)}))

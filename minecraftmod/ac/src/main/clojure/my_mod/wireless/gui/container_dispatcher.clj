@@ -147,10 +147,10 @@
   - container: Any container
   - player: Player entity
   
-  Returns: boolean (default false on error)"
+  Returns: boolean (default false on error). Never returns nil."
   [container player]
   (try
-    (validate-container container player)
+    (boolean (validate-container container player))
     (catch Exception e
       (log/error "Error validating container:" (.getMessage e))
       false)))
