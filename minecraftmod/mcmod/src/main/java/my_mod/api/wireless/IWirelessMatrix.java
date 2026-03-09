@@ -1,0 +1,17 @@
+package my_mod.api.wireless;
+
+/**
+ * Platform-neutral interface for wireless matrix blocks.
+ * Implemented by Clojure deftype in ac (WirelessMatrixImpl).
+ * Exposed as a Forge Capability via CapabilitySlots.
+ */
+public interface IWirelessMatrix {
+    /** How many nodes this matrix can hold. */
+    int getMatrixCapacity();
+
+    /** How much energy allowed to balance between nodes each tick. */
+    double getMatrixBandwidth();
+
+    /** The max range that this matrix can reach (in blocks). */
+    double getMatrixRange();
+}

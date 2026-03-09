@@ -8,9 +8,8 @@
             [my-mod.forge1201.gui.registry-impl :as gui-registry-impl]
             [my-mod.forge1201.platform-impl :as platform-impl]
             [my-mod.block.dsl :as bdsl]
-            [my-mod.block.wireless-node]
-            [my-mod.block.wireless-matrix]
             [my-mod.block.tile-logic :as tile-logic]
+            [my-mod.platform.capability :as platform-cap]
             [my-mod.forge1201.blockstate-properties :as bsp]
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
@@ -30,7 +29,8 @@
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraftforge.registries DeferredRegister ForgeRegistries]
            [net.minecraftforge.common MinecraftForge]
-           [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock])
+           [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
+           [net.minecraftforge.common.capabilities RegisterCapabilitiesEvent])
   (:gen-class
    :name com.example.my_mod1201.MyMod1201Clj
    :prefix "mod-"
@@ -288,26 +288,12 @@
   ;; This must happen before any core code runs that uses NBT/BlockPos/World
   (platform-impl/init-platform!)
   ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources
+  ;; ac namespaces load here; deftile-kind / declare-capability! calls execute at this point
   (init/init-from-java)
 
   ;; Initialize BlockState properties from Clojure metadata
   ;; Must happen before block registration so Property objects are ready
   (bsp/init-all-properties!)
-  
-  ;; Ensure tile-kind defaults are registered before scripted tile hooks.
-  ;; This is a safety net in case tile-kind registration via Tile DSL has
-  ;; not yet populated the core tile-logic registry.
-  (tile-logic/register-tile-kind!
-    :wireless-node
-    {:tick-fn my-mod.block.wireless-node/node-scripted-tick-fn
-     :read-nbt-fn my-mod.block.wireless-node/node-scripted-load-fn
-     :write-nbt-fn my-mod.block.wireless-node/node-scripted-save-fn})
-
-  (tile-logic/register-tile-kind!
-    :wireless-matrix
-    {:tick-fn my-mod.block.wireless-matrix/matrix-scripted-tick-fn
-     :read-nbt-fn my-mod.block.wireless-matrix/matrix-scripted-load-fn
-     :write-nbt-fn my-mod.block.wireless-matrix/matrix-scripted-save-fn})
 
   ;; Register all blocks and items using metadata-driven approach
   ;; DSL systems are automatically initialized when namespaces load
@@ -341,7 +327,15 @@
                     (accept [_ event] (on-common-setup event))))
     (.addListener mod-bus EventPriority/NORMAL false FMLClientSetupEvent
                   (reify java.util.function.Consumer
-                    (accept [_ event] (on-client-setup event)))))
+                    (accept [_ event] (on-client-setup event))))
+    ;; Generic RegisterCapabilitiesEvent: registers all java-types declared by ac.
+    ;; No modification needed when ac adds new capabilities.
+    (.addListener mod-bus EventPriority/NORMAL false RegisterCapabilitiesEvent
+                  (reify java.util.function.Consumer
+                    (accept [_ event]
+                      (doseq [[_key {:keys [java-type]}] @platform-cap/capability-type-registry]
+                        (when java-type
+                          (.register event java-type)))))))
   
   ;; Return state
   [[] nil])

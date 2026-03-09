@@ -1,459 +1,299 @@
 (ns my-mod.block.wireless-matrix
-  "Wireless Matrix block implementation - 2x2x2 multiblock structure
-  
-  Core component of wireless energy network providing capacity, bandwidth and range."
+  "Wireless Matrix block implementation - 2x2x2 multiblock structure.
+
+  State model (Design-3):
+  All persistent state lives in ScriptedBlockEntity.customState as a Clojure
+  persistent map.  The matrix-tiles atom has been removed; world+pos → BE →
+  .getCustomState is the only data path.
+
+  State map shape:
+    {:placer-name  String
+     :inventory    [ItemStack|nil ItemStack|nil ItemStack|nil ItemStack|nil]
+     :plate-count  int   ; 0-3 constraint plates installed
+     :core-level   int   ; 0 = no core, 1-4 = tier
+     :direction    keyword  ; :north :south :east :west
+     :sub-id       int   ; 0 = origin, 1-7 = sub-blocks}"
   (:require [my-mod.block.dsl :as bdsl]
             [my-mod.block.tile-dsl :as tdsl]
-            [my-mod.wireless.interfaces :as winterfaces]
-            [my-mod.inventory.core :as inv]
-            [my-mod.nbt.dsl :as nbt]
+            [my-mod.block.tile-logic :as tile-logic]
+            [my-mod.block.role-impls :as impls]
+            [my-mod.platform.capability :as platform-cap]
+            [my-mod.platform.world :as world]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
             [my-mod.wireless.gui.matrix-sync :as sync]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log])
+  (:import [my_mod.api.wireless IWirelessMatrix]))
 
 ;; ============================================================================
-;; TileMatrix Record
+;; Default state
 ;; ============================================================================
 
-(defrecord TileMatrix
-  [;; Identity
-   placer-name        ; String - who placed this matrix
-   
-   ;; Inventory (4 slots)
-   inventory          ; atom<vector> - [plate1 plate2 plate3 core]
-   
-   ;; Cached values (for client display)
-   plate-count        ; atom<int> - number of plates installed (0-3)
-   
-   ;; Update counter
-   update-ticker      ; atom<int> - tick counter for periodic updates
-   
-   ;; Multi-block info
-   sub-id             ; int - 0 = origin, 1-7 = sub blocks
-   direction          ; keyword - :north, :south, :east, :west
-   
-   ;; Position
-   world              ; World object
-   pos])              ; BlockPos
+(def default-state
+  {:placer-name ""
+   :inventory   [nil nil nil nil]
+   :plate-count 0
+   :core-level  0
+   :direction   :north
+   :sub-id      0})
 
-(defn create-matrix-tile-entity
-  "Create a new matrix tile entity"
-  [world pos]
-  (map->TileMatrix
-    {:placer-name ""
-     :inventory (atom [nil nil nil nil])
-     :plate-count (atom 0)
-     :update-ticker (atom 0)
-     :sub-id 0
-     :direction :north
-     :world world
-     :pos pos}))
-
-  (declare recalculate-plate-count!)
-  (declare sync-to-clients! verify-structure! unregister-matrix-tile!)
+(defn- safe-state
+  "Return the customState map from a BE, falling back to defaults."
+  [be]
+  (or (.getCustomState be) default-state))
 
 ;; ============================================================================
-;; Inventory Management
+;; Inventory helpers (operating on the state map directly)
 ;; ============================================================================
 
-(defn get-inventory-slot
-  "Get item from inventory slot"
-  [tile slot-index]
-  (get @(:inventory tile) slot-index))
+(defn get-inv-slot [state slot] (get-in state [:inventory slot]))
+(defn set-inv-slot [state slot item] (assoc-in state [:inventory slot] item))
 
-(defn set-inventory-slot!
-  "Set item in inventory slot"
-  [tile slot-index item-stack]
-  (swap! (:inventory tile) assoc slot-index item-stack)
-  ;; Update plate count if needed
-  (when (<= 0 slot-index 2)
-    (recalculate-plate-count! tile)))
+(defn- recalculate-plate-count
+  "Count non-nil items in slots 0-2."
+  [state]
+  (assoc state :plate-count
+         (count (filter some? (take 3 (:inventory state))))))
 
-(defn is-item-valid-for-slot?
-  "Check if item can be placed in slot
-  
-  Slots 0-2: constraint_plate only
-  Slot 3: mat_core only"
-  [tile slot item-stack]
-  (cond
-    (nil? item-stack) true
-    (<= 0 slot 2) (= (.getItem item-stack) plate/constraint-plate)
-    (= slot 3) (core/is-mat-core? item-stack)
-    :else false))
+(defn- recalculate-core-level
+  "Update :core-level from core slot."
+  [state]
+  (assoc state :core-level
+         (core/get-core-level (get-in state [:inventory 3]))))
 
-(defn get-inventory-stack-limit
-  "Maximum stack size per slot"
-  [tile]
-  1)
-
-(defn recalculate-plate-count!
-  "Count non-empty plates in slots 0-2"
-  [tile]
-  (let [count (count (filter some? (take 3 @(:inventory tile))))]
-    (reset! (:plate-count tile) count)
-    count))
-
-;; ============================================================================
-;; Core Calculation Logic
-;; ============================================================================
-
-(defn get-plate-count
-  "Get number of installed plates (0-3)"
-  [tile]
-  @(:plate-count tile))
-
-(defn get-core-level
-  "Get matrix core level (0-4)
-  0 = no core, 1-4 = tier levels"
-  [tile]
-  (let [core-stack (get-inventory-slot tile 3)]
-    (core/get-core-level core-stack)))
+(defn recalculate-counts
+  "Recalculate plate-count and core-level from current inventory."
+  [state]
+  (-> state recalculate-plate-count recalculate-core-level))
 
 (defn is-working?
-  "Check if matrix is operational
-  Requires: 3 plates + core"
-  [tile]
-  (and (> (get-core-level tile) 0)
-       (= (get-plate-count tile) 3)))
+  "Is matrix operational? Requires 3 plates + a core."
+  [state]
+  (and (> (:core-level state 0) 0)
+       (= (:plate-count state 0) 3)))
 
 ;; ============================================================================
-;; IWirelessMatrix Protocol Implementation
-;; ============================================================================
-
-(extend-protocol winterfaces/IWirelessMatrix
-  TileMatrix
-  
-  (get-matrix-capacity [this]
-    (if (is-working? this)
-      (* 8 (get-core-level this))
-      0))
-  
-  (get-matrix-bandwidth [this]
-    (if (is-working? this)
-      (let [level (get-core-level this)]
-        (* level level 60))
-      0))
-  
-  (get-matrix-range [this]
-    (if (is-working? this)
-      (* 24 (Math/sqrt (get-core-level this)))
-      0)))
-
-;; Also implement IWirelessTile (marker via metadata)
-(alter-meta! #'->TileMatrix assoc :wireless-tile true :wireless-matrix true)
-(alter-meta! #'map->TileMatrix assoc :wireless-tile true :wireless-matrix true)
-
-;; ============================================================================
-;; Java Accessor Bridge (for XML GUI Integration)
+;; Java accessor bridge (IMatrixJavaProxy replacement)
 ;; ============================================================================
 
 (definterface IMatrixJavaProxy
-  (^String getPlacerName [])
-  (^long getMatrixCapacity [])
-  (^long getMatrixBandwidth [])
-  (^double getMatrixRange [])
-  (^long getLoad [])
-  (^Object getPos []))
+  (^String  getPlacerName [])
+  (^long    getMatrixCapacity [])
+  (^long    getMatrixBandwidth [])
+  (^double  getMatrixRange [])
+  (^long    getLoad [])
+  (^Object  getPos []))
 
-(deftype MatrixJavaProxy
-  [tile-entity]
-  
+(deftype MatrixJavaProxy [be]
   IMatrixJavaProxy
-  
-  (^String getPlacerName [this]
-    (:placer-name tile-entity))
-  
-  (^long getMatrixCapacity [this]
-    (long (winterfaces/get-matrix-capacity tile-entity)))
-  
-  (^long getMatrixBandwidth [this]
-    (long (winterfaces/get-matrix-bandwidth tile-entity)))
-  
-  (^double getMatrixRange [this]
-    (double (winterfaces/get-matrix-range tile-entity)))
-  
-  (^long getLoad [this]
-    0)
-  
-  (^Object getPos [this]
-    (:pos tile-entity))
-  
+  (getPlacerName    [_] (str (:placer-name (safe-state be))))
+  (getMatrixCapacity [_]
+    (long (.getMatrixCapacity (impls/->WirelessMatrixImpl be))))
+  (getMatrixBandwidth [_]
+    (long (.getMatrixBandwidth (impls/->WirelessMatrixImpl be))))
+  (getMatrixRange [_]
+    (double (.getMatrixRange (impls/->WirelessMatrixImpl be))))
+  (getLoad [_] 0)
+  (getPos  [_] (.getBlockPos be))
   Object
-  (toString [this]
-    (str "MatrixJavaProxy[" (:pos tile-entity) "]")))
+  (toString [_] (str "MatrixJavaProxy@" (.getBlockPos be))))
 
 ;; ============================================================================
-;; IInventory Protocol Implementation
+;; Core calculations (pure, operate on state map)
 ;; ============================================================================
 
-(extend-protocol inv/IInventory
-  TileMatrix
-  
-  (get-size-inventory [this]
-    4)  ; 4 slots: 3 plates + 1 core
-  
-  (get-stack-in-slot [this slot]
-    (get-inventory-slot this slot))
-  
-  (decr-stack-size [this slot count]
-    (when-let [stack (get-inventory-slot this slot)]
-      (let [stack-count (.getCount stack)]
-        (if (<= stack-count count)
-          ;; Remove entire stack
-          (let [result stack]
-            (set-inventory-slot! this slot nil)
-            result)
-          ;; Split stack
-          (let [result (.splitStack stack count)]
-            result)))))
-  
-  (remove-stack-from-slot [this slot]
-    (let [stack (get-inventory-slot this slot)]
-      (set-inventory-slot! this slot nil)
-      stack))
-  
-  (set-inventory-slot-contents [this slot stack]
-    (set-inventory-slot! this slot stack))
-  
-  (get-inventory-stack-limit [this]
-    1)  ; Matrix: max 1 item per slot
-  
-  (is-usable-by-player? [this player]
-    true)
-  
-  (is-item-valid-for-slot? [this slot stack]
-    (is-item-valid-for-slot? this slot stack))  ; Use existing function
-  
-  (get-inventory-name [this]
-    "wireless_matrix")
-  
-  (has-custom-name? [this]
-    false))
+(defn get-matrix-capacity [state]
+  (if (is-working? state)
+    (* 8 (:core-level state))
+    0))
+
+(defn get-matrix-bandwidth [state]
+  (if (is-working? state)
+    (let [lv (:core-level state)] (* lv lv 60))
+    0))
+
+(defn get-matrix-range [state]
+  (if (is-working? state)
+    (* 24 (Math/sqrt (:core-level state)))
+    0.0))
 
 ;; ============================================================================
-;; Update Logic
+;; Tile lifecycle hooks (full-state path)
 ;; ============================================================================
-
-(defn update-matrix-tile!
-  "Main update function - called every tick"
-  [tile]
-  (swap! (:update-ticker tile) inc)
-  (let [tick @(:update-ticker tile)]
-    ;; Sync to clients every 15 ticks
-    (when (and (= (:sub-id tile) 0) ; Only origin block
-               (zero? (mod tick 15)))
-      (sync-to-clients! tile))
-    
-    ;; Verify structure integrity every 20 ticks (1 second)
-    (when (zero? (mod tick 20))
-      (verify-structure! tile))))
-
-(defn sync-to-clients!
-  "Synchronize matrix state to nearby clients
-  
-  Sends matrix state data via network packet to players tracking this tile.
-  Called every 15 ticks (approximately once per second)."
-  [tile]
-  (let [world (:world tile)
-        pos (:pos tile)
-        ;; Construct sync payload
-        sync-data {:pos-x (.getX pos)
-                   :pos-y (.getY pos)
-                   :pos-z (.getZ pos)
-                   :plate-count (get-plate-count tile)
-                   :placer-name (:placer-name tile)
-                   :is-working (is-working? tile)
-                   :core-level (get-core-level tile)
-                   :capacity (winterfaces/get-matrix-capacity tile)
-                   :bandwidth (winterfaces/get-matrix-bandwidth tile)
-                   :range (winterfaces/get-matrix-range tile)}]
-    ;; Send to nearby players via platform network system
-    (try
-      ;; Platform-specific sync (defined in each platform's network module)
-      (require 'my-mod.wireless.gui.matrix-sync) ; Dynamic require
-      ((resolve 'my-mod.wireless.gui.matrix-sync/broadcast-matrix-state) 
-       world pos sync-data)
-      (log/debug "Matrix state synced:" sync-data)
-      (catch Exception e
-        (log/debug "Matrix sync not yet implemented:" (.getMessage e))))))
-
-(defn verify-structure!
-  "Verify multiblock structure integrity
-  Destroys block if structure is broken"
-  [tile]
-  ;; Only check on origin block (sub-id = 0)
-  (when (and tile (= (:sub-id tile) 0))
-    (try
-      (let [world (:world tile)
-            pos (:pos tile)
-            ;; Get block spec for multiblock config
-            block-spec (bdsl/get-block :wireless-matrix)]
-
-        (when (and block-spec world pos)
-          ;; Check if structure is still valid
-          (if-not (bdsl/is-multi-block-complete? world pos block-spec)
-            ;; Structure broken - destroy matrix and drop items
-            (do
-              (log/info "Matrix structure broken at" pos)
-              ;; Drop inventory items
-              (doseq [[idx item] (map-indexed vector @(:inventory tile))]
-                (when item
-                  (log/info "Dropping item from slot" idx)))
-              ;; Unregister from tiles
-              (unregister-matrix-tile! pos))
-            ;; Structure intact - ok
-            (log/debug "Matrix structure verified at" pos))))
-      
-      (catch Exception e
-        (log/error "Error verifying matrix structure:" (.getMessage e))))))
-
-;; ============================================================================
-;; NBT Persistence (using NBT DSL)
-;; ============================================================================
-
-;; Define NBT serialization using declarative DSL
-(nbt/defnbt matrix
-  ;; Placer name (direct field access)
-  [:placer-name "placer" :string]
-  
-  ;; Plate count (atom of integer)
-  [:plate-count "plateCount" :int :atom? true]
-  
-  ;; Sub ID (direct field access)
-  [:sub-id "subId" :int]
-  
-  ;; Direction (keyword - needs conversion)
-  [:direction "direction" :keyword]
-  
-  ;; Inventory (uses inventory protocol)
-  [:inventory "inventory" :inventory])
-
-;; ============================================================================
-;; TileEntity Registry
-;; ============================================================================
-
-(defonce matrix-tiles (atom {}))
-
-(defn register-matrix-tile! [pos tile]
-  (swap! matrix-tiles assoc pos tile))
-
-(defn unregister-matrix-tile! [pos]
-  (swap! matrix-tiles dissoc pos))
-
-(defn get-matrix-tile [pos]
-  (get @matrix-tiles pos))
-
-(defn- ensure-matrix-tile-for-be!
-  "Compatibility adapter: materialize legacy TileMatrix from scripted BE context."
-  [world pos]
-  (or (get-matrix-tile pos)
-      (let [tile (create-matrix-tile-entity world pos)]
-        (register-matrix-tile! pos tile)
-        tile)))
 
 (defn matrix-scripted-tick-fn
+  "Tick: read state from BE, do work, write state back."
   [level pos _state be]
-  (let [tile (ensure-matrix-tile-for-be! level pos)]
-    (when tile
-      (update-matrix-tile! tile)
-      (.setScriptData be "placer-name" (:placer-name tile))
-      (.setScriptData be "plate-count" (long (get-plate-count tile)))
-      (.setScriptData be "core-level" (long (get-core-level tile)))
-      (.setScriptData be "working" (boolean (is-working? tile)))
-      (.setChanged be))))
+  (let [state (safe-state be)]
+    ;; Sync to clients every 15 ticks (tracked via update-ticker in state)
+    (let [ticker (inc (get state :update-ticker 0))
+          state  (assoc state :update-ticker ticker)]
+      (when (and (zero? (:sub-id state 0))
+                 (zero? (mod ticker 15)))
+        (try
+          (sync/broadcast-matrix-state level pos
+            {:pos-x (.getX pos) :pos-y (.getY pos) :pos-z (.getZ pos)
+             :plate-count (:plate-count state 0)
+             :placer-name (:placer-name state "")
+             :is-working  (is-working? state)
+             :core-level  (:core-level state 0)
+             :capacity    (get-matrix-capacity state)
+             :bandwidth   (get-matrix-bandwidth state)
+             :range       (get-matrix-range state)})
+          (catch Exception e
+            (log/debug "Matrix sync skipped:" (.getMessage e)))))
+      ;; Verify structure every 20 ticks
+      (when (zero? (mod ticker 20))
+        (try
+          (let [block-spec (bdsl/get-block :wireless-matrix)]
+            (when (and block-spec level pos
+                       (zero? (:sub-id state 0))
+                       (not (bdsl/is-multi-block-complete? level pos block-spec)))
+              (log/info "Matrix structure broken at" pos)
+              ;; Drop inventory items
+              (doseq [[idx item] (map-indexed vector (:inventory state []))]
+                (when item (log/info "Dropping item from slot" idx)))
+              ;; Clear state
+              (.setCustomState be default-state)))
+          (catch Exception e
+            (log/error "Error verifying matrix structure:" (.getMessage e)))))
+      (.setCustomState be (assoc state :update-ticker ticker)))))
 
 (defn matrix-scripted-load-fn
+  "Deserialize CompoundTag → state map."
   [tag]
-  {"placer-name" (if (.contains tag "Placer") (.getString tag "Placer") "")
-   "plate-count" (if (.contains tag "PlateCount") (.getInt tag "PlateCount") 0)
-   "core-level" (if (.contains tag "CoreLevel") (.getInt tag "CoreLevel") 0)})
+  (let [state (assoc default-state
+                :placer-name (if (.contains tag "Placer")      (.getString tag "Placer") "")
+                :plate-count (if (.contains tag "PlateCount")  (.getInt    tag "PlateCount") 0)
+                :core-level  (if (.contains tag "CoreLevel")   (.getInt    tag "CoreLevel") 0)
+                :sub-id      (if (.contains tag "SubId")       (.getInt    tag "SubId") 0)
+                :direction   (keyword (if (.contains tag "Direction") (.getString tag "Direction") "north")))]
+    ;; Deserialize inventory
+    (if (.contains tag "Inventory")
+      (let [inv-tag (.getList tag "Inventory" 10)
+            inv     (reduce (fn [v i]
+                              (let [slot-tag (.getCompound inv-tag i)
+                                    slot     (.getInt slot-tag "Slot")
+                                    item     (net.minecraft.world.item.ItemStack/of slot-tag)]
+                                (if (and (>= slot 0) (< slot 4))
+                                  (assoc v slot (when-not (.isEmpty item) item))
+                                  v)))
+                            [nil nil nil nil]
+                            (range (.size inv-tag)))]
+        (assoc state :inventory inv))
+      state)))
 
 (defn matrix-scripted-save-fn
+  "Serialize state map → CompoundTag."
   [be tag]
-  (when-let [placer (.getScriptData be "placer-name")]
-    (.putString tag "Placer" (str placer)))
-  (when-let [plate-count (.getScriptData be "plate-count")]
-    (.putInt tag "PlateCount" (int plate-count)))
-  (when-let [core-level (.getScriptData be "core-level")]
-    (.putInt tag "CoreLevel" (int core-level))))
+  (let [state (safe-state be)]
+    (.putString tag "Placer"     (str (:placer-name state "")))
+    (.putInt    tag "PlateCount" (int (:plate-count state 0)))
+    (.putInt    tag "CoreLevel"  (int (:core-level state 0)))
+    (.putInt    tag "SubId"      (int (:sub-id state 0)))
+    (.putString tag "Direction"  (name (:direction state :north)))
+    ;; Serialize inventory
+    (let [inv     (:inventory state [nil nil nil nil])
+          inv-list (net.minecraft.nbt.ListTag.)]
+      (doseq [slot (range 4)]
+        (when-let [item (nth inv slot nil)]
+          (let [slot-tag (net.minecraft.nbt.CompoundTag.)]
+            (.putInt slot-tag "Slot" slot)
+            (.save item slot-tag)
+            (.add inv-list slot-tag))))
+      (.put tag "Inventory" inv-list))))
 
 ;; ============================================================================
-;; Tile DSL (shared BlockEntityType metadata)
+;; Container functions (slot access via BE customState)
+;; ============================================================================
+
+(def ^:private matrix-container-fns
+  {:get-size (fn [be] 4)
+
+   :get-item (fn [be slot]
+               (get-in (safe-state be) [:inventory slot]))
+
+   :set-item! (fn [be slot item]
+                (let [state  (safe-state be)
+                      state' (-> state
+                                 (set-inv-slot slot item)
+                                 recalculate-counts)]
+                  (.setCustomState be state')))
+
+   :remove-item (fn [be slot amount]
+                  (let [state (safe-state be)
+                        item  (get-in state [:inventory slot])]
+                    (when item
+                      (let [cnt (.getCount item)]
+                        (if (<= cnt amount)
+                          (do (.setCustomState be (-> state (set-inv-slot slot nil) recalculate-counts))
+                              item)
+                          (let [result (.splitStack item amount)]
+                            (.setCustomState be (recalculate-counts state))
+                            result))))))
+
+   :remove-item-no-update (fn [be slot]
+                            (let [state (safe-state be)
+                                  item  (get-in state [:inventory slot])]
+                              (.setCustomState be (-> state (set-inv-slot slot nil) recalculate-counts))
+                              item))
+
+   :clear! (fn [be]
+             (.setCustomState be (assoc (safe-state be) :inventory [nil nil nil nil]
+                                                         :plate-count 0 :core-level 0)))
+
+   :still-valid? (fn [_be _player] true)
+
+   :slots-for-face (fn [_be _face] (int-array [0 1 2 3]))
+
+   :can-place-through-face? (fn [_be slot item _face]
+                               (cond
+                                 (<= 0 slot 2) (plate/is-constraint-plate? item)
+                                 (= slot 3)    (core/is-mat-core? item)
+                                 :else false))
+
+   :can-take-through-face? (fn [_be _slot _item _face] true)})
+
+;; ============================================================================
+;; Tile DSL registration
 ;; ============================================================================
 
 (tdsl/deftile-kind :wireless-matrix
-  :tick-fn matrix-scripted-tick-fn
-  :read-nbt-fn matrix-scripted-load-fn
+  :tick-fn      matrix-scripted-tick-fn
+  :read-nbt-fn  matrix-scripted-load-fn
   :write-nbt-fn matrix-scripted-save-fn)
 
 (tdsl/deftile wireless-matrix-tile
-  :id "wireless-matrix"
+  :id            "wireless-matrix"
   :registry-name "matrix"
-  :impl :scripted
-  :blocks ["wireless-matrix"]
-  :tile-kind :wireless-matrix)
+  :impl          :scripted
+  :blocks        ["wireless-matrix"]
+  :tile-kind     :wireless-matrix)
+
+;; Register Capability and Container
+(platform-cap/declare-capability! :wireless-matrix IWirelessMatrix
+  (fn [be _side] (impls/->WirelessMatrixImpl be)))
+
+(tile-logic/register-tile-capability! "wireless-matrix" :wireless-matrix)
+(tile-logic/register-container! "wireless-matrix" matrix-container-fns)
 
 ;; ============================================================================
-;; ITickable Implementation
-;; ============================================================================
-
-(deftype TileMatrixTickable [^:volatile-mutable tile-data]
-  Object
-  (toString [this]
-    (str "TileMatrixTickable@" (:pos tile-data)))
-  
-  clojure.lang.IDeref
-  (deref [this] tile-data)
-  
-  clojure.lang.IFn
-  (invoke [this]
-    (when tile-data
-      (try
-        (update-matrix-tile! tile-data)
-        (catch Exception e
-          (log/error "Error updating matrix tile:" (.getMessage e))))))
-  (invoke [this arg]
-    (cond
-      (= arg :get-tile-data) tile-data
-      (= arg :update) (do (update-matrix-tile! tile-data) nil)
-      :else nil)))
-
-(defn create-tickable-matrix-tile-entity
-  "Create a tickable matrix tile entity"
-  [world pos]
-  (let [tile-data (create-matrix-tile-entity world pos)]
-    (TileMatrixTickable. tile-data)))
-
-(defn get-tile-data
-  "Extract TileMatrix data from tickable wrapper"
-  [tickable-tile]
-  (if (instance? TileMatrixTickable tickable-tile)
-    @tickable-tile
-    tickable-tile))
-
-;; ============================================================================
-;; Block Interaction Handlers
+;; Block interaction handlers
 ;; ============================================================================
 
 (defn handle-matrix-right-click []
   (fn [event-data]
     (log/info "Wireless Matrix right-clicked!")
     (let [{:keys [player world pos sneaking]} event-data
-          tile (or (get-matrix-tile pos)
-                   (ensure-matrix-tile-for-be! world pos))]
-      (if tile
+          be    (world/world-get-tile-entity world pos)
+          state (when be (safe-state be))]
+      (if state
         (if-not sneaking
           (do
             (log/info "Opening Matrix GUI")
-            (log/info "  Plates:" (get-plate-count tile))
-            (log/info "  Core Level:" (get-core-level tile))
-            (log/info "  Working:" (is-working? tile))
-            (log/info "  Capacity:" (winterfaces/get-matrix-capacity tile))
-            (log/info "  Bandwidth:" (winterfaces/get-matrix-bandwidth tile))
-            (log/info "  Range:" (winterfaces/get-matrix-range tile))
-            ;; Open GUI — return the result map so the platform event dispatcher
-            ;; can call open-gui-for-player with :gui-id/:player/:world/:pos.
+            (log/info "  Plates:" (:plate-count state))
+            (log/info "  Core Level:" (:core-level state))
+            (log/info "  Working:" (is-working? state))
             (try
               (if-let [open-matrix-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-matrix-gui)]
                 (let [result (open-matrix-gui player world pos)]
@@ -461,8 +301,7 @@
                   result)
                 (do (log/error "Failed to open Matrix GUI: open-matrix-gui not resolved") nil))
               (catch Exception e
-                (log/error "Failed to open Matrix GUI:" (.getMessage e))
-                nil)))
+                (log/error "Failed to open Matrix GUI:" (.getMessage e)) nil)))
           (log/info "Sneaking - no action"))
         (log/info "No tile entity found!")))))
 
@@ -471,58 +310,48 @@
     (log/info "Placing Wireless Matrix")
     (let [{:keys [player world pos]} event-data
           player-name (str player)
-          tile-data (ensure-matrix-tile-for-be! world pos)]
-      ;; Compatibility registration for GUI/network adapters
-      (swap! matrix-tiles assoc pos (assoc tile-data :placer-name player-name))
-      (log/info "Matrix placed by" player-name "at" pos)
-      (log/info "Matrix compatibility tile registered"))))
+          be (world/world-get-tile-entity world pos)]
+      (when be
+        (let [state (or (.getCustomState be) default-state)]
+          (.setCustomState be (assoc state :placer-name player-name))))
+      (log/info "Matrix placed by" player-name "at" pos))))
 
 (defn handle-matrix-break []
   (fn [event-data]
     (log/info "Breaking Wireless Matrix")
     (let [{:keys [world pos]} event-data
-          tile (get-matrix-tile pos)]
-      (when tile
-        ;; Drop items from inventory
-        (doseq [[idx item] (map-indexed vector @(:inventory tile))]
-          (when item
-            (log/info "Dropping item from slot" idx ":" item)))
-        ;; Unregister tile entity
-        (unregister-matrix-tile! pos)))))
+          be (world/world-get-tile-entity world pos)]
+      (when be
+        (let [state (safe-state be)]
+          (doseq [[idx item] (map-indexed vector (:inventory state []))]
+            (when item (log/info "Dropping item from slot" idx ":" item))))))))
 
 ;; ============================================================================
 ;; Block Definition
 ;; ============================================================================
 
 (bdsl/defblock wireless-matrix
-  :registry-name "matrix"
-  :material :stone
-  :hardness 3.0
-  :resistance 6.0
-  :requires-tool true
-  :harvest-tool :pickaxe
-  :harvest-level 1
-  :light-level 1.0
-  :sounds :stone
-  :multi-block {:positions [[0 0 1] [1 0 1] [1 0 0]
-                            [0 1 0] [0 1 1] [1 1 1] [1 1 0]]
-                :rotation-center [1.0 0 1.0]}
-  :on-right-click (handle-matrix-right-click)
-  :on-place (handle-matrix-place)
-  :on-break (handle-matrix-break))
+  :registry-name   "matrix"
+  :material        :stone
+  :hardness        3.0
+  :resistance      6.0
+  :requires-tool   true
+  :harvest-tool    :pickaxe
+  :harvest-level   1
+  :light-level     1.0
+  :sounds          :stone
+  :multi-block     {:positions [[0 0 1] [1 0 1] [1 0 0]
+                                [0 1 0] [0 1 1] [1 1 1] [1 1 0]]
+                   :rotation-center [1.0 0 1.0]}
+  :on-right-click  (handle-matrix-right-click)
+  :on-place        (handle-matrix-place)
+  :on-break        (handle-matrix-break))
 
 ;; ============================================================================
 ;; Initialization
 ;; ============================================================================
 
 (defn init-wireless-matrix! []
-  (log/info "Initialized Wireless Matrix:")
-  (log/info "  - 2x2x2 multiblock structure")
-  (log/info "  - 4 inventory slots")
-  (log/info "  - Capacity: 8 * coreLevel")
-  (log/info "  - Bandwidth: coreLevel² * 60")
-  (log/info "  - Range: 24 * √coreLevel"))
-
-(defn tick-all-matrices! []
-  "Compatibility no-op after migration to scripted BE tick path."
-  nil)
+  (log/info "Initialized Wireless Matrix (Design-3: customState)")
+  (log/info "  - 2x2x2 multiblock, 4 inventory slots")
+  (log/info "  - Capability :wireless-matrix registered"))

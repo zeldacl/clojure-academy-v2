@@ -1,11 +1,15 @@
 (ns my-mod.wireless.virtual-blocks
-  "Virtual block reference system for wireless network
-  
+  "Virtual block reference system for wireless network.
+
   Provides position-based TileEntity references that:
   - Support NBT serialization (avoiding direct TileEntity refs)
   - Lazy loading (only fetch when needed)
   - Chunk loading safety
-  - Distance calculations"
+  - Distance calculations
+
+  Type checking (Design-3):
+  - For Clojure state maps: use :node-type / :placer-name keys
+  - For Java ScriptedBlockEntity: use getCapability().isPresent() via CapabilitySlots"
   (:require [my-mod.util.log :as log]
             [my-mod.wireless.interfaces :as interfaces]
             [my-mod.platform.nbt :as nbt]
@@ -85,26 +89,71 @@
         chunk-z (bit-shift-right (:z vblock) 4)]
     (world/world-is-chunk-loaded? w chunk-x chunk-z)))
 
+;; ============================================================================
+;; Capability-based type checking
+;; ============================================================================
+
+(defn- has-capability?
+  "Check if a BlockEntity has a specific capability key registered.
+  Works with Forge (CapabilitySlots) and falls back to Clojure protocol check."
+  [tile cap-key]
+  (try
+    (let [cap-slots (requiring-resolve 'my-mod.platform.be/get-capability-slot)]
+      (when cap-slots
+        (let [cap (cap-slots cap-key)]
+          (when cap
+            (let [lo (.getCapability tile cap nil)]
+              (.isPresent lo))))))
+    (catch Exception _
+      ;; Fallback: check if tile is a state map with the right keys
+      nil)))
+
+(defn- tile-has-wireless-matrix? [tile]
+  (if (map? tile)
+    (contains? tile :plate-count)
+    (or (has-capability? tile "wireless-matrix")
+        (interfaces/wireless-matrix? tile))))
+
+(defn- tile-has-wireless-node? [tile]
+  (if (map? tile)
+    (contains? tile :node-type)
+    (or (has-capability? tile "wireless-node")
+        (interfaces/wireless-node? tile))))
+
+(defn- tile-has-wireless-generator? [tile]
+  (if (map? tile)
+    (interfaces/wireless-generator? tile)
+    (or (has-capability? tile "wireless-generator")
+        (interfaces/wireless-generator? tile))))
+
+(defn- tile-has-wireless-receiver? [tile]
+  (if (map? tile)
+    (interfaces/wireless-receiver? tile)
+    (or (has-capability? tile "wireless-receiver")
+        (interfaces/wireless-receiver? tile))))
+
 (defn vblock-get
-  "Get the TileEntity for this vblock (lazy loading)
+  "Get the TileEntity/state for this vblock (lazy loading).
+
   Returns nil if:
   - Chunk not loaded (unless ignore-chunk)
   - World is nil
   - TileEntity doesn't exist
-  - TileEntity type doesn't match (protocol implementation)"
+  - TileEntity type doesn't match expected block-type
+
+  Returns the BlockEntity instance (which holds customState internally)."
   [vblock w]
   (when w
     (when (or (:ignore-chunk vblock) (is-chunk-loaded? vblock w))
       (let [block-pos (vblock-pos vblock)
-            tile (world/world-get-tile-entity w block-pos)]
+            tile      (world/world-get-tile-entity w block-pos)]
         (when tile
-          ;; Type checking based on block-type - using protocol satisfies? checks
           (case (:block-type vblock)
-            :matrix (when (interfaces/wireless-matrix? tile) tile)
-            :node (when (interfaces/wireless-node? tile) tile)
-            :node-conn (when (interfaces/wireless-node? tile) tile)
-            :generator (when (interfaces/wireless-generator? tile) tile)
-            :receiver (when (interfaces/wireless-receiver? tile) tile)
+            :matrix    (when (tile-has-wireless-matrix?    tile) tile)
+            :node      (when (tile-has-wireless-node?      tile) tile)
+            :node-conn (when (tile-has-wireless-node?      tile) tile)
+            :generator (when (tile-has-wireless-generator? tile) tile)
+            :receiver  (when (tile-has-wireless-receiver?  tile) tile)
             nil))))))
 
 (defn dist-sq

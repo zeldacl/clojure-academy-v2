@@ -154,21 +154,39 @@
   "Check if object satisfies IWirelessUser protocol"
   (satisfies? IWirelessUser obj))
 
-(defn wireless-matrix? [obj]
-  "Check if object satisfies IWirelessMatrix protocol"
-  (satisfies? IWirelessMatrix obj))
+(defn wireless-matrix?
+  "Check if object is a wireless matrix.
+  For Clojure state maps: checks for :plate-count key.
+  For protocol implementations (old defrecord path): uses satisfies?.
+  ScriptedBlockEntity (Design-3) type detection is handled via capability
+  checks in virtual_blocks/tile-has-wireless-matrix? before this is called."
+  [obj]
+  (cond
+    (nil? obj)  false
+    (map? obj)  (contains? obj :plate-count)
+    :else       (satisfies? IWirelessMatrix obj)))
 
-(defn wireless-node? [obj]
-  "Check if object satisfies IWirelessNode protocol"
-  (satisfies? IWirelessNode obj))
+(defn wireless-node?
+  "Check if object is a wireless node.
+  For Clojure state maps: checks for :node-type key.
+  For protocol implementations (old defrecord path): uses satisfies?.
+  ScriptedBlockEntity (Design-3) type detection is handled via capability
+  checks in virtual_blocks/tile-has-wireless-node? before this is called."
+  [obj]
+  (cond
+    (nil? obj)  false
+    (map? obj)  (contains? obj :node-type)
+    :else       (satisfies? IWirelessNode obj)))
 
-(defn wireless-generator? [obj]
-  "Check if object satisfies IWirelessGenerator protocol"
-  (satisfies? IWirelessGenerator obj))
+(defn wireless-generator?
+  "Check if object satisfies IWirelessGenerator protocol."
+  [obj]
+  (and obj (satisfies? IWirelessGenerator obj)))
 
-(defn wireless-receiver? [obj]
-  "Check if object satisfies IWirelessReceiver protocol"
-  (satisfies? IWirelessReceiver obj))
+(defn wireless-receiver?
+  "Check if object satisfies IWirelessReceiver protocol."
+  [obj]
+  (and obj (satisfies? IWirelessReceiver obj)))
 
 ;; ============================================================================
 ;; Validation Helpers

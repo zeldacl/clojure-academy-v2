@@ -121,6 +121,8 @@ minecraft {
             mods {
                 "${mod_id}" {
                     source sourceSets.main
+                    source project(':mcmod').sourceSets.main
+                    source project(':ac').sourceSets.main
                 }
             }
         }

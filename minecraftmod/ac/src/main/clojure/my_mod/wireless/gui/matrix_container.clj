@@ -1,5 +1,8 @@
 (ns my-mod.wireless.gui.matrix-container
-  "Wireless Matrix GUI Container - handles 4 slots and multiblock data sync"
+  "Wireless Matrix GUI Container - handles 4 slots and multiblock data sync.
+
+  State model (Design-3): tile-entity is a ScriptedBlockEntity; all slot data
+  is read from / written to (.getCustomState be) / (.setCustomState be new-state)."
   (:require [my-mod.util.log :as log]
             [my-mod.block.wireless-matrix :as wm]
             [my-mod.item.constraint-plate :as plate]
@@ -34,43 +37,44 @@
 ;; Container Creation
 ;; ============================================================================
 
-(defn- resolve-tile
-  "If tile is a Java ScriptedBlockEntity (not a Clojure map), look up the
-  corresponding Clojure TileMatrix from the block's registry using its BlockPos."
+(defn- resolve-state
+  "Resolve the state map from either a ScriptedBlockEntity or an existing map.
+  Returns [be state] where be may be nil for legacy map input."
   [tile]
   (if (map? tile)
-    tile
+    [nil tile]
     (try
-      (let [pos (.getBlockPos tile)]
-        (or (wm/get-matrix-tile pos)
-            (do (log/warn "No Clojure TileMatrix found at" pos "- using raw BE") tile)))
+      (let [state (or (.getCustomState tile) wm/default-state)]
+        [tile state])
       (catch Exception e
-        (log/warn "Could not resolve TileMatrix from Java BE:" (.getMessage e))
-        tile))))
+        (log/warn "Could not resolve customState from BE:" (.getMessage e))
+        [tile {}]))))
 
 (defn create-container
-  "Create a Matrix GUI container instance
-  
+  "Create a Matrix GUI container instance.
+
   Args:
-  - tile: Matrix TileEntity instance (Clojure map or Java ScriptedBlockEntity)
+  - tile: ScriptedBlockEntity or legacy Clojure map
   - player: Player who opened GUI
-  
+
   Returns: MatrixContainer record"
   [tile player]
-  (let [tile (resolve-tile tile)]
+  (let [[be state] (resolve-state tile)
+        proxy      (if be
+                     (wm/->MatrixJavaProxy be)
+                     (wm/->MatrixJavaProxy tile))]
     (->MatrixContainer
-      tile
-      (wm/->MatrixJavaProxy tile)  ; Wrap tile in Java accessor proxy
+      (or be tile)
+      proxy
       player
-    ;; Initialize synced data
-    (atom 0)    ; core-level
-    (atom 0)    ; plate-count
-    (atom false) ; is-working
-    (atom 0)    ; capacity
-    (atom 0)    ; max-capacity
-    (atom 0)    ; bandwidth
-    (atom 0.0)  ; range
-    (atom 0))))  ; sync-ticker - for throttling network sync
+      (atom (:core-level state 0))
+      (atom (:plate-count state 0))
+      (atom (wm/is-working? state))
+      (atom (wm/get-matrix-capacity state))
+      (atom (wm/get-matrix-capacity state))
+      (atom (long (wm/get-matrix-bandwidth state)))
+      (atom (double (wm/get-matrix-range state)))
+      (atom 0))))
 
 ;; ============================================================================
 ;; Slot Management
@@ -114,14 +118,29 @@
     :else false))
 
 (defn get-slot-item
-  "Get item from slot"
+  "Get item from slot. Reads from BE customState if tile-entity is a BE."
   [container slot-index]
-  (common/get-slot-item container slot-index))
+  (let [tile (:tile-entity container)]
+    (if (map? tile)
+      (common/get-slot-item container slot-index)
+      (try
+        (get-in (.getCustomState tile) [:inventory slot-index])
+        (catch Exception _ (common/get-slot-item container slot-index))))))
 
 (defn set-slot-item!
-  "Set item in slot"
+  "Set item in slot. Writes to BE customState if tile-entity is a BE."
   [container slot-index item-stack]
-  (common/set-slot-item! container slot-index item-stack))
+  (let [tile (:tile-entity container)]
+    (if (map? tile)
+      (common/set-slot-item! container slot-index item-stack)
+      (try
+        (let [state  (or (.getCustomState tile) wm/default-state)
+              state' (-> state
+                         (assoc-in [:inventory slot-index] item-stack)
+                         wm/recalculate-counts)]
+          (.setCustomState tile state'))
+        (catch Exception _
+          (common/set-slot-item! container slot-index item-stack))))))
 
 (defn slot-changed!
   "Called when slot contents change - triggers multiblock revalidation"

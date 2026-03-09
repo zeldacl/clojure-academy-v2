@@ -1,9 +1,27 @@
 (ns my-mod.block.wireless-node
-  "Wireless Node block implementation - energy network node with item charging
-  
-  Implements ITickable interface for automatic updates every game tick."
+  "Wireless Node block implementation - energy network node with item charging.
+
+  State model (Design-3):
+  All persistent state lives in ScriptedBlockEntity.customState as a Clojure
+  persistent map. The node-tiles atom has been removed.
+
+  State map shape:
+    {:node-type    keyword  ; :basic :standard :advanced
+     :node-name    String
+     :password     String
+     :placer-name  String
+     :energy       double
+     :enabled      boolean
+     :charging-in  boolean
+     :charging-out boolean
+     :update-ticker int
+     :inventory    [ItemStack|nil ItemStack|nil]}"
   (:require [my-mod.block.dsl :as bdsl]
             [my-mod.block.tile-dsl :as tdsl]
+            [my-mod.block.tile-logic :as tile-logic]
+            [my-mod.block.role-impls :as impls]
+            [my-mod.platform.capability :as platform-cap]
+            [my-mod.platform.world :as world]
             [clojure.string :as str]
             [my-mod.energy.operations :as energy]
             [my-mod.wireless.interfaces :as winterfaces]
@@ -11,7 +29,9 @@
             [my-mod.nbt.dsl :as nbt]
             [my-mod.wireless.world-data :as wd]
             [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log])
+  (:import [my_mod.api.wireless IWirelessNode]
+           [my_mod.api.energy IEnergyCapable]))
 
 ;; Node type specifications
 (def node-types
@@ -550,83 +570,221 @@
       (assoc :node-type (:node-type nbt-data))))
 
 ;; ============================================================================
-;; TileEntity Registry
+;; Default state
 ;; ============================================================================
 
-;; Global registry for tile entities (in real impl, this would be per-world)
-;; Supports both NodeTileEntity and NodeTileEntityTickable
-(defonce node-tiles (atom {}))
+(def node-default-state
+  {:node-type     :basic
+   :node-name     "Unnamed"
+   :password      ""
+   :placer-name   ""
+   :energy        0.0
+   :enabled       false
+   :charging-in   false
+   :charging-out  false
+   :update-ticker 0
+   :inventory     [nil nil]})
 
-(defn register-node-tile! [pos tile]
-  "Register a tile entity at a position
-  
-  Parameters:
-  - pos: BlockPos
-  - tile: NodeTileEntity or NodeTileEntityTickable"
-  (swap! node-tiles assoc pos tile))
+(defn- parse-node-type [block-id-or-kw]
+  (let [s (if (keyword? block-id-or-kw) (name block-id-or-kw) (str block-id-or-kw))]
+    (cond
+      (str/includes? s "advanced") :advanced
+      (str/includes? s "standard") :standard
+      :else :basic)))
 
-(defn unregister-node-tile! [pos]
-  (swap! node-tiles dissoc pos))
+(defn- node-safe-state [be block-id]
+  (or (.getCustomState be)
+      (assoc node-default-state :node-type (parse-node-type block-id))))
 
-(defn get-node-tile [pos]
-  "Get tile entity at position, unwrapping if tickable
-  
-  Parameters:
-  - pos: BlockPos
-  
-  Returns: NodeTileEntity record (unwrapped if necessary)"
-  (let [tile (get @node-tiles pos)]
-    (as-tile-data tile)))
+(defn- node-max-energy [state]
+  (get-in node-types [(keyword (:node-type state :basic)) :max-energy] 15000))
 
-(defn- parse-node-type-from-block-id
-  [block-id]
-  (cond
-    (str/includes? block-id "advanced") :advanced
-    (str/includes? block-id "standard") :standard
-    :else :basic))
+;; ============================================================================
+;; Design-3 tick logic (functional, operates on state map)
+;; ============================================================================
 
-(defn- ensure-node-tile-for-be!
-  "Compatibility adapter: materialize legacy NodeTileEntity from scripted BE context."
-  [world pos block-id]
-  (or (get-node-tile pos)
-      (let [node-type (parse-node-type-from-block-id block-id)
-            tile (create-node-tile-entity node-type world pos)]
-        (register-node-tile! pos tile)
-        tile)))
+(defn- tick-charge-in
+  "Attempt to pull energy from inventory[0] into the node. Returns updated state."
+  [state]
+  (let [input-item (get-in state [:inventory 0])]
+    (if (and input-item (energy/is-energy-item-supported? input-item))
+      (let [cur       (double (:energy state 0.0))
+            max-e     (double (node-max-energy state))
+            bandwidth (double (get-in node-types [(keyword (:node-type state :basic)) :bandwidth] 150))
+            needed    (min bandwidth (- max-e cur))
+            pulled    (energy/pull-energy-from-item input-item needed false)]
+        (if (pos? pulled)
+          (assoc state :energy (+ cur pulled) :charging-in true)
+          (assoc state :charging-in false)))
+      (assoc state :charging-in false))))
+
+(defn- tick-charge-out
+  "Attempt to push energy from node to inventory[1]. Returns updated state."
+  [state]
+  (let [output-item (get-in state [:inventory 1])
+        cur         (double (:energy state 0.0))]
+    (if (and output-item (energy/is-energy-item-supported? output-item) (pos? cur))
+      (let [bandwidth (double (get-in node-types [(keyword (:node-type state :basic)) :bandwidth] 150))
+            to-charge (min bandwidth cur)
+            leftover  (energy/charge-energy-to-item output-item to-charge false)
+            charged   (- to-charge leftover)]
+        (if (pos? charged)
+          (assoc state :energy (- cur charged) :charging-out true)
+          (assoc state :charging-out false)))
+      (assoc state :charging-out false))))
+
+(defn- tick-check-network
+  "Update :enabled flag based on world-data network lookup. Returns updated state."
+  [state level pos]
+  (try
+    (let [vblock      (vb/create-vnode (.getX pos) (.getY pos) (.getZ pos))
+          world-data  (wd/get-world-data level)
+          network     (wd/get-network-by-node world-data vblock)
+          connected?  (and network (not (:disposed network)))]
+      (assoc state :enabled connected?))
+    (catch Exception _
+      (assoc state :enabled false))))
+
+;; ============================================================================
+;; Scripted BE adapter functions (Design-3)
+;; ============================================================================
 
 (defn node-scripted-tick-fn
-  [level pos _state be]
+  [level pos _block-state be]
   (let [block-id (.getBlockId be)
-        tile (ensure-node-tile-for-be! level pos block-id)]
-    (when tile
-      (winterfaces/set-energy tile (.getEnergy be))
-      (update-node-tile! tile)
-      (.setEnergy be (double (winterfaces/get-energy tile)))
-      (.setScriptData be "node-type" (name (:node-type tile)))
-      (.setScriptData be "enabled" @(:enabled tile))
-      (.setScriptData be "node-name" (winterfaces/get-node-name tile))
-      (.setScriptData be "password" (winterfaces/get-password tile))
-      (.setChanged be))))
+        state    (node-safe-state be block-id)
+        ticker   (inc (get state :update-ticker 0))
+        state    (assoc state :update-ticker ticker)
+        ;; Every tick: charge in/out
+        state    (try (tick-charge-in state)  (catch Exception _ state))
+        state    (try (tick-charge-out state) (catch Exception _ state))
+        ;; Every 20 ticks: check network + sync
+        state    (if (zero? (mod ticker 20))
+                   (let [state (try (tick-check-network state level pos) (catch Exception _ state))]
+                     ;; Sync block state (energy level / connected)
+                     (try
+                       (let [blk-state (world/world-get-block-state level pos)]
+                         (when blk-state
+                           (let [energy-pct (/ (:energy state 0.0) (max 1 (node-max-energy state)))
+                                 e-level    (min 4 (int (Math/round (* 4 (double energy-pct)))))]
+                             (when-let [block (.getBlock blk-state)]
+                               (let [state-def (.getStateDefinition block)
+                                     ep        (when state-def (.getProperty state-def "energy"))
+                                     cp        (when state-def (.getProperty state-def "connected"))
+                                     new-bs    (cond-> blk-state
+                                                 ep (.setValue ep (Integer/valueOf e-level))
+                                                 cp (.setValue cp (Boolean/valueOf (:enabled state false))))]
+                                 (when (not= new-bs blk-state)
+                                   (.setBlock level pos new-bs 3)))))))
+                       (catch Exception _))
+                     ;; Broadcast sync
+                     (try
+                       (require 'my-mod.wireless.gui.node-sync)
+                       ((resolve 'my-mod.wireless.gui.node-sync/broadcast-node-state)
+                        level pos
+                        {:pos-x (.getX pos) :pos-y (.getY pos) :pos-z (.getZ pos)
+                         :energy (:energy state)
+                         :max-energy (node-max-energy state)
+                         :enabled (:enabled state)
+                         :node-name (:node-name state)
+                         :node-type (:node-type state)
+                         :password (:password state)})
+                       (catch Exception _))
+                     state)
+                   state)]
+    (.setCustomState be state)
+    (.setChanged be)))
 
 (defn node-scripted-load-fn
+  "Deserialize CompoundTag → state map."
   [tag]
-  {"energy" (if (.contains tag "Energy") (.getDouble tag "Energy") 0.0)
-   "node-type" (if (.contains tag "NodeType") (.getString tag "NodeType") "basic")
-   "node-name" (if (.contains tag "NodeName") (.getString tag "NodeName") "Unnamed")
-   "password" (if (.contains tag "Password") (.getString tag "Password") "")
-   "enabled" (if (.contains tag "Enabled") (.getBoolean tag "Enabled") false)})
+  (let [state (assoc node-default-state
+                :energy     (if (.contains tag "Energy")   (.getDouble  tag "Energy")   0.0)
+                :node-type  (keyword (if (.contains tag "NodeType")  (.getString  tag "NodeType")  "basic"))
+                :node-name  (if (.contains tag "NodeName") (.getString  tag "NodeName") "Unnamed")
+                :password   (if (.contains tag "Password") (.getString  tag "Password") "")
+                :enabled    (if (.contains tag "Enabled")  (.getBoolean tag "Enabled")  false)
+                :placer-name (if (.contains tag "Placer")  (.getString  tag "Placer")   ""))]
+    ;; Deserialize inventory
+    (if (.contains tag "NodeInventory")
+      (let [inv-tag (.getList tag "NodeInventory" 10)
+            inv     (reduce (fn [v i]
+                              (let [st   (.getCompound inv-tag i)
+                                    slot (.getInt st "Slot")
+                                    item (net.minecraft.world.item.ItemStack/of st)]
+                                (if (and (>= slot 0) (< slot 2))
+                                  (assoc v slot (when-not (.isEmpty item) item))
+                                  v)))
+                            [nil nil]
+                            (range (.size inv-tag)))]
+        (assoc state :inventory inv))
+      state)))
 
 (defn node-scripted-save-fn
+  "Serialize state map from BE customState → CompoundTag."
   [be tag]
-  (.putDouble tag "Energy" (.getEnergy be))
-  (when-let [node-type (.getScriptData be "node-type")]
-    (.putString tag "NodeType" (str node-type)))
-  (when-let [node-name (.getScriptData be "node-name")]
-    (.putString tag "NodeName" (str node-name)))
-  (when-let [password (.getScriptData be "password")]
-    (.putString tag "Password" (str password)))
-  (when-let [enabled (.getScriptData be "enabled")]
-    (.putBoolean tag "Enabled" (boolean enabled))))
+  (let [state (or (.getCustomState be) node-default-state)]
+    (.putDouble  tag "Energy"    (double (:energy state 0.0)))
+    (.putString  tag "NodeType"  (name   (:node-type state :basic)))
+    (.putString  tag "NodeName"  (str    (:node-name state "Unnamed")))
+    (.putString  tag "Password"  (str    (:password state "")))
+    (.putBoolean tag "Enabled"   (boolean (:enabled state false)))
+    (.putString  tag "Placer"    (str    (:placer-name state "")))
+    ;; Serialize inventory
+    (let [inv      (:inventory state [nil nil])
+          inv-list (net.minecraft.nbt.ListTag.)]
+      (doseq [slot (range 2)]
+        (when-let [item (nth inv slot nil)]
+          (let [st (net.minecraft.nbt.CompoundTag.)]
+            (.putInt st "Slot" slot)
+            (.save item st)
+            (.add inv-list st))))
+      (.put tag "NodeInventory" inv-list))))
+
+;; ============================================================================
+;; Container functions (slot access via BE customState)
+;; ============================================================================
+
+(def ^:private node-container-fns
+  {:get-size (fn [_be] 2)
+
+   :get-item (fn [be slot]
+               (get-in (or (.getCustomState be) node-default-state) [:inventory slot]))
+
+   :set-item! (fn [be slot item]
+                (let [state  (or (.getCustomState be) node-default-state)
+                      state' (assoc-in state [:inventory slot] item)]
+                  (.setCustomState be state')))
+
+   :remove-item (fn [be slot amount]
+                  (let [state (or (.getCustomState be) node-default-state)
+                        item  (get-in state [:inventory slot])]
+                    (when item
+                      (let [cnt (.getCount item)]
+                        (if (<= cnt amount)
+                          (do (.setCustomState be (assoc-in state [:inventory slot] nil)) item)
+                          (.splitStack item amount))))))
+
+   :remove-item-no-update (fn [be slot]
+                            (let [state (or (.getCustomState be) node-default-state)
+                                  item  (get-in state [:inventory slot])]
+                              (.setCustomState be (assoc-in state [:inventory slot] nil))
+                              item))
+
+   :clear! (fn [be]
+             (.setCustomState be (assoc (or (.getCustomState be) node-default-state)
+                                        :inventory [nil nil])))
+
+   :still-valid? (fn [_be _player] true)
+
+   :slots-for-face (fn [_be _face] (int-array [0 1]))
+
+   :can-place-through-face? (fn [_be slot item _face]
+                               (cond
+                                 (= slot 0) (energy/is-energy-item-supported? item)
+                                 :else false))
+
+   :can-take-through-face? (fn [_be slot _item _face] (= slot 1))})
 
 ;; ============================================================================
 ;; Tile DSL (shared BlockEntityType across node tiers)
@@ -642,9 +800,7 @@
   :registry-name "node_basic"
   :impl :scripted
   :blocks ["wireless-node-basic"]
-  :tile-kind :wireless-node
-  ;; Lifecycle hooks provided by tile-kind defaults (no per-tile boilerplate)
-  )
+  :tile-kind :wireless-node)
 
 (tdsl/deftile wireless-node-standard-tile
   :id "wireless-node-standard"
@@ -660,24 +816,32 @@
   :blocks ["wireless-node-advanced"]
   :tile-kind :wireless-node)
 
+;; Register Capabilities (once per capability type - idempotent)
+(platform-cap/declare-capability! :wireless-node IWirelessNode
+  (fn [be _side] (impls/->WirelessNodeImpl be)))
+
+(platform-cap/declare-capability! :wireless-energy IEnergyCapable
+  (fn [be _side] (impls/->ClojureEnergyImpl be)))
+
+;; Register for each node tier
+(doseq [tile-id ["wireless-node-basic" "wireless-node-standard" "wireless-node-advanced"]]
+  (tile-logic/register-tile-capability! tile-id :wireless-node)
+  (tile-logic/register-tile-capability! tile-id :wireless-energy)
+  (tile-logic/register-container! tile-id node-container-fns))
+
 ;; Block interaction handlers
 (defn handle-node-right-click [node-type]
   (fn [event-data]
     (log/info "Wireless Node (" (name node-type) ") right-clicked!")
     (let [{:keys [player world pos]} event-data
-          block-id (str "wireless-node-" (name node-type))
-          tile (or (get-node-tile pos)
-                   (ensure-node-tile-for-be! world pos block-id))]
-      (if tile
+          be    (world/world-get-tile-entity world pos)
+          state (when be (or (.getCustomState be) node-default-state))]
+      (if state
         (do
           (log/info "Node status:")
-          (log/info "  Energy:" (winterfaces/get-energy tile) "/" (winterfaces/get-max-energy tile))
-          (log/info "  Connected:" @(:enabled tile))
-          (log/info "  Charging In:" @(:charging-in tile))
-          (log/info "  Charging Out:" @(:charging-out tile))
-          (log/info "  Name:" (winterfaces/get-node-name tile))
-          ;; Open GUI — return the result map so the platform event dispatcher
-          ;; can call open-gui-for-player with :gui-id/:player/:world/:pos.
+          (log/info "  Energy:" (:energy state) "/" (node-max-energy state))
+          (log/info "  Connected:" (:enabled state))
+          (log/info "  Name:" (:node-name state))
           (try
             (if-let [open-node-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-node-gui)]
               (let [result (open-node-gui player world pos)]
@@ -694,27 +858,24 @@
     (log/info "Placing Wireless Node (" (name node-type) ")")
     (let [{:keys [player world pos]} event-data
           player-name (str player)
-          block-id (str "wireless-node-" (name node-type))
-          tile-data (ensure-node-tile-for-be! world pos block-id)]
-      ;; Set placer
-      (set-placer! tile-data player-name)
-      ;; Keep lightweight compatibility registration for GUI/network adapters
-      (register-node-tile! pos tile-data)
-      (log/info "Node placed by" player-name "at" pos)
-      (log/info "Node compatibility tile registered"))))
+          be          (world/world-get-tile-entity world pos)]
+      (when be
+        (let [state (or (.getCustomState be) node-default-state)]
+          (.setCustomState be (assoc state
+                                :node-type   node-type
+                                :placer-name player-name))))
+      (log/info "Node placed by" player-name "at" pos))))
 
 (defn handle-node-break [node-type]
   (fn [event-data]
     (log/info "Breaking Wireless Node (" (name node-type) ")")
     (let [{:keys [world pos]} event-data
-          tile (get-node-tile pos)]
-      (when tile
-        ;; Drop items from inventory
-        (doseq [item @(:inventory tile)]
-          (when item
-            (log/info "Dropping item:" item)))
-        ;; Unregister tile entity
-        (unregister-node-tile! pos)))))
+          be (world/world-get-tile-entity world pos)]
+      (when be
+        (let [state (or (.getCustomState be) node-default-state)]
+          ;; Drop inventory items
+          (doseq [item (:inventory state [])]
+            (when item (log/info "Dropping item:" item))))))))
 
 ;; Define the three node blocks
 (bdsl/defblock wireless-node-basic
@@ -770,27 +931,8 @@
 
 ;; Initialize wireless nodes
 (defn init-wireless-nodes! []
-  (log/info "Initialized Wireless Nodes:")
+  (log/info "Initialized Wireless Nodes (Design-3: customState):")
   (log/info "  - Basic: max-energy=" (:max-energy (:basic node-types)))
   (log/info "  - Standard: max-energy=" (:max-energy (:standard node-types)))
-  (log/info "  - Advanced: max-energy=" (:max-energy (:advanced node-types))))
-
-;; ============================================================================
-;; Tick System
-;; ============================================================================
-
-;; Tick handler - should be called every game tick for all active nodes
-;; Note: With ITickable implementation, Minecraft calls update() automatically
-;; This function is for manual/fallback ticking if needed
-(defn tick-all-nodes! []
-  "Compatibility no-op after migration to scripted BE tick path.
-  Node ticking now comes from ScriptedBlockEntity/serverTick -> tile-logic."
-  nil)
-
-(defn get-active-node-count []
-  "Get count of active nodes in registry"
-  (count @node-tiles))
-
-(defn get-all-node-positions []
-  "Get all positions with registered nodes"
-  (keys @node-tiles))
+  (log/info "  - Advanced: max-energy=" (:max-energy (:advanced node-types)))
+  (log/info "  - Capabilities :wireless-node + :wireless-energy registered"))

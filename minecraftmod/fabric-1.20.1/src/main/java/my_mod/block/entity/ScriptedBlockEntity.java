@@ -32,6 +32,10 @@ public class ScriptedBlockEntity extends BlockEntity {
 
     private final String tileId;
     private final String blockId;
+
+    /** Primary state: Clojure persistent map (Design-3). Null until first NBT load. */
+    private Object customState = null;
+
     private double energy = 0.0;
     private double maxEnergy = 1000.0;
     private String status = "STOPPED";
@@ -44,12 +48,15 @@ public class ScriptedBlockEntity extends BlockEntity {
         this.blockId = blockId;
     }
 
-    public String getTileId() {
-        return tileId;
-    }
+    public String getTileId()  { return tileId; }
+    public String getBlockId() { return blockId; }
 
-    public String getBlockId() {
-        return blockId;
+    // Design-3 primary state
+    public Object getCustomState() { return customState; }
+
+    public void setCustomState(Object state) {
+        this.customState = state;
+        setChanged();
     }
 
     public double getEnergy() {
@@ -181,7 +188,10 @@ public class ScriptedBlockEntity extends BlockEntity {
         try {
             Var readNbt = RT.var("my-mod.block.tile-logic", "read-nbt");
             Object data = readNbt.invoke(tileId, tag);
-            setFromData(data);
+            if (data != null) {
+                customState = data;
+                setFromData(data);
+            }
             readScriptData(tag);
         } catch (Exception e) {
             if (tag.contains("Energy")) this.energy = tag.getDouble("Energy");

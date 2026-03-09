@@ -34,3 +34,4 @@ run-data
 minecraftmod/forge-1.20.1/src/generated
 gradle
 .gradle
+.clj-kondo

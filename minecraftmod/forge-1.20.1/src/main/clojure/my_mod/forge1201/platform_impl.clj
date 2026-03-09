@@ -14,12 +14,15 @@
             [my-mod.platform.world :as world]
             [my-mod.platform.item :as item]
             [my-mod.platform.resource :as resource]
+            [my-mod.platform.capability :as platform-cap]
+            [my-mod.platform.be :as platform-be]
             [my-mod.util.log :as log])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
            [net.minecraft.world.item ItemStack]
-           [net.minecraft.resources ResourceLocation]))
+           [net.minecraft.resources ResourceLocation]
+           [my_mod.capability CapabilitySlots]))
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Forge 1.20.1)
@@ -190,5 +193,19 @@
   (alter-var-root #'resource/*resource-factory*
     (constantly (fn [namespace path]
                   (ResourceLocation. namespace path))))
+
+  ;; Bind the Forge implementation of declare-capability!
+  ;; When ac calls declare-capability!, this fn assigns a CapabilitySlots slot.
+  (alter-var-root #'platform-cap/*declare-capability-impl*
+    (constantly (fn [key _java-type]
+                  (CapabilitySlots/assign (name key)))))
+
+  ;; Bind the platform BE capability slot lookup
+  (alter-var-root #'platform-be/*be-capability-slot-fn*
+    (constantly (fn [key-string] (CapabilitySlots/get key-string))))
+
+  ;; Retroactively assign slots for capabilities already declared before this ran
+  (doseq [[key {:keys [java-type]}] @platform-cap/capability-type-registry]
+    (CapabilitySlots/assign (name key)))
   
   (log/info "Forge 1.20.1 platform implementations initialized successfully"))

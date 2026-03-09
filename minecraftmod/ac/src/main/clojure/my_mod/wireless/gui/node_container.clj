@@ -36,46 +36,42 @@
 ;; Container Creation
 ;; ============================================================================
 
-(defn- resolve-tile
-  "If tile is a Java ScriptedBlockEntity (not a Clojure map), look up the
-  corresponding Clojure TileNode from the block's registry using its BlockPos."
+(defn- resolve-state
+  "Resolve [be state] from either a ScriptedBlockEntity or a legacy map."
   [tile]
   (if (map? tile)
-    tile
+    [nil tile]
     (try
-      (let [pos (.getBlockPos tile)
-            get-node-tile (requiring-resolve 'my-mod.block.wireless-node/get-node-tile)]
-        (or (get-node-tile pos)
-            (do (log/warn "No Clojure TileNode found at" pos "- using raw BE") tile)))
+      [tile (or (.getCustomState tile) {})]
       (catch Exception e
-        (log/warn "Could not resolve TileNode from Java BE:" (.getMessage e))
-        tile))))
+        (log/warn "Could not resolve customState from BE:" (.getMessage e))
+        [tile {}]))))
 
 (defn create-container
-  "Create a Node GUI container instance
-  
+  "Create a Node GUI container instance.
+
   Args:
-  - tile: NodeTileEntity instance (Clojure map or Java ScriptedBlockEntity)
+  - tile: ScriptedBlockEntity or legacy Clojure state map
   - player: Player who opened GUI
-  
+
   Returns: NodeContainer record"
   [tile player]
-  (let [tile (resolve-tile tile)]
+  (let [[be state] (resolve-state tile)
+        entity     (or be tile)]
     (->NodeContainer
-      tile
+      entity
       player
-    ;; Initialize synced data from tile
-    (atom (int (winterfaces/get-energy tile)))
-    (atom (int (winterfaces/get-max-energy tile)))
-    (atom (:node-type tile))
-    (atom @(:enabled tile))
-    (atom (winterfaces/get-node-name tile))
-    (atom (winterfaces/get-password tile))
-    (atom 0)      ; Transfer rate computed on update
-    (atom 0)      ; Capacity - network node count
-    (atom 0)      ; Max capacity - from matrix
-    (atom 0)      ; Charge ticker - for throttling charging
-    (atom 0))))   ; Sync ticker - for throttling network sync
+      (atom (int (get state :energy 0.0)))
+      (atom (int (get state :max-energy 15000)))
+      (atom (keyword (get state :node-type :basic)))
+      (atom (boolean (get state :enabled false)))
+      (atom (str (get state :node-name "Unnamed")))
+      (atom (str (get state :password "")))
+      (atom 0)      ; transfer-rate
+      (atom 0)      ; capacity
+      (atom 0)      ; max-capacity
+      (atom 0)      ; charge-ticker
+      (atom 0))))
 
 ;; ============================================================================
 ;; Slot Management
@@ -83,6 +79,13 @@
 
 (def slot-input 0)
 (def slot-output 1)
+
+(defn- tile-state
+  "Get current state map from tile-entity (BE or legacy map)."
+  [tile]
+  (if (map? tile)
+    tile
+    (try (.getCustomState tile) (catch Exception _ {}))))
 
 (defn get-slot-count
   "Get total slot count (2 for node)"
@@ -92,7 +95,8 @@
 (defn get-owner
   "Get node owner name"
   [container]
-  (:placer-name (:tile-entity container)))
+  (let [tile (:tile-entity container)]
+    (:placer-name (tile-state tile))))
 
 (defn can-place-item?
   "Check if item can be placed in slot
@@ -106,14 +110,27 @@
     false))
 
 (defn get-slot-item
-  "Get item from slot"
+  "Get item from slot. Reads from BE customState when tile-entity is a BE."
   [container slot-index]
-  (common/get-slot-item container slot-index))
+  (let [tile (:tile-entity container)]
+    (if (map? tile)
+      (common/get-slot-item container slot-index)
+      (try
+        (get-in (.getCustomState tile) [:inventory slot-index])
+        (catch Exception _ (common/get-slot-item container slot-index))))))
 
 (defn set-slot-item!
-  "Set item in slot"
+  "Set item in slot. Writes to BE customState when tile-entity is a BE."
   [container slot-index item-stack]
-  (common/set-slot-item! container slot-index item-stack))
+  (let [tile (:tile-entity container)]
+    (if (map? tile)
+      (common/set-slot-item! container slot-index item-stack)
+      (try
+        (let [state  (or (.getCustomState tile) {})
+              state' (assoc-in state [:inventory slot-index] item-stack)]
+          (.setCustomState tile state'))
+        (catch Exception _
+          (common/set-slot-item! container slot-index item-stack))))))
 
 (defn slot-changed!
   "Called when slot contents change"
@@ -125,35 +142,31 @@
 ;; ============================================================================
 
 (defn sync-to-client!
-  "Update container data from tile entity (server -> client)
-  
-  Called every tick on server side. Network capacity queries are throttled 
-  to every 5 seconds (100 ticks) to reduce performance impact."
+  "Update container data from tile entity (server -> client).
+  Works with both ScriptedBlockEntity (Design-3) and legacy Clojure maps."
   [container]
-  (let [tile (:tile-entity container)]
+  (let [tile  (:tile-entity container)
+        state (or (tile-state tile) {})]
     ;; Update energy (every tick)
-    (reset! (:energy container) (int (winterfaces/get-energy tile)))
-    (reset! (:max-energy container) (int (winterfaces/get-max-energy tile)))
-    
-    ;; Update connection status (every tick)
-    (reset! (:is-online container) @(:enabled tile))
-    
-    ;; Update node info (every tick)
-    (reset! (:ssid container) (winterfaces/get-node-name tile))
-    (reset! (:password container) (winterfaces/get-password tile))
-    
-    ;; Update network capacity info (throttled to every 100 ticks = 5 seconds)
+    (reset! (:energy container)     (int (get state :energy 0.0)))
+    (reset! (:max-energy container) (int (get state :max-energy 15000)))
+
+    ;; Update connection status
+    (reset! (:is-online container) (boolean (get state :enabled false)))
+
+    ;; Update node info
+    (reset! (:ssid container)     (str (get state :node-name "Unnamed")))
+    (reset! (:password container) (str (get state :password "")))
+
+    ;; Update network capacity (throttled)
     (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
-      (fn []
-        (sync-helpers/query-node-network-capacity! container)))
-    
-    ;; Compute transfer rate (charging speed)
-    (let [charging-in? @(:charging-in tile)
-          charging-out? @(:charging-out tile)
-          rate (cond
-             (and charging-in? charging-out?) 200 ; Bidirectional
-             charging-in? 100  ; Charging from slot
-             charging-out? 100 ; Charging to slot
+      (fn [] (sync-helpers/query-node-network-capacity! container)))
+
+    ;; Compute transfer rate
+    (let [rate (cond
+                 (and (get state :charging-in false) (get state :charging-out false)) 200
+                 (get state :charging-in false)  100
+                 (get state :charging-out false) 100
                  :else 0)]
       (reset! (:transfer-rate container) rate))))
 
@@ -205,50 +218,11 @@
 ;; ============================================================================
 
 (defn tick!
-  "Called every tick on server side
-  
-  Updates synced data and handles slot charging logic"
+  "Called every tick on server side.
+  Updates synced data. Actual charging logic runs in the scripted BE tick fn."
   [container]
-  ;; Sync data to client
   (sync-to-client! container)
-  
-  ;; Increment charge ticker
-  (swap! (:charge-ticker container) inc)
-  
-  ;; Only perform charging operations every 10 ticks (0.5 seconds)
-  ;; This prevents overly fast energy transfer
-  (when (>= @(:charge-ticker container) 10)
-    (reset! (:charge-ticker container) 0)
-    
-    ;; Handle item charging in input slot
-    (let [tile (:tile-entity container)
-          input-item (get-slot-item container slot-input)
-          output-item (get-slot-item container slot-output)]
-      
-      ;; Charge items from node energy
-      (when (and output-item
-                 (energy-stub/is-energy-item-supported? output-item)
-                 (> (winterfaces/get-energy tile) 0))
-        (let [to-give (min 100 (winterfaces/get-energy tile))
-              pulled (energy-stub/pull-from-node tile to-give false)
-              leftover (energy-stub/charge-energy-to-item output-item pulled false)
-              given (- pulled leftover)]
-          (when (> leftover 0)
-            (energy-stub/charge-node tile leftover false))
-          (reset! (:charging-out tile) (> given 0))))
-      
-      ;; Charge node from items
-      (when (and input-item
-                 (energy-stub/is-energy-item-supported? input-item)
-                 (< (winterfaces/get-energy tile) (winterfaces/get-max-energy tile)))
-        (let [to-take (min 100 (- (winterfaces/get-max-energy tile)
-                                   (winterfaces/get-energy tile)))
-              taken (energy-stub/pull-energy-from-item input-item to-take false)
-              leftover (energy-stub/charge-node tile taken false)
-              accepted (- taken leftover)]
-          (when (> leftover 0)
-            (energy-stub/charge-energy-to-item input-item leftover false))
-          (reset! (:charging-in tile) (> accepted 0)))))))
+  (swap! (:charge-ticker container) inc))
 
 ;; ============================================================================
 ;; Button Actions
@@ -259,35 +233,33 @@
 (def button-set-password 2)
 
 (defn handle-button-click!
-  "Handle button click from client
-  
-  Args:
-  - container: NodeContainer instance
-  - button-id: int button ID
-  - data: optional data map from client"
+  "Handle button click from client.
+  Updates BE customState for Design-3 BEs; ignores for legacy maps."
   [container button-id data]
   (let [tile (:tile-entity container)]
-    (case button-id
-      0 ; Toggle connection
-      (do
-        (swap! (:enabled tile) not)
-        (log/info "Toggled node connection:" @(:enabled tile)))
-      
-      1 ; Set SSID
-      (when-let [new-ssid (:ssid data)]
-        (let [new-tile (assoc tile :node-name new-ssid)]
-          (log/info "Set node SSID to:" new-ssid)
-          ;; In real implementation, update tile entity
-          ))
-      
-      2 ; Set password
-      (when-let [new-password (:password data)]
-        (let [new-tile (assoc tile :password new-password)]
-          (log/info "Set node password")
-          ;; In real implementation, update tile entity
-          ))
-      
-      (log/warn "Unknown button ID:" button-id))))
+    (when-not (map? tile)
+      (case button-id
+        0 ; Toggle connection
+        (let [state  (or (.getCustomState tile) {})
+              state' (update state :enabled not)]
+          (.setCustomState tile state')
+          (log/info "Toggled node connection:" (:enabled state')))
+
+        1 ; Set SSID
+        (when-let [new-ssid (:ssid data)]
+          (let [state  (or (.getCustomState tile) {})
+                state' (assoc state :node-name new-ssid)]
+            (.setCustomState tile state')
+            (log/info "Set node SSID to:" new-ssid)))
+
+        2 ; Set password
+        (when-let [new-password (:password data)]
+          (let [state  (or (.getCustomState tile) {})
+                state' (assoc state :password new-password)]
+            (.setCustomState tile state')
+            (log/info "Set node password")))
+
+        (log/warn "Unknown button ID:" button-id)))))
 
 ;; ============================================================================
 ;; Quick Move (Shift+Click)
