@@ -53,13 +53,10 @@
   - Only renders if matrix is working: plateCount=3 AND coreLevel>0
   
   Args:
-  - tile: TileMatrix instance with @plate-count"
+  - tile: TileMatrix block entity (or nil for scripted path); state from customState."
   [tile]
-  (let [;; Read state from tile
-        plate-count (int @(:plate-count tile))
+  (let [plate-count (int (wm/get-plate-count tile))
         core-level (wm/get-core-level tile)
-        
-        ;; Only show shields if fully operational (3 plates + core)
         active-plates (if (and (= plate-count 3) (> core-level 0)) 
                         3 
                         0)
@@ -112,27 +109,17 @@
 
 ;; Register the Matrix renderer
 (defn register!
-  "Register this renderer for TileMatrix tiles
-  
+  "Register this renderer for wireless-matrix scripted block entities.
   Should be called during platform initialization."
   []
-  ;; Legacy path (record tile)
-  (tesr-api/register-tile-renderer!
-   my_mod.block.wireless_matrix.TileMatrix
-   (reify tesr-api/ITileEntityRenderer
-     (render-tile [_ tile-entity x y z]
-       (mb-helper/render-multiblock-tesr
-        tile-entity
-        x y z
-        render-at-origin))))
-  ;; Scripted BE path (block-id dispatch). During migration we render static base/core.
   (tesr-api/register-scripted-tile-renderer!
    "wireless-matrix"
    (reify tesr-api/ITileEntityRenderer
-     (render-tile [_ _tile-entity _x _y _z]
-       (render/with-matrix
-         (render/bind-texture @texture)
-         (render-base nil))))))
+     (render-tile [_ tile-entity _x _y _z]
+       (mb-helper/render-multiblock-tesr
+        tile-entity
+        _x _y _z
+        render-at-origin)))))
 
 ;; ============================================================================
 ;; Platform Integration Notes

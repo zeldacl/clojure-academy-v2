@@ -72,6 +72,18 @@
   (and (> (:core-level state 0) 0)
        (= (:plate-count state 0) 3)))
 
+(defn get-plate-count
+  "Return plate count (0–3) from block entity state. For use by renderers.
+  Returns 0 when be is nil."
+  [be]
+  (if be (get (safe-state be) :plate-count 0) 0))
+
+(defn get-core-level
+  "Return core level (0–3) from block entity state. For use by renderers.
+  Returns 0 when be is nil."
+  [be]
+  (if be (get (safe-state be) :core-level 0) 0))
+
 ;; ============================================================================
 ;; Java accessor bridge
 ;; ============================================================================
