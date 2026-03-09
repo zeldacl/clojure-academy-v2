@@ -7,6 +7,8 @@
   WirelessMatrixImpl   → implements IWirelessMatrix
   WirelessNodeImpl     → implements IWirelessNode
   ClojureEnergyImpl    → implements IEnergyCapable (platform-neutral energy)"
+  (:require [my-mod.block.node-schema  :as nschema]
+            [my-mod.block.state-schema :as schema])
   (:import [my_mod.api.wireless IWirelessMatrix IWirelessNode]
            [my_mod.api.energy IEnergyCapable]))
 
@@ -59,42 +61,35 @@
   IWirelessNode
 
   (getEnergy [_]
-    (double (get (.getCustomState be) :energy 0.0)))
+    (let [state (or (.getCustomState be) nschema/node-default-state)]
+      (double (schema/get-field nschema/node-state-schema state :energy))))
 
   (getMaxEnergy [_]
-    (let [state (.getCustomState be)
-          node-type (keyword (get state :node-type "basic"))]
-      (case node-type
-        :advanced 200000.0
-        :standard  50000.0
-                   15000.0)))
+    (let [state (or (.getCustomState be) nschema/node-default-state)]
+      (double (nschema/node-max-energy state))))
 
   (getBandwidth [_]
-    (let [node-type (keyword (get (.getCustomState be) :node-type "basic"))]
-      (case node-type
-        :advanced 900.0
-        :standard 300.0
-                  150.0)))
+    (let [state     (or (.getCustomState be) nschema/node-default-state)
+          node-type (keyword (schema/get-field nschema/node-state-schema state :node-type))]
+      (double (get-in nschema/node-types [node-type :bandwidth] 150))))
 
   (getCapacity [_]
-    (let [node-type (keyword (get (.getCustomState be) :node-type "basic"))]
-      (case node-type
-        :advanced 20
-        :standard 10
-                   5)))
+    (let [state     (or (.getCustomState be) nschema/node-default-state)
+          node-type (keyword (schema/get-field nschema/node-state-schema state :node-type))]
+      (int (get-in nschema/node-types [node-type :capacity] 5))))
 
   (getRange [_]
-    (let [node-type (keyword (get (.getCustomState be) :node-type "basic"))]
-      (case node-type
-        :advanced 19.0
-        :standard 12.0
-                   9.0)))
+    (let [state     (or (.getCustomState be) nschema/node-default-state)
+          node-type (keyword (schema/get-field nschema/node-state-schema state :node-type))]
+      (double (get-in nschema/node-types [node-type :range] 9))))
 
   (getNodeName [_]
-    (str (get (.getCustomState be) :node-name "Unnamed")))
+    (let [state (or (.getCustomState be) nschema/node-default-state)]
+      (str (schema/get-field nschema/node-state-schema state :node-name))))
 
   (getPassword [_]
-    (str (get (.getCustomState be) :password "")))
+    (let [state (or (.getCustomState be) nschema/node-default-state)]
+      (str (schema/get-field nschema/node-state-schema state :password))))
 
   Object
   (toString [_]
@@ -109,9 +104,9 @@
   IEnergyCapable
 
   (receiveEnergy [_ max-receive simulate]
-    (let [state    (.getCustomState be)
-          cur      (double (get state :energy 0.0))
-          max-e    (double (get state :max-energy 15000.0))
+    (let [state    (or (.getCustomState be) nschema/node-default-state)
+          cur      (double (schema/get-field nschema/node-state-schema state :energy))
+          max-e    (double (nschema/node-max-energy state))
           can-recv (- max-e cur)
           actual   (min can-recv (double max-receive))]
       (when (and (not simulate) (pos? actual))
@@ -119,18 +114,20 @@
       (int actual)))
 
   (extractEnergy [_ max-extract simulate]
-    (let [state   (.getCustomState be)
-          cur     (double (get state :energy 0.0))
-          actual  (min cur (double max-extract))]
+    (let [state  (or (.getCustomState be) nschema/node-default-state)
+          cur    (double (schema/get-field nschema/node-state-schema state :energy))
+          actual (min cur (double max-extract))]
       (when (and (not simulate) (pos? actual))
         (.setCustomState be (assoc state :energy (- cur actual))))
       (int actual)))
 
   (getEnergyStored [_]
-    (int (get (.getCustomState be) :energy 0.0)))
+    (let [state (or (.getCustomState be) nschema/node-default-state)]
+      (int (schema/get-field nschema/node-state-schema state :energy))))
 
   (getMaxEnergyStored [_]
-    (int (get (.getCustomState be) :max-energy 15000.0)))
+    (let [state (or (.getCustomState be) nschema/node-default-state)]
+      (int (nschema/node-max-energy state))))
 
   (canExtract [_] true)
   (canReceive [_] true)

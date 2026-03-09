@@ -7,7 +7,8 @@
   每个平台的datagen实现可以根据这些定义调用对应的API生成JSON文件。"
   (:require [clojure.string :as str]
             [my-mod.registry.metadata :as registry-metadata]
-            [my-mod.block.wireless-node :as wireless-node]))
+            [my-mod.block.wireless-node :as wireless-node]
+            [my-mod.block.node-schema :as nschema]))
 
 ;; ============================================================================
 ;; BlockState部分定义
@@ -58,7 +59,7 @@
         energy-max (get-in wireless-node/block-state-properties [:energy :max])
         connected-type (get-in wireless-node/block-state-properties [:connected :type])]
     (into {}
-          (for [node-type (sort (keys wireless-node/node-types))
+          (for [node-type (sort (keys nschema/node-types))
                 :let [node-type-name (name node-type)
                       block-key (keyword (str "wireless-node-" node-type-name))
                       registry-name (str "node_" node-type-name)
@@ -85,7 +86,7 @@
 (defn- node-model-pattern
   "从 wireless-node 生成 node 模型名的正则，避免与 NODE_BLOCKS 重复维护 node 类型与变体。"
   []
-  (let [node-type-str (str "(" (str/join "|" (map name (sort (keys wireless-node/node-types)))) ")")
+  (let [node-type-str (str "(" (str/join "|" (map name (sort (keys nschema/node-types)))) ")")
         variant-str   "(base|energy_\\d+|connected)"]
     (re-pattern (str "node_" node-type-str "_" variant-str))))
 

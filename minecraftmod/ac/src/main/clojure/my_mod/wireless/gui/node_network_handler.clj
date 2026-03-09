@@ -6,7 +6,6 @@
             [my-mod.wireless.world-data :as world-data]
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.wireless.interfaces :as winterfaces]
-            [my-mod.block.wireless-node :as node]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.util.log :as log]))
 
@@ -18,11 +17,13 @@
 (def ^:const MSG_DISCONNECT "wireless_node_disconnect")
 
 (defn- update-node-field!
-  [tile field value]
-  (case field
-    :node-name (node/set-node-name! tile value)
-    :password (node/set-password-str! tile value)
-    tile))
+  "Update a single field in the BE's customState (Design-3).
+  be must be a ScriptedBlockEntity whose customState is the node state map."
+  [be field value]
+  (let [state (or (.getCustomState be) {})]
+    (.setCustomState be (assoc state field value))
+    (try (.setChanged be) (catch Exception _))
+    be))
 
 (defn handle-get-status
   [payload player]
