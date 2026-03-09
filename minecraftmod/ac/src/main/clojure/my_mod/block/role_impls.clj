@@ -7,7 +7,8 @@
   WirelessMatrixImpl   → implements IWirelessMatrix
   WirelessNodeImpl     → implements IWirelessNode
   ClojureEnergyImpl    → implements IEnergyCapable (platform-neutral energy)"
-  (:require [my-mod.block.node-schema  :as nschema]
+  (:require [my-mod.block.matrix-schema :as mschema]
+            [my-mod.block.node-schema  :as nschema]
             [my-mod.block.state-schema :as schema])
   (:import [my_mod.api.wireless IWirelessMatrix IWirelessNode]
            [my_mod.api.energy IEnergyCapable]))
@@ -20,33 +21,27 @@
   IWirelessMatrix
 
   (getMatrixCapacity [_]
-    (let [state (.getCustomState be)]
-      (if state
-        (let [plates  (get state :plate-count 0)
-              core-lv (get state :core-level 0)]
-          (if (and (> core-lv 0) (= plates 3))
-            (int (* 8 core-lv))
-            0))
+    (let [state   (or (.getCustomState be) mschema/matrix-default-state)
+          plates  (schema/get-field mschema/matrix-state-schema state :plate-count)
+          core-lv (schema/get-field mschema/matrix-state-schema state :core-level)]
+      (if (and (> core-lv 0) (= plates 3))
+        (int (* 8 core-lv))
         0)))
 
   (getMatrixBandwidth [_]
-    (let [state (.getCustomState be)]
-      (if state
-        (let [plates  (get state :plate-count 0)
-              core-lv (get state :core-level 0)]
-          (if (and (> core-lv 0) (= plates 3))
-            (double (* core-lv core-lv 60))
-            0.0))
+    (let [state   (or (.getCustomState be) mschema/matrix-default-state)
+          plates  (schema/get-field mschema/matrix-state-schema state :plate-count)
+          core-lv (schema/get-field mschema/matrix-state-schema state :core-level)]
+      (if (and (> core-lv 0) (= plates 3))
+        (double (* core-lv core-lv 60))
         0.0)))
 
   (getMatrixRange [_]
-    (let [state (.getCustomState be)]
-      (if state
-        (let [plates  (get state :plate-count 0)
-              core-lv (get state :core-level 0)]
-          (if (and (> core-lv 0) (= plates 3))
-            (double (* 24 (Math/sqrt core-lv)))
-            0.0))
+    (let [state   (or (.getCustomState be) mschema/matrix-default-state)
+          plates  (schema/get-field mschema/matrix-state-schema state :plate-count)
+          core-lv (schema/get-field mschema/matrix-state-schema state :core-level)]
+      (if (and (> core-lv 0) (= plates 3))
+        (double (* 24 (Math/sqrt core-lv)))
         0.0)))
 
   Object

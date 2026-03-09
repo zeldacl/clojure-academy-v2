@@ -5,6 +5,7 @@
   is read from / written to (.getCustomState be) / (.setCustomState be new-state)."
   (:require [my-mod.util.log :as log]
             [my-mod.block.wireless-matrix :as wm]
+            [my-mod.block.matrix-schema :as mschema]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
             [my-mod.wireless.gui.container-common :as common]
@@ -47,7 +48,7 @@
   (if (map? tile)
     [nil tile]
     (try
-      (let [state (or (.getCustomState tile) wm/default-state)]
+      (let [state (or (.getCustomState tile) mschema/matrix-default-state)]
         [tile state])
       (catch Exception e
         (log/warn "Could not resolve customState from BE:" (.getMessage e))
@@ -128,7 +129,7 @@
     (if (map? tile)
       (common/set-slot-item! container slot-index item-stack)
       (try
-        (let [state  (or (.getCustomState tile) wm/default-state)
+        (let [state  (or (.getCustomState tile) mschema/matrix-default-state)
               state' (-> state
                          (assoc-in [:inventory slot-index] item-stack)
                          wm/recalculate-counts)]

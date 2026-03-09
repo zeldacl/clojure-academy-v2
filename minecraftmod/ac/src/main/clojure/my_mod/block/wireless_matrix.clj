@@ -3,20 +3,17 @@
 
   State model (Design-3):
   All persistent state lives in ScriptedBlockEntity.customState as a Clojure
-  persistent map.  The matrix-tiles atom has been removed; world+pos → BE →
-  .getCustomState is the only data path.
+  persistent map.
 
-  State map shape:
-    {:placer-name  String
-     :inventory    [ItemStack|nil ItemStack|nil ItemStack|nil ItemStack|nil]
-     :plate-count  int   ; 0-3 constraint plates installed
-     :core-level   int   ; 0 = no core, 1-4 = tier
-     :direction    keyword  ; :north :south :east :west
-     :sub-id       int   ; 0 = origin, 1-7 = sub-blocks}"
+  State map shape is defined by my-mod.block.matrix-schema/matrix-state-schema.
+  Do NOT hard-code field names here; add/rename/remove fields only in that
+  schema and everything below updates automatically."
   (:require [my-mod.block.dsl :as bdsl]
             [my-mod.block.tile-dsl :as tdsl]
             [my-mod.block.tile-logic :as tile-logic]
             [my-mod.block.role-impls :as impls]
+            [my-mod.block.matrix-schema :as mschema]
+            [my-mod.block.state-schema :as schema]
             [my-mod.platform.capability :as platform-cap]
             [my-mod.platform.world :as world]
             [my-mod.item.constraint-plate :as plate]
@@ -26,28 +23,31 @@
   (:import [my_mod.api.wireless IWirelessMatrix]))
 
 ;; ============================================================================
-;; Default state
+;; Schema-derived functions  (single-call derivation, executed once at load)
 ;; ============================================================================
 
-(def default-state
-  {:placer-name ""
-   :inventory   [nil nil nil nil]
-   :plate-count 0
-   :core-level  0
-   :direction   :north
-   :sub-id      0})
+;; matrix-scripted-load-fn :: CompoundTag -> state-map
+(def matrix-scripted-load-fn
+  (schema/schema->load-fn mschema/matrix-state-schema))
+
+;; matrix-scripted-save-fn :: (be, CompoundTag) -> nil
+(def matrix-scripted-save-fn
+  (schema/schema->save-fn mschema/matrix-state-schema))
+
+;; ============================================================================
+;; Private helpers
+;; ============================================================================
 
 (defn- safe-state
   "Return the customState map from a BE, falling back to defaults."
   [be]
-  (or (.getCustomState be) default-state))
+  (or (.getCustomState be) mschema/matrix-default-state))
 
 ;; ============================================================================
 ;; Inventory helpers (operating on the state map directly)
 ;; ============================================================================
 
-(defn get-inv-slot [state slot] (get-in state [:inventory slot]))
-(defn set-inv-slot [state slot item] (assoc-in state [:inventory slot] item))
+(defn- set-inv-slot [state slot item] (assoc-in state [:inventory slot] item))
 
 (defn- recalculate-plate-count
   "Count non-nil items in slots 0-2."
@@ -73,7 +73,7 @@
        (= (:plate-count state 0) 3)))
 
 ;; ============================================================================
-;; Java accessor bridge (IMatrixJavaProxy replacement)
+;; Java accessor bridge
 ;; ============================================================================
 
 (definterface IMatrixJavaProxy
@@ -99,25 +99,6 @@
   (toString [_] (str "MatrixJavaProxy@" (.getBlockPos be))))
 
 ;; ============================================================================
-;; Core calculations (pure, operate on state map)
-;; ============================================================================
-
-(defn get-matrix-capacity [state]
-  (if (is-working? state)
-    (* 8 (:core-level state))
-    0))
-
-(defn get-matrix-bandwidth [state]
-  (if (is-working? state)
-    (let [lv (:core-level state)] (* lv lv 60))
-    0))
-
-(defn get-matrix-range [state]
-  (if (is-working? state)
-    (* 24 (Math/sqrt (:core-level state)))
-    0.0))
-
-;; ============================================================================
 ;; Tile lifecycle hooks (full-state path)
 ;; ============================================================================
 
@@ -131,15 +112,13 @@
       (when (and (zero? (:sub-id state 0))
                  (zero? (mod ticker 15)))
         (try
-          (sync/broadcast-matrix-state level pos
-            {:pos-x (.getX pos) :pos-y (.getY pos) :pos-z (.getZ pos)
-             :plate-count (:plate-count state 0)
-             :placer-name (:placer-name state "")
-             :is-working  (is-working? state)
-             :core-level  (:core-level state 0)
-             :capacity    (get-matrix-capacity state)
-             :bandwidth   (get-matrix-bandwidth state)
-             :range       (get-matrix-range state)})
+          (let [impl (impls/->WirelessMatrixImpl be)]
+            (sync/broadcast-matrix-state level pos
+              (-> (schema/schema->sync-payload mschema/matrix-state-schema state pos)
+                  (assoc :is-working  (is-working? state)
+                         :capacity    (.getMatrixCapacity impl)
+                         :bandwidth   (.getMatrixBandwidth impl)
+                         :range       (.getMatrixRange impl)))))
           (catch Exception e
             (log/debug "Matrix sync skipped:" (.getMessage e)))))
       ;; Verify structure every 20 ticks
@@ -154,54 +133,10 @@
               (doseq [[idx item] (map-indexed vector (:inventory state []))]
                 (when item (log/info "Dropping item from slot" idx)))
               ;; Clear state
-              (.setCustomState be default-state)))
+              (.setCustomState be mschema/matrix-default-state)))
           (catch Exception e
             (log/error "Error verifying matrix structure:" (.getMessage e)))))
       (.setCustomState be (assoc state :update-ticker ticker)))))
-
-(defn matrix-scripted-load-fn
-  "Deserialize CompoundTag → state map."
-  [tag]
-  (let [state (assoc default-state
-                :placer-name (if (.contains tag "Placer")      (.getString tag "Placer") "")
-                :plate-count (if (.contains tag "PlateCount")  (.getInt    tag "PlateCount") 0)
-                :core-level  (if (.contains tag "CoreLevel")   (.getInt    tag "CoreLevel") 0)
-                :sub-id      (if (.contains tag "SubId")       (.getInt    tag "SubId") 0)
-                :direction   (keyword (if (.contains tag "Direction") (.getString tag "Direction") "north")))]
-    ;; Deserialize inventory
-    (if (.contains tag "Inventory")
-      (let [inv-tag (.getList tag "Inventory" 10)
-            inv     (reduce (fn [v i]
-                              (let [slot-tag (.getCompound inv-tag i)
-                                    slot     (.getInt slot-tag "Slot")
-                                    item     (net.minecraft.world.item.ItemStack/of slot-tag)]
-                                (if (and (>= slot 0) (< slot 4))
-                                  (assoc v slot (when-not (.isEmpty item) item))
-                                  v)))
-                            [nil nil nil nil]
-                            (range (.size inv-tag)))]
-        (assoc state :inventory inv))
-      state)))
-
-(defn matrix-scripted-save-fn
-  "Serialize state map → CompoundTag."
-  [be tag]
-  (let [state (safe-state be)]
-    (.putString tag "Placer"     (str (:placer-name state "")))
-    (.putInt    tag "PlateCount" (int (:plate-count state 0)))
-    (.putInt    tag "CoreLevel"  (int (:core-level state 0)))
-    (.putInt    tag "SubId"      (int (:sub-id state 0)))
-    (.putString tag "Direction"  (name (:direction state :north)))
-    ;; Serialize inventory
-    (let [inv     (:inventory state [nil nil nil nil])
-          inv-list (net.minecraft.nbt.ListTag.)]
-      (doseq [slot (range 4)]
-        (when-let [item (nth inv slot nil)]
-          (let [slot-tag (net.minecraft.nbt.CompoundTag.)]
-            (.putInt slot-tag "Slot" slot)
-            (.save item slot-tag)
-            (.add inv-list slot-tag))))
-      (.put tag "Inventory" inv-list))))
 
 ;; ============================================================================
 ;; Container functions (slot access via BE customState)
@@ -312,7 +247,7 @@
           player-name (str player)
           be (world/world-get-tile-entity world pos)]
       (when be
-        (let [state (or (.getCustomState be) default-state)]
+        (let [state (or (.getCustomState be) mschema/matrix-default-state)]
           (.setCustomState be (assoc state :placer-name player-name))))
       (log/info "Matrix placed by" player-name "at" pos))))
 
@@ -347,11 +282,4 @@
   :on-place        (handle-matrix-place)
   :on-break        (handle-matrix-break))
 
-;; ============================================================================
-;; Initialization
-;; ============================================================================
 
-(defn init-wireless-matrix! []
-  (log/info "Initialized Wireless Matrix (Design-3: customState)")
-  (log/info "  - 2x2x2 multiblock, 4 inventory slots")
-  (log/info "  - Capability :wireless-matrix registered"))
