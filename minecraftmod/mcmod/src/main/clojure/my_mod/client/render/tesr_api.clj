@@ -15,13 +15,17 @@
   This protocol is implemented by *renderer objects* stored in the
   `renderer-registry`, not by the tile entities themselves."
 
-  (render-tile [renderer tile-entity x y z]
-    "Render the tile entity at the given position (tile-relative coordinates).
+  (render-tile [renderer tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
+    "Render the tile entity.
 
     Args:
       renderer: ITileEntityRenderer implementation
       tile-entity: BlockEntity instance being rendered
-      x, y, z: tile-relative render coordinates (floats/doubles)
+      partial-ticks: interpolation float
+      pose-stack: PoseStack for transformations
+      buffer-source: MultiBufferSource / VertexConsumerProvider
+      packed-light: int lighting
+      packed-overlay: int overlay
 
     Returns: nil"))
 
@@ -62,10 +66,10 @@
 (defn render-scripted-tile-entity
   "Render a scripted block entity by block-id. Called from platform BER when
   the BE is ScriptedBlockEntity."
-  [block-id tile-entity x y z]
+  [block-id tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (when-let [renderer (get-scripted-tile-renderer block-id)]
     (try
-      (render-tile renderer tile-entity x y z)
+      (render-tile renderer tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
       (catch Exception e
         (log/error "Error rendering scripted tile entity" block-id (.getMessage e))
         (.printStackTrace e)))))
@@ -91,15 +95,19 @@
   
   Args:
     tile-entity: The TileEntity to render
-    x, y, z: World coordinates
+    partial-ticks: interpolation float
+    pose-stack: PoseStack passed from platform
+    buffer-source: VertexConsumer provider
+    packed-light: lighting
+    packed-overlay: overlay
   
   Returns: nil
   
   Dispatches to appropriate renderer based on TileEntity type."
-  [tile-entity x y z]
+  [tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (if-let [renderer (get-tile-renderer tile-entity)]
     (try
-      (render-tile renderer tile-entity x y z)
+      (render-tile renderer tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
       (catch Exception e
         (log/error "Error rendering tile entity:" (.getMessage e))
         (.printStackTrace e)))

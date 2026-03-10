@@ -29,79 +29,50 @@
 ;; ============================================================================
 
 (defn render-base
-  "Render static base and core parts
-  
-  Parts:
-  - Main: Base structure
-  - Core: Central core component
-  
+  "Render static base and core parts using buffered VertexConsumer
+
   Args:
-  - tile: TileMatrix instance"
-  [tile]
-  (obj/render-part! @model "Main")
-  (obj/render-part! @model "Core"))
+  - tile: TileMatrix instance
+  - pose-stack, vertex-consumer, packed-light, packed-overlay"
+  [tile pose-stack vertex-consumer packed-light packed-overlay]
+  (obj/render-part-consumer @model "Main" pose-stack vertex-consumer packed-light packed-overlay)
+  (obj/render-part-consumer @model "Core" pose-stack vertex-consumer packed-light packed-overlay))
 
 (defn render-shields
-  "Render animated shield plates
-  
-  Animation effects:
-  - Rotation: Each plate rotates around Y axis at 50°/sec
-  - Float: Vertical sine wave oscillation (amplitude: 0.1 blocks)
-  - Phase offset: 40° between adjacent plates
-  
-  Visibility:
-  - Only renders if matrix is working: plateCount=3 AND coreLevel>0
-  
+  "Render animated shield plates using PoseStack and buffered vertex consumer.
+
   Args:
-  - tile: TileMatrix block entity (or nil for scripted path); state from customState."
-  [tile]
+  - tile: TileMatrix
+  - partial-ticks, pose-stack, vertex-consumer, packed-light, packed-overlay"
+  [tile partial-ticks pose-stack vertex-consumer packed-light packed-overlay]
   (let [plate-count (int (wm/get-plate-count tile))
         core-level (wm/get-core-level tile)
-        active-plates (if (and (= plate-count 3) (> core-level 0)) 
-                        3 
-                        0)
-        
-        ;; Animation parameters
+        active-plates (if (and (= plate-count 3) (> core-level 0)) 3 0)
         time (render/get-render-time)
-        dtheta (/ 360.0 (max active-plates 1))  ; degrees per plate
-        phase (mod (* time 50.0) 360.0)          ; rotation phase
-        ht-phase-offset 40.0]                    ; height phase offset
-    
-    ;; Render each active shield
+        dtheta (/ 360.0 (max active-plates 1))
+        phase (mod (* time 50.0) 360.0)
+        ht-phase-offset 40.0]
     (dotimes [i active-plates]
-      (render/with-matrix
-        ;; Vertical floating animation: y = 0.1 * sin(1.111*t + 40*i)
+      (.pushPose pose-stack)
+      (try
         (let [float-height 0.1
-              y-offset (* float-height 
-                         (Math/sin (+ (* time 1.111) 
-                                     (* ht-phase-offset i))))]
-          (render/gl-translate 0.0 y-offset 0.0))
-        
-        ;; Rotation animation: rotate around Y axis
-        (render/gl-rotate (+ phase (* dtheta i)) 0.0 1.0 0.0)
-        
-        ;; Render shield part
-        (obj/render-part! @model "Shield")))))
+              y-offset (* float-height (Math/sin (+ (* time 1.111) (* ht-phase-offset i))))]
+          (.translate pose-stack (double 0.0) (double y-offset) (double 0.0))
+          (.mulPose pose-stack (.rotationDegrees (.-YP com.mojang.math.Vector3f) (float (+ phase (* dtheta i)))))
+          (obj/render-part-consumer @model "Shield" pose-stack vertex-consumer packed-light packed-overlay))
+        (finally
+          (.popPose pose-stack))))))
 
 (defn render-at-origin
   "Main render function - renders complete matrix at multiblock origin
-  
-  Coordinate system:
-  - Origin is at the multiblock pivot (handled by RenderBlockMulti)
-  - Rotation applied by parent renderer based on direction
-  
+
   Args:
   - tile: TileMatrix instance
-  
-  Returns: nil"
-  [tile]
-  (render/with-matrix
-    ;; Bind texture
-    (render/bind-texture @texture)
-    
-    ;; Render components
-    (render-base tile)
-    (render-shields tile)))
+  - partial-ticks, pose-stack, buffer-source, packed-light, packed-overlay"
+  [tile partial-ticks pose-stack buffer-source packed-light packed-overlay]
+  (let [vc (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entitySolid @texture))]
+    (render-base tile pose-stack vc packed-light packed-overlay)
+    (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay)))
 
 ;; ============================================================================
 ;; TESR API Implementation
@@ -115,11 +86,11 @@
   (tesr-api/register-scripted-tile-renderer!
    "wireless-matrix"
    (reify tesr-api/ITileEntityRenderer
-     (render-tile [_ tile-entity _x _y _z]
+     (render-tile [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
        (mb-helper/render-multiblock-tesr
         tile-entity
-        _x _y _z
-        render-at-origin)))))
+        render-at-origin
+        partial-ticks pose-stack buffer-source packed-light packed-overlay)))))
 
 ;; ============================================================================
 ;; Platform Integration Notes

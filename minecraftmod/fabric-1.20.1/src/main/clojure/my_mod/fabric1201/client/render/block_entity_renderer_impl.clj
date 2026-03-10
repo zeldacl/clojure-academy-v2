@@ -39,8 +39,8 @@
   [this block-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (try
     ;; Universal dispatcher - doesn't know about specific block types
-    ;; Position is (0,0,0) - engine handles translation to block position
-    (tesr-api/render-tile-entity block-entity 0.0 0.0 0.0)
+    ;; Forward engine-provided rendering context to tesr-api
+    (tesr-api/render-tile-entity block-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
     
     (catch Exception e
       (log/error "Error rendering BlockEntity in Fabric:" (.getMessage e))

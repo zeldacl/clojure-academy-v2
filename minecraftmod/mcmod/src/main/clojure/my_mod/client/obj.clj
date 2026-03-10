@@ -180,11 +180,41 @@
           (render/gl-vertex (:x pos) (:y pos) (:z pos)))))
     (render/gl-end)))
 
+(defn render-part-consumer
+  "Render one OBJ group using a VertexConsumer. Uses the provided PoseStack
+  for transforms and the provided vertex consumer for buffered submission." 
+  [model part pose-stack vertex-consumer packed-light packed-overlay]
+  (when-let [face-list (get (:faces model) part)]
+    (let [entry (.last pose-stack)
+          matrix (.pose entry)
+          normal-matrix (.normal entry)
+          vc vertex-consumer]
+      (doseq [{:keys [i0 i1 i2]} face-list]
+        (doseq [vertex-idx [i0 i1 i2]]
+          (let [{:keys [pos uv normal]} (nth (:vertices model) vertex-idx)
+                x (float (:x pos))
+                y (float (:y pos))
+                z (float (:z pos))
+                u (float (:u uv))
+                v (float (- 1.0 (:v uv)))
+                nx (float (:x normal))
+                ny (float (:y normal))
+                nz (float (:z normal))]
+            (-> (.vertex vc matrix x y z)
+                (.uv u v)
+                (.overlayCoords (int packed-overlay))
+                (.uv2 (int packed-light))
+                (.normal normal-matrix nx ny nz)
+                (.endVertex))))))))
+
 (defn render-all!
   "Render all groups in parsed OBJ model." 
-  [model]
-  (doseq [part (keys (:faces model))]
-    (render-part! model part)))
+  ([model]
+   (doseq [part (keys (:faces model))]
+     (render-part! model part)))
+  ([model pose-stack vertex-consumer packed-light packed-overlay]
+   (doseq [part (keys (:faces model))]
+     (render-part-consumer model part pose-stack vertex-consumer packed-light packed-overlay))))
 
 (defn has-part?
   "Whether the model contains a named part/group." 

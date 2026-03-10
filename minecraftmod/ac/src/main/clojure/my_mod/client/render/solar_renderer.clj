@@ -15,12 +15,18 @@
 (defonce texture (delay (res/texture-location "models/solar")))
 
 (defn render-at-origin
-  [_tile]
-  (render/with-matrix
-    (render/bind-texture @texture)
-    (render/gl-rotate 90.0 0.0 1.0 0.0)
-    (render/gl-scale 0.014 0.014 0.014)
-    (obj/render-all! @model)))
+  [_tile pose-stack buffer-source packed-light packed-overlay]
+  (do
+    (.pushPose pose-stack)
+    (try
+      (let [;; rotate 90 degrees around Y
+            _ (.mulPose pose-stack (.rotationDegrees (.-YP com.mojang.math.Vector3f) (float 90.0)))
+            ;; scale
+            _ (.scale pose-stack (float 0.014) (float 0.014) (float 0.014))
+            vc (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entitySolid @texture))]
+        (obj/render-all! @model pose-stack vc packed-light packed-overlay))
+      (finally
+        (.popPose pose-stack)))))
 
 (defn register!
   "Register SolarGen renderer by block-id for generic ScriptedBlockEntity."
@@ -28,8 +34,10 @@
   (tesr-api/register-scripted-tile-renderer!
     "solar-gen"
     (reify tesr-api/ITileEntityRenderer
-      (render-tile [_ _tile-entity x y z]
-        (render/with-matrix
-          (render/gl-translate x y z)
-          (render-at-origin nil))))))
+      (render-tile [_ _tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
+        (try
+          (render-at-origin nil pose-stack buffer-source packed-light packed-overlay)
+          (catch Exception e
+            (log/error "Error in solar renderer:" (.getMessage e))
+            (.printStackTrace e)))))))
 

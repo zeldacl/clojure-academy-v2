@@ -15,9 +15,9 @@
   Called by BlockEntityRendererProvider.create each time a renderer is needed."
   []
   (reify BlockEntityRenderer
-    (render [_this block-entity _partial-ticks _pose-stack _buffer-source _packed-light _packed-overlay]
+    (render [_this block-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
       (try
-        (tesr-api/render-tile-entity block-entity 0.0 0.0 0.0)
+        (tesr-api/render-tile-entity block-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
         (catch Exception e
           (log/error "Error rendering BlockEntity in Forge 1.20.1:" (.getMessage e))
           (.printStackTrace e))))))
