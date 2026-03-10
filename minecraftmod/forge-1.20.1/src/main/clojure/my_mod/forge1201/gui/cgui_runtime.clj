@@ -119,7 +119,7 @@
           (kind-matches? kind :outline)
           (let [outline-color (unchecked-int (or (:color state) 0xFFFFFF))
                 width         (double (or (:width state) 1.0))
-                ww            (int (Math/max 1 width))]
+                ww            (int (Math/max 1.0 width))]
             (.fill gg x y (+ x w-int) (+ y ww) outline-color)
             (.fill gg x (+ y h-int (- ww)) (+ x w-int) (+ y h-int) outline-color)
             (.fill gg x y (+ x ww) (+ y h-int) outline-color)
