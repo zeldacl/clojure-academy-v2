@@ -35,6 +35,21 @@
   [element]
   (first (filter string? (:content element))))
 
+(defn normalize-xml-texture
+  "Normalize texture strings read from XML layouts.
+   - preserve absolute "assets/..." paths
+   - strip placeholder namespace 'academy:' to return the relative path
+   - leave other namespaced references untouched"
+  [s]
+  (when s
+    (let [s (str/trim s)]
+      (cond
+        (str/starts-with? s "assets/") s
+        (str/includes? s ":")
+        (let [[ns path] (str/split s #":" 2)]
+          (if (= ns "academy") path s))
+        :else s))))
+
 (defn parse-float
   "Parse float from string, with default"
   [s default]
@@ -89,7 +104,7 @@
   [component]
   (let [texture-elem (get-element component :texture)
         color-elem (get-element component :color)]
-    {:texture (when texture-elem (get-text texture-elem))
+    {:texture (when texture-elem (normalize-xml-texture (get-text texture-elem)))
      :color (if color-elem
               {:red (parse-int (get-text (get-element color-elem :red)) 255)
                :green (parse-int (get-text (get-element color-elem :green)) 255)
@@ -123,8 +138,8 @@
    :y (parse-int (get-text (get-element button-elem :y)) 0)
    :width (parse-int (get-text (get-element button-elem :width)) 20)
    :height (parse-int (get-text (get-element button-elem :height)) 20)
-   :texture (when-let [t (get-element button-elem :texture)]
-              (get-text t))
+  :texture (when-let [t (get-element button-elem :texture)]
+          (normalize-xml-texture (get-text t)))
    :scale (if-let [s (get-element button-elem :scale)]
             (parse-float (get-text s) 1.0)
             1.0)
@@ -185,8 +200,8 @@
                        :frame-count (parse-int (get-text (get-element state-elem :frameCount)) 1)
                        :frame-time (parse-int (get-text (get-element state-elem :frameTime)) 1000)})]
     {:name (or (:name (:attrs anim-elem)) "animation")
-     :texture (when-let [t (get-element anim-elem :texture)]
-                (get-text t))
+    :texture (when-let [t (get-element anim-elem :texture)]
+         (normalize-xml-texture (get-text t)))
      :total-frames (parse-int (get-text (get-element anim-elem :totalFrames)) 10)
      :states (mapv parse-state states)}))
 

@@ -23,6 +23,23 @@
 (defn- node-text [node]
   (some->> (:content node) (filter string?) first str/trim))
 
+(defn- normalize-xml-texture
+  "Normalize texture strings read from XML.
+    - preserve absolute assets/... paths
+    - strip placeholder namespace 'academy:' to return the relative path
+    - leave other namespaced references untouched"
+  [s]
+  (when s
+    (let [s (str/trim s)]
+      (cond
+        (str/starts-with? s "assets/") s
+        (str/includes? s ":")
+        (let [[ns path] (str/split s #":" 2)]
+          (if (= ns "academy")
+            path
+            s))
+        :else s))))
+
 (defn- text-at [node tag default]
   (if-let [child (first-child node tag)]
     (or (node-text child) default)
@@ -85,9 +102,9 @@
 
       :draw-texture
       (let [texture-node (first-child component-node :texture)
-            texture-path (when texture-node
-                           (when-not (= "true" (get-in texture-node [:attrs :isNull]))
-                             (node-text texture-node)))
+        texture-path (when texture-node
+               (when-not (= "true" (get-in texture-node [:attrs :isNull]))
+                 (normalize-xml-texture (node-text texture-node))))
             color (parse-color-int (first-child component-node :color) 0xFFFFFFFF)]
         (comp/add-component! widget (comp/draw-texture texture-path color)))
 

@@ -5,6 +5,7 @@
     [clojure.string :as str]
     [my-mod.gui.cgui :as cgui]
     [my-mod.platform.resource :as res]
+    [my-mod.config.modid :as modid]
     [my-mod.util.log :as log])
   (:import
     (net.minecraft.client.gui GuiGraphics)
@@ -27,7 +28,21 @@
     (string? v) (if (re-find #":" v)
                    (let [[ns path] (str/split v #":" 2)]
                      (res/invoke-resource-location ns path))
-                   (res/invoke-resource-location nil v))
+                   ;; If the string is an absolute assets path like "assets/ns/..",
+                   ;; extract namespace and path and resolve explicitly.
+                   (cond
+                     (str/starts-with? v "assets/")
+                     (let [after (subs v (count "assets/"))
+                           parts (str/split after #"/" 2)
+                           ns (first parts)
+                           path (second parts)]
+                       (if (and ns path)
+                         (res/invoke-resource-location ns path)
+                         (res/invoke-resource-location nil v)))
+
+                     ;; No namespace: resolve explicitly with current MOD-ID
+                     :else
+                     (res/invoke-resource-location modid/MOD-ID v)))
     :else nil))
 
 (defn- collect-widgets-z-ordered

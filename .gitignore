@@ -29,3 +29,4 @@ importcode/*
 run-data
 minecraftmod/forge-1.20.1/src/generated
 .clj-kondo
+.lsp

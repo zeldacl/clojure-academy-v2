@@ -158,7 +158,7 @@
                   (set-drawtexture! icon-connect
                     (if linked?
                       (modid/asset-path "textures" "guis/icons/icon_connected.png")
-                      (modid/asset-path "textures" "guis/icons/icon_unconnected.png")))))
+                      (modid/asset-path "textures" "guis/icons/icon_unconnected.png"))))))
 
             (query-linked! []
               (net-client/send-to-server
