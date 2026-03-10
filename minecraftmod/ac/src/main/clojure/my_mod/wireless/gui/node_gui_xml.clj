@@ -12,6 +12,7 @@
   - Uses existing resources only"
   (:require [my-mod.gui.cgui :as cgui]
             [my-mod.gui.cgui-document :as cgui-doc]
+            [my-mod.config.modid :as modid]
             [my-mod.gui.components :as comp]
             [my-mod.gui.events :as events]
             [my-mod.gui.tech-ui-common :as tech-ui]
@@ -81,7 +82,7 @@
         v1 (/ 1.0 total-frames)]
     (comp/render-texture-region
       widget
-      "my_mod:textures/guis/effect/effect_node.png"
+      (modid/asset-path "textures" "guis/effect/effect_node.png")
       0 0 186 75
       u0 v0 u1 v1)))
 
@@ -128,7 +129,7 @@
 (defn create-wireless-panel
   "Create wireless connection panel from page_wireless.xml (Scala WirelessPage style)"
   [container]
-  (let [doc (cgui-doc/read-xml "my_mod:guis/rework/page_wireless.xml")
+  (let [doc (cgui-doc/read-xml (modid/namespaced-path "guis/rework/page_wireless.xml"))
         root (cgui-doc/get-widget doc "main")
         wlist (cgui/find-widget root "panel_wireless/zone_elementlist")
         elem-template (cgui/find-widget root "panel_wireless/zone_elementlist/element")
@@ -156,8 +157,8 @@
                   (set-textbox-text! text-name (if linked? "Connected" "Not Connected"))
                   (set-drawtexture! icon-connect
                     (if linked?
-                      "academy:textures/guis/icons/icon_connected.png"
-                      "academy:textures/guis/icons/icon_unconnected.png")))))
+                      (modid/asset-path "textures" "guis/icons/icon_connected.png")
+                      (modid/asset-path "textures" "guis/icons/icon_unconnected.png")))))
 
             (query-linked! []
               (net-client/send-to-server

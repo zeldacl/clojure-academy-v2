@@ -7,7 +7,8 @@
             [my-mod.block.tile-dsl :as tdsl]
             [my-mod.platform.nbt :as nbt]
             [my-mod.platform.item :as item]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log]
+            [my-mod.config.modid :as modid]))
 
 (defn- open-solar-gui!
   [{:keys [player world pos sneaking] :as _ctx}]
@@ -30,7 +31,7 @@
   :harvest-level 1
   :sounds :stone
   :model-parent "minecraft:block/cube_all"
-  :textures {:all "my_mod:block/solar_gen"}
+  :textures {:all (modid/asset-path "block" "solar_gen")}
   :on-right-click open-solar-gui!)
 
 ;; ---------------------------------------------------------------------------

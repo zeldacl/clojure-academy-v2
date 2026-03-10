@@ -11,7 +11,8 @@
             [my-mod.gui.components :as comp]
             [my-mod.gui.events :as events]
             [my-mod.gui.cgui-document :as cgui-doc]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log]
+            [my-mod.config.modid :as modid]))
 
 ;; ============================================================================
 ;; Constants
@@ -33,7 +34,7 @@
   Returns: Page map with {:id :window}"
   [name]
   (try
-    (let [page-xml (cgui-doc/read-xml "my_mod:guis/rework/page_inv.xml")
+        (let [page-xml (cgui-doc/read-xml (modid/namespaced-path "guis/rework/page_inv.xml"))
           page-widget (cgui-doc/get-widget page-xml "main")]
       
       ;; Add breathing effect to all UI elements
@@ -44,7 +45,7 @@
       ;; Set UI block texture based on name
       (when-let [ui-block (cgui/find-widget page-widget "ui_block")]
         (comp/set-texture! ui-block 
-          (str "my_mod:textures/guis/ui/ui_" name ".png")))
+          (modid/asset-path "textures" (str "guis/ui/ui_" name ".png"))))
       
       {:id "inv" :window page-widget})
     (catch Exception e
@@ -66,8 +67,8 @@
   Returns: Updated Y offset"
   [info-area elements y-offset]
   (let [hist-widget (cgui/create-widget :pos [0 y-offset] :size [210 210])
-        _ (comp/add-component! hist-widget
-            (comp/texture "my_mod:textures/guis/histogram.png" 0 0 210 210))
+    _ (comp/add-component! hist-widget
+      (comp/texture (modid/asset-path "textures" "guis/histogram.png") 0 0 210 210))
         _ (cgui/set-scale! hist-widget 0.4)]
     
     ;; Add histogram bars

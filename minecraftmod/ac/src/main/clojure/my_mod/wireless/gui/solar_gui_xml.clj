@@ -8,6 +8,7 @@
             [my-mod.gui.components :as comp]
             [my-mod.gui.events :as events]
             [my-mod.gui.tech-ui-common :as tech-ui]
+            [my-mod.config.modid :as modid]
             [my-mod.util.log :as log]))
 
 (def gui-width tech-ui/gui-width)
@@ -26,7 +27,7 @@
   (let [inv-page (tech-ui/create-inventory-page "windbase") ; page_solar.xml currently uses ui_windbase theme
         main-widget (cgui/create-container :pos [-18 0] :size [gui-width gui-height])
         page (try
-               (let [doc (cgui-doc/read-xml "my_mod:guis/rework/page_solar.xml")]
+               (let [doc (cgui-doc/read-xml (modid/namespaced-path "guis/rework/page_solar.xml"))]
                  (cgui-doc/get-widget doc "main"))
                (catch Exception e
                  (log/error "Failed to load page_solar.xml:" (.getMessage e))
