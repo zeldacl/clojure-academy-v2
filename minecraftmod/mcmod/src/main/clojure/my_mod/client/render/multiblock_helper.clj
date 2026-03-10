@@ -99,39 +99,34 @@
 ;; ============================================================================
 
  (defn render-multiblock-tesr
-  "Generic multiblock TESR render function
+  "Generic multiblock TESR render function.
 
-  Handles coordinate transformation for multiblock structures:
-  1. Checks if this is the origin block (sub-id = 0)
-  2. Applies pivot offset + rotation center
-  3. Rotates based on direction
-  4. Calls render function
+  Applies pivot + rotation center offsets using the provided `pose-stack`,
+  rotates according to block direction, and calls `render-fn` with the
+  rendering context.
 
   Args:
   - tile: TileEntity with :sub-id and :direction fields
-  - render-fn: (fn [tile partial-ticks pose-stack buffer-source packed-light packed-overlay] ...) - function to call at origin
+  - render-fn: (fn [tile partial-ticks pose-stack buffer-source packed-light packed-overlay] ...)
   - partial-ticks, pose-stack, buffer-source, packed-light, packed-overlay: rendering context
-
-  Returns: nil"
+  "
   [tile render-fn partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (when (should-render-multiblock? tile)
     (try
       (let [direction (:direction tile)
             [pivot-x pivot-z] (get-pivot-offset direction)
             [rot-x rot-y rot-z] (get-rotation-center direction)
-            rotation (get-rotation-angle direction)]
-        ;; Use PoseStack for transforms and forward buffered context
+            rotation (get-rotation-angle direction)
+            tx (+ pivot-x rot-x)
+            ty rot-y
+            tz (+ pivot-z rot-z)]
         (.pushPose pose-stack)
         (try
-          ;; Translate by pivot + rotation center offsets (world translation handled by engine)
-          (.translate pose-stack (double (+ pivot-x rot-x)) (double (+ rot-y)) (double (+ pivot-z rot-z)))
-          ;; Rotate around Y axis based on direction
+          (.translate pose-stack (double tx) (double ty) (double tz))
           (.mulPose pose-stack (.rotationDegrees (.-YP com.mojang.math.Vector3f) (float rotation)))
-          ;; Call render function at transformed origin, forwarding render context
           (render-fn tile partial-ticks pose-stack buffer-source packed-light packed-overlay)
           (finally
             (.popPose pose-stack))))
-      
       (catch Exception e
         (log/error "Error rendering multiblock:" (.getMessage e))
         (.printStackTrace e)))))

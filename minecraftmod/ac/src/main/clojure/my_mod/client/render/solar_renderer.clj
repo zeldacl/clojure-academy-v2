@@ -23,7 +23,8 @@
             _ (.mulPose pose-stack (.rotationDegrees (.-YP com.mojang.math.Vector3f) (float 90.0)))
             ;; scale
             _ (.scale pose-stack (float 0.014) (float 0.014) (float 0.014))
-            vc (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entitySolid @texture))]
+            ;; Use translucent entity render type to allow alpha in textures.
+            vc (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityTranslucent @texture))]
         (obj/render-all! @model pose-stack vc packed-light packed-overlay))
       (finally
         (.popPose pose-stack)))))
@@ -35,9 +36,12 @@
     "solar-gen"
     (reify tesr-api/ITileEntityRenderer
       (render-tile [_ _tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
+        (log/info "solar renderer invoked for solar-gen" :tile _tile-entity :partial-ticks partial-ticks)
         (try
           (render-at-origin nil pose-stack buffer-source packed-light packed-overlay)
           (catch Exception e
             (log/error "Error in solar renderer:" (.getMessage e))
             (.printStackTrace e)))))))
+
+(log/info "Registered solar renderer for block-id" "solar-gen")
 
