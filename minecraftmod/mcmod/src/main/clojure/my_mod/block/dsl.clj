@@ -1,7 +1,9 @@
 (ns my-mod.block.dsl
   "Block DSL - Declarative block definition using Clojure macros"
   (:require [clojure.string :as str]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log]
+            [my-mod.platform.position :as pos]
+            [my-mod.platform.world :as world]))
 
 ;; Block Registry - stores all defined blocks
 (defonce block-registry (atom {}))
@@ -85,13 +87,16 @@
          :is-origin? (and (= x 0) (= y 0) (= z 0))}))
     ;; Irregular multi-blocks with custom positions
     (mapv (fn [pos]
-            {:x (+ (:x origin) (:x pos))
-             :y (+ (:y origin) (:y pos))
-             :z (+ (:z origin) (:z pos))
-             :relative-x (:x pos)
-             :relative-y (:y pos)
-             :relative-z (:z pos)
-             :is-origin? (and (= (:x pos) 0) (= (:y pos) 0) (= (:z pos) 0))})
+          (let [[px py pz] (if (vector? pos)
+                 [(nth pos 0 0) (nth pos 1 0) (nth pos 2 0)]
+                 [(:x pos) (:y pos) (:z pos)])]
+            {:x (+ (:x origin) px)
+             :y (+ (:y origin) py)
+             :z (+ (:z origin) pz)
+             :relative-x px
+             :relative-y py
+             :relative-z pz
+             :is-origin? (and (= px 0) (= py 0) (= pz 0))}))
           positions-or-spec)))
 
 (defn normalize-positions
@@ -99,7 +104,14 @@
    Useful for creating irregular multi-blocks from absolute coordinates"
   [positions]
   (when (seq positions)
-    (let [min-x (apply min (map :x positions))
+    (let [positions (mapv (fn [pos]
+                            (if (vector? pos)
+                              {:x (nth pos 0 0)
+                               :y (nth pos 1 0)
+                               :z (nth pos 2 0)}
+                              pos))
+                          positions)
+          min-x (apply min (map :x positions))
           min-y (apply min (map :y positions))
           min-z (apply min (map :z positions))]
       (mapv (fn [pos]
@@ -139,28 +151,33 @@
   [world master-pos block-spec]
   (when (:multi-block? block-spec)
     (try
-      ;; Get multi-block positions from spec
-      (let [multi-block (:multi-block block-spec)
-            positions (if (map? multi-block)
-                        (:positions multi-block)  ;; New format: {:positions [...]}
-                        multi-block)              ;; Old format: [...]
+      (let [origin (:multi-block-origin block-spec {:x 0 :y 0 :z 0})
+            positions (if-let [custom-positions (:multi-block-positions block-spec)]
+                        (calculate-multi-block-positions custom-positions origin)
+                        (calculate-multi-block-positions (:multi-block-size block-spec) origin))
+            [mx my mz] (if (map? master-pos)
+                         [(:x master-pos) (:y master-pos) (:z master-pos)]
+                         [(pos/pos-x master-pos) (pos/pos-y master-pos) (pos/pos-z master-pos)])
+            origin-pos (if (map? master-pos)
+                         (pos/create-block-pos mx my mz)
+                         master-pos)
             
             ;; Function to calculate absolute position
             abs-pos (fn [rel-pos]
-                      (let [x (+ (:x master-pos) (or (:relative-x rel-pos) (:x rel-pos) 0))
-                            y (+ (:y master-pos) (or (:relative-y rel-pos) (:y rel-pos) 0))
-                            z (+ (:z master-pos) (or (:relative-z rel-pos) (:z rel-pos) 0))]
-                        {:x x :y y :z z}))]
+                      (let [x (+ mx (or (:relative-x rel-pos) (:x rel-pos) 0))
+                            y (+ my (or (:relative-y rel-pos) (:y rel-pos) 0))
+                            z (+ mz (or (:relative-z rel-pos) (:z rel-pos) 0))]
+                        (pos/create-block-pos x y z)))]
         
         ;; Check origin first
-        (if-not (.getBlockState world master-pos)
+        (if-not (world/world-get-block-state world origin-pos)
           false
           ;; Check all sub-block positions
           (every?
             (fn [rel-pos]
               (try
                 (let [pos (abs-pos rel-pos)
-                      block-state (.getBlockState world pos)]
+                      block-state (world/world-get-block-state world pos)]
                   (if block-state true false))
                 (catch Exception e
                   (log/debug "Error checking block at" rel-pos ":" (.getMessage e))
@@ -175,10 +192,34 @@
 (defn create-block-spec
   "Create a block specification from options"
   [block-id options]
-  (let [multi-block? (boolean (:multi-block? options))
-        multi-block-size (:multi-block-size options)
-        multi-block-positions (:multi-block-positions options)
-        multi-block-origin (:multi-block-origin options {:x 0 :y 0 :z 0})]
+  (let [multi-block-config (:multi-block options)
+        shorthand-positions (when (map? multi-block-config)
+                              (:positions multi-block-config))
+        shorthand-positions (when shorthand-positions
+                              (let [positions (mapv (fn [pos]
+                                                      (if (vector? pos)
+                                                        {:x (nth pos 0 0)
+                                                         :y (nth pos 1 0)
+                                                         :z (nth pos 2 0)}
+                                                        pos))
+                                                    shorthand-positions)]
+                                (if (some #(and (= (:x %) 0)
+                                                (= (:y %) 0)
+                                                (= (:z %) 0))
+                                          positions)
+                                  positions
+                                  (into [{:x 0 :y 0 :z 0}] positions))))
+        multi-block? (boolean (or (:multi-block? options)
+                                  multi-block-config))
+        multi-block-size (or (:multi-block-size options)
+                             (when (map? multi-block-config)
+                               (:size multi-block-config)))
+        multi-block-positions (or (:multi-block-positions options)
+                                  shorthand-positions)
+        multi-block-origin (or (:multi-block-origin options)
+                               (when (map? multi-block-config)
+                                 (:origin multi-block-config))
+                               {:x 0 :y 0 :z 0})]
     (map->BlockSpec
       {:id block-id
        :registry-name (:registry-name options)

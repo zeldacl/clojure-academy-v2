@@ -3,9 +3,9 @@
   
   Provides coordinate transformation logic for multiblock structures.
   Replaces functionality of cn.lambdalib2.multiblock.RenderBlockMulti."
-  (:require [my-mod.util.render :as render]
-            [my-mod.util.log :as log]
-            [my-mod.client.render.pose :as pose]))
+  (:require [my-mod.util.log :as log]
+            [my-mod.client.render.pose :as pose]
+            [my-mod.platform.be :as pbe]))
 
 ;; ============================================================================
 ;; Direction to Rotation Mapping
@@ -91,9 +91,12 @@
   
   Returns: boolean"
   [tile]
-  (and tile
-       (contains? tile :sub-id)
-       (= (:sub-id tile) 0)))
+    (let [state (if (map? tile)
+         tile
+         (or (pbe/get-custom-state tile) {}))]
+      (and (map? state)
+        (contains? state :sub-id)
+        (zero? (long (:sub-id state))))))
 
 ;; ============================================================================
 ;; Main Render Function
@@ -114,7 +117,10 @@
   [tile render-fn partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (when (should-render-multiblock? tile)
     (try
-      (let [direction (:direction tile)
+      (let [state (if (map? tile)
+                    tile
+                    (or (pbe/get-custom-state tile) {}))
+            direction (:direction state :north)
             [pivot-x pivot-z] (get-pivot-offset direction)
             [rot-x rot-y rot-z] (get-rotation-center direction)
             rotation (get-rotation-angle direction)

@@ -131,37 +131,40 @@
 (defn matrix-scripted-tick-fn
   "Tick: read state from BE, do work, write state back."
   [level pos _state be]
-  (let [state (safe-state be)]
+  (let [state (safe-state be)
+        ticker (inc (get state :update-ticker 0))
+        state (assoc state :update-ticker ticker)
+        broken? (atom false)]
     ;; Sync to clients every 15 ticks (tracked via update-ticker in state)
-    (let [ticker (inc (get state :update-ticker 0))
-          state  (assoc state :update-ticker ticker)]
-      (when (and (zero? (:sub-id state 0))
-                 (zero? (mod ticker 15)))
-        (try
-          (let [impl (impls/->WirelessMatrixImpl be)]
-            (sync/broadcast-matrix-state level pos
-              (-> (schema/schema->sync-payload mschema/matrix-state-schema state pos)
-                  (assoc :is-working  (is-working? state)
-                         :capacity    (.getMatrixCapacity impl)
-                         :bandwidth   (.getMatrixBandwidth impl)
-                         :range       (.getMatrixRange impl)))))
-          (catch Exception e
-            (log/debug "Matrix sync skipped:" (.getMessage e)))))
-      ;; Verify structure every 20 ticks
-      (when (zero? (mod ticker 20))
-        (try
-          (let [block-spec (bdsl/get-block :wireless-matrix)]
-            (when (and block-spec level pos
-                       (zero? (:sub-id state 0))
-                       (not (bdsl/is-multi-block-complete? level pos block-spec)))
-              (log/info "Matrix structure broken at" pos)
-              ;; Drop inventory items
-              (doseq [[idx item] (map-indexed vector (:inventory state []))]
-                (when item (log/info "Dropping item from slot" idx)))
-              ;; Clear state
-              (.setCustomState be mschema/matrix-default-state)))
-          (catch Exception e
-            (log/error "Error verifying matrix structure:" (.getMessage e)))))
+    (when (and (zero? (:sub-id state 0))
+               (zero? (mod ticker 15)))
+      (try
+        (let [impl (impls/->WirelessMatrixImpl be)]
+          (sync/broadcast-matrix-state level pos
+            (-> (schema/schema->sync-payload mschema/matrix-state-schema state pos)
+                (assoc :is-working  (is-working? state)
+                       :capacity    (.getMatrixCapacity impl)
+                       :bandwidth   (.getMatrixBandwidth impl)
+                       :range       (.getMatrixRange impl)))))
+        (catch Exception e
+          (log/debug "Matrix sync skipped:" (.getMessage e)))))
+    ;; Verify structure every 20 ticks
+    (when (zero? (mod ticker 20))
+      (try
+        (let [block-spec (bdsl/get-block :wireless-matrix)]
+          (when (and block-spec
+                     (zero? (:sub-id state 0))
+                     (not (bdsl/is-multi-block-complete? level pos block-spec)))
+            (reset! broken? true)
+            (log/info "Matrix structure broken at" pos)
+            ;; Drop inventory items
+            (doseq [[idx item] (map-indexed vector (:inventory state []))]
+              (when item (log/info "Dropping item from slot" idx)))
+            ;; Keep runtime ticker but clear persistent matrix state.
+            (.setCustomState be (assoc mschema/matrix-default-state :update-ticker ticker))))
+        (catch Exception e
+          (log/error "Error verifying matrix structure:" (.getMessage e)))))
+    (when-not @broken?
       (.setCustomState be (assoc state :update-ticker ticker)))))
 
 ;; ============================================================================

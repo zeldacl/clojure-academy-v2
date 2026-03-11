@@ -23,8 +23,8 @@
           _ (pose/apply-y-rotation pose-stack 90.0)
           ;; scale
           _ (.scale pose-stack (float 0.014) (float 0.014) (float 0.014))
-          ;; Use translucent entity render type to allow alpha in textures.
-          vc (rb/get-translucent-buffer buffer-source @texture)]
+          ;; Use solid render type first to avoid unintended alpha/cull issues.
+          vc (rb/get-solid-buffer buffer-source @texture)]
       (obj/render-all! @model pose-stack vc packed-light packed-overlay))
     (finally
       (.popPose pose-stack))))
@@ -35,8 +35,7 @@
   (tesr-api/register-scripted-tile-renderer!
     "solar-gen"
     (reify tesr-api/ITileEntityRenderer
-      (render-tile [_ _tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
-        (log/info "solar renderer invoked for solar-gen" :tile _tile-entity :partial-ticks partial-ticks)
+      (render-tile [_ _tile-entity _partial-ticks pose-stack buffer-source packed-light packed-overlay]
         (try
           (render-at-origin nil pose-stack buffer-source packed-light packed-overlay)
           (catch Exception e

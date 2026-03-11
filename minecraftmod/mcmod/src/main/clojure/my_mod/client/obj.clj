@@ -197,15 +197,20 @@
                 z (float (:z pos))
                 u (float (:u uv))
                 v (float (- 1.0 (:v uv)))
+                overlay-u (int (bit-and packed-overlay 0xFFFF))
+                overlay-v (int (bit-and (unsigned-bit-shift-right packed-overlay 16) 0xFFFF))
+                light-u (int (bit-and packed-light 0xFFFF))
+                light-v (int (bit-and (unsigned-bit-shift-right packed-light 16) 0xFFFF))
                 nx (float (:x normal))
                 ny (float (:y normal))
                 nz (float (:z normal))]
             (-> (.vertex vc matrix x y z)
-                (.uv u v)
-                (.overlayCoords (int packed-overlay))
-                (.uv2 (int packed-light))
-                (.normal normal-matrix nx ny nz)
-                (.endVertex))))))))
+              (.color (int 255) (int 255) (int 255) (int 255))
+              (.uv u v)
+              (.overlayCoords overlay-u overlay-v)
+              (.uv2 light-u light-v)
+              (.normal normal-matrix nx ny nz)
+              (.endVertex))))))))
 
 (defn render-all!
   "Render all groups in parsed OBJ model." 

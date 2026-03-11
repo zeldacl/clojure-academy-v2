@@ -10,6 +10,7 @@
 
 (def ^:dynamic *solid-buffer-fn* nil)
 (def ^:dynamic *translucent-buffer-fn* nil)
+(def ^:dynamic *cutout-no-cull-buffer-fn* nil)
 
 (defn- require-buffer-fn
   [buffer-fn kind]
@@ -31,3 +32,11 @@
   Throws ex-info when no platform implementation is registered."
   [buffer-source texture]
   ((require-buffer-fn *translucent-buffer-fn* :translucent) buffer-source texture))
+
+(defn get-cutout-no-cull-buffer
+  "Return a cutout/no-cull VertexConsumer for `texture` from `buffer-source`.
+
+  Useful for OBJ models with thin faces or uncertain winding where backface
+  culling can make the model appear invisible."
+  [buffer-source texture]
+  ((require-buffer-fn *cutout-no-cull-buffer-fn* :cutout-no-cull) buffer-source texture))

@@ -6,6 +6,8 @@ import my_mod.capability.CapabilitySlots;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.Container;
 import net.minecraft.world.WorldlyContainer;
@@ -110,6 +112,33 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
     public void setCustomState(Object state) {
         this.customState = state;
         setChanged();
+        if (level != null && !level.isClientSide) {
+            BlockState blockState = getBlockState();
+            level.sendBlockUpdated(worldPosition, blockState, blockState, 3);
+        }
+    }
+
+    @Override
+    public CompoundTag getUpdateTag() {
+        return saveWithoutMetadata();
+    }
+
+    @Override
+    public void handleUpdateTag(CompoundTag tag) {
+        load(tag);
+    }
+
+    @Override
+    public ClientboundBlockEntityDataPacket getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    @Override
+    public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt) {
+        CompoundTag tag = pkt.getTag();
+        if (tag != null) {
+            handleUpdateTag(tag);
+        }
     }
 
     // -------------------------------------------------------------------------

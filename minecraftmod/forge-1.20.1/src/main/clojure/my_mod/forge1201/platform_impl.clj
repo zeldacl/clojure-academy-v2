@@ -209,7 +209,7 @@
   ;; Bind platform PoseStack Y-rotation implementation for mcmod
   (alter-var-root #'pose/*y-rotation-fn*
     (constantly (fn [pose-stack angle]
-                  (.mulPose pose-stack (.rotationDegrees (.-YP com.mojang.math.Axis) (float angle))))))
+                  (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/YP (float angle))))))
 
   ;; Bind platform render buffer selectors for mcmod/ac renderers
   (alter-var-root #'buffer/*solid-buffer-fn*
@@ -218,6 +218,9 @@
   (alter-var-root #'buffer/*translucent-buffer-fn*
     (constantly (fn [buffer-source texture]
                   (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityTranslucent texture)))))
+  (alter-var-root #'buffer/*cutout-no-cull-buffer-fn*
+    (constantly (fn [buffer-source texture]
+                  (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityCutoutNoCull texture)))))
 
   ;; Retroactively assign slots for capabilities already declared before this ran
   (doseq [[key {:keys [_java-type]}] @platform-cap/capability-type-registry]
