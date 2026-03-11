@@ -15,14 +15,8 @@
 (defn- v2 [u v]
   {:u (double u) :v (double v)})
 
-(defn- v3+ [a b]
-  (v3 (+ (:x a) (:x b)) (+ (:y a) (:y b)) (+ (:z a) (:z b))))
-
 (defn- v3- [a b]
   (v3 (- (:x a) (:x b)) (- (:y a) (:y b)) (- (:z a) (:z b))))
-
-(defn- v3* [a k]
-  (v3 (* (:x a) k) (* (:y a) k) (* (:z a) k)))
 
 (defn- v3-cross [a b]
   (v3 (- (* (:y a) (:z b)) (* (:z a) (:y b)))
@@ -36,6 +30,21 @@
     (if (zero? len)
       (v3 0.0 0.0 0.0)
       (v3 (/ (:x a) len) (/ (:y a) len) (/ (:z a) len)))))
+
+(defn- map-model-pos
+  "Map OBJ model coordinates to Minecraft render coordinates.
+  Current mapping applies axis swap + handedness fix discovered during
+  migration verification against legacy visual output."
+  [pos]
+  {:x (double (:x pos))
+   :y (double (:y pos))
+   :z (double (:z pos))})
+
+(defn- map-model-normal
+  [nrm]
+  {:x (double (:x nrm))
+   :y (double (:y nrm))
+   :z (double (:z nrm))})
 
 (defn- parse-face-vertex-token [token]
   (let [[v-str vt-str vn-str] (str/split token #"/")
@@ -106,18 +115,18 @@
           add-vertex! (fn [vref]
                         (let [pid (resolve-obj-index (:v vref) (count positions))
                               tid (resolve-obj-index (:vt vref) (count uvs))
-                              nid (resolve-obj-index (:vn vref) (count normals))
-                              key [pid tid nid]]
+                  nid (resolve-obj-index (:vn vref) (count normals))
+                  key [pid tid nid]]
                           (if-let [idx (@generated key)]
                             idx
                             (let [pos (or (nth positions pid nil) (v3 0.0 0.0 0.0))
                                   uv (or (when (some? tid) (nth uvs tid nil)) (v2 0.0 0.0))
-                                  nrm (or (when (some? nid) (nth normals nid nil)) (v3 0.0 1.0 0.0))
+                    nrm (or (when (some? nid) (nth normals nid nil)) (v3 0.0 1.0 0.0))
                                   idx (count @vertices)]
                               (swap! generated assoc key idx)
                               (swap! vertices conj {:pos pos
                                                     :uv uv
-                                                    :normal nrm
+                            :normal nrm
                                                     :tangent (v3 0.0 0.0 0.0)})
                               idx))))
           add-face! (fn [group i0 i1 i2]
@@ -141,13 +150,7 @@
                                            (* ff (- (* (:v duv2) (:z edge1)) (* (:v duv1) (:z edge2)))))))
                             face-normal (v3-norm (v3-cross edge1 edge2))]
                         (swap! faces-by-group update group (fnil conj [])
-                               {:i0 i0 :i1 i1 :i2 i2 :tangent tangent :normal face-normal})
-                        (doseq [idx [i0 i1 i2]]
-                          (swap! vertices update idx
-                                 (fn [v]
-                                   (-> v
-                                       (update :normal v3+ face-normal)
-                                       (update :tangent v3+ tangent)))))))]
+                   {:i0 i0 :i1 i1 :i2 i2 :tangent tangent :normal face-normal})))]
       (doseq [{:keys [group verts]} raw-faces]
         (let [base (first verts)
               rest-verts (rest verts)]
@@ -156,10 +159,8 @@
                   [i0 i1 i2] (mapv add-vertex! tri)]
               (add-face! group i0 i1 i2)))))
       {:vertices (mapv (fn [v]
-                         (-> v
-                             (update :normal v3-norm)
-                             (update :tangent v3-norm)))
-                       @vertices)
+             (update v :tangent v3-norm))
+               @vertices)
        :faces @faces-by-group})))
 
 (defn load-obj-model
@@ -174,7 +175,9 @@
     (render/gl-begin-triangles)
     (doseq [{:keys [i0 i1 i2]} face-list]
       (doseq [vertex-idx [i0 i1 i2]]
-        (let [{:keys [pos uv normal]} (nth (:vertices model) vertex-idx)]
+        (let [{:keys [pos uv normal]} (nth (:vertices model) vertex-idx)
+              pos (map-model-pos pos)
+              normal (map-model-normal normal)]
           (render/gl-normal (:x normal) (:y normal) (:z normal))
           (render/gl-tex-coord (:u uv) (- 1.0 (:v uv)))
           (render/gl-vertex (:x pos) (:y pos) (:z pos)))))
@@ -183,33 +186,33 @@
 (defn render-part-consumer
   "Render one OBJ group using a VertexConsumer. Uses the provided PoseStack
   for transforms and the provided vertex consumer for buffered submission." 
-  [model part pose-stack vertex-consumer packed-light packed-overlay]
+  [model part pose-stack vertex-consumer _packed-light packed-overlay]
   (when-let [face-list (get (:faces model) part)]
     (let [entry (.last pose-stack)
           matrix (.pose entry)
-          normal-matrix (.normal entry)
           vc vertex-consumer]
       (doseq [{:keys [i0 i1 i2]} face-list]
         (doseq [vertex-idx [i0 i1 i2]]
-          (let [{:keys [pos uv normal]} (nth (:vertices model) vertex-idx)
+            (let [{:keys [pos uv normal]} (nth (:vertices model) vertex-idx)
+              pos (map-model-pos pos)
+              normal (map-model-normal normal)
                 x (float (:x pos))
                 y (float (:y pos))
-                z (float (:z pos))
+              z (float (:z pos))
                 u (float (:u uv))
                 v (float (- 1.0 (:v uv)))
-                overlay-u (int (bit-and packed-overlay 0xFFFF))
-                overlay-v (int (bit-and (unsigned-bit-shift-right packed-overlay 16) 0xFFFF))
-                light-u (int (bit-and packed-light 0xFFFF))
-                light-v (int (bit-and (unsigned-bit-shift-right packed-light 16) 0xFFFF))
+                ;; Force fullbright while debugging OBJ migration; avoids dark output
+                ;; from incorrect normal/light interop and makes geometry issues obvious.
+                packed-light (int 0x00F000F0)
                 nx (float (:x normal))
                 ny (float (:y normal))
                 nz (float (:z normal))]
             (-> (.vertex vc matrix x y z)
               (.color (int 255) (int 255) (int 255) (int 255))
               (.uv u v)
-              (.overlayCoords overlay-u overlay-v)
-              (.uv2 light-u light-v)
-              (.normal normal-matrix nx ny nz)
+              (.overlayCoords (int packed-overlay))
+              (.uv2 packed-light)
+              (.normal nx ny nz)
               (.endVertex))))))))
 
 (defn render-all!

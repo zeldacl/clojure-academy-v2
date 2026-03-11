@@ -22,6 +22,7 @@
                       tile-kind tile-tick-fn tile-load-fn tile-save-fn
                       ;; Multi-block support
                       multi-block? multi-block-size multi-block-origin
+                      multi-block-rotation-center
                       multi-block-positions  ; Custom positions for irregular shapes
                       multi-block-master? on-multi-block-break])
 
@@ -219,7 +220,10 @@
         multi-block-origin (or (:multi-block-origin options)
                                (when (map? multi-block-config)
                                  (:origin multi-block-config))
-                               {:x 0 :y 0 :z 0})]
+                               {:x 0 :y 0 :z 0})
+        multi-block-rotation-center (or (:multi-block-rotation-center options)
+                                        (when (map? multi-block-config)
+                                          (:rotation-center multi-block-config)))]
     (map->BlockSpec
       {:id block-id
        :registry-name (:registry-name options)
@@ -252,6 +256,7 @@
        :multi-block-size multi-block-size
        :multi-block-positions multi-block-positions
        :multi-block-origin multi-block-origin
+      :multi-block-rotation-center multi-block-rotation-center
        :multi-block-master? (or (:multi-block-master? options) false)
        :on-multi-block-break (or (:on-multi-block-break options) (fn [_] nil))})))
 
@@ -611,4 +616,5 @@
    :multi-block-size (:multi-block-size block-spec)
    :multi-block-positions (:multi-block-positions block-spec)
    :multi-block-origin (:multi-block-origin block-spec)
+  :multi-block-rotation-center (:multi-block-rotation-center block-spec)
    :multi-block-master? (:multi-block-master? block-spec)})

@@ -72,9 +72,9 @@
   - tile: TileMatrix instance
   - partial-ticks, pose-stack, buffer-source, packed-light, packed-overlay"
   [tile partial-ticks pose-stack buffer-source packed-light packed-overlay]
-  (let [vc (rb/get-cutout-no-cull-buffer buffer-source @texture)]
-    (render-base tile pose-stack vc packed-light packed-overlay)
-    (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay)))
+    (let [vc (rb/get-cutout-no-cull-buffer buffer-source @texture)]
+      (render-base tile pose-stack vc packed-light packed-overlay)
+      (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay)))
 
 ;; ============================================================================
 ;; TESR API Implementation

@@ -3,9 +3,98 @@
   
   Provides coordinate transformation logic for multiblock structures.
   Replaces functionality of cn.lambdalib2.multiblock.RenderBlockMulti."
-  (:require [my-mod.util.log :as log]
+  (:require [clojure.string :as str]
+            [my-mod.util.log :as log]
             [my-mod.client.render.pose :as pose]
-            [my-mod.platform.be :as pbe]))
+            [my-mod.platform.be :as pbe]
+            [my-mod.platform.position :as pos]
+            [my-mod.platform.world :as world]
+            [my-mod.registry.metadata :as registry-metadata]))
+
+(defn- get-tile-block-id
+  [tile]
+  (when tile
+    (try
+      (let [block-id (clojure.lang.Reflector/invokeInstanceMethod tile "getBlockId" (object-array []))]
+        (when (string? block-id)
+          block-id))
+      (catch Exception _
+        nil))))
+
+(defn- normalize-direction [direction]
+  (cond
+    (keyword? direction) (keyword (str/lower-case (name direction)))
+    (string? direction) (keyword (str/lower-case direction))
+    (some? direction) (keyword (str/lower-case (str direction)))
+    :else :north))
+
+(defn- rotate-rel-pos
+  "Legacy BlockMulti rotation for relative coords [x y z]."
+  [[x y z] direction]
+  (case direction
+    :east [(- z) y x]
+    :west [z y (- x)]
+    :south [(- x) y (- z)]
+    [x y z]))
+
+(defn- spec-relative-positions
+  "Return relative positions [x y z] including origin for a block spec."
+  [block-spec]
+  (let [custom (:multi-block-positions block-spec)
+        origin [0 0 0]]
+    (if (seq custom)
+      (let [rel (mapv (fn [m]
+                        [(long (or (:x m) (:relative-x m) 0))
+                         (long (or (:y m) (:relative-y m) 0))
+                         (long (or (:z m) (:relative-z m) 0))])
+                      custom)]
+        (if (some #(= % origin) rel) rel (into [origin] rel)))
+      [origin])))
+
+(defn- tile-block-id-at
+  [world-obj x y z]
+  (when-let [te (world/world-get-tile-entity world-obj (pos/create-block-pos x y z))]
+    (get-tile-block-id te)))
+
+(defn- lexicographic-min-pos
+  [positions]
+  (first (sort-by (fn [[x y z]] [x y z]) positions)))
+
+(defn- current-pos-xyz
+  [tile]
+  (when tile
+    (try
+      (let [bp (clojure.lang.Reflector/invokeInstanceMethod tile "getBlockPos" (object-array []))]
+        [(long (pos/pos-x bp))
+         (long (pos/pos-y bp))
+         (long (pos/pos-z bp))])
+      (catch Exception _
+        nil))))
+
+(defn- canonical-origin-pos
+  "Derive canonical origin from actual world structure, so only one BE renders.
+
+  This guards against incomplete sub-id initialization where every part defaults
+  to sub-id 0 and all parts try to render the full model."
+  [tile state block-spec]
+  (let [world-obj (try (clojure.lang.Reflector/invokeInstanceMethod tile "getLevel" (object-array []))
+                       (catch Exception _ nil))
+        block-id (or (get-tile-block-id tile) (:block-id state))
+        direction (normalize-direction (:direction state :north))
+        cur (current-pos-xyz tile)]
+    (when (and world-obj block-id cur (:multi-block? block-spec))
+      (let [[cx cy cz] cur
+            rotated (mapv #(rotate-rel-pos % direction) (spec-relative-positions block-spec))
+            candidates (for [[rx ry rz] rotated]
+                         [(- cx rx) (- cy ry) (- cz rz)])
+            valid? (fn [[ox oy oz]]
+                     (every?
+                      (fn [[rx ry rz]]
+                        (= block-id (tile-block-id-at world-obj (+ ox rx) (+ oy ry) (+ oz rz))))
+                      rotated))
+            valids (filter valid? candidates)]
+        (when (seq valids)
+          (lexicographic-min-pos valids))))))
 
 ;; ============================================================================
 ;; Direction to Rotation Mapping
@@ -13,10 +102,10 @@
 
 (def direction-rotations
   "Map of direction keywords to Y-axis rotation angles in degrees"
-  {:north 0.0
-   :south 180.0
+  {:north 180.0
+   :south 0.0
    :east 90.0
-   :west 270.0})
+   :west -90.0})
 
 (defn get-rotation-angle
   "Get rotation angle for a direction
@@ -38,8 +127,8 @@
   Format: {direction [x-offset z-offset]}"
   {:north [0.0 0.0]
    :south [1.0 1.0]
-   :east [1.0 0.0]
-   :west [0.0 1.0]})
+  :east [0.0 1.0]
+  :west [1.0 0.0]})
 
 (defn get-pivot-offset
   "Get pivot offset for multiblock origin
@@ -75,6 +164,21 @@
   [direction]
   (get rotation-centers direction [0.5 0.0 0.5]))
 
+(defn- direction->rotation-center
+  "Rotate base [x y z] center into legacy BlockMulti direction-space.
+
+  Legacy formulas (for a base center [x y z]):
+  - north: [ x  y  z]
+  - south: [-x  y -z]
+  - west:  [ z  y -x]
+  - east:  [-z  y  x]"
+  [[x y z] direction]
+  (case direction
+    :south [(- x) y (- z)]
+    :west [z y (- x)]
+    :east [(- z) y x]
+    [x y z]))
+
 ;; ============================================================================
 ;; Multiblock Render Check
 ;; ============================================================================
@@ -91,12 +195,19 @@
   
   Returns: boolean"
   [tile]
-    (let [state (if (map? tile)
-         tile
-         (or (pbe/get-custom-state tile) {}))]
-      (and (map? state)
-        (contains? state :sub-id)
-        (zero? (long (:sub-id state))))))
+  (let [state (if (map? tile)
+                tile
+                (or (pbe/get-custom-state tile) {}))]
+    (and (map? state)
+         (contains? state :sub-id)
+         (zero? (long (:sub-id state)))
+         (if-let [block-id (or (get-tile-block-id tile) (:block-id state))]
+           (if-let [block-spec (registry-metadata/get-block-spec block-id)]
+             (if-let [canonical (canonical-origin-pos tile state block-spec)]
+               (= canonical (current-pos-xyz tile))
+               true)
+             true)
+           true))))
 
 ;; ============================================================================
 ;; Main Render Function
@@ -120,9 +231,15 @@
       (let [state (if (map? tile)
                     tile
                     (or (pbe/get-custom-state tile) {}))
-            direction (:direction state :north)
+            block-id (or (get-tile-block-id tile)
+             (:block-id state))
+            block-spec (when block-id
+             (registry-metadata/get-block-spec block-id))
+            direction (normalize-direction (:direction state :north))
             [pivot-x pivot-z] (get-pivot-offset direction)
-            [rot-x rot-y rot-z] (get-rotation-center direction)
+            raw-rot-center (or (:multi-block-rotation-center block-spec)
+                   (get-rotation-center direction))
+            [rot-x rot-y rot-z] (direction->rotation-center raw-rot-center direction)
             rotation (get-rotation-angle direction)
             tx (+ pivot-x rot-x)
             ty rot-y

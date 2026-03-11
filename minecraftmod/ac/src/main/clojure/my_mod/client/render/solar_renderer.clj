@@ -20,11 +20,12 @@
   (.pushPose pose-stack)
   (try
     (let [;; rotate 90 degrees around Y
+          _ (.translate pose-stack (double 0.5) (double 0.0) (double 0.5))
           _ (pose/apply-y-rotation pose-stack 90.0)
           ;; scale
           _ (.scale pose-stack (float 0.014) (float 0.014) (float 0.014))
-          ;; Use solid render type first to avoid unintended alpha/cull issues.
-          vc (rb/get-solid-buffer buffer-source @texture)]
+          ;; Use no-cull to avoid losing one-sided faces in legacy OBJs.
+          vc (rb/get-cutout-no-cull-buffer buffer-source @texture)]
       (obj/render-all! @model pose-stack vc packed-light packed-overlay))
     (finally
       (.popPose pose-stack))))
