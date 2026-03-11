@@ -4,6 +4,8 @@
   This namespace is intended to be required during core initialization so that
   GUI metadata/hook registries are populated before platform registration."
   (:require [my-mod.gui.dsl :as gui]
+            [my-mod.gui.slot-schema :as slot-schema]
+            [my-mod.wireless.slot-schema :as slots]
             [my-mod.wireless.gui.node-container :as node-container]
             [my-mod.wireless.gui.matrix-container :as matrix-container]
             [my-mod.wireless.gui.solar-container :as solar-container]
@@ -34,28 +36,15 @@
        (contains? container :energy)
        (contains? container :status)))
 
-;; Slot layout definitions (used by quick-move strategies and slot manager)
+;; Slot layout is derived from the centralized slot schemas.
 (def ^:private node-slot-layout
-  {:slots [{:type :energy :index 0 :x 0 :y 0}
-           {:type :output :index 1 :x 26 :y 0}]
-   :ranges {:tile [0 1]
-            :player-main [2 28]
-            :player-hotbar [29 37]}})
+  (slot-schema/get-slot-layout slots/wireless-node-id))
 
 (def ^:private matrix-slot-layout
-  {:slots [{:type :plate :index 0 :x 0 :y 0}
-           {:type :plate :index 1 :x 34 :y 0}
-           {:type :plate :index 2 :x 68 :y 0}
-           {:type :core :index 3 :x 47 :y 24}]
-   :ranges {:tile [0 3]
-            :player-main [4 30]
-            :player-hotbar [31 39]}})
+  (slot-schema/get-slot-layout slots/wireless-matrix-id))
 
 (def ^:private solar-slot-layout
-  {:slots [{:type :energy :index 0 :x 42 :y 81}]
-   :ranges {:tile [0 0]
-            :player-main [1 27]
-            :player-hotbar [28 36]}})
+  (slot-schema/get-slot-layout slots/solar-gen-id))
 
 (gui/defgui wireless-node
   :gui-id 0

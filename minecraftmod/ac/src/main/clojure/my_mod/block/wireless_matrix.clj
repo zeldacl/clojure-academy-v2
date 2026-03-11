@@ -14,10 +14,12 @@
             [my-mod.block.role-impls :as impls]
             [my-mod.block.matrix-schema :as mschema]
             [my-mod.block.state-schema :as schema]
+            [my-mod.gui.slot-schema :as slot-schema]
             [my-mod.platform.capability :as platform-cap]
             [my-mod.platform.world :as world]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
+            [my-mod.wireless.slot-schema :as slots]
             [my-mod.wireless.gui.matrix-sync :as sync]
             [my-mod.util.log :as log])
   (:import [my_mod.api.wireless IWirelessMatrix]))
@@ -43,6 +45,16 @@
   [be]
   (or (.getCustomState be) mschema/matrix-default-state))
 
+(def ^:private matrix-slot-schema-id slots/wireless-matrix-id)
+(def ^:private matrix-plate-slot-indexes
+  (slot-schema/slot-indexes-by-type matrix-slot-schema-id :plate))
+(def ^:private matrix-core-slot-index
+  (slot-schema/slot-index matrix-slot-schema-id :core))
+(def ^:private matrix-slot-indexes
+  (slot-schema/all-slot-indexes matrix-slot-schema-id))
+(def ^:private matrix-slot-count
+  (slot-schema/tile-slot-count matrix-slot-schema-id))
+
 ;; ============================================================================
 ;; Inventory helpers (operating on the state map directly)
 ;; ============================================================================
@@ -50,16 +62,18 @@
 (defn- set-inv-slot [state slot item] (assoc-in state [:inventory slot] item))
 
 (defn- recalculate-plate-count
-  "Count non-nil items in slots 0-2."
+  "Count non-nil items in matrix plate slots."
   [state]
   (assoc state :plate-count
-         (count (filter some? (take 3 (:inventory state))))))
+         (count (for [slot matrix-plate-slot-indexes
+                      :when (get-in state [:inventory slot])]
+                  slot))))
 
 (defn- recalculate-core-level
   "Update :core-level from core slot."
   [state]
   (assoc state :core-level
-         (core/get-core-level (get-in state [:inventory 3]))))
+         (core/get-core-level (get-in state [:inventory matrix-core-slot-index]))))
 
 (defn recalculate-counts
   "Recalculate plate-count and core-level from current inventory."
@@ -70,7 +84,7 @@
   "Is matrix operational? Requires 3 plates + a core."
   [state]
   (and (> (:core-level state 0) 0)
-       (= (:plate-count state 0) 3)))
+  (= (:plate-count state 0) (count matrix-plate-slot-indexes))))
 
 (defn get-plate-count
   "Return plate count (0–3) from block entity state. For use by renderers.
@@ -155,7 +169,7 @@
 ;; ============================================================================
 
 (def ^:private matrix-container-fns
-  {:get-size (fn [be] 4)
+  {:get-size (fn [_be] matrix-slot-count)
 
    :get-item (fn [be slot]
                (get-in (safe-state be) [:inventory slot]))
@@ -186,18 +200,18 @@
                               item))
 
    :clear! (fn [be]
-             (.setCustomState be (assoc (safe-state be) :inventory [nil nil nil nil]
+             (.setCustomState be (assoc (safe-state be) :inventory (vec (repeat matrix-slot-count nil))
                                                          :plate-count 0 :core-level 0)))
 
    :still-valid? (fn [_be _player] true)
 
-   :slots-for-face (fn [_be _face] (int-array [0 1 2 3]))
+   :slots-for-face (fn [_be _face] (int-array matrix-slot-indexes))
 
    :can-place-through-face? (fn [_be slot item _face]
-                               (cond
-                                 (<= 0 slot 2) (plate/is-constraint-plate? item)
-                                 (= slot 3)    (core/is-mat-core? item)
-                                 :else false))
+                               (case (slot-schema/slot-type matrix-slot-schema-id slot)
+                                 :plate (plate/is-constraint-plate? item)
+                                 :core (core/is-mat-core? item)
+                                 false))
 
    :can-take-through-face? (fn [_be _slot _item _face] true)})
 

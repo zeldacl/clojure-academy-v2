@@ -4,6 +4,7 @@
   Provides platform-agnostic interface for syncing node tile state to clients."
   (:require [my-mod.wireless.gui.gui-metadata :as metadata]
             [my-mod.wireless.gui.node-container :as node-container]
+            [my-mod.wireless.gui.container-common :as common]
             [my-mod.wireless.gui.container-schema :as schema]
             [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
 
@@ -34,13 +35,7 @@
   [source]
   (= (:container-type source) :node))
 
-(defn- tile-state
-  "Get current state map from tile-entity (BE or legacy map)."
-  [tile]
-  (when tile
-    (if (map? tile)
-      tile
-      (try (.getCustomState tile) (catch Exception _ {})))))
+(defn- tile-state [tile] (common/get-tile-state tile))
 
 (defn- get-pos
   [tile]

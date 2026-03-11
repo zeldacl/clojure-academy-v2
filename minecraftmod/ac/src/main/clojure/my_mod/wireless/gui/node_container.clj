@@ -1,9 +1,10 @@
 (ns my-mod.wireless.gui.node-container
   "Wireless Node GUI Container - handles server-side inventory and data sync"
   (:require [my-mod.energy.operations :as energy-stub]
+            [my-mod.gui.slot-schema :as slot-schema]
+            [my-mod.wireless.slot-schema :as slots]
             [my-mod.wireless.gui.container-common :as common]
-            [my-mod.wireless.gui.container-move-common :as move-common
-             :refer [defquick-move-stack-config]]
+            [my-mod.wireless.gui.container-move-common :as move-common]
             [my-mod.wireless.gui.container-schema :as schema]
             [my-mod.wireless.gui.sync-helpers :as sync-helpers]
             [my-mod.util.log :as log]))
@@ -78,20 +79,14 @@
 ;; Slot Management
 ;; ============================================================================
 
-(def slot-input 0)
-(def slot-output 1)
+(def ^:private node-slot-schema-id slots/wireless-node-id)
 
-(defn- tile-state
-  "Get current state map from tile-entity (BE or legacy map)."
-  [tile]
-  (if (map? tile)
-    tile
-    (try (.getCustomState tile) (catch Exception _ {}))))
+(defn- tile-state [tile] (common/get-tile-state tile))
 
 (defn get-slot-count
-  "Get total slot count (2 for node)"
+  "Get total tile slot count for node."
   [_container]
-  2)
+  (slot-schema/tile-slot-count node-slot-schema-id))
 
 (defn get-owner
   "Get node owner name"
@@ -102,36 +97,23 @@
 (defn can-place-item?
   "Check if item can be placed in slot
 
-  Slot 0 (input): Only items with energy capability
-  Slot 1 (output): No direct placement (output only)"
+  Input slot: items with energy capability
+  Output slot: no direct placement"
   [_container slot-index item-stack]
-  (case slot-index
-    0 (energy-stub/is-energy-item-supported? item-stack)
-    1 false
+  (case (slot-schema/slot-type node-slot-schema-id slot-index)
+    :energy (energy-stub/is-energy-item-supported? item-stack)
+    :output false
     false))
 
 (defn get-slot-item
   "Get item from slot. Reads from BE customState when tile-entity is a BE."
   [container slot-index]
-  (let [tile (:tile-entity container)]
-    (if (map? tile)
-      (common/get-slot-item container slot-index)
-      (try
-        (get-in (.getCustomState tile) [:inventory slot-index])
-        (catch Exception _ (common/get-slot-item container slot-index))))))
+  (common/get-slot-item-be container slot-index))
 
 (defn set-slot-item!
   "Set item in slot. Writes to BE customState when tile-entity is a BE."
   [container slot-index item-stack]
-  (let [tile (:tile-entity container)]
-    (if (map? tile)
-      (common/set-slot-item! container slot-index item-stack)
-      (try
-        (let [state  (or (.getCustomState tile) {})
-              state' (assoc-in state [:inventory slot-index] item-stack)]
-          (.setCustomState tile state'))
-        (catch Exception _
-          (common/set-slot-item! container slot-index item-stack))))))
+  (common/set-slot-item-be! container slot-index item-stack {} identity))
 
 (defn slot-changed!
   "Called when slot contents change"
@@ -241,12 +223,16 @@
 ;; Quick Move (Shift+Click)
 ;; ============================================================================
 
-(defquick-move-stack-config quick-move-stack
-  {:container-slots #{slot-input slot-output}
-   :inventory-pred (fn [slot-index player-inventory-start]
-                     (>= slot-index player-inventory-start))
-  :rules [{:accept? (fn [item] (energy-stub/is-energy-item-supported? item))
-            :slots [slot-input]}]})
+(def ^:private quick-move-config slots/wireless-node-quick-move-config)
+
+(defn quick-move-stack
+  "Handle shift-click on slot."
+  [container slot-index player-inventory-start]
+  (move-common/quick-move-with-rules
+    container
+    slot-index
+    player-inventory-start
+    quick-move-config))
 
 ;; ============================================================================
 ;; Container Lifecycle

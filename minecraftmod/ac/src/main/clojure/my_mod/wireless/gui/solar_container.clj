@@ -3,7 +3,12 @@
 
   Reads tile state via getCustomState like node/matrix containers —
   no Java reflection needed."
-  (:require [my-mod.wireless.gui.container-schema :as schema]))
+  (:require [my-mod.gui.slot-schema :as slot-schema]
+            [my-mod.wireless.slot-schema :as slots]
+            [my-mod.wireless.gui.container-common :as common]
+            [my-mod.wireless.gui.container-schema :as schema]))
+
+(def ^:private solar-slot-schema-id slots/solar-gen-id)
 
 ;; ============================================================================
 ;; Field Schema — single source of truth for all atom fields
@@ -29,23 +34,21 @@
 ;; Container Creation
 ;; ============================================================================
 
-(defn- tile-state
-  "Get current Clojure state map from tile entity."
-  [tile]
-  (if (map? tile)
-    tile
-    (try (.getCustomState tile) (catch Exception _ {}))))
-
 (defn create-container
   "Create Solar Generator container instance.
 
   tile: platform-specific ScriptedBlockEntity; state is read via getCustomState."
   [tile player]
-  (let [state (or (tile-state tile) {})]
+  (let [state (or (common/get-tile-state tile) {})]
     (merge {:tile-entity    tile
             :player         player
             :container-type :solar}
            (schema/build-atoms solar-fields state))))
+
+(defn get-slot-count
+  "Get total tile slot count for solar container."
+  [_container]
+  (slot-schema/tile-slot-count solar-slot-schema-id))
 
 ;; ============================================================================
 ;; Validation
@@ -65,7 +68,7 @@
   "Update synced atoms from tile entity custom state (server -> client).
   Reads from getCustomState like node/matrix — no reflection needed."
   [container]
-  (let [state (or (tile-state (:tile-entity container)) {})]
+  (let [state (or (common/get-tile-state (:tile-entity container)) {})]
     (reset! (:energy container)     (double (get state :energy 0.0)))
     (reset! (:max-energy container) (double (get state :max-energy 1000.0)))
     (reset! (:status container)     (str (get state :status "STOPPED")))))

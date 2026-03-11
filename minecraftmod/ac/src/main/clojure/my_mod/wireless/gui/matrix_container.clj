@@ -6,11 +6,12 @@
   (:require [my-mod.util.log :as log]
             [my-mod.block.wireless-matrix :as wm]
             [my-mod.block.matrix-schema :as mschema]
+            [my-mod.gui.slot-schema :as slot-schema]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
+            [my-mod.wireless.slot-schema :as slots]
             [my-mod.wireless.gui.container-common :as common]
-            [my-mod.wireless.gui.container-move-common :as move-common
-             :refer [defquick-move-stack-config]]
+            [my-mod.wireless.gui.container-move-common :as move-common]
             [my-mod.wireless.gui.container-schema :as schema]
             [my-mod.wireless.gui.matrix-fields :as mf]
             [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
@@ -77,65 +78,54 @@
 ;; Slot Management
 ;; ============================================================================
 
-(def slot-plate-1 0)
-(def slot-plate-2 1)
-(def slot-plate-3 2)
-(def slot-core 3)
+(def ^:private matrix-slot-schema-id slots/wireless-matrix-id)
+
+(defn- matrix-slot-count
+  []
+  (slot-schema/tile-slot-count matrix-slot-schema-id))
+
+(defn- plate-slot-indexes
+  []
+  (slot-schema/slot-indexes-by-type matrix-slot-schema-id :plate))
+
+(defn- core-slot-index
+  []
+  (slot-schema/slot-index matrix-slot-schema-id :core))
 
 (defn get-slot-count
-  "Get total slot count (4 for matrix: 3 plates + 1 core)"
+  "Get total tile slot count for matrix container."
   [_container]
-  4)
+  (matrix-slot-count))
 
 (defn is-plate-slot?
-  "Check if slot is a plate slot"
+  "Check if slot is a plate slot."
   [slot-index]
-  (<= 0 slot-index 2))
+  (slot-schema/slot-type? matrix-slot-schema-id slot-index :plate))
 
 (defn is-core-slot?
-  "Check if slot is the core slot"
+  "Check if slot is the core slot."
   [slot-index]
-  (= slot-index slot-core))
+  (slot-schema/slot-type? matrix-slot-schema-id slot-index :core))
 
 (defn can-place-item?
-  "Check if item can be placed in slot
-
-  Slots 0-2 (plates): Only wireless constraint plates
-  Slot 3 (core): Only wireless matrix cores"
+  "Check if item can be placed in slot using slot type metadata."
   [_container slot-index item-stack]
-  (cond
-    (is-plate-slot? slot-index)
-    (plate/is-constraint-plate? item-stack)
-
-    (is-core-slot? slot-index)
-    (core/is-mat-core? item-stack)
-
-    :else false))
+  (case (slot-schema/slot-type matrix-slot-schema-id slot-index)
+    :plate (plate/is-constraint-plate? item-stack)
+    :core (core/is-mat-core? item-stack)
+    false))
 
 (defn get-slot-item
   "Get item from slot. Reads from BE customState if tile-entity is a BE."
   [container slot-index]
-  (let [tile (:tile-entity container)]
-    (if (map? tile)
-      (common/get-slot-item container slot-index)
-      (try
-        (get-in (.getCustomState tile) [:inventory slot-index])
-        (catch Exception _ (common/get-slot-item container slot-index))))))
+  (common/get-slot-item-be container slot-index))
 
 (defn set-slot-item!
-  "Set item in slot. Writes to BE customState if tile-entity is a BE."
+  "Set item in slot. Writes to BE customState, running recalculate-counts after write."
   [container slot-index item-stack]
-  (let [tile (:tile-entity container)]
-    (if (map? tile)
-      (common/set-slot-item! container slot-index item-stack)
-      (try
-        (let [state  (or (.getCustomState tile) mschema/matrix-default-state)
-              state' (-> state
-                         (assoc-in [:inventory slot-index] item-stack)
-                         wm/recalculate-counts)]
-          (.setCustomState tile state'))
-        (catch Exception _
-          (common/set-slot-item! container slot-index item-stack))))))
+  (common/set-slot-item-be! container slot-index item-stack
+                             mschema/matrix-default-state
+                             wm/recalculate-counts))
 
 (defn slot-changed!
   "Called when slot contents change - triggers multiblock revalidation"
@@ -155,14 +145,14 @@
               (inc count)
               count))
           0
-          [slot-plate-1 slot-plate-2 slot-plate-3]))
+          (plate-slot-indexes)))
 
 (defn get-core-level
   "Get core tier level from core slot item
 
   Returns: int 0-4 (0 if no core)"
   [container]
-  (let [core-item (get-slot-item container slot-core)]
+  (let [core-item (get-slot-item container (core-slot-index))]
     (if (and core-item (core/is-mat-core? core-item))
       (core/get-core-level core-item)
       0)))
@@ -255,14 +245,13 @@
 
     1
     (do
-      (set-slot-item! container slot-core nil)
+      (set-slot-item! container (core-slot-index) nil)
       (log/info "Ejected matrix core"))
 
     2
     (do
-      (set-slot-item! container slot-plate-1 nil)
-      (set-slot-item! container slot-plate-2 nil)
-      (set-slot-item! container slot-plate-3 nil)
+      (doseq [slot-idx (plate-slot-indexes)]
+        (set-slot-item! container slot-idx nil))
       (log/info "Ejected all plates"))
 
     (log/warn "Unknown button ID:" button-id)))
@@ -271,14 +260,16 @@
 ;; Quick Move (Shift+Click)
 ;; ============================================================================
 
-(defquick-move-stack-config quick-move-stack
-  {:container-slots #{slot-plate-1 slot-plate-2 slot-plate-3 slot-core}
-   :inventory-pred (fn [slot-index player-inventory-start]
-                     (>= slot-index player-inventory-start))
-   :rules [{:accept? (fn [item] (can-place-item? nil slot-core item))
-            :slots [slot-core]}
-           {:accept? (fn [item] (can-place-item? nil slot-plate-1 item))
-            :slots [slot-plate-1 slot-plate-2 slot-plate-3]}]})
+(def ^:private quick-move-config slots/wireless-matrix-quick-move-config)
+
+(defn quick-move-stack
+  "Handle shift-click on slot."
+  [container slot-index player-inventory-start]
+  (move-common/quick-move-with-rules
+    container
+    slot-index
+    player-inventory-start
+    quick-move-config))
 
 ;; ============================================================================
 ;; Container Lifecycle

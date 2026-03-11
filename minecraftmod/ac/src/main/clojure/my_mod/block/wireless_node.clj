@@ -14,11 +14,13 @@
             [my-mod.block.role-impls    :as impls]
             [my-mod.block.node-schema   :as nschema]
             [my-mod.block.state-schema  :as schema]
+            [my-mod.gui.slot-schema     :as slot-schema]
             [my-mod.platform.capability :as platform-cap]
             [my-mod.platform.world      :as world]
             [clojure.string             :as str]
             [my-mod.energy.operations   :as energy]
             [my-mod.wireless.world-data :as wd]
+            [my-mod.wireless.slot-schema :as slots]
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.util.log            :as log])
   (:import [my_mod.api.wireless IWirelessNode]
@@ -70,6 +72,16 @@
   (or (.getCustomState be)
       (assoc nschema/node-default-state :node-type (parse-node-type block-id))))
 
+(def ^:private node-slot-schema-id slots/wireless-node-id)
+(def ^:private node-input-slot-index
+  (slot-schema/slot-index node-slot-schema-id :input))
+(def ^:private node-output-slot-index
+  (slot-schema/slot-index node-slot-schema-id :output))
+(def ^:private node-slot-indexes
+  (slot-schema/all-slot-indexes node-slot-schema-id))
+(def ^:private node-slot-count
+  (slot-schema/tile-slot-count node-slot-schema-id))
+
 ;; ============================================================================
 ;; Design-3 tick logic (functional, operates on state map)
 ;; ============================================================================
@@ -77,7 +89,7 @@
 (defn- tick-charge-in
   "Pull energy from inventory slot 0 into the node. Returns updated state."
   [state]
-  (let [input-item (get-in state [:inventory 0])]
+  (let [input-item (get-in state [:inventory node-input-slot-index])]
     (if (and input-item (energy/is-energy-item-supported? input-item))
       (let [cur       (double (:energy state 0.0))
             max-e     (double (nschema/node-max-energy state))
@@ -93,7 +105,7 @@
 (defn- tick-charge-out
   "Push energy from node to inventory slot 1. Returns updated state."
   [state]
-  (let [output-item (get-in state [:inventory 1])
+  (let [output-item (get-in state [:inventory node-output-slot-index])
         cur         (double (:energy state 0.0))]
     (if (and output-item (energy/is-energy-item-supported? output-item) (pos? cur))
       (let [bandwidth (double (get-in nschema/node-types
@@ -157,7 +169,7 @@
 ;; ============================================================================
 
 (def ^:private node-container-fns
-  {:get-size (fn [_be] 2)
+  {:get-size (fn [_be] node-slot-count)
 
    :get-item (fn [be slot]
                (get-in (or (.getCustomState be) nschema/node-default-state)
@@ -185,15 +197,16 @@
 
    :clear! (fn [be]
              (.setCustomState be (assoc (or (.getCustomState be) nschema/node-default-state)
-                                        :inventory [nil nil])))
+                  :inventory (vec (repeat node-slot-count nil)))))
 
    :still-valid?          (fn [_be _player] true)
-   :slots-for-face        (fn [_be _face] (int-array [0 1]))
+     :slots-for-face        (fn [_be _face] (int-array node-slot-indexes))
 
    :can-place-through-face? (fn [_be slot item _face]
-                               (and (= slot 0) (energy/is-energy-item-supported? item)))
+              (and (= slot node-input-slot-index)
+                (energy/is-energy-item-supported? item)))
 
-   :can-take-through-face? (fn [_be slot _item _face] (= slot 1))})
+     :can-take-through-face? (fn [_be slot _item _face] (= slot node-output-slot-index))})
 
 ;; ============================================================================
 ;; Tile DSL (shared BlockEntityType across node tiers)
