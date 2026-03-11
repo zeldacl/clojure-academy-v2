@@ -43,10 +43,10 @@ sourceSets {
   }
 }
 
-tasks.named('processResources', ProcessResources).configure {
-  from(sourceSets.main.clojure.srcDirs) { include '**/*.clj' }
-  duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
+// tasks.named('processResources', ProcessResources).configure {
+//   from(sourceSets.main.clojure.srcDirs) { include '**/*.clj' }
+//   duplicatesStrategy = DuplicatesStrategy.INCLUDE
+// }
 
 tasks.named('jar', Jar).configure {
   duplicatesStrategy = DuplicatesStrategy.INCLUDE

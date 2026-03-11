@@ -78,6 +78,24 @@
 
 ## Metadata-Driven Architecture
 
+## Platform Object Protocols (Keep, Not Legacy)
+
+Some protocols are active platform-abstraction boundaries and must be retained.
+
+- `my-mod.platform.item/IItemStack`
+  - Purpose: unify `ItemStack` operations across Forge/Fabric.
+  - Implemented in:
+    - `forge-1.20.1/.../platform_impl.clj` (`extend-type ItemStack item/IItemStack`)
+    - `fabric-1.20.1/.../platform_impl.clj` (`extend-type ItemStack item/IItemStack`)
+  - Consumed by core/content code via `my-mod.platform.item` functions, e.g.:
+    - `item/create-item-from-nbt`
+    - `item/item-is-empty?`
+    - `item/item-save-to-nbt`
+    - `item/item-set-damage!`
+
+Guideline: remove only protocols with zero implementation and zero call sites.
+`IItemStack` does not meet that condition.
+
 ### Core Principle: Platform Neutrality
 
 **Before Refactoring** (Platform code contained game concepts):

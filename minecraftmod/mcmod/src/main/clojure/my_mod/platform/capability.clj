@@ -49,7 +49,7 @@
   (swap! capability-type-registry assoc key
          {:java-type         java-type
           :handler-factory-fn handler-factory-fn})
-  (log/info "Declared capability" key "→" (.getName java-type))
+  (log/info "Declared capability" key "->" (.getName java-type))
   (when *declare-capability-impl*
     (*declare-capability-impl* key java-type))
   nil)

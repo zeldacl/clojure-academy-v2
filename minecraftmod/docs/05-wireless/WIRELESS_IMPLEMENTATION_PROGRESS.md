@@ -276,55 +276,22 @@
 - ✅ **get-matrix-tile**: 获取TileEntity
 - ✅ **tick-all-matrices!**: 批量更新
 
-### 8. IInventory 接口实现
+### 8. 物品栏状态实现（已完成）
 
-#### 8.1 IInventory 协议 (`inventory/core.clj`)
-- ✅ **协议定义**: Clojure 协议替代 Java IInventory 接口
-  - `get-size-inventory`: 获取槽位数量
-  - `get-stack-in-slot`: 获取指定槽位物品
-  - `decr-stack-size`: 减少堆叠数量
-  - `remove-stack-from-slot`: 移除整个堆叠
-  - `set-inventory-slot-contents`: 设置槽位内容
-  - `get-inventory-stack-limit`: 获取堆叠上限
-  - `is-usable-by-player?`: 检查玩家是否可用
-  - `is-item-valid-for-slot?`: 验证物品有效性
-  - `get-inventory-name`: 获取库存名称
-  - `has-custom-name?`: 检查自定义名称
+#### 8.1 实现方式（当前）
+- ✅ **不再使用 IInventory 协议层**
+- ✅ **基于 customState `:inventory` 字段建模槽位**
+  - Node: 2 槽位（输入/输出）
+  - Matrix: 4 槽位（3 板 + 1 核心）
 
-#### 8.2 辅助函数
-- ✅ **inventory?**: 类型检查
-- ✅ **get-all-stacks**: 获取所有物品
-- ✅ **clear-inventory!**: 清空库存
-- ✅ **count-items**: 统计物品数量
-- ✅ **has-space?**: 检查是否有空间
+#### 8.2 NBT 持久化
+- ✅ **通过 schema 字段级 `:load-fn` / `:save-fn` 序列化库存**
+  - `node_schema.clj` 中 `load-inventory` / `save-inventory`
+  - `matrix_schema.clj` 中 `load-inventory` / `save-inventory`
 
-#### 8.3 NBT 序列化
-- ✅ **write-inventory-to-nbt**: 保存库存到 NBT
-  - 遍历所有槽位
-  - 序列化非空物品
-  - 支持自定义 key
-- ✅ **read-inventory-from-nbt**: 从 NBT 加载库存
-  - 恢复所有槽位
-  - 处理空槽位
-  - 支持自定义 key
-
-#### 8.4 NodeTileEntity 实现
-- ✅ **extend-protocol IInventory**: 为 NodeTileEntity 实现协议
-  - 2 槽位：输入/输出
-  - 堆叠上限: 64
-  - 物品验证: 仅能量物品
-- ✅ **NBT 持久化**:
-  - `write-node-to-nbt`: 保存能量、名称、密码、库存
-  - `read-node-from-nbt`: 加载所有数据
-
-#### 8.5 TileMatrix 实现
-- ✅ **extend-protocol IInventory**: 为 TileMatrix 实现协议
-  - 4 槽位：3 板 + 1 核心
-  - 堆叠上限: 1
-  - 物品验证: 板或核心
-- ✅ **NBT 持久化**:
-  - `write-matrix-to-nbt`: 保存放置者、板数、子ID、方向、库存
-  - `read-matrix-from-nbt`: 加载所有数据
+#### 8.3 业务约束
+- ✅ Node 槽位规则：输入/输出分离，按能量物品逻辑处理
+- ✅ Matrix 槽位规则：板位与核心位分离
 
 ### 9. NBT DSL 系统
 
@@ -337,7 +304,7 @@
   - `:float` - Float 类型
   - `:long` - Long 类型
   - `:keyword` - Clojure keyword（自动转换为字符串）
-  - `:inventory` - IInventory 协议（调用 inv/write-inventory-to-nbt）
+  - `:inventory` - 无内建转换器，按字段自定义 `:load-fn` / `:save-fn`
 
 #### 9.2 defnbt 宏
 - ✅ **声明式字段定义**: `[field-key nbt-key type & options]`
@@ -928,13 +895,12 @@ root-widget (WidgetContainer 176×200)
 3. `item/test_battery.clj` (195 lines) - 测试电池实现
 4. `item/constraint_plate.clj` (20 lines) - 限制板物品
 5. `item/mat_core.clj` (110 lines) - 矩阵核心物品 (4等级)
-6. `block/wireless_matrix.clj` (390 lines) - 无线矩阵方块实现 + IInventory + NBT DSL
-7. `inventory/core.clj` (180 lines) - IInventory协议和NBT工具
-8. `nbt/dsl.clj` (380 lines) - NBT序列化DSL系统
+6. `block/wireless_matrix.clj` (390 lines) - 无线矩阵方块实现 + 物品栏状态 + NBT DSL
+7. `nbt/dsl.clj` (380 lines) - NBT序列化DSL系统
 
 ### 更新文件
 1. `energy/operations.clj` (约 220 lines) - 能量操作层（物品/节点/接收器充放电与无线传输）
-2. `block/wireless_node.clj` (640 lines) - 节点方块协议实现 + 状态管理 + ITickable + IInventory + NBT DSL
+2. `block/wireless_node.clj` (640 lines) - 节点方块协议实现 + 状态管理 + ITickable + 物品栏状态 + NBT DSL
 
 ### 无线系统现有文件
 1. `wireless/virtual_blocks.clj` (240 lines)
@@ -953,7 +919,7 @@ root-widget (WidgetContainer 176×200)
   - 方块状态管理 (100%)
   - ITickable实现 (100%)
   - Wireless Matrix实现 (100%)
-  - IInventory实现 (100%)
+  - 物品栏状态实现 (100%)
   - NBT DSL系统 (100%)
 - ⏳ **进行中**: 0/11 (0%)
 - 📋 **待开始**: 2/11 (18%)
@@ -974,7 +940,7 @@ root-widget (WidgetContainer 176×200)
 - ✅ 电池充放电逻辑
 - ✅ BlockState 能量等级计算
 - ✅ ITickable 更新机制
-- ✅ IInventory 槽位操作
+- ✅ 物品栏槽位操作
 - ✅ NBT 序列化/反序列化
 - ✅ GUI 组件封装
 - ✅ 事件系统封装
@@ -1019,7 +985,7 @@ root-widget (WidgetContainer 176×200)
 - **2025-11-25**: 完成方块状态管理（BlockState更新和实际状态获取）
 - **2025-11-25**: 完成ITickable接口实现（使用deftype创建轻量级包装器）
 - **2025-11-26**: 完成Wireless Matrix实现（2x2x2多方块结构，IWirelessMatrix协议）
-- **2025-11-26**: 完成IInventory实现（协议定义、NBT持久化、Node和Matrix集成）
+- **2025-11-26**: 完成物品栏状态实现（schema自定义 load/save、Node和Matrix集成）
 - **2025-11-26**: 完成NBT DSL系统（defnbt宏、类型转换器、声明式序列化，代码减少82.5%）
 - **2025-11-26**: **完成GUI系统实现**（基于LambdaLib2 CGui，8个新文件，完整的Container+GUI架构）
 

@@ -21,6 +21,7 @@ build
 eclipse
 run
 logs/*
+Logs/*
 *.log
 *.Log
 *.Logs

@@ -21,6 +21,11 @@ build
 eclipse
 run
 logs/*
+Logs/*
+*.log
+*.Log
+*.Logs
+*.logs
 
 # Files from Forge MDK
 forge*changelog.txt

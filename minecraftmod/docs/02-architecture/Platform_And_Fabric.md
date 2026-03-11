@@ -41,6 +41,16 @@ forge-1.20.1/ 或 fabric-1.20.1/
 
 ---
 
+## 平台对象协议边界（非兼容残留）
+
+- `my-mod.platform.item/IItemStack` 是当前在用的跨平台抽象，不是历史兼容层。
+- Forge/Fabric 都在各自 `platform_impl.clj` 中对原生 `ItemStack` 做了 `extend-type` 实现。
+- core/content 代码通过 `my-mod.platform.item` 调用统一方法（如 `item-is-empty?`、`item-save-to-nbt`、`item-set-damage!`、`create-item-from-nbt`）。
+
+结论：`IItemStack` 需保留；清理标准应为“无实现且无调用”。
+
+---
+
 ## 事件与 GUI
 
 - **事件**：通过 `events/metadata` 识别方块与处理器（如 `:on-right-click`），调用 core 的 on-block-right-click 等。

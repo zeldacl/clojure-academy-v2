@@ -54,9 +54,9 @@
   - 状态：完成，使用 Clojure record + protocol 实现
   - 包含：4槽位物品栏（3个constraint_plate + 1个mat_core）
 
-- [x] **NodeTileEntity** 实现 IInventory ✅
+- [x] **NodeTileEntity** 完成物品栏逻辑 ✅
   - 2 槽位物品栏
-  - 方法：使用 `inventory.core` 命名空间提供的工具
+  - 方法：基于 customState `:inventory` 字段读写
   - 状态：完成，集成在 NodeTileEntity record 中
 
 - [x] **NodeTileEntity** 实现 ITickable ✅
@@ -369,7 +369,7 @@
   - ✅ IWirelessReceiver 接口
   - ✅ NodeTileEntity 接口实现
   - ✅ TileMatrix 接口实现
-  - ✅ IInventory 实现
+  - ✅ 物品栏状态实现
   - ✅ ITickable 实现
   - ⏳ ImagEnergyItem 接口
   - ⏳ 方块状态管理

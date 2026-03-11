@@ -4,7 +4,6 @@
   Provides a clean, declarative way to define NBT read/write operations
   for tile entities and other game objects."
   (:require [my-mod.util.log :as log]
-            [my-mod.inventory.core :as inv]
             [my-mod.platform.nbt :as nbt]))
 
 ;; ============================================================================
@@ -61,29 +60,21 @@
     :has-key? (fn [nbt key]
                 (.hasKey nbt key))}
    
-   :keyword
-   {:write (fn [nbt key value]
-             (.setString nbt key (name value)))
-    :read (fn [nbt key]
-            (keyword (.getString nbt key)))
-    :has-key? (fn [nbt key]
-                (.hasKey nbt key))}
-   
-   :atom
-   {:write (fn [nbt key value]
-             ;; Atoms need to be dereferenced before writing
-             ;; The actual type is handled by a nested converter
-             (throw (ex-info "Atom type needs explicit sub-type" {:key key})))
-    :read (fn [nbt key]
-            (throw (ex-info "Atom type needs explicit sub-type" {:key key})))}
-   
-   :inventory
-   {:write (fn [nbt key value]
-             (inv/write-inventory-to-nbt value nbt key))
+     :keyword
+     {:write (fn [nbt key value]
+         (.setString nbt key (name value)))
       :read (fn [nbt key]
-        nil)
-    :has-key? (fn [nbt key]
-                (.hasKey nbt key))}})
+        (keyword (.getString nbt key)))
+      :has-key? (fn [nbt key]
+      (.hasKey nbt key))}
+
+     :atom
+     {:write (fn [_nbt key _value]
+         ;; Atoms need to be dereferenced before writing
+         ;; The actual type is handled by a nested converter
+         (throw (ex-info "Atom type needs explicit sub-type" {:key key})))
+      :read (fn [_nbt key]
+        (throw (ex-info "Atom type needs explicit sub-type" {:key key})))}})
 
 ;; ============================================================================
 ;; Field Accessor Helpers
@@ -150,16 +141,14 @@
   [tile nbt field-spec]
   (let [{:keys [field-key nbt-key type atom? getter custom-write skip-on-write? transform-write]} field-spec]
     (when-not (and skip-on-write? (skip-on-write? tile))
-      (if (= type :inventory)
-        (inv/write-inventory-to-nbt tile nbt nbt-key)
-        (let [value (if getter
-                      (getter tile)
-                      (get-field-value tile [field-key] atom?))
-              value (if transform-write (transform-write value) value)]
-          (if custom-write
-            (custom-write tile nbt nbt-key value)
-            (when-let [converter (get type-converters type)]
-              ((:write converter) nbt nbt-key value))))))))
+      (let [value (if getter
+                    (getter tile)
+                    (get-field-value tile [field-key] atom?))
+            value (if transform-write (transform-write value) value)]
+        (if custom-write
+          (custom-write tile nbt nbt-key value)
+          (when-let [converter (get type-converters type)]
+            ((:write converter) nbt nbt-key value)))))))
 
 (defn read-nbt-field
   "Read a single field from NBT according to its specification"
@@ -169,17 +158,15 @@
                    ((:has-key? converter) nbt nbt-key)
                    (.hasKey nbt nbt-key))]
     (when has-key?
-      (if (= type :inventory)
-        (inv/read-inventory-from-nbt tile nbt nbt-key)
-        (let [value (if custom-read
-                      (custom-read tile nbt nbt-key)
-                      (when-let [converter (get type-converters type)]
-                        ((:read converter) nbt nbt-key)))
-              value (if transform-read (transform-read value) value)
-              value (or value default)]
-          (if setter
-            (setter tile value)
-            (set-field-value! tile [field-key] value atom?)))))))
+      (let [value (if custom-read
+                    (custom-read tile nbt nbt-key)
+                    (when-let [converter (get type-converters type)]
+                      ((:read converter) nbt nbt-key)))
+            value (if transform-read (transform-read value) value)
+            value (or value default)]
+        (if setter
+          (setter tile value)
+          (set-field-value! tile [field-key] value atom?))))))
 
 (defn write-nbt-fields
   "Write all fields to NBT according to specifications"
