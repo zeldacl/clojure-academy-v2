@@ -192,7 +192,9 @@
           matrix (.pose entry)
           vc vertex-consumer]
       (doseq [{:keys [i0 i1 i2]} face-list]
-        (doseq [vertex-idx [i0 i1 i2]]
+        ;; Entity RenderTypes are quad-based in modern MC. Submit a degenerate
+        ;; 4th vertex so each OBJ triangle maps to one valid quad primitive.
+        (doseq [vertex-idx [i0 i1 i2 i2]]
             (let [{:keys [pos uv normal]} (nth (:vertices model) vertex-idx)
               pos (map-model-pos pos)
               normal (map-model-normal normal)
