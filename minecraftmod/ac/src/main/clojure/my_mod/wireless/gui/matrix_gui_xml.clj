@@ -22,17 +22,9 @@
             [my-mod.gui.events :as events]
             [my-mod.gui.tech-ui-common :as tech-ui]
             [my-mod.network.client :as net-client]
+            [my-mod.wireless.gui.matrix-messages :as matrix-msgs]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.util.log :as log]))
-
-;; ============================================================================
-;; Constants
-;; ============================================================================
-
-(def ^:const MSG_GATHER_INFO "wireless_matrix_gather_info")
-(def ^:const MSG_INIT "wireless_matrix_init")
-(def ^:const MSG_CHANGE_SSID "wireless_matrix_change_ssid")
-(def ^:const MSG_CHANGE_PASSWORD "wireless_matrix_change_password")
 
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)
@@ -69,7 +61,7 @@
   [tile callback]
   (try
     (net-client/send-to-server
-      MSG_GATHER_INFO
+      (matrix-msgs/msg :gather-info)
       (net-helpers/tile-pos-payload tile)
       (fn [response]
         (try
@@ -99,7 +91,7 @@
   [tile ssid password callback]
   (try
     (net-client/send-to-server
-      MSG_INIT
+      (matrix-msgs/msg :init)
       (assoc (net-helpers/tile-pos-payload tile)
              :ssid ssid
              :password password)
@@ -120,7 +112,7 @@
   [tile new-ssid]
   (try
     (net-client/send-to-server
-      MSG_CHANGE_SSID
+      (matrix-msgs/msg :change-ssid)
       (assoc (net-helpers/tile-pos-payload tile)
              :new-ssid new-ssid))
     (catch Exception e
@@ -135,7 +127,7 @@
   [tile new-password]
   (try
     (net-client/send-to-server
-      MSG_CHANGE_PASSWORD
+      (matrix-msgs/msg :change-password)
       (assoc (net-helpers/tile-pos-payload tile)
              :new-password new-password))
     (catch Exception e

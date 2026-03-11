@@ -14,15 +14,10 @@
   (:require [my-mod.network.server :as net-server]
             [my-mod.wireless.helper :as helper]
             [my-mod.wireless.network :as wireless-net]
+            [my-mod.wireless.gui.matrix-messages :as matrix-msgs]
+            [my-mod.wireless.gui.wireless-messages :as wireless-msgs]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.util.log :as log]))
-
-;; ==================== 消息通道常量 ====================
-
-(def ^:const MSG_GATHER_INFO "wireless_matrix_gather_info")
-(def ^:const MSG_INIT "wireless_matrix_init")
-(def ^:const MSG_CHANGE_SSID "wireless_matrix_change_ssid")
-(def ^:const MSG_CHANGE_PASSWORD "wireless_matrix_change_password")
 
 ;; ==================== 工具函数 ====================
 
@@ -159,22 +154,22 @@
   []
   ;; 注册MSG_GATHER_INFO处理器
   (net-server/register-handler
-    MSG_GATHER_INFO
+    (matrix-msgs/msg :gather-info)
     handle-gather-info)
   
   ;; 注册MSG_INIT处理器
   (net-server/register-handler
-    MSG_INIT
+    (matrix-msgs/msg :init)
     handle-init-network)
   
   ;; 注册MSG_CHANGE_SSID处理器
   (net-server/register-handler
-    MSG_CHANGE_SSID
+    (matrix-msgs/msg :change-ssid)
     handle-change-ssid)
   
   ;; 注册MSG_CHANGE_PASSWORD处理器
   (net-server/register-handler
-    MSG_CHANGE_PASSWORD
+    (matrix-msgs/msg :change-password)
     handle-change-password)
   
   (log/info "Matrix GUI network handlers registered"))
@@ -186,4 +181,6 @@
   
   注册消息处理器。"
   []
+  ;; Touching catalog ensures cross-domain validation runs at init time.
+  (:specs wireless-msgs/catalog)
   (register-handlers!))

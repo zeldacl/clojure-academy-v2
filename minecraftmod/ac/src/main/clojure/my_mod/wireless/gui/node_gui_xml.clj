@@ -17,20 +17,10 @@
             [my-mod.gui.events :as events]
             [my-mod.gui.tech-ui-common :as tech-ui]
             [my-mod.network.client :as net-client]
+            [my-mod.wireless.gui.node-messages :as node-msgs]
             [my-mod.wireless.gui.node-container :as node-container]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.util.log :as log]))
-
-;; ============================================================================
-;; Network Message IDs (match node_network_handler.clj)
-;; ============================================================================
-
-(def ^:const MSG_GET_STATUS "wireless_node_get_status")
-(def ^:const MSG_CHANGE_NAME "wireless_node_change_name")
-(def ^:const MSG_CHANGE_PASSWORD "wireless_node_change_password")
-(def ^:const MSG_LIST_NETWORKS "wireless_node_list_networks")
-(def ^:const MSG_CONNECT "wireless_node_connect")
-(def ^:const MSG_DISCONNECT "wireless_node_disconnect")
 
 ;; ============================================================================
 ;; GUI Dimensions (shared)
@@ -97,7 +87,7 @@
                     (when (> dt 2000)
                       (reset! last-query now)
                       (net-client/send-to-server
-                        MSG_GET_STATUS
+                        (node-msgs/msg :get-status)
                         (net-helpers/tile-pos-payload tile)
                         (fn [response]
                           (let [is-linked (boolean (:linked response))]
@@ -162,14 +152,14 @@
 
             (query-linked! []
               (net-client/send-to-server
-                MSG_GET_STATUS
+                (node-msgs/msg :get-status)
                 payload
                 (fn [response]
                   (update-connected! (boolean (:linked response))))))
 
             (connect-network! [ssid pass]
               (net-client/send-to-server
-                MSG_CONNECT
+                (node-msgs/msg :connect)
                 (assoc payload :ssid ssid :password pass)
                 (fn [_]
                   (query-networks!)
@@ -177,7 +167,7 @@
 
             (disconnect-network! []
               (net-client/send-to-server
-                MSG_DISCONNECT
+                (node-msgs/msg :disconnect)
                 payload
                 (fn [_]
                   (query-networks!)
@@ -225,7 +215,7 @@
 
             (query-networks! []
               (net-client/send-to-server
-                MSG_LIST_NETWORKS
+                (node-msgs/msg :list-networks)
                 payload
                 (fn [response]
                   (rebuild-list! (vec (:networks response []))))))]
@@ -280,7 +270,7 @@
                     :editable? true
                     :on-change (fn [new-name]
                                 (net-client/send-to-server
-                                  MSG_CHANGE_NAME
+                                  (node-msgs/msg :change-name)
                                   (assoc (net-helpers/tile-pos-payload tile)
                                          :node-name new-name))))
                 y (tech-ui/add-property
@@ -289,7 +279,7 @@
                     :masked? true
                     :on-change (fn [new-pass]
                                 (net-client/send-to-server
-                                  MSG_CHANGE_PASSWORD
+                                  (node-msgs/msg :change-password)
                                   (assoc (net-helpers/tile-pos-payload tile)
                                          :password new-pass))))]
             y)

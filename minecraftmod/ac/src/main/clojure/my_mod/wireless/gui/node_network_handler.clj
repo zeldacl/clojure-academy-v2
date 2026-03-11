@@ -6,15 +6,10 @@
             [my-mod.wireless.world-data :as world-data]
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.wireless.interfaces :as winterfaces]
+            [my-mod.wireless.gui.node-messages :as node-msgs]
+            [my-mod.wireless.gui.wireless-messages :as wireless-msgs]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.util.log :as log]))
-
-(def ^:const MSG_GET_STATUS "wireless_node_get_status")
-(def ^:const MSG_CHANGE_NAME "wireless_node_change_name")
-(def ^:const MSG_CHANGE_PASSWORD "wireless_node_change_password")
-(def ^:const MSG_LIST_NETWORKS "wireless_node_list_networks")
-(def ^:const MSG_CONNECT "wireless_node_connect")
-(def ^:const MSG_DISCONNECT "wireless_node_disconnect")
 
 (defn- update-node-field!
   "Update a single field in the BE's customState (Design-3).
@@ -111,13 +106,15 @@
       {:success false})))
 
 (defn register-handlers! []
-  (net-server/register-handler MSG_GET_STATUS handle-get-status)
-  (net-server/register-handler MSG_CHANGE_NAME handle-change-name)
-  (net-server/register-handler MSG_CHANGE_PASSWORD handle-change-password)
-  (net-server/register-handler MSG_LIST_NETWORKS handle-list-networks)
-  (net-server/register-handler MSG_CONNECT handle-connect)
-  (net-server/register-handler MSG_DISCONNECT handle-disconnect)
+  (net-server/register-handler (node-msgs/msg :get-status) handle-get-status)
+  (net-server/register-handler (node-msgs/msg :change-name) handle-change-name)
+  (net-server/register-handler (node-msgs/msg :change-password) handle-change-password)
+  (net-server/register-handler (node-msgs/msg :list-networks) handle-list-networks)
+  (net-server/register-handler (node-msgs/msg :connect) handle-connect)
+  (net-server/register-handler (node-msgs/msg :disconnect) handle-disconnect)
   (log/info "Node GUI network handlers registered"))
 
 (defn init! []
+  ;; Touching catalog ensures cross-domain validation runs at init time.
+  (:specs wireless-msgs/catalog)
   (register-handlers!))
