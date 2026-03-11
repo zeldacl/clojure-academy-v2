@@ -2,6 +2,7 @@ package my_mod.block;
 
 import my_mod.block.entity.ScriptedBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.RenderShape;
@@ -12,6 +13,10 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
@@ -104,6 +109,41 @@ public class ScriptedBlock extends BaseEntityBlock {
     @Override
     public RenderShape getRenderShape(BlockState state) {
         return hasDynamicProps ? RenderShape.MODEL : RenderShape.INVISIBLE;
+    }
+
+    @Override
+    public boolean propagatesSkylightDown(BlockState state, BlockGetter level, BlockPos pos) {
+        return !hasDynamicProps || super.propagatesSkylightDown(state, level, pos);
+    }
+
+    @Override
+    public int getLightBlock(BlockState state, BlockGetter level, BlockPos pos) {
+        return hasDynamicProps ? super.getLightBlock(state, level, pos) : 0;
+    }
+
+    @Override
+    public float getShadeBrightness(BlockState state, BlockGetter level, BlockPos pos) {
+        return hasDynamicProps ? super.getShadeBrightness(state, level, pos) : 1.0F;
+    }
+
+    @Override
+    public VoxelShape getOcclusionShape(BlockState state, BlockGetter level, BlockPos pos) {
+        return hasDynamicProps ? super.getOcclusionShape(state, level, pos) : Shapes.empty();
+    }
+
+    @Override
+    public VoxelShape getVisualShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        return hasDynamicProps ? super.getVisualShape(state, level, pos, context) : Shapes.empty();
+    }
+
+    @Override
+    public boolean useShapeForLightOcclusion(BlockState state) {
+        return hasDynamicProps && super.useShapeForLightOcclusion(state);
+    }
+
+    @Override
+    public boolean skipRendering(BlockState state, BlockState adjacentBlockState, Direction side) {
+        return !hasDynamicProps || super.skipRendering(state, adjacentBlockState, side);
     }
 
     @Nullable

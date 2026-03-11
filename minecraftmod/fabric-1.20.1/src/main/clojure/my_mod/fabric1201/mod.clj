@@ -35,6 +35,19 @@
 (defonce registered-items (atom {}))
 (defonce registered-block-entities (atom {}))
 
+(defn- carrier-block-props
+  "Properties for invisible scripted carrier blocks used by BER/TESR rendering.
+  Keep them non-occluding and non-view-blocking so they do not darken blocks below."
+  []
+  (let [always-false (reify net.minecraft.world.level.block.state.BlockBehaviour$StatePredicate
+                       (test [_ _state _level _pos] false))]
+    (doto (BlockBehaviour$Properties/copy Blocks/STONE)
+      (.noOcclusion)
+      (.forceSolidOff)
+      (.isViewBlocking always-false)
+      (.isSuffocating always-false)
+      (.isRedstoneConductor always-false))))
+
 (defn register-blocks []
   "Register all blocks using metadata-driven approach.
   Platform code does not know specific block names."
@@ -51,8 +64,7 @@
                         (ScriptedDynamicEntityBlock/create block-id
                                                            tile-id
                                                            (java.util.ArrayList. props)
-                                                           (doto (BlockBehaviour$Properties/copy Blocks/STONE)
-                                                             (.noOcclusion))))
+                                                           (carrier-block-props)))
                       needs-dynamic-properties?
                       (let [props (bsp/get-all-properties block-id)]
                         (NodeDynamicBlock/create block-id
@@ -60,8 +72,7 @@
                                                  (BlockBehaviour$Properties/copy Blocks/STONE)))
                       has-be?
                       (ScriptedEntityBlock. block-id tile-id
-                        (doto (BlockBehaviour$Properties/copy Blocks/STONE)
-                          (.noOcclusion)))
+                        (carrier-block-props))
                       :else
                       (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))]
       (registry/register-block registry-name block-obj)
