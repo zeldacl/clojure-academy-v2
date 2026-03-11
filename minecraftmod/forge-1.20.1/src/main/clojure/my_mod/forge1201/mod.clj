@@ -90,14 +90,17 @@
                                   (ScriptedBlock/create block-id
                                                         tile-id
                                                         (java.util.ArrayList. props)
-                                                        (BlockBehaviour$Properties/copy Blocks/STONE)))
+                                                        (doto (BlockBehaviour$Properties/copy Blocks/STONE)
+                                                          (.noOcclusion))))
                                 needs-dynamic-properties?
                                 (let [props (bsp/get-all-properties block-id)]
                                   (DynamicStateBlock/create block-id
                                                             (java.util.ArrayList. props)
                                                             (BlockBehaviour$Properties/copy Blocks/STONE)))
                                 has-be?
-                                (ScriptedBlock. block-id tile-id (BlockBehaviour$Properties/copy Blocks/STONE))
+                                (ScriptedBlock. block-id tile-id
+                                  (doto (BlockBehaviour$Properties/copy Blocks/STONE)
+                                    (.noOcclusion)))
                                 :else
                                 (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))]
       (swap! registered-blocks assoc block-id registered-obj))))

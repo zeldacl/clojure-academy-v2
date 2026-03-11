@@ -72,9 +72,13 @@
   - tile: TileMatrix instance
   - partial-ticks, pose-stack, buffer-source, packed-light, packed-overlay"
   [tile partial-ticks pose-stack buffer-source packed-light packed-overlay]
-    (let [vc (rb/get-cutout-no-cull-buffer buffer-source @texture)]
+  ;; Lift above support top to eliminate origin-cell depth conflict.
+  (.translate pose-stack (double 0.0) (double 0.02) (double 0.0))
+    (let [vc (rb/get-solid-buffer buffer-source @texture)]
+    (binding [obj/*skip-flat-bottom-plane* true
+              obj/*bottom-plane-epsilon* 0.0008]
       (render-base tile pose-stack vc packed-light packed-overlay)
-      (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay)))
+      (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay))))
 
 ;; ============================================================================
 ;; TESR API Implementation

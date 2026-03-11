@@ -46,6 +46,33 @@
    :y (double (:y nrm))
    :z (double (:z nrm))})
 
+(def ^:dynamic *skip-downward-faces*
+  "When true, faces with downward-pointing normals are skipped.
+  Useful for block-mounted models where the underside should not occlude
+  the supporting block's top surface."
+  false)
+
+(def ^:dynamic *skip-model-bottom-faces*
+  "When true, triangles on the model's lowest Y plane are skipped.
+  This is more robust than normal-based culling for OBJ files with mixed
+  winding or imperfect normals."
+  false)
+
+(def ^:dynamic *force-fullbright*
+  "When true, OBJ buffered rendering uses fullbright light to avoid models
+  turning black due to platform/light interop differences."
+  true)
+
+(def ^:dynamic *skip-flat-bottom-plane*
+  "When true, remove triangles that are exactly on the current part's minimum
+  Y plane (all 3 vertices near min Y). This is a precise way to avoid support
+  block depth conflicts without broad face culling."
+  false)
+
+(def ^:dynamic *bottom-plane-epsilon*
+  "Tolerance for flat-bottom-plane matching in model-space Y units."
+  0.0005)
+
 (defn- parse-face-vertex-token [token]
   (let [[v-str vt-str vn-str] (str/split token #"/")
         parse-int (fn [x] (when (and x (not= x "")) (Long/parseLong x)))]
@@ -190,8 +217,41 @@
   (when-let [face-list (get (:faces model) part)]
     (let [entry (.last pose-stack)
           matrix (.pose entry)
-          vc vertex-consumer]
-      (doseq [{:keys [i0 i1 i2]} face-list]
+      vc vertex-consumer
+          part-vertex-indices (set (mapcat (fn [{:keys [i0 i1 i2]}]
+                                             [i0 i1 i2])
+                                           face-list))
+          part-min-y (reduce min
+                             (map (fn [idx]
+                                    (:y (:pos (nth (:vertices model) idx))))
+                                  part-vertex-indices))
+          bottom-epsilon (double *bottom-plane-epsilon*)]
+      (doseq [{:keys [i0 i1 i2 normal]} face-list
+        :let [face-normal (map-model-normal normal)
+          v0 (nth (:vertices model) i0)
+          v1 (nth (:vertices model) i1)
+          v2 (nth (:vertices model) i2)
+          y0 (:y (:pos v0))
+          y1 (:y (:pos v1))
+          y2 (:y (:pos v2))
+            face-min-y (min y0 y1 y2)
+          bottom-verts (count (filter true?
+                        [(<= (Math/abs (- y0 part-min-y)) bottom-epsilon)
+                         (<= (Math/abs (- y1 part-min-y)) bottom-epsilon)
+                         (<= (Math/abs (- y2 part-min-y)) bottom-epsilon)]))
+          skip-flat-bottom? (and *skip-flat-bottom-plane*
+                                 (= bottom-verts 3))
+          skip-by-normal? (and *skip-downward-faces*
+                     (<= (:y face-normal) -0.2))
+          skip-by-bottom? (and *skip-model-bottom-faces*
+                       (or (>= bottom-verts 2)
+                         (and (>= bottom-verts 1)
+                            (<= (:y face-normal) 0.15)
+                          (<= (Math/abs (- face-min-y part-min-y))
+                              (* 2.0 bottom-epsilon))))) ]
+        :when (not (or skip-flat-bottom?
+                       skip-by-normal?
+                       skip-by-bottom?))]
         ;; Entity RenderTypes are quad-based in modern MC. Submit a degenerate
         ;; 4th vertex so each OBJ triangle maps to one valid quad primitive.
         (doseq [vertex-idx [i0 i1 i2 i2]]
@@ -203,9 +263,9 @@
               z (float (:z pos))
                 u (float (:u uv))
                 v (float (- 1.0 (:v uv)))
-                ;; Force fullbright while debugging OBJ migration; avoids dark output
-                ;; from incorrect normal/light interop and makes geometry issues obvious.
-                packed-light (int 0x00F000F0)
+                packed-light (int (if *force-fullbright*
+                                    0x00F000F0
+                                    _packed-light))
                 nx (float (:x normal))
                 ny (float (:y normal))
                 nz (float (:z normal))]

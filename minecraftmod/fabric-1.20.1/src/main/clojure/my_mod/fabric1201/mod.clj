@@ -51,14 +51,17 @@
                         (ScriptedDynamicEntityBlock/create block-id
                                                            tile-id
                                                            (java.util.ArrayList. props)
-                                                           (BlockBehaviour$Properties/copy Blocks/STONE)))
+                                                           (doto (BlockBehaviour$Properties/copy Blocks/STONE)
+                                                             (.noOcclusion))))
                       needs-dynamic-properties?
                       (let [props (bsp/get-all-properties block-id)]
                         (NodeDynamicBlock/create block-id
                                                  (java.util.ArrayList. props)
                                                  (BlockBehaviour$Properties/copy Blocks/STONE)))
                       has-be?
-                      (ScriptedEntityBlock. block-id tile-id (BlockBehaviour$Properties/copy Blocks/STONE))
+                      (ScriptedEntityBlock. block-id tile-id
+                        (doto (BlockBehaviour$Properties/copy Blocks/STONE)
+                          (.noOcclusion)))
                       :else
                       (Block. (BlockBehaviour$Properties/copy Blocks/STONE)))]
       (registry/register-block registry-name block-obj)
