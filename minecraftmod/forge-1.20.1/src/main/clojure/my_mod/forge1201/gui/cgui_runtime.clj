@@ -59,6 +59,8 @@
       (cons [root [(+ px wx) (+ py wy)] scale]
             (mapcat #(collect-widgets-z-ordered % next-pos) children)))))
 
+    (def ^:private DRAG-TIME-TOL-MS 100)
+
 (defn resize-root!
   "Set root widget size to match screen dimensions. Optional: center the root.
    Our GUIs use fixed layout with leftPos/topPos from the container screen, so we typically
@@ -101,7 +103,18 @@
                 color (unchecked-int (or (:color state) 0xFFFFFF))
                 font  (.font (Minecraft/getInstance))]
             (when (seq text)
-              (.drawString gg font text x y color)))
+              (.drawString gg font text x y color))
+            ;; caret rendering for editable textboxes when focused
+            (when (and (:editable? state)
+                       (some-> @(:metadata root) :focused?) )
+              (try
+                (let [font (.font (Minecraft/getInstance))
+                      ;; compute caret x at end of text for now
+                      caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
+                      caret-x (+ x (int (.width font (str (or (:text state) "")))))]
+                  (when caret-visible?
+                    (.drawString gg font "|" caret-x y color)))
+                (catch Exception _ nil))))
 
           (kind-matches? kind :progressbar)
           (let [progress    (double (or (:progress state) 0.0))
@@ -181,13 +194,30 @@
     (doseq [[widget _ _] (collect-widgets-z-ordered root [0 0])]
       (try
         (cgui/emit-widget-event! widget :frame event)
-        (catch Exception _ nil)))))
+        (catch Exception _ nil)))
+    ;; drag stop timeout handling: if no drag update within tolerance, emit drag-stop
+    (let [m @(:metadata root)
+          dnode-atom (:dragging-node m)
+          last-drag-atom (:last-drag-time m)]
+      (when (and dnode-atom @dnode-atom)
+        (let [now (System/currentTimeMillis)
+              last @last-drag-atom]
+          (when (and last (> (- now last) DRAG-TIME-TOL-MS))
+            (try
+              (let [dnode @dnode-atom]
+                (cgui/emit-widget-event! dnode :drag-stop {:time now})
+                (reset! dnode-atom nil)
+                (reset! last-drag-atom 0))
+              (catch Exception _ nil))))))))
 
 (defn mouse-click!
   "Hit-test at (mx, my), then emit :left-click or :right-click to the hit widget.
    left/top are container leftPos/topPos. button: 0 left, 1 right."
   [root mx my left top button]
   (when-let [hit (hit-test root mx my left top)]
+    ;; set focus on left click
+    (when (== 0 button)
+      (cgui/gain-focus! root hit))
     (cgui/emit-widget-event!
      hit
      (if (== 0 button) :left-click :right-click)
@@ -198,6 +228,19 @@
    For simplicity we re hit-test and emit to that widget."
   [root mx my left top]
   (when-let [hit (hit-test root mx my left top)]
+    ;; initialize dragging node if absent
+    (let [m @(:metadata root)
+          dnode-atom (:dragging-node m)
+          last-drag-atom (:last-drag-time m)
+          start-atom (:last-start-time m)
+          now (System/currentTimeMillis)]
+      (when (and dnode-atom (nil? @dnode-atom))
+        (reset! dnode-atom hit)
+        (reset! start-atom now)
+        (cgui/emit-widget-event! hit :drag-start {:x mx :y my :time now}))
+      ;; emit continuous drag
+      (when dnode-atom
+        (reset! last-drag-atom now)))
     (cgui/emit-widget-event! hit :drag {:x mx :y my})))
 
 (defn key-input!
@@ -205,7 +248,11 @@
    Caller can track focus; for now we emit to root so at least key handlers on root get it."
   [root keyCode scanCode typedChar]
   (when root
-    (cgui/emit-widget-event! root :key {:keyCode keyCode :scanCode scanCode :typedChar typedChar})))
+    (let [m @(:metadata root)
+          focus-atom (:cgui-focus m)
+          focus (when focus-atom @focus-atom)
+          target (or focus root)]
+      (cgui/emit-widget-event! target :key {:keyCode keyCode :scanCode scanCode :typedChar typedChar}))))
 
 (defn dispose!
   "Release any CGUI state. Currently a no-op; widget tree is GC'd when screen is closed."

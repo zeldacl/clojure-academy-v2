@@ -37,12 +37,18 @@
                             native)
                           native)]
     (cgui/add-widget-component! widget comp-with-owner)
+    ;; component lifecycle hook: call :on-added if provided on native component
+    (when (and (map? comp-with-owner) (fn? (:on-added comp-with-owner)))
+      ((:on-added comp-with-owner) widget comp-with-owner))
     widget))
 
 (defn remove-component!
   "Remove a component from widget"
   [widget component]
   (cgui/remove-widget-component! widget component)
+  ;; component lifecycle hook: call :on-removed if provided on component
+  (when (and (map? component) (fn? (:on-removed component)))
+    ((:on-removed component) widget component))
   widget)
 
 (defn get-component
@@ -90,6 +96,8 @@
                                 :scale (:scale spec 1.0)
                                 :shadow? (:shadow? spec true)
                                 :masked? (:masked? spec false)
+                                :caret-pos 0
+                                :display-offset 0
                                 :editable? (:editable? spec false)})
       :progressbar (make-component :progressbar
                                    {:direction (:direction spec :horizontal)

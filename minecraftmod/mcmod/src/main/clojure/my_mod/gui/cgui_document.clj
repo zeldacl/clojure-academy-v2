@@ -98,7 +98,20 @@
         (cgui/set-size! widget w h)
         (cgui/set-pos! widget x y)
         (cgui/set-scale! widget scale)
-        (cgui/set-visible! widget does-draw?))
+        (cgui/set-visible! widget does-draw?)
+        ;; parse and stash additional transform metadata (pivot, align, key listening, z-level)
+          (let [pivot-x (parse-float (text-at component-node :pivotX "0") 0)
+            pivot-y (parse-float (text-at component-node :pivotY "0") 0)
+            align-w (some-> (text-at component-node :alignWidth "LEFT") str/upper-case keyword)
+            align-h (some-> (text-at component-node :alignHeight "TOP") str/upper-case keyword)
+            does-listen (parse-bool (text-at component-node :doesListenKey "true") true)
+            z-level (parse-float (text-at component-node :zLevel "0") 0)]
+          (swap! (:metadata widget) assoc :transform-meta {:pivot-x pivot-x
+                                 :pivot-y pivot-y
+                                 :align-width align-w
+                                 :align-height align-h
+                                 :does-listen-key does-listen
+                                 :z-level z-level})))
 
       :draw-texture
       (let [texture-node (first-child component-node :texture)

@@ -209,8 +209,53 @@
     event))
 
 (defn create-cgui []
-  {:type :cgui
-   :root (create-container :name "root" :pos [0 0] :size [0 0])})
+  (let [root (create-container :name "root" :pos [0 0] :size [0 0])]
+    ;; per-cgui runtime state stored in root metadata for platform runtime access
+    (swap! (:metadata root) assoc :cgui-focus (atom nil)
+                                  :dragging-node (atom nil)
+                                  :last-drag-time (atom 0)
+                                  :last-start-time (atom 0))
+    {:type :cgui :root root}))
+
+(defn get-focus
+  "Return the current focused widget for the CGUI root (root is the cgui root widget)."
+  [root]
+  (when root
+    (let [m @(:metadata root)]
+      (when-let [a (:cgui-focus m)]
+        @a))))
+
+(defn gain-focus!
+  "Set focus to `widget` for this cgui root. Emits :gain-focus / :lost-focus events.
+   `root` is the cgui root widget (the value returned by `get-root`)."
+  [root widget]
+  (when root
+    (let [m @(:metadata root)
+          a (:cgui-focus m)]
+      (when a
+        (let [old @a]
+          (when (and old (not= old widget))
+            (swap! (:metadata old) assoc :focused? false)
+            (emit-widget-event! old :lost-focus {:new-focus widget}))
+          (reset! a widget)
+          (when widget
+            (swap! (:metadata widget) assoc :focused? true)
+            (emit-widget-event! widget :gain-focus {:old-focus old}))
+          widget)))))
+
+(defn remove-focus!
+  "Clear focus for this cgui root."
+  [root]
+  (when root
+    (let [m @(:metadata root)
+          a (:cgui-focus m)
+          old (when a @a)]
+      (when a
+        (reset! a nil))
+      (when old
+        (swap! (:metadata old) assoc :focused? false)
+        (emit-widget-event! old :lost-focus {:new-focus nil}))
+      nil)))
 
 (defn get-root [cgui]
   (:root cgui))

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "AcademyCraft.git Docs": {
+      "url": "https://gitmcp.io/LambdaInnovation/AcademyCraft.git"
+    },
+    "LambdaLib2.git Docs": {
+      "url": "https://gitmcp.io/LambdaInnovation/LambdaLib2.git"
+    }
+  }
+}
