@@ -1,9 +1,9 @@
 (ns my-mod.block.blockstate-property-definitions
-  "BlockState property definitions only (platform-neutral, no net.minecraft).
+  "BlockState property definitions only (platform-neutral, no engine package imports).
 
   Provides definition/query API for block state properties. Forge/Fabric
   adapters use this to create actual IntegerProperty/BooleanProperty and
-  register them. This namespace does not import any net.minecraft types."
+  register them. This namespace does not import game engine concrete types."
   (:require [my-mod.registry.metadata :as registry-metadata]))
 
 (defn get-property-definition

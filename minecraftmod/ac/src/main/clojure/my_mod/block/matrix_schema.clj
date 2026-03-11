@@ -9,7 +9,9 @@
   Note: :is-working, :capacity, :bandwidth, and :range are *derived* values
   computed from :plate-count / :core-level at call sites; they are not stored
   fields and therefore not present in this schema."
-  (:require [my-mod.block.state-schema :as schema]))
+  (:require [my-mod.block.state-schema :as schema]
+            [my-mod.platform.nbt :as nbt]
+            [my-mod.platform.item :as item]))
 
 ;; ============================================================================
 ;; Inventory serialisation helpers
@@ -19,16 +21,16 @@
 (defn- load-inventory
   "Deserialise a ListTag of ItemStack compounds into a [s0 s1 s2 s3] vector."
   [tag nbt-key default]
-  (if (.contains tag nbt-key)
-    (let [inv-tag (.getList tag nbt-key 10)
-          size    (.size inv-tag)]
+  (if (nbt/nbt-has-key? tag nbt-key)
+    (let [inv-tag (nbt/nbt-get-list tag nbt-key)
+          size    (nbt/nbt-list-size inv-tag)]
       (reduce
         (fn [v i]
-          (let [slot-tag (.getCompound inv-tag i)
-                slot     (.getInt slot-tag "Slot")
-                item     (net.minecraft.world.item.ItemStack/of slot-tag)]
+          (let [slot-tag (nbt/nbt-list-get-compound inv-tag i)
+                slot     (nbt/nbt-get-int slot-tag "Slot")
+                item     (item/create-item-from-nbt slot-tag)]
             (if (and (>= slot 0) (< slot (count v)))
-              (assoc v slot (when-not (.isEmpty item) item))
+              (assoc v slot (when-not (item/item-is-empty? item) item))
               v)))
         default
         (range size)))
@@ -38,14 +40,14 @@
   "Serialise a [s0 s1 s2 s3] vector into a ListTag and attach to tag."
   [state tag nbt-key]
   (let [inv      (get state :inventory [nil nil nil nil])
-        inv-list (net.minecraft.nbt.ListTag.)]
+        inv-list (nbt/create-nbt-list)]
     (doseq [slot (range (count inv))]
       (when-let [item (nth inv slot nil)]
-        (let [slot-tag (net.minecraft.nbt.CompoundTag.)]
-          (.putInt slot-tag "Slot" slot)
-          (.save item slot-tag)
-          (.add inv-list slot-tag))))
-    (.put tag nbt-key inv-list)))
+        (let [slot-tag (nbt/create-nbt-compound)]
+          (nbt/nbt-set-int! slot-tag "Slot" slot)
+          (item/item-save-to-nbt item slot-tag)
+          (nbt/nbt-append! inv-list slot-tag))))
+    (nbt/nbt-set-tag! tag nbt-key inv-list)))
 
 ;; ============================================================================
 ;; Matrix state schema  ── the single point of definition

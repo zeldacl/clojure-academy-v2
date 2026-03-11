@@ -10,7 +10,9 @@
   node-state-schema below; NBT serialisation, GUI sync payloads, and
   BlockState update logic are all derived automatically via
   my-mod.block.state-schema."
-  (:require [my-mod.block.state-schema :as schema]))
+  (:require [my-mod.block.state-schema :as schema]
+            [my-mod.platform.nbt :as nbt]
+            [my-mod.platform.item :as item]))
 
 ;; ============================================================================
 ;; Node type specifications
@@ -30,22 +32,22 @@
 ;; ============================================================================
 ;; Inventory serialisation helpers
 ;; Used as :load-fn / :save-fn overrides in node-state-schema.
-;; Placed here (in ac) rather than mcmod because they require Minecraft API.
+;; Kept in ac because they describe content state, while protocol calls remain platform-neutral.
 ;; ============================================================================
 
 (defn- load-inventory
   "Deserialise a ListTag of ItemStack compounds into a [slot0 slot1] vector."
   [tag nbt-key default]
-  (if (.contains tag nbt-key)
-    (let [inv-tag (.getList tag nbt-key 10)
-          size    (.size inv-tag)]
+  (if (nbt/nbt-has-key? tag nbt-key)
+    (let [inv-tag (nbt/nbt-get-list tag nbt-key)
+          size    (nbt/nbt-list-size inv-tag)]
       (reduce
         (fn [v i]
-          (let [st   (.getCompound inv-tag i)
-                slot (.getInt st "Slot")
-                item (net.minecraft.world.item.ItemStack/of st)]
+          (let [st   (nbt/nbt-list-get-compound inv-tag i)
+                slot (nbt/nbt-get-int st "Slot")
+                item (item/create-item-from-nbt st)]
             (if (and (>= slot 0) (< slot (count v)))
-              (assoc v slot (when-not (.isEmpty item) item))
+              (assoc v slot (when-not (item/item-is-empty? item) item))
               v)))
         default
         (range size)))
@@ -55,14 +57,14 @@
   "Serialise a [slot0 slot1] vector into a ListTag and attach it to tag."
   [state tag nbt-key]
   (let [inv      (get state :inventory [nil nil])
-        inv-list (net.minecraft.nbt.ListTag.)]
+        inv-list (nbt/create-nbt-list)]
     (doseq [slot (range (count inv))]
       (when-let [item (nth inv slot nil)]
-        (let [st (net.minecraft.nbt.CompoundTag.)]
-          (.putInt st "Slot" slot)
-          (.save item st)
-          (.add inv-list st))))
-    (.put tag nbt-key inv-list)))
+        (let [st (nbt/create-nbt-compound)]
+          (nbt/nbt-set-int! st "Slot" slot)
+          (item/item-save-to-nbt item st)
+          (nbt/nbt-append! inv-list st))))
+    (nbt/nbt-set-tag! tag nbt-key inv-list)))
 
 ;; ============================================================================
 ;; Node state schema  ── the single point of definition

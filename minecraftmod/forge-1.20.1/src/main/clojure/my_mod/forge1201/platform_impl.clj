@@ -16,7 +16,9 @@
             [my-mod.platform.resource :as resource]
             [my-mod.platform.capability :as platform-cap]
             [my-mod.platform.be :as platform-be]
-            [my-mod.util.log :as log])
+            [my-mod.util.log :as log]
+            [my-mod.client.render.pose :as pose]
+            [my-mod.client.render.buffer :as buffer])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
@@ -204,8 +206,21 @@
   (alter-var-root #'platform-be/*be-capability-slot-fn*
     (constantly (fn [key-string] (CapabilitySlots/get key-string))))
 
+  ;; Bind platform PoseStack Y-rotation implementation for mcmod
+  (alter-var-root #'pose/*y-rotation-fn*
+    (constantly (fn [pose-stack angle]
+                  (.mulPose pose-stack (.rotationDegrees (.-YP com.mojang.math.Axis) (float angle))))))
+
+  ;; Bind platform render buffer selectors for mcmod/ac renderers
+  (alter-var-root #'buffer/*solid-buffer-fn*
+    (constantly (fn [buffer-source texture]
+                  (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entitySolid texture)))))
+  (alter-var-root #'buffer/*translucent-buffer-fn*
+    (constantly (fn [buffer-source texture]
+                  (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityTranslucent texture)))))
+
   ;; Retroactively assign slots for capabilities already declared before this ran
-  (doseq [[key {:keys [java-type]}] @platform-cap/capability-type-registry]
+  (doseq [[key {:keys [_java-type]}] @platform-cap/capability-type-registry]
     (CapabilitySlots/assign (name key)))
   
   (log/info "Forge 1.20.1 platform implementations initialized successfully"))

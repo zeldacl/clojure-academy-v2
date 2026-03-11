@@ -12,7 +12,7 @@
   - Protocols define operations independent of platform classes
   - Dynamic var *nbt-factory* holds platform-specific constructors
   - Platform code uses extend-type to add protocol implementations
-  - Core code uses protocols + factories, never imports net.minecraft classes")
+  - Core code uses protocols + factories, never imports engine-specific classes")
 
 ;; ============================================================================
 ;; NBT Compound Protocol

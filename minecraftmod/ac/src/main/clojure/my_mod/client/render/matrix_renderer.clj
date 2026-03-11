@@ -12,6 +12,8 @@
             [my-mod.util.render :as render]
             [my-mod.client.render.tesr-api :as tesr-api]
             [my-mod.client.render.multiblock-helper :as mb-helper]
+            [my-mod.client.render.buffer :as rb]
+            [my-mod.client.render.pose :as pose]
             [my-mod.block.wireless-matrix :as wm]))
 
 ;; ============================================================================
@@ -34,7 +36,7 @@
   Args:
   - tile: TileMatrix instance
   - pose-stack, vertex-consumer, packed-light, packed-overlay"
-  [tile pose-stack vertex-consumer packed-light packed-overlay]
+  [_tile pose-stack vertex-consumer packed-light packed-overlay]
   (obj/render-part-consumer @model "Main" pose-stack vertex-consumer packed-light packed-overlay)
   (obj/render-part-consumer @model "Core" pose-stack vertex-consumer packed-light packed-overlay))
 
@@ -44,7 +46,7 @@
   Args:
   - tile: TileMatrix
   - partial-ticks, pose-stack, vertex-consumer, packed-light, packed-overlay"
-  [tile partial-ticks pose-stack vertex-consumer packed-light packed-overlay]
+  [tile _partial-ticks pose-stack vertex-consumer packed-light packed-overlay]
   (let [plate-count (int (wm/get-plate-count tile))
         core-level (wm/get-core-level tile)
         active-plates (if (and (= plate-count 3) (> core-level 0)) 3 0)
@@ -58,7 +60,7 @@
         (let [float-height 0.1
               y-offset (* float-height (Math/sin (+ (* time 1.111) (* ht-phase-offset i))))]
           (.translate pose-stack (double 0.0) (double y-offset) (double 0.0))
-          (.mulPose pose-stack (.rotationDegrees (.-YP com.mojang.math.Vector3f) (float (+ phase (* dtheta i)))))
+          (pose/apply-y-rotation pose-stack (+ phase (* dtheta i)))
           (obj/render-part-consumer @model "Shield" pose-stack vertex-consumer packed-light packed-overlay))
         (finally
           (.popPose pose-stack))))))
@@ -70,7 +72,7 @@
   - tile: TileMatrix instance
   - partial-ticks, pose-stack, buffer-source, packed-light, packed-overlay"
   [tile partial-ticks pose-stack buffer-source packed-light packed-overlay]
-  (let [vc (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entitySolid @texture))]
+  (let [vc (rb/get-solid-buffer buffer-source @texture)]
     (render-base tile pose-stack vc packed-light packed-overlay)
     (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay)))
 

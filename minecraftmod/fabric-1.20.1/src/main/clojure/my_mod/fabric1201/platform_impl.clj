@@ -15,7 +15,9 @@
             [my-mod.platform.world :as world]
             [my-mod.platform.item :as item]
             [my-mod.platform.resource :as resource]
-            [my-mod.util.log :as log])
+            [my-mod.util.log :as log]
+            [my-mod.client.render.pose :as pose]
+            [my-mod.client.render.buffer :as buffer])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
@@ -188,5 +190,18 @@
   (alter-var-root #'resource/*resource-factory*
     (constantly (fn [namespace path]
                   (ResourceLocation. namespace path))))
+
+  ;; Bind platform PoseStack Y-rotation implementation for mcmod
+  (alter-var-root #'pose/*y-rotation-fn*
+    (constantly (fn [pose-stack angle]
+                  (.mulPose pose-stack (.rotationDegrees (.-YP com.mojang.math.Axis) (float angle))))))
+
+  ;; Bind platform render buffer selectors for mcmod/ac renderers
+  (alter-var-root #'buffer/*solid-buffer-fn*
+    (constantly (fn [buffer-source texture]
+                  (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entitySolid texture)))))
+  (alter-var-root #'buffer/*translucent-buffer-fn*
+    (constantly (fn [buffer-source texture]
+                  (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityTranslucent texture)))))
   
   (log/info "Fabric 1.20.1 platform implementations initialized successfully"))

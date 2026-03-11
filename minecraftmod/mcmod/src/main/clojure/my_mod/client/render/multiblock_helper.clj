@@ -4,7 +4,8 @@
   Provides coordinate transformation logic for multiblock structures.
   Replaces functionality of cn.lambdalib2.multiblock.RenderBlockMulti."
   (:require [my-mod.util.render :as render]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log]
+            [my-mod.client.render.pose :as pose]))
 
 ;; ============================================================================
 ;; Direction to Rotation Mapping
@@ -123,7 +124,11 @@
         (.pushPose pose-stack)
         (try
           (.translate pose-stack (double tx) (double ty) (double tz))
-          (.mulPose pose-stack (.rotationDegrees (.-YP com.mojang.math.Vector3f) (float rotation)))
+          ;; Delegate rotation to platform-registered implementation (mcmod must
+          ;; not reference Minecraft classes). Platform adapters (forge/fabric)
+          ;; should call `my-mod.client.render.pose/register-y-rotation!`
+          ;; with a function that applies rotation to the passed `pose-stack`.
+          (pose/apply-y-rotation pose-stack rotation)
           (render-fn tile partial-ticks pose-stack buffer-source packed-light packed-overlay)
           (finally
             (.popPose pose-stack))))
