@@ -14,6 +14,7 @@
             [my-mod.block.role-impls :as impls]
             [my-mod.block.matrix-schema :as mschema]
             [my-mod.block.state-schema :as schema]
+            [my-mod.platform.position :as pos]
             [my-mod.gui.slot-schema :as slot-schema]
             [my-mod.platform.capability :as platform-cap]
             [my-mod.platform.world :as world]
@@ -153,15 +154,26 @@
       (try
         (let [block-spec (bdsl/get-block :wireless-matrix)]
           (when (and block-spec
-                     (zero? (:sub-id state 0))
-                     (not (bdsl/is-multi-block-complete? level pos block-spec)))
-            (reset! broken? true)
-            (log/info "Matrix structure broken at" pos)
-            ;; Drop inventory items
-            (doseq [[idx item] (map-indexed vector (:inventory state []))]
-              (when item (log/info "Dropping item from slot" idx)))
-            ;; Keep runtime ticker but clear persistent matrix state.
-            (.setCustomState be (assoc mschema/matrix-default-state :update-ticker ticker))))
+                     (zero? (:sub-id state 0)))
+            ;; Determine master position from this part's position by
+            ;; trying all relative positions defined in the block spec.
+            (let [origin (or (:multi-block-origin block-spec) {:x 0 :y 0 :z 0})
+                  positions (if-let [custom-pos (:multi-block-positions block-spec)]
+                              (bdsl/calculate-multi-block-positions custom-pos origin)
+                              (bdsl/calculate-multi-block-positions (:multi-block-size block-spec) origin))
+                  part-pos-map {:x (pos/pos-x pos) :y (pos/pos-y pos) :z (pos/pos-z pos)}
+                  master-found? (some (fn [rel-pos]
+                                         (let [master-map (bdsl/get-multi-block-master-pos part-pos-map rel-pos)]
+                                           (bdsl/is-multi-block-complete? level master-map block-spec)))
+                                       positions)]
+              (when (not master-found?)
+                (reset! broken? true)
+                (log/info "Matrix structure broken at" pos)
+                ;; Drop inventory items
+                (doseq [[idx item] (map-indexed vector (:inventory state []))]
+                  (when item (log/info "Dropping item from slot" idx)))
+                ;; Keep runtime ticker but clear persistent matrix state.
+                (.setCustomState be (assoc mschema/matrix-default-state :update-ticker ticker))))))
         (catch Exception e
           (log/error "Error verifying matrix structure:" (.getMessage e)))))
     (when-not @broken?

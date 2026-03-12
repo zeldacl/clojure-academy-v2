@@ -12,6 +12,57 @@
     (net.minecraft.client Minecraft)
     (net.minecraft.resources ResourceLocation)))
 
+  (defonce ^:private texture-size-cache (atom {}))
+  (defn- get-texture-size
+    "Try to obtain the pixel size [width height] for the given `resource-location`.
+     Caches results by resource-location string. Returns [w h] or nil if unknown.
+     Uses best-effort reflective calls against Minecraft's TextureManager / texture
+     objects so it is tolerant to different runtime implementations." 
+    [resource-location]
+    (when resource-location
+      (let [k (str resource-location)
+            cached (@texture-size-cache k)]
+        (if cached
+          cached
+          (let [mc (Minecraft/getInstance)
+                tm (try (.getTextureManager mc) (catch Exception _ nil))
+                tex (try (when tm (.getTexture tm resource-location)) (catch Exception _ nil))
+                ;; try multiple ways to obtain width/height
+                size (try
+                       (or
+                         ;; common: texture object exposes getWidth/getHeight
+                         (when tex
+                           (try
+                             (let [w (try (.getWidth tex) (catch Exception _ nil))
+                                   h (try (.getHeight tex) (catch Exception _ nil))]
+                               (when (and w h) [(int w) (int h)]))
+                             (catch Exception _ nil)))
+                         ;; some implementations wrap an image object
+                         (when tex
+                           (try
+                             (let [img (try (.getTextureImage tex) (catch Exception _ nil))]
+                               (when img
+                                 (let [w (try (.getWidth img) (catch Exception _ nil))
+                                       h (try (.getHeight img) (catch Exception _ nil))]
+                                   (when (and w h) [(int w) (int h)]))))
+                             (catch Exception _ nil)))
+                         ;; as a last resort: try accessing fields reflectively
+                         (when tex
+                           (try
+                             (let [cls (class tex)
+                                   wf (try (.getDeclaredField cls "width") (catch Exception _ nil))
+                                   hf (try (.getDeclaredField cls "height") (catch Exception _ nil))]
+                               (when (and wf hf)
+                                 (doto wf (.setAccessible true))
+                                 (doto hf (.setAccessible true))
+                                 (let [w (.getInt wf tex)
+                                       h (.getInt hf tex)]
+                                   (when (and (number? w) (number? h)) [(int w) (int h)]))))
+                           (catch Exception _ nil))))
+                       (catch Exception _ nil))]
+            (when size (swap! texture-size-cache assoc k size))
+            size)))))
+
 (defn- component-kind [c]
   (or (:kind c) (::kind c) :unknown))
 
@@ -47,17 +98,49 @@
 
 (defn- collect-widgets-z-ordered
   "Depth-first traversal of widget tree, returning widgets in draw order (parents before children).
-   Only visible widgets. Each node is [widget parent-abs-pos] where parent-abs-pos is [ox oy] cumulative offset."
-  [root abs-pos]
+   Only visible widgets. Each node is [widget absolute-pos cumulative-scale].
+   This version accumulates parent scale so children are rendered with parent's scale multiplied.
+   Additionally applies :transform-meta alignment and pivot when computing absolute positions so
+   child widgets inherit the adjusted coordinates." 
+  [root abs-pos parent-scale parent-size]
   (when (and root (cgui/visible? root))
     (let [pos (cgui/get-pos root)
-          scale (double (or @(:scale root) 1.0))
+          own-scale (double (or @(:scale root) 1.0))
+          cum-scale (* parent-scale own-scale)
           [px py] abs-pos
           [wx wy] pos
-          next-pos [(+ px wx) (+ py wy)]
-          children (cgui/get-widgets root)]
-      (cons [root [(+ px wx) (+ py wy)] scale]
-            (mapcat #(collect-widgets-z-ordered % next-pos) children)))))
+          ;; parent-size is the logical size [pw ph] of the parent widget (unscaled).
+          [pw ph] (or parent-size [0 0])
+          ;; widget size (logical units)
+          [w h] (cgui/get-size root)
+          ;; transform-meta may include pivot-x/pivot-y and align-width/align-height
+          tm (get @(:metadata root) :transform-meta {})
+          pivot-x (or (:pivot-x tm) 0.0)
+          pivot-y (or (:pivot-y tm) 0.0)
+          align-w (when-let [a (:align-width tm)] (-> a name str/lower-case keyword))
+          align-h (when-let [a (:align-height tm)] (-> a name str/lower-case keyword))
+          ;; compute alignment offsets in logical units relative to parent size
+          align-offset-x (case align-w
+                           :center (int (Math/round (/ (- pw w) 2.0)))
+                           :right  (int (Math/round (- pw w)))
+                           ;; default :left or nil
+                           0)
+          align-offset-y (case align-h
+                           :center (int (Math/round (/ (- ph h) 2.0)))
+                           :bottom (int (Math/round (- ph h)))
+                           ;; default :top or nil
+                           0)
+          ;; pivot is fraction of widget size; shift top-left so pivot point is at position
+          pivot-shift-x (* pivot-x w)
+          pivot-shift-y (* pivot-y h)
+          ;; absolute position for this widget (logical units)
+          abs-x (+ px align-offset-x wx (- pivot-shift-x))
+          abs-y (+ py align-offset-y wy (- pivot-shift-y))
+          children (cgui/get-widgets root)
+          next-parent-size [w h]
+          next-pos [abs-x abs-y]]
+      (cons [root next-pos cum-scale]
+            (mapcat #(collect-widgets-z-ordered % next-pos cum-scale next-parent-size) children)))))
 
     (def ^:private DRAG-TIME-TOL-MS 100)
 
@@ -69,16 +152,14 @@
   (when root
     (cgui/set-size! root width height))
   root)
-
-(defn render-widget!
+  
+ (defn render-widget!
   "Render a single widget at the given absolute position and scale using GuiGraphics.
    Draws :drawtexture, :textbox, :progressbar, :outline, :tint as applicable."
   [^GuiGraphics gg root [abs-x abs-y] scale left top]
   (when-not (cgui/visible? root)
     (throw (ex-info "render-widget! called on invisible widget" {})))
-  (let [pos (cgui/get-pos root)
-        size (cgui/get-size root)
-        [wx wy] pos
+  (let [size (cgui/get-size root)
         [w h] size
         x (int (+ left abs-x))
         y (int (+ top abs-y))
@@ -92,11 +173,19 @@
           (kind-matches? kind :drawtexture)
           (when-let [tex (ensure-resource-location (:texture state))]
             (let [uv (:uv state)
-                  [u v uw uh] (if (and (sequential? uv) (>= (count uv) 4))
-                               uv
-                               [0 0 (int w) (int h)])]
-              (when (and uw uh)
-                (.blit gg tex x y (int u) (int v) (int uw) (int uh)))))
+                  [u v uw uh] (if (and (sequential? uv) (>= (count uv) 4)) uv [0 0 (int w) (int h)])
+                  fractional? (and (number? u) (number? v) (number? uw) (number? uh)
+                                    (<= (double u) 1.0) (<= (double v) 1.0)
+                                    (<= (double uw) 1.0) (<= (double uh) 1.0))
+                  tex-size (when fractional? (get-texture-size tex))
+                  basis-w (if (and tex-size (number? (first tex-size))) (first tex-size) w-int)
+                  basis-h (if (and tex-size (number? (second tex-size))) (second tex-size) h-int)
+                  u-px (if fractional? (int (Math/round (* (double u) (double basis-w)))) (int u))
+                  v-px (if fractional? (int (Math/round (* (double v) (double basis-h)))) (int v))
+                  uw-px (if fractional? (int (Math/round (* (double uw) (double basis-w)))) (int uw))
+                  uh-px (if fractional? (int (Math/round (* (double uh) (double basis-h)))) (int uh))]
+              (when (and uw-px uh-px)
+                (.blit gg tex x y u-px v-px uw-px uh-px))))
 
           (kind-matches? kind :textbox)
           (let [text  (str (or (:text state) ""))
@@ -144,12 +233,14 @@
           :else
           nil)))))
 
+          
+
 (defn render-tree!
   "Render the entire widget tree rooted at root. left and top are the container screen's
    leftPos and topPos (used to transform widget coordinates into screen space)."
   [^GuiGraphics gg root left top]
   (when root
-    (doseq [[widget [abs-x abs-y] scale] (collect-widgets-z-ordered root [0 0])]
+    (doseq [[widget [abs-x abs-y] scale] (collect-widgets-z-ordered root [0 0] 1.0 nil)]
       (try
         (render-widget! gg widget [abs-x abs-y] scale left top)
         (catch Exception e
@@ -191,7 +282,7 @@
    :partial-ticks and other frame data."
   [root event]
   (when root
-    (doseq [[widget _ _] (collect-widgets-z-ordered root [0 0])]
+    (doseq [[widget _ _] (collect-widgets-z-ordered root [0 0] 1.0 nil)]
       (try
         (cgui/emit-widget-event! widget :frame event)
         (catch Exception _ nil)))

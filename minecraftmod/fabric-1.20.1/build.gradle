@@ -35,6 +35,11 @@ loom {
 	}
 }
 
+
+fabricApi {
+    configureDataGeneration()
+}
+
 clojure {
   builds {
     main {

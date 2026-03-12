@@ -147,8 +147,11 @@
                  new-dt))]
     (set-texture! dt texture-path)
     (swap! (component-state dt) assoc :uv [u0 v0 (- u1 u0) (- v1 v0)])
-    (cgui/set-pos! widget x y)
-    (cgui/set-size! widget w h)
+    ;; Note: do NOT mutate widget transform here. Components should not have
+    ;; side effects on layout; the document loader / runtime are responsible
+    ;; for applying widget position/size/scale from XML. We only set component
+    ;; metadata (texture and uv). Callers that need a specific widget size should
+    ;; set it via the XML or document loader.
     widget))
 
 (defn text-box
