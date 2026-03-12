@@ -32,7 +32,10 @@
       (render [^GuiGraphics gg mouse-x mouse-y partial-ticks]
         (when root
           (try
-            (cgui-rt/resize-root! root (.-width this) (.-height this))
+            ;; Use the logical GUI size (container image size) instead of the
+            ;; full screen resolution so that XML/TechUI layouts using fixed
+            ;; coordinates (e.g. page_wireless.xml) are not stretched.
+            (cgui-rt/resize-root! root (.getXSize this) (.getYSize this))
             (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
             (catch Exception e
               (log/debug "CGUI frame-tick error:" (.getMessage e)))))

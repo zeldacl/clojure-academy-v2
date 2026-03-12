@@ -303,7 +303,15 @@
   (try
     (let [tile (:tile-entity container)
           inv-page (tech-ui/create-inventory-page "node")
-          main-widget (cgui/create-container :pos [-18 0] :size [gui-width gui-height])
+          ;; Use the inventory page window as the size reference so that the
+          ;; wrapper container matches the XML layout (176x187) instead of
+          ;; the smaller TechUI logical width. This prevents the background
+          ;; from appearing zoomed or clipped.
+          inv-window (:window inv-page)
+          inv-w (cgui/get-width inv-window)
+          inv-h (cgui/get-height inv-window)
+          ;; Root wrapper at (0,0) with the same size as the XML page.
+          main-widget (cgui/create-container :pos [0 0] :size [inv-w inv-h])
           info-area (tech-ui/create-info-area)
           anim-state (create-animation-state)
           poller (create-status-poller tile anim-state)

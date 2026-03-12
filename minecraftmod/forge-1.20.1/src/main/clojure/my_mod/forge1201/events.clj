@@ -68,16 +68,24 @@
     (log/info "1.20.1 Place event at (" x "," y "," z ") block:" block-name)
     (when block-id
       (let [block-spec (bdsl/get-block block-id)
-            ;; 原 AC / LambdaLib2 风格：使用 multi-block 体积做放置检查。
-            ;; 对结构占用的每一个坐标（包括 origin 在内）：
-            ;; - 当前方块必须是 isReplaceable 才允许被覆盖。
-            ;; 这里直接复刻 ItemBlockMulti 的语义：!isReplaceable => 取消整套放置。
+            ;; 使用 multi-block 体积做放置检查。
+            ;; 对结构占用的每一个坐标：
+            ;; - 对于 origin 位置（pos 本身），不做额外限制，交给 vanilla / Forge 的 mayPlace 处理。
+            ;; - 对于其余所有坐标，当前方块必须是“可替换”的（这里保守地认为只有空气可替换）。
+            ;; 同时打印详细日志，方便调试每个坐标的判定结果。
             cancel? (when (:multi-block? block-spec)
                       (let [positions (bdsl/all-multi-block-positions pos block-spec)]
                         (some (fn [bp]
                                 (let [state (pworld/world-get-block-state world bp)
-                                      blk   (when state (.getBlock state))]
-                                  (and blk (not (.isReplaceable blk world bp)))))
+                                      blk   (when state (.getBlock state))
+                                      replaceable? (or (nil? state)
+                                                       (.isAir state))]
+                                  (log/info "Matrix place check at" bp
+                                            "state=" (str state)
+                                            "block=" (when blk (str blk))
+                                            "replaceable?=" replaceable?)
+                                  (and (not (= bp pos)) ; 跳过 origin，自身由 Forge 放置规则控制
+                                       (not replaceable?))))
                               positions)))]
         (if cancel?
           (do

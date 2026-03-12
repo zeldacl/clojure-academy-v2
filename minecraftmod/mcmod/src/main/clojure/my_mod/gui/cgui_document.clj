@@ -26,8 +26,12 @@
 (defn- normalize-xml-texture
   "Normalize texture strings read from XML.
     - preserve absolute assets/... paths
-    - strip placeholder namespace 'academy:' to return the relative path
-    - leave other namespaced references untouched"
+    - for legacy AcademyCraft paths like \"academy:textures/...\", strip the
+      namespace and keep only \"textures/...\" so that they are resolved via
+      the current mod's namespace (my_mod) where the textures have been copied
+      to assets/my_mod/textures/...
+    - leave other namespaced references (非 academy) untouched
+    - for plain relative paths, just trim whitespace"
   [s]
   (when s
     (let [s (str/trim s)]

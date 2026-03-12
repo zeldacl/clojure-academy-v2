@@ -145,12 +145,20 @@
     (def ^:private DRAG-TIME-TOL-MS 100)
 
 (defn resize-root!
-  "Set root widget size to match screen dimensions. Optional: center the root.
-   Our GUIs use fixed layout with leftPos/topPos from the container screen, so we typically
-   only set size so hit-testing and layout know the area."
+  "Update root widget with the current screen/container size.
+
+   - For layouts that already have an explicit size (XML/TechUI pages), we *do not*
+     overwrite the widget's logical width/height, otherwise textures from page_wireless.xml
+     等会被强行拉伸。
+   - We always record the latest screen size into root metadata so alignment logic
+     can choose to center the root if needed."
   [root width height]
   (when root
-    (cgui/set-size! root width height))
+    (let [[w h] (cgui/get-size root)]
+      ;; Only fall back to screen size when the root has no intrinsic size.
+      (when (and (zero? (double w)) (zero? (double h)))
+        (cgui/set-size! root width height))
+      (swap! (:metadata root) assoc :screen-size [width height])))
   root)
   
  (defn render-widget!
@@ -240,7 +248,11 @@
    leftPos and topPos (used to transform widget coordinates into screen space)."
   [^GuiGraphics gg root left top]
   (when root
-    (doseq [[widget [abs-x abs-y] scale] (collect-widgets-z-ordered root [0 0] 1.0 nil)]
+    ;; Use the widget tree's own logical coordinates without applying additional
+    ;; screen-size based alignment here. XML/TechUI layouts already encode all
+    ;; positions/sizes explicitly, and extra alignment tends to distort them.
+    (doseq [[widget [abs-x abs-y] scale]
+            (collect-widgets-z-ordered root [0 0] 1.0 nil)]
       (try
         (render-widget! gg widget [abs-x abs-y] scale left top)
         (catch Exception e
