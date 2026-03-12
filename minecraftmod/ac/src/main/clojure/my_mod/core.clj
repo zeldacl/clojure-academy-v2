@@ -54,3 +54,13 @@
   (when-let [handler (event-metadata/get-block-event-handler block-id :on-right-click)]
     (log/info "Dispatching to registered handler for block:" block-id)
     (handler ctx)))
+
+(defn on-block-place
+  "Generic block place event handler.
+  
+  Dispatches to block-specific :on-place handlers registered in event metadata."
+  [{:keys [x y z player world block block-id] :as ctx}]
+  (log/info "Place event at (" x "," y "," z ") for block-id:" block-id)
+  (when-let [handler (event-metadata/get-block-event-handler block-id :on-place)]
+    (log/info "Dispatching to registered :on-place handler for block:" block-id)
+    (handler ctx)))

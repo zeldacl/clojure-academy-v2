@@ -142,6 +142,62 @@
    :y (- (:y part-pos) (:relative-y relative-pos))
    :z (- (:z part-pos) (:relative-z relative-pos))})
 
+(defn resolve-multi-block-master-pos
+  "Given a clicked block position (BlockPos) and a multi-block spec,
+   try to resolve the master/origin BlockPos.
+
+   Returns a BlockPos when resolved, or nil when not a valid part."
+  [world clicked-pos block-spec]
+  (when (:multi-block? block-spec)
+    (let [origin   (:multi-block-origin block-spec {:x 0 :y 0 :z 0})
+          positions (if-let [custom-pos (:multi-block-positions block-spec)]
+                      (calculate-multi-block-positions custom-pos origin)
+                      (calculate-multi-block-positions (:multi-block-size block-spec)
+                                                       origin))
+          part-pos-map {:x (pos/pos-x clicked-pos)
+                        :y (pos/pos-y clicked-pos)
+                        :z (pos/pos-z clicked-pos)}]
+      (some (fn [rel-pos]
+              (let [master-map (get-multi-block-master-pos part-pos-map rel-pos)
+                    master-pos (pos/create-block-pos (:x master-map)
+                                                     (:y master-map)
+                                                     (:z master-map))]
+                (when (world/world-get-tile-entity world master-pos)
+                  master-pos)))
+            positions))))
+
+(defn all-multi-block-positions
+  "Return a sequence of all absolute BlockPos occupied by a multi-block,
+   given the master/origin BlockPos and block-spec."
+  [master-pos block-spec]
+  (let [origin   (:multi-block-origin block-spec {:x 0 :y 0 :z 0})
+        positions (if-let [custom-pos (:multi-block-positions block-spec)]
+                    (calculate-multi-block-positions custom-pos origin)
+                    (calculate-multi-block-positions (:multi-block-size block-spec)
+                                                     origin))
+        mx (pos/pos-x master-pos)
+        my (pos/pos-y master-pos)
+        mz (pos/pos-z master-pos)]
+    (map (fn [rel-pos]
+           (pos/create-block-pos (+ mx (or (:relative-x rel-pos) (:x rel-pos) 0))
+                                 (+ my (or (:relative-y rel-pos) (:y rel-pos) 0))
+                                 (+ mz (or (:relative-z rel-pos) (:z rel-pos) 0))))
+         positions)))
+
+(defn can-place-multi-block?
+  "Check if a multi-block structure can be placed at master-pos in the world.
+   Returns true if all target positions currently have no block state (treated as empty).
+   Platform-specific layers can later extend this with 'replaceable' checks if needed."
+  [world master-pos block-spec]
+  (if-not (:multi-block? block-spec)
+    true
+    (let [positions (all-multi-block-positions master-pos block-spec)]
+      (every?
+        (fn [p]
+          (let [state (world/world-get-block-state world p)]
+            (nil? state)))
+        positions))))
+
 (defn is-multi-block-complete?
   "Check if all parts of a multi-block structure are present
    world: world object

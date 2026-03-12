@@ -13,7 +13,7 @@ repositories {
 
 dependencies {
   implementation project(':mcmod')
-  implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version') ?: '1.11.1'}"
+  implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version') ?: '1.12.4'}"
   implementation "org.clojure:data.json:2.4.0"
 }
 

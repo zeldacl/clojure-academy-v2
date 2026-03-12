@@ -261,8 +261,12 @@
   (fn [event-data]
     (log/info "Wireless Matrix right-clicked!")
     (let [{:keys [player world pos sneaking]} event-data
-          be    (world/world-get-tile-entity world pos)
-          state (when be (safe-state be))]
+          ;; 使用通用 multiblock 逻辑从任意子方块解析到 master
+          block-spec (bdsl/get-block :wireless-matrix)
+          master-pos (bdsl/resolve-multi-block-master-pos world pos block-spec)
+          target-pos (or master-pos pos)
+          be         (world/world-get-tile-entity world target-pos)
+          state      (when be (safe-state be))]
       (if state
         (if-not sneaking
           (do
@@ -272,7 +276,7 @@
             (log/info "  Working:" (is-working? state))
             (try
               (if-let [open-matrix-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-matrix-gui)]
-                (let [result (open-matrix-gui player world pos)]
+                (let [result (open-matrix-gui player world target-pos)]
                   (log/info "Opened Matrix GUI")
                   result)
                 (do (log/error "Failed to open Matrix GUI: open-matrix-gui not resolved") nil))
@@ -287,6 +291,8 @@
     (let [{:keys [player world pos]} event-data
           player-name (str player)
           be (world/world-get-tile-entity world pos)]
+      ;; 实际的空间占用与重叠检查在平台层 (forge/fabric events) 已统一处理。
+      ;; 这里仅在放置成功后记录放置者名称。
       (when be
         (let [state (or (.getCustomState be) mschema/matrix-default-state)]
           (.setCustomState be (assoc state :placer-name player-name))))

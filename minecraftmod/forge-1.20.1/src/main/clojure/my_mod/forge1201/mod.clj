@@ -279,7 +279,13 @@
                 EventPriority/NORMAL false PlayerInteractEvent$RightClickBlock
                 (reify java.util.function.Consumer
                   (accept [_ evt]
-                    (events/handle-right-click-event evt)))))
+                    (events/handle-right-click-event evt))))
+  ;; Block place events for multi-block overlap checks and :on-place handlers
+  (.addListener (MinecraftForge/EVENT_BUS)
+                EventPriority/NORMAL false net.minecraftforge.event.level.BlockEvent$EntityPlaceEvent
+                (reify java.util.function.Consumer
+                  (accept [_ evt]
+                    (events/handle-block-place-event evt)))))
 
 ;; Helper: Client setup phase (called from event handler)  
 (defn on-client-setup [event]

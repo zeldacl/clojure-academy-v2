@@ -170,8 +170,8 @@ dependencies {
    implementation project(':ac')
    implementation project(':mcmod')
    
-   implementation "org.clojure:clojure:1.11.1"
-   minecraftLibrary "org.clojure:clojure:1.11.1"
+   implementation "org.clojure:clojure:1.12.4"
+   minecraftLibrary "org.clojure:clojure:1.12.4"
    minecraftLibrary "org.clojure:spec.alpha:0.3.218"
    minecraftLibrary "org.clojure:core.specs.alpha:0.2.62"
   // implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version')}"
