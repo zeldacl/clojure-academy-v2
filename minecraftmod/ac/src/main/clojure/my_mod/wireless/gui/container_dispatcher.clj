@@ -84,7 +84,7 @@
       (solar-container? container) (solar-container/handle-button-click! container button-id player)
       :else (log/warn "Unknown container type for button click:" (type container))))
   
-  (handle-text-input! [container field-id text player]
+  (handle-text-input! [container _field-id _text _player]
     (log/warn "handle-text-input! not implemented for container type:" (type container)))
   
   (close-container! [container]
@@ -219,6 +219,75 @@
     (catch Exception e
       (log/error "Error closing container:" (.getMessage e))
       false)))
+
+;; ============================================================================
+;; Slot Operation Dispatch (for platform menu bridges)
+;; ============================================================================
+
+(defn slot-count
+  "Get tile slot count for a container. Returns 0 for unknown containers."
+  [container]
+  (try
+    (cond
+      (node-container? container) (node-container/get-slot-count container)
+      (matrix-container? container) (matrix-container/get-slot-count container)
+      (solar-container? container) (solar-container/get-slot-count container)
+      :else 0)
+    (catch Exception e
+      (log/error "Error getting slot count:" (.getMessage e))
+      0)))
+
+(defn slot-get-item
+  "Get slot item as ItemStack (or nil/empty when unavailable)."
+  [container slot-index]
+  (try
+    (cond
+      (node-container? container) (node-container/get-slot-item container slot-index)
+      (matrix-container? container) (matrix-container/get-slot-item container slot-index)
+      (solar-container? container) (solar-container/get-slot-item container slot-index)
+      :else nil)
+    (catch Exception e
+      (log/error "Error getting slot item:" (.getMessage e))
+      nil)))
+
+(defn slot-set-item!
+  "Set slot item. Nil stack clears the slot."
+  [container slot-index item-stack]
+  (try
+    (cond
+      (node-container? container) (node-container/set-slot-item! container slot-index item-stack)
+      (matrix-container? container) (matrix-container/set-slot-item! container slot-index item-stack)
+      (solar-container? container) (solar-container/set-slot-item! container slot-index item-stack)
+      :else nil)
+    (catch Exception e
+      (log/error "Error setting slot item:" (.getMessage e))
+      nil)))
+
+(defn slot-can-place?
+  "Check whether a stack may be placed in a slot."
+  [container slot-index item-stack]
+  (try
+    (cond
+      (node-container? container) (boolean (node-container/can-place-item? container slot-index item-stack))
+      (matrix-container? container) (boolean (matrix-container/can-place-item? container slot-index item-stack))
+      (solar-container? container) (boolean (solar-container/can-place-item? container slot-index item-stack))
+      :else true)
+    (catch Exception e
+      (log/error "Error checking slot placement:" (.getMessage e))
+      false)))
+
+(defn slot-changed!
+  "Notify container that slot content changed."
+  [container slot-index]
+  (try
+    (cond
+      (node-container? container) (node-container/slot-changed! container slot-index)
+      (matrix-container? container) (matrix-container/slot-changed! container slot-index)
+      (solar-container? container) (solar-container/slot-changed! container slot-index)
+      :else nil)
+    (catch Exception e
+      (log/error "Error in slot changed notification:" (.getMessage e))
+      nil)))
 
 ;; ============================================================================
 ;; Design Notes

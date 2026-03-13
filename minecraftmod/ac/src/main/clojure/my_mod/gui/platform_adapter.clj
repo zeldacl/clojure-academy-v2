@@ -39,6 +39,13 @@
 (def safe-handle-text-input! dispatcher/safe-handle-text-input!)
 (def safe-close! dispatcher/safe-close!)
 
+;; Slot operation API for platform menu bridges
+(def slot-count dispatcher/slot-count)
+(def slot-get-item dispatcher/slot-get-item)
+(def slot-set-item! dispatcher/slot-set-item!)
+(def slot-can-place? dispatcher/slot-can-place?)
+(def slot-changed! dispatcher/slot-changed!)
+
 (def get-container-type dispatcher/get-container-type)
 (def node-container? dispatcher/node-container?)
 (def matrix-container? dispatcher/matrix-container?)
@@ -74,6 +81,14 @@
         (metadata/get-all-gui-ids)))
 (def get-slot-layout metadata/get-slot-layout)
 (def get-slot-range metadata/get-slot-range)
+
+(defn get-gui-id-for-container
+  "Resolve GUI ID from a container using business-layer metadata.
+  Platform modules should use this instead of hardcoding container types."
+  [container]
+  (let [container-type (dispatcher/get-container-type container)]
+    (when (not= container-type :unknown)
+      (metadata/get-gui-id-for-type container-type))))
 
 ;; ============================================================================
 ;; Re-export Slot Manager

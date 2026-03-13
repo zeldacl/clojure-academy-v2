@@ -89,14 +89,16 @@
   "Register this renderer for wireless-matrix scripted block entities.
   Should be called during platform initialization."
   []
-  (tesr-api/register-scripted-tile-renderer!
-   "wireless-matrix"
-   (reify tesr-api/ITileEntityRenderer
-     (render-tile [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
-       (mb-helper/render-multiblock-tesr
-        tile-entity
-        render-at-origin
-        partial-ticks pose-stack buffer-source packed-light packed-overlay)))))
+  (let [renderer
+        (reify tesr-api/ITileEntityRenderer
+          (render-tile [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
+            (mb-helper/render-multiblock-tesr
+             tile-entity
+             render-at-origin
+             partial-ticks pose-stack buffer-source packed-light packed-overlay)))]
+    (tesr-api/register-scripted-tile-renderer! "wireless-matrix" renderer)
+    ;; Multiblock part tiles share the same BlockEntity type and renderer dispatch.
+    (tesr-api/register-scripted-tile-renderer! "wireless-matrix-part" renderer)))
 
 ;; ============================================================================
 ;; Platform Integration Notes

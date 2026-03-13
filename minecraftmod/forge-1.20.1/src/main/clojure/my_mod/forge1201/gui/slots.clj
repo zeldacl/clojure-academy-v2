@@ -7,10 +7,7 @@
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.gui.slot-validators :as slot-validators]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.world.inventory Slot]
-           [net.minecraft.world.entity.player Player]
-           [net.minecraft.world.item ItemStack]
-           [net.minecraft.world.Container]))
+  (:import [net.minecraft.world.inventory Slot]))
 
 ;; ============================================================================
 ;; Slot Factory Functions

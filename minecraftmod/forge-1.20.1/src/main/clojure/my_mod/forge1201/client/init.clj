@@ -41,14 +41,9 @@
   []
   (log/info "Registering block renderers for Forge 1.20.1...")
   (try
-    (log/info "Starting renderer registration routine")
     (render/register-texture-binder! bind-texture-forge!)
 
     (render-init/register-all-renderers!)
-    (log/info "Completed register-all-renderers!" )
-    (try
-      (log/info "Scripted renderer registry keys:" (keys @tesr-api/scripted-renderer-registry))
-      (catch Exception _# (log/warn "Failed to read scripted renderer registry")))
 
     ;; Bind universal BER only to tile-ids that have at least one block with a
     ;; registered scripted renderer. Tiles using standard static models (e.g.

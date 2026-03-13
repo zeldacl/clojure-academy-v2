@@ -5,6 +5,7 @@
   no Java reflection needed."
   (:require [my-mod.gui.slot-schema :as slot-schema]
             [my-mod.wireless.slot-schema :as slots]
+            [my-mod.energy.operations :as energy-ops]
             [my-mod.wireless.gui.container-common :as common]
             [my-mod.wireless.gui.container-schema :as schema]))
 
@@ -49,6 +50,26 @@
   "Get total tile slot count for solar container."
   [_container]
   (slot-schema/tile-slot-count solar-slot-schema-id))
+
+(defn can-place-item?
+  "Solar slot accepts energy items only."
+  [_container _slot-index item-stack]
+  (energy-ops/is-energy-item-supported? item-stack))
+
+(defn get-slot-item
+  "Get item from tile slot (Design-3 BE customState aware)."
+  [container slot-index]
+  (common/get-slot-item-be container slot-index))
+
+(defn set-slot-item!
+  "Set item in tile slot (Design-3 BE customState aware)."
+  [container slot-index item-stack]
+  (common/set-slot-item-be! container slot-index item-stack {} identity))
+
+(defn slot-changed!
+  "Slot change hook for parity with node/matrix containers."
+  [_container _slot-index]
+  nil)
 
 ;; ============================================================================
 ;; Validation

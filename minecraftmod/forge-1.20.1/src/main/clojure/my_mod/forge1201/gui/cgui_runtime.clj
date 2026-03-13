@@ -2,6 +2,7 @@
   "Forge 1.20.1 CGUI runtime: resize, render, and event dispatch for the pure Clojure
    widget tree. Used by the CGUI screen proxy to drive rendering and input."
   (:require
+    [clojure.java.io :as io]
     [clojure.string :as str]
     [my-mod.gui.cgui :as cgui]
     [my-mod.platform.resource :as res]
@@ -12,10 +13,27 @@
     (net.minecraft.client Minecraft)
     (net.minecraft.resources ResourceLocation)
     (com.mojang.blaze3d.systems RenderSystem)
-    (net.minecraft.client.renderer GameRenderer)
+    (javax.imageio ImageIO)
     (org.lwjgl.opengl GL11)))
 
   (defonce ^:private texture-size-cache (atom {}))
+
+  (defn- resource-location->asset-path
+    [resource-location]
+    (when resource-location
+      (let [[ns path] (str/split (str resource-location) #":" 2)]
+        (when (and ns path)
+          (str "assets/" ns "/" path)))))
+
+  (defn- get-texture-size-from-resource
+    [resource-location]
+    (when-let [asset-path (resource-location->asset-path resource-location)]
+      (when-let [resource (or (io/resource asset-path)
+                              (io/resource asset-path (.getClassLoader (class get-texture-size-from-resource))))]
+        (with-open [stream (io/input-stream resource)]
+          (when-let [image (ImageIO/read stream)]
+            [(.getWidth image) (.getHeight image)])))))
+
   (defn- get-texture-size
     "Try to obtain the pixel size [width height] for the given `resource-location`.
      Caches results by resource-location string. Returns [w h] or nil if unknown.
@@ -33,6 +51,8 @@
                 ;; try multiple ways to obtain width/height
                 size (try
                        (or
+                         ;; preferred: read the actual PNG from mod resources
+                         (get-texture-size-from-resource resource-location)
                          ;; common: texture object exposes getWidth/getHeight
                          (when tex
                            (try
@@ -176,6 +196,51 @@
         (cgui/set-size! root width height))
       (swap! (:metadata root) assoc :screen-size [width height])))
   root)
+
+(defn- blit-scaled-region!
+  "Draw a texture region scaled to the target widget size via pose matrix.
+
+   Applies a pose-matrix scale of (target/src) so that src-w x src-h pose-space
+   units map to target-w x target-h screen pixels.  The blit call always uses
+   src-w x src-h as the quad dimensions (in scaled pose space), covering the
+   full source region without tiling.
+
+   tex-atlas-w / tex-atlas-h are the full PNG dimensions used for UV
+   normalization.  For standalone textures (no sub-region) these equal src-w
+   and src-h.  For sprite-sheet sub-regions pass the atlas width/height so the
+   UV fraction is computed correctly."
+  [^GuiGraphics gg tex-loc x y target-w target-h u-px v-px src-w src-h z-level tex-atlas-w tex-atlas-h]
+  (let [safe-src-w   (max 1 (int src-w))
+        safe-src-h   (max 1 (int src-h))
+        safe-atlas-w (max 1 (int tex-atlas-w))
+        safe-atlas-h (max 1 (int tex-atlas-h))
+        scale-x      (/ (double (max 1 target-w)) (double safe-src-w))
+        scale-y      (/ (double (max 1 target-h)) (double safe-src-h))
+        ps           (.pose gg)]
+    (.pushPose ps)
+    (when-not (zero? z-level)
+      (.translate ps 0.0 0.0 (double z-level)))
+    (.translate ps (double x) (double y) 0.0)
+    ;; Scale pose so that src-w x src-h units = target-w x target-h screen px.
+    (.scale ps (float scale-x) (float scale-y) 1.0)
+    ;; 9-param blit: blit(RL, x, y, u, v, w, h, texW, texH)
+    ;; w / h  = src dimensions in scaled pose space -> renders as target size.
+    ;; texW / texH = full atlas size for correct UV fraction.
+    (try
+      (clojure.lang.Reflector/invokeInstanceMethod
+        gg "blit"
+        (object-array [tex-loc
+                       (int 0) (int 0)
+                       (int u-px) (int v-px)
+                       (int safe-src-w) (int safe-src-h)
+                       (int safe-atlas-w) (int safe-atlas-h)]))
+      (catch Exception _
+        ;; Fallback: 7-param blit (assumes 256x256 UV space).
+        ;; May tile for textures wider than 256 px.
+        (.blit gg tex-loc (int 0) (int 0)
+               (int u-px) (int v-px)
+               (int safe-src-w) (int safe-src-h))))
+    (.popPose ps)))
   
  (defn render-widget!
   "Render a single widget at the given absolute position and scale using GuiGraphics.
@@ -198,22 +263,39 @@
           (let [tex-loc (ensure-resource-location (:texture state))]
             (if tex-loc
               (let [uv (:uv state)
-                    [u v uw uh] (if (and (sequential? uv) (>= (count uv) 4)) uv [0 0 (int w) (int h)])
+                tex-size (get-texture-size tex-loc)
+                tex-w (when (and tex-size (number? (first tex-size)))
+                  (int (first tex-size)))
+                tex-h (when (and tex-size (number? (second tex-size)))
+                  (int (second tex-size)))
+                has-uv? (and (sequential? uv) (>= (count uv) 4))
+                [u v uw uh] (if has-uv?
+                  uv
+                  [0 0 (or tex-w w-int) (or tex-h h-int)])
                     fractional? (and (number? u) (number? v) (number? uw) (number? uh)
                                       (<= (double u) 1.0) (<= (double v) 1.0)
                                       (<= (double uw) 1.0) (<= (double uh) 1.0))
-                    tex-size (when fractional? (get-texture-size tex-loc))
                     basis-w (if (and tex-size (number? (first tex-size))) (first tex-size) w-int)
                     basis-h (if (and tex-size (number? (second tex-size))) (second tex-size) h-int)
                     u-px (if fractional? (int (Math/round (* (double u) (double basis-w)))) (int u))
                     v-px (if fractional? (int (Math/round (* (double v) (double basis-h)))) (int v))
-                    uw-px (if fractional? (int (Math/round (* (double uw) (double basis-w)))) (int uw))
-                    uh-px (if fractional? (int (Math/round (* (double uh) (double basis-h)))) (int uh))
+                src-w (if fractional?
+                  (int (Math/round (* (double uw) (double basis-w))))
+                  (int uw))
+                src-h (if fractional?
+                  (int (Math/round (* (double uh) (double basis-h))))
+                  (int uh))
+                    ;; Full atlas dimensions for UV normalization.
+                    ;; When no sub-region UV is used src == atlas; prefer the
+                    ;; actual PNG size so the UV fraction covers the full region.
+                    tex-atlas-w (or tex-w src-w)
+                    tex-atlas-h (or tex-h src-h)
                     ;; optional state keys to approximate old behavior
                     color-int (or (:color state) 0xFFFFFF)
                     z-level (or (:z-level state) 0.0)
-                    write-depth (boolean (:write-depth state))
                     depth-mode (or (:depth-test-mode state) :none)
+                    write-depth (and (boolean (:write-depth state))
+                                     (not= depth-mode :none))
                     ;; compute color components
                     r (/ (double (bit-and (bit-shift-right color-int 16) 0xFF)) 255.0)
                     g (/ (double (bit-and (bit-shift-right color-int 8) 0xFF)) 255.0)
@@ -221,7 +303,7 @@
                     a (if (pos? (bit-and color-int 0xFF000000))
                         (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)
                         1.0)]
-                (when (and uw-px uh-px)
+                (when (and (pos? src-w) (pos? src-h))
                   (try
                     ;; setup blending and shader color
                     (RenderSystem/enableBlend)
@@ -231,17 +313,8 @@
                     ;; depth test / depth mask handling (centralized)
                     (apply-depth-mode! depth-mode write-depth)
 
-                    ;; apply z translation if requested
-                    (let [ps (.pose gg)]
-                      (.pushPose ps)
-                      (when (not (zero? z-level))
-                        (.translate ps 0.0 0.0 (double z-level))))
-
-                    ;; draw (GuiGraphics.blit will bind the texture)
-                    (.blit gg tex-loc x y u-px v-px uw-px uh-px)
-
-                    ;; restore pose
-                    (let [ps (.pose gg)] (.popPose ps))
+                    ;; draw the source region scaled to the widget's target size
+                    (blit-scaled-region! gg tex-loc x y w-int h-int u-px v-px src-w src-h z-level tex-atlas-w tex-atlas-h)
 
                     ;; restore depth/blend/shader state to sane defaults
                     (RenderSystem/disableDepthTest)
