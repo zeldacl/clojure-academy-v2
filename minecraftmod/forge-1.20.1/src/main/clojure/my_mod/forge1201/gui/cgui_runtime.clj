@@ -10,7 +10,10 @@
   (:import
     (net.minecraft.client.gui GuiGraphics)
     (net.minecraft.client Minecraft)
-    (net.minecraft.resources ResourceLocation)))
+    (net.minecraft.resources ResourceLocation)
+    (com.mojang.blaze3d.systems RenderSystem)
+    (net.minecraft.client.renderer GameRenderer)
+    (org.lwjgl.opengl GL11)))
 
   (defonce ^:private texture-size-cache (atom {}))
   (defn- get-texture-size
@@ -62,6 +65,19 @@
                        (catch Exception _ nil))]
             (when size (swap! texture-size-cache assoc k size))
             size)))))
+
+        (defn- apply-depth-mode!
+          "Configure RenderSystem depth test/mask according to `mode` and `write-depth`.
+           Uses RenderSystem to change state; GL11 constants are passed as args where needed.
+           There is no RenderSystem-provided enum for depth funcs, so GL11 constants are used here
+           but centralized in one helper to make future changes easier."
+          [mode write-depth]
+          (RenderSystem/depthMask write-depth)
+          (case mode
+            :equals (do (RenderSystem/enableDepthTest) (RenderSystem/depthFunc GL11/GL_EQUAL))
+            :always (do (RenderSystem/enableDepthTest) (RenderSystem/depthFunc GL11/GL_ALWAYS))
+            ;; default: none
+            (RenderSystem/disableDepthTest)))
 
 (defn- component-kind [c]
   (or (:kind c) (::kind c) :unknown))
@@ -179,21 +195,63 @@
             state @(component-state c)]
         (cond
           (kind-matches? kind :drawtexture)
-          (when-let [tex (ensure-resource-location (:texture state))]
-            (let [uv (:uv state)
-                  [u v uw uh] (if (and (sequential? uv) (>= (count uv) 4)) uv [0 0 (int w) (int h)])
-                  fractional? (and (number? u) (number? v) (number? uw) (number? uh)
-                                    (<= (double u) 1.0) (<= (double v) 1.0)
-                                    (<= (double uw) 1.0) (<= (double uh) 1.0))
-                  tex-size (when fractional? (get-texture-size tex))
-                  basis-w (if (and tex-size (number? (first tex-size))) (first tex-size) w-int)
-                  basis-h (if (and tex-size (number? (second tex-size))) (second tex-size) h-int)
-                  u-px (if fractional? (int (Math/round (* (double u) (double basis-w)))) (int u))
-                  v-px (if fractional? (int (Math/round (* (double v) (double basis-h)))) (int v))
-                  uw-px (if fractional? (int (Math/round (* (double uw) (double basis-w)))) (int uw))
-                  uh-px (if fractional? (int (Math/round (* (double uh) (double basis-h)))) (int uh))]
-              (when (and uw-px uh-px)
-                (.blit gg tex x y u-px v-px uw-px uh-px))))
+          (let [tex-loc (ensure-resource-location (:texture state))]
+            (if tex-loc
+              (let [uv (:uv state)
+                    [u v uw uh] (if (and (sequential? uv) (>= (count uv) 4)) uv [0 0 (int w) (int h)])
+                    fractional? (and (number? u) (number? v) (number? uw) (number? uh)
+                                      (<= (double u) 1.0) (<= (double v) 1.0)
+                                      (<= (double uw) 1.0) (<= (double uh) 1.0))
+                    tex-size (when fractional? (get-texture-size tex-loc))
+                    basis-w (if (and tex-size (number? (first tex-size))) (first tex-size) w-int)
+                    basis-h (if (and tex-size (number? (second tex-size))) (second tex-size) h-int)
+                    u-px (if fractional? (int (Math/round (* (double u) (double basis-w)))) (int u))
+                    v-px (if fractional? (int (Math/round (* (double v) (double basis-h)))) (int v))
+                    uw-px (if fractional? (int (Math/round (* (double uw) (double basis-w)))) (int uw))
+                    uh-px (if fractional? (int (Math/round (* (double uh) (double basis-h)))) (int uh))
+                    ;; optional state keys to approximate old behavior
+                    color-int (or (:color state) 0xFFFFFF)
+                    z-level (or (:z-level state) 0.0)
+                    write-depth (boolean (:write-depth state))
+                    depth-mode (or (:depth-test-mode state) :none)
+                    ;; compute color components
+                    r (/ (double (bit-and (bit-shift-right color-int 16) 0xFF)) 255.0)
+                    g (/ (double (bit-and (bit-shift-right color-int 8) 0xFF)) 255.0)
+                    b (/ (double (bit-and color-int 0xFF)) 255.0)
+                    a (if (pos? (bit-and color-int 0xFF000000))
+                        (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)
+                        1.0)]
+                (when (and uw-px uh-px)
+                  (try
+                    ;; setup blending and shader color
+                    (RenderSystem/enableBlend)
+                    (RenderSystem/defaultBlendFunc)
+                    (RenderSystem/setShaderColor (float r) (float g) (float b) (float a))
+
+                    ;; depth test / depth mask handling (centralized)
+                    (apply-depth-mode! depth-mode write-depth)
+
+                    ;; apply z translation if requested
+                    (let [ps (.pose gg)]
+                      (.pushPose ps)
+                      (when (not (zero? z-level))
+                        (.translate ps 0.0 0.0 (double z-level))))
+
+                    ;; draw (GuiGraphics.blit will bind the texture)
+                    (.blit gg tex-loc x y u-px v-px uw-px uh-px)
+
+                    ;; restore pose
+                    (let [ps (.pose gg)] (.popPose ps))
+
+                    ;; restore depth/blend/shader state to sane defaults
+                    (RenderSystem/disableDepthTest)
+                    (RenderSystem/depthFunc GL11/GL_LEQUAL)
+                    (RenderSystem/depthMask true)
+                    (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
+                    (catch Exception e
+                      (log/debug "CGUI drawtexture render error:" (.getMessage e))))))
+              ;; no texture -> fallback to solid rect
+              (.fill gg x y (+ x w-int) (+ y h-int) (unchecked-int (or (:color state) 0xFFFFFF)))))
 
           (kind-matches? kind :textbox)
           (let [text  (str (or (:text state) ""))
