@@ -61,6 +61,45 @@
   [block-id]
   (bdsl/get-block block-id))
 
+(defn controller-parts-block?
+  "Return true when the block uses DSL controller+parts mode."
+  [block-id]
+  (= :controller-parts (:multiblock-mode (get-block-spec block-id))))
+
+(defn is-controller-block?
+  "Return true when block-id is the controller block in controller+parts mode."
+  [block-id]
+  (let [spec (get-block-spec block-id)]
+    (and (= :controller-parts (:multiblock-mode spec))
+         (= (str block-id) (:controller-block-id spec)))))
+
+(defn is-part-block?
+  "Return true when block-id is the part block in controller+parts mode."
+  [block-id]
+  (let [spec (get-block-spec block-id)]
+    (and (= :controller-parts (:multiblock-mode spec))
+         (= (str block-id) (:part-block-id spec)))))
+
+(defn get-controller-block-id
+  "Get controller block-id for a block participating in controller+parts mode."
+  [block-id]
+  (:controller-block-id (get-block-spec block-id)))
+
+(defn get-part-block-id
+  "Get part block-id for a block participating in controller+parts mode."
+  [block-id]
+  (:part-block-id (get-block-spec block-id)))
+
+(defn get-structure-offsets
+  "Get normalized relative offsets (including origin) for a controller block.
+  Returns a vector of maps with :relative-x/:relative-y/:relative-z."
+  [controller-block-id]
+  (when-let [spec (get-block-spec controller-block-id)]
+    (let [origin (:multi-block-origin spec {:x 0 :y 0 :z 0})]
+      (if-let [custom-pos (:multi-block-positions spec)]
+        (bdsl/calculate-multi-block-positions custom-pos origin)
+        (bdsl/calculate-multi-block-positions (:multi-block-size spec) origin)))))
+
 (defn has-block-state-properties?
   "Checks if a block has dynamic block state properties.
   
@@ -274,9 +313,8 @@
   Returns:
     Boolean - true if BlockItem should be created"
   [block-id]
-  ;; Default: all blocks get BlockItems
-  ;; Future: could check block spec for :has-item-form property
-  true)
+  (let [block-spec (get-block-spec block-id)]
+    (not= false (:has-item-form? block-spec))))
 
 ;; Creative Tab Metadata
 ;; ============================================================

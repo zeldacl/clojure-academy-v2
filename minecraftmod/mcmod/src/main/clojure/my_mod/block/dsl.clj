@@ -12,6 +12,7 @@
 (defrecord BlockSpec [id registry-name material hardness resistance light-level requires-tool
                       sounds harvest-level harvest-tool friction slip-factor
                       creative-tab  ;; Creative tab for block items
+                      has-item-form?  ;; Whether this block should have a BlockItem/item model
                       block-state-properties  ;; Dynamic block state properties (e.g., energy, connected)
                       on-right-click on-break on-place properties
                       ;; Model/datagen fields (official DSL options)
@@ -24,7 +25,11 @@
                       multi-block? multi-block-size multi-block-origin
                       multi-block-rotation-center
                       multi-block-positions  ; Custom positions for irregular shapes
-                      multi-block-master? on-multi-block-break])
+                      multi-block-master? on-multi-block-break
+                      ;; Controller/part multi-block mode metadata
+                      multiblock-mode
+                      controller-block-id
+                      part-block-id])
 
 ;; Material types (version-agnostic)
 (def materials
@@ -250,29 +255,29 @@
   "Create a block specification from options"
   [block-id options]
   (let [multi-block-config (:multi-block options)
-        shorthand-positions (when (map? multi-block-config)
-                              (:positions multi-block-config))
-        shorthand-positions (when shorthand-positions
-                              (let [positions (mapv (fn [pos]
-                                                      (if (vector? pos)
-                                                        {:x (nth pos 0 0)
-                                                         :y (nth pos 1 0)
-                                                         :z (nth pos 2 0)}
-                                                        pos))
-                                                    shorthand-positions)]
-                                (if (some #(and (= (:x %) 0)
-                                                (= (:y %) 0)
-                                                (= (:z %) 0))
-                                          positions)
-                                  positions
-                                  (into [{:x 0 :y 0 :z 0}] positions))))
+    shorthand-positions (when (map? multi-block-config)
+                (:positions multi-block-config))
+    processed-shorthand-positions (when shorthand-positions
+                    (let [positions (mapv (fn [pos]
+                                (if (vector? pos)
+                                  {:x (nth pos 0 0)
+                                   :y (nth pos 1 0)
+                                   :z (nth pos 2 0)}
+                                  pos))
+                                shorthand-positions)]
+                      (if (some #(and (= (:x %) 0)
+                              (= (:y %) 0)
+                              (= (:z %) 0))
+                          positions)
+                      positions
+                      (into [{:x 0 :y 0 :z 0}] positions))))
         multi-block? (boolean (or (:multi-block? options)
                                   multi-block-config))
         multi-block-size (or (:multi-block-size options)
                              (when (map? multi-block-config)
                                (:size multi-block-config)))
         multi-block-positions (or (:multi-block-positions options)
-                                  shorthand-positions)
+                processed-shorthand-positions)
         multi-block-origin (or (:multi-block-origin options)
                                (when (map? multi-block-config)
                                  (:origin multi-block-config))
@@ -294,6 +299,7 @@
        :friction (or (:friction options) default-friction)
        :slip-factor (or (:slip-factor options) default-friction)
        :creative-tab (or (:creative-tab options) default-creative-tab)
+      :has-item-form? (not= false (:has-item-form options))
        :block-state-properties (:block-state-properties options)
        :on-right-click (or (:on-right-click options) (fn [_] nil))
        :on-break (or (:on-break options) (fn [_] nil))
@@ -314,7 +320,10 @@
        :multi-block-origin multi-block-origin
       :multi-block-rotation-center multi-block-rotation-center
        :multi-block-master? (or (:multi-block-master? options) false)
-       :on-multi-block-break (or (:on-multi-block-break options) (fn [_] nil))})))
+      :on-multi-block-break (or (:on-multi-block-break options) (fn [_] nil))
+      :multiblock-mode (:multiblock-mode options)
+      :controller-block-id (:controller-block-id options)
+      :part-block-id (:part-block-id options)})))
 
 ;; Validate block specification
 (defn validate-block-spec [block-spec]
@@ -366,16 +375,22 @@
 
   ;; Validate optional scripted tile hooks
   (when (and (:tile-tick-fn block-spec)
-             (not (fn? (:tile-tick-fn block-spec))))
-    (throw (ex-info "Block :tile-tick-fn must be a function when provided"
+             (not (or (fn? (:tile-tick-fn block-spec))
+                      (symbol? (:tile-tick-fn block-spec))
+                      (var? (:tile-tick-fn block-spec)))))
+    (throw (ex-info "Block :tile-tick-fn must be a function or a symbol/var referencing one when provided"
                     {:id (:id block-spec)})))
   (when (and (:tile-load-fn block-spec)
-             (not (fn? (:tile-load-fn block-spec))))
-    (throw (ex-info "Block :tile-load-fn must be a function when provided"
+             (not (or (fn? (:tile-load-fn block-spec))
+                      (symbol? (:tile-load-fn block-spec))
+                      (var? (:tile-load-fn block-spec)))))
+    (throw (ex-info "Block :tile-load-fn must be a function or a symbol/var referencing one when provided"
                     {:id (:id block-spec)})))
   (when (and (:tile-save-fn block-spec)
-             (not (fn? (:tile-save-fn block-spec))))
-    (throw (ex-info "Block :tile-save-fn must be a function when provided"
+             (not (or (fn? (:tile-save-fn block-spec))
+                      (symbol? (:tile-save-fn block-spec))
+                      (var? (:tile-save-fn block-spec)))))
+    (throw (ex-info "Block :tile-save-fn must be a function or a symbol/var referencing one when provided"
                     {:id (:id block-spec)})))
   (when (and (:tile-kind block-spec)
              (not (keyword? (:tile-kind block-spec))))
@@ -440,6 +455,37 @@
     `(def ~block-name
        (register-block!
          (create-block-spec ~block-id ~options-map)))))
+
+;; Define a controller+part multi-block while preserving the structure DSL.
+;; 
+;; Example:
+;; (defcontroller-multiblock wireless-matrix
+;;   :multi-block {:positions [[0 0 1] [1 0 1] ...]}
+;;   :controller {:registry-name "wireless_matrix" :on-place ...}
+;;   :part {:registry-name "wireless_matrix_part"})
+(defmacro defcontroller-multiblock
+  [base-name & options]
+  (let [options-map (apply hash-map options)
+        multi-block (:multi-block options-map)
+      raw-controller-opts (or (:controller options-map) {})
+      raw-part-opts (or (:part options-map) {})
+        controller-name (or (:controller-name options-map) base-name)
+        part-name (or (:part-name options-map)
+                      (symbol (str (name base-name) "-part")))
+        controller-id (name controller-name)
+        part-id (name part-name)
+      merged-controller-opts (merge raw-controller-opts
+                {:multi-block multi-block
+                 :multiblock-mode :controller-parts
+                 :controller-block-id controller-id
+                 :part-block-id part-id})
+      merged-part-opts (merge raw-part-opts
+              {:multiblock-mode :controller-parts
+               :controller-block-id controller-id
+               :part-block-id part-id})]
+    `(do
+     (defblock ~controller-name ~@(vec (mapcat identity merged-controller-opts)))
+     (defblock ~part-name ~@(vec (mapcat identity merged-part-opts))))))
 
 ;; Helper: create ore block preset
 (defn ore-preset
@@ -643,8 +689,7 @@
     (when-let [handler (:on-multi-block-break block-spec)]
       (handler event-data))
     ;; Platform adapter should handle breaking all parts
-    (let [{:keys [world pos]} event-data
-          origin (:multi-block-origin block-spec)
+    (let [origin (:multi-block-origin block-spec)
           ;; Use custom positions if available, otherwise calculate from size
           positions (if-let [custom-pos (:multi-block-positions block-spec)]
                       (calculate-multi-block-positions custom-pos origin)

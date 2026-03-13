@@ -166,18 +166,22 @@
 (defn- build-simple-block!
   [^BlockStateProvider provider block-key definition]
   (let [registry-name (:registry-name definition)
-        block (resolve-registered-block block-key registry-name)]
+        block (resolve-registered-block block-key registry-name)
+        block-id (if (keyword? block-key) (name block-key) block-key)]
     (when (or (nil? block) (= block Blocks/AIR))
       (throw (ex-info "Simple block not resolvable for datagen"
                       {:block-key block-key :registry-name registry-name})))
     (let [model-id (first (:models (first (:parts definition))))
           model-file (ensure-block-model! provider model-id)]
-      (.simpleBlockWithItem provider block model-file))))
+      (if (registry-metadata/should-create-block-item? block-id)
+        (.simpleBlockWithItem provider block model-file)
+        (.simpleBlock provider block model-file)))))
 
 (defn- build-multipart-block!
   [^BlockStateProvider provider block-key definition]
   (let [registry-name (:registry-name definition)
-        block (resolve-registered-block block-key registry-name)]
+        block (resolve-registered-block block-key registry-name)
+        block-id (if (keyword? block-key) (name block-key) block-key)]
     (when (or (nil? block) (= block Blocks/AIR))
       (throw (ex-info "Multipart block not resolvable for datagen"
                       {:block-key block-key :registry-name registry-name})))
@@ -194,8 +198,9 @@
                 (.end))
             (.end part-builder))))
       ;; For node blocks, use _base variant for item model
-      (let [item-model-id (blockstate-def/get-item-model-id modid/MOD-ID registry-name)]
-        (.simpleBlockItem provider block (ensure-block-model! provider item-model-id))))))
+      (when (registry-metadata/should-create-block-item? block-id)
+        (let [item-model-id (blockstate-def/get-item-model-id modid/MOD-ID registry-name)]
+          (.simpleBlockItem provider block (ensure-block-model! provider item-model-id)))))))
 
 (defn- generate-with-forge-builder!
   [^CachedOutput cache ^PackOutput pack-output ^ExistingFileHelper exfile-helper all-defs]

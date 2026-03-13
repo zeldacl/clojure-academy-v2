@@ -45,6 +45,24 @@
     - flags: int - block update flags
     
     Returns: boolean - true if successful")
+
+  (world-remove-block [this pos]
+    "Remove block at position without drops.
+
+    Args:
+    - pos: IBlockPos
+
+    Returns: boolean - true if successful")
+
+  (world-place-block-by-id [this block-id pos flags]
+    "Place block by DSL block-id using platform registry lookup.
+
+    Args:
+    - block-id: string - DSL block-id
+    - pos: IBlockPos
+    - flags: int - block update flags
+
+    Returns: boolean - true if successful")
   
   (world-is-chunk-loaded? [this chunk-x chunk-z]
     "Check if chunk at coordinates is loaded.

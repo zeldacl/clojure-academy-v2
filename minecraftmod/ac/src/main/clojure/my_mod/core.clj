@@ -3,11 +3,10 @@
             [my-mod.util.log :as log]
             [my-mod.platform.resource :as platform-res]
             [my-mod.config.modid :as modid]
-            [my-mod.gui.api :as gui-api]
-            [my-mod.gui.core :as gui-core]
             ;; Load all GUI definitions (so gui-dsl registry is populated)
             [my-mod.gui.definitions]
             [my-mod.events.metadata :as event-metadata]
+            [my-mod.block.multiblock-core :as mb-core]
             [my-mod.wireless.gui.matrix-network-handler :as matrix-net]
             [my-mod.wireless.gui.node-network-handler :as node-net]
             [my-mod.wireless.world-data :as wd]
@@ -47,20 +46,43 @@
   
   Args:
     ctx: Event context map with :x :y :z :player :world :block :block-id"
-  [{:keys [x y z player world block block-id] :as ctx}]
-  (log/info "Right-click event at (" x "," y "," z ") for block-id:" block-id)
+  [{:keys [x y z block-id] :as ctx}]
+  (let [routed-ctx (mb-core/route-to-controller-context ctx)
+        routed-block-id (:block-id routed-ctx)]
+    (log/info "Right-click event at (" x "," y "," z ") for block-id:" block-id
+              "-> routed:" routed-block-id)
   
-  ;; Dispatch to block-specific handler if registered
-  (when-let [handler (event-metadata/get-block-event-handler block-id :on-right-click)]
-    (log/info "Dispatching to registered handler for block:" block-id)
-    (handler ctx)))
+    ;; Dispatch to block-specific handler if registered
+    (when-let [handler (event-metadata/get-block-event-handler routed-block-id :on-right-click)]
+      (log/info "Dispatching to registered handler for block:" routed-block-id)
+      (handler routed-ctx))))
 
 (defn on-block-place
   "Generic block place event handler.
   
   Dispatches to block-specific :on-place handlers registered in event metadata."
-  [{:keys [x y z player world block block-id] :as ctx}]
+  [{:keys [x y z block-id] :as ctx}]
   (log/info "Place event at (" x "," y "," z ") for block-id:" block-id)
-  (when-let [handler (event-metadata/get-block-event-handler block-id :on-place)]
-    (log/info "Dispatching to registered :on-place handler for block:" block-id)
-    (handler ctx)))
+  (if-let [precheck-ret (mb-core/precheck-controller-place ctx)]
+    precheck-ret
+    (let [handler-ret (when-let [handler (event-metadata/get-block-event-handler block-id :on-place)]
+                        (log/info "Dispatching to registered :on-place handler for block:" block-id)
+                        (handler ctx))
+          core-ret (mb-core/post-place-controller! ctx)]
+      (or core-ret handler-ret))))
+
+(defn on-block-break
+  "Generic block break event handler.
+
+  Routes part blocks to their controller block handlers, then applies
+  generic structure cleanup in mcmod." 
+  [{:keys [x y z block-id] :as ctx}]
+  (let [routed-ctx (mb-core/route-to-controller-context ctx)
+        routed-block-id (:block-id routed-ctx)]
+    (log/info "Break event at (" x "," y "," z ") for block-id:" block-id
+              "-> routed:" routed-block-id)
+    (let [handler-ret (when-let [handler (event-metadata/get-block-event-handler routed-block-id :on-break)]
+                        (log/info "Dispatching to registered :on-break handler for block:" routed-block-id)
+                        (handler routed-ctx))
+          core-ret (mb-core/apply-structure-break! ctx routed-ctx)]
+      (merge (or handler-ret {}) (or core-ret {})))))

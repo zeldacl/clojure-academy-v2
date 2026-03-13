@@ -285,7 +285,13 @@
                 EventPriority/NORMAL false net.minecraftforge.event.level.BlockEvent$EntityPlaceEvent
                 (reify java.util.function.Consumer
                   (accept [_ evt]
-                    (events/handle-block-place-event evt)))))
+                    (events/handle-block-place-event evt))))
+  ;; Block break events for controller/part routed break logic
+  (.addListener (MinecraftForge/EVENT_BUS)
+                EventPriority/NORMAL false net.minecraftforge.event.level.BlockEvent$BreakEvent
+                (reify java.util.function.Consumer
+                  (accept [_ evt]
+                    (events/handle-block-break-event evt)))))
 
 ;; Helper: Client setup phase (called from event handler)  
 (defn on-client-setup [event]

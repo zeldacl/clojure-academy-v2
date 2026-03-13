@@ -234,17 +234,20 @@
 ;; Tile DSL registration
 ;; ============================================================================
 
-(tdsl/deftile-kind :wireless-matrix
-  :tick-fn      matrix-scripted-tick-fn
-  :read-nbt-fn  matrix-scripted-load-fn
-  :write-nbt-fn matrix-scripted-save-fn)
+(tile-logic/register-tile-kind!
+  :wireless-matrix
+  {:tick-fn matrix-scripted-tick-fn
+   :read-nbt-fn matrix-scripted-load-fn
+   :write-nbt-fn matrix-scripted-save-fn})
 
-(tdsl/deftile wireless-matrix-tile
-  :id            "wireless-matrix"
-  :registry-name "matrix"
-  :impl          :scripted
-  :blocks        ["wireless-matrix"]
-  :tile-kind     :wireless-matrix)
+(def wireless-matrix-tile
+  (tdsl/register-tile!
+    (tdsl/create-tile-spec
+      "wireless-matrix"
+      {:registry-name "matrix"
+       :impl :scripted
+       :blocks ["wireless-matrix" "wireless-matrix-part"]
+       :tile-kind :wireless-matrix})))
 
 ;; Register Capability and Container
 (platform-cap/declare-capability! :wireless-matrix IWirelessMatrix
@@ -261,11 +264,7 @@
   (fn [event-data]
     (log/info "Wireless Matrix right-clicked!")
     (let [{:keys [player world pos sneaking]} event-data
-          ;; 使用通用 multiblock 逻辑从任意子方块解析到 master
-          block-spec (bdsl/get-block :wireless-matrix)
-          master-pos (bdsl/resolve-multi-block-master-pos world pos block-spec)
-          target-pos (or master-pos pos)
-          be         (world/world-get-tile-entity world target-pos)
+          be         (world/world-get-tile-entity world pos)
           state      (when be (safe-state be))]
       (if state
         (if-not sneaking
@@ -276,7 +275,7 @@
             (log/info "  Working:" (is-working? state))
             (try
               (if-let [open-matrix-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-matrix-gui)]
-                (let [result (open-matrix-gui player world target-pos)]
+                (let [result (open-matrix-gui player world pos)]
                   (log/info "Opened Matrix GUI")
                   result)
                 (do (log/error "Failed to open Matrix GUI: open-matrix-gui not resolved") nil))
@@ -291,8 +290,8 @@
     (let [{:keys [player world pos]} event-data
           player-name (str player)
           be (world/world-get-tile-entity world pos)]
-      ;; 实际的空间占用与重叠检查在平台层 (forge/fabric events) 已统一处理。
-      ;; 这里仅在放置成功后记录放置者名称。
+      ;; 结构放置/part 铺设逻辑已下沉到 mcmod.block.multiblock-core。
+      ;; ac 层仅记录业务字段。
       (when be
         (let [state (or (.getCustomState be) mschema/matrix-default-state)]
           (.setCustomState be (assoc state :placer-name player-name))))
@@ -312,21 +311,47 @@
 ;; Block Definition
 ;; ============================================================================
 
-(bdsl/defblock wireless-matrix
-  :registry-name   "matrix"
-  :material        :stone
-  :hardness        3.0
-  :resistance      6.0
-  :requires-tool   true
-  :harvest-tool    :pickaxe
-  :harvest-level   1
-  :light-level     1.0
-  :sounds          :stone
-  :multi-block     {:positions [[0 0 1] [1 0 1] [1 0 0]
-                                [0 1 0] [0 1 1] [1 1 1] [1 1 0]]
-                   :rotation-center [1.0 0 1.0]}
-  :on-right-click  (handle-matrix-right-click)
-  :on-place        (handle-matrix-place)
-  :on-break        (handle-matrix-break))
+(def wireless-matrix
+  (bdsl/register-block!
+    (bdsl/create-block-spec
+      "wireless-matrix"
+      {:registry-name "matrix"
+       :material :stone
+       :hardness 3.0
+       :resistance 6.0
+       :requires-tool true
+       :harvest-tool :pickaxe
+       :harvest-level 1
+       :light-level 1.0
+       :sounds :stone
+       :multi-block {:positions [[0 0 1] [1 0 1] [1 0 0]
+                                 [0 1 0] [0 1 1] [1 1 1] [1 1 0]]
+                     :rotation-center [1.0 0 1.0]}
+       :multiblock-mode :controller-parts
+       :controller-block-id "wireless-matrix"
+       :part-block-id "wireless-matrix-part"
+       :on-right-click (handle-matrix-right-click)
+       :on-place (handle-matrix-place)
+       :on-break (handle-matrix-break)})))
+
+(def wireless-matrix-part
+  (bdsl/register-block!
+    (bdsl/create-block-spec
+      "wireless-matrix-part"
+      {:registry-name "matrix_part"
+       :material :stone
+       :hardness 3.0
+       :resistance 6.0
+       :requires-tool true
+       :harvest-tool :pickaxe
+       :harvest-level 1
+       :light-level 1.0
+       :sounds :stone
+       :multiblock-mode :controller-parts
+       :controller-block-id "wireless-matrix"
+       :part-block-id "wireless-matrix-part"
+      :has-item-form false
+       :model-parent "minecraft:block/cube_all"
+       :textures {:all "my_mod:block/matrix"}})))
 
 

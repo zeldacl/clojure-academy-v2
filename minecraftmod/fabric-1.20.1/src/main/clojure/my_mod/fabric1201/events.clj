@@ -6,13 +6,14 @@
             [my-mod.fabric1201.gui.registry-impl :as gui-registry-impl]
             [my-mod.wireless.world-data :as wd])
   (:import [net.fabricmc.fabric.api.event.player UseBlockCallback]
+           [net.fabricmc.fabric.api.event.player PlayerBlockBreakEvents]
            [net.minecraft.world InteractionResult]
            [net.fabricmc.fabric.api.event.lifecycle.v1 ServerWorldEvents]))
 
 (defn handle-right-click
   "Handle right-click block event from event data map"
   [event-data]
-  (let [{:keys [x y z player world block]} event-data
+  (let [{:keys [x y z block]} event-data
         block-name (str block)
         ;; Identify block ID from Minecraft block name
         block-id (event-metadata/identify-block-from-full-name block-name)]
@@ -34,7 +35,7 @@
 
 (defn handle-use-block
   "Handle Fabric UseBlockCallback event"
-  [player world hand hit-result]
+  [player world _hand hit-result]
   (try
     (let [pos (.getBlockPos hit-result)
           block-state (.getBlockState world pos)]
@@ -54,8 +55,31 @@
       (.printStackTrace t)
       InteractionResult/PASS)))
 
-(defn register-events []
+(defn handle-block-break
+  "Handle Fabric block break callback. Return true to continue vanilla break."
+  [world player pos state _be]
+  (try
+    (let [block (.getBlock state)
+          block-id (event-metadata/identify-block-from-full-name (str block))]
+      (if-not block-id
+        true
+        (let [ret (core/on-block-break
+                    {:x (.getX pos)
+                     :y (.getY pos)
+                     :z (.getZ pos)
+                     :pos pos
+                     :player player
+                     :world world
+                     :block block
+                     :block-id block-id})]
+          (not (and (map? ret) (:cancel-break? ret))))))
+    (catch Throwable t
+      (log/error "Error handling fabric block break:" (.getMessage t))
+      true)))
+
+(defn register-events
   "Register Fabric event listeners"
+  []
   (log/info "Registering Fabric event listeners...")
   
   ;; Register block interaction event
@@ -63,11 +87,17 @@
     (reify UseBlockCallback
       (interact [_ player world hand hit-result]
         (handle-use-block player world hand hit-result))))
+
+  ;; Register block break event
+  (.register PlayerBlockBreakEvents/BEFORE
+    (reify net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents$Before
+      (beforeBlockBreak [_ world player pos state be]
+        (boolean (handle-block-break world player pos state be)))))
   
   ;; Register world load event
   (.register ServerWorldEvents/LOAD
     (reify net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents$Load
-      (onServerWorldLoad [_ server world]
+      (onServerWorldLoad [_ _server world]
         (try
           (log/info "Fabric world load event, initializing wireless system")
           (wd/on-world-load world nil)
@@ -77,7 +107,7 @@
   ;; Register world save event
   (.register ServerWorldEvents/SAVE
     (reify net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents$Save
-      (onServerWorldSave [_ server world]
+      (onServerWorldSave [_ _server world]
         (try
           (log/info "Fabric world save event, preparing wireless data")
           (wd/on-world-save world)
@@ -87,7 +117,7 @@
   ;; Register world unload event
   (.register ServerWorldEvents/UNLOAD
     (reify net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents$Unload
-      (onServerWorldUnload [_ server world]
+      (onServerWorldUnload [_ _server world]
         (try
           (log/info "Fabric world unload event, cleaning up wireless system")
           (wd/on-world-unload world)

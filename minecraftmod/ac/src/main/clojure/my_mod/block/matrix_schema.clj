@@ -83,6 +83,15 @@
    {:key :sub-id        :nbt-key "SubId"       :type :int      :default 0
     :persist? true  :gui-sync? false}
 
+  {:key :controller-pos-x :nbt-key "ControllerPosX" :type :int :default 0
+   :persist? true :gui-sync? false}
+
+  {:key :controller-pos-y :nbt-key "ControllerPosY" :type :int :default 0
+   :persist? true :gui-sync? false}
+
+  {:key :controller-pos-z :nbt-key "ControllerPosZ" :type :int :default 0
+   :persist? true :gui-sync? false}
+
    ;; ── ephemeral tick counter (not persisted, not synced) ───────────────────
    {:key :update-ticker :nbt-key nil           :type :int      :default 0
     :persist? false :gui-sync? false}
