@@ -114,11 +114,23 @@
   [model-id]
   (str/replace model-id #".*:block/" ""))
 
+(def ^:private flat-item-icon-blocks
+  "Blocks that should use a flat item icon directly from block textures."
+  #{"matrix" "solar_gen"})
+
+(defn- write-flat-item-model!
+  [^BlockStateProvider provider registry-name texture-rl]
+  (let [item-models (.itemModels provider)
+        builder (.withExistingParent item-models registry-name "item/generated")]
+    (.texture builder "layer0" (parse-rl texture-rl))
+    builder))
+
 (defn- ensure-block-model!
   "Generate block model using Forge API.
    Queries business layer for texture configuration, then uses appropriate Forge API:
    - .cube() for models with custom side/vert textures (e.g., node blocks)
-   - .cubeAll() for models with single texture"
+   - parent-driven model for explicit :model-parent definitions
+   - .cubeAll() fallback for simple textured blocks"
   [^BlockStateProvider provider model-id]
   (let [model-name (model-id->model-name model-id)]
     ;; Query business layer for texture configuration
@@ -135,12 +147,23 @@
                           side-texture   ; east
                           side-texture)] ; west
         builder)
-      ;; Default model: use .cubeAll() with single texture
+      ;; Default model: honor explicit DSL parent/textures first.
       (let [registry-name (infer-registry-name-from-model model-name)
             block-spec (registry-name->block-spec registry-name)
-            texture-all (parse-rl (texture-from-spec block-spec model-name))
+        parent (parent-from-spec block-spec)
+        explicit-texture (some-> (or (get-in block-spec [:textures :all])
+                     (get-in block-spec [:properties :textures :all]))
+                 normalize-block-texture)]
+        (if (or (not= parent "minecraft:block/cube_all") explicit-texture)
+          (let [builder (.withExistingParent (.models provider)
+                     model-name
+                     (parse-rl parent "minecraft"))]
+        (when explicit-texture
+          (.texture builder "all" (parse-rl explicit-texture)))
+        builder)
+          (let [texture-all (parse-rl (texture-from-spec block-spec model-name))
             builder (.cubeAll (.models provider) model-name texture-all)]
-        builder))))
+        builder))))))
 
 (defn- condition->typed
   [property-key value]
@@ -172,10 +195,14 @@
       (throw (ex-info "Simple block not resolvable for datagen"
                       {:block-key block-key :registry-name registry-name})))
     (let [model-id (first (:models (first (:parts definition))))
-          model-file (ensure-block-model! provider model-id)]
-      (if (registry-metadata/should-create-block-item? block-id)
-        (.simpleBlockWithItem provider block model-file)
-        (.simpleBlock provider block model-file)))))
+          model-file (ensure-block-model! provider model-id)
+          block-spec (registry-name->block-spec registry-name)]
+      (.simpleBlock provider block model-file)
+      (when (registry-metadata/should-create-block-item? block-id)
+        (if (contains? flat-item-icon-blocks registry-name)
+          (let [texture-rl (texture-from-spec block-spec registry-name)]
+            (write-flat-item-model! provider registry-name texture-rl))
+          (.simpleBlockItem provider block model-file))))))
 
 (defn- build-multipart-block!
   [^BlockStateProvider provider block-key definition]

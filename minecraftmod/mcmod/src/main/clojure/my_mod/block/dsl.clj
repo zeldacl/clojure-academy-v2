@@ -456,36 +456,49 @@
        (register-block!
          (create-block-spec ~block-id ~options-map)))))
 
-;; Define a controller+part multi-block while preserving the structure DSL.
-;; 
+;; Define a controller+part multi-block with shared options.
+;;
 ;; Example:
-;; (defcontroller-multiblock wireless-matrix
+;; (defmultiblock wireless-matrix
 ;;   :multi-block {:positions [[0 0 1] [1 0 1] ...]}
-;;   :controller {:registry-name "wireless_matrix" :on-place ...}
-;;   :part {:registry-name "wireless_matrix_part"})
-(defmacro defcontroller-multiblock
+;;   :common {:material :stone :hardness 3.0}
+;;   :controller {:registry-name "matrix" :on-place ...}
+;;   :part {:registry-name "matrix_part" :has-item-form false})
+(defmacro defmultiblock
   [base-name & options]
-  (let [options-map (apply hash-map options)
+  (let [base-sym (if (and (seq? base-name)
+                          (= 'quote (first base-name)))
+                   (second base-name)
+                   base-name)
+        options-map (apply hash-map options)
         multi-block (:multi-block options-map)
-      raw-controller-opts (or (:controller options-map) {})
-      raw-part-opts (or (:part options-map) {})
-        controller-name (or (:controller-name options-map) base-name)
+        common-opts (or (:common options-map) {})
+        raw-controller-opts (or (:controller options-map) {})
+        raw-part-opts (or (:part options-map) {})
+        controller-name (or (:controller-name options-map) base-sym)
         part-name (or (:part-name options-map)
-                      (symbol (str (name base-name) "-part")))
+                      (symbol (str (name base-sym) "-part")))
         controller-id (name controller-name)
         part-id (name part-name)
-      merged-controller-opts (merge raw-controller-opts
-                {:multi-block multi-block
-                 :multiblock-mode :controller-parts
-                 :controller-block-id controller-id
-                 :part-block-id part-id})
-      merged-part-opts (merge raw-part-opts
-              {:multiblock-mode :controller-parts
-               :controller-block-id controller-id
-               :part-block-id part-id})]
+        merged-controller-opts (merge common-opts
+                                      raw-controller-opts
+                                      {:multi-block multi-block
+                                       :multiblock-mode :controller-parts
+                                       :controller-block-id controller-id
+                                       :part-block-id part-id})
+        merged-part-opts (merge common-opts
+              {:has-item-form false}
+              raw-part-opts
+                                {:multiblock-mode :controller-parts
+                                 :controller-block-id controller-id
+                                 :part-block-id part-id})]
     `(do
-     (defblock ~controller-name ~@(vec (mapcat identity merged-controller-opts)))
-     (defblock ~part-name ~@(vec (mapcat identity merged-part-opts))))))
+       (defblock ~controller-name ~@(vec (mapcat identity merged-controller-opts)))
+       (defblock ~part-name ~@(vec (mapcat identity merged-part-opts))))))
+
+(defmacro defcontroller-multiblock
+  [base-name & options]
+  `(defmultiblock ~base-name ~@options))
 
 ;; Helper: create ore block preset
 (defn ore-preset

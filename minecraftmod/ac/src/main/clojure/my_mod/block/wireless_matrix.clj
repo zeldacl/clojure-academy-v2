@@ -311,47 +311,23 @@
 ;; Block Definition
 ;; ============================================================================
 
-(def wireless-matrix
-  (bdsl/register-block!
-    (bdsl/create-block-spec
-      "wireless-matrix"
-      {:registry-name "matrix"
-       :material :stone
-       :hardness 3.0
-       :resistance 6.0
-       :requires-tool true
-       :harvest-tool :pickaxe
-       :harvest-level 1
-       :light-level 1.0
-       :sounds :stone
-       :multi-block {:positions [[0 0 1] [1 0 1] [1 0 0]
-                                 [0 1 0] [0 1 1] [1 1 1] [1 1 0]]
-                     :rotation-center [1.0 0 1.0]}
-       :multiblock-mode :controller-parts
-       :controller-block-id "wireless-matrix"
-       :part-block-id "wireless-matrix-part"
-       :on-right-click (handle-matrix-right-click)
-       :on-place (handle-matrix-place)
-       :on-break (handle-matrix-break)})))
-
-(def wireless-matrix-part
-  (bdsl/register-block!
-    (bdsl/create-block-spec
-      "wireless-matrix-part"
-      {:registry-name "matrix_part"
-       :material :stone
-       :hardness 3.0
-       :resistance 6.0
-       :requires-tool true
-       :harvest-tool :pickaxe
-       :harvest-level 1
-       :light-level 1.0
-       :sounds :stone
-       :multiblock-mode :controller-parts
-       :controller-block-id "wireless-matrix"
-       :part-block-id "wireless-matrix-part"
-      :has-item-form false
-       :model-parent "minecraft:block/cube_all"
-       :textures {:all "my_mod:block/matrix"}})))
+(bdsl/defmultiblock 'wireless-matrix
+  :multi-block {:positions [[0 0 1] [1 0 1] [1 0 0]
+                            [0 1 0] [0 1 1] [1 1 1] [1 1 0]]
+                :rotation-center [1.0 0 1.0]}
+  :common {:material :stone
+           :hardness 3.0
+           :resistance 6.0
+           :requires-tool true
+           :harvest-tool :pickaxe
+           :harvest-level 1
+           :light-level 1.0
+           :sounds :stone}
+  :controller {:registry-name "matrix"
+               :on-right-click (handle-matrix-right-click)
+               :on-place (handle-matrix-place)
+               :on-break (handle-matrix-break)}
+  :part {:registry-name "matrix_part"
+         :model-parent "minecraft:block/block"})
 
 
