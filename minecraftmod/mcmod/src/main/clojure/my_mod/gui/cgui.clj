@@ -138,6 +138,26 @@
   (reset! (:scale widget) scale)
   widget)
 
+(defn set-w-align!
+  "Set horizontal alignment metadata on `widget`.
+  Accepts keywords or strings: :left/:center/:right or \"left\"/\"center\"/\"right\".
+  Stores value under `:w-align` in widget metadata and returns the widget." 
+  [widget align]
+  (when widget
+    (let [a (if (keyword? align) align (keyword (str/lower-case (str align))))]
+      (swap! (:metadata widget) assoc-in [:transform-meta :align-width] a))
+    widget))
+
+(defn set-h-align!
+  "Set vertical alignment metadata on `widget`.
+  Accepts keywords or strings: :top/:middle/:bottom or \"top\"/\"middle\"/\"bottom\".
+  Stores value under `:h-align` in widget metadata and returns the widget." 
+  [widget align]
+  (when widget
+    (let [a (if (keyword? align) align (keyword (str/lower-case (str align))))]
+      (swap! (:metadata widget) assoc-in [:transform-meta :align-height] a))
+    widget))
+
 (defn set-z-level!
   [widget z]
   (reset! (:z-level widget) z)

@@ -310,49 +310,35 @@
           inv-window (:window inv-page)
           inv-w (cgui/get-width inv-window)
           inv-h (cgui/get-height inv-window)
-          ;; Root wrapper at (0,0) with the same size as the XML page.
-          main-widget (cgui/create-container :pos [0 0] :size [inv-w inv-h])
           info-area (tech-ui/create-info-area)
           anim-state (create-animation-state)
           poller (create-status-poller tile anim-state)
           anim-widget (cgui/create-widget :pos [42 35.5] :size [93 37.5])
           wireless-panel (create-wireless-panel container)
-          show-info! (fn []
-                       (cgui/set-visible! info-area true)
-                       (cgui/set-visible! wireless-panel false))
-          show-wireless! (fn []
-                           (cgui/set-visible! info-area false)
-                           (cgui/set-visible! wireless-panel true))]
-
-      ;; Add inventory page window
-      (cgui/add-widget! main-widget (:window inv-page))
-
-      ;; Animation area
+          ;; Compose tech UI from pages (inventory, info, wireless)
+          tech-ui (tech-ui/create-tech-ui inv-page {:id "wireless" :window wireless-panel})
+          main-widget (:window tech-ui)
+          ;show-info! (fn [] ((:show-page-fn tech-ui) "info"))
+          ;show-wireless! (fn [] ((:show-page-fn tech-ui) "wireless"))
+          ]
+      
+      ;; Animation area: add anim widget into inventory window so it draws above
       (events/on-frame anim-widget
-        (fn [_]
-          (update-animation! anim-state)
-          ((:update-fn poller))
-          (render-animation-frame! anim-state anim-widget)))
+                       (fn [_]
+                         (update-animation! anim-state)
+                         ((:update-fn poller))
+                         (render-animation-frame! anim-state anim-widget)))
       (cgui/add-widget! (:window inv-page) anim-widget)
 
-      ;; Position and build info area
-      (cgui/set-position! info-area (+ (cgui/get-width main-widget) 7) 5)
+      ;; Position and build info area (create-tech-ui has already attached it,
+      ;; but we need to position and populate it)
+      (cgui/set-position! info-area (+ (cgui/get-width (:window inv-page)) 7) 5)
       (build-info-area! info-area container player)
+
       (cgui/add-widget! main-widget info-area)
-
-      ;; Wireless panel page (hidden by default)
-      (cgui/set-visible! wireless-panel false)
-      (cgui/add-widget! main-widget wireless-panel)
-
-      ;; Page switching buttons
-      (let [btn-info (comp/button :text "Info" :x 8 :y 172 :width 40 :height 12
-                                  :on-click show-info!)
-            btn-wireless (comp/button :text "Wireless" :x 52 :y 172 :width 60 :height 12
-                                      :on-click show-wireless!)]
-        (cgui/add-widget! main-widget btn-info)
-        (cgui/add-widget! main-widget btn-wireless))
-
+      
       (log/info "Created Wireless Node GUI (TechUI)")
+      ;(log/info "main-widget:" main-widget)
       main-widget)
     (catch Exception e
       (log/error "Error creating Node GUI:" (.getMessage e))

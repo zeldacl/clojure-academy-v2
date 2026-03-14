@@ -412,13 +412,21 @@
                   x1 (+ x0 w)
                   y1 (+ y0 h)
                   inside (and (>= mx-rel x0) (< mx-rel x1) (>= my-rel y0) (< my-rel y1))]
-              (if inside
-                (let [children (cgui/get-widgets node)
-                      child-stack (reduce (fn [acc child]
-                                           (conj acc [child x0 y0]))
-                                         rest-stack (reverse children))]
-                  (recur child-stack node))
-                (recur rest-stack best)))))))))
+              ;; (if inside
+              ;;   (let [children (cgui/get-widgets node)
+              ;;         child-stack (reduce (fn [acc child]
+              ;;                              (conj acc [child x0 y0]))
+              ;;                            rest-stack (reverse children))]
+              ;;     (recur child-stack node))
+              ;;   (recur rest-stack best)) 
+              (let [children (cgui/get-widgets node)
+                    child-stack (reduce (fn [acc child]
+                                          (conj acc [child x0 y0]))
+                                        rest-stack (reverse children))]
+                (if inside
+                  (recur child-stack node)   ; 保持 best 为 node，当 inside 时优先返回 deeper hit
+                  (recur child-stack best))) ; 即使 parent 不包含，也继续检查 children
+              )))))))
 
 (defn frame-tick!
   "Emit :frame events to all widgets in the tree (depth-first). event map can include
@@ -452,6 +460,7 @@
     ;; set focus on left click
     (when (== 0 button)
       (cgui/gain-focus! root hit))
+    (log/debug "CGUI mouse-click! mx:" mx "my:" my "left:" left "top:" top "button:" button)
     (cgui/emit-widget-event!
      hit
      (if (== 0 button) :left-click :right-click)

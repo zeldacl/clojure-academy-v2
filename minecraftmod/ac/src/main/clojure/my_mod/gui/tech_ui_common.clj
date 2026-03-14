@@ -240,3 +240,114 @@
     ;; TODO: Add BlendQuad component
     ;; (comp/add-component! info-area (comp/blend-quad :margin 4))
     info-area))
+
+;; ============================================================================
+;; Page helpers and main Tech UI composer
+;; ============================================================================
+
+(defn apply-breathe-to-ui!
+  "Apply breathe effect to all child widgets whose name starts with `ui_`."
+  [page-widget]
+  (doseq [w (cgui/get-draw-list page-widget)]
+    (when (clojure.string/starts-with? (cgui/get-name w) "ui_")
+      (comp/add-component! w (comp/breathe-effect)))))
+
+(defn page-button
+  "Create a page-select button using icon texture and hover animation.
+
+  Args:
+  - id: page id string
+  - idx: index (used for vertical position)
+  - current-atom: atom holding current page id
+  - pages: sequence of page maps
+  - target-window: the window widget for this page
+  - on-click: optional fn to call after switching
+
+  Returns: widget"
+  [id idx current-atom pages target-window & [on-click]]
+  (let [y (* idx 22)
+        click-fn (fn []
+                   (log/info "Switching to page:" id)
+                   (doseq [q pages]
+                     (when-let [w (:window q)]
+                       (cgui/set-visible! w false)))
+                   (when target-window
+                     (cgui/set-visible! target-window true))
+                   (reset! current-atom id)
+                   (when on-click (on-click)))
+        icon-path (modid/asset-path "textures" (str "guis/icons/icon_" id ".png"))
+        page-xml (cgui-doc/read-xml (modid/namespaced-path "guis/rework/pageselect.xml"))
+        btn (cgui-doc/get-widget page-xml "main")
+        ;btn (comp/button :text "" :x -20 :y y :width 20 :height 20 :on-click click-fn)
+        ]
+    ;; prepare click handler: hide all pages, show target, update current
+    ;; add draw texture component for icon 
+    ;(comp/add-component! btn (comp/draw-texture icon-path 0xFFFFFFFF))
+    (comp/set-texture! btn icon-path)
+    ;; scale and position 
+    (cgui/set-w-align! btn :left)
+    (cgui/set-h-align! btn :top)
+    (cgui/set-scale! btn 0.7)
+    (cgui/set-pos! btn -20 y)
+
+    ;; frame handler: adjust alpha and tint based on hover/current
+    (events/on-frame btn
+                     (fn [evt]
+                       (let [hovering (boolean (:hovering evt))
+                             cur @current-atom
+                             a1 (if (or hovering (= cur id)) 1.0 0.8)
+                             a2 (if (= cur id) 1.0 0.8)
+                             alpha-byte (int (* a1 255))
+                             rgb-byte (int (* a2 255))
+                             color (bit-or (bit-shift-left (bit-and alpha-byte 0xFF) 24)
+                                           (bit-shift-left (bit-and rgb-byte 0xFF) 16)
+                                           (bit-shift-left (bit-and rgb-byte 0xFF) 8)
+                                           (bit-and rgb-byte 0xFF))]
+                         (when-let [dt (comp/get-drawtexture-component btn)]
+                           (swap! (:state dt) assoc :color color)))))
+    (events/on-left-click btn (events/make-click-handler click-fn))
+    (log/debug "Created page button for" id "at y=" (keys @(:metadata btn)) "with widget:" (get @(:metadata btn) :transform-meta :align-height))
+    btn))
+
+(defn create-tech-ui
+  "Create a tech UI composed from given pages.
+
+  Each page should be a map {:id \"inv\" :window widget}.
+  Returns a map {:id \"tech\" :window main-widget :pages {id page-map} :show-page-fn fn}
+  "
+  [& pages]
+  (let [pages (if (and (= 1 (count pages)) (sequential? (first pages))) (first pages) pages)
+        main (cgui/create-widget :name "tech_ui_main" :pos [0 0] :size [gui-width gui-height])
+        current (atom (when (seq pages) (:id (first pages))))
+        pages-map (into {} (map (fn [p] [(:id p) p]) pages))]
+
+    ;; Add pages and page buttons
+    (doseq [[p idx] (map vector pages (range))]
+      (let [pw (:window p)]
+        (cgui/set-pos! pw 0 0)
+        (cgui/set-visible! pw false)
+        (cgui/add-widget! main pw)
+
+        (let [btn (page-button (:id p) idx current pages pw)]
+          (cgui/add-widget! main btn))))
+
+    ;; show first page by default
+    (when-let [first-page (first pages)]
+      (cgui/set-visible! (:window first-page) true))
+
+    ;; apply breathe effect to inventory-like pages
+    (doseq [p pages]
+      (apply-breathe-to-ui! (:window p)))
+
+    {:id "tech"
+     :window main
+     :pages pages-map
+     :current current
+     ;; :show-page-fn (fn [id]
+     ;;                 (when-let [p (get pages-map id)]
+     ;;                   (doseq [[_ pm] pages-map]
+     ;;                     (cgui/set-visible! (:window pm) false))
+     ;;                   (cgui/set-visible! (:window p) true)
+     ;;                   (reset! current id)
+     ;;                   p))
+     }))
