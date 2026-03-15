@@ -113,8 +113,9 @@
     (when tab-slot
       (.addDataSlot menu tab-slot))
     (when (and gui-id player-inventory)
-      (slots/add-gui-slots menu tile-inventory gui-id 8 84 (when tabbed? active?-fn))
-      (slots/add-player-inventory-slots menu player-inventory 8 107 (when tabbed? active?-fn)))))
+      ;; Offsets aligned with AcademyCraft TechUIContainer: tile at (0,0) => schema coords are absolute; player inv at (6, 105) => hotbar at 163
+      (slots/add-gui-slots menu tile-inventory gui-id 0 0 (when tabbed? active?-fn))
+      (slots/add-player-inventory-slots menu player-inventory 6 105 (when tabbed? active?-fn)))))
 
 (defn create-menu-bridge
   "Create an AbstractContainerMenu proxy wrapping a Clojure container.

@@ -18,16 +18,16 @@
 (def wireless-node
   (slot-schema/register-slot-schema!
     {:schema-id wireless-node-id
-     :slots [{:id :input :type :energy :x 0 :y 0}
-             {:id :output :type :output :x 26 :y 0}]}))
+     :slots [{:id :input :type :energy :x 42 :y 10}
+             {:id :output :type :output :x 42 :y 80}]}))
 
 (def wireless-matrix
   (slot-schema/register-slot-schema!
     {:schema-id wireless-matrix-id
-     :slots [{:id :plate-a :type :plate :x 0 :y 0}
-             {:id :plate-b :type :plate :x 34 :y 0}
-             {:id :plate-c :type :plate :x 68 :y 0}
-             {:id :core :type :core :x 47 :y 24}]}))
+     :slots [{:id :plate-a :type :plate :x 78 :y 11}
+             {:id :plate-b :type :plate :x 53 :y 60}
+             {:id :plate-c :type :plate :x 104 :y 60}
+             {:id :core :type :core :x 78 :y 36}]}))
 
 (def solar-gen
   (slot-schema/register-slot-schema!

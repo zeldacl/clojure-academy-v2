@@ -62,7 +62,9 @@
       (reset! last-update now))))
 
 (defn render-animation-frame!
-  "Render current animation frame (10-frame vertical sprite)"
+  "Render current animation frame (10-frame vertical sprite).
+   Texture has 10 frames stacked vertically; each frame is 1/10 of texture height.
+   UV: (0, frame/10) to (1, frame/10 + 1/10)."
   [anim-state widget]
   (let [{:keys [current-state current-frame]} anim-state
         config (get-animation-config @current-state)
@@ -71,7 +73,8 @@
         u0 0.0
         v0 (/ (double absolute-frame) total-frames)
         u1 1.0
-        v1 (/ 1.0 total-frames)]
+        ;; v1 must be v0 + 1/10 so stored uv height is 1/10 (one frame), not 0.1 - v0
+        v1 (+ v0 (/ 1.0 total-frames))]
     (comp/render-texture-region
       widget
       (modid/asset-path "textures" "guis/effect/effect_node.png")
@@ -316,7 +319,7 @@
           info-area (tech-ui/create-info-area)
           anim-state (create-animation-state)
           poller (create-status-poller tile anim-state)
-          anim-widget (cgui/create-widget :pos [42 35.5] :size [93 37.5])
+          anim-widget (cgui/create-widget :pos [42 35.5] :size [186, 75] :scale 0.5)
           wireless-panel (create-wireless-panel container)
           pages [inv-page {:id "wireless" :window wireless-panel}]
           container-id (when-let [m (:menu opts)] (gui/get-menu-container-id m))
