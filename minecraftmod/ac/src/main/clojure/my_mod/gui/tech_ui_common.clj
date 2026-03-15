@@ -21,6 +21,16 @@
 (def gui-width 172)
 (def gui-height 187)
 
+;; TechUI container screen size delta (AcademyCraft ContainerUI: xSize += 31, ySize += 20).
+;; Platform layer (e.g. screen_impl) reads :size-dx/:size-dy from the map returned by create-screen.
+(def tech-ui-size-dx 31)
+(def tech-ui-size-dy 20)
+
+(defn assoc-tech-ui-screen-size
+  "Merge TechUI size deltas into a cgui-screen-container map. Call when create-screen returns a TechUI layout so the platform layer gets :size-dx/:size-dy without repeating constants."
+  [m]
+  (assoc m :size-dx tech-ui-size-dx :size-dy tech-ui-size-dy))
+
 ;; ============================================================================
 ;; InventoryPage - 共享库存页面
 ;; ============================================================================

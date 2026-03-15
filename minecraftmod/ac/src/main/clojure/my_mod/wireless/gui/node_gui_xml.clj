@@ -377,7 +377,7 @@
         root (if (map? gui) (:root gui) gui)
         base (cgui/create-cgui-screen-container root minecraft-container)]
     (if (map? gui)
-      (assoc base :current-tab-atom (:current gui))
+      (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current gui)))
       base)))
 
 ;; ============================================================================

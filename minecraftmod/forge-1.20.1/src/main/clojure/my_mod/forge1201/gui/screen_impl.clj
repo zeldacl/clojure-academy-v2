@@ -42,10 +42,42 @@
   [menu player-inventory title cgui-screen]
   (when-not (cgui-screen-container? cgui-screen)
     (throw (ex-info "Expected :cgui-screen-container map" {:got (type cgui-screen)})))
+  ;; Size delta comes from create-screen (e.g. tech_ui_common tech-ui-size-dx/dy); no business constants here.
   (let [root (:cgui cgui-screen)
         left (atom 0)
-        top (atom 0)]
+        top (atom 0)
+        size-dx (int (or (:size-dx cgui-screen) 0))
+        size-dy (int (or (:size-dy cgui-screen) 0))]
     (proxy [AbstractContainerScreen] [menu player-inventory title]
+      ;; (getXSize []
+      ;;   (+ size-dx (proxy-super getXSize)))
+      ;; (getYSize []
+      ;;   (+ size-dy (proxy-super getYSize)))
+      ;; (getGuiLeft []
+      ;;   (int (/ (- (.width this) (.getXSize this)) 2)))
+      ;; (getGuiTop []
+      ;;   (int (/ (- (.height this) (.getYSize this)) 2)))
+      
+      ;; Slot rendering reads leftPos/topPos directly; set them with type-hinted set! so slots align with the enlarged GUI.
+      (init []
+        (log/info "Initializing CGUI container screen with size delta" size-dx "x" size-dy)
+        (log/info "Original size:" (.-imageWidth ^AbstractContainerScreen this) "x" (.-imageHeight ^AbstractContainerScreen this))
+        (when (or (not= size-dx 0) (not= size-dy 0))
+          (let [new-x (int (+ size-dx (.-imageWidth ^AbstractContainerScreen this)))
+                new-y (int (+ size-dy (.-imageHeight ^AbstractContainerScreen this)))]
+            (set! (.-imageWidth ^AbstractContainerScreen this) new-x)
+            (set! (.-imageHeight ^AbstractContainerScreen this) new-y)))
+        (log/info "Adjusted size:" (.-imageWidth ^AbstractContainerScreen this) "x" (.-imageHeight ^AbstractContainerScreen this))
+        ;(log/info "Initial left/top:" (.-leftPos ^AbstractContainerScreen this) "/" (.-topPos ^AbstractContainerScreen this))
+        ;; (when (or (not= size-dx 0) (not= size-dy 0))
+        ;;   (let [new-left (int (/ (- (.width this) (.getXSize this)) 2))
+        ;;         new-top (int (/ (- (.height this) (.getYSize this)) 2))]
+        ;;     (set! (.-leftPos ^AbstractContainerScreen this) new-left)
+        ;;     (set! (.-topPos ^AbstractContainerScreen this) new-top)))
+        (proxy-super init) 
+            ;(log/info "Post-init left/top:" (.-leftPos ^AbstractContainerScreen this) "/" (.-topPos ^AbstractContainerScreen this))
+        )
+      
       (render [^GuiGraphics gg mouse-x mouse-y partial-ticks]
         (when root
           (try
@@ -61,44 +93,44 @@
             (.renderBg this gg (float partial-ticks) (int mouse-x) (int mouse-y))
             (.renderTooltip this gg (int mouse-x) (int mouse-y)))))
       (renderLabels [^GuiGraphics gg mouse-x mouse-y] (comment "skip labels"))
-
+      
       ;; Tabbed GUI: draw slot highlight only when on inv tab (use client tab atom so no delay)
       (renderSlotHighlight [^GuiGraphics gg x y]
         (when (slots-visible? cgui-screen)
           (proxy-super renderSlotHighlight gg x y)))
-
+      
       ;; Tabbed GUI: draw slot (and item) only when on inv tab; on other tabs hide slots and items
       (renderSlot [^GuiGraphics gg ^Slot slot]
         (when (slots-visible? cgui-screen)
           (proxy-super renderSlot gg slot)))
-
+      
       ;; Return null when on non-inv tab so hoveredSlot stays null and no slot is "under" mouse
       (findSlot [x y]
         (if (slots-enabled-for-click? cgui-screen)
           (proxy-super findSlot x y)
           nil))
-
+      
       ;; Block the actual slot-click→packet path when on non-inv tab (even if something calls this directly)
       (slotClicked [^Slot slot slot-id button ^ClickType action-type]
         (when (slots-enabled-for-click? cgui-screen)
           (proxy-super slotClicked slot slot-id button action-type)))
-
+      
       (renderBg [^GuiGraphics gg _partial-ticks _mouse-x _mouse-y]
-                (reset! left (.getGuiLeft this))
-                (reset! top (.getGuiTop this))
-                (let [left-val @left
-                      top-val @top
-                      right (+ left-val (.getXSize this))
-                      bottom (+ top-val (.getYSize this))]
-          ;(.fill gg left-val top-val right bottom (unchecked-int 0xC0101010))
-          ;(.fill gg left-val top-val right bottom (unchecked-int 0xD0101010))
-                  )
-                (when root
-                  (try
-                    (cgui-rt/render-tree! gg root @left @top)
-                    (catch Exception e
-                      (log/debug "CGUI renderBg error:" (.getMessage e))))))
-
+        (reset! left (.getGuiLeft this))
+        (reset! top (.getGuiTop this))
+        (let [left-val @left
+              top-val @top
+              right (+ left-val (.getXSize this))
+              bottom (+ top-val (.getYSize this))]
+                  ;(.fill gg left-val top-val right bottom (unchecked-int 0xC0101010))
+                  ;(.fill gg left-val top-val right bottom (unchecked-int 0xD0101010))
+          )
+        (when root
+          (try
+            (cgui-rt/render-tree! gg root @left @top)
+            (catch Exception e
+              (log/debug "CGUI renderBg error:" (.getMessage e))))))
+      
       (mouseClicked [mouse-x mouse-y button]
         (when root
           (try
@@ -108,12 +140,12 @@
         (if (slots-enabled-for-click? cgui-screen)
           (proxy-super mouseClicked mouse-x mouse-y button)
           true))
-
+      
       (mouseReleased [mouse-x mouse-y button]
         (if (slots-enabled-for-click? cgui-screen)
           (proxy-super mouseReleased mouse-x mouse-y button)
           true))
-
+      
       (mouseDragged [mouse-x mouse-y button drag-x drag-y]
         (when root
           (try
@@ -122,21 +154,21 @@
         (if (slots-enabled-for-click? cgui-screen)
           (proxy-super mouseDragged mouse-x mouse-y button drag-x drag-y)
           true))
-
+      
       (keyPressed [key-code scan-code modifiers]
         (when root
           (try
             (cgui-rt/key-input! root key-code scan-code (char 0))
             (catch Exception _ nil)))
         (proxy-super keyPressed key-code scan-code modifiers))
-
+      
       (charTyped [code-point modifiers]
         (when root
           (try
             (cgui-rt/key-input! root 0 0 (char code-point))
             (catch Exception _ nil)))
         (proxy-super charTyped code-point modifiers))
-
+      
       (onClose []
         (when root
           (try (cgui-rt/dispose! root) (catch Exception _ nil)))

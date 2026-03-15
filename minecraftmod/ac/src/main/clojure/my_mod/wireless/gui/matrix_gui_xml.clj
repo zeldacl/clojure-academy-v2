@@ -297,8 +297,9 @@
   
   Returns: CGuiScreenContainer"
   [container minecraft-container player]
-  (let [root (create-matrix-gui container player)]
-    (cgui/create-cgui-screen-container root minecraft-container)))
+  (let [root (create-matrix-gui container player)
+        base (cgui/create-cgui-screen-container root minecraft-container)]
+    (tech-ui/assoc-tech-ui-screen-size base)))
 
 ;; ============================================================================
 ;; Public API
