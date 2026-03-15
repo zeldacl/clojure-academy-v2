@@ -40,21 +40,23 @@
             (catch Exception e
               (log/debug "CGUI frame-tick error:" (.getMessage e)))))
         (proxy-super render gg mouse-x mouse-y partial-ticks))
+      (renderLabels [^GuiGraphics gg mouse-x mouse-y] (comment "skip labels"))
 
       (renderBg [^GuiGraphics gg _partial-ticks _mouse-x _mouse-y]
-        (reset! left (.getGuiLeft this))
-        (reset! top (.getGuiTop this))
-        (let [left-val @left
-              top-val @top
-              right (+ left-val (.getXSize this))
-              bottom (+ top-val (.getYSize this))]
-          (.fill gg left-val top-val right bottom (unchecked-int 0xC0101010))
-          (.fill gg left-val top-val right bottom (unchecked-int 0xD0101010)))
-        (when root
-          (try
-            (cgui-rt/render-tree! gg root @left @top)
-            (catch Exception e
-              (log/debug "CGUI renderBg error:" (.getMessage e))))))
+                (reset! left (.getGuiLeft this))
+                (reset! top (.getGuiTop this))
+                (let [left-val @left
+                      top-val @top
+                      right (+ left-val (.getXSize this))
+                      bottom (+ top-val (.getYSize this))]
+          ;(.fill gg left-val top-val right bottom (unchecked-int 0xC0101010))
+          ;(.fill gg left-val top-val right bottom (unchecked-int 0xD0101010))
+                  )
+                (when root
+                  (try
+                    (cgui-rt/render-tree! gg root @left @top)
+                    (catch Exception e
+                      (log/debug "CGUI renderBg error:" (.getMessage e))))))
 
       (mouseClicked [mouse-x mouse-y button]
         (when root

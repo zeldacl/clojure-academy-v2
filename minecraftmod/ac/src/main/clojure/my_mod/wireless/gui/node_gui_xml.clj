@@ -317,6 +317,7 @@
           wireless-panel (create-wireless-panel container)
           ;; Compose tech UI from pages (inventory, info, wireless)
           tech-ui (tech-ui/create-tech-ui inv-page {:id "wireless" :window wireless-panel})
+          ;tech-ui (tech-ui/create-tech-ui)
           main-widget (:window tech-ui)
           ;show-info! (fn [] ((:show-page-fn tech-ui) "info"))
           ;show-wireless! (fn [] ((:show-page-fn tech-ui) "wireless"))
@@ -335,7 +336,7 @@
       (cgui/set-position! info-area (+ (cgui/get-width (:window inv-page)) 7) 5)
       (build-info-area! info-area container player)
 
-      (cgui/add-widget! main-widget info-area)
+      ;(cgui/add-widget! main-widget info-area)
       
       (log/info "Created Wireless Node GUI (TechUI)")
       ;(log/info "main-widget:" main-widget)

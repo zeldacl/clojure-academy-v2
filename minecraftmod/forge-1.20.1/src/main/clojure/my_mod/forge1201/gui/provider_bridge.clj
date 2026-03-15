@@ -34,7 +34,9 @@
   [gui-id tile-entity]
   (reify MenuProvider
     (getDisplayName [_]
-      (Component/literal (gui/get-display-name gui-id)))
+      ;(Component/literal (gui/get-display-name gui-id))
+      (Component/empty)
+      )
 
     (createMenu [_ window-id player-inventory player]
       (let [handler (gui/get-gui-handler)

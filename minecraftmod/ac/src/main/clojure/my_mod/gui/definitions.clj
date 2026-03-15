@@ -48,7 +48,7 @@
 
 (gui/defgui wireless-node
   :gui-id 0
-  :display-name "Wireless Node"
+  :display-name "Wireless Node1"
   :gui-type :node
   :registry-name "wireless_node_gui"
   :screen-factory-fn-kw :create-node-screen
