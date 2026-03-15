@@ -36,7 +36,9 @@
    {:key :capacity      :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}
    {:key :max-capacity  :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}
    {:key :charge-ticker :init (fn [_] 0)                                   :sync? false :coerce int     :close-reset 0}
-   {:key :sync-ticker   :init (fn [_] 0)                                   :sync? false :coerce int     :close-reset 0}])
+   {:key :sync-ticker   :init (fn [_] 0)                                   :sync? false :coerce int     :close-reset 0}
+   ;; Tab index for multi-page TechUI: 0 = inv-window (slots enabled), >=1 = other panels (slots disabled)
+   {:key :tab-index     :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}])
 
 (defn sync-field-mappings
   "Return the field-mappings vector for apply-sync-payload-template!.

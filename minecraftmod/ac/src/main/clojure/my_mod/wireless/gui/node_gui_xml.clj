@@ -15,6 +15,8 @@
             [my-mod.config.modid :as modid]
             [my-mod.gui.components :as comp]
             [my-mod.gui.events :as events]
+            [my-mod.gui.platform-adapter :as gui]
+            [my-mod.gui.tabbed-gui :as tabbed-gui]
             [my-mod.gui.tech-ui-common :as tech-ui]
             [my-mod.network.client :as net-client]
             [my-mod.wireless.gui.node-messages :as node-msgs]
@@ -297,9 +299,10 @@
   Args:
   - container: NodeContainer
   - player: EntityPlayer
+  - opts: optional map, e.g. {:menu AbstractContainerMenu} (menu passed from screen factory)
   
   Returns: Root CGui widget"
-  [container player]
+  [container player & [opts]]
   (try
     (let [tile (:tile-entity container)
           inv-page (tech-ui/create-inventory-page "node")
@@ -315,8 +318,19 @@
           poller (create-status-poller tile anim-state)
           anim-widget (cgui/create-widget :pos [42 35.5] :size [93 37.5])
           wireless-panel (create-wireless-panel container)
+          pages [inv-page {:id "wireless" :window wireless-panel}]
+          container-id (when-let [m (:menu opts)] (gui/get-menu-container-id m))
+          ;; Sync tab to server and set client-side tab by container-id so menu.clicked() blocks slot packets on non-inv tab
+          on-tab-change (fn [page-id]
+                          (when-let [idx (tabbed-gui/page-id->index pages page-id)]
+                            (when (tabbed-gui/tabbed-container? container)
+                              (reset! (:tab-index container) (int idx)))
+                            (when (integer? container-id)
+                              (tabbed-gui/set-tab-index-by-container-id! container-id (int idx)))
+                            (tabbed-gui/send-set-tab! idx container-id)))
           ;; Compose tech UI from pages (inventory, info, wireless)
-          tech-ui (tech-ui/create-tech-ui inv-page {:id "wireless" :window wireless-panel})
+          tech-ui (tech-ui/create-tech-ui inv-page {:id "wireless" :window wireless-panel}
+                                         {:on-tab-change on-tab-change})
           ;tech-ui (tech-ui/create-tech-ui)
           main-widget (:window tech-ui)
           ;show-info! (fn [] ((:show-page-fn tech-ui) "info"))
@@ -339,8 +353,10 @@
       ;(cgui/add-widget! main-widget info-area)
       
       (log/info "Created Wireless Node GUI (TechUI)")
-      ;(log/info "main-widget:" main-widget)
-      main-widget)
+      ;; When opts has :menu (screen path), return map so screen can block slot clicks when tab != inv
+      (if (:menu opts)
+        {:root main-widget :current (:current tech-ui)}
+        main-widget))
     (catch Exception e
       (log/error "Error creating Node GUI:" (.getMessage e))
       (throw e))))
@@ -350,10 +366,16 @@
 ;; ============================================================================
 
 (defn create-screen
-  "Create CGuiScreenContainer for Node GUI"
+  "Create CGuiScreenContainer for Node GUI.
+   minecraft-container is the AbstractContainerMenu (menu); passed as opts for tabbed GUI sync.
+   Passes :current-tab-atom so client can block slot clicks when not on inv tab."
   [container minecraft-container player]
-  (let [root (create-node-gui container player)]
-    (cgui/create-cgui-screen-container root minecraft-container)))
+  (let [gui (create-node-gui container player {:menu minecraft-container})
+        root (if (map? gui) (:root gui) gui)
+        base (cgui/create-cgui-screen-container root minecraft-container)]
+    (if (map? gui)
+      (assoc base :current-tab-atom (:current gui))
+      base)))
 
 ;; ============================================================================
 ;; Public API

@@ -3,11 +3,14 @@
 
   Uses runtime `proxy` instead of `gen-class` because gen-class is a
   compile-time-only macro (guarded by *compile-files*) and produces no class
-  when Clojure source files are loaded dynamically without AOT compilation."
+  when Clojure source files are loaded dynamically without AOT compilation.
+  Tabbed GUIs: same UI, same container; :tab-index is only the 'current tab' state.
+  When container has :tab-index, we add DataSlot + conditional slots (slots active only when tab-index is 0)."
   (:require [my-mod.gui.platform-adapter :as gui]
+            [my-mod.gui.tabbed-gui :as tabbed]
             [my-mod.forge1201.gui.slots :as slots]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.world.inventory AbstractContainerMenu]
+  (:import [net.minecraft.world.inventory AbstractContainerMenu DataSlot]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.world Container]))
 
@@ -74,18 +77,44 @@
           (doseq [idx (range n)]
             (gui/slot-changed! clj-container idx))))))
 
+(def tab-data-slot-index 0)
+
+(defn get-tab-index-from-menu
+  "Read tab index from menu's first DataSlot (for tabbed GUIs). Returns nil if not tabbed or read fails."
+  [^AbstractContainerMenu menu]
+  (when (and menu (pos? (.getDataSlotCount menu)))
+    (try
+      (let [slot (clojure.lang.Reflector/invokeInstanceMethod menu "getDataSlot" (object-array [(int tab-data-slot-index)]))]
+        (when slot (.get ^net.minecraft.world.inventory.DataSlot slot)))
+      (catch Exception _ nil))))
+
+(defn- create-tab-data-slot
+  "Create a standalone DataSlot and sync from container's :tab-index.
+   Avoids proxy (which breaks for DataSlot.get() due to 0-param Java method / arity mismatch)."
+  [clj-container]
+  (doto (DataSlot/standalone)
+    (.set (int @(:tab-index clj-container)))))
+
+(defn- sync-tab-slot-from-container!
+  "Update tab DataSlot from container so broadcastChanges sends current :tab-index to client."
+  [^DataSlot tab-slot clj-container]
+  (when (and tab-slot clj-container (:tab-index clj-container))
+    (.set tab-slot (int @(:tab-index clj-container)))))
+
 (defn- setup-menu-slots!
-  [^AbstractContainerMenu menu clj-container]
+  [^AbstractContainerMenu menu clj-container tab-slot]
   (let [gui-id (gui/get-gui-id-for-container clj-container)
         player (:player clj-container)
         player-inventory (when player
                            (clojure.lang.Reflector/invokeInstanceMethod player "getInventory" (object-array [])))
-        tile-inventory (create-tile-inventory-adapter clj-container)]
+        tile-inventory (create-tile-inventory-adapter clj-container)
+        tabbed? (tabbed/tabbed-container? clj-container)
+        active?-fn (when tabbed? (fn [] (tabbed/slots-active? clj-container)))]
+    (when tab-slot
+      (.addDataSlot menu tab-slot))
     (when (and gui-id player-inventory)
-      ;; Tile/gui slots are defined by slot schema coordinates.
-      (slots/add-gui-slots menu tile-inventory gui-id 8 84)
-      ;; Standard player inventory placement for 176x187 style GUIs.
-      (slots/add-player-inventory-slots menu player-inventory 8 107))))
+      (slots/add-gui-slots menu tile-inventory gui-id 8 84 (when tabbed? active?-fn))
+      (slots/add-player-inventory-slots menu player-inventory 8 107 (when tabbed? active?-fn)))))
 
 (defn create-menu-bridge
   "Create an AbstractContainerMenu proxy wrapping a Clojure container.
@@ -98,13 +127,24 @@
   - menu-type:     MenuType   — registered MenuType for this GUI
   - clj-container: map        — Clojure-side container (NodeContainer, etc.)"
   [window-id menu-type clj-container]
-  (let [menu
+  (let [tab-slot (when (tabbed/tabbed-container? clj-container)
+                   (create-tab-data-slot clj-container))
+        ;; Ref updated every tick from container so clicked/quickMoveStack see latest tab
+        tab-idx-ref (atom (int (or (when (and (tabbed/tabbed-container? clj-container) (:tab-index clj-container))
+                                    @(:tab-index clj-container))
+                                  0)))
+        menu
         (proxy [AbstractContainerMenu] [menu-type (int window-id)]
 
           (stillValid [player]
             (gui/safe-validate clj-container player))
 
           (removed [player]
+            (let [cid (gui/get-menu-container-id this)]
+              (when cid
+                (tabbed/clear-tab-index-by-container-id! cid)
+                (gui/unregister-container-by-id! cid)))
+            (gui/unregister-menu-container! this)
             (proxy-super removed player)
             (gui/safe-close! clj-container)
             (gui/unregister-active-container! clj-container)
@@ -112,21 +152,37 @@
             (log/info "Menu closed for player" (.getName player)))
 
           (broadcastChanges []
+            (when (and (tabbed/tabbed-container? clj-container) (:tab-index clj-container))
+              (reset! tab-idx-ref (int @(:tab-index clj-container))))
+            (sync-tab-slot-from-container! tab-slot clj-container)
             (proxy-super broadcastChanges)
             (gui/safe-sync! clj-container))
 
+          ;; Block all slot clicks when not on inv-window tab; use tab by container-id so client menu sees correct tab.
+          ;; clicked() runs only on the SERVER when the server receives a slot-click packet. If the client blocks the
+          ;; click (Screen mouseClicked/slotClicked/findSlot), no packet is sent and this is never called.
+          (clicked [slot-index button click-type player]
+            (when (or (not (tabbed/tabbed-container? clj-container))
+                      (tabbed/slots-active-for-menu? this clj-container))
+              (proxy-super clicked slot-index button click-type player)))
+
           (quickMoveStack [player slot-index]
-            (try
-              (let [slot (.getSlot this slot-index)]
-                (if (and slot (.hasItem slot))
-                  (let [stack (.getItem slot)]
-                    (gui/execute-quick-move-forge this clj-container slot-index slot stack))
-                  ItemStack/EMPTY))
-              (catch Exception e
-                (log/error "Error in quickMoveStack:" (.getMessage e))
-                ItemStack/EMPTY)))
+            (if (and (tabbed/tabbed-container? clj-container)
+                     (not (tabbed/slots-active-for-menu? this clj-container)))
+              ItemStack/EMPTY
+              (try
+                (let [slot (.getSlot this slot-index)]
+                  (if (and slot (.hasItem slot))
+                    (let [stack (.getItem slot)]
+                      (gui/execute-quick-move-forge this clj-container slot-index slot stack))
+                    ItemStack/EMPTY))
+                (catch Exception e
+                  (log/error "Error in quickMoveStack:" (.getMessage e))
+                  ItemStack/EMPTY))))
 
           (canTakeItemForPickAll [stack slot] true)
           (canDragTo [slot] true))]
-    (setup-menu-slots! menu clj-container)
+    (setup-menu-slots! menu clj-container tab-slot)
+    (gui/register-menu-container! menu clj-container)
+    (gui/register-container-by-id! window-id clj-container)
     menu))

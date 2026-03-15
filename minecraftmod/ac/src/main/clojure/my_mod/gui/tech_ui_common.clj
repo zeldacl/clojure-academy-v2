@@ -261,10 +261,11 @@
   - current-atom: atom holding current page id
   - pages: sequence of page maps
   - target-window: the window widget for this page
-  - on-click: optional fn to call after switching
+  - on-click: optional fn to call after switching (no args)
+  - on-tab-change: optional (fn [page-id]) called when tab is switched, for syncing to server
 
   Returns: widget"
-  [id idx current-atom pages target-window & [on-click]]
+  [id idx current-atom pages target-window & [on-click on-tab-change]]
   (let [y (* idx 22)
         click-fn (fn []
                    (log/info "Switching to page:" id)
@@ -274,6 +275,7 @@
                    (when target-window
                      (cgui/set-visible! target-window true))
                    (reset! current-atom id)
+                   (when on-tab-change (on-tab-change id))
                    (when on-click (on-click)))
         icon-path (modid/asset-path "textures" (str "guis/icons/icon_" id ".png"))
         page-xml (cgui-doc/read-xml (modid/namespaced-path "guis/rework/pageselect.xml"))
@@ -313,10 +315,15 @@
   "Create a tech UI composed from given pages.
 
   Each page should be a map {:id \"inv\" :window widget}.
-  Returns a map {:id \"tech\" :window main-widget :pages {id page-map} :show-page-fn fn}
+  If the last argument is a map with :on-tab-change key, it is opts; :on-tab-change is (fn [page-id]).
+  Returns a map {:id \"tech\" :window main-widget :pages {id page-map} :current atom}
   "
-  [& pages]
-  (let [pages (if (and (= 1 (count pages)) (sequential? (first pages))) (first pages) pages)
+  [& args]
+  (let [opts (when (and (seq args) (map? (last args)) (contains? (last args) :on-tab-change))
+               (last args))
+        pages (if opts (drop-last args) args)
+        pages (if (and (= 1 (count pages)) (sequential? (first pages))) (first pages) pages)
+        on-tab-change (:on-tab-change opts)
         main (cgui/create-widget :name "tech_ui_main" :pos [0 0] :size [gui-width gui-height])
         current (atom (when (seq pages) (:id (first pages))))
         pages-map (into {} (map (fn [p] [(:id p) p]) pages))]
@@ -328,7 +335,7 @@
         (cgui/set-visible! pw false)
         (cgui/add-widget! main pw)
 
-        (let [btn (page-button (:id p) idx current pages pw)]
+        (let [btn (page-button (:id p) idx current pages pw nil on-tab-change)]
           (cgui/add-widget! main btn))))
 
     ;; show first page by default

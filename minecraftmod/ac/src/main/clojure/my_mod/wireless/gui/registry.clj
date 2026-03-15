@@ -170,6 +170,8 @@
 
 (defonce ^:private active-containers (atom #{}))
 (defonce ^:private player-containers (atom {}))
+(defonce ^:private menu-containers (atom {}))
+(defonce ^:private containers-by-id (atom {}))
 (defonce ^:private client-container (atom nil))
 
 (defn register-active-container!
@@ -178,11 +180,19 @@
   (swap! active-containers conj container)
   (log/info "Registered active container, total:" (count @active-containers)))
 
+(defn- player-key
+  "Stable key for player (UUID) so lookup works regardless of object reference. Uses reflection."
+  [player]
+  (try
+    (clojure.lang.Reflector/invokeInstanceMethod player "getUUID" (object-array []))
+    (catch Exception _ nil)))
+
 (defn register-player-container!
-  "Register a container for a specific player"
+  "Register a container for a specific player (keyed by player UUID for stable lookup)."
   [player container]
-  (swap! player-containers assoc player container)
-  (log/debug "Registered player container for" player))
+  (when-let [k (player-key player)]
+    (swap! player-containers assoc k container)
+    (log/debug "Registered player container for" player)))
 
 (defn unregister-active-container!
   "Unregister a container when closed"
@@ -193,13 +203,71 @@
 (defn unregister-player-container!
   "Unregister a container for a specific player"
   [player]
-  (swap! player-containers dissoc player)
-  (log/debug "Unregistered player container for" player))
+  (when-let [k (player-key player)]
+    (swap! player-containers dissoc k)
+    (log/debug "Unregistered player container for" player)))
 
 (defn get-player-container
-  "Get the active container for a player"
+  "Get the active container for a player (lookup by UUID so set-tab handler finds it)."
   [player]
-  (get @player-containers player))
+  (when-let [k (player-key player)]
+    (get @player-containers k)))
+
+(defn get-player-container-from-active
+  "Find an open tabbed container for this player by scanning active-containers (same JVM, :player UUID match).
+   Use for set-tab when other lookups fail (e.g. integrated server / classloader quirks)."
+  [player]
+  (when-let [pk (player-key player)]
+    (first (filter (fn [c]
+                     (and (contains? c :tab-index)
+                          (when-let [p (:player c)]
+                            (= (player-key p) pk))))
+                   @active-containers))))
+
+(defn register-menu-container!
+  "Register container for a menu (AbstractContainerMenu). Used so set-tab can find container from player.containerMenu."
+  [menu container]
+  (swap! menu-containers assoc menu container)
+  (log/debug "Registered menu container"))
+
+(defn unregister-menu-container!
+  "Unregister container when menu is removed."
+  [menu]
+  (swap! menu-containers dissoc menu)
+  (log/debug "Unregistered menu container"))
+
+(defn get-container-for-menu
+  "Get Clojure container for a menu instance. Used by set-tab handler when player.containerMenu is our menu."
+  [menu]
+  (get @menu-containers menu))
+
+(defn register-container-by-id!
+  "Register container by menu containerId (window-id). Most reliable for set-tab lookup across threads/sides."
+  [container-id container]
+  (swap! containers-by-id assoc (int container-id) container)
+  (log/debug "Registered container by id" container-id))
+
+(defn unregister-container-by-id!
+  [container-id]
+  (swap! containers-by-id dissoc (int container-id))
+  (log/debug "Unregistered container by id" container-id))
+
+(defn get-container-by-id
+  [container-id]
+  (get @containers-by-id (int container-id)))
+
+(defn get-menu-container-id
+  "Get AbstractContainerMenu containerId (window-id) via reflection. For set-tab and unregister."
+  [menu]
+  (when menu
+    (or (try
+          (clojure.lang.Reflector/invokeInstanceMethod menu "getContainerId" (object-array []))
+          (catch Exception _ nil))
+        (try
+          (let [f (.getDeclaredField (class menu) "containerId")]
+            (.setAccessible f true)
+            (.get f menu))
+          (catch Exception _ nil)))))
 
 (defn set-client-container!
   "Set the client-side active container"

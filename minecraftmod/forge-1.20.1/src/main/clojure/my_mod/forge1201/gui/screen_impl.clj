@@ -2,13 +2,15 @@
   "Forge 1.20.1 Client-side Screen Implementation
 
   Platform-agnostic design: Reads GUI metadata and loops through all GUIs
-  to register. Uses CGUI runtime to render and handle input for wireless GUIs."
+  to register. Uses CGUI runtime to render and handle input for wireless GUIs.
+  Tabbed GUIs: when tab index != 0, slot highlight is not drawn (inv-window only)."
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.forge1201.gui.cgui-runtime :as cgui-rt]
             [my-mod.util.log :as log])
   (:import [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client.gui.screens MenuScreens]
-           [net.minecraft.client.gui.screens.inventory AbstractContainerScreen]))
+           [net.minecraft.client.gui.screens.inventory AbstractContainerScreen]
+           [net.minecraft.world.inventory Slot ClickType]))
 
 ;; ============================================================================
 ;; CGUI Screen Proxy
@@ -17,6 +19,21 @@
 (defn- cgui-screen-container? [m]
   (and (map? m) (= (:type m) :cgui-screen-container)
        (contains? m :cgui) (contains? m :minecraft-container)))
+
+(defn- slots-enabled-for-click?
+  "True when slot clicks should be forwarded (inv tab only). Uses :current-tab-atom from tabbed GUIs."
+  [cgui-screen]
+  (let [current-atom (:current-tab-atom cgui-screen)
+        current-id (when current-atom (deref current-atom))
+        enabled? (if current-atom (= "inv" current-id) true)]
+    ;; (when (and current-atom (not enabled?))
+    ;;   (log/debug "slot click blocked: current tab id=" (str current-id)))
+    enabled?))
+
+(defn- slots-visible?
+  "True when slots (and their items) should be drawn (inv tab only). Same as slots-enabled-for-click? for tabbed GUIs."
+  [cgui-screen]
+  (slots-enabled-for-click? cgui-screen))
 
 (defn- create-cgui-container-screen
   "Build an AbstractContainerScreen proxy that renders and dispatches events to the
@@ -32,15 +49,39 @@
       (render [^GuiGraphics gg mouse-x mouse-y partial-ticks]
         (when root
           (try
-            ;; Use the logical GUI size (container image size) instead of the
-            ;; full screen resolution so that XML/TechUI layouts using fixed
-            ;; coordinates (e.g. page_wireless.xml) are not stretched.
             (cgui-rt/resize-root! root (.getXSize this) (.getYSize this))
             (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
             (catch Exception e
               (log/debug "CGUI frame-tick error:" (.getMessage e)))))
-        (proxy-super render gg mouse-x mouse-y partial-ticks))
+        ;; Non-inv tab: skip full vanilla render so no slots/highlight are drawn; only background + our renderBg (CGui) + tooltip
+        (if (slots-visible? cgui-screen)
+          (proxy-super render gg mouse-x mouse-y partial-ticks)
+          (do
+            (.renderBackground this gg)
+            (.renderBg this gg (float partial-ticks) (int mouse-x) (int mouse-y))
+            (.renderTooltip this gg (int mouse-x) (int mouse-y)))))
       (renderLabels [^GuiGraphics gg mouse-x mouse-y] (comment "skip labels"))
+
+      ;; Tabbed GUI: draw slot highlight only when on inv tab (use client tab atom so no delay)
+      (renderSlotHighlight [^GuiGraphics gg x y]
+        (when (slots-visible? cgui-screen)
+          (proxy-super renderSlotHighlight gg x y)))
+
+      ;; Tabbed GUI: draw slot (and item) only when on inv tab; on other tabs hide slots and items
+      (renderSlot [^GuiGraphics gg ^Slot slot]
+        (when (slots-visible? cgui-screen)
+          (proxy-super renderSlot gg slot)))
+
+      ;; Return null when on non-inv tab so hoveredSlot stays null and no slot is "under" mouse
+      (findSlot [x y]
+        (if (slots-enabled-for-click? cgui-screen)
+          (proxy-super findSlot x y)
+          nil))
+
+      ;; Block the actual slot-click→packet path when on non-inv tab (even if something calls this directly)
+      (slotClicked [^Slot slot slot-id button ^ClickType action-type]
+        (when (slots-enabled-for-click? cgui-screen)
+          (proxy-super slotClicked slot slot-id button action-type)))
 
       (renderBg [^GuiGraphics gg _partial-ticks _mouse-x _mouse-y]
                 (reset! left (.getGuiLeft this))
@@ -63,14 +104,24 @@
           (try
             (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)
             (catch Exception _ nil)))
-        (proxy-super mouseClicked mouse-x mouse-y button))
+        ;; Only forward to vanilla (slot handling) when on inv tab; otherwise consume click to block slot interaction
+        (if (slots-enabled-for-click? cgui-screen)
+          (proxy-super mouseClicked mouse-x mouse-y button)
+          true))
+
+      (mouseReleased [mouse-x mouse-y button]
+        (if (slots-enabled-for-click? cgui-screen)
+          (proxy-super mouseReleased mouse-x mouse-y button)
+          true))
 
       (mouseDragged [mouse-x mouse-y button drag-x drag-y]
         (when root
           (try
             (cgui-rt/mouse-drag! root (int mouse-x) (int mouse-y) @left @top)
             (catch Exception _ nil)))
-        (proxy-super mouseDragged mouse-x mouse-y button drag-x drag-y))
+        (if (slots-enabled-for-click? cgui-screen)
+          (proxy-super mouseDragged mouse-x mouse-y button drag-x drag-y)
+          true))
 
       (keyPressed [key-code scan-code modifiers]
         (when root

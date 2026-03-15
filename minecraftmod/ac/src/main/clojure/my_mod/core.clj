@@ -5,6 +5,7 @@
             [my-mod.config.modid :as modid]
             ;; Load all GUI definitions (so gui-dsl registry is populated)
             [my-mod.gui.definitions]
+            [my-mod.gui.tabbed-gui :as tabbed-gui]
             [my-mod.events.metadata :as event-metadata]
             [my-mod.block.multiblock-core :as mb-core]
             [my-mod.wireless.gui.matrix-network-handler :as matrix-net]
@@ -36,7 +37,9 @@
   (wd/init-world-data!)
   ;; Register GUI network handlers
   (matrix-net/init!)
-  (node-net/init!))
+  (node-net/init!)
+  ;; Register generic set-tab handler for tabbed GUIs (inv-window + panels)
+  (tabbed-gui/register-set-tab-handler!))
 
 (defn on-block-right-click
   "Generic block right-click event handler.
