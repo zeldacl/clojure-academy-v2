@@ -257,6 +257,7 @@
           
           ;; Create main TechUI widget
           main-widget (cgui/create-container :pos [-18 0] :size [gui-width gui-height])
+          ;;tech-ui (apply tech-ui/create-tech-ui pages)
           
           ;; Create InfoArea
           info-area (tech-ui/create-info-area)]

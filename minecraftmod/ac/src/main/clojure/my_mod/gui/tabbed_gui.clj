@@ -134,3 +134,36 @@
    (net-client/send-to-server set-tab-msg-id
      (cond-> {:tab-index (int tab-index)}
        (some? container-id) (assoc :container-id (int container-id))))))
+
+(defn attach-tab-sync!
+  "Attach generic tab-change sync between a TechUI instance and a container.
+
+  pages: sequential collection of page maps (the same sequence passed to create-tech-ui)
+  tech-ui: map returned by create-tech-ui (expects :current atom)
+  container: container map (may contain :tab-index atom)
+  container-id: optional integer id from `gui/get-menu-container-id`
+
+  This installs a watch on the tech-ui current atom and performs the standard
+  tabbed-container updates: reset container :tab-index, update client-side
+  container-id mapping, and send the set-tab message to server.
+  "
+  [pages tech-ui container container-id]
+  (let [current-atom (:current tech-ui)]
+    (when (some? current-atom)
+      (add-watch current-atom :tab-sync
+        (fn [_ _ _ new-id]
+          (when-let [idx (page-id->index pages new-id)]
+            (when (tabbed-container? container)
+              (reset! (:tab-index container) (int idx)))
+            (when (integer? container-id)
+              (set-tab-index-by-container-id! container-id (int idx)))
+            (send-set-tab! idx container-id)))))
+
+    ;; initial sync of current tab
+    (when-let [cur (and current-atom @current-atom)]
+      (when-let [idx (page-id->index pages cur)]
+        (when (tabbed-container? container)
+          (reset! (:tab-index container) (int idx)))
+        (when (integer? container-id)
+          (set-tab-index-by-container-id! container-id (int idx)))
+        (send-set-tab! idx container-id)))))

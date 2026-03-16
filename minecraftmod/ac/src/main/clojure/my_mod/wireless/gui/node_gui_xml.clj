@@ -99,6 +99,34 @@
                             (reset! (:current-state anim-state)
                                     (if is-linked :linked :unlinked))))))))}))
 
+(defn create-anim-widget
+  "Create animation widget, poller and attach frame handler.
+
+    Args:
+    - tile: tile entity used by status poller
+    - target-window: the window widget to which the anim widget will be added
+    - opts: optional map {:pos [x y] :size [w h] :scale s}
+
+    Returns: map {:widget widget :anim-state anim-state :poller poller}
+    "
+  [tile & [opts]]
+  (let [opts (or opts {})
+        pos (get opts :pos [42 35.5])
+        size (get opts :size [186 75])
+        scale (get opts :scale 0.5)
+        anim-state (create-animation-state)
+        poller (create-status-poller tile anim-state)
+        widget (apply cgui/create-widget
+                      (concat [:pos pos :size size]
+                              (when scale [:scale scale])))]
+    ;; attach per-frame update: animation + poller + render
+    (events/on-frame widget
+                     (fn [_]
+                       (update-animation! anim-state)
+                       ((:update-fn poller))
+                       (render-animation-frame! anim-state widget)))
+    {:widget widget :anim-state anim-state :poller poller}))
+
 ;; ============================================================================
 ;; Wireless Page (network list + connect)
 ;; ============================================================================
@@ -317,40 +345,27 @@
           inv-w (cgui/get-width inv-window)
           inv-h (cgui/get-height inv-window)
           info-area (tech-ui/create-info-area)
-          anim-state (create-animation-state)
-          poller (create-status-poller tile anim-state)
-          anim-widget (cgui/create-widget :pos [42 35.5] :size [186, 75] :scale 0.5)
+          ;; create animation widget (includes anim-state and poller)
+          {:keys [widget anim-state poller]} (create-anim-widget tile)
+          anim-widget widget
           wireless-panel (create-wireless-panel container)
           pages [inv-page {:id "wireless" :window wireless-panel}]
           container-id (when-let [m (:menu opts)] (gui/get-menu-container-id m))
-          ;; Sync tab to server and set client-side tab by container-id so menu.clicked() blocks slot packets on non-inv tab
-          on-tab-change (fn [page-id]
-                          (when-let [idx (tabbed-gui/page-id->index pages page-id)]
-                            (when (tabbed-gui/tabbed-container? container)
-                              (reset! (:tab-index container) (int idx)))
-                            (when (integer? container-id)
-                              (tabbed-gui/set-tab-index-by-container-id! container-id (int idx)))
-                            (tabbed-gui/send-set-tab! idx container-id)))
           ;; Compose tech UI from pages (inventory, info, wireless)
-          tech-ui (tech-ui/create-tech-ui inv-page {:id "wireless" :window wireless-panel}
-                                         {:on-tab-change on-tab-change})
+          tech-ui (apply tech-ui/create-tech-ui pages)
+          ;; Attach generic tab-change sync (pages sequence, tech-ui map, container, container-id)
+          _ (tabbed-gui/attach-tab-sync! pages tech-ui container container-id)
           ;tech-ui (tech-ui/create-tech-ui)
           main-widget (:window tech-ui)
           ;show-info! (fn [] ((:show-page-fn tech-ui) "info"))
           ;show-wireless! (fn [] ((:show-page-fn tech-ui) "wireless"))
           ]
       
-      ;; Animation area: add anim widget into inventory window so it draws above
-      (events/on-frame anim-widget
-                       (fn [_]
-                         (update-animation! anim-state)
-                         ((:update-fn poller))
-                         (render-animation-frame! anim-state anim-widget)))
-      (cgui/add-widget! (:window inv-page) anim-widget)
+      (cgui/add-widget! inv-window anim-widget)
 
       ;; Position and build info area (create-tech-ui has already attached it,
       ;; but we need to position and populate it)
-      (cgui/set-position! info-area (+ (cgui/get-width (:window inv-page)) 7) 5)
+      (cgui/set-position! info-area (+ (cgui/get-width inv-window) 7) 5)
       (build-info-area! info-area container player)
 
       ;(cgui/add-widget! main-widget info-area)
