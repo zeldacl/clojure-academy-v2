@@ -9,7 +9,7 @@
             [my-mod.util.log :as log])
   (:import [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client.gui.screens MenuScreens]
-           [net.minecraft.client.gui.screens.inventory AbstractContainerScreen]
+           [my_mod.forge1201.gui CGuiContainerScreen]
            [net.minecraft.world.inventory Slot ClickType]))
 
 ;; ============================================================================
@@ -48,7 +48,7 @@
         top (atom 0)
         size-dx (int (or (:size-dx cgui-screen) 0))
         size-dy (int (or (:size-dy cgui-screen) 0))]
-    (proxy [AbstractContainerScreen] [menu player-inventory title]
+    (proxy [CGuiContainerScreen] [menu player-inventory title]
       ;; (getXSize []
       ;;   (+ size-dx (proxy-super getXSize)))
       ;; (getYSize []
@@ -61,13 +61,12 @@
       ;; Slot rendering reads leftPos/topPos directly; set them with type-hinted set! so slots align with the enlarged GUI.
       (init []
         (log/info "Initializing CGUI container screen with size delta" size-dx "x" size-dy)
-        (log/info "Original size:" (.-imageWidth ^AbstractContainerScreen this) "x" (.-imageHeight ^AbstractContainerScreen this))
+        (log/info "Original size:" (.getImageWidthPublic this) "x" (.getImageHeightPublic this))
         (when (or (not= size-dx 0) (not= size-dy 0))
-          (let [new-x (int (+ size-dx (.-imageWidth ^AbstractContainerScreen this)))
-                new-y (int (+ size-dy (.-imageHeight ^AbstractContainerScreen this)))]
-            (set! (.-imageWidth ^AbstractContainerScreen this) new-x)
-            (set! (.-imageHeight ^AbstractContainerScreen this) new-y)))
-        (log/info "Adjusted size:" (.-imageWidth ^AbstractContainerScreen this) "x" (.-imageHeight ^AbstractContainerScreen this))
+          (let [new-x (int (+ size-dx (.getImageWidthPublic this)))
+                new-y (int (+ size-dy (.getImageHeightPublic this)))]
+            (.setImageSize this new-x new-y)))
+        (log/info "Adjusted size:" (.getImageWidthPublic this) "x" (.getImageHeightPublic this))
         ;(log/info "Initial left/top:" (.-leftPos ^AbstractContainerScreen this) "/" (.-topPos ^AbstractContainerScreen this))
         ;; (when (or (not= size-dx 0) (not= size-dy 0))
         ;;   (let [new-left (int (/ (- (.width this) (.getXSize this)) 2))
