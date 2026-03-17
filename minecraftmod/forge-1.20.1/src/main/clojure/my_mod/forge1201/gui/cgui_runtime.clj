@@ -7,7 +7,6 @@
     [my-mod.gui.cgui :as cgui]
     [my-mod.platform.resource :as res]
     [my-mod.config.modid :as modid]
-   [my-mod.forge1201.client.i18n :as i18n]
     [my-mod.util.log :as log])
   (:import
     (net.minecraft.client.gui GuiGraphics)
@@ -392,7 +391,9 @@
           (let [raw-text (str (or (:text state) ""))
                 localized? (boolean (:localized? state))
                 raw-text (if (and localized? (seq raw-text))
-                           (i18n/translate raw-text)
+                           (try
+                             (net.minecraft.client.resources.language.I18n/get raw-text (object-array 0))
+                             (catch Throwable _ raw-text))
                            raw-text)
                 text (if (and (:masked? state) (seq raw-text))
                        (apply str (repeat (count raw-text) \*))
