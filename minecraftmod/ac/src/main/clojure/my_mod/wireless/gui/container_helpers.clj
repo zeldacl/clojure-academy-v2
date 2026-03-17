@@ -61,10 +61,7 @@
   Returns: boolean - true if player is within 8 blocks of tile"
   [container player]
   (let [tile         (:tile-entity container)
-        ;; Support both legacy map tiles (with :pos) and ScriptedBlockEntity/BlockEntity
-        raw-pos     (or (:pos tile)
-                        (try (.getBlockPos tile) (catch Exception _ nil))
-                        (try (.getPos tile) (catch Exception _ nil)))
+        raw-pos     (try (.getBlockPos tile) (catch Exception _ nil))
         max-distance 8.0]
     (and (= player (:player container))
          raw-pos

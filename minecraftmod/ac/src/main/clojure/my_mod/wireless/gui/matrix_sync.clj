@@ -44,7 +44,7 @@
   (let [container? (matrix-container? source)
         tile       (if container? (:tile-entity source) source)
         container  (when container? source)
-        pos        (:pos tile)]
+        pos        (.getBlockPos tile)]
     (merge {:gui-id      metadata/gui-wireless-matrix
             :pos-x       (.getX pos)
             :pos-y       (.getY pos)

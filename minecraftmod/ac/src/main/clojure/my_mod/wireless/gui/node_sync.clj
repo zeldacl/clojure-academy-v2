@@ -40,9 +40,7 @@
 (defn- get-pos
   [tile]
   (when tile
-    (or (:pos tile)
-        (try (.getBlockPos tile) (catch Exception _ nil))
-        (try (.getPos tile) (catch Exception _ nil)))))
+    (try (.getBlockPos tile) (catch Exception _ nil))))
 
 (defn make-sync-packet
   "Create node state sync packet payload map from container or tile entity.

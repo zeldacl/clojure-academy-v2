@@ -166,8 +166,7 @@
   (let [tile (if (contains? source :tile-entity)
                (:tile-entity source)
                source)
-        pos (or (:pos tile) 
-                (try (.getPos tile) (catch Exception _ nil)))]
+        pos  (.getBlockPos tile)]
     {:pos-x (.getX pos)
      :pos-y (.getY pos)
      :pos-z (.getZ pos)}))
@@ -214,21 +213,21 @@
   - container: NodeContainer with :tile-entity, :capacity, :max-capacity atoms"
   [container]
   (try
-    (let [tile (:tile-entity container)
-          world (:world tile)
-          pos (:pos tile)
+    (let [tile  (:tile-entity container)
+          world (.getLevel tile)
+          pos   (.getBlockPos tile)
           node-vblock (vb/create-vnode (.getX pos) (.getY pos) (.getZ pos))
-          world-data (wd/get-world-data world)
-          network (wd/get-network-by-node world-data node-vblock)]
+          world-data  (wd/get-world-data world)
+          network     (wd/get-network-by-node world-data node-vblock)]
       (if network
         (do
           (reset! (:capacity container) (count @(:nodes network)))
           ;; Get matrix capacity
           (when-let [matrix-vb (:matrix network)]
             (when-let [matrix (vb/vblock-get matrix-vb world)]
-              (reset! (:max-capacity container) 
-                     (try (winterfaces/get-capacity matrix) 
-                          (catch Exception _ 0))))))
+              (reset! (:max-capacity container)
+                      (try (winterfaces/get-capacity matrix)
+                           (catch Exception _ 0))))))
         (do
           (reset! (:capacity container) 0)
           (reset! (:max-capacity container) 0))))
@@ -248,21 +247,22 @@
   - stats: Map with :capacity key (calculated stats)"
   [container stats]
   (try
-    (let [tile (:tile-entity container)
-          world (:world tile)
-          pos (:pos tile)
+    (let [tile  (:tile-entity container)
+          world (.getLevel tile)
+          pos   (.getBlockPos tile)
           matrix-vblock (vb/create-vmatrix (.getX pos) (.getY pos) (.getZ pos))
-          world-data (wd/get-world-data world)
-          network (wd/get-network-by-matrix world-data matrix-vblock)]
+          world-data    (wd/get-world-data world)
+          network       (wd/get-network-by-matrix world-data matrix-vblock)
+          stats-cap     (long (or (:capacity stats) 0))]
       (if network
         (do
           ;; Real network capacity (current number of nodes)
           (reset! (:capacity container) (count @(:nodes network)))
           ;; Max capacity from calculated stats
-          (reset! (:max-capacity container) (:capacity stats)))
+          (reset! (:max-capacity container) stats-cap))
         (do
           (reset! (:capacity container) 0)
-          (reset! (:max-capacity container) (:capacity stats)))))
+          (reset! (:max-capacity container) stats-cap))))
     (catch Exception e
       (log/debug "Error querying matrix network capacity:" (.getMessage e))
       (reset! (:capacity container) 0)
