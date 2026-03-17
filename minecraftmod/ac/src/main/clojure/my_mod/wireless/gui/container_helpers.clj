@@ -17,8 +17,14 @@
   
   Returns: ItemStack or nil"
   [container slot-index]
-  (let [inventory @(:inventory (:tile-entity container))]
-    (get inventory slot-index)))
+  (let [tile (:tile-entity container)]
+    (if (map? tile)
+      (let [inventory-atom (:inventory tile)]
+        (when inventory-atom
+          (get @inventory-atom slot-index)))
+      (try
+        (get-in (.getCustomState tile) [:inventory slot-index])
+        (catch Exception _ nil)))))
 
 (defn set-slot-item!
   "Set item in slot by updating tile entity inventory
@@ -30,9 +36,16 @@
   
   Returns: Updated inventory map"
   [container slot-index item-stack]
-  (let [tile (:tile-entity container)
-        inventory-atom (:inventory tile)]
-    (swap! inventory-atom assoc slot-index item-stack)))
+  (let [tile (:tile-entity container)]
+    (if (map? tile)
+      (let [inventory-atom (:inventory tile)]
+        (when inventory-atom
+          (swap! inventory-atom assoc slot-index item-stack)))
+      (try
+        (let [state (or (.getCustomState tile) {})
+              state' (assoc-in state [:inventory slot-index] item-stack)]
+          (.setCustomState tile state'))
+        (catch Exception _ nil)))))
 
 ;; ============================================================================
 ;; Container Lifecycle

@@ -122,7 +122,10 @@
     (.getMaxDamage this))
   
   (item-set-damage! [this damage]
-    (.setDamageValue this (int damage))))
+    (.setDamageValue this (int damage)))
+
+  (item-get-damage [this]
+    (.getDamageValue this)))
 
 ;; ============================================================================
 ;; Position Protocol Implementation (Fabric 1.20.1)

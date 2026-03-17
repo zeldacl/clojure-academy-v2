@@ -7,7 +7,9 @@
   - Damage 2: Tier 3 (Advanced)
   - Damage 3: Tier 4 (Ultimate)"
   (:require [my-mod.item.dsl :as idsl]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log]
+            [my-mod.platform.item :as item]
+            [clojure.string :as str]))
 
 ;; ============================================================================
 ;; Matrix Core Tiers
@@ -78,20 +80,43 @@
 ;; ============================================================================
 
 (defn is-mat-core?
-  "Check if ItemStack is a matrix core"
+  "Check if ItemStack (or item-like value) is a matrix core.
+
+  Accepts either a platform `ItemStack` or an item/spec-like value.
+  For ItemStacks we extract the item id from the item's description id
+  (e.g. \"item.my_mod.mat_core_0\") and compare against the DSL ids.
+  This makes the predicate robust across platform vs. DSL representations.
+  "
   [item-stack]
   (when item-stack
-    (let [item (.getItem item-stack)]
-      (or (= item mat-core-tier-1)
-          (= item mat-core-tier-2)
-          (= item mat-core-tier-3)))))
+    (let [id-from-spec #(when (map? %) (:id %))
+          desc (try
+                 (let [item (.getItem item-stack)]
+                   (str (.getDescriptionId item)))
+                 (catch Throwable _ nil))
+          id-from-stack (when desc (last (str/split desc #"\\.")))
+          id (or id-from-stack (id-from-spec item-stack))
+          ;; Match if derived desc contains DSL id (handles different desc formats)
+          result (boolean
+                   (some (fn [spec]
+                           (let [spec-id (:id spec)]
+                             (or (= id spec-id)
+                                 (and (string? desc) (str/includes? desc spec-id)))))
+                         [mat-core-tier-1 mat-core-tier-2 mat-core-tier-3]))]
+      ;; (try
+      ;;   (log/debug "is-mat-core?" {:stack-class (class item-stack)
+      ;;                                :desc desc
+      ;;                                :derived-id id
+      ;;                                :result result})
+      ;;   (catch Throwable _))
+      result)))
 
 (defn get-core-level
   "Get core level from ItemStack (1-3)
   Returns 0 if not a core or empty"
   [item-stack]
   (if (and item-stack (is-mat-core? item-stack))
-    (+ 1 (.getItemDamage item-stack))
+    (+ 1 (item/item-get-damage item-stack))
     0))
 
 (defn init-mat-cores! []

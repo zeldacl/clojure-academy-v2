@@ -40,7 +40,10 @@
     "Get maximum damage value for this item. Returns int.")
   
   (item-set-damage! [this damage]
-    "Set item damage value for durability bar display. Returns nil."))
+    "Set item damage value for durability bar display. Returns nil.")
+
+  (item-get-damage [this]
+    "Get current damage value for this item. Returns int."))
 
 ;; ============================================================================
 ;; Platform Factory Registration

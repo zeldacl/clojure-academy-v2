@@ -143,7 +143,10 @@
     (.getMaxDamage this))
   
   (item-set-damage! [this damage]
-    (.setDamageValue this (int damage))))
+    (.setDamageValue this (int damage)))
+
+  (item-get-damage [this]
+    (.getDamageValue this)))
 
 ;; ============================================================================
 ;; World Protocol Implementation (Forge 1.20.1)

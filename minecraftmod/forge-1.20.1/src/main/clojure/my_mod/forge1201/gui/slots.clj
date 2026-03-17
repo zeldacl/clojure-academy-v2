@@ -19,7 +19,7 @@
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
       (slot-validators/energy-item-validator stack))
-    (getMaxStackSize [] 1)))
+    (getMaxStackSize [& _] 1)))
 
 (defn create-plate-slot
   "Create a slot that filters for constraint-plate items."
@@ -27,7 +27,7 @@
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
       (slot-validators/constraint-plate-validator stack))
-    (getMaxStackSize [] 1)))
+    (getMaxStackSize [& _] 1)))
 
 (defn create-core-slot
   "Create a slot that filters for mat-core items."
@@ -35,7 +35,7 @@
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
       (slot-validators/matrix-core-validator stack))
-    (getMaxStackSize [] 1)))
+    (getMaxStackSize [& _] 1)))
 
 (defn create-output-slot
   "Create an output-only slot (no insertion allowed)."
@@ -70,7 +70,7 @@
     (mayPlace [stack]
       (and (active?-fn) (slot-validators/energy-item-validator stack)))
     (mayPickup [_player] (and (active?-fn) (proxy-super mayPickup _player)))
-    (getMaxStackSize [] 1)))
+    (getMaxStackSize [& _] 1)))
 
 (defn create-conditional-plate-slot
   [inventory slot-index x y active?-fn]
@@ -78,7 +78,7 @@
     (mayPlace [stack]
       (and (active?-fn) (slot-validators/constraint-plate-validator stack)))
     (mayPickup [_player] (and (active?-fn) (proxy-super mayPickup _player)))
-    (getMaxStackSize [] 1)))
+    (getMaxStackSize [& _] 1)))
 
 (defn create-conditional-core-slot
   [inventory slot-index x y active?-fn]
@@ -86,7 +86,7 @@
     (mayPlace [stack]
       (and (active?-fn) (slot-validators/matrix-core-validator stack)))
     (mayPickup [_player] (and (active?-fn) (proxy-super mayPickup _player)))
-    (getMaxStackSize [] 1)))
+    (getMaxStackSize [& _] 1)))
 
 (defn create-conditional-output-slot
   [inventory slot-index x y active?-fn]
