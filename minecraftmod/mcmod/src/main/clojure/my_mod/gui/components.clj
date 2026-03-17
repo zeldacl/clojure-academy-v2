@@ -96,6 +96,7 @@
                                 :scale (:scale spec 1.0)
                                 :shadow? (:shadow? spec true)
                                 :masked? (:masked? spec false)
+                                :localized? (boolean (:localized? spec false))
                                 :caret-pos 0
                                 :display-offset 0
                                 :editable? (:editable? spec false)})

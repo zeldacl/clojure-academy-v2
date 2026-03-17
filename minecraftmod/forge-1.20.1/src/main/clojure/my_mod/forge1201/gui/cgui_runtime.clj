@@ -7,10 +7,12 @@
     [my-mod.gui.cgui :as cgui]
     [my-mod.platform.resource :as res]
     [my-mod.config.modid :as modid]
+   [my-mod.forge1201.client.i18n :as i18n]
     [my-mod.util.log :as log])
   (:import
     (net.minecraft.client.gui GuiGraphics)
     (net.minecraft.client Minecraft)
+    (net.minecraft.client.resources.language I18n)
     (net.minecraft.resources ResourceLocation)
     (com.mojang.blaze3d.systems RenderSystem)
     (javax.imageio ImageIO)
@@ -387,7 +389,11 @@
               (.fill gg x y (+ x w-int) (+ y h-int) (unchecked-int (or (:color state) 0xFFFFFF)))))
 
           (kind-matches? kind :textbox)
-          (let [raw-text  (str (or (:text state) ""))
+          (let [raw-text (str (or (:text state) ""))
+                localized? (boolean (:localized? state))
+                raw-text (if (and localized? (seq raw-text))
+                           (i18n/translate raw-text)
+                           raw-text)
                 text (if (and (:masked? state) (seq raw-text))
                        (apply str (repeat (count raw-text) \*))
                        raw-text)
@@ -482,13 +488,11 @@
               ;;                            rest-stack (reverse children))]
               ;;     (recur child-stack node))
               ;;   (recur rest-stack best)) 
-              (let [children (cgui/get-widgets node)
-                    child-stack (reduce (fn [acc child]
-                                          (conj acc [child x0 y0]))
-                                        rest-stack (reverse children))]
-                (if inside
-                  (recur child-stack node)   ; 保持 best 为 node，当 inside 时优先返回 deeper hit
-                  (recur child-stack best))) ; 即使 parent 不包含，也继续检查 children
+              (recur (reduce (fn [acc child]
+                               (conj acc [child x0 y0]))
+                             rest-stack
+                             (reverse (cgui/get-widgets node)))
+                     (if inside node best)) ; 即使 parent 不包含，也继续检查 children
               )))))))
 
 (defn frame-tick!

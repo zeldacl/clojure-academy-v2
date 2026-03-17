@@ -131,9 +131,10 @@
             color (parse-color-int (first-child option-node :color)
                                    0xFFFFFFFF)
             allow-edit? (parse-bool (text-at component-node :allowEdit "false") false)
-            does-echo? (parse-bool (text-at component-node :doesEcho "false") false)]
+            does-echo? (parse-bool (text-at component-node :doesEcho "false") false)
+            localized? (parse-bool (text-at component-node :localized "false") false)]
         (comp/add-component! widget
-          (comp/text-box :text content :color color :masked? does-echo? :shadow? false))
+          (comp/text-box :text content :color color :masked? does-echo? :shadow? false :localized? localized?))
         (when-let [tb (comp/get-textbox-component widget)]
           (comp/set-editable! tb allow-edit?)))
 

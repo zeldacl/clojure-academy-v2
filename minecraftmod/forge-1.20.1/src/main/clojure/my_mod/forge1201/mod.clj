@@ -14,6 +14,7 @@
             [my-mod.item.dsl :as idsl]
             [my-mod.registry.metadata :as registry-metadata]
             [my-mod.config.modid :as modid]
+            [my-mod.i18n :as i18n]
             [my-mod.util.log :as log])
   (:import [net.minecraft.world.level.block Block Blocks]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
@@ -298,6 +299,12 @@
   (log/info "FMLClientSetupEvent - Client setup phase")
   ;; Client-only initialization
   (gui-init/init-client!)
+  ;; Install platform i18n implementation for shared code (client-side only).
+  (alter-var-root #'i18n/*translate-fn*
+                  (constantly (fn [k]
+                                (try
+                                  (net.minecraft.client.resources.language.I18n/get (str k) (object-array 0))
+                                  (catch Throwable _ (str k))))))
   (if-let [init-client! (requiring-resolve 'my-mod.forge1201.client.init/init-client)]
     (init-client!)
     (log/warn "Forge client init namespace unavailable on current side")))
