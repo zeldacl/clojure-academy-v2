@@ -368,7 +368,7 @@
       (cgui/set-position! info-area (+ (cgui/get-width inv-window) 7) 5)
       (build-info-area! info-area container player)
 
-      ;(cgui/add-widget! main-widget info-area)
+      (cgui/add-widget! main-widget info-area)
       
       (log/info "Created Wireless Node GUI (TechUI)")
       ;; When opts has :menu (screen path), return map so screen can block slot clicks when tab != inv

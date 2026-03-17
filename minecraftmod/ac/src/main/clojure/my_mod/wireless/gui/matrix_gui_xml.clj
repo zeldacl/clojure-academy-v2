@@ -20,6 +20,7 @@
   (:require [my-mod.gui.cgui :as cgui]
             [my-mod.gui.components :as comp]
             [my-mod.gui.events :as events]
+            [my-mod.gui.tabbed-gui :as tabbed-gui]
             [my-mod.gui.tech-ui-common :as tech-ui]
             [my-mod.network.client :as net-client]
             [my-mod.wireless.gui.matrix-messages :as matrix-msgs]
@@ -247,7 +248,7 @@
   - player: EntityPlayer who opened GUI
   
   Returns: Root CGui widget"
-  [container player]
+  [container player & [opts]]
   (try
     (let [tile (or (:tile-entity container)
                    (try (.tile container) (catch Exception _ nil)))
@@ -256,14 +257,22 @@
           inv-page (tech-ui/create-inventory-page "matrix")
           
           ;; Create main TechUI widget
-          main-widget (cgui/create-container :pos [-18 0] :size [gui-width gui-height])
+          ;main-widget (cgui/create-container :pos [-18 0] :size [gui-width gui-height])
           ;;tech-ui (apply tech-ui/create-tech-ui pages)
+          ;; Compose tech UI from pages (inventory, info, wireless)
+          pages [inv-page]
+          container-id (when-let [m (:menu opts)] (gui/get-menu-container-id m))
+          tech-ui (apply tech-ui/create-tech-ui pages)
+          ;; Attach generic tab-change sync (pages sequence, tech-ui map, container, container-id)
+          _ (tabbed-gui/attach-tab-sync! pages tech-ui container container-id)
+          ;tech-ui (tech-ui/create-tech-ui)
+          main-widget (:window tech-ui)
           
           ;; Create InfoArea
           info-area (tech-ui/create-info-area)]
       
       ;; Add inventory page window
-      (cgui/add-widget! main-widget (:window inv-page))
+      ;(cgui/add-widget! main-widget (:window inv-page))
       
       ;; Position info area
       (cgui/set-position! info-area
@@ -279,7 +288,10 @@
       (cgui/add-widget! main-widget info-area)
       
       (log/info "Created Wireless Matrix GUI")
-      main-widget)
+      
+      (if (:menu opts)
+        {:root main-widget :current (:current tech-ui)}
+        main-widget))
     (catch Exception e
       (log/error "Error creating Matrix GUI:" (.getMessage e))
       (throw e))))
