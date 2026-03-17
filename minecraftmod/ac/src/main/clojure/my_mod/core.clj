@@ -10,6 +10,7 @@
             [my-mod.block.multiblock-core :as mb-core]
             [my-mod.wireless.gui.matrix-network-handler :as matrix-net]
             [my-mod.wireless.gui.node-network-handler :as node-net]
+            [my-mod.wireless.gui.generator-network-handler :as gen-net]
             [my-mod.wireless.world-data :as wd]
             ;; Load all block definitions (so block-dsl registry is populated)
             [my-mod.block.wireless-node]
@@ -38,6 +39,7 @@
   ;; Register GUI network handlers
   (matrix-net/init!)
   (node-net/init!)
+  (gen-net/init!)
   ;; Register generic set-tab handler for tabbed GUIs (inv-window + panels)
   (tabbed-gui/register-set-tab-handler!))
 

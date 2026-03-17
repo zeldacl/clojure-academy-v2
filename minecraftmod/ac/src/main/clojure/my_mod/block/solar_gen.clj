@@ -5,6 +5,9 @@
   namespace. Block metadata and right-click (open GUI) are defined here."
   (:require [my-mod.block.dsl :as bdsl]
             [my-mod.block.tile-dsl :as tdsl]
+            [my-mod.platform.capability :as platform-cap]
+            [my-mod.platform.tile-logic :as tile-logic]
+            [my-mod.block.role-impls :as impls]
             [my-mod.platform.nbt :as nbt]
             [my-mod.platform.item :as item]
             [my-mod.util.log :as log]
@@ -20,6 +23,8 @@
       (catch Exception e
         (log/error "Failed to open SolarGen GUI:" (.getMessage e))
         nil))))
+
+(declare solar-gen)
 
 (bdsl/defblock solar-gen
   :registry-name "solar_gen"
@@ -67,7 +72,10 @@
           current     (double (get state :energy 0.0))
           new-energy  (min max-energy (+ current gen))
           changed?    (and (> gen 0) (not= new-energy current))
-          new-state   (cond-> (assoc state :status status :max-energy max-energy)
+          new-state   (cond-> (assoc state
+                               :status status
+                               :max-energy max-energy
+                               :gen-speed (double gen))
                         changed? (assoc :energy new-energy))]
       (when (not= new-state state)
         (.setCustomState be new-state)
@@ -96,6 +104,8 @@
           (item/item-save-to-nbt stack sub)
           (nbt/nbt-set-tag! tag "Battery" sub))))))
 
+(declare solar-gen-tile)
+
 (tdsl/deftile solar-gen-tile
   :id "solar-gen"
   :registry-name "solar_gen"
@@ -104,6 +114,12 @@
   :tick-fn solar-tick-fn
   :read-nbt-fn solar-read-nbt-fn
   :write-nbt-fn solar-write-nbt-fn)
+
+;; Register capability so wireless system can treat SolarGen as a generator.
+(platform-cap/declare-capability! :wireless-generator my_mod.api.wireless.IWirelessGenerator
+  (fn [be _side] (impls/->WirelessGeneratorImpl be)))
+
+(tile-logic/register-tile-capability! "solar-gen" :wireless-generator)
 
 (defn init-solar-gen!
   []

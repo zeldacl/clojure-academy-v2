@@ -29,6 +29,9 @@
   [{:key :energy     :init (fn [s] (double (get s :energy 0.0)))     :sync? true  :coerce double :close-reset 0.0}
    {:key :max-energy :init (fn [s] (double (get s :max-energy 1000.0))) :sync? true  :coerce double :close-reset 0.0}
    {:key :status     :init (fn [s] (str (get s :status "STOPPED")))  :sync? true  :coerce str    :close-reset ""}
+   {:key :gen-speed  :init (fn [s] (double (get s :gen-speed 0.0)))  :sync? true  :coerce double :close-reset 0.0}
+   ;; Tabbed TechUI support (0=inv, >=1=other pages). Not synced via container packets; server tab state is synced by set-tab message.
+   {:key :tab-index  :init (fn [_] 0)                                :sync? false :coerce int    :close-reset 0}
    {:key :sync-ticker :init (fn [_] 0)                               :sync? false :coerce int    :close-reset 0}])
 
 ;; ============================================================================
@@ -92,7 +95,8 @@
   (let [state (or (common/get-tile-state (:tile-entity container)) {})]
     (reset! (:energy container)     (double (get state :energy 0.0)))
     (reset! (:max-energy container) (double (get state :max-energy 1000.0)))
-    (reset! (:status container)     (str (get state :status "STOPPED")))))
+    (reset! (:status container)     (str (get state :status "STOPPED")))
+    (reset! (:gen-speed container)  (double (get state :gen-speed 0.0)))))
 
 (defn get-sync-data
   "Get container→client sync data. Derived from solar-fields schema."

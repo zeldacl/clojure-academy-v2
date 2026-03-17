@@ -11,6 +11,7 @@
             [my-mod.block.node-schema  :as nschema]
             [my-mod.block.state-schema :as schema])
   (:import [my_mod.api.wireless IWirelessMatrix IWirelessNode]
+           [my_mod.api.wireless IWirelessGenerator]
            [my_mod.api.energy IEnergyCapable]))
 
 ;; ============================================================================
@@ -130,3 +131,29 @@
   Object
   (toString [_]
     (str "ClojureEnergyImpl@" (.getBlockPos be))))
+
+;; ============================================================================
+;; WirelessGeneratorImpl
+;; Implements IWirelessGenerator for ScriptedBlockEntity whose customState stores :energy.
+;; ============================================================================
+
+(deftype WirelessGeneratorImpl [be]
+  IWirelessGenerator
+
+  (getProvidedEnergy [_ req]
+    (let [state (or (.getCustomState be) {})
+          cur (double (get state :energy 0.0))
+          bw (double (get state :gen-speed 0.0))
+          max-out (if (pos? bw) bw req)
+          actual (min (double req) cur max-out)]
+      (when (pos? actual)
+        (.setCustomState be (assoc state :energy (- cur actual))))
+      (double actual)))
+
+  (getGeneratorBandwidth [_]
+    (let [state (or (.getCustomState be) {})]
+      (double (max 0.0 (double (get state :gen-speed 0.0))))))
+
+  Object
+  (toString [_]
+    (str "WirelessGeneratorImpl@" (.getBlockPos be))))
