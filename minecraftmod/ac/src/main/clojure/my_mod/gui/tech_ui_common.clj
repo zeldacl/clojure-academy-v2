@@ -204,7 +204,8 @@
   (let [hist-widget (cgui/create-widget :pos [0 0] :size [210 210])
         _ (comp/add-component! hist-widget
                                (comp/texture (modid/asset-path "textures" "guis/histogram.png") 0 0 210 210))
-        _ (cgui/set-scale! hist-widget 0.4)]
+        _ (cgui/set-scale! hist-widget 0.4)
+        _ (cgui/set-z-level! hist-widget 10)]
     
     ;; Add histogram bars
     (doseq [[elem idx] (map vector elements (range))]
@@ -224,8 +225,8 @@
         (cgui/add-widget! hist-widget bar)))
     
     (info-area-element! info-area hist-widget)
-    ;; Original TechUI applies a negative blank to pull hist properties upward.
-    (info-area-blank! info-area -30)
+    ;; Keep rows below the histogram to avoid overlap in our scaled layout.
+    (info-area-blank! info-area 3)
     
     ;; Add histogram property lines (icon + key/value aligned)
     (doseq [elem elements]
@@ -407,6 +408,7 @@
         state-a (info-area-state-atom info-area)]
     ;; True TechUI BlendQuad (nine-slice + line overlays), rendered by runtime.
     (comp/add-component! bg (comp/blend-quad :margin 4.0 :color 0x80FFFFFF))
+    (cgui/set-z-level! bg -100)
     (cgui/add-widget! info-area bg)
     (swap! (:metadata info-area) assoc :tech-ui/info-area-bg bg)
     (register-blend-targets! info-area bg)
