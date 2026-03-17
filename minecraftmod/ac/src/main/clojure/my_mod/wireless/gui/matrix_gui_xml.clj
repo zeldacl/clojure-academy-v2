@@ -154,7 +154,7 @@
     (let [is-owner? (= (.getPlacerName tile) (.getName player))]
       
       ;; Clear current content
-      (cgui/clear-widgets! info-area)
+      (tech-ui/reset-info-area! info-area)
       
       ;; Build histogram
       (let [y (tech-ui/add-histogram

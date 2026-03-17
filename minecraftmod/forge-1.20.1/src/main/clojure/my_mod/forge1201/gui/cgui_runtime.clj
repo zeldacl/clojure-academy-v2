@@ -259,6 +259,66 @@
       (let [kind (component-kind c)
             state @(component-state c)]
         (cond
+          (kind-matches? kind :blendquad)
+          (let [blend-tex (ensure-resource-location (:blend-tex state))
+                line-tex (ensure-resource-location (:line-tex state))
+                margin (double (or (:margin state) 4.0))
+                color-int (unchecked-int (or (:color state) 0x80FFFFFF))
+                r (/ (double (bit-and (bit-shift-right color-int 16) 0xFF)) 255.0)
+                g (/ (double (bit-and (bit-shift-right color-int 8) 0xFF)) 255.0)
+                b (/ (double (bit-and color-int 0xFF)) 255.0)
+                a (if (pos? (bit-and color-int 0xFF000000))
+                    (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)
+                    1.0)
+                ;; replicate 1.12: xs=[x-margin,x,x+w,x+w+margin], ys=[y-margin,y,y+h,y+h+margin]
+                xs [(double (- x margin)) (double x) (double (+ x w-int)) (double (+ x w-int margin))]
+                ys [(double (- y margin)) (double y) (double (+ y h-int)) (double (+ y h-int margin))]]
+            (when blend-tex
+              (try
+                (RenderSystem/enableBlend)
+                (RenderSystem/defaultBlendFunc)
+                (RenderSystem/setShaderColor (float r) (float g) (float b) (float a))
+                (apply-depth-mode! :none false)
+
+                ;; nine-slice (3x3)
+                (let [tex-size (get-texture-size blend-tex)
+                      tex-w (max 1 (int (or (first tex-size) 48)))
+                      tex-h (max 1 (int (or (second tex-size) 48)))
+                      cell-w (max 1 (int (Math/floor (/ tex-w 3.0))))
+                      cell-h (max 1 (int (Math/floor (/ tex-h 3.0))))]
+                  (doseq [i (range 3)
+                          j (range 3)]
+                    (let [x0 (int (Math/round (nth xs i)))
+                          y0 (int (Math/round (nth ys j)))
+                          x1 (int (Math/round (nth xs (inc i))))
+                          y1 (int (Math/round (nth ys (inc j))))
+                          tw (max 1 (- x1 x0))
+                          th (max 1 (- y1 y0))
+                          u (* i cell-w)
+                          v (* j cell-h)]
+                      (blit-scaled-region! gg blend-tex x0 y0 tw th u v cell-w cell-h 0.0 tex-w tex-h))))
+
+                ;; line overlays (1.12 HudUtils.rect on lineTex)
+                (when line-tex
+                  (let [mrg 3.2
+                        top-x (int (Math/round (- x mrg)))
+                        top-y (int (Math/round (- y 8.6)))
+                        top-w (int (Math/round (+ w-int (* mrg 2.0))))
+                        top-h (int (Math/round 12.0))
+                        bot-x (int (Math/round (- x mrg)))
+                        bot-y (int (Math/round (+ y h-int -2.0)))
+                        bot-w (int (Math/round (+ w-int (* mrg 2.0))))
+                        bot-h (int (Math/round 8.0))
+                        line-size (get-texture-size line-tex)
+                        lw (max 1 (int (or (first line-size) 1)))
+                        lh (max 1 (int (or (second line-size) 1)))]
+                    (blit-scaled-region! gg line-tex top-x top-y top-w top-h 0 0 lw lh 0.0 lw lh)
+                    (blit-scaled-region! gg line-tex bot-x bot-y bot-w bot-h 0 0 lw lh 0.0 lw lh)))
+
+                (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
+                (catch Exception e
+                  (log/debug "CGUI blendquad render error:" (.getMessage e)))))) 
+
           (kind-matches? kind :drawtexture)
           (let [tex-loc (ensure-resource-location (:texture state))]
             (if tex-loc
@@ -327,7 +387,10 @@
               (.fill gg x y (+ x w-int) (+ y h-int) (unchecked-int (or (:color state) 0xFFFFFF)))))
 
           (kind-matches? kind :textbox)
-          (let [text  (str (or (:text state) ""))
+          (let [raw-text  (str (or (:text state) ""))
+                text (if (and (:masked? state) (seq raw-text))
+                       (apply str (repeat (count raw-text) \*))
+                       raw-text)
                 color (unchecked-int (or (:color state) 0xFFFFFF))
                 font  (.font (Minecraft/getInstance))]
             (when (seq text)
@@ -339,7 +402,7 @@
                 (let [font (.font (Minecraft/getInstance))
                       ;; compute caret x at end of text for now
                       caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
-                      caret-x (+ x (int (.width font (str (or (:text state) "")))))]
+                      caret-x (+ x (int (.width font text)))]
                   (when caret-visible?
                     (.drawString gg font "|" caret-x y color)))
                 (catch Exception _ nil))))
@@ -495,7 +558,34 @@
           focus-atom (:cgui-focus m)
           focus (when focus-atom @focus-atom)
           target (or focus root)]
-      (cgui/emit-widget-event! target :key {:keyCode keyCode :scanCode scanCode :typedChar typedChar}))))
+      (cgui/emit-widget-event! target :key {:keyCode keyCode :scanCode scanCode :typedChar typedChar})
+      ;; Minimal TextBox editing support for focused widget.
+      ;; This drives :change-content and :confirm-input events used by TechUI property editors.
+      (when focus
+        (when-let [tb (cgui/get-widget-component focus :textbox)]
+          (let [st (:state tb)]
+            (when (and st (:editable? @st))
+              (let [enter-keys #{257 335 28}     ;; GLFW_ENTER, GLFW_KP_ENTER, legacy
+                    backspace-keys #{259 14}     ;; GLFW_BACKSPACE, legacy
+                    ;; Note: charTyped path passes typedChar with keyCode=0
+                    has-char? (and typedChar (not= typedChar (char 0)))
+                    curr (str (or (:text @st) ""))]
+                (cond
+                  (contains? backspace-keys keyCode)
+                  (when (pos? (count curr))
+                    (swap! st assoc :text (subs curr 0 (dec (count curr))))
+                    (cgui/emit-widget-event! focus :change-content {:value (str (:text @st))}))
+
+                  (contains? enter-keys keyCode)
+                  (cgui/emit-widget-event! focus :confirm-input {:value curr})
+
+                  has-char?
+                  (do
+                    (swap! st assoc :text (str curr typedChar))
+                    (cgui/emit-widget-event! focus :change-content {:value (str (:text @st))}))
+
+                  :else
+                  nil)))))))))
 
 (defn dispose!
   "Release any CGUI state. Currently a no-op; widget tree is GC'd when screen is closed."

@@ -176,7 +176,7 @@
 (defn- fallback-container-screen
   "Minimal AbstractContainerScreen that only draws a dark gradient (no CGUI)."
   [menu player-inventory title]
-  (proxy [AbstractContainerScreen] [menu player-inventory title]
+  (proxy [CGuiContainerScreen] [menu player-inventory title]
     (renderBg [^GuiGraphics gg _partial _mx _my]
       (let [left (.getGuiLeft this)
             top (.getGuiTop this)

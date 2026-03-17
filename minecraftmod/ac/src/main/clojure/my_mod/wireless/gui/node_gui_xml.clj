@@ -280,7 +280,7 @@
           owner-name (node-container/get-owner container)
           is-owner? (= owner-name (.getName player))]
 
-      (cgui/clear-widgets! info-area)
+      (tech-ui/reset-info-area! info-area)
 
       (let [y (tech-ui/add-histogram
                 info-area

@@ -121,6 +121,11 @@
                                   :scale (:scale spec 1.0)
                                   :rotate (:rotate spec 0.0)})
       :breathe-effect (make-component :breathe-effect {:phase 0.0 :speed 1.0})
+      :blendquad (make-component :blendquad
+                                 {:margin (double (:margin spec 4.0))
+                                  :color (unchecked-int (or (:color spec) 0x80FFFFFF))
+                                  :blend-tex (:blend-tex spec "textures/guis/blend_quad.png")
+                                  :line-tex (:line-tex spec "textures/guis/line.png")})
       (throw (ex-info "Unknown component kind" {:kind kind})))))
 
 (defn set-texture!
@@ -140,7 +145,7 @@
   draw-tex)
 
 (defn render-texture-region
-  [widget texture-path x y w h u0 v0 u1 v1]
+  [widget texture-path _x _y _w _h u0 v0 u1 v1]
   (let [dt (or (get-drawtexture-component widget)
                (let [new-dt (create-native-component (texture texture-path))]
                  (add-component! widget new-dt)
@@ -282,6 +287,16 @@
 
 (defn breathe-effect []
   {::kind :breathe-effect})
+
+(defn blend-quad
+  "TechUI InfoArea background. Draws a 3x3 nine-slice blend quad with extra line overlays.
+
+  Keys:
+  - :margin (default 4.0): outer margin for nine-slice.
+  - :color  (default 0x80FFFFFF): ARGB tint/alpha applied when rendering."
+  [& {:keys [margin color]
+      :or {margin 4.0 color 0x80FFFFFF}}]
+  {::kind :blendquad :margin margin :color color})
 
 (defn text-field
   [& {:keys [text placeholder]

@@ -45,9 +45,9 @@
     (cgui/set-position! info-area (+ (cgui/get-width main-widget) 7) 5)
     (let [energy-elem (tech-ui/hist-energy (fn [] @(:energy container))
                                           (max 1.0 @(:max-energy container)))]
-      (cgui/clear-widgets! info-area)
-      (tech-ui/add-histogram info-area [energy-elem] 10)
-      (let [y (tech-ui/add-sepline info-area "Solar" 102)]
+      (tech-ui/reset-info-area! info-area)
+      (let [y (tech-ui/add-histogram info-area [energy-elem] 10)
+            y (tech-ui/add-sepline info-area "Solar" y)]
         (tech-ui/add-property info-area "Status"
                               (fn [] @(:status container))
                               y)))

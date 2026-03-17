@@ -66,6 +66,130 @@
 ;; InfoArea辅助函数 (参照TechUI.ContainerUI.InfoArea)
 ;; ============================================================================
 
+(def ^:private info-area-key-length 40)
+(def ^:private info-area-expect-width 100.0)
+(def ^:private info-area-min-height 50.0)
+
+(defn- now-sec []
+  (/ (double (System/currentTimeMillis)) 1000.0))
+
+(defn- argb-ensure-alpha [color-int]
+  (let [c (long (or color-int 0xFFFFFFFF))]
+    (if (pos? (bit-and c 0xFF000000))
+      (unchecked-int c)
+      (unchecked-int (bit-or 0xFF000000 c)))))
+
+(defn- argb-with-alpha [color-int alpha-byte]
+  (let [base (long (argb-ensure-alpha color-int))
+        a (bit-and (long alpha-byte) 0xFF)]
+    (unchecked-int (bit-or (bit-shift-left a 24) (bit-and base 0x00FFFFFF)))))
+
+(defn- info-area-state-atom
+  "Return the state atom stored on info-area metadata, creating if absent."
+  [info-area]
+  (let [m (:metadata info-area)]
+    (or (:tech-ui/info-area-state @m)
+        (let [a (atom {:elem-y 10.0
+                       :elements-count 0
+                       :expect-width info-area-expect-width
+                       :expect-height info-area-min-height
+                       :last-frame-time (now-sec)
+                       :blend-start-time (now-sec)
+                       :blend-targets []})]
+          (swap! m assoc :tech-ui/info-area-state a)
+          a))))
+
+(defn- widget-tree
+  "Return a seq of widget and all descendants (depth-first)."
+  [root]
+  (when root
+    (cons root (mapcat widget-tree (cgui/get-widgets root)))))
+
+(defn- register-blend-targets!
+  "Scan widget subtree and register any components that should participate in InfoArea fade-in."
+  [info-area widget]
+  (let [state-a (info-area-state-atom info-area)]
+    (swap! state-a
+           (fn [st]
+             (let [targets
+                   (->> (widget-tree widget)
+                        (mapcat (fn [w]
+                                  (mapcat
+                                    (fn [c]
+                                      (when (map? c)
+                                        (let [k (:kind c)
+                                              s (:state c)]
+                                          (cond
+                                            (= k :drawtexture)
+                                            [{:kind :drawtexture :state s :key :color :base (argb-ensure-alpha (:color @s 0xFFFFFFFF))}]
+
+                                            (= k :textbox)
+                                            [{:kind :textbox :state s :key :color :base (argb-ensure-alpha (:color @s 0xFFFFFFFF))}]
+
+                                            (= k :progressbar)
+                                            [{:kind :progressbar :state s :key :color-full :base (argb-ensure-alpha (:color-full @s 0xFFFFFFFF))}
+                                             {:kind :progressbar :state s :key :color-empty :base (argb-ensure-alpha (:color-empty @s 0xFFFFFFFF))}]
+
+                                            :else
+                                            []))))
+                                    @(:components w))))
+                        vec)]
+               (update st :blend-targets into targets))))))
+
+(defn reset-info-area!
+  "Clear InfoArea content and reset its internal layout/animation state."
+  [info-area]
+  (cgui/clear-widgets! info-area)
+  (when-let [bg (:tech-ui/info-area-bg @(:metadata info-area))]
+    (cgui/add-widget! info-area bg))
+  (let [state-a (info-area-state-atom info-area)]
+    (reset! state-a {:elem-y 10.0
+                     :elements-count 0
+                     :expect-width info-area-expect-width
+                     :expect-height info-area-min-height
+                     :last-frame-time (now-sec)
+                     :blend-start-time (now-sec)
+                     :blend-targets []}))
+  (when-let [bg (:tech-ui/info-area-bg @(:metadata info-area))]
+    (register-blend-targets! info-area bg))
+  info-area)
+
+(defn- maybe-init-elem-y!
+  [info-area y-offset]
+  (when (number? y-offset)
+    (let [state-a (info-area-state-atom info-area)]
+      (swap! state-a
+             (fn [st]
+               (if (zero? (long (:elements-count st 0)))
+                 (assoc st :elem-y (double y-offset))
+                 st))))))
+
+(defn- info-area-blank!
+  [info-area ht]
+  (let [state-a (info-area-state-atom info-area)]
+    (swap! state-a update :elem-y (fnil #(+ (double %) (double ht)) 0.0)))
+  info-area)
+
+(defn- info-area-element!
+  "Stack an element into InfoArea using internal elem-y, update expect-height, and register blend targets."
+  [info-area elem]
+  (let [state-a (info-area-state-atom info-area)
+        [_ew eh] (cgui/get-size elem)
+        s (double (or @(:scale elem) 1.0))]
+    (swap! state-a
+           (fn [st]
+             (let [y (double (:elem-y st 10.0))
+                   next-y (+ y (* (double eh) s))
+                   next-expect (max info-area-min-height (+ next-y 8.0))]
+               (cgui/set-pos! elem (first (cgui/get-pos elem)) y)
+               (-> st
+                   (assoc :elem-y next-y)
+                   (update :elements-count (fnil inc 0))
+                   (assoc :expect-height next-expect)))))
+    (cgui/add-widget! info-area elem)
+    (register-blend-targets! info-area elem))
+  info-area)
+
 (defn add-histogram
   "Add histogram widget to info area
   
@@ -76,9 +200,10 @@
   
   Returns: Updated Y offset"
   [info-area elements y-offset]
-  (let [hist-widget (cgui/create-widget :pos [0 y-offset] :size [210 210])
-    _ (comp/add-component! hist-widget
-      (comp/texture (modid/asset-path "textures" "guis/histogram.png") 0 0 210 210))
+  (maybe-init-elem-y! info-area y-offset)
+  (let [hist-widget (cgui/create-widget :pos [0 0] :size [210 210])
+        _ (comp/add-component! hist-widget
+                               (comp/texture (modid/asset-path "textures" "guis/histogram.png") 0 0 210 210))
         _ (cgui/set-scale! hist-widget 0.4)]
     
     ;; Add histogram bars
@@ -88,7 +213,8 @@
             progress (comp/progress-bar
                        :direction :vertical
                        :progress 0.0
-                       :color (:color elem))]
+                       :color-full (:color elem)
+                       :color-empty 0x20404040)]
         (comp/add-component! bar progress)
         (events/on-frame bar
           (fn [_]
@@ -97,27 +223,30 @@
               (comp/set-progress! progress clamped))))
         (cgui/add-widget! hist-widget bar)))
     
-    (cgui/add-widget! info-area hist-widget)
+    (info-area-element! info-area hist-widget)
+    ;; Original TechUI applies a negative blank to pull hist properties upward.
+    (info-area-blank! info-area -30)
     
-    ;; Add histogram property labels below
-    (let [prop-start-y (+ y-offset 90)]
-      (reduce
-        (fn [y elem]
-          (let [prop-widget (cgui/create-widget :pos [6 y] :size [88 8])
-                icon (cgui/create-widget :pos [-3 0.5] :size [6 6])
-                label-box (comp/text-box :text (:label elem) :color 0xFFAAAAAA :scale 0.8)
-                value-box (comp/text-box :text "" :color 0xFFFFFFFF :scale 0.8)]
-            (comp/add-component! icon (comp/draw-texture nil (:color elem)))
-            (comp/add-component! prop-widget label-box)
-            (comp/add-component! prop-widget value-box)
-            (events/on-frame prop-widget
-              (fn [_]
-                (comp/set-text! value-box ((:desc-fn elem)))))
-            (cgui/add-widget! prop-widget icon)
-            (cgui/add-widget! info-area prop-widget)
-            (+ y 8)))
-        prop-start-y
-        elements))))
+    ;; Add histogram property lines (icon + key/value aligned)
+    (doseq [elem elements]
+      (let [row (cgui/create-widget :pos [6 0] :size [(- info-area-expect-width 10) 8])
+            key-area (cgui/create-widget :pos [4 0] :size [32 8])
+            icon (cgui/create-widget :pos [-3 0.5] :size [6 6])
+            value-area (cgui/create-widget :pos [info-area-key-length 0] :size [40 8])
+            key-box (comp/text-box :text (str (:label elem)) :color 0xFFAAAAAA :scale 0.8)
+            value-box (comp/text-box :text (str ((:desc-fn elem))) :color 0xFFFFFFFF :scale 0.8)]
+        (comp/add-component! icon (comp/draw-texture nil (:color elem)))
+        (comp/add-component! key-area key-box)
+        (comp/add-component! value-area value-box)
+        (events/on-frame value-area (fn [_] (comp/set-text! value-box ((:desc-fn elem)))))
+        (cgui/add-widget! row key-area)
+        (cgui/add-widget! row icon)
+        (cgui/add-widget! row value-area)
+        (info-area-element! info-area row)))
+    ;; small gap before next section
+    (info-area-blank! info-area 3)
+    ;; Return a y-offset compatible with old callers.
+    (double (:elem-y @(info-area-state-atom info-area)))))
 
 (defn add-sepline
   "Add separator line
@@ -129,14 +258,17 @@
   
   Returns: Updated Y offset"
   [info-area label y-offset]
-  (let [sep-widget (cgui/create-widget :pos [3 y-offset] :size [97 8])]
+  (maybe-init-elem-y! info-area y-offset)
+  (info-area-blank! info-area 3)
+  (let [sep-widget (cgui/create-widget :pos [3 0] :size [97 8])]
     (comp/add-component! sep-widget
       (comp/text-box
         :text label
         :color 0x99FFFFFF
         :scale 0.6))
-    (cgui/add-widget! info-area sep-widget)
-    (+ y-offset 11)))
+    (info-area-element! info-area sep-widget)
+    (info-area-blank! info-area 3)
+    (double (:elem-y @(info-area-state-atom info-area)))))
 
 (defn add-property
   "Add property field (read-only or editable)
@@ -151,36 +283,56 @@
   Returns: Updated Y offset"
   [info-area label value y-offset & {:keys [editable? on-change masked? color-change?]
                                       :or {editable? false masked? false color-change? true}}]
-  (let [prop-widget (cgui/create-widget :pos [6 y-offset] :size [88 8])
-        label-box (comp/text-box :text label :color 0xFFAAAAAA :scale 0.8)
+  (maybe-init-elem-y! info-area y-offset)
+  (let [prop-widget (cgui/create-widget :pos [6 0] :size [(- info-area-expect-width 10) 8])
+        key-area (cgui/create-widget :pos [0 0] :size [info-area-key-length 8])
+        ;; remaining width for value (roughly)
+        value-area (cgui/create-widget :pos [info-area-key-length 0]
+                                       :size [(max 1 (- info-area-expect-width info-area-key-length 10)) 8])
+        label-box (comp/text-box :text (str label) :color 0xFFAAAAAA :scale 0.8)
         value-text (if (fn? value) (value) (str value))
-        value-color (if editable? 0xFF2180d8 0xFFFFFFFF)
+        idle-color 0xFFFFFFFF
+        edit-color 0xFF2180d8
+        value-color (if editable? edit-color idle-color)
         value-box (comp/text-box :text value-text :color value-color :scale 0.8 :masked? masked?)]
     
-    (comp/add-component! prop-widget label-box)
-    (comp/add-component! prop-widget value-box)
+    (comp/add-component! key-area label-box)
+    (comp/add-component! value-area value-box)
+    (cgui/add-widget! prop-widget key-area)
+    (cgui/add-widget! prop-widget value-area)
     
     (when editable?
       (comp/set-editable! value-box true)
+      ;; Visual brackets around editable value area.
+      (let [box (fn [ch x]
+                  ;; size 0 so it won't steal focus in hit-test, but still renders text
+                  (let [w (cgui/create-widget :pos [x 0] :size [0 0])
+                        tb (comp/text-box :text ch :color 0xFFAAAAAA :scale 0.8)]
+                    (comp/add-component! w tb)
+                    w))
+            left (box "[" -4)
+            right (box "]" (+ (cgui/get-width value-area) 2))]
+        (cgui/add-widget! value-area left)
+        (cgui/add-widget! value-area right))
       (when on-change
         (events/on-confirm-input value-box
           (fn [new-val]
             (on-change new-val)
             (when color-change?
-              (comp/set-text-color! value-box 0xFFFFFFFF))))
+              (comp/set-text-color! value-box idle-color))))
         (when color-change?
           (events/on-change-content value-box
             (fn [_]
-              (comp/set-text-color! value-box 0xFF2180d8))))))
+              (comp/set-text-color! value-box edit-color))))))
     
     (when-not editable?
       (when (fn? value)
-        (events/on-frame prop-widget
+        (events/on-frame value-area
           (fn [_]
             (comp/set-text! value-box (value))))))
     
-    (cgui/add-widget! info-area prop-widget)
-    (+ y-offset 10)))
+    (info-area-element! info-area prop-widget)
+    (double (:elem-y @(info-area-state-atom info-area)))))
 
 (defn add-button
   "Add button
@@ -193,7 +345,8 @@
   
   Returns: Updated Y offset"
   [info-area text on-click y-offset]
-  (let [button-widget (cgui/create-widget :pos [50 y-offset] :size [50 8])
+  (maybe-init-elem-y! info-area y-offset)
+  (let [button-widget (cgui/create-widget :pos [50 0] :size [50 8])
         text-box (comp/text-box :text text :color 0xFFFFFFFF :scale 0.9)]
     (comp/add-component! button-widget text-box)
     (events/on-left-click button-widget on-click)
@@ -206,8 +359,8 @@
                    (bit-shift-left color-val 16)
                    (bit-shift-left color-val 8)
                    color-val)))))
-    (cgui/add-widget! info-area button-widget)
-    (+ y-offset 11)))
+    (info-area-element! info-area button-widget)
+    (double (:elem-y @(info-area-state-atom info-area)))))
 
 ;; ============================================================================
 ;; Histogram元素构建器 (参照TechUI.histEnergy等)
@@ -246,9 +399,39 @@
   
   Returns: InfoArea widget"
   []
-  (let [info-area (cgui/create-container :pos [0 0] :size [100 50])]
-    ;; TODO: Add BlendQuad component
-    ;; (comp/add-component! info-area (comp/blend-quad :margin 4))
+  (let [info-area (cgui/create-container :pos [0 0] :size [info-area-expect-width info-area-min-height])
+        bg (cgui/create-widget :name "info_area_bg" :pos [0 0] :size [info-area-expect-width info-area-min-height])
+        state-a (info-area-state-atom info-area)]
+    ;; True TechUI BlendQuad (nine-slice + line overlays), rendered by runtime.
+    (comp/add-component! bg (comp/blend-quad :margin 4.0 :color 0x80FFFFFF))
+    (cgui/add-widget! info-area bg)
+    (swap! (:metadata info-area) assoc :tech-ui/info-area-bg bg)
+    (register-blend-targets! info-area bg)
+
+    (events/on-frame info-area
+      (fn [_evt]
+        (let [t (now-sec)]
+          (swap! state-a
+                 (fn [{:keys [last-frame-time expect-width expect-height blend-start-time blend-targets] :as st}]
+                   (let [dt (min 0.5 (max 0.0 (- t (double (or last-frame-time t)))))
+                         move (fn [from to]
+                                (let [max-step (* dt 500.0)
+                                      delta (- (double to) (double from))
+                                      step (min max-step (Math/abs delta))]
+                                  (+ (double from) (* step (Math/signum delta)))))
+                         [cur-w cur-h] (cgui/get-size info-area)
+                         nw (move cur-w expect-width)
+                         nh (move cur-h expect-height)
+                         ;; fade in over ~0.3s after 0.3s delay (same shape as old TechUI)
+                         balpha (-> (/ (- t (double blend-start-time) 0.3) 0.3)
+                                    (max 0.0) (min 1.0))
+                         a (int (Math/round (* 255.0 balpha)))]
+                     (cgui/set-size! info-area nw nh)
+                     (cgui/set-size! bg nw nh)
+                     (doseq [{:keys [state key base]} blend-targets]
+                       (when (and state key)
+                         (swap! state assoc key (argb-with-alpha base a))))
+                     (assoc st :last-frame-time t)))))))
     info-area))
 
 ;; ============================================================================
