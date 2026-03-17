@@ -11,6 +11,7 @@
             [my-mod.config.modid :as modid]
             [my-mod.network.client :as net-client]
             [my-mod.util.log :as log]
+            [my-mod.client.i18n :as i18n]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.wireless.gui.node-messages :as node-msgs]
             [my-mod.wireless.gui.generator-messages :as gen-msgs]))
@@ -81,7 +82,7 @@
             text-name (cgui/find-widget connected-elem "text_name")
             connected? (some? linked)
             alpha (if connected? 1.0 0.6)
-            name (if connected? (name-fn linked) "Not Connected")]
+            name (if connected? (name-fn linked) (i18n/translate "ac.gui.common.pg_wireless.not_connected"))]
         (reset! linked-atom linked)
         (when icon-connect
           (set-drawtexture! icon-connect
