@@ -152,21 +152,26 @@
   - data: MatrixNetworkData"
   [info-area tile player data]
   (try
-    (let [is-owner? (= (.getPlacerName tile) (.getName player))]
+    (let [placer (try (.getPlacerName tile) (catch Exception _ (:owner data)))
+          player-name (try (.getName player) (catch Exception _ (str player)))
+          is-owner? (= (str placer) (str player-name))
+          cap (:max-capacity data)
+          range (:range data)
+          bandwidth (:bandwidth data)]
       (tech-ui/reset-info-area! info-area)
       (let [y (tech-ui/add-histogram
                 info-area
                 [(tech-ui/hist-capacity
                    (fn [] (:load data))
-                   (.getCapacity tile))]
+                   cap)]
                 10)
             y (tech-ui/add-sepline info-area "info" y)
-            y (tech-ui/add-property info-area "owner" (.getPlacerName tile) y)
+            y (tech-ui/add-property info-area "owner" placer y)
             y (tech-ui/add-property info-area "range"
-                                    (format "%.0f" (double (.getRange tile)))
+                                    (format "%.0f" (double range))
                                     y)
             y (tech-ui/add-property info-area "bandwidth"
-                                    (str (.getBandwidth tile) " IF/T")
+                                    (str bandwidth " IF/T")
                                     y)]
         (if (network-initialized? data)
           (let [y (tech-ui/add-sepline info-area "wireless_info" y)]
