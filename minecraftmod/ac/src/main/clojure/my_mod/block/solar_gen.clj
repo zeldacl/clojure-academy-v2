@@ -6,7 +6,7 @@
   (:require [my-mod.block.dsl :as bdsl]
             [my-mod.block.tile-dsl :as tdsl]
             [my-mod.platform.capability :as platform-cap]
-            [my-mod.platform.tile-logic :as tile-logic]
+            [my-mod.block.tile-logic :as tile-logic]
             [my-mod.block.role-impls :as impls]
             [my-mod.platform.nbt :as nbt]
             [my-mod.platform.item :as item]

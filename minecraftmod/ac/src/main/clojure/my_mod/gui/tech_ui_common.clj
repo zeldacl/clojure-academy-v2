@@ -278,10 +278,10 @@
   - label: String - property name
   - value: Any - current value (or value-fn for dynamic)
   - y-offset: Y position
-  - opts: {:editable? :on-change :masked? :color-change?}
+  - opts: {:editable? :on-change :masked? :color-change? :content-cell}
   
   Returns: Updated Y offset"
-  [info-area label value y-offset & {:keys [editable? on-change masked? color-change?]
+  [info-area label value y-offset & {:keys [editable? on-change masked? color-change? content-cell]
                                       :or {editable? false masked? false color-change? true}}]
   (maybe-init-elem-y! info-area y-offset)
   (let [prop-widget (cgui/create-widget :pos [6 0] :size [(- info-area-expect-width 10) 8])
@@ -300,6 +300,9 @@
     (comp/add-component! value-area value-box)
     (cgui/add-widget! prop-widget key-area)
     (cgui/add-widget! prop-widget value-area)
+
+    (when (instance? clojure.lang.IAtom content-cell)
+      (reset! content-cell value-box))
     
     (when editable?
       (comp/set-editable! value-box true)

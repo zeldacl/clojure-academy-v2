@@ -29,8 +29,9 @@
 (defn is-owner?
   "检查玩家是否是Matrix的所有者"
   [tile player]
-  (let [player-name (try (.getName player) (catch Exception _ (str player)))]
-    (= (:placer-name tile) player-name)))
+  (let [player-name (try (.getName player) (catch Exception _ (str player)))
+        placer-name (try (.getPlacerName tile) (catch Exception _ nil))]
+    (= (str placer-name) (str player-name))))
 
 ;; ==================== 消息处理器 ====================
 

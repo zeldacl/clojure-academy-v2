@@ -46,7 +46,7 @@
    ])
 
 (defn network-initialized? [data]
-  "Check if network is initialized"
+  ;; Check if network is initialized
   (:initialized data))
 
 ;; ============================================================================
@@ -153,86 +153,69 @@
   [info-area tile player data]
   (try
     (let [is-owner? (= (.getPlacerName tile) (.getName player))]
-      
-      ;; Clear current content
       (tech-ui/reset-info-area! info-area)
-      
-      ;; Build histogram
       (let [y (tech-ui/add-histogram
                 info-area
                 [(tech-ui/hist-capacity
                    (fn [] (:load data))
                    (.getCapacity tile))]
-                10)]
-        
-        ;; Add separator - Info
-        (let [y (tech-ui/add-sepline info-area "Info" y)]
-          
-          ;; Basic properties (always visible)
-          (let [y (tech-ui/add-property info-area "Owner" (.getPlacerName tile) y)
-                y (tech-ui/add-property info-area "Range" 
-                                        (str (.getRange tile) " blocks")
-                                        y)
-                y (tech-ui/add-property info-area "Bandwidth"
-                                        (str (.getBandwidth tile) " IF/T")
-                                        y)]
-            
-            (if (network-initialized? data)
-              ;; Network initialized: show wireless info
-              (let [y (tech-ui/add-sepline info-area "Wireless Info" y)]
-                (if is-owner?
-                  ;; Owner: editable SSID and password
-                  (let [y (tech-ui/add-property 
-                            info-area "SSID" (:ssid data) y
-                            :editable? true
-                            :on-change (fn [new-ssid]
-                                        (send-change-ssid tile new-ssid)))
-                        y (tech-ui/add-sepline info-area "Change Pass" y)
-                        y (tech-ui/add-property
-                            info-area "Password" (:password data) y
-                            :editable? true
-                            :masked? true
-                            :on-change (fn [new-pass]
-                                        (send-change-password tile new-pass)))]
-                    y)
-                  ;; Non-owner: read-only
-                  (let [y (tech-ui/add-property info-area "SSID" (:ssid data) y)
-                        y (tech-ui/add-property info-area "Password" (:password data) y
-                                                :masked? true)]
-                    y)))
-              
-              ;; Network not initialized
-              (if is-owner?
-                ;; Owner: show init form
-                (let [ssid-atom (atom "")
-                      pass-atom (atom "")
-                      y (tech-ui/add-sepline info-area "Wireless Init" y)
-                      y (tech-ui/add-property
-                          info-area "SSID" @ssid-atom y
-                          :editable? true
-                          :color-change? false
-                          :on-change (fn [v] (reset! ssid-atom v)))
-                      y (tech-ui/add-property
-                          info-area "Password" @pass-atom y
-                          :editable? true
-                          :masked? true
-                          :color-change? false
-                          :on-change (fn [v] (reset! pass-atom v)))
-                      y (+ y 1)
-                      y (tech-ui/add-button
-                          info-area "INIT"
-                          (fn []
-                            (send-init-network tile @ssid-atom @pass-atom
-                              (fn [success]
-                                (when success
-                                  (send-gather-info tile
-                                    (fn [new-data]
-                                      (rebuild-info-area! info-area tile player new-data)))))))
-                          y)]
-                  y)
-                ;; Non-owner: show message
-                (let [y (tech-ui/add-sepline info-area "Wireless NoInit" y)]
-                  y)))))))
+                10)
+            y (tech-ui/add-sepline info-area "info" y)
+            y (tech-ui/add-property info-area "owner" (.getPlacerName tile) y)
+            y (tech-ui/add-property info-area "range"
+                                    (format "%.0f" (double (.getRange tile)))
+                                    y)
+            y (tech-ui/add-property info-area "bandwidth"
+                                    (str (.getBandwidth tile) " IF/T")
+                                    y)]
+        (if (network-initialized? data)
+          (let [y (tech-ui/add-sepline info-area "wireless_info" y)]
+            (if is-owner?
+              (let [y (tech-ui/add-property
+                        info-area "ssid" (:ssid data) y
+                        :editable? true
+                        :on-change (fn [new-ssid]
+                                    (send-change-ssid tile new-ssid)))
+                    y (tech-ui/add-sepline info-area "change_pass" y)
+                    y (tech-ui/add-property
+                        info-area "password" (:password data) y
+                        :editable? true
+                        :masked? true
+                        :on-change (fn [new-pass]
+                                    (send-change-password tile new-pass)))]
+                y)
+              (let [y (tech-ui/add-property info-area "ssid" (:ssid data) y)
+                    y (tech-ui/add-property info-area "password" (:password data) y
+                                            :masked? true)]
+                y)))
+          (if is-owner?
+            (let [ssid-cell (atom nil)
+                  pass-cell (atom nil)
+                  y (tech-ui/add-sepline info-area "wireless_init" y)
+                  y (tech-ui/add-property info-area "ssid" "" y
+                                          :editable? true
+                                          :color-change? false
+                                          :content-cell ssid-cell)
+                  y (tech-ui/add-property info-area "password" "" y
+                                          :editable? true
+                                          :masked? true
+                                          :color-change? false
+                                          :content-cell pass-cell)
+                  y (+ y 1)
+                  y (tech-ui/add-button
+                      info-area "INIT"
+                      (fn []
+                        (let [ssid (if-let [tb @ssid-cell] (comp/get-text tb) "")
+                              pass (if-let [tb @pass-cell] (comp/get-text tb) "")]
+                          (send-init-network tile ssid pass
+                            (fn [success]
+                              (when success
+                                (send-gather-info tile
+                                  (fn [new-data]
+                                    (rebuild-info-area! info-area tile player new-data))))))))
+                      y)]
+              y)
+            (tech-ui/add-sepline info-area "wireless_noinit" y)))))
     (catch Exception e
       (log/error "Error rebuilding info area:" (.getMessage e)))))
 
@@ -255,16 +238,10 @@
           
           ;; Create inventory page using shared builder
           inv-page (tech-ui/create-inventory-page "matrix")
-          
-          ;; Create main TechUI widget
-          ;main-widget (cgui/create-container :pos [-18 0] :size [gui-width gui-height])
-          ;;tech-ui (apply tech-ui/create-tech-ui pages)
-          ;; Compose tech UI from pages (inventory, info, wireless)
           pages [inv-page]
-          container-id (when-let [m (:menu opts)] (gui/get-menu-container-id m))
+          
+          ;; Compose tech UI from pages (inv only, like Scala GuiMatrix2)
           tech-ui (apply tech-ui/create-tech-ui pages)
-          ;; Attach generic tab-change sync (pages sequence, tech-ui map, container, container-id)
-          _ (tabbed-gui/attach-tab-sync! pages tech-ui container container-id)
           ;tech-ui (tech-ui/create-tech-ui)
           main-widget (:window tech-ui)
           
@@ -310,9 +287,12 @@
   
   Returns: CGuiScreenContainer"
   [container minecraft-container player]
-  (let [root (create-matrix-gui container player)
+  (let [gui (create-matrix-gui container player {:menu minecraft-container})
+        root (if (map? gui) (:root gui) gui)
         base (cgui/create-cgui-screen-container root minecraft-container)]
-    (tech-ui/assoc-tech-ui-screen-size base)))
+    (if (map? gui)
+      (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current gui)))
+      (tech-ui/assoc-tech-ui-screen-size base))))
 
 ;; ============================================================================
 ;; Public API

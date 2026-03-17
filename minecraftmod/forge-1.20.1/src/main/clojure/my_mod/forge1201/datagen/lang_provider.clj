@@ -1,49 +1,35 @@
 (ns my-mod.forge1201.datagen.lang-provider
-  "Forge 1.20.1 language (lang JSON) datagen.
-
-  Generates:
-  - assets/my_mod/lang/en_us.json
-  - assets/my_mod/lang/zh_cn.json"
   (:require [my-mod.config.modid :as modid])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
-           [java.nio.file Files Path]
-           [java.nio.charset StandardCharsets]
+           [java.nio.file Path]
            [java.util.concurrent CompletableFuture]
-           [com.google.gson GsonBuilder]))
+           [com.google.gson Gson GsonBuilder JsonElement]))
 
-(def ^:private gson
-  (-> (GsonBuilder.)
-      (.setPrettyPrinting)
-      (.disableHtmlEscaping)
-      (.create)))
+;; 1. 显式类型暗示的变量
+(def ^:private ^Gson gson
+  (-> (GsonBuilder.) (.setPrettyPrinting) (.disableHtmlEscaping) (.create)))
 
-(def ^:private en-us
-  {"itemGroup.my_mod.items" "My Mod Items"
-   ;; AcademyCraft TechUI WirelessPage (pg_wireless)
-   "ac.gui.common.pg_wireless.not_connected" "Not Connected"})
-
-(def ^:private zh-cn
-  {"itemGroup.my_mod.items" "My Mod Items"
-   "ac.gui.common.pg_wireless.not_connected" "未连接"})
-
-(defn- write-json!
-  [^Path path m]
-  (let [parent (.getParent path)]
-    (when parent
-      (Files/createDirectories parent))
-    (Files/writeString path (.toJson gson m) StandardCharsets/UTF_8)))
+(def ^:private lang-data
+  {"en_us.json" {"itemGroup.my_mod.items" "My Mod Items"
+                 "ac.gui.common.pg_wireless.not_connected" "Not Connected"}
+   "zh_cn.json" {"itemGroup.my_mod.items" "My Mod Items"
+                 "ac.gui.common.pg_wireless.not_connected" "未连接"}})
 
 (defn create
-  "Create Language DataProvider instance (factory signature: PackOutput -> DataProvider)."
   [^PackOutput pack-output _exfile-helper]
   (let [out-root (.getOutputFolder pack-output)
-        base (.resolve ^Path out-root (str "assets/" modid/MOD-ID "/lang"))]
+        ^Path base (.resolve ^Path out-root (str "assets/" modid/MOD-ID "/lang"))]
     (reify DataProvider
-      (run [_ ^CachedOutput _cached]
-        (CompletableFuture/runAsync
-          (fn []
-            (write-json! (.resolve base "en_us.json") en-us)
-            (write-json! (.resolve base "zh_cn.json") zh-cn))))
-      (getName [_]
-        (str modid/MOD-ID " Lang Provider")))))
+      (^CompletableFuture run [_ ^CachedOutput cached]
+        (let [results (atom [])]
+          ;; 遍历数据，直接在这里调用，避免跨函数编译问题
+          (doseq [[file-name data] lang-data]
+            (let [target-path (.resolve base ^String file-name)
+                  ;; 手动将 Map 转为 JsonElement，确保类型匹配
+                  json-tree   (.toJsonTree gson data)]
+              ;; 使用完全限定名确保静态调用
+              (swap! results conj (DataProvider/saveStable cached json-tree target-path))))
 
+          (CompletableFuture/allOf (into-array CompletableFuture @results))))
+
+      (getName [_] (str modid/MOD-ID " Lang Provider")))))
