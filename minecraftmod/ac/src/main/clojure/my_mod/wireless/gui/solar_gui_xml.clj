@@ -75,7 +75,7 @@
                 info-area
                 [(tech-ui/hist-buffer (fn [] (double @(:energy container)))
                                       (max-e))]
-                10)
+                0)
             y (tech-ui/add-sepline info-area "Info" y)
             y (tech-ui/add-property info-area "gen_speed" speed-str y)
             y (tech-ui/add-property info-area "status" (fn [] @(:status container)) y)]

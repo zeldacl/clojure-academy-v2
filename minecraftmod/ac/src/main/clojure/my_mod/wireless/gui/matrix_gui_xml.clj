@@ -164,7 +164,7 @@
                 [(tech-ui/hist-capacity
                    (fn [] (:load data))
                    cap)]
-                10)
+                0)
             y (tech-ui/add-sepline info-area "info" y)
             y (tech-ui/add-property info-area "owner" placer y)
             y (tech-ui/add-property info-area "range"

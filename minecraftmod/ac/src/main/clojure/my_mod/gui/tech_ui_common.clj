@@ -89,7 +89,7 @@
   [info-area]
   (let [m (:metadata info-area)]
     (or (:tech-ui/info-area-state @m)
-        (let [a (atom {:elem-y 10.0
+        (let [a (atom {:elem-y 0.0
                        :elements-count 0
                        :expect-width info-area-expect-width
                        :expect-height info-area-min-height
@@ -143,7 +143,7 @@
   (when-let [bg (:tech-ui/info-area-bg @(:metadata info-area))]
     (cgui/add-widget! info-area bg))
   (let [state-a (info-area-state-atom info-area)]
-    (reset! state-a {:elem-y 10.0
+    (reset! state-a {:elem-y 0.0
                      :elements-count 0
                      :expect-width info-area-expect-width
                      :expect-height info-area-min-height

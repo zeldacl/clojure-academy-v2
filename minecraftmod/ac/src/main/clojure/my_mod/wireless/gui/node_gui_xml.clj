@@ -182,7 +182,7 @@
                  (tech-ui/hist-capacity
                    (fn [] @(:capacity container))
                    (max 1 @(:max-capacity container)))]
-                10)
+                0)
             y (tech-ui/add-sepline info-area "Info" y)
             y (tech-ui/add-property info-area "Range"
                                     (fn [] (str (try (.getRange tile) (catch Exception _ 0.0))))
