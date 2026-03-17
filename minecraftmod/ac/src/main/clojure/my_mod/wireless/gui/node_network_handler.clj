@@ -25,7 +25,10 @@
   (let [world (net-helpers/get-world player)
         tile (net-helpers/get-tile-at world payload)]
     (if tile
-      {:linked (boolean (helper/is-node-linked? tile))}
+      (if-let [net (helper/get-wireless-net-by-node tile)]
+        {:linked {:ssid (:ssid net)
+                  :is-encrypted? (not (empty? (str (:password net))))}}
+        {:linked nil})
       {:linked false})))
 
 (defn handle-change-name
@@ -55,30 +58,37 @@
   (let [world (net-helpers/get-world player)
         tile (net-helpers/get-tile-at world payload)]
     (if tile
-      (let [;; Use coordinates from the payload directly — avoids calling
+      (let [linked (try (helper/get-wireless-net-by-node tile) (catch Exception _ nil))
+            linked-ssid (when linked (:ssid linked))
+            ;; Use coordinates from the payload directly — avoids calling
             ;; getPos() on ScriptedBlockEntity (renamed getBlockPos() in 1.17+)
             x (double (:pos-x payload))
             y (double (:pos-y payload))
             z (double (:pos-z payload))
             range (try (.getRange tile) (catch Exception _ 20.0))
             nets (helper/get-nets-in-range world x y z range 100)]
-        {:networks (mapv (fn [net]
-                           (let [matrix (when (:matrix net)
-                                         (vb/vblock-get (:matrix net) world))]
-                             {:ssid (:ssid net)
-                              :load (wireless-net/get-load net)
-                              :capacity (if matrix
-                                         (try (winterfaces/get-capacity matrix) (catch Exception _ 0))
-                                         0)
-                              :is-encrypted? (not (empty? (str (:password net))))
-                              :bandwidth (if matrix
-                                          (try (winterfaces/get-bandwidth matrix) (catch Exception _ 0))
-                                          0)
-                              :range (if matrix
-                                      (try (winterfaces/get-range matrix) (catch Exception _ 0.0))
-                                      0.0)}))
-                         nets)})
-      {:networks []})))
+        {:linked (when linked
+                   {:ssid (:ssid linked)
+                    :is-encrypted? (not (empty? (str (:password linked))))})
+         :avail (->> nets
+                     (remove (fn [net] (= (:ssid net) linked-ssid)))
+                     (mapv (fn [net]
+                             (let [matrix (when (:matrix net)
+                                            (vb/vblock-get (:matrix net) world))]
+                               {:ssid (:ssid net)
+                                :is-encrypted? (not (empty? (str (:password net))))
+                                ;; fields below are not used by WirelessPage itself but are useful for debugging/inspection
+                                :load (wireless-net/get-load net)
+                                :capacity (if matrix
+                                            (try (winterfaces/get-capacity matrix) (catch Exception _ 0))
+                                            0)
+                                :bandwidth (if matrix
+                                             (try (winterfaces/get-bandwidth matrix) (catch Exception _ 0))
+                                             0)
+                                :range (if matrix
+                                         (try (winterfaces/get-range matrix) (catch Exception _ 0.0))
+                                         0.0)}))))})
+      {:linked nil :avail []})))
 
 (defn handle-connect
   [payload player]

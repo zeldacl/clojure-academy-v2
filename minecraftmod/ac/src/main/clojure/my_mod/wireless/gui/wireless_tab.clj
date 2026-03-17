@@ -26,6 +26,22 @@
   (when-let [dt (widget-drawtexture widget)]
     (comp/set-texture! dt texture-path)))
 
+(defn- set-drawtexture-color!
+  [widget argb]
+  (when-let [dt (widget-drawtexture widget)]
+    (swap! (:state dt) assoc :color (unchecked-int argb))))
+
+(defn- set-tint-enabled!
+  [widget enabled?]
+  (when-let [t (comp/get-tint-component widget)]
+    (swap! (:state t) assoc :enabled (boolean enabled?))))
+
+(defn- alpha-argb
+  [argb alpha-f]
+  (let [a (int (Math/round (* 255.0 (double alpha-f))))
+        rgb (bit-and (long argb) 0x00FFFFFF)]
+    (unchecked-int (bit-or (bit-shift-left (bit-and a 0xFF) 24) rgb))))
+
 (defn- ensure-template-hidden! [elem-template]
   (when elem-template
     (cgui/set-visible! elem-template false)))
@@ -39,108 +55,138 @@
 (defn- base-wireless-doc []
   (cgui-doc/read-xml (modid/namespaced-path "guis/rework/page_wireless.xml")))
 
-(defn create-wireless-panel-node
-  "Wireless tab for Wireless Node: connect node -> matrix network (SSID list)."
-  [container]
-  (let [doc (base-wireless-doc)
-        root (cgui-doc/get-widget doc "main")
-        wlist (cgui/find-widget root "panel_wireless/zone_elementlist")
+(defn- rebuild-page!
+  "Port of AcademyCraft WirelessPage.rebuildPage behavior:
+   - Connected element shows icon+name; connect icon click disconnects only if linked.
+   - Avail list: encrypted shows pass box and key; else hides them.
+   - Pass box confirm triggers connect.
+   - Key icon alpha toggles on focus."
+  [root {:keys [linked avail connect-fn disconnect-fn name-fn encrypted?-fn]}]
+  (let [wlist (cgui/find-widget root "panel_wireless/zone_elementlist")
         elem-template (cgui/find-widget root "panel_wireless/zone_elementlist/element")
         connected-elem (cgui/find-widget root "panel_wireless/elem_connected")
         btn-up (cgui/find-widget root "panel_wireless/btn_arrowup")
         btn-down (cgui/find-widget root "panel_wireless/btn_arrowdown")
         elist (comp/element-list :spacing 2)
-        payload (net-helpers/tile-pos-payload (:tile-entity container))]
+        linked-atom (atom linked)]
 
-    (when wlist (comp/add-component! wlist elist))
+    (when wlist
+      (comp/add-component! wlist elist))
     (ensure-template-hidden! elem-template)
     (attach-scroll-buttons! btn-up btn-down elist)
 
-    (letfn [(update-connected! [linked?]
-              (when connected-elem
-                (let [icon-connect (cgui/find-widget connected-elem "icon_connect")
-                      text-name (cgui/find-widget connected-elem "text_name")]
-                  (set-textbox-text! text-name (if linked? "Connected" "Not Connected"))
-                  (set-drawtexture! icon-connect
-                    (if linked?
-                      (modid/asset-path "textures" "guis/icons/icon_connected.png")
-                      (modid/asset-path "textures" "guis/icons/icon_unconnected.png"))))))
+    (when connected-elem
+      (let [icon-connect (cgui/find-widget connected-elem "icon_connect")
+            icon-logo (cgui/find-widget connected-elem "icon_logo")
+            text-name (cgui/find-widget connected-elem "text_name")
+            connected? (some? linked)
+            alpha (if connected? 1.0 0.6)
+            name (if connected? (name-fn linked) "Not Connected")]
+        (reset! linked-atom linked)
+        (when icon-connect
+          (set-drawtexture! icon-connect
+                            (if connected?
+                              (modid/asset-path "textures" "guis/icons/icon_connected.png")
+                              (modid/asset-path "textures" "guis/icons/icon_unconnected.png")))
+          (set-drawtexture-color! icon-connect (alpha-argb 0xFFFFFFFF alpha))
+          (set-tint-enabled! icon-connect connected?)
+          (events/on-left-click icon-connect
+            (fn [_]
+              (when-let [t @linked-atom]
+                (disconnect-fn t)))))
+        (when icon-logo
+          (set-drawtexture-color! icon-logo (alpha-argb 0xFFFFFFFF alpha)))
+        (when text-name
+          (set-textbox-text! text-name name))))
 
-            (query-linked! []
-              (net-client/send-to-server
-                (node-msgs/msg :get-status)
-                payload
-                (fn [response]
-                  (update-connected! (boolean (:linked response))))))
+    (when elist
+      (comp/list-clear! elist)
+      (doseq [target avail]
+        (when elem-template
+          (let [elem (cgui/copy-widget elem-template)
+                text-name (cgui/find-widget elem "text_name")
+                icon-key (cgui/find-widget elem "icon_key")
+                input-pass (cgui/find-widget elem "input_pass")
+                icon-connect (cgui/find-widget elem "icon_connect")
+                pass-box (when input-pass (widget-textbox input-pass))
+                encrypted? (boolean (encrypted?-fn target))]
 
-            (connect-network! [ssid pass]
-              (net-client/send-to-server
-                (node-msgs/msg :connect)
-                (assoc payload :ssid ssid :password pass)
+            (when text-name
+              (set-textbox-text! text-name (name-fn target)))
+
+            (if encrypted?
+              (do
+                (when icon-key
+                  (cgui/set-visible! icon-key true)
+                  (set-drawtexture-color! icon-key (alpha-argb 0xFFFFFFFF 0.6)))
+
+                (when input-pass
+                  (cgui/set-visible! input-pass true))
+
+                (when (and input-pass pass-box)
+                  ;; enter to confirm
+                  (events/on-confirm-input pass-box
+                    (fn [_]
+                      (let [pwd (comp/get-text pass-box)]
+                        (connect-fn target pwd)
+                        (comp/set-text! pass-box ""))))
+                  ;; focus brightens key icon
+                  (events/on-gain-focus input-pass
+                    (fn [_]
+                      (when icon-key
+                        (set-drawtexture-color! icon-key (alpha-argb 0xFFFFFFFF 1.0)))))
+                  (events/on-lost-focus input-pass
+                    (fn [_]
+                      (when icon-key
+                        (set-drawtexture-color! icon-key (alpha-argb 0xFFFFFFFF 0.6)))))))
+              (do
+                (when input-pass (cgui/set-visible! input-pass false))
+                (when icon-key (cgui/set-visible! icon-key false))))
+
+            (when icon-connect
+              (events/on-left-click icon-connect
                 (fn [_]
-                  (query-networks!)
-                  (query-linked!))))
+                  (let [pwd (if (and encrypted? pass-box) (comp/get-text pass-box) "")]
+                    (connect-fn target pwd)
+                    (when pass-box (comp/set-text! pass-box ""))))))
 
-            (disconnect-network! []
-              (net-client/send-to-server
-                (node-msgs/msg :disconnect)
-                payload
-                (fn [_]
-                  (query-networks!)
-                  (query-linked!))))
+            (comp/list-add! elist elem))))))
 
-            (build-element! [net]
-              (when elem-template
-                (let [elem (cgui/copy-widget elem-template)
-                      ssid (:ssid net)
-                      encrypted? (boolean (:is-encrypted? net))
-                      text-name (cgui/find-widget elem "text_name")
-                      icon-key (cgui/find-widget elem "icon_key")
-                      input-pass (cgui/find-widget elem "input_pass")
-                      icon-connect (cgui/find-widget elem "icon_connect")
-                      pass-box (when input-pass (widget-textbox input-pass))]
+    root)
 
-                  (set-textbox-text! text-name (str ssid))
+(defn create-wireless-panel-node
+  "Wireless tab for Wireless Node: connect node -> matrix network (SSID list)."
+  [container]
+  (let [doc (base-wireless-doc)
+        root (cgui-doc/get-widget doc "main")
+        payload (net-helpers/tile-pos-payload (:tile-entity container))]
 
-                  (if encrypted?
-                    (do
-                      (when icon-key (cgui/set-visible! icon-key true))
-                      (when input-pass (cgui/set-visible! input-pass true)))
-                    (do
-                      (when icon-key (cgui/set-visible! icon-key false))
-                      (when input-pass (cgui/set-visible! input-pass false))))
+    ;; nodePage sets icon_logo to toMatrixIcon
+    (when-let [logo (cgui/find-widget root "icon_logo")]
+      (comp/add-component! logo (comp/breathe-effect))
+      (set-drawtexture! logo (modid/asset-path "textures" "guis/icons/icon_tomatrix.png")))
 
-                  (when icon-connect
-                    (events/on-left-click icon-connect
-                      (fn [_]
-                        (let [pwd (if (and encrypted? pass-box)
-                                    (comp/get-text pass-box)
-                                    "")]
-                          (connect-network! ssid pwd)
-                          (when pass-box (comp/set-text! pass-box ""))))))
-
-                  (when elist (comp/list-add! elist elem)))))
-
-            (rebuild-list! [nets]
-              (when elist
-                (comp/list-clear! elist)
-                (doseq [net nets]
-                  (build-element! net))))
-
-            (query-networks! []
+    (letfn [(rebuild! []
               (net-client/send-to-server
                 (node-msgs/msg :list-networks)
                 payload
-                (fn [response]
-                  (rebuild-list! (vec (:networks response []))))))]
-
-      (when connected-elem
-        (let [icon-connect (cgui/find-widget connected-elem "icon_connect")]
-          (when icon-connect
-            (events/on-left-click icon-connect (fn [_] (disconnect-network!))))))
-
-      (query-networks!)
-      (query-linked!))
+                (fn [resp]
+                  (rebuild-page! root
+                                 {:linked (:linked resp)
+                                  :avail (vec (:avail resp []))
+                                  :name-fn (fn [t] (:ssid t))
+                                  :encrypted?-fn (fn [t] (boolean (:is-encrypted? t)))
+                                  :disconnect-fn (fn [_linked]
+                                                   (net-client/send-to-server
+                                                     (node-msgs/msg :disconnect)
+                                                     payload
+                                                     (fn [_] (rebuild!))))
+                                  :connect-fn (fn [target pass]
+                                                (net-client/send-to-server
+                                                  (node-msgs/msg :connect)
+                                                  (assoc payload :ssid (:ssid target) :password pass)
+                                                  (fn [_] (rebuild!))))}))))]
+      (rebuild!))
 
     root))
 
@@ -149,111 +195,36 @@
   [container]
   (let [doc (base-wireless-doc)
         root (cgui-doc/get-widget doc "main")
-        wlist (cgui/find-widget root "panel_wireless/zone_elementlist")
-        elem-template (cgui/find-widget root "panel_wireless/zone_elementlist/element")
-        connected-elem (cgui/find-widget root "panel_wireless/elem_connected")
-        btn-up (cgui/find-widget root "panel_wireless/btn_arrowup")
-        btn-down (cgui/find-widget root "panel_wireless/btn_arrowdown")
-        elist (comp/element-list :spacing 2)
         payload (net-helpers/tile-pos-payload (:tile-entity container))]
+    (when-let [logo (cgui/find-widget root "icon_logo")]
+      (comp/add-component! logo (comp/breathe-effect)))
 
-    (when wlist (comp/add-component! wlist elist))
-    (ensure-template-hidden! elem-template)
-    (attach-scroll-buttons! btn-up btn-down elist)
-
-    (letfn [(update-connected! [linked? node-name]
-              (when connected-elem
-                (let [icon-connect (cgui/find-widget connected-elem "icon_connect")
-                      text-name (cgui/find-widget connected-elem "text_name")]
-                  (set-textbox-text! text-name
-                                     (if linked?
-                                       (str "Connected: " (or node-name "Node"))
-                                       "Not Connected"))
-                  (set-drawtexture! icon-connect
-                    (if linked?
-                      (modid/asset-path "textures" "guis/icons/icon_connected.png")
-                      (modid/asset-path "textures" "guis/icons/icon_unconnected.png"))))))
-
-            (query-linked! []
-              (net-client/send-to-server
-                (gen-msgs/msg :get-status)
-                payload
-                (fn [response]
-                  (update-connected! (boolean (:linked response)) (:node-name response)))))
-
-            (connect-node! [node-x node-y node-z pass need-auth?]
-              (net-client/send-to-server
-                (gen-msgs/msg :connect)
-                (assoc payload
-                       :node-x node-x :node-y node-y :node-z node-z
-                       :password pass
-                       :need-auth? (boolean need-auth?))
-                (fn [_]
-                  (query-nodes!)
-                  (query-linked!))))
-
-            (disconnect-node! []
-              (net-client/send-to-server
-                (gen-msgs/msg :disconnect)
-                payload
-                (fn [_]
-                  (query-nodes!)
-                  (query-linked!))))
-
-            (build-element! [node]
-              (when elem-template
-                (let [elem (cgui/copy-widget elem-template)
-                      node-name (:node-name node)
-                      encrypted? (boolean (:is-encrypted? node))
-                      nx (:pos-x node) ny (:pos-y node) nz (:pos-z node)
-                      text-name (cgui/find-widget elem "text_name")
-                      icon-key (cgui/find-widget elem "icon_key")
-                      input-pass (cgui/find-widget elem "input_pass")
-                      icon-connect (cgui/find-widget elem "icon_connect")
-                      pass-box (when input-pass (widget-textbox input-pass))]
-
-                  (set-textbox-text! text-name (str node-name))
-
-                  (if encrypted?
-                    (do
-                      (when icon-key (cgui/set-visible! icon-key true))
-                      (when input-pass (cgui/set-visible! input-pass true)))
-                    (do
-                      (when icon-key (cgui/set-visible! icon-key false))
-                      (when input-pass (cgui/set-visible! input-pass false))))
-
-                  (when icon-connect
-                    (events/on-left-click icon-connect
-                      (fn [_]
-                        (let [pwd (if (and encrypted? pass-box)
-                                    (comp/get-text pass-box)
-                                    "")]
-                          (connect-node! nx ny nz pwd encrypted?)
-                          (when pass-box (comp/set-text! pass-box ""))))))
-
-                  (when elist (comp/list-add! elist elem)))))
-
-            (rebuild-list! [nodes]
-              (when elist
-                (comp/list-clear! elist)
-                (doseq [n nodes]
-                  (when (and (number? (:pos-x n)) (number? (:pos-y n)) (number? (:pos-z n)))
-                    (build-element! n)))))
-
-            (query-nodes! []
+    (letfn [(rebuild! []
               (net-client/send-to-server
                 (gen-msgs/msg :list-nodes)
                 payload
-                (fn [response]
-                  (rebuild-list! (vec (:nodes response []))))))]
-
-      (when connected-elem
-        (let [icon-connect (cgui/find-widget connected-elem "icon_connect")]
-          (when icon-connect
-            (events/on-left-click icon-connect (fn [_] (disconnect-node!))))))
-
-      (query-nodes!)
-      (query-linked!))
+                (fn [resp]
+                  (rebuild-page! root
+                                 {:linked (:linked resp)
+                                  :avail (vec (:avail resp []))
+                                  :name-fn (fn [t] (:node-name t))
+                                  :encrypted?-fn (fn [t] (boolean (:is-encrypted? t)))
+                                  :disconnect-fn (fn [_linked]
+                                                   (net-client/send-to-server
+                                                     (gen-msgs/msg :disconnect)
+                                                     payload
+                                                     (fn [_] (rebuild!))))
+                                  :connect-fn (fn [target pass]
+                                                (net-client/send-to-server
+                                                  (gen-msgs/msg :connect)
+                                                  (assoc payload
+                                                         :node-x (:pos-x target)
+                                                         :node-y (:pos-y target)
+                                                         :node-z (:pos-z target)
+                                                         :password pass
+                                                         :need-auth? true)
+                                                  (fn [_] (rebuild!))))}))))]
+      (rebuild!))
 
     root))
 
