@@ -82,6 +82,9 @@
           ;; Create IForgeMenuType eagerly; the embedded IContainerFactory is a
           ;; lazy callback that resolves get-menu-type at GUI-open time (runtime).
           menu-type (create-menu-type gui-id)
+          ;; Also publish into the platform-agnostic metadata store, because
+          ;; provider_bridge.clj looks up MenuType via my-mod.gui.platform-adapter.
+          _ (gui/register-menu-type! :forge-1.20.1 gui-id menu-type)
           ro (.register menu-register registry-name
                (reify java.util.function.Supplier
                  (get [_]

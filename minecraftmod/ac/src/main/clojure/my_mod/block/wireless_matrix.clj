@@ -62,21 +62,39 @@
 ;; Inventory helpers (operating on the state map directly)
 ;; ============================================================================
 
-(defn- set-inv-slot [state slot item] (assoc-in state [:inventory slot] item))
+(defn- normalize-itemstack
+  "Normalize inventory values: treat nil or empty ItemStack as nil.
+
+  We store nil for 'no item' so counts and core-level don't get stuck when slots
+  contain ItemStack.EMPTY (which is non-nil but empty)."
+  [item]
+  (cond
+    (nil? item) nil
+    (instance? ItemStack item) (when-not (.isEmpty ^ItemStack item) item)
+    :else item))
+
+(defn- set-inv-slot
+  [state slot item]
+  (assoc-in state [:inventory slot] (normalize-itemstack item)))
 
 (defn- recalculate-plate-count
   "Count non-nil items in matrix plate slots."
   [state]
   (assoc state :plate-count
          (count (for [slot matrix-plate-slot-indexes
-                      :when (get-in state [:inventory slot])]
+                      :let [item (get-in state [:inventory slot])]
+                      :when (and item
+                                 (not (and (instance? ItemStack item)
+                                           (.isEmpty ^ItemStack item))))]
                   slot))))
 
 (defn- recalculate-core-level
   "Update :core-level from core slot."
   [state]
   (assoc state :core-level
-         (core/get-core-level (get-in state [:inventory matrix-core-slot-index]))))
+         (let [item (get-in state [:inventory matrix-core-slot-index])
+               item (if (and (instance? ItemStack item) (.isEmpty ^ItemStack item)) nil item)]
+           (core/get-core-level item))))
 
 (defn recalculate-counts
   "Recalculate plate-count and core-level from current inventory."
