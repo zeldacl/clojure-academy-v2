@@ -19,13 +19,13 @@
             [my-mod.gui.slot-schema :as slot-schema]
             [my-mod.platform.capability :as platform-cap]
             [my-mod.platform.world :as world]
+            [my-mod.platform.item :as item]
             [my-mod.item.constraint-plate :as plate]
             [my-mod.item.mat-core :as core]
             [my-mod.wireless.slot-schema :as slots]
             [my-mod.wireless.gui.matrix-sync :as sync]
             [my-mod.util.log :as log])
-  (:import [my_mod.api.wireless IWirelessMatrix]
-           [net.minecraft.world.item ItemStack]))
+  (:import [my_mod.api.wireless IWirelessMatrix]))
 
 ;; ============================================================================
 ;; Schema-derived functions  (single-call derivation, executed once at load)
@@ -70,7 +70,7 @@
   [item]
   (cond
     (nil? item) nil
-    (instance? ItemStack item) (when-not (.isEmpty ^ItemStack item) item)
+    (satisfies? item/IItemStack item) (when-not (item/item-is-empty? item) item)
     :else item))
 
 (defn- set-inv-slot
@@ -84,8 +84,8 @@
          (count (for [slot matrix-plate-slot-indexes
                       :let [item (get-in state [:inventory slot])]
                       :when (and item
-                                 (not (and (instance? ItemStack item)
-                                           (.isEmpty ^ItemStack item))))]
+                                 (not (and (satisfies? item/IItemStack item)
+                                           (item/item-is-empty? item))))]
                   slot))))
 
 (defn- recalculate-core-level
@@ -93,7 +93,7 @@
   [state]
   (assoc state :core-level
          (let [item (get-in state [:inventory matrix-core-slot-index])
-               item (if (and (instance? ItemStack item) (.isEmpty ^ItemStack item)) nil item)]
+               item (if (and (satisfies? item/IItemStack item) (item/item-is-empty? item)) nil item)]
            (core/get-core-level item))))
 
 (defn recalculate-counts
@@ -129,7 +129,7 @@
   (^long    getMatrixBandwidth [])
   (^double  getMatrixRange [])
   (^long    getLoad [])
-  (^Object  getPos []))
+  (^clojure.lang.IPersistentMap getPos []))
 
 (deftype MatrixJavaProxy [be]
   IMatrixJavaProxy
@@ -141,7 +141,9 @@
   (getMatrixRange [_]
     (double (.getMatrixRange ^IWirelessMatrix (impls/->WirelessMatrixImpl be))))
   (getLoad [_] 0)
-  (getPos  [_] (pos/position-get-block-pos be))
+  (getPos  [_]
+    (let [p (pos/position-get-block-pos be)]
+      {:x (pos/pos-x p) :y (pos/pos-y p) :z (pos/pos-z p)}))
   Object
   (toString [_] (str "MatrixJavaProxy@" (pos/position-get-block-pos be))))
 
@@ -220,11 +222,11 @@
                   (let [state (safe-state be)
                         item  (get-in state [:inventory slot])]
                     (when item
-                      (let [cnt (.getCount ^ItemStack item)]
+                      (let [cnt (item/item-get-count item)]
                         (if (<= cnt amount)
                           (do (platform-be/set-custom-state! be (-> state (set-inv-slot slot nil) recalculate-counts))
                               item)
-                          (let [result (.split ^ItemStack item amount)]
+                          (let [result (item/item-split item amount)]
                             (platform-be/set-custom-state! be (recalculate-counts state))
                             result))))))
 

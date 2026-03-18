@@ -49,7 +49,11 @@
     "Get the Item type from this ItemStack. Returns Item object.")
 
   (item-get-tag-compound [this]
-    "Get NBT tag compound from ItemStack (may be null). Returns NBT or nil."))
+    "Get NBT tag compound from ItemStack (may be null). Returns NBT or nil.")
+
+  (item-split [this amount]
+    "Split `amount` items from this stack, mutating this stack like vanilla ItemStack#split.
+     Returns a new stack containing the removed items."))
 
 ;; ============================================================================
 ;; Item Protocol (for Item objects, not ItemStack)

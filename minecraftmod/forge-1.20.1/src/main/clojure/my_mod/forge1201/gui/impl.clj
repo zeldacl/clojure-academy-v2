@@ -29,7 +29,7 @@
    Returns: action map for processing"
   [button-id container]
   (log/info "Button" button-id "clicked in 1.20.1 GUI")
-  (case button-id
+  (case (int button-id)
     0 (do
         (log/info "Destroy button clicked - clearing slot")
         (gui-core/on-destroy-button-clicked demo-gui-id 0)

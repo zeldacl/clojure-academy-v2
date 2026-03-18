@@ -10,9 +10,13 @@
             [my-mod.gui.tabbed-gui :as tabbed]
             [my-mod.forge1201.gui.slots :as slots]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.world.inventory AbstractContainerMenu DataSlot]
+  (:import [my_mod.forge1201.gui ACContainerMenu]
+           [net.minecraft.world.inventory AbstractContainerMenu DataSlot]
+           [net.minecraft.world.inventory ClickType]
+           [net.minecraft.world.inventory Slot]
            [net.minecraft.world.item ItemStack]
-           [net.minecraft.world Container]))
+           [net.minecraft.world Container]
+           [net.minecraft.world.entity.player Player]))
 
 (defn- create-tile-inventory-adapter
   "Expose Clojure container slot access as a vanilla `Container` so Forge Slot
@@ -79,15 +83,6 @@
 
 (def tab-data-slot-index 0)
 
-(defn get-tab-index-from-menu
-  "Read tab index from menu's first DataSlot (for tabbed GUIs). Returns nil if not tabbed or read fails."
-  [^AbstractContainerMenu menu]
-  (when (and menu (pos? (.getDataSlotCount menu)))
-    (try
-      (let [slot (clojure.lang.Reflector/invokeInstanceMethod menu "getDataSlot" (object-array [(int tab-data-slot-index)]))]
-        (when slot (.get ^net.minecraft.world.inventory.DataSlot slot)))
-      (catch Exception _ nil))))
-
 (defn- create-tab-data-slot
   "Create a standalone DataSlot and sync from container's :tab-index.
    Avoids proxy (which breaks for DataSlot.get() due to 0-param Java method / arity mismatch)."
@@ -111,7 +106,8 @@
         tabbed? (tabbed/tabbed-container? clj-container)
         active?-fn (when tabbed? (fn [] (tabbed/slots-active? clj-container)))]
     (when tab-slot
-      (.addDataSlot menu tab-slot))
+      (when (instance? ACContainerMenu menu)
+        (.publicAddDataSlot ^ACContainerMenu menu tab-slot)))
     (when (and gui-id player-inventory)
       ;; Offsets aligned with AcademyCraft TechUIContainer: tile at (0,0) => schema coords are absolute; player inv at (6, 105) => hotbar at 163
       (slots/add-gui-slots menu tile-inventory gui-id 0 0 (when tabbed? active?-fn))
@@ -135,12 +131,12 @@
                                     @(:tab-index clj-container))
                                   0)))
         menu
-        (proxy [AbstractContainerMenu] [menu-type (int window-id)]
+        (proxy [ACContainerMenu] [menu-type (int window-id)]
 
           (stillValid [player]
             (gui/safe-validate clj-container player))
 
-          (removed [player]
+          (removed [^Player player]
             (let [cid (gui/get-menu-container-id this)]
               (when cid
                 (tabbed/clear-tab-index-by-container-id! cid)
@@ -162,17 +158,17 @@
           ;; Block all slot clicks when not on inv-window tab; use tab by container-id so client menu sees correct tab.
           ;; clicked() runs only on the SERVER when the server receives a slot-click packet. If the client blocks the
           ;; click (Screen mouseClicked/slotClicked/findSlot), no packet is sent and this is never called.
-          (clicked [slot-index button click-type player]
+          (clicked [slot-index button ^ClickType click-type ^Player player]
             (when (or (not (tabbed/tabbed-container? clj-container))
                       (tabbed/slots-active-for-menu? this clj-container))
-              (proxy-super clicked slot-index button click-type player)))
+              (proxy-super clicked (int slot-index) (int button) click-type player)))
 
           (quickMoveStack [player slot-index]
             (if (and (tabbed/tabbed-container? clj-container)
                      (not (tabbed/slots-active-for-menu? this clj-container)))
               ItemStack/EMPTY
               (try
-                (let [slot (.getSlot this slot-index)]
+                (let [^Slot slot (.getSlot this (int slot-index))]
                   (if (and slot (.hasItem slot))
                     (let [stack (.getItem slot)]
                       (gui/execute-quick-move-forge this clj-container slot-index slot stack))

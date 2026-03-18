@@ -125,7 +125,16 @@
     (.setDamageValue this (int damage)))
 
   (item-get-damage [this]
-    (.getDamageValue this)))
+    (.getDamageValue this))
+
+  (item-get-item [this]
+    (.getItem this))
+
+  (item-get-tag-compound [this]
+    (.getTag this))
+
+  (item-split [this amount]
+    (.split this (int amount))))
 
 ;; ============================================================================
 ;; Position Protocol Implementation (Fabric 1.20.1)

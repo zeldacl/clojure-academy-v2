@@ -22,9 +22,12 @@
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
+           [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.world.item ItemStack]
+           [com.mojang.blaze3d.vertex PoseStack]
            [net.minecraft.resources ResourceLocation]
+           [net.minecraft.client.renderer MultiBufferSource]
            [net.minecraftforge.common.util LazyOptional]
            [my_mod.capability CapabilitySlots]))
 
@@ -105,11 +108,11 @@
   
   (nbt-list-get [this index]
     (when (and (>= index 0) (< index (.size this)))
-      (.get this index)))
+      (.get this (int index))))
   
   (nbt-list-get-compound [this index]
     (when (and (>= index 0) (< index (.size this)))
-      (.getCompound this index))))
+      (.getCompound this (int index)))))
 
 ;; ============================================================================
 ;; Position Protocol Implementation (Forge 1.20.1)
@@ -182,7 +185,8 @@
     (.getMaxStackSize this))
   
   (item-is-equal? [this other]
-    (.sameItem this other))
+    ;; Mojang-mapped 1.20.1 uses a static helper, not an instance method.
+    (ItemStack/isSameItem this other))
   
   (item-save-to-nbt [this nbt]
     (.save this nbt))
@@ -203,7 +207,10 @@
     (.getItem this))
 
   (item-get-tag-compound [this]
-    (.getTag this)))
+    (.getTag this))
+
+  (item-split [this amount]
+    (.split this (int amount))))
 
 ;; ============================================================================
 ;; Item Protocol Implementation (Forge 1.20.1)
@@ -238,7 +245,8 @@
   (world-place-block-by-id [this block-id block-pos flags]
     (if-let [get-registered-block (requiring-resolve 'my-mod.forge1201.mod/get-registered-block)]
       (if-let [block (get-registered-block block-id)]
-        (.setBlock this block-pos (.defaultBlockState block) flags)
+        (let [^Block block block]
+          (.setBlock this block-pos (.defaultBlockState block) flags))
         false)
       false))
   
@@ -301,18 +309,25 @@
   ;; Bind platform PoseStack Y-rotation implementation for mcmod
   (alter-var-root #'pose/*y-rotation-fn*
     (constantly (fn [pose-stack angle]
-                  (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/YP (float angle))))))
+                  (let [^PoseStack pose-stack pose-stack]
+                    (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/YP (float angle)))))))
 
   ;; Bind platform render buffer selectors for mcmod/ac renderers
   (alter-var-root #'buffer/*solid-buffer-fn*
     (constantly (fn [buffer-source texture]
-                  (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entitySolid texture)))))
+                  (let [^MultiBufferSource buffer-source buffer-source
+                        ^ResourceLocation texture texture]
+                    (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entitySolid texture))))))
   (alter-var-root #'buffer/*translucent-buffer-fn*
     (constantly (fn [buffer-source texture]
-                  (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityTranslucent texture)))))
+                  (let [^MultiBufferSource buffer-source buffer-source
+                        ^ResourceLocation texture texture]
+                    (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityTranslucent texture))))))
   (alter-var-root #'buffer/*cutout-no-cull-buffer-fn*
     (constantly (fn [buffer-source texture]
-                  (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityCutoutNoCull texture)))))
+                  (let [^MultiBufferSource buffer-source buffer-source
+                        ^ResourceLocation texture texture]
+                    (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityCutoutNoCull texture))))))
 
   ;; Retroactively assign slots for capabilities already declared before this ran
   (doseq [[key {:keys [_java-type]}] @platform-cap/capability-type-registry]

@@ -7,7 +7,9 @@
             [my-mod.events.world-lifecycle :as world-lifecycle])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
-            BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
+            BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]
+           [net.minecraft.world.level Level]
+           [net.minecraft.core BlockPos]))
 
 (defn handle-right-click
   "Handle right-click block event from event data map"
@@ -25,6 +27,8 @@
         (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
           (try
             (let [{:keys [gui-id player world pos]} ret
+                  ^Level world world
+                  ^BlockPos pos pos
                   tile-entity (.getBlockEntity world pos)]
               (when (and tile-entity (not (.isClientSide world)))
                 (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))

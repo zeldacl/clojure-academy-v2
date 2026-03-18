@@ -7,7 +7,9 @@
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.gui.slot-validators :as slot-validators]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.world.inventory Slot]))
+  (:import [net.minecraft.world.inventory AbstractContainerMenu Slot]
+           [net.minecraft.world.item ItemStack]
+           [net.minecraft.world.entity.player Player]))
 
 ;; ============================================================================
 ;; Slot Factory Functions
@@ -17,7 +19,7 @@
   "Create a slot that only accepts energy items."
   [inventory slot-index x y]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [stack]
+    (mayPlace [^ItemStack stack]
       (slot-validators/energy-item-validator stack))
     (getMaxStackSize [& _] 1)))
 
@@ -25,7 +27,7 @@
   "Create a slot that filters for constraint-plate items."
   [inventory slot-index x y]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [stack]
+    (mayPlace [^ItemStack stack]
       (slot-validators/constraint-plate-validator stack))
     (getMaxStackSize [& _] 1)))
 
@@ -33,7 +35,7 @@
   "Create a slot that filters for mat-core items."
   [inventory slot-index x y]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [stack]
+    (mayPlace [^ItemStack stack]
       (slot-validators/matrix-core-validator stack))
     (getMaxStackSize [& _] 1)))
 
@@ -59,40 +61,40 @@
    active?-fn: (fn [] boolean)"
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [stack]
+    (mayPlace [^ItemStack stack]
       (and (active?-fn) (proxy-super mayPlace stack)))
-    (mayPickup [_player]
-      (and (active?-fn) (proxy-super mayPickup _player)))))
+    (mayPickup [^Player player]
+      (and (active?-fn) (proxy-super mayPickup player)))))
 
 (defn create-conditional-energy-slot
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [stack]
+    (mayPlace [^ItemStack stack]
       (and (active?-fn) (slot-validators/energy-item-validator stack)))
-    (mayPickup [_player] (and (active?-fn) (proxy-super mayPickup _player)))
+    (mayPickup [^Player player] (and (active?-fn) (proxy-super mayPickup player)))
     (getMaxStackSize [& _] 1)))
 
 (defn create-conditional-plate-slot
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [stack]
+    (mayPlace [^ItemStack stack]
       (and (active?-fn) (slot-validators/constraint-plate-validator stack)))
-    (mayPickup [_player] (and (active?-fn) (proxy-super mayPickup _player)))
+    (mayPickup [^Player player] (and (active?-fn) (proxy-super mayPickup player)))
     (getMaxStackSize [& _] 1)))
 
 (defn create-conditional-core-slot
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
-    (mayPlace [stack]
+    (mayPlace [^ItemStack stack]
       (and (active?-fn) (slot-validators/matrix-core-validator stack)))
-    (mayPickup [_player] (and (active?-fn) (proxy-super mayPickup _player)))
+    (mayPickup [^Player player] (and (active?-fn) (proxy-super mayPickup player)))
     (getMaxStackSize [& _] 1)))
 
 (defn create-conditional-output-slot
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [_stack] (and (active?-fn) false))
-    (mayPickup [_player] (and (active?-fn) (proxy-super mayPickup _player)))))
+    (mayPickup [^Player player] (and (active?-fn) (proxy-super mayPickup player)))))
 
 (defn- slot-by-type-conditional
   [type inventory index abs-x abs-y active?-fn]
@@ -120,7 +122,8 @@
   ([container player-inventory x-offset y-offset]
    (add-player-inventory-slots container player-inventory x-offset y-offset nil))
   ([container player-inventory x-offset y-offset active?-fn]
-   (let [slot-fn (if active?-fn
+   (let [^AbstractContainerMenu container container
+         slot-fn (if active?-fn
                    (fn [inv idx x y] (create-conditional-slot inv idx x y active?-fn))
                    (fn [inv idx x y] (create-standard-slot inv idx x y)))]
      (doseq [row (range 3)
@@ -128,12 +131,12 @@
        (let [slot-index (+ (* row 9) col 9)
              x (+ x-offset (* col 18))
              y (+ y-offset (* row 18))]
-         (.addSlot container (slot-fn player-inventory slot-index x y))))
+         (.addSlot container ^Slot (slot-fn player-inventory slot-index x y))))
      (doseq [col (range 9)]
        (let [slot-index col
              x (+ x-offset (* col 18))
              y (+ y-offset 58)]
-         (.addSlot container (slot-fn player-inventory slot-index x y)))))))
+         (.addSlot container ^Slot (slot-fn player-inventory slot-index x y)))))))
 
 (defn add-gui-slots
   "Add GUI-specific slots based on metadata-driven layout.
@@ -149,7 +152,8 @@
   ([container inventory gui-id x-offset y-offset]
    (add-gui-slots container inventory gui-id x-offset y-offset nil))
   ([container inventory gui-id x-offset y-offset active?-fn]
-   (when-let [layout (gui/get-slot-layout gui-id)]
+   (let [^AbstractContainerMenu container container]
+     (when-let [layout (gui/get-slot-layout gui-id)]
      (doseq [slot-def (:slots layout)]
        (let [{:keys [type index x y]} slot-def
              abs-x (+ x-offset x)
@@ -162,7 +166,7 @@
                        :core   (create-core-slot    inventory index abs-x abs-y)
                        :output (create-output-slot  inventory index abs-x abs-y)
                        (create-standard-slot        inventory index abs-x abs-y)))]
-         (.addSlot container slot))))))
+         (.addSlot container ^Slot slot)))))))
 
 ;; ============================================================================
 ;; Slot Index Helpers
@@ -198,11 +202,11 @@
 
 (defn log-slot-contents
   "Log all slot contents for debugging."
-  [container]
+  [^AbstractContainerMenu container]
   (log/debug "Container slots:")
-  (doseq [i (range (.slots container))]
-    (let [slot  (.getSlot container i)
-          stack (.getItem slot)]
+  (doseq [i (range (count (.-slots container)))]
+    (let [^Slot slot  (.getSlot container (int i))
+          ^ItemStack stack (.getItem slot)]
       (when-not (.isEmpty stack)
         (log/debug "  Slot" i ":"
                    (.getCount stack) "x"
@@ -216,8 +220,8 @@
   - expected-count: int
 
   Returns: boolean"
-  [container expected-count]
-  (let [actual-count (count (.slots container))]
+  [^AbstractContainerMenu container expected-count]
+  (let [actual-count (count (.-slots container))]
     (if (= actual-count expected-count)
       (do (log/info "Slot validation passed:" actual-count "slots") true)
       (do (log/error "Slot validation failed: expected" expected-count

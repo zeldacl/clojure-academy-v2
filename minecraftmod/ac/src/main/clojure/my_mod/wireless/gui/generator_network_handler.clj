@@ -17,7 +17,7 @@
         tile (net-helpers/get-tile-at world payload)]
     (if tile
       (let [conn (try (helper/get-node-conn-by-generator tile) (catch Exception _ nil))
-            node ^IWirelessNode (when conn (try (node-conn/get-node conn) (catch Exception _ nil)))
+            ^IWirelessNode node (when conn (try (node-conn/get-node conn) (catch Exception _ nil)))
             node-pos (when node (.getBlockPos node))
             pw (when node (try (str (.getPassword node)) (catch Exception _ "")))]
         {:linked (when node
@@ -36,7 +36,7 @@
     (if tile
       (let [tile-pos (pos/position-get-block-pos tile)
             linked-conn (try (helper/get-node-conn-by-generator tile) (catch Exception _ nil))
-            linked-node ^IWirelessNode (when linked-conn (try (node-conn/get-node linked-conn) (catch Exception _ nil)))
+            ^IWirelessNode linked-node (when linked-conn (try (node-conn/get-node linked-conn) (catch Exception _ nil)))
             linked-pos (when linked-node (.getBlockPos linked-node))
             nodes (if tile-pos (helper/get-nodes-in-range world tile-pos) [])
             linked (when linked-node

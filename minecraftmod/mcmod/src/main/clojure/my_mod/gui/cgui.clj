@@ -188,7 +188,8 @@
 
 (defn get-widget-component-by-class
   [widget component-class]
-  (let [kind (keyword (str/lower-case (or (some-> component-class .getSimpleName) "")))]
+  (let [^Class component-class component-class
+        kind (keyword (str/lower-case (or (some-> component-class .getSimpleName) "")))]
     (get-widget-component widget kind)))
 
 (defn create-component-instance

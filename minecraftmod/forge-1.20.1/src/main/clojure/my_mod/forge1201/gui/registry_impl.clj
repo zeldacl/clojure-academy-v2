@@ -12,8 +12,12 @@
   (:import [net.minecraftforge.network NetworkHooks IContainerFactory]
            [net.minecraftforge.common.extensions IForgeMenuType]
            [net.minecraftforge.registries DeferredRegister]
+           [net.minecraftforge.registries RegistryObject]
            [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.world.inventory MenuType]
+           [net.minecraft.core BlockPos]
+           [net.minecraft.world MenuProvider]
+           [net.minecraft.server.level ServerPlayer]
            [net.minecraft.core.registries Registries]
            [net.minecraft.resources ResourceLocation]))
 
@@ -42,7 +46,7 @@
   Returns: MenuType or nil"
   [gui-id]
   (when-let [ro (get @gui-menu-types gui-id)]
-    (.get ro)))
+    (.get ^RegistryObject ro)))
 
 (defn create-menu-type
   "Create a MenuType for a GUI
@@ -58,9 +62,11 @@
         ;; This factory is invoked on the CLIENT when Forge recreates the menu
         ;; after receiving the open-screen packet.
         (let [handler (gui/get-gui-handler)
+              ^my_mod.wireless.gui.registry.IGuiHandler handler handler
               player (.player player-inventory)
               world (.level player)
-              pos (.readBlockPos buf)
+              ^FriendlyByteBuf buf buf
+              ^BlockPos pos (.readBlockPos buf)
               clj-container (.get-server-container handler gui-id player world pos)]
           (if clj-container
             (do
@@ -109,7 +115,8 @@
   [player gui-id tile-entity]
   (log/info "Opening GUI" gui-id "for player" (.getName player))
   (try
-    (let [provider (bridge/create-menu-provider gui-id tile-entity)
+    (let [^ServerPlayer player player
+          ^MenuProvider provider (bridge/create-menu-provider gui-id tile-entity)
           pos (when tile-entity
                 (try
                   (if (map? tile-entity)
@@ -122,7 +129,9 @@
           provider
           (reify java.util.function.Consumer
             (accept [_ buf]
-              (.writeBlockPos buf pos))))
+              (let [^FriendlyByteBuf buf buf
+                    ^BlockPos pos pos]
+                (.writeBlockPos buf pos)))))
         (NetworkHooks/openScreen player provider))
       (log/info "GUI opened successfully"))
     (catch Exception e

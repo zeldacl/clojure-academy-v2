@@ -157,9 +157,16 @@
 ;; WorldSavedData Integration
 ;; ============================================================================
 
+;; Avoid direct field access (munging/compilation can make it non-resolvable).
+(defprotocol IWiSavedDataWrapper
+  (wrapper-world-data [this] "Return WiWorldData stored in wrapper."))
+
 ;; Wrapper for platform-specific SavedData / WorldSavedData
 (deftype WiSavedDataWrapper
   [^:volatile-mutable wi-data]
+
+  IWiSavedDataWrapper
+  (wrapper-world-data [_this] wi-data)
   
   ;; IDataManager interface (platform-neutral base)
   Object
@@ -177,9 +184,9 @@
 (defn get-saved-data-world-data
   "Extract WiWorldData from SavedData wrapper"
   [saved-data]
-  (when saved-data
+  (when (and saved-data (satisfies? IWiSavedDataWrapper saved-data))
     (try
-      (.-wi-data saved-data)
+      (wrapper-world-data saved-data)
       (catch Exception _ nil))))
 
 ;; ============================================================================

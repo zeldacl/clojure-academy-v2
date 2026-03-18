@@ -6,20 +6,23 @@
             [my-mod.util.log :as log]
             [my-mod.forge1201.gui.menu-bridge :as menu-bridge])
   (:import [net.minecraft.world MenuProvider]
-           [net.minecraft.network.chat Component]))
+           [net.minecraft.network.chat Component]
+           [net.minecraft.world.entity.player Player]
+           [net.minecraft.core BlockPos]
+           [my_mod.wireless.gui.registry IGuiHandler]))
 
 (defn- tile->pos
-  [tile-entity player]
+  [tile-entity ^Player player]
   (cond
     (nil? tile-entity)
     (.blockPosition player)
 
     (map? tile-entity)
-    (or (:pos tile-entity) (.blockPosition player))
+    (or ^BlockPos (:pos tile-entity) (.blockPosition player))
 
     :else
     (try
-      (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array []))
+      ^BlockPos (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array []))
       (catch Exception _
         (.blockPosition player)))))
 
@@ -43,7 +46,8 @@
             world (.level player)
             pos (tile->pos tile-entity player)]
         (log/info "Creating menu for GUI" gui-id)
-        (let [clj-container (.get-server-container handler gui-id player world pos)]
+        (let [^IGuiHandler handler handler
+              clj-container (.get-server-container handler gui-id player world pos)]
           (when-not clj-container
             (throw (ex-info "Failed to create Clojure container"
                             {:gui-id gui-id :player player})))

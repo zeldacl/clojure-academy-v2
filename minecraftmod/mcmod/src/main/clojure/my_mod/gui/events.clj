@@ -187,8 +187,10 @@
   Returns: KeyEvent handler"
   [text-atom & {:keys [validator]}]
   (fn [event]
-    (let [char (.typedChar event)
-          keycode (.keyCode event)
+    ;; Platform runtimes should pass a simple event map
+    ;; (e.g. Forge runtime emits {:keyCode int :scanCode int :typedChar char}).
+    (let [char (get event :typedChar (char 0))
+          keycode (long (get event :keyCode 0))
           current @text-atom]
       (cond
         ;; Backspace
@@ -214,7 +216,8 @@
 (defn event-pos
   "Extract [x y] position from mouse event"
   [event]
-  [(.-x event) (.-y event)])
+  [(long (get event :x 0))
+   (long (get event :y 0))])
 
 (defn event-in-bounds?
   "Check if event position is within bounds"
