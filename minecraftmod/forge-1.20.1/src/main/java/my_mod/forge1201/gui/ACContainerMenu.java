@@ -27,15 +27,15 @@ public abstract class ACContainerMenu extends AbstractContainerMenu {
     }
 
     public void publicRemoved(Player player) {
-        this.removed(player);
+        super.removed(player);
     }
 
     public void publicBroadcastChanges() {
-        this.broadcastChanges();
+        super.broadcastChanges();
     }
 
     public void publicClicked(int slotIndex, int button, ClickType clickType, Player player) {
-        this.clicked(slotIndex, button, clickType, player);
+        super.clicked(slotIndex, button, clickType, player);
     }
 
     public Slot publicGetSlot(int index) {
