@@ -29,6 +29,7 @@
            [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraftforge.registries DeferredRegister ForgeRegistries]
+   [net.minecraftforge.registries RegistryObject]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
            [net.minecraftforge.common.capabilities RegisterCapabilitiesEvent])
@@ -43,20 +44,20 @@
              [clientSetup [net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent] void]]))
 
 ;; Mod ID constant
-(def mod-id modid/MOD-ID)
+(def ^String mod-id modid/MOD-ID)
 
 ;; DeferredRegister instances
-(defonce blocks-register 
+(defonce ^DeferredRegister blocks-register 
   (DeferredRegister/create ForgeRegistries/BLOCKS mod-id))
 
-(defonce items-register 
+(defonce ^DeferredRegister items-register 
   (DeferredRegister/create ForgeRegistries/ITEMS mod-id))
 
-(defonce creative-tabs-register
+(defonce ^DeferredRegister creative-tabs-register
   (DeferredRegister/create Registries/CREATIVE_MODE_TAB mod-id))
 
 ;; BlockEntity types
-(defonce block-entities-register
+(defonce ^DeferredRegister block-entities-register
   (DeferredRegister/create ForgeRegistries/BLOCK_ENTITY_TYPES mod-id))
 
 ;; Storage for registered blocks and items (populated during initialization)
@@ -103,12 +104,18 @@
                                 (let [props (bsp/get-all-properties block-id)]
                                   (ScriptedBlock/create block-id
                                                         tile-id
-                                                        (java.util.ArrayList. props)
+                                                        (let [al (java.util.ArrayList.)]
+                                                          (doseq [p props]
+                                                            (.add al p))
+                                                          al)
                                                         (carrier-block-props)))
                                 needs-dynamic-properties?
                                 (let [props (bsp/get-all-properties block-id)]
                                   (DynamicStateBlock/create block-id
-                                                            (java.util.ArrayList. props)
+                                                            (let [al (java.util.ArrayList.)]
+                                                              (doseq [p props]
+                                                                (.add al p))
+                                                              al)
                                                             (BlockBehaviour$Properties/copy Blocks/STONE)))
                                 has-be?
                                 (ScriptedBlock. block-id tile-id
@@ -142,7 +149,7 @@
           block-ids (registry-metadata/get-tile-block-ids tile-id)
           ;; Capture RegistryObjects now; resolve to Blocks later inside Supplier.get
           ros (keep (fn [block-id]
-                      (when-let [ro (get @registered-blocks block-id)]
+                      (when-let [^RegistryObject ro (get @registered-blocks block-id)]
                         [block-id ro]))
                     block-ids)]
       (when (seq ros)
@@ -153,7 +160,7 @@
                 (reify java.util.function.Supplier
                   (get [_]
                     ;; Resolve RegistryObjects to Blocks at registration time
-                    (let [pairs (map (fn [[block-id ro]]
+                    (let [pairs (map (fn [[block-id ^RegistryObject ro]]
                                        [block-id (.get ro)])
                                      ros)
                           block-insts (mapv second pairs)
@@ -181,7 +188,7 @@
   (let [tile-id (or (when (contains? @registered-block-entities tile-or-block-id)
                       tile-or-block-id)
                     (registry-metadata/get-block-tile-id tile-or-block-id))]
-    (when-let [registered-obj (and tile-id (get @registered-block-entities tile-id))]
+    (when-let [^RegistryObject registered-obj (and tile-id (get @registered-block-entities tile-id))]
       (.get registered-obj))))
 
 ;; Dynamic item registration using metadata
@@ -203,7 +210,7 @@
   (doseq [block-id (registry-metadata/get-all-block-ids)]
     (when (registry-metadata/should-create-block-item? block-id)
       (let [registry-name (registry-metadata/get-block-registry-name block-id)
-            block-registered (get @registered-blocks block-id)
+            ^RegistryObject block-registered (get @registered-blocks block-id)
             registered-obj (.register items-register registry-name
                             (reify java.util.function.Supplier
                               (get [_]
@@ -223,7 +230,7 @@
   Returns:
     RegistryObject - The registered block, or nil if not found"
   [block-id]
-  (when-let [registered-obj (get @registered-blocks block-id)]
+  (when-let [^RegistryObject registered-obj (get @registered-blocks block-id)]
     (.get registered-obj)))
 
 (defn get-registered-item
@@ -235,7 +242,7 @@
   Returns:
     RegistryObject - The registered item, or nil if not found"
   [item-id]
-  (when-let [registered-obj (get @registered-items item-id)]
+  (when-let [^RegistryObject registered-obj (get @registered-items item-id)]
     (.get registered-obj)))
 
 (defn get-registered-block-item
@@ -247,7 +254,7 @@
   Returns:
     RegistryObject - The registered block item, or nil if not found"
   [block-id]
-  (when-let [registered-obj (get @registered-items (str block-id "-item"))]
+  (when-let [^RegistryObject registered-obj (get @registered-items (str block-id "-item"))]
     (.get registered-obj)))
 
 (defn- build-creative-tab []
@@ -265,7 +272,8 @@
                                             (get-registered-block-item item-id)
                                             (get-registered-item item-id))]
                              (when item-obj
-                               (.accept output (net.minecraft.world.item.ItemStack. item-obj 1))))))))
+                               (let [^net.minecraft.world.item.Item item-typed item-obj]
+                                 (.accept output (.getDefaultInstance item-typed)))))))))
       (.build)))
 
 ;; ============================================================================
@@ -366,9 +374,10 @@
     (.addListener mod-bus EventPriority/NORMAL false RegisterCapabilitiesEvent
                   (reify java.util.function.Consumer
                     (accept [_ event]
-                      (doseq [[_key {:keys [java-type]}] @platform-cap/capability-type-registry]
-                        (when java-type
-                          (.register event java-type)))))))
+                      (let [^RegisterCapabilitiesEvent event event]
+                        (doseq [[_key {:keys [java-type]}] @platform-cap/capability-type-registry]
+                          (when java-type
+                            (.register event java-type))))))))
   
   ;; Return state
   [[] nil])

@@ -142,7 +142,7 @@
                 (tabbed/clear-tab-index-by-container-id! cid)
                 (gui/unregister-container-by-id! cid)))
             (gui/unregister-menu-container! this)
-            (proxy-super removed player)
+            (.publicRemoved ^ACContainerMenu this player)
             (gui/safe-close! clj-container)
             (gui/unregister-active-container! clj-container)
             (gui/unregister-player-container! player)
@@ -152,7 +152,7 @@
             (when (and (tabbed/tabbed-container? clj-container) (:tab-index clj-container))
               (reset! tab-idx-ref (int @(:tab-index clj-container))))
             (sync-tab-slot-from-container! tab-slot clj-container)
-            (proxy-super broadcastChanges)
+            (.publicBroadcastChanges ^ACContainerMenu this)
             (gui/safe-sync! clj-container))
 
           ;; Block all slot clicks when not on inv-window tab; use tab by container-id so client menu sees correct tab.
@@ -161,14 +161,15 @@
           (clicked [slot-index button ^ClickType click-type ^Player player]
             (when (or (not (tabbed/tabbed-container? clj-container))
                       (tabbed/slots-active-for-menu? this clj-container))
-              (proxy-super clicked (int slot-index) (int button) click-type player)))
+              (.publicClicked ^ACContainerMenu this
+                               (int slot-index) (int button) click-type player)))
 
           (quickMoveStack [player slot-index]
             (if (and (tabbed/tabbed-container? clj-container)
                      (not (tabbed/slots-active-for-menu? this clj-container)))
               ItemStack/EMPTY
               (try
-                (let [^Slot slot (.getSlot this (int slot-index))]
+                (let [^Slot slot (.publicGetSlot ^ACContainerMenu this (int slot-index))]
                   (if (and slot (.hasItem slot))
                     (let [stack (.getItem slot)]
                       (gui/execute-quick-move-forge this clj-container slot-index slot stack))

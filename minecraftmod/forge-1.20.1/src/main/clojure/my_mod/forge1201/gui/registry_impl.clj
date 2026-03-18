@@ -27,7 +27,7 @@
 
 ;; Registries are locked before FMLCommonSetupEvent; MenuType must be registered
 ;; via DeferredRegister during RegisterEvent, just like blocks and items.
-(defonce menu-register
+(defonce ^DeferredRegister menu-register
   (DeferredRegister/create Registries/MENU modid/MOD-ID))
 
 (defonce gui-menu-types
@@ -112,7 +112,7 @@
   - player: ServerPlayerEntity
   - gui-id: int
   - tile-entity: TileEntity (optional, can be nil)"
-  [player gui-id tile-entity]
+  [^ServerPlayer player gui-id tile-entity]
   (log/info "Opening GUI" gui-id "for player" (.getName player))
   (try
     (let [^ServerPlayer player player

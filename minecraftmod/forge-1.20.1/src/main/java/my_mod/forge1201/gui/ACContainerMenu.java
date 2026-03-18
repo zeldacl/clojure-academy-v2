@@ -2,7 +2,10 @@ package my_mod.forge1201.gui;
 
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.DataSlot;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.entity.player.Player;
 
 /**
  * Thin bridge class to expose protected AbstractContainerMenu APIs to Clojure.
@@ -17,6 +20,26 @@ public abstract class ACContainerMenu extends AbstractContainerMenu {
 
     public void publicAddDataSlot(DataSlot slot) {
         this.addDataSlot(slot);
+    }
+
+    public void publicAddSlot(Slot slot) {
+        this.addSlot(slot);
+    }
+
+    public void publicRemoved(Player player) {
+        this.removed(player);
+    }
+
+    public void publicBroadcastChanges() {
+        this.broadcastChanges();
+    }
+
+    public void publicClicked(int slotIndex, int button, ClickType clickType, Player player) {
+        this.clicked(slotIndex, button, clickType, player);
+    }
+
+    public Slot publicGetSlot(int index) {
+        return this.getSlot(index);
     }
 }
 
