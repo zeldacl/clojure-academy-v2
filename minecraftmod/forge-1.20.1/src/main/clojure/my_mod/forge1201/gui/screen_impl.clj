@@ -7,10 +7,12 @@
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.forge1201.gui.cgui-runtime :as cgui-rt]
             [my-mod.util.log :as log])
-  (:import [net.minecraft.client.gui GuiGraphics]
-           [net.minecraft.client.gui.screens MenuScreens]
-           [my_mod.forge1201.gui CGuiContainerScreen]
-           [net.minecraft.world.inventory Slot ClickType]))
+  (:import (net.minecraft.client.gui GuiGraphics)
+           (net.minecraft.client.gui.screens MenuScreens)
+           (net.minecraft.client.gui.screens.inventory AbstractContainerScreen)
+           (my_mod.forge1201.gui CGuiContainerScreen)
+           (net.minecraft.world.inventory Slot)
+           (net.minecraft.world.inventory ClickType)))
 
 ;; ============================================================================
 ;; CGUI Screen Proxy
@@ -42,146 +44,105 @@
   [menu player-inventory title cgui-screen]
   (when-not (cgui-screen-container? cgui-screen)
     (throw (ex-info "Expected :cgui-screen-container map" {:got (type cgui-screen)})))
-  ;; Size delta comes from create-screen (e.g. tech_ui_common tech-ui-size-dx/dy); no business constants here.
   (let [root (:cgui cgui-screen)
         left (atom 0)
         top (atom 0)
         size-dx (int (or (:size-dx cgui-screen) 0))
         size-dy (int (or (:size-dy cgui-screen) 0))]
     (proxy [CGuiContainerScreen] [menu player-inventory title]
-      ;; (getXSize []
-      ;;   (+ size-dx (proxy-super getXSize)))
-      ;; (getYSize []
-      ;;   (+ size-dy (proxy-super getYSize)))
-      ;; (getGuiLeft []
-      ;;   (int (/ (- (.width this) (.getXSize this)) 2)))
-      ;; (getGuiTop []
-      ;;   (int (/ (- (.height this) (.getYSize this)) 2)))
-      
-      ;; Slot rendering reads leftPos/topPos directly; set them with type-hinted set! so slots align with the enlarged GUI.
       (init []
-        (log/info "Initializing CGUI container screen with size delta" size-dx "x" size-dy)
-        (log/info "Original size:" (.getImageWidthPublic this) "x" (.getImageHeightPublic this))
-        (when (or (not= size-dx 0) (not= size-dy 0))
-          (let [new-x (int (+ size-dx (.getImageWidthPublic this)))
-                new-y (int (+ size-dy (.getImageHeightPublic this)))]
-            (.setImageSize this new-x new-y)))
-        (log/info "Adjusted size:" (.getImageWidthPublic this) "x" (.getImageHeightPublic this))
-        ;(log/info "Initial left/top:" (.-leftPos ^AbstractContainerScreen this) "/" (.-topPos ^AbstractContainerScreen this))
-        ;; (when (or (not= size-dx 0) (not= size-dy 0))
-        ;;   (let [new-left (int (/ (- (.width this) (.getXSize this)) 2))
-        ;;         new-top (int (/ (- (.height this) (.getYSize this)) 2))]
-        ;;     (set! (.-leftPos ^AbstractContainerScreen this) new-left)
-        ;;     (set! (.-topPos ^AbstractContainerScreen this) new-top)))
-        (proxy-super init) 
-            ;(log/info "Post-init left/top:" (.-leftPos ^AbstractContainerScreen this) "/" (.-topPos ^AbstractContainerScreen this))
-        )
-      
+        (let [^CGuiContainerScreen screen this]
+          (when (or (not= size-dx 0) (not= size-dy 0))
+            (let [new-x (int (+ size-dx (.getImageWidthPublic screen)))
+                  new-y (int (+ size-dy (.getImageHeightPublic screen)))]
+              (.setImageSize screen new-x new-y)))
+          (.initPublic screen)))
+
       (render [^GuiGraphics gg mouse-x mouse-y partial-ticks]
-        (when root
-          (try
-            (cgui-rt/resize-root! root (.getXSize this) (.getYSize this))
-            (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
-            (catch Exception e
-              (log/debug "CGUI frame-tick error:" (.getMessage e)))))
-        ;; Non-inv tab: skip full vanilla render so no slots/highlight are drawn; only background + our renderBg (CGui) + tooltip
-        (if (slots-visible? cgui-screen)
-          (proxy-super render gg mouse-x mouse-y partial-ticks)
-          (do
-            (.renderBackground this gg)
-            (.renderBg this gg (float partial-ticks) (int mouse-x) (int mouse-y))
-            (.renderTooltip this gg (int mouse-x) (int mouse-y)))))
+        (let [^CGuiContainerScreen screen this]
+          (when root
+            (try
+              (cgui-rt/resize-root! root (.getImageWidthPublic screen) (.getImageHeightPublic screen))
+              (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
+              (catch Exception e
+                (log/debug "CGUI frame-tick error:" (.getMessage e)))))
+          (if (slots-visible? cgui-screen)
+            (.renderPublic screen gg (int mouse-x) (int mouse-y) (float partial-ticks))
+            (do
+              (.renderBackground screen gg)
+              (.renderBgPublic screen gg (float partial-ticks) (int mouse-x) (int mouse-y))
+              (.renderTooltipPublic screen gg (int mouse-x) (int mouse-y))))))
+
       (renderLabels [^GuiGraphics gg mouse-x mouse-y] (comment "skip labels"))
-      
-      ;; Tabbed GUI: draw slot highlight only when on inv tab (use client tab atom so no delay)
-      (renderSlotHighlight [^GuiGraphics gg x y]
-        (when (slots-visible? cgui-screen)
-          (proxy-super renderSlotHighlight gg x y)))
-      
-      ;; Tabbed GUI: draw slot (and item) only when on inv tab; on other tabs hide slots and items
-      (renderSlot [^GuiGraphics gg ^Slot slot]
-        (when (slots-visible? cgui-screen)
-          (proxy-super renderSlot gg slot)))
-      
-      ;; Return null when on non-inv tab so hoveredSlot stays null and no slot is "under" mouse
-      (findSlot [x y]
-        (if (slots-enabled-for-click? cgui-screen)
-          (proxy-super findSlot x y)
-          nil))
-      
-      ;; Block the actual slot-click→packet path when on non-inv tab (even if something calls this directly)
-      (slotClicked [^Slot slot slot-id button ^ClickType action-type]
-        (when (slots-enabled-for-click? cgui-screen)
-          (proxy-super slotClicked slot slot-id button action-type)))
-      
+
       (renderBg [^GuiGraphics gg _partial-ticks _mouse-x _mouse-y]
-        (reset! left (.getGuiLeft this))
-        (reset! top (.getGuiTop this))
-        (let [left-val @left
-              top-val @top
-              right (+ left-val (.getXSize this))
-              bottom (+ top-val (.getYSize this))]
-                  ;(.fill gg left-val top-val right bottom (unchecked-int 0xC0101010))
-                  ;(.fill gg left-val top-val right bottom (unchecked-int 0xD0101010))
-          )
-        (when root
-          (try
-            (cgui-rt/render-tree! gg root @left @top)
-            (catch Exception e
-              (log/debug "CGUI renderBg error:" (.getMessage e))))))
-      
+        (let [^CGuiContainerScreen screen this]
+          (reset! left (.getLeftPosPublic screen))
+          (reset! top (.getTopPosPublic screen))
+          (when root
+            (try
+              (cgui-rt/render-tree! gg root @left @top)
+              (catch Exception e
+                (log/debug "CGUI renderBg error:" (.getMessage e)))))))
+
       (mouseClicked [mouse-x mouse-y button]
         (when root
           (try
-            (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)
+            (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top (int button))
             (catch Exception _ nil)))
-        ;; Only forward to vanilla (slot handling) when on inv tab; otherwise consume click to block slot interaction
         (if (slots-enabled-for-click? cgui-screen)
-          (proxy-super mouseClicked mouse-x mouse-y button)
+          (let [^CGuiContainerScreen screen this]
+            (.mouseClickedPublic screen (double mouse-x) (double mouse-y) (int button)))
           true))
-      
+
       (mouseReleased [mouse-x mouse-y button]
         (if (slots-enabled-for-click? cgui-screen)
-          (proxy-super mouseReleased mouse-x mouse-y button)
+          (let [^CGuiContainerScreen screen this]
+            (.mouseReleasedPublic screen (double mouse-x) (double mouse-y) (int button)))
           true))
-      
+
       (mouseDragged [mouse-x mouse-y button drag-x drag-y]
         (when root
           (try
             (cgui-rt/mouse-drag! root (int mouse-x) (int mouse-y) @left @top)
             (catch Exception _ nil)))
         (if (slots-enabled-for-click? cgui-screen)
-          (proxy-super mouseDragged mouse-x mouse-y button drag-x drag-y)
+          (let [^CGuiContainerScreen screen this]
+            (.mouseDraggedPublic screen (double mouse-x) (double mouse-y) (int button) (double drag-x) (double drag-y)))
           true))
-      
+
       (keyPressed [key-code scan-code modifiers]
         (when root
           (try
-            (cgui-rt/key-input! root key-code scan-code (char 0))
+            (cgui-rt/key-input! root (int key-code) (int scan-code) (char 0))
             (catch Exception _ nil)))
-        (proxy-super keyPressed key-code scan-code modifiers))
-      
+        (let [^CGuiContainerScreen screen this]
+          (.keyPressedPublic screen (int key-code) (int scan-code) (int modifiers))))
+
       (charTyped [code-point modifiers]
         (when root
           (try
-            (cgui-rt/key-input! root 0 0 (char code-point))
+            (cgui-rt/key-input! root 0 0 code-point)
             (catch Exception _ nil)))
-        (proxy-super charTyped code-point modifiers))
-      
+        (let [^CGuiContainerScreen screen this]
+          (.charTypedPublic screen code-point (int modifiers))))
+
       (onClose []
         (when root
           (try (cgui-rt/dispose! root) (catch Exception _ nil)))
-        (proxy-super onClose)))))
+        (let [^CGuiContainerScreen screen this]
+          (.onClosePublic screen))))))
 
 (defn- fallback-container-screen
   "Minimal AbstractContainerScreen that only draws a dark gradient (no CGUI)."
   [menu player-inventory title]
   (proxy [CGuiContainerScreen] [menu player-inventory title]
     (renderBg [^GuiGraphics gg _partial _mx _my]
-      (let [left (.getGuiLeft this)
-            top (.getGuiTop this)
-            right (+ left (.getXSize this))
-            bottom (+ top (.getYSize this))]
+      (let [^CGuiContainerScreen screen this
+            left (.getLeftPosPublic screen)
+            top (.getTopPosPublic screen)
+            right (+ left (.getImageWidthPublic screen))
+            bottom (+ top (.getImageHeightPublic screen))]
         (.fill gg left top right bottom (unchecked-int 0xC0101010))
         (.fill gg left top right bottom (unchecked-int 0xD0101010))))))
 

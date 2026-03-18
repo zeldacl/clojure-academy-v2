@@ -10,12 +10,14 @@
     [my-mod.util.log :as log])
   (:import
     (net.minecraft.client.gui GuiGraphics)
+    (net.minecraft.client.gui Font)
     (net.minecraft.client Minecraft)
     (net.minecraft.client.resources.language I18n)
     (net.minecraft.resources ResourceLocation)
     (com.mojang.blaze3d.systems RenderSystem)
     (javax.imageio ImageIO)
-    (org.lwjgl.opengl GL11)))
+    (org.lwjgl.opengl GL11)
+    ))
 
   (defonce ^:private texture-size-cache (atom {}))
 
@@ -36,55 +38,19 @@
             [(.getWidth image) (.getHeight image)])))))
 
   (defn- get-texture-size
-    "Try to obtain the pixel size [width height] for the given `resource-location`.
-     Caches results by resource-location string. Returns [w h] or nil if unknown.
-     Uses best-effort reflective calls against Minecraft's TextureManager / texture
-     objects so it is tolerant to different runtime implementations." 
-    [resource-location]
+    "Obtain pixel size [width height] for `resource-location` by reading the PNG
+     from this mod's resources. Returns [w h] or nil."
+    [^ResourceLocation resource-location]
     (when resource-location
       (let [k (str resource-location)
             cached (@texture-size-cache k)]
         (if cached
           cached
-          (let [mc (Minecraft/getInstance)
-                tm (try (.getTextureManager mc) (catch Exception _ nil))
-                tex (try (when tm (.getTexture tm resource-location)) (catch Exception _ nil))
-                ;; try multiple ways to obtain width/height
-                size (try
-                       (or
-                         ;; preferred: read the actual PNG from mod resources
-                         (get-texture-size-from-resource resource-location)
-                         ;; common: texture object exposes getWidth/getHeight
-                         (when tex
-                           (try
-                             (let [w (try (.getWidth tex) (catch Exception _ nil))
-                                   h (try (.getHeight tex) (catch Exception _ nil))]
-                               (when (and w h) [(int w) (int h)]))
-                             (catch Exception _ nil)))
-                         ;; some implementations wrap an image object
-                         (when tex
-                           (try
-                             (let [img (try (.getTextureImage tex) (catch Exception _ nil))]
-                               (when img
-                                 (let [w (try (.getWidth img) (catch Exception _ nil))
-                                       h (try (.getHeight img) (catch Exception _ nil))]
-                                   (when (and w h) [(int w) (int h)]))))
-                             (catch Exception _ nil)))
-                         ;; as a last resort: try accessing fields reflectively
-                         (when tex
-                           (try
-                             (let [cls (class tex)
-                                   wf (try (.getDeclaredField cls "width") (catch Exception _ nil))
-                                   hf (try (.getDeclaredField cls "height") (catch Exception _ nil))]
-                               (when (and wf hf)
-                                 (doto wf (.setAccessible true))
-                                 (doto hf (.setAccessible true))
-                                 (let [w (.getInt wf tex)
-                                       h (.getInt hf tex)]
-                                   (when (and (number? w) (number? h)) [(int w) (int h)]))))
-                           (catch Exception _ nil))))
-                       (catch Exception _ nil))]
-            (when size (swap! texture-size-cache assoc k size))
+          (let [size (try
+                        (get-texture-size-from-resource resource-location)
+                        (catch Exception _ nil))]
+            (when size
+              (swap! texture-size-cache assoc k size))
             size)))))
 
         (defn- apply-depth-mode!
@@ -158,13 +124,13 @@
           align-h (when-let [a (:align-height tm)] (-> a name str/lower-case keyword))
           ;; compute alignment offsets in logical units relative to parent size
           align-offset-x (case align-w
-                           :center (int (Math/round (/ (- pw w) 2.0)))
-                           :right  (int (Math/round (- pw w)))
+                           :center (int (Math/round (double (/ (- pw w) 2.0))))
+                           :right  (int (Math/round (double (- pw w))))
                            ;; default :left or nil
                            0)
           align-offset-y (case align-h
-                           :center (int (Math/round (/ (- ph h) 2.0)))
-                           :bottom (int (Math/round (- ph h)))
+                           :center (int (Math/round (double (/ (- ph h) 2.0))))
+                           :bottom (int (Math/round (double (- ph h))))
                            ;; default :top or nil
                            0)
           ;; pivot is fraction of widget size; shift top-left so pivot point is at position
@@ -289,10 +255,10 @@
                       cell-h (max 1 (int (Math/floor (/ tex-h 3.0))))]
                   (doseq [i (range 3)
                           j (range 3)]
-                    (let [x0 (int (Math/round (nth xs i)))
-                          y0 (int (Math/round (nth ys j)))
-                          x1 (int (Math/round (nth xs (inc i))))
-                          y1 (int (Math/round (nth ys (inc j))))
+                    (let [x0 (int (Math/round (double (nth xs i))))
+                          y0 (int (Math/round (double (nth ys j))))
+                          x1 (int (Math/round (double (nth xs (inc i)))))
+                          y1 (int (Math/round (double (nth ys (inc j)))))
                           tw (max 1 (- x1 x0))
                           th (max 1 (- y1 y0))
                           u (* i cell-w)
@@ -302,14 +268,14 @@
                 ;; line overlays (1.12 HudUtils.rect on lineTex)
                 (when line-tex
                   (let [mrg 3.2
-                        top-x (int (Math/round (- x mrg)))
-                        top-y (int (Math/round (- y 8.6)))
-                        top-w (int (Math/round (+ w-int (* mrg 2.0))))
-                        top-h (int (Math/round 12.0))
-                        bot-x (int (Math/round (- x mrg)))
-                        bot-y (int (Math/round (+ y h-int -2.0)))
-                        bot-w (int (Math/round (+ w-int (* mrg 2.0))))
-                        bot-h (int (Math/round 8.0))
+                        top-x (int (Math/round (double (- x mrg))))
+                        top-y (int (Math/round (double (- y 8.6))))
+                        top-w (int (Math/round (double (+ w-int (* mrg 2.0)))))
+                        top-h (int (Math/round (double 12.0)))
+                        bot-x (int (Math/round (double (- x mrg))))
+                        bot-y (int (Math/round (double (+ y h-int -2.0))))
+                        bot-w (int (Math/round (double (+ w-int (* mrg 2.0)))))
+                        bot-h (int (Math/round (double 8.0)))
                         line-size (get-texture-size line-tex)
                         lw (max 1 (int (or (first line-size) 1)))
                         lh (max 1 (int (or (second line-size) 1)))]
@@ -388,30 +354,30 @@
               (.fill gg x y (+ x w-int) (+ y h-int) (unchecked-int (or (:color state) 0xFFFFFF)))))
 
           (kind-matches? kind :textbox)
-          (let [raw-text (str (or (:text state) ""))
+            (let [raw-text (str (or (:text state) ""))
                 localized? (boolean (:localized? state))
                 raw-text (if (and localized? (seq raw-text))
                            (try
                              (net.minecraft.client.resources.language.I18n/get raw-text (object-array 0))
                              (catch Throwable _ raw-text))
                            raw-text)
-                text (if (and (:masked? state) (seq raw-text))
+                ^String text (if (and (:masked? state) (seq raw-text))
                        (apply str (repeat (count raw-text) \*))
                        raw-text)
                 color (unchecked-int (or (:color state) 0xFFFFFF))
-                font  (.font (Minecraft/getInstance))]
+                ^Font font (.font (Minecraft/getInstance))]
             (when (seq text)
-              (.drawString gg font text x y color))
+              (.drawString gg font text (int x) (int y) color))
             ;; caret rendering for editable textboxes when focused
             (when (and (:editable? state)
                        (some-> @(:metadata root) :focused?) )
               (try
-                (let [font (.font (Minecraft/getInstance))
+                (let [^Font font (.font (Minecraft/getInstance))
                       ;; compute caret x at end of text for now
                       caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
-                      caret-x (+ x (int (.width font text)))]
+                      caret-x (+ (int x) (int (.width font text)))]
                   (when caret-visible?
-                    (.drawString gg font "|" caret-x y color)))
+                    (.drawString gg font "|" caret-x (int y) color)))
                 (catch Exception _ nil))))
 
           (kind-matches? kind :progressbar)

@@ -312,6 +312,27 @@
                   (let [^PoseStack pose-stack pose-stack]
                     (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/YP (float angle)))))))
 
+  ;; Bind PoseStack operations for mcmod/ac renderers (avoid reflection in platform-neutral code)
+  (alter-var-root #'pose/*push-pose-fn*
+    (constantly (fn [pose-stack]
+                  (let [^PoseStack pose-stack pose-stack]
+                    (.pushPose pose-stack)))))
+
+  (alter-var-root #'pose/*pop-pose-fn*
+    (constantly (fn [pose-stack]
+                  (let [^PoseStack pose-stack pose-stack]
+                    (.popPose pose-stack)))))
+
+  (alter-var-root #'pose/*translate-fn*
+    (constantly (fn [pose-stack x y z]
+                  (let [^PoseStack pose-stack pose-stack]
+                    (.translate pose-stack (double x) (double y) (double z))))))
+
+  (alter-var-root #'pose/*scale-fn*
+    (constantly (fn [pose-stack x y z]
+                  (let [^PoseStack pose-stack pose-stack]
+                    (.scale pose-stack (float x) (float y) (float z))))))
+
   ;; Bind platform render buffer selectors for mcmod/ac renderers
   (alter-var-root #'buffer/*solid-buffer-fn*
     (constantly (fn [buffer-source texture]

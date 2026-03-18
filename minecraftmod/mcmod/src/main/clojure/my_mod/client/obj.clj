@@ -213,11 +213,13 @@
 (defn render-part-consumer
   "Render one OBJ group using a VertexConsumer. Uses the provided PoseStack
   for transforms and the provided vertex consumer for buffered submission." 
-  [model part pose-stack vertex-consumer _packed-light packed-overlay]
+  [model part ^com.mojang.blaze3d.vertex.PoseStack pose-stack
+   ^com.mojang.blaze3d.vertex.VertexConsumer vertex-consumer
+   _packed-light packed-overlay]
   (when-let [face-list (get (:faces model) part)]
-    (let [entry (.last pose-stack)
-          matrix (.pose entry)
-      vc vertex-consumer
+    (let [^com.mojang.blaze3d.vertex.PoseStack$Pose entry (.last pose-stack)
+          ^org.joml.Matrix4f matrix (.pose entry)
+          ^com.mojang.blaze3d.vertex.VertexConsumer vc vertex-consumer
           part-vertex-indices (set (mapcat (fn [{:keys [i0 i1 i2]}]
                                              [i0 i1 i2])
                                            face-list))
@@ -236,9 +238,9 @@
           y2 (:y (:pos v2))
             face-min-y (min y0 y1 y2)
           bottom-verts (count (filter true?
-                        [(<= (Math/abs (- y0 part-min-y)) bottom-epsilon)
-                         (<= (Math/abs (- y1 part-min-y)) bottom-epsilon)
-                         (<= (Math/abs (- y2 part-min-y)) bottom-epsilon)]))
+                        [(<= (Math/abs (double (- y0 part-min-y))) bottom-epsilon)
+                         (<= (Math/abs (double (- y1 part-min-y))) bottom-epsilon)
+                         (<= (Math/abs (double (- y2 part-min-y))) bottom-epsilon)]))
           skip-flat-bottom? (and *skip-flat-bottom-plane*
                                  (= bottom-verts 3))
           skip-by-normal? (and *skip-downward-faces*
@@ -247,8 +249,8 @@
                        (or (>= bottom-verts 2)
                          (and (>= bottom-verts 1)
                             (<= (:y face-normal) 0.15)
-                          (<= (Math/abs (- face-min-y part-min-y))
-                              (* 2.0 bottom-epsilon))))) ]
+                            (<= (Math/abs (double (- face-min-y part-min-y)))
+                                (* 2.0 bottom-epsilon))))) ]
         :when (not (or skip-flat-bottom?
                        skip-by-normal?
                        skip-by-bottom?))]
@@ -269,7 +271,8 @@
                 nx (float (:x normal))
                 ny (float (:y normal))
                 nz (float (:z normal))]
-            (-> (.vertex vc matrix x y z)
+            (doto vc
+              (.vertex matrix x y z)
               (.color (int 255) (int 255) (int 255) (int 255))
               (.uv u v)
               (.overlayCoords (int packed-overlay))

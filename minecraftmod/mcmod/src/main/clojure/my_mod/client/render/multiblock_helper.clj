@@ -244,9 +244,9 @@
             tx (+ pivot-x rot-x)
             ty rot-y
             tz (+ pivot-z rot-z)]
-        (.pushPose pose-stack)
+        (pose/push-pose! pose-stack)
         (try
-          (.translate pose-stack (double tx) (double ty) (double tz))
+          (pose/translate! pose-stack (double tx) (double ty) (double tz))
           ;; Delegate rotation to platform-registered implementation (mcmod must
           ;; not reference Minecraft classes). Platform adapters (forge/fabric)
           ;; should call `my-mod.client.render.pose/register-y-rotation!`
@@ -254,7 +254,7 @@
           (pose/apply-y-rotation pose-stack rotation)
           (render-fn tile partial-ticks pose-stack buffer-source packed-light packed-overlay)
           (finally
-            (.popPose pose-stack))))
+            (pose/pop-pose! pose-stack))))
       (catch Exception e
         (log/error "Error rendering multiblock:" (.getMessage e))
         (.printStackTrace e)))))

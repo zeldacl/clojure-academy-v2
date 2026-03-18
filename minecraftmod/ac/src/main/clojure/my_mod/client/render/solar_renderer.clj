@@ -17,15 +17,15 @@
 
 (defn render-at-origin
   [_tile pose-stack buffer-source packed-light packed-overlay]
-  (.pushPose pose-stack)
+  (pose/push-pose! pose-stack)
   (try
     (let [;; rotate 90 degrees around Y
           ;; Lift slightly above the support block top to avoid origin-cell
           ;; depth conflict that makes the block below appear transparent.
-          _ (.translate pose-stack (double 0.5) (double 0.02) (double 0.5))
+          _ (pose/translate! pose-stack (double 0.5) (double 0.02) (double 0.5))
           _ (pose/apply-y-rotation pose-stack 90.0)
           ;; scale
-          _ (.scale pose-stack (float 0.014) (float 0.014) (float 0.014))
+          _ (pose/scale! pose-stack (float 0.014) (float 0.014) (float 0.014))
           ;; Use culled solid buffer so the model underside doesn't overlay the
           ;; supporting block's top texture.
           vc (rb/get-solid-buffer buffer-source @texture)]
@@ -33,7 +33,7 @@
                 obj/*bottom-plane-epsilon* 0.0008]
         (obj/render-all! @model pose-stack vc packed-light packed-overlay)))
     (finally
-      (.popPose pose-stack))))
+      (pose/pop-pose! pose-stack))))
 
 (defn register!
   "Register SolarGen renderer by block-id for generic ScriptedBlockEntity."
