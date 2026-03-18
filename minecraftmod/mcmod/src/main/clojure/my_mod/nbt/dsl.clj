@@ -337,14 +337,14 @@
   Example:
     (defworldnbt world-data
       :create create-world-data
-      :lists [{:tag \"networks\"
-               :atom :networks
-               :to-nbt my-mod.wireless.network/network-to-nbt
-               :from-nbt my-mod.wireless.network/network-from-nbt
-               :skip? (fn [net] @(:disposed net))
-               :rebuild {:lookup-atom :net-lookup
-                         :direct-keys [:matrix :ssid]
-                         :collection-keys [:nodes]}}])"
+      :lists [{:tag \"items\"
+               :atom :items
+               :to-nbt my-mod.data/item-to-nbt
+               :from-nbt my-mod.data/item-from-nbt
+               :skip? (fn [item] (:deleted item))
+               :rebuild {:lookup-atom :item-lookup
+                         :direct-keys [:id :name]
+                         :collection-keys [:children]}}])"
   [name & options]
   (let [opts (apply hash-map options)
         create-fn (:create opts)

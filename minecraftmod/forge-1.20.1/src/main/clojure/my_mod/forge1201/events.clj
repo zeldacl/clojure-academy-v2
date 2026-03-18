@@ -4,7 +4,7 @@
             [my-mod.util.log :as log]
             [my-mod.events.metadata :as event-metadata]
             [my-mod.forge1201.gui.registry-impl :as gui-registry-impl]
-            [my-mod.wireless.world-data :as wd])
+            [my-mod.events.world-lifecycle :as world-lifecycle])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
             BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
@@ -121,25 +121,25 @@
 ;; ============================================================================
 
 (defn handle-world-load
-  "Handle world load event - restore wireless network data"
+  "Handle world load event - dispatch to registered handlers"
   [^LevelEvent$Load evt]
   (try
     (let [level (.getLevel evt)]
       (when-not (.isClientSide level)  ; Server side only
-        (log/info "World loaded, initializing wireless system")
-        (wd/on-world-load level nil)))
+        (log/info "World loaded, dispatching to lifecycle handlers")
+        (world-lifecycle/dispatch-world-load level nil)))
     (catch Throwable t
       (log/error "Error handling world load event:" (.getMessage t))
       (.printStackTrace t))))
 
 (defn handle-world-unload
-  "Handle world unload event - cleanup wireless network data"
+  "Handle world unload event - dispatch to registered handlers"
   [^LevelEvent$Unload evt]
   (try
     (let [level (.getLevel evt)]
       (when-not (.isClientSide level)  ; Server side only
-        (log/info "World unloading, cleaning up wireless system")
-        (wd/on-world-unload level)))
+        (log/info "World unloading, dispatching to lifecycle handlers")
+        (world-lifecycle/dispatch-world-unload level)))
     (catch Throwable t
       (log/error "Error handling world unload event:" (.getMessage t))
       (.printStackTrace t))))

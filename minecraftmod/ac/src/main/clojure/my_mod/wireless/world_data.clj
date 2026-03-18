@@ -1,6 +1,6 @@
 (ns my-mod.wireless.world-data
   "World-level wireless network data management
-  
+
   Manages all wireless networks and node connections for a world:
   - Network registry (SSID-based)
   - Lookup tables for fast queries
@@ -8,7 +8,8 @@
   - Tick coordination"
   (:require [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.util.log :as log]
-            [my-mod.wireless.world-schema :as ws]))
+            [my-mod.wireless.world-schema :as ws]
+            [my-mod.events.world-lifecycle :as world-lifecycle]))
 
 ;; ============================================================================
 ;; WiWorldData Record
@@ -251,4 +252,10 @@
 ;; ============================================================================
 
 (defn init-world-data! []
+  (log/info "Registering wireless world data lifecycle handlers...")
+  ;; Register world lifecycle handlers with mcmod's event system
+  (world-lifecycle/register-world-lifecycle-handler!
+    {:on-load   on-world-load
+     :on-unload on-world-unload
+     :on-save   on-world-save})
   (log/info "World data system initialized"))

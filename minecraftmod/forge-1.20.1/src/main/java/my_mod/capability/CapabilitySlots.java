@@ -50,7 +50,7 @@ public final class CapabilitySlots {
      * Claim the next free slot for the given logical key.
      * Idempotent: calling with the same key twice returns the same Capability.
      *
-     * @param key logical capability key (e.g. "wireless-node")
+     * @param key logical capability key (e.g. "my-capability-key")
      * @return the Capability object for this key
      * @throws IllegalStateException if all 16 slots are already in use
      */

@@ -105,6 +105,7 @@
 ;; ============================================================================
 
 (def get-gui-handler registry/get-gui-handler)
+(def register-gui-handler registry/register-gui-handler)
 (def init-gui-handler! registry/init!)
 (def register-active-container! registry/register-active-container!)
 (def unregister-active-container! registry/unregister-active-container!)

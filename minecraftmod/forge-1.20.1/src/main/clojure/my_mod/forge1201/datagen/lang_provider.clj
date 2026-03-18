@@ -1,5 +1,7 @@
 (ns my-mod.forge1201.datagen.lang-provider
-  (:require [my-mod.config.modid :as modid])
+  "Language file data generator - generates translation files from metadata"
+  (:require [my-mod.config.modid :as modid]
+            [my-mod.registry.metadata :as registry-metadata])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [java.nio.file Path]
            [java.util.concurrent CompletableFuture]
@@ -9,11 +11,11 @@
 (def ^:private ^Gson gson
   (-> (GsonBuilder.) (.setPrettyPrinting) (.disableHtmlEscaping) (.create)))
 
+;; TODO: Load translation data from ac metadata system instead of hardcoding
+;; For now, keep minimal translations for creative tab
 (def ^:private lang-data
-  {"en_us.json" {"itemGroup.my_mod.items" "My Mod Items"
-                 "ac.gui.common.pg_wireless.not_connected" "Not Connected"}
-   "zh_cn.json" {"itemGroup.my_mod.items" "My Mod Items"
-                 "ac.gui.common.pg_wireless.not_connected" "未连接"}})
+  {"en_us.json" {"itemGroup.my_mod.items" "My Mod Items"}
+   "zh_cn.json" {"itemGroup.my_mod.items" "My Mod Items"}})
 
 (defn create
   [^PackOutput pack-output _exfile-helper]
