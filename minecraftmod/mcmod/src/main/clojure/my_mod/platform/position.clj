@@ -114,6 +114,29 @@
   (create-block-pos x y z))
 
 ;; ============================================================================
+;; Position Navigation (platform-agnostic wrappers)
+;; ============================================================================
+
+(defonce ^{:dynamic true
+           :doc "Platform function to get the BlockPos one above a given pos.
+         Signature: (fn [pos] -> IBlockPos)
+         Must be initialized by platform code."}
+  *pos-above-fn*
+  nil)
+
+(defn pos-above
+  "Return the BlockPos directly above the given position.
+
+  Args:
+  - pos: IBlockPos
+
+  Returns: IBlockPos one block above"
+  [pos]
+  (if-let [f *pos-above-fn*]
+    (f pos)
+    (throw (ex-info "pos-above not initialized - platform must set *pos-above-fn*" {:pos pos}))))
+
+;; ============================================================================
 ;; Utility Functions
 ;; ============================================================================
 

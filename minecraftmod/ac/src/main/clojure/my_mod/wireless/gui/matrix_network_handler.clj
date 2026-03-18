@@ -18,7 +18,8 @@
             [my-mod.wireless.gui.wireless-messages :as wireless-msgs]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.platform.entity :as entity]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log])
+  (:import [my_mod.api.wireless IWirelessMatrix]))
 
 ;; ==================== 工具函数 ====================
 
@@ -29,7 +30,7 @@
 
 (defn is-owner?
   "检查玩家是否是Matrix的所有者"
-  [tile player]
+  [^IWirelessMatrix tile player]
   (let [player-name (entity/player-get-name player)
         placer-name (.getPlacerName tile)]
     (= (str placer-name) (str player-name))))

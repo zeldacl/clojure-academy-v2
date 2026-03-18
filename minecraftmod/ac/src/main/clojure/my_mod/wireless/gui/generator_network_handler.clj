@@ -8,7 +8,8 @@
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.wireless.node-connection :as node-conn]
             [my-mod.platform.position :as pos]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log])
+  (:import [my_mod.api.wireless IWirelessNode]))
 
 (defn handle-get-status
   [payload player]
@@ -16,7 +17,7 @@
         tile (net-helpers/get-tile-at world payload)]
     (if tile
       (let [conn (try (helper/get-node-conn-by-generator tile) (catch Exception _ nil))
-            node (when conn (try (node-conn/get-node conn) (catch Exception _ nil)))
+            node ^IWirelessNode (when conn (try (node-conn/get-node conn) (catch Exception _ nil)))
             node-pos (when node (.getBlockPos node))
             pw (when node (try (str (.getPassword node)) (catch Exception _ "")))]
         {:linked (when node
@@ -35,7 +36,7 @@
     (if tile
       (let [tile-pos (pos/position-get-block-pos tile)
             linked-conn (try (helper/get-node-conn-by-generator tile) (catch Exception _ nil))
-            linked-node (when linked-conn (try (node-conn/get-node linked-conn) (catch Exception _ nil)))
+            linked-node ^IWirelessNode (when linked-conn (try (node-conn/get-node linked-conn) (catch Exception _ nil)))
             linked-pos (when linked-node (.getBlockPos linked-node))
             nodes (if tile-pos (helper/get-nodes-in-range world tile-pos) [])
             linked (when linked-node
@@ -46,13 +47,13 @@
                         :pos-z (when linked-pos (pos/pos-z linked-pos))
                         :is-encrypted? (not (empty? pw))}))
             avail (->> nodes
-                       (remove (fn [node]
+                       (remove (fn [^IWirelessNode node]
                                  (let [p (.getBlockPos node)]
                                    (and p linked-pos
                                         (= (pos/pos-x p) (pos/pos-x linked-pos))
                                         (= (pos/pos-y p) (pos/pos-y linked-pos))
                                         (= (pos/pos-z p) (pos/pos-z linked-pos))))))
-                       (mapv (fn [node]
+                       (mapv (fn [^IWirelessNode node]
                                (let [p (.getBlockPos node)
                                      pw (try (str (.getPassword node)) (catch Exception _ ""))]
                                  {:node-name (try (str (.getNodeName node)) (catch Exception _ "Node"))

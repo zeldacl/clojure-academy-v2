@@ -220,7 +220,7 @@
         (events/on-frame bar
           (fn [_]
             (let [value ((:value-fn elem))
-                  clamped (Math/max 0.03 (Math/min 1.0 value))]
+                  clamped (Math/max 0.03 (Math/min 1.0 (double value)))]
               (comp/set-progress! progress clamped))))
         (cgui/add-widget! hist-widget bar)))
     

@@ -1,7 +1,8 @@
 (ns my-mod.platform.entity
   "Platform-neutral entity utilities."
   (:import [net.minecraft.world.entity Entity]
-           [net.minecraft.world.entity.player Player]))
+           [net.minecraft.world.entity.player Player Inventory]
+           [net.minecraft.world.inventory AbstractContainerMenu]))
 
 (defn entity-distance-to-sqr
   "Calculate squared distance from entity to coordinates.
@@ -33,3 +34,43 @@
   Returns: String - player name"
   [player]
   (str (.getName ^Player player)))
+
+(defn player-get-uuid
+  "Get the UUID of a Player entity.
+
+  Args:
+  - player: Player instance
+
+  Returns: UUID"
+  [player]
+  (.getUUID ^Player player))
+
+(defn player-get-container-menu
+  "Get the player's currently open container menu.
+
+  Args:
+  - player: Player instance
+
+  Returns: AbstractContainerMenu"
+  [player]
+  (.containerMenu ^Player player))
+
+(defn inventory-get-player
+  "Get the Player from a player Inventory.
+
+  Args:
+  - inventory: Inventory instance
+
+  Returns: Player"
+  [inventory]
+  (.player ^Inventory inventory))
+
+(defn menu-get-container-id
+  "Get the containerId (window-id) from an AbstractContainerMenu.
+
+  Args:
+  - menu: AbstractContainerMenu instance
+
+  Returns: int"
+  [menu]
+  (.containerId ^AbstractContainerMenu menu))

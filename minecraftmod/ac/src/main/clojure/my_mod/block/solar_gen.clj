@@ -52,7 +52,8 @@
   (when (and level pos)
     (let [time (rem (long (my-mod.platform.world/world-get-day-time level)) 24000)
           day? (<= time 12500)]
-      (and day? (my-mod.platform.world/world-can-see-sky level (.above pos))))))
+      (and day? (my-mod.platform.world/world-can-see-sky level
+                  (clojure.lang.Reflector/invokeInstanceMethod pos "above" (object-array [])))))))
 
 (defn- solar-tick-fn
   "Tick handler for solar generator ScriptedBlockEntity.

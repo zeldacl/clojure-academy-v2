@@ -131,7 +131,7 @@
   
   Returns:
     String - DSL block identifier, or nil if not found"
-  [block-name]
+  [^String block-name]
   (when block-name
     (let [;; Extract registry name from various formats
           registry-name (cond

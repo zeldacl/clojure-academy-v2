@@ -3,6 +3,7 @@
   (:require [my-mod.gui.dsl :as gui-dsl]
             [my-mod.wireless.gui.gui-metadata :as gui-meta]
             [my-mod.platform.world :as pworld]
+            [my-mod.platform.entity :as entity]
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
@@ -54,7 +55,7 @@
              cfg# (get-gui-config gui-id#)]
          (if (and tile-entity# cfg#)
            (do
-             (log/info "Creating container for player" (.getName player#) "gui" gui-id#)
+             (log/info "Creating container for player" (entity/player-get-name player#) "gui" gui-id#)
              ((:container-fn cfg#) tile-entity# player#))
            (do
              (when-not cfg#
@@ -65,7 +66,7 @@
              cfg# (get-gui-config gui-id#)]
          (if (and tile-entity# cfg#)
            (do
-             (log/info "Creating GUI for player" (.getName player#) "gui" gui-id#)
+             (log/info "Creating GUI for player" (entity/player-get-name player#) "gui" gui-id#)
              (let [container# ((:container-fn cfg#) tile-entity# player#)]
                ((:screen-fn cfg#) container# nil player#)))
            (do
@@ -103,7 +104,7 @@
   This is a platform-agnostic API. Platform-specific implementations
   should call this and then use NetworkHooks or equivalent."
   [player gui-id world pos]
-  (log/info "Opening GUI" gui-id "for player" (.getName player) "at" pos)
+  (log/info "Opening GUI" gui-id "for player" (entity/player-get-name player) "at" pos)
   
   ;; Validate GUI ID
   (when-not (get-gui-config gui-id)

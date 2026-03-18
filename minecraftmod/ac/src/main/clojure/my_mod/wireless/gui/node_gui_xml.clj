@@ -23,7 +23,9 @@
             [my-mod.wireless.gui.node-container :as node-container]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.wireless.gui.wireless-tab :as wireless-tab]
-            [my-mod.util.log :as log]))
+            [my-mod.platform.entity :as entity]
+            [my-mod.util.log :as log])
+  (:import [my_mod.api.wireless IWirelessNode]))
 
 ;; ============================================================================
 ;; GUI Dimensions (shared)
@@ -170,7 +172,7 @@
   (try
     (let [tile (:tile-entity container)
           owner-name (node-container/get-owner container)
-          is-owner? (= owner-name (.getName player))]
+          is-owner? (= owner-name (entity/player-get-name player))]
 
       (tech-ui/reset-info-area! info-area)
 
@@ -185,7 +187,7 @@
                 0)
             y (tech-ui/add-sepline info-area "Info" y)
             y (tech-ui/add-property info-area "Range"
-                                    (fn [] (str (try (.getRange tile) (catch Exception _ 0.0))))
+                                    (fn [] (str (try (.getRange ^IWirelessNode tile) (catch Exception _ 0.0))))
                                     y)
             y (tech-ui/add-property info-area "Owner" owner-name y)]
 

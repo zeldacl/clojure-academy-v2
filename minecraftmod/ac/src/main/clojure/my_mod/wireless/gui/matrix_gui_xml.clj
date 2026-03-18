@@ -25,7 +25,9 @@
             [my-mod.network.client :as net-client]
             [my-mod.wireless.gui.matrix-messages :as matrix-msgs]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
-            [my-mod.util.log :as log]))
+            [my-mod.platform.entity :as entity]
+            [my-mod.util.log :as log])
+  (:import [my_mod.api.wireless IWirelessMatrix]))
 
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)
@@ -152,8 +154,8 @@
   - data: MatrixNetworkData"
   [info-area tile player data]
   (try
-    (let [placer (try (.getPlacerName tile) (catch Exception _ (:owner data)))
-          player-name (try (.getName player) (catch Exception _ (str player)))
+    (let [placer (try (.getPlacerName ^IWirelessMatrix tile) (catch Exception _ (:owner data)))
+          player-name (try (entity/player-get-name player) (catch Exception _ (str player)))
           is-owner? (= (str placer) (str player-name))
           cap (:max-capacity data)
           range (:range data)
@@ -239,8 +241,8 @@
   [container player & [opts]]
   (try
     (let [tile (or (:tile-entity container)
-                   (try (.tile container) (catch Exception _ nil)))
-          
+                   (:tile container))
+
           ;; Create inventory page using shared builder
           inv-page (tech-ui/create-inventory-page "matrix")
           pages [inv-page]

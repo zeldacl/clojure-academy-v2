@@ -39,7 +39,7 @@
           clj-container (or (gui-registry/get-client-container)
                             (throw (ex-info "No client container registered for screen creation"
                                             {:gui-type gui-type})))
-          player (.player player-inventory)
+          player (clojure.lang.Reflector/getInstanceField player-inventory "player")
           cgui-screen ((:screen-fn cfg) clj-container container-or-handler player)]
       
       (log/info (str (name gui-type) " screen created successfully"))

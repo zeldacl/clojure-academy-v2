@@ -11,6 +11,7 @@
   (:require [my-mod.gui.platform-adapter :as gui]
             [my-mod.network.client :as net-client]
             [my-mod.network.server :as net-server]
+            [my-mod.platform.entity :as entity]
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
@@ -114,9 +115,9 @@
     (if (and container (tabbed-container? container))
       (do
         (reset! (:tab-index container) tab-index)
-        (log/info "Set tab-index to" tab-index "for player" (.getName player)))
+        (log/info "Set tab-index to" tab-index "for player" (entity/player-get-name player)))
       (when-not container
-        (log/warn "set-tab: no container for player" (.getName player)))))
+        (log/warn "set-tab: no container for player" (entity/player-get-name player)))))
   {})
 
 (defn register-set-tab-handler!
