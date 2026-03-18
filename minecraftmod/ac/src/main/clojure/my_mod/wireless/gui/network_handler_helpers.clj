@@ -1,10 +1,11 @@
 (ns my-mod.wireless.gui.network-handler-helpers
   "Shared network handler utility functions
-  
+
   Provides common helper functions for server-side network message handlers,
   eliminating duplication between node_network_handler and matrix_network_handler."
   (:require [my-mod.platform.position :as pos]
-            [my-mod.platform.world :as world]))
+            [my-mod.platform.world :as world]
+            [my-mod.platform.entity :as entity]))
 
 ;; ============================================================================
 ;; World and Tile Access Helpers
@@ -12,15 +13,13 @@
 
 (defn get-world
   "Get world instance from player, handling cross-version API differences
-  
+
   Args:
   - player: Player entity instance
-  
+
   Returns: World/Level instance or nil if not accessible"
   [player]
-  (or (try (.getWorld player) (catch Exception _ nil))
-      (try (.level player) (catch Exception _ nil))
-      (try (.getEntityWorld player) (catch Exception _ nil))))
+  (entity/player-get-level player))
 
 (defn get-tile-at
   "Fetch tile entity at position from network payload
@@ -44,15 +43,14 @@
 
   Args:
   - tile: ScriptedBlockEntity / BlockEntity instance
-  
+
   Returns: Map with :pos-x, :pos-y, :pos-z keys.
   Throws ex-info if position cannot be resolved."
   [tile]
-  (let [pos (or (try (.getBlockPos tile) (catch Exception _ nil))
-                (try (.getPos tile) (catch Exception _ nil)))]
-    (when-not pos
-      (throw (ex-info "tile-pos-payload: tile has no position (getBlockPos/getPos returned nil)"
+  (let [block-pos (pos/position-get-block-pos tile)]
+    (when-not block-pos
+      (throw (ex-info "tile-pos-payload: tile has no position"
                       {:tile tile})))
-    {:pos-x (pos/pos-x pos)
-     :pos-y (pos/pos-y pos)
-     :pos-z (pos/pos-z pos)}))
+    {:pos-x (pos/pos-x block-pos)
+     :pos-y (pos/pos-y block-pos)
+     :pos-z (pos/pos-z block-pos)}))

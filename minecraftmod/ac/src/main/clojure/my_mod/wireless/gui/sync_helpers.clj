@@ -7,7 +7,8 @@
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.wireless.world-data :as wd]
             [my-mod.wireless.interfaces :as winterfaces]
-            [my-mod.platform.position :as pos]))
+            [my-mod.platform.position :as pos]
+            [my-mod.platform.be :as platform-be]))
 
 (defn- get-active-client-container
   "Get active client container from gui.registry without creating compile-time cycle."
@@ -144,7 +145,8 @@
     (when-let [container (get-active-client-container)]
       (when (and (:tile-entity container)
                  (= (:pos-x payload)
-                    (try (.getX (.getPos (:tile-entity container)))
+                    (try (let [tile-pos (pos/position-get-block-pos (:tile-entity container))]
+                           (pos/pos-x tile-pos))
                          (catch Exception _ nil))))
         (apply-payload-fields! container payload field-mappings)
         (log/debug (str "Applied " log-prefix " sync payload on client"))))
@@ -166,10 +168,10 @@
   (let [tile (if (contains? source :tile-entity)
                (:tile-entity source)
                source)
-        pos  (.getBlockPos tile)]
-    {:pos-x (.getX pos)
-     :pos-y (.getY pos)
-     :pos-z (.getZ pos)}))
+        block-pos (pos/position-get-block-pos tile)]
+    {:pos-x (pos/pos-x block-pos)
+     :pos-y (pos/pos-y block-pos)
+     :pos-z (pos/pos-z block-pos)}))
 
 ;; ============================================================================
 ;; Throttling Helpers
@@ -214,9 +216,9 @@
   [container]
   (try
     (let [tile  (:tile-entity container)
-          world (.getLevel tile)
-          pos   (.getBlockPos tile)
-          node-vblock (vb/create-vnode (.getX pos) (.getY pos) (.getZ pos))
+          world (platform-be/be-get-level tile)
+          block-pos (pos/position-get-block-pos tile)
+          node-vblock (vb/create-vnode (pos/pos-x block-pos) (pos/pos-y block-pos) (pos/pos-z block-pos))
           world-data  (wd/get-world-data world)
           network     (wd/get-network-by-node world-data node-vblock)]
       (if network
@@ -248,9 +250,9 @@
   [container stats]
   (try
     (let [tile  (:tile-entity container)
-          world (.getLevel tile)
-          pos   (.getBlockPos tile)
-          matrix-vblock (vb/create-vmatrix (.getX pos) (.getY pos) (.getZ pos))
+          world (platform-be/be-get-level tile)
+          block-pos (pos/position-get-block-pos tile)
+          matrix-vblock (vb/create-vmatrix (pos/pos-x block-pos) (pos/pos-y block-pos) (pos/pos-z block-pos))
           world-data    (wd/get-world-data world)
           network       (wd/get-network-by-matrix world-data matrix-vblock)
           stats-cap     (long (or (:capacity stats) 0))]

@@ -53,9 +53,9 @@
   "Get battery configuration from ItemStack"
   [item-stack]
   (when item-stack
-    (let [item (.getItem item-stack)
-          nbt (.getTagCompound item-stack)
-          battery-type (when nbt (.getString nbt "batteryType"))]
+    (let [item (item/item-get-item item-stack)
+          nbt (item/item-get-tag-compound item-stack)
+          battery-type (when nbt (nbt/nbt-get-string nbt "batteryType"))]
       (when battery-type
         (create-battery (keyword battery-type))))))
 
@@ -69,9 +69,9 @@
   "Get current energy from battery ItemStack"
   [item-stack]
   (when (is-battery? item-stack)
-    (let [nbt (.getTagCompound item-stack)]
+    (let [nbt (item/item-get-tag-compound item-stack)]
       (if nbt
-        (.getDouble nbt "energy")
+        (nbt/nbt-get-double nbt "energy")
         0.0))))
 
 (defn set-battery-energy!

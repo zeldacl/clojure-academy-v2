@@ -23,29 +23,35 @@
                                 when nil raw value is used as-is
     :load-fn          fn?       override for load: (fn [tag nbt-key default] -> val)
     :save-fn          fn?       override for save: (fn [state tag nbt-key]   -> nil)"
-  (:require [my-mod.platform.world :as platform-world]))
+  (:require [my-mod.platform.world :as platform-world])
+  (:import [net.minecraft.nbt CompoundTag]
+           [net.minecraft.world.level.block.state BlockState]
+           [net.minecraft.world.level.block Block]
+           [net.minecraft.world.level Level]
+           [net.minecraft.core BlockPos]
+           [my_mod.block.entity ScriptedBlockEntity]))
 
 ;; ============================================================================
 ;; Internal: 1.20.1 NBT type dispatch
 ;; ============================================================================
 
 (def ^:private nbt-writers
-  {:double  (fn [tag k v] (.putDouble  tag k (double  v)))
-   :float   (fn [tag k v] (.putFloat   tag k (float   v)))
-   :long    (fn [tag k v] (.putLong    tag k (long    v)))
-   :int     (fn [tag k v] (.putInt     tag k (int     v)))
-   :boolean (fn [tag k v] (.putBoolean tag k (boolean v)))
-   :string  (fn [tag k v] (.putString  tag k (str     v)))
-   :keyword (fn [tag k v] (.putString  tag k (name    v)))})
+  {:double  (fn [^CompoundTag tag k v] (.putDouble  tag k (double  v)))
+   :float   (fn [^CompoundTag tag k v] (.putFloat   tag k (float   v)))
+   :long    (fn [^CompoundTag tag k v] (.putLong    tag k (long    v)))
+   :int     (fn [^CompoundTag tag k v] (.putInt     tag k (int     v)))
+   :boolean (fn [^CompoundTag tag k v] (.putBoolean tag k (boolean v)))
+   :string  (fn [^CompoundTag tag k v] (.putString  tag k (str     v)))
+   :keyword (fn [^CompoundTag tag k v] (.putString  tag k (name    v)))})
 
 (def ^:private nbt-readers
-  {:double  (fn [tag k] (.getDouble  tag k))
-   :float   (fn [tag k] (.getFloat   tag k))
-   :long    (fn [tag k] (.getLong    tag k))
-   :int     (fn [tag k] (.getInt     tag k))
-   :boolean (fn [tag k] (.getBoolean tag k))
-   :string  (fn [tag k] (.getString  tag k))
-   :keyword (fn [tag k] (keyword (.getString tag k)))})
+  {:double  (fn [^CompoundTag tag k] (.getDouble  tag k))
+   :float   (fn [^CompoundTag tag k] (.getFloat   tag k))
+   :long    (fn [^CompoundTag tag k] (.getLong    tag k))
+   :int     (fn [^CompoundTag tag k] (.getInt     tag k))
+   :boolean (fn [^CompoundTag tag k] (.getBoolean tag k))
+   :string  (fn [^CompoundTag tag k] (.getString  tag k))
+   :keyword (fn [^CompoundTag tag k] (keyword (.getString tag k)))})
 
 ;; ============================================================================
 ;; Core schema utilities
@@ -77,7 +83,7 @@
   - Other persisted fields use the internal 1.20.1 NBT readers."
   [schema]
   (let [defaults (schema->default-state schema)]
-    (fn [tag]
+    (fn [^CompoundTag tag]
       (reduce
         (fn [state spec]
           (let [k    (:key spec)
@@ -104,7 +110,7 @@
   - Other fields use the internal 1.20.1 NBT writers."
   [schema]
   (let [defaults (schema->default-state schema)]
-    (fn [be tag]
+    (fn [^ScriptedBlockEntity be ^CompoundTag tag]
       (let [state (or (.getCustomState be) defaults)]
         (doseq [spec schema]
           (when (:persist? spec)
@@ -133,9 +139,9 @@
             m))
         {}
         schema)
-      (assoc :pos-x (.getX pos)
-             :pos-y (.getY pos)
-             :pos-z (.getZ pos))))
+      (assoc :pos-x (.getX ^BlockPos pos)
+             :pos-y (.getY ^BlockPos pos)
+             :pos-z (.getZ ^BlockPos pos))))
 
 ;; ============================================================================
 ;; BlockState updater
@@ -153,8 +159,8 @@
     (fn [state level pos]
       (try
         (when-let [blk-state (platform-world/world-get-block-state level pos)]
-          (when-let [block (.getBlock blk-state)]
-            (let [state-def (.getStateDefinition block)
+          (when-let [block (.getBlock ^BlockState blk-state)]
+            (let [state-def (.getStateDefinition ^Block block)
                   new-bs    (reduce
                               (fn [bs spec]
                                 (let [prop-name (:block-state-prop spec)
@@ -165,7 +171,7 @@
                                       prop      (when state-def
                                                   (.getProperty state-def prop-name))]
                                   (if prop
-                                    (.setValue bs prop
+                                    (.setValue ^BlockState bs prop
                                                (cond
                                                  (integer? val) (Integer/valueOf (int val))
                                                  (boolean? val) (Boolean/valueOf (boolean val))
@@ -174,5 +180,5 @@
                               blk-state
                               bs-specs)]
               (when (not= new-bs blk-state)
-                (.setBlock level pos new-bs 3)))))
+                (.setBlock ^Level level pos new-bs 3)))))
         (catch Exception _)))))

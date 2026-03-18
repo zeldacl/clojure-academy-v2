@@ -15,6 +15,7 @@
             [my-mod.block.matrix-schema :as mschema]
             [my-mod.block.state-schema :as schema]
             [my-mod.platform.position :as pos]
+            [my-mod.platform.be :as platform-be]
             [my-mod.gui.slot-schema :as slot-schema]
             [my-mod.platform.capability :as platform-cap]
             [my-mod.platform.world :as world]
@@ -23,7 +24,8 @@
             [my-mod.wireless.slot-schema :as slots]
             [my-mod.wireless.gui.matrix-sync :as sync]
             [my-mod.util.log :as log])
-  (:import [my_mod.api.wireless IWirelessMatrix]))
+  (:import [my_mod.api.wireless IWirelessMatrix]
+           [net.minecraft.world.item ItemStack]))
 
 ;; ============================================================================
 ;; Schema-derived functions  (single-call derivation, executed once at load)
@@ -44,7 +46,7 @@
 (defn- safe-state
   "Return the customState map from a BE, falling back to defaults."
   [be]
-  (or (.getCustomState be) mschema/matrix-default-state))
+  (or (platform-be/get-custom-state be) mschema/matrix-default-state))
 
 (def ^:private matrix-slot-schema-id slots/wireless-matrix-id)
 (def ^:private matrix-plate-slot-indexes
@@ -115,15 +117,15 @@
   IMatrixJavaProxy
   (getPlacerName    [_] (str (:placer-name (safe-state be))))
   (getMatrixCapacity [_]
-    (long (.getMatrixCapacity (impls/->WirelessMatrixImpl be))))
+    (long (.getMatrixCapacity ^IWirelessMatrix (impls/->WirelessMatrixImpl be))))
   (getMatrixBandwidth [_]
-    (long (.getMatrixBandwidth (impls/->WirelessMatrixImpl be))))
+    (long (.getMatrixBandwidth ^IWirelessMatrix (impls/->WirelessMatrixImpl be))))
   (getMatrixRange [_]
-    (double (.getMatrixRange (impls/->WirelessMatrixImpl be))))
+    (double (.getMatrixRange ^IWirelessMatrix (impls/->WirelessMatrixImpl be))))
   (getLoad [_] 0)
-  (getPos  [_] (.getBlockPos be))
+  (getPos  [_] (pos/position-get-block-pos be))
   Object
-  (toString [_] (str "MatrixJavaProxy@" (.getBlockPos be))))
+  (toString [_] (str "MatrixJavaProxy@" (pos/position-get-block-pos be))))
 
 ;; ============================================================================
 ;; Tile lifecycle hooks (full-state path)
@@ -140,7 +142,7 @@
     (when (and (zero? (:sub-id state 0))
                (zero? (mod ticker 15)))
       (try
-        (let [impl (impls/->WirelessMatrixImpl be)]
+        (let [impl ^IWirelessMatrix (impls/->WirelessMatrixImpl be)]
           (sync/broadcast-matrix-state level pos
             (-> (schema/schema->sync-payload mschema/matrix-state-schema state pos)
                 (assoc :is-working  (is-working? state)
@@ -173,11 +175,11 @@
                 (doseq [[idx item] (map-indexed vector (:inventory state []))]
                   (when item (log/info "Dropping item from slot" idx)))
                 ;; Keep runtime ticker but clear persistent matrix state.
-                (.setCustomState be (assoc mschema/matrix-default-state :update-ticker ticker))))))
+                (platform-be/set-custom-state! be (assoc mschema/matrix-default-state :update-ticker ticker))))))
         (catch Exception e
           (log/error "Error verifying matrix structure:" (.getMessage e)))))
     (when-not @broken?
-      (.setCustomState be (assoc state :update-ticker ticker)))))
+      (platform-be/set-custom-state! be (assoc state :update-ticker ticker)))))
 
 ;; ============================================================================
 ;; Container functions (slot access via BE customState)
@@ -194,28 +196,28 @@
                       state' (-> state
                                  (set-inv-slot slot item)
                                  recalculate-counts)]
-                  (.setCustomState be state')))
+                  (platform-be/set-custom-state! be state')))
 
    :remove-item (fn [be slot amount]
                   (let [state (safe-state be)
                         item  (get-in state [:inventory slot])]
                     (when item
-                      (let [cnt (.getCount item)]
+                      (let [cnt (.getCount ^ItemStack item)]
                         (if (<= cnt amount)
-                          (do (.setCustomState be (-> state (set-inv-slot slot nil) recalculate-counts))
+                          (do (platform-be/set-custom-state! be (-> state (set-inv-slot slot nil) recalculate-counts))
                               item)
-                          (let [result (.splitStack item amount)]
-                            (.setCustomState be (recalculate-counts state))
+                          (let [result (.split ^ItemStack item amount)]
+                            (platform-be/set-custom-state! be (recalculate-counts state))
                             result))))))
 
    :remove-item-no-update (fn [be slot]
                             (let [state (safe-state be)
                                   item  (get-in state [:inventory slot])]
-                              (.setCustomState be (-> state (set-inv-slot slot nil) recalculate-counts))
+                              (platform-be/set-custom-state! be (-> state (set-inv-slot slot nil) recalculate-counts))
                               item))
 
    :clear! (fn [be]
-             (.setCustomState be (assoc (safe-state be) :inventory (vec (repeat matrix-slot-count nil))
+             (platform-be/set-custom-state! be (assoc (safe-state be) :inventory (vec (repeat matrix-slot-count nil))
                                                          :plate-count 0 :core-level 0)))
 
    :still-valid? (fn [_be _player] true)
@@ -293,8 +295,8 @@
       ;; 结构放置/part 铺设逻辑已下沉到 mcmod.block.multiblock-core。
       ;; ac 层仅记录业务字段。
       (when be
-        (let [state (or (.getCustomState be) mschema/matrix-default-state)]
-          (.setCustomState be (assoc state :placer-name player-name))))
+        (let [state (or (platform-be/get-custom-state be) mschema/matrix-default-state)]
+          (platform-be/set-custom-state! be (assoc state :placer-name player-name))))
       (log/info "Matrix placed by" player-name "at" pos))))
 
 (defn handle-matrix-break []

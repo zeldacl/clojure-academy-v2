@@ -14,59 +14,59 @@
   "Map of field types to their read/write converters"
   {:double
    {:write (fn [nbt key value]
-             (.setDouble nbt key value))
+             (nbt/nbt-set-double! nbt key value))
     :read (fn [nbt key]
-            (.getDouble nbt key))
+            (nbt/nbt-get-double nbt key))
     :has-key? (fn [nbt key]
-                (.hasKey nbt key))}
-   
+                (nbt/nbt-has-key? nbt key))}
+
    :string
    {:write (fn [nbt key value]
-             (.setString nbt key value))
+             (nbt/nbt-set-string! nbt key value))
     :read (fn [nbt key]
-            (.getString nbt key))
+            (nbt/nbt-get-string nbt key))
     :has-key? (fn [nbt key]
-                (.hasKey nbt key))}
-   
+                (nbt/nbt-has-key? nbt key))}
+
    :int
    {:write (fn [nbt key value]
-             (.setInteger nbt key value))
+             (nbt/nbt-set-int! nbt key value))
     :read (fn [nbt key]
-            (.getInteger nbt key))
+            (nbt/nbt-get-int nbt key))
     :has-key? (fn [nbt key]
-                (.hasKey nbt key))}
-   
+                (nbt/nbt-has-key? nbt key))}
+
    :boolean
    {:write (fn [nbt key value]
-             (.setBoolean nbt key value))
+             (nbt/nbt-set-boolean! nbt key value))
     :read (fn [nbt key]
-            (.getBoolean nbt key))
+            (nbt/nbt-get-boolean nbt key))
     :has-key? (fn [nbt key]
-                (.hasKey nbt key))}
-   
+                (nbt/nbt-has-key? nbt key))}
+
    :float
    {:write (fn [nbt key value]
-             (.setFloat nbt key value))
+             (nbt/nbt-set-float! nbt key value))
     :read (fn [nbt key]
-            (.getFloat nbt key))
+            (nbt/nbt-get-float nbt key))
     :has-key? (fn [nbt key]
-                (.hasKey nbt key))}
-   
+                (nbt/nbt-has-key? nbt key))}
+
    :long
    {:write (fn [nbt key value]
-             (.setLong nbt key value))
+             (nbt/nbt-set-long! nbt key value))
     :read (fn [nbt key]
-            (.getLong nbt key))
+            (nbt/nbt-get-long nbt key))
     :has-key? (fn [nbt key]
-                (.hasKey nbt key))}
-   
+                (nbt/nbt-has-key? nbt key))}
+
      :keyword
      {:write (fn [nbt key value]
-         (.setString nbt key (name value)))
+         (nbt/nbt-set-string! nbt key (name value)))
       :read (fn [nbt key]
-        (keyword (.getString nbt key)))
+        (keyword (nbt/nbt-get-string nbt key)))
       :has-key? (fn [nbt key]
-      (.hasKey nbt key))}
+      (nbt/nbt-has-key? nbt key))}
 
      :atom
      {:write (fn [_nbt key _value]
@@ -156,7 +156,7 @@
   (let [{:keys [field-key nbt-key type atom? setter custom-read default transform-read]} field-spec
         has-key? (if-let [converter (get type-converters type)]
                    ((:has-key? converter) nbt nbt-key)
-                   (.hasKey nbt nbt-key))]
+                   (nbt/nbt-has-key? nbt nbt-key))]
     (when has-key?
       (let [value (if custom-read
                     (custom-read tile nbt nbt-key)
@@ -409,35 +409,35 @@
 (defn write-atom-int
   "Write an atom containing an integer"
   [tile nbt nbt-key atom-value]
-  (.setInteger nbt nbt-key @atom-value))
+  (nbt/nbt-set-int! nbt nbt-key @atom-value))
 
 (defn read-atom-int
   "Read an integer into an atom"
   [tile nbt nbt-key]
-  (when (.hasKey nbt nbt-key)
-    (reset! (get-in tile [nbt-key]) (.getInteger nbt nbt-key))))
+  (when (nbt/nbt-has-key? nbt nbt-key)
+    (reset! (get-in tile [nbt-key]) (nbt/nbt-get-int nbt nbt-key))))
 
 (defn write-atom-double
   "Write an atom containing a double"
   [tile nbt nbt-key atom-value]
-  (.setDouble nbt nbt-key @atom-value))
+  (nbt/nbt-set-double! nbt nbt-key @atom-value))
 
 (defn read-atom-double
   "Read a double into an atom"
   [tile nbt nbt-key]
-  (when (.hasKey nbt nbt-key)
-    (reset! (get-in tile [nbt-key]) (.getDouble nbt nbt-key))))
+  (when (nbt/nbt-has-key? nbt nbt-key)
+    (reset! (get-in tile [nbt-key]) (nbt/nbt-get-double nbt nbt-key))))
 
 (defn write-atom-boolean
   "Write an atom containing a boolean"
   [tile nbt nbt-key atom-value]
-  (.setBoolean nbt nbt-key @atom-value))
+  (nbt/nbt-set-boolean! nbt nbt-key @atom-value))
 
 (defn read-atom-boolean
   "Read a boolean into an atom"
   [tile nbt nbt-key]
-  (when (.hasKey nbt nbt-key)
-    (reset! (get-in tile [nbt-key]) (.getBoolean nbt nbt-key))))
+  (when (nbt/nbt-has-key? nbt nbt-key)
+    (reset! (get-in tile [nbt-key]) (nbt/nbt-get-boolean nbt nbt-key))))
 
 ;; ============================================================================
 ;; Validation

@@ -9,15 +9,17 @@
             [my-mod.wireless.gui.node-messages :as node-msgs]
             [my-mod.wireless.gui.wireless-messages :as wireless-msgs]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
-            [my-mod.util.log :as log]))
+            [my-mod.platform.be :as platform-be]
+            [my-mod.util.log :as log])
+  (:import [my_mod.api.wireless IWirelessNode]))
 
 (defn- update-node-field!
   "Update a single field in the BE's customState (Design-3).
   be must be a ScriptedBlockEntity whose customState is the node state map."
   [be field value]
-  (let [state (or (.getCustomState be) {})]
-    (.setCustomState be (assoc state field value))
-    (try (.setChanged be) (catch Exception _))
+  (let [state (or (platform-be/get-custom-state be) {})]
+    (platform-be/set-custom-state! be (assoc state field value))
+    (try (platform-be/set-changed! be) (catch Exception _))
     be))
 
 (defn handle-get-status
@@ -65,7 +67,7 @@
             x (double (:pos-x payload))
             y (double (:pos-y payload))
             z (double (:pos-z payload))
-            range (try (.getRange tile) (catch Exception _ 20.0))
+            range (try (.getRange ^IWirelessNode tile) (catch Exception _ 20.0))
             nets (helper/get-nets-in-range world x y z range 100)]
         {:linked (when linked
                    {:ssid (:ssid linked)

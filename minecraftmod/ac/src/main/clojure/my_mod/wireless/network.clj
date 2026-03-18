@@ -23,8 +23,8 @@
 (defrecord WirelessNet
   [world-data       ; WiWorldData - parent world data
    matrix           ; VBlock - network matrix (center)
-   ssid             ; String - network name
-   password         ; String - network password
+   ssid             ; atom<String> - network name
+   password         ; atom<String> - network password
    nodes            ; atom<vector<VBlock>> - connected nodes
    to-remove-nodes  ; atom<vector<VBlock>> - nodes to remove
    buffer           ; atom<double> - energy buffer
@@ -41,8 +41,8 @@
   (->WirelessNet
     world-data
     matrix-vblock
-    ssid
-    password
+    (atom ssid)        ; ssid
+    (atom password)    ; password
     (atom [])          ; nodes
     (atom [])          ; to-remove-nodes
     (atom 0.0)         ; buffer
@@ -59,15 +59,15 @@
   (vb/vblock-get (:matrix network) (:world (:world-data network))))
 
 (defn is-disposed? [network] @(:disposed network))
-(defn get-ssid [network] (:ssid network))
-(defn get-password [network] (:password network))
+(defn get-ssid [network] @(:ssid network))
+(defn get-password [network] @(:password network))
 (defn get-load [network] (count @(:nodes network)))
 
 (defn get-capacity
   "Get network capacity from matrix"
   [network]
   (if-let [matrix (get-matrix network)]
-    (.getCapacity matrix)
+    (.getMatrixCapacity ^my_mod.api.wireless.IWirelessMatrix matrix)
     0))
 
 (defn- find-existing-network-by-node
@@ -85,14 +85,14 @@
 (defn reset-password!
   "Change network password"
   [network new-password]
-  (set! (. network password) new-password)
-  (log/info (format "Network '%s' password changed" (:ssid network)))
+  (reset! (:password network) new-password)
+  (log/info (format "Network '%s' password changed" @(:ssid network)))
   true)
 
 (defn reset-ssid!
   "Change network ssid"
   [network new-ssid]
-  (set! (. network ssid) new-ssid)
+  (reset! (:ssid network) new-ssid)
   (log/info (format "Network ssid changed to '%s'" new-ssid))
   true)
 
@@ -123,7 +123,7 @@
         (do
           (log/info "Node add failed: matrix not found")
           false)
-        (let [range (.getRange matrix)
+        (let [range (.getMatrixRange ^my_mod.api.wireless.IWirelessMatrix matrix)
               dist-sq (vb/dist-sq node-vblock (:matrix network))]
           (if (> dist-sq (* range range))
             (do
@@ -200,7 +200,7 @@
   "Check if coordinates are in network range"
   [network x y z]
   (if-let [matrix (get-matrix network)]
-    (let [range (.getRange matrix)
+    (let [range (.getMatrixRange ^my_mod.api.wireless.IWirelessMatrix matrix)
           dist-sq (vb/dist-sq-pos (:matrix network) x y z)]
       (<= dist-sq (* range range)))
     false))
@@ -217,15 +217,15 @@
     (when matrix
       ;; Shuffle nodes for fairness
       (let [nodes-shuffled (shuffle @(:nodes network))
-            bandwidth (.getBandwidth matrix)]
+            bandwidth (.getMatrixBandwidth ^my_mod.api.wireless.IWirelessMatrix matrix)]
         
         ;; Calculate total energy and capacity
         (let [energy-data (reduce
                             (fn [acc node-vb]
                               (if (vb/is-chunk-loaded? node-vb world)
                                 (if-let [node (vb/vblock-get node-vb world)]
-                                  (let [current (.getEnergy node)
-                                        max-energy (.getMaxEnergy node)]
+                                  (let [current (.getEnergy ^my_mod.api.wireless.IWirelessNode node)
+                                        max-energy (.getMaxEnergy ^my_mod.api.wireless.IWirelessNode node)]
                                     {:sum (+ (:sum acc) current)
                                      :max-sum (+ (:max-sum acc) max-energy)})
                                   acc) ; Node destroyed, skip
@@ -246,8 +246,8 @@
                         (let [node-vb (first nodes-remaining)]
                           (if (vb/is-chunk-loaded? node-vb world)
                             (if-let [node (vb/vblock-get node-vb world)]
-                              (let [current (.getEnergy node)
-                                    max-energy (.getMaxEnergy node)
+                              (let [current (.getEnergy ^my_mod.api.wireless.IWirelessNode node)
+                                    max-energy (.getMaxEnergy ^my_mod.api.wireless.IWirelessNode node)
                                     target (* max-energy average-percent)
                                     diff (- current target)]
                                 (if (> diff 0)
@@ -255,14 +255,14 @@
                                   (let [to-pull (min diff transfer-left)
                                         buffer-space (- BUFFER_MAX buffer-val)
                                         actual-pull (min to-pull buffer-space)]
-                                    (.setEnergy node (- current actual-pull))
+                                    (.setEnergy ^my_mod.api.wireless.IWirelessNode node (- current actual-pull))
                                     (recur (rest nodes-remaining)
                                            (- transfer-left actual-pull)
                                            (+ buffer-val actual-pull)))
 
                                   ;; Node needs energy → push from buffer
                                   (let [to-push (min (- diff) transfer-left buffer-val)]
-                                    (.setEnergy node (+ current to-push))
+                                    (.setEnergy ^my_mod.api.wireless.IWirelessNode node (+ current to-push))
                                     (recur (rest nodes-remaining)
                                            (- transfer-left to-push)
                                            (- buffer-val to-push)))))

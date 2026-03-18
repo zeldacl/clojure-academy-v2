@@ -10,6 +10,7 @@
             [my-mod.block.role-impls :as impls]
             [my-mod.platform.nbt :as nbt]
             [my-mod.platform.item :as item]
+            [my-mod.platform.be :as platform-be]
             [my-mod.util.log :as log]
             [my-mod.config.modid :as modid]))
 
@@ -49,9 +50,9 @@
   "True when the level is daytime and the block above has sky access."
   [level pos]
   (when (and level pos)
-    (let [time (rem (long (.getDayTime level)) 24000)
+    (let [time (rem (long (my-mod.platform.world/world-get-day-time level)) 24000)
           day? (<= time 12500)]
-      (and day? (.canSeeSky level (.above pos))))))
+      (and day? (my-mod.platform.world/world-can-see-sky level (.above pos))))))
 
 (defn- solar-tick-fn
   "Tick handler for solar generator ScriptedBlockEntity.
@@ -59,10 +60,10 @@
   All mutable state is stored in BE customState as a Clojure keyword map.
   No reflection — uses direct Java interop and getCustomState/setCustomState."
   [level pos _block-state be]
-  (when (and level (not (.isClientSide level)))
-    (let [state       (or (.getCustomState be) {})
+  (when (and level (not (my-mod.platform.world/world-is-client-side level)))
+    (let [state       (or (platform-be/get-custom-state be) {})
           generating? (can-generate? level pos)
-          raining?    (.isRaining level)
+          raining?    (my-mod.platform.world/world-is-raining level)
           status      (cond (not generating?) "STOPPED"
                             raining?          "WEAK"
                             :else             "STRONG")
@@ -78,9 +79,9 @@
                                :gen-speed (double gen))
                         changed? (assoc :energy new-energy))]
       (when (not= new-state state)
-        (.setCustomState be new-state)
+        (platform-be/set-custom-state! be new-state)
         (when changed?
-          (.setChanged be))))))
+          (platform-be/set-changed! be))))))
 
 (defn- solar-read-nbt-fn
   "Deserialize CompoundTag → state keyword map (stored in BE customState)."
@@ -96,7 +97,7 @@
 (defn- solar-write-nbt-fn
   "Serialize BE customState → CompoundTag."
   [be tag]
-  (let [state (or (.getCustomState be) {})]
+  (let [state (or (platform-be/get-custom-state be) {})]
     (nbt/nbt-set-double! tag "Energy" (double (get state :energy 0.0)))
     (let [stack (:battery state)]
       (when (and stack (not (item/item-is-empty? stack)))

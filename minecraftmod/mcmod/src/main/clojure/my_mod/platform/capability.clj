@@ -49,7 +49,7 @@
   (swap! capability-type-registry assoc key
          {:java-type         java-type
           :handler-factory-fn handler-factory-fn})
-  (log/info "Declared capability" key "->" (.getName java-type))
+  (log/info "Declared capability" key "->" (.getName ^Class java-type))
   (when *declare-capability-impl*
     (*declare-capability-impl* key java-type))
   nil)
@@ -63,3 +63,19 @@
   "Return the handler-factory-fn for key, or nil."
   [key]
   (:handler-factory-fn (get-capability-entry key)))
+
+;; ============================================================================
+;; Capability Access Protocol
+;; ============================================================================
+
+(defprotocol ICapabilityProvider
+  "Protocol for objects that can provide capabilities (like BlockEntity)."
+
+  (get-capability [this cap side]
+    "Get a capability from this provider. Returns LazyOptional or equivalent."))
+
+(defprotocol ILazyOptional
+  "Protocol for LazyOptional-like capability wrappers."
+
+  (is-present? [this]
+    "Check if the capability is present. Returns boolean."))

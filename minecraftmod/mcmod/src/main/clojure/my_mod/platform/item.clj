@@ -43,7 +43,23 @@
     "Set item damage value for durability bar display. Returns nil.")
 
   (item-get-damage [this]
-    "Get current damage value for this item. Returns int."))
+    "Get current damage value for this item. Returns int.")
+
+  (item-get-item [this]
+    "Get the Item type from this ItemStack. Returns Item object.")
+
+  (item-get-tag-compound [this]
+    "Get NBT tag compound from ItemStack (may be null). Returns NBT or nil."))
+
+;; ============================================================================
+;; Item Protocol (for Item objects, not ItemStack)
+;; ============================================================================
+
+(defprotocol IItem
+  "Protocol for Item operations (the item type, not the stack)."
+
+  (item-get-description-id [this]
+    "Get the translation key/description ID for this item. Returns String."))
 
 ;; ============================================================================
 ;; Platform Factory Registration

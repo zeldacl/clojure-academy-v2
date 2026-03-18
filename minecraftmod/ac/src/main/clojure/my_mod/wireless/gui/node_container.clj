@@ -7,6 +7,7 @@
             [my-mod.wireless.gui.container-move-common :as move-common]
             [my-mod.wireless.gui.container-schema :as schema]
             [my-mod.wireless.gui.sync-helpers :as sync-helpers]
+            [my-mod.platform.be :as platform-be]
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
@@ -56,7 +57,7 @@
   (if (map? tile)
     [nil tile]
     (try
-      [tile (or (.getCustomState tile) {})]
+      [tile (or (platform-be/get-custom-state tile) {})]
       (catch Exception e
         (log/warn "Could not resolve customState from BE:" (.getMessage e))
         [tile {}]))))
@@ -198,25 +199,25 @@
   [container button-id data]
   (let [tile (:tile-entity container)]
     (when-not (map? tile)
-      (case button-id
+      (case (int button-id)
         0
-        (let [state  (or (.getCustomState tile) {})
+        (let [state  (or (platform-be/get-custom-state tile) {})
               state' (update state :enabled not)]
-          (.setCustomState tile state')
+          (platform-be/set-custom-state! tile state')
           (log/info "Toggled node connection:" (:enabled state')))
 
         1
         (when-let [new-ssid (:ssid data)]
-          (let [state  (or (.getCustomState tile) {})
+          (let [state  (or (platform-be/get-custom-state tile) {})
                 state' (assoc state :node-name new-ssid)]
-            (.setCustomState tile state')
+            (platform-be/set-custom-state! tile state')
             (log/info "Set node SSID to:" new-ssid)))
 
         2
         (when-let [new-password (:password data)]
-          (let [state  (or (.getCustomState tile) {})
+          (let [state  (or (platform-be/get-custom-state tile) {})
                 state' (assoc state :password new-password)]
-            (.setCustomState tile state')
+            (platform-be/set-custom-state! tile state')
             (log/info "Set node password")))
 
         (log/warn "Unknown button ID:" button-id)))))

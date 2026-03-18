@@ -1,8 +1,11 @@
 (ns my-mod.wireless.gui.container-helpers
   "Shared container utility functions for wireless GUI system
-  
+
   Provides common slot access, lifecycle, and validation helpers used by
-  both node_container and matrix_container to eliminate code duplication.")
+  both node_container and matrix_container to eliminate code duplication."
+  (:require [my-mod.platform.be :as platform-be]
+            [my-mod.platform.position :as pos]
+            [my-mod.platform.entity :as entity]))
 
 ;; ============================================================================
 ;; Slot Access Helpers
@@ -23,7 +26,7 @@
         (when inventory-atom
           (get @inventory-atom slot-index)))
       (try
-        (get-in (.getCustomState tile) [:inventory slot-index])
+        (get-in (platform-be/get-custom-state tile) [:inventory slot-index])
         (catch Exception _ nil)))))
 
 (defn set-slot-item!
@@ -42,9 +45,9 @@
         (when inventory-atom
           (swap! inventory-atom assoc slot-index item-stack)))
       (try
-        (let [state (or (.getCustomState tile) {})
+        (let [state (or (platform-be/get-custom-state tile) {})
               state' (assoc-in state [:inventory slot-index] item-stack)]
-          (.setCustomState tile state'))
+          (platform-be/set-custom-state! tile state'))
         (catch Exception _ nil)))))
 
 ;; ============================================================================
@@ -61,19 +64,19 @@
   Returns: boolean - true if player is within 8 blocks of tile"
   [container player]
   (let [tile         (:tile-entity container)
-        raw-pos     (try (.getBlockPos tile) (catch Exception _ nil))
+        raw-pos     (try (pos/position-get-block-pos tile) (catch Exception _ nil))
         max-distance 8.0]
     (and (= player (:player container))
          raw-pos
-         (let [bx (double (or (try (.getX raw-pos) (catch Exception _ nil))
+         (let [bx (double (or (try (pos/pos-x raw-pos) (catch Exception _ nil))
                               (:x raw-pos)))
-               by (double (or (try (.getY raw-pos) (catch Exception _ nil))
+               by (double (or (try (pos/pos-y raw-pos) (catch Exception _ nil))
                               (:y raw-pos)))
-               bz (double (or (try (.getZ raw-pos) (catch Exception _ nil))
+               bz (double (or (try (pos/pos-z raw-pos) (catch Exception _ nil))
                               (:z raw-pos)))]
            ;; MC 1.20.1: Entity.distanceToSqr(x,y,z) replaces old distanceSq/getPos
-           (< (.distanceToSqr player
-                               (+ bx 0.5) by (+ bz 0.5))
+           (< (entity/entity-distance-to-sqr player
+                                              (+ bx 0.5) by (+ bz 0.5))
               (* max-distance max-distance))))))
 
 (defn reset-container-atoms!

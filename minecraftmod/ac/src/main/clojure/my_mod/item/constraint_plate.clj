@@ -1,9 +1,10 @@
 (ns my-mod.item.constraint-plate
   "Constraint Plate - component for Wireless Matrix
-  
+
   Required for Matrix to function (need 3 plates)."
   (:require [my-mod.item.dsl :as idsl]
             [my-mod.util.log :as log]
+            [my-mod.platform.item :as item]
             [clojure.string :as str]))
 
 ;; ============================================================================
@@ -34,8 +35,8 @@
   (when item-stack
     (let [id-from-spec #(when (map? %) (:id %))
           desc (try
-                 (let [item (.getItem item-stack)]
-                   (str (.getDescriptionId item)))
+                 (let [item-obj (item/item-get-item item-stack)]
+                   (str (item/item-get-description-id item-obj)))
                  (catch Throwable _ nil))
           id-from-stack (when desc (last (str/split desc #"\\.")))
           id (or id-from-stack (id-from-spec item-stack))

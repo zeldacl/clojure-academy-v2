@@ -14,6 +14,8 @@
             [my-mod.wireless.interfaces :as interfaces]
             [my-mod.platform.nbt :as nbt]
             [my-mod.platform.position :as pos]
+            [my-mod.platform.capability :as platform-cap]
+            [my-mod.platform.position :as pos]
             [my-mod.platform.world :as world]))
 
 ;; ============================================================================
@@ -35,12 +37,12 @@
   "Create a virtual block reference from a TileEntity"
   [tile-entity block-type ignore-chunk]
   ;; MC 1.17+ renamed getPos() to getBlockPos() on BlockEntity; try both.
-  (let [pos (or (try (.getBlockPos tile-entity) (catch Exception _ nil))
-                (try (.getPos tile-entity) (catch Exception _ nil)))]
+  (let [block-pos (or (try (pos/position-get-block-pos tile-entity) (catch Exception _ nil))
+                      (try (pos/position-get-pos tile-entity) (catch Exception _ nil)))]
     (->VBlock
-      (.getX pos)
-      (.getY pos)
-      (.getZ pos)
+      (pos/position-get-x block-pos)
+      (pos/position-get-y block-pos)
+      (pos/position-get-z block-pos)
       block-type
       ignore-chunk)))
 
@@ -102,8 +104,8 @@
       (when cap-slots
         (let [cap (cap-slots cap-key)]
           (when cap
-            (let [lo (.getCapability tile cap nil)]
-              (.isPresent lo))))))
+            (let [lo (platform-cap/get-capability tile cap nil)]
+              (platform-cap/is-present? lo))))))
     (catch Exception _
       ;; Fallback: check if tile is a state map with the right keys
       nil)))

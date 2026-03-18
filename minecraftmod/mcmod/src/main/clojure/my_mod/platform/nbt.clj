@@ -58,7 +58,19 @@
     "Get a nested list tag. Returns list or nil if key doesn't exist.")
   
   (nbt-has-key? [this key]
-    "Check if a key exists in the compound."))
+    "Check if a key exists in the compound.")
+
+  (nbt-set-float! [this key value]
+    "Set a float value. Returns the compound for chaining.")
+
+  (nbt-get-float [this key]
+    "Get a float value. Returns 0.0f if key doesn't exist.")
+
+  (nbt-set-long! [this key value]
+    "Set a long value. Returns the compound for chaining.")
+
+  (nbt-get-long [this key]
+    "Get a long value. Returns 0L if key doesn't exist."))
 
 ;; ============================================================================
 ;; NBT List Protocol

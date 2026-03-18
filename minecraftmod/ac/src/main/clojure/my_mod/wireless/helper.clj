@@ -10,6 +10,8 @@
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.wireless.network :as network]
             [my-mod.wireless.node-connection :as node-conn]
+            [my-mod.platform.be :as platform-be]
+            [my-mod.platform.position :as pos]
             [my-mod.util.log :as log]))
 
 ;; ============================================================================
@@ -20,8 +22,7 @@
   "Get the Level/World from a BlockEntity.
   MC 1.17+ renamed getWorld() to getLevel(); try both for compatibility."
   [tile]
-  (or (try (.getLevel tile) (catch Exception _ nil))
-      (try (.getWorld tile) (catch Exception _ nil))))
+  (platform-be/be-get-world-safe tile))
 
 (defn get-wireless-net-by-matrix
   "Get wireless network by matrix TileEntity"
@@ -70,7 +71,7 @@
 (defn get-node-conn-by-node
   "Get node connection by node TileEntity"
   [node-tile]
-  (let [world (.getWorld node-tile)
+  (let [world (platform-be/be-get-world-safe node-tile)
         world-data (wd/get-world-data world)
         node-vb (vb/create-vnode-conn node-tile)]
     (wd/get-node-connection world-data node-vb)))
@@ -78,7 +79,7 @@
 (defn get-node-conn-by-generator
   "Get node connection by generator TileEntity"
   [gen-tile]
-  (let [world (.getWorld gen-tile)
+  (let [world (platform-be/be-get-world-safe gen-tile)
         world-data (wd/get-world-data world)
         gen-vb (vb/create-vgenerator gen-tile)]
     (wd/get-node-connection world-data gen-vb)))
@@ -86,7 +87,7 @@
 (defn get-node-conn-by-receiver
   "Get node connection by receiver TileEntity"
   [rec-tile]
-  (let [world (.getWorld rec-tile)
+  (let [world (platform-be/be-get-world-safe rec-tile)
         world-data (wd/get-world-data world)
         rec-vb (vb/create-vreceiver rec-tile)]
     (wd/get-node-connection world-data rec-vb)))
@@ -120,9 +121,9 @@
   [world pos]
   (let [search-range 20.0
         max-results 100
-        x (.getX pos)
-        y (.getY pos)
-        z (.getZ pos)
+        x (pos/pos-x pos)
+        y (pos/pos-y pos)
+        z (pos/pos-z pos)
         world-data (wd/get-world-data world)
         all-conns @(:connections world-data)
         matching-nodes
@@ -132,7 +133,7 @@
                   dist-sq (vb/dist-sq-pos node-vb x y z)]
               (if (<= dist-sq (* search-range search-range))
                 (if-let [node (vb/vblock-get node-vb world)]
-                  (let [node-range (.getRange node)
+                  (let [node-range (.getRange ^my_mod.api.wireless.IWirelessNode node)
                         node-dist-sq (vb/dist-sq-pos node-vb x y z)]
                     (if (and (<= node-dist-sq (* node-range node-range))
                              (< (node-conn/get-load conn)
@@ -158,7 +159,7 @@
 
   Returns: true if successful"
   [matrix-tile ssid password]
-  (let [world (.getWorld matrix-tile)
+  (let [world (platform-be/be-get-world-safe matrix-tile)
         world-data (wd/get-world-data world)
         matrix-vb (vb/create-vmatrix matrix-tile)]
     (wd/create-network-impl! world-data matrix-vb ssid password)))
@@ -167,7 +168,7 @@
   "Destroy a wireless network"
   [matrix-tile]
   (when-let [network-item (get-wireless-net-by-matrix matrix-tile)]
-    (let [world (.getWorld matrix-tile)
+    (let [world (platform-be/be-get-world-safe matrix-tile)
           world-data (wd/get-world-data world)]
       (wd/destroy-network-impl! world-data network-item))))
 
@@ -204,8 +205,8 @@
   Returns: true if successful"
   [gen-tile node-tile password need-auth]
   (when (or (not need-auth)
-            (= password (.getPassword node-tile)))
-    (let [world (.getWorld node-tile)
+            (= password (.getPassword ^my_mod.api.wireless.IWirelessNode node-tile)))
+    (let [world (platform-be/be-get-world-safe node-tile)
           world-data (wd/get-world-data world)
           node-vb (vb/create-vnode-conn node-tile)
           conn (wd/ensure-node-connection! world-data node-vb)
@@ -231,8 +232,8 @@
   Returns: true if successful"
   [rec-tile node-tile password need-auth]
   (when (or (not need-auth)
-            (= password (.getPassword node-tile)))
-    (let [world (.getWorld node-tile)
+            (= password (.getPassword ^my_mod.api.wireless.IWirelessNode node-tile)))
+    (let [world (platform-be/be-get-world-safe node-tile)
           world-data (wd/get-world-data world)
           node-vb (vb/create-vnode-conn node-tile)
           conn (wd/ensure-node-connection! world-data node-vb)

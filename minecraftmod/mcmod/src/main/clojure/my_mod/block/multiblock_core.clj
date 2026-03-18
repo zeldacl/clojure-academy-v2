@@ -6,8 +6,10 @@
   (:require [my-mod.block.dsl :as bdsl]
             [my-mod.platform.position :as pos]
             [my-mod.platform.world :as world]
+            [my-mod.platform.be :as platform-be]
             [my-mod.registry.metadata :as registry-metadata]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log])
+  (:import [net.minecraft.world.level.block.state BlockState]))
 
 (defn- same-pos?
   [a b]
@@ -19,21 +21,21 @@
   [state]
   (or (nil? state)
       (try
-        (.isAir state)
+        (.isAir ^BlockState state)
         (catch Throwable _
           false))))
 
 (defn- be-state
   [be]
   (try
-    (or (.getCustomState be) {})
+    (or (platform-be/get-custom-state be) {})
     (catch Throwable _
       {})))
 
 (defn- set-be-state!
   [be state-map]
   (try
-    (.setCustomState be state-map)
+    (platform-be/set-custom-state! be state-map)
     (catch Throwable _
       nil)))
 

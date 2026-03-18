@@ -7,6 +7,7 @@
             [my-mod.wireless.gui.wireless-messages :as wireless-msgs]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
             [my-mod.wireless.node-connection :as node-conn]
+            [my-mod.platform.position :as pos]
             [my-mod.util.log :as log]))
 
 (defn handle-get-status
@@ -16,15 +17,13 @@
     (if tile
       (let [conn (try (helper/get-node-conn-by-generator tile) (catch Exception _ nil))
             node (when conn (try (node-conn/get-node conn) (catch Exception _ nil)))
-            node-pos (when node
-                       (or (try (.getBlockPos node) (catch Exception _ nil))
-                           (try (.getPos node) (catch Exception _ nil))))
+            node-pos (when node (.getBlockPos node))
             pw (when node (try (str (.getPassword node)) (catch Exception _ "")))]
         {:linked (when node
                    {:node-name (try (str (.getNodeName node)) (catch Exception _ "Node"))
-                    :pos-x (when node-pos (.getX node-pos))
-                    :pos-y (when node-pos (.getY node-pos))
-                    :pos-z (when node-pos (.getZ node-pos))
+                    :pos-x (when node-pos (pos/pos-x node-pos))
+                    :pos-y (when node-pos (pos/pos-y node-pos))
+                    :pos-z (when node-pos (pos/pos-z node-pos))
                     :is-encrypted? (not (empty? pw))})
          :avail []})
       {:linked nil :avail []})))
@@ -34,37 +33,32 @@
   (let [world (net-helpers/get-world player)
         tile (net-helpers/get-tile-at world payload)]
     (if tile
-      (let [pos (or (try (.getBlockPos tile) (catch Exception _ nil))
-                    (try (.getPos tile) (catch Exception _ nil)))
+      (let [tile-pos (pos/position-get-block-pos tile)
             linked-conn (try (helper/get-node-conn-by-generator tile) (catch Exception _ nil))
             linked-node (when linked-conn (try (node-conn/get-node linked-conn) (catch Exception _ nil)))
-            linked-pos (when linked-node
-                         (or (try (.getBlockPos linked-node) (catch Exception _ nil))
-                             (try (.getPos linked-node) (catch Exception _ nil))))
-            nodes (if pos (helper/get-nodes-in-range world pos) [])
+            linked-pos (when linked-node (.getBlockPos linked-node))
+            nodes (if tile-pos (helper/get-nodes-in-range world tile-pos) [])
             linked (when linked-node
                      (let [pw (try (str (.getPassword linked-node)) (catch Exception _ ""))]
                        {:node-name (try (str (.getNodeName linked-node)) (catch Exception _ "Node"))
-                        :pos-x (when linked-pos (.getX linked-pos))
-                        :pos-y (when linked-pos (.getY linked-pos))
-                        :pos-z (when linked-pos (.getZ linked-pos))
+                        :pos-x (when linked-pos (pos/pos-x linked-pos))
+                        :pos-y (when linked-pos (pos/pos-y linked-pos))
+                        :pos-z (when linked-pos (pos/pos-z linked-pos))
                         :is-encrypted? (not (empty? pw))}))
             avail (->> nodes
                        (remove (fn [node]
-                                 (let [p (or (try (.getBlockPos node) (catch Exception _ nil))
-                                             (try (.getPos node) (catch Exception _ nil)))]
+                                 (let [p (.getBlockPos node)]
                                    (and p linked-pos
-                                        (= (.getX p) (.getX linked-pos))
-                                        (= (.getY p) (.getY linked-pos))
-                                        (= (.getZ p) (.getZ linked-pos))))))
+                                        (= (pos/pos-x p) (pos/pos-x linked-pos))
+                                        (= (pos/pos-y p) (pos/pos-y linked-pos))
+                                        (= (pos/pos-z p) (pos/pos-z linked-pos))))))
                        (mapv (fn [node]
-                               (let [p (or (try (.getBlockPos node) (catch Exception _ nil))
-                                           (try (.getPos node) (catch Exception _ nil)))
+                               (let [p (.getBlockPos node)
                                      pw (try (str (.getPassword node)) (catch Exception _ ""))]
                                  {:node-name (try (str (.getNodeName node)) (catch Exception _ "Node"))
-                                  :pos-x (when p (.getX p))
-                                  :pos-y (when p (.getY p))
-                                  :pos-z (when p (.getZ p))
+                                  :pos-x (when p (pos/pos-x p))
+                                  :pos-y (when p (pos/pos-y p))
+                                  :pos-z (when p (pos/pos-z p))
                                   :is-encrypted? (not (empty? pw))}))))]
         {:linked linked
          :avail avail})

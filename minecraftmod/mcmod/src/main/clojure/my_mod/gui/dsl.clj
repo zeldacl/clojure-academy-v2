@@ -5,7 +5,8 @@
   - legacy \"generic\" GUI specs (string :id, slots/buttons/labels, XML layout)
   - wireless GUI metadata + runtime hooks (int :gui-id, registry/screen/container/sync metadata)"
   (:require [clojure.string :as str]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log]
+            [my-mod.platform.item :as item]))
 
 ;; GUI Registry - stores all defined GUIs
 (defonce ^{:doc "Registry for GUI specs.
@@ -57,8 +58,8 @@ Structure:
 (defn any-item-filter [_item] true)
 
 (defn item-type-filter [item-type]
-  (fn [item]
-    (= (.getItem item) item-type)))
+  (fn [item-stack]
+    (= (item/item-get-item item-stack) item-type)))
 
 ;; Parse slot specification
 (defn parse-slot [slot-map]

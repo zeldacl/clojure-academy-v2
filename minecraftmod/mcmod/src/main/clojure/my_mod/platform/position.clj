@@ -17,17 +17,35 @@
 
 (defprotocol IBlockPos
   "Protocol for block position operations.
-  
+
   Platform implementations extend this to their BlockPos classes."
-  
+
   (pos-x [this]
     "Get X coordinate")
-  
+
   (pos-y [this]
     "Get Y coordinate")
-  
+
   (pos-z [this]
     "Get Z coordinate"))
+
+;; ============================================================================
+;; Position Accessor Protocol (for objects that have positions)
+;; ============================================================================
+
+(defprotocol IHasPosition
+  "Protocol for objects that have a position (like TileEntity/BlockEntity)."
+
+  (position-get-block-pos [this]
+    "Get BlockPos from this object (MC 1.17+ method name)")
+
+  (position-get-pos [this]
+    "Get BlockPos from this object (MC 1.16.5 method name)"))
+
+;; Helper functions that work with IBlockPos
+(defn position-get-x [pos] (pos-x pos))
+(defn position-get-y [pos] (pos-y pos))
+(defn position-get-z [pos] (pos-z pos))
 
 ;; ============================================================================
 ;; Platform Factory Registration

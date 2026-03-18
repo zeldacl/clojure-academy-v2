@@ -91,8 +91,8 @@
   (when item-stack
     (let [id-from-spec #(when (map? %) (:id %))
           desc (try
-                 (let [item (.getItem item-stack)]
-                   (str (.getDescriptionId item)))
+                 (let [item-obj (item/item-get-item item-stack)]
+                   (str (item/item-get-description-id item-obj)))
                  (catch Throwable _ nil))
           id-from-stack (when desc (last (str/split desc #"\\.")))
           id (or id-from-stack (id-from-spec item-stack))

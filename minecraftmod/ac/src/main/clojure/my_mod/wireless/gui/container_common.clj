@@ -1,6 +1,7 @@
 (ns my-mod.wireless.gui.container-common
   "Shared helpers for wireless GUI containers"
-  (:require [my-mod.wireless.gui.container-helpers :as helpers]))
+  (:require [my-mod.wireless.gui.container-helpers :as helpers]
+            [my-mod.platform.be :as platform-be]))
 
 (defn get-slot-item
   "Get item from slot"
@@ -30,7 +31,7 @@
     (if (map? tile)
       (get-slot-item container slot-index)
       (try
-        (get-in (.getCustomState tile) [:inventory slot-index])
+        (get-in (platform-be/get-custom-state tile) [:inventory slot-index])
         (catch Exception _ (get-slot-item container slot-index))))))
 
 (defn set-slot-item-be!
@@ -43,11 +44,11 @@
     (if (map? tile)
       (set-slot-item! container slot-index item-stack)
       (try
-        (let [state  (or (.getCustomState tile) default-state)
+        (let [state  (or (platform-be/get-custom-state tile) default-state)
               state' (-> state
                          (assoc-in [:inventory slot-index] item-stack)
                          post-write)]
-          (.setCustomState tile state'))
+          (platform-be/set-custom-state! tile state'))
         (catch Exception _
           (set-slot-item! container slot-index item-stack))))))
 
@@ -59,4 +60,4 @@
   (when tile
     (if (map? tile)
       tile
-      (try (.getCustomState tile) (catch Exception _ {})))))
+      (try (platform-be/get-custom-state tile) (catch Exception _ {})))))

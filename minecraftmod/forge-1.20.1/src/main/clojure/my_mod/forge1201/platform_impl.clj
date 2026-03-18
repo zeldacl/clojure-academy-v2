@@ -22,8 +22,10 @@
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
+           [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.resources ResourceLocation]
+           [net.minecraftforge.common.util LazyOptional]
            [my_mod.capability CapabilitySlots]))
 
 ;; ============================================================================
@@ -75,7 +77,21 @@
     (.getList this key 10))
   
   (nbt-has-key? [this key]
-    (.contains this key)))
+    (.contains this key))
+
+  (nbt-set-float! [this key value]
+    (.putFloat this key (float value))
+    this)
+
+  (nbt-get-float [this key]
+    (.getFloat this key))
+
+  (nbt-set-long! [this key value]
+    (.putLong this key (long value))
+    this)
+
+  (nbt-get-long [this key]
+    (.getLong this key)))
 
 (extend-type ListTag
   nbt/INBTList
@@ -101,15 +117,50 @@
 
 (extend-type BlockPos
   pos/IBlockPos
-  
+
   (pos-x [this]
     (.getX this))
-  
+
   (pos-y [this]
     (.getY this))
-  
+
   (pos-z [this]
     (.getZ this)))
+
+;; Extend BlockEntity to support position access
+(extend-type BlockEntity
+  pos/IHasPosition
+
+  (position-get-block-pos [this]
+    (.getBlockPos this))
+
+  (position-get-pos [this]
+    ;; Fallback for older code that might call this
+    (.getBlockPos this))
+
+  platform-cap/ICapabilityProvider
+
+  (get-capability [this cap side]
+    (.getCapability this cap side))
+
+  platform-be/IBlockEntity
+
+  (be-get-level [this]
+    (.getLevel this))
+
+  (be-get-world [this]
+    ;; Fallback for older code
+    (.getLevel this)))
+
+;; ============================================================================
+;; Capability LazyOptional Protocol Implementation (Forge 1.20.1)
+;; ============================================================================
+
+(extend-type LazyOptional
+  platform-cap/ILazyOptional
+
+  (is-present? [this]
+    (.isPresent this)))
 
 ;; ============================================================================
 ;; World Protocol Implementation (Forge 1.20.1)
@@ -146,7 +197,23 @@
     (.setDamageValue this (int damage)))
 
   (item-get-damage [this]
-    (.getDamageValue this)))
+    (.getDamageValue this))
+
+  (item-get-item [this]
+    (.getItem this))
+
+  (item-get-tag-compound [this]
+    (.getTag this)))
+
+;; ============================================================================
+;; Item Protocol Implementation (Forge 1.20.1)
+;; ============================================================================
+
+(extend-type net.minecraft.world.item.Item
+  item/IItem
+
+  (item-get-description-id [this]
+    (.getDescriptionId this)))
 
 ;; ============================================================================
 ;; World Protocol Implementation (Forge 1.20.1)
@@ -176,7 +243,19 @@
       false))
   
   (world-is-chunk-loaded? [this chunk-x chunk-z]
-    (.hasChunk this chunk-x chunk-z)))
+    (.hasChunk this chunk-x chunk-z))
+
+  (world-get-day-time [this]
+    (.getDayTime this))
+
+  (world-is-raining [this]
+    (.isRaining this))
+
+  (world-is-client-side [this]
+    (.isClientSide this))
+
+  (world-can-see-sky [this pos]
+    (.canSeeSky this pos)))
 
 ;; ============================================================================
 ;; Platform Initialization

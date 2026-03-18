@@ -5,7 +5,28 @@
   Platform implementations must bind *be-capability-slot-fn* during init so
   that get-capability-slot can retrieve Forge Capability objects by key."
   (:require [my-mod.platform.world :as world]
-            [my-mod.util.log :as log]))
+            [my-mod.util.log :as log])
+  (:import [my_mod.block.entity ScriptedBlockEntity]))
+
+;; ============================================================================
+;; BlockEntity Protocol
+;; ============================================================================
+
+(defprotocol IBlockEntity
+  "Protocol for BlockEntity operations."
+
+  (be-get-level [this]
+    "Get the Level/World from BlockEntity (MC 1.17+ method name)")
+
+  (be-get-world [this]
+    "Get the World from BlockEntity (MC 1.16.5 method name)"))
+
+;; Helper function to get world from BlockEntity (tries both methods)
+(defn be-get-world-safe
+  "Get world from BlockEntity, trying both getLevel() and getWorld()"
+  [be]
+  (or (try (be-get-level be) (catch Exception _ nil))
+      (try (be-get-world be) (catch Exception _ nil))))
 
 ;; ============================================================================
 ;; Platform hook
@@ -36,7 +57,7 @@
   [be]
   (when be
     (try
-      (.getCustomState be)
+      (.getCustomState ^ScriptedBlockEntity be)
       (catch Exception e
         (log/warn "get-custom-state failed:" (.getMessage e))
         nil))))
@@ -47,9 +68,31 @@
   [be state]
   (when be
     (try
-      (.setCustomState be state)
+      (.setCustomState ^ScriptedBlockEntity be state)
       (catch Exception e
         (log/error "set-custom-state! failed:" (.getMessage e))))))
+
+(defn get-block-id
+  "Get the block ID string from a ScriptedBlockEntity.
+  Returns nil if be is nil or doesn't have getBlockId."
+  [be]
+  (when be
+    (try
+      (.getBlockId ^ScriptedBlockEntity be)
+      (catch Exception e
+        (log/warn "get-block-id failed:" (.getMessage e))
+        nil))))
+
+(defn set-changed!
+  "Mark a BlockEntity as changed so it will be saved.
+  This is a platform-specific operation."
+  [be]
+  (when be
+    (try
+      (.setChanged ^ScriptedBlockEntity be)
+      (catch Exception e
+        (log/warn "set-changed! failed:" (.getMessage e))
+        nil))))
 
 (defn get-capability-slot
   "Return the Forge Capability object for the given logical key string.
@@ -69,7 +112,7 @@
     (try
       (let [cap (*be-capability-slot-fn* key-string)]
         (when cap
-          (let [lo (.getCapability be cap nil)]
+          (let [lo (.getCapability ^ScriptedBlockEntity be cap nil)]
             (when (.isPresent lo)
               (.orElse lo nil)))))
       (catch Exception _

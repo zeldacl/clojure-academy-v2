@@ -5,7 +5,8 @@
   (:require [my-mod.wireless.gui.gui-metadata :as metadata]
             [my-mod.wireless.gui.matrix-fields :as mf]
             [my-mod.wireless.gui.container-schema :as schema]
-            [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
+            [my-mod.wireless.gui.sync-helpers :as sync-helpers]
+            [my-mod.platform.position :as pos]))
 
 ;; ============================================================================
 ;; Universal Sync Interface
@@ -44,11 +45,11 @@
   (let [container? (matrix-container? source)
         tile       (if container? (:tile-entity source) source)
         container  (when container? source)
-        pos        (.getBlockPos tile)]
+        block-pos  (pos/position-get-block-pos tile)]
     (merge {:gui-id      metadata/gui-wireless-matrix
-            :pos-x       (.getX pos)
-            :pos-y       (.getY pos)
-            :pos-z       (.getZ pos)
+            :pos-x       (pos/pos-x block-pos)
+            :pos-y       (pos/pos-y block-pos)
+            :pos-z       (pos/pos-z block-pos)
             :placer-name (or (:placer-name tile) "Unknown")}
            (schema/build-sync-packet-fields mf/matrix-fields container))))
 

@@ -17,6 +17,8 @@
             [my-mod.gui.slot-schema     :as slot-schema]
             [my-mod.platform.capability :as platform-cap]
             [my-mod.platform.world      :as world]
+            [my-mod.platform.be         :as platform-be]
+            [my-mod.platform.position   :as pos]
             [clojure.string             :as str]
             [my-mod.energy.operations   :as energy]
             [my-mod.wireless.world-data :as wd]
@@ -24,7 +26,8 @@
             [my-mod.wireless.virtual-blocks :as vb]
             [my-mod.util.log            :as log])
   (:import [my_mod.api.wireless IWirelessNode]
-           [my_mod.api.energy   IEnergyCapable]))
+           [my_mod.api.energy   IEnergyCapable]
+           [net.minecraft.world.item ItemStack]))
 
 ;; ============================================================================
 ;; BlockState properties declaration (used by defblock at bottom)
@@ -69,7 +72,7 @@
 (defn- node-safe-state
   "Return the BE's customState, or a fresh default state seeded with node-type."
   [be block-id]
-  (or (.getCustomState be)
+  (or (platform-be/get-custom-state be)
       (assoc nschema/node-default-state :node-type (parse-node-type block-id))))
 
 (def ^:private node-slot-schema-id slots/wireless-node-id)
@@ -122,7 +125,7 @@
   "Update :enabled flag based on world-data network lookup. Returns updated state."
   [state level pos]
   (try
-    (let [vblock      (vb/create-vnode (.getX pos) (.getY pos) (.getZ pos))
+    (let [vblock      (vb/create-vnode (pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos))
           world-data  (wd/get-world-data level)
           network     (wd/get-network-by-node world-data vblock)
           connected?  (and network (not (:disposed network)))]
@@ -136,7 +139,7 @@
 
 (defn node-scripted-tick-fn
   [level pos _block-state be]
-  (let [block-id (.getBlockId be)
+  (let [block-id (platform-be/get-block-id be)
         state    (node-safe-state be block-id)
         ticker   (inc (get state :update-ticker 0))
         state    (assoc state :update-ticker ticker)
@@ -158,8 +161,8 @@
                        (catch Exception _))
                      state)
                    state)]
-    (.setCustomState be state)
-    (.setChanged be)))
+    (platform-be/set-custom-state! be state)
+    (platform-be/set-changed! be)))
 
 
 
@@ -172,31 +175,31 @@
   {:get-size (fn [_be] node-slot-count)
 
    :get-item (fn [be slot]
-               (get-in (or (.getCustomState be) nschema/node-default-state)
+               (get-in (or (platform-be/get-custom-state be) nschema/node-default-state)
                        [:inventory slot]))
 
    :set-item! (fn [be slot item]
-                (let [state  (or (.getCustomState be) nschema/node-default-state)
+                (let [state  (or (platform-be/get-custom-state be) nschema/node-default-state)
                       state' (assoc-in state [:inventory slot] item)]
-                  (.setCustomState be state')))
+                  (platform-be/set-custom-state! be state')))
 
    :remove-item (fn [be slot amount]
-                  (let [state (or (.getCustomState be) nschema/node-default-state)
+                  (let [state (or (platform-be/get-custom-state be) nschema/node-default-state)
                         item  (get-in state [:inventory slot])]
                     (when item
-                      (let [cnt (.getCount item)]
+                      (let [cnt (.getCount ^ItemStack item)]
                         (if (<= cnt amount)
-                          (do (.setCustomState be (assoc-in state [:inventory slot] nil)) item)
-                          (.splitStack item amount))))))
+                          (do (platform-be/set-custom-state! be (assoc-in state [:inventory slot] nil)) item)
+                          (.split ^ItemStack item amount))))))
 
    :remove-item-no-update (fn [be slot]
-                            (let [state (or (.getCustomState be) nschema/node-default-state)
+                            (let [state (or (platform-be/get-custom-state be) nschema/node-default-state)
                                   item  (get-in state [:inventory slot])]
-                              (.setCustomState be (assoc-in state [:inventory slot] nil))
+                              (platform-be/set-custom-state! be (assoc-in state [:inventory slot] nil))
                               item))
 
    :clear! (fn [be]
-             (.setCustomState be (assoc (or (.getCustomState be) nschema/node-default-state)
+             (platform-be/set-custom-state! be (assoc (or (platform-be/get-custom-state be) nschema/node-default-state)
                   :inventory (vec (repeat node-slot-count nil)))))
 
    :still-valid?          (fn [_be _player] true)
@@ -257,7 +260,7 @@
     (log/info "Wireless Node (" (name node-type) ") right-clicked!")
     (let [{:keys [player world pos]} event-data
           be    (world/world-get-tile-entity world pos)
-          state (when be (or (.getCustomState be) nschema/node-default-state))]
+          state (when be (or (platform-be/get-custom-state be) nschema/node-default-state))]
       (if state
         (do
           (log/info "Node status:")
@@ -282,8 +285,8 @@
           player-name (str player)
           be          (world/world-get-tile-entity world pos)]
       (when be
-        (let [state (or (.getCustomState be) nschema/node-default-state)]
-          (.setCustomState be (assoc state
+        (let [state (or (platform-be/get-custom-state be) nschema/node-default-state)]
+          (platform-be/set-custom-state! be (assoc state
                                :node-type   node-type
                                :placer-name player-name))))
       (log/info "Node placed by" player-name "at" pos))))
@@ -294,7 +297,7 @@
     (let [{:keys [world pos]} event-data
           be (world/world-get-tile-entity world pos)]
       (when be
-        (let [state (or (.getCustomState be) nschema/node-default-state)]
+        (let [state (or (platform-be/get-custom-state be) nschema/node-default-state)]
           (doseq [item (:inventory state [])]
             (when item (log/info "Dropping item:" item))))))))
 

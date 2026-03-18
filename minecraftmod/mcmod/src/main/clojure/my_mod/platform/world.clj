@@ -66,11 +66,34 @@
   
   (world-is-chunk-loaded? [this chunk-x chunk-z]
     "Check if chunk at coordinates is loaded.
-    
+
     Args:
     - chunk-x: int - chunk X coordinate
     - chunk-z: int - chunk Z coordinate
-    
+
+    Returns: boolean")
+
+  (world-get-day-time [this]
+    "Get the current day time (0-24000).
+
+    Returns: long - current time in ticks")
+
+  (world-is-raining [this]
+    "Check if it is currently raining.
+
+    Returns: boolean")
+
+  (world-is-client-side [this]
+    "Check if this is the client side.
+
+    Returns: boolean")
+
+  (world-can-see-sky [this pos]
+    "Check if position can see the sky.
+
+    Args:
+    - pos: IBlockPos
+
     Returns: boolean"))
 
 ;; ============================================================================

@@ -4,6 +4,12 @@ package my_mod.api.wireless;
  * Platform-neutral interface for wireless generator blocks.
  */
 public interface IWirelessGenerator {
+    /** Current energy stored. */
+    double getEnergy();
+
+    /** Set current energy stored. */
+    void setEnergy(double energy);
+
     /**
      * Get how much energy this generator can provide.
      * @param req how much energy is required

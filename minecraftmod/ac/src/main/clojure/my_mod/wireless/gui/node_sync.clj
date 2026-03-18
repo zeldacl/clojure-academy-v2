@@ -6,7 +6,8 @@
             [my-mod.wireless.gui.node-container :as node-container]
             [my-mod.wireless.gui.container-common :as common]
             [my-mod.wireless.gui.container-schema :as schema]
-            [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
+            [my-mod.wireless.gui.sync-helpers :as sync-helpers]
+            [my-mod.platform.position :as pos]))
 
 ;; ============================================================================
 ;; Universal Sync Interface
@@ -40,7 +41,7 @@
 (defn- get-pos
   [tile]
   (when tile
-    (try (.getBlockPos tile) (catch Exception _ nil))))
+    (try (pos/position-get-block-pos tile) (catch Exception _ nil))))
 
 (defn make-sync-packet
   "Create node state sync packet payload map from container or tile entity.
@@ -51,13 +52,13 @@
   [source]
   (let [container? (node-container? source)
         tile      (if container? (:tile-entity source) source)
-        pos       (get-pos tile)
+        block-pos (get-pos tile)
         state     (tile-state tile)]
-    (when pos
+    (when block-pos
       (merge {:gui-id metadata/gui-wireless-node
-              :pos-x  (.getX pos)
-              :pos-y  (.getY pos)
-              :pos-z  (.getZ pos)}
+              :pos-x  (pos/pos-x block-pos)
+              :pos-y  (pos/pos-y block-pos)
+              :pos-z  (pos/pos-z block-pos)}
              (schema/build-sync-packet-payload
               node-container/node-fields
               (when container? source)

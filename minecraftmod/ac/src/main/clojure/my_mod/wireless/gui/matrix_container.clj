@@ -14,7 +14,8 @@
             [my-mod.wireless.gui.container-move-common :as move-common]
             [my-mod.wireless.gui.container-schema :as schema]
             [my-mod.wireless.gui.matrix-fields :as mf]
-            [my-mod.wireless.gui.sync-helpers :as sync-helpers]))
+            [my-mod.wireless.gui.sync-helpers :as sync-helpers]
+            [my-mod.platform.be :as platform-be]))
 
 ;; ============================================================================
 ;; Field Schema — single source of truth for all atom fields
@@ -49,7 +50,7 @@
   (if (map? tile)
     [nil tile]
     (try
-      (let [state (or (.getCustomState tile) mschema/matrix-default-state)]
+      (let [state (or (platform-be/get-custom-state tile) mschema/matrix-default-state)]
         [tile state])
       (catch Exception e
         (log/warn "Could not resolve customState from BE:" (.getMessage e))
@@ -239,7 +240,7 @@
 (defn handle-button-click!
   "Handle button click from client"
   [container button-id _data]
-  (case button-id
+  (case (int button-id)
     0
     (log/info "Toggled matrix working state")
 

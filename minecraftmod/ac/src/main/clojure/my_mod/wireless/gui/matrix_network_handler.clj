@@ -1,22 +1,23 @@
 (ns my-mod.wireless.gui.matrix-network-handler
   "Wireless Matrix GUI - 服务端网络消息处理器
-  
+
   处理客户端发送的网络消息：
   - MSG_GATHER_INFO: 查询网络信息
   - MSG_INIT: 初始化网络
   - MSG_CHANGE_SSID: 修改SSID
   - MSG_CHANGE_PASSWORD: 修改密码
-  
+
   权限验证：
   - 初始化网络：只有放置者
   - 修改SSID/密码：只有放置者"
-  
+
   (:require [my-mod.network.server :as net-server]
             [my-mod.wireless.helper :as helper]
             [my-mod.wireless.network :as wireless-net]
             [my-mod.wireless.gui.matrix-messages :as matrix-msgs]
             [my-mod.wireless.gui.wireless-messages :as wireless-msgs]
             [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
+            [my-mod.platform.entity :as entity]
             [my-mod.util.log :as log]))
 
 ;; ==================== 工具函数 ====================
@@ -29,8 +30,8 @@
 (defn is-owner?
   "检查玩家是否是Matrix的所有者"
   [tile player]
-  (let [player-name (try (.getName player) (catch Exception _ (str player)))
-        placer-name (try (.getPlacerName tile) (catch Exception _ nil))]
+  (let [player-name (entity/player-get-name player)
+        placer-name (.getPlacerName tile)]
     (= (str placer-name) (str player-name))))
 
 ;; ==================== 消息处理器 ====================

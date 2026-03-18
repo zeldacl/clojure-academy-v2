@@ -9,6 +9,9 @@ public interface IWirelessNode {
     /** Current energy stored. */
     double getEnergy();
 
+    /** Set current energy stored. */
+    void setEnergy(double energy);
+
     /** Maximum energy capacity. */
     double getMaxEnergy();
 
@@ -26,4 +29,7 @@ public interface IWirelessNode {
 
     /** Network password. */
     String getPassword();
+
+    /** Block position (platform-neutral IBlockPos). */
+    Object getBlockPos();
 }

@@ -14,4 +14,13 @@ public interface IWirelessMatrix {
 
     /** The max range that this matrix can reach (in blocks). */
     double getMatrixRange();
+
+    /** Network SSID. */
+    String getSsid();
+
+    /** Network password. */
+    String getPassword();
+
+    /** Name of player who placed this matrix. */
+    String getPlacerName();
 }
