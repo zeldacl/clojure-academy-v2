@@ -9,6 +9,7 @@
            [net.minecraft.network.chat Component]
            [net.minecraft.world.entity.player Player]
            [net.minecraft.core BlockPos]
+           [net.minecraft.world.level.block.entity BlockEntity]
            [my_mod.wireless.gui.registry IGuiHandler]))
 
 (defn- tile->pos
@@ -21,10 +22,7 @@
     (or ^BlockPos (:pos tile-entity) (.blockPosition player))
 
     :else
-    (try
-      ^BlockPos (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array []))
-      (catch Exception _
-        (.blockPosition player)))))
+    (.getBlockPos ^BlockEntity tile-entity)))
 
 (defn create-menu-provider
   "Create a MenuProvider for opening GUI.

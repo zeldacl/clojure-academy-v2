@@ -3,7 +3,8 @@
   
   Provides a platform-agnostic interface for block entity rendering.
   Platform-specific TESR implementations dispatch to these methods."
-  (:require [my-mod.util.log :as log]))
+  (:require [my-mod.util.log :as log]
+            [my-mod.platform.be :as pbe]))
 
 ;; ============================================================================
 ;; TileEntity Rendering Protocol
@@ -76,10 +77,7 @@
 
 (defn- get-block-id [tile-entity]
   (when tile-entity
-    (try
-      (let [v (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockId" (object-array []))]
-        (when (string? v) v))
-      (catch Exception _ nil))))
+    (pbe/get-block-id tile-entity)))
 
 (defn get-tile-renderer
   "Get the renderer for a TileEntity instance.

@@ -86,17 +86,11 @@
 (def ^:const set-tab-msg-id "set-tab")
 
 (defn- get-player-menu
-  "Get player's current open container menu. Tries field 'containerMenu' then method 'getContainerMenu' (Mojang 1.20.1)."
+  "Get player's current open container menu (Mojang 1.20.1)."
   [player]
-  (or (try
-        (let [klass (class player)
-              f (.getDeclaredField klass "containerMenu")]
-          (.setAccessible f true)
-          (.get f player))
-        (catch Exception _ nil))
-      (try
-        (clojure.lang.Reflector/invokeInstanceMethod player "getContainerMenu" (object-array []))
-        (catch Exception _ nil))))
+  (try
+    (entity/player-get-container-menu player)
+    (catch Exception _ nil)))
 
 (defn- handle-set-tab
   "Server handler for set-tab: update the container that the player's OPEN MENU uses (so clicked/slots see it).

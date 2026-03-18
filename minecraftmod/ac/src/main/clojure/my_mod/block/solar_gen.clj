@@ -11,6 +11,7 @@
             [my-mod.platform.nbt :as nbt]
             [my-mod.platform.item :as item]
             [my-mod.platform.be :as platform-be]
+            [my-mod.platform.position :as pos]
             [my-mod.util.log :as log]
             [my-mod.config.modid :as modid]))
 
@@ -53,7 +54,7 @@
     (let [time (rem (long (my-mod.platform.world/world-get-day-time level)) 24000)
           day? (<= time 12500)]
       (and day? (my-mod.platform.world/world-can-see-sky level
-                  (clojure.lang.Reflector/invokeInstanceMethod pos "above" (object-array [])))))))
+                  (pos/pos-above pos))))))
 
 (defn- solar-tick-fn
   "Tick handler for solar generator ScriptedBlockEntity.

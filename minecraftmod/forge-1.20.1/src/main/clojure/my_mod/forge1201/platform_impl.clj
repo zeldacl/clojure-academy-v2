@@ -296,6 +296,11 @@
     (constantly (fn [namespace path]
                   (ResourceLocation. namespace path))))
 
+  ;; Bind BlockPos#above for mcmod pos abstraction.
+  (alter-var-root #'pos/*pos-above-fn*
+    (constantly (fn [p]
+                  (.above p))))
+
   ;; Bind the Forge implementation of declare-capability!
   ;; When ac calls declare-capability!, this fn assigns a CapabilitySlots slot.
   (alter-var-root #'platform-cap/*declare-capability-impl*

@@ -66,9 +66,7 @@
 (defn create-menu-bridge
   "Create FabricMenuBridge instance without ns-load class resolution."
   [window-id menu-type clj-container]
-  (clojure.lang.Reflector/invokeConstructor
-    (Class/forName "my_mod.fabric1201.gui.FabricMenuBridge")
-    (object-array [window-id menu-type clj-container])))
+  (my_mod.fabric1201.gui.FabricMenuBridge. window-id menu-type clj-container))
 
 (defn create-screen-handler-bridge
   "Backward-compatible alias."

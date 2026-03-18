@@ -190,23 +190,11 @@
     (.translate ps (double x) (double y) 0.0)
     ;; Scale pose so that src-w x src-h units = target-w x target-h screen px.
     (.scale ps (float scale-x) (float scale-y) 1.0)
-    ;; 9-param blit: blit(RL, x, y, u, v, w, h, texW, texH)
-    ;; w / h  = src dimensions in scaled pose space -> renders as target size.
-    ;; texW / texH = full atlas size for correct UV fraction.
-    (try
-      (clojure.lang.Reflector/invokeInstanceMethod
-        gg "blit"
-        (object-array [tex-loc
-                       (int 0) (int 0)
-                       (int u-px) (int v-px)
-                       (int safe-src-w) (int safe-src-h)
-                       (int safe-atlas-w) (int safe-atlas-h)]))
-      (catch Exception _
-        ;; Fallback: 7-param blit (assumes 256x256 UV space).
-        ;; May tile for textures wider than 256 px.
-        (.blit gg tex-loc (int 0) (int 0)
-               (int u-px) (int v-px)
-               (int safe-src-w) (int safe-src-h))))
+    ;; 1.20.1 official: use the public GuiGraphics#blit overload directly.
+    ;; We keep a single overload to avoid Reflector-based dynamic dispatch.
+    (.blit gg tex-loc (int 0) (int 0)
+           (int u-px) (int v-px)
+           (int safe-src-w) (int safe-src-h))
     (.popPose ps)))
   
  (defn render-widget!

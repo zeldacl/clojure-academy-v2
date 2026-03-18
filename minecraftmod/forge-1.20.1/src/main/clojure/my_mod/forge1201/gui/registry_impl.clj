@@ -18,6 +18,7 @@
            [net.minecraft.core BlockPos]
            [net.minecraft.world MenuProvider]
            [net.minecraft.server.level ServerPlayer]
+           [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.core.registries Registries]
            [net.minecraft.resources ResourceLocation]))
 
@@ -121,7 +122,7 @@
                 (try
                   (if (map? tile-entity)
                     (:pos tile-entity)
-                    (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array [])))
+                    (.getBlockPos ^BlockEntity tile-entity))
                   (catch Exception _ nil)))]
       (if pos
         (NetworkHooks/openScreen

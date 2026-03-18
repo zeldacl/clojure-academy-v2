@@ -121,7 +121,7 @@
   - tile-entity: TileEntity (optional, can be nil)
   
   This uses Fabric's openHandledScreen"
-  [player gui-id tile-entity]
+  [^net.minecraft.server.level.ServerPlayer player gui-id tile-entity]
   (log/info "Opening GUI" gui-id "for player" (.getName player))
   
   (try
@@ -129,11 +129,8 @@
     (let [factory (bridge/create-extended-screen-handler-factory gui-id tile-entity)]
       
       ;; Open GUI using Fabric API
-      (try
-        (clojure.lang.Reflector/invokeInstanceMethod player "openHandledScreen" (object-array [factory]))
-        (catch Exception _
-          ;; Fallback: some environments expose openMenu instead
-          (clojure.lang.Reflector/invokeInstanceMethod player "openMenu" (object-array [factory]))))
+      ;; Mojang-mapped 1.20.1 server player provides openHandledScreen.
+      (.openHandledScreen player factory))
       
       (log/info "GUI opened successfully"))
     

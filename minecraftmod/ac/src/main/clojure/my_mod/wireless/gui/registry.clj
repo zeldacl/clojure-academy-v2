@@ -182,11 +182,9 @@
   (log/info "Registered active container, total:" (count @active-containers)))
 
 (defn- player-key
-  "Stable key for player (UUID) so lookup works regardless of object reference. Uses reflection."
+  "Stable key for player (UUID) so lookup works regardless of object reference."
   [player]
-  (try
-    (clojure.lang.Reflector/invokeInstanceMethod player "getUUID" (object-array []))
-    (catch Exception _ nil)))
+  (entity/player-get-uuid player))
 
 (defn register-player-container!
   "Register a container for a specific player (keyed by player UUID for stable lookup)."
@@ -258,17 +256,10 @@
   (get @containers-by-id (int container-id)))
 
 (defn get-menu-container-id
-  "Get AbstractContainerMenu containerId (window-id) via reflection. For set-tab and unregister."
+  "Get AbstractContainerMenu containerId (window-id)."
   [menu]
   (when menu
-    (or (try
-          (clojure.lang.Reflector/invokeInstanceMethod menu "getContainerId" (object-array []))
-          (catch Exception _ nil))
-        (try
-          (let [f (.getDeclaredField (class menu) "containerId")]
-            (.setAccessible f true)
-            (.get f menu))
-          (catch Exception _ nil)))))
+    (entity/menu-get-container-id menu)))
 
 (defn set-client-container!
   "Set the client-side active container"

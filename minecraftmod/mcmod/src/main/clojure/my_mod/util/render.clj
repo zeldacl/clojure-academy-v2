@@ -14,10 +14,14 @@
   (reset! texture-binder* binder-fn))
 
 (defn- gl-static [method-name arg-types args]
-  (clojure.lang.Reflector/invokeStaticMethod
-   @gl11-class
-   method-name
-   (to-array args)))
+  ;; Use Class#getMethod + Method#invoke so static analysis can resolve
+  ;; the reflective call target without relying on Reflector's
+  ;; signature-sensitive invokeStaticMethod.
+  (let [^Class cls @gl11-class
+        ^java.lang.reflect.Method m (.getMethod cls
+                                                method-name
+                                                (to-array Class arg-types))]
+    (.invoke m nil (to-array args))))
 
 ;; ============================================================================
 ;; Time Helper

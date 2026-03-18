@@ -251,5 +251,10 @@
   (alter-var-root #'buffer/*cutout-no-cull-buffer-fn*
     (constantly (fn [buffer-source texture]
                   (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityCutoutNoCull texture)))))
+
+  ;; Bind BlockPos#above for mcmod pos abstraction.
+  (alter-var-root #'pos/*pos-above-fn*
+    (constantly (fn [p]
+                  (.above p))))
   
   (log/info "Fabric 1.20.1 platform implementations initialized successfully"))

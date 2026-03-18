@@ -7,7 +7,8 @@
             [my-mod.fabric1201.gui.menu-bridge :as menu-bridge])
   (:import [net.minecraft.world MenuProvider]
            [net.fabricmc.fabric.api.screenhandler.v1 ExtendedScreenHandlerFactory]
-           [net.minecraft.network.chat Component]))
+           [net.minecraft.network.chat Component]
+           [net.minecraft.world.level.block.entity BlockEntity]))
 
 (defn- tile->pos
   [tile-entity player]
@@ -19,10 +20,7 @@
     (or (:pos tile-entity) (.blockPosition player))
 
     :else
-    (try
-      (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array []))
-      (catch Exception _
-        (.blockPosition player)))))
+    (.getBlockPos ^BlockEntity tile-entity)))
 
 (defn create-menu-provider
   "Create a simple MenuProvider provider."
