@@ -298,7 +298,7 @@
 
   ;; Bind BlockPos#above for mcmod pos abstraction.
   (alter-var-root #'pos/*pos-above-fn*
-    (constantly (fn [p]
+    (constantly (fn [^BlockPos p]
                   (.above p))))
 
   ;; Bind the Forge implementation of declare-capability!

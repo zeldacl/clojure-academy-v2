@@ -254,7 +254,7 @@
 
   ;; Bind BlockPos#above for mcmod pos abstraction.
   (alter-var-root #'pos/*pos-above-fn*
-    (constantly (fn [p]
+    (constantly (fn [^BlockPos p]
                   (.above p))))
   
   (log/info "Fabric 1.20.1 platform implementations initialized successfully"))
