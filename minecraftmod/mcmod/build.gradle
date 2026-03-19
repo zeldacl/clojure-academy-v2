@@ -1,53 +1,66 @@
-plugins {
-  id 'java'
-  id 'dev.clojurephant.clojure' version '0.9.1'
-}
+// plugins {
+//   id 'java'
+//   id "java-library"
+//   id 'dev.clojurephant.clojure' version '0.9.1'
+// }
 
-java {
-  toolchain { languageVersion = JavaLanguageVersion.of(17) }
-}
+// // 阻止 common 产出无意义的 jar，因为它会被注入到子模块中
+// jar { enabled = false }
 
-repositories {
-  mavenCentral()
-}
+// java {
+//   toolchain { languageVersion = JavaLanguageVersion.of(17) }
+// }
 
-dependencies {
-  implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version') ?: '1.12.4'}"
-  implementation "org.clojure:data.json:2.4.0"
-}
+// repositories {
+//   mavenCentral()
+// }
 
-clojure {
-  builds {
-    main {
-      reflection = 'skip'
-    }
-    // test {
-    //   sourceSet = sourceSets.test
-    //   reflection = 'skip'
-    // }
-  }
-}
+// dependencies {
+//   implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version') ?: '1.12.4'}"
+//   implementation "org.clojure:data.json:2.4.0"
+// }
 
-tasks.matching { it.name == 'checkClojure' }.configureEach {
-  enabled = false
-}
+// clojure {
+//   builds {
+//     main {
+//       reflection = 'skip'
+//     }
+//     // test {
+//     //   sourceSet = sourceSets.test
+//     //   reflection = 'skip'
+//     // }
+//   }
+// }
 
-sourceSets {
-  main {
-    java { srcDirs = ["src/main/java"] }
-    clojure { srcDirs = ["src/main/clojure"] }
-    resources { srcDirs = [] }
-  }
-  test {
-    clojure { srcDirs = ["src/test/clojure"] }
-  }
-}
+// tasks.matching { it.name == 'checkClojure' }.configureEach {
+//   enabled = false
+// }
 
-// tasks.named('processResources', ProcessResources).configure {
-//   from(sourceSets.main.clojure.srcDirs) { include '**/*.clj' }
+// sourceSets {
+//   main {
+//     java { srcDirs = ["src/main/java"] }
+//     clojure { srcDirs = ["src/main/clojure"] }
+//     resources { srcDirs = [] }
+//   }
+//   test {
+//     clojure { srcDirs = ["src/test/clojure"] }
+//   }
+// }
+
+// // tasks.named('processResources', ProcessResources).configure {
+// //   from(sourceSets.main.clojure.srcDirs) { include '**/*.clj' }
+// //   duplicatesStrategy = DuplicatesStrategy.INCLUDE
+// // }
+
+// tasks.named('jar', Jar).configure {
 //   duplicatesStrategy = DuplicatesStrategy.INCLUDE
 // }
 
-tasks.named('jar', Jar).configure {
-  duplicatesStrategy = DuplicatesStrategy.INCLUDE
+plugins {
+    id "java-library"
 }
+dependencies {
+    implementation "org.clojure:clojure:1.11.1"
+}
+
+

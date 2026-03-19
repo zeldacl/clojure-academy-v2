@@ -43,32 +43,41 @@
 //     //     maxHeapSize = "1G"
 //     // }
 // }
+plugins {
+    // 统一管理插件版本，不在这里 apply
+    id "dev.architectury.loom" version "1.13.467" apply false 
+    id "dev.clojurephant.clojure" version "0.9.1" apply false
+    id "com.github.johnrengelman.shadow" version "8.1.1" apply false
+}
 
 allprojects {
-  group = findProperty('mod_group') ?: 'com.example'
-  version = findProperty('mod_version') ?: '1.0.0'
+    group = rootProject.findProperty('mod_group')
+    version = rootProject.findProperty('mod_version')
 
-  repositories {
-    mavenCentral()
-    maven { url 'https://maven.minecraftforge.net' }
-  }
-}
-
-// Convenience task to copy built jars to distributions
-tasks.register('gatherJars', Copy) {
-  into "$buildDir/distributions"
-  subprojects.each { sp ->
-    def shadowTask = sp.tasks.findByName('shadowJar') ?: sp.tasks.findByName('jar')
-    if (shadowTask != null) {
-      from shadowTask.archiveFile
+    repositories {
+        mavenCentral()
+        maven { url "https://maven.architectury.dev/" }
+        maven { url "https://maven.fabricmc.net/" }    // 必须，Loom 的底层依赖在此
+        maven { url "https://maven.minecraftforge.net" }
+        maven { url "https://repo.clojars.org" }
     }
-  }
 }
 
-tasks.register('buildAll') {
-  dependsOn subprojects.collect { it.path + ":build" }
-  finalizedBy 'gatherJars'
+// 汇总任务依然保留，但在各个子模块 build 完成后触发
+tasks.register('gatherJars', Copy) {
+    into "$buildDir/distributions"
+    subprojects { sp ->
+        if (sp.name.startsWith("forge-")) {
+            evaluationDependsOn(sp.path) // 确保子项目评估完成
+            def remapTask = sp.tasks.findByName('remapJar')
+            if (remapTask != null) {
+                from remapTask.archiveFile
+            }
+        }
+    }
 }
+
+
 
 
 

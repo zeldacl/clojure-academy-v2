@@ -1,53 +1,64 @@
-plugins {
-  id 'java'
-  id 'dev.clojurephant.clojure' version '0.9.1'
-}
+// plugins {
+//   // id 'java'
+//   id 'dev.clojurephant.clojure' version '0.9.1'
+// }
 
-java {
-  toolchain { languageVersion = JavaLanguageVersion.of(17) }
-}
+// jar { enabled = false }
 
-repositories {
-  mavenCentral()
-}
+// java {
+//   toolchain { languageVersion = JavaLanguageVersion.of(17) }
+// }
 
-dependencies {
-  implementation project(':mcmod')
-  implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version') ?: '1.12.4'}"
-  implementation "org.clojure:data.json:2.4.0"
-}
+// repositories {
+//   mavenCentral()
+// }
 
-clojure {
-  builds {
-    main {
-      reflection = 'skip'
-    }
-    // test {
-    //   sourceSet = sourceSets.test
-    //   reflection = 'skip'
-    // }
-  }
-}
+// dependencies {
+//   implementation project(':mcmod')
+//   implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version') ?: '1.12.4'}"
+//   implementation "org.clojure:data.json:2.4.0"
+// }
 
-tasks.matching { it.name == 'checkClojure' }.configureEach {
-  enabled = false
-}
+// clojure {
+//   builds {
+//     main {
+//       reflection = 'skip'
+//     }
+//     // test {
+//     //   sourceSet = sourceSets.test
+//     //   reflection = 'skip'
+//     // }
+//   }
+// }
 
-sourceSets {
-  main {
-    clojure { srcDirs = ["src/main/clojure"] }
-    resources { srcDirs = ["src/main/resources"] }
-  }
-  test {
-    clojure { srcDirs = ["src/test/clojure"] }
-  }
-}
+// tasks.matching { it.name == 'checkClojure' }.configureEach {
+//   enabled = false
+// }
 
-// tasks.named('processResources', ProcessResources).configure {
-//   from(sourceSets.main.clojure.srcDirs) { include '**/*.clj' }
+// sourceSets {
+//   main {
+//     clojure { srcDirs = ["src/main/clojure"] }
+//     resources { srcDirs = ["src/main/resources"] }
+//   }
+//   test {
+//     clojure { srcDirs = ["src/test/clojure"] }
+//   }
+// }
+
+// // tasks.named('processResources', ProcessResources).configure {
+// //   from(sourceSets.main.clojure.srcDirs) { include '**/*.clj' }
+// //   duplicatesStrategy = DuplicatesStrategy.INCLUDE
+// // }
+
+// tasks.named('jar', Jar).configure {
 //   duplicatesStrategy = DuplicatesStrategy.INCLUDE
 // }
 
-tasks.named('jar', Jar).configure {
-  duplicatesStrategy = DuplicatesStrategy.INCLUDE
+plugins {
+    id "dev.clojurephant.clojure"
 }
+dependencies {
+    implementation "org.clojure:clojure:1.11.1"
+    implementation project(':mcmod')
+}
+
