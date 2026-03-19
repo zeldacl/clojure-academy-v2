@@ -324,10 +324,10 @@ dependencies {
     // modImplementation "net.minecraftforge:forge:1.20.1-47.1.0"
 
     // 编译依赖项
-    // implementation project(':ac')
-    // implementation project(':mcmod')
-    //     compileOnly project(':ac')
-    // compileOnly project(':mcmod')
+//     implementation project(':ac')
+//     implementation project(':mcmod')
+//         compileOnly project(':ac')
+//     compileOnly project(':mcmod')
     implementation "org.clojure:clojure:1.11.1"
 }
 
