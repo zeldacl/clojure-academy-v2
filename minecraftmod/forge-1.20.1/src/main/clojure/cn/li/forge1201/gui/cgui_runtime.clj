@@ -4,10 +4,10 @@
   (:require
     [clojure.java.io :as io]
     [clojure.string :as str]
-    [my-mod.gui.cgui :as cgui]
+    [cn.li.mcmod.gui.cgui :as cgui]
     [my-mod.platform.resource :as res]
     [my-mod.config.modid :as modid]
-    [my-mod.util.log :as log])
+    [cn.li.mcmod.util.log :as log])
   (:import
     (net.minecraft.client.gui GuiGraphics)
     (net.minecraft.client Minecraft)

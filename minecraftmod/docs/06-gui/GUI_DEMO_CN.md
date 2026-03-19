@@ -18,7 +18,7 @@
 ### ✅ 已完成的 Clojure 代码
 
 #### Core 层（版本无关）
-- `my-mod.gui.core`：GUI 核心逻辑
+- `cn.li.mcmod.gui.core`：GUI 核心逻辑
   - `gui-slots` atom：存储 GUI 槽位状态
   - `register-gui-slot`：注册槽位和物品
   - `clear-slot`：清空槽位（销毁物品）

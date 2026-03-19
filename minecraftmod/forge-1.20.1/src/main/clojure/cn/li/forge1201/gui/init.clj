@@ -2,8 +2,8 @@
   "Forge 1.20.1 GUI System Initialization"
   (:require [my-mod.forge1201.gui.registry-impl :as registry-impl]
             [my-mod.forge1201.gui.network :as network]
-            [my-mod.gui.platform-adapter :as gui]
-            [my-mod.util.log :as log]))
+            [cn.li.mcmod.gui.platform-adapter :as gui]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn init-common!
   "Initialize common GUI system (server + client).
@@ -26,7 +26,7 @@
   (log/info "=== Initializing Forge 1.20.1 GUI System (Client) ===")
   
   ;; Register screen factories
-  (if-let [init-screen! (requiring-resolve 'my-mod.forge1201.gui.screen-impl/init-client!)]
+  (if-let [init-screen! (requiring-resolve 'cn.li.forge1201.gui.screen-impl/init-client!)]
     (init-screen!)
     (log/warn "Forge GUI screen impl not available on current side"))
   

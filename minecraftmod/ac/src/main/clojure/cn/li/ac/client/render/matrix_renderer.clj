@@ -1,4 +1,4 @@
-(ns my-mod.client.render.matrix-renderer
+(ns cn.li.ac.client.render.matrix-renderer
   "Wireless Matrix block renderer - multiblock TESR
   
   Renders the 2x2x2 matrix structure with:

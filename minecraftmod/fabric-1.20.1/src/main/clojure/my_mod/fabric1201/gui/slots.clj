@@ -2,9 +2,9 @@
   "Fabric 1.20.1 GUI Slot Implementations
   
   This is adapted from Forge's slot system with Fabric API compatibility"
-  (:require [my-mod.gui.platform-adapter :as gui]
-            [my-mod.gui.slot-validators :as slot-validators]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.gui.platform-adapter :as gui]
+            [cn.li.mcmod.gui.slot-validators :as slot-validators]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.screen.slot Slot]
            [net.minecraft.inventory Inventory]
            [net.minecraft.item ItemStack]

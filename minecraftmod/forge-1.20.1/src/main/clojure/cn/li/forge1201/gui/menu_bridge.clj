@@ -6,10 +6,10 @@
   when Clojure source files are loaded dynamically without AOT compilation.
   Tabbed GUIs: same UI, same container; :tab-index is only the 'current tab' state.
   When container has :tab-index, we add DataSlot + conditional slots (slots active only when tab-index is 0)."
-  (:require [my-mod.gui.platform-adapter :as gui]
-            [my-mod.gui.tabbed-gui :as tabbed]
-            [my-mod.forge1201.gui.slots :as slots]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.gui.platform-adapter :as gui]
+            [cn.li.mcmod.gui.tabbed-gui :as tabbed]
+            [cn.li.forge1201.gui.slots :as slots]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.inventory AbstractContainerMenu DataSlot]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.world Container]))

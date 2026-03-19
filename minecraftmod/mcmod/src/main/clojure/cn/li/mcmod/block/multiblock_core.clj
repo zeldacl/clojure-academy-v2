@@ -1,14 +1,14 @@
-(ns my-mod.block.multiblock-core
+(ns cn.li.mcmod.block.multiblock-core
   "Platform-neutral controller+part multiblock orchestration.
 
   This namespace owns generic structure checks/routing. Business actions
   (GUI behavior, inventory policies, etc.) stay in ac handlers."
-  (:require [my-mod.block.dsl :as bdsl]
-            [my-mod.platform.position :as pos]
-            [my-mod.platform.world :as world]
-            [my-mod.platform.be :as platform-be]
-            [my-mod.registry.metadata :as registry-metadata]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.level.block.state BlockState]))
 
 (defn- same-pos?

@@ -1,8 +1,8 @@
 (ns cn.li.forge1201.gui.impl
   "Forge 1.20.1 GUI/Menu implementation"
-  (:require [my-mod.gui.api :as gui-api]
-            [my-mod.gui.core :as gui-core]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.gui.api :as gui-api]
+            [cn.li.mcmod.gui.core :as gui-core]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; GUI ID constant
 (def demo-gui-id 1)

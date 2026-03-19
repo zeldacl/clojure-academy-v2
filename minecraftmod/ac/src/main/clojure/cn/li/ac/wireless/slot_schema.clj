@@ -1,4 +1,4 @@
-(ns my-mod.wireless.slot-schema
+(ns cn.li.ac.wireless.slot-schema
   "Authoritative slot schemas for wireless GUIs.
 
   GUI definitions, containers, and block logic should all query these schemas
@@ -6,10 +6,10 @@
 
   Also declares the quick-move routing configs so containers only need to
   reference a pre-built config rather than repeat the acceptance predicates."
-  (:require [my-mod.gui.slot-schema :as slot-schema]
-            [my-mod.item.constraint-plate :as plate]
-            [my-mod.item.mat-core :as core]
-            [my-mod.energy.operations :as energy-ops]))
+  (:require [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.ac.item.constraint-plate :as plate]
+            [cn.li.ac.item.mat-core :as core]
+            [cn.li.ac.energy.operations :as energy-ops]))
 
 (def wireless-node-id :wireless-node)
 (def wireless-matrix-id :wireless-matrix)

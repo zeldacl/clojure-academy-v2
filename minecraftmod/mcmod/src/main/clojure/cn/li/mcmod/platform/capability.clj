@@ -1,4 +1,4 @@
-(ns my-mod.platform.capability
+(ns cn.li.mcmod.platform.capability
   "Platform-neutral Capability declaration registry.
 
   ac code calls declare-capability! to register a capability type and its

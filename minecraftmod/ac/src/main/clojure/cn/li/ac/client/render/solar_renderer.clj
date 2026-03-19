@@ -1,4 +1,4 @@
-(ns my-mod.client.render.solar-renderer
+(ns cn.li.ac.client.render.solar-renderer
   "Solar Generator block renderer (OBJ via BlockEntityRenderer).
 
   Ported from AcademyCraft's RenderSolarGen:

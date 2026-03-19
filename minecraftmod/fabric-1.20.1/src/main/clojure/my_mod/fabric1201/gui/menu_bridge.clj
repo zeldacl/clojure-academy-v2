@@ -5,8 +5,8 @@
 
   NOTE: This project uses official Mojang mappings on Fabric, so the menu
   base class is `net.minecraft.world.inventory.AbstractContainerMenu`."
-  (:require [my-mod.gui.platform-adapter :as gui]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.gui.platform-adapter :as gui]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.inventory AbstractContainerMenu MenuType Slot]))
 
 (gen-class

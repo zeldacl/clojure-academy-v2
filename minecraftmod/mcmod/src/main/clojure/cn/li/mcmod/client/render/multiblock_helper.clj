@@ -1,15 +1,15 @@
-(ns my-mod.client.render.multiblock-helper
+(ns cn.li.mcmod.client.render.multiblock-helper
   "Multiblock TESR rendering helper - platform-agnostic
   
   Provides coordinate transformation logic for multiblock structures.
   Replaces functionality of cn.lambdalib2.multiblock.RenderBlockMulti."
   (:require [clojure.string :as str]
-            [my-mod.util.log :as log]
-            [my-mod.client.render.pose :as pose]
-            [my-mod.platform.be :as pbe]
-            [my-mod.platform.position :as pos]
-            [my-mod.platform.world :as world]
-            [my-mod.registry.metadata :as registry-metadata]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.client.render.pose :as pose]
+            [cn.li.mcmod.platform.be :as pbe]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.registry.metadata :as registry-metadata]))
 
 (defn- get-tile-block-id
   [tile]

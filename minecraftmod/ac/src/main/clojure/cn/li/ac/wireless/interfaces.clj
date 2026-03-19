@@ -1,4 +1,4 @@
-(ns my-mod.wireless.interfaces
+(ns cn.li.ac.wireless.interfaces
   "Wireless system interfaces - Clojure protocols matching Java interfaces
   
   These protocols define the contracts for wireless energy system components:

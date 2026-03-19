@@ -1,8 +1,8 @@
 (ns my-mod.fabric1201.gui.impl
   "Fabric 1.20.1 GUI implementations"
-  (:require [my-mod.gui.api :as gui-api]
-            [my-mod.gui.core :as gui-core]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.gui.api :as gui-api]
+            [cn.li.mcmod.gui.core :as gui-core]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; GUI implementation for Fabric 1.20.1
 (defmethod gui-api/open-gui :fabric-1.20.1

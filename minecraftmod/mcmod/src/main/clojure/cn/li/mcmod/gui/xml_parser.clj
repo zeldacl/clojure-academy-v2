@@ -1,4 +1,4 @@
-(ns my-mod.gui.xml-parser
+(ns cn.li.mcmod.gui.xml-parser
   "XML Layout Parser - Converts XML GUI layouts to DSL specifications
   
   This parser reads XML files (inspired by AcademyCraft's CGUIDocument format)
@@ -14,7 +14,7 @@
   (:require [clojure.xml :as xml]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [my-mod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; XML Parsing Utilities

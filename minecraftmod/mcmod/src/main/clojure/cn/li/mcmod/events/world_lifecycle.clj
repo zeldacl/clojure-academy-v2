@@ -1,4 +1,4 @@
-(ns my-mod.events.world-lifecycle
+(ns cn.li.mcmod.events.world-lifecycle
   "Platform-neutral world lifecycle event handlers registry.
 
   This allows ac code to register world load/unload handlers without
@@ -30,9 +30,9 @@
 
   Example:
     (register-world-lifecycle-handler!
-      {:on-load   my-mod.wireless.world-data/on-world-load
-       :on-unload my-mod.wireless.world-data/on-world-unload
-       :on-save   my-mod.wireless.world-data/on-world-save})"
+      {:on-load   cn.li.ac.wireless.world-data/on-world-load
+       :on-unload cn.li.ac.wireless.world-data/on-world-unload
+       :on-save   cn.li.ac.wireless.world-data/on-world-save})"
   [handler-map]
   (when-let [on-load (:on-load handler-map)]
     (swap! world-load-handlers conj on-load))

@@ -1,4 +1,4 @@
-(ns my-mod.platform.nbt
+(ns cn.li.mcmod.platform.nbt
   "Platform-agnostic NBT (Named Binary Tag) abstraction layer.
   
   This namespace provides protocols and factory functions for NBT operations
@@ -105,9 +105,9 @@
          - :create-list     - fn [] -> INBTList
          
          Example platform initialization:
-         (alter-var-root #'my-mod.platform.nbt/*nbt-factory*
-           (constantly {:create-compound #(CompoundTag.)
-                        :create-list #(ListTag.)}))"}
+        (alter-var-root #'cn.li.mcmod.platform.nbt/*nbt-factory*
+                 (constantly {:create-compound #(CompoundTag.)
+                              :create-list #(ListTag.)}))"
   *nbt-factory*
   nil)
 

@@ -1,11 +1,11 @@
 (ns my-mod.fabric1201.gui.registry-impl
   "Fabric 1.20.1 GUI Registration Implementation"
-  (:require [my-mod.gui.platform-adapter :as gui]
+  (:require [cn.li.mcmod.gui.platform-adapter :as gui]
             [my-mod.fabric1201.gui.bridge :as bridge]
             [my-mod.wireless.gui.registry :as gui-registry]
             [my-mod.wireless.gui.gui-metadata :as gui-meta]
             [my-mod.config.modid :as modid]
-            [my-mod.util.log :as log])
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.inventory MenuType]
            [net.minecraft.resources ResourceLocation]
            [net.fabricmc.fabric.api.screenhandler.v1 ScreenHandlerRegistry]))

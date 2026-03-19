@@ -49,8 +49,8 @@ cd ..
 ### GUI DSL
 
 ```clojure
-(ns my-mod.my-gui
-  (:require [my-mod.gui.dsl :as dsl]))
+(ns cn.li.mcmod.my-gui
+  (:require [cn.li.mcmod.gui.dsl :as dsl]))
 
 (defonce my-slots (atom {}))
 
@@ -115,12 +115,12 @@ cd ..
   - `my-mod.core`: Init hook and game logic
   - `my-mod.registry`: Multimethod registry abstraction
   - `my-mod.blocks/items`: Factory functions and definitions
-  - `my-mod.gui.api/core`: GUI abstractions and handlers
-  - `my-mod.gui.dsl`: 🎨 声明式 GUI DSL 系统
-  - `my-mod.gui.renderer`: 跨版本渲染抽象
-  - `my-mod.gui.container`: 容器/菜单管理
-  - `my-mod.gui.network`: 网络通信抽象
-  - `my-mod.gui.demo`: 示例 GUI（demo、crafting、furnace、storage）
+  - `cn.li.mcmod.gui.api/core`: GUI abstractions and handlers
+  - `cn.li.mcmod.gui.dsl`: 🎨 声明式 GUI DSL 系统
+  - `cn.li.mcmod.gui.renderer`: 跨版本渲染抽象
+  - `cn.li.mcmod.gui.container`: 容器/菜单管理
+  - `cn.li.mcmod.gui.network`: 网络通信抽象
+  - `cn.li.mcmod.gui.demo`: 示例 GUI（demo、crafting、furnace、storage）
   - `my-mod.block.dsl`: 🎨 声明式 Block DSL 系统
   - `my-mod.block.demo`: 示例方块（16+ 种不同类型）
   - `my-mod.item.dsl`: 🎨 声明式 Item DSL 系统

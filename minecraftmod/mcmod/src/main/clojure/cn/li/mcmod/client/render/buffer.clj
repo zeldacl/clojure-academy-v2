@@ -1,4 +1,4 @@
-(ns my-mod.client.render.buffer
+(ns cn.li.mcmod.client.render.buffer
   "Platform-neutral render buffer API for model rendering.
 
   Platform adapters register two functions during platform init:

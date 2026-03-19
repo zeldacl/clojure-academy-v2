@@ -1,4 +1,4 @@
-(ns my-mod.util.log)
+(ns cn.li.mcmod.util.log)
 
 (defn info [& xs]
   (locking System/out

@@ -1,4 +1,4 @@
-(ns my-mod.block.wireless-node
+(ns cn.li.ac.block.wireless-node
   "Wireless Node block implementation - energy network node with item charging.
 
   State model (Design-3):

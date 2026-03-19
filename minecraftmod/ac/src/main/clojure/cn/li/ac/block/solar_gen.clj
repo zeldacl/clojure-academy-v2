@@ -1,4 +1,4 @@
-(ns my-mod.block.solar-gen
+(ns cn.li.ac.block.solar-gen
   "Solar Generator block (ported from AcademyCraft).
 
   Uses generic ScriptedBlockEntity; tick and NBT logic are registered in this

@@ -1,9 +1,9 @@
-(ns my-mod.client.render.tesr-api
+(ns cn.li.mcmod.client.render.tesr-api
   "Universal TileEntity Special Renderer API
   
   Provides a platform-agnostic interface for block entity rendering.
   Platform-specific TESR implementations dispatch to these methods."
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; TileEntity Rendering Protocol

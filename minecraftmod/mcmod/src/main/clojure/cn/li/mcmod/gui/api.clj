@@ -1,4 +1,4 @@
-(ns my-mod.gui.api
+(ns cn.li.mcmod.gui.api
   "Abstract GUI API using multimethods")
 
 (def ^:dynamic *forge-version* nil)

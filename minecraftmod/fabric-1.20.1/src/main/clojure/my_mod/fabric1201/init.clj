@@ -1,11 +1,11 @@
-(ns my-mod.fabric1201.init
+(ns cn.li.fabric1201.init
   "Fabric 1.20.1 initialization - sets version for multimethod dispatch"
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 (defn set-version! []
   "Set the Fabric version for multimethod dispatch"
-  (alter-var-root #'my-mod.registry/*forge-version* (constantly :fabric-1.20.1))
-  (alter-var-root #'my-mod.gui.api/*forge-version* (constantly :fabric-1.20.1))
+  (alter-var-root #'cn.li.mcmod.registry/*forge-version* (constantly :fabric-1.20.1))
+  (alter-var-root #'cn.li.mcmod.gui.api/*forge-version* (constantly :fabric-1.20.1))
   (log/info "Set version to :fabric-1.20.1"))
 
 (defn init-from-java []

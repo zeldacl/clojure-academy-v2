@@ -1,4 +1,4 @@
-(ns my-mod.block.node-schema
+(ns cn.li.ac.block.node-schema
   "Wireless node type specifications and state schema.
 
   Extracted into a standalone namespace so that my-mod.block.wireless-node

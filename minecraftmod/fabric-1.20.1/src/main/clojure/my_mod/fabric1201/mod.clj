@@ -1,20 +1,21 @@
-(ns my-mod.fabric1201.mod
-  "Fabric 1.20.1 main mod initialization"
-  (:require [my-mod.core :as core]
-            [my-mod.fabric1201.init :as init]
-            [my-mod.fabric1201.datagen.setup :as datagen]
-            [my-mod.fabric1201.registry :as registry]
-            [my-mod.fabric1201.events :as events]
-            [my-mod.fabric1201.gui.impl :as gui]
-            [my-mod.fabric1201.gui.init :as gui-init]
-            [my-mod.fabric1201.platform-impl :as platform-impl]
-            [my-mod.block.dsl :as bdsl]
-            [my-mod.block.tile-logic :as tile-logic]
-            [my-mod.fabric1201.blockstate-properties :as bsp]
-            [my-mod.item.dsl :as idsl]
-            [my-mod.registry.metadata :as registry-metadata]
-            [my-mod.config.modid :as modid]
-            [my-mod.util.log :as log])
+ 
+  (ns cn.li.fabric1201.mod
+    (:require [cn.li.mcmod.core :as core]
+              [cn.li.fabric1201.init :as init]
+              [cn.li.fabric1201.datagen.setup :as datagen]
+              [cn.li.fabric1201.registry :as registry]
+              [cn.li.fabric1201.events :as events]
+              [cn.li.fabric1201.gui.impl :as gui]
+              [cn.li.fabric1201.gui.init :as gui-init]
+              [cn.li.fabric1201.gui.registry-impl :as gui-registry-impl]
+              [cn.li.fabric1201.platform-impl :as platform-impl]
+              [cn.li.mcmod.block.dsl :as bdsl]
+              [cn.li.mcmod.block.tile-logic :as tile-logic]
+              [cn.li.fabric1201.blockstate-properties :as bsp]
+              [cn.li.mcmod.item.dsl :as idsl]
+              [cn.li.mcmod.registry.metadata :as registry-metadata]
+              [cn.li.mcmod.config.modid :as modid]
+              [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core Registry]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]

@@ -1,4 +1,4 @@
-(ns my-mod.energy.operations
+(ns cn.li.ac.energy.operations
   "Energy operations - 物品/节点/接收器的充放电与无线传输
 
   实现并统一对外提供：
@@ -7,13 +7,13 @@
   - IFReceiverManager：接收器能量（inject/pull）
   - 无线网络：获取网络、连接状态、无线传输（含 fallback stub）
   - 网络同步：send-sync-message（当前为 stub 实现）"
-  (:require [my-mod.util.log :as log]
-            [my-mod.energy.imag-energy-item :as energy-item]
-            [my-mod.item.test-battery :as battery]
-            [my-mod.platform.item :as item]
-            [my-mod.platform.nbt :as nbt]
-            [my-mod.wireless.interfaces :as winterfaces]
-            [my-mod.wireless.helper :as whelper]))
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.energy.imag-energy-item :as energy-item]
+            [cn.li.ac.item.test-battery :as battery]
+            [cn.li.mcmod.platform.item :as item]
+            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.ac.wireless.interfaces :as winterfaces]
+            [cn.li.ac.wireless.helper :as whelper]))
 
 ;; ============================================================================
 ;; IFItemManager Implementation

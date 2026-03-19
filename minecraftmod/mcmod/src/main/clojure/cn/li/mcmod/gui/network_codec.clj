@@ -1,4 +1,4 @@
-(ns my-mod.gui.network-codec
+(ns cn.li.mcmod.gui.network-codec
   "Shared network packet encoding/decoding utilities for GUI packets.
   
   Provides platform-agnostic encoding/decoding logic. Platform layers wrap these

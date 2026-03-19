@@ -1,4 +1,4 @@
-(ns my-mod.platform.entity
+(ns cn.li.mcmod.platform.entity
   "Platform-neutral entity utilities."
   (:import [net.minecraft.world.entity Entity]
            [net.minecraft.world.entity.player Player Inventory]

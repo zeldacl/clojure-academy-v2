@@ -1,12 +1,12 @@
-(ns my-mod.gui.dsl
+(ns cn.li.mcmod.gui.dsl
   "GUI DSL - Declarative GUI definition using Clojure macros
   
   Supports both:
   - legacy \"generic\" GUI specs (string :id, slots/buttons/labels, XML layout)
   - wireless GUI metadata + runtime hooks (int :gui-id, registry/screen/container/sync metadata)"
   (:require [clojure.string :as str]
-            [my-mod.util.log :as log]
-            [my-mod.platform.item :as item]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.item :as item]))
 
 ;; GUI Registry - stores all defined GUIs
 (defonce ^{:doc "Registry for GUI specs.
@@ -271,10 +271,10 @@ Structure:
         xml-layout (:xml-layout options-map)
         gui-id (name gui-name)]
     `(def ~gui-name
-       (let [xml-parser# (requiring-resolve 'my-mod.gui.xml-parser/load-gui-from-xml)
-             base-spec# (xml-parser# ~gui-id ~xml-layout)
-             merged-spec# (merge base-spec# ~(dissoc options-map :xml-layout))]
-         (register-gui! (create-gui-spec (:id base-spec#) merged-spec#))))))
+       (let [xml-parser# (requiring-resolve 'cn.li.mcmod.gui.xml-parser/load-gui-from-xml)
+         base-spec# (xml-parser# ~gui-id ~xml-layout)
+         merged-spec# (merge base-spec# ~(dissoc options-map :xml-layout))]
+       (register-gui! (create-gui-spec (:id base-spec#) merged-spec#))))))
 
 ;; Helper: create slot handler that updates atom
 (defn slot-change-handler [slots-atom slot-index]

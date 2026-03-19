@@ -1,7 +1,7 @@
-(ns my-mod.gui.container
+(ns cn.li.mcmod.gui.container
   "GUI container/menu abstraction - manages server-side GUI state"
-  (:require [my-mod.util.log :as log]
-            [my-mod.gui.dsl :as dsl]))
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.gui.dsl :as dsl]))
 
 ;; Multimethod for version-specific container operations
 (def ^:dynamic *forge-version* nil)

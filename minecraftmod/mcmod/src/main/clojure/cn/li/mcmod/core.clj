@@ -1,6 +1,6 @@
 
-(ns my-mod.core
-  (:import [my_mod IPlatform]))
+(ns cn.li.mcmod.core
+  (:import [cn.li.mcmod IPlatform]))
 
 ;; 这个变量将在具体版本（如 forge-1.20.1）的入口处被初始化
 (def ^:dynamic ^IPlatform *api* nil)

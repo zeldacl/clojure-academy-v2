@@ -1,6 +1,6 @@
-(ns my-mod.gui.core
+(ns cn.li.mcmod.gui.core
   "Core GUI logic - button handlers and slot management"
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 ;; GUI state atom (per-player, per-GUI instance in practice)
 (defonce gui-slots (atom {}))

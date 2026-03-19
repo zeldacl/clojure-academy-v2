@@ -1,10 +1,10 @@
-(ns my-mod.client.obj
+(ns cn.li.mcmod.client.obj
   "Pure Clojure OBJ parser and legacy-style renderer.
 
   Replaces cn.lambdalib2.render.obj runtime dependency with data-first API."
   (:require [clojure.string :as str]
             [clojure.java.io :as io]
-            [my-mod.util.render :as render]))
+            [cn.li.mcmod.util.render :as render]))
 
 (defn- parse-float [s]
   (Double/parseDouble (str s)))

@@ -1,6 +1,6 @@
-(ns my-mod.gui.renderer
+(ns cn.li.mcmod.gui.renderer
   "GUI rendering abstraction for version-specific implementations"
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 ;; Multimethod for version-specific GUI rendering
 (def ^:dynamic *forge-version* nil)
@@ -83,9 +83,6 @@
     (render-gui-labels render-ctx gui-spec left-pos top-pos)
     
     ;; Render buttons
-    (render-gui-buttons render-ctx gui-instance left-pos top-pos mouse-x mouse-y)
-    
-    ;; Render tooltips
     (render-gui-tooltips render-ctx gui-instance mouse-x mouse-y)))
 
 ;; Button hit testing

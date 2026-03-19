@@ -1,10 +1,10 @@
-(ns my-mod.gui.cgui-document
+(ns cn.li.mcmod.gui.cgui-document
   "Pure Clojure XML document loader for CGUI-like layouts."
   (:require [clojure.xml :as xml]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [my-mod.gui.cgui :as cgui]
-            [my-mod.gui.components :as comp]))
+            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.components :as comp]))
 
 (defn- parse-float [s default]
   (try (Float/parseFloat (str/trim (str s))) (catch Exception _ default)))

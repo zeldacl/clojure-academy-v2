@@ -1,4 +1,4 @@
-(ns my-mod.events.metadata
+(ns cn.li.mcmod.events.metadata
   "Event metadata system - maps blocks to their event handlers.
   
   This module provides a metadata-driven event handling system, ensuring
@@ -9,8 +9,8 @@
   - Game logic (block definitions) registers event handlers here
   - Platform code queries this module to dispatch events
   - Adding new blocks with events requires zero platform code changes"
-  (:require [my-mod.block.dsl :as bdsl]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; Event Handler Registry
 ;; ============================================================

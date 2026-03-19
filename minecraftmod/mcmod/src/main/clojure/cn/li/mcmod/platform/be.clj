@@ -1,4 +1,4 @@
-(ns my-mod.platform.be
+(ns cn.li.mcmod.platform.be
   "Platform-neutral utilities for interacting with ScriptedBlockEntity.
 
   ac code should use these functions instead of calling Java interop directly.

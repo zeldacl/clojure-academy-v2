@@ -1,10 +1,10 @@
 (ns cn.li.forge1201.events
   "Forge 1.20.1 event handlers"
-  (:require [my-mod.core :as core]
-            [my-mod.util.log :as log]
-            [my-mod.events.metadata :as event-metadata]
-            [my-mod.forge1201.gui.registry-impl :as gui-registry-impl]
-            [my-mod.events.world-lifecycle :as world-lifecycle])
+  (:require [cn.li.mcmod.core :as core]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.events.metadata :as event-metadata]
+            [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
+            [cn.li.mcmod.events.world-lifecycle :as world-lifecycle])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
             BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))

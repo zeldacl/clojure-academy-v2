@@ -1,7 +1,7 @@
-(ns my-mod.network.client
+(ns cn.li.mcmod.network.client
   "Client-side RPC request/response support for GUI/network logic"
-  (:require [my-mod.gui.api :as gui-api]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.gui.api :as gui-api]
+            [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private request-counter (atom 0))
 (defonce ^:private pending-requests (atom {}))

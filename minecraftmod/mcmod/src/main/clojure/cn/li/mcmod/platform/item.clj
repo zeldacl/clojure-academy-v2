@@ -1,4 +1,4 @@
-(ns my-mod.platform.item
+(ns cn.li.mcmod.platform.item
   "Platform-agnostic ItemStack abstraction layer.
   
   Supports Forge 1.20.1 and Fabric 1.20.1 modern APIs.

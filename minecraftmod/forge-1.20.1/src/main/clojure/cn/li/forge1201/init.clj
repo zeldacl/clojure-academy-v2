@@ -2,7 +2,7 @@
   "Forge 1.20.1 initialization and version-specific implementations"
   (:require [my-mod.core :as core]
             [my-mod.registry :as reg]
-            [my-mod.gui.api :as gui-api]
+            [cn.li.mcmod.gui.api :as gui-api]
             [my-mod.util.log :as log]))
 
 (defn set-version!

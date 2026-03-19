@@ -1,10 +1,10 @@
-(ns my-mod.nbt.dsl
+(ns cn.li.mcmod.nbt.dsl
   "NBT DSL - Declarative NBT serialization using Clojure macros
   
   Provides a clean, declarative way to define NBT read/write operations
   for tile entities and other game objects."
-  (:require [my-mod.util.log :as log]
-            [my-mod.platform.nbt :as nbt]))
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.nbt :as nbt]))
 
 ;; ============================================================================
 ;; Type Converters
@@ -339,8 +339,8 @@
       :create create-world-data
       :lists [{:tag \"items\"
                :atom :items
-               :to-nbt my-mod.data/item-to-nbt
-               :from-nbt my-mod.data/item-from-nbt
+               :to-nbt cn.li.mcmod.data/item-to-nbt
+               :from-nbt cn.li.mcmod.data/item-from-nbt
                :skip? (fn [item] (:deleted item))
                :rebuild {:lookup-atom :item-lookup
                          :direct-keys [:id :name]

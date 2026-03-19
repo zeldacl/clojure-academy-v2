@@ -1,4 +1,4 @@
-(ns my-mod.item.dsl
+(ns cn.li.mcmod.item.dsl
   "Item DSL - Declarative item definition using Clojure macros"
   (:require [my-mod.util.log :as log]))
 

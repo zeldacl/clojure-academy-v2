@@ -1,4 +1,4 @@
-(ns my-mod.block.wireless-matrix
+(ns cn.li.ac.block.wireless-matrix
   "Wireless Matrix block implementation - 2x2x2 multiblock structure.
 
   State model (Design-3):

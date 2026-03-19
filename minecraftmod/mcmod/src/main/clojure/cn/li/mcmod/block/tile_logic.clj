@@ -1,9 +1,9 @@
-(ns my-mod.block.tile-logic
+(ns cn.li.mcmod.block.tile-logic
   "Registry and dispatch for scripted block entity logic.
 
   Supports both block-id direct registration and reusable tile-kind registration.
   ScriptedBlockEntity calls into this namespace for tick/load/save/capability/container hooks."
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 (defonce tile-logic-registry (atom {}))
 (defonce tile-kind-registry (atom {}))
@@ -141,9 +141,9 @@
   [tile-id cap-key be side]
   (when (get-in @capability-registry [tile-id cap-key])
     (try
-      (let [get-factory (requiring-resolve 'my-mod.platform.capability/get-handler-factory)
-            factory     (when get-factory (get-factory cap-key))]
-        (when factory (factory be side)))
+    (let [get-factory (requiring-resolve 'cn.li.mcmod.platform.capability/get-handler-factory)
+      factory     (when get-factory (get-factory cap-key))]
+      (when factory (factory be side)))
       (catch Exception e
         (log/error "get-capability error" tile-id cap-key (.getMessage e))
         nil))))

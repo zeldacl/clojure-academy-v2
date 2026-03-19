@@ -1,4 +1,4 @@
-(ns my-mod.registry.metadata
+(ns cn.li.mcmod.registry.metadata
   "Registry metadata system - single source of truth for block/item registration.
   
   This module provides metadata-driven registration, ensuring platform code
@@ -10,10 +10,10 @@
   - This module queries DSL systems for available blocks/items
   - Game logic remains in core, platform code remains generic"
   (:require [clojure.string :as str]
-            [my-mod.block.dsl :as bdsl]
-            [my-mod.block.tile-dsl :as tdsl]
-            [my-mod.gui.dsl :as gui-dsl]
-            [my-mod.item.dsl :as idsl]))
+            [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.block.tile-dsl :as tdsl]
+            [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.mcmod.item.dsl :as idsl]))
 
 ;; Block Registration Metadata
 ;; ============================================================

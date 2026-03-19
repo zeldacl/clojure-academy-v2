@@ -1,4 +1,4 @@
-(ns my-mod.block.state-schema
+(ns cn.li.mcmod.block.state-schema
   "Generic BlockEntity state schema framework.
 
   A state schema is a vector of FieldSpec maps. Each FieldSpec describes one
@@ -23,7 +23,7 @@
                                 when nil raw value is used as-is
     :load-fn          fn?       override for load: (fn [tag nbt-key default] -> val)
     :save-fn          fn?       override for save: (fn [state tag nbt-key]   -> nil)"
-  (:require [my-mod.platform.world :as platform-world])
+  (:require [cn.li.mcmod.platform.world :as platform-world])
   (:import [net.minecraft.nbt CompoundTag]
            [net.minecraft.world.level.block.state BlockState]
            [net.minecraft.world.level.block Block]

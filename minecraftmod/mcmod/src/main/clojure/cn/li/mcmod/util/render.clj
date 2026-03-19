@@ -1,6 +1,6 @@
-(ns my-mod.util.render
+(ns cn.li.mcmod.util.render
   "Rendering utilities - OpenGL and texture helpers"
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private gl11-class (delay (Class/forName "org.lwjgl.opengl.GL11")))
 (defonce ^:private texture-binder* (atom nil))

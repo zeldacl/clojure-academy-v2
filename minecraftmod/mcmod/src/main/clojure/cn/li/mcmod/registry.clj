@@ -1,4 +1,4 @@
-(ns my-mod.registry)
+(ns cn.li.mcmod.registry)
 
 ;; 1. 定义一个简单的原子，存放待注册的条目
 (def blocks (atom []))

@@ -1,12 +1,12 @@
-(ns my-mod.block.tile-dsl
+(ns cn.li.mcmod.block.tile-dsl
   "Tile/BlockEntity DSL - declarative BlockEntityType metadata and lifecycle hooks.
 
   Goals:
   - Allow defining a single tile type bound to multiple blocks.
   - Keep core platform-neutral: stores metadata only; platforms query via registry metadata."
   (:require [clojure.string :as str]
-            [my-mod.block.tile-logic :as tile-logic]
-            [my-mod.util.log :as log]))
+            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.util.log :as log]))
 
 (defonce ^{:doc "Registry of tile specs.
 

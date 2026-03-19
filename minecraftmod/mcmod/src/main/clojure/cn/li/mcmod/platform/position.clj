@@ -1,4 +1,4 @@
-(ns my-mod.platform.position
+(ns cn.li.mcmod.platform.position
   "Platform-agnostic position abstraction layer.
   
   This namespace provides protocols and factory functions for block positions

@@ -1,9 +1,9 @@
-(ns my-mod.energy.imag-energy-item
+ (ns cn.li.ac.energy.imag-energy-item
   "ImagEnergyItem protocol - Clojure version of Java interface
   
   Defines the contract for items that can store and transfer energy.
   Used by IFItemManager for energy operations."
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; ImagEnergyItem Protocol

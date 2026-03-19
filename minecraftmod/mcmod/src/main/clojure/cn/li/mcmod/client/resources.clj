@@ -1,4 +1,4 @@
-(ns my-mod.client.resources
+(ns cn.li.mcmod.client.resources
   "Client-side resource loading utilities for models and textures"
   (:require [my-mod.platform.resource :as res]
             [my-mod.client.obj :as obj]))

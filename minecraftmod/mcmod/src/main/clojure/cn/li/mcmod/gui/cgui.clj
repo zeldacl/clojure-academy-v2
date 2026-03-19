@@ -1,4 +1,4 @@
-(ns my-mod.gui.cgui
+(ns cn.li.mcmod.gui.cgui
   "Pure Clojure CGui model and operations."
   (:require [clojure.string :as str]))
 

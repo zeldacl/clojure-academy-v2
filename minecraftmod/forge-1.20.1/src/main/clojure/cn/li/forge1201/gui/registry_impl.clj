@@ -3,12 +3,12 @@
 
   Platform-agnostic design: Uses metadata-driven approach.
 
-  IMPORTANT: Only imports from my-mod.gui.platform-adapter, not directly
+  IMPORTANT: Only imports from cn.li.mcmod.gui.platform-adapter, not directly
   from my-mod.wireless.gui.* modules (per platform adapter contract)."
-  (:require [my-mod.gui.platform-adapter :as gui]
+  (:require [cn.li.mcmod.gui.platform-adapter :as gui]
             [my-mod.forge1201.gui.bridge :as bridge]
             [my-mod.config.modid :as modid]
-            [my-mod.util.log :as log])
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.network NetworkHooks IContainerFactory]
            [net.minecraftforge.common.extensions IForgeMenuType]
            [net.minecraftforge.registries DeferredRegister]

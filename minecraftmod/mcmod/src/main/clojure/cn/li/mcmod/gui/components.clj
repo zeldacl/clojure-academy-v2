@@ -1,9 +1,9 @@
-(ns my-mod.gui.components
+(ns cn.li.mcmod.gui.components
   "Pure Clojure component API inspired by Java references."
   (:require [clojure.string :as str]
-            [my-mod.gui.cgui :as cgui]
-            [my-mod.gui.events :as events]
-            [my-mod.platform.resource :as res]))
+            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.events :as events]
+            [cn.li.mcmod.platform.resource :as res]))
 
 (defn- ensure-resource-location
   [texture-path]

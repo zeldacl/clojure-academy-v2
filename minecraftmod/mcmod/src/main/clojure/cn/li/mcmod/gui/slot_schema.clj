@@ -1,9 +1,9 @@
-(ns my-mod.gui.slot-schema
+(ns cn.li.mcmod.gui.slot-schema
   "Slot schema DSL and query API.
 
   A slot schema is the single source of truth for a GUI's tile slots.
   Slot indexes, ranges, and layout metadata are derived from declaration order."
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 (defonce ^{:doc "Registered slot schemas by schema-id keyword."}
   slot-schema-registry

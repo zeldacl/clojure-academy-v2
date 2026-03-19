@@ -1,4 +1,4 @@
-(ns my-mod.block.matrix-schema
+(ns cn.li.ac.block.matrix-schema
   "Wireless Matrix state schema.
 
   This is the *single point of definition* for all matrix state fields.

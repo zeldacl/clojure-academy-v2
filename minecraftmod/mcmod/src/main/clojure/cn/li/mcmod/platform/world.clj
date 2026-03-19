@@ -1,4 +1,4 @@
-(ns my-mod.platform.world
+(ns cn.li.mcmod.platform.world
   "Platform-agnostic world access abstraction layer.
   
   This namespace provides protocols for world/level operations without

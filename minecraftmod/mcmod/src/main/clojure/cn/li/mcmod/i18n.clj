@@ -1,4 +1,4 @@
-(ns my-mod.i18n
+(ns cn.li.mcmod.i18n
   "Platform-neutral i18n entrypoint.
 
   - `ac` / `mcmod` code should depend on THIS namespace only.

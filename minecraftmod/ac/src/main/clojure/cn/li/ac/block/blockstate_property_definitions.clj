@@ -1,4 +1,4 @@
-(ns my-mod.block.blockstate-property-definitions
+(ns cn.li.ac.block.blockstate-property-definitions
   "BlockState property definitions only (platform-neutral, no engine package imports).
 
   Provides definition/query API for block state properties. Forge/Fabric

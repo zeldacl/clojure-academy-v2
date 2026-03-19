@@ -1,8 +1,8 @@
-(ns my-mod.block.wireless-node-test
+(ns cn.li.ac.block.wireless-node-test
   "Unit tests for Wireless Node implementation"
-  (:require [my-mod.block.wireless-node :as wnode]
-            [my-mod.energy.operations :as energy]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.ac.block.wireless-node :as wnode]
+            [cn.li.ac.energy.operations :as energy]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; Test node creation
 (defn test-node-creation []

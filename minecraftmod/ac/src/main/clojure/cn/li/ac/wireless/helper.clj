@@ -1,4 +1,4 @@
-(ns my-mod.wireless.helper
+(ns cn.li.ac.wireless.helper
   "Wireless system helper functions
 
   Provides utility functions for querying the wireless system:
@@ -6,13 +6,13 @@
   - Node connection lookups
   - Range searches
   - Link status checks"
-  (:require [my-mod.wireless.world-data :as wd]
-            [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.wireless.network :as network]
-            [my-mod.wireless.node-connection :as node-conn]
-            [my-mod.platform.be :as platform-be]
-            [my-mod.platform.position :as pos]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.ac.wireless.world-data :as wd]
+            [cn.li.ac.wireless.virtual-blocks :as vb]
+            [cn.li.ac.wireless.network :as network]
+            [cn.li.ac.wireless.node-connection :as node-conn]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Network Queries

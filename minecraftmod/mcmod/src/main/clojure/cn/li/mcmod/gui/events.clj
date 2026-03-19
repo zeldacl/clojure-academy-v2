@@ -1,6 +1,6 @@
-(ns my-mod.gui.events
+(ns cn.li.mcmod.gui.events
   "LambdaLib2 GuiEventBus wrapper - Event handling DSL"
-  (:require [my-mod.gui.cgui :as cgui]))
+  (:require [cn.li.mcmod.gui.cgui :as cgui]))
 
 ;; ============================================================================
 ;; Event Listener Registration

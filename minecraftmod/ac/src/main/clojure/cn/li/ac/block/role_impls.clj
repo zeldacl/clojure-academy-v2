@@ -1,4 +1,4 @@
-(ns my-mod.block.role-impls
+(ns cn.li.ac.block.role-impls
   "Clojure deftype implementations of mcmod Java interfaces.
 
   Each deftype wraps a ScriptedBlockEntity and delegates to its customState map.

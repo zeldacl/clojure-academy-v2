@@ -1,4 +1,4 @@
-(ns my-mod.wireless.virtual-blocks
+ (ns cn.li.ac.wireless.virtual-blocks
   "Virtual block reference system for wireless network.
 
   Provides position-based TileEntity references that:
@@ -10,13 +10,13 @@
   Type checking (Design-3):
   - For Clojure state maps: use :node-type / :placer-name keys
   - For Java ScriptedBlockEntity: use getCapability().isPresent() via CapabilitySlots"
-  (:require [my-mod.util.log :as log]
-            [my-mod.wireless.interfaces :as interfaces]
-            [my-mod.platform.nbt :as nbt]
-            [my-mod.platform.position :as pos]
-            [my-mod.platform.capability :as platform-cap]
-            [my-mod.platform.position :as pos]
-            [my-mod.platform.world :as world]))
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.wireless.interfaces :as interfaces]
+            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.capability :as platform-cap]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]))
 
 ;; ============================================================================
 ;; VBlock Record
@@ -100,7 +100,7 @@
   Works with Forge (CapabilitySlots) and falls back to Clojure protocol check."
   [tile cap-key]
   (try
-    (let [cap-slots (requiring-resolve 'my-mod.platform.be/get-capability-slot)]
+    (let [cap-slots (requiring-resolve 'cn.li.mcmod.platform.be/get-capability-slot)]
       (when cap-slots
         (let [cap (cap-slots cap-key)]
           (when cap

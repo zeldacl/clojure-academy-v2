@@ -12,7 +12,7 @@
 
 ## 核心模块
 
-### 1. `my-mod.gui.dsl` — DSL 核心
+### 1. `cn.li.mcmod.gui.dsl` — DSL 核心
 
 - **defgui**：声明式 GUI 定义（title、width、height、slots、buttons、labels）。
 - **GuiSpec / SlotSpec / ButtonSpec / LabelSpec**：数据结构。
@@ -42,17 +42,17 @@
 
 **Slot**：`{:index :x :y :filter :on-change}`；**Button**：`{:id :x :y :width :height :text :on-click}`；**Label**：`{:x :y :text :color}`。
 
-### 2. `my-mod.gui.renderer` — 渲染抽象
+### 2. `cn.li.mcmod.gui.renderer` — 渲染抽象
 
 - **IRenderContext** 与 multimethod**：render-gui-background、render-gui-slots、render-gui-buttons、render-gui-labels、render-gui-tooltips；find-clicked-button、find-clicked-slot。
 - 平台实现通过实现对应 multimethod 完成。
 
-### 3. `my-mod.gui.container` — 容器管理
+### 3. `cn.li.mcmod.gui.container` — 容器管理
 
 - 容器创建/注册/获取；槽位 get/set/clear；handle-button-click。
 - create-platform-container、open-gui-container 等 multimethod。
 
-### 4. `my-mod.gui.network` — 网络抽象
+### 4. `cn.li.mcmod.gui.network` — 网络抽象
 
 - Packet 与 button-click / slot-change / open-gui 等包；send-to-server / send-to-client；register-packet-handlers。
 
@@ -83,4 +83,4 @@
 - 详见 `05-wireless/Node_GUI.md`、`05-wireless/Matrix_GUI.md`。
 
 **更新（当前架构）**：
-- Wireless GUI 的“元数据源”已统一到 `my-mod.gui.dsl` 的 registry；`my-mod.wireless.gui.gui-metadata` 仅保留查询与平台 MenuType 存储，不再需要手工维护中心映射表。
+- Wireless GUI 的“元数据源”已统一到 `cn.li.mcmod.gui.dsl` 的 registry；`my-mod.wireless.gui.gui-metadata` 仅保留查询与平台 MenuType 存储，不再需要手工维护中心映射表。

@@ -1,4 +1,4 @@
-(ns my-mod.platform.resource
+(ns cn.li.mcmod.platform.resource
   "Platform-agnostic resource identifier abstraction.
 
   Core code uses this namespace to create Minecraft resource identifiers

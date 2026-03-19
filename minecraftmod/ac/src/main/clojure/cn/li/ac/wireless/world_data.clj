@@ -1,4 +1,4 @@
-(ns my-mod.wireless.world-data
+ (ns cn.li.ac.wireless.world-data
   "World-level wireless network data management
 
   Manages all wireless networks and node connections for a world:
@@ -6,10 +6,10 @@
   - Lookup tables for fast queries
   - Persistence (NBT serialization)
   - Tick coordination"
-  (:require [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.util.log :as log]
-            [my-mod.wireless.world-schema :as ws]
-            [my-mod.events.world-lifecycle :as world-lifecycle]))
+  (:require [cn.li.ac.wireless.virtual-blocks :as vb]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.wireless.world-schema :as ws]
+            [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]))
 
 ;; ============================================================================
 ;; WiWorldData Record

@@ -1,12 +1,12 @@
-(ns my-mod.wireless.world-schema
+(ns cn.li.ac.wireless.world-schema
   "Unified schema for world-data collections.
   
   This namespace defines the schema and macros to generate world-data
   operations (create/destroy, validate, tick, and NBT read/write)."
-  (:require [my-mod.nbt.dsl :as nbt-dsl]
-            [my-mod.platform.nbt :as nbt]
-            [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.nbt.dsl :as nbt-dsl]
+            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.ac.wireless.virtual-blocks :as vb]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn- resolve-var-value
   "Resolve symbol to var value, auto-loading namespaces when needed."

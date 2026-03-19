@@ -1,6 +1,6 @@
-(ns my-mod.gui.network
+(ns cn.li.mcmod.gui.network
   "Network packet abstraction for GUI communication"
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 ;; Multimethod for version-specific networking
 (def ^:dynamic *forge-version* nil)
@@ -82,16 +82,16 @@
 (defn default-button-click-handler [data player]
   (log/info "Button click from player" player ":" data)
   (let [{:keys [container-id button-id]} data]
-    (when-let [container (my-mod.gui.container/get-container container-id)]
-      (when (my-mod.gui.container/validate-container container player)
-        (my-mod.gui.container/handle-button-click! container button-id)))))
+    (when-let [container (cn.li.mcmod.gui.container/get-container container-id)]
+      (when (cn.li.mcmod.gui.container/validate-container container player)
+        (cn.li.mcmod.gui.container/handle-button-click! container button-id)))}))
 
 (defn default-slot-change-handler [data player]
   (log/info "Slot change from player" player ":" data)
   (let [{:keys [container-id slot-index item-stack]} data]
-    (when-let [container (my-mod.gui.container/get-container container-id)]
-      (when (my-mod.gui.container/validate-container container player)
-        (my-mod.gui.container/set-slot-item! container slot-index item-stack)))))
+    (when-let [container (cn.li.mcmod.gui.container/get-container container-id)]
+      (when (cn.li.mcmod.gui.container/validate-container container player)
+        (cn.li.mcmod.gui.container/set-slot-item! container slot-index item-stack)))))
 
 ;; Initialize default handlers
 (defn init-default-handlers! []

@@ -1,4 +1,4 @@
-(ns my-mod.client.render.pose
+ (ns cn.li.mcmod.client.render.pose
   "Platform-neutral pose/rotation API for TESR rendering.
 
   Platform adapters must call `register-y-rotation!` with a function that
@@ -8,7 +8,7 @@
   mcmod code should call `apply-y-rotation` to rotate around the Y axis.
   If no implementation is registered, rotation is skipped and a warning is
   logged."
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 (def ^:dynamic *y-rotation-fn* nil)
 

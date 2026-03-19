@@ -9,16 +9,16 @@
   
   This module must be loaded during mod initialization to register
   platform implementations before any core code runs."
-  (:require [my-mod.platform.nbt :as nbt]
-            [my-mod.platform.position :as pos]
-            [my-mod.platform.world :as world]
-            [my-mod.platform.item :as item]
-            [my-mod.platform.resource :as resource]
-            [my-mod.platform.capability :as platform-cap]
-            [my-mod.platform.be :as platform-be]
-            [my-mod.util.log :as log]
-            [my-mod.client.render.pose :as pose]
-            [my-mod.client.render.buffer :as buffer])
+  (:require [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.platform.item :as item]
+            [cn.li.mcmod.platform.resource :as resource]
+            [cn.li.mcmod.platform.capability :as platform-cap]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.client.render.pose :as pose]
+            [cn.li.mcmod.client.render.buffer :as buffer])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
@@ -26,7 +26,7 @@
            [net.minecraft.world.item ItemStack]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.common.util LazyOptional]
-           [my_mod.capability CapabilitySlots]))
+           [cn.li.mcmod.capability CapabilitySlots]))
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Forge 1.20.1)

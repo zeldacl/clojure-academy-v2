@@ -1,7 +1,7 @@
-(ns my-mod.gui.dsl-test
+(ns cn.li.mcmod.gui.dsl-test
   "Unit tests for GUI DSL"
-  (:require [my-mod.gui.dsl :as dsl]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.gui.dsl :as dsl]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; Test basic GUI definition
 (defn test-basic-gui []

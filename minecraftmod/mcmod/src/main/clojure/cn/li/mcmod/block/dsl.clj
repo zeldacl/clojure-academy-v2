@@ -1,9 +1,9 @@
-(ns my-mod.block.dsl
+(ns cn.li.mcmod.block.dsl
   "Block DSL - Declarative block definition using Clojure macros"
   (:require [clojure.string :as str]
-            [my-mod.util.log :as log]
-            [my-mod.platform.position :as pos]
-            [my-mod.platform.world :as world]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]))
 
 ;; Block Registry - stores all defined blocks
 (defonce block-registry (atom {}))

@@ -1,4 +1,4 @@
-(ns my-mod.item.mat-core
+ (ns cn.li.ac.item.mat-core
   "Matrix Core - main component for Wireless Matrix
   
   Different damage values represent different tiers:
@@ -6,9 +6,9 @@
   - Damage 1: Tier 2 (Improved)
   - Damage 2: Tier 3 (Advanced)
   - Damage 3: Tier 4 (Ultimate)"
-  (:require [my-mod.item.dsl :as idsl]
-            [my-mod.util.log :as log]
-            [my-mod.platform.item :as item]
+  (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.item :as item]
             [clojure.string :as str]))
 
 ;; ============================================================================

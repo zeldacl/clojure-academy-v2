@@ -747,10 +747,10 @@ Block DSL 提供了多个辅助函数来生成常见的不规则形状：
 ### 示例：带 GUI 的工作台
 
 ```clojure
-(ns my-mod.workbench
+(ns cn.li.mcmod.workbench
   (:require [my-mod.block.dsl :as bdsl]
-            [my-mod.gui.demo :as gui-demo]
-            [my-mod.gui.container :as container]))
+            [cn.li.mcmod.gui.demo :as gui-demo]
+            [cn.li.mcmod.gui.container :as container]))
 
 (bdsl/defblock crafting-station
   :material :wood

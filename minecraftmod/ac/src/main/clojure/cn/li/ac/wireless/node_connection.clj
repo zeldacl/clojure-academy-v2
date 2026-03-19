@@ -1,4 +1,4 @@
-(ns my-mod.wireless.node-connection
+(ns cn.li.ac.wireless.node-connection
   "Node Connection management
   
   Manages connections between a node and generators/receivers:
@@ -6,8 +6,8 @@
   - Receiver energy distribution
   - Capacity management
   - Range validation"
-  (:require [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.ac.wireless.virtual-blocks :as vb]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; NodeConn Record
@@ -68,7 +68,7 @@
   "Lookup existing node connection via world-data namespace at runtime.
   Uses requiring-resolve to avoid compile-time circular dependency."
   [world-data vblock]
-  (if-let [lookup-fn (requiring-resolve 'my-mod.wireless.world-data/get-node-connection)]
+  (if-let [lookup-fn (requiring-resolve 'cn.li.ac.wireless.world-data/get-node-connection)]
     (lookup-fn world-data vblock)
     nil))
 
@@ -340,7 +340,7 @@
                  {:name :receivers :type :vblock-list :nbt-key "receivers" :atom? true}
                  {:name :generators :type :vblock-list :nbt-key "generators" :atom? true}]
     :create {:args [node-vblock]
-             :expr '(my-mod.wireless.node-connection/create-node-conn world-data node-vblock)
+         :expr '(cn.li.ac.wireless.node-connection/create-node-conn world-data node-vblock)
              :return 'item
              :return-on-unique-fail false
              :log-create "Created node connection: %s"
@@ -349,14 +349,14 @@
               :log-destroy-key-expr '(:node item)}
     :direct-keys [:node]
     :collection-keys [:generators :receivers]
-    :log-key-fn 'my-mod.wireless.virtual-blocks/vblock-to-string
+    :log-key-fn 'cn.li.ac.wireless.virtual-blocks/vblock-to-string
     :validator {:vblock-key :node
                 :log-label "connections"}
-    :tick {:fn 'my-mod.wireless.node-connection/tick-node-conn!}
+    :tick {:fn 'cn.li.ac.wireless.node-connection/tick-node-conn!}
     :nbt {:tag "connections"
           :atom :connections
-          :to-nbt 'my-mod.wireless.node-connection/conn-to-nbt
-          :from-nbt 'my-mod.wireless.node-connection/conn-from-nbt
+          :to-nbt 'cn.li.ac.wireless.node-connection/conn-to-nbt
+          :from-nbt 'cn.li.ac.wireless.node-connection/conn-from-nbt
           :skip? '(fn [conn] @(:disposed conn))
           :rebuild {:lookup-atom :node-lookup
                     :direct-keys [:node]
@@ -366,7 +366,7 @@
 ;; NBT Serialization
 ;; ============================================================================
 
-(my-mod.wireless.world-schema/defnbt-handlers-from-schema conn-schema)
+(cn.li.ac.wireless.world-schema/defnbt-handlers-from-schema conn-schema)
 
 ;; ============================================================================
 ;; Debug

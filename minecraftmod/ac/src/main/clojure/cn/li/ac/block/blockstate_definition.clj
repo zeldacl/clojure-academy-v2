@@ -1,4 +1,4 @@
-(ns my-mod.block.blockstate-definition
+(ns cn.li.ac.block.blockstate-definition
   "BlockState定义层 - 独立于平台
    
    定义所有block的blockstate结构、属性和model对应关系。

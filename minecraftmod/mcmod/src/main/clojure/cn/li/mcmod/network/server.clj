@@ -1,4 +1,4 @@
-(ns my-mod.network.server
+(ns cn.li.mcmod.network.server
   "Server-side RPC handler registry for GUI/network logic"
   (:require [my-mod.util.log :as log]))
 
