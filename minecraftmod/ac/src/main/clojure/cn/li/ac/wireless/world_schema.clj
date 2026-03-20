@@ -484,8 +484,8 @@
 ;;   - connections (vector) + node-lookup (map: vblock -> connection)
 
 (def world-data-schema
-  '{:collections [my-mod.wireless.network/network-schema
-                  my-mod.wireless.node-connection/conn-schema]
+  '{:collections [cn.li.ac.wireless.network/network-schema
+                  cn.li.ac.wireless.node-connection/conn-schema]
     :tick-name tick-world-data-impl!
     :nbt-write-name world-data-to-nbt-impl
     :nbt-read-name world-data-from-nbt-impl

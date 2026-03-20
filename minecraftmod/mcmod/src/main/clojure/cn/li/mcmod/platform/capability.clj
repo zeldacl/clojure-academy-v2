@@ -4,7 +4,7 @@
   ac code calls declare-capability! to register a capability type and its
   handler factory. forge/fabric platform implementations bind
   *declare-capability-impl* to perform the platform-specific slot assignment."
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Registry

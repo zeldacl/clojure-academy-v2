@@ -74,8 +74,8 @@ cd ..
 ### Block DSL
 
 ```clojure
-(ns my-mod.my-blocks
-  (:require [my-mod.block.dsl :as bdsl]))
+(ns cn.li.my-blocks
+  (:require [cn.li.block.dsl :as bdsl]))
 
 ;; 声明式定义方块
 (bdsl/defblock my-custom-block
@@ -91,8 +91,8 @@ cd ..
 ### Item DSL
 
 ```clojure
-(ns my-mod.my-items
-  (:require [my-mod.item.dsl :as idsl]))
+(ns cn.li.my-items
+  (:require [cn.li.item.dsl :as idsl]))
 
 ;; 声明式定义物品
 (idsl/defitem my-custom-item
@@ -112,30 +112,30 @@ cd ..
 
 ## What's included
 - **core**: Pure Clojure namespaces with multimethod-based abstractions
-  - `my-mod.core`: Init hook and game logic
-  - `my-mod.registry`: Multimethod registry abstraction
-  - `my-mod.blocks/items`: Factory functions and definitions
+  - `cn.li.core`: Init hook and game logic
+  - `cn.li.registry`: Multimethod registry abstraction
+  - `cn.li.blocks/items`: Factory functions and definitions
   - `cn.li.mcmod.gui.api/core`: GUI abstractions and handlers
   - `cn.li.mcmod.gui.dsl`: 🎨 声明式 GUI DSL 系统
   - `cn.li.mcmod.gui.renderer`: 跨版本渲染抽象
   - `cn.li.mcmod.gui.container`: 容器/菜单管理
   - `cn.li.mcmod.gui.network`: 网络通信抽象
   - `cn.li.mcmod.gui.demo`: 示例 GUI（demo、crafting、furnace、storage）
-  - `my-mod.block.dsl`: 🎨 声明式 Block DSL 系统
-  - `my-mod.block.demo`: 示例方块（16+ 种不同类型）
-  - `my-mod.item.dsl`: 🎨 声明式 Item DSL 系统
-  - `my-mod.item.demo`: 示例物品（19+ 种不同类型）
+  - `cn.li.block.dsl`: 🎨 声明式 Block DSL 系统
+  - `cn.li.block.demo`: 示例方块（16+ 种不同类型）
+  - `cn.li.item.dsl`: 🎨 声明式 Item DSL 系统
+  - `cn.li.item.demo`: 示例物品（19+ 种不同类型）
   - Shared assets (models, blockstates using vanilla textures)
   
 - **forge-1.20.1**: Java @Mod entry + Clojure adapters
   - `MyMod1201.java`: Minimal @Mod bridge (20 lines)
-  - `my-mod.forge1201.mod`: Complete Clojure mod implementation
-  - `my-mod.forge1201.*`: Multimethod implementations for 1.20.1 API
+  - `cn.li.forge1201.mod`: Complete Clojure mod implementation
+  - `cn.li.forge1201.*`: Multimethod implementations for 1.20.1 API
 
 - **fabric-1.20.1**: Fabric ModInitializer + Clojure adapters
   - `MyModFabric.java`: Minimal ModInitializer bridge (17 lines)
-  - `my-mod.fabric1201.mod`: Complete Clojure mod implementation
-  - `my-mod.fabric1201.*`: Multimethod implementations for Fabric API
+  - `cn.li.fabric1201.mod`: Complete Clojure mod implementation
+  - `cn.li.fabric1201.*`: Multimethod implementations for Fabric API
 
 ## 文档
 

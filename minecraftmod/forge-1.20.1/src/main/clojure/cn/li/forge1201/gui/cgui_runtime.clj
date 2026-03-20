@@ -5,8 +5,8 @@
     [clojure.java.io :as io]
     [clojure.string :as str]
     [cn.li.mcmod.gui.cgui :as cgui]
-    [my-mod.platform.resource :as res]
-    [my-mod.config.modid :as modid]
+    [cn.li.mcmod.platform.resource :as res]
+    [cn.li.ac.config.modid :as modid]
     [cn.li.mcmod.util.log :as log])
   (:import
     (net.minecraft.client.gui GuiGraphics)

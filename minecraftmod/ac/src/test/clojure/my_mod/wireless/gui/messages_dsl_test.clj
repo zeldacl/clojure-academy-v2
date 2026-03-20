@@ -1,4 +1,4 @@
-(ns cn.li.ac.wireless.gui.messages-dsl-test
+(ns cn.li.wireless.gui.messages-dsl-test
   "Tests for wireless GUI message DSL.
   Covers: naming conventions, uniqueness constraints,
   domain lookups, and catalog-level consistency."

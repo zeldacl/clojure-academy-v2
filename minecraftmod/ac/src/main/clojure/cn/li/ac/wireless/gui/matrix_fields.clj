@@ -1,4 +1,4 @@
-(ns my-mod.wireless.gui.matrix-fields
+(ns cn.li.ac.wireless.gui.matrix-fields
   "Field schema definition for MatrixContainer.
 
   Kept in a separate namespace so both matrix-container and matrix-sync can
@@ -7,7 +7,7 @@
   Note: fields whose values require wm/* computations (is-working, capacity,
   bandwidth, range) start at zero/false and are populated immediately by the
   first sync-to-client! tick, so no wm import is needed here."
-  (:require [my-mod.wireless.gui.container-schema :as schema]))
+  (:require [cn.li.ac.wireless.gui.container-schema :as schema]))
 
 ;; ============================================================================
 ;; Field Schema — single source of truth for all MatrixContainer atom fields

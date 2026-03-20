@@ -1,10 +1,10 @@
-(ns my-mod.item.constraint-plate
+(ns cn.li.ac.item.constraint-plate
   "Constraint Plate - component for Wireless Matrix
 
   Required for Matrix to function (need 3 plates)."
-  (:require [my-mod.item.dsl :as idsl]
-            [my-mod.util.log :as log]
-            [my-mod.platform.item :as item]
+  (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.item :as item]
             [clojure.string :as str]))
 
 ;; ============================================================================

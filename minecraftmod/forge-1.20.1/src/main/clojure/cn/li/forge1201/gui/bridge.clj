@@ -2,10 +2,10 @@
   "Forge 1.20.1 GUI Bridge facade.
 
   Keeps public API stable while delegating concrete bridge logic to:
-  - my-mod.forge1201.gui.menu-bridge
-  - my-mod.forge1201.gui.provider-bridge"
-  (:require [my-mod.forge1201.gui.menu-bridge :as menu-bridge]
-            [my-mod.forge1201.gui.provider-bridge :as provider-bridge]))
+  - cn.li.forge1201.gui.menu-bridge
+  - cn.li.forge1201.gui.provider-bridge"
+  (:require [cn.li.forge1201.gui.menu-bridge :as menu-bridge]
+            [cn.li.forge1201.gui.provider-bridge :as provider-bridge]))
 
 ;; ============================================================================
 ;; Helper Functions

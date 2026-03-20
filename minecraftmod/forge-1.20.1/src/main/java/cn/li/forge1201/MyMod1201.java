@@ -7,7 +7,7 @@ import net.minecraftforge.fml.common.Mod;
 
 /**
  * Minimal Java bridge for @Mod annotation.
- * All logic implemented in my-mod.forge1201.mod Clojure namespace.
+ * All logic implemented in cn.li.forge1201.mod Clojure namespace.
  */
 @Mod(MyMod1201.MODID)
 public class MyMod1201 {
@@ -25,9 +25,9 @@ public class MyMod1201 {
             Var warnVar = clojure.lang.RT.var("clojure.core", "*warn-on-reflection*");
             warnVar.bindRoot(true); 
             IFn require = Clojure.var("clojure.core", "require");
-            require.invoke(Clojure.read("my-mod.forge1201.mod"));
+            require.invoke(Clojure.read("cn.li.forge1201.mod"));
 
-            IFn initFn = Clojure.var("my-mod.forge1201.mod", "mod-init");
+            IFn initFn = Clojure.var("cn.li.forge1201.mod", "mod-init");
             initFn.invoke();
         } catch (Throwable t) {
             System.err.println("Failed to load Clojure mod implementation:");

@@ -1,4 +1,4 @@
-(ns my-mod.fabric1201.gui.menu-bridge
+(ns cn.li.fabric1201.gui.menu-bridge
   "Fabric 1.20.1 menu bridge.
 
   Keeps AbstractContainerMenu gen-class isolated and exposes menu-bridge constructors.

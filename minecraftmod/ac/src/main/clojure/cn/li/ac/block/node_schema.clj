@@ -1,18 +1,18 @@
 (ns cn.li.ac.block.node-schema
   "Wireless node type specifications and state schema.
 
-  Extracted into a standalone namespace so that my-mod.block.wireless-node
-  (content definition) and my-mod.block.role-impls (Java-interface bridge)
+  Extracted into a standalone namespace so that cn.li.ac.block.wireless-node
+  (content definition) and cn.li.ac.block.role-impls (Java-interface bridge)
   can both depend on it without introducing a circular namespace dependency.
 
   This is the *single point of definition* for all node state fields.
   Adding, removing, or renaming a field requires only editing
   node-state-schema below; NBT serialisation, GUI sync payloads, and
   BlockState update logic are all derived automatically via
-  my-mod.block.state-schema."
-  (:require [my-mod.block.state-schema :as schema]
-            [my-mod.platform.nbt :as nbt]
-            [my-mod.platform.item :as item]))
+  cn.li.block.state-schema."
+  (:require [cn.li.mcmod.block.state-schema :as schema]
+            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.item :as item]))
 
 ;; ============================================================================
 ;; Node type specifications

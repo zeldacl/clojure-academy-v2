@@ -1,8 +1,8 @@
-(ns my-mod.gui.slot-validators
+(ns cn.li.ac.gui.slot-validators
   "Shared slot validation helpers for all platforms."
-  (:require [my-mod.energy.operations :as energy]
-            [my-mod.item.constraint-plate :as plate]
-            [my-mod.item.mat-core :as core]))
+  (:require [cn.li.ac.energy.operations :as energy]
+            [cn.li.ac.item.constraint-plate :as plate]
+            [cn.li.item.mat-core :as core]))
 
 (defn energy-item-validator
   "Return true if stack is an energy item."

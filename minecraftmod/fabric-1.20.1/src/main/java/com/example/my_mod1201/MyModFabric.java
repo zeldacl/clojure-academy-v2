@@ -12,9 +12,9 @@ public class MyModFabric implements ModInitializer {
     public void onInitialize() {
         // Load and invoke Clojure mod initialization
         IFn require = Clojure.var("clojure.core", "require");
-        require.invoke(Clojure.read("my-mod.fabric1201.mod"));
+        require.invoke(Clojure.read("cn.li.fabric1201.mod"));
         
-        IFn modInit = Clojure.var("my-mod.fabric1201.mod", "mod-init");
+        IFn modInit = Clojure.var("cn.li.fabric1201.mod", "mod-init");
         modInit.invoke();
     }
 }

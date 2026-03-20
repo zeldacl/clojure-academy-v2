@@ -11,7 +11,7 @@ import clojure.lang.Var;
  * DataGenerator Event Handler for Forge 1.20.1
  * 
  * Minimal Java wrapper - only serves as annotation container.
- * All business logic is implemented in Clojure (my-mod.forge1201.datagen.event-handler).
+ * All business logic is implemented in Clojure (cn.li.forge1201.datagen.event-handler).
  * 
  * This allows us to keep DataGenerator logic in Clojure for consistency,
  * while using Java only for Forge-required annotations.
@@ -25,8 +25,8 @@ public class DataGeneratorSetup {
         try {
             System.out.println("[my_mod] DataGeneratorSetup.onGatherData invoked");
             Var require = RT.var("clojure.core", "require");
-            require.invoke(Symbol.intern("my-mod.forge1201.datagen.event-handler"));
-            Var var = RT.var("my-mod.forge1201.datagen.event-handler", "static-gather-data");
+            require.invoke(Symbol.intern("cn.li.forge1201.datagen.event-handler"));
+            Var var = RT.var("cn.li.forge1201.datagen.event-handler", "static-gather-data");
             var.invoke(event);
         } catch (Exception e) {
             System.err.println("[my_mod] Error invoking Clojure DataGenerator handler: " + e);

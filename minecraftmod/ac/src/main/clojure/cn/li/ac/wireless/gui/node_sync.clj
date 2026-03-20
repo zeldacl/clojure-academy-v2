@@ -1,13 +1,13 @@
-(ns my-mod.wireless.gui.node-sync
+(ns cn.li.ac.wireless.gui.node-sync
   "Cross-platform node state synchronization
 
   Provides platform-agnostic interface for syncing node tile state to clients."
-  (:require [my-mod.wireless.gui.gui-metadata :as metadata]
-            [my-mod.wireless.gui.node-container :as node-container]
-            [my-mod.wireless.gui.container-common :as common]
-            [my-mod.wireless.gui.container-schema :as schema]
-            [my-mod.wireless.gui.sync-helpers :as sync-helpers]
-            [my-mod.platform.position :as pos]))
+  (:require [cn.li.ac.wireless.gui.gui-metadata :as metadata]
+            [cn.li.ac.wireless.gui.node-container :as node-container]
+            [cn.li.ac.wireless.gui.container-common :as common]
+            [cn.li.ac.wireless.gui.container-schema :as schema]
+            [cn.li.ac.wireless.gui.sync-helpers :as sync-helpers]
+            [cn.li.mcmod.platform.position :as pos]))
 
 ;; ============================================================================
 ;; Universal Sync Interface

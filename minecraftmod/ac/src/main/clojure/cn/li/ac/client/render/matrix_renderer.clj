@@ -7,14 +7,14 @@
   
   Platform-agnostic rendering logic. Platform-specific TESR classes
   should be defined in forge/fabric modules using gen-class."
-  (:require [my-mod.client.resources :as res]
-            [my-mod.client.obj :as obj]
-            [my-mod.util.render :as render]
-            [my-mod.client.render.tesr-api :as tesr-api]
-            [my-mod.client.render.multiblock-helper :as mb-helper]
-            [my-mod.client.render.buffer :as rb]
-            [my-mod.client.render.pose :as pose]
-            [my-mod.block.wireless-matrix :as wm]))
+  (:require [cn.li.mcmod.client.resources :as res]
+            [cn.li.mcmod.client.obj :as obj]
+            [cn.li.mcmod.util.render :as render]
+            [cn.li.mcmod.client.render.tesr-api :as tesr-api]
+            [cn.li.mcmod.client.render.multiblock-helper :as mb-helper]
+            [cn.li.mcmod.client.render.buffer :as rb]
+            [cn.li.client.render.pose :as pose]
+            [cn.li.ac.block.wireless-matrix :as wm]))
 
 ;; ============================================================================
 ;; Resources (loaded once on initialization)

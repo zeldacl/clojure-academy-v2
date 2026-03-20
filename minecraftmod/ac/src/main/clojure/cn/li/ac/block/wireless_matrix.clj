@@ -5,25 +5,25 @@
   All persistent state lives in ScriptedBlockEntity.customState as a Clojure
   persistent map.
 
-  State map shape is defined by my-mod.block.matrix-schema/matrix-state-schema.
+  State map shape is defined by cn.li.ac.block.matrix-schema/matrix-state-schema.
   Do NOT hard-code field names here; add/rename/remove fields only in that
   schema and everything below updates automatically."
-  (:require [my-mod.block.dsl :as bdsl]
-            [my-mod.block.tile-dsl :as tdsl]
-            [my-mod.block.tile-logic :as tile-logic]
-            [my-mod.block.role-impls :as impls]
-            [my-mod.block.matrix-schema :as mschema]
-            [my-mod.block.state-schema :as schema]
-            [my-mod.platform.position :as pos]
-            [my-mod.platform.be :as platform-be]
-            [my-mod.gui.slot-schema :as slot-schema]
-            [my-mod.platform.capability :as platform-cap]
-            [my-mod.platform.world :as world]
-            [my-mod.item.constraint-plate :as plate]
-            [my-mod.item.mat-core :as core]
-            [my-mod.wireless.slot-schema :as slots]
-            [my-mod.wireless.gui.matrix-sync :as sync]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.block.tile-dsl :as tdsl]
+            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.ac.block.role-impls :as impls]
+            [cn.li.ac.block.matrix-schema :as mschema]
+            [cn.li.mcmod.block.state-schema :as schema]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.mcmod.platform.capability :as platform-cap]
+            [cn.li.mcmod.platform.world :as world]
+            [cn.li.ac.item.constraint-plate :as plate]
+            [cn.li.item.mat-core :as core]
+            [cn.li.ac.wireless.slot-schema :as slots]
+            [cn.li.ac.wireless.gui.matrix-sync :as sync]
+            [cn.li.mcmod.util.log :as log])
   (:import [my_mod.api.wireless IWirelessMatrix]
            [net.minecraft.world.item ItemStack]))
 
@@ -276,7 +276,7 @@
             (log/info "  Core Level:" (:core-level state))
             (log/info "  Working:" (is-working? state))
             (try
-              (if-let [open-matrix-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-matrix-gui)]
+              (if-let [open-matrix-gui (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-matrix-gui)]
                 (let [result (open-matrix-gui player world pos)]
                   (log/info "Opened Matrix GUI")
                   result)

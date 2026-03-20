@@ -9,11 +9,11 @@
   Payload/response are EDN-serialized Clojure maps so that arbitrary data
   (keywords, numbers, strings, vectors) is preserved round-trip.
 
-  Also extends the my-mod.network.client/send-request multimethod for the
+  Also extends the cn.li.mcmod.network.client/send-request multimethod for the
   :forge-1.20.1 dispatch value so the GUI's send-to-server calls work."
-  (:require [my-mod.network.client :as net-client]
-            [my-mod.network.server :as net-server]
-            [my-mod.util.log :as log]
+  (:require [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.network.server :as net-server]
+            [cn.li.mcmod.util.log :as log]
             [clojure.edn :as edn])
   (:import [my_mod.network ClojureNetwork]))
 

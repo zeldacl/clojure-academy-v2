@@ -1,10 +1,10 @@
-(ns my-mod.wireless.gui.gui-metadata
+(ns cn.li.ac.wireless.gui.gui-metadata
   "Centralized GUI metadata management
   
   This namespace contains all GUI-related constants and mappings,
   eliminating hardcoded case statements in platform-specific code."
-  (:require [my-mod.gui.dsl :as gui-dsl]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; GUI ID Constants
@@ -37,7 +37,7 @@
   [gui-key {:keys [id display-name type registry-name screen-fn-kw slot-layout] :as cfg}]
   (when-not (integer? id)
     (throw (ex-info "register-gui!: :id must be an integer" {:gui-key gui-key :cfg cfg})))
-  (log/info "Registering GUI metadata (delegating to my-mod.gui.dsl)" {:gui-key gui-key :id id})
+  (log/info "Registering GUI metadata (delegating to cn.li.mcmod.gui.dsl)" {:gui-key gui-key :id id})
   (gui-dsl/register-gui!
     (gui-dsl/create-gui-spec (name gui-key)
                              {:gui-id id

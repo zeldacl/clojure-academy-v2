@@ -1,10 +1,10 @@
-(ns my-mod.wireless.gui.registry
+(ns cn.li.ac.wireless.gui.registry
   "Wireless GUI registration and opening system"
-  (:require [my-mod.gui.dsl :as gui-dsl]
-            [my-mod.wireless.gui.gui-metadata :as gui-meta]
-            [my-mod.platform.world :as pworld]
-            [my-mod.platform.entity :as entity]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.ac.wireless.gui.gui-metadata :as gui-meta]
+            [cn.li.mcmod.platform.world :as pworld]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; GUI Handler Protocol

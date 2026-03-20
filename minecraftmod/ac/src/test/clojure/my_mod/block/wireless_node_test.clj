@@ -1,4 +1,4 @@
-(ns cn.li.ac.block.wireless-node-test
+(ns cn.li.block.wireless-node-test
   "Unit tests for Wireless Node implementation"
   (:require [cn.li.ac.block.wireless-node :as wnode]
             [cn.li.ac.energy.operations :as energy]

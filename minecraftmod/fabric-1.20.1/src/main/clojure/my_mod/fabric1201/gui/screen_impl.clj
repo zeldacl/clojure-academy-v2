@@ -1,4 +1,4 @@
-(ns my-mod.fabric1201.gui.screen-impl
+(ns cn.li.fabric1201.gui.screen-impl
   "Fabric 1.20.1 Client-side Screen Implementation
   
   Platform-agnostic design: Reads GUI metadata and loops through all GUIs

@@ -21,7 +21,7 @@
 ### 迁移成果（Java → Clojure）
 
 - 绝大部分逻辑在 Clojure 中；Java 仅保留极简桥接（@Mod、委托到 Clojure 的 mod-init/mod-setup/事件处理）。
-- Forge 1.20.1：`MyMod1201.java` 委托给 `my-mod.forge1201.mod`；Fabric 1.20.1 同理，入口为 ModInitializer。
+- Forge 1.20.1：`MyMod1201.java` 委托给 `cn.li.forge1201.mod`；Fabric 1.20.1 同理，入口为 ModInitializer。
 
 ---
 
@@ -30,7 +30,7 @@
 - **GUI**：screen_factory、slot_manager、GUI 元数据、IContainerOperations、动态 MenuType 注册；平台仅调用工厂与 slot-manager。
 - **注册**：registry_metadata、events 元数据；方块/物品/事件由元数据与 DSL 驱动，平台循环注册，无 demo-block 等硬编码。
 - **事件**：events/metadata.clj、从 DSL 的 `:on-right-click` 等同步处理器；平台零游戏模块依赖。
-- **能量**：物品/节点/接收器充放电统一走 `my-mod.energy.operations`（原 energy/stub 已重命名）。
+- **能量**：物品/节点/接收器充放电统一走 `cn.li.energy.operations`（原 energy/stub 已重命名）。
 
 ---
 

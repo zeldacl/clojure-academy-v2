@@ -1,13 +1,13 @@
-(ns my-mod.item.test-battery
+(ns cn.li.ac.item.test-battery
   "Test energy item implementation
   
   A simple battery item for testing the wireless energy system.
   Implements ImagEnergyItem protocol."
-  (:require [my-mod.energy.imag-energy-item :as energy-item]
-            [my-mod.item.dsl :as item-dsl]
-            [my-mod.platform.item :as item]
-            [my-mod.platform.nbt :as nbt]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.energy.imag-energy-item :as energy-item]
+            [cn.li.mcmod.item.dsl :as item-dsl]
+            [cn.li.mcmod.platform.item :as item]
+            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Test Battery Record

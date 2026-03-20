@@ -97,6 +97,6 @@ forge-1.20.1/.../datagen/
 
 ## 参考文件
 
-- Core 定义：`my-mod.block.blockstate-definition`、`my-mod.block.blockstate-properties`、`my-mod.block.wireless-node`
-- Forge 运行时：`my-mod.forge1201.mod`（register-blocks / register-all-blocks）
-- Forge DataProvider：`my-mod.forge1201.datagen.blockstate-provider`
+- Core 定义：`cn.li.block.blockstate-definition`、`cn.li.block.blockstate-properties`、`cn.li.block.wireless-node`
+- Forge 运行时：`cn.li.forge1201.mod`（register-blocks / register-all-blocks）
+- Forge DataProvider：`cn.li.forge1201.datagen.blockstate-provider`

@@ -13,8 +13,8 @@
 当多个 tile 共享同一套 tick/NBT 逻辑时，优先用 `deftile-kind` 注册默认逻辑，然后在 `deftile` 中只填写 `:tile-kind` 即可，减少样板代码。
 
 ```clojure
-(ns my-mod.block.my-machine
-  (:require [my-mod.block.tile-dsl :as tdsl]))
+(ns cn.li.block.my-machine
+  (:require [cn.li.block.tile-dsl :as tdsl]))
 
 (defn my-tick [level pos state be] ...)
 (defn my-read [tag] ...)
@@ -69,7 +69,7 @@
 
 ## 4. 平台侧如何消费（你不需要改平台代码）
 
-Forge/Fabric 适配层会通过 `my-mod.registry.metadata` 查询：
+Forge/Fabric 适配层会通过 `cn.li.registry.metadata` 查询：
 - `get-all-tile-ids`
 - `get-tile-registry-name`
 - `get-tile-block-ids`

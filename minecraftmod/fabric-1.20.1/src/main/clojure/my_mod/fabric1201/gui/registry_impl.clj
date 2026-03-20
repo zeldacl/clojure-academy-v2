@@ -1,10 +1,10 @@
-(ns my-mod.fabric1201.gui.registry-impl
+(ns cn.li.fabric1201.gui.registry-impl
   "Fabric 1.20.1 GUI Registration Implementation"
   (:require [cn.li.mcmod.gui.platform-adapter :as gui]
-            [my-mod.fabric1201.gui.bridge :as bridge]
-            [my-mod.wireless.gui.registry :as gui-registry]
-            [my-mod.wireless.gui.gui-metadata :as gui-meta]
-            [my-mod.config.modid :as modid]
+            [cn.li.fabric1201.gui.bridge :as bridge]
+            [cn.li.ac.wireless.gui.registry :as gui-registry]
+            [cn.li.ac.wireless.gui.gui-metadata :as gui-meta]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.inventory MenuType]
            [net.minecraft.resources ResourceLocation]

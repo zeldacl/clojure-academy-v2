@@ -249,7 +249,7 @@
           (.translate pose-stack (double tx) (double ty) (double tz))
           ;; Delegate rotation to platform-registered implementation (mcmod must
           ;; not reference Minecraft classes). Platform adapters (forge/fabric)
-          ;; should call `my-mod.client.render.pose/register-y-rotation!`
+          ;; should call `cn.li.client.render.pose/register-y-rotation!`
           ;; with a function that applies rotation to the passed `pose-stack`.
           (pose/apply-y-rotation pose-stack rotation)
           (render-fn tile partial-ticks pose-stack buffer-source packed-light packed-overlay)

@@ -1,19 +1,19 @@
-(ns my-mod.wireless.gui.wireless-tab
+(ns cn.li.ac.wireless.gui.wireless-tab
   "Shared Wireless tab (page_wireless.xml) for all TechUI screens.
 
   Modes:
   - :node      -> connect a Wireless Node to a Matrix network (SSID list)
   - :generator -> connect a Generator (SolarGen) to a Wireless Node"
-  (:require [my-mod.gui.cgui :as cgui]
-            [my-mod.gui.cgui-document :as cgui-doc]
-            [my-mod.gui.components :as comp]
-            [my-mod.gui.events :as events]
-            [my-mod.config.modid :as modid]
-            [my-mod.network.client :as net-client]
-            [my-mod.util.log :as log]
-            [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
-            [my-mod.wireless.gui.node-messages :as node-msgs]
-            [my-mod.wireless.gui.generator-messages :as gen-msgs]))
+  (:require [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-document :as cgui-doc]
+            [cn.li.mcmod.gui.components :as comp]
+            [cn.li.mcmod.gui.events :as events]
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
+            [cn.li.ac.wireless.gui.node-messages :as node-msgs]
+            [cn.li.ac.wireless.gui.generator-messages :as gen-msgs]))
 
 (defn- widget-textbox [widget] (comp/get-textbox-component widget))
 (defn- widget-drawtexture [widget] (comp/get-drawtexture-component widget))

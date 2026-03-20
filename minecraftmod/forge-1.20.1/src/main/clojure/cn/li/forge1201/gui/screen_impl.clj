@@ -5,7 +5,7 @@
   to register. Uses CGUI runtime to render and handle input for wireless GUIs.
   Tabbed GUIs: when tab index != 0, slot highlight is not drawn (inv-window only)."
     (:require [cn.li.mcmod.gui.platform-adapter :as gui]
-              [my-mod.forge1201.gui.cgui-runtime :as cgui-rt]
+              [cn.li.forge1201.gui.cgui-runtime :as cgui-rt]
               [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client.gui.screens MenuScreens]

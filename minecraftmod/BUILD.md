@@ -97,7 +97,7 @@ To support additional Forge versions (e.g., 1.19.2):
    mappings_1192_version=1.19.2
    ```
 4. **Copy and adapt** `forge-1.16.5/build.gradle` with correct plugin versions
-5. **Create Clojure namespaces**: `my-mod.forge1192.*` with multimethod implementations
+5. **Create Clojure namespaces**: `cn.li.forge1192.*` with multimethod implementations
 6. **Create Java entry**: Adapt `MyMod1165.java` for 1.19.2 API changes
 
 ## Testing Mods in Game

@@ -4,8 +4,8 @@
   ac code should use these functions instead of calling Java interop directly.
   Platform implementations must bind *be-capability-slot-fn* during init so
   that get-capability-slot can retrieve Forge Capability objects by key."
-  (:require [my-mod.platform.world :as world]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.util.log :as log])
   (:import [my_mod.block.entity ScriptedBlockEntity]))
 
 ;; ============================================================================

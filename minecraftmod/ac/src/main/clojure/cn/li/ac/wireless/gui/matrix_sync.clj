@@ -1,12 +1,12 @@
-(ns my-mod.wireless.gui.matrix-sync
+(ns cn.li.ac.wireless.gui.matrix-sync
   "Cross-platform matrix state synchronization
 
   Provides platform-agnostic interface for syncing matrix tile state to clients."
-  (:require [my-mod.wireless.gui.gui-metadata :as metadata]
-            [my-mod.wireless.gui.matrix-fields :as mf]
-            [my-mod.wireless.gui.container-schema :as schema]
-            [my-mod.wireless.gui.sync-helpers :as sync-helpers]
-            [my-mod.platform.position :as pos]))
+  (:require [cn.li.ac.wireless.gui.gui-metadata :as metadata]
+            [cn.li.ac.wireless.gui.matrix-fields :as mf]
+            [cn.li.ac.wireless.gui.container-schema :as schema]
+            [cn.li.ac.wireless.gui.sync-helpers :as sync-helpers]
+            [cn.li.mcmod.platform.position :as pos]))
 
 ;; ============================================================================
 ;; Universal Sync Interface

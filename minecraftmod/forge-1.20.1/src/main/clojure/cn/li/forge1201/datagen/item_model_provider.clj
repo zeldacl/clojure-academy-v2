@@ -6,8 +6,8 @@
    - 本文件: 使用Forge/Minecraft API从item registry生成JSON（平台特定）
    
    优势：数据不分散，直接从item定义提取，单一信息源"
-  (:require [my-mod.config.modid :as modid]
-            [my-mod.item.dsl :as item-dsl]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.item.dsl :as item-dsl]
             [clojure.string :as str])
   (:import [net.minecraft.data DataProvider PackOutput]
            [net.minecraft.resources ResourceLocation]

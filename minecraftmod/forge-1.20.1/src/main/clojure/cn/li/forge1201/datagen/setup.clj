@@ -4,10 +4,10 @@
    Registers all data generators for the mod.
    Triggered during setup phase when running:
      ./gradlew :forge-1.20.1:runData"
-  (:require [my-mod.config.modid :as modid]
-            [my-mod.forge1201.datagen.blockstate-provider :as bsp]
-            [my-mod.forge1201.datagen.item-model-provider :as imp]
-            [my-mod.forge1201.datagen.lang-provider :as lang])
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.forge1201.datagen.blockstate-provider :as bsp]
+            [cn.li.forge1201.datagen.item-model-provider :as imp]
+            [cn.li.forge1201.datagen.lang-provider :as lang])
   (:import [net.minecraftforge.data.event GatherDataEvent]
            [net.minecraft.data DataProvider DataProvider$Factory DataGenerator]))
 

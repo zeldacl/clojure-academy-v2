@@ -1,4 +1,4 @@
-(ns my-mod.wireless.gui.screen-factory
+(ns cn.li.ac.wireless.gui.screen-factory
   "Platform-agnostic screen factory for Wireless GUI system
   
   This namespace contains the core game logic for creating GUI screens,
@@ -6,9 +6,9 @@
   
   Platform-specific screen_impl.clj files should delegate to this factory
   and only handle platform-specific registration mechanics."
-  (:require [my-mod.gui.dsl :as gui-dsl]
-            [my-mod.wireless.gui.registry :as gui-registry]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.ac.wireless.gui.registry :as gui-registry]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Screen Creation - Core Game Logic

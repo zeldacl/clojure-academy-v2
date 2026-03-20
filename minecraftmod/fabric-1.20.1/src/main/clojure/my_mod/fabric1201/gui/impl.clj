@@ -1,4 +1,4 @@
-(ns my-mod.fabric1201.gui.impl
+(ns cn.li.fabric1201.gui.impl
   "Fabric 1.20.1 GUI implementations"
   (:require [cn.li.mcmod.gui.api :as gui-api]
             [cn.li.mcmod.gui.core :as gui-core]

@@ -1,19 +1,19 @@
-(ns my-mod.gui.definitions
+(ns cn.li.ac.gui.definitions
   "Central GUI declarations.
 
   This namespace is intended to be required during core initialization so that
   GUI metadata/hook registries are populated before platform registration."
-  (:require [my-mod.gui.dsl :as gui]
-            [my-mod.gui.slot-schema :as slot-schema]
-            [my-mod.wireless.slot-schema :as slots]
-            [my-mod.wireless.gui.node-container :as node-container]
-            [my-mod.wireless.gui.matrix-container :as matrix-container]
-            [my-mod.wireless.gui.solar-container :as solar-container]
-            [my-mod.wireless.gui.node-gui :as node-gui]
-            [my-mod.wireless.gui.matrix-gui :as matrix-gui]
-            [my-mod.wireless.gui.solar-gui-xml :as solar-gui]
-            [my-mod.wireless.gui.node-sync :as node-sync]
-            [my-mod.wireless.gui.matrix-sync :as matrix-sync]))
+  (:require [cn.li.mcmod.gui.dsl :as gui]
+            [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.ac.wireless.slot-schema :as slots]
+            [cn.li.ac.wireless.gui.node-container :as node-container]
+            [cn.li.ac.wireless.gui.matrix-container :as matrix-container]
+            [cn.li.ac.wireless.gui.solar-container :as solar-container]
+            [cn.li.ac.wireless.gui.node-gui :as node-gui]
+            [cn.li.ac.wireless.gui.matrix-gui :as matrix-gui]
+            [cn.li.ac.wireless.gui.solar-gui-xml :as solar-gui]
+            [cn.li.ac.wireless.gui.node-sync :as node-sync]
+            [cn.li.ac.wireless.gui.matrix-sync :as matrix-sync]))
 
 (defn- node-container?
   [container]

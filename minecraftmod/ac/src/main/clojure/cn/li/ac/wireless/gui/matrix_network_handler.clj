@@ -1,4 +1,4 @@
-(ns my-mod.wireless.gui.matrix-network-handler
+(ns cn.li.ac.wireless.gui.matrix-network-handler
   "Wireless Matrix GUI - 服务端网络消息处理器
 
   处理客户端发送的网络消息：
@@ -11,14 +11,14 @@
   - 初始化网络：只有放置者
   - 修改SSID/密码：只有放置者"
 
-  (:require [my-mod.network.server :as net-server]
-            [my-mod.wireless.helper :as helper]
-            [my-mod.wireless.network :as wireless-net]
-            [my-mod.wireless.gui.matrix-messages :as matrix-msgs]
-            [my-mod.wireless.gui.wireless-messages :as wireless-msgs]
-            [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
-            [my-mod.platform.entity :as entity]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.network.server :as net-server]
+            [cn.li.ac.wireless.helper :as helper]
+            [cn.li.ac.wireless.network :as wireless-net]
+            [cn.li.ac.wireless.gui.matrix-messages :as matrix-msgs]
+            [cn.li.ac.wireless.gui.wireless-messages :as wireless-msgs]
+            [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.util.log :as log])
   (:import [my_mod.api.wireless IWirelessMatrix]))
 
 ;; ==================== 工具函数 ====================

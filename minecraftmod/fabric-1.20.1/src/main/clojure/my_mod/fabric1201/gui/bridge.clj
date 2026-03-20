@@ -1,11 +1,11 @@
-(ns my-mod.fabric1201.gui.bridge
+(ns cn.li.fabric1201.gui.bridge
   "Fabric 1.20.1 GUI Bridge facade.
 
   Keeps public API stable while delegating concrete bridge logic to:
-  - my-mod.fabric1201.gui.menu-bridge
-  - my-mod.fabric1201.gui.provider-bridge"
-  (:require [my-mod.fabric1201.gui.menu-bridge :as menu-bridge]
-            [my-mod.fabric1201.gui.provider-bridge :as provider-bridge]))
+  - cn.li.fabric1201.gui.menu-bridge
+  - cn.li.fabric1201.gui.provider-bridge"
+  (:require [cn.li.fabric1201.gui.menu-bridge :as menu-bridge]
+            [cn.li.fabric1201.gui.provider-bridge :as provider-bridge]))
 
 (defn create-menu-provider
   "Create a simple menu provider."

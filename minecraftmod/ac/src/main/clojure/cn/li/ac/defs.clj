@@ -1,5 +1,5 @@
 (ns cn.li.ac.defs
-  (:require [my-mod.config.modid :as modid]))
+  (:require [cn.li.ac.config.modid :as modid]))
 
 (def mod-id modid/MOD-ID)
 ;; Legacy demo IDs - deprecated, kept for backward compatibility

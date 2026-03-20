@@ -1,4 +1,4 @@
-(ns my-mod.wireless.gui.matrix-gui
+(ns cn.li.ac.wireless.gui.matrix-gui
   "Wireless Matrix GUI - Facade for matrix-gui-xml
   
   This module re-exports the TechUI-based implementation from matrix-gui-xml.
@@ -7,7 +7,7 @@
   
   The actual implementation is in matrix-gui-xml.clj which follows the 
   Scala TechUI.ContainerUI architecture."
-  (:require [my-mod.wireless.gui.matrix-gui-xml :as impl]))
+  (:require [cn.li.ac.wireless.gui.matrix-gui-xml :as impl]))
 
 ;; ============================================================================
 ;; Re-exported Public API

@@ -1,11 +1,11 @@
-(ns my-mod.wireless.gui.network-handler-helpers
+(ns cn.li.ac.wireless.gui.network-handler-helpers
   "Shared network handler utility functions
 
   Provides common helper functions for server-side network message handlers,
   eliminating duplication between node_network_handler and matrix_network_handler."
-  (:require [my-mod.platform.position :as pos]
-            [my-mod.platform.world :as world]
-            [my-mod.platform.entity :as entity]))
+  (:require [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.platform.entity :as entity]))
 
 ;; ============================================================================
 ;; World and Tile Access Helpers

@@ -1,11 +1,11 @@
-(ns my-mod.fabric1201.datagen.setup
+(ns cn.li.fabric1201.datagen.setup
   "Fabric 1.20.1 DataGenerator Setup
    
    Registers all data generators for JSON generation.
    
    Fabric uses different event system than Forge, so this module
    provides utilities to be called during data generation phase."
-  (:require [my-mod.config.modid :as modid])
+  (:require [cn.li.ac.config.modid :as modid])
   (:import [net.minecraft.data DataGenerator DirectoryCache]))
 
 ;; ============================================================================

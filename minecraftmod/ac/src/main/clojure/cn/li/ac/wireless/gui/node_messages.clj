@@ -1,6 +1,6 @@
-(ns my-mod.wireless.gui.node-messages
+(ns cn.li.ac.wireless.gui.node-messages
   "Single source of truth for wireless node GUI messages."
-  (:require [my-mod.wireless.gui.messages-dsl :as msg-dsl]))
+  (:require [cn.li.ac.wireless.gui.messages-dsl :as msg-dsl]))
 
 (def node-actions
   [:get-status

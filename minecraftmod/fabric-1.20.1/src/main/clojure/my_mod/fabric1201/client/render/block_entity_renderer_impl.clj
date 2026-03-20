@@ -1,10 +1,10 @@
-(ns my-mod.fabric1201.client.render.block-entity-renderer-impl
+(ns cn.li.fabric1201.client.render.block-entity-renderer-impl
   "Fabric 1.20.1 Universal Block Entity Renderer
   
   Platform-specific BlockEntityRenderer implementation that dispatches to registered renderers.
   This class knows nothing about specific blocks - it's a pure dispatcher."
-  (:require [my-mod.client.render.tesr-api :as tesr-api]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.client.render.tesr-api :as tesr-api]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Block Entity Renderer Generation

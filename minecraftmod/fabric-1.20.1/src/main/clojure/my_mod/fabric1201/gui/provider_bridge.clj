@@ -1,10 +1,10 @@
-(ns my-mod.fabric1201.gui.provider-bridge
+(ns cn.li.fabric1201.gui.provider-bridge
   "Fabric 1.20.1 provider bridge.
 
   Uses reify factories and delegates menu construction to menu-bridge."
   (:require [cn.li.mcmod.gui.platform-adapter :as gui]
             [cn.li.mcmod.util.log :as log]
-            [my-mod.fabric1201.gui.menu-bridge :as menu-bridge])
+            [cn.li.fabric1201.gui.menu-bridge :as menu-bridge])
   (:import [net.minecraft.world MenuProvider]
            [net.fabricmc.fabric.api.screenhandler.v1 ExtendedScreenHandlerFactory]
            [net.minecraft.network.chat Component]))

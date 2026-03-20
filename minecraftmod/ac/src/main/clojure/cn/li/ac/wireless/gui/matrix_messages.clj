@@ -1,6 +1,6 @@
-(ns my-mod.wireless.gui.matrix-messages
+(ns cn.li.ac.wireless.gui.matrix-messages
   "Single source of truth for wireless matrix GUI messages."
-  (:require [my-mod.wireless.gui.messages-dsl :as msg-dsl]))
+  (:require [cn.li.ac.wireless.gui.messages-dsl :as msg-dsl]))
 
 (def matrix-actions
   [:gather-info

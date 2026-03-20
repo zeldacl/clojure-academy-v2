@@ -1,6 +1,6 @@
 # GUI DSL 使用与实现
 
-本文档合并自 GUI DSL 使用指南与实现总结。当前平台为 Forge 1.20.1、Fabric 1.20.1；能量相关使用 `my-mod.energy.operations`。
+本文档合并自 GUI DSL 使用指南与实现总结。当前平台为 Forge 1.20.1、Fabric 1.20.1；能量相关使用 `cn.li.energy.operations`。
 
 ---
 
@@ -73,7 +73,7 @@
 (dsl/create-gui-instance my-gui player world pos)
 ```
 
-插槽过滤与能量物品支持可依赖 `my-mod.energy.operations`（如 `is-energy-item-supported?`）。
+插槽过滤与能量物品支持可依赖 `cn.li.energy.operations`（如 `is-energy-item-supported?`）。
 
 ---
 
@@ -83,4 +83,4 @@
 - 详见 `05-wireless/Node_GUI.md`、`05-wireless/Matrix_GUI.md`。
 
 **更新（当前架构）**：
-- Wireless GUI 的“元数据源”已统一到 `cn.li.mcmod.gui.dsl` 的 registry；`my-mod.wireless.gui.gui-metadata` 仅保留查询与平台 MenuType 存储，不再需要手工维护中心映射表。
+- Wireless GUI 的“元数据源”已统一到 `cn.li.mcmod.gui.dsl` 的 registry；`cn.li.wireless.gui.gui-metadata` 仅保留查询与平台 MenuType 存储，不再需要手工维护中心映射表。

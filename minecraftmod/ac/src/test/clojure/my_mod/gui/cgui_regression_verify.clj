@@ -1,4 +1,4 @@
-(ns cn.li.ac.gui.cgui-regression-verify
+(ns cn.li.gui.cgui-regression-verify
   "Quick regression verification script for cgui_document XML loading.
    Runs independently to verify all migrated XML files can be loaded."
   (:require [clojure.xml :as xml]

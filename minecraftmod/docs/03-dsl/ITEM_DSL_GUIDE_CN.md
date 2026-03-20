@@ -6,7 +6,7 @@ Item DSL 提供了一种声明式的方式来定义 Minecraft 物品，无需编
 
 ## 核心概念
 
-### 1. Item DSL 核心 (`my-mod.item.dsl`)
+### 1. Item DSL 核心 (`cn.li.item.dsl`)
 
 提供声明式物品定义宏和运行时管理。
 
@@ -175,9 +175,9 @@ Item DSL 提供了多种预设，用于快速创建常见类型的物品。
 ### 示例 1：基础材料物品
 
 ```clojure
-(ns my-mod.my-items
-  (:require [my-mod.item.dsl :as idsl]
-            [my-mod.util.log :as log]))
+(ns cn.li.my-items
+  (:require [cn.li.item.dsl :as idsl]
+            [cn.li.util.log :as log]))
 
 ;; 铜锭
 (idsl/defitem copper-ingot
@@ -496,8 +496,8 @@ Item DSL 支持三种主要的交互处理器：
 在您的 mod 初始化代码中调用：
 
 ```clojure
-(ns my-mod.my-items-init
-  (:require [my-mod.item.demo :as item-demo]))
+(ns cn.li.my-items-init
+  (:require [cn.li.item.demo :as item-demo]))
 
 (defn init! []
   ;; 初始化所有演示物品
@@ -516,22 +516,22 @@ Item DSL 支持三种主要的交互处理器：
 
 ```clojure
 ;; materials.clj - 材料物品
-(ns my-mod.items.materials
-  (:require [my-mod.item.dsl :as idsl]))
+(ns cn.li.items.materials
+  (:require [cn.li.item.dsl :as idsl]))
 
 (idsl/defitem copper-ingot ...)
 (idsl/defitem steel-ingot ...)
 
 ;; tools.clj - 工具物品
-(ns my-mod.items.tools
-  (:require [my-mod.item.dsl :as idsl]))
+(ns cn.li.items.tools
+  (:require [cn.li.item.dsl :as idsl]))
 
 (idsl/defitem copper-pickaxe ...)
 (idsl/defitem steel-sword ...)
 
 ;; food.clj - 食物物品
-(ns my-mod.items.food
-  (:require [my-mod.item.dsl :as idsl]))
+(ns cn.li.items.food
+  (:require [cn.li.item.dsl :as idsl]))
 
 (idsl/defitem magic-bread ...)
 (idsl/defitem healing-potion ...)

@@ -77,7 +77,7 @@
                  - Fabric 1.20.1: ItemStack.fromNbt(nbt)
                  
                  Example platform initialization:
-                 (alter-var-root #'my-mod.platform.item/*item-factory*
+                 (alter-var-root #'cn.li.mcmod.platform.item/*item-factory*
                    (constantly (fn [nbt] (ItemStack/of nbt))))"}
   *item-factory*
   nil)

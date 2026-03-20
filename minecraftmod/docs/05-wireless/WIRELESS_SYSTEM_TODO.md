@@ -14,28 +14,28 @@
   - 文件：`energy/imag_energy_item.clj` 或 Java 源码
 
 - [x] **IWirelessMatrix** 接口 ✅
-  - 包：`my-mod.wireless.interfaces`
+  - 包：`cn.li.wireless.interfaces`
   - 方法：`get-matrix-range`, `get-matrix-capacity`, `get-matrix-bandwidth`
   - 用途：无线网络矩阵（中心节点）
   - 文件：`wireless/interfaces.clj`
   - 状态：已完成 defprotocol 定义
 
 - [x] **IWirelessNode** 接口 ✅
-  - 包：`my-mod.wireless.interfaces`
+  - 包：`cn.li.wireless.interfaces`
   - 方法：`get-energy`, `set-energy`, `get-max-energy`, `get-bandwidth`, `get-range`, `get-capacity`, `get-password`, `get-node-name`
   - 用途：无线节点
   - 文件：`wireless/interfaces.clj`
   - 状态：已完成 defprotocol 定义
 
 - [x] **IWirelessGenerator** 接口 ✅
-  - 包：`my-mod.wireless.interfaces`
+  - 包：`cn.li.wireless.interfaces`
   - 方法：`get-provided-energy`, `get-generator-bandwidth`
   - 用途：能量生成器
   - 文件：`wireless/interfaces.clj`
   - 状态：已完成 defprotocol 定义
 
 - [x] **IWirelessReceiver** 接口 ✅
-  - 包：`my-mod.wireless.interfaces`
+  - 包：`cn.li.wireless.interfaces`
   - 方法：`inject-energy`, `pull-energy`, `get-required-energy`, `get-receiver-bandwidth`
   - 用途：能量接收器
   - 文件：`wireless/interfaces.clj`

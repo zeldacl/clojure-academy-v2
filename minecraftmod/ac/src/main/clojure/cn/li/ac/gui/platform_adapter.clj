@@ -1,32 +1,32 @@
-(ns my-mod.gui.platform-adapter
+(ns cn.li.ac.gui.platform-adapter
   "Platform Adapter for GUI framework
   
   This module serves as the single import point for platform-specific GUI code
   (forge/fabric bridges). It aggregates and re-exports all GUI framework functionality
   without exposing the details of the underlying wireless.gui implementation.
   
-  Platform layers should ONLY import from this module, not directly from my-mod.wireless.gui.
+  Platform layers should ONLY import from this module, not directly from cn.li.wireless.gui.
   This allows the wireless implementation to change without affecting platform code.
   
   **Usage in platform code:**
   ```clojure
-  (:require [my-mod.gui.platform-adapter :as gui]
-           [my-mod.util.log :as log])
+  (:require [cn.li.ac.gui.platform-adapter :as gui]
+           [cn.li.mcmod.util.log :as log])
   
   ;; Use the unified API
   (gui/safe-tick! container)
   (gui/safe-close! container)
   (gui/get-display-name gui-id)
   ```"
-  (:require [my-mod.wireless.gui.container-dispatcher :as dispatcher]
-            [my-mod.gui.dsl :as gui-dsl]
-            [my-mod.wireless.gui.gui-metadata :as metadata]
-            [my-mod.wireless.gui.slot-manager :as slot-mgr]
-            [my-mod.wireless.gui.registry :as registry]
-            [my-mod.wireless.gui.matrix-sync :as matrix-sync]
-            [my-mod.wireless.gui.node-sync :as node-sync]
-            [my-mod.wireless.gui.screen-factory :as screen-factory]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.ac.wireless.gui.container-dispatcher :as dispatcher]
+            [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.ac.wireless.gui.gui-metadata :as metadata]
+            [cn.li.ac.wireless.gui.slot-manager :as slot-mgr]
+            [cn.li.ac.wireless.gui.registry :as registry]
+            [cn.li.ac.wireless.gui.matrix-sync :as matrix-sync]
+            [cn.li.ac.wireless.gui.node-sync :as node-sync]
+            [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Re-export Container Dispatcher (polymorphic operations)
@@ -192,7 +192,7 @@
 ;; ============================================================================
 
 ;; This adapter guarantees that platform code:
-;; 1. Never directly imports my-mod.wireless.gui.* modules
+;; 1. Never directly imports cn.li.wireless.gui.* modules
 ;; 2. Only depends on this single unified API
 ;; 3. Remains isolated from wireless implementation details
 ;;

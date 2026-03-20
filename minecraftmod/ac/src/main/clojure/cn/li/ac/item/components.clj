@@ -1,9 +1,9 @@
-(ns my-mod.item.components
+(ns cn.li.ac.item.components
   "Component items - building blocks for Wireless Matrix system
   
   These items are used to construct matrix cores, nodes, and other wireless components."
-  (:require [my-mod.item.dsl :as idsl]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Wafer - Basic computational component

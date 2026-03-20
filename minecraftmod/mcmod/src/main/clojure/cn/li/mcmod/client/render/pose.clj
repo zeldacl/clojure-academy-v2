@@ -19,7 +19,7 @@
   Platform `platform_impl.clj` files should assign this var via
   `alter-var-root` during platform initialization, e.g.:
 
-    (alter-var-root #'my-mod.client.render.pose/*y-rotation-fn*
+    (alter-var-root #'cn.li.client.render.pose/*y-rotation-fn*
       (constantly (fn [pose-stack angle]
                     ;; Use the platform axis constant for +Y here.
                     (.mulPose pose-stack (.rotationDegrees <platform-y-axis> (float angle))))))

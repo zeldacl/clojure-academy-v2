@@ -1,9 +1,9 @@
-(ns my-mod.wireless.gui.wireless-messages
+(ns cn.li.ac.wireless.gui.wireless-messages
   "Aggregated wireless GUI message catalog for validation and lookup."
-  (:require [my-mod.wireless.gui.messages-dsl :as msg-dsl]
-            [my-mod.wireless.gui.generator-messages :as gen-msgs]
-            [my-mod.wireless.gui.node-messages :as node-msgs]
-            [my-mod.wireless.gui.matrix-messages :as matrix-msgs]))
+  (:require [cn.li.ac.wireless.gui.messages-dsl :as msg-dsl]
+            [cn.li.ac.wireless.gui.generator-messages :as gen-msgs]
+            [cn.li.ac.wireless.gui.node-messages :as node-msgs]
+            [cn.li.ac.wireless.gui.matrix-messages :as matrix-msgs]))
 
 (def catalog
   (msg-dsl/build-catalog

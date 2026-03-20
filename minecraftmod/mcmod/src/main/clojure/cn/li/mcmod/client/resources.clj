@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.client.resources
   "Client-side resource loading utilities for models and textures"
-  (:require [my-mod.platform.resource :as res]
-            [my-mod.client.obj :as obj]))
+  (:require [cn.li.mcmod.platform.resource :as res]
+            [cn.li.mcmod.client.obj :as obj]))
 
 ;; ============================================================================
 ;; ResourceLocation Helpers

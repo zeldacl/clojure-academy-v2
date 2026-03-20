@@ -1,4 +1,4 @@
-(ns my-mod.wireless.network
+(ns cn.li.ac.wireless.network
   "Wireless Energy Network implementation
   
   Manages SSID-based wireless networks:
@@ -6,8 +6,8 @@
   - Energy balancing across nodes
   - Password authentication
   - Range validation"
-  (:require [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.ac.wireless.virtual-blocks :as vb]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Constants
@@ -74,7 +74,7 @@
   "Lookup existing network for a node via world-data namespace at runtime.
   Uses requiring-resolve to avoid compile-time circular dependency."
   [world-data node-vblock]
-  (if-let [lookup-fn (requiring-resolve 'my-mod.wireless.world-data/get-network-by-node)]
+  (if-let [lookup-fn (requiring-resolve 'cn.li.ac.wireless.world-data/get-network-by-node)]
     (lookup-fn world-data node-vblock)
     nil))
 
@@ -326,11 +326,11 @@
                  {:name :buffer :type :double :nbt-key "buffer" :atom? true}
                  {:name :nodes :type :vblock-list :nbt-key "list" :atom? true}]
     :create {:args [matrix-vblock ssid password]
-             :expr '(my-mod.wireless.network/create-wireless-net world-data matrix-vblock ssid password)
+             :expr '(cn.li.ac.wireless.network/create-wireless-net world-data matrix-vblock ssid password)
              :return true
              :return-on-unique-fail false
              :unique [{:label "SSID" :value-expr 'ssid :value-fn 'identity}
-                      {:label "matrix" :value-expr 'matrix-vblock :value-fn 'my-mod.wireless.virtual-blocks/vblock-to-string}]
+                      {:label "matrix" :value-expr 'matrix-vblock :value-fn 'cn.li.ac.wireless.virtual-blocks/vblock-to-string}]
              :log-create "Created network: SSID='%s'"
              :log-create-key-expr 'ssid
              :log-create-fail "Cannot create network: %s '%s' already exists"}
@@ -341,11 +341,11 @@
     :log-key-fn 'identity
     :validator {:vblock-key :matrix
                 :log-label "networks"}
-    :tick {:fn 'my-mod.wireless.network/tick-wireless-net!}
+    :tick {:fn 'cn.li.ac.wireless.network/tick-wireless-net!}
     :nbt {:tag "networks"
           :atom :networks
-          :to-nbt 'my-mod.wireless.network/network-to-nbt
-          :from-nbt 'my-mod.wireless.network/network-from-nbt
+          :to-nbt 'cn.li.ac.wireless.network/network-to-nbt
+          :from-nbt 'cn.li.ac.wireless.network/network-from-nbt
           :skip? '(fn [net] @(:disposed net))
           :rebuild {:lookup-atom :net-lookup
                     :direct-keys [:matrix :ssid]
@@ -355,7 +355,7 @@
 ;; NBT Serialization
 ;; ============================================================================
 
-(my-mod.wireless.world-schema/defnbt-handlers-from-schema network-schema)
+(cn.li.ac.wireless.world-schema/defnbt-handlers-from-schema network-schema)
 
 ;; ============================================================================
 ;; Debug

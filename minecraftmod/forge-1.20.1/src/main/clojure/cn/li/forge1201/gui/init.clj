@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.gui.init
   "Forge 1.20.1 GUI System Initialization"
-  (:require [my-mod.forge1201.gui.registry-impl :as registry-impl]
-            [my-mod.forge1201.gui.network :as network]
+  (:require [cn.li.forge1201.gui.registry-impl :as registry-impl]
+            [cn.li.forge1201.gui.network :as network]
             [cn.li.mcmod.gui.platform-adapter :as gui]
             [cn.li.mcmod.util.log :as log]))
 

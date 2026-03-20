@@ -144,7 +144,7 @@ Enforces:
          (create-tile-spec ~tile-id ~options-map)))))
 
 (defmacro deftile-kind
-  "Register reusable tile-kind defaults in `my-mod.block.tile-logic`."
+  "Register reusable tile-kind defaults in `cn.li.mcmod.block.tile-logic`."
   [tile-kind & options]
   (let [options-map (apply hash-map options)]
     `(tile-logic/register-tile-kind! ~tile-kind ~options-map)))

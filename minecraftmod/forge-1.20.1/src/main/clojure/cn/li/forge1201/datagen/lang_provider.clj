@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.datagen.lang-provider
   "Language file data generator - generates translation files from metadata"
-  (:require [my-mod.config.modid :as modid]
-            [my-mod.registry.metadata :as registry-metadata])
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.registry.metadata :as registry-metadata])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [java.nio.file Path]
            [java.util.concurrent CompletableFuture]

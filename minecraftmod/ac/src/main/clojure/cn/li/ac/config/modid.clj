@@ -1,7 +1,7 @@
 (ns cn.li.ac.config.modid
   "Centralized mod-id configuration for easy portability across projects.
    Change MOD-ID here to update mod identification across all modules."
-  (:require [my-mod.platform.resource :as resource]))
+  (:require [cn.li.mcmod.platform.resource :as resource]))
 
 ;; ============================================================================
 ;; Central Mod ID Configuration

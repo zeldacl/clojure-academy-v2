@@ -1,4 +1,4 @@
-(ns my-mod.wireless.gui.node-gui-xml
+(ns cn.li.ac.wireless.gui.node-gui-xml
   "Wireless Node GUI - TechUI implementation (参照Scala GuiNode)
   
   Architecture:
@@ -10,21 +10,21 @@
   NOTE:
   - No XML parsing
   - Uses existing resources only"
-  (:require [my-mod.gui.cgui :as cgui]
-            [my-mod.gui.cgui-document :as cgui-doc]
-            [my-mod.config.modid :as modid]
-            [my-mod.gui.components :as comp]
-            [my-mod.gui.events :as events]
-            [my-mod.gui.platform-adapter :as gui]
-            [my-mod.gui.tabbed-gui :as tabbed-gui]
-            [my-mod.gui.tech-ui-common :as tech-ui]
-            [my-mod.network.client :as net-client]
-            [my-mod.wireless.gui.node-messages :as node-msgs]
-            [my-mod.wireless.gui.node-container :as node-container]
-            [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
-            [my-mod.wireless.gui.wireless-tab :as wireless-tab]
-            [my-mod.platform.entity :as entity]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-document :as cgui-doc]
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.gui.components :as comp]
+            [cn.li.mcmod.gui.events :as events]
+            [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.gui.tabbed-gui :as tabbed-gui]
+            [cn.li.ac.gui.tech-ui-common :as tech-ui]
+            [cn.li.mcmod.network.client :as net-client]
+            [cn.li.ac.wireless.gui.node-messages :as node-msgs]
+            [cn.li.ac.wireless.gui.node-container :as node-container]
+            [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
+            [cn.li.ac.wireless.gui.wireless-tab :as wireless-tab]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.util.log :as log])
   (:import [my_mod.api.wireless IWirelessNode]))
 
 ;; ============================================================================

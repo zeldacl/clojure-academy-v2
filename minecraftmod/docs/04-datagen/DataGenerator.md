@@ -28,7 +28,7 @@ DataProvider 实现位于各平台模块内：
   - `item-model-provider.clj`：生成物品模型 JSON。
   - `setup.clj`：在 GatherDataEvent 中注册上述 Provider。
 - **`forge-1.20.1/src/main/java/my_mod/datagen/DataGeneratorSetup.java`**
-  - `@Mod.EventBusSubscriber`，将 `GatherDataEvent` 委托给 Clojure：`my-mod.forge1201.datagen.event-handler` 的 `static-gather-data`。
+  - `@Mod.EventBusSubscriber`，将 `GatherDataEvent` 委托给 Clojure：`cn.li.forge1201.datagen.event-handler` 的 `static-gather-data`。
 
 #### Fabric 1.20.1
 

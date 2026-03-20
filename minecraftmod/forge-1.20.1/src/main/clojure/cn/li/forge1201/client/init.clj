@@ -1,12 +1,12 @@
-(ns my-mod.forge1201.client.init
+(ns cn.li.forge1201.client.init
   "Forge 1.20.1 client-side initialization and registration"
-  (:require [my-mod.util.log :as log]
-            [my-mod.util.render :as render]
-            [my-mod.registry.metadata :as registry-metadata]
-            [my-mod.client.render.init :as render-init]
-            [my-mod.client.render.tesr-api :as tesr-api]
-            [my-mod.forge1201.client.render.tesr-impl :as tesr-impl]
-            [my-mod.forge1201.mod :as forge-mod])
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.util.render :as render]
+            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.client.render.init :as render-init]
+            [cn.li.mcmod.client.render.tesr-api :as tesr-api]
+            [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
+            [cn.li.forge1201.mod :as forge-mod])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.client.renderer.texture TextureManager]
            [net.minecraft.client.renderer.blockentity BlockEntityRenderers BlockEntityRendererProvider]

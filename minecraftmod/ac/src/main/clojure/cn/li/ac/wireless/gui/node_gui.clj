@@ -1,4 +1,4 @@
-(ns my-mod.wireless.gui.node-gui
+(ns cn.li.ac.wireless.gui.node-gui
   "Wireless Node GUI - Facade for node-gui-xml
   
   This module re-exports the XML/TechUI-based implementation from node-gui-xml.
@@ -6,7 +6,7 @@
   and screen_factory.clj.
   
   The actual implementation is in node-gui-xml.clj."
-  (:require [my-mod.wireless.gui.node-gui-xml :as impl]))
+  (:require [cn.li.ac.wireless.gui.node-gui-xml :as impl]))
 
 ;; ============================================================================
 ;; Re-exported Public API

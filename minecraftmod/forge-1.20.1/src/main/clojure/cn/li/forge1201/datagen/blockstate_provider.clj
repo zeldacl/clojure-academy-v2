@@ -6,12 +6,12 @@
    - 本文件: 使用Forge/Minecraft API和定义生成JSON（平台特定）
    
    优势：定义层复用，易于支持新的Forge版本"
-  (:require [my-mod.config.modid :as modid]
-            [my-mod.block.blockstate-definition :as blockstate-def]
-            [my-mod.forge1201.blockstate-properties :as bsp]
-            [my-mod.forge1201.mod :as forge-mod]
-            [my-mod.registry.metadata :as registry-metadata]
-            [my-mod.util.log :as log]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.block.blockstate-definition :as blockstate-def]
+            [cn.li.forge1201.blockstate-properties :as bsp]
+            [cn.li.forge1201.mod :as forge-mod]
+            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [net.minecraft.resources ResourceLocation]

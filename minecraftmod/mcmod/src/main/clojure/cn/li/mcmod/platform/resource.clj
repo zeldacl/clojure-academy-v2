@@ -23,7 +23,7 @@
   (if-let [factory *resource-factory*]
     (factory namespace path)
     (throw (ex-info "Resource factory not initialized - platform must call init-platform! first"
-                    {:hint "Check platform initialization for my-mod.platform.resource/*resource-factory*"}))))
+                    {:hint "Check platform initialization for cn.li.mcmod.platform.resource/*resource-factory*"}))))
 
 (defn factory-initialized?
   "Check if resource factory has been initialized by platform code."
@@ -43,7 +43,7 @@
   ([path]
    (if *resource-location-fn*
      (*resource-location-fn* nil path)
-     (throw (ex-info "*resource-location-fn* not set - ac/loader must set my-mod.platform.resource/*resource-location-fn* at init" {:path path}))))
+     (throw (ex-info "*resource-location-fn* not set - ac/loader must set cn.li.mcmod.platform.resource/*resource-location-fn* at init" {:path path}))))
   ([namespace path]
    (if *resource-location-fn*
      (*resource-location-fn* namespace path)

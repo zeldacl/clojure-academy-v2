@@ -4,7 +4,7 @@
   Provides definition/query API for block state properties. Forge/Fabric
   adapters use this to create actual IntegerProperty/BooleanProperty and
   register them. This namespace does not import game engine concrete types."
-  (:require [my-mod.registry.metadata :as registry-metadata]))
+  (:require [cn.li.mcmod.registry.metadata :as registry-metadata]))
 
 (defn get-property-definition
   "Get the Clojure definition of a property for a block.

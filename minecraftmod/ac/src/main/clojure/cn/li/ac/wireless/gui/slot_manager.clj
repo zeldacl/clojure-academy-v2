@@ -1,4 +1,4 @@
-(ns my-mod.wireless.gui.slot-manager
+(ns cn.li.ac.wireless.gui.slot-manager
   "Platform-agnostic slot layout and quick-move logic for GUI containers
   
   This namespace provides slot layout information and quick-move strategies
@@ -6,7 +6,7 @@
   
   Platform-specific bridge code should delegate to these functions instead of
   implementing slot logic directly."
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
   (defn- node-container?
     [container]

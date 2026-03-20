@@ -1,6 +1,6 @@
-(ns my-mod.wireless.gui.generator-messages
+(ns cn.li.ac.wireless.gui.generator-messages
   "Single source of truth for wireless generator GUI messages (SolarGen etc.)."
-  (:require [my-mod.wireless.gui.messages-dsl :as msg-dsl]))
+  (:require [cn.li.ac.wireless.gui.messages-dsl :as msg-dsl]))
 
 (def generator-actions
   [:get-status

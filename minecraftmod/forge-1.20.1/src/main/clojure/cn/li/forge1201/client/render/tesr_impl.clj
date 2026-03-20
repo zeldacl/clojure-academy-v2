@@ -1,4 +1,4 @@
-(ns my-mod.forge1201.client.render.tesr-impl
+(ns cn.li.forge1201.client.render.tesr-impl
   "Forge 1.20.1 Universal TileEntity Special Renderer
 
   Uses reify instead of gen-class to avoid DynamicClassLoader lifecycle issues:
@@ -6,8 +6,8 @@
   but resource reloads run in a fresh classloader context where that class is
   no longer reachable. reify creates an anonymous class inline at call time,
   which is always visible to the current classloader."
-  (:require [my-mod.client.render.tesr-api :as tesr-api]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.client.render.tesr-api :as tesr-api]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.renderer.blockentity BlockEntityRenderer]))
 
 (defn new-renderer

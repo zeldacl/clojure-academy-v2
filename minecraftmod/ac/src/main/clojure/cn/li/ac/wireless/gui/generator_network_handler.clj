@@ -1,14 +1,14 @@
-(ns my-mod.wireless.gui.generator-network-handler
+(ns cn.li.ac.wireless.gui.generator-network-handler
   "Wireless generator GUI - server-side network handlers (SolarGen etc.)."
-  (:require [my-mod.network.server :as net-server]
-            [my-mod.wireless.helper :as helper]
-            [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.wireless.gui.generator-messages :as gen-msgs]
-            [my-mod.wireless.gui.wireless-messages :as wireless-msgs]
-            [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
-            [my-mod.wireless.node-connection :as node-conn]
-            [my-mod.platform.position :as pos]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.network.server :as net-server]
+            [cn.li.ac.wireless.helper :as helper]
+            [cn.li.wireless.virtual-blocks :as vb]
+            [cn.li.ac.wireless.gui.generator-messages :as gen-msgs]
+            [cn.li.ac.wireless.gui.wireless-messages :as wireless-msgs]
+            [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
+            [cn.li.ac.wireless.node-connection :as node-conn]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.util.log :as log])
   (:import [my_mod.api.wireless IWirelessNode]))
 
 (defn handle-get-status

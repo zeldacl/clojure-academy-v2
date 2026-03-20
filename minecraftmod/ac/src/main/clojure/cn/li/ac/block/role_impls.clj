@@ -7,11 +7,11 @@
   WirelessMatrixImpl   → implements IWirelessMatrix
   WirelessNodeImpl     → implements IWirelessNode
   ClojureEnergyImpl    → implements IEnergyCapable (platform-neutral energy)"
-  (:require [my-mod.block.matrix-schema :as mschema]
-            [my-mod.block.node-schema  :as nschema]
-            [my-mod.block.state-schema :as schema]
-            [my-mod.platform.be :as platform-be]
-            [my-mod.platform.position :as pos])
+  (:require [cn.li.ac.block.matrix-schema :as mschema]
+            [cn.li.ac.block.node-schema  :as nschema]
+            [cn.li.mcmod.block.state-schema :as schema]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.position :as pos])
   (:import [my_mod.api.wireless IWirelessMatrix IWirelessNode]
            [my_mod.api.wireless IWirelessGenerator]
            [my_mod.api.energy IEnergyCapable]))

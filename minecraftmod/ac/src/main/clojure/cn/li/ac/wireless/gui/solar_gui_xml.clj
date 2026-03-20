@@ -1,18 +1,18 @@
-(ns my-mod.wireless.gui.solar-gui-xml
+(ns cn.li.ac.wireless.gui.solar-gui-xml
   "Solar Generator GUI screen (TechUI/CGUI).
 
   Uses existing XML page: assets/my_mod/guis/rework/page_solar.xml
   and composes it into TechUI tabs (inv + wireless) with InfoArea."
-  (:require [my-mod.gui.cgui :as cgui]
-            [my-mod.gui.cgui-document :as cgui-doc]
-            [my-mod.gui.components :as comp]
-            [my-mod.gui.events :as events]
-            [my-mod.gui.platform-adapter :as gui]
-            [my-mod.gui.tabbed-gui :as tabbed-gui]
-            [my-mod.gui.tech-ui-common :as tech-ui]
-            [my-mod.wireless.gui.wireless-tab :as wireless-tab]
-            [my-mod.config.modid :as modid]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-document :as cgui-doc]
+            [cn.li.mcmod.gui.components :as comp]
+            [cn.li.mcmod.gui.events :as events]
+            [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.gui.tabbed-gui :as tabbed-gui]
+            [cn.li.ac.gui.tech-ui-common :as tech-ui]
+            [cn.li.ac.wireless.gui.wireless-tab :as wireless-tab]
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.util.log :as log]))
 
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)

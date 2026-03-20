@@ -4,10 +4,10 @@
   This namespace is deprecated and kept only for backward compatibility.
   
   For modern item definitions, use:
-  - my-mod.item.dsl/defitem - DSL macro for defining items
+  - cn.li.mcmod.item.dsl/defitem - DSL macro for defining items
   
   Example:
-  (require '[my-mod.item.dsl :as idsl])
+  (require '[cn.li.mcmod.item.dsl :as idsl])
   
   (idsl/defitem my-custom-item
     :max-stack-size 16
@@ -15,4 +15,4 @@
     :durability 500
     :on-use (fn [data] (println "Used!")))")
 
-;; All item definitions have been migrated to my-mod.item.dsl
+;; All item definitions have been migrated to cn.li.mcmod.item.dsl

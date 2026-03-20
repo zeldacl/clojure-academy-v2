@@ -136,8 +136,8 @@ wireless_<domain>_<action-token>
 
 在 REPL 中执行：
 ```clojure
-(require 'my-mod.wireless.gui.messages-dsl-test :reload)
-(my-mod.wireless.gui.messages-dsl-test/run-all-tests)
+(require 'cn.li.wireless.gui.messages-dsl-test :reload)
+(cn.li.wireless.gui.messages-dsl-test/run-all-tests)
 ```
 
 ---
@@ -164,8 +164,8 @@ wireless_<domain>_<action-token>
 新建 `repeater_messages.clj`（参照 `node_messages.clj`）：
 
 ```clojure
-(ns my-mod.wireless.gui.repeater-messages
-  (:require [my-mod.wireless.gui.messages-dsl :as msg-dsl]))
+(ns cn.li.wireless.gui.repeater-messages
+  (:require [cn.li.wireless.gui.messages-dsl :as msg-dsl]))
 
 (def repeater-actions [:get-status :set-mode])
 
@@ -182,7 +182,7 @@ wireless_<domain>_<action-token>
 ```clojure
 ;; wireless_messages.clj
 (:require ...
-          [my-mod.wireless.gui.repeater-messages :as repeater-msgs])
+          [cn.li.wireless.gui.repeater-messages :as repeater-msgs])
 
 (def catalog
   (msg-dsl/build-catalog

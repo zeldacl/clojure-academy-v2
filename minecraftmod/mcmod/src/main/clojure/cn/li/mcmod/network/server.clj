@@ -1,6 +1,6 @@
 (ns cn.li.mcmod.network.server
   "Server-side RPC handler registry for GUI/network logic"
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private handlers (atom {}))
 

@@ -4,10 +4,10 @@
   This namespace is deprecated and kept only for backward compatibility.
   
   For modern block definitions, use:
-  - my-mod.block.dsl/defblock - DSL macro for defining blocks
+  - cn.li.mcmod.block.dsl/defblock - DSL macro for defining blocks
   
   Example:
-  (require '[my-mod.block.dsl :as bdsl])
+  (require '[cn.li.mcmod.block.dsl :as bdsl])
   
   (bdsl/defblock my-custom-block
     :material :stone
@@ -17,4 +17,4 @@
     :requires-tool true
     :on-right-click (fn [data] (println \"Clicked!\")))")
 
-;; All block definitions have been migrated to my-mod.block.dsl
+;; All block definitions have been migrated to cn.li.mcmod.block.dsl

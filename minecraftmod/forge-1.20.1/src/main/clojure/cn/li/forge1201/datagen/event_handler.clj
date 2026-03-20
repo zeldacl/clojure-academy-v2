@@ -6,8 +6,8 @@
    
    Key insight: Java annotations are metadata; the real logic is in Clojure.
    The wrapper class with @Mod.EventBusSubscriber just delegates to this namespace."
-  (:require [my-mod.forge1201.datagen.setup :as dg-setup]
-            [my-mod.config.modid :as modid])
+  (:require [cn.li.forge1201.datagen.setup :as dg-setup]
+            [cn.li.ac.config.modid :as modid])
   (:import [net.minecraftforge.data.event GatherDataEvent]))
 
 ;; ============================================================================

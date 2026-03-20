@@ -305,7 +305,7 @@
                                 (try
                                   (net.minecraft.client.resources.language.I18n/get (str k) (object-array 0))
                                   (catch Throwable _ (str k))))))
-  (if-let [init-client! (requiring-resolve 'my-mod.forge1201.client.init/init-client)]
+  (if-let [init-client! (requiring-resolve 'cn.li.forge1201.client.init/init-client)]
     (init-client!)
     (log/warn "Forge client init namespace unavailable on current side")))
 

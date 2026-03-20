@@ -1,7 +1,7 @@
-(ns my-mod.wireless.gui.container-common
+(ns cn.li.ac.wireless.gui.container-common
   "Shared helpers for wireless GUI containers"
-  (:require [my-mod.wireless.gui.container-helpers :as helpers]
-            [my-mod.platform.be :as platform-be]))
+  (:require [cn.li.ac.wireless.gui.container-helpers :as helpers]
+            [cn.li.mcmod.platform.be :as platform-be]))
 
 (defn get-slot-item
   "Get item from slot"

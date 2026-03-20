@@ -1,14 +1,14 @@
-(ns my-mod.wireless.gui.container-dispatcher
+(ns cn.li.ac.wireless.gui.container-dispatcher
   "Platform-agnostic container operation dispatcher
   
   This namespace provides unified interfaces for container operations,
   eliminating the need for platform-specific instanceof checks and cond branching.
   
   Uses protocols to achieve polymorphic dispatch based on container type."
-  (:require [my-mod.wireless.gui.node-container :as node-container]
-            [my-mod.wireless.gui.matrix-container :as matrix-container]
-            [my-mod.wireless.gui.solar-container :as solar-container]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.ac.wireless.gui.node-container :as node-container]
+            [cn.li.ac.wireless.gui.matrix-container :as matrix-container]
+            [cn.li.ac.wireless.gui.solar-container :as solar-container]
+            [cn.li.mcmod.util.log :as log]))
 
   (defn node-container?
     "Type check via :container-type — stable regardless of field changes."

@@ -59,7 +59,7 @@
          Expected signature: (fn [x y z] -> IBlockPos)
          
          Example platform initialization:
-         (alter-var-root #'my-mod.platform.position/*position-factory*
+         (alter-var-root #'cn.li.mcmod.platform.position/*position-factory*
            (constantly (fn [x y z] (BlockPos. x y z))))"}
   *position-factory*
   nil)

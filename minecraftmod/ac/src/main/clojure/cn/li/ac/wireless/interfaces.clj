@@ -10,7 +10,7 @@
   - IWirelessReceiver: Energy receiver
   
   All interfaces are implemented using Clojure protocols for maximum flexibility."
-  (:require [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Base Interfaces

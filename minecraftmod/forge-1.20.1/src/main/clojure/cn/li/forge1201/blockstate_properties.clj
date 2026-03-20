@@ -1,10 +1,10 @@
 (ns cn.li.forge1201.blockstate-properties
   "Forge 1.20.1 adapter: create Minecraft BlockState Property objects from ac definitions.
-   Reads definitions from my-mod.block.blockstate-property-definitions (ac); creates
+   Reads definitions from cn.li.ac.block.blockstate-property-definitions (ac); creates
    IntegerProperty/BooleanProperty and stores in registry for mod and datagen."
-  (:require [my-mod.block.blockstate-property-definitions :as defs]
-            [my-mod.registry.metadata :as registry-metadata]
-            [my-mod.util.log :as log])
+  (:require [cn.li.ac.block.blockstate-property-definitions :as defs]
+            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.level.block.state.properties IntegerProperty BooleanProperty]))
 
 (defonce property-registry (atom {}))

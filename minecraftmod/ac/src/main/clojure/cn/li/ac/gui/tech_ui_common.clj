@@ -1,4 +1,4 @@
-(ns my-mod.gui.tech-ui-common
+(ns cn.li.ac.gui.tech-ui-common
   "TechUI共享组件库 (参照Scala TechUI.scala)
   
   提供：
@@ -7,12 +7,12 @@
   - 通用样式和动画
   - Histogram元素构建器"
   (:require [clojure.string :as str]
-            [my-mod.gui.cgui :as cgui]
-            [my-mod.gui.components :as comp]
-            [my-mod.gui.events :as events]
-            [my-mod.gui.cgui-document :as cgui-doc]
-            [my-mod.util.log :as log]
-            [my-mod.config.modid :as modid]))
+            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.components :as comp]
+            [cn.li.mcmod.gui.events :as events]
+            [cn.li.mcmod.gui.cgui-document :as cgui-doc]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.config.modid :as modid]))
 
 ;; ============================================================================
 ;; Constants

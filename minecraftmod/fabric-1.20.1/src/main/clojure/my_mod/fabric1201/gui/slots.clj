@@ -1,4 +1,4 @@
-(ns my-mod.fabric1201.gui.slots
+(ns cn.li.fabric1201.gui.slots
   "Fabric 1.20.1 GUI Slot Implementations
   
   This is adapted from Forge's slot system with Fabric API compatibility"

@@ -1,13 +1,13 @@
-(ns my-mod.wireless.gui.solar-container
+(ns cn.li.ac.wireless.gui.solar-container
   "Solar Generator GUI container (server-side + synced atoms).
 
   Reads tile state via getCustomState like node/matrix containers —
   no Java reflection needed."
-  (:require [my-mod.gui.slot-schema :as slot-schema]
-            [my-mod.wireless.slot-schema :as slots]
-            [my-mod.energy.operations :as energy-ops]
-            [my-mod.wireless.gui.container-common :as common]
-            [my-mod.wireless.gui.container-schema :as schema]))
+  (:require [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.ac.wireless.slot-schema :as slots]
+            [cn.li.ac.energy.operations :as energy-ops]
+            [cn.li.ac.wireless.gui.container-common :as common]
+            [cn.li.ac.wireless.gui.container-schema :as schema]))
 
 (def ^:private solar-slot-schema-id slots/solar-gen-id)
 

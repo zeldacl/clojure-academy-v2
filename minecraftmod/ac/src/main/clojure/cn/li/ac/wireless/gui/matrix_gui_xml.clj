@@ -1,4 +1,4 @@
-(ns my-mod.wireless.gui.matrix-gui-xml
+(ns cn.li.ac.wireless.gui.matrix-gui-xml
   "Wireless Matrix GUI - 动态实现（参照Scala GuiMatrix2+TechUI）
   
   架构：使用TechUI.ContainerUI模式
@@ -17,16 +17,16 @@
   - 动态SSID/密码显示（初始化后所有者可编辑）
   - 初始化表单供所有者创建网络"
   
-  (:require [my-mod.gui.cgui :as cgui]
-            [my-mod.gui.components :as comp]
-            [my-mod.gui.events :as events]
-            [my-mod.gui.tabbed-gui :as tabbed-gui]
-            [my-mod.gui.tech-ui-common :as tech-ui]
-            [my-mod.network.client :as net-client]
-            [my-mod.wireless.gui.matrix-messages :as matrix-msgs]
-            [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
-            [my-mod.platform.entity :as entity]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.components :as comp]
+            [cn.li.mcmod.gui.events :as events]
+            [cn.li.ac.gui.tabbed-gui :as tabbed-gui]
+            [cn.li.ac.gui.tech-ui-common :as tech-ui]
+            [cn.li.mcmod.network.client :as net-client]
+            [cn.li.ac.wireless.gui.matrix-messages :as matrix-msgs]
+            [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.util.log :as log])
   (:import [my_mod.api.wireless IWirelessMatrix]))
 
 (def gui-width tech-ui/gui-width)

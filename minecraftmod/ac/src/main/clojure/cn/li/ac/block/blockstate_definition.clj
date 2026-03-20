@@ -6,9 +6,9 @@
    
   每个平台的datagen实现可以根据这些定义调用对应的API生成JSON文件。"
   (:require [clojure.string :as str]
-            [my-mod.registry.metadata :as registry-metadata]
-            [my-mod.block.wireless-node :as wireless-node]
-            [my-mod.block.node-schema :as nschema]))
+            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.ac.block.wireless-node :as wireless-node]
+            [cn.li.ac.block.node-schema :as nschema]))
 
 ;; ============================================================================
 ;; BlockState部分定义

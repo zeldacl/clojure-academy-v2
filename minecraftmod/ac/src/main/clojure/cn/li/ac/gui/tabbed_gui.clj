@@ -1,4 +1,4 @@
-(ns my-mod.gui.tabbed-gui
+(ns cn.li.ac.gui.tabbed-gui
   "AC 通用：多页签 TechUI 约定与辅助。
 
   约定：
@@ -8,11 +8,11 @@
   - 切换页签 = 改变对应 tab 的布局显示（client CGui set-visible!）+ 根据 tab-index 启用/禁用 slot 交互。
   - 凡「inv-window + 其他 panel」的 GUI，其 container 提供 :tab-index atom 存当前页签索引。
   平台层通过「是否存在 :tab-index」判断是否为多页签 GUI，决定是否添加 DataSlot、条件 Slot 与高亮控制。"
-  (:require [my-mod.gui.platform-adapter :as gui]
-            [my-mod.network.client :as net-client]
-            [my-mod.network.server :as net-server]
-            [my-mod.platform.entity :as entity]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.network.server :as net-server]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Constants & protocol (platform-agnostic)

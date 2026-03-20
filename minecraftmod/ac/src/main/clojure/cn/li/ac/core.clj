@@ -1,26 +1,26 @@
 (ns cn.li.ac.core
-  (:require [my-mod.defs :as defs]
-            [my-mod.util.log :as log]
-            [my-mod.platform.resource :as platform-res]
-            [my-mod.config.modid :as modid]
+  (:require [cn.li.ac.defs :as defs]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.resource :as platform-res]
+            [cn.li.ac.config.modid :as modid]
             ;; Load all GUI definitions (so gui-dsl registry is populated)
-            [my-mod.gui.definitions]
-            [my-mod.gui.tabbed-gui :as tabbed-gui]
-            [my-mod.events.metadata :as event-metadata]
-            [my-mod.block.multiblock-core :as mb-core]
-            [my-mod.wireless.gui.matrix-network-handler :as matrix-net]
-            [my-mod.wireless.gui.node-network-handler :as node-net]
-            [my-mod.wireless.gui.generator-network-handler :as gen-net]
-            [my-mod.wireless.world-data :as wd]
+            [cn.li.ac.gui.definitions]
+            [cn.li.ac.gui.tabbed-gui :as tabbed-gui]
+            [cn.li.mcmod.events.metadata :as event-metadata]
+            [cn.li.mcmod.block.multiblock-core :as mb-core]
+            [cn.li.ac.wireless.gui.matrix-network-handler :as matrix-net]
+            [cn.li.ac.wireless.gui.node-network-handler :as node-net]
+            [cn.li.ac.wireless.gui.generator-network-handler :as gen-net]
+            [cn.li.wireless.world-data :as wd]
             ;; Load all block definitions (so block-dsl registry is populated)
-            [my-mod.block.wireless-node]
-            [my-mod.block.wireless-matrix]
-            [my-mod.block.solar-gen]
+            [cn.li.ac.block.wireless-node]
+            [cn.li.ac.block.wireless-matrix]
+            [cn.li.ac.block.solar-gen]
             ;; Load all item definitions (so item-dsl registry is populated)
-            [my-mod.item.components]
-            [my-mod.item.constraint-plate]
-            [my-mod.item.mat-core]
-            [my-mod.item.media]))
+            [cn.li.ac.item.components]
+            [cn.li.ac.item.constraint-plate]
+            [cn.li.item.mat-core]
+            [cn.li.ac.item.media]))
 
 (defn init
   "Core init hook invoked by per-version entry classes."

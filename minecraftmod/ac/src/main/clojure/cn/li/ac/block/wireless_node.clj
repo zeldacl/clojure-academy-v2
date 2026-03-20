@@ -5,26 +5,26 @@
   All persistent state lives in ScriptedBlockEntity.customState as a Clojure
   persistent map.
 
-  State map shape is defined by my-mod.block.node-schema/node-state-schema.
+  State map shape is defined by cn.li.ac.block.node-schema/node-state-schema.
   Do NOT hard-code field names here; add/rename/remove fields only in that
   schema and everything below updates automatically."
-  (:require [my-mod.block.dsl           :as bdsl]
-            [my-mod.block.tile-dsl      :as tdsl]
-            [my-mod.block.tile-logic    :as tile-logic]
-            [my-mod.block.role-impls    :as impls]
-            [my-mod.block.node-schema   :as nschema]
-            [my-mod.block.state-schema  :as schema]
-            [my-mod.gui.slot-schema     :as slot-schema]
-            [my-mod.platform.capability :as platform-cap]
-            [my-mod.platform.world      :as world]
-            [my-mod.platform.be         :as platform-be]
-            [my-mod.platform.position   :as pos]
+  (:require [cn.li.mcmod.block.dsl           :as bdsl]
+            [cn.li.mcmod.block.tile-dsl      :as tdsl]
+            [cn.li.mcmod.block.tile-logic    :as tile-logic]
+            [cn.li.ac.block.role-impls    :as impls]
+            [cn.li.ac.block.node-schema   :as nschema]
+            [cn.li.mcmod.block.state-schema  :as schema]
+            [cn.li.mcmod.gui.slot-schema     :as slot-schema]
+            [cn.li.mcmod.platform.capability :as platform-cap]
+            [cn.li.mcmod.platform.world      :as world]
+            [cn.li.mcmod.platform.be         :as platform-be]
+            [cn.li.mcmod.platform.position   :as pos]
             [clojure.string             :as str]
-            [my-mod.energy.operations   :as energy]
-            [my-mod.wireless.world-data :as wd]
-            [my-mod.wireless.slot-schema :as slots]
-            [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.util.log            :as log])
+            [cn.li.ac.energy.operations   :as energy]
+            [cn.li.wireless.world-data :as wd]
+            [cn.li.ac.wireless.slot-schema :as slots]
+            [cn.li.wireless.virtual-blocks :as vb]
+            [cn.li.mcmod.util.log            :as log])
   (:import [my_mod.api.wireless IWirelessNode]
            [my_mod.api.energy   IEnergyCapable]
            [net.minecraft.world.item ItemStack]))
@@ -153,8 +153,8 @@
                      (update-block-state! state level pos)
                      ;; Broadcast to connected GUIs
                      (try
-                       (require 'my-mod.wireless.gui.node-sync)
-                       ((resolve 'my-mod.wireless.gui.node-sync/broadcast-node-state)
+                       (require 'cn.li.ac.wireless.gui.node-sync)
+                       ((resolve 'cn.li.ac.wireless.gui.node-sync/broadcast-node-state)
                         level pos
                         (-> (schema/schema->sync-payload nschema/node-state-schema state pos)
                             (assoc :max-energy (nschema/node-max-energy state))))
@@ -268,7 +268,7 @@
           (log/info "  Connected:" (:enabled state))
           (log/info "  Name:" (:node-name state))
           (try
-            (if-let [open-node-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-node-gui)]
+            (if-let [open-node-gui (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-node-gui)]
               (let [result (open-node-gui player world pos)]
                 (log/info "Opened Node GUI")
                 result)

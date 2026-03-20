@@ -1,20 +1,20 @@
-(ns my-mod.wireless.gui.sync-helpers
+(ns cn.li.ac.wireless.gui.sync-helpers
   "Shared synchronization utilities for GUI containers.
   
   Provides common functions for broadcasting state and applying sync payloads
   to reduce code duplication between node and matrix sync implementations."
-  (:require [my-mod.util.log :as log]
-            [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.wireless.world-data :as wd]
-            [my-mod.wireless.interfaces :as winterfaces]
-            [my-mod.platform.position :as pos]
-            [my-mod.platform.be :as platform-be]))
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.wireless.virtual-blocks :as vb]
+            [cn.li.wireless.world-data :as wd]
+            [cn.li.ac.wireless.interfaces :as winterfaces]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.be :as platform-be]))
 
 (defn- get-active-client-container
   "Get active client container from gui.registry without creating compile-time cycle."
   []
   (try
-    (when-let [container-var (requiring-resolve 'my-mod.wireless.gui.registry/client-container)]
+    (when-let [container-var (requiring-resolve 'cn.li.ac.wireless.gui.registry/client-container)]
       @container-var)
     (catch Exception _
       nil)))
@@ -39,7 +39,7 @@
   (try
     ;; Get the unified platform broadcast function from platform-adapter
     ;; We use dynamic require to break circular dependency
-    (when-let [get-fn (requiring-resolve 'my-mod.gui.platform-adapter/get-platform-broadcast-fn)]
+    (when-let [get-fn (requiring-resolve 'cn.li.ac.gui.platform-adapter/get-platform-broadcast-fn)]
       (when-let [broadcast-fn (get-fn)]
         (broadcast-fn world pos sync-data)))
     (catch Exception e

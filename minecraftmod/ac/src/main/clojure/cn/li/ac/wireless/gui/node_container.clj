@@ -1,14 +1,14 @@
-(ns my-mod.wireless.gui.node-container
+(ns cn.li.ac.wireless.gui.node-container
   "Wireless Node GUI Container - handles server-side inventory and data sync"
-  (:require [my-mod.energy.operations :as energy-stub]
-            [my-mod.gui.slot-schema :as slot-schema]
-            [my-mod.wireless.slot-schema :as slots]
-            [my-mod.wireless.gui.container-common :as common]
-            [my-mod.wireless.gui.container-move-common :as move-common]
-            [my-mod.wireless.gui.container-schema :as schema]
-            [my-mod.wireless.gui.sync-helpers :as sync-helpers]
-            [my-mod.platform.be :as platform-be]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.ac.energy.operations :as energy-stub]
+            [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.ac.wireless.slot-schema :as slots]
+            [cn.li.ac.wireless.gui.container-common :as common]
+            [cn.li.ac.wireless.gui.container-move-common :as move-common]
+            [cn.li.ac.wireless.gui.container-schema :as schema]
+            [cn.li.ac.wireless.gui.sync-helpers :as sync-helpers]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Field Schema — single source of truth for all atom fields

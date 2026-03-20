@@ -5,12 +5,12 @@
   - Rotate 90 degrees around Y
   - Scale by 0.014
   - Render solar.obj with models/solar texture"
-  (:require [my-mod.client.resources :as res]
-            [my-mod.client.obj :as obj]
-            [my-mod.client.render.tesr-api :as tesr-api]
-            [my-mod.client.render.buffer :as rb]
-            [my-mod.client.render.pose :as pose]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.client.resources :as res]
+            [cn.li.mcmod.client.obj :as obj]
+            [cn.li.mcmod.client.render.tesr-api :as tesr-api]
+            [cn.li.mcmod.client.render.buffer :as rb]
+            [cn.li.client.render.pose :as pose]
+            [cn.li.mcmod.util.log :as log]))
 
 (defonce model (delay (res/load-obj-model "solar")))
 (defonce texture (delay (res/texture-location "models/solar")))

@@ -1,21 +1,21 @@
-(ns my-mod.wireless.gui.matrix-container
+(ns cn.li.ac.wireless.gui.matrix-container
   "Wireless Matrix GUI Container - handles 4 slots and multiblock data sync.
 
   State model (Design-3): tile-entity is a ScriptedBlockEntity; all slot data
   is read from / written to (.getCustomState be) / (.setCustomState be new-state)."
-  (:require [my-mod.util.log :as log]
-            [my-mod.block.wireless-matrix :as wm]
-            [my-mod.block.matrix-schema :as mschema]
-            [my-mod.gui.slot-schema :as slot-schema]
-            [my-mod.item.constraint-plate :as plate]
-            [my-mod.item.mat-core :as core]
-            [my-mod.wireless.slot-schema :as slots]
-            [my-mod.wireless.gui.container-common :as common]
-            [my-mod.wireless.gui.container-move-common :as move-common]
-            [my-mod.wireless.gui.container-schema :as schema]
-            [my-mod.wireless.gui.matrix-fields :as mf]
-            [my-mod.wireless.gui.sync-helpers :as sync-helpers]
-            [my-mod.platform.be :as platform-be]))
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.block.wireless-matrix :as wm]
+            [cn.li.ac.block.matrix-schema :as mschema]
+            [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.ac.item.constraint-plate :as plate]
+            [cn.li.item.mat-core :as core]
+            [cn.li.ac.wireless.slot-schema :as slots]
+            [cn.li.ac.wireless.gui.container-common :as common]
+            [cn.li.ac.wireless.gui.container-move-common :as move-common]
+            [cn.li.ac.wireless.gui.container-schema :as schema]
+            [cn.li.ac.wireless.gui.matrix-fields :as mf]
+            [cn.li.ac.wireless.gui.sync-helpers :as sync-helpers]
+            [cn.li.mcmod.platform.be :as platform-be]))
 
 ;; ============================================================================
 ;; Field Schema — single source of truth for all atom fields

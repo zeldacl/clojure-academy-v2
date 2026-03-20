@@ -228,7 +228,7 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
     public void load(CompoundTag tag) {
         super.load(tag);
         try {
-            Var readNbt = RT.var("my-mod.block.tile-logic", "read-nbt");
+            Var readNbt = RT.var("cn.li.mcmod.block.tile-logic", "read-nbt");
             Object data = readNbt.invoke(tileId, tag);
             if (data != null) {
                 customState = data;
@@ -248,7 +248,7 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
         try {
-            Var writeNbt = RT.var("my-mod.block.tile-logic", "write-nbt");
+            Var writeNbt = RT.var("cn.li.mcmod.block.tile-logic", "write-nbt");
             writeNbt.invoke(tileId, this, tag);
             writeScriptData(tag);
         } catch (Exception ex) {
@@ -262,7 +262,7 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
     public static void serverTick(Level level, BlockPos pos, BlockState state, ScriptedBlockEntity be) {
         if (level == null || level.isClientSide) return;
         try {
-            Var invokeTick = RT.var("my-mod.block.tile-logic", "invoke-tick");
+            Var invokeTick = RT.var("cn.li.mcmod.block.tile-logic", "invoke-tick");
             invokeTick.invoke(be.tileId, level, pos, state, be);
         } catch (Exception ex) {
             // Silent; log via Clojure if needed
@@ -283,7 +283,7 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
                 return cached.cast();
             }
             try {
-                Var getCapFn = RT.var("my-mod.block.tile-logic", "get-capability");
+                Var getCapFn = RT.var("cn.li.mcmod.block.tile-logic", "get-capability");
                 Object handler = getCapFn.invoke(tileId, key, this, side);
                 if (handler != null) {
                     LazyOptional<Object> lo = LazyOptional.of(() -> handler);
@@ -319,7 +319,7 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
 
     private @Nullable Object containerOp(String fn, Object... extraArgs) {
         try {
-            Var v = RT.var("my-mod.block.tile-logic", fn);
+            Var v = RT.var("cn.li.mcmod.block.tile-logic", fn);
             Object[] args = new Object[1 + extraArgs.length];
             args[0] = tileId;
             System.arraycopy(extraArgs, 0, args, 1, extraArgs.length);

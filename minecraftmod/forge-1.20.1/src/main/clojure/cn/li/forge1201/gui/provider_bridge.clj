@@ -4,7 +4,7 @@
   Uses reify MenuProvider and delegates menu creation to menu-bridge."
   (:require [cn.li.mcmod.gui.platform-adapter :as gui]
             [cn.li.mcmod.util.log :as log]
-            [my-mod.forge1201.gui.menu-bridge :as menu-bridge])
+            [cn.li.forge1201.gui.menu-bridge :as menu-bridge])
   (:import [net.minecraft.world MenuProvider]
            [net.minecraft.network.chat Component]))
 

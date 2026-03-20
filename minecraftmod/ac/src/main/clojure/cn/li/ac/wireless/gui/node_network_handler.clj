@@ -1,16 +1,16 @@
-(ns my-mod.wireless.gui.node-network-handler
+(ns cn.li.ac.wireless.gui.node-network-handler
   "Wireless Node GUI - server-side network handlers"
-  (:require [my-mod.network.server :as net-server]
-            [my-mod.wireless.helper :as helper]
-            [my-mod.wireless.network :as wireless-net]
-            [my-mod.wireless.world-data :as world-data]
-            [my-mod.wireless.virtual-blocks :as vb]
-            [my-mod.wireless.interfaces :as winterfaces]
-            [my-mod.wireless.gui.node-messages :as node-msgs]
-            [my-mod.wireless.gui.wireless-messages :as wireless-msgs]
-            [my-mod.wireless.gui.network-handler-helpers :as net-helpers]
-            [my-mod.platform.be :as platform-be]
-            [my-mod.util.log :as log])
+  (:require [cn.li.mcmod.network.server :as net-server]
+            [cn.li.ac.wireless.helper :as helper]
+            [cn.li.ac.wireless.network :as wireless-net]
+            [cn.li.wireless.world-data :as world-data]
+            [cn.li.wireless.virtual-blocks :as vb]
+            [cn.li.ac.wireless.interfaces :as winterfaces]
+            [cn.li.ac.wireless.gui.node-messages :as node-msgs]
+            [cn.li.ac.wireless.gui.wireless-messages :as wireless-msgs]
+            [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.util.log :as log])
   (:import [my_mod.api.wireless IWirelessNode]))
 
 (defn- update-node-field!

@@ -3,24 +3,24 @@
 
   Uses generic ScriptedBlockEntity; tick and NBT logic are registered in this
   namespace. Block metadata and right-click (open GUI) are defined here."
-  (:require [my-mod.block.dsl :as bdsl]
-            [my-mod.block.tile-dsl :as tdsl]
-            [my-mod.platform.capability :as platform-cap]
-            [my-mod.block.tile-logic :as tile-logic]
-            [my-mod.block.role-impls :as impls]
-            [my-mod.platform.nbt :as nbt]
-            [my-mod.platform.item :as item]
-            [my-mod.platform.be :as platform-be]
-            [my-mod.util.log :as log]
-            [my-mod.config.modid :as modid]))
+  (:require [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.block.tile-dsl :as tdsl]
+            [cn.li.mcmod.platform.capability :as platform-cap]
+            [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.ac.block.role-impls :as impls]
+            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.item :as item]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.config.modid :as modid]))
 
 (defn- open-solar-gui!
   [{:keys [player world pos sneaking] :as _ctx}]
   (when (and player world pos (not sneaking))
     (try
-      (if-let [open-solar-gui (requiring-resolve 'my-mod.wireless.gui.registry/open-solar-gui)]
+      (if-let [open-solar-gui (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-solar-gui)]
         (open-solar-gui player world pos)
-        (do (log/error "SolarGen GUI open fn not found: my-mod.wireless.gui.registry/open-solar-gui") nil))
+        (do (log/error "SolarGen GUI open fn not found: cn.li.ac.wireless.gui.registry/open-solar-gui") nil))
       (catch Exception e
         (log/error "Failed to open SolarGen GUI:" (.getMessage e))
         nil))))
@@ -50,9 +50,9 @@
   "True when the level is daytime and the block above has sky access."
   [level pos]
   (when (and level pos)
-    (let [time (rem (long (my-mod.platform.world/world-get-day-time level)) 24000)
+    (let [time (rem (long (cn.li.mcmod.platform.world/world-get-day-time level)) 24000)
           day? (<= time 12500)]
-      (and day? (my-mod.platform.world/world-can-see-sky level
+      (and day? (cn.li.mcmod.platform.world/world-can-see-sky level
                   (clojure.lang.Reflector/invokeInstanceMethod pos "above" (object-array [])))))))
 
 (defn- solar-tick-fn
@@ -61,10 +61,10 @@
   All mutable state is stored in BE customState as a Clojure keyword map.
   No reflection — uses direct Java interop and getCustomState/setCustomState."
   [level pos _block-state be]
-  (when (and level (not (my-mod.platform.world/world-is-client-side level)))
+  (when (and level (not (cn.li.mcmod.platform.world/world-is-client-side level)))
     (let [state       (or (platform-be/get-custom-state be) {})
           generating? (can-generate? level pos)
-          raining?    (my-mod.platform.world/world-is-raining level)
+          raining?    (cn.li.mcmod.platform.world/world-is-raining level)
           status      (cond (not generating?) "STOPPED"
                             raining?          "WEAK"
                             :else             "STRONG")

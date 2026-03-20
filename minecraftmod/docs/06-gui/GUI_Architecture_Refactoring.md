@@ -46,5 +46,5 @@
 ## 槽位管理要点
 
 - 槽位范围与快速移动策略由 **slot_manager** 统一给出，平台仅执行“移动+标记脏”。
-- 能量物品等过滤逻辑使用 **my-mod.energy.operations**，与 GUI 槽位校验一致。
+- 能量物品等过滤逻辑使用 **cn.li.energy.operations**，与 GUI 槽位校验一致。
 - 详见原 SLOT_MANAGER_REFACTORING 文档中的常量与 get-quick-move-strategy 说明。

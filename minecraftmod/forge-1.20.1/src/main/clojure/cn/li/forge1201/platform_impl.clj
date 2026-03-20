@@ -236,7 +236,7 @@
     (.destroyBlock this block-pos false))
 
   (world-place-block-by-id [this block-id block-pos flags]
-    (if-let [get-registered-block (requiring-resolve 'my-mod.forge1201.mod/get-registered-block)]
+    (if-let [get-registered-block (requiring-resolve 'cn.li.forge1201.mod/get-registered-block)]
       (if-let [block (get-registered-block block-id)]
         (.setBlock this block-pos (.defaultBlockState block) flags)
         false)

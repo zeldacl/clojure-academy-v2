@@ -82,12 +82,12 @@
 
 Some protocols are active platform-abstraction boundaries and must be retained.
 
-- `my-mod.platform.item/IItemStack`
+- `cn.li.platform.item/IItemStack`
   - Purpose: unify `ItemStack` operations across Forge/Fabric.
   - Implemented in:
     - `forge-1.20.1/.../platform_impl.clj` (`extend-type ItemStack item/IItemStack`)
     - `fabric-1.20.1/.../platform_impl.clj` (`extend-type ItemStack item/IItemStack`)
-  - Consumed by core/content code via `my-mod.platform.item` functions, e.g.:
+  - Consumed by core/content code via `cn.li.platform.item` functions, e.g.:
     - `item/create-item-from-nbt`
     - `item/item-is-empty?`
     - `item/item-save-to-nbt`
@@ -276,10 +276,10 @@ At runtime, the correct implementation is invoked based on `*forge-version*`.
 ```java
 // Load namespace
 IFn require = Clojure.var("clojure.core", "require");
-require.invoke(Clojure.read("my-mod.forge1165.init"));
+require.invoke(Clojure.read("cn.li.forge1165.init"));
 
 // Call function
-IFn initFn = Clojure.var("my-mod.forge1165.init", "init-from-java");
+IFn initFn = Clojure.var("cn.li.forge1165.init", "init-from-java");
 initFn.invoke();
 ```
 
@@ -287,7 +287,7 @@ initFn.invoke();
 
 Clojure can directly invoke Java constructors/methods:
 ```clojure
-(ns my-mod.blocks
+(ns cn.li.blocks
   (:import [net.minecraft.block Block]))
 
 (defn make-block []
@@ -492,7 +492,7 @@ When running `./gradlew buildAll`:
 2. Instantiates `MyMod1165` (Java constructor runs)
 3. Constructor:
    - Loads Clojure namespaces via `Clojure.var`
-   - Calls `my-mod.forge1165.mod/mod-init`
+   - Calls `cn.li.forge1165.mod/mod-init`
 4. Clojure `mod-init`:
    - Loads DSL namespaces (triggers `defblock`/`defitem` macros)
    - DSL registries auto-populate (`block-registry`, `item-registry`)
@@ -620,7 +620,7 @@ The current architecture is the result of 12 systematic refactorings to achieve 
 14. Created `events/metadata.clj` for event handler mapping
 15. Removed hardcoded `"demo_block"` string checks
 16. Auto-sync event handlers from DSL `:on-right-click` properties
-17. Eliminated `my-mod.defs` dependency from all platform code
+17. Eliminated `cn.li.defs` dependency from all platform code
 
 **Result**: Events 100% metadata-driven, -23 lines
 

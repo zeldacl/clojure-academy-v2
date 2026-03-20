@@ -25,12 +25,12 @@
   - `on-destroy-button-clicked`：按钮点击处理
   - `validate-gui-open`：验证 GUI 是否可以打开
 
-- `my-mod.core`：主逻辑
+- `cn.li.core`：主逻辑
   - `on-block-right-click`：右键点击方块时调用 `gui-api/open-gui`
 
 #### Forge 1.20.1 适配层
-- `my-mod.forge1201.events`：handle-right-click 等
-- `my-mod.forge1201.gui.impl`：on-button-clicked、on-slot-changed、create-menu-title、get-slot-count
+- `cn.li.forge1201.events`：handle-right-click 等
+- `cn.li.forge1201.gui.impl`：on-button-clicked、on-slot-changed、create-menu-title、get-slot-count
 
 #### Fabric 1.20.1 适配层
 - 与 Forge 1.20.1 对应的实现，使用 Fabric API（ScreenHandler 等）
@@ -47,7 +47,7 @@
 ## Clojure 代码工作流程
 
 1. 玩家右键点击方块 → 平台事件 → Clojure handle-right-click（检查 demo_block）
-2. my-mod.core/on-block-right-click → gui-core/validate-gui-open、gui-api/open-gui
+2. cn.li.core/on-block-right-click → gui-core/validate-gui-open、gui-api/open-gui
 3. 平台 gui.impl/open-gui 返回 gui-id 与 pos → [Java] 打开 GUI
 4. 槽位变化 / 按钮点击 → Clojure on-slot-changed、on-destroy-button-clicked 等
 

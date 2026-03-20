@@ -1,9 +1,9 @@
-(ns my-mod.item.media
+(ns cn.li.ac.item.media
   "Media items - information storage devices for Wireless Matrix
   
   Media items store information/music that can be transmitted through wireless network."
-  (:require [my-mod.item.dsl :as idsl]
-            [my-mod.util.log :as log]))
+  (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Media Items - Music/Information storage

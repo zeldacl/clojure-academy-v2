@@ -4,14 +4,14 @@
   This is the *single point of definition* for all matrix state fields.
   Adding, removing, or renaming a field requires only editing
   matrix-state-schema below; NBT serialisation and GUI sync payloads are
-  derived automatically via my-mod.block.state-schema.
+  derived automatically via cn.li.block.state-schema.
 
   Note: :is-working, :capacity, :bandwidth, and :range are *derived* values
   computed from :plate-count / :core-level at call sites; they are not stored
   fields and therefore not present in this schema."
-  (:require [my-mod.block.state-schema :as schema]
-            [my-mod.platform.nbt :as nbt]
-            [my-mod.platform.item :as item]))
+  (:require [cn.li.mcmod.block.state-schema :as schema]
+            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.item :as item]))
 
 ;; ============================================================================
 ;; Inventory serialisation helpers

@@ -1,11 +1,11 @@
-(ns my-mod.wireless.gui.container-helpers
+(ns cn.li.ac.wireless.gui.container-helpers
   "Shared container utility functions for wireless GUI system
 
   Provides common slot access, lifecycle, and validation helpers used by
   both node_container and matrix_container to eliminate code duplication."
-  (:require [my-mod.platform.be :as platform-be]
-            [my-mod.platform.position :as pos]
-            [my-mod.platform.entity :as entity]))
+  (:require [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.entity :as entity]))
 
 ;; ============================================================================
 ;; Slot Access Helpers
