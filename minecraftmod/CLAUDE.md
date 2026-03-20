@@ -35,13 +35,15 @@ Output jars go to `build/distributions/` (via `gatherJars` task) and per-module 
 
 ```
 minecraftmod/
-├── mcmod/          # Platform-agnostic base: block/item/GUI DSLs, metadata systems, protocols
-├── ac/             # Game content: wireless energy system, blocks, items, GUIs, renderers
-├── forge-1.20.1/   # Forge 1.20.1 platform adapter (Java @Mod entry + Clojure adapters)
-└── fabric-1.20.1/  # Fabric 1.20.1 adapter (currently disabled in settings.gradle)
+├── api/            # (java) (namespace: cn/li/acapi) The api for other mod
+├── mcmod/          # (java+clojure) (namespace: cn/li/mcmod) Platform-agnostic base: block/item/GUI DSLs, metadata systems, protocols
+├── ac/             # (clojure) (namespace: cn/li/ac) Game content: wireless energy system, blocks, items, GUIs, renderers
+├── forge-1.20.1/   # (java+clojure) (namespace: cn/li/forge1201) Forge 1.20.1 platform adapter (Java @Mod entry + Clojure adapters)
+└── fabric-1.20.1/  # (java+clojure) (namespace: cn/li/fabric1201) Fabric 1.20.1 adapter (currently disabled in settings.gradle)
 ```
 
-Module dependency chain: `forge-1.20.1` → `ac` → `mcmod`
+Module dependency chain1: `forge-1.20.1` → `mcmod`→ `api`
+Module dependency chain2: `ac` → `mcmod`→ `api`
 
 ## Architecture
 
@@ -71,6 +73,10 @@ Module dependency chain: `forge-1.20.1` → `ac` → `mcmod`
 ### GUI System
 
 GUIs are defined in XML-style Clojure data (`*_gui_xml.clj`), parsed by `mcmod/gui/xml_parser.clj`, with sync handled by `sync_helpers.clj`. Network handlers (`*_network_handler.clj`) bridge server↔client GUI state. Platform-specific menu/screen implementations live in `forge-1.20.1/gui/`.
+
+## Coding Rules
+
+- **No reflection in Clojure**: All Java interop must use type hints to avoid reflection. Never use untyped Java method calls — always add `^TypeName` hints to eliminate reflection warnings. Use `(set! *warn-on-reflection* true)` to detect violations.
 
 ## Troubleshooting
 
