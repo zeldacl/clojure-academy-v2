@@ -90,6 +90,8 @@
                    ;; Store menu-type in platform adapter's metadata system
                    menu-type)))]
       (swap! gui-menu-types assoc gui-id ro)
+      ;; Sync into unified business-layer metadata via mcmod (no direct `ac` dependency).
+      (gui/register-menu-type! :forge-1.20.1 gui-id menu-type)
       (log/info "Queued menu type:" registry-name "for GUI ID" gui-id)))
   (log/info "Queued" (count @gui-menu-types) "menu types"))
 

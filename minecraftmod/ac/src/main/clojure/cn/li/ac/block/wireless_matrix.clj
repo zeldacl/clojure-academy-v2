@@ -16,6 +16,7 @@
             [cn.li.mcmod.block.state-schema :as schema]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.world :as world]
@@ -69,7 +70,8 @@
   [state]
   (assoc state :plate-count
          (count (for [slot matrix-plate-slot-indexes
-                      :when (get-in state [:inventory slot])]
+                      :let [stk (get-in state [:inventory slot])]
+                      :when (and stk (not (pitem/item-is-empty? stk)))]
                   slot))))
 
 (defn- recalculate-core-level

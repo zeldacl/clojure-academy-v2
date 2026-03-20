@@ -66,6 +66,7 @@
 (def get-gui-type metadata/get-gui-type)
 (def get-registry-name metadata/get-registry-name)
 (def get-menu-type metadata/get-menu-type)
+(def register-menu-type! metadata/register-menu-type!)
 (def get-all-gui-ids metadata/get-all-gui-ids)
 (def get-screen-factory-fn metadata/get-screen-factory-fn)
 (def get-screen-factory-fn-keyword metadata/get-screen-factory-fn)

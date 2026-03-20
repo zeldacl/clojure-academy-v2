@@ -250,6 +250,18 @@
   [platform gui-id]
   ((platform-impl-fn! :get-menu-type) platform gui-id))
 
+;; ============================================================================
+;; Platform MenuType registration (Forge/Fabric)
+;; ============================================================================
+
+(defn register-menu-type!
+  "Register a platform-specific MenuType for a GUI id.
+
+   This is called by platform loaders after creating the native MenuType/ScreenHandlerType.
+   It routes into the business-layer metadata system via injected platform callbacks."
+  [platform gui-id menu-type]
+  ((platform-impl-fn! :register-menu-type!) platform gui-id menu-type))
+
 (defn execute-quick-move-forge [menu container slot-index slot stack]
   ((platform-impl-fn! :execute-quick-move-forge) menu container slot-index slot stack))
 

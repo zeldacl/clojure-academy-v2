@@ -15,7 +15,8 @@
             [cn.li.ac.wireless.gui.container-schema :as schema]
             [cn.li.ac.wireless.gui.matrix-fields :as mf]
             [cn.li.ac.wireless.gui.sync-helpers :as sync-helpers]
-            [cn.li.mcmod.platform.be :as platform-be]))
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.item :as pitem]))
 
 ;; ============================================================================
 ;; Field Schema — single source of truth for all atom fields
@@ -142,9 +143,10 @@
   "Count number of plate items in slots"
   [container]
   (reduce (fn [count slot-idx]
-            (if (get-slot-item container slot-idx)
-              (inc count)
-              count))
+            (let [stk (get-slot-item container slot-idx)]
+              (if (and stk (not (pitem/item-is-empty? stk)))
+                (inc count)
+                count)))
           0
           (plate-slot-indexes)))
 

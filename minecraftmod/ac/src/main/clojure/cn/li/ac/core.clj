@@ -99,6 +99,7 @@
 
      :get-gui-id-for-container #'platform-gui/get-gui-id-for-container
      :get-menu-type #'platform-gui/get-menu-type
+     :register-menu-type! #'platform-gui/register-menu-type!
      :execute-quick-move-forge #'platform-gui/execute-quick-move-forge
 
      :make-matrix-sync-packet #'platform-gui/make-matrix-sync-packet
