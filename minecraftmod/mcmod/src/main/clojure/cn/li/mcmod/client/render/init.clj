@@ -18,6 +18,17 @@
   (reset! renderer-init-fns (vec fns))
   nil)
 
+(defn register-default-renderer-init-fns!
+  "Register the core client renderer init callbacks shipped by the shared
+   `ac` module.
+
+   Kept inside `mcmod` so Forge source code doesn't reference `cn.li.ac.*`
+   directly."
+  []
+  (register-renderer-init-fns!
+    [(requiring-resolve 'cn.li.ac.client.render.matrix-renderer/register!)
+     (requiring-resolve 'cn.li.ac.client.render.solar-renderer/register!)]))
+
 (defn register-all-renderers!
   "Require and register all renderers (idempotent)."
   []

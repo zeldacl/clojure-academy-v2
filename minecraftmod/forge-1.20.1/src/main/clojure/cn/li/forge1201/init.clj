@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.init
   "Forge 1.20.1 initialization and version-specific implementations"
   (:require [cn.li.mcmod.platform.dispatch :as platform-dispatch]
+            [cn.li.mcmod.content :as content]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.util.log :as log]))
 
@@ -16,7 +17,7 @@
   []
   (log/info "Initializing Forge 1.20.1 adapter")
   (set-version!)
-  ;; Ensure shared game logic namespace is loaded so it can register
-  ;; `mcmod.lifecycle/register-content-init!` before we run it.
-  (requiring-resolve 'cn.li.ac.core/init)
+  ;; Ensure shared content init is registered (without Forge referencing
+  ;; the shared content namespace directly).
+  (content/ensure-content-init-registered!)
   (lifecycle/run-content-init!))
