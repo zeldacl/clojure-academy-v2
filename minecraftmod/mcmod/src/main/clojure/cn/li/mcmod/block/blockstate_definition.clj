@@ -37,7 +37,7 @@
    node-type is the part after `node_` and before the final `_`."
   [model-name]
   (when-let [[_ node-type variant]
-             (re-matches #"node_(.+)_(base|connected|energy_\\d+)" model-name)]
+             (re-matches #"node_(.+)_(base|connected|energy_\d+)" model-name)]
     [node-type variant]))
 
 (defn- node-block-registry-name
