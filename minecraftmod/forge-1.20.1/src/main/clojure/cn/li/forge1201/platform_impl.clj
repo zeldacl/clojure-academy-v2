@@ -179,7 +179,9 @@
        (item-is-empty? [this] (.isEmpty this))
        (item-get-count [this] (.getCount this))
        (item-get-max-stack-size [this] (.getMaxStackSize this))
-       (item-is-equal? [this other] (.sameItem this other))
+     ;; Mojang mappings (1.20.x): static helper `ItemStack.isSameItem(a, b)`
+     ;; (instance method `isSameItem` may not exist depending on mappings).
+     (item-is-equal? [this other] (net.minecraft.world.item.ItemStack/isSameItem this ^net.minecraft.world.item.ItemStack other))
        (item-save-to-nbt [this nbt] (.save this nbt))
        (item-get-or-create-tag [this] (.getOrCreateTag this))
        (item-get-max-damage [this] (.getMaxDamage this))

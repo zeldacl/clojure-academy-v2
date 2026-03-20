@@ -383,6 +383,12 @@
             [[] nil])
           (throw e))))))
 
+;; (defn start-repl-safe []
+;;   (let [cl (.getContextClassLoader (Thread/currentThread))]
+;;     (nrepl/start-server :port 7888 :handler (nrepl/default-handler))
+;;     ;; 确保 REPL 线程能访问到 Minecraft 的类
+;;     (.setContextClassLoader (Thread/currentThread) cl)))
+
 ;; ============================================================================
 ;; Gen-class Method Implementations
 ;; ============================================================================

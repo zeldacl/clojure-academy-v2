@@ -77,3 +77,14 @@ GUIs are defined in XML-style Clojure data (`*_gui_xml.clj`), parsed by `mcmod/g
 - **Clojure compilation errors**: Check `require` chains — missing namespace will fail the whole compile. Run `./gradlew :forge-1.20.1:compileClojure --info` for detail.
 - **Gradle daemon issues**: `./gradlew --stop && ./gradlew clean`
 - **GUI not opening**: Check that the `defgui` registration ran before the platform adapter's `register-all-guis!` call during mod init.
+
+
+## Compact Instructions
+
+When compressing, preserve in priority order:
+
+1. Architecture decisions (NEVER summarize)
+2. Modified files and their key changes
+3. Current verification status (pass/fail)
+4. Open TODOs and rollback notes
+5. Tool outputs (can delete, keep pass/fail only)
