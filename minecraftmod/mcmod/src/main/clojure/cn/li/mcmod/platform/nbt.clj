@@ -107,7 +107,7 @@
          Example platform initialization:
         (alter-var-root #'cn.li.mcmod.platform.nbt/*nbt-factory*
                  (constantly {:create-compound #(CompoundTag.)
-                              :create-list #(ListTag.)}))"
+                              :create-list #(ListTag.)}))"}
   *nbt-factory*
   nil)
 

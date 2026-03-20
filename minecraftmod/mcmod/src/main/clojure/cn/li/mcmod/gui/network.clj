@@ -84,7 +84,7 @@
   (let [{:keys [container-id button-id]} data]
     (when-let [container (cn.li.mcmod.gui.container/get-container container-id)]
       (when (cn.li.mcmod.gui.container/validate-container container player)
-        (cn.li.mcmod.gui.container/handle-button-click! container button-id)))}))
+        (cn.li.mcmod.gui.container/handle-button-click! container button-id)))))
 
 (defn default-slot-change-handler [data player]
   (log/info "Slot change from player" player ":" data)
