@@ -3,8 +3,7 @@
 
   Platform-agnostic design: Uses metadata-driven approach.
 
-  IMPORTANT: Only imports from cn.li.ac.gui.platform-adapter, not directly
-  from cn.li.wireless.gui.* modules (per platform adapter contract)."
+  IMPORTANT: Only imports from `cn.li.mcmod.gui.adapter` for the unified GUI API."
   (:require [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.forge1201.gui.bridge :as bridge]
             [cn.li.mcmod.config :as modid]
