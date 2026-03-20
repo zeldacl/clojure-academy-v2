@@ -4,7 +4,7 @@
   Platform-agnostic design: Reads GUI metadata and loops through all GUIs
   to register. Uses CGUI runtime to render and handle input for wireless GUIs.
   Tabbed GUIs: when tab index != 0, slot highlight is not drawn (inv-window only)."
-    (:require [cn.li.ac.gui.platform-adapter :as gui]
+    (:require [cn.li.mcmod.gui.adapter :as gui]
               [cn.li.forge1201.gui.cgui-runtime :as cgui-rt]
               [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui GuiGraphics]
@@ -205,7 +205,7 @@
         (let [menu-type     (gui/get-menu-type platform gui-id)
               factory-fn-kw (gui/get-screen-factory-fn-kw gui-id)
               factory-fn    (when factory-fn-kw
-                                (ns-resolve 'cn.li.ac.gui.platform-adapter
+                                (ns-resolve 'cn.li.mcmod.gui.adapter
                                           (symbol (name factory-fn-kw))))]
           (when menu-type
             (MenuScreens/register

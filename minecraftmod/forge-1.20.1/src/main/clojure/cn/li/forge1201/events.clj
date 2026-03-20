@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.events
   "Forge 1.20.1 event handlers"
-  (:require [cn.li.ac.core :as core]
+  (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
@@ -21,7 +21,7 @@
     ;; Check if this block has a registered right-click handler
     (when (and block-id (event-metadata/has-event-handler? block-id :on-right-click))
       (log/info "Block has registered handler, dispatching...")
-      (let [ret (core/on-block-right-click (assoc event-data :block-id block-id))]
+      (let [ret (dispatcher/on-block-right-click (assoc event-data :block-id block-id))]
         (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
           (try
             (let [{:keys [gui-id player world pos]} ret
@@ -66,7 +66,7 @@
         block-id   (event-metadata/identify-block-from-full-name block-name)]
     (log/info "1.20.1 Place event at (" x "," y "," z ") block:" block-name)
     (when block-id
-      (core/on-block-place (assoc event-data :block-id block-id)))))
+      (dispatcher/on-block-place (assoc event-data :block-id block-id)))))
 
 (defn handle-block-place-event
   "Handle block place event directly from Forge event object."
@@ -101,7 +101,7 @@
           block-state (.getBlockState level pos)
           block-id (event-metadata/identify-block-from-full-name (str (.getBlock block-state)))]
       (when block-id
-        (let [ret (core/on-block-break
+        (let [ret (dispatcher/on-block-break
                     {:x (.getX pos)
                      :y (.getY pos)
                      :z (.getZ pos)

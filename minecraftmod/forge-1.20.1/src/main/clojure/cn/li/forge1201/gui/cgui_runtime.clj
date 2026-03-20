@@ -6,7 +6,7 @@
     [clojure.string :as str]
     [cn.li.mcmod.gui.cgui :as cgui]
     [cn.li.mcmod.platform.resource :as res]
-    [cn.li.ac.config.modid :as modid]
+    [cn.li.mcmod.config :as modid]
     [cn.li.mcmod.util.log :as log])
   (:import
     (net.minecraft.client.gui GuiGraphics)
@@ -128,9 +128,9 @@
                          (res/invoke-resource-location ns path)
                          (res/invoke-resource-location nil v)))
 
-                     ;; No namespace: resolve explicitly with current MOD-ID
-                     :else
-                     (res/invoke-resource-location modid/MOD-ID v)))
+                    ;; No namespace: resolve explicitly with current MOD-ID
+                    :else
+                    (res/invoke-resource-location modid/*mod-id* v)))
     :else nil))
 
 (defn- collect-widgets-z-ordered

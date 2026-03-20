@@ -4,8 +4,8 @@
   Uses runtime `proxy` instead of `gen-class` for each custom slot type.
   gen-class is a compile-time-only macro (guarded by *compile-files*) and
   produces no class when Clojure source files are loaded without AOT."
-  (:require [cn.li.ac.gui.platform-adapter :as gui]
-            [cn.li.ac.gui.slot-validators :as slot-validators]
+  (:require [cn.li.mcmod.gui.adapter :as gui]
+            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.inventory Slot]))
 
@@ -18,7 +18,8 @@
   [inventory slot-index x y]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
-      (slot-validators/energy-item-validator stack))
+      (let [pred (slot-registry/get-slot-validator :energy)]
+        (and pred (pred stack))))
     (getMaxStackSize [& _] 1)))
 
 (defn create-plate-slot
@@ -26,7 +27,8 @@
   [inventory slot-index x y]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
-      (slot-validators/constraint-plate-validator stack))
+      (let [pred (slot-registry/get-slot-validator :plate)]
+        (and pred (pred stack))))
     (getMaxStackSize [& _] 1)))
 
 (defn create-core-slot
@@ -34,7 +36,8 @@
   [inventory slot-index x y]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
-      (slot-validators/matrix-core-validator stack))
+      (let [pred (slot-registry/get-slot-validator :core)]
+        (and pred (pred stack))))
     (getMaxStackSize [& _] 1)))
 
 (defn create-output-slot
@@ -68,7 +71,8 @@
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
-      (and (active?-fn) (slot-validators/energy-item-validator stack)))
+      (let [pred (slot-registry/get-slot-validator :energy)]
+        (and (active?-fn) pred (pred stack))))
     (mayPickup [_player] (and (active?-fn) (proxy-super mayPickup _player)))
     (getMaxStackSize [& _] 1)))
 
@@ -76,7 +80,8 @@
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
-      (and (active?-fn) (slot-validators/constraint-plate-validator stack)))
+      (let [pred (slot-registry/get-slot-validator :plate)]
+        (and (active?-fn) pred (pred stack))))
     (mayPickup [_player] (and (active?-fn) (proxy-super mayPickup _player)))
     (getMaxStackSize [& _] 1)))
 
@@ -84,7 +89,8 @@
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
-      (and (active?-fn) (slot-validators/matrix-core-validator stack)))
+      (let [pred (slot-registry/get-slot-validator :core)]
+        (and (active?-fn) pred (pred stack))))
     (mayPickup [_player] (and (active?-fn) (proxy-super mayPickup _player)))
     (getMaxStackSize [& _] 1)))
 

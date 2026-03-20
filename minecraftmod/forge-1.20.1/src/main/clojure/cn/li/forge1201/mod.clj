@@ -13,7 +13,7 @@
             [cn.li.forge1201.blockstate-properties :as bsp]
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.level.block Block]
@@ -43,7 +43,7 @@
              [clientSetup [net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent] void]]))
 
 ;; Mod ID constant
-(def mod-id modid/MOD-ID)
+(def mod-id modid/*mod-id*)
 
 ;; DeferredRegister instances
 (defonce blocks-register

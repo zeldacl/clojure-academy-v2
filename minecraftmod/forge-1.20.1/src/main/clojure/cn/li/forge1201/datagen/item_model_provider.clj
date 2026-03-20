@@ -6,7 +6,7 @@
    - 本文件: 使用Forge/Minecraft API从item registry生成JSON（平台特定）
    
    优势：数据不分散，直接从item定义提取，单一信息源"
-  (:require [cn.li.ac.config.modid :as modid]
+  (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.item.dsl :as item-dsl]
             [clojure.string :as str])
   (:import [net.minecraft.data DataProvider PackOutput]
@@ -24,12 +24,12 @@
 
 (defn- texture-rl
   [texture-name]
-  (ResourceLocation. modid/MOD-ID (str "item/" texture-name)))
+  (ResourceLocation. modid/*mod-id* (str "item/" texture-name)))
 
 (defn create
   "创建Item Model DataProvider实例 (factory signature: PackOutput -> DataProvider)"
   [^PackOutput pack-output _exfile-helper]
-  (proxy [ItemModelProvider] [pack-output modid/MOD-ID ^ExistingFileHelper _exfile-helper]
+  (proxy [ItemModelProvider] [pack-output modid/*mod-id* ^ExistingFileHelper _exfile-helper]
     (registerModels []
       (let [all-item-names (item-dsl/list-items)
             items-with-model (keep (fn [item-name]

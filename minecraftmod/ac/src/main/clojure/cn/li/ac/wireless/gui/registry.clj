@@ -2,20 +2,14 @@
   "Wireless GUI registration and opening system"
   (:require [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.wireless.gui.gui-metadata :as gui-meta]
+            [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.platform.world :as pworld]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
-;; GUI Handler Protocol
+;; GUI Handler Protocol + record implementation moved to mcmod
 ;; ============================================================================
-
-(defprotocol IGuiHandler
-  "Protocol for GUI opening and container creation"
-  (get-server-container [this gui-id player world pos]
-    "Create server-side container")
-  (get-client-gui [this gui-id player world pos]
-    "Create client-side GUI screen"))
 
 ;; ============================================================================
 ;; GUI Handler Implementation
@@ -25,10 +19,10 @@
 ;; Helper Functions
 ;; ============================================================================
 
-(defn get-gui-config
-  "Get GUI spec/config by gui-id (int)."
-  [gui-id]
-  (gui-dsl/get-gui-by-gui-id gui-id))
+(def get-gui-config
+  "Get GUI spec/config by gui-id (int).
+   Moved to mcmod/gui/handler."
+  gui-handler/get-gui-config)
 
 (defn get-config-by-container
   "Get GUI config by container structure.
@@ -43,50 +37,16 @@
               cfg)))
         (gui-dsl/list-gui-ids)))
 
-(defmacro defwireless-gui-handler
-  "Define a GUI handler driven by gui-config table.
-  
-  Each function is called only when tile-entity exists." 
-  [name]
-  `(defrecord ~name []
-     IGuiHandler
-     (get-server-container [_# gui-id# player# world# pos#]
-       (let [tile-entity# (pworld/world-get-tile-entity world# pos#)
-             cfg# (get-gui-config gui-id#)]
-         (if (and tile-entity# cfg#)
-           (do
-             (log/info "Creating container for player" (entity/player-get-name player#) "gui" gui-id#)
-             ((:container-fn cfg#) tile-entity# player#))
-           (do
-             (when-not cfg#
-               (log/warn "Unknown GUI ID:" gui-id#))
-             nil))))
-     (get-client-gui [_# gui-id# player# world# pos#]
-       (let [tile-entity# (pworld/world-get-tile-entity world# pos#)
-             cfg# (get-gui-config gui-id#)]
-         (if (and tile-entity# cfg#)
-           (do
-             (log/info "Creating GUI for player" (entity/player-get-name player#) "gui" gui-id#)
-             (let [container# ((:container-fn cfg#) tile-entity# player#)]
-               ((:screen-fn cfg#) container# nil player#)))
-           (do
-             (when-not cfg#
-               (log/warn "Unknown GUI ID:" gui-id#))
-             nil))))))
-
-(defwireless-gui-handler WirelessGuiHandler)
+;; GUI handler protocol/record implementation moved to mcmod/gui/handler.
 
 ;; ============================================================================
 ;; Global Handler Instance
 ;; ============================================================================
 
-(defonce ^:private gui-handler (atom nil))
-
-(defn get-gui-handler
-  "Get the global GUI handler instance"
-  []
-  (or @gui-handler
-      (reset! gui-handler (->WirelessGuiHandler))))
+(def get-gui-handler
+  "Get the global GUI handler instance.
+   Moved to mcmod/gui/handler."
+  gui-handler/get-gui-handler)
 
 ;; ============================================================================
 ;; GUI Opening API
@@ -169,11 +129,11 @@
 ;; Container Tick Management
 ;; ============================================================================
 
-(defonce ^:private active-containers (atom #{}))
-(defonce ^:private player-containers (atom {}))
-(defonce ^:private menu-containers (atom {}))
-(defonce ^:private containers-by-id (atom {}))
-(defonce ^:private client-container (atom nil))
+(def active-containers gui-handler/active-containers)
+(def player-containers gui-handler/player-containers)
+(def menu-containers gui-handler/menu-containers)
+(def containers-by-id gui-handler/containers-by-id)
+(def client-container gui-handler/client-container)
 
 (defn register-active-container!
   "Register a container as active (for tick updates)"

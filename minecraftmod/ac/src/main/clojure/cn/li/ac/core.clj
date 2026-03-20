@@ -3,11 +3,18 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.resource :as platform-res]
             [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.config :as mcmod-config]
+            [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.mcmod.gui.adapter :as gui-adapter]
+            [cn.li.mcmod.gui.slot-registry :as slot-registry]
+            [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
+            [cn.li.ac.gui.slot-validators :as slot-validators]
             ;; Load all GUI definitions (so gui-dsl registry is populated)
             [cn.li.ac.gui.definitions]
-            [cn.li.ac.gui.tabbed-gui :as tabbed-gui]
+            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.block.multiblock-core :as mb-core]
+            [cn.li.mcmod.events.dispatcher :as event-dispatcher]
             [cn.li.ac.wireless.gui.matrix-network-handler :as matrix-net]
             [cn.li.ac.wireless.gui.node-network-handler :as node-net]
             [cn.li.ac.wireless.gui.generator-network-handler :as gen-net]
@@ -25,12 +32,35 @@
 (defn init
   "Core init hook invoked by per-version entry classes."
   []
+  ;; Bind mod-id into mcmod config so resource helpers and resource-location
+  ;; injection become consistent across modules.
+  (alter-var-root #'mcmod-config/*mod-id*
+                  (constantly modid/MOD-ID))
+
+  ;; Register client screen factories into the unified mcmod GUI adapter.
+  (gui-adapter/register-screen-factory! :create-node-screen
+                                         screen-factory/create-node-screen)
+  (gui-adapter/register-screen-factory! :create-matrix-screen
+                                         screen-factory/create-matrix-screen)
+  (gui-adapter/register-screen-factory! :create-solar-screen
+                                         screen-factory/create-solar-screen)
+
+  ;; Register slot validators used by platform GUI slot implementations.
+  (slot-registry/register-slot-validator! :energy
+                                            slot-validators/energy-item-validator)
+  (slot-registry/register-slot-validator! :plate
+                                            slot-validators/constraint-plate-validator)
+  (slot-registry/register-slot-validator! :core
+                                            slot-validators/matrix-core-validator)
+  (slot-registry/register-slot-validator! :output
+                                            slot-validators/output-slot-validator)
+
   ;; Inject resource-location for mcmod (gui.components, client.resources) so they resolve paths without requiring config.modid
   (alter-var-root #'platform-res/*resource-location-fn*
                   (constantly (fn [namespace path]
                                (if (nil? namespace)
-                                 (modid/resource-location path)
-                                 (modid/resource-location namespace path)))))
+                                 (mcmod-config/resource-location path)
+                                 (mcmod-config/resource-location namespace path)))))
   (log/info "Initializing core for mod-id=" defs/mod-id)
   ;; Initialize event metadata system
   (event-metadata/init-event-metadata!)
@@ -44,50 +74,22 @@
   (tabbed-gui/register-set-tab-handler!))
 
 (defn on-block-right-click
-  "Generic block right-click event handler.
-  
-  Dispatches to block-specific handlers registered in event metadata system.
-  Platform code does not know which blocks have handlers.
-  
-  Args:
-    ctx: Event context map with :x :y :z :player :world :block :block-id"
-  [{:keys [x y z block-id] :as ctx}]
-  (let [routed-ctx (mb-core/route-to-controller-context ctx)
-        routed-block-id (:block-id routed-ctx)]
-    (log/info "Right-click event at (" x "," y "," z ") for block-id:" block-id
-              "-> routed:" routed-block-id)
-  
-    ;; Dispatch to block-specific handler if registered
-    (when-let [handler (event-metadata/get-block-event-handler routed-block-id :on-right-click)]
-      (log/info "Dispatching to registered handler for block:" routed-block-id)
-      (handler routed-ctx))))
+  "Backwards-compatible forwarding shim. Actual implementation lives in
+   `cn.li.mcmod.events.dispatcher`." 
+  [ctx]
+  (event-dispatcher/on-block-right-click ctx))
 
 (defn on-block-place
-  "Generic block place event handler.
-  
-  Dispatches to block-specific :on-place handlers registered in event metadata."
-  [{:keys [x y z block-id] :as ctx}]
-  (log/info "Place event at (" x "," y "," z ") for block-id:" block-id)
-  (if-let [precheck-ret (mb-core/precheck-controller-place ctx)]
-    precheck-ret
-    (let [handler-ret (when-let [handler (event-metadata/get-block-event-handler block-id :on-place)]
-                        (log/info "Dispatching to registered :on-place handler for block:" block-id)
-                        (handler ctx))
-          core-ret (mb-core/post-place-controller! ctx)]
-      (or core-ret handler-ret))))
+  "Backwards-compatible forwarding shim. Actual implementation lives in
+   `cn.li.mcmod.events.dispatcher`."
+  [ctx]
+  (event-dispatcher/on-block-place ctx))
 
 (defn on-block-break
-  "Generic block break event handler.
+  "Backwards-compatible forwarding shim. Actual implementation lives in
+   `cn.li.mcmod.events.dispatcher`."
+  [ctx]
+  (event-dispatcher/on-block-break ctx))
 
-  Routes part blocks to their controller block handlers, then applies
-  generic structure cleanup in mcmod." 
-  [{:keys [x y z block-id] :as ctx}]
-  (let [routed-ctx (mb-core/route-to-controller-context ctx)
-        routed-block-id (:block-id routed-ctx)]
-    (log/info "Break event at (" x "," y "," z ") for block-id:" block-id
-              "-> routed:" routed-block-id)
-    (let [handler-ret (when-let [handler (event-metadata/get-block-event-handler routed-block-id :on-break)]
-                        (log/info "Dispatching to registered :on-break handler for block:" routed-block-id)
-                        (handler routed-ctx))
-          core-ret (mb-core/apply-structure-break! ctx routed-ctx)]
-      (merge (or handler-ret {}) (or core-ret {})))))
+;; Phase1.4/Phase2: register content init hook for platform adapters.
+(lifecycle/register-content-init! #'init)

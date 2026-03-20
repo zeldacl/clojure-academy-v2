@@ -6,6 +6,7 @@
    
   每个平台的datagen实现可以根据这些定义调用对应的API生成JSON文件。"
   (:require [clojure.string :as str]
+            [cn.li.mcmod.config :as mcmod-config]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.ac.block.wireless-node :as wireless-node]
             [cn.li.ac.block.node-schema :as nschema]))
@@ -33,7 +34,9 @@
 ;; Block定义常量
 ;; ============================================================================
 
-(def MOD-ID "my_mod")
+(defn- mod-id []
+  ;; Use centralized config so Forge/Fabric and datagen share the same namespace.
+  mcmod-config/*mod-id*)
 ;; 基础blocks (简单单一model)
 ;; 从 DSL/注册元数据自动推导，避免在此处重复维护定义。
 (def SIMPLE_BLOCKS
@@ -47,7 +50,7 @@
             registry-name
             {}
             [{:condition nil
-              :models [(str MOD-ID ":block/" registry-name)]}])])))
+              :models [(str (mod-id) ":block/" registry-name)]}])])))
 
 ;; ============================================================================
 ;; Node Blocks (多维度动态BlockState)
@@ -63,12 +66,12 @@
                 :let [node-type-name (name node-type)
                       block-key (keyword (str "wireless-node-" node-type-name))
                       registry-name (str "node_" node-type-name)
-                      base-model (str MOD-ID ":block/" registry-name "_base")
+                      base-model (str (mod-id) ":block/" registry-name "_base")
                       energy-models (vec (for [level (range energy-min (inc energy-max))]
                                            {:condition {:energy (str level)}
-                                            :models [(str MOD-ID ":block/" registry-name "_energy_" level)]}))
+                                            :models [(str (mod-id) ":block/" registry-name "_energy_" level)]}))
                       connected-model {:condition {:connected "true"}
-                                       :models [(str MOD-ID ":block/" registry-name "_connected")]}]]
+                                       :models [(str (mod-id) ":block/" registry-name "_connected")]}]]
             [block-key
              (BlockStateDefinition.
               registry-name
@@ -132,9 +135,9 @@
   (when-let [[node-type variant] (parse-node-model-name model-name)]
     (let [energy-level (variant->energy-level variant)
           top-texture  (if (= variant "connected")
-                        (str MOD-ID ":block/node_top_1")
-                        (str MOD-ID ":block/node_top_0"))
-          side-texture (str MOD-ID ":block/node_" node-type "_side_" energy-level)]
+                        (str (mod-id) ":block/node_top_1")
+                        (str (mod-id) ":block/node_top_0"))
+          side-texture (str (mod-id) ":block/node_" node-type "_side_" energy-level)]
       {:side side-texture
        :vert top-texture})))
 

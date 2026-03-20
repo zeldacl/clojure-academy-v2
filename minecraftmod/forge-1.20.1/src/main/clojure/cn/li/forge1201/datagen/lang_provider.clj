@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.datagen.lang-provider
   "Language file data generator - generates translation files from metadata"
-  (:require [cn.li.ac.config.modid :as modid]
+  (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.registry.metadata :as registry-metadata])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [java.nio.file Path]
@@ -20,7 +20,7 @@
 (defn create
   [^PackOutput pack-output _exfile-helper]
   (let [out-root (.getOutputFolder pack-output)
-        ^Path base (.resolve ^Path out-root (str "assets/" modid/MOD-ID "/lang"))]
+        ^Path base (.resolve ^Path out-root (str "assets/" modid/*mod-id* "/lang"))]
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
         (let [results (atom [])]
@@ -34,4 +34,4 @@
 
           (CompletableFuture/allOf (into-array CompletableFuture @results))))
 
-      (getName [_] (str modid/MOD-ID " Lang Provider")))))
+      (getName [_] (str modid/*mod-id* " Lang Provider")))))

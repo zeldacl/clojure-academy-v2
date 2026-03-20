@@ -4,7 +4,7 @@
    Registers all data generators for the mod.
    Triggered during setup phase when running:
      ./gradlew :forge-1.20.1:runData"
-  (:require [cn.li.ac.config.modid :as modid]
+  (:require [cn.li.mcmod.config :as modid]
             [cn.li.forge1201.datagen.blockstate-provider :as bsp]
             [cn.li.forge1201.datagen.item-model-provider :as imp]
             [cn.li.forge1201.datagen.lang-provider :as lang])
@@ -43,15 +43,15 @@
         exfile-helper (.getExistingFileHelper event)]
     
     ;; Register BlockState provider
-    (println (str "[" modid/MOD-ID "] Registering BlockState DataGenerator..."))
+    (println (str "[" modid/*mod-id* "] Registering BlockState DataGenerator..."))
     (add-provider! generator bsp/create exfile-helper)
 
     ;; Register Item Model provider
-    (println (str "[" modid/MOD-ID "] Registering Item Model DataGenerator..."))
+    (println (str "[" modid/*mod-id* "] Registering Item Model DataGenerator..."))
     (add-provider! generator imp/create exfile-helper)
 
     ;; Register Language provider
-    (println (str "[" modid/MOD-ID "] Registering Lang DataGenerator..."))
+    (println (str "[" modid/*mod-id* "] Registering Lang DataGenerator..."))
     (add-provider! generator lang/create exfile-helper)
     
-    (println (str "[" modid/MOD-ID "] DataGenerator setup complete!"))))
+    (println (str "[" modid/*mod-id* "] DataGenerator setup complete!"))))

@@ -6,8 +6,7 @@
    - 本文件: 使用Forge/Minecraft API和定义生成JSON（平台特定）
    
    优势：定义层复用，易于支持新的Forge版本"
-  (:require [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.block.blockstate-definition :as blockstate-def]
+  (:require [cn.li.mcmod.config :as modid]
             [cn.li.forge1201.blockstate-properties :as bsp]
             [cn.li.forge1201.mod :as forge-mod]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
@@ -24,7 +23,7 @@
 
 
 (defn- parse-rl
-  ([s] (parse-rl s modid/MOD-ID))
+  ([s] (parse-rl s modid/*mod-id*))
   ([s default-namespace]
    (let [value (str s)]
      (if (str/includes? value ":")
@@ -62,6 +61,32 @@
   ;; during AOT/checkClojure class loading.
   (delay ForgeRegistries/BLOCKS))
 
+;; Avoid compile-time hard dependency on `cn.li.ac.block.blockstate-definition`.
+;; Datagen runs with full mod classpath, so we resolve business functions at runtime.
+(def ^:private blockstate-def-get-model-texture-config
+  (delay (requiring-resolve 'cn.li.ac.block.blockstate-definition/get-model-texture-config)))
+
+(def ^:private blockstate-def-get-all-definitions
+  (delay (requiring-resolve 'cn.li.ac.block.blockstate-definition/get-all-definitions)))
+
+(def ^:private blockstate-def-get-item-model-id
+  (delay (requiring-resolve 'cn.li.ac.block.blockstate-definition/get-item-model-id)))
+
+(def ^:private blockstate-def-is-multipart-block?
+  (delay (requiring-resolve 'cn.li.ac.block.blockstate-definition/is-multipart-block?)))
+
+(defn- blockstate-get-model-texture-config [model-name]
+  ((force blockstate-def-get-model-texture-config) model-name))
+
+(defn- blockstate-get-all-definitions []
+  ((force blockstate-def-get-all-definitions)))
+
+(defn- blockstate-get-item-model-id [mod-id registry-name]
+  ((force blockstate-def-get-item-model-id) mod-id registry-name))
+
+(defn- blockstate-is-multipart-block? [definition]
+  ((force blockstate-def-is-multipart-block?) definition))
+
 ;; Dynamic counters used inside `eval`ed code to avoid embedding Atom objects
 ;; in the generated form (which Clojure refuses to compile).
 (def ^:dynamic *datagen-simple-count* nil)
@@ -79,7 +104,7 @@
                                      (normalize-candidates key-name)))]
     (some (fn [candidate]
             (.getValue (force forge-blocks-registry)
-                       (ResourceLocation. modid/MOD-ID candidate)))
+                       (ResourceLocation. modid/*mod-id* candidate)))
           candidates)))
 
 (defn- resolve-registered-block
@@ -117,7 +142,7 @@
       (get-in block-spec [:properties :model-textures (keyword model-name)])
       (get-in block-spec [:properties :textures :all])
       (get-in block-spec [:properties :texture])
-      (str modid/MOD-ID ":block/" model-name)))
+      (str modid/*mod-id* ":block/" model-name)))
 
 (defn- parent-from-spec
   [block-spec]
@@ -149,7 +174,7 @@
   [^BlockStateProvider provider model-id]
   (let [model-name (model-id->model-name model-id)]
     ;; Query business layer for texture configuration
-    (if-let [tex-cfg (blockstate-def/get-model-texture-config model-name)]
+    (if-let [tex-cfg (blockstate-get-model-texture-config model-name)]
       ;; Special model: use .cube() with side/vert textures
       (let [side-texture (parse-rl (:side tex-cfg))
             vert-texture (parse-rl (:vert tex-cfg))
@@ -241,7 +266,7 @@
             (.end part-builder))))
       ;; For node blocks, use _base variant for item model
       (when (registry-metadata/should-create-block-item? block-id)
-        (let [item-model-id (blockstate-def/get-item-model-id modid/MOD-ID registry-name)]
+        (let [item-model-id (blockstate-get-item-model-id modid/*mod-id* registry-name)]
           (.simpleBlockItem provider block (ensure-block-model! provider item-model-id)))))))
 
 (defn- generate-with-forge-builder!
@@ -257,10 +282,10 @@
         provider (binding [*datagen-pack-output* pack-output
                             *datagen-exfile-helper* exfile-helper]
                    (eval
-                     `(proxy [BlockStateProvider] [*datagen-pack-output* ~modid/MOD-ID *datagen-exfile-helper*]
+                    `(proxy [BlockStateProvider] [*datagen-pack-output* ~modid/*mod-id* *datagen-exfile-helper*]
                         (registerStatesAndModels []
                           (doseq [[block-key# definition#] ~all-defs]
-                            (if (blockstate-def/is-multipart-block? definition#)
+                            (if (blockstate-is-multipart-block? definition#)
                               (do
                                 (cn.li.forge1201.datagen.blockstate-provider/build-multipart-block!
                                  ~'this block-key# definition#)
@@ -282,7 +307,7 @@
     (run [_this cache]
       ;; Datagen runs outside normal mod init order; ensure Property registry is seeded.
       (bsp/init-all-properties!)
-      (let [all-defs (blockstate-def/get-all-definitions)
+      (let [all-defs (blockstate-get-all-definitions)
             {:keys [future simple multipart]} (generate-with-forge-builder!
                                                cache pack-output exfile-helper all-defs)
             written-count (+ simple multipart)]

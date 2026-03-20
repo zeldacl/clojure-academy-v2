@@ -5,9 +5,9 @@
 
   IMPORTANT: Only imports from cn.li.ac.gui.platform-adapter, not directly
   from cn.li.wireless.gui.* modules (per platform adapter contract)."
-  (:require [cn.li.ac.gui.platform-adapter :as gui]
+  (:require [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.forge1201.gui.bridge :as bridge]
-            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.network NetworkHooks IContainerFactory]
            [net.minecraftforge.common.extensions IForgeMenuType]
@@ -26,7 +26,7 @@
 (defonce menu-register
   ;; AOT/checkClojure 阶段 Minecraft registries 尚未 bootstrapped。
   ;; 延迟创建，避免编译期触发 Bootstrap。
-  (delay (DeferredRegister/create Registries/MENU modid/MOD-ID)))
+  (delay (DeferredRegister/create Registries/MENU modid/*mod-id*)))
 
 (defonce gui-menu-types
   ^{:doc "Map from GUI ID to RegistryObject<MenuType>.

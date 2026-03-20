@@ -1,9 +1,8 @@
 (ns cn.li.forge1201.blockstate-properties
   "Forge 1.20.1 adapter: create Minecraft BlockState Property objects from ac definitions.
-   Reads definitions from cn.li.ac.block.blockstate-property-definitions (ac); creates
+   Reads definitions from cn.li.mcmod.registry.metadata (mcmod); creates
    IntegerProperty/BooleanProperty and stores in registry for mod and datagen."
-  (:require [cn.li.ac.block.blockstate-property-definitions :as defs]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+  (:require [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.level.block.state.properties IntegerProperty BooleanProperty]))
 
@@ -43,5 +42,5 @@
   []
   (log/info "Initializing BlockState properties (Forge adapter)...")
   (doseq [block-id (registry-metadata/get-all-block-ids)]
-    (when-let [props (defs/get-all-property-definitions block-id)]
+    (when-let [props (registry-metadata/get-block-state-properties block-id)]
       (register-block-properties! block-id props))))
