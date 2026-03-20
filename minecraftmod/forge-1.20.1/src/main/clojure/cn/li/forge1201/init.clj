@@ -16,4 +16,7 @@
   []
   (log/info "Initializing Forge 1.20.1 adapter")
   (set-version!)
+  ;; Ensure shared game logic namespace is loaded so it can register
+  ;; `mcmod.lifecycle/register-content-init!` before we run it.
+  (requiring-resolve 'cn.li.ac.core/init)
   (lifecycle/run-content-init!))

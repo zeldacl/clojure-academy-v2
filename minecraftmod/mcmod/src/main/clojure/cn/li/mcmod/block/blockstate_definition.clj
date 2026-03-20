@@ -1,8 +1,8 @@
 (ns cn.li.mcmod.block.blockstate-definition
   "BlockState datagen business logic (platform independent).
 
-   This module replaces the old `cn.li.ac.block.blockstate-definition` so
-   Forge datagen can avoid any dependency on `cn.li.ac` namespaces.
+   This module replaces the old `ac.block.blockstate-definition` so Forge
+   datagen can avoid any dependency on `ac` namespaces.
 
    It derives all needed information from `cn.li.mcmod.registry.metadata`,
    which is populated by the DSL namespaces at runtime."

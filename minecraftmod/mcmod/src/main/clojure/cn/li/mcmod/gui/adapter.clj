@@ -1,5 +1,5 @@
 (ns cn.li.mcmod.gui.adapter
-  "Facade replacing `cn.li.ac.gui.platform-adapter`.
+  "Facade for unified GUI operations.
 
    This module is intended to be the single import point for platform GUI code.
    It provides:
@@ -26,6 +26,44 @@
   "Delegate a call to a resolved var without loading target namespaces at mcmod compile time."
   [var-sym & args]
   (apply (resolve-var var-sym) args))
+
+;; ============================================================================
+;; Platform implementation injection (callback atom)
+;; ============================================================================
+;;
+;; We want `mcmod` to be free from direct calls into the `ac` namespaces.
+;; Platform/business code registers concrete function callbacks here during
+;; content init. The unified GUI adapter below invokes them at runtime.
+
+(defonce ^:private platform-impl
+  ;; Map: keyword -> fn
+  (atom nil))
+
+(defn register-gui-platform-impl!
+  "Register platform-specific GUI callbacks used by this unified adapter.
+
+  `impl-map` must be a map from the keywords used by the wrapper functions
+  in this namespace (e.g. `:set-client-container!`, `:slot-get-item`, ... )
+  to function values."
+  [impl-map]
+  (when-not (map? impl-map)
+    (throw (ex-info "Expected map for register-gui-platform-impl!"
+                    {:impl-map-type (type impl-map)})))
+  (reset! platform-impl impl-map)
+  nil)
+
+(defn- platform-impl-fn!
+  [k]
+  (let [m @platform-impl]
+    (when-not m
+      (throw (ex-info "GUI platform implementation not registered"
+                      {:missing-key k
+                       :hint "Call cn.li.mcmod.gui.adapter/register-gui-platform-impl! during content init."})))
+    (when-not (contains? m k)
+      (throw (ex-info "Missing GUI platform callback"
+                      {:missing-key k
+                       :available-keys (keys m)})))
+    (get m k)))
 
 ;; ============================================================================
 ;; Screen factories (Group E)
@@ -118,56 +156,102 @@
 (defn get-gui-handler [] (gui-handler/get-gui-handler))
 
 ;; Container registry helpers used by tabbed GUIs + menu bridges.
-(defn set-client-container! [container] (delegate 'cn.li.ac.gui.platform-adapter/set-client-container! container))
-(defn clear-client-container! [] (delegate 'cn.li.ac.gui.platform-adapter/clear-client-container!))
-(defn get-client-container [] (delegate 'cn.li.ac.gui.platform-adapter/get-client-container))
+(defn set-client-container! [container]
+  ((platform-impl-fn! :set-client-container!) container))
 
-(defn register-active-container! [container] (delegate 'cn.li.ac.gui.platform-adapter/register-active-container! container))
-(defn unregister-active-container! [container] (delegate 'cn.li.ac.gui.platform-adapter/unregister-active-container! container))
+(defn clear-client-container! []
+  ((platform-impl-fn! :clear-client-container!)))
 
-(defn register-player-container! [player container] (delegate 'cn.li.ac.gui.platform-adapter/register-player-container! player container))
-(defn unregister-player-container! [player] (delegate 'cn.li.ac.gui.platform-adapter/unregister-player-container! player))
+(defn get-client-container []
+  ((platform-impl-fn! :get-client-container)))
 
-(defn get-player-container [player] (delegate 'cn.li.ac.gui.platform-adapter/get-player-container player))
-(defn get-player-container-from-active [player] (delegate 'cn.li.ac.gui.platform-adapter/get-player-container-from-active player))
+(defn register-active-container! [container]
+  ((platform-impl-fn! :register-active-container!) container))
 
-(defn get-container-for-menu [menu] (delegate 'cn.li.ac.gui.platform-adapter/get-container-for-menu menu))
-(defn get-container-by-id [container-id] (delegate 'cn.li.ac.gui.platform-adapter/get-container-by-id container-id))
-(defn get-menu-container-id [menu] (delegate 'cn.li.ac.gui.platform-adapter/get-menu-container-id menu))
-(defn register-menu-container! [menu container] (delegate 'cn.li.ac.gui.platform-adapter/register-menu-container! menu container))
-(defn unregister-menu-container! [menu] (delegate 'cn.li.ac.gui.platform-adapter/unregister-menu-container! menu))
+(defn unregister-active-container! [container]
+  ((platform-impl-fn! :unregister-active-container!) container))
 
-(defn register-container-by-id! [container-id container] (delegate 'cn.li.ac.gui.platform-adapter/register-container-by-id! container-id container))
-(defn unregister-container-by-id! [container-id] (delegate 'cn.li.ac.gui.platform-adapter/unregister-container-by-id! container-id))
+(defn register-player-container! [player container]
+  ((platform-impl-fn! :register-player-container!) player container))
+
+(defn unregister-player-container! [player]
+  ((platform-impl-fn! :unregister-player-container!) player))
+
+(defn get-player-container [player]
+  ((platform-impl-fn! :get-player-container) player))
+
+(defn get-player-container-from-active [player]
+  ((platform-impl-fn! :get-player-container-from-active) player))
+
+(defn get-container-for-menu [menu]
+  ((platform-impl-fn! :get-container-for-menu) menu))
+
+(defn get-container-by-id [container-id]
+  ((platform-impl-fn! :get-container-by-id) container-id))
+
+(defn get-menu-container-id [menu]
+  ((platform-impl-fn! :get-menu-container-id) menu))
+
+(defn register-menu-container! [menu container]
+  ((platform-impl-fn! :register-menu-container!) menu container))
+
+(defn unregister-menu-container! [menu]
+  ((platform-impl-fn! :unregister-menu-container!) menu))
+
+(defn register-container-by-id! [container-id container]
+  ((platform-impl-fn! :register-container-by-id!) container-id container))
+
+(defn unregister-container-by-id! [container-id]
+  ((platform-impl-fn! :unregister-container-by-id!) container-id))
 
 ;; Sync helpers used by menu bridges / screens.
-(defn safe-tick! [container] (delegate 'cn.li.ac.gui.platform-adapter/safe-tick! container))
-(defn safe-validate [container player] (delegate 'cn.li.ac.gui.platform-adapter/safe-validate container player))
-(defn safe-sync! [container] (delegate 'cn.li.ac.gui.platform-adapter/safe-sync! container))
+(defn safe-tick! [container]
+  ((platform-impl-fn! :safe-tick!) container))
 
-(defn safe-close! [container] (delegate 'cn.li.ac.gui.platform-adapter/safe-close! container))
+(defn safe-validate [container player]
+  ((platform-impl-fn! :safe-validate) container player))
 
-(defn slot-count [container] (delegate 'cn.li.ac.gui.platform-adapter/slot-count container))
-(defn slot-get-item [container idx] (delegate 'cn.li.ac.gui.platform-adapter/slot-get-item container idx))
-(defn slot-set-item! [container idx item] (delegate 'cn.li.ac.gui.platform-adapter/slot-set-item! container idx item))
-(defn slot-changed! [container idx] (delegate 'cn.li.ac.gui.platform-adapter/slot-changed! container idx))
-(defn slot-can-place? [container idx stack] (delegate 'cn.li.ac.gui.platform-adapter/slot-can-place? container idx stack))
+(defn safe-sync! [container]
+  ((platform-impl-fn! :safe-sync!) container))
 
-(defn get-container-type [container] (delegate 'cn.li.ac.gui.platform-adapter/get-container-type container))
-(defn node-container? [container] (delegate 'cn.li.ac.gui.platform-adapter/node-container? container))
-(defn matrix-container? [container] (delegate 'cn.li.ac.gui.platform-adapter/matrix-container? container))
+(defn safe-close! [container]
+  ((platform-impl-fn! :safe-close!) container))
+
+(defn slot-count [container]
+  ((platform-impl-fn! :slot-count) container))
+
+(defn slot-get-item [container idx]
+  ((platform-impl-fn! :slot-get-item) container idx))
+
+(defn slot-set-item! [container idx item]
+  ((platform-impl-fn! :slot-set-item!) container idx item))
+
+(defn slot-changed! [container idx]
+  ((platform-impl-fn! :slot-changed!) container idx))
+
+(defn slot-can-place? [container idx stack]
+  ((platform-impl-fn! :slot-can-place?) container idx stack))
+
+(defn get-container-type [container]
+  ((platform-impl-fn! :get-container-type) container))
+
+(defn node-container? [container]
+  ((platform-impl-fn! :node-container?) container))
+
+(defn matrix-container? [container]
+  ((platform-impl-fn! :matrix-container?) container))
 
 ;; Business-layer routing helpers.
 (defn get-gui-id-for-container [container]
-  (delegate 'cn.li.ac.gui.platform-adapter/get-gui-id-for-container container))
+  ((platform-impl-fn! :get-gui-id-for-container) container))
 
 (defn get-menu-type
   "Get platform-specific MenuType for a GUI id."
   [platform gui-id]
-  (delegate 'cn.li.ac.gui.platform-adapter/get-menu-type platform gui-id))
+  ((platform-impl-fn! :get-menu-type) platform gui-id))
 
 (defn execute-quick-move-forge [menu container slot-index slot stack]
-  (delegate 'cn.li.ac.gui.platform-adapter/execute-quick-move-forge menu container slot-index slot stack))
+  ((platform-impl-fn! :execute-quick-move-forge) menu container slot-index slot stack))
 
 ;; ============================================================================
 ;; Set-tab support (used by mcmod/gui/tabbed-gui)
@@ -179,14 +263,14 @@
 
 ;; Networking payload helpers are still provided by the wireless implementation.
 (defn make-matrix-sync-packet [source]
-  (delegate 'cn.li.ac.gui.platform-adapter/make-matrix-sync-packet source))
+  ((platform-impl-fn! :make-matrix-sync-packet) source))
 
 (defn apply-matrix-sync-payload! [payload]
-  (delegate 'cn.li.ac.gui.platform-adapter/apply-matrix-sync-payload! payload))
+  ((platform-impl-fn! :apply-matrix-sync-payload!) payload))
 
 (defn make-node-sync-packet [source]
-  (delegate 'cn.li.ac.gui.platform-adapter/make-node-sync-packet source))
+  ((platform-impl-fn! :make-node-sync-packet) source))
 
 (defn apply-node-sync-payload! [payload]
-  (delegate 'cn.li.ac.gui.platform-adapter/apply-node-sync-payload! payload))
+  ((platform-impl-fn! :apply-node-sync-payload!) payload))
 

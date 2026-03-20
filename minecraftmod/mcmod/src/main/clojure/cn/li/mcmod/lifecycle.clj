@@ -16,12 +16,6 @@
 (defn run-content-init!
   "Run registered content init function, if present."
   []
-  (when (nil? @content-init-fn)
-    ;; Best-effort: ensure content init registration happened.
-    ;; Some loaders may not eagerly load `cn.li.ac.core` before adapters run.
-    (try
-      (requiring-resolve 'cn.li.ac.core/init)
-      (catch Throwable _ nil)))
   (when-let [f @content-init-fn]
     (f)))
 

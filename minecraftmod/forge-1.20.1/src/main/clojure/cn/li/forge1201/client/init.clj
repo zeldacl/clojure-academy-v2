@@ -43,6 +43,11 @@
   (try
     (render/register-texture-binder! bind-texture-forge!)
 
+    ;; Inject core renderer registration callbacks into mcmod.
+    (render-init/register-renderer-init-fns!
+      [(requiring-resolve 'cn.li.ac.client.render.matrix-renderer/register!)
+       (requiring-resolve 'cn.li.ac.client.render.solar-renderer/register!)])
+
     (render-init/register-all-renderers!)
 
     ;; Bind universal BER only to tile-ids that have at least one block with a

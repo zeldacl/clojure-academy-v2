@@ -30,9 +30,9 @@
 
   Example:
     (register-world-lifecycle-handler!
-      {:on-load   cn.li.ac.wireless.world-data/on-world-load
-       :on-unload cn.li.ac.wireless.world-data/on-world-unload
-       :on-save   cn.li.ac.wireless.world-data/on-world-save})"
+      {:on-load   ac.wireless.world-data/on-world-load
+       :on-unload ac.wireless.world-data/on-world-unload
+       :on-save   ac.wireless.world-data/on-world-save})"
   [handler-map]
   (when-let [on-load (:on-load handler-map)]
     (swap! world-load-handlers conj on-load))
