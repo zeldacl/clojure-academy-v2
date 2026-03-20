@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.events
   "Forge 1.20.1 event handlers"
-  (:require [cn.li.mcmod.core :as core]
+  (:require [cn.li.ac.core :as core]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]

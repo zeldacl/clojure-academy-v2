@@ -15,7 +15,7 @@
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]
             [clojure.edn :as edn])
-  (:import [my_mod.network ClojureNetwork]))
+  (:import [cn.li.forge1201.network ClojureNetwork]))
 
 ;; ---------------------------------------------------------------------------
 ;; EDN serialization helpers

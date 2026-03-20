@@ -13,6 +13,6 @@
     :max-stack-size 16
     :creative-tab :tools
     :durability 500
-    :on-use (fn [data] (println "Used!")))")
+    :on-use (fn [data] (println \"Used!\")))")
 
 ;; All item definitions have been migrated to cn.li.mcmod.item.dsl

@@ -3,7 +3,7 @@
   
   A simple battery item for testing the wireless energy system.
   Implements ImagEnergyItem protocol."
-  (:require [cn.li.energy.imag-energy-item :as energy-item]
+  (:require [cn.li.ac.energy.imag-energy-item :as energy-item]
             [cn.li.mcmod.item.dsl :as item-dsl]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.platform.nbt :as nbt]

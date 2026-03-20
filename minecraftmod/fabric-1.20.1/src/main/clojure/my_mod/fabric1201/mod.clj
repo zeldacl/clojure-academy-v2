@@ -1,6 +1,6 @@
  
   (ns cn.li.fabric1201.mod
-    (:require [cn.li.mcmod.core :as core]
+    (:require [cn.li.ac.core :as core]
               [cn.li.fabric1201.init :as init]
               [cn.li.fabric1201.datagen.setup :as datagen]
               [cn.li.fabric1201.registry :as registry]
@@ -14,7 +14,7 @@
               [cn.li.fabric1201.blockstate-properties :as bsp]
               [cn.li.mcmod.item.dsl :as idsl]
               [cn.li.mcmod.registry.metadata :as registry-metadata]
-              [cn.li.mcmod.config.modid :as modid]
+              [cn.li.ac.config.modid :as modid]
               [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core Registry]
            [net.minecraft.core.registries BuiltInRegistries]
@@ -25,8 +25,8 @@
            [net.minecraft.world.level.block.entity BlockEntityType BlockEntityType$Builder BlockEntityType$BlockEntitySupplier]
            [net.fabricmc.fabric.api.itemgroup.v1 FabricItemGroup ItemGroupEvents]
            [net.minecraft.network.chat Component]
-           [my_mod.block NodeDynamicBlock ScriptedEntityBlock ScriptedDynamicEntityBlock]
-           [my_mod.block.entity ScriptedBlockEntity]))
+           [cn.li.fabric1201.block NodeDynamicBlock ScriptedEntityBlock ScriptedDynamicEntityBlock]
+           [cn.li.fabric1201.block.entity ScriptedBlockEntity]))
 
 ;; Mod ID constant
 (def mod-id modid/MOD-ID)

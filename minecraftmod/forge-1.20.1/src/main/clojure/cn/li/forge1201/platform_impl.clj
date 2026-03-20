@@ -23,10 +23,9 @@
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
            [net.minecraft.world.level.block.entity BlockEntity]
-           [net.minecraft.world.item ItemStack]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.common.util LazyOptional]
-           [cn.li.mcmod.capability CapabilitySlots]))
+           [cn.li.forge1201.capability CapabilitySlots]))
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Forge 1.20.1)
@@ -169,51 +168,28 @@
 ;; ItemStack Protocol Implementation (Forge 1.20.1)
 ;; ============================================================================
 
-(extend-type ItemStack
-  item/IItemStack
-  
-  (item-is-empty? [this]
-    (.isEmpty this))
-  
-  (item-get-count [this]
-    (.getCount this))
-  
-  (item-get-max-stack-size [this]
-    (.getMaxStackSize this))
-  
-  (item-is-equal? [this other]
-    (.sameItem this other))
-  
-  (item-save-to-nbt [this nbt]
-    (.save this nbt))
-  
-  (item-get-or-create-tag [this]
-    (.getOrCreateTag this))
-  
-  (item-get-max-damage [this]
-    (.getMaxDamage this))
-  
-  (item-set-damage! [this damage]
-    (.setDamageValue this (int damage)))
-
-  (item-get-damage [this]
-    (.getDamageValue this))
-
-  (item-get-item [this]
-    (.getItem this))
-
-  (item-get-tag-compound [this]
-    (.getTag this)))
-
-;; ============================================================================
-;; Item Protocol Implementation (Forge 1.20.1)
-;; ============================================================================
-
-(extend-type net.minecraft.world.item.Item
-  item/IItem
-
-  (item-get-description-id [this]
-    (.getDescriptionId this)))
+(defn- install-itemstack-impls!
+  []
+  ;; Use runtime `eval` to defer `extend-type` macroexpansion until Minecraft
+  ;; registries are bootstrapped (AOT/checkClojure would otherwise touch them).
+  (eval
+    '(extend-type net.minecraft.world.item.ItemStack
+       item/IItemStack
+       (item-is-empty? [this] (.isEmpty this))
+       (item-get-count [this] (.getCount this))
+       (item-get-max-stack-size [this] (.getMaxStackSize this))
+       (item-is-equal? [this other] (.sameItem this other))
+       (item-save-to-nbt [this nbt] (.save this nbt))
+       (item-get-or-create-tag [this] (.getOrCreateTag this))
+       (item-get-max-damage [this] (.getMaxDamage this))
+       (item-set-damage! [this damage] (.setDamageValue this (int damage)))
+       (item-get-damage [this] (.getDamageValue this))
+       (item-get-item [this] (.getItem this))
+       (item-get-tag-compound [this] (.getTag this))))
+  (eval
+    '(extend-type net.minecraft.world.item.Item
+       item/IItem
+       (item-get-description-id [this] (.getDescriptionId this)))))
 
 ;; ============================================================================
 ;; World Protocol Implementation (Forge 1.20.1)
@@ -268,6 +244,10 @@
   Must be called during mod initialization before any core code runs."
   []
   (log/info "Initializing Forge 1.20.1 platform implementations...")
+
+  ;; Install protocol extensions that may indirectly trigger Minecraft class loading.
+  ;; This must run only during real mod initialization, not during AOT/checkClojure.
+  (install-itemstack-impls!)
   
   ;; Register NBT factory
   (alter-var-root #'nbt/*nbt-factory*
@@ -281,7 +261,10 @@
   
   ;; Register ItemStack factory
   (alter-var-root #'item/*item-factory*
-    (constantly (fn [nbt] (ItemStack/of nbt))))
+    (constantly
+      (fn [nbt]
+        (let [cls (Class/forName "net.minecraft.world.item.ItemStack")]
+          (clojure.lang.Reflector/invokeStaticMethod cls "of" (object-array [nbt]))))))
 
   ;; Register resource identifier factory
   (alter-var-root #'resource/*resource-factory*

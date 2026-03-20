@@ -6,17 +6,17 @@
             [cn.li.forge1201.gui.impl :as gui]
             [cn.li.forge1201.gui.init :as gui-init]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
-            [cn.li.forge1201.platform-impl :as platform-impl]
+            ;; platform-impl 会在 runtime 的 mod-init 中按需加载（避免 AOT/checkClojure 阶段触发 Minecraft class init）
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.forge1201.blockstate-properties :as bsp]
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.mcmod.config.modid :as modid]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.world.level.block Block Blocks]
+  (:import [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [cn.li.forge1201.block ScriptedBlock DynamicStateBlock]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
@@ -46,18 +46,20 @@
 (def mod-id modid/MOD-ID)
 
 ;; DeferredRegister instances
-(defonce blocks-register 
-  (DeferredRegister/create ForgeRegistries/BLOCKS mod-id))
+(defonce blocks-register
+  ;; AOT/checkClojure 阶段 Minecraft registries 尚未 bootstrapped。
+  ;; 延迟创建，避免触发 Bootstrap。
+  (delay (DeferredRegister/create ForgeRegistries/BLOCKS mod-id)))
 
-(defonce items-register 
-  (DeferredRegister/create ForgeRegistries/ITEMS mod-id))
+(defonce items-register
+  (delay (DeferredRegister/create ForgeRegistries/ITEMS mod-id)))
 
 (defonce creative-tabs-register
-  (DeferredRegister/create Registries/CREATIVE_MODE_TAB mod-id))
+  (delay (DeferredRegister/create Registries/CREATIVE_MODE_TAB mod-id)))
 
 ;; BlockEntity types
 (defonce block-entities-register
-  (DeferredRegister/create ForgeRegistries/BLOCK_ENTITY_TYPES mod-id))
+  (delay (DeferredRegister/create ForgeRegistries/BLOCK_ENTITY_TYPES mod-id)))
 
 ;; Storage for registered blocks and items (populated during initialization)
 (defonce registered-blocks (atom {}))
@@ -76,7 +78,7 @@
   []
   (let [always-false (reify net.minecraft.world.level.block.state.BlockBehaviour$StatePredicate
                        (test [_ _state _level _pos] false))]
-    (doto (BlockBehaviour$Properties/copy Blocks/STONE)
+    (doto (BlockBehaviour$Properties/copy net.minecraft.world.level.block.Blocks/STONE)
       (.noOcclusion)
       (.forceSolidOff)
       (.isViewBlocking always-false)
@@ -95,7 +97,7 @@
           has-be? (registry-metadata/has-block-entity? block-id)
           tile-id (when has-be?
                     (or (registry-metadata/get-block-tile-id block-id) block-id))
-          registered-obj (.register blocks-register registry-name
+          registered-obj (.register (force blocks-register) registry-name
                           (reify java.util.function.Supplier
                             (get [_]
                               (cond
@@ -109,12 +111,12 @@
                                 (let [props (bsp/get-all-properties block-id)]
                                   (DynamicStateBlock/create block-id
                                                             (java.util.ArrayList. props)
-                                                            (BlockBehaviour$Properties/copy Blocks/STONE)))
+                                                            (BlockBehaviour$Properties/copy net.minecraft.world.level.block.Blocks/STONE)))
                                 has-be?
                                 (ScriptedBlock. block-id tile-id
                                   (carrier-block-props))
                                 :else
-                                (Block. (BlockBehaviour$Properties/copy Blocks/STONE))))))]
+                                (Block. (BlockBehaviour$Properties/copy net.minecraft.world.level.block.Blocks/STONE))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
 
 (defn register-scripted-tile-hooks!
@@ -148,7 +150,7 @@
       (when (seq ros)
         (let [registered-obj
               (.register
-                block-entities-register
+                (force block-entities-register)
                 registry-name
                 (reify java.util.function.Supplier
                   (get [_]
@@ -193,7 +195,7 @@
   (doseq [item-id (registry-metadata/get-all-item-ids)]
     (let [registry-name (registry-metadata/get-item-registry-name item-id)
           item-spec (registry-metadata/get-item-spec item-id)
-          registered-obj (.register items-register registry-name
+          registered-obj (.register (force items-register) registry-name
                           (reify java.util.function.Supplier
                             (get [_]
                               (Item. (Item$Properties.)))))]
@@ -204,7 +206,7 @@
     (when (registry-metadata/should-create-block-item? block-id)
       (let [registry-name (registry-metadata/get-block-registry-name block-id)
             block-registered (get @registered-blocks block-id)
-            registered-obj (.register items-register registry-name
+            registered-obj (.register (force items-register) registry-name
                             (reify java.util.function.Supplier
                               (get [_]
                                 (BlockItem. (.get block-registered) (Item$Properties.)))))]
@@ -316,62 +318,70 @@
 ;; Constructor implementation
 (defn mod-init []
   (log/info "Initializing MyMod1201 from Clojure...")
-  
-  ;; CRITICAL: Initialize platform abstractions FIRST
-  ;; This must happen before any core code runs that uses NBT/BlockPos/World
-  (platform-impl/init-platform!)
-  ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources
-  ;; ac namespaces load here; deftile-kind / declare-capability! calls execute at this point
-  (init/init-from-java)
+  (try
+    ;; CRITICAL: Initialize platform abstractions FIRST
+    ;; This must happen before any core code runs that uses NBT/BlockPos/World
+    (when-let [init-platform! (requiring-resolve 'cn.li.forge1201.platform-impl/init-platform!)]
+      (init-platform!))
+    ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources
+    ;; ac namespaces load here; deftile-kind / declare-capability! calls execute at this point
+    (init/init-from-java)
 
-  ;; Initialize BlockState properties from Clojure metadata
-  ;; Must happen before block registration so Property objects are ready
-  (bsp/init-all-properties!)
+    ;; Initialize BlockState properties from Clojure metadata
+    ;; Must happen before block registration so Property objects are ready
+    (bsp/init-all-properties!)
 
-  ;; Register all blocks and items using metadata-driven approach
-  ;; DSL systems are automatically initialized when namespaces load
-  (register-scripted-tile-hooks!)
-  (register-all-blocks!)
-  (register-block-entities!)
-  (register-all-items!)
-  
-  ;; Register creative tab (safe icon = BARRIER so no dependency on item registry order)
-  (log/info "Registering Forge creative tab...")
-  (.register creative-tabs-register "items"
-             (reify java.util.function.Supplier
-               (get [_] (build-creative-tab))))
+    ;; Register all blocks and items using metadata-driven approach
+    ;; DSL systems are automatically initialized when namespaces load
+    (register-scripted-tile-hooks!)
+    (register-all-blocks!)
+    (register-block-entities!)
+    (register-all-items!)
+    
+    ;; Register creative tab (safe icon = BARRIER so no dependency on item registry order)
+    (log/info "Registering Forge creative tab...")
+    (.register (force creative-tabs-register) "items"
+               (reify java.util.function.Supplier
+                 (get [_] (build-creative-tab))))
 
-  ;; Populate GUI DeferredRegister before it is registered with the bus.
-  ;; Must happen here (during mod-init) — registries are locked by FMLCommonSetupEvent.
-  (gui-registry-impl/register-menu-types!)
+    ;; Populate GUI DeferredRegister before it is registered with the bus.
+    ;; Must happen here (during mod-init) — registries are locked by FMLCommonSetupEvent.
+    (gui-registry-impl/register-menu-types!)
 
-  ;; Register DeferredRegisters and lifecycle event listeners on mod event bus.
-  ;; Must use addListener(EventPriority, boolean, Class<T>, Consumer<T>) overload:
-  ;; Clojure's reify erases generic type info, so Forge cannot infer the event
-  ;; type from the Consumer alone.
-  (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
-    (.register blocks-register mod-bus)
-    (.register items-register mod-bus)
-    (.register block-entities-register mod-bus)
-    (.register creative-tabs-register mod-bus)
-    (.register gui-registry-impl/menu-register mod-bus)
-    (.addListener mod-bus EventPriority/NORMAL false FMLCommonSetupEvent
-                  (reify java.util.function.Consumer
-                    (accept [_ event] (on-common-setup event))))
-    (.addListener mod-bus EventPriority/NORMAL false FMLClientSetupEvent
-                  (reify java.util.function.Consumer
-                    (accept [_ event] (on-client-setup event))))
-    ;; Generic RegisterCapabilitiesEvent: registers all java-types declared by ac.
-    ;; No modification needed when ac adds new capabilities.
-    (.addListener mod-bus EventPriority/NORMAL false RegisterCapabilitiesEvent
-                  (reify java.util.function.Consumer
-                    (accept [_ event]
-                      (doseq [[_key {:keys [java-type]}] @platform-cap/capability-type-registry]
-                        (when java-type
-                          (.register event java-type)))))))
-  
-  ;; Return state
-  [[] nil])
+    ;; Register DeferredRegisters and lifecycle event listeners on mod event bus.
+    ;; Must use addListener(EventPriority, boolean, Class<T>, Consumer<T>) overload:
+    ;; Clojure's reify erases generic type info, so Forge cannot infer the event
+    ;; type from the Consumer alone.
+    (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
+      (.register (force blocks-register) mod-bus)
+      (.register (force items-register) mod-bus)
+      (.register (force block-entities-register) mod-bus)
+      (.register (force creative-tabs-register) mod-bus)
+      (.register (force gui-registry-impl/menu-register) mod-bus)
+      (.addListener mod-bus EventPriority/NORMAL false FMLCommonSetupEvent
+                    (reify java.util.function.Consumer
+                      (accept [_ event] (on-common-setup event))))
+      (.addListener mod-bus EventPriority/NORMAL false FMLClientSetupEvent
+                    (reify java.util.function.Consumer
+                      (accept [_ event] (on-client-setup event))))
+      ;; Generic RegisterCapabilitiesEvent: registers all java-types declared by ac.
+      ;; No modification needed when ac adds new capabilities.
+      (.addListener mod-bus EventPriority/NORMAL false RegisterCapabilitiesEvent
+                    (reify java.util.function.Consumer
+                      (accept [_ event]
+                        (doseq [[_key {:keys [java-type]}] @platform-cap/capability-type-registry]
+                          (when java-type
+                            (.register event java-type)))))))
+    
+    ;; Return state
+    [[] nil]
+    (catch IllegalArgumentException e
+      (let [msg (some-> e .getMessage str)]
+        (if (and msg (.contains msg "Not bootstrapped"))
+          (do
+            (log/warn "Skipping Forge mod-init during checkClojure: Minecraft registries not bootstrapped")
+            [[] nil])
+          (throw e))))))
 
 ;; ============================================================================
 ;; Gen-class Method Implementations

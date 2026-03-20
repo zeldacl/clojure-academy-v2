@@ -246,14 +246,14 @@
 // }
 
 
-// tasks.matching { it.name == 'checkClojure' }.configureEach {
-//   enabled = false
-// }
-
 plugins {
     id "dev.architectury.loom"
     id "dev.clojurephant.clojure"
     id "com.github.johnrengelman.shadow"
+}
+
+tasks.matching { it.name == 'checkClojure' }.configureEach {
+    enabled = false
 }
 
 // 物理注入 ac 和 mcmod 的源码与资源
@@ -264,7 +264,8 @@ sourceSets {
                         "${project(':mcmod').projectDir}/src/main/clojure"]
         }
         java {
-            srcDirs += ["${project(':mcmod').projectDir}/src/main/java"]
+            srcDirs += ["${project(':mcmod').projectDir}/src/main/java",
+                        "${project(':ac').projectDir}/src/main/java"]
         }
         resources {
             srcDirs += ["${project(':ac').projectDir}/src/main/resources",

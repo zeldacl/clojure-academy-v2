@@ -1,6 +1,6 @@
 (ns cn.li.fabric1201.gui.registry-impl
   "Fabric 1.20.1 GUI Registration Implementation"
-  (:require [cn.li.mcmod.gui.platform-adapter :as gui]
+  (:require [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.fabric1201.gui.bridge :as bridge]
             [cn.li.ac.wireless.gui.registry :as gui-registry]
             [cn.li.ac.wireless.gui.gui-metadata :as gui-meta]

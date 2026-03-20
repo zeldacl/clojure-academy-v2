@@ -28,8 +28,7 @@
            [net.minecraft.world.level.block.state BlockState]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.level Level]
-           [net.minecraft.core BlockPos]
-           [my_mod.block.entity ScriptedBlockEntity]))
+           [net.minecraft.core BlockPos]))
 
 ;; ============================================================================
 ;; Internal: 1.20.1 NBT type dispatch
@@ -110,7 +109,7 @@
   - Other fields use the internal 1.20.1 NBT writers."
   [schema]
   (let [defaults (schema->default-state schema)]
-    (fn [^ScriptedBlockEntity be ^CompoundTag tag]
+    (fn [be ^CompoundTag tag]
       (let [state (or (.getCustomState be) defaults)]
         (doseq [spec schema]
           (when (:persist? spec)

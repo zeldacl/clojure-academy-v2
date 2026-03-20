@@ -4,8 +4,8 @@
   Uses runtime `proxy` instead of `gen-class` for each custom slot type.
   gen-class is a compile-time-only macro (guarded by *compile-files*) and
   produces no class when Clojure source files are loaded without AOT."
-  (:require [cn.li.mcmod.gui.platform-adapter :as gui]
-            [cn.li.mcmod.gui.slot-validators :as slot-validators]
+  (:require [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.gui.slot-validators :as slot-validators]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.inventory Slot]))
 

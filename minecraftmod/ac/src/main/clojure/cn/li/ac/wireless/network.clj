@@ -67,7 +67,7 @@
   "Get network capacity from matrix"
   [network]
   (if-let [matrix (get-matrix network)]
-    (.getMatrixCapacity ^ cn.li.ac.api.wireless.IWirelessMatrix matrix)
+    (.getMatrixCapacity ^cn.li.ac.api.wireless.IWirelessMatrix matrix)
     0))
 
 (defn- find-existing-network-by-node

@@ -8,7 +8,7 @@
             [cn.li.ac.block.matrix-schema :as mschema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.item.constraint-plate :as plate]
-            [cn.li.item.mat-core :as core]
+            [cn.li.ac.item.mat-core :as core]
             [cn.li.ac.wireless.slot-schema :as slots]
             [cn.li.ac.wireless.gui.container-common :as common]
             [cn.li.ac.wireless.gui.container-move-common :as move-common]

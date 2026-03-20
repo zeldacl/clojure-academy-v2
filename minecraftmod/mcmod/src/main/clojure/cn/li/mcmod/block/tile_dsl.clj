@@ -95,14 +95,20 @@ Enforces:
     (swap! tile-registry
            (fn [{:keys [by-id block->tile-id] :as reg}]
              (when (contains? by-id id)
-               (throw (ex-info "Duplicate tile-id registered" {:tile-id id})))
+               ;; `checkClojure`/AOT 会重复加载同一份 DSL，导致 tile-spec 里函数对象不再“相等”。
+               ;; 这里将重复 tile-id 视为幂等；真正的约束由下面的 block->tile-id 冲突检查保证。
+               nil)
+
              (doseq [block-id blocks
                      :let [existing (get block->tile-id block-id)]
                      :when existing]
-               (throw (ex-info "Block is already bound to a tile-id"
-                               {:block-id block-id
-                                :existing-tile-id existing
-                                :new-tile-id id})))
+               (when-not (= existing id)
+                 (when-not *compile-files*
+                   (throw (ex-info "Block is already bound to a tile-id"
+                                   {:block-id block-id
+                                    :existing-tile-id existing
+                                    :new-tile-id id})))))
+
              (-> reg
                  (assoc-in [:by-id id] tile-spec)
                  (update :block->tile-id

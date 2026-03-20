@@ -5,8 +5,7 @@
   Platform implementations must bind *be-capability-slot-fn* during init so
   that get-capability-slot can retrieve Forge Capability objects by key."
   (:require [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.util.log :as log])
-  (:import [my_mod.block.entity ScriptedBlockEntity]))
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; BlockEntity Protocol
@@ -57,7 +56,7 @@
   [be]
   (when be
     (try
-      (.getCustomState ^ScriptedBlockEntity be)
+      (.getCustomState be)
       (catch Exception e
         (log/warn "get-custom-state failed:" (.getMessage e))
         nil))))
@@ -68,7 +67,7 @@
   [be state]
   (when be
     (try
-      (.setCustomState ^ScriptedBlockEntity be state)
+      (.setCustomState be state)
       (catch Exception e
         (log/error "set-custom-state! failed:" (.getMessage e))))))
 
@@ -78,7 +77,7 @@
   [be]
   (when be
     (try
-      (.getBlockId ^ScriptedBlockEntity be)
+      (.getBlockId be)
       (catch Exception e
         (log/warn "get-block-id failed:" (.getMessage e))
         nil))))
@@ -89,7 +88,7 @@
   [be]
   (when be
     (try
-      (.setChanged ^ScriptedBlockEntity be)
+      (.setChanged be)
       (catch Exception e
         (log/warn "set-changed! failed:" (.getMessage e))
         nil))))
@@ -112,7 +111,7 @@
     (try
       (let [cap (*be-capability-slot-fn* key-string)]
         (when cap
-          (let [lo (.getCapability ^ScriptedBlockEntity be cap nil)]
+          (let [lo (.getCapability be cap nil)]
             (when (.isPresent lo)
               (.orElse lo nil)))))
       (catch Exception _

@@ -21,12 +21,12 @@
             [cn.li.mcmod.platform.position   :as pos]
             [clojure.string             :as str]
             [cn.li.ac.energy.operations   :as energy]
-            [cn.li.wireless.world-data :as wd]
+            [cn.li.ac.wireless.world-data :as wd]
             [cn.li.ac.wireless.slot-schema :as slots]
-            [cn.li.wireless.virtual-blocks :as vb]
+            [cn.li.ac.wireless.virtual-blocks :as vb]
             [cn.li.mcmod.util.log            :as log])
-  (:import [my_mod.api.wireless IWirelessNode]
-           [my_mod.api.energy   IEnergyCapable]
+  (:import [cn.li.ac.api.wireless IWirelessNode]
+           [cn.li.ac.api.energy IEnergyCapable]
            [net.minecraft.world.item ItemStack]))
 
 ;; ============================================================================

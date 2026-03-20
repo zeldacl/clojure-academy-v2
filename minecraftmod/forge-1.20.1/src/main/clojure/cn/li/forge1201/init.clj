@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.init
   "Forge 1.20.1 initialization and version-specific implementations"
-  (:require [cn.li.core :as core]
-            [cn.li.registry :as reg]
+  (:require [cn.li.ac.core :as core]
+            [cn.li.ac.registry :as reg]
             [cn.li.mcmod.gui.api :as gui-api]
             [cn.li.mcmod.util.log :as log]))
 

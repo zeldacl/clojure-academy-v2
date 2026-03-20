@@ -2,14 +2,14 @@
   "Wireless generator GUI - server-side network handlers (SolarGen etc.)."
   (:require [cn.li.mcmod.network.server :as net-server]
             [cn.li.ac.wireless.helper :as helper]
-            [cn.li.wireless.virtual-blocks :as vb]
+            [cn.li.ac.wireless.virtual-blocks :as vb]
             [cn.li.ac.wireless.gui.generator-messages :as gen-msgs]
             [cn.li.ac.wireless.gui.wireless-messages :as wireless-msgs]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.ac.wireless.node-connection :as node-conn]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.util.log :as log])
-  (:import [my_mod.api.wireless IWirelessNode]))
+  (:import [cn.li.ac.api.wireless IWirelessNode]))
 
 (defn handle-get-status
   [payload player]

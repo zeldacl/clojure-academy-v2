@@ -11,7 +11,7 @@
             [cn.li.ac.wireless.gui.matrix-network-handler :as matrix-net]
             [cn.li.ac.wireless.gui.node-network-handler :as node-net]
             [cn.li.ac.wireless.gui.generator-network-handler :as gen-net]
-            [cn.li.wireless.world-data :as wd]
+            [cn.li.ac.wireless.world-data :as wd]
             ;; Load all block definitions (so block-dsl registry is populated)
             [cn.li.ac.block.wireless-node]
             [cn.li.ac.block.wireless-matrix]
@@ -19,7 +19,7 @@
             ;; Load all item definitions (so item-dsl registry is populated)
             [cn.li.ac.item.components]
             [cn.li.ac.item.constraint-plate]
-            [cn.li.item.mat-core]
+            [cn.li.ac.item.mat-core]
             [cn.li.ac.item.media]))
 
 (defn init

@@ -37,7 +37,7 @@
 
 (defn normalize-xml-texture
   "Normalize texture strings read from XML layouts.
-   - preserve absolute "assets/..." paths
+   - preserve absolute assets/... paths (leading assets/)
    - strip placeholder namespace 'academy:' to return the relative path
    - leave other namespaced references untouched"
   [s]

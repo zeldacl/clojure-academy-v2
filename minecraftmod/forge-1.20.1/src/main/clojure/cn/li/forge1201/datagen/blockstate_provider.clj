@@ -19,7 +19,7 @@
            [net.minecraftforge.client.model.generators BlockStateProvider]
            [net.minecraftforge.common.data ExistingFileHelper]
            [net.minecraftforge.registries ForgeRegistries]
-           [my_mod.block DynamicStateBlock]
+           [cn.li.forge1201.block DynamicStateBlock]
            [java.util.concurrent CompletableFuture]))
 
 
@@ -57,13 +57,18 @@
               (registry-object->block registry-object)))
           candidates)))
 
+(def ^:private forge-blocks-registry
+  ;; Delay static field access to avoid triggering Minecraft registry bootstrap
+  ;; during AOT/checkClojure class loading.
+  (delay ForgeRegistries/BLOCKS))
+
 (defn- resolve-from-forge-registry
   [block-key registry-name]
   (let [key-name (name block-key)
         candidates (distinct (concat (normalize-candidates registry-name)
                                      (normalize-candidates key-name)))]
     (some (fn [candidate]
-            (.getValue ForgeRegistries/BLOCKS
+            (.getValue (force forge-blocks-registry)
                        (ResourceLocation. modid/MOD-ID candidate)))
           candidates)))
 
@@ -233,16 +238,19 @@
   [^CachedOutput cache ^PackOutput pack-output ^ExistingFileHelper exfile-helper all-defs]
   (let [simple-count (atom 0)
         multipart-count (atom 0)
-        provider (proxy [BlockStateProvider] [pack-output modid/MOD-ID exfile-helper]
-                   (registerStatesAndModels []
-                     (doseq [[block-key definition] all-defs]
-                       (if (blockstate-def/is-multipart-block? definition)
-                         (do
-                           (build-multipart-block! this block-key definition)
-                           (swap! multipart-count inc))
-                         (do
-                           (build-simple-block! this block-key definition)
-                           (swap! simple-count inc))))))]
+        ;; Defer `proxy` macroexpansion to runtime to avoid Minecraft registry
+        ;; bootstrap during AOT/checkClojure/compileClojure.
+        provider (eval
+                   `(proxy [BlockStateProvider] [~pack-output ~modid/MOD-ID ~exfile-helper]
+                      (registerStatesAndModels []
+                        (doseq [[block-key definition] ~all-defs]
+                          (if (blockstate-def/is-multipart-block? definition)
+                            (do
+                              (build-multipart-block! this block-key definition)
+                              (swap! ~multipart-count inc))
+                            (do
+                              (build-simple-block! this block-key definition)
+                              (swap! ~simple-count inc))))))]
     {:future (.run provider cache)
      :simple @simple-count
      :multipart @multipart-count}))

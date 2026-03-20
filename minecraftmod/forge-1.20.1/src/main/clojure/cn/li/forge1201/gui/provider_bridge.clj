@@ -2,7 +2,7 @@
   "Forge 1.20.1 provider bridge.
 
   Uses reify MenuProvider and delegates menu creation to menu-bridge."
-  (:require [cn.li.mcmod.gui.platform-adapter :as gui]
+  (:require [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.gui.menu-bridge :as menu-bridge])
   (:import [net.minecraft.world MenuProvider]

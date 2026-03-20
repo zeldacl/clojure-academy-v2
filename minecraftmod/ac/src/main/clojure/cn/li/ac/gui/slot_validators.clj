@@ -2,7 +2,7 @@
   "Shared slot validation helpers for all platforms."
   (:require [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.item.constraint-plate :as plate]
-            [cn.li.item.mat-core :as core]))
+            [cn.li.ac.item.mat-core :as core]))
 
 (defn energy-item-validator
   "Return true if stack is an energy item."

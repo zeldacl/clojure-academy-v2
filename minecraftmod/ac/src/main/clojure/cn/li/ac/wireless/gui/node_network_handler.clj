@@ -3,15 +3,15 @@
   (:require [cn.li.mcmod.network.server :as net-server]
             [cn.li.ac.wireless.helper :as helper]
             [cn.li.ac.wireless.network :as wireless-net]
-            [cn.li.wireless.world-data :as world-data]
-            [cn.li.wireless.virtual-blocks :as vb]
+            [cn.li.ac.wireless.world-data :as world-data]
+            [cn.li.ac.wireless.virtual-blocks :as vb]
             [cn.li.ac.wireless.interfaces :as winterfaces]
             [cn.li.ac.wireless.gui.node-messages :as node-msgs]
             [cn.li.ac.wireless.gui.wireless-messages :as wireless-msgs]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.util.log :as log])
-  (:import [my_mod.api.wireless IWirelessNode]))
+  (:import [cn.li.ac.api.wireless IWirelessNode]))
 
 (defn- update-node-field!
   "Update a single field in the BE's customState (Design-3).

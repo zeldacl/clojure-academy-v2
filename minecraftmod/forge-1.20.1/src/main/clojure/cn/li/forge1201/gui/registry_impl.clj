@@ -3,9 +3,9 @@
 
   Platform-agnostic design: Uses metadata-driven approach.
 
-  IMPORTANT: Only imports from cn.li.mcmod.gui.platform-adapter, not directly
+  IMPORTANT: Only imports from cn.li.ac.gui.platform-adapter, not directly
   from cn.li.wireless.gui.* modules (per platform adapter contract)."
-  (:require [cn.li.mcmod.gui.platform-adapter :as gui]
+  (:require [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.forge1201.gui.bridge :as bridge]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log])
@@ -24,7 +24,9 @@
 ;; Registries are locked before FMLCommonSetupEvent; MenuType must be registered
 ;; via DeferredRegister during RegisterEvent, just like blocks and items.
 (defonce menu-register
-  (DeferredRegister/create Registries/MENU modid/MOD-ID))
+  ;; AOT/checkClojure 阶段 Minecraft registries 尚未 bootstrapped。
+  ;; 延迟创建，避免编译期触发 Bootstrap。
+  (delay (DeferredRegister/create Registries/MENU modid/MOD-ID)))
 
 (defonce gui-menu-types
   ^{:doc "Map from GUI ID to RegistryObject<MenuType>.
@@ -82,7 +84,7 @@
           ;; Create IForgeMenuType eagerly; the embedded IContainerFactory is a
           ;; lazy callback that resolves get-menu-type at GUI-open time (runtime).
           menu-type (create-menu-type gui-id)
-          ro (.register menu-register registry-name
+          ro (.register (force menu-register) registry-name
                (reify java.util.function.Supplier
                  (get [_]
                    ;; Called by Forge during RegisterEvent — registries are open here.

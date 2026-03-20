@@ -9,7 +9,7 @@
             [cn.li.mcmod.client.obj :as obj]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.buffer :as rb]
-            [cn.li.client.render.pose :as pose]
+            [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce model (delay (res/load-obj-model "solar")))

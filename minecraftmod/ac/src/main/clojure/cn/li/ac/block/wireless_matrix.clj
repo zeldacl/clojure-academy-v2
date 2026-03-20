@@ -20,11 +20,11 @@
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.ac.item.constraint-plate :as plate]
-            [cn.li.item.mat-core :as core]
+            [cn.li.ac.item.mat-core :as core]
             [cn.li.ac.wireless.slot-schema :as slots]
             [cn.li.ac.wireless.gui.matrix-sync :as sync]
             [cn.li.mcmod.util.log :as log])
-  (:import [my_mod.api.wireless IWirelessMatrix]
+  (:import [cn.li.ac.api.wireless IWirelessMatrix]
            [net.minecraft.world.item ItemStack]))
 
 ;; ============================================================================

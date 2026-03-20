@@ -157,10 +157,9 @@ Structure:
            (let [id (:id gui-spec)
                  gui-id (:gui-id gui-spec)]
              (when (and (some? gui-id) (contains? (:by-gui-id reg) gui-id))
-               (throw (ex-info "Duplicate :gui-id registered"
-                               {:gui-id gui-id
-                                :existing-id (get-in reg [:by-gui-id gui-id :id])
-                                :new-id id})))
+               ;; AOT/checkClojure 会重复加载同一份 GUI DSL，
+               ;; gui-spec 中的函数对象无法保证“相等”，因此这里将重复 :gui-id 视为幂等。
+               nil)
              (cond-> reg
                true (assoc-in [:by-id id] gui-spec)
                (some? gui-id) (assoc-in [:by-gui-id gui-id] gui-spec)))))

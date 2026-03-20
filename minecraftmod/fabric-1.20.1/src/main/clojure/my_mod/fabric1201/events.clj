@@ -1,10 +1,10 @@
 (ns cn.li.fabric1201.events
   "Fabric 1.20.1 event handlers"
-  (:require [cn.li.core :as core]
+  (:require [cn.li.ac.core :as core]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.fabric1201.gui.registry-impl :as gui-registry-impl]
-            [cn.li.wireless.world-data :as wd])
+            [cn.li.ac.wireless.world-data :as wd])
   (:import [net.fabricmc.fabric.api.event.player UseBlockCallback]
            [net.fabricmc.fabric.api.event.player PlayerBlockBreakEvents]
            [net.minecraft.world InteractionResult]

@@ -3,7 +3,7 @@
   
   Platform-agnostic design: Reads GUI metadata and loops through all GUIs
   to register, eliminating hardcoded game concepts."
-  (:require [cn.li.mcmod.gui.platform-adapter :as gui]
+  (:require [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens MenuScreens]
            [net.minecraft.network.chat Component]))
@@ -34,7 +34,7 @@
           
           (when (and menu-type factory-fn-kw)
             ;; Get the actual factory function from screen-factory namespace
-            (let [factory-fn (ns-resolve 'cn.li.mcmod.gui.platform-adapter factory-fn-kw)]
+            (let [factory-fn (ns-resolve 'cn.li.ac.gui.platform-adapter factory-fn-kw)]
               (if factory-fn
                 (do
                   (MenuScreens/register

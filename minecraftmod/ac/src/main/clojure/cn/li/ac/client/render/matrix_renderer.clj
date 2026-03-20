@@ -13,7 +13,7 @@
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.multiblock-helper :as mb-helper]
             [cn.li.mcmod.client.render.buffer :as rb]
-            [cn.li.client.render.pose :as pose]
+            [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.ac.block.wireless-matrix :as wm]))
 
 ;; ============================================================================
