@@ -59,7 +59,7 @@
   "Get node capacity"
   [conn]
   (if-let [node (get-node conn)]
-    (.getCapacity ^ cn.li.ac.api.wireless.IWirelessNode node)
+    (.getCapacity ^ cn.li.acapi.wireless.IWirelessNode node)
     Integer/MAX_VALUE))
 
 (declare remove-receiver! remove-generator!)
@@ -80,7 +80,7 @@
   "Check if vblock is within node range"
   [conn vblock]
   (if-let [node (get-node conn)]
-    (let [range (.getRange ^ cn.li.ac.api.wireless.IWirelessNode node)
+    (let [range (.getRange ^ cn.li.acapi.wireless.IWirelessNode node)
           dist-sq (vb/dist-sq vblock (:node conn))]
       (<= dist-sq (* range range)))
     false))
@@ -236,18 +236,18 @@
           (if (vb/is-chunk-loaded? gen-vb world)
             (if-let [gen (vb/vblock-get gen-vb world)]
               (let [;; Get energy from generator
-                    energy-available (.getEnergy ^ cn.li.ac.api.wireless.IWirelessGenerator gen)
+                    energy-available (.getEnergy ^ cn.li.acapi.wireless.IWirelessGenerator gen)
                     to-collect (min energy-available transfer-left)
 
                     ;; Charge to node
-                    node-max (.getMaxEnergy ^ cn.li.ac.api.wireless.IWirelessNode node)
-                    node-current (.getEnergy ^ cn.li.ac.api.wireless.IWirelessNode node)
+                    node-max (.getMaxEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
+                    node-current (.getEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
                     node-space (- node-max node-current)
                     actual-transfer (min to-collect node-space)]
 
                 ;; Transfer energy
-                (.setEnergy ^ cn.li.ac.api.wireless.IWirelessGenerator gen (- energy-available actual-transfer))
-                (.setEnergy ^ cn.li.ac.api.wireless.IWirelessNode node (+ node-current actual-transfer))
+                (.setEnergy ^ cn.li.acapi.wireless.IWirelessGenerator gen (- energy-available actual-transfer))
+                (.setEnergy ^ cn.li.acapi.wireless.IWirelessNode node (+ node-current actual-transfer))
                 
                 (recur (rest gens-remaining)
                        (- transfer-left actual-transfer)))
@@ -271,15 +271,15 @@
           (if (vb/is-chunk-loaded? rec-vb world)
             (if-let [rec (vb/vblock-get rec-vb world)]
               (let [;; Pull from node
-                    node-current (.getEnergy ^ cn.li.ac.api.wireless.IWirelessNode node)
+                    node-current (.getEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
                     to-send (min node-current transfer-left)
 
                     ;; Inject to receiver
-                    leftover (.injectEnergy ^ cn.li.ac.api.wireless.IWirelessReceiver rec to-send)
+                    leftover (.injectEnergy ^ cn.li.acapi.wireless.IWirelessReceiver rec to-send)
                     actual-transfer (- to-send leftover)]
 
                 ;; Update node energy
-                (.setEnergy ^ cn.li.ac.api.wireless.IWirelessNode node (- node-current actual-transfer))
+                (.setEnergy ^ cn.li.acapi.wireless.IWirelessNode node (- node-current actual-transfer))
                 
                 (recur (rest recs-remaining)
                        (- transfer-left actual-transfer)))
@@ -305,7 +305,7 @@
             node-vb (:node conn)]
         (when (vb/is-chunk-loaded? node-vb world)
           (when-let [node (vb/vblock-get node-vb world)]
-            (let [bandwidth (.getBandwidth ^ cn.li.ac.api.wireless.IWirelessNode node)]
+            (let [bandwidth (.getBandwidth ^ cn.li.acapi.wireless.IWirelessNode node)]
               ;; Collect from generators
               (transfer-from-generators! conn node bandwidth)
               

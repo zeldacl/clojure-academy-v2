@@ -15,6 +15,7 @@ pluginManagement {
 
 rootProject.name = 'clojure-minecraft-mod'
 
+include 'api'
 include 'mcmod'
 include 'ac'
 include 'forge-1.20.1'

@@ -67,7 +67,7 @@
   "Get network capacity from matrix"
   [network]
   (if-let [matrix (get-matrix network)]
-    (.getMatrixCapacity ^cn.li.ac.api.wireless.IWirelessMatrix matrix)
+    (.getMatrixCapacity ^cn.li.acapi.wireless.IWirelessMatrix matrix)
     0))
 
 (defn- find-existing-network-by-node
@@ -123,7 +123,7 @@
         (do
           (log/info "Node add failed: matrix not found")
           false)
-        (let [range (.getMatrixRange ^ cn.li.ac.api.wireless.IWirelessMatrix matrix)
+        (let [range (.getMatrixRange ^ cn.li.acapi.wireless.IWirelessMatrix matrix)
               dist-sq (vb/dist-sq node-vblock (:matrix network))]
           (if (> dist-sq (* range range))
             (do
@@ -200,7 +200,7 @@
   "Check if coordinates are in network range"
   [network x y z]
   (if-let [matrix (get-matrix network)]
-    (let [range (.getMatrixRange ^ cn.li.ac.api.wireless.IWirelessMatrix matrix)
+    (let [range (.getMatrixRange ^ cn.li.acapi.wireless.IWirelessMatrix matrix)
           dist-sq (vb/dist-sq-pos (:matrix network) x y z)]
       (<= dist-sq (* range range)))
     false))
@@ -217,15 +217,15 @@
     (when matrix
       ;; Shuffle nodes for fairness
       (let [nodes-shuffled (shuffle @(:nodes network))
-            bandwidth (.getMatrixBandwidth ^ cn.li.ac.api.wireless.IWirelessMatrix matrix)]
+            bandwidth (.getMatrixBandwidth ^ cn.li.acapi.wireless.IWirelessMatrix matrix)]
         
         ;; Calculate total energy and capacity
         (let [energy-data (reduce
                             (fn [acc node-vb]
                               (if (vb/is-chunk-loaded? node-vb world)
                                 (if-let [node (vb/vblock-get node-vb world)]
-                                  (let [current (.getEnergy ^ cn.li.ac.api.wireless.IWirelessNode node)
-                                        max-energy (.getMaxEnergy ^ cn.li.ac.api.wireless.IWirelessNode node)]
+                                  (let [current (.getEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
+                                        max-energy (.getMaxEnergy ^ cn.li.acapi.wireless.IWirelessNode node)]
                                     {:sum (+ (:sum acc) current)
                                      :max-sum (+ (:max-sum acc) max-energy)})
                                   acc) ; Node destroyed, skip
@@ -246,8 +246,8 @@
                         (let [node-vb (first nodes-remaining)]
                           (if (vb/is-chunk-loaded? node-vb world)
                             (if-let [node (vb/vblock-get node-vb world)]
-                              (let [current (.getEnergy ^ cn.li.ac.api.wireless.IWirelessNode node)
-                                    max-energy (.getMaxEnergy ^ cn.li.ac.api.wireless.IWirelessNode node)
+                              (let [current (.getEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
+                                    max-energy (.getMaxEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
                                     target (* max-energy average-percent)
                                     diff (- current target)]
                                 (if (> diff 0)
@@ -255,14 +255,14 @@
                                   (let [to-pull (min diff transfer-left)
                                         buffer-space (- BUFFER_MAX buffer-val)
                                         actual-pull (min to-pull buffer-space)]
-                                    (.setEnergy ^ cn.li.ac.api.wireless.IWirelessNode node (- current actual-pull))
+                                    (.setEnergy ^ cn.li.acapi.wireless.IWirelessNode node (- current actual-pull))
                                     (recur (rest nodes-remaining)
                                            (- transfer-left actual-pull)
                                            (+ buffer-val actual-pull)))
 
                                   ;; Node needs energy → push from buffer
                                   (let [to-push (min (- diff) transfer-left buffer-val)]
-                                    (.setEnergy ^ cn.li.ac.api.wireless.IWirelessNode node (+ current to-push))
+                                    (.setEnergy ^ cn.li.acapi.wireless.IWirelessNode node (+ current to-push))
                                     (recur (rest nodes-remaining)
                                            (- transfer-left to-push)
                                            (- buffer-val to-push)))))

@@ -118,7 +118,7 @@
   :write-nbt-fn solar-write-nbt-fn)
 
 ;; Register capability so wireless system can treat SolarGen as a generator.
-(platform-cap/declare-capability! :wireless-generator cn.li.ac.api.wireless.IWirelessGenerator
+(platform-cap/declare-capability! :wireless-generator cn.li.acapi.wireless.IWirelessGenerator
   (fn [be _side] (impls/->WirelessGeneratorImpl be)))
 
 (tile-logic/register-tile-capability! "solar-gen" :wireless-generator)

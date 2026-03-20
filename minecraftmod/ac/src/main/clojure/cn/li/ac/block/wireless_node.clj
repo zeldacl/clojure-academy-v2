@@ -25,8 +25,8 @@
             [cn.li.ac.wireless.slot-schema :as slots]
             [cn.li.ac.wireless.virtual-blocks :as vb]
             [cn.li.mcmod.util.log            :as log])
-  (:import [cn.li.ac.api.wireless IWirelessNode]
-           [cn.li.ac.api.energy IEnergyCapable]
+  (:import [cn.li.acapi.wireless IWirelessNode]
+           [cn.li.acapi.energy IEnergyCapable]
            [net.minecraft.world.item ItemStack]))
 
 ;; ============================================================================

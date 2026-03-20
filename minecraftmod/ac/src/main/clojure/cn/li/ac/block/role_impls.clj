@@ -12,8 +12,8 @@
             [cn.li.mcmod.block.state-schema :as schema]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos])
-  (:import [cn.li.ac.api.wireless IWirelessMatrix IWirelessNode IWirelessGenerator]
-           [cn.li.ac.api.energy IEnergyCapable]))
+  (:import [cn.li.acapi.wireless IWirelessMatrix IWirelessNode IWirelessGenerator]
+           [cn.li.acapi.energy IEnergyCapable]))
 
 ;; ============================================================================
 ;; WirelessMatrixImpl

@@ -11,7 +11,7 @@
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.ac.api.wireless IWirelessNode]))
+  (:import [cn.li.acapi.wireless IWirelessNode]))
 
 (defn- update-node-field!
   "Update a single field in the BE's customState (Design-3).

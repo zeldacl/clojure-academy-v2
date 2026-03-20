@@ -25,7 +25,7 @@
             [cn.li.ac.wireless.gui.wireless-tab :as wireless-tab]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.ac.api.wireless IWirelessNode]))
+  (:import [cn.li.acapi.wireless IWirelessNode]))
 
 ;; ============================================================================
 ;; GUI Dimensions (shared)

@@ -133,7 +133,7 @@
                   dist-sq (vb/dist-sq-pos node-vb x y z)]
               (if (<= dist-sq (* search-range search-range))
                 (if-let [node (vb/vblock-get node-vb world)]
-                  (let [node-range (.getRange ^ cn.li.ac.api.wireless.IWirelessNode node)
+                  (let [node-range (.getRange ^ cn.li.acapi.wireless.IWirelessNode node)
                         node-dist-sq (vb/dist-sq-pos node-vb x y z)]
                     (if (and (<= node-dist-sq (* node-range node-range))
                              (< (node-conn/get-load conn)
@@ -205,7 +205,7 @@
   Returns: true if successful"
   [gen-tile node-tile password need-auth]
   (when (or (not need-auth)
-            (= password (.getPassword ^ cn.li.ac.api.wireless.IWirelessNode node-tile)))
+            (= password (.getPassword ^ cn.li.acapi.wireless.IWirelessNode node-tile)))
     (let [world (platform-be/be-get-world-safe node-tile)
           world-data (wd/get-world-data world)
           node-vb (vb/create-vnode-conn node-tile)
@@ -232,7 +232,7 @@
   Returns: true if successful"
   [rec-tile node-tile password need-auth]
   (when (or (not need-auth)
-            (= password (.getPassword ^ cn.li.ac.api.wireless.IWirelessNode node-tile)))
+            (= password (.getPassword ^ cn.li.acapi.wireless.IWirelessNode node-tile)))
     (let [world (platform-be/be-get-world-safe node-tile)
           world-data (wd/get-world-data world)
           node-vb (vb/create-vnode-conn node-tile)

@@ -1,4 +1,4 @@
-package cn.li.ac.api.wireless;
+package cn.li.acapi.wireless;
 
 /**
  * Platform-neutral interface for wireless generator blocks.

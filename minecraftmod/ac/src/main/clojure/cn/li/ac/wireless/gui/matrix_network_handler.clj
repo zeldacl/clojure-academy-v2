@@ -19,7 +19,7 @@
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.ac.api.wireless IWirelessMatrix]))
+  (:import [cn.li.acapi.wireless IWirelessMatrix]))
 
 ;; ==================== 工具函数 ====================
 

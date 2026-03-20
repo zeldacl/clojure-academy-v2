@@ -24,7 +24,7 @@
             [cn.li.ac.wireless.slot-schema :as slots]
             [cn.li.ac.wireless.gui.matrix-sync :as sync]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.ac.api.wireless IWirelessMatrix]
+  (:import [cn.li.acapi.wireless IWirelessMatrix]
            [net.minecraft.world.item ItemStack]))
 
 ;; ============================================================================

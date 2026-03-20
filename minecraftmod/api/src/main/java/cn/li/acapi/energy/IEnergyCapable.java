@@ -1,4 +1,4 @@
-package cn.li.ac.api.energy;
+package cn.li.acapi.energy;
 
 /**
  * Platform-neutral energy storage interface.

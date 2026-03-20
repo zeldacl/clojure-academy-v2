@@ -9,7 +9,7 @@
             [cn.li.ac.wireless.node-connection :as node-conn]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.ac.api.wireless IWirelessNode]))
+  (:import [cn.li.acapi.wireless IWirelessNode]))
 
 (defn handle-get-status
   [payload player]

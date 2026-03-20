@@ -55,10 +55,12 @@
 // }
 
 plugins {
+    id 'java-library' // 必须是 java-library，不能只是 java
     id "dev.clojurephant.clojure"
 }
 dependencies {
     implementation "org.clojure:clojure:1.11.1"
+    api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation project(':mcmod')
 }
 

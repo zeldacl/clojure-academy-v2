@@ -58,8 +58,10 @@
 
 plugins {
     id "java-library"
+    id "dev.clojurephant.clojure"
 }
 dependencies {
+    api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation "org.clojure:clojure:1.11.1"
 }
 
