@@ -14,11 +14,11 @@
     (log/info "Registering all core renderers...")
     ;; Require renderers lazily to avoid client-only ns load on server.
     (require
-      'cn.li.mcmod.client.render.matrix-renderer
-      'cn.li.mcmod.client.render.solar-renderer)
+      'cn.li.ac.client.render.matrix-renderer
+      'cn.li.ac.client.render.solar-renderer)
 
-    ((requiring-resolve 'cn.li.mcmod.client.render.matrix-renderer/register!))
-    ((requiring-resolve 'cn.li.mcmod.client.render.solar-renderer/register!))
+    ((requiring-resolve 'cn.li.ac.client.render.matrix-renderer/register!))
+    ((requiring-resolve 'cn.li.ac.client.render.solar-renderer/register!))
 
     (log/info "Core renderers registered.")))
 
