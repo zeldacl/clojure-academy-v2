@@ -62,6 +62,16 @@
   ;; during AOT/checkClojure class loading.
   (delay ForgeRegistries/BLOCKS))
 
+;; Dynamic counters used inside `eval`ed code to avoid embedding Atom objects
+;; in the generated form (which Clojure refuses to compile).
+(def ^:dynamic *datagen-simple-count* nil)
+(def ^:dynamic *datagen-multipart-count* nil)
+
+;; Also used to avoid embedding Java objects (PackOutput / ExistingFileHelper)
+;; into the `eval`ed form. Clojure refuses to compile those as literals.
+(def ^:dynamic *datagen-pack-output* nil)
+(def ^:dynamic *datagen-exfile-helper* nil)
+
 (defn- resolve-from-forge-registry
   [block-key registry-name]
   (let [key-name (name block-key)
@@ -191,7 +201,7 @@
       (log/warn "Property not found for block" block-id-str ":" property-key))))
   part-builder)
 
-(defn- build-simple-block!
+(defn build-simple-block!
   [^BlockStateProvider provider block-key definition]
   (let [registry-name (:registry-name definition)
         block (resolve-registered-block block-key registry-name)
@@ -209,7 +219,7 @@
             (write-flat-item-model! provider registry-name texture-rl))
           (.simpleBlockItem provider block model-file))))))
 
-(defn- build-multipart-block!
+(defn build-multipart-block!
   [^BlockStateProvider provider block-key definition]
   (let [registry-name (:registry-name definition)
         block (resolve-registered-block block-key registry-name)
@@ -240,18 +250,28 @@
         multipart-count (atom 0)
         ;; Defer `proxy` macroexpansion to runtime to avoid Minecraft registry
         ;; bootstrap during AOT/checkClojure/compileClojure.
-        provider (eval
-                   `(proxy [BlockStateProvider] [~pack-output ~modid/MOD-ID ~exfile-helper]
-                      (registerStatesAndModels []
-                        (doseq [[block-key definition] ~all-defs]
-                          (if (blockstate-def/is-multipart-block? definition)
-                            (do
-                              (build-multipart-block! this block-key definition)
-                              (swap! ~multipart-count inc))
-                            (do
-                              (build-simple-block! this block-key definition)
-                              (swap! ~simple-count inc))))))]
-    {:future (.run provider cache)
+        ;;
+        ;; Important: do NOT embed Java objects (PackOutput/ExistingFileHelper) into the
+        ;; evaled form. Clojure refuses to compile those literals. Instead, bind them
+        ;; to dynamic vars and reference the vars in the generated proxy call.
+        provider (binding [*datagen-pack-output* pack-output
+                            *datagen-exfile-helper* exfile-helper]
+                   (eval
+                     `(proxy [BlockStateProvider] [*datagen-pack-output* ~modid/MOD-ID *datagen-exfile-helper*]
+                        (registerStatesAndModels []
+                          (doseq [[block-key# definition#] ~all-defs]
+                            (if (blockstate-def/is-multipart-block? definition#)
+                              (do
+                                (cn.li.forge1201.datagen.blockstate-provider/build-multipart-block!
+                                 ~'this block-key# definition#)
+                                (swap! *datagen-multipart-count* inc))
+                              (do
+                                (cn.li.forge1201.datagen.blockstate-provider/build-simple-block!
+                                 ~'this block-key# definition#)
+                                (swap! *datagen-simple-count* inc))))))))]
+    {:future (binding [*datagen-simple-count* simple-count
+                       *datagen-multipart-count* multipart-count]
+               (.run provider cache))
      :simple @simple-count
      :multipart @multipart-count}))
 

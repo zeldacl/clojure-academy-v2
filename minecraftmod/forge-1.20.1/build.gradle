@@ -304,7 +304,9 @@ loom {
             // 传递 DataGen 参数
             programArgs "--mod", mod_id, "--all", 
                         "--output", file('src/generated/resources/').getAbsolutePath(), 
-                        "--existing", file('src/main/resources/').getAbsolutePath()
+                        "--existing", file('src/main/resources/').getAbsolutePath(),
+                        "--existing", project(':ac').file('src/main/resources/').getAbsolutePath()
+                        // "--existing", project(':mcmod').file('src/main/resources/').getAbsolutePath()
         }
     }
 }
@@ -330,6 +332,14 @@ dependencies {
 //         compileOnly project(':ac')
 //     compileOnly project(':mcmod')
     implementation "org.clojure:clojure:1.11.1"
+    implementation "org.clojure:spec.alpha:0.3.218"
+    implementation "org.clojure:core.specs.alpha:0.2.62"
+
+    // Forge dev/runtime classloader does not automatically expose regular
+    // implementation deps to transformed mod classes.
+    forgeRuntimeLibrary "org.clojure:clojure:1.11.1"
+    forgeRuntimeLibrary "org.clojure:spec.alpha:0.3.218"
+    forgeRuntimeLibrary "org.clojure:core.specs.alpha:0.2.62"
 }
 
 // 配置 ShadowJar 把 Clojure 运行环境打入
@@ -338,6 +348,8 @@ shadowJar {
     archiveClassifier = 'shadow'
     dependencies {
         include(dependency('org.clojure:clojure'))
+        include(dependency('org.clojure:spec.alpha'))
+        include(dependency('org.clojure:core.specs.alpha'))
     }
 }
 
@@ -350,14 +362,55 @@ remapJar {
 clojure {
     builds {
         main {
-            aotAll() 
+            aotAll()
             reflection = 'warn'
         }
     }
 }
 
+// Clojurephant emits AOT to `build/clojure/main`, but Loom/Forge userdev only puts
+// `build/classes/java/main` on the transformed mod classpath. Copy (do not use Sync:
+// it would delete Java outputs) so `require` finds `__init.class` next to Java classes.
+def copyClojureClassesToJavaOutput = tasks.register('copyClojureClassesToJavaOutput', Copy) {
+    from layout.buildDirectory.dir('clojure/main')
+    into layout.buildDirectory.dir('classes/java/main')
+    dependsOn tasks.named('compileClojure')
+}
+
 // 确保 Java 接口先编译，供 Clojure 调用
 tasks.named('compileClojure').configure {
     dependsOn 'compileJava'
+    finalizedBy copyClojureClassesToJavaOutput
+    // Merged AOT lives in `classes/java/main` for Loom runs. Those `.class` files must not
+    // stay on the compile classpath for the next `compileClojure`, or loaders will execute
+    // `__init` during compilation and trip Minecraft bootstrap.
+    doFirst {
+        def clojureOutDir = layout.buildDirectory.dir('clojure/main').get().asFile
+        def javaMainDir = layout.buildDirectory.dir('classes/java/main').get().asFile
+        if (!clojureOutDir.isDirectory() || !javaMainDir.isDirectory()) {
+            return
+        }
+        clojureOutDir.eachFileRecurse { f ->
+            if (f.isFile() && f.name.endsWith('.class')) {
+                def rel = clojureOutDir.toPath().relativize(f.toPath()).toString()
+                def victim = new File(javaMainDir, rel.replace('/', File.separator))
+                if (victim.isFile()) {
+                    victim.delete()
+                }
+            }
+        }
+    }
+}
+
+tasks.named('classes').configure {
+    dependsOn tasks.named('copyClojureClassesToJavaOutput')
+}
+
+tasks.matching { it.name in ['runClient', 'runServer', 'runData'] }.configureEach {
+    dependsOn tasks.named('copyClojureClassesToJavaOutput')
+}
+
+tasks.named('shadowJar').configure {
+    dependsOn tasks.named('copyClojureClassesToJavaOutput')
 }
 

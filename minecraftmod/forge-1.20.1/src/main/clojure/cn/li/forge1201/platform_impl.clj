@@ -172,9 +172,10 @@
   []
   ;; Use runtime `eval` to defer `extend-type` macroexpansion until Minecraft
   ;; registries are bootstrapped (AOT/checkClojure would otherwise touch them).
+  ;; Fully qualify protocol symbols: `eval` does not see this ns's `item` alias.
   (eval
     '(extend-type net.minecraft.world.item.ItemStack
-       item/IItemStack
+       cn.li.mcmod.platform.item/IItemStack
        (item-is-empty? [this] (.isEmpty this))
        (item-get-count [this] (.getCount this))
        (item-get-max-stack-size [this] (.getMaxStackSize this))
@@ -188,7 +189,7 @@
        (item-get-tag-compound [this] (.getTag this))))
   (eval
     '(extend-type net.minecraft.world.item.Item
-       item/IItem
+       cn.li.mcmod.platform.item/IItem
        (item-get-description-id [this] (.getDescriptionId this)))))
 
 ;; ============================================================================
