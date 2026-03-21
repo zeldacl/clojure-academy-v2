@@ -11,6 +11,7 @@
   platform implementations before any core code runs."
   (:require [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.platform.resource :as resource]
@@ -22,6 +23,8 @@
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
+           [net.minecraft.world.level.block.state BlockState StateDefinition]
+           [net.minecraft.world.level.block.state.properties Property]
            [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.common.util LazyOptional]
@@ -104,11 +107,11 @@
   
   (nbt-list-get [this index]
     (when (and (>= index 0) (< index (.size this)))
-      (.get this index)))
+      (.get this (int index))))
   
   (nbt-list-get-compound [this index]
     (when (and (>= index 0) (< index (.size this)))
-      (.getCompound this index))))
+      (.getCompound this (int index)))))
 
 ;; ============================================================================
 ;; Position Protocol Implementation (Forge 1.20.1)
@@ -151,6 +154,23 @@
     ;; Fallback for older code
     (.getLevel this)))
 
+;; ==========================================================================
+;; BlockState protocol implementations for Forge
+;; ==========================================================================
+
+(extend-type BlockState
+  world/IBlockStateOps
+  (block-state-is-air [this]
+    (.isAir this))
+  (block-state-get-block [this]
+    (.getBlock this))
+  (block-state-get-state-definition [this]
+    (.getStateDefinition (.getBlock this)))
+  (block-state-get-property [this state-def prop-name]
+    (.getProperty ^StateDefinition state-def ^String prop-name))
+  (block-state-set-property [this prop value]
+    (.setValue this ^Property prop value)))
+
 ;; ============================================================================
 ;; Capability LazyOptional Protocol Implementation (Forge 1.20.1)
 ;; ============================================================================
@@ -187,6 +207,7 @@
        (item-get-max-damage [this] (.getMaxDamage this))
        (item-set-damage! [this damage] (.setDamageValue this (int damage)))
        (item-get-damage [this] (.getDamageValue this))
+      (item-split [this amount] (.split this (int amount)))
        (item-get-item [this] (.getItem this))
        (item-get-tag-compound [this] (.getTag this))))
   (eval
@@ -235,6 +256,36 @@
 
   (world-can-see-sky [this pos]
     (.canSeeSky this pos)))
+
+;; ==========================================================================
+;; Entity / Player / Inventory / Menu protocol implementations
+;; ==========================================================================
+
+(extend-type net.minecraft.world.entity.Entity
+  cn.li.mcmod.platform.entity/IEntityOps
+  (entity-distance-to-sqr [this x y z]
+    (.distanceToSqr ^net.minecraft.world.entity.Entity this (double x) (double y) (double z))))
+
+(extend-type net.minecraft.world.entity.player.Player
+  cn.li.mcmod.platform.entity/IEntityOps
+  (player-get-level [this]
+    (.level ^net.minecraft.world.entity.player.Player this))
+  (player-get-name [this]
+    (str (.getName ^net.minecraft.world.entity.player.Player this)))
+  (player-get-uuid [this]
+    (.getUUID ^net.minecraft.world.entity.player.Player this))
+  (player-get-container-menu [this]
+    (.containerMenu ^net.minecraft.world.entity.player.Player this)))
+
+(extend-type net.minecraft.world.entity.player.Inventory
+  cn.li.mcmod.platform.entity/IEntityOps
+  (inventory-get-player [this]
+    (.player ^net.minecraft.world.entity.player.Inventory this)))
+
+(extend-type net.minecraft.world.inventory.AbstractContainerMenu
+  cn.li.mcmod.platform.entity/IEntityOps
+  (menu-get-container-id [this]
+    (.containerId ^net.minecraft.world.inventory.AbstractContainerMenu this)))
 
 ;; ============================================================================
 ;; Platform Initialization

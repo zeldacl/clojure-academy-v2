@@ -49,7 +49,10 @@
     "Get the Item type from this ItemStack. Returns Item object.")
 
   (item-get-tag-compound [this]
-    "Get NBT tag compound from ItemStack (may be null). Returns NBT or nil."))
+    "Get NBT tag compound from ItemStack (may be null). Returns NBT or nil.")
+
+  (item-split [this amount]
+    "Split this stack by `amount`, returning the taken stack (platform object)."))
 
 ;; ============================================================================
 ;; Item Protocol (for Item objects, not ItemStack)
@@ -108,3 +111,5 @@
   "Check if the ItemStack factory has been initialized by platform code."
   []
   (some? *item-factory*))
+
+;; `item-split` is implemented per-platform via the IItemStack protocol

@@ -13,6 +13,7 @@
   (:require [cn.li.fabric1201.platform.nbt :as nbt]
             [cn.li.fabric1201.platform.position :as pos]
             [cn.li.fabric1201.platform.world :as world]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.fabric1201.platform.item :as item]
             [cn.li.fabric1201.platform.resource :as resource]
             [cn.li.mcmod.util.log :as log]
@@ -21,6 +22,7 @@
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
+           [net.minecraft.world.level.block.state BlockState]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.resources ResourceLocation]))
 
@@ -125,7 +127,15 @@
     (.setDamageValue this (int damage)))
 
   (item-get-damage [this]
-    (.getDamageValue this)))
+    (.getDamageValue this))
+  (item-get-item [this]
+    (.getItem this))
+
+  (item-get-tag-compound [this]
+    (.getTag this))
+
+  (item-split [this amount]
+    (.split this (int amount))))
 
 ;; ============================================================================
 ;; Position Protocol Implementation (Fabric 1.20.1)
@@ -142,6 +152,26 @@
   
   (pos-z [this]
     (.getZ this)))
+
+;; ==========================================================================
+;; BlockState protocol implementations for Fabric
+;; ==========================================================================
+
+(extend-type BlockState
+  world/IBlockStateOps
+  (block-state-is-air [this]
+    (.isAir this)))
+
+(extend-type BlockState
+  world/IBlockStateOps
+  (block-state-get-block [this]
+    (.getBlock this))
+  (block-state-get-state-definition [this]
+    (.getStateDefinition (.getBlock this)))
+  (block-state-get-property [this state-def prop-name]
+    (.getProperty state-def prop-name))
+  (block-state-set-property [this prop value]
+    (.setValue this prop value)))
 
 ;; ============================================================================
 ;; World Protocol Implementation (Fabric 1.20.1)
@@ -171,6 +201,36 @@
   
   (world-is-chunk-loaded? [this chunk-x chunk-z]
     (.hasChunk this chunk-x chunk-z)))
+
+;; ============================================================================
+;; Entity / Player / Inventory / Menu protocol implementations (Fabric)
+;; ============================================================================
+
+(extend-type net.minecraft.world.entity.Entity
+  cn.li.mcmod.platform.entity/IEntityOps
+  (entity-distance-to-sqr [this x y z]
+    (.distanceToSqr ^net.minecraft.world.entity.Entity this (double x) (double y) (double z))))
+
+(extend-type net.minecraft.world.entity.player.Player
+  cn.li.mcmod.platform.entity/IEntityOps
+  (player-get-level [this]
+    (.level ^net.minecraft.world.entity.player.Player this))
+  (player-get-name [this]
+    (str (.getName ^net.minecraft.world.entity.player.Player this)))
+  (player-get-uuid [this]
+    (.getUUID ^net.minecraft.world.entity.player.Player this))
+  (player-get-container-menu [this]
+    (.containerMenu ^net.minecraft.world.entity.player.Player this)))
+
+(extend-type net.minecraft.world.entity.player.Inventory
+  cn.li.mcmod.platform.entity/IEntityOps
+  (inventory-get-player [this]
+    (.player ^net.minecraft.world.entity.player.Inventory this)))
+
+(extend-type net.minecraft.world.inventory.AbstractContainerMenu
+  cn.li.mcmod.platform.entity/IEntityOps
+  (menu-get-container-id [this]
+    (.containerId ^net.minecraft.world.inventory.AbstractContainerMenu this)))
 
 ;; ============================================================================
 ;; Platform Initialization

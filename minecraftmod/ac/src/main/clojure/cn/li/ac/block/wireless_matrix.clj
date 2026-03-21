@@ -25,8 +25,7 @@
             [cn.li.ac.wireless.slot-schema :as slots]
             [cn.li.ac.wireless.gui.matrix-sync :as sync]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.acapi.wireless IWirelessMatrix]
-           [net.minecraft.world.item ItemStack]))
+  (:import [cn.li.acapi.wireless IWirelessMatrix]))
 
 ;; ============================================================================
 ;; Schema-derived functions  (single-call derivation, executed once at load)
@@ -204,11 +203,11 @@
                   (let [state (safe-state be)
                         item  (get-in state [:inventory slot])]
                     (when item
-                      (let [cnt (.getCount ^ItemStack item)]
+                      (let [cnt (pitem/item-get-count item)]
                         (if (<= cnt amount)
                           (do (platform-be/set-custom-state! be (-> state (set-inv-slot slot nil) recalculate-counts))
                               item)
-                          (let [result (.split ^ItemStack item amount)]
+                          (let [result (pitem/item-split item amount)]
                             (platform-be/set-custom-state! be (recalculate-counts state))
                             result))))))
 

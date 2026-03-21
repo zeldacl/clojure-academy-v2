@@ -1,4 +1,4 @@
-(ns cn.li.gui.dsl-test
+(ns cn.li.mcmod.gui.dsl-test
   "Unit tests for GUI DSL"
   (:require [cn.li.mcmod.gui.dsl :as dsl]
             [cn.li.mcmod.util.log :as log]))

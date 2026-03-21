@@ -120,3 +120,45 @@
   (let [chunk-x (block-to-chunk-coord x)
         chunk-z (block-to-chunk-coord z)]
     (world-is-chunk-loaded? world chunk-x chunk-z)))
+
+
+;; ============================================================================
+;; BlockState Protocol
+;; ============================================================================
+
+(defprotocol IBlockStateOps
+  "Protocol for BlockState operations.
+
+  Platform implementations should extend this to the concrete Minecraft
+  BlockState class and implement helpers such as `block-state-is-air` so
+  core code doesn't call Java methods directly."
+
+  (block-state-is-air [this]
+    "Return true when this block state is considered air on the platform")
+
+  (block-state-get-block [this]
+    "Return the underlying Block instance (opaque object) for this BlockState")
+
+  (block-state-get-state-definition [this]
+    "Return an opaque state-definition object for the block, or nil if unavailable")
+
+  (block-state-get-property [this state-def prop-name]
+    "Return the property object for `prop-name` from the state-def, or nil")
+
+  (block-state-set-property [this prop value]
+    "Return a new BlockState with property `prop` set to `value` if supported,
+    otherwise return original BlockState."))
+
+(defn block-state-is-air?
+  "Platform-neutral helper to test whether a `block-state` is air.
+
+  Accepts nil and returns false for nil values." [block-state]
+  (boolean (when block-state
+             (block-state-is-air block-state))))
+
+;; NOTE: Protocol functions `block-state-get-block`,
+;; `block-state-get-state-definition`, `block-state-get-property` and
+;; `block-state-set-property` are provided by the `IBlockStateOps` defprotocol
+;; above. Call the protocol functions directly from core code (e.g.
+;; `platform-world/block-state-get-state-definition`). Do NOT shadow them
+;; with defn wrappers here.

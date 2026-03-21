@@ -18,6 +18,7 @@
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.world      :as world]
             [cn.li.mcmod.platform.be         :as platform-be]
+            [cn.li.mcmod.platform.item       :as pitem]
             [cn.li.mcmod.platform.position   :as pos]
             [clojure.string             :as str]
             [cn.li.ac.energy.operations   :as energy]
@@ -26,8 +27,7 @@
             [cn.li.ac.wireless.virtual-blocks :as vb]
             [cn.li.mcmod.util.log            :as log])
   (:import [cn.li.acapi.wireless IWirelessNode]
-           [cn.li.acapi.energy IEnergyCapable]
-           [net.minecraft.world.item ItemStack]))
+           [cn.li.acapi.energy IEnergyCapable]))
 
 ;; ============================================================================
 ;; BlockState properties declaration (used by defblock at bottom)
@@ -187,10 +187,10 @@
                   (let [state (or (platform-be/get-custom-state be) nschema/node-default-state)
                         item  (get-in state [:inventory slot])]
                     (when item
-                      (let [cnt (.getCount ^ItemStack item)]
+                      (let [cnt (pitem/item-get-count item)]
                         (if (<= cnt amount)
                           (do (platform-be/set-custom-state! be (assoc-in state [:inventory slot] nil)) item)
-                          (.split ^ItemStack item amount))))))
+                          (pitem/item-split item amount))))))
 
    :remove-item-no-update (fn [be slot]
                             (let [state (or (platform-be/get-custom-state be) nschema/node-default-state)

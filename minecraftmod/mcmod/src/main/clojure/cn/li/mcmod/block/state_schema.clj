@@ -6,51 +6,31 @@
   be serialised to/from NBT, included in GUI sync payloads, and reflected in
   BlockState properties.
 
-  All NBT access uses the Minecraft 1.20.1 CompoundTag API
-  (.contains / .putDouble / .getDouble etc.) via dynamic interop — no static
-  imports required — consistent with the rest of mcmod.
-
-  FieldSpec keys (all optional unless marked required):
-    :key              keyword   REQUIRED - Clojure state-map key
-    :nbt-key          string    REQUIRED for persisted fields - CompoundTag key
-    :type             keyword   REQUIRED - one of :double :float :long :int
-                                           :boolean :string :keyword
-    :default          any       REQUIRED - default value for schema->default-state
-    :persist?         boolean   true  = read/written from NBT (default false)
-    :gui-sync?        boolean   true  = included in sync payload (default false)
-    :block-state-prop string    BlockState property name; nil = not mapped
-    :block-state-xf   fn?       (fn [raw-val full-state] -> coerced-value);
-                                when nil raw value is used as-is
-    :load-fn          fn?       override for load: (fn [tag nbt-key default] -> val)
-    :save-fn          fn?       override for save: (fn [state tag nbt-key]   -> nil)"
-  (:require [cn.li.mcmod.platform.world :as platform-world])
-  (:import [net.minecraft.nbt CompoundTag]
-           [net.minecraft.world.level.block.state BlockState]
-           [net.minecraft.world.level.block Block]
-           [net.minecraft.world.level Level]
-           [net.minecraft.core BlockPos]))
-
-;; ============================================================================
-;; Internal: 1.20.1 NBT type dispatch
-;; ============================================================================
+  This namespace is platform-neutral and must not import `net.minecraft.*`
+  types at the top-level. Use platform adapters for any platform-specific
+  behaviour."
+  (:require [cn.li.mcmod.platform.world :as platform-world]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.be :as pbe]))
 
 (def ^:private nbt-writers
-  {:double  (fn [^CompoundTag tag k v] (.putDouble  tag k (double  v)))
-   :float   (fn [^CompoundTag tag k v] (.putFloat   tag k (float   v)))
-   :long    (fn [^CompoundTag tag k v] (.putLong    tag k (long    v)))
-   :int     (fn [^CompoundTag tag k v] (.putInt     tag k (int     v)))
-   :boolean (fn [^CompoundTag tag k v] (.putBoolean tag k (boolean v)))
-   :string  (fn [^CompoundTag tag k v] (.putString  tag k (str     v)))
-   :keyword (fn [^CompoundTag tag k v] (.putString  tag k (name    v)))})
+  {:double  (fn [tag k v] (nbt/nbt-set-double! tag k v))
+   :float   (fn [tag k v] (nbt/nbt-set-float!  tag k v))
+   :long    (fn [tag k v] (nbt/nbt-set-long!   tag k v))
+   :int     (fn [tag k v] (nbt/nbt-set-int!    tag k v))
+   :boolean (fn [tag k v] (nbt/nbt-set-boolean! tag k v))
+   :string  (fn [tag k v] (nbt/nbt-set-string!  tag k (str v)))
+   :keyword (fn [tag k v] (nbt/nbt-set-string!  tag k (name v)))})
 
 (def ^:private nbt-readers
-  {:double  (fn [^CompoundTag tag k] (.getDouble  tag k))
-   :float   (fn [^CompoundTag tag k] (.getFloat   tag k))
-   :long    (fn [^CompoundTag tag k] (.getLong    tag k))
-   :int     (fn [^CompoundTag tag k] (.getInt     tag k))
-   :boolean (fn [^CompoundTag tag k] (.getBoolean tag k))
-   :string  (fn [^CompoundTag tag k] (.getString  tag k))
-   :keyword (fn [^CompoundTag tag k] (keyword (.getString tag k)))})
+  {:double  (fn [tag k] (nbt/nbt-get-double tag k))
+   :float   (fn [tag k] (nbt/nbt-get-float  tag k))
+   :long    (fn [tag k] (nbt/nbt-get-long   tag k))
+   :int     (fn [tag k] (nbt/nbt-get-int    tag k))
+   :boolean (fn [tag k] (nbt/nbt-get-boolean tag k))
+   :string  (fn [tag k] (nbt/nbt-get-string  tag k))
+   :keyword (fn [tag k] (keyword (nbt/nbt-get-string tag k)))})
 
 ;; ============================================================================
 ;; Core schema utilities
@@ -82,7 +62,7 @@
   - Other persisted fields use the internal 1.20.1 NBT readers."
   [schema]
   (let [defaults (schema->default-state schema)]
-    (fn [^CompoundTag tag]
+    (fn [tag]
       (reduce
         (fn [state spec]
           (let [k    (:key spec)
@@ -92,7 +72,7 @@
               (let [nk (:nbt-key spec)]
                 (if-let [load-fn (:load-fn spec)]
                   (assoc state k (load-fn tag nk dflt))
-                  (if (.contains tag nk)
+                  (if (nbt/nbt-has-key? tag nk)
                     (if-let [reader (get nbt-readers (:type spec))]
                       (assoc state k (reader tag nk))
                       (assoc state k dflt))
@@ -109,8 +89,8 @@
   - Other fields use the internal 1.20.1 NBT writers."
   [schema]
   (let [defaults (schema->default-state schema)]
-    (fn [be ^CompoundTag tag]
-      (let [state (or (.getCustomState be) defaults)]
+    (fn [be tag]
+      (let [state (or (pbe/get-custom-state be) defaults)]
         (doseq [spec schema]
           (when (:persist? spec)
             (let [k  (:key spec)
@@ -138,9 +118,9 @@
             m))
         {}
         schema)
-      (assoc :pos-x (.getX ^BlockPos pos)
-             :pos-y (.getY ^BlockPos pos)
-             :pos-z (.getZ ^BlockPos pos))))
+            (assoc :pos-x (pos/pos-x pos)
+              :pos-y (pos/pos-y pos)
+              :pos-z (pos/pos-z pos))))
 
 ;; ============================================================================
 ;; BlockState updater
@@ -158,26 +138,21 @@
     (fn [state level pos]
       (try
         (when-let [blk-state (platform-world/world-get-block-state level pos)]
-          (when-let [block (.getBlock ^BlockState blk-state)]
-            (let [state-def (.getStateDefinition ^Block block)
-                  new-bs    (reduce
-                              (fn [bs spec]
-                                (let [prop-name (:block-state-prop spec)
-                                      raw-val   (get state (:key spec) (:default spec))
-                                      val       (if-let [xf (:block-state-xf spec)]
-                                                  (xf raw-val state)
-                                                  raw-val)
+              (let [state-def (platform-world/block-state-get-state-definition blk-state)
+                new-bs    (reduce
+                           (fn [bs spec]
+                             (let [prop-name (:block-state-prop spec)
+                                   raw-val   (get state (:key spec) (:default spec))
+                                   val       (if-let [xf (:block-state-xf spec)]
+                                               (xf raw-val state)
+                                               raw-val)
                                       prop      (when state-def
-                                                  (.getProperty state-def prop-name))]
-                                  (if prop
-                                    (.setValue ^BlockState bs prop
-                                               (cond
-                                                 (integer? val) (Integer/valueOf (int val))
-                                                 (boolean? val) (Boolean/valueOf (boolean val))
-                                                 :else val))
-                                    bs)))
-                              blk-state
-                              bs-specs)]
-              (when (not= new-bs blk-state)
-                (.setBlock ^Level level pos new-bs 3)))))
+                                                  (platform-world/block-state-get-property blk-state state-def prop-name))]
+                               (if prop
+                                 (platform-world/block-state-set-property bs prop val)
+                                 bs)))
+                           blk-state
+                           bs-specs)]
+            (when (not= new-bs blk-state)
+              (platform-world/world-set-block level pos new-bs 3))))
         (catch Exception _)))))

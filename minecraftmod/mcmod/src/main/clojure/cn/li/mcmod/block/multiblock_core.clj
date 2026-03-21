@@ -9,7 +9,7 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.world.level.block.state BlockState]))
+  )
 
 (defn- same-pos?
   [a b]
@@ -21,7 +21,7 @@
   [state]
   (or (nil? state)
       (try
-        (.isAir ^BlockState state)
+        (world/block-state-is-air? state)
         (catch Throwable _
           false))))
 
