@@ -17,7 +17,7 @@
             [cn.li.fabric1201.platform.item :as item]
             [cn.li.fabric1201.platform.resource :as resource]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.fabric1201.client.render.pose :as pose]
+            [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.fabric1201.client.render.buffer :as buffer])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
@@ -258,3 +258,20 @@
   (alter-var-root #'item/*item-factory*
     (constantly (fn [nbt]
                   (ItemStack/of nbt)))))
+
+  ;; Bind platform PoseStack implementations for mcmod
+  (alter-var-root #'pose/*y-rotation-fn*
+    (constantly (fn [pose-stack angle]
+                  (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/YP (float angle))))))
+
+  (alter-var-root #'pose/*push-pose-fn*
+      (constantly (fn [pose-stack]
+            (.pushPose pose-stack))))
+
+  (alter-var-root #'pose/*pop-pose-fn*
+    (constantly (fn [pose-stack]
+                  (.popPose pose-stack))))
+
+  (alter-var-root #'pose/*translate-fn*
+    (constantly (fn [pose-stack x y z]
+                  (.translate pose-stack (double x) (double y) (double z)))))

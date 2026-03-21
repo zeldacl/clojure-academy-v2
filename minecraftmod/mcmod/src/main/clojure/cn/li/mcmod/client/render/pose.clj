@@ -12,6 +12,10 @@
 
 (def ^:dynamic *y-rotation-fn* nil)
 
+(def ^:dynamic *push-pose-fn* nil)
+(def ^:dynamic *pop-pose-fn* nil)
+(def ^:dynamic *translate-fn* nil)
+
 (defn apply-y-rotation
   "Apply Y-axis rotation to `pose-stack` using the platform-provided
   function stored in the root var `*y-rotation-fn*`.
@@ -34,3 +38,40 @@
       (catch Exception e
         (log/error "Error applying Y-rotation:" (.getMessage e))))
     (log/warn "No platform Y-rotation function bound; skipping rotation")))
+
+(defn push-pose
+  "Push current pose onto the matrix stack using platform implementation.
+
+  Args:
+  - pose-stack: platform pose stack object
+  "
+  [pose-stack]
+  (if *push-pose-fn*
+    (try
+      (*push-pose-fn* pose-stack)
+      (catch Exception e
+        (log/error "Error pushing pose:" (.getMessage e))))
+    (log/warn "No platform push-pose function bound; skipping push")))
+
+(defn pop-pose
+  "Pop pose from the matrix stack using platform implementation."
+  [pose-stack]
+  (if *pop-pose-fn*
+    (try
+      (*pop-pose-fn* pose-stack)
+      (catch Exception e
+        (log/error "Error popping pose:" (.getMessage e))))
+    (log/warn "No platform pop-pose function bound; skipping pop")))
+
+(defn translate
+  "Translate the pose-stack by (x y z) using platform implementation.
+
+  All arguments should be numeric.
+  "
+  [pose-stack x y z]
+  (if *translate-fn*
+    (try
+      (*translate-fn* pose-stack x y z)
+      (catch Exception e
+        (log/error "Error translating pose-stack:" (.getMessage e))))
+    (log/warn "No platform translate function bound; skipping translate")))

@@ -152,7 +152,21 @@
 
   (be-get-world [this]
     ;; Fallback for older code
-    (.getLevel this)))
+    (.getLevel this))
+
+  ;; Additional BE interop implemented in platform_impl (keeps core free of
+  ;; direct Minecraft class references)
+  (be-get-custom-state [this]
+    (.getCustomState this))
+
+  (be-set-custom-state! [this state]
+    (.setCustomState this state))
+
+  (be-get-block-id [this]
+    (.getBlockId this))
+
+  (be-set-changed! [this]
+    (.setChanged this)))
 
 ;; ==========================================================================
 ;; BlockState protocol implementations for Forge
@@ -179,7 +193,10 @@
   platform-cap/ILazyOptional
 
   (is-present? [this]
-    (.isPresent this)))
+    (.isPresent this))
+
+  (or-else [this default]
+    (.orElse this default)))
 
 ;; ============================================================================
 ;; World Protocol Implementation (Forge 1.20.1)
@@ -339,6 +356,19 @@
   (alter-var-root #'pose/*y-rotation-fn*
     (constantly (fn [pose-stack angle]
                   (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/YP (float angle))))))
+
+  ;; Bind platform pose stack push/pop/translate implementations
+  (alter-var-root #'pose/*push-pose-fn*
+    (constantly (fn [pose-stack]
+                  (.pushPose pose-stack))))
+
+  (alter-var-root #'pose/*pop-pose-fn*
+    (constantly (fn [pose-stack]
+                  (.popPose pose-stack))))
+
+  (alter-var-root #'pose/*translate-fn*
+    (constantly (fn [pose-stack x y z]
+                  (.translate pose-stack (double x) (double y) (double z)))))
 
   ;; Bind platform render buffer selectors for mcmod/ac renderers
   (alter-var-root #'buffer/*solid-buffer-fn*

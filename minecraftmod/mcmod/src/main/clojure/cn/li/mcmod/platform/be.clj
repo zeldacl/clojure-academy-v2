@@ -5,6 +5,7 @@
   Platform implementations must bind *be-capability-slot-fn* during init so
   that get-capability-slot can retrieve Forge Capability objects by key."
   (:require [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -12,13 +13,27 @@
 ;; ============================================================================
 
 (defprotocol IBlockEntity
-  "Protocol for BlockEntity operations."
+  "Protocol for BlockEntity operations. Platform implementations must extend
+  this protocol on the platform BlockEntity class to perform Java interop.
+  Core code should call these protocol functions instead of raw interop."
 
   (be-get-level [this]
     "Get the Level/World from BlockEntity (MC 1.17+ method name)")
 
   (be-get-world [this]
-    "Get the World from BlockEntity (MC 1.16.5 method name)"))
+    "Get the World from BlockEntity (MC 1.16.5 method name)")
+
+  (be-get-custom-state [this]
+    "Return the customState map from ScriptedBlockEntity, or nil")
+
+  (be-set-custom-state! [this state]
+    "Set the customState map on ScriptedBlockEntity")
+
+  (be-get-block-id [this]
+    "Return stable block id identifier string for this BE")
+
+  (be-set-changed! [this]
+    "Mark the BE as changed so it will be saved."))
 
 ;; Helper function to get world from BlockEntity (tries both methods)
 (defn be-get-world-safe
@@ -56,7 +71,7 @@
   [be]
   (when be
     (try
-      (.getCustomState be)
+      (be-get-custom-state be)
       (catch Exception e
         (log/warn "get-custom-state failed:" (.getMessage e))
         nil))))
@@ -67,7 +82,7 @@
   [be state]
   (when be
     (try
-      (.setCustomState be state)
+      (be-set-custom-state! be state)
       (catch Exception e
         (log/error "set-custom-state! failed:" (.getMessage e))))))
 
@@ -77,7 +92,7 @@
   [be]
   (when be
     (try
-      (.getBlockId be)
+      (be-get-block-id be)
       (catch Exception e
         (log/warn "get-block-id failed:" (.getMessage e))
         nil))))
@@ -88,7 +103,7 @@
   [be]
   (when be
     (try
-      (.setChanged be)
+      (be-set-changed! be)
       (catch Exception e
         (log/warn "set-changed! failed:" (.getMessage e))
         nil))))
@@ -111,8 +126,8 @@
     (try
       (let [cap (*be-capability-slot-fn* key-string)]
         (when cap
-          (let [lo (.getCapability be cap nil)]
-            (when (.isPresent lo)
-              (.orElse lo nil)))))
+          (let [lo (platform-cap/get-capability be cap nil)]
+            (when (platform-cap/is-present? lo)
+              (platform-cap/or-else lo nil)))))
       (catch Exception _
         nil))))

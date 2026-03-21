@@ -78,4 +78,7 @@
   "Protocol for LazyOptional-like capability wrappers."
 
   (is-present? [this]
-    "Check if the capability is present. Returns boolean."))
+    "Check if the capability is present. Returns boolean.")
+
+  (or-else [this default]
+    "Return contained value or `default` if not present."))
