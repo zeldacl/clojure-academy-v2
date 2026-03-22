@@ -188,7 +188,11 @@
 
 (defn get-widget-component-by-class
   [widget component-class]
-  (let [kind (keyword (str/lower-case (or (some-> component-class .getSimpleName) "")))]
+  (let [s (str component-class)
+        ;; `str` on a Class yields strings like "class net.minecraft.foo.Bar".
+        s (if (clojure.string/starts-with? s "class ") (subs s 6) s)
+        simple (last (clojure.string/split s #"\."))
+        kind (keyword (clojure.string/lower-case (or simple "")))]
     (get-widget-component widget kind)))
 
 (defn create-component-instance

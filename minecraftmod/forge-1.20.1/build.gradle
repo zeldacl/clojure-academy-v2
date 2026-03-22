@@ -252,9 +252,9 @@ plugins {
     id "com.github.johnrengelman.shadow"
 }
 
-tasks.matching { it.name == 'checkClojure' }.configureEach {
-    enabled = true
-}
+// tasks.matching { it.name == 'checkClojure' }.configureEach {
+//     enabled = false
+// }
 
 // 物理注入 ac 和 mcmod 的源码与资源
 sourceSets {
@@ -356,8 +356,11 @@ shadowJar {
 
 // 配置重映射，处理 Clojure 的混淆名
 remapJar {
-    inputFile = shadowJar.archiveFile
-    dependsOn shadowJar
+    // Use the normal `jar` output for remapping first. Shadow jars embed
+    // third-party classes (Clojure runtime etc.) which can trip TinyRemapper.
+    // Switching to `jar` helps identify if the shadow archive is causing the crash.
+    inputFile = jar.archiveFile
+    dependsOn jar
 }
 
 clojure {
@@ -381,7 +384,6 @@ def copyClojureClassesToJavaOutput = tasks.register('copyClojureClassesToJavaOut
 // 确保 Java 接口先编译，供 Clojure 调用
 tasks.named('compileClojure').configure {
     dependsOn 'compileJava'
-    finalizedBy copyClojureClassesToJavaOutput
     // Merged AOT lives in `classes/java/main` for Loom runs. Those `.class` files must not
     // stay on the compile classpath for the next `compileClojure`, or loaders will execute
     // `__init` during compilation and trip Minecraft bootstrap.
@@ -403,15 +405,7 @@ tasks.named('compileClojure').configure {
     }
 }
 
-tasks.named('classes').configure {
-    dependsOn tasks.named('copyClojureClassesToJavaOutput')
-}
-
 tasks.matching { it.name in ['runClient', 'runServer', 'runData'] }.configureEach {
-    dependsOn tasks.named('copyClojureClassesToJavaOutput')
-}
-
-tasks.named('shadowJar').configure {
     dependsOn tasks.named('copyClojureClassesToJavaOutput')
 }
 

@@ -205,32 +205,34 @@
 ;; ItemStack Protocol Implementation (Forge 1.20.1)
 ;; ============================================================================
 
-(defn- install-itemstack-impls!
-  []
-  ;; Use runtime `eval` to defer `extend-type` macroexpansion until Minecraft
-  ;; registries are bootstrapped (AOT/checkClojure would otherwise touch them).
-  ;; Fully qualify protocol symbols: `eval` does not see this ns's `item` alias.
-  (eval
-    '(extend-type net.minecraft.world.item.ItemStack
-       cn.li.mcmod.platform.item/IItemStack
-       (item-is-empty? [this] (.isEmpty this))
-       (item-get-count [this] (.getCount this))
-       (item-get-max-stack-size [this] (.getMaxStackSize this))
-     ;; Mojang mappings (1.20.x): static helper `ItemStack.isSameItem(a, b)`
-     ;; (instance method `isSameItem` may not exist depending on mappings).
-     (item-is-equal? [this other] (net.minecraft.world.item.ItemStack/isSameItem this ^net.minecraft.world.item.ItemStack other))
-       (item-save-to-nbt [this nbt] (.save this nbt))
-       (item-get-or-create-tag [this] (.getOrCreateTag this))
-       (item-get-max-damage [this] (.getMaxDamage this))
-       (item-set-damage! [this damage] (.setDamageValue this (int damage)))
-       (item-get-damage [this] (.getDamageValue this))
-      (item-split [this amount] (.split this (int amount)))
-       (item-get-item [this] (.getItem this))
-       (item-get-tag-compound [this] (.getTag this))))
-  (eval
-    '(extend-type net.minecraft.world.item.Item
-       cn.li.mcmod.platform.item/IItem
-       (item-get-description-id [this] (.getDescriptionId this)))))
+ (defn- install-itemstack-impls!
+   []
+   ;; Use runtime `eval` to defer `extend-type` macroexpansion until Minecraft
+   ;; registries are bootstrapped (AOT/checkClojure would otherwise touch them).
+   ;; Fully qualify protocol symbols: `eval` does not see this ns's `item` alias.
+   (eval
+     '(extend-type net.minecraft.world.item.ItemStack
+        cn.li.mcmod.platform.item/IItemStack
+        (item-is-empty? [this] (.isEmpty this))
+        (item-get-count [this] (.getCount this))
+        (item-get-max-stack-size [this] (.getMaxStackSize this))
+        ;; Mojang mappings (1.20.x): static helper `ItemStack.isSameItem(a, b)`
+        ;; (instance method `isSameItem` may not exist depending on mappings).
+        (item-is-equal? [this other]
+          (net.minecraft.world.item.ItemStack/isSameItem this ^net.minecraft.world.item.ItemStack other))
+        (item-save-to-nbt [this nbt] (.save this nbt))
+        (item-get-or-create-tag [this] (.getOrCreateTag this))
+        (item-get-max-damage [this] (.getMaxDamage this))
+        (item-set-damage! [this damage] (.setDamageValue this (int damage)))
+        (item-get-damage [this] (.getDamageValue this))
+        (item-split [this amount] (.split this (int amount)))
+        (item-get-item [this] (.getItem this))
+        (item-get-tag-compound [this] (.getTag this))))
+
+   (eval
+     '(extend-type net.minecraft.world.item.Item
+        cn.li.mcmod.platform.item/IItem
+        (item-get-description-id [this] (.getDescriptionId this)))))
 
 ;; ============================================================================
 ;; World Protocol Implementation (Forge 1.20.1)
@@ -278,31 +280,42 @@
 ;; Entity / Player / Inventory / Menu protocol implementations
 ;; ==========================================================================
 
-(extend-type net.minecraft.world.entity.Entity
-  cn.li.mcmod.platform.entity/IEntityOps
-  (entity-distance-to-sqr [this x y z]
-    (.distanceToSqr ^net.minecraft.world.entity.Entity this (double x) (double y) (double z))))
+;; Defer entity-related `extend-type` expansions until runtime to avoid
+;; triggering Minecraft registry access during AOT/checkClojure. These
+;; implementations are installed during `init-platform!` below.
+(defn- install-entity-impls!
+  []
+  (eval
+    '(extend-type net.minecraft.world.entity.Entity
+       cn.li.mcmod.platform.entity/IEntityOps
+       (entity-distance-to-sqr [this x y z]
+         (.distanceToSqr ^net.minecraft.world.entity.Entity this (double x) (double y) (double z)))))
 
-(extend-type net.minecraft.world.entity.player.Player
-  cn.li.mcmod.platform.entity/IEntityOps
-  (player-get-level [this]
-    (.level ^net.minecraft.world.entity.player.Player this))
-  (player-get-name [this]
-    (str (.getName ^net.minecraft.world.entity.player.Player this)))
-  (player-get-uuid [this]
-    (.getUUID ^net.minecraft.world.entity.player.Player this))
-  (player-get-container-menu [this]
-    (.containerMenu ^net.minecraft.world.entity.player.Player this)))
+  (eval
+    '(extend-type net.minecraft.world.entity.player.Player
+       cn.li.mcmod.platform.entity/IEntityOps
+       (player-get-level [this]
+         (.level ^net.minecraft.world.entity.player.Player this))
+       (player-get-name [this]
+         (str (.getName ^net.minecraft.world.entity.player.Player this)))
+       (player-get-uuid [this]
+         (.getUUID ^net.minecraft.world.entity.player.Player this))
+       (player-get-container-menu [this]
+         (.containerMenu ^net.minecraft.world.entity.player.Player this)))))
 
-(extend-type net.minecraft.world.entity.player.Inventory
-  cn.li.mcmod.platform.entity/IEntityOps
-  (inventory-get-player [this]
-    (.player ^net.minecraft.world.entity.player.Inventory this)))
+(defn- install-inventory-and-menu-impls!
+  []
+  (eval
+    '(extend-type net.minecraft.world.entity.player.Inventory
+       cn.li.mcmod.platform.entity/IEntityOps
+       (inventory-get-player [this]
+         (.player ^net.minecraft.world.entity.player.Inventory this))))
 
-(extend-type net.minecraft.world.inventory.AbstractContainerMenu
-  cn.li.mcmod.platform.entity/IEntityOps
-  (menu-get-container-id [this]
-    (.containerId ^net.minecraft.world.inventory.AbstractContainerMenu this)))
+  (eval
+    '(extend-type net.minecraft.world.inventory.AbstractContainerMenu
+       cn.li.mcmod.platform.entity/IEntityOps
+       (menu-get-container-id [this]
+         (.containerId ^net.minecraft.world.inventory.AbstractContainerMenu this)))))
 
 ;; ============================================================================
 ;; Platform Initialization
@@ -319,6 +332,9 @@
   ;; Install protocol extensions that may indirectly trigger Minecraft class loading.
   ;; This must run only during real mod initialization, not during AOT/checkClojure.
   (install-itemstack-impls!)
+  ;; Install entity/inventory/menu impls at runtime to avoid registry bootstrap issues
+  (install-entity-impls!)
+  (install-inventory-and-menu-impls!)
   
   ;; Register NBT factory
   (alter-var-root #'nbt/*nbt-factory*
@@ -369,6 +385,23 @@
   (alter-var-root #'pose/*translate-fn*
     (constantly (fn [pose-stack x y z]
                   (.translate pose-stack (double x) (double y) (double z)))))
+
+  ;; Bind platform accessor for current matrix from PoseStack
+  (alter-var-root #'pose/*get-matrix-fn*
+    (constantly (fn [pose-stack]
+                  (let [entry (.last pose-stack)]
+                    (.pose entry)))))
+
+  ;; Bind submit-vertex helper to avoid core calling VertexConsumer methods
+  (alter-var-root #'buffer/*submit-vertex-fn*
+    (constantly (fn [vc matrix x y z r g b a u v overlay uv2 nx ny nz]
+                  (-> (.vertex vc matrix (float x) (float y) (float z))
+                      (.color (int r) (int g) (int b) (int a))
+                      (.uv (float u) (float v))
+                      (.overlayCoords (int overlay))
+                      (.uv2 (int uv2))
+                      (.normal (float nx) (float ny) (float nz))
+                      (.endVertex)))))
 
   ;; Bind platform render buffer selectors for mcmod/ac renderers
   (alter-var-root #'buffer/*solid-buffer-fn*

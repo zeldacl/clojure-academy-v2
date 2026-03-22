@@ -257,7 +257,7 @@
   ;; Register item factory
   (alter-var-root #'item/*item-factory*
     (constantly (fn [nbt]
-                  (ItemStack/of nbt)))))
+                  (ItemStack/of nbt))))
 
   ;; Bind platform PoseStack implementations for mcmod
   (alter-var-root #'pose/*y-rotation-fn*
@@ -275,3 +275,20 @@
   (alter-var-root #'pose/*translate-fn*
     (constantly (fn [pose-stack x y z]
                   (.translate pose-stack (double x) (double y) (double z)))))
+
+  ;; Bind platform accessor for current matrix from PoseStack
+  (alter-var-root #'pose/*get-matrix-fn*
+    (constantly (fn [pose-stack]
+                  (let [entry (.last pose-stack)]
+                    (.pose entry)))))
+
+  ;; Bind submit-vertex helper to avoid core calling VertexConsumer methods
+  (alter-var-root #'buffer/*submit-vertex-fn*
+    (constantly (fn [vc matrix x y z r g b a u v overlay uv2 nx ny nz]
+                  (-> (.vertex vc matrix (float x) (float y) (float z))
+                      (.color (int r) (int g) (int b) (int a))
+                      (.uv (float u) (float v))
+                      (.overlayCoords (int overlay))
+                      (.uv2 (int uv2))
+                      (.normal (float nx) (float ny) (float nz))
+                      (.endVertex))))))

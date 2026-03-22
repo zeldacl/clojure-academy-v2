@@ -63,8 +63,10 @@
   "Create keyboard event handler
   
   Handler receives event with:
-  - .keyCode: int keycode
-  - .typedChar: char typed"
+  - :key-code (int) - keycode
+  - :typed-char (char) - typed character (if any)
+  NOTE: platform adapters should translate platform events into plain maps
+  with these keys to avoid Java interop in core."
   [widget handler]
   (listen! widget :key handler))
 
@@ -187,8 +189,8 @@
   Returns: KeyEvent handler"
   [text-atom & {:keys [validator]}]
   (fn [event]
-    (let [char (.typedChar event)
-          keycode (.keyCode event)
+        (let [char (or (:typed-char event) (:typedChar event))
+          keycode (or (:key-code event) (:keyCode event))
           current @text-atom]
       (cond
         ;; Backspace
@@ -214,7 +216,8 @@
 (defn event-pos
   "Extract [x y] position from mouse event"
   [event]
-  [(.-x event) (.-y event)])
+  [(or (:x event) (:pos-x event) (get-in event [:pos :x]))
+   (or (:y event) (:pos-y event) (get-in event [:pos :y]))])
 
 (defn event-in-bounds?
   "Check if event position is within bounds"

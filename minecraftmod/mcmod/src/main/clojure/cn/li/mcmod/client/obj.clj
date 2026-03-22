@@ -4,7 +4,9 @@
   Replaces cn.lambdalib2.render.obj runtime dependency with data-first API."
   (:require [clojure.string :as str]
             [clojure.java.io :as io]
-            [cn.li.mcmod.util.render :as render]))
+            [cn.li.mcmod.util.render :as render]
+            [cn.li.mcmod.client.render.buffer :as buffer]
+            [cn.li.mcmod.client.render.pose :as pose]))
 
 (defn- parse-float [s]
   (Double/parseDouble (str s)))
@@ -215,8 +217,7 @@
   for transforms and the provided vertex consumer for buffered submission." 
   [model part pose-stack vertex-consumer _packed-light packed-overlay]
   (when-let [face-list (get (:faces model) part)]
-    (let [entry (.last pose-stack)
-          matrix (.pose entry)
+    (let [matrix (pose/get-matrix pose-stack)
       vc vertex-consumer
           part-vertex-indices (set (mapcat (fn [{:keys [i0 i1 i2]}]
                                              [i0 i1 i2])
@@ -236,9 +237,9 @@
           y2 (:y (:pos v2))
             face-min-y (min y0 y1 y2)
           bottom-verts (count (filter true?
-                        [(<= (Math/abs (- y0 part-min-y)) bottom-epsilon)
-                         (<= (Math/abs (- y1 part-min-y)) bottom-epsilon)
-                         (<= (Math/abs (- y2 part-min-y)) bottom-epsilon)]))
+                        [(<= (Math/abs (double (- y0 part-min-y))) bottom-epsilon)
+                         (<= (Math/abs (double (- y1 part-min-y))) bottom-epsilon)
+                         (<= (Math/abs (double (- y2 part-min-y))) bottom-epsilon)]))
           skip-flat-bottom? (and *skip-flat-bottom-plane*
                                  (= bottom-verts 3))
           skip-by-normal? (and *skip-downward-faces*
@@ -247,7 +248,7 @@
                        (or (>= bottom-verts 2)
                          (and (>= bottom-verts 1)
                             (<= (:y face-normal) 0.15)
-                          (<= (Math/abs (- face-min-y part-min-y))
+                          (<= (Math/abs (double (- face-min-y part-min-y)))
                               (* 2.0 bottom-epsilon))))) ]
         :when (not (or skip-flat-bottom?
                        skip-by-normal?
@@ -269,13 +270,10 @@
                 nx (float (:x normal))
                 ny (float (:y normal))
                 nz (float (:z normal))]
-            (-> (.vertex vc matrix x y z)
-              (.color (int 255) (int 255) (int 255) (int 255))
-              (.uv u v)
-              (.overlayCoords (int packed-overlay))
-              (.uv2 packed-light)
-              (.normal nx ny nz)
-              (.endVertex))))))))
+            (buffer/submit-vertex vc matrix x y z
+                                  (int 255) (int 255) (int 255) (int 255)
+                                  u v (int packed-overlay) packed-light
+                                  nx ny nz)))))))
 
 (defn render-all!
   "Render all groups in parsed OBJ model." 

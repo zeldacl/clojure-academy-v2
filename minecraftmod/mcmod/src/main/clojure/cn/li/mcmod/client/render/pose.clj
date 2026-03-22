@@ -16,6 +16,8 @@
 (def ^:dynamic *pop-pose-fn* nil)
 (def ^:dynamic *translate-fn* nil)
 
+(def ^:dynamic *get-matrix-fn* nil)
+
 (defn apply-y-rotation
   "Apply Y-axis rotation to `pose-stack` using the platform-provided
   function stored in the root var `*y-rotation-fn*`.
@@ -75,3 +77,21 @@
       (catch Exception e
         (log/error "Error translating pose-stack:" (.getMessage e))))
     (log/warn "No platform translate function bound; skipping translate")))
+
+(defn get-matrix
+  "Return the current transformation matrix object for `pose-stack`.
+
+  Platform implementations should bind `*get-matrix-fn*` to a function that
+  accepts a platform `PoseStack` and returns the current matrix/pose entry or
+  matrix object used by vertex submission code. If unbound, throws an
+  informative exception.
+  "
+  [pose-stack]
+  (if *get-matrix-fn*
+    (try
+      (*get-matrix-fn* pose-stack)
+      (catch Exception e
+        (log/error "Error getting pose-stack matrix:" (.getMessage e))
+        (throw e)))
+    (throw (ex-info "No platform matrix accessor bound for pose-stack"
+                    {:hint "Call platform-impl/init-platform! to bind pose functions"}))))

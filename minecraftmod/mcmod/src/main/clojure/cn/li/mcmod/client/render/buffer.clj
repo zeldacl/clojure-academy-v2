@@ -12,6 +12,8 @@
 (def ^:dynamic *translucent-buffer-fn* nil)
 (def ^:dynamic *cutout-no-cull-buffer-fn* nil)
 
+(def ^:dynamic *submit-vertex-fn* nil)
+
 (defn- require-buffer-fn
   [buffer-fn kind]
   (or buffer-fn
@@ -40,3 +42,27 @@
   culling can make the model appear invisible."
   [buffer-source texture]
   ((require-buffer-fn *cutout-no-cull-buffer-fn* :cutout-no-cull) buffer-source texture))
+
+(defn submit-vertex
+  "Submit a single vertex to a platform `VertexConsumer`.
+
+  Args:
+  - vertex-consumer: platform vertex consumer
+  - matrix: platform matrix/mutable pose entry
+  - x y z: vertex position (numbers)
+  - r g b a: color components (ints 0-255)
+  - u v: texture coords (numbers)
+  - overlay: overlay coords (int)
+  - uv2: light/uv2 packed int
+  - nx ny nz: normal (numbers)
+
+  This delegates to a platform-provided function bound to `*submit-vertex-fn*`.
+  "
+  [vertex-consumer matrix x y z r g b a u v overlay uv2 nx ny nz]
+  (or *submit-vertex-fn*
+      (throw (ex-info "No platform submit-vertex function bound"
+                      {:hint "Call platform-impl/init-platform! to bind buffer helpers"})))
+  (try
+    (*submit-vertex-fn* vertex-consumer matrix x y z r g b a u v overlay uv2 nx ny nz)
+    (catch Exception e
+      (throw e))))

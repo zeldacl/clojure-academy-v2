@@ -6,6 +6,7 @@
             [cn.li.ac.gui.slot-validators :as slot-validators]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.screen.slot Slot]
+           [net.minecraft.screen ScreenHandler]
            [net.minecraft.inventory Inventory]
            [net.minecraft.item ItemStack]
            [net.minecraft.entity.player PlayerEntity]))
@@ -170,14 +171,14 @@
   - y-offset: int (additional y offset)
   
   Side effects: Adds slot to handler"
-  [handler inventory slot-def x-offset y-offset]
-  (let [{:keys [type index x y]} slot-def]
-    (.addSlot handler
-      (case type
-        :energy (create-energy-slot inventory index (+ x x-offset) (+ y y-offset))
-        :plate (create-plate-slot inventory index (+ x x-offset) (+ y y-offset))
-        :core (create-core-slot inventory index (+ x x-offset) (+ y y-offset))
-        (throw (ex-info "Unknown slot type" {:type type}))))))
+  [^ScreenHandler handler inventory slot-def x-offset y-offset]
+  (let [{:keys [type index x y]} slot-def
+        ^Slot s (case type
+                  :energy (create-energy-slot inventory index (+ x x-offset) (+ y y-offset))
+                  :plate (create-plate-slot inventory index (+ x x-offset) (+ y y-offset))
+                  :core (create-core-slot inventory index (+ x x-offset) (+ y y-offset))
+                  (throw (ex-info "Unknown slot type" {:type type})))]
+    (.addSlot handler s)))
 
 (defn add-gui-slots
   "Generic function to add GUI-specific slots based on metadata
@@ -192,7 +193,7 @@
   - y-offset: int
   
   Side effects: Adds all GUI slots to handler based on layout in gui_metadata.clj"
-  [handler inventory gui-id x-offset y-offset]
+  [^ScreenHandler handler inventory gui-id x-offset y-offset]
   (let [layout (gui/get-slot-layout gui-id)]
     (when layout
       (doseq [slot-def (:slots layout)]
@@ -225,22 +226,24 @@
   - y-offset: int (top edge y position for main inventory)
   
   Side effects: Adds 36 slots to handler"
-  [handler player-inventory x-offset y-offset]
+  [^ScreenHandler handler player-inventory x-offset y-offset]
   
   ;; Main inventory (3 rows × 9 columns)
-  (doseq [row (range 3)
-          col (range 9)]
-    (let [slot-index (+ (* row 9) col 9)  ; Skip hotbar (0-8)
-          x (+ x-offset (* col 18))
-          y (+ y-offset (* row 18))]
-      (.addSlot handler (create-standard-slot player-inventory slot-index x y))))
+    (doseq [row (range 3)
+        col (range 9)]
+      (let [slot-index (+ (* row 9) col 9)  ; Skip hotbar (0-8)
+        x (+ x-offset (* col 18))
+        y (+ y-offset (* row 18))
+        ^Slot s (create-standard-slot player-inventory slot-index x y)]
+    (.addSlot handler s)))
   
   ;; Hotbar (1 row × 9 columns)
   (doseq [col (range 9)]
     (let [slot-index col
           x (+ x-offset (* col 18))
-          y (+ y-offset 58)]  ; 58 = 3 rows * 18 + 4px gap
-      (.addSlot handler (create-standard-slot player-inventory slot-index x y)))))
+          y (+ y-offset 58)  ; 58 = 3 rows * 18 + 4px gap
+          ^Slot s (create-standard-slot player-inventory slot-index x y)]
+      (.addSlot handler s))))
 
 ;; ============================================================================
 ;; Slot Index Helpers
@@ -280,13 +283,14 @@
   "Log all slot contents for debugging"
   [handler]
   (log/debug "ScreenHandler slots:")
-  (doseq [i (range (.slots handler))]
-    (let [slot (.getSlot handler i)
-          stack (.getStack slot)]
-      (when-not (.isEmpty stack)
-        (log/debug "  Slot" i ":" 
-                   (.getCount stack) "x" 
-                   (-> stack .getItem .toString))))))
+  (let [^java.util.List slots (.slots handler)]
+    (doseq [i (range (.size slots))]
+      (let [^Slot slot (.get slots i)
+            ^ItemStack stack (.getStack slot)]
+        (when-not (.isEmpty stack)
+          (log/debug "  Slot" i ":" 
+                     (.getCount stack) "x" 
+                     (-> stack .getItem .toString)))))))
 
 (defn validate-slot-setup
   "Validate that handler slots are set up correctly
@@ -296,8 +300,9 @@
   - expected-count: int
   
   Returns: boolean"
-  [handler expected-count]
-  (let [actual-count (count (.slots handler))]
+  [^ScreenHandler handler expected-count]
+  (let [^java.util.List slots (.slots handler)
+        actual-count (.size slots)]
     (if (= actual-count expected-count)
       (do
         (log/info "Slot validation passed:" actual-count "slots")
