@@ -20,31 +20,40 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class CapabilitySlots {
 
-    @SuppressWarnings("unchecked")
-    private static final Capability<Object>[] SLOTS = new Capability[]{
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_0
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_1
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_2
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_3
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_4
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_5
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_6
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_7
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_8
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_9
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_10
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_11
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_12
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_13
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_14
-        CapabilityManager.get(new CapabilityToken<>(){}),  // SLOT_15
-    };
+    private static final int SLOT_COUNT = 16;
 
     private static final Map<String, Integer> KEY_TO_SLOT = new ConcurrentHashMap<>();
     private static final Map<Capability<?>, String> CAP_TO_KEY = new IdentityHashMap<>();
     private static int nextSlot = 0;
 
     private CapabilitySlots() {}
+
+    @SuppressWarnings("unchecked")
+    private static Capability<Object>[] slots() {
+        return SlotsHolder.SLOTS;
+    }
+
+    private static final class SlotsHolder {
+        @SuppressWarnings("unchecked")
+        private static final Capability<Object>[] SLOTS = new Capability[]{
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){}),
+            CapabilityManager.get(new CapabilityToken<>(){})
+        };
+    }
 
     /**
      * Claim the next free slot for the given logical key.
@@ -56,19 +65,20 @@ public final class CapabilitySlots {
      */
     @SuppressWarnings("unchecked")
     public static synchronized <T> Capability<T> assign(String key) {
+        Capability<Object>[] slots = slots();
         if (KEY_TO_SLOT.containsKey(key)) {
-            return (Capability<T>) SLOTS[KEY_TO_SLOT.get(key)];
+            return (Capability<T>) slots[KEY_TO_SLOT.get(key)];
         }
-        if (nextSlot >= SLOTS.length) {
+        if (nextSlot >= slots.length) {
             throw new IllegalStateException(
-                "CapabilitySlots: all " + SLOTS.length + " slots exhausted. key=" + key);
+                "CapabilitySlots: all " + SLOT_COUNT + " slots exhausted. key=" + key);
         }
         int slot = nextSlot++;
         KEY_TO_SLOT.put(key, slot);
         synchronized (CAP_TO_KEY) {
-            CAP_TO_KEY.put(SLOTS[slot], key);
+            CAP_TO_KEY.put(slots[slot], key);
         }
-        return (Capability<T>) SLOTS[slot];
+        return (Capability<T>) slots[slot];
     }
 
     /**
@@ -90,7 +100,7 @@ public final class CapabilitySlots {
     @SuppressWarnings("unchecked")
     public static <T> Capability<T> get(String key) {
         Integer slot = KEY_TO_SLOT.get(key);
-        return slot == null ? null : (Capability<T>) SLOTS[slot];
+        return slot == null ? null : (Capability<T>) slots()[slot];
     }
 
     /** @return true if this key has already been assigned a slot */

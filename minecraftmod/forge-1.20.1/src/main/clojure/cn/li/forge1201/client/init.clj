@@ -7,10 +7,7 @@
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
             [cn.li.forge1201.mod :as forge-mod])
-  (:import [net.minecraft.client Minecraft]
-           [net.minecraft.client.renderer.texture TextureManager]
-           [net.minecraft.client.renderer.blockentity BlockEntityRenderers BlockEntityRendererProvider]
-           [net.minecraft.world.level.block.entity BlockEntity]))
+  (:import [cn.li.forge1201.shim ForgeClientHelper ForgeClientHelper$RendererFactory]))
 
 ;; ============================================================================
 ;; Client Registration
@@ -24,14 +21,7 @@
   
   Uses direct method calls (no reflection) for better performance."
   [texture]
-  (let [minecraft (Minecraft/getInstance)
-        texture-manager (.getTextureManager minecraft)]
-    (try
-      ;; Prefer bindForSetup if available (clears previous bindings)
-      (.bindForSetup texture-manager texture)
-      (catch Exception _
-        ;; Fallback to bind() if bindForSetup doesn't exist
-        (.bind texture-manager texture)))))
+  (ForgeClientHelper/bindTextureForSetup texture))
 
 (defn register-renderers
   "Register platform-agnostic renderers with the universal BlockEntityRenderer dispatcher
@@ -56,10 +46,10 @@
       (let [block-ids (or (seq (registry-metadata/get-tile-block-ids tile-id)) [tile-id])]
         (when (some tesr-api/get-scripted-tile-renderer block-ids)
           (when-let [be-type (forge-mod/get-registered-block-entity-type tile-id)]
-            (BlockEntityRenderers/register
+            (ForgeClientHelper/registerBlockEntityRenderer
               be-type
-              (reify BlockEntityRendererProvider
-                (create [_this _ctx]
+              (reify ForgeClientHelper$RendererFactory
+                (create [_this]
                   (tesr-impl/new-renderer))))))))
     
     (catch Exception e

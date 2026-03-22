@@ -15,12 +15,17 @@
             [clojure.string :as str])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraft.world.level.block Blocks]
            [net.minecraftforge.client.model.generators BlockStateProvider]
            [net.minecraftforge.common.data ExistingFileHelper]
-           [net.minecraftforge.registries ForgeRegistries]
            [cn.li.forge1201.block DynamicStateBlock]
            [java.util.concurrent CompletableFuture]))
+
+(defn- invoke-bootstrap-helper
+  [method-name & args]
+  (clojure.lang.Reflector/invokeStaticMethod
+    "cn.li.forge1201.shim.ForgeBootstrapHelper"
+    method-name
+    (to-array args)))
 
 
 (defn- parse-rl
@@ -57,11 +62,6 @@
               (registry-object->block registry-object)))
           candidates)))
 
-(def ^:private forge-blocks-registry
-  ;; Delay static field access to avoid triggering Minecraft registry bootstrap
-  ;; during AOT/checkClojure class loading.
-  (delay ForgeRegistries/BLOCKS))
-
 ;; Blockstate definition is now provided by mcmod (no ac dependency).
 
 ;; Dynamic counters used inside `eval`ed code to avoid embedding Atom objects
@@ -80,8 +80,7 @@
         candidates (distinct (concat (normalize-candidates registry-name)
                                      (normalize-candidates key-name)))]
     (some (fn [candidate]
-            (.getValue (force forge-blocks-registry)
-                       (ResourceLocation. modid/*mod-id* candidate)))
+          (invoke-bootstrap-helper "findBlock" modid/*mod-id* candidate))
           candidates)))
 
 (defn- resolve-registered-block
@@ -208,7 +207,7 @@
   (let [registry-name (:registry-name definition)
         block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
-    (when (or (nil? block) (= block Blocks/AIR))
+    (when (invoke-bootstrap-helper "isAirBlock" block)
       (throw (ex-info "Simple block not resolvable for datagen"
                       {:block-key block-key :registry-name registry-name})))
     (let [model-id (first (:models (first (:parts definition))))
@@ -226,7 +225,7 @@
   (let [registry-name (:registry-name definition)
         block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
-    (when (or (nil? block) (= block Blocks/AIR))
+    (when (invoke-bootstrap-helper "isAirBlock" block)
       (throw (ex-info "Multipart block not resolvable for datagen"
                       {:block-key block-key :registry-name registry-name})))
     (let [builder (.getMultipartBuilder provider block)]

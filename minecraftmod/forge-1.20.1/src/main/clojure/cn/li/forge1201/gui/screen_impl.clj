@@ -8,7 +8,7 @@
               [cn.li.forge1201.gui.cgui-runtime :as cgui-rt]
               [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui GuiGraphics]
-           [net.minecraft.client.gui.screens MenuScreens]
+          [cn.li.forge1201.shim ForgeClientHelper ForgeClientHelper$ScreenFactory]
            [cn.li.forge1201.gui CGuiContainerScreen]
            [net.minecraft.world.inventory Slot ClickType]))
 
@@ -208,9 +208,9 @@
                                 (ns-resolve 'cn.li.mcmod.gui.adapter
                                           (symbol (name factory-fn-kw))))]
           (when menu-type
-            (MenuScreens/register
+            (ForgeClientHelper/registerMenuScreen
              menu-type
-             (reify net.minecraft.client.gui.screens.MenuScreens$ScreenConstructor
+             (reify ForgeClientHelper$ScreenFactory
                (create [_ menu player-inventory title]
                  (if factory-fn
                    (try

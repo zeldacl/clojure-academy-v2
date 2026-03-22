@@ -28,7 +28,14 @@
            [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.common.util LazyOptional]
-           [cn.li.forge1201.capability CapabilitySlots]))
+           [cn.li.forge1201.shim ForgeItemStackHelper]))
+
+(defn- invoke-capability-slots
+  [method-name & args]
+  (clojure.lang.Reflector/invokeStaticMethod
+    "cn.li.forge1201.capability.CapabilitySlots"
+    method-name
+    (to-array args)))
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Forge 1.20.1)
@@ -350,8 +357,7 @@
   (alter-var-root #'item/*item-factory*
     (constantly
       (fn [nbt]
-        (let [cls (Class/forName "net.minecraft.world.item.ItemStack")]
-          (clojure.lang.Reflector/invokeStaticMethod cls "of" (object-array [nbt]))))))
+        (ForgeItemStackHelper/fromNBT nbt))))
 
   ;; Register resource identifier factory
   (alter-var-root #'resource/*resource-factory*
@@ -362,11 +368,11 @@
   ;; When ac calls declare-capability!, this fn assigns a CapabilitySlots slot.
   (alter-var-root #'platform-cap/*declare-capability-impl*
                   (constantly (fn [key _java-type]
-                  (CapabilitySlots/assign (name key)))))
+                  (invoke-capability-slots "assign" (name key)))))
 
   ;; Bind the platform BE capability slot lookup
   (alter-var-root #'platform-be/*be-capability-slot-fn*
-                  (constantly (fn [key-string] (CapabilitySlots/get key-string))))
+                  (constantly (fn [key-string] (invoke-capability-slots "get" key-string))))
 
   ;; Bind platform PoseStack Y-rotation implementation for mcmod
   (alter-var-root #'pose/*y-rotation-fn*
@@ -416,6 +422,6 @@
 
   ;; Retroactively assign slots for capabilities already declared before this ran
   (doseq [[key {:keys [_java-type]}] @platform-cap/capability-type-registry]
-    (CapabilitySlots/assign (name key)))
+    (invoke-capability-slots "assign" (name key)))
   
   (log/info "Forge 1.20.1 platform implementations initialized successfully"))

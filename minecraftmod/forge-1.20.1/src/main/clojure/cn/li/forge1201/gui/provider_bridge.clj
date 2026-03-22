@@ -5,7 +5,8 @@
   (:require [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.gui.menu-bridge :as menu-bridge])
-  (:import [net.minecraft.world MenuProvider]
+  (:import [cn.li.forge1201.shim BlockEntityHelper]
+           [net.minecraft.world MenuProvider]
            [net.minecraft.network.chat Component]))
 
 (defn- tile->pos
@@ -18,10 +19,8 @@
     (or (:pos tile-entity) (.blockPosition player))
 
     :else
-    (try
-      (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array []))
-      (catch Exception _
-        (.blockPosition player)))))
+    (or (BlockEntityHelper/getPosition tile-entity)
+        (.blockPosition player))))
 
 (defn create-menu-provider
   "Create a MenuProvider for opening GUI.

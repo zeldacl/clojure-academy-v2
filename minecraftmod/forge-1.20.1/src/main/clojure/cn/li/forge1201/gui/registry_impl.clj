@@ -8,13 +8,16 @@
             [cn.li.forge1201.gui.bridge :as bridge]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraftforge.network NetworkHooks IContainerFactory]
-           [net.minecraftforge.common.extensions IForgeMenuType]
-           [net.minecraftforge.registries DeferredRegister]
-           [net.minecraft.network FriendlyByteBuf]
-           [net.minecraft.world.inventory MenuType]
-           [net.minecraft.core.registries Registries]
-           [net.minecraft.resources ResourceLocation]))
+  (:import [cn.li.forge1201.shim BlockEntityHelper]
+           [net.minecraftforge.network NetworkHooks IContainerFactory]
+           [net.minecraftforge.common.extensions IForgeMenuType]))
+
+(defn- invoke-bootstrap-helper
+  [method-name & args]
+  (clojure.lang.Reflector/invokeStaticMethod
+    "cn.li.forge1201.shim.ForgeBootstrapHelper"
+    method-name
+    (to-array args)))
 
 ;; ============================================================================
 ;; MenuType Registry
@@ -25,7 +28,7 @@
 (defonce menu-register
   ;; AOT/checkClojure 阶段 Minecraft registries 尚未 bootstrapped。
   ;; 延迟创建，避免编译期触发 Bootstrap。
-  (delay (DeferredRegister/create Registries/MENU modid/*mod-id*)))
+  (delay (invoke-bootstrap-helper "createMenusRegister" modid/*mod-id*)))
 
 (defonce gui-menu-types
   ^{:doc "Map from GUI ID to RegistryObject<MenuType>.
@@ -114,7 +117,7 @@
                 (try
                   (if (map? tile-entity)
                     (:pos tile-entity)
-                    (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array [])))
+                    (BlockEntityHelper/getPosition tile-entity))
                   (catch Exception _ nil)))]
       (if pos
         (NetworkHooks/openScreen
