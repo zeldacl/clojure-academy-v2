@@ -46,51 +46,38 @@ public final class ForgeBootstrapHelper {
         return DeferredRegister.create(Registries.MENU, modId);
     }
 
-    public static Block stoneBlock() {
-        return Blocks.STONE;
-    }
-
-    public static Block airBlock() {
-        return Blocks.AIR;
-    }
-
-    public static Item barrierItem() {
-        return net.minecraft.world.item.Items.BARRIER;
-    }
-
-    public static BlockBehaviour.Properties stoneProperties() {
+    public static BlockBehaviour.Properties createStoneProperties() {
         return BlockBehaviour.Properties.copy(Blocks.STONE);
     }
 
-    public static BlockBehaviour.Properties carrierBlockProperties() {
+    public static BlockBehaviour.Properties carrierBlockProperties(BlockBehaviour.Properties base) {
         BlockBehaviour.StatePredicate alwaysFalse = new BlockBehaviour.StatePredicate() {
             @Override
             public boolean test(BlockState state, BlockGetter level, BlockPos pos) {
                 return false;
             }
         };
-        return stoneProperties()
-            .noOcclusion()
+        return base.noOcclusion()
             .forceSolidOff()
             .isViewBlocking(alwaysFalse)
             .isSuffocating(alwaysFalse)
             .isRedstoneConductor(alwaysFalse);
     }
 
-    public static Block createCarrierScriptedDynamicBlock(String blockId, String tileId, List<Property<?>> properties) {
-        return ScriptedBlock.create(blockId, tileId, new ArrayList<>(properties), carrierBlockProperties());
+    public static Block createCarrierScriptedDynamicBlock(String blockId, String tileId, List<Property<?>> properties, BlockBehaviour.Properties blockProperties) {
+        return ScriptedBlock.create(blockId, tileId, new ArrayList<>(properties), blockProperties);
     }
 
-    public static Block createDynamicStateBlock(String blockId, List<Property<?>> properties) {
-        return DynamicStateBlock.create(blockId, new ArrayList<>(properties), stoneProperties());
+    public static Block createDynamicStateBlock(String blockId, List<Property<?>> properties, BlockBehaviour.Properties blockProperties) {
+        return DynamicStateBlock.create(blockId, new ArrayList<>(properties), blockProperties);
     }
 
-    public static Block createCarrierScriptedBlock(String blockId, String tileId) {
-        return new ScriptedBlock(blockId, tileId, carrierBlockProperties());
+    public static Block createCarrierScriptedBlock(String blockId, String tileId, BlockBehaviour.Properties blockProperties) {
+        return new ScriptedBlock(blockId, tileId, blockProperties);
     }
 
-    public static Block createPlainBlock() {
-        return new Block(stoneProperties());
+    public static Block createPlainBlock(BlockBehaviour.Properties blockProperties) {
+        return new Block(blockProperties);
     }
 
     @SuppressWarnings("unchecked")
@@ -117,8 +104,8 @@ public final class ForgeBootstrapHelper {
         return beType;
     }
 
-    public static boolean isAirBlock(Block block) {
-        return block == null || block == Blocks.AIR;
+    public static boolean isAirBlock(Block block, Block airBlock) {
+        return block == null || block == airBlock;
     }
 
     public static Block findBlock(String namespace, String path) {

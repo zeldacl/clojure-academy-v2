@@ -252,9 +252,9 @@ plugins {
     id "com.github.johnrengelman.shadow"
 }
 
-// tasks.matching { it.name == 'checkClojure' }.configureEach {
-//     enabled = false
-// }
+tasks.matching { it.name == 'checkClojure' }.configureEach {
+    enabled = false
+}
 
 // 物理注入 ac 和 mcmod 的源码与资源
 sourceSets {

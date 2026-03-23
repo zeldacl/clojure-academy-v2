@@ -17,6 +17,7 @@
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.level.block Block]
+           [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
            [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab]
            [net.minecraft.network.chat Component]
@@ -45,6 +46,13 @@
     "cn.li.forge1201.shim.ForgeBootstrapHelper"
     method-name
     (to-array args)))
+
+;; Lazy block properties - only accessed during registration, not during namespace load
+(defonce base-properties
+  (delay (invoke-bootstrap-helper "createStoneProperties")))
+
+(defonce carrier-properties
+  (delay (invoke-bootstrap-helper "carrierBlockProperties" @base-properties)))
 
 ;; DeferredRegister instances
 (defonce blocks-register
@@ -90,14 +98,14 @@
                                         (cond
                                           (and needs-dynamic-properties? has-be?)
                                           (let [props (bsp/get-all-properties block-id)]
-                                            (invoke-bootstrap-helper "createCarrierScriptedDynamicBlock" block-id tile-id props))
+                                            (invoke-bootstrap-helper "createCarrierScriptedDynamicBlock" block-id tile-id props @carrier-properties))
                                           needs-dynamic-properties?
                                           (let [props (bsp/get-all-properties block-id)]
-                                            (invoke-bootstrap-helper "createDynamicStateBlock" block-id props))
+                                            (invoke-bootstrap-helper "createDynamicStateBlock" block-id props @base-properties))
                                           has-be?
-                                          (invoke-bootstrap-helper "createCarrierScriptedBlock" block-id tile-id)
+                                          (invoke-bootstrap-helper "createCarrierScriptedBlock" block-id tile-id @carrier-properties)
                                           :else
-                                          (invoke-bootstrap-helper "createPlainBlock")))))]
+                                          (invoke-bootstrap-helper "createPlainBlock" @base-properties)))))]
       (swap! registered-blocks assoc block-id registered-obj))))
 
 (defn register-scripted-tile-hooks!
