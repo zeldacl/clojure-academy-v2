@@ -1,6 +1,9 @@
 (ns cn.li.forge1201.gui.cgui-runtime
-  "Forge 1.20.1 CGUI runtime: resize, render, and event dispatch for the pure Clojure
-   widget tree. Used by the CGUI screen proxy to drive rendering and input."
+  "CLIENT-ONLY: Forge 1.20.1 CGUI runtime for GUI rendering and event dispatch.
+
+  This namespace contains client-side GUI rendering code and must only be loaded
+  when a GUI screen is opened (client-only operation). It drives rendering and
+  input for the pure Clojure widget tree."
   (:require
     [clojure.java.io :as io]
     [clojure.string :as str]

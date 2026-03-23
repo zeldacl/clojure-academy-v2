@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.mod
   "Forge 1.20.1 main mod class - generated with gen-class"
   (:require [cn.li.forge1201.init :as init]
+            [cn.li.forge1201.side :as side]
             [cn.li.forge1201.registry :as registry]
             [cn.li.forge1201.events :as events]
             [cn.li.forge1201.gui.impl :as gui]
@@ -280,20 +281,20 @@
                   (accept [_ evt]
                     (events/handle-block-break-event evt)))))
 
-;; Helper: Client setup phase (called from event handler)  
+;; Helper: Client setup phase (called from event handler)
 (defn on-client-setup [event]
   (log/info "FMLClientSetupEvent - Client setup phase")
-  ;; Client-only initialization
-  (gui-init/init-client!)
-  ;; Install platform i18n implementation for shared code (client-side only).
-  (alter-var-root #'i18n/*translate-fn*
-                  (constantly (fn [k]
-                                (try
-                                  (net.minecraft.client.resources.language.I18n/get (str k) (object-array 0))
-                                  (catch Throwable _ (str k))))))
-  (if-let [init-client! (requiring-resolve 'cn.li.forge1201.client.init/init-client)]
-    (init-client!)
-    (log/warn "Forge client init namespace unavailable on current side")))
+  ;; Only proceed if we're actually on the client side
+  (when (side/client-side?)
+    ;; Client-only initialization
+    (gui-init/init-client!)
+    ;; Install platform i18n implementation via client module
+    (when-let [install-i18n! (side/resolve-client-fn 'cn.li.forge1201.client.i18n-impl 'install-client-i18n!)]
+      (install-i18n!))
+    ;; Initialize client-side systems
+    (if-let [init-client! (side/resolve-client-fn 'cn.li.forge1201.client.init 'init-client)]
+      (init-client!)
+      (log/error "Client-side detected but client init failed to load"))))
 
 ;; ============================================================================
 ;; Constructor Implementation

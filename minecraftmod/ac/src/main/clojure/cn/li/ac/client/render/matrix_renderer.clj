@@ -1,10 +1,14 @@
 (ns cn.li.ac.client.render.matrix-renderer
-  "Wireless Matrix block renderer - multiblock TESR
-  
+  "CLIENT-ONLY: Wireless matrix block entity renderer.
+
+  This namespace must be loaded via side-checked requiring-resolve from the
+  platform layer. It uses platform-agnostic protocols only, no direct Minecraft
+  class imports.
+
   Renders the 2x2x2 matrix structure with:
   - Static base (Main) and core (Core) parts
   - Animated shield plates (rotating and floating)
-  
+
   Platform-agnostic rendering logic. Platform-specific TESR classes
   should be defined in forge/fabric modules using gen-class."
   (:require [cn.li.mcmod.client.resources :as res]

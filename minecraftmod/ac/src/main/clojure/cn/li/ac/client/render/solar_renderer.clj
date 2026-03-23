@@ -1,5 +1,9 @@
 (ns cn.li.ac.client.render.solar-renderer
-  "Solar Generator block renderer (OBJ via BlockEntityRenderer).
+  "CLIENT-ONLY: Solar generator block entity renderer.
+
+  This namespace must be loaded via side-checked requiring-resolve from the
+  platform layer. It uses platform-agnostic protocols only, no direct Minecraft
+  class imports.
 
   Ported from AcademyCraft's RenderSolarGen:
   - Rotate 90 degrees around Y

@@ -4,11 +4,16 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.network.chat.Component;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
- * Small helper subclass that exposes public methods to adjust protected
+ * CLIENT-ONLY: Small helper subclass that exposes public methods to adjust protected
  * imageWidth/imageHeight fields from Clojure code safely.
+ *
+ * This class must only be loaded on the client side.
  */
+@OnlyIn(Dist.CLIENT)
 public abstract class CGuiContainerScreen<T extends AbstractContainerMenu> extends AbstractContainerScreen<T> {
     public CGuiContainerScreen(T menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);

@@ -17,9 +17,7 @@
             [cn.li.mcmod.platform.resource :as resource]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.client.render.pose :as pose]
-            [cn.li.mcmod.client.render.buffer :as buffer])
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
@@ -31,8 +29,6 @@
            [net.minecraftforge.common.util LazyOptional]
            [net.minecraft.world.item ItemStack]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
-           [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
-           [net.minecraft.client.renderer MultiBufferSource]
            [org.joml Matrix4f]))
 
 (set! *warn-on-reflection* true)
@@ -378,51 +374,8 @@
                   (constantly (fn [key-string]
                     (cn.li.forge1201.capability.CapabilitySlots/get key-string))))
 
-  ;; Bind platform PoseStack Y-rotation implementation for mcmod
-  (alter-var-root #'pose/*y-rotation-fn*
-    (constantly (fn [^PoseStack pose-stack angle]
-                  (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/YP (float angle))))))
-
-  ;; Bind platform pose stack push/pop/translate implementations
-  (alter-var-root #'pose/*push-pose-fn*
-    (constantly (fn [^PoseStack pose-stack]
-                  (.pushPose pose-stack))))
-
-  (alter-var-root #'pose/*pop-pose-fn*
-    (constantly (fn [^PoseStack pose-stack]
-                  (.popPose pose-stack))))
-
-  (alter-var-root #'pose/*translate-fn*
-    (constantly (fn [^PoseStack pose-stack x y z]
-                  (.translate pose-stack (double x) (double y) (double z)))))
-
-  ;; Bind platform accessor for current matrix from PoseStack
-  (alter-var-root #'pose/*get-matrix-fn*
-    (constantly (fn [^PoseStack pose-stack]
-                  (let [entry (.last pose-stack)]
-                    (.pose entry)))))
-
-  ;; Bind submit-vertex helper to avoid core calling VertexConsumer methods
-  (alter-var-root #'buffer/*submit-vertex-fn*
-    (constantly (fn [^VertexConsumer vc ^Matrix4f matrix x y z r g b a u v overlay uv2 nx ny nz]
-                  (-> (.vertex vc matrix (float x) (float y) (float z))
-                      (.color (int r) (int g) (int b) (int a))
-                      (.uv (float u) (float v))
-                      (.overlayCoords (int overlay))
-                      (.uv2 (int uv2))
-                      (.normal (float nx) (float ny) (float nz))
-                      (.endVertex)))))
-
-  ;; Bind platform render buffer selectors for mcmod/ac renderers
-  (alter-var-root #'buffer/*solid-buffer-fn*
-    (constantly (fn [^MultiBufferSource buffer-source texture]
-                  (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entitySolid texture)))))
-  (alter-var-root #'buffer/*translucent-buffer-fn*
-    (constantly (fn [^MultiBufferSource buffer-source texture]
-                  (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityTranslucent texture)))))
-  (alter-var-root #'buffer/*cutout-no-cull-buffer-fn*
-    (constantly (fn [^MultiBufferSource buffer-source texture]
-                  (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityCutoutNoCull texture)))))
+  ;; Client-side rendering bindings are now handled in client initialization
+  ;; See forge-1.20.1/client/init.clj for pose stack and render buffer setup
 
   ;; Retroactively assign slots for capabilities already declared before this ran
   (doseq [[key {:keys [_java-type]}] @platform-cap/capability-type-registry]

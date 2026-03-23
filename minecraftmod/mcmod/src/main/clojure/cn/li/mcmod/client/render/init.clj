@@ -1,8 +1,13 @@
 (ns cn.li.mcmod.client.render.init
-  "Single entrypoint for registering all core renderers.
+  "CLIENT-ONLY: Renderer registration system.
 
-  Platform client init should call `register-all-renderers!` once; individual
-  renderer namespaces keep their own `register!` implementations."
+  This namespace must be loaded via side-checked requiring-resolve from the
+  platform layer. It provides platform-agnostic renderer registration that
+  delegates to platform-specific implementations.
+
+  Single entrypoint for registering all core renderers. Platform client init
+  should call `register-all-renderers!` once; individual renderer namespaces
+  keep their own `register!` implementations."
   (:require [cn.li.mcmod.util.log :as log]))
 
 (def ^:private registered? (atom false))

@@ -78,6 +78,109 @@ GUIs are defined in XML-style Clojure data (`*_gui_xml.clj`), parsed by `mcmod/g
 
 - **No reflection in Clojure**: All Java interop must use type hints to avoid reflection. Never use untyped Java method calls — always add `^TypeName` hints to eliminate reflection warnings. Use `(set! *warn-on-reflection* true)` to detect violations.
 
+### Client/Server Code Separation
+
+The mod produces a single JAR that runs on both client and dedicated server. Strict separation rules prevent client-only code from loading on servers:
+
+#### Architecture Constraints
+
+1. **Dependency chain**: `platform (forge/fabric)` → `mcmod` → `ac` (one-way only, no reverse dependencies)
+2. **ac/ and mcmod/ modules**: MUST NEVER directly import Minecraft classes (`net.minecraft.*`)
+3. **ac/ and platform modules**: MUST NOT directly reference each other — all interactions go through `mcmod` as intermediary
+4. **Client-only Minecraft classes** (`net.minecraft.client.*`): Can ONLY be imported in platform implementation CLIENT sublayer
+
+#### Directory Convention
+
+- `*/client/*` directories = CLIENT-ONLY code (must be loaded via side-checked `requiring-resolve`)
+- `*/` (root) = COMMON code (safe for both client and server)
+
+Examples:
+- `mcmod/src/main/clojure/cn/li/mcmod/client/` - CLIENT-ONLY
+- `ac/src/main/clojure/cn/li/ac/client/render/` - CLIENT-ONLY
+- `forge-1.20.1/src/main/clojure/cn/li/forge1201/client/` - CLIENT-ONLY
+- `forge-1.20.1/src/main/java/cn/li/forge1201/client/` - CLIENT-ONLY (must use `@OnlyIn`)
+
+#### Code Organization Rules
+
+1. **Common code must never import client classes**:
+   ```clojure
+   ;; ❌ BAD - Direct client import in common code
+   (ns cn.li.mcmod.block.logic
+     (:import [net.minecraft.client Minecraft]))
+
+   ;; ✅ GOOD - Use protocol or lazy resolution
+   (ns cn.li.mcmod.block.logic)
+   (when-let [get-client (requiring-resolve 'cn.li.mcmod.client.accessor/get-minecraft)]
+     (get-client))
+   ```
+
+2. **Client code must be loaded via side-checked `requiring-resolve`**:
+   ```clojure
+   ;; In platform layer (forge-1.20.1/mod.clj)
+   (require '[cn.li.forge1201.side :as side])
+
+   (when (side/client-side?)
+     (when-let [init-client! (side/resolve-client-fn 'cn.li.forge1201.client.init 'init-client)]
+       (init-client!)))
+   ```
+
+3. **Java client classes must use `@OnlyIn(Dist.CLIENT)`**:
+   ```java
+   import net.minecraftforge.api.distmarker.Dist;
+   import net.minecraftforge.api.distmarker.OnlyIn;
+
+   @OnlyIn(Dist.CLIENT)
+   public class ClientProxy {
+       // Client-only methods
+   }
+   ```
+
+4. **Client namespaces must document their side requirement**:
+   ```clojure
+   (ns cn.li.forge1201.client.init
+     "CLIENT-ONLY: Must be loaded via side-checked requiring-resolve.
+     This namespace contains client-side initialization code.")
+   ```
+
+#### Side Detection System
+
+Each platform adapter provides runtime side detection:
+
+- **Forge**: `cn.li.forge1201.side/client-side?`, `server-side?`, `resolve-client-fn`
+- **Fabric**: `cn.li.fabric1201.side/client-side?`, `server-side?`, `resolve-client-fn`
+
+Use `resolve-client-fn` to safely load client-only functions:
+```clojure
+(when-let [init! (side/resolve-client-fn 'cn.li.forge1201.client.init 'init-client)]
+  (init!))
+```
+
+#### Verification Commands
+
+Before committing, verify architecture compliance:
+
+```bash
+# Check ac/ has no Minecraft imports
+grep -r "import.*minecraft" ac/src/main/clojure/
+
+# Check ac/ has no platform imports
+grep -r "cn\.li\.forge\|cn\.li\.fabric" ac/src/main/clojure/
+
+# Check mcmod/ has no Minecraft imports
+grep -r "import.*minecraft" mcmod/src/main/clojure/
+
+# Check mcmod/ has no platform imports
+grep -r "cn\.li\.forge\|cn\.li\.fabric" mcmod/src/main/clojure/
+
+# Check platform isolates client imports
+grep -r "net\.minecraft\.client" forge-1.20.1/src/main/clojure/ | grep -v "/client/"
+
+# Check Java client classes have @OnlyIn
+find forge-1.20.1/src/main/java -name "*.java" -exec grep -l "net.minecraft.client" {} \; | xargs grep -L "@OnlyIn"
+```
+
+All commands should return no matches (or only acceptable exceptions like comments).
+
 ## Troubleshooting
 
 - **Clojure compilation errors**: Check `require` chains — missing namespace will fail the whole compile. Run `./gradlew :forge-1.20.1:compileClojure --info` for detail.
