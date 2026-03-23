@@ -16,7 +16,7 @@
     (net.minecraft.resources ResourceLocation)
     (com.mojang.blaze3d.systems RenderSystem)
     (javax.imageio ImageIO)
-    (cn.li.forge1201.client ClientProxy)
+    (cn.li.forge1201.client ClientProxy GuiGraphicsHelper)
     (org.lwjgl.opengl GL11)))
 
   (defonce ^:private texture-size-cache (atom {}))
@@ -230,13 +230,11 @@
     ;; w / h  = src dimensions in scaled pose space -> renders as target size.
     ;; texW / texH = full atlas size for correct UV fraction.
     (try
-      (clojure.lang.Reflector/invokeInstanceMethod
-        gg "blit"
-        (object-array [tex-loc
-                       (int 0) (int 0)
-                       (int u-px) (int v-px)
-                       (int safe-src-w) (int safe-src-h)
-                       (int safe-atlas-w) (int safe-atlas-h)]))
+      (GuiGraphicsHelper/blit9 gg tex-loc
+                               (int 0) (int 0)
+                               (int u-px) (int v-px)
+                               (int safe-src-w) (int safe-src-h)
+                               (int safe-atlas-w) (int safe-atlas-h))
       (catch Exception _
         ;; Fallback: 7-param blit (assumes 256x256 UV space).
         ;; May tile for textures wider than 256 px.
