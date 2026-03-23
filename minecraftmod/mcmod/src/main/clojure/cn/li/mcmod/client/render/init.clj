@@ -16,6 +16,12 @@
   ;; Vector of (fn [] ...) or Var values implementing IFn.
   (atom []))
 
+(defn register-renderer-init-fn!
+  "Register a single renderer init callback. Called by renderer namespaces at load time."
+  [f]
+  (swap! renderer-init-fns conj f)
+  nil)
+
 (defn register-renderer-init-fns!
   "Register renderer init callbacks to be invoked by `register-all-renderers!`.
    Each callback should be a (fn [] ...) or a Var referencing such a function."
@@ -24,15 +30,15 @@
   nil)
 
 (defn register-default-renderer-init-fns!
-  "Register the core client renderer init callbacks shipped by the shared
-   `ac` module.
+  "Load core renderer namespaces to trigger auto-registration.
 
    Kept inside `mcmod` so Forge source code doesn't reference `cn.li.ac.*`
    directly."
   []
-  (register-renderer-init-fns!
-    [(requiring-resolve 'cn.li.ac.block.wireless-matrix.render/register!)
-     (requiring-resolve 'cn.li.ac.block.solar-gen.render/register!)]))
+  ;; Simply require the namespaces - they auto-register via requiring-resolve
+  (requiring-resolve 'cn.li.ac.block.wireless-matrix.render/register!)
+  (requiring-resolve 'cn.li.ac.block.solar-gen.render/register!)
+  nil)
 
 (defn register-all-renderers!
   "Require and register all renderers (idempotent)."

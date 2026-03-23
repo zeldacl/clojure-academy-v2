@@ -147,3 +147,7 @@
 ;; - "Shield": Rotating plate (rendered 3 times if active)
 
 
+
+;; Auto-register at namespace load time
+(when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
+  (register-fn register!))
