@@ -8,9 +8,9 @@
             [cn.li.forge1201.gui.bridge :as bridge]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.forge1201.shim BlockEntityHelper]
-           [net.minecraftforge.network NetworkHooks IContainerFactory]
-           [net.minecraftforge.common.extensions IForgeMenuType]))
+  (:import [net.minecraftforge.network NetworkHooks IContainerFactory]
+           [net.minecraftforge.common.extensions IForgeMenuType]
+           [net.minecraft.world.level.block.entity BlockEntity]))
 
 (defn- invoke-bootstrap-helper
   [method-name & args]
@@ -117,7 +117,7 @@
                 (try
                   (if (map? tile-entity)
                     (:pos tile-entity)
-                    (BlockEntityHelper/getPosition tile-entity))
+                    (.getBlockPos ^BlockEntity tile-entity))
                   (catch Exception _ nil)))]
       (if pos
         (NetworkHooks/openScreen

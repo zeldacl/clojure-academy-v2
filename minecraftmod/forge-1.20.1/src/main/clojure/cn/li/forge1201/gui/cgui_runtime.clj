@@ -13,6 +13,7 @@
     (net.minecraft.resources ResourceLocation)
     (com.mojang.blaze3d.systems RenderSystem)
     (javax.imageio ImageIO)
+    (cn.li.forge1201.client ClientProxy)
     (org.lwjgl.opengl GL11)))
 
   (defonce ^:private texture-size-cache (atom {}))
@@ -44,10 +45,7 @@
             cached (@texture-size-cache k)]
         (if cached
           cached
-              (let [mc (clojure.lang.Reflector/invokeStaticMethod
-                 "net.minecraft.client.Minecraft"
-                 "getInstance"
-                 (object-array []))
+              (let [mc (ClientProxy/getMinecraft)
                 tm (try (.getTextureManager mc) (catch Exception _ nil))
                 tex (try (when tm (.getTexture tm resource-location)) (catch Exception _ nil))
                 ;; try multiple ways to obtain width/height
@@ -400,20 +398,14 @@
                        (apply str (repeat (count raw-text) \*))
                        raw-text)
                 color (unchecked-int (or (:color state) 0xFFFFFF))
-                font  (.font (clojure.lang.Reflector/invokeStaticMethod
-                               "net.minecraft.client.Minecraft"
-                               "getInstance"
-                               (object-array [])))]
+                font  (ClientProxy/getFont)]
             (when (seq text)
               (.drawString gg font text x y color))
             ;; caret rendering for editable textboxes when focused
             (when (and (:editable? state)
                        (some-> @(:metadata root) :focused?) )
               (try
-                (let [font (.font (clojure.lang.Reflector/invokeStaticMethod
-                                    "net.minecraft.client.Minecraft"
-                                    "getInstance"
-                                    (object-array [])))
+                (let [font (ClientProxy/getFont)
                       ;; compute caret x at end of text for now
                       caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
                       caret-x (+ x (int (.width font text)))]

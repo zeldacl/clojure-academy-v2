@@ -59,7 +59,7 @@
     (try
       [tile (or (platform-be/get-custom-state tile) {})]
       (catch Exception e
-        (log/warn "Could not resolve customState from BE:" (.getMessage e))
+        (log/warn "Could not resolve customState from BE:" ((ex-message e)))
         [tile {}]))))
 
 (defn create-container

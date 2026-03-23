@@ -26,7 +26,7 @@
       (try
         (callback response)
         (catch Exception e
-          (log/error "Error in response callback:" (.getMessage e)))))
+          (log/error "Error in response callback:" ((ex-message e))))))
     (log/warn "No pending request for response" request-id)))
 
 (defmulti send-request

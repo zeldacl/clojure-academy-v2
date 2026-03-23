@@ -207,7 +207,7 @@
   (let [registry-name (:registry-name definition)
         block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
-    (when (invoke-bootstrap-helper "isAirBlock" block)
+    (when (invoke-bootstrap-helper "isAirBlock" block (invoke-bootstrap-helper "getAirBlock"))
       (throw (ex-info "Simple block not resolvable for datagen"
                       {:block-key block-key :registry-name registry-name})))
     (let [model-id (first (:models (first (:parts definition))))
@@ -225,7 +225,7 @@
   (let [registry-name (:registry-name definition)
         block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
-    (when (invoke-bootstrap-helper "isAirBlock" block)
+    (when (invoke-bootstrap-helper "isAirBlock" block (invoke-bootstrap-helper "getAirBlock"))
       (throw (ex-info "Multipart block not resolvable for datagen"
                       {:block-key block-key :registry-name registry-name})))
     (let [builder (.getMultipartBuilder provider block)]

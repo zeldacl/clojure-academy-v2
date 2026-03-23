@@ -95,7 +95,7 @@
           (.get f player))
         (catch Exception _ nil))
       (try
-        (clojure.lang.Reflector/invokeInstanceMethod player "getContainerMenu" (object-array []))
+        (entity/player-get-container-menu player)
         (catch Exception _ nil))))
 
 (defn- handle-set-tab

@@ -45,7 +45,7 @@
         (try
           (render-at-origin nil pose-stack buffer-source packed-light packed-overlay)
           (catch Exception e
-            (log/error "Error in solar renderer:" (.getMessage e))
+            (log/error "Error in solar renderer:" ((ex-message e)))
             (.printStackTrace e)))))))
 
 (log/info "Registered solar renderer for block-id" "solar-gen")

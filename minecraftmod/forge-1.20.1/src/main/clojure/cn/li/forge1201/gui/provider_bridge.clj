@@ -5,9 +5,9 @@
   (:require [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.gui.menu-bridge :as menu-bridge])
-  (:import [cn.li.forge1201.shim BlockEntityHelper]
-           [net.minecraft.world MenuProvider]
-           [net.minecraft.network.chat Component]))
+  (:import [net.minecraft.world MenuProvider]
+           [net.minecraft.network.chat Component]
+           [net.minecraft.world.level.block.entity BlockEntity]))
 
 (defn- tile->pos
   [tile-entity player]
@@ -19,8 +19,9 @@
     (or (:pos tile-entity) (.blockPosition player))
 
     :else
-    (or (BlockEntityHelper/getPosition tile-entity)
-        (.blockPosition player))))
+    (try
+      (.getBlockPos ^BlockEntity tile-entity)
+      (catch Exception _ (.blockPosition player)))))
 
 (defn create-menu-provider
   "Create a MenuProvider for opening GUI.

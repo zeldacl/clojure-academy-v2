@@ -43,7 +43,7 @@
       (when-let [broadcast-fn (get-fn)]
         (broadcast-fn world pos sync-data)))
     (catch Exception e
-      (log/debug (str "Error broadcasting " log-prefix " state:") (.getMessage e)))))
+      (log/debug (str "Error broadcasting " log-prefix " state:") ((ex-message e))))))
 
 ;; ============================================================================
 ;; Position Extraction
@@ -65,7 +65,7 @@
       (when (and (number? x) (number? y) (number? z))
         (pos/create-block-pos x y z)))
     (catch Exception e
-      (log/debug "Failed to extract position:" (.getMessage e))
+      (log/debug "Failed to extract position:" ((ex-message e)))
       nil)))
 
 ;; ============================================================================
@@ -151,7 +151,7 @@
         (apply-payload-fields! container payload field-mappings)
         (log/debug (str "Applied " log-prefix " sync payload on client"))))
     (catch Exception e
-      (log/debug (str "Failed to apply " log-prefix " sync payload:") (.getMessage e)))))
+      (log/debug (str "Failed to apply " log-prefix " sync payload:") ((ex-message e))))))
 
 ;; ============================================================================
 ;; Position Payload Helpers
@@ -202,7 +202,7 @@
      (try
        (f)
        (catch Exception e
-         (log/debug "Error in throttled sync:" (.getMessage e)))))))
+         (log/debug "Error in throttled sync:" ((ex-message e))))))))
 
 (defn query-node-network-capacity!
   "Query network capacity for a node and update container atoms.
@@ -266,6 +266,6 @@
           (reset! (:capacity container) 0)
           (reset! (:max-capacity container) stats-cap))))
     (catch Exception e
-      (log/debug "Error querying matrix network capacity:" (.getMessage e))
+      (log/debug "Error querying matrix network capacity:" ((ex-message e)))
       (reset! (:capacity container) 0)
       (reset! (:max-capacity container) 0))))

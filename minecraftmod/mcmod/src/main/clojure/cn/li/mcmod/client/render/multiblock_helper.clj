@@ -14,12 +14,7 @@
 (defn- get-tile-block-id
   [tile]
   (when tile
-    (try
-      (let [block-id (clojure.lang.Reflector/invokeInstanceMethod tile "getBlockId" (object-array []))]
-        (when (string? block-id)
-          block-id))
-      (catch Exception _
-        nil))))
+    (pbe/be-get-block-id tile)))
 
 (defn- normalize-direction [direction]
   (cond
@@ -64,7 +59,7 @@
   [tile]
   (when tile
     (try
-      (let [bp (clojure.lang.Reflector/invokeInstanceMethod tile "getBlockPos" (object-array []))]
+      (let [bp (pos/position-get-block-pos tile)]
         [(long (pos/pos-x bp))
          (long (pos/pos-y bp))
          (long (pos/pos-z bp))])
@@ -77,8 +72,7 @@
   This guards against incomplete sub-id initialization where every part defaults
   to sub-id 0 and all parts try to render the full model."
   [tile state block-spec]
-  (let [world-obj (try (clojure.lang.Reflector/invokeInstanceMethod tile "getLevel" (object-array []))
-                       (catch Exception _ nil))
+  (let [world-obj (pbe/be-get-level tile)
         block-id (or (get-tile-block-id tile) (:block-id state))
         direction (normalize-direction (:direction state :north))
         cur (current-pos-xyz tile)]
@@ -256,7 +250,7 @@
           (finally
             (pose/pop-pose pose-stack))))
       (catch Exception e
-        (log/error "Error rendering multiblock:" (.getMessage e))
+        (log/error "Error rendering multiblock:" ((ex-message e)))
         (.printStackTrace e)))))
 
 ;; ============================================================================

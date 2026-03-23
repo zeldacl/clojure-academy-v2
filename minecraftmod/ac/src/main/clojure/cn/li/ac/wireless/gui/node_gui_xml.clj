@@ -212,7 +212,7 @@
             y)
           (tech-ui/add-property info-area "Node Name" @(:ssid container) y))))
     (catch Exception e
-      (log/error "Error building info area:" (.getMessage e)))))
+      (log/error "Error building info area:" ((ex-message e))))))
 
 ;; ============================================================================
 ;; Main GUI Factory
@@ -268,7 +268,7 @@
         {:root main-widget :current (:current tech-ui)}
         main-widget))
     (catch Exception e
-      (log/error "Error creating Node GUI:" (.getMessage e))
+      (log/error "Error creating Node GUI:" ((ex-message e)))
       (throw e))))
 
 ;; ============================================================================

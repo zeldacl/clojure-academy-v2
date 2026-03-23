@@ -87,7 +87,7 @@
       (try
         {:success (boolean (helper/create-network! tile ssid password))}
         (catch Exception e
-          (log/error "Failed to initialize network:" (.getMessage e))
+          (log/error "Failed to initialize network:" ((ex-message e)))
           {:success false}))
       {:success false})))
 
@@ -116,7 +116,7 @@
             (swap! (:net-lookup (:world-data network)) assoc new-ssid network)
             {:success true})
           (catch Exception e
-            (log/error "Failed to change SSID:" (.getMessage e))
+            (log/error "Failed to change SSID:" ((ex-message e)))
             {:success false}))
         {:success false})
       {:success false})))
@@ -143,7 +143,7 @@
           (wireless-net/reset-password! network new-password)
           {:success true}
           (catch Exception e
-            (log/error "Failed to change password:" (.getMessage e))
+            (log/error "Failed to change password:" ((ex-message e)))
             {:success false}))
         {:success false})
       {:success false})))

@@ -11,6 +11,7 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid]))
 
@@ -22,7 +23,7 @@
         (open-solar-gui player world pos)
         (do (log/error "SolarGen GUI open fn not found: cn.li.ac.wireless.gui.registry/open-solar-gui") nil))
       (catch Exception e
-        (log/error "Failed to open SolarGen GUI:" (.getMessage e))
+        (log/error "Failed to open SolarGen GUI:" ((ex-message e)))
         nil))))
 
 (declare solar-gen)
@@ -53,7 +54,7 @@
     (let [time (rem (long (cn.li.mcmod.platform.world/world-get-day-time level)) 24000)
           day? (<= time 12500)]
       (and day? (cn.li.mcmod.platform.world/world-can-see-sky level
-                  (clojure.lang.Reflector/invokeInstanceMethod pos "above" (object-array [])))))))
+                  (pos/create-block-pos (pos/pos-x pos) (inc (pos/pos-y pos)) (pos/pos-z pos)))))))
 
 (defn- solar-tick-fn
   "Tick handler for solar generator ScriptedBlockEntity.

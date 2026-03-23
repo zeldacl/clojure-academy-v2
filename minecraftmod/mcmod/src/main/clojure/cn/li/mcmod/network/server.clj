@@ -30,9 +30,9 @@
         (when (and respond-fn (>= request-id 0))
           (respond-fn request-id (or response {}))))
       (catch Exception e
-        (log/error "Error handling request" msg-id ":" (.getMessage e))
+        (log/error "Error handling request" msg-id ":" ((ex-message e)))
         (when (and respond-fn (>= request-id 0))
-          (respond-fn request-id {:success false :error (.getMessage e)}))))
+          (respond-fn request-id {:success false :error ((ex-message e))}))))
     (do
       (log/warn "No handler registered for" msg-id)
       (when (and respond-fn (>= request-id 0))

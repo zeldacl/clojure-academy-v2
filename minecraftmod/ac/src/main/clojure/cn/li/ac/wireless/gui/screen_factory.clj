@@ -8,6 +8,7 @@
   and only handle platform-specific registration mechanics."
   (:require [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.wireless.gui.registry :as gui-registry]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -39,14 +40,14 @@
           clj-container (or (gui-registry/get-client-container)
                             (throw (ex-info "No client container registered for screen creation"
                                             {:gui-type gui-type})))
-          player (clojure.lang.Reflector/getInstanceField player-inventory "player")
+          player (entity/inventory-get-player player-inventory)
           cgui-screen ((:screen-fn cfg) clj-container container-or-handler player)]
       
       (log/info (str (name gui-type) " screen created successfully"))
       cgui-screen)
     
     (catch Exception e
-      (log/error (str "Failed to create " (name gui-type) " screen:") (.getMessage e))
+      (log/error (str "Failed to create " (name gui-type) " screen:") ((ex-message e)))
       (.printStackTrace e)
       nil)))
 

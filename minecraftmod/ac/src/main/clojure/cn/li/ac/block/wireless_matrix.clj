@@ -151,7 +151,7 @@
                        :bandwidth   (.getMatrixBandwidth impl)
                        :range       (.getMatrixRange impl)))))
         (catch Exception e
-          (log/debug "Matrix sync skipped:" (.getMessage e)))))
+          (log/debug "Matrix sync skipped:" ((ex-message e))))))
     ;; Verify structure every 20 ticks
     (when (zero? (mod ticker 20))
       (try
@@ -178,7 +178,7 @@
                 ;; Keep runtime ticker but clear persistent matrix state.
                 (platform-be/set-custom-state! be (assoc mschema/matrix-default-state :update-ticker ticker))))))
         (catch Exception e
-          (log/error "Error verifying matrix structure:" (.getMessage e)))))
+          (log/error "Error verifying matrix structure:" ((ex-message e))))))
     (when-not @broken?
       (platform-be/set-custom-state! be (assoc state :update-ticker ticker)))))
 
@@ -283,7 +283,7 @@
                   result)
                 (do (log/error "Failed to open Matrix GUI: open-matrix-gui not resolved") nil))
               (catch Exception e
-                (log/error "Failed to open Matrix GUI:" (.getMessage e)) nil)))
+                (log/error "Failed to open Matrix GUI:" ((ex-message e))) nil)))
           (log/info "Sneaking - no action"))
         (log/info "No tile entity found!")))))
 

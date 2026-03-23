@@ -108,6 +108,10 @@ public final class ForgeBootstrapHelper {
         return block == null || block == airBlock;
     }
 
+    public static Block getAirBlock() {
+        return Blocks.AIR;
+    }
+
     public static Block findBlock(String namespace, String path) {
         return ForgeRegistries.BLOCKS.getValue(new ResourceLocation(namespace, path));
     }

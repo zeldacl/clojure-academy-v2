@@ -3,7 +3,8 @@
   
   Provides a platform-agnostic interface for block entity rendering.
   Platform-specific TESR implementations dispatch to these methods."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.be :as platform-be]))
 
 ;; ============================================================================
 ;; TileEntity Rendering Protocol
@@ -71,13 +72,13 @@
     (try
       (render-tile renderer tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
       (catch Exception e
-        (log/error "Error rendering scripted tile entity" block-id (.getMessage e))
+        (log/error "Error rendering scripted tile entity" block-id ((ex-message e)))
         (.printStackTrace e)))))
 
 (defn- get-block-id [tile-entity]
   (when tile-entity
     (try
-      (let [v (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockId" (object-array []))]
+      (let [v (platform-be/be-get-block-id tile-entity)]
         (when (string? v) v))
       (catch Exception _ nil))))
 
@@ -109,6 +110,6 @@
     (try
       (render-tile renderer tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
       (catch Exception e
-        (log/error "Error rendering tile entity:" (.getMessage e))
+        (log/error "Error rendering tile entity:" ((ex-message e)))
         (.printStackTrace e)))
     (log/warn "No renderer registered for" (class tile-entity))))

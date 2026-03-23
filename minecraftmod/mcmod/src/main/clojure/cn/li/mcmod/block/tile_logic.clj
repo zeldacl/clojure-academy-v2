@@ -94,7 +94,7 @@
       (try
         (tick-fn level pos state be)
         (catch Exception e
-          (log/error "Tile tick error" block-id (.getMessage e)))))))
+          (log/error "Tile tick error" block-id ((ex-message e))))))))
 
 (defn read-nbt
   "Called from ScriptedBlockEntity.load(tag). Returns a data map for the BE to apply (setFromData).
@@ -105,7 +105,7 @@
       (try
         (read-fn tag)
         (catch Exception e
-          (log/error "Tile read-nbt error" block-id (.getMessage e))
+          (log/error "Tile read-nbt error" block-id ((ex-message e)))
           {}))
       {})
     {}))
@@ -119,7 +119,7 @@
       (try
         (write-fn be tag)
         (catch Exception e
-          (log/error "Tile write-nbt error" block-id (.getMessage e)))))))
+          (log/error "Tile write-nbt error" block-id ((ex-message e))))))))
 
 ;; ============================================================================
 ;; Capability registry
@@ -145,7 +145,7 @@
       factory     (when get-factory (get-factory cap-key))]
       (when factory (factory be side)))
       (catch Exception e
-        (log/error "get-capability error" tile-id cap-key (.getMessage e))
+        (log/error "get-capability error" tile-id cap-key ((ex-message e)))
         nil))))
 
 ;; ============================================================================

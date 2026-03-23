@@ -145,7 +145,7 @@
   "Stable key for player (UUID) so lookup works regardless of object reference. Uses reflection."
   [player]
   (try
-    (clojure.lang.Reflector/invokeInstanceMethod player "getUUID" (object-array []))
+    (entity/player-get-uuid player)
     (catch Exception _ nil)))
 
 (defn register-player-container!
@@ -222,7 +222,7 @@
   [menu]
   (when menu
     (or (try
-          (clojure.lang.Reflector/invokeInstanceMethod menu "getContainerId" (object-array []))
+          (entity/menu-get-container-id menu)
           (catch Exception _ nil))
         (try
           (let [f (.getDeclaredField (class menu) "containerId")]

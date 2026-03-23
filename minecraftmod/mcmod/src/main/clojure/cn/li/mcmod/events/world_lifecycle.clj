@@ -59,7 +59,7 @@
     (try
       (handler world saved-data)
       (catch Throwable t
-        (println "Error in world load handler:" (.getMessage t))
+        (println "Error in world load handler:" ((ex-message t)))
         (.printStackTrace t)))))
 
 (defn dispatch-world-unload
@@ -74,7 +74,7 @@
     (try
       (handler world)
       (catch Throwable t
-        (println "Error in world unload handler:" (.getMessage t))
+        (println "Error in world unload handler:" ((ex-message t)))
         (.printStackTrace t)))))
 
 (defn dispatch-world-save
@@ -94,7 +94,7 @@
           (conj acc data)
           acc)
         (catch Throwable t
-          (println "Error in world save handler:" (.getMessage t))
+          (println "Error in world save handler:" ((ex-message t)))
           (.printStackTrace t)
           acc)))
     []

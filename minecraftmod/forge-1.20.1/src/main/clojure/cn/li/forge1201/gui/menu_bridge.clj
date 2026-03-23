@@ -84,7 +84,7 @@
   [^AbstractContainerMenu menu]
   (when (and menu (pos? (.getDataSlotCount menu)))
     (try
-      (let [slot (clojure.lang.Reflector/invokeInstanceMethod menu "getDataSlot" (object-array [(int tab-data-slot-index)]))]
+      (let [slot (.getDataSlot menu (int tab-data-slot-index))]
         (when slot (.get ^net.minecraft.world.inventory.DataSlot slot)))
       (catch Exception _ nil))))
 
@@ -106,7 +106,7 @@
   (let [gui-id (gui/get-gui-id-for-container clj-container)
         player (:player clj-container)
         player-inventory (when player
-                           (clojure.lang.Reflector/invokeInstanceMethod player "getInventory" (object-array [])))
+                           (.getInventory player))
         tile-inventory (create-tile-inventory-adapter clj-container)
         tabbed? (tabbed/tabbed-container? clj-container)
         active?-fn (when tabbed? (fn [] (tabbed/slots-active? clj-container)))]

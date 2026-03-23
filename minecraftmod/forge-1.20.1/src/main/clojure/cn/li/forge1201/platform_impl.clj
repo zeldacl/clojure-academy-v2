@@ -1,12 +1,12 @@
 (ns cn.li.forge1201.platform-impl
   "Forge 1.20.1 platform implementation.
-  
+
   Extends core platform protocols to Forge 1.20.1's Minecraft classes:
   - CompoundTag (was NBTTagCompound in 1.16.5)
   - ListTag (was NBTTagList in 1.16.5)
   - BlockPos (moved from util.math to core package in 1.18+)
   - Level (was World in 1.16.5)
-  
+
   This module must be loaded during mod initialization to register
   platform implementations before any core code runs."
   (:require [cn.li.mcmod.platform.nbt :as nbt]
@@ -23,12 +23,19 @@
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
+           [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockState StateDefinition]
            [net.minecraft.world.level.block.state.properties Property]
            [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.common.util LazyOptional]
-           [cn.li.forge1201.shim ForgeItemStackHelper]))
+           [net.minecraft.world.item ItemStack]
+           [cn.li.forge1201.block.entity ScriptedBlockEntity]
+           [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
+           [net.minecraft.client.renderer MultiBufferSource]
+           [org.joml Matrix4f]))
+
+(set! *warn-on-reflection* true)
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Forge 1.20.1)
@@ -36,80 +43,80 @@
 
 (extend-type CompoundTag
   nbt/INBTCompound
-  
-  (nbt-set-int! [this key value]
+
+  (nbt-set-int! [^CompoundTag this key value]
     (.putInt this key (int value))
     this)
-  
-  (nbt-get-int [this key]
+
+  (nbt-get-int [^CompoundTag this key]
     (.getInt this key))
-  
-  (nbt-set-string! [this key value]
+
+  (nbt-set-string! [^CompoundTag this key value]
     (.putString this key (str value))
     this)
-  
-  (nbt-get-string [this key]
+
+  (nbt-get-string [^CompoundTag this key]
     (.getString this key))
-  
-  (nbt-set-boolean! [this key value]
+
+  (nbt-set-boolean! [^CompoundTag this key value]
     (.putBoolean this key (boolean value))
     this)
-  
-  (nbt-get-boolean [this key]
+
+  (nbt-get-boolean [^CompoundTag this key]
     (.getBoolean this key))
-  
-  (nbt-set-double! [this key value]
+
+  (nbt-set-double! [^CompoundTag this key value]
     (.putDouble this key (double value))
     this)
-  
-  (nbt-get-double [this key]
+
+  (nbt-get-double [^CompoundTag this key]
     (.getDouble this key))
-  
-  (nbt-set-tag! [this key tag]
+
+  (nbt-set-tag! [^CompoundTag this key tag]
     (.put this key tag)
     this)
-  
-  (nbt-get-tag [this key]
+
+  (nbt-get-tag [^CompoundTag this key]
     (.get this key))
-  
-    (nbt-get-compound [this key]
+
+    (nbt-get-compound [^CompoundTag this key]
       (.getCompound this key))
-  
-  (nbt-get-list [this key]
+
+  (nbt-get-list [^CompoundTag this key]
     (.getList this key 10))
-  
-  (nbt-has-key? [this key]
+
+  (nbt-has-key? [^CompoundTag this key]
     (.contains this key))
 
-  (nbt-set-float! [this key value]
+  (nbt-set-float! [^CompoundTag this key value]
     (.putFloat this key (float value))
     this)
 
-  (nbt-get-float [this key]
+  (nbt-get-float [^CompoundTag this key]
     (.getFloat this key))
 
-  (nbt-set-long! [this key value]
+  (nbt-set-long! [^CompoundTag this key value]
     (.putLong this key (long value))
     this)
 
-  (nbt-get-long [this key]
+  (nbt-get-long [^CompoundTag this key]
     (.getLong this key)))
 
 (extend-type ListTag
   nbt/INBTList
-  
-  (nbt-append! [this element]
+
+  (nbt-append! [^ListTag this element]
     (.add this element)
     this)
-  
-  (nbt-list-size [this]
+
+  (nbt-list-size [^ListTag this]
     (.size this))
-  
-  (nbt-list-get [this index]
+
+  (nbt-list-get [^ListTag this index]
     (when (and (>= index 0) (< index (.size this)))
       (.get this (int index))))
-  
-  (nbt-list-get-compound [this index]
+
+  (nbt-list-get-compound [^ListTag this index]
     (when (and (>= index 0) (< index (.size this)))
       (.getCompound this (int index)))))
 
@@ -120,52 +127,55 @@
 (extend-type BlockPos
   pos/IBlockPos
 
-  (pos-x [this]
+  (pos-x [^BlockPos this]
     (.getX this))
 
-  (pos-y [this]
+  (pos-y [^BlockPos this]
     (.getY this))
 
-  (pos-z [this]
+  (pos-z [^BlockPos this]
     (.getZ this)))
 
 ;; Extend BlockEntity to support position access
 (extend-type BlockEntity
   pos/IHasPosition
 
-  (position-get-block-pos [this]
+  (position-get-block-pos [^BlockEntity this]
     (.getBlockPos this))
 
-  (position-get-pos [this]
+  (position-get-pos [^BlockEntity this]
     ;; Fallback for older code that might call this
     (.getBlockPos this))
 
   platform-cap/ICapabilityProvider
 
-  (get-capability [this cap side]
+  (get-capability [^BlockEntity this cap side]
     (.getCapability this cap side))
 
   platform-be/IBlockEntity
 
-  (be-get-level [this]
+  (be-get-level [^BlockEntity this]
     (.getLevel this))
 
-  (be-get-world [this]
+  (be-get-world [^BlockEntity this]
     ;; Fallback for older code
     (.getLevel this))
 
   ;; Additional BE interop implemented in platform_impl (keeps core free of
   ;; direct Minecraft class references)
-  (be-get-custom-state [this]
-    (.getCustomState this))
+  (be-get-custom-state [^BlockEntity this]
+    (when (instance? ScriptedBlockEntity this)
+      (.getCustomState ^ScriptedBlockEntity this)))
 
-  (be-set-custom-state! [this state]
-    (.setCustomState this state))
+  (be-set-custom-state! [^BlockEntity this state]
+    (when (instance? ScriptedBlockEntity this)
+      (.setCustomState ^ScriptedBlockEntity this state)))
 
-  (be-get-block-id [this]
-    (.getBlockId this))
+  (be-get-block-id [^BlockEntity this]
+    (when (instance? ScriptedBlockEntity this)
+      (.getBlockId ^ScriptedBlockEntity this)))
 
-  (be-set-changed! [this]
+  (be-set-changed! [^BlockEntity this]
     (.setChanged this)))
 
 ;; ==========================================================================
@@ -174,15 +184,15 @@
 
 (extend-type BlockState
   world/IBlockStateOps
-  (block-state-is-air [this]
+  (block-state-is-air [^BlockState this]
     (.isAir this))
-  (block-state-get-block [this]
+  (block-state-get-block [^BlockState this]
     (.getBlock this))
-  (block-state-get-state-definition [this]
+  (block-state-get-state-definition [^BlockState this]
     (.getStateDefinition (.getBlock this)))
-  (block-state-get-property [this state-def prop-name]
+  (block-state-get-property [^BlockState this state-def prop-name]
     (.getProperty ^StateDefinition state-def ^String prop-name))
-  (block-state-set-property [this prop value]
+  (block-state-set-property [^BlockState this prop value]
     (.setValue this ^Property prop value)))
 
 ;; ============================================================================
@@ -192,10 +202,10 @@
 (extend-type LazyOptional
   platform-cap/ILazyOptional
 
-  (is-present? [this]
+  (is-present? [^LazyOptional this]
     (.isPresent this))
 
-  (or-else [this default]
+  (or-else [^LazyOptional this default]
     (.orElse this default)))
 
 ;; ============================================================================
@@ -213,26 +223,26 @@
    (eval
      '(extend-type net.minecraft.world.item.ItemStack
         cn.li.mcmod.platform.item/IItemStack
-        (item-is-empty? [this] (.isEmpty this))
-        (item-get-count [this] (.getCount this))
-        (item-get-max-stack-size [this] (.getMaxStackSize this))
+        (item-is-empty? [^net.minecraft.world.item.ItemStack this] (.isEmpty this))
+        (item-get-count [^net.minecraft.world.item.ItemStack this] (.getCount this))
+        (item-get-max-stack-size [^net.minecraft.world.item.ItemStack this] (.getMaxStackSize this))
         ;; Mojang mappings (1.20.x): static helper `ItemStack.isSameItem(a, b)`
         ;; (instance method `isSameItem` may not exist depending on mappings).
-        (item-is-equal? [this other]
+        (item-is-equal? [^net.minecraft.world.item.ItemStack this other]
           (net.minecraft.world.item.ItemStack/isSameItem this ^net.minecraft.world.item.ItemStack other))
-        (item-save-to-nbt [this nbt] (.save this nbt))
-        (item-get-or-create-tag [this] (.getOrCreateTag this))
-        (item-get-max-damage [this] (.getMaxDamage this))
-        (item-set-damage! [this damage] (.setDamageValue this (int damage)))
-        (item-get-damage [this] (.getDamageValue this))
-        (item-split [this amount] (.split this (int amount)))
-        (item-get-item [this] (.getItem this))
-        (item-get-tag-compound [this] (.getTag this))))
+        (item-save-to-nbt [^net.minecraft.world.item.ItemStack this nbt] (.save this nbt))
+        (item-get-or-create-tag [^net.minecraft.world.item.ItemStack this] (.getOrCreateTag this))
+        (item-get-max-damage [^net.minecraft.world.item.ItemStack this] (.getMaxDamage this))
+        (item-set-damage! [^net.minecraft.world.item.ItemStack this damage] (.setDamageValue this (int damage)))
+        (item-get-damage [^net.minecraft.world.item.ItemStack this] (.getDamageValue this))
+        (item-split [^net.minecraft.world.item.ItemStack this amount] (.split this (int amount)))
+        (item-get-item [^net.minecraft.world.item.ItemStack this] (.getItem this))
+        (item-get-tag-compound [^net.minecraft.world.item.ItemStack this] (.getTag this))))
 
    (eval
      '(extend-type net.minecraft.world.item.Item
         cn.li.mcmod.platform.item/IItem
-        (item-get-description-id [this] (.getDescriptionId this)))))
+        (item-get-description-id [^net.minecraft.world.item.Item this] (.getDescriptionId this)))))
 
 ;; ============================================================================
 ;; World Protocol Implementation (Forge 1.20.1)
@@ -241,39 +251,39 @@
 
 (extend-type Level
   world/IWorldAccess
-  
-  (world-get-tile-entity [this block-pos]
+
+  (world-get-tile-entity [^Level this block-pos]
     (.getBlockEntity this block-pos))
-  
-  (world-get-block-state [this block-pos]
+
+  (world-get-block-state [^Level this block-pos]
     (.getBlockState this block-pos))
-  
-  (world-set-block [this block-pos state flags]
+
+  (world-set-block [^Level this block-pos state flags]
     (.setBlock this block-pos state flags))
 
-  (world-remove-block [this block-pos]
+  (world-remove-block [^Level this block-pos]
     (.destroyBlock this block-pos false))
 
-  (world-place-block-by-id [this block-id block-pos flags]
+  (world-place-block-by-id [^Level this block-id block-pos flags]
     (if-let [get-registered-block (requiring-resolve 'cn.li.forge1201.mod/get-registered-block)]
-      (if-let [block (get-registered-block block-id)]
+      (if-let [^Block block (get-registered-block block-id)]
         (.setBlock this block-pos (.defaultBlockState block) flags)
         false)
       false))
-  
-  (world-is-chunk-loaded? [this chunk-x chunk-z]
+
+  (world-is-chunk-loaded? [^Level this chunk-x chunk-z]
     (.hasChunk this chunk-x chunk-z))
 
-  (world-get-day-time [this]
+  (world-get-day-time [^Level this]
     (.getDayTime this))
 
-  (world-is-raining [this]
+  (world-is-raining [^Level this]
     (.isRaining this))
 
-  (world-is-client-side [this]
+  (world-is-client-side [^Level this]
     (.isClientSide this))
 
-  (world-can-see-sky [this pos]
+  (world-can-see-sky [^Level this pos]
     (.canSeeSky this pos)))
 
 ;; ==========================================================================
@@ -288,34 +298,34 @@
   (eval
     '(extend-type net.minecraft.world.entity.Entity
        cn.li.mcmod.platform.entity/IEntityOps
-       (entity-distance-to-sqr [this x y z]
-         (.distanceToSqr ^net.minecraft.world.entity.Entity this (double x) (double y) (double z)))))
+       (entity-distance-to-sqr [^net.minecraft.world.entity.Entity this x y z]
+         (.distanceToSqr this (double x) (double y) (double z)))))
 
   (eval
     '(extend-type net.minecraft.world.entity.player.Player
        cn.li.mcmod.platform.entity/IEntityOps
-       (player-get-level [this]
-         (.level ^net.minecraft.world.entity.player.Player this))
-       (player-get-name [this]
-         (str (.getName ^net.minecraft.world.entity.player.Player this)))
-       (player-get-uuid [this]
-         (.getUUID ^net.minecraft.world.entity.player.Player this))
-       (player-get-container-menu [this]
-         (.containerMenu ^net.minecraft.world.entity.player.Player this)))))
+       (player-get-level [^net.minecraft.world.entity.player.Player this]
+         (.level this))
+       (player-get-name [^net.minecraft.world.entity.player.Player this]
+         (str (.getName this)))
+       (player-get-uuid [^net.minecraft.world.entity.player.Player this]
+         (.getUUID this))
+       (player-get-container-menu [^net.minecraft.world.entity.player.Player this]
+         (.containerMenu this)))))
 
 (defn- install-inventory-and-menu-impls!
   []
   (eval
     '(extend-type net.minecraft.world.entity.player.Inventory
        cn.li.mcmod.platform.entity/IEntityOps
-       (inventory-get-player [this]
-         (.player ^net.minecraft.world.entity.player.Inventory this))))
+       (inventory-get-player [^net.minecraft.world.entity.player.Inventory this]
+         (.player this))))
 
   (eval
     '(extend-type net.minecraft.world.inventory.AbstractContainerMenu
        cn.li.mcmod.platform.entity/IEntityOps
-       (menu-get-container-id [this]
-         (.containerId ^net.minecraft.world.inventory.AbstractContainerMenu this)))))
+       (menu-get-container-id [^net.minecraft.world.inventory.AbstractContainerMenu this]
+         (.containerId this)))))
 
 ;; ============================================================================
 ;; Platform Initialization
@@ -350,7 +360,7 @@
   (alter-var-root #'item/*item-factory*
     (constantly
       (fn [nbt]
-        (ForgeItemStackHelper/fromNBT nbt))))
+        (ItemStack/of ^CompoundTag nbt))))
 
   ;; Register resource identifier factory
   (alter-var-root #'resource/*resource-factory*
@@ -370,31 +380,31 @@
 
   ;; Bind platform PoseStack Y-rotation implementation for mcmod
   (alter-var-root #'pose/*y-rotation-fn*
-    (constantly (fn [pose-stack angle]
+    (constantly (fn [^PoseStack pose-stack angle]
                   (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/YP (float angle))))))
 
   ;; Bind platform pose stack push/pop/translate implementations
   (alter-var-root #'pose/*push-pose-fn*
-    (constantly (fn [pose-stack]
+    (constantly (fn [^PoseStack pose-stack]
                   (.pushPose pose-stack))))
 
   (alter-var-root #'pose/*pop-pose-fn*
-    (constantly (fn [pose-stack]
+    (constantly (fn [^PoseStack pose-stack]
                   (.popPose pose-stack))))
 
   (alter-var-root #'pose/*translate-fn*
-    (constantly (fn [pose-stack x y z]
+    (constantly (fn [^PoseStack pose-stack x y z]
                   (.translate pose-stack (double x) (double y) (double z)))))
 
   ;; Bind platform accessor for current matrix from PoseStack
   (alter-var-root #'pose/*get-matrix-fn*
-    (constantly (fn [pose-stack]
+    (constantly (fn [^PoseStack pose-stack]
                   (let [entry (.last pose-stack)]
                     (.pose entry)))))
 
   ;; Bind submit-vertex helper to avoid core calling VertexConsumer methods
   (alter-var-root #'buffer/*submit-vertex-fn*
-    (constantly (fn [vc matrix x y z r g b a u v overlay uv2 nx ny nz]
+    (constantly (fn [^VertexConsumer vc ^Matrix4f matrix x y z r g b a u v overlay uv2 nx ny nz]
                   (-> (.vertex vc matrix (float x) (float y) (float z))
                       (.color (int r) (int g) (int b) (int a))
                       (.uv (float u) (float v))
@@ -405,13 +415,13 @@
 
   ;; Bind platform render buffer selectors for mcmod/ac renderers
   (alter-var-root #'buffer/*solid-buffer-fn*
-    (constantly (fn [buffer-source texture]
+    (constantly (fn [^MultiBufferSource buffer-source texture]
                   (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entitySolid texture)))))
   (alter-var-root #'buffer/*translucent-buffer-fn*
-    (constantly (fn [buffer-source texture]
+    (constantly (fn [^MultiBufferSource buffer-source texture]
                   (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityTranslucent texture)))))
   (alter-var-root #'buffer/*cutout-no-cull-buffer-fn*
-    (constantly (fn [buffer-source texture]
+    (constantly (fn [^MultiBufferSource buffer-source texture]
                   (.getBuffer buffer-source (net.minecraft.client.renderer.RenderType/entityCutoutNoCull texture)))))
 
   ;; Retroactively assign slots for capabilities already declared before this ran

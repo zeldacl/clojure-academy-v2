@@ -62,7 +62,7 @@
   (try
     (world/world-get-tile-entity w block-pos)
     (catch Exception e
-      (log/warn "get-block-entity failed:" (.getMessage e))
+      (log/warn "get-block-entity failed:" (ex-message e))
       nil)))
 
 (defn get-custom-state
@@ -73,7 +73,7 @@
     (try
       (be-get-custom-state be)
       (catch Exception e
-        (log/warn "get-custom-state failed:" (.getMessage e))
+        (log/warn "get-custom-state failed:" (ex-message e))
         nil))))
 
 (defn set-custom-state!
@@ -84,7 +84,7 @@
     (try
       (be-set-custom-state! be state)
       (catch Exception e
-        (log/error "set-custom-state! failed:" (.getMessage e))))))
+        (log/error "set-custom-state! failed:" (ex-message e))))))
 
 (defn get-block-id
   "Get the block ID string from a ScriptedBlockEntity.
@@ -94,7 +94,7 @@
     (try
       (be-get-block-id be)
       (catch Exception e
-        (log/warn "get-block-id failed:" (.getMessage e))
+        (log/warn "get-block-id failed:" (ex-message e))
         nil))))
 
 (defn set-changed!
@@ -105,7 +105,7 @@
     (try
       (be-set-changed! be)
       (catch Exception e
-        (log/warn "set-changed! failed:" (.getMessage e))
+        (log/warn "set-changed! failed:" (ex-message e))
         nil))))
 
 (defn get-capability-slot

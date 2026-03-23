@@ -274,7 +274,7 @@
                 result)
               (do (log/error "Node GUI registry function not found") nil))
             (catch Exception e
-              (log/error "Failed to open Node GUI:" (.getMessage e))
+              (log/error "Failed to open Node GUI:" ((ex-message e)))
               nil)))
         (log/info "No tile entity found!")))))
 
