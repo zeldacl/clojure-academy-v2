@@ -1,8 +1,14 @@
-(ns cn.li.ac.block.solar-gen
-  "Solar Generator block (ported from AcademyCraft).
+(ns cn.li.ac.block.solar-gen.block
+  "Solar Generator block - wireless energy generator powered by sunlight.
 
-  Uses generic ScriptedBlockEntity; tick and NBT logic are registered in this
-  namespace. Block metadata and right-click (open GUI) are defined here."
+  This file contains:
+  - Block definition
+  - Server-side logic (tick, NBT, energy generation)
+  - Container functions
+
+  Architecture:
+  All persistent state lives in ScriptedBlockEntity.customState as a Clojure
+  persistent map."
   (:require [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.platform.capability :as platform-cap]
@@ -12,49 +18,33 @@
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.config.modid :as modid]))
+            [cn.li.ac.config.modid :as modid])
+  (:import [cn.li.acapi.wireless IWirelessGenerator]))
 
-(defn- open-solar-gui!
-  [{:keys [player world pos sneaking] :as _ctx}]
-  (when (and player world pos (not sneaking))
-    (try
-      (if-let [open-solar-gui (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-solar-gui)]
-        (open-solar-gui player world pos)
-        (do (log/error "SolarGen GUI open fn not found: cn.li.ac.wireless.gui.registry/open-solar-gui") nil))
-      (catch Exception e
-        (log/error "Failed to open SolarGen GUI:" ((ex-message e)))
-        nil))))
-
-(declare solar-gen)
-
-(bdsl/defblock solar-gen
-  :registry-name "solar_gen"
-  :material :stone
-  :hardness 1.5
-  :resistance 6.0
-  :requires-tool true
-  :harvest-tool :pickaxe
-  :harvest-level 1
-  :sounds :stone
-  :model-parent "minecraft:block/cube_all"
-  :textures {:all (modid/asset-path "block" "solar_gen")}
-  :on-right-click open-solar-gui!)
-
-;; ---------------------------------------------------------------------------
-;; Scripted tile logic (tick + NBT) for generic ScriptedBlockEntity
-;; ---------------------------------------------------------------------------
+;; ============================================================================
+;; Part 1: Constants
+;; ============================================================================
 
 (def ^:private max-energy 1000.0)
+
+;; ============================================================================
+;; Part 2: Helper Functions
+;; ============================================================================
 
 (defn- can-generate?
   "True when the level is daytime and the block above has sky access."
   [level pos]
   (when (and level pos)
-    (let [time (rem (long (cn.li.mcmod.platform.world/world-get-day-time level)) 24000)
+    (let [time (rem (long (world/world-get-day-time level)) 24000)
           day? (<= time 12500)]
-      (and day? (cn.li.mcmod.platform.world/world-can-see-sky level
+      (and day? (world/world-can-see-sky level
                   (pos/create-block-pos (pos/pos-x pos) (inc (pos/pos-y pos)) (pos/pos-z pos)))))))
+
+;; ============================================================================
+;; Part 3: Server-Side Tick Logic
+;; ============================================================================
 
 (defn- solar-tick-fn
   "Tick handler for solar generator ScriptedBlockEntity.
@@ -62,10 +52,10 @@
   All mutable state is stored in BE customState as a Clojure keyword map.
   No reflection — uses direct Java interop and getCustomState/setCustomState."
   [level pos _block-state be]
-  (when (and level (not (cn.li.mcmod.platform.world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side level)))
     (let [state       (or (platform-be/get-custom-state be) {})
           generating? (can-generate? level pos)
-          raining?    (cn.li.mcmod.platform.world/world-is-raining level)
+          raining?    (world/world-is-raining level)
           status      (cond (not generating?) "STOPPED"
                             raining?          "WEAK"
                             :else             "STRONG")
@@ -84,6 +74,10 @@
         (platform-be/set-custom-state! be new-state)
         (when changed?
           (platform-be/set-changed! be))))))
+
+;; ============================================================================
+;; Part 4: NBT Serialization
+;; ============================================================================
 
 (defn- solar-read-nbt-fn
   "Deserialize CompoundTag → state keyword map (stored in BE customState)."
@@ -107,8 +101,26 @@
           (item/item-save-to-nbt stack sub)
           (nbt/nbt-set-tag! tag "Battery" sub))))))
 
-(declare solar-gen-tile)
+;; ============================================================================
+;; Part 5: Block Event Handlers
+;; ============================================================================
 
+(defn- open-solar-gui!
+  [{:keys [player world pos sneaking] :as _ctx}]
+  (when (and player world pos (not sneaking))
+    (try
+      (if-let [open-solar-gui (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-solar-gui)]
+        (open-solar-gui player world pos)
+        (do (log/error "SolarGen GUI open fn not found: cn.li.ac.wireless.gui.registry/open-solar-gui") nil))
+      (catch Exception e
+        (log/error "Failed to open SolarGen GUI:" (ex-message e))
+        nil))))
+
+;; ============================================================================
+;; Part 6: Registration
+;; ============================================================================
+
+;; Register tile logic
 (tdsl/deftile solar-gen-tile
   :id "solar-gen"
   :registry-name "solar_gen"
@@ -118,12 +130,27 @@
   :read-nbt-fn solar-read-nbt-fn
   :write-nbt-fn solar-write-nbt-fn)
 
-;; Register capability so wireless system can treat SolarGen as a generator.
-(platform-cap/declare-capability! :wireless-generator cn.li.acapi.wireless.IWirelessGenerator
+;; Register capability
+(platform-cap/declare-capability! :wireless-generator IWirelessGenerator
   (fn [be _side] (impls/->WirelessGeneratorImpl be)))
 
 (tile-logic/register-tile-capability! "solar-gen" :wireless-generator)
 
+;; Define block
+(bdsl/defblock solar-gen
+  :registry-name "solar_gen"
+  :material :stone
+  :hardness 1.5
+  :resistance 6.0
+  :requires-tool true
+  :harvest-tool :pickaxe
+  :harvest-level 1
+  :sounds :stone
+  :model-parent "minecraft:block/cube_all"
+  :textures {:all (modid/asset-path "block" "solar_gen")}
+  :on-right-click open-solar-gui!)
+
+;; Helper functions
 (defn init-solar-gen!
   []
   (log/info "Initialized Solar Generator block"))

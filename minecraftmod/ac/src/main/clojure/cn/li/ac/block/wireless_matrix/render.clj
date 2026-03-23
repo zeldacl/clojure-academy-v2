@@ -1,4 +1,4 @@
-(ns cn.li.ac.client.render.matrix-renderer
+(ns cn.li.ac.block.wireless-matrix.render
   "CLIENT-ONLY: Wireless matrix block entity renderer.
 
   This namespace must be loaded via side-checked requiring-resolve from the
@@ -18,7 +18,7 @@
             [cn.li.mcmod.client.render.multiblock-helper :as mb-helper]
             [cn.li.mcmod.client.render.buffer :as rb]
             [cn.li.mcmod.client.render.pose :as pose]
-            [cn.li.ac.block.wireless-matrix :as wm]))
+            [cn.li.ac.block.wireless-matrix.block :as wm]))
 
 ;; ============================================================================
 ;; Resources (loaded once on initialization)

@@ -1,12 +1,12 @@
 (ns cn.li.ac.wireless.gui.node-gui
-  "Wireless Node GUI - Facade for node-gui-xml
-  
-  This module re-exports the XML/TechUI-based implementation from node-gui-xml.
-  Kept for backward compatibility with existing references in registry.clj 
+  "Wireless Node GUI - Facade for node GUI implementation
+
+  This module re-exports the XML/TechUI-based implementation from the block's gui module.
+  Kept for backward compatibility with existing references in registry.clj
   and screen_factory.clj.
-  
-  The actual implementation is in node-gui-xml.clj."
-  (:require [cn.li.ac.wireless.gui.node-gui-xml :as impl]))
+
+  The actual implementation is in cn.li.ac.block.wireless-node.gui."
+  (:require [cn.li.ac.block.wireless-node.gui :as impl]))
 
 ;; ============================================================================
 ;; Re-exported Public API

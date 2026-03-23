@@ -9,9 +9,9 @@
             [cn.li.ac.wireless.gui.node-container :as node-container]
             [cn.li.ac.wireless.gui.matrix-container :as matrix-container]
             [cn.li.ac.wireless.gui.solar-container :as solar-container]
-            [cn.li.ac.wireless.gui.node-gui :as node-gui]
-            [cn.li.ac.wireless.gui.matrix-gui :as matrix-gui]
-            [cn.li.ac.wireless.gui.solar-gui-xml :as solar-gui]
+            [cn.li.ac.block.wireless-node.gui :as node-gui]
+            [cn.li.ac.block.wireless-matrix.gui :as matrix-gui]
+            [cn.li.ac.block.solar-gen.gui :as solar-gui]
             [cn.li.ac.wireless.gui.node-sync :as node-sync]
             [cn.li.ac.wireless.gui.matrix-sync :as matrix-sync]))
 

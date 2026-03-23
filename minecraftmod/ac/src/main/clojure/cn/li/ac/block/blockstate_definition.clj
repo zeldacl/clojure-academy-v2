@@ -8,8 +8,7 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.config :as mcmod-config]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.ac.block.wireless-node :as wireless-node]
-            [cn.li.ac.block.node-schema :as nschema]))
+            [cn.li.ac.block.wireless-node.block :as wireless-node]))
 
 ;; ============================================================================
 ;; BlockState部分定义
@@ -62,7 +61,7 @@
         energy-max (get-in wireless-node/block-state-properties [:energy :max])
         connected-type (get-in wireless-node/block-state-properties [:connected :type])]
     (into {}
-          (for [node-type (sort (keys nschema/node-types))
+          (for [node-type (sort (keys wireless-node/node-types))
                 :let [node-type-name (name node-type)
                       block-key (keyword (str "wireless-node-" node-type-name))
                       registry-name (str "node_" node-type-name)
@@ -89,7 +88,7 @@
 (defn- node-model-pattern
   "从 wireless-node 生成 node 模型名的正则，避免与 NODE_BLOCKS 重复维护 node 类型与变体。"
   []
-  (let [node-type-str (str "(" (str/join "|" (map name (sort (keys nschema/node-types)))) ")")
+  (let [node-type-str (str "(" (str/join "|" (map name (sort (keys wireless-node/node-types)))) ")")
         variant-str   "(base|energy_\\d+|connected)"]
     (re-pattern (str "node_" node-type-str "_" variant-str))))
 

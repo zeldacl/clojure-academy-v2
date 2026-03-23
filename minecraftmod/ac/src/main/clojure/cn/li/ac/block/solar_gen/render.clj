@@ -1,4 +1,4 @@
-(ns cn.li.ac.client.render.solar-renderer
+(ns cn.li.ac.block.solar-gen.render
   "CLIENT-ONLY: Solar generator block entity renderer.
 
   This namespace must be loaded via side-checked requiring-resolve from the

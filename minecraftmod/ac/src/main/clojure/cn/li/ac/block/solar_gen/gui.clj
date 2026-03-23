@@ -1,5 +1,12 @@
-(ns cn.li.ac.wireless.gui.solar-gui-xml
-  "Solar Generator GUI screen (TechUI/CGUI).
+(ns cn.li.ac.block.solar-gen.gui
+  "CLIENT-ONLY: Solar Generator GUI implementation.
+
+  This file contains:
+  - GUI layout and component builders
+  - GUI interaction logic
+  - Container atom management
+
+  Must be loaded via side-checked requiring-resolve from platform layer.
 
   Uses existing XML page: assets/my_mod/guis/rework/page_solar.xml
   and composes it into TechUI tabs (inv + wireless) with InfoArea."

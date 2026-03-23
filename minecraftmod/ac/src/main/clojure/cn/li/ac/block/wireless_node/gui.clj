@@ -1,15 +1,19 @@
-(ns cn.li.ac.wireless.gui.node-gui-xml
-  "Wireless Node GUI - TechUI implementation (参照Scala GuiNode)
-  
+(ns cn.li.ac.block.wireless-node.gui
+  "CLIENT-ONLY: Wireless Node GUI implementation.
+
+  This file contains:
+  - GUI layout and component builders
+  - Client-side network message senders
+  - GUI interaction logic
+  - Container atom management
+
+  Must be loaded via side-checked requiring-resolve from platform layer.
+
   Architecture:
   - Inventory page from shared TechUI builder
   - InfoArea (histogram + properties)
   - Wireless page (network list + connect/disconnect)
-  - Animated node status indicator
-  
-  NOTE:
-  - No XML parsing
-  - Uses existing resources only"
+  - Animated node status indicator"
   (:require [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.cgui-document :as cgui-doc]
             [cn.li.ac.config.modid :as modid]
@@ -19,13 +23,17 @@
             [cn.li.ac.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.ac.wireless.gui.node-messages :as node-msgs]
             [cn.li.ac.wireless.gui.node-container :as node-container]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.ac.wireless.gui.wireless-tab :as wireless-tab]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessNode]))
+
+(defn- msg
+  "Generate message ID for node actions."
+  [action]
+  (str "wireless_node_" (name action)))
 
 ;; ============================================================================
 ;; GUI Dimensions (shared)
@@ -95,7 +103,7 @@
                     (when (> dt 2000)
                       (reset! last-query now)
                       (net-client/send-to-server
-                        (node-msgs/msg :get-status)
+                        (msg :get-status)
                         (net-helpers/tile-pos-payload tile)
                         (fn [response]
                           (let [is-linked (boolean (:linked response))]
@@ -197,7 +205,7 @@
                     :editable? true
                     :on-change (fn [new-name]
                                 (net-client/send-to-server
-                                  (node-msgs/msg :change-name)
+                                  (msg :change-name)
                                   (assoc (net-helpers/tile-pos-payload tile)
                                          :node-name new-name))))
                 y (tech-ui/add-property
@@ -206,7 +214,7 @@
                     :masked? true
                     :on-change (fn [new-pass]
                                 (net-client/send-to-server
-                                  (node-msgs/msg :change-password)
+                                  (msg :change-password)
                                   (assoc (net-helpers/tile-pos-payload tile)
                                          :password new-pass))))]
             y)

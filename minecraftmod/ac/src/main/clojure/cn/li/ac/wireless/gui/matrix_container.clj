@@ -4,8 +4,7 @@
   State model (Design-3): tile-entity is a ScriptedBlockEntity; all slot data
   is read from / written to (.getCustomState be) / (.setCustomState be new-state)."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.block.wireless-matrix :as wm]
-            [cn.li.ac.block.matrix-schema :as mschema]
+            [cn.li.ac.block.wireless-matrix.block :as wm]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.item.constraint-plate :as plate]
             [cn.li.ac.item.mat-core :as core]
@@ -51,7 +50,7 @@
   (if (map? tile)
     [nil tile]
     (try
-      (let [state (or (platform-be/get-custom-state tile) mschema/matrix-default-state)]
+      (let [state (or (platform-be/get-custom-state tile) wm/matrix-default-state)]
         [tile state])
       (catch Exception e
         (log/warn "Could not resolve customState from BE:" ((ex-message e)))
@@ -126,7 +125,7 @@
   "Set item in slot. Writes to BE customState, running recalculate-counts after write."
   [container slot-index item-stack]
   (common/set-slot-item-be! container slot-index item-stack
-                             mschema/matrix-default-state
+                             wm/matrix-default-state
                              wm/recalculate-counts))
 
 (defn slot-changed!

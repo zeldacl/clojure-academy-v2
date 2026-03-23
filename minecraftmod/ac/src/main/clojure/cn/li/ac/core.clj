@@ -16,14 +16,14 @@
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.block.multiblock-core :as mb-core]
             [cn.li.mcmod.events.dispatcher :as event-dispatcher]
-            [cn.li.ac.wireless.gui.matrix-network-handler :as matrix-net]
-            [cn.li.ac.wireless.gui.node-network-handler :as node-net]
+            [cn.li.ac.block.wireless-matrix.block :as matrix-block]
+            [cn.li.ac.block.wireless-node.block :as node-block]
             [cn.li.ac.wireless.gui.generator-network-handler :as gen-net]
             [cn.li.ac.wireless.world-data :as wd]
             ;; Load all block definitions (so block-dsl registry is populated)
-            [cn.li.ac.block.wireless-node]
-            [cn.li.ac.block.wireless-matrix]
-            [cn.li.ac.block.solar-gen]
+            [cn.li.ac.block.wireless-node.block]
+            [cn.li.ac.block.wireless-matrix.block]
+            [cn.li.ac.block.solar-gen.block]
             ;; Load all item definitions (so item-dsl registry is populated)
             [cn.li.ac.item.components]
             [cn.li.ac.item.constraint-plate]
@@ -120,8 +120,8 @@
   ;; Initialize wireless world data system
   (wd/init-world-data!)
   ;; Register GUI network handlers
-  (matrix-net/init!)
-  (node-net/init!)
+  (matrix-block/register-network-handlers!)
+  (node-block/register-network-handlers!)
   (gen-net/init!)
   ;; Register generic set-tab handler for tabbed GUIs (inv-window + panels)
   (tabbed-gui/register-set-tab-handler!))

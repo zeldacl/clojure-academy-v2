@@ -1,21 +1,29 @@
-(ns cn.li.ac.wireless.gui.matrix-gui-xml
-  "Wireless Matrix GUI - 动态实现（参照Scala GuiMatrix2+TechUI）
-  
-  架构：使用TechUI.ContainerUI模式
-  
-  流程：
-  1. 加载共享InventoryPage
-  2. 查询服务端网络信息
-  3. 根据3种状态构建动态InfoArea：
-     - 未初始化+所有者: 显示初始化表单
-     - 未初始化+非所有者: 显示提示消息
-     - 已初始化: 显示网络信息（所有者可编辑）
-  
-  特性：
-  - 网络容量直方图
-  - 所有者/范围/带宽属性（只读）
-  - 动态SSID/密码显示（初始化后所有者可编辑）
-  - 初始化表单供所有者创建网络"
+(ns cn.li.ac.block.wireless-matrix.gui
+  "CLIENT-ONLY: Wireless Matrix GUI implementation.
+
+  This file contains:
+  - GUI layout and component builders
+  - Client-side network message senders
+  - GUI interaction logic
+  - Container atom management
+
+  Must be loaded via side-checked requiring-resolve from platform layer.
+
+  Architecture: Uses TechUI.ContainerUI pattern
+
+  Flow:
+  1. Load shared InventoryPage
+  2. Query server for network information
+  3. Build dynamic InfoArea based on 3 states:
+     - Uninitialized + Owner: Show initialization form
+     - Uninitialized + Non-owner: Show prompt message
+     - Initialized: Show network info (owner can edit)
+
+  Features:
+  - Network capacity histogram
+  - Owner/range/bandwidth properties (read-only)
+  - Dynamic SSID/password display (owner can edit after init)
+  - Initialization form for owner to create network"
   
   (:require [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.components :as comp]
@@ -23,11 +31,15 @@
             [cn.li.ac.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.ac.wireless.gui.matrix-messages :as matrix-msgs]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessMatrix]))
+
+(defn- msg
+  "Generate message ID for matrix actions."
+  [action]
+  (str "wireless_matrix_" (name action)))
 
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)
@@ -64,7 +76,7 @@
   [tile callback]
   (try
     (net-client/send-to-server
-      (matrix-msgs/msg :gather-info)
+      (msg :gather-info)
       (net-helpers/tile-pos-payload tile)
       (fn [response]
         (try
@@ -94,7 +106,7 @@
   [tile ssid password callback]
   (try
     (net-client/send-to-server
-      (matrix-msgs/msg :init)
+      (msg :init)
       (assoc (net-helpers/tile-pos-payload tile)
              :ssid ssid
              :password password)
@@ -115,7 +127,7 @@
   [tile new-ssid]
   (try
     (net-client/send-to-server
-      (matrix-msgs/msg :change-ssid)
+      (msg :change-ssid)
       (assoc (net-helpers/tile-pos-payload tile)
              :new-ssid new-ssid))
     (catch Exception e
@@ -130,7 +142,7 @@
   [tile new-password]
   (try
     (net-client/send-to-server
-      (matrix-msgs/msg :change-password)
+      (msg :change-password)
       (assoc (net-helpers/tile-pos-payload tile)
              :new-password new-password))
     (catch Exception e

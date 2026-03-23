@@ -31,8 +31,8 @@
    directly."
   []
   (register-renderer-init-fns!
-    [(requiring-resolve 'cn.li.ac.client.render.matrix-renderer/register!)
-     (requiring-resolve 'cn.li.ac.client.render.solar-renderer/register!)]))
+    [(requiring-resolve 'cn.li.ac.block.wireless-matrix.render/register!)
+     (requiring-resolve 'cn.li.ac.block.solar-gen.render/register!)]))
 
 (defn register-all-renderers!
   "Require and register all renderers (idempotent)."
