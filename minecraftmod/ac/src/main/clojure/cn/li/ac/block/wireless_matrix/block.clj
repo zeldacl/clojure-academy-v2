@@ -26,7 +26,6 @@
             [cn.li.ac.item.constraint-plate :as plate]
             [cn.li.ac.item.mat-core :as core]
             [cn.li.ac.wireless.slot-schema :as slots]
-            [cn.li.ac.wireless.gui.matrix-sync :as sync]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.ac.wireless.helper :as helper]
             [cn.li.ac.wireless.network :as wireless-net]
@@ -280,13 +279,14 @@
     (when (and (zero? (:sub-id state 0))
                (zero? (mod ticker 15)))
       (try
-        (let [impl ^IWirelessMatrix (->WirelessMatrixImpl be)]
-          (sync/broadcast-matrix-state level pos
-            (-> (schema/schema->sync-payload matrix-state-schema state pos)
-                (assoc :is-working  (is-working? state)
-                       :capacity    (.getMatrixCapacity impl)
-                       :bandwidth   (.getMatrixBandwidth impl)
-                       :range       (.getMatrixRange impl)))))
+        (when-let [broadcast-fn (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/broadcast-matrix-state)]
+          (let [impl ^IWirelessMatrix (->WirelessMatrixImpl be)]
+            (broadcast-fn level pos
+              (-> (schema/schema->sync-payload matrix-state-schema state pos)
+                  (assoc :is-working  (is-working? state)
+                         :capacity    (.getMatrixCapacity impl)
+                         :bandwidth   (.getMatrixBandwidth impl)
+                         :range       (.getMatrixRange impl))))))
         (catch Exception e
           (log/debug "Matrix sync skipped:" (ex-message e)))))
     ;; Verify structure every 20 ticks

@@ -1,29 +1,35 @@
 (ns cn.li.ac.wireless.gui.container-dispatcher
   "Platform-agnostic container operation dispatcher
-  
+
   This namespace provides unified interfaces for container operations,
   eliminating the need for platform-specific instanceof checks and cond branching.
-  
+
   Uses protocols to achieve polymorphic dispatch based on container type."
-  (:require [cn.li.ac.wireless.gui.node-container :as node-container]
-            [cn.li.ac.wireless.gui.matrix-container :as matrix-container]
-            [cn.li.ac.wireless.gui.solar-container :as solar-container]
-            [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
-  (defn node-container?
-    "Type check via :container-type — stable regardless of field changes."
-    [container]
-    (= (:container-type container) :node))
+;; Function resolution cache to avoid repeated requiring-resolve in hot paths
+(defonce ^:private fn-cache (atom {}))
 
-  (defn matrix-container?
-    "Type check via :container-type — stable regardless of field changes."
-    [container]
-    (= (:container-type container) :matrix))
+(defn- resolve-cached [sym]
+  (or (@fn-cache sym)
+      (when-let [f (requiring-resolve sym)]
+        (swap! fn-cache assoc sym f)
+        f)))
 
-  (defn solar-container?
-    "Type check via :container-type — stable regardless of field changes."
-    [container]
-    (= (:container-type container) :solar))
+(defn node-container?
+  "Type check via :container-type — stable regardless of field changes."
+  [container]
+  (= (:container-type container) :node))
+
+(defn matrix-container?
+  "Type check via :container-type — stable regardless of field changes."
+  [container]
+  (= (:container-type container) :matrix))
+
+(defn solar-container?
+  "Type check via :container-type — stable regardless of field changes."
+  [container]
+  (= (:container-type container) :solar))
 
 ;; ============================================================================
 ;; Container Operation Protocol
@@ -58,40 +64,55 @@
   Object
   (tick-container! [container]
     (cond
-      (node-container? container) (node-container/tick! container)
-      (matrix-container? container) (matrix-container/tick! container)
-      (solar-container? container) (solar-container/tick! container)
+      (node-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/tick!)] (f container))
+      (matrix-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/tick!)] (f container))
+      (solar-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/tick!)] (f container))
       :else (log/warn "Unknown container type for tick:" (type container))))
-  
+
   (validate-container [container player]
     (cond
-      (node-container? container) (node-container/still-valid? container player)
-      (matrix-container? container) (matrix-container/still-valid? container player)
-      (solar-container? container) (solar-container/still-valid? container player)
+      (node-container? container)
+      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/still-valid?)] (f container player) false)
+      (matrix-container? container)
+      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/still-valid?)] (f container player) false)
+      (solar-container? container)
+      (if-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/still-valid?)] (f container player) false)
       :else false))
-  
+
   (sync-container! [container]
     (cond
-      (node-container? container) (node-container/sync-to-client! container)
-      (matrix-container? container) (matrix-container/sync-to-client! container)
-      (solar-container? container) (solar-container/sync-to-client! container)
+      (node-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/sync-to-client!)] (f container))
+      (matrix-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/sync-to-client!)] (f container))
+      (solar-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/sync-to-client!)] (f container))
       :else (log/warn "Unknown container type for sync:" (type container))))
-  
+
   (handle-button-click! [container button-id player]
     (cond
-      (node-container? container) (node-container/handle-button-click! container button-id player)
-      (matrix-container? container) (matrix-container/handle-button-click! container button-id player)
-      (solar-container? container) (solar-container/handle-button-click! container button-id player)
+      (node-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/handle-button-click!)] (f container button-id player))
+      (matrix-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/handle-button-click!)] (f container button-id player))
+      (solar-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/handle-button-click!)] (f container button-id player))
       :else (log/warn "Unknown container type for button click:" (type container))))
-  
+
   (handle-text-input! [container _field-id _text _player]
     (log/warn "handle-text-input! not implemented for container type:" (type container)))
-  
+
   (close-container! [container]
     (cond
-      (node-container? container) (node-container/on-close container)
-      (matrix-container? container) (matrix-container/on-close container)
-      (solar-container? container) (solar-container/on-close container)
+      (node-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/on-close)] (f container))
+      (matrix-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/on-close)] (f container))
+      (solar-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/on-close)] (f container))
       :else (log/warn "Unknown container type for close:" (type container)))))
 
 ;; ============================================================================
@@ -229,9 +250,18 @@
   [container]
   (try
     (cond
-      (node-container? container) (node-container/get-slot-count container)
-      (matrix-container? container) (matrix-container/get-slot-count container)
-      (solar-container? container) (solar-container/get-slot-count container)
+      (node-container? container)
+      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/get-slot-count)]
+        (f container)
+        0)
+      (matrix-container? container)
+      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/get-slot-count)]
+        (f container)
+        0)
+      (solar-container? container)
+      (if-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/get-slot-count)]
+        (f container)
+        0)
       :else 0)
     (catch Exception e
       (log/error "Error getting slot count:" ((ex-message e)))
@@ -242,9 +272,15 @@
   [container slot-index]
   (try
     (cond
-      (node-container? container) (node-container/get-slot-item container slot-index)
-      (matrix-container? container) (matrix-container/get-slot-item container slot-index)
-      (solar-container? container) (solar-container/get-slot-item container slot-index)
+      (node-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/get-slot-item)]
+        (f container slot-index))
+      (matrix-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/get-slot-item)]
+        (f container slot-index))
+      (solar-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/get-slot-item)]
+        (f container slot-index))
       :else nil)
     (catch Exception e
       (log/error "Error getting slot item:" ((ex-message e)))
@@ -255,9 +291,15 @@
   [container slot-index item-stack]
   (try
     (cond
-      (node-container? container) (node-container/set-slot-item! container slot-index item-stack)
-      (matrix-container? container) (matrix-container/set-slot-item! container slot-index item-stack)
-      (solar-container? container) (solar-container/set-slot-item! container slot-index item-stack)
+      (node-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/set-slot-item!)]
+        (f container slot-index item-stack))
+      (matrix-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/set-slot-item!)]
+        (f container slot-index item-stack))
+      (solar-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/set-slot-item!)]
+        (f container slot-index item-stack))
       :else nil)
     (catch Exception e
       (log/error "Error setting slot item:" ((ex-message e)))
@@ -268,9 +310,18 @@
   [container slot-index item-stack]
   (try
     (cond
-      (node-container? container) (boolean (node-container/can-place-item? container slot-index item-stack))
-      (matrix-container? container) (boolean (matrix-container/can-place-item? container slot-index item-stack))
-      (solar-container? container) (boolean (solar-container/can-place-item? container slot-index item-stack))
+      (node-container? container)
+      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/can-place-item?)]
+        (boolean (f container slot-index item-stack))
+        true)
+      (matrix-container? container)
+      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/can-place-item?)]
+        (boolean (f container slot-index item-stack))
+        true)
+      (solar-container? container)
+      (if-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/can-place-item?)]
+        (boolean (f container slot-index item-stack))
+        true)
       :else true)
     (catch Exception e
       (log/error "Error checking slot placement:" ((ex-message e)))
@@ -281,9 +332,15 @@
   [container slot-index]
   (try
     (cond
-      (node-container? container) (node-container/slot-changed! container slot-index)
-      (matrix-container? container) (matrix-container/slot-changed! container slot-index)
-      (solar-container? container) (solar-container/slot-changed! container slot-index)
+      (node-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/slot-changed!)]
+        (f container slot-index))
+      (matrix-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/slot-changed!)]
+        (f container slot-index))
+      (solar-container? container)
+      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/slot-changed!)]
+        (f container slot-index))
       :else nil)
     (catch Exception e
       (log/error "Error in slot changed notification:" ((ex-message e)))

@@ -19,10 +19,82 @@
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.wireless.gui.wireless-tab :as wireless-tab]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.ac.wireless.slot-schema :as slots]
+            [cn.li.ac.energy.operations :as energy-ops]
+            [cn.li.ac.wireless.gui.container-common :as common]
+            [cn.li.ac.wireless.gui.container-schema :as schema]))
 
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)
+
+;; ============================================================================
+;; Field Schema (from solar_container.clj)
+;; ============================================================================
+
+(def solar-fields
+  [{:key :energy     :init (fn [s] (double (get s :energy 0.0)))     :sync? true  :coerce double :close-reset 0.0}
+   {:key :max-energy :init (fn [s] (double (get s :max-energy 1000.0))) :sync? true  :coerce double :close-reset 0.0}
+   {:key :status     :init (fn [s] (str (get s :status "STOPPED")))  :sync? true  :coerce str    :close-reset ""}
+   {:key :gen-speed  :init (fn [s] (double (get s :gen-speed 0.0)))  :sync? true  :coerce double :close-reset 0.0}
+   {:key :tab-index  :init (fn [_] 0)                                :sync? false :coerce int    :close-reset 0}
+   {:key :sync-ticker :init (fn [_] 0)                               :sync? false :coerce int    :close-reset 0}])
+
+;; ============================================================================
+;; Container Creation (from solar_container.clj)
+;; ============================================================================
+
+(def ^:private solar-slot-schema-id slots/solar-gen-id)
+
+(defn create-container [tile player]
+  (let [state (or (common/get-tile-state tile) {})]
+    (merge {:tile-entity    tile
+            :player         player
+            :container-type :solar}
+           (schema/build-atoms solar-fields state))))
+
+(defn get-slot-count [_container]
+  (slot-schema/tile-slot-count solar-slot-schema-id))
+
+(defn can-place-item? [_container _slot-index item-stack]
+  (energy-ops/is-energy-item-supported? item-stack))
+
+(defn get-slot-item [container slot-index]
+  (common/get-slot-item-be container slot-index))
+
+(defn set-slot-item! [container slot-index item-stack]
+  (common/set-slot-item-be! container slot-index item-stack {} identity))
+
+(defn slot-changed! [_container _slot-index] nil)
+
+(defn still-valid? [_container _player] true)
+
+(defn sync-to-client! [container]
+  (let [state (or (common/get-tile-state (:tile-entity container)) {})]
+    (reset! (:energy container)     (double (get state :energy 0.0)))
+    (reset! (:max-energy container) (double (get state :max-energy 1000.0)))
+    (reset! (:status container)     (str (get state :status "STOPPED")))
+    (reset! (:gen-speed container)  (double (get state :gen-speed 0.0)))))
+
+(defn get-sync-data [container]
+  (schema/get-sync-data solar-fields container))
+
+(defn apply-sync-data! [container data]
+  (schema/apply-sync-data! solar-fields container data))
+
+(defn tick! [container]
+  (swap! (:sync-ticker container) inc)
+  (sync-to-client! container))
+
+(defn handle-button-click! [_container _button-id _player] nil)
+
+(defn on-close [container]
+  (schema/reset-atoms! solar-fields container))
+
+;; ============================================================================
+;; GUI Components
+;; ============================================================================
 
 (defn- status->frame-v0
   "Map Solar status string to v0 for 3-frame vertical texture."

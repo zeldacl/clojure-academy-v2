@@ -23,8 +23,6 @@
             [cn.li.ac.wireless.gui.gui-metadata :as metadata]
             [cn.li.ac.wireless.gui.slot-manager :as slot-mgr]
             [cn.li.ac.wireless.gui.registry :as registry]
-            [cn.li.ac.wireless.gui.matrix-sync :as matrix-sync]
-            [cn.li.ac.wireless.gui.node-sync :as node-sync]
             [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
             [cn.li.mcmod.util.log :as log]))
 
@@ -134,12 +132,22 @@
 ;; ============================================================================
 
 ;; Matrix sync packet helpers
-(def make-matrix-sync-packet matrix-sync/make-sync-packet)
-(def apply-matrix-sync-payload! matrix-sync/apply-matrix-sync-payload!)
+(defn make-matrix-sync-packet [source]
+  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/make-sync-packet)]
+    (f source)))
 
-;; Node sync packet helpers  
-(def make-node-sync-packet node-sync/make-sync-packet)
-(def apply-node-sync-payload! node-sync/apply-node-sync-payload!)
+(defn apply-matrix-sync-payload! [payload]
+  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/apply-matrix-sync-payload!)]
+    (f payload)))
+
+;; Node sync packet helpers
+(defn make-node-sync-packet [source]
+  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/make-sync-packet)]
+    (f source)))
+
+(defn apply-node-sync-payload! [payload]
+  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/apply-node-sync-payload!)]
+    (f payload)))
 
 ;; ============================================================================
 ;; Unified GUI Sync System (Platform-Business Separation)

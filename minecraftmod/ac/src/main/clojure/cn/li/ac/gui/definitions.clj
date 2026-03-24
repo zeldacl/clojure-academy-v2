@@ -5,15 +5,7 @@
   GUI metadata/hook registries are populated before platform registration."
   (:require [cn.li.mcmod.gui.dsl :as gui]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.ac.wireless.slot-schema :as slots]
-            [cn.li.ac.wireless.gui.node-container :as node-container]
-            [cn.li.ac.wireless.gui.matrix-container :as matrix-container]
-            [cn.li.ac.wireless.gui.solar-container :as solar-container]
-            [cn.li.ac.block.wireless-node.gui :as node-gui]
-            [cn.li.ac.block.wireless-matrix.gui :as matrix-gui]
-            [cn.li.ac.block.solar-gen.gui :as solar-gui]
-            [cn.li.ac.wireless.gui.node-sync :as node-sync]
-            [cn.li.ac.wireless.gui.matrix-sync :as matrix-sync]))
+            [cn.li.ac.wireless.slot-schema :as slots]))
 
 (defn- node-container?
   [container]
@@ -54,13 +46,24 @@
   :screen-factory-fn-kw :create-node-screen
   :slot-layout node-slot-layout
   :container-predicate node-container?
-  :container-fn node-container/create-container
+  :container-fn (fn [tile player]
+                  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/create-container)]
+                    (f tile player)))
   :screen-fn (fn [container minecraft-container player]
-               (node-gui/create-screen container minecraft-container player))
-  :tick-fn node-container/tick!
-  :sync-get node-container/get-sync-data
-  :sync-apply node-container/apply-sync-data!
-  :payload-sync-apply-fn node-sync/apply-node-sync-payload!)
+               (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/create-screen)]
+                 (f container minecraft-container player)))
+  :tick-fn (fn [container]
+             (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/tick!)]
+               (f container)))
+  :sync-get (fn [container]
+              (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/get-sync-data)]
+                (f container)))
+  :sync-apply (fn [container data]
+                (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/apply-sync-data!)]
+                  (f container data)))
+  :payload-sync-apply-fn (fn [payload]
+                           (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/apply-node-sync-payload!)]
+                             (f payload))))
 
 (gui/defgui wireless-matrix
   :gui-id 1
@@ -70,13 +73,24 @@
   :screen-factory-fn-kw :create-matrix-screen
   :slot-layout matrix-slot-layout
   :container-predicate matrix-container?
-  :container-fn matrix-container/create-container
+  :container-fn (fn [tile player]
+                  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/create-container)]
+                    (f tile player)))
   :screen-fn (fn [container minecraft-container player]
-               (matrix-gui/create-screen container minecraft-container player))
-  :tick-fn matrix-container/tick!
-  :sync-get matrix-container/get-sync-data
-  :sync-apply matrix-container/apply-sync-data!
-  :payload-sync-apply-fn matrix-sync/apply-matrix-sync-payload!)
+               (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/create-screen)]
+                 (f container minecraft-container player)))
+  :tick-fn (fn [container]
+             (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/tick!)]
+               (f container)))
+  :sync-get (fn [container]
+              (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/get-sync-data)]
+                (f container)))
+  :sync-apply (fn [container data]
+                (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/apply-sync-data!)]
+                  (f container data)))
+  :payload-sync-apply-fn (fn [payload]
+                           (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/apply-matrix-sync-payload!)]
+                             (f payload))))
 
 (gui/defgui solar-gen
   :gui-id 2
@@ -86,10 +100,19 @@
   :screen-factory-fn-kw :create-solar-screen
   :slot-layout solar-slot-layout
   :container-predicate solar-container?
-  :container-fn solar-container/create-container
+  :container-fn (fn [tile player]
+                  (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/create-container)]
+                    (f tile player)))
   :screen-fn (fn [container minecraft-container player]
-               (solar-gui/create-screen container minecraft-container player))
-  :tick-fn solar-container/tick!
-  :sync-get solar-container/get-sync-data
-  :sync-apply solar-container/apply-sync-data!)
+               (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/create-screen)]
+                 (f container minecraft-container player)))
+  :tick-fn (fn [container]
+             (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/tick!)]
+               (f container)))
+  :sync-get (fn [container]
+              (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/get-sync-data)]
+                (f container)))
+  :sync-apply (fn [container data]
+                (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/apply-sync-data!)]
+                  (f container data))))
 

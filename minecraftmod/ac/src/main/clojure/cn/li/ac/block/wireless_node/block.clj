@@ -255,11 +255,11 @@
                      (update-block-state! state level pos)
                      ;; Broadcast to connected GUIs
                      (try
-                       (require 'cn.li.ac.wireless.gui.node-sync)
-                       ((resolve 'cn.li.ac.wireless.gui.node-sync/broadcast-node-state)
-                        level pos
-                        (-> (schema/schema->sync-payload node-state-schema state pos)
-                            (assoc :max-energy (node-max-energy state))))
+                       (when-let [broadcast-fn (requiring-resolve 'cn.li.ac.block.wireless-node.gui/broadcast-node-state)]
+                         (broadcast-fn
+                          level pos
+                          (-> (schema/schema->sync-payload node-state-schema state pos)
+                              (assoc :max-energy (node-max-energy state)))))
                        (catch Exception _))
                      state)
                    state)]

@@ -23,11 +23,20 @@
             [cn.li.ac.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.ac.wireless.gui.node-container :as node-container]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.ac.wireless.gui.wireless-tab :as wireless-tab]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.energy.operations :as energy-stub]
+            [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.ac.wireless.slot-schema :as slots]
+            [cn.li.ac.wireless.gui.container-common :as common]
+            [cn.li.ac.wireless.gui.container-move-common :as move-common]
+            [cn.li.ac.wireless.gui.container-schema :as schema]
+            [cn.li.ac.wireless.gui.sync-helpers :as sync-helpers]
+            [cn.li.ac.wireless.gui.gui-metadata :as metadata]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
 (defn- msg
@@ -41,6 +50,27 @@
 
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)
+
+;; ============================================================================
+;; Field Schema (from node_container.clj)
+;; ============================================================================
+
+(def node-fields
+  [{:key :energy        :init (fn [s] (int (get s :energy 0.0)))          :sync? true  :coerce int     :close-reset 0}
+   {:key :max-energy    :init (fn [s] (int (get s :max-energy 15000)))     :sync? true  :coerce int     :close-reset 0}
+   {:key :node-type     :init (fn [s] (keyword (get s :node-type :basic))) :sync? true  :coerce keyword :close-reset :basic}
+   {:key :is-online     :init (fn [s] (boolean (get s :enabled false)))    :sync? true  :payload-key :enabled :coerce boolean :close-reset false}
+   {:key :ssid          :init (fn [s] (str (get s :node-name "Unnamed")))  :sync? true  :payload-key :node-name :coerce str :close-reset ""}
+   {:key :password      :init (fn [s] (str (get s :password "")))          :sync? true  :coerce str     :close-reset ""}
+   {:key :transfer-rate :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}
+   {:key :capacity      :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}
+   {:key :max-capacity  :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}
+   {:key :charge-ticker :init (fn [_] 0)                                   :sync? false :coerce int     :close-reset 0}
+   {:key :sync-ticker   :init (fn [_] 0)                                   :sync? false :coerce int     :close-reset 0}
+   {:key :tab-index     :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}])
+
+(defn sync-field-mappings []
+  (schema/sync-field-mappings node-fields))
 
 ;; ============================================================================
 ;; Animation System (Node status)
@@ -139,6 +169,57 @@
     {:widget widget :anim-state anim-state :poller poller}))
 
 ;; ============================================================================
+;; Container Creation (from node_container.clj)
+;; ============================================================================
+
+(defn- resolve-state [tile]
+  (if (map? tile)
+    [nil tile]
+    (try
+      [tile (or (platform-be/get-custom-state tile) {})]
+      (catch Exception e
+        (log/warn "Could not resolve customState from BE:" ((ex-message e)))
+        [tile {}]))))
+
+(defn create-container [tile player]
+  (let [[be state] (resolve-state tile)
+        entity     (or be tile)]
+    (merge {:tile-entity    entity
+            :player         player
+            :container-type :node}
+           (schema/build-atoms node-fields state))))
+
+;; ============================================================================
+;; Slot Management (from node_container.clj)
+;; ============================================================================
+
+(def ^:private node-slot-schema-id slots/wireless-node-id)
+
+(defn- tile-state [tile] (common/get-tile-state tile))
+
+(defn get-slot-count [_container]
+  (slot-schema/tile-slot-count node-slot-schema-id))
+
+(defn get-owner [container]
+  (let [tile (:tile-entity container)]
+    (:placer-name (tile-state tile))))
+
+(defn can-place-item? [_container slot-index item-stack]
+  (case (slot-schema/slot-type node-slot-schema-id slot-index)
+    :energy (energy-stub/is-energy-item-supported? item-stack)
+    :output false
+    false))
+
+(defn get-slot-item [container slot-index]
+  (common/get-slot-item-be container slot-index))
+
+(defn set-slot-item! [container slot-index item-stack]
+  (common/set-slot-item-be! container slot-index item-stack {} identity))
+
+(defn slot-changed! [_container slot-index]
+  (log/info "Node container slot" slot-index "changed"))
+
+;; ============================================================================
 ;; Wireless Page (network list + connect)
 ;; ============================================================================
 
@@ -166,6 +247,107 @@
   (wireless-tab/create-wireless-panel {:mode :node :container container}))
 
 ;; ============================================================================
+;; Container Sync (from node_container.clj)
+;; ============================================================================
+
+(defn sync-to-client! [container]
+  (let [tile  (:tile-entity container)
+        state (or (tile-state tile) {})]
+    (reset! (:energy container)     (int (get state :energy 0.0)))
+    (reset! (:max-energy container) (int (get state :max-energy 15000)))
+    (reset! (:is-online container)  (boolean (get state :enabled false)))
+    (reset! (:ssid container)       (str (get state :node-name "Unnamed")))
+    (reset! (:password container)   (str (get state :password "")))
+    (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
+      (fn [] (sync-helpers/query-node-network-capacity! container)))
+    (let [rate (cond
+                 (and (get state :charging-in false) (get state :charging-out false)) 200
+                 (get state :charging-in false)  100
+                 (get state :charging-out false) 100
+                 :else 0)]
+      (reset! (:transfer-rate container) rate))))
+
+(defn get-sync-data [container]
+  (schema/get-sync-data node-fields container))
+
+(defn apply-sync-data! [container data]
+  (schema/apply-sync-data! node-fields container data))
+
+(defn still-valid? [container player]
+  (common/still-valid? container player))
+
+(defn tick! [container]
+  (sync-to-client! container)
+  (swap! (:charge-ticker container) inc))
+
+(defn handle-button-click! [container button-id data]
+  (let [tile (:tile-entity container)]
+    (when-not (map? tile)
+      (case (int button-id)
+        0 (let [state  (or (platform-be/get-custom-state tile) {})
+                state' (update state :enabled not)]
+            (platform-be/set-custom-state! tile state')
+            (log/info "Toggled node connection:" (:enabled state')))
+        1 (when-let [new-ssid (:ssid data)]
+            (let [state  (or (platform-be/get-custom-state tile) {})
+                  state' (assoc state :node-name new-ssid)]
+              (platform-be/set-custom-state! tile state')
+              (log/info "Set node SSID to:" new-ssid)))
+        2 (when-let [new-password (:password data)]
+            (let [state  (or (platform-be/get-custom-state tile) {})
+                  state' (assoc state :password new-password)]
+              (platform-be/set-custom-state! tile state')
+              (log/info "Set node password")))
+        (log/warn "Unknown button ID:" button-id)))))
+
+(defn quick-move-stack [container slot-index player-inventory-start]
+  (move-common/quick-move-with-rules
+    container slot-index player-inventory-start
+    slots/wireless-node-quick-move-config))
+
+(defn on-close [container]
+  (log/debug "Closing wireless node container")
+  (schema/reset-atoms! node-fields container))
+
+;; ============================================================================
+;; Sync Packet Handling (from node_sync.clj)
+;; ============================================================================
+
+(defn broadcast-node-state [world pos sync-data]
+  (sync-helpers/broadcast-state world pos sync-data "node"))
+
+(defn- node-container? [source]
+  (= (:container-type source) :node))
+
+(defn- get-pos [tile]
+  (when tile
+    (try (pos/position-get-block-pos tile) (catch Exception _ nil))))
+
+(defn make-sync-packet [source]
+  (let [container? (node-container? source)
+        tile      (if container? (:tile-entity source) source)
+        block-pos (get-pos tile)
+        state     (tile-state tile)]
+    (when block-pos
+      (merge {:gui-id metadata/gui-wireless-node
+              :pos-x  (pos/pos-x block-pos)
+              :pos-y  (pos/pos-y block-pos)
+              :pos-z  (pos/pos-z block-pos)}
+             (schema/build-sync-packet-payload
+              node-fields
+              (when container? source)
+              state)))))
+
+(defn apply-node-sync-payload! [payload]
+  (sync-helpers/apply-sync-payload-template!
+    payload
+    (sync-field-mappings)
+    "node"))
+
+(defn extract-position [sync-data world]
+  (sync-helpers/extract-position sync-data world))
+
+;; ============================================================================
 ;; InfoArea Builder (TechUI)
 ;; ============================================================================
 
@@ -179,7 +361,7 @@
   [info-area container player]
   (try
     (let [tile (:tile-entity container)
-          owner-name (node-container/get-owner container)
+          owner-name (get-owner container)
           is-owner? (= owner-name (entity/player-get-name player))]
 
       (tech-ui/reset-info-area! info-area)
