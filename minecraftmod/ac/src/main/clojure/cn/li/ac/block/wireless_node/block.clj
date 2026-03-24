@@ -26,7 +26,6 @@
             [cn.li.ac.energy.operations      :as energy]
             [cn.li.ac.wireless.world-data    :as wd]
             [cn.li.ac.wireless.world-data    :as world-data]
-            [cn.li.ac.wireless.slot-schema   :as slots]
             [cn.li.ac.wireless.virtual-blocks :as vb]
             [cn.li.ac.wireless.gui.message-registry :as msg-registry]
             [cn.li.ac.wireless.helper        :as helper]
@@ -186,7 +185,7 @@
   (or (platform-be/get-custom-state be)
       (assoc node-default-state :node-type (parse-node-type block-id))))
 
-(def ^:private node-slot-schema-id slots/wireless-node-id)
+(def ^:private node-slot-schema-id :wireless-node)
 (def ^:private node-input-slot-index
   (slot-schema/slot-index node-slot-schema-id :input))
 (def ^:private node-output-slot-index

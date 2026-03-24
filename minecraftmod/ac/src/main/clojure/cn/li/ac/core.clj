@@ -11,7 +11,9 @@
             [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
             [cn.li.ac.gui.slot-validators :as slot-validators]
             ;; Load all GUI definitions (so gui-dsl registry is populated)
-            [cn.li.ac.gui.definitions]
+            [cn.li.ac.block.wireless-node.gui]
+            [cn.li.ac.block.wireless-matrix.gui]
+            [cn.li.ac.block.solar-gen.gui]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.block.multiblock-core :as mb-core]
@@ -100,7 +102,6 @@
      :get-gui-id-for-container #'platform-gui/get-gui-id-for-container
      :get-menu-type #'platform-gui/get-menu-type
      :register-menu-type! #'platform-gui/register-menu-type!
-     :execute-quick-move-forge #'platform-gui/execute-quick-move-forge
 
      :make-matrix-sync-packet #'platform-gui/make-matrix-sync-packet
      :apply-matrix-sync-payload! #'platform-gui/apply-matrix-sync-payload!

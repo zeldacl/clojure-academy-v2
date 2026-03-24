@@ -21,7 +21,6 @@
   (:require [cn.li.ac.wireless.gui.container-dispatcher :as dispatcher]
             [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.wireless.gui.gui-metadata :as metadata]
-            [cn.li.ac.wireless.gui.slot-manager :as slot-mgr]
             [cn.li.ac.wireless.gui.registry :as registry]
             [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
             [cn.li.mcmod.util.log :as log]))
@@ -88,16 +87,6 @@
   (let [container-type (dispatcher/get-container-type container)]
     (when (not= container-type :unknown)
       (metadata/get-gui-id-for-type container-type))))
-
-;; ============================================================================
-;; Re-export Slot Manager
-;; ============================================================================
-
-(def get-node-slot-layout slot-mgr/get-tile-slot-range)
-(def get-matrix-slot-layout slot-mgr/get-tile-slot-range)
-(def get-slot-layout-for-container slot-mgr/get-tile-slot-range)
-(def execute-quick-move-forge slot-mgr/get-quick-move-strategy)
-(def execute-quick-move-fabric slot-mgr/get-quick-move-strategy)
 
 ;; ============================================================================
 ;; Re-export GUI Registry

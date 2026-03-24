@@ -22,7 +22,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.ac.wireless.slot-schema :as slots]
+            [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.energy.operations :as energy-ops]
             [cn.li.ac.wireless.gui.container-common :as common]
             [cn.li.ac.wireless.gui.container-schema :as schema]
@@ -34,6 +34,17 @@
             [cn.li.ac.wireless.node-connection :as node-conn]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessNode]))
+
+;; ============================================================================
+;; Slot Schema
+;; ============================================================================
+
+(def solar-gen-id :solar-gen)
+
+(def solar-gen-slot-schema
+  (slot-schema/register-slot-schema!
+    {:schema-id solar-gen-id
+     :slots [{:id :energy :type :energy :x 42 :y 81}]}))
 
 ;; ============================================================================
 ;; Message Registration
@@ -62,7 +73,7 @@
 ;; Container Creation (from solar_container.clj)
 ;; ============================================================================
 
-(def ^:private solar-slot-schema-id slots/solar-gen-id)
+(def ^:private solar-slot-schema-id solar-gen-id)
 
 (defn create-container [tile player]
   (let [state (or (common/get-tile-state tile) {})]
@@ -281,4 +292,41 @@
   (net-server/register-handler (msg-registry/msg :generator :connect) handle-connect)
   (net-server/register-handler (msg-registry/msg :generator :disconnect) handle-disconnect)
   (log/info "Solar Generator GUI network handlers registered"))
+
+;; ============================================================================
+;; GUI Registration
+;; ============================================================================
+
+(defn- solar-container? [container]
+  (and (map? container)
+       (contains? container :tile-entity)
+       (contains? container :energy)
+       (contains? container :status)))
+
+(def ^:private solar-slot-layout
+  (slot-schema/get-slot-layout solar-gen-id))
+
+(gui-dsl/defgui solar-gen
+  :gui-id 2
+  :display-name "Solar Generator"
+  :gui-type :solar
+  :registry-name "solar_gen_gui"
+  :screen-factory-fn-kw :create-solar-screen
+  :slot-layout solar-slot-layout
+  :container-predicate solar-container?
+  :container-fn (fn [tile player]
+                  (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/create-container)]
+                    (f tile player)))
+  :screen-fn (fn [container minecraft-container player]
+               (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/create-screen)]
+                 (f container minecraft-container player)))
+  :tick-fn (fn [container]
+             (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/tick!)]
+               (f container)))
+  :sync-get (fn [container]
+              (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/get-sync-data)]
+                (f container)))
+  :sync-apply (fn [container data]
+                (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/apply-sync-data!)]
+                  (f container data))))
 

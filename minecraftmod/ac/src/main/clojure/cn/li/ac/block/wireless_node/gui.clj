@@ -29,7 +29,7 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.energy.operations :as energy-stub]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
-            [cn.li.ac.wireless.slot-schema :as slots]
+            [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.wireless.gui.container-common :as common]
             [cn.li.ac.wireless.gui.container-move-common :as move-common]
             [cn.li.ac.wireless.gui.container-schema :as schema]
@@ -38,6 +38,29 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessNode]))
+
+;; ============================================================================
+;; Slot Schema
+;; ============================================================================
+
+(def wireless-node-id :wireless-node)
+
+(def wireless-node-slot-schema
+  (slot-schema/register-slot-schema!
+    {:schema-id wireless-node-id
+     :slots [{:id :input :type :energy :x 42 :y 10}
+             {:id :output :type :output :x 42 :y 80}]}))
+
+(def ^:private inventory-pred
+  (fn [slot-index player-inventory-start]
+    (>= slot-index player-inventory-start)))
+
+(def wireless-node-quick-move-config
+  (slot-schema/build-quick-move-config
+    wireless-node-id
+    {:inventory-pred inventory-pred
+     :rules [{:accept? energy-stub/is-energy-item-supported?
+              :slot-ids [:input]}]}))
 
 (defn- msg
   "Generate message ID for node actions."
@@ -193,7 +216,7 @@
 ;; Slot Management (from node_container.clj)
 ;; ============================================================================
 
-(def ^:private node-slot-schema-id slots/wireless-node-id)
+(def ^:private node-slot-schema-id wireless-node-id)
 
 (defn- tile-state [tile] (common/get-tile-state tile))
 
@@ -303,7 +326,7 @@
 (defn quick-move-stack [container slot-index player-inventory-start]
   (move-common/quick-move-with-rules
     container slot-index player-inventory-start
-    slots/wireless-node-quick-move-config))
+    wireless-node-quick-move-config))
 
 (defn on-close [container]
   (log/debug "Closing wireless node container")
@@ -490,3 +513,43 @@
   "Initialize Node GUI module"
   []
   (log/info "Wireless Node GUI module initialized"))
+
+;; ============================================================================
+;; GUI Registration
+;; ============================================================================
+
+(defn- node-container? [container]
+  (and (map? container)
+       (contains? container :tile-entity)
+       (contains? container :ssid)
+       (contains? container :password)))
+
+(def ^:private node-slot-layout
+  (slot-schema/get-slot-layout wireless-node-id))
+
+(gui-dsl/defgui wireless-node
+  :gui-id 0
+  :display-name "Wireless Node"
+  :gui-type :node
+  :registry-name "wireless_node_gui"
+  :screen-factory-fn-kw :create-node-screen
+  :slot-layout node-slot-layout
+  :container-predicate node-container?
+  :container-fn (fn [tile player]
+                  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/create-container)]
+                    (f tile player)))
+  :screen-fn (fn [container minecraft-container player]
+               (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/create-screen)]
+                 (f container minecraft-container player)))
+  :tick-fn (fn [container]
+             (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/tick!)]
+               (f container)))
+  :sync-get (fn [container]
+              (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/get-sync-data)]
+                (f container)))
+  :sync-apply (fn [container data]
+                (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/apply-sync-data!)]
+                  (f container data)))
+  :payload-sync-apply-fn (fn [payload]
+                           (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/apply-node-sync-payload!)]
+                             (f payload))))

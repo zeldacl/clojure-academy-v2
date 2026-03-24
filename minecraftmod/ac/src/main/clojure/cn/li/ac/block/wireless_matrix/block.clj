@@ -25,7 +25,6 @@
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.ac.item.constraint-plate :as plate]
             [cn.li.ac.item.mat-core :as core]
-            [cn.li.ac.wireless.slot-schema :as slots]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.ac.wireless.helper :as helper]
             [cn.li.ac.wireless.network :as wireless-net]
@@ -142,7 +141,7 @@
   [be]
   (or (platform-be/get-custom-state be) matrix-default-state))
 
-(def ^:private matrix-slot-schema-id slots/wireless-matrix-id)
+(def ^:private matrix-slot-schema-id :wireless-matrix)
 (def ^:private matrix-plate-slot-indexes
   (slot-schema/slot-indexes-by-type matrix-slot-schema-id :plate))
 (def ^:private matrix-core-slot-index

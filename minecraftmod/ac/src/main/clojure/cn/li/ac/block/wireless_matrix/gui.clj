@@ -36,9 +36,9 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.block.wireless-matrix.block :as wm]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.item.constraint-plate :as plate]
             [cn.li.ac.item.mat-core :as core]
-            [cn.li.ac.wireless.slot-schema :as slots]
             [cn.li.ac.wireless.gui.container-common :as common]
             [cn.li.ac.wireless.gui.container-move-common :as move-common]
             [cn.li.ac.wireless.gui.container-schema :as schema]
@@ -48,6 +48,33 @@
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessMatrix]))
+
+;; ============================================================================
+;; Slot Schema
+;; ============================================================================
+
+(def wireless-matrix-id :wireless-matrix)
+
+(def wireless-matrix-slot-schema
+  (slot-schema/register-slot-schema!
+    {:schema-id wireless-matrix-id
+     :slots [{:id :plate-a :type :plate :x 78 :y 11}
+             {:id :plate-b :type :plate :x 53 :y 60}
+             {:id :plate-c :type :plate :x 104 :y 60}
+             {:id :core :type :core :x 78 :y 36}]}))
+
+(def ^:private inventory-pred
+  (fn [slot-index player-inventory-start]
+    (>= slot-index player-inventory-start)))
+
+(def wireless-matrix-quick-move-config
+  (slot-schema/build-quick-move-config
+    wireless-matrix-id
+    {:inventory-pred inventory-pred
+     :rules [{:accept? core/is-mat-core?
+              :slot-ids [:core]}
+             {:accept? plate/is-constraint-plate?
+              :slot-type :plate}]}))
 
 (defn- msg
   "Generate message ID for matrix actions."
@@ -213,7 +240,7 @@
 ;; Slot Management (from matrix_container.clj)
 ;; ============================================================================
 
-(def ^:private matrix-slot-schema-id slots/wireless-matrix-id)
+(def ^:private matrix-slot-schema-id wireless-matrix-id)
 
 (defn get-slot-count [_container]
   (slot-schema/tile-slot-count matrix-slot-schema-id))
@@ -309,7 +336,7 @@
     container
     slot-index
     player-inventory-start
-    slots/wireless-matrix-quick-move-config))
+    wireless-matrix-quick-move-config))
 
 (defn on-close [container]
   (log/debug "Closing wireless matrix container")
@@ -524,3 +551,43 @@
   "Initialize Matrix GUI module"
   []
   (log/info "Wireless Matrix GUI XML module initialized"))
+
+;; ============================================================================
+;; GUI Registration
+;; ============================================================================
+
+(defn- matrix-container? [container]
+  (and (map? container)
+       (contains? container :tile-entity)
+       (contains? container :plate-count)
+       (contains? container :core-level)))
+
+(def ^:private matrix-slot-layout
+  (slot-schema/get-slot-layout wireless-matrix-id))
+
+(gui-dsl/defgui wireless-matrix
+  :gui-id 1
+  :display-name "Wireless Matrix"
+  :gui-type :matrix
+  :registry-name "wireless_matrix_gui"
+  :screen-factory-fn-kw :create-matrix-screen
+  :slot-layout matrix-slot-layout
+  :container-predicate matrix-container?
+  :container-fn (fn [tile player]
+                  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/create-container)]
+                    (f tile player)))
+  :screen-fn (fn [container minecraft-container player]
+               (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/create-screen)]
+                 (f container minecraft-container player)))
+  :tick-fn (fn [container]
+             (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/tick!)]
+               (f container)))
+  :sync-get (fn [container]
+              (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/get-sync-data)]
+                (f container)))
+  :sync-apply (fn [container data]
+                (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/apply-sync-data!)]
+                  (f container data)))
+  :payload-sync-apply-fn (fn [payload]
+                           (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/apply-matrix-sync-payload!)]
+                             (f payload))))
