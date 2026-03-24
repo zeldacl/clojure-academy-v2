@@ -29,6 +29,7 @@
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.ac.wireless.helper :as helper]
             [cn.li.ac.wireless.network :as wireless-net]
+            [cn.li.ac.wireless.gui.message-registry :as msg-registry]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessMatrix]))
 
@@ -36,10 +37,14 @@
 ;; Message ID Helper
 ;; ============================================================================
 
+(msg-registry/register-block-messages!
+  :matrix
+  [:gather-info :init :change-ssid :change-password])
+
 (defn- msg
   "Generate message ID for matrix actions."
   [action]
-  (str "wireless_matrix_" (name action)))
+  (msg-registry/msg :matrix action))
 
 ;; ============================================================================
 ;; Part 1: State Schema Definition

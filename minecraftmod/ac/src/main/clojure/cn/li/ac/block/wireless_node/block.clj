@@ -28,6 +28,7 @@
             [cn.li.ac.wireless.world-data    :as world-data]
             [cn.li.ac.wireless.slot-schema   :as slots]
             [cn.li.ac.wireless.virtual-blocks :as vb]
+            [cn.li.ac.wireless.gui.message-registry :as msg-registry]
             [cn.li.ac.wireless.helper        :as helper]
             [cn.li.ac.wireless.network       :as wireless-net]
             [cn.li.ac.wireless.interfaces    :as winterfaces]
@@ -40,10 +41,14 @@
 ;; Message ID Helper
 ;; ============================================================================
 
+(msg-registry/register-block-messages!
+  :node
+  [:get-status :change-name :change-password :list-networks :connect :disconnect])
+
 (defn- msg
   "Generate message ID for node actions."
   [action]
-  (str "wireless_node_" (name action)))
+  (msg-registry/msg :node action))
 
 ;; ============================================================================
 ;; Part 1: Node Type Specifications and State Schema

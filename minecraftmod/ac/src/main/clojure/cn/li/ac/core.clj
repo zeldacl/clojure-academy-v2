@@ -18,7 +18,7 @@
             [cn.li.mcmod.events.dispatcher :as event-dispatcher]
             [cn.li.ac.block.wireless-matrix.block :as matrix-block]
             [cn.li.ac.block.wireless-node.block :as node-block]
-            [cn.li.ac.wireless.gui.generator-network-handler :as gen-net]
+            [cn.li.ac.block.solar-gen.gui :as solar-gui]
             [cn.li.ac.wireless.world-data :as wd]
             ;; Load all block definitions (so block-dsl registry is populated)
             [cn.li.ac.block.wireless-node.block]
@@ -122,7 +122,7 @@
   ;; Register GUI network handlers
   (matrix-block/register-network-handlers!)
   (node-block/register-network-handlers!)
-  (gen-net/init!)
+  (solar-gui/register-network-handlers!)
   ;; Register generic set-tab handler for tabbed GUIs (inv-window + panels)
   (tabbed-gui/register-set-tab-handler!))
 
@@ -146,3 +146,15 @@
 
 ;; Phase1.4/Phase2: register content init hook for platform adapters.
 (lifecycle/register-content-init! #'init)
+
+;; Register client-side initialization callback
+(defn- init-client-renderers
+  "Load renderer namespaces to trigger auto-registration.
+  Called by mcmod during client initialization."
+  []
+  (require 'cn.li.ac.block.wireless-matrix.render)
+  (require 'cn.li.ac.block.solar-gen.render))
+
+;; Register the callback with mcmod lifecycle system
+(when-let [register-fn (requiring-resolve 'cn.li.mcmod.lifecycle/register-client-init!)]
+  (register-fn init-client-renderers))

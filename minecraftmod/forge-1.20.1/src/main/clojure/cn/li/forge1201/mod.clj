@@ -20,7 +20,7 @@
   (:import [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
-           [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab]
+           [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab Items]
            [net.minecraft.network.chat Component]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
            [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
@@ -243,7 +243,7 @@
   (-> (CreativeModeTab/builder)
       (.title (Component/translatable (str "itemGroup." mod-id ".items")))
       (.icon (reify java.util.function.Supplier
-           (get [_] (.getDefaultInstance (invoke-bootstrap-helper "barrierItem")))))
+           (get [_] (.getDefaultInstance Items/BARRIER))))
       (.displayItems (reify net.minecraft.world.item.CreativeModeTab$DisplayItemsGenerator
                        (accept [_ _params output]
                          (doseq [entry (registry-metadata/get-all-creative-tab-entries)]

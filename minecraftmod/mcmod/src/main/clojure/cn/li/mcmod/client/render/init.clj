@@ -30,14 +30,13 @@
   nil)
 
 (defn register-default-renderer-init-fns!
-  "Load core renderer namespaces to trigger auto-registration.
+  "Trigger client-side initialization callbacks that load renderer namespaces.
 
-   Kept inside `mcmod` so Forge source code doesn't reference `cn.li.ac.*`
-   directly."
+  This function is called by platform layer during client setup.
+  Content modules register their callbacks via lifecycle/register-client-init!."
   []
-  ;; Simply require the namespaces - they auto-register via requiring-resolve
-  (requiring-resolve 'cn.li.ac.block.wireless-matrix.render/register!)
-  (requiring-resolve 'cn.li.ac.block.solar-gen.render/register!)
+  (when-let [run-client-init! (requiring-resolve 'cn.li.mcmod.lifecycle/run-client-init!)]
+    (run-client-init!))
   nil)
 
 (defn register-all-renderers!

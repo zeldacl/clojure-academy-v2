@@ -12,9 +12,10 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
-            [cn.li.ac.wireless.gui.generator-messages :as gen-msgs]))
+            [cn.li.ac.wireless.gui.message-registry :as msg-registry]))
 
-(defn- node-msg [action] (str "wireless_node_" (name action)))
+(defn- node-msg [action] (msg-registry/msg :node action))
+(defn- gen-msg [action] (msg-registry/msg :generator action))
 
 (defn- widget-textbox [widget] (comp/get-textbox-component widget))
 (defn- widget-drawtexture [widget] (comp/get-drawtexture-component widget))
@@ -202,7 +203,7 @@
 
     (letfn [(rebuild! []
               (net-client/send-to-server
-                (gen-msgs/msg :list-nodes)
+                (gen-msg :list-nodes)
                 payload
                 (fn [resp]
                   (rebuild-page! root
@@ -212,12 +213,12 @@
                                   :encrypted?-fn (fn [t] (boolean (:is-encrypted? t)))
                                   :disconnect-fn (fn [_linked]
                                                    (net-client/send-to-server
-                                                     (gen-msgs/msg :disconnect)
+                                                     (gen-msg :disconnect)
                                                      payload
                                                      (fn [_] (rebuild!))))
                                   :connect-fn (fn [target pass]
                                                 (net-client/send-to-server
-                                                  (gen-msgs/msg :connect)
+                                                  (gen-msg :connect)
                                                   (assoc payload
                                                          :node-x (:pos-x target)
                                                          :node-y (:pos-y target)

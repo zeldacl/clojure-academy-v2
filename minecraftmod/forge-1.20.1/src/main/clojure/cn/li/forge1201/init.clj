@@ -1,8 +1,8 @@
 (ns cn.li.forge1201.init
   "Forge 1.20.1 initialization and version-specific implementations"
   (:require [cn.li.mcmod.platform.dispatch :as platform-dispatch]
-            [cn.li.mcmod.content :as content]
             [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.mcmod.content :as content]
             [cn.li.mcmod.util.log :as log]))
 
 (defn set-version!

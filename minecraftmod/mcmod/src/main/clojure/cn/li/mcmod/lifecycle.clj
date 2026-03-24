@@ -19,3 +19,21 @@
   (when-let [f @content-init-fn]
     (f)))
 
+(defonce client-init-fns
+  ;; Vector of client init functions to run during client setup.
+  (atom []))
+
+(defn register-client-init!
+  "Register client-side init function. Called by content modules (ac).
+
+  The function will be executed by platform adapters during client setup."
+  [init-fn]
+  (swap! client-init-fns conj init-fn)
+  nil)
+
+(defn run-client-init!
+  "Run all registered client init functions."
+  []
+  (doseq [f @client-init-fns]
+    (f)))
+
