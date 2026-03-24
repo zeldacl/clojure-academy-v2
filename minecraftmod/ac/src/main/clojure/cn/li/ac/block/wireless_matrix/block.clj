@@ -592,6 +592,7 @@
            :light-level 1.0
            :sounds :stone}
   :controller {:registry-name "matrix"
+               :flat-item-icon? true
                :on-right-click (handle-matrix-right-click)
                :on-place (handle-matrix-place)
                :on-break (handle-matrix-break)}

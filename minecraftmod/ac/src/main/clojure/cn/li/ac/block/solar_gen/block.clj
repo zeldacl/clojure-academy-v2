@@ -148,6 +148,7 @@
   :sounds :stone
   :model-parent "minecraft:block/cube_all"
   :textures {:all (modid/asset-path "block" "solar_gen")}
+  :flat-item-icon? true
   :on-right-click open-solar-gui!)
 
 ;; Helper functions

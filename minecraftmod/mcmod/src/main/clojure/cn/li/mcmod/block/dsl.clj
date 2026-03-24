@@ -13,6 +13,7 @@
                       sounds harvest-level harvest-tool friction slip-factor
                       creative-tab  ;; Creative tab for block items
                       has-item-form?  ;; Whether this block should have a BlockItem/item model
+                      flat-item-icon?  ;; Use flat 2D item icon instead of 3D block model
                       block-state-properties  ;; Dynamic block state properties (e.g., energy, connected)
                       on-right-click on-break on-place properties
                       ;; Model/datagen fields (official DSL options)
@@ -300,6 +301,7 @@
        :slip-factor (or (:slip-factor options) default-friction)
        :creative-tab (or (:creative-tab options) default-creative-tab)
       :has-item-form? (not= false (:has-item-form options))
+      :flat-item-icon? (boolean (:flat-item-icon? options))
        :block-state-properties (:block-state-properties options)
        :on-right-click (or (:on-right-click options) (fn [_] nil))
        :on-break (or (:on-break options) (fn [_] nil))

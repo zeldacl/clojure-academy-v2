@@ -130,10 +130,6 @@
   [model-id]
   (str/replace model-id #".*:block/" ""))
 
-(def ^:private flat-item-icon-blocks
-  "Blocks that should use a flat item icon directly from block textures."
-  #{"matrix" "solar_gen"})
-
 (defn- write-flat-item-model!
   [^BlockStateProvider provider registry-name texture-rl]
   (let [item-models (.itemModels provider)
@@ -215,7 +211,8 @@
           block-spec (registry-name->block-spec registry-name)]
       (.simpleBlock provider block model-file)
       (when (registry-metadata/should-create-block-item? block-id)
-        (if (contains? flat-item-icon-blocks registry-name)
+        ;; Query metadata instead of hardcoded set
+        (if (:flat-item-icon? block-spec)
           (let [texture-rl (texture-from-spec block-spec registry-name)]
             (write-flat-item-model! provider registry-name texture-rl))
           (.simpleBlockItem provider block model-file))))))
