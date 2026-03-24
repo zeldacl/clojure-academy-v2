@@ -497,11 +497,11 @@
             (log/info "  Core Level:" (:core-level state))
             (log/info "  Working:" (is-working? state))
             (try
-              (if-let [open-matrix-gui (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-matrix-gui)]
-                (let [result (open-matrix-gui player world pos)]
+              (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
+                (let [result (open-gui-by-type player :matrix world pos)]
                   (log/info "Opened Matrix GUI")
                   result)
-                (do (log/error "Failed to open Matrix GUI: open-matrix-gui not resolved") nil))
+                (do (log/error "Failed to open Matrix GUI: open-gui-by-type not resolved") nil))
               (catch Exception e
                 (log/error "Failed to open Matrix GUI:" (ex-message e)) nil)))
           (log/info "Sneaking - no action"))

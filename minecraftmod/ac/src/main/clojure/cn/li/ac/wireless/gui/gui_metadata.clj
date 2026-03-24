@@ -10,9 +10,8 @@
 ;; GUI ID Constants
 ;; ============================================================================
 
-(def gui-wireless-node 0)
-(def gui-wireless-matrix 1)
-(def gui-solar-gen 2)
+;; GUI IDs are now managed by the DSL system via defgui :gui-id parameter.
+;; No hardcoded constants needed here.
 
 ;; ============================================================================
 ;; Registration API (for new GUIs)
@@ -137,26 +136,15 @@
 ;; Reverse Lookups
 ;; ============================================================================
 
-;; ============================================================================
-;; Reverse Lookups
-;; ============================================================================
-
-(def type-to-gui-id
-  ^{:doc "Fallback map from container type to GUI ID (built-ins)."}
-  {:node gui-wireless-node
-   :matrix gui-wireless-matrix
-   :solar gui-solar-gen})
-
 (defn get-gui-id-for-type
   "Get GUI ID for container type
-  
+
   Args:
-  - container-type: :node or :matrix
-  
+  - container-type: :node, :matrix, :solar, etc.
+
   Returns: int or nil if unknown"
   [container-type]
-  (or (gui-dsl/get-gui-id-for-type container-type)
-      (get type-to-gui-id container-type)))
+  (gui-dsl/get-gui-id-for-type container-type))
 
 ;; ============================================================================
 ;; Platform-Specific Metadata Storage

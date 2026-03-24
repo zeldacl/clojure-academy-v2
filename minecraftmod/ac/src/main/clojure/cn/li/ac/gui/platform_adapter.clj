@@ -49,9 +49,7 @@
 ;; Re-export GUI Metadata
 ;; ============================================================================
 
-(def gui-wireless-node metadata/gui-wireless-node)
-(def gui-wireless-matrix metadata/gui-wireless-matrix)
-(def gui-solar-gen metadata/gui-solar-gen)
+;; GUI IDs are now managed by DSL - use metadata/get-gui-id-for-type instead
 (defn valid-gui-ids
   "Return a set of all registered wireless GUI ids."
   []

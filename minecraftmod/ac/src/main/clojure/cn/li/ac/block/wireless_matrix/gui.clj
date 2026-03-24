@@ -357,7 +357,7 @@
         tile       (if container? (:tile-entity source) source)
         container  (when container? source)
         block-pos  (pos/position-get-block-pos tile)]
-    (merge {:gui-id      metadata/gui-wireless-matrix
+    (merge {:gui-id      1
             :pos-x       (pos/pos-x block-pos)
             :pos-y       (pos/pos-y block-pos)
             :pos-z       (pos/pos-z block-pos)

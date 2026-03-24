@@ -352,7 +352,7 @@
         block-pos (get-pos tile)
         state     (tile-state tile)]
     (when block-pos
-      (merge {:gui-id metadata/gui-wireless-node
+      (merge {:gui-id 0
               :pos-x  (pos/pos-x block-pos)
               :pos-y  (pos/pos-y block-pos)
               :pos-z  (pos/pos-z block-pos)}

@@ -84,20 +84,19 @@
    :world world
    :pos pos})
 
-(defn open-node-gui
-  "Open Wireless Node GUI (legacy entrypoint used by blocks)."
-  [player world pos]
-  (open-gui player gui-meta/gui-wireless-node world pos))
+(defn open-gui-by-type
+  "Open GUI by container type keyword.
 
-(defn open-matrix-gui
-  "Open Wireless Matrix GUI (legacy entrypoint used by blocks)."
-  [player world pos]
-  (open-gui player gui-meta/gui-wireless-matrix world pos))
-
-(defn open-solar-gui
-  "Open Solar Generator GUI (legacy entrypoint used by blocks)."
-  [player world pos]
-  (open-gui player gui-meta/gui-solar-gen world pos))
+  Args:
+  - player: EntityPlayer instance
+  - container-type: Keyword (:node, :matrix, :solar, etc.)
+  - world: World instance
+  - pos: BlockPos instance"
+  [player container-type world pos]
+  (if-let [gui-id (gui-meta/get-gui-id-for-type container-type)]
+    (open-gui player gui-id world pos)
+    (throw (ex-info "No GUI registered for container type"
+                   {:container-type container-type}))))
 
 ;; ============================================================================
 ;; Registration (for platform-specific implementations)
