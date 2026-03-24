@@ -40,13 +40,12 @@
   (alter-var-root #'mcmod-config/*mod-id*
                   (constantly modid/MOD-ID))
 
-  ;; Register client screen factories into the unified mcmod GUI adapter.
-  (gui-adapter/register-screen-factory! :create-node-screen
-                                         screen-factory/create-node-screen)
-  (gui-adapter/register-screen-factory! :create-matrix-screen
-                                         screen-factory/create-matrix-screen)
-  (gui-adapter/register-screen-factory! :create-solar-screen
-                                         screen-factory/create-solar-screen)
+  ;; Auto-register all GUI screen factories
+  (doseq [gui-id (gui-adapter/get-all-gui-ids)]
+    (when-let [gui-type (platform-gui/get-gui-type gui-id)]
+      (gui-adapter/register-screen-factory!
+        (keyword (str "create-" (name gui-type) "-screen"))
+        (partial screen-factory/create-screen gui-type))))
 
   ;; Register slot validators used by platform GUI slot implementations.
   (slot-registry/register-slot-validator! :energy
@@ -99,13 +98,7 @@
 
      :get-gui-id-for-container #'platform-gui/get-gui-id-for-container
      :get-menu-type #'platform-gui/get-menu-type
-     :register-menu-type! #'platform-gui/register-menu-type!
-
-     :make-matrix-sync-packet #'platform-gui/make-matrix-sync-packet
-     :apply-matrix-sync-payload! #'platform-gui/apply-matrix-sync-payload!
-
-     :make-node-sync-packet #'platform-gui/make-node-sync-packet
-     :apply-node-sync-payload! #'platform-gui/apply-node-sync-payload!})
+     :register-menu-type! #'platform-gui/register-menu-type!})
 
   ;; Inject resource-location for mcmod (gui.components, client.resources) so they resolve paths without requiring config.modid
   (alter-var-root #'platform-res/*resource-location-fn*

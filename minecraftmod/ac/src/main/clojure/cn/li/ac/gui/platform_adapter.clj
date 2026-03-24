@@ -113,28 +113,6 @@
 (def client-container registry/get-client-container)
 
 ;; ============================================================================
-;; Re-export Sync Modules (Payload creation and application)
-;; ============================================================================
-
-;; Matrix sync packet helpers
-(defn make-matrix-sync-packet [source]
-  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/make-sync-packet)]
-    (f source)))
-
-(defn apply-matrix-sync-payload! [payload]
-  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/apply-matrix-sync-payload!)]
-    (f payload)))
-
-;; Node sync packet helpers
-(defn make-node-sync-packet [source]
-  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/make-sync-packet)]
-    (f source)))
-
-(defn apply-node-sync-payload! [payload]
-  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/apply-node-sync-payload!)]
-    (f payload)))
-
-;; ============================================================================
 ;; Unified GUI Sync System (Platform-Business Separation)
 ;; ============================================================================
 
@@ -172,14 +150,6 @@
     (if apply-fn
       (apply-fn payload)
       (log/debug "Unknown gui-id in sync payload:" gui-id))))
-
-;; ============================================================================
-;; Re-export Screen Factory (screen creation on client)
-;; ============================================================================
-
-(def create-node-screen screen-factory/create-node-screen)
-(def create-matrix-screen screen-factory/create-matrix-screen)
-(def create-solar-screen screen-factory/create-solar-screen)
 
 ;; ============================================================================
 ;; Adapter Guarantees

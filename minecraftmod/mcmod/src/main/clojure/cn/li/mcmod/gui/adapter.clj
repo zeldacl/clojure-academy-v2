@@ -93,20 +93,6 @@
   [gui-id]
   (registry-metadata/get-gui-screen-factory-fn-kw gui-id))
 
-(defn create-node-screen
-  "Adapter entrypoint used by platform client code."
-  [menu player-inventory title]
-  ((get-screen-factory-fn :create-node-screen) menu player-inventory title))
-
-(defn create-matrix-screen
-  "Adapter entrypoint used by platform client code."
-  [menu player-inventory title]
-  ((get-screen-factory-fn :create-matrix-screen) menu player-inventory title))
-
-(defn create-solar-screen
-  "Adapter entrypoint used by platform client code."
-  [menu player-inventory title]
-  ((get-screen-factory-fn :create-solar-screen) menu player-inventory title))
 
 ;; ============================================================================
 ;; Metadata queries (Group A)
@@ -272,17 +258,4 @@
 (defn register-set-tab-handler!
   []
   (delegate 'cn.li.mcmod.gui.tabbed-gui/register-set-tab-handler!))
-
-;; Networking payload helpers are still provided by the wireless implementation.
-(defn make-matrix-sync-packet [source]
-  ((platform-impl-fn! :make-matrix-sync-packet) source))
-
-(defn apply-matrix-sync-payload! [payload]
-  ((platform-impl-fn! :apply-matrix-sync-payload!) payload))
-
-(defn make-node-sync-packet [source]
-  ((platform-impl-fn! :make-node-sync-packet) source))
-
-(defn apply-node-sync-payload! [payload]
-  ((platform-impl-fn! :apply-node-sync-payload!) payload))
 

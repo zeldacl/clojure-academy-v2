@@ -51,38 +51,6 @@
       (.printStackTrace e)
       nil)))
 
-(defn create-node-screen
-  "Create Node GUI screen (platform-agnostic)
-  
-  Delegates to generic create-screen with :node configuration.
-  
-  Args:
-  - container-or-handler: Platform-specific container/handler wrapper
-  - player-inventory: Player inventory
-  - title: Text component
-  
-  Returns: CGuiScreenContainer instance or nil on error"
-  [container-or-handler player-inventory title]
-  (create-screen :node container-or-handler player-inventory title))
-
-(defn create-matrix-screen
-  "Create Matrix GUI screen (platform-agnostic)
-  
-  Delegates to generic create-screen with :matrix configuration.
-  
-  Args:
-  - container-or-handler: Platform-specific container/handler wrapper
-  - player-inventory: Player inventory
-  - title: Text component
-  
-  Returns: CGuiScreenContainer instance or nil on error"
-  [container-or-handler player-inventory title]
-  (create-screen :matrix container-or-handler player-inventory title))
-
-(defn create-solar-screen
-  "Create Solar Generator GUI screen (platform-agnostic)"
-  [container-or-handler player-inventory title]
-  (create-screen :solar container-or-handler player-inventory title))
 
 ;; ============================================================================
 ;; Design Notes
