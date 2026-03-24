@@ -10,27 +10,14 @@
             [cn.li.ac.gui.platform-adapter :as platform-gui]
             [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
             [cn.li.ac.gui.slot-validators :as slot-validators]
-            ;; Load all GUI definitions (so gui-dsl registry is populated)
-            [cn.li.ac.block.wireless-node.gui]
-            [cn.li.ac.block.wireless-matrix.gui]
-            [cn.li.ac.block.solar-gen.gui]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.block.multiblock-core :as mb-core]
             [cn.li.mcmod.events.dispatcher :as event-dispatcher]
-            [cn.li.ac.block.wireless-matrix.block :as matrix-block]
-            [cn.li.ac.block.wireless-node.block :as node-block]
-            [cn.li.ac.block.solar-gen.gui :as solar-gui]
             [cn.li.ac.wireless.world-data :as wd]
-            ;; Load all block definitions (so block-dsl registry is populated)
-            [cn.li.ac.block.wireless-node.block]
-            [cn.li.ac.block.wireless-matrix.block]
-            [cn.li.ac.block.solar-gen.block]
-            ;; Load all item definitions (so item-dsl registry is populated)
-            [cn.li.ac.item.components]
-            [cn.li.ac.item.constraint-plate]
-            [cn.li.ac.item.mat-core]
-            [cn.li.ac.item.media]))
+            ;; Auto-registration system
+            [cn.li.ac.registry.content-namespaces :as content-ns]
+            [cn.li.ac.registry.hooks :as hooks]))
 
 (defn init
   "Core init hook invoked by per-version entry classes."
@@ -111,10 +98,10 @@
   (event-metadata/init-event-metadata!)
   ;; Initialize wireless world data system
   (wd/init-world-data!)
-  ;; Register GUI network handlers
-  (matrix-block/register-network-handlers!)
-  (node-block/register-network-handlers!)
-  (solar-gui/register-network-handlers!)
+  ;; Load all content namespaces (triggers DSL macros and hook registration)
+  (content-ns/load-all!)
+  ;; Call all registered network handlers
+  (hooks/call-all-network-handlers!)
   ;; Register generic set-tab handler for tabbed GUIs (inv-window + panels)
   (tabbed-gui/register-set-tab-handler!))
 
@@ -144,8 +131,7 @@
   "Load renderer namespaces to trigger auto-registration.
   Called by mcmod during client initialization."
   []
-  (require 'cn.li.ac.block.wireless-matrix.render)
-  (require 'cn.li.ac.block.solar-gen.render))
+  (hooks/load-all-client-renderers!))
 
 ;; Register the callback with mcmod lifecycle system
 (when-let [register-fn (requiring-resolve 'cn.li.mcmod.lifecycle/register-client-init!)]

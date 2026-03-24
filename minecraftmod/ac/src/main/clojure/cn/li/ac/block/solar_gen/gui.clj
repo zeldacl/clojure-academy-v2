@@ -32,6 +32,7 @@
             [cn.li.ac.wireless.virtual-blocks :as vb]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.ac.wireless.node-connection :as node-conn]
+            [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
@@ -353,4 +354,14 @@
   :slot-changed-fn (fn [container slot-index]
                      (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/slot-changed!)]
                        (f container slot-index))))
+
+;; ============================================================================
+;; Auto-Registration Hooks
+;; ============================================================================
+
+;; Register network handlers with hook system
+(hooks/register-network-handler! register-network-handlers!)
+
+;; Register client renderer
+(hooks/register-client-renderer! 'cn.li.ac.block.solar-gen.render/init!)
 

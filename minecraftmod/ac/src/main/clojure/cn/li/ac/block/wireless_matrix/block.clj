@@ -29,6 +29,7 @@
             [cn.li.ac.wireless.helper :as helper]
             [cn.li.ac.wireless.network :as wireless-net]
             [cn.li.ac.wireless.gui.message-registry :as msg-registry]
+            [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessMatrix]))
 
@@ -596,3 +597,13 @@
                :on-break (handle-matrix-break)}
   :part {:registry-name "matrix_part"
          :model-parent "minecraft:block/block"})
+
+;; ============================================================================
+;; Part 10: Auto-Registration Hooks
+;; ============================================================================
+
+;; Register network handlers with hook system
+(hooks/register-network-handler! register-network-handlers!)
+
+;; Register client renderer
+(hooks/register-client-renderer! 'cn.li.ac.block.wireless-matrix.render/init!)

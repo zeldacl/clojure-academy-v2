@@ -32,6 +32,7 @@
             [cn.li.ac.wireless.network       :as wireless-net]
             [cn.li.ac.wireless.interfaces    :as winterfaces]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
+            [cn.li.ac.registry.hooks         :as hooks]
             [cn.li.mcmod.util.log            :as log])
   (:import [cn.li.acapi.wireless IWirelessNode]
            [cn.li.acapi.energy IEnergyCapable]))
@@ -660,3 +661,10 @@
   (doseq [[tier cfg] node-types]
     (log/info "  -" (name tier) ": max-energy=" (:max-energy cfg)))
   (log/info "  - Capabilities :wireless-node + :wireless-energy registered"))
+
+;; ============================================================================
+;; Auto-Registration Hooks
+;; ============================================================================
+
+;; Register network handlers with hook system
+(hooks/register-network-handler! register-network-handlers!)
