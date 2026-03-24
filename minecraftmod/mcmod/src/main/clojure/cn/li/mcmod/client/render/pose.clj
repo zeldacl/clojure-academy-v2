@@ -38,7 +38,7 @@
     (try
       (*y-rotation-fn* pose-stack angle-degrees)
       (catch Exception e
-        (log/error "Error applying Y-rotation:" ((ex-message e)))))
+        (log/error "Error applying Y-rotation:"(ex-message e))))
     (log/warn "No platform Y-rotation function bound; skipping rotation")))
 
 (defn push-pose
@@ -52,7 +52,7 @@
     (try
       (*push-pose-fn* pose-stack)
       (catch Exception e
-        (log/error "Error pushing pose:" ((ex-message e)))))
+        (log/error "Error pushing pose:"(ex-message e))))
     (log/warn "No platform push-pose function bound; skipping push")))
 
 (defn pop-pose
@@ -62,7 +62,7 @@
     (try
       (*pop-pose-fn* pose-stack)
       (catch Exception e
-        (log/error "Error popping pose:" ((ex-message e)))))
+        (log/error "Error popping pose:"(ex-message e))))
     (log/warn "No platform pop-pose function bound; skipping pop")))
 
 (defn translate
@@ -75,7 +75,7 @@
     (try
       (*translate-fn* pose-stack x y z)
       (catch Exception e
-        (log/error "Error translating pose-stack:" ((ex-message e)))))
+        (log/error "Error translating pose-stack:"(ex-message e))))
     (log/warn "No platform translate function bound; skipping translate")))
 
 (defn get-matrix
@@ -91,7 +91,7 @@
     (try
       (*get-matrix-fn* pose-stack)
       (catch Exception e
-        (log/error "Error getting pose-stack matrix:" ((ex-message e)))
+        (log/error "Error getting pose-stack matrix:"(ex-message e))
         (throw e)))
     (throw (ex-info "No platform matrix accessor bound for pose-stack"
                     {:hint "Call platform-impl/init-platform! to bind pose functions"}))))

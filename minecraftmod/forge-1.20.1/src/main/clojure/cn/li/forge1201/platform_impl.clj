@@ -300,6 +300,8 @@
   (eval
     '(extend-type net.minecraft.world.entity.player.Player
        cn.li.mcmod.platform.entity/IEntityOps
+       (entity-distance-to-sqr [^net.minecraft.world.entity.player.Player this x y z]
+         (.distanceToSqr this (double x) (double y) (double z)))
        (player-get-level [^net.minecraft.world.entity.player.Player this]
          (.level this))
        (player-get-name [^net.minecraft.world.entity.player.Player this]

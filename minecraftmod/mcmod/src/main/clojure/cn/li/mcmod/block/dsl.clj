@@ -242,12 +242,12 @@
                       block-state (world/world-get-block-state world pos)]
                   (if block-state true false))
                 (catch Exception e
-                  (log/debug "Error checking block at" rel-pos ":" ((ex-message e)))
+                  (log/debug "Error checking block at" rel-pos ":"(ex-message e))
                   false)))
             (or positions []))))
       
       (catch Exception e
-        (log/error "Error checking multi-block structure:" ((ex-message e)))
+        (log/error "Error checking multi-block structure:"(ex-message e))
         false))))
 
 ;; Create block specification

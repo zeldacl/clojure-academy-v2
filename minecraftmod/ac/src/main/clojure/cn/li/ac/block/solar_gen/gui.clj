@@ -184,7 +184,7 @@
         {:root main-widget :current (:current tech-ui)}
         main-widget))
     (catch Exception e
-      (log/error "Error creating Solar GUI:" ((ex-message e)))
+      (log/error "Error creating Solar GUI:"(ex-message e))
       (throw e))))
 
 (defn create-screen

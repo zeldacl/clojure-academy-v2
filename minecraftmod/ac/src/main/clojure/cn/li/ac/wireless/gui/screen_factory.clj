@@ -47,7 +47,7 @@
       cgui-screen)
     
     (catch Exception e
-      (log/error (str "Failed to create " (name gui-type) " screen:") ((ex-message e)))
+      (log/error (str "Failed to create " (name gui-type) " screen:")(ex-message e))
       (.printStackTrace e)
       nil)))
 

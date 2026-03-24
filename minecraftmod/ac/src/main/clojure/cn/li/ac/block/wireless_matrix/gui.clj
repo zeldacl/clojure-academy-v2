@@ -123,9 +123,9 @@
                         :initialized (boolean (get response :ssid))})]
             (callback data))
           (catch Exception e
-            (log/error "Error processing gather-info response:" ((ex-message e)))))))
+            (log/error "Error processing gather-info response:"(ex-message e))))))
     (catch Exception e
-      (log/error "Error sending gather-info:" ((ex-message e))))))
+      (log/error "Error sending gather-info:"(ex-message e)))))
 
 (defn send-init-network
   "Initialize network on server
@@ -146,9 +146,9 @@
         (try
           (callback (get response :success false))
           (catch Exception e
-            (log/error "Error processing init response:" ((ex-message e)))))))
+            (log/error "Error processing init response:"(ex-message e))))))
     (catch Exception e
-      (log/error "Error sending init:" ((ex-message e))))))
+      (log/error "Error sending init:"(ex-message e)))))
 
 (defn send-change-ssid
   "Change network SSID
@@ -163,7 +163,7 @@
       (assoc (net-helpers/tile-pos-payload tile)
              :new-ssid new-ssid))
     (catch Exception e
-      (log/error "Error sending change-ssid:" ((ex-message e))))))
+      (log/error "Error sending change-ssid:"(ex-message e)))))
 
 (defn send-change-password
   "Change network password
@@ -178,7 +178,7 @@
       (assoc (net-helpers/tile-pos-payload tile)
              :new-password new-password))
     (catch Exception e
-      (log/error "Error sending change-password:" ((ex-message e))))))
+      (log/error "Error sending change-password:"(ex-message e)))))
 
 ;; ============================================================================
 ;; Container Creation (from matrix_container.clj)
@@ -193,7 +193,7 @@
       (let [state (or (platform-be/get-custom-state tile) wm/matrix-default-state)]
         [tile state])
       (catch Exception e
-        (log/warn "Could not resolve customState from BE:" ((ex-message e)))
+        (log/warn "Could not resolve customState from BE:"(ex-message e))
         [tile {}]))))
 
 (defn create-container
@@ -434,7 +434,7 @@
               y)
             (tech-ui/add-sepline info-area "wireless_noinit" y)))))
     (catch Exception e
-      (log/error "Error rebuilding info area:" ((ex-message e))))))
+      (log/error "Error rebuilding info area:"(ex-message e)))))
 
 ;; ============================================================================
 ;; Main GUI Factory
@@ -487,7 +487,7 @@
         {:root main-widget :current (:current tech-ui)}
         main-widget))
     (catch Exception e
-      (log/error "Error creating Matrix GUI:" ((ex-message e)))
+      (log/error "Error creating Matrix GUI:"(ex-message e))
       (throw e))))
 
 ;; ============================================================================

@@ -75,7 +75,7 @@
     (try
       (handler (:data packet) player)
       (catch Exception e
-        (log/info "Error handling packet:" ((ex-message e)))
+        (log/info "Error handling packet:"(ex-message e))
         (.printStackTrace e)))
     (log/info "No handler for packet type:" (:type packet))))
 

@@ -158,7 +158,7 @@
     (tick-container! container)
     true
     (catch Exception e
-      (log/error "Error ticking container:" ((ex-message e)))
+      (log/error "Error ticking container:"(ex-message e))
       false)))
 
 (defn safe-validate
@@ -173,7 +173,7 @@
   (try
     (boolean (validate-container container player))
     (catch Exception e
-      (log/error "Error validating container:" ((ex-message e)))
+      (log/error "Error validating container:"(ex-message e))
       false)))
 
 (defn safe-sync!
@@ -188,7 +188,7 @@
     (sync-container! container)
     true
     (catch Exception e
-      (log/error "Error syncing container:" ((ex-message e)))
+      (log/error "Error syncing container:"(ex-message e))
       false)))
 
 (defn safe-handle-button-click!
@@ -205,7 +205,7 @@
     (handle-button-click! container button-id player)
     true
     (catch Exception e
-      (log/error "Error handling button click:" ((ex-message e)))
+      (log/error "Error handling button click:"(ex-message e))
       false)))
 
 (defn safe-handle-text-input!
@@ -223,7 +223,7 @@
     (handle-text-input! container field-id text player)
     true
     (catch Exception e
-      (log/error "Error handling text input:" ((ex-message e)))
+      (log/error "Error handling text input:"(ex-message e))
       false)))
 
 (defn safe-close!
@@ -238,7 +238,7 @@
     (close-container! container)
     true
     (catch Exception e
-      (log/error "Error closing container:" ((ex-message e)))
+      (log/error "Error closing container:"(ex-message e))
       false)))
 
 ;; ============================================================================
@@ -264,7 +264,7 @@
         0)
       :else 0)
     (catch Exception e
-      (log/error "Error getting slot count:" ((ex-message e)))
+      (log/error "Error getting slot count:"(ex-message e))
       0)))
 
 (defn slot-get-item
@@ -283,7 +283,7 @@
         (f container slot-index))
       :else nil)
     (catch Exception e
-      (log/error "Error getting slot item:" ((ex-message e)))
+      (log/error "Error getting slot item:"(ex-message e))
       nil)))
 
 (defn slot-set-item!
@@ -302,7 +302,7 @@
         (f container slot-index item-stack))
       :else nil)
     (catch Exception e
-      (log/error "Error setting slot item:" ((ex-message e)))
+      (log/error "Error setting slot item:"(ex-message e))
       nil)))
 
 (defn slot-can-place?
@@ -324,7 +324,7 @@
         true)
       :else true)
     (catch Exception e
-      (log/error "Error checking slot placement:" ((ex-message e)))
+      (log/error "Error checking slot placement:"(ex-message e))
       false)))
 
 (defn slot-changed!
@@ -343,7 +343,7 @@
         (f container slot-index))
       :else nil)
     (catch Exception e
-      (log/error "Error in slot changed notification:" ((ex-message e)))
+      (log/error "Error in slot changed notification:"(ex-message e))
       nil)))
 
 ;; ============================================================================

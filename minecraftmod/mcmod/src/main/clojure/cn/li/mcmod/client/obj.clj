@@ -271,7 +271,7 @@
                 ny (float (:y normal))
                 nz (float (:z normal))]
             (buffer/submit-vertex vc matrix x y z
-                                  (int 255) (int 255) (int 255) (int 255)
+                                  1.0 1.0 1.0 1.0
                                   u v (int packed-overlay) packed-light
                                   nx ny nz)))))))
 

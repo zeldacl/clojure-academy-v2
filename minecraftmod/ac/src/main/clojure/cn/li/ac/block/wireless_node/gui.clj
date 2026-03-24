@@ -178,7 +178,7 @@
     (try
       [tile (or (platform-be/get-custom-state tile) {})]
       (catch Exception e
-        (log/warn "Could not resolve customState from BE:" ((ex-message e)))
+        (log/warn "Could not resolve customState from BE:"(ex-message e))
         [tile {}]))))
 
 (defn create-container [tile player]
@@ -402,7 +402,7 @@
             y)
           (tech-ui/add-property info-area "Node Name" @(:ssid container) y))))
     (catch Exception e
-      (log/error "Error building info area:" ((ex-message e))))))
+      (log/error "Error building info area:"(ex-message e)))))
 
 ;; ============================================================================
 ;; Main GUI Factory
@@ -458,7 +458,7 @@
         {:root main-widget :current (:current tech-ui)}
         main-widget))
     (catch Exception e
-      (log/error "Error creating Node GUI:" ((ex-message e)))
+      (log/error "Error creating Node GUI:"(ex-message e))
       (throw e))))
 
 ;; ============================================================================

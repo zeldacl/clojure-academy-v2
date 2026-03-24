@@ -262,7 +262,7 @@
         (log/info "Successfully parsed XML layout:" xml-path)
         result))
     (catch Exception e
-      (log/error "Failed to parse XML layout:" xml-path "-" ((ex-message e)))
+      (log/error "Failed to parse XML layout:" xml-path "-"(ex-message e))
       (throw e))))
 
 ;; ============================================================================

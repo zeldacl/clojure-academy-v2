@@ -59,7 +59,7 @@
       
       {:id "inv" :window page-widget})
     (catch Exception e
-      (log/error "Error creating inventory page:" ((ex-message e)))
+      (log/error "Error creating inventory page:"(ex-message e))
       {:id "inv" :window (cgui/create-container :pos [0 0] :size [gui-width gui-height])})))
 
 ;; ============================================================================

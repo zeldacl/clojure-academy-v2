@@ -299,7 +299,7 @@ Structure:
               (swap! slots-atom dissoc slot))
             (swap! slots-atom assoc output-slot result))
           (catch Exception e
-            (log/info "Processing failed:" ((ex-message e)))))))))
+            (log/info "Processing failed:"(ex-message e))))))))
 
 ;; GUI instance management
 (defrecord GuiInstance [spec player world pos data])

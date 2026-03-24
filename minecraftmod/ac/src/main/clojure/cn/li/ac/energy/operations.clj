@@ -185,7 +185,7 @@
                         actual-transfer leftover))
       leftover)
     (catch Exception e
-      (log/info (format "Wireless transfer error: %s" ((ex-message e))))
+      (log/info (format "Wireless transfer error: %s"(ex-message e)))
       amount)))
 
 ;; ============================================================================
