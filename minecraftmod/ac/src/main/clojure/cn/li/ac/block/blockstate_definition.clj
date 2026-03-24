@@ -1,14 +1,17 @@
 (ns cn.li.ac.block.blockstate-definition
   "BlockState定义层 - 独立于平台
-   
+
    定义所有block的blockstate结构、属性和model对应关系。
    这些定义在core中，可被所有平台（forge, fabric）使用。
-   
-  每个平台的datagen实现可以根据这些定义调用对应的API生成JSON文件。"
+
+  每个平台的datagen实现可以根据这些定义调用对应的API生成JSON文件。
+
+  Node-specific blockstate logic has been extracted to wireless-node/blockstate.clj
+  to colocate it with the node block implementation."
   (:require [clojure.string :as str]
             [cn.li.mcmod.config :as mcmod-config]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.ac.block.wireless-node.block :as wireless-node]))
+            [cn.li.ac.block.wireless-node.blockstate :as node-blockstate]))
 
 ;; ============================================================================
 ;; BlockState部分定义
@@ -52,65 +55,17 @@
               :models [(str (mod-id) ":block/" registry-name)]}])])))
 
 ;; ============================================================================
-;; Node Blocks (多维度动态BlockState)
-;; 统一从 wireless_node.clj 读取定义，避免重复来源
+;; Node Blocks - Delegated to wireless-node/blockstate.clj
 ;; ============================================================================
-
-(def NODE_BLOCKS
-  (let [energy-min (get-in wireless-node/block-state-properties [:energy :min])
-        energy-max (get-in wireless-node/block-state-properties [:energy :max])
-        connected-type (get-in wireless-node/block-state-properties [:connected :type])]
-    (into {}
-          (for [node-type (sort (keys wireless-node/node-types))
-                :let [node-type-name (name node-type)
-                      block-key (keyword (str "wireless-node-" node-type-name))
-                      registry-name (str "node_" node-type-name)
-                      base-model (str (mod-id) ":block/" registry-name "_base")
-                      energy-models (vec (for [level (range energy-min (inc energy-max))]
-                                           {:condition {:energy (str level)}
-                                            :models [(str (mod-id) ":block/" registry-name "_energy_" level)]}))
-                      connected-model {:condition {:connected "true"}
-                                       :models [(str (mod-id) ":block/" registry-name "_connected")]}]]
-            [block-key
-             (BlockStateDefinition.
-              registry-name
-              {:energy {:min energy-min :max energy-max}
-               :connected {:type connected-type}}
-              (vec (concat
-                    [{:condition nil :models [base-model]}]
-                    energy-models
-                    [connected-model])))]))))
+;; Node-specific blockstate definitions have been moved to
+;; cn.li.ac.block.wireless-node.blockstate to colocate them with
+;; the node block implementation.
 
 ;; ============================================================================
-;; Node 模型名解析（与 NODE_BLOCKS 共用 wireless-node 为单一数据源）
+;; Node Model Parsing - Delegated to wireless-node/blockstate.clj
 ;; ============================================================================
-
-(defn- node-model-pattern
-  "从 wireless-node 生成 node 模型名的正则，避免与 NODE_BLOCKS 重复维护 node 类型与变体。"
-  []
-  (let [node-type-str (str "(" (str/join "|" (map name (sort (keys wireless-node/node-types)))) ")")
-        variant-str   "(base|energy_\\d+|connected)"]
-    (re-pattern (str "node_" node-type-str "_" variant-str))))
-
-(defn- parse-node-model-name
-  "解析 node 模型名，返回 [node-type variant] 或 nil。
-   energy 范围来自 wireless-node/block-state-properties，与 NODE_BLOCKS 一致。"
-  [model-name]
-  (when-let [[_ node-type variant] (re-matches (node-model-pattern) model-name)]
-    [node-type variant]))
-
-(defn- variant->energy-level
-  "根据 variant 字符串得到能量等级（用于纹理）。
-   范围与 wireless-node/block-state-properties 一致，与 NODE_BLOCKS 生成的 model 一致。"
-  [variant]
-  (let [raw (cond
-              (#{"base" "connected"} variant) 0
-              (str/starts-with? variant "energy_") (Integer/parseInt (subs variant 7))
-              :else 0)
-        {:keys [min max]} (get-in wireless-node/block-state-properties [:energy])
-        min-v (or min 0)
-        max-v (or max 4)]
-    (clojure.core/max min-v (clojure.core/min max-v raw))))
+;; Node model name parsing logic has been moved to
+;; cn.li.ac.block.wireless-node.blockstate
 
 ;; ============================================================================
 ;; 模型纹理配置 (业务逻辑)
@@ -118,27 +73,23 @@
 
 (defn get-model-texture-config
   "获取模型的纹理配置
-   
+
    此函数包含所有与模型纹理相关的业务逻辑。
    框架层调用此函数获取纹理配置，然后使用Forge API生成模型。
-   
-   node 的 energy/connected 变体与 NODE_BLOCKS 一致，均以 wireless-node 为单一数据源。
-   
+
+   Node-specific texture logic is delegated to wireless-node/blockstate.clj
+
    参数：
      model-name: 模型名称（不含命名空间），如 \"node_basic_base\"
-   
+
    返回：
      {:side \"texture-path\" :vert \"texture-path\"} - cube模型的纹理配置
      nil - 使用默认处理（cubeAll）"
   [model-name]
-  (when-let [[node-type variant] (parse-node-model-name model-name)]
-    (let [energy-level (variant->energy-level variant)
-          top-texture  (if (= variant "connected")
-                        (str (mod-id) ":block/node_top_1")
-                        (str (mod-id) ":block/node_top_0"))
-          side-texture (str (mod-id) ":block/node_" node-type "_side_" energy-level)]
-      {:side side-texture
-       :vert top-texture})))
+  ;; Delegate to node-specific logic if it's a node model
+  (or (node-blockstate/get-node-model-texture-config model-name)
+      ;; Simple blocks use default cubeAll (return nil)
+      nil))
 
 ;; ============================================================================
 ;; 查询接口
@@ -146,23 +97,23 @@
 
 (defn get-block-state-definition
   "获取指定block的BlockState定义
-   
+
    参数：
      block-key: 关键字，如 :wireless-node-basic, :wireless-matrix
-   
+
    返回：
      BlockStateDefinition 或 nil"
   [block-key]
   (or (get SIMPLE_BLOCKS block-key)
-      (get NODE_BLOCKS block-key)))
+      (node-blockstate/get-node-blockstate-definition block-key)))
 
 (defn get-all-definitions
   "获取所有block的BlockState定义
-   
+
    返回：
      map of block-key -> BlockStateDefinition"
   []
-  (merge SIMPLE_BLOCKS NODE_BLOCKS))
+  (merge SIMPLE_BLOCKS (node-blockstate/get-all-node-definitions)))
 
 (defn get-definitions-for-platform
   "获取特定平台的block定义
@@ -190,29 +141,31 @@
 
 (defn is-node-block?
   "判断block是否为node块（basic/standard/advanced）
-   
+
+   Delegates to wireless-node/blockstate.clj
+
    参数：
      registry-name: block的registry name
-   
+
    返回：
      true 如果是node块"
   [registry-name]
-  (boolean (re-find #"^node_(basic|standard|advanced)" registry-name)))
+  (node-blockstate/is-node-block? registry-name))
 
 (defn get-item-model-id
   "获取block对应的物品模型ID
-   
+
    对于node块，使用_base变体；其他块使用registry-name
-   
+
    参数：
      mod-id: 模组ID
      registry-name: block的registry name
-   
+
    返回：
      物品模型ID字符串"
   [mod-id registry-name]
-  (if (is-node-block? registry-name)
-    (str mod-id ":block/" registry-name "_base")
+  (if (node-blockstate/is-node-block? registry-name)
+    (node-blockstate/get-node-item-model-id mod-id registry-name)
     (str mod-id ":block/" registry-name)))
 
 (comment
