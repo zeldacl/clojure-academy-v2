@@ -44,8 +44,6 @@
 (def slot-changed! dispatcher/slot-changed!)
 
 (def get-container-type dispatcher/get-container-type)
-(def node-container? dispatcher/node-container?)
-(def matrix-container? dispatcher/matrix-container?)
 
 ;; ============================================================================
 ;; Re-export GUI Metadata

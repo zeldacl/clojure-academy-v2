@@ -552,4 +552,28 @@
                   (f container data)))
   :payload-sync-apply-fn (fn [payload]
                            (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/apply-node-sync-payload!)]
-                             (f payload))))
+                             (f payload)))
+  :validate-fn (fn [container player]
+                 (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/still-valid?)]
+                   (f container player)))
+  :close-fn (fn [container]
+              (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/on-close)]
+                (f container)))
+  :button-click-fn (fn [container button-id player]
+                     (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/handle-button-click!)]
+                       (f container button-id player)))
+  :slot-count-fn (fn [container]
+                   (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/get-slot-count)]
+                     (f container)))
+  :slot-get-fn (fn [container slot-index]
+                 (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/get-slot-item)]
+                   (f container slot-index)))
+  :slot-set-fn (fn [container slot-index item-stack]
+                 (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/set-slot-item!)]
+                   (f container slot-index item-stack)))
+  :slot-can-place-fn (fn [container slot-index item-stack]
+                       (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/can-place-item?)]
+                         (f container slot-index item-stack)))
+  :slot-changed-fn (fn [container slot-index]
+                     (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.gui/slot-changed!)]
+                       (f container slot-index))))

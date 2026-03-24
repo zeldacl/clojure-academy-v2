@@ -4,32 +4,10 @@
   This namespace provides unified interfaces for container operations,
   eliminating the need for platform-specific instanceof checks and cond branching.
 
-  Uses protocols to achieve polymorphic dispatch based on container type."
-  (:require [cn.li.mcmod.util.log :as log]))
+  Uses metadata-driven dispatch via GUI registry."
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.gui.dsl :as gui-dsl]))
 
-;; Function resolution cache to avoid repeated requiring-resolve in hot paths
-(defonce ^:private fn-cache (atom {}))
-
-(defn- resolve-cached [sym]
-  (or (@fn-cache sym)
-      (when-let [f (requiring-resolve sym)]
-        (swap! fn-cache assoc sym f)
-        f)))
-
-(defn node-container?
-  "Type check via :container-type — stable regardless of field changes."
-  [container]
-  (= (:container-type container) :node))
-
-(defn matrix-container?
-  "Type check via :container-type — stable regardless of field changes."
-  [container]
-  (= (:container-type container) :matrix))
-
-(defn solar-container?
-  "Type check via :container-type — stable regardless of field changes."
-  [container]
-  (= (:container-type container) :solar))
 
 ;; ============================================================================
 ;; Container Operation Protocol
@@ -63,57 +41,36 @@
 (extend-protocol IContainerOperations
   Object
   (tick-container! [container]
-    (cond
-      (node-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/tick!)] (f container))
-      (matrix-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/tick!)] (f container))
-      (solar-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/tick!)] (f container))
-      :else (log/warn "Unknown container type for tick:" (type container))))
+    (if-let [cfg (gui-dsl/get-config-by-container container)]
+      (when-let [f (:tick-fn cfg)] (f container))
+      (log/warn "Unknown container type for tick")))
 
   (validate-container [container player]
-    (cond
-      (node-container? container)
-      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/still-valid?)] (f container player) false)
-      (matrix-container? container)
-      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/still-valid?)] (f container player) false)
-      (solar-container? container)
-      (if-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/still-valid?)] (f container player) false)
-      :else false))
+    (if-let [cfg (gui-dsl/get-config-by-container container)]
+      (if-let [f (:validate-fn cfg)]
+        (boolean (f container player))
+        true)
+      false))
 
   (sync-container! [container]
-    (cond
-      (node-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/sync-to-client!)] (f container))
-      (matrix-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/sync-to-client!)] (f container))
-      (solar-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/sync-to-client!)] (f container))
-      :else (log/warn "Unknown container type for sync:" (type container))))
+    (if-let [cfg (gui-dsl/get-config-by-container container)]
+      (when-let [f (:sync-get cfg)] (f container))
+      (log/warn "Unknown container type for sync")))
 
   (handle-button-click! [container button-id player]
-    (cond
-      (node-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/handle-button-click!)] (f container button-id player))
-      (matrix-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/handle-button-click!)] (f container button-id player))
-      (solar-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/handle-button-click!)] (f container button-id player))
-      :else (log/warn "Unknown container type for button click:" (type container))))
+    (if-let [cfg (gui-dsl/get-config-by-container container)]
+      (when-let [f (:button-click-fn cfg)] (f container button-id player))
+      (log/warn "Unknown container type for button click")))
 
-  (handle-text-input! [container _field-id _text _player]
-    (log/warn "handle-text-input! not implemented for container type:" (type container)))
+  (handle-text-input! [container field-id text player]
+    (if-let [cfg (gui-dsl/get-config-by-container container)]
+      (when-let [f (:text-input-fn cfg)] (f container field-id text player))
+      (log/warn "Unknown container type for text input")))
 
   (close-container! [container]
-    (cond
-      (node-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/on-close)] (f container))
-      (matrix-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/on-close)] (f container))
-      (solar-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/on-close)] (f container))
-      :else (log/warn "Unknown container type for close:" (type container)))))
+    (if-let [cfg (gui-dsl/get-config-by-container container)]
+      (when-let [f (:close-fn cfg)] (f container))
+      (log/warn "Unknown container type for close"))))
 
 ;; ============================================================================
 ;; Container Type Queries
@@ -121,23 +78,14 @@
 
 (defn get-container-type
   "Get the type identifier for a container
-  
+
   Args:
   - container: NodeContainer or MatrixContainer
-  
+
   Returns: :node or :matrix"
   [container]
-  (cond
-    (node-container? container)
-    :node
-    
-    (matrix-container? container)
-    :matrix
-
-    (solar-container? container)
-    :solar
-    
-    :else
+  (if-let [cfg (gui-dsl/get-config-by-container container)]
+    (:gui-type cfg)
     (do
       (log/warn "Unknown container type:" (type container))
       :unknown)))
@@ -249,20 +197,11 @@
   "Get tile slot count for a container. Returns 0 for unknown containers."
   [container]
   (try
-    (cond
-      (node-container? container)
-      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/get-slot-count)]
+    (if-let [cfg (gui-dsl/get-config-by-container container)]
+      (if-let [f (:slot-count-fn cfg)]
         (f container)
         0)
-      (matrix-container? container)
-      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/get-slot-count)]
-        (f container)
-        0)
-      (solar-container? container)
-      (if-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/get-slot-count)]
-        (f container)
-        0)
-      :else 0)
+      0)
     (catch Exception e
       (log/error "Error getting slot count:"(ex-message e))
       0)))
@@ -271,17 +210,9 @@
   "Get slot item as ItemStack (or nil/empty when unavailable)."
   [container slot-index]
   (try
-    (cond
-      (node-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/get-slot-item)]
-        (f container slot-index))
-      (matrix-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/get-slot-item)]
-        (f container slot-index))
-      (solar-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/get-slot-item)]
-        (f container slot-index))
-      :else nil)
+    (when-let [cfg (gui-dsl/get-config-by-container container)]
+      (when-let [f (:slot-get-fn cfg)]
+        (f container slot-index)))
     (catch Exception e
       (log/error "Error getting slot item:"(ex-message e))
       nil)))
@@ -290,17 +221,9 @@
   "Set slot item. Nil stack clears the slot."
   [container slot-index item-stack]
   (try
-    (cond
-      (node-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/set-slot-item!)]
-        (f container slot-index item-stack))
-      (matrix-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/set-slot-item!)]
-        (f container slot-index item-stack))
-      (solar-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/set-slot-item!)]
-        (f container slot-index item-stack))
-      :else nil)
+    (when-let [cfg (gui-dsl/get-config-by-container container)]
+      (when-let [f (:slot-set-fn cfg)]
+        (f container slot-index item-stack)))
     (catch Exception e
       (log/error "Error setting slot item:"(ex-message e))
       nil)))
@@ -309,20 +232,11 @@
   "Check whether a stack may be placed in a slot."
   [container slot-index item-stack]
   (try
-    (cond
-      (node-container? container)
-      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/can-place-item?)]
+    (if-let [cfg (gui-dsl/get-config-by-container container)]
+      (if-let [f (:slot-can-place-fn cfg)]
         (boolean (f container slot-index item-stack))
         true)
-      (matrix-container? container)
-      (if-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/can-place-item?)]
-        (boolean (f container slot-index item-stack))
-        true)
-      (solar-container? container)
-      (if-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/can-place-item?)]
-        (boolean (f container slot-index item-stack))
-        true)
-      :else true)
+      false)
     (catch Exception e
       (log/error "Error checking slot placement:"(ex-message e))
       false)))
@@ -331,17 +245,9 @@
   "Notify container that slot content changed."
   [container slot-index]
   (try
-    (cond
-      (node-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-node.gui/slot-changed!)]
-        (f container slot-index))
-      (matrix-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.wireless-matrix.gui/slot-changed!)]
-        (f container slot-index))
-      (solar-container? container)
-      (when-let [f (resolve-cached 'cn.li.ac.block.solar-gen.gui/slot-changed!)]
-        (f container slot-index))
-      :else nil)
+    (when-let [cfg (gui-dsl/get-config-by-container container)]
+      (when-let [f (:slot-changed-fn cfg)]
+        (f container slot-index)))
     (catch Exception e
       (log/error "Error in slot changed notification:"(ex-message e))
       nil)))
@@ -352,30 +258,36 @@
 
 ;; This dispatcher provides:
 ;;
-;; 1. **Protocol-Based Dispatch**:
-;;    - Uses Clojure protocols for polymorphic method dispatch
-;;    - No instanceof checks or cond branching needed
-;;    - Extensible: new container types just extend protocol
+;; 1. **Metadata-Driven Dispatch**:
+;;    - Uses GUI registry to look up handlers by container predicate
+;;    - No hardcoded type checks or cond branching needed
+;;    - Extensible: new container types just register via defgui
 ;;
 ;; 2. **Unified Interface**:
 ;;    - tick-container! - Lifecycle tick
 ;;    - validate-container - Permission check
 ;;    - sync-container! - Data synchronization
+;;    - handle-button-click! - Button interactions
+;;    - handle-text-input! - Text field interactions
+;;    - close-container! - Cleanup on close
 ;;
-;; 3. **Type Queries**:
-;;    - get-container-type: :node/:matrix/:unknown
-;;    - node-container?, matrix-container?: predicates
+;; 3. **Slot Operations**:
+;;    - slot-count, slot-get-item, slot-set-item!
+;;    - slot-can-place?, slot-changed!
 ;;
-;; 4. **Error Handling**:
+;; 4. **Type Queries**:
+;;    - get-container-type: returns :gui-type from metadata
+;;
+;; 5. **Error Handling**:
 ;;    - safe-* wrappers catch exceptions
 ;;    - Return sensible defaults on error
 ;;    - Log errors for debugging
 ;;
 ;; Benefits:
-;; - Eliminates repetitive (instance? + cond) code
-;; - Single dispatch point for all platforms
-;; - Easy to add new container types
+;; - Zero dispatcher changes when adding new GUIs
+;; - Single source of truth in defgui declarations
 ;; - Clean separation of concerns
+;; - Easy to add new container types
 ;;
 ;; Usage in platform bridge:
 ;;   (defn -tick [this]

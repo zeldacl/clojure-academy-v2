@@ -45,6 +45,19 @@ Structure:
    sync-apply
    payload-sync-apply-fn
 
+   ;; Operation handlers
+   validate-fn
+   close-fn
+   button-click-fn
+   text-input-fn
+
+   ;; Slot operation handlers
+   slot-count-fn
+   slot-get-fn
+   slot-set-fn
+   slot-can-place-fn
+   slot-changed-fn
+
    ;; Legacy/generic GUI layout fields
    title width height slots buttons labels background])
 
@@ -138,6 +151,17 @@ Structure:
                 :sync-get (:sync-get options)
                 :sync-apply (:sync-apply options)
                 :payload-sync-apply-fn (:payload-sync-apply-fn options)
+                ;; Operation handlers
+                :validate-fn (:validate-fn options)
+                :close-fn (:close-fn options)
+                :button-click-fn (:button-click-fn options)
+                :text-input-fn (:text-input-fn options)
+                ;; Slot operation handlers
+                :slot-count-fn (:slot-count-fn options)
+                :slot-get-fn (:slot-get-fn options)
+                :slot-set-fn (:slot-set-fn options)
+                :slot-can-place-fn (:slot-can-place-fn options)
+                :slot-changed-fn (:slot-changed-fn options)
                 ;; Legacy/generic fields
                 :title (or (:title options) "GUI")
                 :width (or (:width options) default-gui-width)
@@ -235,6 +259,15 @@ Structure:
   (some (fn [[gui-id spec]]
           (when (= (:gui-type spec) gui-type)
             gui-id))
+        (:by-gui-id @gui-registry)))
+
+(defn get-config-by-container
+  "Get GUI config by testing container against all registered predicates."
+  [container]
+  (some (fn [[_gui-id spec]]
+          (when-let [pred (:container-predicate spec)]
+            (when (pred container)
+              spec)))
         (:by-gui-id @gui-registry)))
 
 ;; Main macro: defgui

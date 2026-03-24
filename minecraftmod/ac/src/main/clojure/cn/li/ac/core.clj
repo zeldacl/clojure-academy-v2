@@ -96,8 +96,6 @@
      :slot-can-place? #'platform-gui/slot-can-place?
 
      :get-container-type #'platform-gui/get-container-type
-     :node-container? #'platform-gui/node-container?
-     :matrix-container? #'platform-gui/matrix-container?
 
      :get-gui-id-for-container #'platform-gui/get-gui-id-for-container
      :get-menu-type #'platform-gui/get-menu-type
