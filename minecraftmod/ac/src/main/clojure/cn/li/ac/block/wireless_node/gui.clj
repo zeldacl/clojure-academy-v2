@@ -5,7 +5,7 @@
   - GUI layout and component builders
   - Client-side network message senders
   - GUI interaction logic
-  - Container atom management
+  - Container atom management (generated from schema)
 
   Must be loaded via side-checked requiring-resolve from platform layer.
 
@@ -35,6 +35,7 @@
             [cn.li.ac.wireless.gui.container-schema :as schema]
             [cn.li.ac.wireless.gui.sync-helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.gui-metadata :as metadata]
+            [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessNode]))
@@ -75,25 +76,90 @@
 (def gui-height tech-ui/gui-height)
 
 ;; ============================================================================
-;; Field Schema (from node_container.clj)
+;; Schema-Based Generation (Client-Side)
 ;; ============================================================================
 
-(def node-fields
-  [{:key :energy        :init (fn [s] (int (get s :energy 0.0)))          :sync? true  :coerce int     :close-reset 0}
-   {:key :max-energy    :init (fn [s] (int (get s :max-energy 15000)))     :sync? true  :coerce int     :close-reset 0}
-   {:key :node-type     :init (fn [s] (keyword (get s :node-type :basic))) :sync? true  :coerce keyword :close-reset :basic}
-   {:key :is-online     :init (fn [s] (boolean (get s :enabled false)))    :sync? true  :payload-key :enabled :coerce boolean :close-reset false}
-   {:key :ssid          :init (fn [s] (str (get s :node-name "Unnamed")))  :sync? true  :payload-key :node-name :coerce str :close-reset ""}
-   {:key :password      :init (fn [s] (str (get s :password "")))          :sync? true  :coerce str     :close-reset ""}
-   {:key :transfer-rate :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}
-   {:key :capacity      :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}
-   {:key :max-capacity  :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}
-   {:key :charge-ticker :init (fn [_] 0)                                   :sync? false :coerce int     :close-reset 0}
-   {:key :sync-ticker   :init (fn [_] 0)                                   :sync? false :coerce int     :close-reset 0}
-   {:key :tab-index     :init (fn [_] 0)                                   :sync? true  :coerce int     :close-reset 0}])
+(defn- build-gui-atoms
+  "Generate GUI container atoms from unified schema."
+  [schema tile]
+  (let [state (or (platform-be/get-custom-state tile) {})]
+    (into {}
+      (for [field schema
+            :when (or (:gui-sync? field) (:gui-only? field))
+            :let [k (:gui-container-key field (:key field))
+                  init-fn (or (:gui-init field)
+                              (fn [s] (get s (:key field) (:default field))))]]
+        [k (atom (init-fn state))]))))
 
+(defn- build-sync-to-client-fn
+  "Generate sync-to-client! function from schema."
+  [schema]
+  (fn [container]
+    (let [tile (:tile-entity container)
+          state (or (common/get-tile-state tile) {})]
+      ;; Reset all gui-sync? atoms
+      (doseq [field schema
+              :when (:gui-sync? field)
+              :let [container-key (:gui-container-key field (:key field))
+                    state-key (:key field)
+                    coerce-fn (or (:gui-coerce field) identity)
+                    value (get state state-key (:default field))]]
+        (when-let [atom-ref (get container container-key)]
+          (reset! atom-ref (coerce-fn value))))
+      ;; Handle special sync logic (throttled queries, etc.)
+      (when-let [ticker (:sync-ticker container)]
+        (sync-helpers/with-throttled-sync! ticker 100
+          (fn [] (sync-helpers/query-node-network-capacity! container))))
+      ;; Calculate transfer-rate from charging flags
+      (when-let [rate-atom (:transfer-rate container)]
+        (let [rate (cond
+                     (and (:charging-in state) (:charging-out state)) 200
+                     (:charging-in state) 100
+                     (:charging-out state) 100
+                     :else 0)]
+          (reset! rate-atom rate))))))
+
+(defn- build-get-sync-data-fn
+  "Generate get-sync-data function from schema."
+  [schema]
+  (fn [container]
+    (into {}
+      (for [field schema
+            :when (:gui-sync? field)
+            :let [k (:gui-container-key field (:key field))]]
+        [k (when-let [a (get container k)] @a)]))))
+
+(defn- build-apply-sync-data-fn
+  "Generate apply-sync-data! function from schema."
+  [schema]
+  (fn [container data]
+    (doseq [field schema
+            :when (:gui-sync? field)
+            :let [k (:gui-container-key field (:key field))
+                  coerce-fn (or (:gui-coerce field) identity)]]
+      (when-let [atom-ref (get container k)]
+        (when (contains? data k)
+          (reset! atom-ref (coerce-fn (get data k))))))))
+
+(defn- build-on-close-fn
+  "Generate on-close function from schema."
+  [schema]
+  (fn [container]
+    (doseq [field schema
+            :when (contains? field :gui-close-reset)
+            :let [k (:gui-container-key field (:key field))
+                  reset-val (:gui-close-reset field)]]
+      (when-let [atom-ref (get container k)]
+        (reset! atom-ref reset-val)))))
+
+;; Generate from schema
 (defn sync-field-mappings []
-  (schema/sync-field-mappings node-fields))
+  (into {}
+    (for [field node-schema/unified-node-schema
+          :when (:gui-sync? field)
+          :let [container-key (:gui-container-key field (:key field))
+                payload-key (:gui-payload-key field (:key field))]]
+      [payload-key container-key])))
 
 ;; ============================================================================
 ;; Animation System (Node status)
@@ -210,7 +276,7 @@
     (merge {:tile-entity    entity
             :player         player
             :container-type :node}
-           (schema/build-atoms node-fields state))))
+           (build-gui-atoms node-schema/unified-node-schema entity))))
 
 ;; ============================================================================
 ;; Slot Management (from node_container.clj)
@@ -273,28 +339,10 @@
 ;; Container Sync (from node_container.clj)
 ;; ============================================================================
 
-(defn sync-to-client! [container]
-  (let [tile  (:tile-entity container)
-        state (or (tile-state tile) {})]
-    (reset! (:energy container)     (int (get state :energy 0.0)))
-    (reset! (:max-energy container) (int (get state :max-energy 15000)))
-    (reset! (:is-online container)  (boolean (get state :enabled false)))
-    (reset! (:ssid container)       (str (get state :node-name "Unnamed")))
-    (reset! (:password container)   (str (get state :password "")))
-    (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
-      (fn [] (sync-helpers/query-node-network-capacity! container)))
-    (let [rate (cond
-                 (and (get state :charging-in false) (get state :charging-out false)) 200
-                 (get state :charging-in false)  100
-                 (get state :charging-out false) 100
-                 :else 0)]
-      (reset! (:transfer-rate container) rate))))
-
-(defn get-sync-data [container]
-  (schema/get-sync-data node-fields container))
-
-(defn apply-sync-data! [container data]
-  (schema/apply-sync-data! node-fields container data))
+;; Generated from schema
+(def sync-to-client! (build-sync-to-client-fn node-schema/unified-node-schema))
+(def get-sync-data (build-get-sync-data-fn node-schema/unified-node-schema))
+(def apply-sync-data! (build-apply-sync-data-fn node-schema/unified-node-schema))
 
 (defn still-valid? [container player]
   (common/still-valid? container player))
@@ -330,7 +378,7 @@
 
 (defn on-close [container]
   (log/debug "Closing wireless node container")
-  (schema/reset-atoms! node-fields container))
+  ((build-on-close-fn node-schema/unified-node-schema) container))
 
 ;; ============================================================================
 ;; Sync Packet Handling (from node_sync.clj)
@@ -356,10 +404,16 @@
               :pos-x  (pos/pos-x block-pos)
               :pos-y  (pos/pos-y block-pos)
               :pos-z  (pos/pos-z block-pos)}
-             (schema/build-sync-packet-payload
-              node-fields
-              (when container? source)
-              state)))))
+             (when state
+               (into {}
+                 (for [field node-schema/unified-node-schema
+                       :when (:gui-sync? field)
+                       :let [k (:key field)
+                             container-key (:gui-container-key field k)
+                             value (if container?
+                                    (when-let [a (get source container-key)] @a)
+                                    (get state k))]]
+                   [container-key value])))))))
 
 (defn apply-node-sync-payload! [payload]
   (sync-helpers/apply-sync-payload-template!

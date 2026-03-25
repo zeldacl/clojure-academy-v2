@@ -2,10 +2,10 @@
   "Wireless Node block - energy network node with item charging.
 
   This file contains:
-  - Block state schema (NBT fields)
+  - Block state schema (NBT fields) - imported from schema.clj
   - Block definitions (basic/standard/advanced tiers)
   - Server-side logic (tick, NBT, container)
-  - Network message handlers (server-side)
+  - Network message handlers (server-side) - generated from schema
 
   Architecture:
   All persistent state lives in ScriptedBlockEntity.customState as a Clojure
@@ -13,7 +13,7 @@
   (:require [cn.li.mcmod.block.dsl           :as bdsl]
             [cn.li.mcmod.block.tile-dsl      :as tdsl]
             [cn.li.mcmod.block.tile-logic    :as tile-logic]
-            [cn.li.mcmod.block.state-schema  :as schema]
+            [cn.li.mcmod.block.state-schema  :as state-schema]
             [cn.li.mcmod.gui.slot-schema     :as slot-schema]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.world      :as world]
@@ -33,6 +33,7 @@
             [cn.li.ac.wireless.interfaces    :as winterfaces]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
             [cn.li.ac.registry.hooks         :as hooks]
+            [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.util.log            :as log])
   (:import [cn.li.acapi.wireless IWirelessNode]
            [cn.li.acapi.energy IEnergyCapable]))
@@ -65,7 +66,13 @@
   [state]
   (get-in node-types [(keyword (:node-type state :basic)) :max-energy] 15000))
 
-(defn- load-inventory
+(defn energy->blockstate-level
+  "Transform energy value to BlockState level (0-4) for visual display."
+  [e s]
+  (let [max-e (double (node-max-energy s))]
+    (min 4 (int (Math/round (* 4.0 (/ (double e) (max 1.0 max-e))))))))
+
+(defn load-inventory
   "Deserialise a ListTag of ItemStack compounds into a [slot0 slot1] vector."
   [tag nbt-key default]
   (if (nbt/nbt-has-key? tag nbt-key)
@@ -83,7 +90,7 @@
         (range size)))
     default))
 
-(defn- save-inventory
+(defn save-inventory
   "Serialise a [slot0 slot1] vector into a ListTag and attach it to tag."
   [state tag nbt-key]
   (let [inv      (get state :inventory [nil nil])
@@ -96,78 +103,103 @@
           (nbt/nbt-append! inv-list st))))
     (nbt/nbt-set-tag! tag nbt-key inv-list)))
 
+;; ============================================================================
+;; Part 2: Schema-Based Generation (Server-Side)
+;; ============================================================================
+
+(defn- extract-block-state-properties
+  "Extract BlockState properties from blockstate-property-fields.
+   Input: vector of field definitions with :block-state metadata
+   Output: map of {property-keyword {:name :type :min :max :default}}"
+  [blockstate-fields]
+  (into {}
+    (for [field blockstate-fields
+          :when (:block-state field)
+          :let [bs (:block-state field)
+                prop-name (:prop bs)]]
+      [(keyword prop-name)
+       {:name prop-name
+        :type (:type bs)
+        :min (:min bs)
+        :max (:max bs)
+        :default (:default bs)}])))
+
+(defn- build-block-state-updater
+  "Generate BlockState updater function from blockstate-property-fields.
+   Returns: (fn [state level pos] -> updates BlockState in world)"
+  [blockstate-fields]
+  (let [bs-specs (filterv :block-state blockstate-fields)]
+    (fn [state level pos]
+      (try
+        (when-let [blk-state (world/world-get-block-state level pos)]
+          (let [state-def (world/block-state-get-state-definition blk-state)
+                new-bs    (reduce
+                           (fn [bs spec]
+                             (let [prop-name (:prop (:block-state spec))
+                                   raw-val   (get state (:key spec) (:default spec))
+                                   xf-fn     (:xf (:block-state spec))
+                                   val       (if xf-fn
+                                               ;; Resolve symbol to function if needed
+                                               (let [xf (if (symbol? xf-fn)
+                                                         (requiring-resolve xf-fn)
+                                                         xf-fn)]
+                                                 (xf raw-val state))
+                                               raw-val)
+                                   prop      (when state-def
+                                               (world/block-state-get-property blk-state state-def prop-name))]
+                               (if prop
+                                 (world/block-state-set-property bs prop val)
+                                 bs)))
+                           blk-state
+                           bs-specs)]
+            (when (not= new-bs blk-state)
+              (world/world-set-block level pos new-bs 3))))
+        (catch Exception _)))))
+
+(defn- build-network-handlers
+  "Generate network message handlers from network-editable-fields.
+   Returns: map of {msg-keyword handler-fn}"
+  [network-editable-fields]
+  (into {}
+    (for [field network-editable-fields
+          :when (:network-editable? field)
+          :let [msg-key (:network-msg field)
+                field-key (:key field)
+                payload-key (:gui-payload-key field field-key)]]
+      [msg-key
+       (fn [payload player]
+         (let [world (net-helpers/get-world player)
+               tile (net-helpers/get-tile-at world payload)
+               new-value (get payload payload-key)]
+           (if (and tile new-value)
+             (do
+               (let [state (or (platform-be/get-custom-state tile) {})]
+                 (platform-be/set-custom-state! tile (assoc state field-key new-value))
+                 (platform-be/set-changed! tile))
+               {:success true})
+             {:success false})))])))
+
+;; Generate from schema
 (def node-state-schema
-  "Single source of truth for all node state fields.
-
-  Adding/removing/renaming a field only requires editing this vector.
-  NBT serialization, GUI sync, and default state are derived automatically."
-  [;; Identity
-   {:key :node-type     :nbt-key "NodeType"  :type :keyword  :default :basic
-    :persist? true  :gui-sync? true}
-
-   {:key :node-name     :nbt-key "NodeName"  :type :string   :default "Unnamed"
-    :persist? true  :gui-sync? true}
-
-   {:key :password      :nbt-key "Password"  :type :string   :default ""
-    :persist? true  :gui-sync? true}
-
-   {:key :placer-name   :nbt-key "Placer"    :type :string   :default ""
-    :persist? true  :gui-sync? true}
-
-   ;; Energy - :block-state-xf maps stored energy → discrete 0-4 BlockState level
-   {:key :energy        :nbt-key "Energy"    :type :double   :default 0.0
-    :persist? true  :gui-sync? true
-    :block-state-prop "energy"
-    :block-state-xf   (fn [e s]
-                        (let [max-e (double (node-max-energy s))]
-                          (min 4 (int (Math/round (* 4.0 (/ (double e)
-                                                            (max 1.0 max-e))))))))}
-
-   ;; Connection status
-   {:key :enabled       :nbt-key "Enabled"   :type :boolean  :default false
-    :persist? true  :gui-sync? true
-    :block-state-prop "connected"}
-
-   ;; Ephemeral charging flags (not persisted)
-   {:key :charging-in   :nbt-key nil         :type :boolean  :default false
-    :persist? false :gui-sync? true}
-
-   {:key :charging-out  :nbt-key nil         :type :boolean  :default false
-    :persist? false :gui-sync? true}
-
-   ;; Tick counter (not persisted, not synced)
-   {:key :update-ticker :nbt-key nil         :type :int      :default 0
-    :persist? false :gui-sync? false}
-
-   ;; Inventory (custom load/save for ItemStack handling)
-   {:key :inventory     :nbt-key "NodeInventory" :type :inventory :default [nil nil]
-    :persist? true  :gui-sync? false
-    :load-fn load-inventory
-    :save-fn save-inventory}])
+  (state-schema/filter-server-fields node-schema/unified-node-schema))
 
 (def node-default-state
-  (schema/schema->default-state node-state-schema))
-
-;; ============================================================================
-;; Part 2: BlockState Properties
-;; ============================================================================
-
-(def block-state-properties
-  {:energy    {:name "energy"    :type :integer :min 0 :max 4 :default 0}
-   :connected {:name "connected" :type :boolean              :default false}})
-
-;; ============================================================================
-;; Part 3: Schema-Derived Functions
-;; ============================================================================
+  (state-schema/schema->default-state node-state-schema))
 
 (def node-scripted-load-fn
-  (schema/schema->load-fn node-state-schema))
+  (state-schema/schema->load-fn node-state-schema))
 
 (def node-scripted-save-fn
-  (schema/schema->save-fn node-state-schema))
+  (state-schema/schema->save-fn node-state-schema))
+
+(def block-state-properties
+  (extract-block-state-properties node-schema/blockstate-property-fields))
 
 (def ^:private update-block-state!
-  (schema/schema->block-state-updater node-state-schema))
+  (build-block-state-updater node-schema/blockstate-property-fields))
+
+(def network-handlers
+  (build-network-handlers node-schema/network-editable-fields))
 
 ;; ============================================================================
 ;; Part 4: Helper Functions
@@ -263,7 +295,7 @@
                        (when-let [broadcast-fn (requiring-resolve 'cn.li.ac.block.wireless-node.gui/broadcast-node-state)]
                          (broadcast-fn
                           level pos
-                          (-> (schema/schema->sync-payload node-state-schema state pos)
+                          (-> (state-schema/schema->sync-payload node-state-schema state pos)
                               (assoc :max-energy (node-max-energy state)))))
                        (catch Exception _))
                      state)
@@ -338,27 +370,9 @@
         {:linked nil})
       {:linked false})))
 
-(defn handle-change-name
-  [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)
-        new-name (:node-name payload)]
-    (if (and tile new-name)
-      (do
-        (update-node-field! tile :node-name new-name)
-        {:success true})
-      {:success false})))
-
-(defn handle-change-password
-  [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)
-        new-password (:password payload)]
-    (if (and tile new-password)
-      (do
-        (update-node-field! tile :password new-password)
-        {:success true})
-      {:success false})))
+;; Network handlers for change-name and change-password are auto-generated from schema
+(def handle-change-name (get network-handlers :change-name))
+(def handle-change-password (get network-handlers :change-password))
 
 (defn handle-list-networks
   [payload player]
@@ -509,7 +523,7 @@
 
   (getEnergy [_]
     (let [state (or (platform-be/get-custom-state be) node-default-state)]
-      (double (schema/get-field node-state-schema state :energy))))
+      (double (state-schema/get-field node-state-schema state :energy))))
 
   (getMaxEnergy [_]
     (let [state (or (platform-be/get-custom-state be) node-default-state)]
@@ -517,26 +531,26 @@
 
   (getBandwidth [_]
     (let [state     (or (platform-be/get-custom-state be) node-default-state)
-          node-type (keyword (schema/get-field node-state-schema state :node-type))]
+          node-type (keyword (state-schema/get-field node-state-schema state :node-type))]
       (double (get-in node-types [node-type :bandwidth] 150))))
 
   (getCapacity [_]
     (let [state     (or (platform-be/get-custom-state be) node-default-state)
-          node-type (keyword (schema/get-field node-state-schema state :node-type))]
+          node-type (keyword (state-schema/get-field node-state-schema state :node-type))]
       (int (get-in node-types [node-type :capacity] 5))))
 
   (getRange [_]
     (let [state     (or (platform-be/get-custom-state be) node-default-state)
-          node-type (keyword (schema/get-field node-state-schema state :node-type))]
+          node-type (keyword (state-schema/get-field node-state-schema state :node-type))]
       (double (get-in node-types [node-type :range] 9))))
 
   (getNodeName [_]
     (let [state (or (platform-be/get-custom-state be) node-default-state)]
-      (str (schema/get-field node-state-schema state :node-name))))
+      (str (state-schema/get-field node-state-schema state :node-name))))
 
   (getPassword [_]
     (let [state (or (platform-be/get-custom-state be) node-default-state)]
-      (str (schema/get-field node-state-schema state :password))))
+      (str (state-schema/get-field node-state-schema state :password))))
 
   (getBlockPos [_]
     (pos/position-get-block-pos be))
@@ -550,7 +564,7 @@
 
   (receiveEnergy [_ max-receive simulate]
     (let [state    (or (platform-be/get-custom-state be) node-default-state)
-          cur      (double (schema/get-field node-state-schema state :energy))
+          cur      (double (state-schema/get-field node-state-schema state :energy))
           max-e    (double (node-max-energy state))
           can-recv (- max-e cur)
           actual   (min can-recv (double max-receive))]
@@ -560,7 +574,7 @@
 
   (extractEnergy [_ max-extract simulate]
     (let [state  (or (platform-be/get-custom-state be) node-default-state)
-          cur    (double (schema/get-field node-state-schema state :energy))
+          cur    (double (state-schema/get-field node-state-schema state :energy))
           actual (min cur (double max-extract))]
       (when (and (not simulate) (pos? actual))
         (platform-be/set-custom-state! be (assoc state :energy (- cur actual))))
@@ -568,7 +582,7 @@
 
   (getEnergyStored [_]
     (let [state (or (platform-be/get-custom-state be) node-default-state)]
-      (int (schema/get-field node-state-schema state :energy))))
+      (int (state-schema/get-field node-state-schema state :energy))))
 
   (getMaxEnergyStored [_]
     (let [state (or (platform-be/get-custom-state be) node-default-state)]

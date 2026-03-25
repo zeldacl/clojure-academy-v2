@@ -156,3 +156,32 @@
             (when (not= new-bs blk-state)
               (platform-world/world-set-block level pos new-bs 3))))
         (catch Exception _)))))
+
+;; ============================================================================
+;; Schema filtering utilities
+;; ============================================================================
+
+(defn filter-server-fields
+  "Filter schema to only server-side fields (persist? true or no gui-only? flag).
+
+  Used to extract fields that should be handled by server-side code (NBT persistence,
+  BlockState updates, etc.). Excludes client-only GUI fields."
+  [schema]
+  (filterv #(and (not (:gui-only? %))
+                 (or (:persist? %) (:block-state %)))
+           schema))
+
+(defn filter-gui-fields
+  "Filter schema to only GUI-relevant fields (gui-sync? true or gui-only? true).
+
+  Used to extract fields that should be present in GUI containers (client-side atoms)."
+  [schema]
+  (filterv #(or (:gui-sync? %) (:gui-only? %))
+           schema))
+
+(defn filter-by-tag
+  "Filter schema to fields that have a specific tag key set to a truthy value.
+
+  Example: (filter-by-tag schema :network-editable?) returns only network-editable fields."
+  [schema tag-key]
+  (filterv #(get % tag-key) schema))

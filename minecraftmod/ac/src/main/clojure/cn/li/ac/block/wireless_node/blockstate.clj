@@ -8,7 +8,8 @@
   to colocate it with the node block implementation."
   (:require [clojure.string :as str]
             [cn.li.mcmod.config :as mcmod-config]
-            [cn.li.ac.block.wireless-node.block :as wireless-node]))
+            [cn.li.ac.block.wireless-node.block :as wireless-node]
+            [cn.li.ac.block.wireless-node.schema :as node-schema]))
 
 ;; ============================================================================
 ;; BlockState Definition Record (copied from blockstate_definition.clj)
@@ -29,18 +30,36 @@
 (defn- mod-id []
   mcmod-config/*mod-id*)
 
+(defn- extract-blockstate-props
+  "Extract BlockState properties from schema into a map.
+   Returns: {property-keyword {:name :type :min :max :default}}"
+  []
+  (into {}
+    (for [field node-schema/blockstate-property-fields
+          :when (:block-state field)
+          :let [bs (:block-state field)
+                prop-name (:prop bs)]]
+      [(keyword prop-name)
+       {:name prop-name
+        :type (:type bs)
+        :min (:min bs)
+        :max (:max bs)
+        :default (:default bs)}])))
+
 (defn get-all-node-definitions
   "Generate BlockStateDefinition records for all node types.
 
-  Reads node-types and block-state-properties from wireless-node/block.clj
-  to maintain single source of truth.
+  Reads node-types from wireless-node/block.clj and BlockState properties
+  from schema.clj to maintain single source of truth.
 
   Returns:
     map of block-key -> BlockStateDefinition"
   []
-  (let [energy-min (get-in wireless-node/block-state-properties [:energy :min])
-        energy-max (get-in wireless-node/block-state-properties [:energy :max])
-        connected-type (get-in wireless-node/block-state-properties [:connected :type])]
+  (let [;; Extract BlockState properties from schema
+        props (extract-blockstate-props)
+        energy-min (get-in props [:energy :min])
+        energy-max (get-in props [:energy :max])
+        connected-type (get-in props [:connected :type])]
     (into {}
           (for [node-type (sort (keys wireless-node/node-types))
                 :let [node-type-name (name node-type)
@@ -112,7 +131,8 @@
               (#{"base" "connected"} variant) 0
               (str/starts-with? variant "energy_") (Integer/parseInt (subs variant 7))
               :else 0)
-        {:keys [min max]} (get-in wireless-node/block-state-properties [:energy])
+        ;; Extract min/max from schema
+        {:keys [min max]} (get (extract-blockstate-props) :energy)
         min-v (or min 0)
         max-v (or max 4)]
     (clojure.core/max min-v (clojure.core/min max-v raw))))
