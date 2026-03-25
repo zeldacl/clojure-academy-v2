@@ -1,0 +1,68 @@
+(ns cn.li.mcmod.block.inventory-helpers
+  "Generic inventory NBT serialization utilities.
+
+  Provides load/save functions for item vector ↔ NBT ListTag conversion.
+  Reusable across any block with inventory slots."
+  (:require [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.item :as pitem]
+            [cn.li.mcmod.platform.be :as pbe]))
+
+(defn load-inventory
+  "Deserialize NBT ListTag into item vector [slot0 slot1 ...].
+
+  Args:
+    tag - CompoundTag containing inventory data
+    nbt-key - String key for inventory ListTag
+    default - Default vector (e.g. [nil nil])
+
+  Returns: Vector of ItemStack or nil per slot"
+  [tag nbt-key default]
+  (if (nbt/nbt-has-key? tag nbt-key)
+    (let [inv-tag (nbt/nbt-get-list tag nbt-key)
+          size    (nbt/nbt-list-size inv-tag)]
+      (reduce
+        (fn [v i]
+          (let [st   (nbt/nbt-list-get-compound inv-tag i)
+                slot (nbt/nbt-get-int st "Slot")
+                item (pitem/create-item-from-nbt st)]
+            (if (and (>= slot 0) (< slot (count v)))
+              (assoc v slot (when-not (pitem/item-is-empty? item) item))
+              v)))
+        default
+        (range size)))
+    default))
+
+(defn save-inventory
+  "Serialize item vector into NBT ListTag.
+
+  Args:
+    state - State map containing :inventory key
+    tag - CompoundTag to write to
+    nbt-key - String key for inventory ListTag
+
+  Side effects: Writes ListTag to tag"
+  [state tag nbt-key]
+  (let [inv      (get state :inventory [])
+        inv-list (nbt/create-nbt-list)]
+    (doseq [slot (range (count inv))]
+      (when-let [item (nth inv slot nil)]
+        (let [st (nbt/create-nbt-compound)]
+          (nbt/nbt-set-int! st "Slot" slot)
+          (pitem/item-save-to-nbt item st)
+          (nbt/nbt-append! inv-list st))))
+    (nbt/nbt-set-tag! tag nbt-key inv-list)))
+
+(defn update-be-field!
+  "Update single field in BE's customState.
+
+  Args:
+    be - BlockEntity
+    field - Keyword field name
+    value - New value
+
+  Side effects: Updates BE state and marks changed"
+  [be field value]
+  (let [state (or (pbe/get-custom-state be) {})]
+    (pbe/set-custom-state! be (assoc state field value))
+    (try (pbe/set-changed! be) (catch Exception _))
+    be))

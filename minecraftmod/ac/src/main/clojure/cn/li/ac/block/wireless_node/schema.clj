@@ -12,7 +12,8 @@
   This organization makes the schema pattern reusable for other blocks.
 
   CRITICAL: This file contains PURE DATA ONLY (no function definitions).
-  It can be safely imported by both server-side (block.clj) and client-side (gui.clj) code.")
+  It can be safely imported by both server-side (block.clj) and client-side (gui.clj) code."
+  (:require [cn.li.mcmod.block.state-schema :as state-schema]))
 
 ;; ============================================================================
 ;; 1. NBT-PERSISTED FIELDS
@@ -91,8 +92,8 @@
     :default [nil nil]
     :persist? true
     :gui-sync? false
-    :load-fn 'cn.li.ac.block.wireless-node.block/load-inventory
-    :save-fn 'cn.li.ac.block.wireless-node.block/save-inventory
+    :load-fn 'cn.li.mcmod.block.inventory-helpers/load-inventory
+    :save-fn 'cn.li.mcmod.block.inventory-helpers/save-inventory
     :doc "Item inventory slots"}])
 
 ;; ============================================================================
@@ -286,17 +287,8 @@
 ;; Merge all field groups, deduplicating by :key.
 ;; Fields can appear in multiple groups (e.g., :energy in both nbt-persisted and blockstate-property).
 
-(defn- merge-field-definitions
-  "Merge field definitions by :key, combining metadata from all groups."
-  [field-groups]
-  (let [all-fields (apply concat field-groups)
-        by-key (group-by :key all-fields)]
-    (vec
-      (for [[k fields] by-key]
-        (apply merge fields)))))
-
 (def unified-node-schema
-  (merge-field-definitions
+  (state-schema/merge-field-definitions
     [nbt-persisted-fields
      blockstate-property-fields
      gui-container-fields

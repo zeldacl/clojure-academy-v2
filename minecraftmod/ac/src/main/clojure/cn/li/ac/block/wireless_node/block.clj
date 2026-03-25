@@ -14,6 +14,7 @@
             [cn.li.mcmod.block.tile-dsl      :as tdsl]
             [cn.li.mcmod.block.tile-logic    :as tile-logic]
             [cn.li.mcmod.block.state-schema  :as state-schema]
+            [cn.li.mcmod.block.inventory-helpers :as inv-helpers]
             [cn.li.mcmod.gui.slot-schema     :as slot-schema]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.world      :as world]
@@ -71,112 +72,9 @@
   (let [max-e (double (node-max-energy s))]
     (min 4 (int (Math/round (* 4.0 (/ (double e) (max 1.0 max-e))))))))
 
-(defn load-inventory
-  "Deserialise a ListTag of ItemStack compounds into a [slot0 slot1] vector."
-  [tag nbt-key default]
-  (if (nbt/nbt-has-key? tag nbt-key)
-    (let [inv-tag (nbt/nbt-get-list tag nbt-key)
-          size    (nbt/nbt-list-size inv-tag)]
-      (reduce
-        (fn [v i]
-          (let [st   (nbt/nbt-list-get-compound inv-tag i)
-                slot (nbt/nbt-get-int st "Slot")
-                item (pitem/create-item-from-nbt st)]
-            (if (and (>= slot 0) (< slot (count v)))
-              (assoc v slot (when-not (pitem/item-is-empty? item) item))
-              v)))
-        default
-        (range size)))
-    default))
-
-(defn save-inventory
-  "Serialise a [slot0 slot1] vector into a ListTag and attach it to tag."
-  [state tag nbt-key]
-  (let [inv      (get state :inventory [nil nil])
-        inv-list (nbt/create-nbt-list)]
-    (doseq [slot (range (count inv))]
-      (when-let [item (nth inv slot nil)]
-        (let [st (nbt/create-nbt-compound)]
-          (nbt/nbt-set-int! st "Slot" slot)
-          (pitem/item-save-to-nbt item st)
-          (nbt/nbt-append! inv-list st))))
-    (nbt/nbt-set-tag! tag nbt-key inv-list)))
-
 ;; ============================================================================
 ;; Part 2: Schema-Based Generation (Server-Side)
 ;; ============================================================================
-
-(defn- extract-block-state-properties
-  "Extract BlockState properties from blockstate-property-fields.
-   Input: vector of field definitions with :block-state metadata
-   Output: map of {property-keyword {:name :type :min :max :default}}"
-  [blockstate-fields]
-  (into {}
-    (for [field blockstate-fields
-          :when (:block-state field)
-          :let [bs (:block-state field)
-                prop-name (:prop bs)]]
-      [(keyword prop-name)
-       {:name prop-name
-        :type (:type bs)
-        :min (:min bs)
-        :max (:max bs)
-        :default (:default bs)}])))
-
-(defn- build-block-state-updater
-  "Generate BlockState updater function from blockstate-property-fields.
-   Returns: (fn [state level pos] -> updates BlockState in world)"
-  [blockstate-fields]
-  (let [bs-specs (filterv :block-state blockstate-fields)]
-    (fn [state level pos]
-      (try
-        (when-let [blk-state (world/world-get-block-state level pos)]
-          (let [state-def (world/block-state-get-state-definition blk-state)
-                new-bs    (reduce
-                           (fn [bs spec]
-                             (let [prop-name (:prop (:block-state spec))
-                                   raw-val   (get state (:key spec) (:default spec))
-                                   xf-fn     (:xf (:block-state spec))
-                                   val       (if xf-fn
-                                               ;; Resolve symbol to function if needed
-                                               (let [xf (if (symbol? xf-fn)
-                                                         (requiring-resolve xf-fn)
-                                                         xf-fn)]
-                                                 (xf raw-val state))
-                                               raw-val)
-                                   prop      (when state-def
-                                               (world/block-state-get-property blk-state state-def prop-name))]
-                               (if prop
-                                 (world/block-state-set-property bs prop val)
-                                 bs)))
-                           blk-state
-                           bs-specs)]
-            (when (not= new-bs blk-state)
-              (world/world-set-block level pos new-bs 3))))
-        (catch Exception _)))))
-
-(defn- build-network-handlers
-  "Generate network message handlers from network-editable-fields.
-   Returns: map of {msg-keyword handler-fn}"
-  [network-editable-fields]
-  (into {}
-    (for [field network-editable-fields
-          :when (:network-editable? field)
-          :let [msg-key (:network-msg field)
-                field-key (:key field)
-                payload-key (:gui-payload-key field field-key)]]
-      [msg-key
-       (fn [payload player]
-         (let [world (net-helpers/get-world player)
-               tile (net-helpers/get-tile-at world payload)
-               new-value (get payload payload-key)]
-           (if (and tile new-value)
-             (do
-               (let [state (or (platform-be/get-custom-state tile) {})]
-                 (platform-be/set-custom-state! tile (assoc state field-key new-value))
-                 (platform-be/set-changed! tile))
-               {:success true})
-             {:success false})))])))
 
 ;; Generate from schema
 (def node-state-schema
@@ -192,13 +90,13 @@
   (state-schema/schema->save-fn node-state-schema))
 
 (def block-state-properties
-  (extract-block-state-properties node-schema/blockstate-property-fields))
+  (state-schema/extract-block-state-properties node-schema/blockstate-property-fields))
 
 (def ^:private update-block-state!
-  (build-block-state-updater node-schema/blockstate-property-fields))
+  (state-schema/build-block-state-updater node-schema/blockstate-property-fields))
 
 (def network-handlers
-  (build-network-handlers node-schema/network-editable-fields))
+  (state-schema/build-network-handlers node-schema/network-editable-fields))
 
 ;; ============================================================================
 ;; Part 4: Helper Functions
@@ -356,14 +254,6 @@
 ;; ============================================================================
 ;; Part 6: Network Message Handlers (Server-Side)
 ;; ============================================================================
-
-(defn- update-node-field!
-  "Update a single field in the BE's customState."
-  [be field value]
-  (let [state (or (platform-be/get-custom-state be) {})]
-    (platform-be/set-custom-state! be (assoc state field value))
-    (try (platform-be/set-changed! be) (catch Exception _))
-    be))
 
 (defn handle-get-status
   [payload player]

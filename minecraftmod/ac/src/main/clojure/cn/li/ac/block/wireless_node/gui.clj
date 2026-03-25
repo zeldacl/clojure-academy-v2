@@ -36,6 +36,8 @@
             [cn.li.ac.wireless.gui.sync-helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.gui-metadata :as metadata]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
+            [cn.li.mcmod.gui.schema-builders :as schema-builders]
+            [cn.li.mcmod.gui.animation :as anim]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessNode]))
@@ -78,100 +80,13 @@
 ;; Schema-Based Generation (Client-Side)
 ;; ============================================================================
 
-(defn- build-gui-atoms
-  "Generate GUI container atoms from unified schema."
-  [schema tile]
-  (let [state (or (platform-be/get-custom-state tile) {})]
-    (into {}
-      (for [field schema
-            :when (or (:gui-sync? field) (:gui-only? field))
-            :let [k (:gui-container-key field (:key field))
-                  init-fn (or (:gui-init field)
-                              (fn [s] (get s (:key field) (:default field))))]]
-        [k (atom (init-fn state))]))))
-
-(defn- build-sync-to-client-fn
-  "Generate sync-to-client! function from schema."
-  [schema]
-  (fn [container]
-    (let [tile (:tile-entity container)
-          state (or (common/get-tile-state tile) {})]
-      ;; Reset gui-sync? atoms only if value changed
-      (doseq [field schema
-              :when (:gui-sync? field)
-              :let [container-key (:gui-container-key field (:key field))
-                    state-key (:key field)
-                    coerce-fn (or (:gui-coerce field) identity)
-                    value (get state state-key (:default field))]]
-        (when-let [atom-ref (get container container-key)]
-          (let [new-val (coerce-fn value)]
-            (when (not= @atom-ref new-val)
-              (reset! atom-ref new-val)))))
-      ;; Handle special sync logic (throttled queries, etc.)
-      (when-let [ticker (:sync-ticker container)]
-        (sync-helpers/with-throttled-sync! ticker 100
-          (fn [] (sync-helpers/query-node-network-capacity! container))))
-      ;; Calculate transfer-rate from charging flags
-      (when-let [rate-atom (:transfer-rate container)]
-        (let [rate (cond
-                     (and (:charging-in state) (:charging-out state)) 200
-                     (:charging-in state) 100
-                     (:charging-out state) 100
-                     :else 0)]
-          (reset! rate-atom rate))))))
-
-(defn- build-get-sync-data-fn
-  "Generate get-sync-data function from schema."
-  [schema]
-  (fn [container]
-    (into {}
-      (for [field schema
-            :when (:gui-sync? field)
-            :let [k (:gui-container-key field (:key field))]]
-        [k (when-let [a (get container k)] @a)]))))
-
-(defn- build-apply-sync-data-fn
-  "Generate apply-sync-data! function from schema."
-  [schema]
-  (fn [container data]
-    (doseq [field schema
-            :when (:gui-sync? field)
-            :let [k (:gui-container-key field (:key field))
-                  coerce-fn (or (:gui-coerce field) identity)]]
-      (when-let [atom-ref (get container k)]
-        (when (contains? data k)
-          (reset! atom-ref (coerce-fn (get data k))))))))
-
-(defn- build-on-close-fn
-  "Generate on-close function from schema."
-  [schema]
-  (fn [container]
-    (doseq [field schema
-            :when (contains? field :gui-close-reset)
-            :let [k (:gui-container-key field (:key field))
-                  reset-val (:gui-close-reset field)]]
-      (when-let [atom-ref (get container k)]
-        (reset! atom-ref reset-val)))))
-
 ;; Generate from schema
 (defn sync-field-mappings []
-  (into {}
-    (for [field node-schema/unified-node-schema
-          :when (:gui-sync? field)
-          :let [container-key (:gui-container-key field (:key field))
-                payload-key (:gui-payload-key field (:key field))]]
-      [payload-key container-key])))
+  (schema-builders/build-sync-field-mappings node-schema/unified-node-schema))
 
 ;; ============================================================================
 ;; Animation System (Node status)
 ;; ============================================================================
-
-(defn create-animation-state
-  "Create animation state for node indicator"
-  []
-  {:current-state (atom :unlinked)
-   :current-frame (atom 0)
-   :last-update (atom (System/currentTimeMillis))})
 
 (defn get-animation-config
   "Get animation config for current state"
@@ -180,55 +95,6 @@
     :linked {:begin 0 :frames 8 :frame-time 800}
     :unlinked {:begin 8 :frames 2 :frame-time 3000}
     {:begin 0 :frames 1 :frame-time 1000}))
-
-(defn update-animation!
-  "Update animation frame based on elapsed time"
-  [anim-state]
-  (let [{:keys [current-state current-frame last-update]} anim-state
-        now (System/currentTimeMillis)
-        dt (- now @last-update)
-        {:keys [frames frame-time]} (get-animation-config @current-state)]
-    (when (>= dt frame-time)
-      (swap! current-frame #(mod (inc %) frames))
-      (reset! last-update now))))
-
-(defn render-animation-frame!
-  "Render current animation frame (10-frame vertical sprite).
-   Texture has 10 frames stacked vertically; each frame is 1/10 of texture height.
-   UV: (0, frame/10) to (1, frame/10 + 1/10)."
-  [anim-state widget]
-  (let [{:keys [current-state current-frame]} anim-state
-        config (get-animation-config @current-state)
-        absolute-frame (+ (:begin config) @current-frame)
-        total-frames 10
-        u0 0.0
-        v0 (/ (double absolute-frame) total-frames)
-        u1 1.0
-        ;; v1 must be v0 + 1/10 so stored uv height is 1/10 (one frame), not 0.1 - v0
-        v1 (+ v0 (/ 1.0 total-frames))]
-    (comp/render-texture-region
-      widget
-      (modid/asset-path "textures" "guis/effect/effect_node.png")
-      0 0 186 75
-      u0 v0 u1 v1)))
-
-(defn create-status-poller
-  "Create status poller to query link state every 2 seconds"
-  [tile anim-state]
-  (let [last-query (atom (- (System/currentTimeMillis) 3000))]
-    {:last-query last-query
-     :update-fn (fn []
-                  (let [now (System/currentTimeMillis)
-                        dt (- now @last-query)]
-                    (when (> dt 2000)
-                      (reset! last-query now)
-                      (net-client/send-to-server
-                        (msg :get-status)
-                        (net-helpers/tile-pos-payload tile)
-                        (fn [response]
-                          (let [is-linked (boolean (:linked response))]
-                            (reset! (:current-state anim-state)
-                                    (if is-linked :linked :unlinked))))))))}))
 
 (defn create-anim-widget
   "Create animation widget, poller and attach frame handler.
@@ -245,17 +111,35 @@
         pos (get opts :pos [42 35.5])
         size (get opts :size [186 75])
         scale (get opts :scale 0.5)
-        anim-state (create-animation-state)
-        poller (create-status-poller tile anim-state)
+        anim-state (anim/create-animation-state)
+        ;; Create status poller with query function
+        poller (anim/create-status-poller
+                 (fn []
+                   (net-client/send-to-server
+                     (msg :get-status)
+                     (net-helpers/tile-pos-payload tile)
+                     (fn [response]
+                       (let [is-linked (boolean (:linked response))]
+                         (reset! (:current-state anim-state)
+                                 (if is-linked :linked :unlinked))))))
+                 2000)
         widget (apply cgui/create-widget
                       (concat [:pos pos :size size]
                               (when scale [:scale scale])))]
     ;; attach per-frame update: animation + poller + render
     (events/on-frame widget
                      (fn [_]
-                       (update-animation! anim-state)
+                       (let [config (get-animation-config @(:current-state anim-state))]
+                         (anim/update-animation! anim-state config))
                        ((:update-fn poller))
-                       (render-animation-frame! anim-state widget)))
+                       (let [config (get-animation-config @(:current-state anim-state))
+                             absolute-frame (+ (:begin config) @(:current-frame anim-state))]
+                         (anim/render-animation-frame!
+                           widget
+                           (modid/asset-path "textures" "guis/effect/effect_node.png")
+                           0 0 186 75
+                           absolute-frame
+                           10))))
     {:widget widget :anim-state anim-state :poller poller}))
 
 ;; ============================================================================
@@ -277,7 +161,7 @@
     (merge {:tile-entity    entity
             :player         player
             :container-type :node}
-           (build-gui-atoms node-schema/unified-node-schema entity))))
+           (schema-builders/build-gui-atoms node-schema/unified-node-schema entity))))
 
 ;; ============================================================================
 ;; Slot Management (from node_container.clj)
@@ -340,10 +224,27 @@
 ;; Container Sync (from node_container.clj)
 ;; ============================================================================
 
-;; Generated from schema
-(def sync-to-client! (build-sync-to-client-fn node-schema/unified-node-schema))
-(def get-sync-data (build-get-sync-data-fn node-schema/unified-node-schema))
-(def apply-sync-data! (build-apply-sync-data-fn node-schema/unified-node-schema))
+;; Generated from schema with custom sync logic
+(defn sync-to-client! [container]
+  (let [base-sync (schema-builders/build-sync-to-client-fn node-schema/unified-node-schema)]
+    (base-sync container)
+    ;; Handle special sync logic (throttled queries, etc.)
+    (when-let [ticker (:sync-ticker container)]
+      (sync-helpers/with-throttled-sync! ticker 100
+        (fn [] (sync-helpers/query-node-network-capacity! container))))
+    ;; Calculate transfer-rate from charging flags
+    (when-let [rate-atom (:transfer-rate container)]
+      (let [tile (:tile-entity container)
+            state (or (common/get-tile-state tile) {})
+            rate (cond
+                   (and (:charging-in state) (:charging-out state)) 200
+                   (:charging-in state) 100
+                   (:charging-out state) 100
+                   :else 0)]
+        (reset! rate-atom rate)))))
+
+(def get-sync-data (schema-builders/build-get-sync-data-fn node-schema/unified-node-schema))
+(def apply-sync-data! (schema-builders/build-apply-sync-data-fn node-schema/unified-node-schema))
 
 (defn still-valid? [container player]
   (common/still-valid? container player))
@@ -379,7 +280,7 @@
 
 (defn on-close [container]
   (log/debug "Closing wireless node container")
-  ((build-on-close-fn node-schema/unified-node-schema) container))
+  ((schema-builders/build-on-close-fn node-schema/unified-node-schema) container))
 
 ;; ============================================================================
 ;; Sync Packet Handling (from node_sync.clj)

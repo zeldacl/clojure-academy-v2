@@ -123,11 +123,13 @@
               :pos-z (pos/pos-z pos))))
 
 ;; ============================================================================
-;; BlockState updater
+;; BlockState updater (DEPRECATED - use build-block-state-updater for nested format)
 ;; ============================================================================
 
 (defn schema->block-state-updater
-  "Return (fn [state level pos] -> nil).
+  "DEPRECATED: Use build-block-state-updater for nested :block-state format.
+
+  Return (fn [state level pos] -> nil).
 
   Iterates over all FieldSpecs with :block-state-prop set and attempts to
   update the in-world BlockState.  When :block-state-xf is supplied it is
@@ -156,6 +158,122 @@
             (when (not= new-bs blk-state)
               (platform-world/world-set-block level pos new-bs 3))))
         (catch Exception _)))))
+
+;; ============================================================================
+;; Schema Organization Utilities
+;; ============================================================================
+
+(defn merge-field-definitions
+  "Merge field definitions by :key, combining metadata from all groups.
+
+  Enables organizing schema into conceptual layers (NBT, BlockState, GUI, etc.)
+  where the same field can appear in multiple groups with different metadata.
+
+  Example:
+    (merge-field-definitions
+      [[{:key :energy :persist? true :default 0.0}]
+       [{:key :energy :block-state {:prop \"energy\" :type :integer}}]])
+    => [{:key :energy :persist? true :default 0.0
+         :block-state {:prop \"energy\" :type :integer}}]"
+  [field-groups]
+  (let [all-fields (apply concat field-groups)
+        by-key (group-by :key all-fields)]
+    (vec
+      (for [[k fields] by-key]
+        (apply merge fields)))))
+
+;; ============================================================================
+;; BlockState Utilities (Nested Format)
+;; ============================================================================
+
+(defn extract-block-state-properties
+  "Extract BlockState properties from nested :block-state format.
+
+  Input: vector of field definitions with :block-state {:prop ... :type ...}
+  Output: map of {property-keyword {:name :type :min :max :default}}
+
+  Used for defblock :block-state-properties registration."
+  [blockstate-fields]
+  (into {}
+    (for [field blockstate-fields
+          :when (:block-state field)
+          :let [bs (:block-state field)
+                prop-name (:prop bs)]]
+      [(keyword prop-name)
+       {:name prop-name
+        :type (:type bs)
+        :min (:min bs)
+        :max (:max bs)
+        :default (:default bs)}])))
+
+(defn build-block-state-updater
+  "Generate BlockState updater function from nested :block-state format.
+
+  Returns: (fn [state level pos] -> updates BlockState in world)
+
+  Handles :xf transform function (can be symbol or fn).
+  Replaces old schema->block-state-updater (flat format)."
+  [blockstate-fields]
+  (let [bs-specs (filterv :block-state blockstate-fields)]
+    (fn [state level pos]
+      (try
+        (when-let [blk-state (platform-world/world-get-block-state level pos)]
+          (let [state-def (platform-world/block-state-get-state-definition blk-state)
+                new-bs    (reduce
+                           (fn [bs spec]
+                             (let [prop-name (:prop (:block-state spec))
+                                   raw-val   (get state (:key spec) (:default spec))
+                                   xf-fn     (:xf (:block-state spec))
+                                   val       (if xf-fn
+                                               (let [xf (if (symbol? xf-fn)
+                                                         (requiring-resolve xf-fn)
+                                                         xf-fn)]
+                                                 (xf raw-val state))
+                                               raw-val)
+                                   prop      (when state-def
+                                               (platform-world/block-state-get-property blk-state state-def prop-name))]
+                               (if prop
+                                 (platform-world/block-state-set-property bs prop val)
+                                 bs)))
+                           blk-state
+                           bs-specs)]
+            (when (not= new-bs blk-state)
+              (platform-world/world-set-block level pos new-bs 3))))
+        (catch Exception _)))))
+
+;; ============================================================================
+;; Network Handler Generation
+;; ============================================================================
+
+(defn build-network-handlers
+  "Generate network message handlers from :network-editable? fields.
+
+  Returns: map of {msg-keyword handler-fn}
+
+  Each handler receives [payload player] and updates the BE field.
+  Requires net-helpers namespace for get-world and get-tile-at."
+  [network-editable-fields]
+  (into {}
+    (for [field network-editable-fields
+          :when (:network-editable? field)
+          :let [msg-key (:network-msg field)
+                field-key (:key field)
+                payload-key (:gui-payload-key field field-key)]]
+      [msg-key
+       (fn [payload player]
+         (let [get-world (requiring-resolve 'cn.li.ac.wireless.gui.network-handler-helpers/get-world)
+               get-tile-at (requiring-resolve 'cn.li.ac.wireless.gui.network-handler-helpers/get-tile-at)
+               world (get-world player)
+               tile (get-tile-at world payload)
+               new-value (get payload payload-key)]
+           (if (and tile new-value)
+             (do
+               (let [state (or (pbe/get-custom-state tile) {})]
+                 (pbe/set-custom-state! tile (assoc state field-key new-value))
+                 (pbe/set-changed! tile))
+               {:success true})
+             {:success false})))])))
+
 
 ;; ============================================================================
 ;; Schema filtering utilities
