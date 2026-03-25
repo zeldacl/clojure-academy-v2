@@ -24,7 +24,6 @@
             [cn.li.mcmod.network.server      :as net-server]
             [clojure.string                  :as str]
             [cn.li.ac.energy.operations      :as energy]
-            [cn.li.ac.wireless.world-data    :as wd]
             [cn.li.ac.wireless.world-data    :as world-data]
             [cn.li.ac.wireless.virtual-blocks :as vb]
             [cn.li.ac.wireless.gui.message-registry :as msg-registry]
@@ -232,6 +231,10 @@
 ;; Part 4: Server-Side Tick Logic
 ;; ============================================================================
 
+;; Cache broadcast function to avoid requiring-resolve in hot path
+(def ^:private broadcast-node-state-fn
+  (delay (requiring-resolve 'cn.li.ac.block.wireless-node.gui/broadcast-node-state)))
+
 (defn- tick-charge-in
   "Pull energy from inventory slot 0 into the node. Returns updated state."
   [state]
@@ -269,8 +272,8 @@
   [state level pos]
   (try
     (let [vblock      (vb/create-vnode (pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos))
-          world-data  (wd/get-world-data level)
-          network     (wd/get-network-by-node world-data vblock)
+          world-data  (world-data/get-world-data level)
+          network     (world-data/get-network-by-node world-data vblock)
           connected?  (and network (not (:disposed network)))]
       (assoc state :enabled connected?))
     (catch Exception _
@@ -292,16 +295,19 @@
                      (update-block-state! state level pos)
                      ;; Broadcast to connected GUIs
                      (try
-                       (when-let [broadcast-fn (requiring-resolve 'cn.li.ac.block.wireless-node.gui/broadcast-node-state)]
+                       (when-let [broadcast-fn @broadcast-node-state-fn]
                          (broadcast-fn
                           level pos
                           (-> (state-schema/schema->sync-payload node-state-schema state pos)
                               (assoc :max-energy (node-max-energy state)))))
                        (catch Exception _))
                      state)
-                   state)]
-    (platform-be/set-custom-state! be state)
-    (platform-be/set-changed! be)))
+                   state)
+        ;; Only update BE if state actually changed
+        old-state (platform-be/get-custom-state be)]
+    (when (not= state old-state)
+      (platform-be/set-custom-state! be state)
+      (platform-be/set-changed! be))))
 
 ;; ============================================================================
 ;; Part 5: Container Functions (Slot Access)

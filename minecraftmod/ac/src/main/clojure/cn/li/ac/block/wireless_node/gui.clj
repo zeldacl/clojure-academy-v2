@@ -72,8 +72,7 @@
 ;; GUI Dimensions (shared)
 ;; ============================================================================
 
-(def gui-width tech-ui/gui-width)
-(def gui-height tech-ui/gui-height)
+;; Note: gui-width and gui-height removed - use tech-ui/gui-width directly if needed
 
 ;; ============================================================================
 ;; Schema-Based Generation (Client-Side)
@@ -97,7 +96,7 @@
   (fn [container]
     (let [tile (:tile-entity container)
           state (or (common/get-tile-state tile) {})]
-      ;; Reset all gui-sync? atoms
+      ;; Reset gui-sync? atoms only if value changed
       (doseq [field schema
               :when (:gui-sync? field)
               :let [container-key (:gui-container-key field (:key field))
@@ -105,7 +104,9 @@
                     coerce-fn (or (:gui-coerce field) identity)
                     value (get state state-key (:default field))]]
         (when-let [atom-ref (get container container-key)]
-          (reset! atom-ref (coerce-fn value))))
+          (let [new-val (coerce-fn value)]
+            (when (not= @atom-ref new-val)
+              (reset! atom-ref new-val)))))
       ;; Handle special sync logic (throttled queries, etc.)
       (when-let [ticker (:sync-ticker container)]
         (sync-helpers/with-throttled-sync! ticker 100
@@ -387,17 +388,11 @@
 (defn broadcast-node-state [world pos sync-data]
   (sync-helpers/broadcast-state world pos sync-data "node"))
 
-(defn- node-container? [source]
-  (= (:container-type source) :node))
-
-(defn- get-pos [tile]
-  (when tile
-    (try (pos/position-get-block-pos tile) (catch Exception _ nil))))
-
 (defn make-sync-packet [source]
-  (let [container? (node-container? source)
+  (let [container? (= (:container-type source) :node)
         tile      (if container? (:tile-entity source) source)
-        block-pos (get-pos tile)
+        block-pos (when tile
+                    (try (pos/position-get-block-pos tile) (catch Exception _ nil)))
         state     (tile-state tile)]
     (when block-pos
       (merge {:gui-id 0
@@ -421,8 +416,7 @@
     (sync-field-mappings)
     "node"))
 
-(defn extract-position [sync-data world]
-  (sync-helpers/extract-position sync-data world))
+;; Removed extract-position wrapper - use sync-helpers/extract-position directly
 
 ;; ============================================================================
 ;; InfoArea Builder (TechUI)
