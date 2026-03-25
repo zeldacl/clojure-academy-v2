@@ -321,6 +321,8 @@
               origin-pos (if (map? master-pos)
                            (pos/create-block-pos mx my mz)
                            master-pos)
+              controller-id (:controller-block-id multi-block)
+              part-id (:part-block-id multi-block)
 
               ;; Function to calculate absolute position
               abs-pos (fn [rel-pos]
@@ -329,20 +331,74 @@
                               z (+ mz (or (:relative-z rel-pos) (:z rel-pos) 0))]
                           (pos/create-block-pos x y z)))]
 
-          ;; Check origin first
-          (if-not (world/world-get-block-state world origin-pos)
-            false
-            ;; Check all sub-block positions
-            (every?
-              (fn [rel-pos]
-                (try
-                  (let [pos (abs-pos rel-pos)
-                        block-state (world/world-get-block-state world pos)]
-                    (if block-state true false))
-                  (catch Exception e
-                    (log/debug "Error checking block at" rel-pos ":"(ex-message e))
-                    false)))
-              (or positions []))))
+          ;; Check origin first - must be controller block
+          (let [origin-state (world/world-get-block-state world origin-pos)]
+            (if-not origin-state
+              (do
+                (log/debug "Multi-block validation failed: origin block missing at" origin-pos)
+                false)
+              ;; Check if origin is controller (when controller-parts mode)
+              (if (and controller-id part-id)
+                (let [origin-be (world/world-get-tile-entity world origin-pos)
+                      origin-block-id (when origin-be
+                                        (try
+                                          (when-let [get-id (requiring-resolve 'cn.li.mcmod.platform.be/be-get-block-id)]
+                                            (get-id origin-be))
+                                          (catch Exception _ nil)))]
+                  (if (not= origin-block-id controller-id)
+                    (do
+                      (log/debug "Multi-block validation failed: origin is not controller. Expected:" controller-id "Got:" origin-block-id)
+                      false)
+                    ;; Check all other positions - must be part blocks
+                    (let [result (every?
+                                   (fn [rel-pos]
+                                     (try
+                                       (let [is-origin? (and (zero? (or (:relative-x rel-pos) (:x rel-pos) 0))
+                                                             (zero? (or (:relative-y rel-pos) (:y rel-pos) 0))
+                                                             (zero? (or (:relative-z rel-pos) (:z rel-pos) 0)))]
+                                         (if is-origin?
+                                           true  ; Already checked origin
+                                           (let [pos (abs-pos rel-pos)
+                                                 block-state (world/world-get-block-state world pos)]
+                                             (if-not block-state
+                                               (do
+                                                 (log/debug "Multi-block validation failed: missing block at" pos "rel-pos" rel-pos)
+                                                 false)
+                                               ;; Verify it's a part block
+                                               (let [be (world/world-get-tile-entity world pos)
+                                                     block-id (when be
+                                                                (try
+                                                                  (when-let [get-id (requiring-resolve 'cn.li.mcmod.platform.be/be-get-block-id)]
+                                                                    (get-id be))
+                                                                  (catch Exception _ nil)))]
+                                                 (if (not= block-id part-id)
+                                                   (do
+                                                     (log/debug "Multi-block validation failed: wrong block type at" pos ". Expected:" part-id "Got:" block-id)
+                                                     false)
+                                                   true))))))
+                                       (catch Exception e
+                                         (log/debug "Error checking block at" rel-pos ":"(ex-message e))
+                                         false)))
+                                   (or positions []))]
+                      (when result
+                        (log/debug "Multi-block validation passed for structure at" origin-pos))
+                      result)))
+                ;; No controller-parts mode, just check blocks exist
+                (let [result (every?
+                               (fn [rel-pos]
+                                 (try
+                                   (let [pos (abs-pos rel-pos)
+                                         block-state (world/world-get-block-state world pos)]
+                                     (when-not block-state
+                                       (log/debug "Multi-block validation failed: missing block at" pos "rel-pos" rel-pos))
+                                     (if block-state true false))
+                                   (catch Exception e
+                                     (log/debug "Error checking block at" rel-pos ":"(ex-message e))
+                                     false)))
+                               (or positions []))]
+                  (when result
+                    (log/debug "Multi-block validation passed for structure at" origin-pos))
+                  result)))))
 
         (catch Exception e
           (log/error "Error checking multi-block structure:"(ex-message e))
