@@ -22,6 +22,8 @@
                    ;   ssid-string -> WirelessNet
    node-lookup     ; atom<map> - lookups for NodeConn
                    ;   vblock -> NodeConn
+   spatial-index   ; atom<map> - chunk-based spatial index
+                   ;   [chunk-x chunk-y chunk-z] -> set<vblock>
    networks        ; atom<vector<WirelessNet>> - all networks
    connections])   ; atom<vector<NodeConn>> - all node connections
 
@@ -39,6 +41,7 @@
     world
     (atom {})          ; net-lookup
     (atom {})          ; node-lookup
+    (atom {})          ; spatial-index
     (atom [])          ; networks
     (atom [])))        ; connections
 
@@ -68,6 +71,72 @@
 ;; ============================================================================
 
 (ws/defworld-from-schemas ws/world-data-schema create-world-data)
+
+;; ============================================================================
+;; Spatial Indexing Helpers
+;; ============================================================================
+
+(defn- pos->chunk-key
+  "Convert world position to chunk key [cx cy cz]"
+  [x y z]
+  [(quot x 16) (quot y 16) (quot z 16)])
+
+(defn- add-to-spatial-index!
+  "Add a vblock to the spatial index"
+  [world-data vblock]
+  (let [chunk-key (pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
+    (swap! (:spatial-index world-data)
+           update chunk-key (fnil conj #{}) vblock)))
+
+(defn- remove-from-spatial-index!
+  "Remove a vblock from the spatial index"
+  [world-data vblock]
+  (let [chunk-key (pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
+    (swap! (:spatial-index world-data)
+           (fn [idx]
+             (let [chunk-set (get idx chunk-key)]
+               (if chunk-set
+                 (let [new-set (disj chunk-set vblock)]
+                   (if (empty? new-set)
+                     (dissoc idx chunk-key)
+                     (assoc idx chunk-key new-set)))
+                 idx))))))
+
+(defn get-nearby-chunks
+  "Get chunk keys within range of a position.
+
+  Args:
+    x, y, z - World position
+    range - Search range in blocks
+
+  Returns: Sequence of [cx cy cz] chunk keys"
+  [x y z range]
+  (let [chunk-range (inc (quot range 16))
+        cx (quot x 16)
+        cy (quot y 16)
+        cz (quot z 16)]
+    (for [dx (range (- chunk-range) (inc chunk-range))
+          dy (range (- chunk-range) (inc chunk-range))
+          dz (range (- chunk-range) (inc chunk-range))]
+      [(+ cx dx) (+ cy dy) (+ cz dz)])))
+
+(defn get-vblocks-in-chunks
+  "Get all vblocks in the specified chunks.
+
+  Args:
+    world-data - WiWorldData instance
+    chunk-keys - Sequence of [cx cy cz] chunk keys
+
+  Returns: Set of vblocks"
+  [world-data chunk-keys]
+  (let [idx @(:spatial-index world-data)]
+    (reduce
+      (fn [acc chunk-key]
+        (if-let [vblocks (get idx chunk-key)]
+          (into acc vblocks)
+          acc))
+      #{}
+      chunk-keys)))
 
 ;; ============================================================================
 ;; Network Operations

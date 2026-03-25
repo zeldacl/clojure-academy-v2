@@ -220,53 +220,15 @@
 (def ^:private solar-slot-layout
   (slot-schema/get-slot-layout solar-gen-id))
 
-(gui-dsl/defgui solar-gen
+(gui-dsl/defgui-with-lazy-fns solar-gen
   :gui-id 2
+  :namespace 'cn.li.ac.block.solar-gen.gui
   :display-name "Solar Generator"
   :gui-type :solar
   :registry-name "solar_gen_gui"
   :screen-factory-fn-kw :create-solar-screen
   :slot-layout solar-slot-layout
-  :container-predicate solar-container?
-  :container-fn (fn [tile player]
-                  (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/create-container)]
-                    (f tile player)))
-  :screen-fn (fn [container minecraft-container player]
-               (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/create-screen)]
-                 (f container minecraft-container player)))
-  :tick-fn (fn [container]
-             (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/tick!)]
-               (f container)))
-  :sync-get (fn [container]
-              (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/get-sync-data)]
-                (f container)))
-  :sync-apply (fn [container data]
-                (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/apply-sync-data!)]
-                  (f container data)))
-  :validate-fn (fn [container player]
-                 (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/still-valid?)]
-                   (f container player)))
-  :close-fn (fn [container]
-              (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/on-close)]
-                (f container)))
-  :button-click-fn (fn [container button-id player]
-                     (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/handle-button-click!)]
-                       (f container button-id player)))
-  :slot-count-fn (fn [container]
-                   (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/get-slot-count)]
-                     (f container)))
-  :slot-get-fn (fn [container slot-index]
-                 (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/get-slot-item)]
-                   (f container slot-index)))
-  :slot-set-fn (fn [container slot-index item-stack]
-                 (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/set-slot-item!)]
-                   (f container slot-index item-stack)))
-  :slot-can-place-fn (fn [container slot-index item-stack]
-                       (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/can-place-item?)]
-                         (f container slot-index item-stack)))
-  :slot-changed-fn (fn [container slot-index]
-                     (when-let [f (requiring-resolve 'cn.li.ac.block.solar-gen.gui/slot-changed!)]
-                       (f container slot-index))))
+  :container-predicate solar-container?)
 
 ;; ============================================================================
 ;; Auto-Registration Hooks

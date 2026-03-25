@@ -113,6 +113,8 @@
   - Are within their range of the position
   - Have available capacity (load < capacity)
 
+  Uses spatial indexing for efficient chunk-based lookup.
+
   Parameters:
   - world: World
   - pos: BlockPos
@@ -125,26 +127,33 @@
         y (pos/pos-y pos)
         z (pos/pos-z pos)
         world-data (wd/get-world-data world)
-        all-conns @(:connections world-data)
+        ;; Get nearby chunks using spatial index
+        nearby-chunks (wd/get-nearby-chunks x y z search-range)
+        candidate-vblocks (wd/get-vblocks-in-chunks world-data nearby-chunks)
+        ;; Filter candidates by actual distance and capacity
         range-sq (* search-range search-range)
         matching-nodes
         (reduce
-          (fn [acc conn]
-            (let [node-vb (:node conn)
-                  dist-sq (vb/dist-sq-pos node-vb x y z)]
+          (fn [acc node-vb]
+            (let [dist-sq (vb/dist-sq-pos node-vb x y z)]
               (if (<= dist-sq range-sq)
                 (if-let [node (vb/vblock-get node-vb world)]
                   (let [node-range (.getRange ^cn.li.acapi.wireless.IWirelessNode node)
                         node-range-sq (* node-range node-range)]
-                    (if (and (<= dist-sq node-range-sq)
-                             (< (node-conn/get-load conn)
-                                (node-conn/get-capacity conn)))
-                      (conj acc node)
+                    (if (<= dist-sq node-range-sq)
+                      ;; Check capacity via node connection
+                      (if-let [conn (wd/get-node-connection world-data node-vb)]
+                        (if (< (node-conn/get-load conn)
+                               (node-conn/get-capacity conn))
+                          (conj acc node)
+                          acc)
+                        ;; No connection record, node is available
+                        (conj acc node))
                       acc))
                   acc)
                 acc)))
           []
-          all-conns)]
+          candidate-vblocks)]
     (take max-results matching-nodes)))
 
 ;; ============================================================================

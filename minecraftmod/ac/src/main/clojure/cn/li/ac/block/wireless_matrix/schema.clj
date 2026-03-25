@@ -8,7 +8,8 @@
 
   CRITICAL: This file contains PURE DATA ONLY (no function definitions).
   It can be safely imported by both server-side (block.clj) and client-side (gui.clj) code."
-  (:require [cn.li.mcmod.block.state-schema :as state-schema]))
+  (:require [cn.li.mcmod.block.state-schema :as state-schema]
+            [cn.li.ac.config.nbt-keys :as nbt-keys]))
 
 ;; ============================================================================
 ;; 1. NBT-PERSISTED FIELDS
@@ -19,7 +20,7 @@
 (def nbt-persisted-fields
   [;; Identity
    {:key :placer-name
-    :nbt-key "Placer"
+    :nbt-key (nbt-keys/get-key :placer)
     :type :string
     :default ""
     :persist? true
@@ -28,7 +29,7 @@
 
    ;; Installed components
    {:key :plate-count
-    :nbt-key "PlateCount"
+    :nbt-key (nbt-keys/get-key :plate-count)
     :type :int
     :default 0
     :persist? true
@@ -36,7 +37,7 @@
     :doc "Number of constraint plates installed (0-3)"}
 
    {:key :core-level
-    :nbt-key "CoreLevel"
+    :nbt-key (nbt-keys/get-key :core-level)
     :type :int
     :default 0
     :persist? true
@@ -45,7 +46,7 @@
 
    ;; Multiblock structure
    {:key :direction
-    :nbt-key "Direction"
+    :nbt-key (nbt-keys/get-key :direction)
     :type :keyword
     :default :north
     :persist? true
@@ -53,7 +54,7 @@
     :doc "Multiblock facing direction"}
 
    {:key :sub-id
-    :nbt-key "SubId"
+    :nbt-key (nbt-keys/get-key :sub-id)
     :type :int
     :default 0
     :persist? true
@@ -61,7 +62,7 @@
     :doc "Multiblock part ID (0=controller, 1-7=parts)"}
 
    {:key :controller-pos-x
-    :nbt-key "ControllerPosX"
+    :nbt-key (nbt-keys/get-key :controller-pos-x)
     :type :int
     :default 0
     :persist? true
@@ -69,7 +70,7 @@
     :doc "Controller X position"}
 
    {:key :controller-pos-y
-    :nbt-key "ControllerPosY"
+    :nbt-key (nbt-keys/get-key :controller-pos-y)
     :type :int
     :default 0
     :persist? true
@@ -77,7 +78,7 @@
     :doc "Controller Y position"}
 
    {:key :controller-pos-z
-    :nbt-key "ControllerPosZ"
+    :nbt-key (nbt-keys/get-key :controller-pos-z)
     :type :int
     :default 0
     :persist? true
@@ -86,7 +87,7 @@
 
    ;; Inventory (custom load/save for ItemStack handling)
    {:key :inventory
-    :nbt-key "Inventory"
+    :nbt-key (nbt-keys/get-key :matrix-inventory)
     :type :inventory
     :default [nil nil nil nil]
     :persist? true

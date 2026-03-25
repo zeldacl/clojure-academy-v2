@@ -5,7 +5,8 @@
 
   Provides functions to auto-generate GUI container atoms, sync functions,
   and lifecycle handlers from unified schema definitions."
-  (:require [cn.li.mcmod.platform.be :as pbe]))
+  (:require [cn.li.mcmod.platform.be :as pbe]
+            [cn.li.mcmod.gui.slot-schema :as slot-schema]))
 
 (defn build-gui-atoms
   "Generate GUI container atoms from unified schema.
@@ -112,3 +113,66 @@
           :let [container-key (:gui-container-key field (:key field))
                 payload-key (:gui-payload-key field (:key field))]]
       [payload-key container-key])))
+
+(defn build-create-container-fn
+  "Generate create-container function from schema.
+
+  Args:
+    schema - Unified schema vector
+    gui-type - Keyword identifying the GUI type (e.g., :node, :matrix, :solar)
+    opts - Optional map with:
+      :extra-keys - Additional keys to merge into container
+      :resolve-state-fn - Custom function to extract state from tile (default: get-custom-state)
+
+  Returns: (fn [tile player] -> container map)
+
+  The returned function creates a container with:
+  - :tile-entity - The block entity
+  - :player - The player
+  - :gui-type - The GUI type keyword
+  - GUI atoms generated from schema
+  - Any extra keys provided"
+  [schema gui-type & {:keys [extra-keys resolve-state-fn]}]
+  (fn [tile player]
+    (let [state ((or resolve-state-fn
+                     (fn [t] (if (map? t) t (or (pbe/get-custom-state t) {}))))
+                 tile)]
+      (merge {:tile-entity tile
+              :player player
+              :gui-type gui-type}
+             (or extra-keys {})
+             (build-gui-atoms schema state)))))
+
+(defn build-slot-functions
+  "Generate slot management functions from schema.
+
+  NOTE: This is a basic generator. Many GUIs require custom can-place-item? logic.
+  Use this as a starting point and override specific functions as needed.
+
+  Args:
+    schema-id - The schema ID for slot layout lookup
+
+  Returns: Map with slot function implementations:
+    :get-slot-count - (fn [container] -> int)
+    :get-slot-item - (fn [container idx] -> ItemStack) - requires container-common
+    :set-slot-item! - (fn [container idx item] -> void) - requires container-common
+    :can-place-item? - (fn [container idx item] -> boolean) - requires container-common
+    :slot-changed! - (fn [container idx] -> void) - requires container-common
+
+  IMPORTANT: The returned functions require cn.li.ac.wireless.gui.container-common
+  to be available at runtime. This generator is only useful for AC module GUIs."
+  [schema-id]
+  {:get-slot-count (fn [_container]
+                     (slot-schema/tile-slot-count schema-id))
+   :get-slot-item (fn [container idx]
+                    (when-let [get-fn (requiring-resolve 'cn.li.ac.wireless.gui.container-common/get-slot-item-be)]
+                      (get-fn container idx)))
+   :set-slot-item! (fn [container idx item]
+                     (when-let [set-fn (requiring-resolve 'cn.li.ac.wireless.gui.container-common/set-slot-item-be!)]
+                       (set-fn container idx item {} identity)))
+   :can-place-item? (fn [container idx item]
+                      (when-let [can-place-fn (requiring-resolve 'cn.li.ac.wireless.gui.container-common/can-place-item-be?)]
+                        (can-place-fn container idx item)))
+   :slot-changed! (fn [container idx]
+                    (when-let [changed-fn (requiring-resolve 'cn.li.ac.wireless.gui.container-common/slot-changed-be!)]
+                      (changed-fn container idx)))})

@@ -8,7 +8,8 @@
 
   CRITICAL: This file contains PURE DATA ONLY (no function definitions).
   It can be safely imported by both server-side (block.clj) and client-side (gui.clj) code."
-  (:require [cn.li.mcmod.block.state-schema :as state-schema]))
+  (:require [cn.li.mcmod.block.state-schema :as state-schema]
+            [cn.li.ac.config.nbt-keys :as nbt-keys]))
 
 ;; ============================================================================
 ;; 1. NBT-PERSISTED FIELDS
@@ -19,7 +20,7 @@
 (def nbt-persisted-fields
   [;; Energy storage
    {:key :energy
-    :nbt-key "Energy"
+    :nbt-key (nbt-keys/get-key :energy)
     :type :double
     :default 0.0
     :persist? true
@@ -30,7 +31,7 @@
 
    ;; Inventory
    {:key :battery
-    :nbt-key "Battery"
+    :nbt-key (nbt-keys/get-key :battery)
     :type :itemstack
     :default nil
     :persist? true

@@ -273,7 +273,7 @@ Structure:
 ;; Main macro: defgui
 (defmacro defgui
   "Define a GUI with declarative syntax
-  
+
   Example:
   (defgui my-gui
     :title \"My GUI\"
@@ -288,6 +288,66 @@ Structure:
     `(def ~gui-name
        (register-gui!
          (create-gui-spec ~gui-id ~options-map)))))
+
+;; Macro: defgui-with-lazy-fns
+(defmacro defgui-with-lazy-fns
+  "Define a GUI with automatic lazy function resolution.
+
+  Eliminates boilerplate by automatically generating requiring-resolve wrappers
+  for all standard GUI functions from a specified namespace.
+
+  Example:
+  (defgui-with-lazy-fns wireless-node
+    :gui-id 0
+    :namespace 'cn.li.ac.block.wireless-node.gui
+    :display-name \"Wireless Node\"
+    :registry-name \"wireless_node\"
+    :gui-type :node
+    :screen-factory-fn-kw :create-node-screen
+    :slot-layout {...}
+    :payload-sync-fn 'apply-node-sync-payload!)
+
+  This will automatically create lazy wrappers for:
+  - create-container, create-screen, tick!
+  - get-sync-data, apply-sync-data!
+  - still-valid?, on-close, handle-button-click!
+  - get-slot-count, get-slot-item, set-slot-item!
+  - can-place-item?, slot-changed!
+
+  Use :payload-sync-fn to specify the payload sync function name (varies per GUI)."
+  [gui-name & {:keys [namespace payload-sync-fn] :as opts}]
+  (when-not namespace
+    (throw (ex-info "defgui-with-lazy-fns requires :namespace parameter" {:gui-name gui-name})))
+  (let [;; Map function names to their corresponding defgui option keywords
+        fn-mappings {'create-container :container-fn
+                     'create-screen :screen-fn
+                     'tick! :tick-fn
+                     'get-sync-data :sync-get
+                     'apply-sync-data! :sync-apply
+                     'still-valid? :validate-fn
+                     'on-close :close-fn
+                     'handle-button-click! :button-click-fn
+                     'get-slot-count :slot-count-fn
+                     'get-slot-item :slot-get-fn
+                     'set-slot-item! :slot-set-fn
+                     'can-place-item? :slot-can-place-fn
+                     'slot-changed! :slot-changed-fn}
+        ;; Generate lazy wrapper for each function
+        wrappers (into {}
+                   (for [[fn-name opt-kw] fn-mappings]
+                     [opt-kw
+                      `(fn [& args#]
+                         (when-let [f# (requiring-resolve '~(symbol (str namespace) (str fn-name)))]
+                           (apply f# args#)))]))
+        ;; Add payload sync function if specified
+        wrappers (if payload-sync-fn
+                   (assoc wrappers :payload-sync-apply-fn
+                     `(fn [& args#]
+                        (when-let [f# (requiring-resolve '~(symbol (str namespace) (str payload-sync-fn)))]
+                          (apply f# args#))))
+                   wrappers)]
+    `(defgui ~gui-name
+       ~@(apply concat (merge wrappers (dissoc opts :namespace :payload-sync-fn))))))
 
 ;; XML-based GUI macro
 (defmacro defgui-from-xml

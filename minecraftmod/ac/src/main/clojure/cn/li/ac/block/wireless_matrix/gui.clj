@@ -563,53 +563,13 @@
 (def ^:private matrix-slot-layout
   (slot-schema/get-slot-layout wireless-matrix-id))
 
-(gui-dsl/defgui wireless-matrix
+(gui-dsl/defgui-with-lazy-fns wireless-matrix
   :gui-id 1
+  :namespace 'cn.li.ac.block.wireless-matrix.gui
+  :payload-sync-fn 'apply-matrix-sync-payload!
   :display-name "Wireless Matrix"
   :gui-type :matrix
   :registry-name "wireless_matrix_gui"
   :screen-factory-fn-kw :create-matrix-screen
   :slot-layout matrix-slot-layout
-  :container-predicate matrix-container?
-  :container-fn (fn [tile player]
-                  (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/create-container)]
-                    (f tile player)))
-  :screen-fn (fn [container minecraft-container player]
-               (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/create-screen)]
-                 (f container minecraft-container player)))
-  :tick-fn (fn [container]
-             (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/tick!)]
-               (f container)))
-  :sync-get (fn [container]
-              (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/get-sync-data)]
-                (f container)))
-  :sync-apply (fn [container data]
-                (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/apply-sync-data!)]
-                  (f container data)))
-  :payload-sync-apply-fn (fn [payload]
-                           (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/apply-matrix-sync-payload!)]
-                             (f payload)))
-  :validate-fn (fn [container player]
-                 (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/still-valid?)]
-                   (f container player)))
-  :close-fn (fn [container]
-              (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/on-close)]
-                (f container)))
-  :button-click-fn (fn [container button-id player]
-                     (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/handle-button-click!)]
-                       (f container button-id player)))
-  :slot-count-fn (fn [container]
-                   (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/get-slot-count)]
-                     (f container)))
-  :slot-get-fn (fn [container slot-index]
-                 (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/get-slot-item)]
-                   (f container slot-index)))
-  :slot-set-fn (fn [container slot-index item-stack]
-                 (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/set-slot-item!)]
-                   (f container slot-index item-stack)))
-  :slot-can-place-fn (fn [container slot-index item-stack]
-                       (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/can-place-item?)]
-                         (f container slot-index item-stack)))
-  :slot-changed-fn (fn [container slot-index]
-                     (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/slot-changed!)]
-                       (f container slot-index))))
+  :container-predicate matrix-container?)

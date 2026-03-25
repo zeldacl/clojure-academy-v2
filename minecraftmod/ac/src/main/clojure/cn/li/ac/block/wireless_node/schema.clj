@@ -13,7 +13,8 @@
 
   CRITICAL: This file contains PURE DATA ONLY (no function definitions).
   It can be safely imported by both server-side (block.clj) and client-side (gui.clj) code."
-  (:require [cn.li.mcmod.block.state-schema :as state-schema]))
+  (:require [cn.li.mcmod.block.state-schema :as state-schema]
+            [cn.li.ac.config.nbt-keys :as nbt-keys]))
 
 ;; ============================================================================
 ;; 1. NBT-PERSISTED FIELDS
@@ -24,7 +25,7 @@
 (def nbt-persisted-fields
   [;; Basic properties
    {:key :node-type
-    :nbt-key "NodeType"
+    :nbt-key (nbt-keys/get-key :node-type)
     :type :keyword
     :default :basic
     :persist? true
@@ -34,7 +35,7 @@
     :doc "Node tier: :basic, :standard, or :advanced"}
 
    {:key :placer-name
-    :nbt-key "Placer"
+    :nbt-key (nbt-keys/get-key :placer)
     :type :string
     :default ""
     :persist? true
@@ -44,7 +45,7 @@
 
    ;; Energy storage
    {:key :energy
-    :nbt-key "Energy"
+    :nbt-key (nbt-keys/get-key :energy)
     :type :double
     :default 0.0
     :persist? true
@@ -55,7 +56,7 @@
 
    ;; Network configuration
    {:key :node-name
-    :nbt-key "NodeName"
+    :nbt-key (nbt-keys/get-key :node-name)
     :type :string
     :default "Unnamed"
     :persist? true
@@ -66,7 +67,7 @@
     :doc "Network SSID"}
 
    {:key :password
-    :nbt-key "Password"
+    :nbt-key (nbt-keys/get-key :password)
     :type :string
     :default ""
     :persist? true
@@ -75,7 +76,7 @@
     :doc "Network password"}
 
    {:key :enabled
-    :nbt-key "Enabled"
+    :nbt-key (nbt-keys/get-key :enabled)
     :type :boolean
     :default false
     :persist? true
@@ -87,7 +88,7 @@
 
    ;; Inventory
    {:key :inventory
-    :nbt-key "NodeInventory"
+    :nbt-key (nbt-keys/get-key :node-inventory)
     :type :inventory
     :default [nil nil]
     :persist? true
