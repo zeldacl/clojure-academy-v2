@@ -17,7 +17,6 @@
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.world :as world]
@@ -30,6 +29,7 @@
             [cn.li.ac.wireless.network :as wireless-net]
             [cn.li.ac.wireless.gui.message-registry :as msg-registry]
             [cn.li.ac.registry.hooks :as hooks]
+            [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessMatrix]))
 
@@ -47,91 +47,18 @@
   (msg-registry/msg :matrix action))
 
 ;; ============================================================================
-;; Part 1: State Schema Definition
+;; Part 1: State Schema (imported from schema.clj)
 ;; ============================================================================
-
-(defn- load-inventory
-  "Deserialize a ListTag of ItemStack compounds into a [s0 s1 s2 s3] vector."
-  [tag nbt-key default]
-  (if (nbt/nbt-has-key? tag nbt-key)
-    (let [inv-tag (nbt/nbt-get-list tag nbt-key)
-          size    (nbt/nbt-list-size inv-tag)]
-      (reduce
-        (fn [v i]
-          (let [slot-tag (nbt/nbt-list-get-compound inv-tag i)
-                slot     (nbt/nbt-get-int slot-tag "Slot")
-                item     (pitem/create-item-from-nbt slot-tag)]
-            (if (and (>= slot 0) (< slot (count v)))
-              (assoc v slot (when-not (pitem/item-is-empty? item) item))
-              v)))
-        default
-        (range size)))
-    default))
-
-(defn- save-inventory
-  "Serialize a [s0 s1 s2 s3] vector into a ListTag and attach to tag."
-  [state tag nbt-key]
-  (let [inv      (get state :inventory [nil nil nil nil])
-        inv-list (nbt/create-nbt-list)]
-    (doseq [slot (range (count inv))]
-      (when-let [item (nth inv slot nil)]
-        (let [slot-tag (nbt/create-nbt-compound)]
-          (nbt/nbt-set-int! slot-tag "Slot" slot)
-          (pitem/item-save-to-nbt item slot-tag)
-          (nbt/nbt-append! inv-list slot-tag))))
-    (nbt/nbt-set-tag! tag nbt-key inv-list)))
-
-(def matrix-state-schema
-  "Single source of truth for all matrix state fields.
-
-  Adding/removing/renaming a field only requires editing this vector.
-  NBT serialization, GUI sync, and default state are derived automatically."
-  [;; Identity
-   {:key :placer-name   :nbt-key "Placer"      :type :string   :default ""
-    :persist? true  :gui-sync? true}
-
-   ;; Installed components
-   {:key :plate-count   :nbt-key "PlateCount"  :type :int      :default 0
-    :persist? true  :gui-sync? true}
-
-   {:key :core-level    :nbt-key "CoreLevel"   :type :int      :default 0
-    :persist? true  :gui-sync? true}
-
-   ;; Multiblock structure
-   {:key :direction     :nbt-key "Direction"   :type :keyword  :default :north
-    :persist? true  :gui-sync? false}
-
-   {:key :sub-id        :nbt-key "SubId"       :type :int      :default 0
-    :persist? true  :gui-sync? false}
-
-   {:key :controller-pos-x :nbt-key "ControllerPosX" :type :int :default 0
-    :persist? true :gui-sync? false}
-
-   {:key :controller-pos-y :nbt-key "ControllerPosY" :type :int :default 0
-    :persist? true :gui-sync? false}
-
-   {:key :controller-pos-z :nbt-key "ControllerPosZ" :type :int :default 0
-    :persist? true :gui-sync? false}
-
-   ;; Ephemeral tick counter (not persisted, not synced)
-   {:key :update-ticker :nbt-key nil           :type :int      :default 0
-    :persist? false :gui-sync? false}
-
-   ;; Inventory (custom load/save for ItemStack handling)
-   {:key :inventory     :nbt-key "Inventory"   :type :inventory :default [nil nil nil nil]
-    :persist? true  :gui-sync? false
-    :load-fn load-inventory
-    :save-fn save-inventory}])
 
 ;; Derived from schema
 (def matrix-default-state
-  (schema/schema->default-state matrix-state-schema))
+  (schema/schema->default-state matrix-schema/unified-matrix-schema))
 
 (def matrix-scripted-load-fn
-  (schema/schema->load-fn matrix-state-schema))
+  (schema/schema->load-fn matrix-schema/unified-matrix-schema))
 
 (def matrix-scripted-save-fn
-  (schema/schema->save-fn matrix-state-schema))
+  (schema/schema->save-fn matrix-schema/unified-matrix-schema))
 
 ;; ============================================================================
 ;; Part 2: Helper Functions
@@ -205,39 +132,39 @@
 
   (getMatrixCapacity [_]
     (let [state   (or (platform-be/get-custom-state be) matrix-default-state)
-          plates  (schema/get-field matrix-state-schema state :plate-count)
-          core-lv (schema/get-field matrix-state-schema state :core-level)]
+          plates  (schema/get-field matrix-schema/unified-matrix-schema state :plate-count)
+          core-lv (schema/get-field matrix-schema/unified-matrix-schema state :core-level)]
       (if (and (> core-lv 0) (= plates 3))
         (int (* 8 core-lv))
         0)))
 
   (getMatrixBandwidth [_]
     (let [state   (or (platform-be/get-custom-state be) matrix-default-state)
-          plates  (schema/get-field matrix-state-schema state :plate-count)
-          core-lv (schema/get-field matrix-state-schema state :core-level)]
+          plates  (schema/get-field matrix-schema/unified-matrix-schema state :plate-count)
+          core-lv (schema/get-field matrix-schema/unified-matrix-schema state :core-level)]
       (if (and (> core-lv 0) (= plates 3))
         (double (* core-lv core-lv 60))
         0.0)))
 
   (getMatrixRange [_]
     (let [state   (or (platform-be/get-custom-state be) matrix-default-state)
-          plates  (schema/get-field matrix-state-schema state :plate-count)
-          core-lv (schema/get-field matrix-state-schema state :core-level)]
+          plates  (schema/get-field matrix-schema/unified-matrix-schema state :plate-count)
+          core-lv (schema/get-field matrix-schema/unified-matrix-schema state :core-level)]
       (if (and (> core-lv 0) (= plates 3))
         (double (* 24 (Math/sqrt core-lv)))
         0.0)))
 
   (getSsid [_]
     (let [state (or (platform-be/get-custom-state be) matrix-default-state)]
-      (str (schema/get-field matrix-state-schema state :ssid))))
+      (str (schema/get-field matrix-schema/unified-matrix-schema state :ssid))))
 
   (getPassword [_]
     (let [state (or (platform-be/get-custom-state be) matrix-default-state)]
-      (str (schema/get-field matrix-state-schema state :password))))
+      (str (schema/get-field matrix-schema/unified-matrix-schema state :password))))
 
   (getPlacerName [_]
     (let [state (or (platform-be/get-custom-state be) matrix-default-state)]
-      (str (schema/get-field matrix-state-schema state :placer-name))))
+      (str (schema/get-field matrix-schema/unified-matrix-schema state :placer-name))))
 
   Object
   (toString [_]
@@ -287,7 +214,7 @@
         (when-let [broadcast-fn (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/broadcast-matrix-state)]
           (let [impl ^IWirelessMatrix (->WirelessMatrixImpl be)]
             (broadcast-fn level pos
-              (-> (schema/schema->sync-payload matrix-state-schema state pos)
+              (-> (schema/schema->sync-payload matrix-schema/unified-matrix-schema state pos)
                   (assoc :is-working  (is-working? state)
                          :capacity    (.getMatrixCapacity impl)
                          :bandwidth   (.getMatrixBandwidth impl)

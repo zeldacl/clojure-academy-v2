@@ -35,6 +35,7 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.block.wireless-matrix.block :as wm]
+            [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.item.constraint-plate :as plate]
@@ -42,6 +43,7 @@
             [cn.li.ac.wireless.gui.container-common :as common]
             [cn.li.ac.wireless.gui.container-move-common :as move-common]
             [cn.li.ac.wireless.gui.container-schema :as schema]
+            [cn.li.mcmod.gui.schema-builders :as schema-builders]
             [cn.li.ac.wireless.gui.sync-helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.gui-metadata :as metadata]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -85,23 +87,13 @@
 (def gui-height tech-ui/gui-height)
 
 ;; ============================================================================
-;; Field Schema (from matrix_fields.clj)
+;; Field Schema (imported from schema.clj)
 ;; ============================================================================
-
-(def matrix-fields
-  [{:key :core-level   :init (fn [s] (:core-level s 0))    :sync? true  :coerce int     :close-reset 0}
-   {:key :plate-count  :init (fn [s] (:plate-count s 0))   :sync? true  :coerce int     :close-reset 0}
-   {:key :is-working   :init (fn [_] false)                 :sync? true  :coerce boolean :close-reset false}
-   {:key :capacity     :init (fn [_] 0)                     :sync? true  :coerce int     :close-reset 0}
-   {:key :max-capacity :init (fn [_] 0)                     :sync? true  :coerce int     :close-reset 0}
-   {:key :bandwidth    :init (fn [_] 0)                     :sync? true  :coerce long    :close-reset 0}
-   {:key :range        :init (fn [_] 0.0)                   :sync? true  :coerce double  :close-reset 0.0}
-   {:key :sync-ticker  :init (fn [_] 0)                     :sync? false :coerce int     :close-reset 0}])
 
 (defn sync-field-mappings
   "Return the field-mappings vector for apply-sync-payload-template!."
   []
-  (schema/sync-field-mappings matrix-fields))
+  (schema/sync-field-mappings matrix-schema/gui-container-fields))
 
 ;; ============================================================================
 ;; Data Structures
@@ -234,7 +226,7 @@
             :tile-java      proxy
             :player         player
             :container-type :matrix}
-           (schema/build-atoms matrix-fields state))))
+           (schema-builders/build-gui-atoms matrix-schema/unified-matrix-schema state))))
 
 ;; ============================================================================
 ;; Slot Management (from matrix_container.clj)
@@ -308,10 +300,10 @@
           (sync-helpers/query-matrix-network-capacity! container stats))))))
 
 (defn get-sync-data [container]
-  (schema/get-sync-data matrix-fields container))
+  ((schema-builders/build-get-sync-data-fn matrix-schema/unified-matrix-schema) container))
 
 (defn apply-sync-data! [container data]
-  (schema/apply-sync-data! matrix-fields container data))
+  ((schema-builders/build-apply-sync-data-fn matrix-schema/unified-matrix-schema) container data))
 
 (defn still-valid? [container player]
   (common/still-valid? container player))
@@ -340,7 +332,7 @@
 
 (defn on-close [container]
   (log/debug "Closing wireless matrix container")
-  (schema/reset-atoms! matrix-fields container))
+  ((schema-builders/build-on-close-fn matrix-schema/unified-matrix-schema) container))
 
 ;; ============================================================================
 ;; Sync Packet Handling (from matrix_sync.clj)
@@ -362,7 +354,7 @@
             :pos-y       (pos/pos-y block-pos)
             :pos-z       (pos/pos-z block-pos)
             :placer-name (or (:placer-name tile) "Unknown")}
-           (schema/build-sync-packet-fields matrix-fields container))))
+           (schema/build-sync-packet-fields matrix-schema/gui-container-fields container))))
 
 (defn apply-matrix-sync-payload! [payload]
   (sync-helpers/apply-sync-payload-template!

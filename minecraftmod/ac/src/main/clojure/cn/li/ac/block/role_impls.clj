@@ -8,6 +8,7 @@
   WirelessNodeImpl     → implements IWirelessNode
   ClojureEnergyImpl    → implements IEnergyCapable (platform-neutral energy)"
   (:require [cn.li.ac.block.wireless-matrix.block :as matrix-block]
+            [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.ac.block.wireless-node.block :as node-block]
             [cn.li.mcmod.block.state-schema :as schema]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -24,39 +25,39 @@
 
   (getMatrixCapacity [_]
     (let [state   (or (platform-be/get-custom-state be) matrix-block/matrix-default-state)
-          plates  (schema/get-field matrix-block/matrix-state-schema state :plate-count)
-          core-lv (schema/get-field matrix-block/matrix-state-schema state :core-level)]
+          plates  (schema/get-field matrix-schema/unified-matrix-schema state :plate-count)
+          core-lv (schema/get-field matrix-schema/unified-matrix-schema state :core-level)]
       (if (and (> core-lv 0) (= plates 3))
         (int (* 8 core-lv))
         0)))
 
   (getMatrixBandwidth [_]
     (let [state   (or (platform-be/get-custom-state be) matrix-block/matrix-default-state)
-          plates  (schema/get-field matrix-block/matrix-state-schema state :plate-count)
-          core-lv (schema/get-field matrix-block/matrix-state-schema state :core-level)]
+          plates  (schema/get-field matrix-schema/unified-matrix-schema state :plate-count)
+          core-lv (schema/get-field matrix-schema/unified-matrix-schema state :core-level)]
       (if (and (> core-lv 0) (= plates 3))
         (double (* core-lv core-lv 60))
         0.0)))
 
   (getMatrixRange [_]
     (let [state   (or (platform-be/get-custom-state be) matrix-block/matrix-default-state)
-          plates  (schema/get-field matrix-block/matrix-state-schema state :plate-count)
-          core-lv (schema/get-field matrix-block/matrix-state-schema state :core-level)]
+          plates  (schema/get-field matrix-schema/unified-matrix-schema state :plate-count)
+          core-lv (schema/get-field matrix-schema/unified-matrix-schema state :core-level)]
       (if (and (> core-lv 0) (= plates 3))
         (double (* 24 (Math/sqrt core-lv)))
         0.0)))
 
   (getSsid [_]
     (let [state (or (platform-be/get-custom-state be) matrix-block/matrix-default-state)]
-      (str (schema/get-field matrix-block/matrix-state-schema state :ssid))))
+      (str (schema/get-field matrix-schema/unified-matrix-schema state :ssid))))
 
   (getPassword [_]
     (let [state (or (platform-be/get-custom-state be) matrix-block/matrix-default-state)]
-      (str (schema/get-field matrix-block/matrix-state-schema state :password))))
+      (str (schema/get-field matrix-schema/unified-matrix-schema state :password))))
 
   (getPlacerName [_]
     (let [state (or (platform-be/get-custom-state be) matrix-block/matrix-default-state)]
-      (str (schema/get-field matrix-block/matrix-state-schema state :placer-name))))
+      (str (schema/get-field matrix-schema/unified-matrix-schema state :placer-name))))
 
   Object
   (toString [_]
