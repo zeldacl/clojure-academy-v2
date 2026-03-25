@@ -122,7 +122,7 @@
 
 (defn- parent-from-spec
   [block-spec]
-  (or (:model-parent block-spec)
+  (or (get-in block-spec [:rendering :model-parent])
       (get-in block-spec [:properties :model-parent])
       "minecraft:block/cube_all"))
 
@@ -163,7 +163,7 @@
       (let [registry-name (infer-registry-name-from-model model-name)
             block-spec (registry-name->block-spec registry-name)
         parent (parent-from-spec block-spec)
-        explicit-texture (some-> (or (get-in block-spec [:textures :all])
+        explicit-texture (some-> (or (get-in block-spec [:rendering :textures :all])
                      (get-in block-spec [:properties :textures :all]))
                  normalize-block-texture)]
         (if (or (not= parent "minecraft:block/cube_all") explicit-texture)
@@ -212,7 +212,7 @@
       (.simpleBlock provider block model-file)
       (when (registry-metadata/should-create-block-item? block-id)
         ;; Query metadata instead of hardcoded set
-        (if (:flat-item-icon? block-spec)
+        (if (get-in block-spec [:rendering :flat-item-icon?])
           (let [texture-rl (texture-from-spec block-spec registry-name)]
             (write-flat-item-model! provider registry-name texture-rl))
           (.simpleBlockItem provider block model-file))))))

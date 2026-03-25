@@ -8,29 +8,110 @@
 ;; Block Registry - stores all defined blocks
 (defonce block-registry (atom {}))
 
+;; ============================================================================
+;; Nested Record Structures for BlockSpec
+;; ============================================================================
+
+(defrecord PhysicalProperties
+  [material hardness resistance friction slip-factor
+   sounds harvest-level harvest-tool requires-tool]
+  ;; Physical properties of a block: material, hardness, resistance, friction, sounds, harvest requirements.
+  ;;
+  ;; Fields:
+  ;; - material: Material type keyword (:stone, :wood, :metal, :glass, etc.)
+  ;; - hardness: How long it takes to break (higher = longer)
+  ;; - resistance: Explosion resistance (higher = more resistant)
+  ;; - friction: Slipperiness factor (0.6 = normal, lower = more slippery)
+  ;; - slip-factor: Alternative name for friction
+  ;; - sounds: Sound type keyword (:stone, :wood, :metal, :glass, etc.)
+  ;; - harvest-level: Minimum tool tier required (0 = wood, 1 = stone, 2 = iron, 3 = diamond)
+  ;; - harvest-tool: Tool type required (:pickaxe, :axe, :shovel, :hoe, :sword)
+  ;; - requires-tool: Whether a tool is required to harvest drops
+  )
+
+(defrecord RenderingProperties
+  [model-parent textures model-textures has-item-form?
+   flat-item-icon? creative-tab light-level]
+  ;; Rendering and visual properties of a block: models, textures, lighting, creative tab.
+  ;;
+  ;; Fields:
+  ;; - model-parent: Parent model path for datagen (e.g., "block/cube_all")
+  ;; - textures: Texture map for datagen (e.g., {:all "modid:block/texture"})
+  ;; - model-textures: Additional model-specific textures
+  ;; - has-item-form?: Whether this block should have a BlockItem/item model
+  ;; - flat-item-icon?: Use flat 2D item icon instead of 3D block model
+  ;; - creative-tab: Creative tab for block items (:misc, :building, :decorations, etc.)
+  ;; - light-level: Light emission level (0-15, 0 = no light, 15 = brightest)
+  )
+
+(defrecord TileEntityConfig
+  [has-block-entity? tile-kind tile-tick-fn tile-load-fn tile-save-fn]
+  ;; Tile entity (block entity) configuration and lifecycle hooks.
+  ;;
+  ;; Fields:
+  ;; - has-block-entity?: Whether this block has a tile entity
+  ;; - tile-kind: Keyword identifying the tile entity type (e.g., :wireless-node)
+  ;; - tile-tick-fn: Function called every tick (fn [tile-entity world pos] ...)
+  ;; - tile-load-fn: Function called when loading from NBT (fn [tile-entity nbt] ...)
+  ;; - tile-save-fn: Function called when saving to NBT (fn [tile-entity] nbt-map)
+  )
+
+(defrecord BlockStateConfig
+  [block-state-properties]
+  ;; Block state properties configuration.
+  ;;
+  ;; Fields:
+  ;; - block-state-properties: Dynamic block state properties (e.g., {:energy IntegerProperty, :connected BooleanProperty})
+  )
+
+(defrecord EventHandlers
+  [on-right-click on-break on-place on-multi-block-break]
+  ;; Event handlers for block interactions.
+  ;;
+  ;; Fields:
+  ;; - on-right-click: Handler for right-click/use (fn [event-data] ...)
+  ;; - on-break: Handler for block break (fn [event-data] ...)
+  ;; - on-place: Handler for block placement (fn [event-data] ...)
+  ;; - on-multi-block-break: Handler for multi-block structure break (fn [event-data] ...)
+  )
+
+(defrecord MultiBlockConfig
+  [multi-block? multi-block-size multi-block-positions multi-block-origin
+   multi-block-rotation-center multi-block-master? multiblock-mode
+   controller-block-id part-block-id]
+  ;; Multi-block structure configuration.
+  ;;
+  ;; Fields:
+  ;; - multi-block?: Whether this is a multi-block structure
+  ;; - multi-block-size: Regular multi-block size {:width N :height N :depth N}
+  ;; - multi-block-positions: Irregular multi-block custom positions [{:x 0 :y 0 :z 0} ...]
+  ;; - multi-block-origin: Origin point of the structure {:x 0 :y 0 :z 0}
+  ;; - multi-block-rotation-center: Rotation center for the structure
+  ;; - multi-block-master?: Whether this block is the master/controller
+  ;; - multiblock-mode: Multi-block mode (:controller-parts, etc.)
+  ;; - controller-block-id: ID of the controller block (for controller-parts mode)
+  ;; - part-block-id: ID of the part block (for controller-parts mode)
+  )
+
 ;; Block specifications
-(defrecord BlockSpec [id registry-name material hardness resistance light-level requires-tool
-                      sounds harvest-level harvest-tool friction slip-factor
-                      creative-tab  ;; Creative tab for block items
-                      has-item-form?  ;; Whether this block should have a BlockItem/item model
-                      flat-item-icon?  ;; Use flat 2D item icon instead of 3D block model
-                      block-state-properties  ;; Dynamic block state properties (e.g., energy, connected)
-                      on-right-click on-break on-place properties
-                      ;; Model/datagen fields (official DSL options)
-                      model-parent textures model-textures
-                      ;; BlockEntity: when true, platform uses generic ScriptedEntityBlock/ScriptedBlockEntity
-                      has-block-entity?
-                      ;; Scripted tile metadata/hooks (optional)
-                      tile-kind tile-tick-fn tile-load-fn tile-save-fn
-                      ;; Multi-block support
-                      multi-block? multi-block-size multi-block-origin
-                      multi-block-rotation-center
-                      multi-block-positions  ; Custom positions for irregular shapes
-                      multi-block-master? on-multi-block-break
-                      ;; Controller/part multi-block mode metadata
-                      multiblock-mode
-                      controller-block-id
-                      part-block-id])
+(defrecord BlockSpec
+  [id registry-name properties
+   physical rendering tile-entity block-state events multi-block]
+  ;; Complete block specification with nested configuration groups.
+  ;;
+  ;; Core identity fields:
+  ;; - id: Unique string identifier for this block
+  ;; - registry-name: Registry name for platform registration
+  ;; - properties: Additional custom properties map
+  ;;
+  ;; Nested configuration groups:
+  ;; - physical: PhysicalProperties record
+  ;; - rendering: RenderingProperties record
+  ;; - tile-entity: TileEntityConfig record
+  ;; - block-state: BlockStateConfig record
+  ;; - events: EventHandlers record
+  ;; - multi-block: MultiBlockConfig record
+  )
 
 ;; Material types (version-agnostic)
 (def materials
@@ -132,10 +213,22 @@
   [positions]
   (when (empty? positions)
     (throw (ex-info "Multi-block positions cannot be empty" {:positions positions})))
-  (when-not (some #(and (= (:x %) 0) (= (:y %) 0) (= (:z %) 0)) positions)
-    (throw (ex-info "Multi-block positions must include origin (0,0,0)" {:positions positions})))
-  (when-not (every? #(and (integer? (:x %)) (integer? (:y %)) (integer? (:z %))) positions)
-    (throw (ex-info "All position coordinates must be integers" {:positions positions})))
+  ;; Helper to extract coordinates from either vector [x y z] or map {:x x :y y :z z}
+  (let [get-coords (fn [pos]
+                     (if (vector? pos)
+                       [(nth pos 0 0) (nth pos 1 0) (nth pos 2 0)]
+                       [(:x pos) (:y pos) (:z pos)]))]
+    (when-not (some (fn [pos]
+                      (let [[x y z] (get-coords pos)]
+                        (and (= x 0) (= y 0) (= z 0))))
+                    positions)
+      (log/warn "Multi-block positions do not include origin (0,0,0), adding it automatically" positions)
+      (throw (ex-info "Multi-block positions must include origin (0,0,0)" {:positions positions})))
+    (when-not (every? (fn [pos]
+                        (let [[x y z] (get-coords pos)]
+                          (and (integer? x) (integer? y) (integer? z))))
+                      positions)
+      (throw (ex-info "All position coordinates must be integers" {:positions positions}))))
   true)
 
 (defn get-multi-block-master-pos
@@ -154,32 +247,34 @@
 
    Returns a BlockPos when resolved, or nil when not a valid part."
   [world clicked-pos block-spec]
-  (when (:multi-block? block-spec)
-    (let [origin   (:multi-block-origin block-spec {:x 0 :y 0 :z 0})
-          positions (if-let [custom-pos (:multi-block-positions block-spec)]
-                      (calculate-multi-block-positions custom-pos origin)
-                      (calculate-multi-block-positions (:multi-block-size block-spec)
-                                                       origin))
-          part-pos-map {:x (pos/pos-x clicked-pos)
-                        :y (pos/pos-y clicked-pos)
-                        :z (pos/pos-z clicked-pos)}]
-      (some (fn [rel-pos]
-              (let [master-map (get-multi-block-master-pos part-pos-map rel-pos)
-                    master-pos (pos/create-block-pos (:x master-map)
-                                                     (:y master-map)
-                                                     (:z master-map))]
-                (when (world/world-get-tile-entity world master-pos)
-                  master-pos)))
-            positions))))
+  (let [multi-block (:multi-block block-spec)]
+    (when (:multi-block? multi-block)
+      (let [origin   (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})
+            positions (if-let [custom-pos (:multi-block-positions multi-block)]
+                        (calculate-multi-block-positions custom-pos origin)
+                        (calculate-multi-block-positions (:multi-block-size multi-block)
+                                                         origin))
+            part-pos-map {:x (pos/pos-x clicked-pos)
+                          :y (pos/pos-y clicked-pos)
+                          :z (pos/pos-z clicked-pos)}]
+        (some (fn [rel-pos]
+                (let [master-map (get-multi-block-master-pos part-pos-map rel-pos)
+                      master-pos (pos/create-block-pos (:x master-map)
+                                                       (:y master-map)
+                                                       (:z master-map))]
+                  (when (world/world-get-tile-entity world master-pos)
+                    master-pos)))
+              positions)))))
 
 (defn all-multi-block-positions
   "Return a sequence of all absolute BlockPos occupied by a multi-block,
    given the master/origin BlockPos and block-spec."
   [master-pos block-spec]
-  (let [origin   (:multi-block-origin block-spec {:x 0 :y 0 :z 0})
-        positions (if-let [custom-pos (:multi-block-positions block-spec)]
+  (let [multi-block (:multi-block block-spec)
+        origin   (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})
+        positions (if-let [custom-pos (:multi-block-positions multi-block)]
                     (calculate-multi-block-positions custom-pos origin)
-                    (calculate-multi-block-positions (:multi-block-size block-spec)
+                    (calculate-multi-block-positions (:multi-block-size multi-block)
                                                      origin))
         mx (pos/pos-x master-pos)
         my (pos/pos-y master-pos)
@@ -195,137 +290,189 @@
    Returns true if all target positions currently have no block state (treated as empty).
    Platform-specific layers can later extend this with 'replaceable' checks if needed."
   [world master-pos block-spec]
-  (if-not (:multi-block? block-spec)
-    true
-    (let [positions (all-multi-block-positions master-pos block-spec)]
-      (every?
-        (fn [p]
-          (let [state (world/world-get-block-state world p)]
-            (nil? state)))
-        positions))))
+  (let [multi-block (:multi-block block-spec)]
+    (if-not (:multi-block? multi-block)
+      true
+      (let [positions (all-multi-block-positions master-pos block-spec)]
+        (every?
+          (fn [p]
+            (let [state (world/world-get-block-state world p)]
+              (nil? state)))
+          positions)))))
 
 (defn is-multi-block-complete?
   "Check if all parts of a multi-block structure are present
    world: world object
    master-pos: master block position (origin)
    block-spec: BlockSpec record containing multi-block configuration
-   
+
    Returns true if all part blocks exist and are correct type"
   [world master-pos block-spec]
-  (when (:multi-block? block-spec)
-    (try
-      (let [origin (:multi-block-origin block-spec {:x 0 :y 0 :z 0})
-            positions (if-let [custom-positions (:multi-block-positions block-spec)]
-                        (calculate-multi-block-positions custom-positions origin)
-                        (calculate-multi-block-positions (:multi-block-size block-spec) origin))
-            [mx my mz] (if (map? master-pos)
-                         [(:x master-pos) (:y master-pos) (:z master-pos)]
-                         [(pos/pos-x master-pos) (pos/pos-y master-pos) (pos/pos-z master-pos)])
-            origin-pos (if (map? master-pos)
-                         (pos/create-block-pos mx my mz)
-                         master-pos)
-            
-            ;; Function to calculate absolute position
-            abs-pos (fn [rel-pos]
-                      (let [x (+ mx (or (:relative-x rel-pos) (:x rel-pos) 0))
-                            y (+ my (or (:relative-y rel-pos) (:y rel-pos) 0))
-                            z (+ mz (or (:relative-z rel-pos) (:z rel-pos) 0))]
-                        (pos/create-block-pos x y z)))]
-        
-        ;; Check origin first
-        (if-not (world/world-get-block-state world origin-pos)
-          false
-          ;; Check all sub-block positions
-          (every?
-            (fn [rel-pos]
-              (try
-                (let [pos (abs-pos rel-pos)
-                      block-state (world/world-get-block-state world pos)]
-                  (if block-state true false))
-                (catch Exception e
-                  (log/debug "Error checking block at" rel-pos ":"(ex-message e))
-                  false)))
-            (or positions []))))
-      
-      (catch Exception e
-        (log/error "Error checking multi-block structure:"(ex-message e))
-        false))))
+  (let [multi-block (:multi-block block-spec)]
+    (when (:multi-block? multi-block)
+      (try
+        (let [origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})
+              positions (if-let [custom-positions (:multi-block-positions multi-block)]
+                          (calculate-multi-block-positions custom-positions origin)
+                          (calculate-multi-block-positions (:multi-block-size multi-block) origin))
+              [mx my mz] (if (map? master-pos)
+                           [(:x master-pos) (:y master-pos) (:z master-pos)]
+                           [(pos/pos-x master-pos) (pos/pos-y master-pos) (pos/pos-z master-pos)])
+              origin-pos (if (map? master-pos)
+                           (pos/create-block-pos mx my mz)
+                           master-pos)
+
+              ;; Function to calculate absolute position
+              abs-pos (fn [rel-pos]
+                        (let [x (+ mx (or (:relative-x rel-pos) (:x rel-pos) 0))
+                              y (+ my (or (:relative-y rel-pos) (:y rel-pos) 0))
+                              z (+ mz (or (:relative-z rel-pos) (:z rel-pos) 0))]
+                          (pos/create-block-pos x y z)))]
+
+          ;; Check origin first
+          (if-not (world/world-get-block-state world origin-pos)
+            false
+            ;; Check all sub-block positions
+            (every?
+              (fn [rel-pos]
+                (try
+                  (let [pos (abs-pos rel-pos)
+                        block-state (world/world-get-block-state world pos)]
+                    (if block-state true false))
+                  (catch Exception e
+                    (log/debug "Error checking block at" rel-pos ":"(ex-message e))
+                    false)))
+              (or positions []))))
+
+        (catch Exception e
+          (log/error "Error checking multi-block structure:"(ex-message e))
+          false)))))
 
 ;; Create block specification
 (defn create-block-spec
-  "Create a block specification from options"
+  "Create a block specification from options.
+
+  Accepts both nested and flat syntax for backward compatibility during migration:
+  - Nested: {:physical {:material :stone :hardness 5.0} ...}
+  - Flat: {:material :stone :hardness 5.0 ...}
+
+  Nested syntax takes precedence over flat syntax."
   [block-id options]
-  (let [multi-block-config (:multi-block options)
-    shorthand-positions (when (map? multi-block-config)
-                (:positions multi-block-config))
-    processed-shorthand-positions (when shorthand-positions
-                    (let [positions (mapv (fn [pos]
-                                (if (vector? pos)
-                                  {:x (nth pos 0 0)
-                                   :y (nth pos 1 0)
-                                   :z (nth pos 2 0)}
-                                  pos))
-                                shorthand-positions)]
-                      (if (some #(and (= (:x %) 0)
-                              (= (:y %) 0)
-                              (= (:z %) 0))
-                          positions)
-                      positions
-                      (into [{:x 0 :y 0 :z 0}] positions))))
-        multi-block? (boolean (or (:multi-block? options)
+  (let [;; Extract nested groups (new syntax)
+        physical-opts (:physical options)
+        rendering-opts (:rendering options)
+        tile-entity-opts (:tile-entity options)
+        block-state-opts (:block-state options)
+        events-opts (:events options)
+        multi-block-opts (:multi-block options)
+
+        ;; Handle multi-block shorthand syntax
+        multi-block-config (or multi-block-opts (:multi-block options))
+        shorthand-positions (when (map? multi-block-config)
+                              (:positions multi-block-config))
+        processed-shorthand-positions (when shorthand-positions
+                                        (let [positions (mapv (fn [pos]
+                                                                (if (vector? pos)
+                                                                  {:x (nth pos 0 0)
+                                                                   :y (nth pos 1 0)
+                                                                   :z (nth pos 2 0)}
+                                                                  pos))
+                                                              shorthand-positions)]
+                                          (if (some #(and (= (:x %) 0)
+                                                          (= (:y %) 0)
+                                                          (= (:z %) 0))
+                                                    positions)
+                                            positions
+                                            (into [{:x 0 :y 0 :z 0}] positions))))
+
+        ;; Build nested records
+        physical (map->PhysicalProperties
+                   {:material (or (:material physical-opts) (:material options) :stone)
+                    :hardness (or (:hardness physical-opts) (:hardness options) default-hardness)
+                    :resistance (or (:resistance physical-opts) (:resistance options) default-resistance)
+                    :friction (or (:friction physical-opts) (:friction options) default-friction)
+                    :slip-factor (or (:slip-factor physical-opts) (:slip-factor options) default-friction)
+                    :sounds (or (:sounds physical-opts) (:sounds options) :stone)
+                    :harvest-level (or (:harvest-level physical-opts) (:harvest-level options) 0)
+                    :harvest-tool (or (:harvest-tool physical-opts) (:harvest-tool options) :pickaxe)
+                    :requires-tool (or (:requires-tool physical-opts) (:requires-tool options) false)})
+
+        rendering (map->RenderingProperties
+                    {:model-parent (or (:model-parent rendering-opts) (:model-parent options))
+                     :textures (or (:textures rendering-opts) (:textures options))
+                     :model-textures (or (:model-textures rendering-opts) (:model-textures options))
+                     :has-item-form? (if (contains? rendering-opts :has-item-form?)
+                                       (:has-item-form? rendering-opts)
+                                       (not= false (:has-item-form options)))
+                     :flat-item-icon? (boolean (or (:flat-item-icon? rendering-opts) (:flat-item-icon? options)))
+                     :creative-tab (or (:creative-tab rendering-opts) (:creative-tab options) default-creative-tab)
+                     :light-level (or (:light-level rendering-opts) (:light-level options) default-light-level)})
+
+        tile-entity (map->TileEntityConfig
+                      {:has-block-entity? (boolean (or (:has-block-entity? tile-entity-opts) (:has-block-entity? options)))
+                       :tile-kind (or (:tile-kind tile-entity-opts) (:tile-kind options))
+                       :tile-tick-fn (or (:tile-tick-fn tile-entity-opts) (:tile-tick-fn options))
+                       :tile-load-fn (or (:tile-load-fn tile-entity-opts) (:tile-load-fn options))
+                       :tile-save-fn (or (:tile-save-fn tile-entity-opts) (:tile-save-fn options))})
+
+        block-state (map->BlockStateConfig
+                      {:block-state-properties (or (:block-state-properties block-state-opts)
+                                                   (:block-state-properties options))})
+
+        events (map->EventHandlers
+                 {:on-right-click (or (:on-right-click events-opts) (:on-right-click options) (fn [_] nil))
+                  :on-break (or (:on-break events-opts) (:on-break options) (fn [_] nil))
+                  :on-place (or (:on-place events-opts) (:on-place options) (fn [_] nil))
+                  :on-multi-block-break (or (:on-multi-block-break events-opts) (:on-multi-block-break options) (fn [_] nil))})
+
+        ;; Multi-block configuration
+        multi-block? (boolean (or (:multi-block? multi-block-opts)
+                                  (:multi-block? options)
                                   multi-block-config))
-        multi-block-size (or (:multi-block-size options)
+        multi-block-size (or (:size multi-block-opts)
+                             (:multi-block-size multi-block-opts)
+                             (:multi-block-size options)
                              (when (map? multi-block-config)
                                (:size multi-block-config)))
-        multi-block-positions (or (:multi-block-positions options)
-                processed-shorthand-positions)
-        multi-block-origin (or (:multi-block-origin options)
+        multi-block-positions (or (:positions multi-block-opts)
+                                  (:multi-block-positions multi-block-opts)
+                                  (:multi-block-positions options)
+                                  processed-shorthand-positions)
+        multi-block-origin (or (:origin multi-block-opts)
+                               (:multi-block-origin multi-block-opts)
+                               (:multi-block-origin options)
                                (when (map? multi-block-config)
                                  (:origin multi-block-config))
                                {:x 0 :y 0 :z 0})
-        multi-block-rotation-center (or (:multi-block-rotation-center options)
+        multi-block-rotation-center (or (:rotation-center multi-block-opts)
+                                        (:multi-block-rotation-center multi-block-opts)
+                                        (:multi-block-rotation-center options)
                                         (when (map? multi-block-config)
-                                          (:rotation-center multi-block-config)))]
+                                          (:rotation-center multi-block-config)))
+
+        multi-block (map->MultiBlockConfig
+                      {:multi-block? multi-block?
+                       :multi-block-size multi-block-size
+                       :multi-block-positions multi-block-positions
+                       :multi-block-origin multi-block-origin
+                       :multi-block-rotation-center multi-block-rotation-center
+                       :multi-block-master? (or (:multi-block-master? multi-block-opts)
+                                                (:multi-block-master? options)
+                                                false)
+                       :multiblock-mode (or (:multiblock-mode multi-block-opts) (:multiblock-mode options))
+                       :controller-block-id (or (:controller-block-id multi-block-opts) (:controller-block-id options))
+                       :part-block-id (or (:part-block-id multi-block-opts) (:part-block-id options))})]
+
     (map->BlockSpec
       {:id block-id
        :registry-name (:registry-name options)
-       :material (or (:material options) :stone)
-       :hardness (or (:hardness options) default-hardness)
-       :resistance (or (:resistance options) default-resistance)
-       :light-level (or (:light-level options) default-light-level)
-       :requires-tool (or (:requires-tool options) false)
-       :sounds (or (:sounds options) :stone)
-       :harvest-level (or (:harvest-level options) 0)
-       :harvest-tool (or (:harvest-tool options) :pickaxe)
-       :friction (or (:friction options) default-friction)
-       :slip-factor (or (:slip-factor options) default-friction)
-       :creative-tab (or (:creative-tab options) default-creative-tab)
-      :has-item-form? (not= false (:has-item-form options))
-      :flat-item-icon? (boolean (:flat-item-icon? options))
-       :block-state-properties (:block-state-properties options)
-       :on-right-click (or (:on-right-click options) (fn [_] nil))
-       :on-break (or (:on-break options) (fn [_] nil))
-       :on-place (or (:on-place options) (fn [_] nil))
        :properties (or (:properties options) {})
-       :model-parent (:model-parent options)
-       :textures (:textures options)
-       :model-textures (:model-textures options)
-       :has-block-entity? (boolean (:has-block-entity? options))
-       :tile-kind (:tile-kind options)
-       :tile-tick-fn (:tile-tick-fn options)
-       :tile-load-fn (:tile-load-fn options)
-       :tile-save-fn (:tile-save-fn options)
-       ;; Multi-block properties
-       :multi-block? multi-block?
-       :multi-block-size multi-block-size
-       :multi-block-positions multi-block-positions
-       :multi-block-origin multi-block-origin
-      :multi-block-rotation-center multi-block-rotation-center
-       :multi-block-master? (or (:multi-block-master? options) false)
-      :on-multi-block-break (or (:on-multi-block-break options) (fn [_] nil))
-      :multiblock-mode (:multiblock-mode options)
-      :controller-block-id (:controller-block-id options)
-      :part-block-id (:part-block-id options)})))
+       :physical physical
+       :rendering rendering
+       :tile-entity tile-entity
+       :block-state block-state
+       :events events
+       :multi-block multi-block})))
 
 ;; Validate block specification
 (defn validate-block-spec [block-spec]
@@ -339,86 +486,93 @@
     (throw (ex-info "Block :registry-name must be a non-empty string when provided"
                     {:registry-name (:registry-name block-spec)
                      :id (:id block-spec)})))
-  (when-not (get materials (:material block-spec))
-    (throw (ex-info "Invalid material" {:material (:material block-spec)
-                                        :valid materials})))
 
-  ;; Validate model/datagen fields
-  (when (and (:model-parent block-spec)
-             (or (not (string? (:model-parent block-spec)))
-                 (str/blank? (:model-parent block-spec))))
-    (throw (ex-info "Block :model-parent must be a non-empty string when provided"
-                    {:model-parent (:model-parent block-spec)
-                     :id (:id block-spec)})))
+  ;; Validate physical properties
+  (let [physical (:physical block-spec)]
+    (when-not (get materials (:material physical))
+      (throw (ex-info "Invalid material" {:material (:material physical)
+                                          :valid materials
+                                          :id (:id block-spec)}))))
 
-  (when (and (:textures block-spec)
-             (not (map? (:textures block-spec))))
-    (throw (ex-info "Block :textures must be a map when provided"
-                    {:textures (:textures block-spec)
-                     :id (:id block-spec)})))
+  ;; Validate rendering properties
+  (let [rendering (:rendering block-spec)]
+    (when (and (:model-parent rendering)
+               (or (not (string? (:model-parent rendering)))
+                   (str/blank? (:model-parent rendering))))
+      (throw (ex-info "Block :model-parent must be a non-empty string when provided"
+                      {:model-parent (:model-parent rendering)
+                       :id (:id block-spec)})))
 
-  (when (and (:model-textures block-spec)
-             (not (map? (:model-textures block-spec))))
-    (throw (ex-info "Block :model-textures must be a map when provided"
-                    {:model-textures (:model-textures block-spec)
-                     :id (:id block-spec)})))
+    (when (and (:textures rendering)
+               (not (map? (:textures rendering))))
+      (throw (ex-info "Block :textures must be a map when provided"
+                      {:textures (:textures rendering)
+                       :id (:id block-spec)})))
 
-  (when (map? (:model-textures block-spec))
-    (doseq [[model-name texture-path] (:model-textures block-spec)]
-      (when-not (or (string? model-name) (keyword? model-name))
-        (throw (ex-info "Block :model-textures keys must be string/keyword"
-                        {:invalid-key model-name
-                         :id (:id block-spec)})))
-      (when-not (and (string? texture-path) (not (str/blank? texture-path)))
-        (throw (ex-info "Block :model-textures values must be non-empty texture path strings"
-                        {:invalid-value texture-path
-                         :model-name model-name
-                         :id (:id block-spec)})))))
+    (when (and (:model-textures rendering)
+               (not (map? (:model-textures rendering))))
+      (throw (ex-info "Block :model-textures must be a map when provided"
+                      {:model-textures (:model-textures rendering)
+                       :id (:id block-spec)})))
 
-  ;; Validate optional scripted tile hooks
-  (when (and (:tile-tick-fn block-spec)
-             (not (or (fn? (:tile-tick-fn block-spec))
-                      (symbol? (:tile-tick-fn block-spec))
-                      (var? (:tile-tick-fn block-spec)))))
-    (throw (ex-info "Block :tile-tick-fn must be a function or a symbol/var referencing one when provided"
-                    {:id (:id block-spec)})))
-  (when (and (:tile-load-fn block-spec)
-             (not (or (fn? (:tile-load-fn block-spec))
-                      (symbol? (:tile-load-fn block-spec))
-                      (var? (:tile-load-fn block-spec)))))
-    (throw (ex-info "Block :tile-load-fn must be a function or a symbol/var referencing one when provided"
-                    {:id (:id block-spec)})))
-  (when (and (:tile-save-fn block-spec)
-             (not (or (fn? (:tile-save-fn block-spec))
-                      (symbol? (:tile-save-fn block-spec))
-                      (var? (:tile-save-fn block-spec)))))
-    (throw (ex-info "Block :tile-save-fn must be a function or a symbol/var referencing one when provided"
-                    {:id (:id block-spec)})))
-  (when (and (:tile-kind block-spec)
-             (not (keyword? (:tile-kind block-spec))))
-    (throw (ex-info "Block :tile-kind must be a keyword when provided"
-                    {:id (:id block-spec)
-                     :tile-kind (:tile-kind block-spec)})))
+    (when (map? (:model-textures rendering))
+      (doseq [[model-name texture-path] (:model-textures rendering)]
+        (when-not (or (string? model-name) (keyword? model-name))
+          (throw (ex-info "Block :model-textures keys must be string/keyword"
+                          {:invalid-key model-name
+                           :id (:id block-spec)})))
+        (when-not (and (string? texture-path) (not (str/blank? texture-path)))
+          (throw (ex-info "Block :model-textures values must be non-empty texture path strings"
+                          {:invalid-value texture-path
+                           :model-name model-name
+                           :id (:id block-spec)}))))))
+
+  ;; Validate tile entity config
+  (let [tile-entity (:tile-entity block-spec)]
+    (when (and (:tile-tick-fn tile-entity)
+               (not (or (fn? (:tile-tick-fn tile-entity))
+                        (symbol? (:tile-tick-fn tile-entity))
+                        (var? (:tile-tick-fn tile-entity)))))
+      (throw (ex-info "Block :tile-tick-fn must be a function or a symbol/var referencing one when provided"
+                      {:id (:id block-spec)})))
+    (when (and (:tile-load-fn tile-entity)
+               (not (or (fn? (:tile-load-fn tile-entity))
+                        (symbol? (:tile-load-fn tile-entity))
+                        (var? (:tile-load-fn tile-entity)))))
+      (throw (ex-info "Block :tile-load-fn must be a function or a symbol/var referencing one when provided"
+                      {:id (:id block-spec)})))
+    (when (and (:tile-save-fn tile-entity)
+               (not (or (fn? (:tile-save-fn tile-entity))
+                        (symbol? (:tile-save-fn tile-entity))
+                        (var? (:tile-save-fn tile-entity)))))
+      (throw (ex-info "Block :tile-save-fn must be a function or a symbol/var referencing one when provided"
+                      {:id (:id block-spec)})))
+    (when (and (:tile-kind tile-entity)
+               (not (keyword? (:tile-kind tile-entity))))
+      (throw (ex-info "Block :tile-kind must be a keyword when provided"
+                      {:id (:id block-spec)
+                       :tile-kind (:tile-kind tile-entity)}))))
 
   ;; Validate multi-block configuration
-  (when (:multi-block? block-spec)
-    (let [has-size? (:multi-block-size block-spec)
-          has-positions? (:multi-block-positions block-spec)]
-      ;; Must have either size (regular) or positions (irregular)
-      (when-not (or has-size? has-positions?)
-        (throw (ex-info "Multi-block must have either :multi-block-size or :multi-block-positions"
-                        {:id (:id block-spec)})))
-      ;; Validate regular multi-block size
-      (when has-size?
-        (let [{:keys [width height depth]} (:multi-block-size block-spec)]
-          (when-not (and width height depth
-                         (pos? width) (pos? height) (pos? depth))
-            (throw (ex-info "Invalid multi-block size, must have positive :width :height :depth"
-                            {:id (:id block-spec)
-                             :size (:multi-block-size block-spec)})))))
-      ;; Validate irregular multi-block positions
-      (when has-positions?
-        (validate-multi-block-positions (:multi-block-positions block-spec)))))
+  (let [multi-block (:multi-block block-spec)]
+    (when (:multi-block? multi-block)
+      (let [has-size? (:multi-block-size multi-block)
+            has-positions? (:multi-block-positions multi-block)]
+        ;; Must have either size (regular) or positions (irregular)
+        (when-not (or has-size? has-positions?)
+          (throw (ex-info "Multi-block must have either :multi-block-size or :multi-block-positions"
+                          {:id (:id block-spec)})))
+        ;; Validate regular multi-block size
+        (when has-size?
+          (let [{:keys [width height depth]} (:multi-block-size multi-block)]
+            (when-not (and width height depth
+                           (pos? width) (pos? height) (pos? depth))
+              (throw (ex-info "Invalid multi-block size, must have positive :width :height :depth"
+                              {:id (:id block-spec)
+                               :size (:multi-block-size multi-block)})))))
+        ;; Validate irregular multi-block positions
+        (when has-positions?
+          (validate-multi-block-positions (:multi-block-positions multi-block))))))
   true)
 
 ;; Register block in registry
@@ -463,9 +617,9 @@
 ;; Example:
 ;; (defmultiblock wireless-matrix
 ;;   :multi-block {:positions [[0 0 1] [1 0 1] ...]}
-;;   :common {:material :stone :hardness 3.0}
-;;   :controller {:registry-name "matrix" :on-place ...}
-;;   :part {:registry-name "matrix_part" :has-item-form false})
+;;   :common {:physical {:material :stone :hardness 3.0}}
+;;   :controller {:registry-name "matrix" :events {:on-place ...}}
+;;   :part {:registry-name "matrix_part" :rendering {:has-item-form false}})
 (defmacro defmultiblock
   [base-name & options]
   (let [base-sym (if (and (seq? base-name)
@@ -482,18 +636,26 @@
                       (symbol (str (name base-sym) "-part")))
         controller-id (name controller-name)
         part-id (name part-name)
-        merged-controller-opts (merge common-opts
-                                      raw-controller-opts
-                                      {:multi-block multi-block
-                                       :multiblock-mode :controller-parts
-                                       :controller-block-id controller-id
-                                       :part-block-id part-id})
-        merged-part-opts (merge common-opts
-              {:has-item-form false}
-              raw-part-opts
-                                {:multiblock-mode :controller-parts
-                                 :controller-block-id controller-id
-                                 :part-block-id part-id})]
+        ;; Deep merge function for nested maps
+        deep-merge (fn deep-merge [& maps]
+                     (apply merge-with
+                            (fn [x y]
+                              (if (and (map? x) (map? y))
+                                (deep-merge x y)
+                                y))
+                            maps))
+        merged-controller-opts (deep-merge common-opts
+                                           raw-controller-opts
+                                           {:multi-block multi-block
+                                            :multiblock-mode :controller-parts
+                                            :controller-block-id controller-id
+                                            :part-block-id part-id})
+        merged-part-opts (deep-merge common-opts
+                                     {:rendering {:has-item-form? false}}
+                                     raw-part-opts
+                                     {:multiblock-mode :controller-parts
+                                      :controller-block-id controller-id
+                                      :part-block-id part-id})]
     `(do
        (defblock ~controller-name ~@(vec (mapcat identity merged-controller-opts)))
        (defblock ~part-name ~@(vec (mapcat identity merged-part-opts))))))
@@ -699,38 +861,42 @@
   "Handle multi-block structure break
    Should break all parts of the multi-block"
   [block-spec event-data]
-  (when (:multi-block? block-spec)
-    (log/info "Breaking multi-block structure:" (:id block-spec))
-    (when-let [handler (:on-multi-block-break block-spec)]
-      (handler event-data))
-    ;; Platform adapter should handle breaking all parts
-    (let [origin (:multi-block-origin block-spec)
-          ;; Use custom positions if available, otherwise calculate from size
-          positions (if-let [custom-pos (:multi-block-positions block-spec)]
-                      (calculate-multi-block-positions custom-pos origin)
-                      (calculate-multi-block-positions 
-                        (:multi-block-size block-spec) 
-                        origin))]
-      {:should-break-all true
-       :positions positions})))
+  (let [multi-block (:multi-block block-spec)
+        events (:events block-spec)]
+    (when (:multi-block? multi-block)
+      (log/info "Breaking multi-block structure:" (:id block-spec))
+      (when-let [handler (:on-multi-block-break events)]
+        (handler event-data))
+      ;; Platform adapter should handle breaking all parts
+      (let [origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})
+            ;; Use custom positions if available, otherwise calculate from size
+            positions (if-let [custom-pos (:multi-block-positions multi-block)]
+                        (calculate-multi-block-positions custom-pos origin)
+                        (calculate-multi-block-positions
+                          (:multi-block-size multi-block)
+                          origin))]
+        {:should-break-all true
+         :positions positions}))))
 
 ;; Get block properties for platform creation
 (defn get-block-properties
   "Get block properties map for platform-specific creation"
   [block-spec]
-  {:material (:material block-spec)
-   :hardness (:hardness block-spec)
-   :resistance (:resistance block-spec)
-   :light-level (:light-level block-spec)
-   :requires-tool (:requires-tool block-spec)
-   :sounds (:sounds block-spec)
-   :harvest-level (:harvest-level block-spec)
-   :harvest-tool (:harvest-tool block-spec)
-   :friction (:friction block-spec)
-   :slip-factor (:slip-factor block-spec)
-   :multi-block? (:multi-block? block-spec)
-   :multi-block-size (:multi-block-size block-spec)
-   :multi-block-positions (:multi-block-positions block-spec)
-   :multi-block-origin (:multi-block-origin block-spec)
-  :multi-block-rotation-center (:multi-block-rotation-center block-spec)
-   :multi-block-master? (:multi-block-master? block-spec)})
+  (let [physical (:physical block-spec)
+        multi-block (:multi-block block-spec)]
+    {:material (:material physical)
+     :hardness (:hardness physical)
+     :resistance (:resistance physical)
+     :light-level (get-in block-spec [:rendering :light-level])
+     :requires-tool (:requires-tool physical)
+     :sounds (:sounds physical)
+     :harvest-level (:harvest-level physical)
+     :harvest-tool (:harvest-tool physical)
+     :friction (:friction physical)
+     :slip-factor (:slip-factor physical)
+     :multi-block? (:multi-block? multi-block)
+     :multi-block-size (:multi-block-size multi-block)
+     :multi-block-positions (:multi-block-positions multi-block)
+     :multi-block-origin (:multi-block-origin multi-block)
+     :multi-block-rotation-center (:multi-block-rotation-center multi-block)
+     :multi-block-master? (:multi-block-master? multi-block)}))

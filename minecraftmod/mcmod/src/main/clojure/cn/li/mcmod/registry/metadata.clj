@@ -64,65 +64,68 @@
 (defn controller-parts-block?
   "Return true when the block uses DSL controller+parts mode."
   [block-id]
-  (= :controller-parts (:multiblock-mode (get-block-spec block-id))))
+  (= :controller-parts (get-in (get-block-spec block-id) [:multi-block :multiblock-mode])))
 
 (defn is-controller-block?
   "Return true when block-id is the controller block in controller+parts mode."
   [block-id]
-  (let [spec (get-block-spec block-id)]
-    (and (= :controller-parts (:multiblock-mode spec))
-         (= (str block-id) (:controller-block-id spec)))))
+  (let [spec (get-block-spec block-id)
+        multi-block (:multi-block spec)]
+    (and (= :controller-parts (:multiblock-mode multi-block))
+         (= (str block-id) (:controller-block-id multi-block)))))
 
 (defn is-part-block?
   "Return true when block-id is the part block in controller+parts mode."
   [block-id]
-  (let [spec (get-block-spec block-id)]
-    (and (= :controller-parts (:multiblock-mode spec))
-         (= (str block-id) (:part-block-id spec)))))
+  (let [spec (get-block-spec block-id)
+        multi-block (:multi-block spec)]
+    (and (= :controller-parts (:multiblock-mode multi-block))
+         (= (str block-id) (:part-block-id multi-block)))))
 
 (defn get-controller-block-id
   "Get controller block-id for a block participating in controller+parts mode."
   [block-id]
-  (:controller-block-id (get-block-spec block-id)))
+  (get-in (get-block-spec block-id) [:multi-block :controller-block-id]))
 
 (defn get-part-block-id
   "Get part block-id for a block participating in controller+parts mode."
   [block-id]
-  (:part-block-id (get-block-spec block-id)))
+  (get-in (get-block-spec block-id) [:multi-block :part-block-id]))
 
 (defn get-structure-offsets
   "Get normalized relative offsets (including origin) for a controller block.
   Returns a vector of maps with :relative-x/:relative-y/:relative-z."
   [controller-block-id]
   (when-let [spec (get-block-spec controller-block-id)]
-    (let [origin (:multi-block-origin spec {:x 0 :y 0 :z 0})]
-      (if-let [custom-pos (:multi-block-positions spec)]
+    (let [multi-block (:multi-block spec)
+          origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})]
+      (if-let [custom-pos (:multi-block-positions multi-block)]
         (bdsl/calculate-multi-block-positions custom-pos origin)
-        (bdsl/calculate-multi-block-positions (:multi-block-size spec) origin)))))
+        (bdsl/calculate-multi-block-positions (:multi-block-size multi-block) origin)))))
 
 (defn has-block-state-properties?
   "Checks if a block has dynamic block state properties.
-  
+
   Args:
     block-id: String - DSL block identifier
-  
+
   Returns:
     Boolean - true if block has block-state-properties defined"
   [block-id]
   (let [block-spec (get-block-spec block-id)]
-    (some? (:block-state-properties block-spec))))
+    (some? (get-in block-spec [:block-state :block-state-properties]))))
 
 (defn has-block-entity?
   "Checks if a block uses the generic scripted BlockEntity (ScriptedEntityBlock/ScriptedBlockEntity).
-  
+
   Args:
     block-id: String - DSL block identifier
-  
+
   Returns:
     Boolean - true if block has :has-block-entity? in its spec"
   [block-id]
   (let [block-spec (get-block-spec block-id)]
-    (boolean (or (:has-block-entity? block-spec)
+    (boolean (or (get-in block-spec [:tile-entity :has-block-entity?])
                  (some? (tdsl/get-tile-id-for-block block-id))))))
 
 (defn get-scripted-block-ids
@@ -138,7 +141,7 @@
   [block-id]
   (if-let [tile-id (tdsl/get-tile-id-for-block block-id)]
     (some-> (tdsl/get-tile tile-id) :tile-kind)
-    (some-> (get-block-spec block-id) :tile-kind)))
+    (some-> (get-block-spec block-id) :tile-entity :tile-kind)))
 
 (defn get-scripted-tile-hooks
   "Returns optional scripted tile lifecycle hooks for a block.
@@ -149,10 +152,11 @@
       {:tick-fn (:tick-fn spec)
        :read-nbt-fn (:read-nbt-fn spec)
        :write-nbt-fn (:write-nbt-fn spec)})
-    (let [spec (get-block-spec block-id)]
-      {:tick-fn (:tile-tick-fn spec)
-       :read-nbt-fn (:tile-load-fn spec)
-       :write-nbt-fn (:tile-save-fn spec)})))
+    (let [spec (get-block-spec block-id)
+          tile-entity (:tile-entity spec)]
+      {:tick-fn (:tile-tick-fn tile-entity)
+       :read-nbt-fn (:tile-load-fn tile-entity)
+       :write-nbt-fn (:tile-save-fn tile-entity)})))
 
 ;; Tile/BlockEntity Registration Metadata (Tile DSL + legacy block spec compatibility)
 ;; ============================================================
@@ -167,7 +171,7 @@
   (let [explicit (set (tdsl/list-tiles))
         implicit (->> (get-all-block-ids)
                       (filter (fn [block-id]
-                                (boolean (:has-block-entity? (get-block-spec block-id)))))
+                                (boolean (get-in (get-block-spec block-id) [:tile-entity :has-block-entity?]))))
                       set)]
     (seq (into explicit implicit))))
 
@@ -179,7 +183,7 @@
   - nil if block has no BlockEntity"
   [block-id]
   (or (tdsl/get-tile-id-for-block block-id)
-      (when (boolean (:has-block-entity? (get-block-spec block-id)))
+      (when (boolean (get-in (get-block-spec block-id) [:tile-entity :has-block-entity?]))
         (str block-id))))
 
 (defn get-tile-spec
@@ -190,14 +194,15 @@
   (if-let [spec (tdsl/get-tile tile-id)]
     spec
     (when-let [block-spec (get-block-spec tile-id)]
-      (when (boolean (:has-block-entity? block-spec))
-        {:id tile-id
-         :impl :scripted
-         :blocks [tile-id]
-         :tile-kind (:tile-kind block-spec)
-         :tick-fn (:tile-tick-fn block-spec)
-         :read-nbt-fn (:tile-load-fn block-spec)
-         :write-nbt-fn (:tile-save-fn block-spec)}))))
+      (let [tile-entity (:tile-entity block-spec)]
+        (when (boolean (:has-block-entity? tile-entity))
+          {:id tile-id
+           :impl :scripted
+           :blocks [tile-id]
+           :tile-kind (:tile-kind tile-entity)
+           :tick-fn (:tile-tick-fn tile-entity)
+           :read-nbt-fn (:tile-load-fn tile-entity)
+           :write-nbt-fn (:tile-save-fn tile-entity)})))))
 
 (defn get-tile-block-ids
   "Get block-ids bound to a tile-id."
@@ -250,25 +255,25 @@
 
 (defn get-block-state-properties
   "Returns the block state properties definition for a block.
-  
+
   Args:
     block-id: String - DSL block identifier
-  
+
   Returns:
     Map - Block state properties (e.g., {:energy {...} :connected {...}}), or nil"
   [block-id]
   (let [block-spec (get-block-spec block-id)]
-    (:block-state-properties block-spec)))
+    (get-in block-spec [:block-state :block-state-properties])))
 
 ;; Item Registration Metadata
 ;; ============================================================
 
 (defn get-all-item-ids
   "Returns a sequence of all registered item IDs from the item DSL.
-  
+
   Platform code should iterate over this list to register all items,
   without knowing specific item names.
-  
+
   Returns:
     Sequence of item ID strings (e.g., [\"demo-item\" \"copper-ingot\" ...])"
   []
@@ -276,12 +281,12 @@
 
 (defn get-item-registry-name
   "Returns the Minecraft registry name for an item ID.
-  
+
   Converts DSL item ID (kebab-case) to Minecraft registry format (snake_case).
-  
+
   Args:
     item-id: String - DSL item identifier (e.g., \"demo-item\")
-  
+
   Returns:
     String - Registry name (e.g., \"demo_item\")"
   [item-id]
@@ -289,10 +294,10 @@
 
 (defn get-item-spec
   "Retrieves the full item specification from the DSL.
-  
+
   Args:
     item-id: String - DSL item identifier
-  
+
   Returns:
     Map - Item specification with all properties"
   [item-id]
@@ -303,28 +308,28 @@
 
 (defn should-create-block-item?
   "Determines if a block should have a corresponding BlockItem.
-  
+
   By default, all blocks get BlockItems for placement in the world.
   This can be customized based on block properties if needed.
-  
+
   Args:
     block-id: String - DSL block identifier
-  
+
   Returns:
     Boolean - true if BlockItem should be created"
   [block-id]
   (let [block-spec (get-block-spec block-id)]
-    (not= false (:has-item-form? block-spec))))
+    (not= false (get-in block-spec [:rendering :has-item-form?]))))
 
 ;; Creative Tab Metadata
 ;; ============================================================
 
 (defn get-item-creative-tab
   "Returns the creative tab for an item.
-  
+
   Args:
     item-id: String - DSL item identifier
-  
+
   Returns:
     Keyword - Creative tab (e.g., :misc, :tools, :combat)"
   [item-id]
@@ -333,29 +338,29 @@
 
 (defn get-block-creative-tab
   "Returns the creative tab for a block (used for block items).
-  
+
   Args:
     block-id: String - DSL block identifier
-  
+
   Returns:
     Keyword - Creative tab (e.g., :misc, :building-blocks)"
   [block-id]
   (let [block-spec (get-block-spec block-id)]
-    (or (:creative-tab block-spec) :misc)))
+    (or (get-in block-spec [:rendering :creative-tab]) :misc)))
 
 (defn get-all-creative-tab-entries
   "Returns all items and block-items that should be added to creative tabs.
-  
+
   Platform code should use this to populate creative mode tabs without
   knowing specific item/block names.
-  
+
   Returns:
     Sequence of maps with:
       :type - :item or :block-item
       :id - registry ID (string)
       :tab - creative tab keyword
       :registry-name - Minecraft registry name
-  
+
   Example:
     [{:type :item :id \"demo-item\" :tab :misc :registry-name \"demo_item\"}
      {:type :block-item :id \"demo-block\" :tab :building-blocks :registry-name \"demo_block\"}]"
@@ -371,11 +376,12 @@
 
         ;; Get all block items - fetch spec once per block
         block-item-entries (for [block-id (get-all-block-ids)
-                                 :let [spec (bdsl/get-block block-id)]
-                                 :when (:has-item-form? spec)]
+                                 :let [spec (bdsl/get-block block-id)
+                                       rendering (:rendering spec)]
+                                 :when (:has-item-form? rendering)]
                              {:type :block-item
                               :id block-id
-                              :tab (:creative-tab spec)
+                              :tab (:creative-tab rendering)
                               :registry-name (or (:registry-name spec)
                                                 (str/replace block-id #"-" "_"))})]
 

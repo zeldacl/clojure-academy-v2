@@ -156,28 +156,29 @@
 
 (defn sync-handlers-from-dsl!
   "Synchronize event handlers from block DSL definitions.
-  
+
   This function reads all block specifications from the DSL and registers
   their event handlers (if defined). Should be called after block definitions
   are loaded.
-  
+
   This is called automatically during initialization, but can be called
   manually if needed (e.g., hot-reloading)."
   []
   (log/info "Synchronizing event handlers from block DSL...")
   (doseq [block-id (bdsl/list-blocks)]
     (when-let [block-spec (bdsl/get-block block-id)]
-      ;; Register :on-right-click handler
-      (when-let [on-right-click (:on-right-click block-spec)]
-        (register-block-event-handler! block-id :on-right-click on-right-click))
-      
-      ;; Register :on-break handler
-      (when-let [on-break (:on-break block-spec)]
-        (register-block-event-handler! block-id :on-break on-break))
-      
-      ;; Register :on-place handler
-      (when-let [on-place (:on-place block-spec)]
-        (register-block-event-handler! block-id :on-place on-place))))
+      (let [events (:events block-spec)]
+        ;; Register :on-right-click handler
+        (when-let [on-right-click (:on-right-click events)]
+          (register-block-event-handler! block-id :on-right-click on-right-click))
+
+        ;; Register :on-break handler
+        (when-let [on-break (:on-break events)]
+          (register-block-event-handler! block-id :on-break on-break))
+
+        ;; Register :on-place handler
+        (when-let [on-place (:on-place events)]
+          (register-block-event-handler! block-id :on-place on-place)))))
   (log/info "Synchronized" (count @block-event-handlers) "block event handlers"))
 
 (defn init-event-metadata!

@@ -237,17 +237,17 @@
 ;; Define block
 (bdsl/defblock solar-gen
   :registry-name "solar_gen"
-  :material :stone
-  :hardness 1.5
-  :resistance 6.0
-  :requires-tool true
-  :harvest-tool :pickaxe
-  :harvest-level 1
-  :sounds :stone
-  :model-parent "minecraft:block/cube_all"
-  :textures {:all (modid/asset-path "block" "solar_gen")}
-  :flat-item-icon? true
-  :on-right-click open-solar-gui!)
+  :physical {:material :stone
+             :hardness 1.5
+             :resistance 6.0
+             :requires-tool true
+             :harvest-tool :pickaxe
+             :harvest-level 1
+             :sounds :stone}
+  :rendering {:model-parent "minecraft:block/cube_all"
+              :textures {:all (modid/asset-path "block" "solar_gen")}
+              :flat-item-icon? true}
+  :events {:on-right-click open-solar-gui!})
 
 ;; Auto-Registration
 (hooks/register-network-handler! register-network-handlers!)

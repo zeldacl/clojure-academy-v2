@@ -21,45 +21,99 @@ Structure:
 (defrecord SlotSpec [index x y filter on-change])
 (defrecord ButtonSpec [id x y width height text on-click])
 (defrecord LabelSpec [x y text color])
+
+;; ============================================================================
+;; Nested Record Structures for GuiSpec
+;; ============================================================================
+
+(defrecord RegistrationConfig
+  [display-name gui-type registry-name screen-factory-fn-kw slot-layout]
+  ;; GUI registration metadata for platform adapters.
+  ;;
+  ;; Fields:
+  ;; - display-name: Human-readable display name for the GUI
+  ;; - gui-type: GUI type keyword (e.g., :node, :matrix, :solar-gen)
+  ;; - registry-name: Registry name for platform registration (e.g., "wireless_node")
+  ;; - screen-factory-fn-kw: Keyword for screen factory function (e.g., :create-node-screen)
+  ;; - slot-layout: Slot layout configuration map with ranges
+  )
+
+(defrecord LifecycleHandlers
+  [container-fn container-predicate screen-fn tick-fn]
+  ;; GUI lifecycle hook functions.
+  ;;
+  ;; Fields:
+  ;; - container-fn: Function to create container/menu (fn [gui-id inventory player-entity pos] ...)
+  ;; - container-predicate: Predicate to test if a container matches this GUI (fn [container] boolean)
+  ;; - screen-fn: Function to create screen (fn [container inventory component] ...)
+  ;; - tick-fn: Function called every tick (fn [container] ...)
+  )
+
+(defrecord SyncConfig
+  [sync-get sync-apply payload-sync-apply-fn]
+  ;; Client-server synchronization configuration.
+  ;;
+  ;; Fields:
+  ;; - sync-get: Function to get sync data from server (fn [container] data-map)
+  ;; - sync-apply: Function to apply sync data on client (fn [container data-map] ...)
+  ;; - payload-sync-apply-fn: Function to apply payload sync data (fn [container payload] ...)
+  )
+
+(defrecord OperationHandlers
+  [validate-fn close-fn button-click-fn text-input-fn]
+  ;; GUI operation handler functions.
+  ;;
+  ;; Fields:
+  ;; - validate-fn: Function to validate if GUI can stay open (fn [container] boolean)
+  ;; - close-fn: Function called when GUI closes (fn [container] ...)
+  ;; - button-click-fn: Function to handle button clicks (fn [container button-id] ...)
+  ;; - text-input-fn: Function to handle text input (fn [container text] ...)
+  )
+
+(defrecord SlotOperations
+  [slot-count-fn slot-get-fn slot-set-fn slot-can-place-fn slot-changed-fn]
+  ;; Slot operation handler functions.
+  ;;
+  ;; Fields:
+  ;; - slot-count-fn: Function to get slot count (fn [container] int)
+  ;; - slot-get-fn: Function to get item from slot (fn [container slot-index] ItemStack)
+  ;; - slot-set-fn: Function to set item in slot (fn [container slot-index item-stack] ...)
+  ;; - slot-can-place-fn: Function to check if item can be placed (fn [container slot-index item-stack] boolean)
+  ;; - slot-changed-fn: Function called when slot changes (fn [container slot-index] ...)
+  )
+
+(defrecord LegacyLayout
+  [title width height slots buttons labels background]
+  ;; Legacy/generic GUI layout fields for XML-based GUIs.
+  ;;
+  ;; Fields:
+  ;; - title: GUI title text
+  ;; - width: GUI width in pixels
+  ;; - height: GUI height in pixels
+  ;; - slots: Vector of SlotSpec records
+  ;; - buttons: Vector of ButtonSpec records
+  ;; - labels: Vector of LabelSpec records
+  ;; - background: Background texture identifier
+  )
+
 (defrecord GuiSpec
-  [;; Legacy/generic ID used by XML/gui.container system (string)
-   id
-
-   ;; Wireless/platform-visible GUI ID (int). When present, platform layers
-   ;; can register MenuType/ScreenHandlerType and open GUIs using this id.
-   gui-id
-
-   ;; Metadata used by platform adapters (wireless GUIs)
-   display-name
-   gui-type
-   registry-name
-   screen-factory-fn-kw
-   slot-layout
-
-   ;; Runtime hooks for wireless GUIs
-   container-fn
-   container-predicate
-   screen-fn
-   tick-fn
-   sync-get
-   sync-apply
-   payload-sync-apply-fn
-
-   ;; Operation handlers
-   validate-fn
-   close-fn
-   button-click-fn
-   text-input-fn
-
-   ;; Slot operation handlers
-   slot-count-fn
-   slot-get-fn
-   slot-set-fn
-   slot-can-place-fn
-   slot-changed-fn
-
-   ;; Legacy/generic GUI layout fields
-   title width height slots buttons labels background])
+  [id gui-id
+   registration lifecycle sync operations slots legacy-layout]
+  ;; Complete GUI specification with nested configuration groups.
+  ;;
+  ;; Core identity fields:
+  ;; - id: Legacy/generic ID used by XML/gui.container system (string)
+  ;; - gui-id: Wireless/platform-visible GUI ID (int). When present, platform layers
+  ;;          can register MenuType/ScreenHandlerType and open GUIs using this id.
+  ;;
+  ;; Nested configuration groups:
+  ;; - registration: RegistrationConfig record
+  ;; - lifecycle: LifecycleHandlers record
+  ;; - sync: SyncConfig record
+  ;; - operations: OperationHandlers record
+  ;; - slots: SlotOperations record
+  ;; - legacy-layout: LegacyLayout record
+  )
 
 ;; Default values
 (def default-gui-width 176)
@@ -109,67 +163,93 @@ Structure:
 
   ;; If this GUI participates in platform registration, require wireless metadata.
   (when (some? (:gui-id gui-spec))
-    (when-not (integer? (:gui-id gui-spec))
-      (throw (ex-info "GUI :gui-id must be an integer when provided" {:gui-id (:gui-id gui-spec) :id (:id gui-spec)})))
-    (when-not (and (string? (:registry-name gui-spec)) (not (str/blank? (:registry-name gui-spec))))
-      (throw (ex-info "GUI :registry-name must be a non-empty string when :gui-id is present"
-                      {:id (:id gui-spec) :gui-id (:gui-id gui-spec) :registry-name (:registry-name gui-spec)})))
-    (when-not (keyword? (:gui-type gui-spec))
-      (throw (ex-info "GUI :gui-type must be a keyword when :gui-id is present"
-                      {:id (:id gui-spec) :gui-id (:gui-id gui-spec) :gui-type (:gui-type gui-spec)})))
-    (when-not (keyword? (:screen-factory-fn-kw gui-spec))
-      (throw (ex-info "GUI :screen-factory-fn-kw must be a keyword when :gui-id is present"
-                      {:id (:id gui-spec) :gui-id (:gui-id gui-spec) :screen-factory-fn-kw (:screen-factory-fn-kw gui-spec)}))))
+    (let [registration (:registration gui-spec)]
+      (when-not (integer? (:gui-id gui-spec))
+        (throw (ex-info "GUI :gui-id must be an integer when provided" {:gui-id (:gui-id gui-spec) :id (:id gui-spec)})))
+      (when-not (and (string? (:registry-name registration)) (not (str/blank? (:registry-name registration))))
+        (throw (ex-info "GUI :registry-name must be a non-empty string when :gui-id is present"
+                        {:id (:id gui-spec) :gui-id (:gui-id gui-spec) :registry-name (:registry-name registration)})))
+      (when-not (keyword? (:gui-type registration))
+        (throw (ex-info "GUI :gui-type must be a keyword when :gui-id is present"
+                        {:id (:id gui-spec) :gui-id (:gui-id gui-spec) :gui-type (:gui-type registration)})))
+      (when-not (keyword? (:screen-factory-fn-kw registration))
+        (throw (ex-info "GUI :screen-factory-fn-kw must be a keyword when :gui-id is present"
+                        {:id (:id gui-spec) :gui-id (:gui-id gui-spec) :screen-factory-fn-kw (:screen-factory-fn-kw registration)})))))
 
-  (doseq [slot (:slots gui-spec)]
-    (when-not (number? (:index slot))
-      (throw (ex-info "Slot must have an :index number" {:slot slot}))))
-  (doseq [button (:buttons gui-spec)]
-    (when-not (number? (:id button))
-      (throw (ex-info "Button must have an :id number" {:button button}))))
+  (let [legacy-layout (:legacy-layout gui-spec)]
+    (doseq [slot (:slots legacy-layout)]
+      (when-not (number? (:index slot))
+        (throw (ex-info "Slot must have an :index number" {:slot slot}))))
+    (doseq [button (:buttons legacy-layout)]
+      (when-not (number? (:id button))
+        (throw (ex-info "Button must have an :id number" {:button button})))))
   true)
 
 ;; Create GUI specification from options
 (defn create-gui-spec [gui-id options]
-  (let [slots (mapv parse-slot (or (:slots options) []))
-        buttons (mapv parse-button (or (:buttons options) []))
-        labels (mapv parse-label (or (:labels options) []))
+  (let [;; Extract nested groups (new syntax)
+        registration-opts (:registration options)
+        lifecycle-opts (:lifecycle options)
+        sync-opts (:sync options)
+        operations-opts (:operations options)
+        slots-opts (:slots options)
+        legacy-layout-opts (:legacy-layout options)
+
+        ;; Parse legacy layout components
+        slots-vec (mapv parse-slot (or (:slots legacy-layout-opts) (:slots options) []))
+        buttons-vec (mapv parse-button (or (:buttons legacy-layout-opts) (:buttons options) []))
+        labels-vec (mapv parse-label (or (:labels legacy-layout-opts) (:labels options) []))
+
+        ;; Build nested records
+        registration (map->RegistrationConfig
+                       {:display-name (or (:display-name registration-opts) (:display-name options))
+                        :gui-type (or (:gui-type registration-opts) (:gui-type options))
+                        :registry-name (or (:registry-name registration-opts) (:registry-name options))
+                        :screen-factory-fn-kw (or (:screen-factory-fn-kw registration-opts) (:screen-factory-fn-kw options))
+                        :slot-layout (or (:slot-layout registration-opts) (:slot-layout options))})
+
+        lifecycle (map->LifecycleHandlers
+                    {:container-fn (or (:container-fn lifecycle-opts) (:container-fn options))
+                     :container-predicate (or (:container-predicate lifecycle-opts) (:container-predicate options))
+                     :screen-fn (or (:screen-fn lifecycle-opts) (:screen-fn options))
+                     :tick-fn (or (:tick-fn lifecycle-opts) (:tick-fn options))})
+
+        sync (map->SyncConfig
+               {:sync-get (or (:sync-get sync-opts) (:sync-get options))
+                :sync-apply (or (:sync-apply sync-opts) (:sync-apply options))
+                :payload-sync-apply-fn (or (:payload-sync-apply-fn sync-opts) (:payload-sync-apply-fn options))})
+
+        operations (map->OperationHandlers
+                     {:validate-fn (or (:validate-fn operations-opts) (:validate-fn options))
+                      :close-fn (or (:close-fn operations-opts) (:close-fn options))
+                      :button-click-fn (or (:button-click-fn operations-opts) (:button-click-fn options))
+                      :text-input-fn (or (:text-input-fn operations-opts) (:text-input-fn options))})
+
+        slot-operations (map->SlotOperations
+                          {:slot-count-fn (or (:slot-count-fn slots-opts) (:slot-count-fn options))
+                           :slot-get-fn (or (:slot-get-fn slots-opts) (:slot-get-fn options))
+                           :slot-set-fn (or (:slot-set-fn slots-opts) (:slot-set-fn options))
+                           :slot-can-place-fn (or (:slot-can-place-fn slots-opts) (:slot-can-place-fn options))
+                           :slot-changed-fn (or (:slot-changed-fn slots-opts) (:slot-changed-fn options))})
+
+        legacy-layout (map->LegacyLayout
+                        {:title (or (:title legacy-layout-opts) (:title options) "GUI")
+                         :width (or (:width legacy-layout-opts) (:width options) default-gui-width)
+                         :height (or (:height legacy-layout-opts) (:height options) default-gui-height)
+                         :slots slots-vec
+                         :buttons buttons-vec
+                         :labels labels-vec
+                         :background (or (:background legacy-layout-opts) (:background options) :default)})
+
         spec (map->GuiSpec
                {:id gui-id
-                ;; Wireless metadata (optional)
                 :gui-id (:gui-id options)
-                :display-name (:display-name options)
-                :gui-type (:gui-type options)
-                :registry-name (:registry-name options)
-                :screen-factory-fn-kw (:screen-factory-fn-kw options)
-                :slot-layout (:slot-layout options)
-                ;; Wireless runtime hooks (optional)
-                :container-fn (:container-fn options)
-                :container-predicate (:container-predicate options)
-                :screen-fn (:screen-fn options)
-                :tick-fn (:tick-fn options)
-                :sync-get (:sync-get options)
-                :sync-apply (:sync-apply options)
-                :payload-sync-apply-fn (:payload-sync-apply-fn options)
-                ;; Operation handlers
-                :validate-fn (:validate-fn options)
-                :close-fn (:close-fn options)
-                :button-click-fn (:button-click-fn options)
-                :text-input-fn (:text-input-fn options)
-                ;; Slot operation handlers
-                :slot-count-fn (:slot-count-fn options)
-                :slot-get-fn (:slot-get-fn options)
-                :slot-set-fn (:slot-set-fn options)
-                :slot-can-place-fn (:slot-can-place-fn options)
-                :slot-changed-fn (:slot-changed-fn options)
-                ;; Legacy/generic fields
-                :title (or (:title options) "GUI")
-                :width (or (:width options) default-gui-width)
-                :height (or (:height options) default-gui-height)
-                :slots slots
-                :buttons buttons
-                :labels labels
-                :background (or (:background options) :default)})]
+                :registration registration
+                :lifecycle lifecycle
+                :sync sync
+                :operations operations
+                :slots slot-operations
+                :legacy-layout legacy-layout})]
     (validate-gui-spec spec)
     spec))
 
@@ -219,22 +299,22 @@ Structure:
 (defn get-registry-name
   "Get registry name for a wireless GUI by gui-id."
   [gui-id]
-  (some-> (get-gui-by-gui-id gui-id) :registry-name))
+  (some-> (get-gui-by-gui-id gui-id) :registration :registry-name))
 
 (defn get-screen-factory-fn-kw
   "Get screen factory keyword for a wireless GUI by gui-id."
   [gui-id]
-  (some-> (get-gui-by-gui-id gui-id) :screen-factory-fn-kw))
+  (some-> (get-gui-by-gui-id gui-id) :registration :screen-factory-fn-kw))
 
 (defn get-gui-type
   "Get container/gui type keyword for a wireless GUI by gui-id."
   [gui-id]
-  (some-> (get-gui-by-gui-id gui-id) :gui-type))
+  (some-> (get-gui-by-gui-id gui-id) :registration :gui-type))
 
 (defn get-slot-layout
   "Get slot layout for a wireless GUI by gui-id."
   [gui-id]
-  (some-> (get-gui-by-gui-id gui-id) :slot-layout))
+  (some-> (get-gui-by-gui-id gui-id) :registration :slot-layout))
 
 (defn get-slot-range
   "Get slot index range for a wireless GUI section.
@@ -249,7 +329,7 @@ Structure:
   "Get a registered wireless GUI spec by its :gui-type keyword."
   [gui-type]
   (some (fn [[_gui-id spec]]
-          (when (= (:gui-type spec) gui-type)
+          (when (= (get-in spec [:registration :gui-type]) gui-type)
             spec))
         (:by-gui-id @gui-registry)))
 
@@ -257,7 +337,7 @@ Structure:
   "Get GUI id (int) for a :gui-type keyword, or nil."
   [gui-type]
   (some (fn [[gui-id spec]]
-          (when (= (:gui-type spec) gui-type)
+          (when (= (get-in spec [:registration :gui-type]) gui-type)
             gui-id))
         (:by-gui-id @gui-registry)))
 
@@ -265,7 +345,7 @@ Structure:
   "Get GUI config by testing container against all registered predicates."
   [container]
   (some (fn [[_gui-id spec]]
-          (when-let [pred (:container-predicate spec)]
+          (when-let [pred (get-in spec [:lifecycle :container-predicate])]
             (when (pred container)
               spec)))
         (:by-gui-id @gui-registry)))
@@ -401,10 +481,11 @@ Structure:
   "Create a runtime instance of a GUI for a specific player"
   [gui-spec player world pos]
   (let [slots-atom (atom {})
+        legacy-layout (:legacy-layout gui-spec)
         buttons-with-state (mapv
                              (fn [btn]
                                (assoc btn :enabled (atom true)))
-                             (:buttons gui-spec))]
+                             (:buttons legacy-layout))]
     (map->GuiInstance
       {:spec gui-spec
        :player player
@@ -439,14 +520,16 @@ Structure:
 
 ;; Execute button click
 (defn handle-button-click [gui-instance button-id]
-  (let [button-spec (nth (:buttons (:spec gui-instance)) button-id nil)]
+  (let [legacy-layout (get-in gui-instance [:spec :legacy-layout])
+        button-spec (nth (:buttons legacy-layout) button-id nil)]
     (when (and button-spec (button-enabled? gui-instance button-id))
       (log/info "Executing button" button-id ":" (:text button-spec))
       ((:on-click button-spec)))))
 
 ;; Execute slot change
 (defn handle-slot-change [gui-instance slot-index old-stack new-stack]
-  (let [slot-spec (nth (:slots (:spec gui-instance)) slot-index nil)]
+  (let [legacy-layout (get-in gui-instance [:spec :legacy-layout])
+        slot-spec (nth (:slots legacy-layout) slot-index nil)]
     (when slot-spec
       (if ((:filter slot-spec) new-stack)
         (do

@@ -518,48 +518,48 @@
 ;; Define the three node blocks
 (bdsl/defblock wireless-node-basic
   :registry-name "node_basic"
-  :material :metal
-  :hardness 2.5
-  :resistance 6.0
-  :requires-tool true
-  :harvest-tool :pickaxe
-  :harvest-level 1
-  :sounds :metal
-  :model-parent "minecraft:block/cube_all"
-  :block-state-properties block-state-properties
-  :on-right-click (handle-node-right-click :basic)
-  :on-place (handle-node-place :basic)
-  :on-break (handle-node-break :basic))
+  :physical {:material :metal
+             :hardness 2.5
+             :resistance 6.0
+             :requires-tool true
+             :harvest-tool :pickaxe
+             :harvest-level 1
+             :sounds :metal}
+  :rendering {:model-parent "minecraft:block/cube_all"}
+  :block-state {:block-state-properties block-state-properties}
+  :events {:on-right-click (handle-node-right-click :basic)
+           :on-place (handle-node-place :basic)
+           :on-break (handle-node-break :basic)})
 
 (bdsl/defblock wireless-node-standard
   :registry-name "node_standard"
-  :material :metal
-  :hardness 2.5
-  :resistance 6.0
-  :requires-tool true
-  :harvest-tool :pickaxe
-  :harvest-level 1
-  :sounds :metal
-  :model-parent "minecraft:block/cube_all"
-  :block-state-properties block-state-properties
-  :on-right-click (handle-node-right-click :standard)
-  :on-place (handle-node-place :standard)
-  :on-break (handle-node-break :standard))
+  :physical {:material :metal
+             :hardness 2.5
+             :resistance 6.0
+             :requires-tool true
+             :harvest-tool :pickaxe
+             :harvest-level 1
+             :sounds :metal}
+  :rendering {:model-parent "minecraft:block/cube_all"}
+  :block-state {:block-state-properties block-state-properties}
+  :events {:on-right-click (handle-node-right-click :standard)
+           :on-place (handle-node-place :standard)
+           :on-break (handle-node-break :standard)})
 
 (bdsl/defblock wireless-node-advanced
   :registry-name "node_advanced"
-  :material :metal
-  :hardness 2.5
-  :resistance 6.0
-  :requires-tool true
-  :harvest-tool :pickaxe
-  :harvest-level 1
-  :sounds :metal
-  :model-parent "minecraft:block/cube_all"
-  :block-state-properties block-state-properties
-  :on-right-click (handle-node-right-click :advanced)
-  :on-place (handle-node-place :advanced)
-  :on-break (handle-node-break :advanced))
+  :physical {:material :metal
+             :hardness 2.5
+             :resistance 6.0
+             :requires-tool true
+             :harvest-tool :pickaxe
+             :harvest-level 1
+             :sounds :metal}
+  :rendering {:model-parent "minecraft:block/cube_all"}
+  :block-state {:block-state-properties block-state-properties}
+  :events {:on-right-click (handle-node-right-click :advanced)
+           :on-place (handle-node-place :advanced)
+           :on-break (handle-node-break :advanced)})
 
 ;; Helper functions
 (defn get-all-wireless-nodes []

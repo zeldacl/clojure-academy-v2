@@ -14,6 +14,7 @@
   CRITICAL: This file contains PURE DATA ONLY (no function definitions).
   It can be safely imported by both server-side (block.clj) and client-side (gui.clj) code."
   (:require [cn.li.mcmod.block.state-schema :as state-schema]
+            [cn.li.mcmod.block.inventory-helpers :as inv-helpers]
             [cn.li.ac.config.nbt-keys :as nbt-keys]))
 
 ;; ============================================================================
@@ -93,8 +94,8 @@
     :default [nil nil]
     :persist? true
     :gui-sync? false
-    :load-fn 'cn.li.mcmod.block.inventory-helpers/load-inventory
-    :save-fn 'cn.li.mcmod.block.inventory-helpers/save-inventory
+    :load-fn inv-helpers/load-inventory
+    :save-fn inv-helpers/save-inventory
     :doc "Item inventory slots"}])
 
 ;; ============================================================================

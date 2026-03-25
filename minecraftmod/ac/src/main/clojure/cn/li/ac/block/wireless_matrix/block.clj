@@ -512,24 +512,24 @@
 
 ;; Register block definition
 (bdsl/defmultiblock 'wireless-matrix
-  :multi-block {:positions [[0 0 1] [1 0 1] [1 0 0]
+  :multi-block {:positions [[0 0 0] [0 0 1] [1 0 1] [1 0 0]
                             [0 1 0] [0 1 1] [1 1 1] [1 1 0]]
                 :rotation-center [1.0 0 1.0]}
-  :common {:material :stone
-           :hardness 3.0
-           :resistance 6.0
-           :requires-tool true
-           :harvest-tool :pickaxe
-           :harvest-level 1
-           :light-level 1.0
-           :sounds :stone}
+  :common {:physical {:material :stone
+                      :hardness 3.0
+                      :resistance 6.0
+                      :requires-tool true
+                      :harvest-tool :pickaxe
+                      :harvest-level 1
+                      :sounds :stone}
+           :rendering {:light-level 1.0}}
   :controller {:registry-name "matrix"
-               :flat-item-icon? true
-               :on-right-click (handle-matrix-right-click)
-               :on-place (handle-matrix-place)
-               :on-break (handle-matrix-break)}
+               :rendering {:flat-item-icon? true}
+               :events {:on-right-click (handle-matrix-right-click)
+                        :on-place (handle-matrix-place)
+                        :on-break (handle-matrix-break)}}
   :part {:registry-name "matrix_part"
-         :model-parent "minecraft:block/block"})
+         :rendering {:model-parent "minecraft:block/block"}})
 
 ;; ============================================================================
 ;; Part 10: Auto-Registration Hooks
