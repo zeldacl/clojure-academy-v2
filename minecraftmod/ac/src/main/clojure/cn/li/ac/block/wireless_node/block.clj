@@ -188,18 +188,19 @@
         state    (try (tick-charge-out state) (catch Exception _ state))
         ;; Every 20 ticks: check network + sync
         state    (if (zero? (mod ticker 20))
-                   (let [state (try (tick-check-network state level pos) (catch Exception _ state))]
+                   (let [state (try (tick-check-network state level pos) (catch Exception _ state))
+                         old-sync-state (::last-broadcast-state state)
+                         new-sync-state (-> (state-schema/schema->sync-payload node-state-schema state pos)
+                                            (assoc :max-energy (node-max-energy state)))]
                      ;; Update BlockState visual (energy bar + connected glow)
                      (update-block-state! state level pos)
-                     ;; Broadcast to connected GUIs
-                     (try
-                       (when-let [broadcast-fn @broadcast-node-state-fn]
-                         (broadcast-fn
-                          level pos
-                          (-> (state-schema/schema->sync-payload node-state-schema state pos)
-                              (assoc :max-energy (node-max-energy state)))))
-                       (catch Exception _))
-                     state)
+                     ;; Broadcast to connected GUIs only if state changed
+                     (when (not= new-sync-state old-sync-state)
+                       (try
+                         (when-let [broadcast-fn @broadcast-node-state-fn]
+                           (broadcast-fn level pos new-sync-state))
+                         (catch Exception _)))
+                     (assoc state ::last-broadcast-state new-sync-state))
                    state)
         ;; Only update BE if state actually changed
         old-state (platform-be/get-custom-state be)]

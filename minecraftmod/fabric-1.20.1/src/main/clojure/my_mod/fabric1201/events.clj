@@ -4,7 +4,7 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.fabric1201.gui.registry-impl :as gui-registry-impl]
-            [cn.li.ac.wireless.world-data :as wd])
+            [cn.li.ac.wireless.world_data :as wd])
   (:import [net.fabricmc.fabric.api.event.player UseBlockCallback]
            [net.fabricmc.fabric.api.event.player PlayerBlockBreakEvents]
            [net.minecraft.world InteractionResult]

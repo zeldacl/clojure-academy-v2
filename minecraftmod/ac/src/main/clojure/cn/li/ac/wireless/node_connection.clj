@@ -6,7 +6,8 @@
   - Receiver energy distribution
   - Capacity management
   - Range validation"
-  (:require [cn.li.ac.wireless.virtual-blocks :as vb]
+  (:require [clojure.string :as str]
+            [cn.li.ac.wireless.virtual-blocks :as vb]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -86,6 +87,52 @@
     false))
 
 ;; ============================================================================
+;; Device Management (Unified)
+;; ============================================================================
+
+(defn- add-device!
+  "Generic function to add a device (receiver or generator) to node connection
+  Returns true if successful"
+  [conn device-vb device-type]
+  (let [device-atom (case device-type
+                      :receiver (:receivers conn)
+                      :generator (:generators conn))
+        remove-fn (case device-type
+                    :receiver remove-receiver!
+                    :generator remove-generator!)
+        device-name (name device-type)]
+    (cond
+      (>= (get-load conn) (get-capacity conn))
+      (do
+        (log/info (format "%s add failed: node at capacity" (str/capitalize device-name)))
+        false)
+
+      (not (check-range conn device-vb))
+      (do
+        (log/info (format "%s add failed: out of range" (str/capitalize device-name)))
+        false)
+
+      :else
+      (do
+        ;; Remove from old connection if exists
+        (let [old-conn (find-existing-node-connection (:world-data conn) device-vb)]
+          (when old-conn
+            (remove-fn old-conn device-vb)))
+
+        ;; Add to this connection
+        (swap! device-atom conj device-vb)
+
+        ;; Update lookup
+        (swap! (:node-lookup (:world-data conn))
+               assoc device-vb conn)
+
+        (log/info (format "Added %s %s to node %s"
+                          device-name
+                          (vb/vblock-to-string device-vb)
+                          (vb/vblock-to-string (:node conn))))
+        true))))
+
+;; ============================================================================
 ;; Receiver Management
 ;; ============================================================================
 
@@ -93,35 +140,7 @@
   "Add a receiver to this node connection
   Returns true if successful"
   [conn receiver-vb]
-  (cond
-    (>= (get-load conn) (get-capacity conn))
-    (do
-      (log/info "Receiver add failed: node at capacity")
-      false)
-
-    (not (check-range conn receiver-vb))
-    (do
-      (log/info "Receiver add failed: out of range")
-      false)
-
-    :else
-    (do
-      ;; Remove from old connection if exists
-      (let [old-conn (find-existing-node-connection (:world-data conn) receiver-vb)]
-        (when old-conn
-          (remove-receiver! old-conn receiver-vb)))
-
-      ;; Add to this connection
-      (swap! (:receivers conn) conj receiver-vb)
-
-      ;; Update lookup
-      (swap! (:node-lookup (:world-data conn))
-             assoc receiver-vb conn)
-
-      (log/info (format "Added receiver %s to node %s"
-                        (vb/vblock-to-string receiver-vb)
-                        (vb/vblock-to-string (:node conn))))
-      true)))
+  (add-device! conn receiver-vb :receiver))
 
 (defn remove-receiver!
   "Mark receiver for removal"
@@ -136,35 +155,7 @@
   "Add a generator to this node connection
   Returns true if successful"
   [conn generator-vb]
-  (cond
-    (>= (get-load conn) (get-capacity conn))
-    (do
-      (log/info "Generator add failed: node at capacity")
-      false)
-
-    (not (check-range conn generator-vb))
-    (do
-      (log/info "Generator add failed: out of range")
-      false)
-
-    :else
-    (do
-      ;; Remove from old connection if exists
-      (let [old-conn (find-existing-node-connection (:world-data conn) generator-vb)]
-        (when old-conn
-          (remove-generator! old-conn generator-vb)))
-
-      ;; Add to this connection
-      (swap! (:generators conn) conj generator-vb)
-
-      ;; Update lookup
-      (swap! (:node-lookup (:world-data conn))
-             assoc generator-vb conn)
-
-      (log/info (format "Added generator %s to node %s"
-            (vb/vblock-to-string generator-vb)
-            (vb/vblock-to-string (:node conn))))
-      true)))
+  (add-device! conn generator-vb :generator))
 
 (defn remove-generator!
   "Mark generator for removal"
@@ -175,31 +166,24 @@
 ;; Cleanup
 ;; ============================================================================
 
+(defn- cleanup-removed-devices!
+  "Remove devices marked for removal from collection and lookup"
+  [conn device-atom to-remove-atom]
+  (let [to-remove @to-remove-atom]
+    (when (seq to-remove)
+      (swap! device-atom
+             (fn [devices]
+               (filterv #(not (some (partial vb/vblock-equals? %) to-remove))
+                        devices)))
+      (doseq [device to-remove]
+        (swap! (:node-lookup (:world-data conn)) dissoc device))
+      (reset! to-remove-atom []))))
+
 (defn- cleanup-removed!
   "Remove all marked receivers and generators"
   [conn]
-  (let [to-remove-recs @(:to-remove-receivers conn)
-        to-remove-gens @(:to-remove-generators conn)]
-    
-    ;; Remove receivers
-    (when (seq to-remove-recs)
-      (swap! (:receivers conn)
-             (fn [recs]
-               (filterv #(not (some (partial vb/vblock-equals? %) to-remove-recs))
-                        recs)))
-      (doseq [rec to-remove-recs]
-        (swap! (:node-lookup (:world-data conn)) dissoc rec))
-      (reset! (:to-remove-receivers conn) []))
-    
-    ;; Remove generators
-    (when (seq to-remove-gens)
-      (swap! (:generators conn)
-             (fn [gens]
-               (filterv #(not (some (partial vb/vblock-equals? %) to-remove-gens))
-                        gens)))
-      (doseq [gen to-remove-gens]
-        (swap! (:node-lookup (:world-data conn)) dissoc gen))
-      (reset! (:to-remove-generators conn) []))))
+  (cleanup-removed-devices! conn (:receivers conn) (:to-remove-receivers conn))
+  (cleanup-removed-devices! conn (:generators conn) (:to-remove-generators conn)))
 
 ;; ============================================================================
 ;; Validation
@@ -227,69 +211,75 @@
 (defn- transfer-from-generators!
   "Collect energy from generators to node"
   [conn node bandwidth]
-  (let [world (:world (:world-data conn))
-        generators-shuffled (shuffle @(:generators conn))]
-    (loop [gens-remaining generators-shuffled
-           transfer-left bandwidth]
-      (when (and (seq gens-remaining) (> transfer-left 0))
-        (let [gen-vb (first gens-remaining)]
-          (if (vb/is-chunk-loaded? gen-vb world)
-            (if-let [gen (vb/vblock-get gen-vb world)]
-              (let [;; Get energy from generator
-                    energy-available (.getEnergy ^ cn.li.acapi.wireless.IWirelessGenerator gen)
-                    to-collect (min energy-available transfer-left)
+  (when (> bandwidth 0)
+    (let [generators @(:generators conn)]
+      (when (seq generators)
+        (let [world (:world (:world-data conn))
+              generators-shuffled (shuffle generators)]
+          (loop [gens-remaining generators-shuffled
+                 transfer-left bandwidth]
+            (when (and (seq gens-remaining) (> transfer-left 0))
+              (let [gen-vb (first gens-remaining)]
+                (if (vb/is-chunk-loaded? gen-vb world)
+                  (if-let [gen (vb/vblock-get gen-vb world)]
+                    (let [;; Get energy from generator
+                          energy-available (.getEnergy ^cn.li.acapi.wireless.IWirelessGenerator gen)
+                          to-collect (min energy-available transfer-left)
 
-                    ;; Charge to node
-                    node-max (.getMaxEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
-                    node-current (.getEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
-                    node-space (- node-max node-current)
-                    actual-transfer (min to-collect node-space)]
+                          ;; Charge to node
+                          node-max (.getMaxEnergy ^cn.li.acapi.wireless.IWirelessNode node)
+                          node-current (.getEnergy ^cn.li.acapi.wireless.IWirelessNode node)
+                          node-space (- node-max node-current)
+                          actual-transfer (min to-collect node-space)]
 
-                ;; Transfer energy
-                (.setEnergy ^ cn.li.acapi.wireless.IWirelessGenerator gen (- energy-available actual-transfer))
-                (.setEnergy ^ cn.li.acapi.wireless.IWirelessNode node (+ node-current actual-transfer))
-                
-                (recur (rest gens-remaining)
-                       (- transfer-left actual-transfer)))
-              
-              ;; Generator destroyed
-              (do (remove-generator! conn gen-vb)
-                  (recur (rest gens-remaining) transfer-left)))
-            
-            ;; Chunk not loaded
-            (recur (rest gens-remaining) transfer-left)))))))
+                      ;; Transfer energy
+                      (.setEnergy ^cn.li.acapi.wireless.IWirelessGenerator gen (- energy-available actual-transfer))
+                      (.setEnergy ^cn.li.acapi.wireless.IWirelessNode node (+ node-current actual-transfer))
+
+                      (recur (rest gens-remaining)
+                             (- transfer-left actual-transfer)))
+
+                    ;; Generator destroyed
+                    (do (remove-generator! conn gen-vb)
+                        (recur (rest gens-remaining) transfer-left)))
+
+                  ;; Chunk not loaded
+                  (recur (rest gens-remaining) transfer-left))))))))))
 
 (defn- transfer-to-receivers!
   "Distribute energy from node to receivers"
   [conn node bandwidth]
-  (let [world (:world (:world-data conn))
-        receivers-shuffled (shuffle @(:receivers conn))]
-    (loop [recs-remaining receivers-shuffled
-           transfer-left bandwidth]
-      (when (and (seq recs-remaining) (> transfer-left 0))
-        (let [rec-vb (first recs-remaining)]
-          (if (vb/is-chunk-loaded? rec-vb world)
-            (if-let [rec (vb/vblock-get rec-vb world)]
-              (let [;; Pull from node
-                    node-current (.getEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
-                    to-send (min node-current transfer-left)
+  (when (> bandwidth 0)
+    (let [receivers @(:receivers conn)]
+      (when (seq receivers)
+        (let [world (:world (:world-data conn))
+              receivers-shuffled (shuffle receivers)]
+          (loop [recs-remaining receivers-shuffled
+                 transfer-left bandwidth]
+            (when (and (seq recs-remaining) (> transfer-left 0))
+              (let [rec-vb (first recs-remaining)]
+                (if (vb/is-chunk-loaded? rec-vb world)
+                  (if-let [rec (vb/vblock-get rec-vb world)]
+                    (let [;; Pull from node
+                          node-current (.getEnergy ^cn.li.acapi.wireless.IWirelessNode node)
+                          to-send (min node-current transfer-left)
 
-                    ;; Inject to receiver
-                    leftover (.injectEnergy ^ cn.li.acapi.wireless.IWirelessReceiver rec to-send)
-                    actual-transfer (- to-send leftover)]
+                          ;; Inject to receiver
+                          leftover (.injectEnergy ^cn.li.acapi.wireless.IWirelessReceiver rec to-send)
+                          actual-transfer (- to-send leftover)]
 
-                ;; Update node energy
-                (.setEnergy ^ cn.li.acapi.wireless.IWirelessNode node (- node-current actual-transfer))
-                
-                (recur (rest recs-remaining)
-                       (- transfer-left actual-transfer)))
-              
-              ;; Receiver destroyed
-              (do (remove-receiver! conn rec-vb)
-                  (recur (rest recs-remaining) transfer-left)))
-            
-            ;; Chunk not loaded
-            (recur (rest recs-remaining) transfer-left)))))))
+                      ;; Update node energy
+                      (.setEnergy ^cn.li.acapi.wireless.IWirelessNode node (- node-current actual-transfer))
+
+                      (recur (rest recs-remaining)
+                             (- transfer-left actual-transfer)))
+
+                    ;; Receiver destroyed
+                    (do (remove-receiver! conn rec-vb)
+                        (recur (rest recs-remaining) transfer-left)))
+
+                  ;; Chunk not loaded
+                  (recur (rest recs-remaining) transfer-left))))))))))
 
 ;; ============================================================================
 ;; Tick System
@@ -355,8 +345,8 @@
     :tick {:fn 'cn.li.ac.wireless.node-connection/tick-node-conn!}
     :nbt {:tag "connections"
           :atom :connections
-          :to-nbt 'cn.li.ac.wireless.node-connection/conn-to-nbt
-          :from-nbt 'cn.li.ac.wireless.node-connection/conn-from-nbt
+          :to-nbt 'cn.li.ac.wireless.node-connection/node-connection-to-nbt
+          :from-nbt 'cn.li.ac.wireless.node-connection/node-connection-from-nbt
           :skip? '(fn [conn] @(:disposed conn))
           :rebuild {:lookup-atom :node-lookup
                     :direct-keys [:node]

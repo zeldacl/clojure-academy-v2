@@ -126,16 +126,17 @@
         z (pos/pos-z pos)
         world-data (wd/get-world-data world)
         all-conns @(:connections world-data)
+        range-sq (* search-range search-range)
         matching-nodes
         (reduce
           (fn [acc conn]
             (let [node-vb (:node conn)
                   dist-sq (vb/dist-sq-pos node-vb x y z)]
-              (if (<= dist-sq (* search-range search-range))
+              (if (<= dist-sq range-sq)
                 (if-let [node (vb/vblock-get node-vb world)]
-                  (let [node-range (.getRange ^ cn.li.acapi.wireless.IWirelessNode node)
-                        node-dist-sq (vb/dist-sq-pos node-vb x y z)]
-                    (if (and (<= node-dist-sq (* node-range node-range))
+                  (let [node-range (.getRange ^cn.li.acapi.wireless.IWirelessNode node)
+                        node-range-sq (* node-range node-range)]
+                    (if (and (<= dist-sq node-range-sq)
                              (< (node-conn/get-load conn)
                                 (node-conn/get-capacity conn)))
                       (conj acc node)

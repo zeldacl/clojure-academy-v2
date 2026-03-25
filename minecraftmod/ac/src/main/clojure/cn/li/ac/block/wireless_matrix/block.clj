@@ -206,21 +206,26 @@
   (let [state (safe-state be)
         ticker (inc (get state :update-ticker 0))
         state (assoc state :update-ticker ticker)
-        broken? (atom false)]
-    ;; Sync to clients every 15 ticks
-    (when (and (zero? (:sub-id state 0))
-               (zero? (mod ticker 15)))
-      (try
-        (when-let [broadcast-fn (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/broadcast-matrix-state)]
-          (let [impl ^IWirelessMatrix (->WirelessMatrixImpl be)]
-            (broadcast-fn level pos
-              (-> (schema/schema->sync-payload matrix-schema/unified-matrix-schema state pos)
-                  (assoc :is-working  (is-working? state)
-                         :capacity    (.getMatrixCapacity impl)
-                         :bandwidth   (.getMatrixBandwidth impl)
-                         :range       (.getMatrixRange impl))))))
-        (catch Exception e
-          (log/debug "Matrix sync skipped:" (ex-message e)))))
+        broken? (atom false)
+        state (if (and (zero? (:sub-id state 0))
+                       (zero? (mod ticker 15)))
+                (try
+                  (if-let [broadcast-fn (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/broadcast-matrix-state)]
+                    (let [impl ^IWirelessMatrix (->WirelessMatrixImpl be)
+                          old-sync-state (::last-broadcast-state state)
+                          new-sync-state (-> (schema/schema->sync-payload matrix-schema/unified-matrix-schema state pos)
+                                             (assoc :is-working  (is-working? state)
+                                                    :capacity    (.getMatrixCapacity impl)
+                                                    :bandwidth   (.getMatrixBandwidth impl)
+                                                    :range       (.getMatrixRange impl)))]
+                      (when (not= new-sync-state old-sync-state)
+                        (broadcast-fn level pos new-sync-state))
+                      (assoc state ::last-broadcast-state new-sync-state))
+                    state)
+                  (catch Exception e
+                    (log/debug "Matrix sync skipped:" (ex-message e))
+                    state))
+                state)]
     ;; Verify structure every 20 ticks
     (when (zero? (mod ticker 20))
       (try
