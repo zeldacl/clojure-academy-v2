@@ -41,18 +41,23 @@
   mcmod-config/*mod-id*)
 ;; 基础blocks (简单单一model)
 ;; 从 DSL/注册元数据自动推导，避免在此处重复维护定义。
+;; 简单block = 所有未在复杂blockstate定义中出现的block
 (def SIMPLE_BLOCKS
-  (into {}
-        (for [block-id (registry-metadata/get-all-block-ids)
-              :let [registry-name (registry-metadata/get-block-registry-name block-id)
-                    simple-block? (not (.startsWith registry-name "node_"))]
-              :when simple-block?]
-          [(keyword block-id)
-           (BlockStateDefinition.
-            registry-name
-            {}
-            [{:condition nil
-              :models [(str (mod-id) ":block/" registry-name)]}])])))
+  (let [;; Collect all block-keys that have complex blockstate definitions
+        complex-block-keys (set (keys (node-blockstate/get-all-node-definitions)))]
+    (into {}
+          (for [block-id (registry-metadata/get-all-block-ids)
+                :let [block-key (keyword block-id)
+                      registry-name (registry-metadata/get-block-registry-name block-id)
+                      ;; A block is simple if it's NOT in any complex definition set
+                      simple-block? (not (contains? complex-block-keys block-key))]
+                :when simple-block?]
+            [block-key
+             (BlockStateDefinition.
+              registry-name
+              {}
+              [{:condition nil
+                :models [(str (mod-id) ":block/" registry-name)]}])]))))
 
 ;; ============================================================================
 ;; Node Blocks - Delegated to wireless-node/blockstate.clj
