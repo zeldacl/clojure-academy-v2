@@ -439,24 +439,72 @@
     (log/info "Wireless Matrix right-clicked!")
     (let [{:keys [player world pos sneaking]} event-data
           be         (world/world-get-tile-entity world pos)
-          state      (when be (safe-state be))]
-      (if state
+          state      (when be (safe-state be))
+          ;; If this is a part block (sub-id != 0), find the controller
+          sub-id     (when state (:sub-id state 0))
+          controller-pos (if (and state (not= sub-id 0))
+                           ;; This is a part, find controller
+                           (try
+                             (let [block-spec (bdsl/get-block :wireless-matrix)
+                                   multi-block (:multi-block block-spec)
+                                   positions (:multi-block-positions multi-block)
+                                   origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})
+                                   all-positions (if positions
+                                                   (bdsl/calculate-multi-block-positions positions origin)
+                                                   [])
+                                   ;; Find which position this part is at
+                                   part-offset (when (< sub-id (count all-positions))
+                                                 (nth all-positions sub-id))
+                                   ;; Calculate controller position (sub-id 0)
+                                   controller-offset (first all-positions)
+                                   dx (- (:x controller-offset) (:x part-offset))
+                                   dy (- (:y controller-offset) (:y part-offset))
+                                   dz (- (:z controller-offset) (:z part-offset))]
+                               (log/info "Part block clicked, sub-id:" sub-id)
+                               (log/info "  Part offset:" part-offset)
+                               (log/info "  Controller offset:" controller-offset)
+                               (log/info "  Delta:" dx dy dz)
+                               (pos/create-block-pos
+                                 (+ (pos/pos-x pos) dx)
+                                 (+ (pos/pos-y pos) dy)
+                                 (+ (pos/pos-z pos) dz)))
+                             (catch Exception e
+                               (log/error "Failed to find controller position:" (ex-message e))
+                               pos))
+                           ;; This is the controller
+                           pos)
+          ;; Get controller's block entity
+          controller-be (world/world-get-tile-entity world controller-pos)
+          controller-state (when controller-be (safe-state controller-be))]
+      (log/info "Controller pos:" controller-pos "sub-id:" (:sub-id controller-state 0))
+      (if controller-state
         (if-not sneaking
           (do
             (log/info "Opening Matrix GUI")
-            (log/info "  Plates:" (:plate-count state))
-            (log/info "  Core Level:" (:core-level state))
-            (log/info "  Working:" (is-working? state))
+            (log/info "  Plates:" (:plate-count controller-state))
+            (log/info "  Core Level:" (:core-level controller-state))
+            (log/info "  Working:" (is-working? controller-state))
             (try
               (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
-                (let [result (open-gui-by-type player :matrix world pos)]
-                  (log/info "Opened Matrix GUI")
+                (let [result (open-gui-by-type player :matrix world controller-pos)]
+                  (log/info "open-gui-by-type returned:" result)
+                  (log/info "  Result keys:" (when (map? result) (keys result)))
+                  (log/info "  gui-id:" (:gui-id result))
+                  (log/info "  player:" (:player result))
+                  (log/info "  world:" (:world result))
+                  (log/info "  pos:" (:pos result))
                   result)
                 (do (log/error "Failed to open Matrix GUI: open-gui-by-type not resolved") nil))
               (catch Exception e
-                (log/error "Failed to open Matrix GUI:" (ex-message e)) nil)))
-          (log/info "Sneaking - no action"))
-        (log/info "No tile entity found!")))))
+                (log/error "Failed to open Matrix GUI:" (ex-message e))
+                (log/error "Exception stack trace:" e)
+                nil)))
+          (do
+            (log/info "Sneaking - no action")
+            nil))
+        (do
+          (log/info "No tile entity found!")
+          nil)))))
 
 (defn handle-matrix-place []
   (fn [event-data]
@@ -547,7 +595,8 @@
                         :on-place (handle-matrix-place)
                         :on-break (handle-matrix-break)}}
   :part {:registry-name "matrix_part"
-         :rendering {:model-parent "minecraft:block/block"}})
+         :rendering {:model-parent "minecraft:block/block"}
+         :events {:on-right-click (handle-matrix-right-click)}})
 
 ;; ============================================================================
 ;; Part 10: Auto-Registration Hooks
