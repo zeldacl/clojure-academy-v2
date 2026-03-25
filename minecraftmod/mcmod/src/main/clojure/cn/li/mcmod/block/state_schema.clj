@@ -12,25 +12,17 @@
   (:require [cn.li.mcmod.platform.world :as platform-world]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.nbt :as nbt]
-            [cn.li.mcmod.platform.be :as pbe]))
+            [cn.li.mcmod.platform.be :as pbe]
+            [cn.li.mcmod.nbt.dsl :as nbt-dsl]
+            [cn.li.mcmod.block.inventory-helpers :as inv-helpers]))
 
 (def ^:private nbt-writers
-  {:double  (fn [tag k v] (nbt/nbt-set-double! tag k v))
-   :float   (fn [tag k v] (nbt/nbt-set-float!  tag k v))
-   :long    (fn [tag k v] (nbt/nbt-set-long!   tag k v))
-   :int     (fn [tag k v] (nbt/nbt-set-int!    tag k v))
-   :boolean (fn [tag k v] (nbt/nbt-set-boolean! tag k v))
-   :string  (fn [tag k v] (nbt/nbt-set-string!  tag k (str v)))
-   :keyword (fn [tag k v] (nbt/nbt-set-string!  tag k (name v)))})
+  "NBT writers extracted from nbt.dsl/type-converters"
+  (into {} (map (fn [[k v]] [k (:write v)]) nbt-dsl/type-converters)))
 
 (def ^:private nbt-readers
-  {:double  (fn [tag k] (nbt/nbt-get-double tag k))
-   :float   (fn [tag k] (nbt/nbt-get-float  tag k))
-   :long    (fn [tag k] (nbt/nbt-get-long   tag k))
-   :int     (fn [tag k] (nbt/nbt-get-int    tag k))
-   :boolean (fn [tag k] (nbt/nbt-get-boolean tag k))
-   :string  (fn [tag k] (nbt/nbt-get-string  tag k))
-   :keyword (fn [tag k] (keyword (nbt/nbt-get-string tag k)))})
+  "NBT readers extracted from nbt.dsl/type-converters"
+  (into {} (map (fn [[k v]] [k (:read v)]) nbt-dsl/type-converters)))
 
 ;; ============================================================================
 ;; Core schema utilities
@@ -268,9 +260,7 @@
                new-value (get payload payload-key)]
            (if (and tile new-value)
              (do
-               (let [state (or (pbe/get-custom-state tile) {})]
-                 (pbe/set-custom-state! tile (assoc state field-key new-value))
-                 (pbe/set-changed! tile))
+               (inv-helpers/update-be-field! tile field-key new-value)
                {:success true})
              {:success false})))])))
 

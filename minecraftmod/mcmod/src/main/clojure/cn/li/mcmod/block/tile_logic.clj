@@ -12,6 +12,10 @@
 ;; handler-factory-fn is (fn [be side] handler-or-nil)
 (defonce capability-registry (atom {}))
 
+;; Resolve capability factory once at namespace load time
+(def ^:private capability-get-factory
+  (delay (requiring-resolve 'cn.li.mcmod.platform.capability/get-handler-factory)))
+
 ;; container-registry: tile-id → container-fns-map
 ;; container-fns-map keys:
 ;;   :get-size                  (fn [be] int)
@@ -141,11 +145,11 @@
   [tile-id cap-key be side]
   (when (get-in @capability-registry [tile-id cap-key])
     (try
-    (let [get-factory (requiring-resolve 'cn.li.mcmod.platform.capability/get-handler-factory)
-      factory     (when get-factory (get-factory cap-key))]
-      (when factory (factory be side)))
+      (when-let [get-factory @capability-get-factory]
+        (when-let [factory (get-factory cap-key)]
+          (factory be side)))
       (catch Exception e
-        (log/error "get-capability error" tile-id cap-key(ex-message e))
+        (log/error "get-capability error" tile-id cap-key (ex-message e))
         nil))))
 
 ;; ============================================================================
@@ -164,32 +168,40 @@
 
 (defn- container-fns [tile-id] (get @container-registry tile-id))
 
+(defn- invoke-container-fn
+  "Invoke a container function by key, applying args. Returns nil if function not found."
+  [tile-id fn-key & args]
+  (when-let [f (get (container-fns tile-id) fn-key)]
+    (apply f args)))
+
 (defn container-size [tile-id be]
-  (if-let [f (:get-size (container-fns tile-id))] (int (f be)) 0))
+  (or (invoke-container-fn tile-id :get-size be) 0))
 
 (defn container-get-item [tile-id be slot]
-  (when-let [f (:get-item (container-fns tile-id))] (f be slot)))
+  (invoke-container-fn tile-id :get-item be slot))
 
 (defn container-set-item [tile-id be slot item]
-  (when-let [f (:set-item! (container-fns tile-id))] (f be slot item)))
+  (invoke-container-fn tile-id :set-item! be slot item))
 
 (defn container-remove-item [tile-id be slot amount]
-  (when-let [f (:remove-item (container-fns tile-id))] (f be slot amount)))
+  (invoke-container-fn tile-id :remove-item be slot amount))
 
 (defn container-remove-item-no-update [tile-id be slot]
-  (when-let [f (:remove-item-no-update (container-fns tile-id))] (f be slot)))
+  (invoke-container-fn tile-id :remove-item-no-update be slot))
 
 (defn container-clear [tile-id be]
-  (when-let [f (:clear! (container-fns tile-id))] (f be)))
+  (invoke-container-fn tile-id :clear! be))
 
 (defn container-still-valid [tile-id be player]
-  (if-let [f (:still-valid? (container-fns tile-id))] (f be player) true))
+  (if-let [result (invoke-container-fn tile-id :still-valid? be player)]
+    result
+    true))
 
 (defn container-slots-for-face [tile-id be face]
-  (when-let [f (:slots-for-face (container-fns tile-id))] (f be face)))
+  (invoke-container-fn tile-id :slots-for-face be face))
 
 (defn container-can-place-through-face [tile-id be slot item face]
-  (boolean (when-let [f (:can-place-through-face? (container-fns tile-id))] (f be slot item face))))
+  (boolean (invoke-container-fn tile-id :can-place-through-face? be slot item face)))
 
 (defn container-can-take-through-face [tile-id be slot item face]
-  (boolean (when-let [f (:can-take-through-face? (container-fns tile-id))] (f be slot item face))))
+  (boolean (invoke-container-fn tile-id :can-take-through-face? be slot item face)))

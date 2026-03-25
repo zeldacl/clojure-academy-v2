@@ -360,21 +360,25 @@
     [{:type :item :id \"demo-item\" :tab :misc :registry-name \"demo_item\"}
      {:type :block-item :id \"demo-block\" :tab :building-blocks :registry-name \"demo_block\"}]"
   []
-  (let [;; Get all standalone items
-        item-entries (for [item-id (get-all-item-ids)]
+  (let [;; Get all standalone items - fetch spec once per item
+        item-entries (for [item-id (get-all-item-ids)
+                           :let [spec (idsl/get-item item-id)]]
                        {:type :item
                         :id item-id
-                        :tab (get-item-creative-tab item-id)
-                        :registry-name (get-item-registry-name item-id)})
-        
-        ;; Get all block items
+                        :tab (:creative-tab spec)
+                        :registry-name (or (:registry-name spec)
+                                          (str/replace item-id #"-" "_"))})
+
+        ;; Get all block items - fetch spec once per block
         block-item-entries (for [block-id (get-all-block-ids)
-                                 :when (should-create-block-item? block-id)]
+                                 :let [spec (bdsl/get-block block-id)]
+                                 :when (:has-item-form? spec)]
                              {:type :block-item
                               :id block-id
-                              :tab (get-block-creative-tab block-id)
-                              :registry-name (get-block-registry-name block-id)})]
-    
+                              :tab (:creative-tab spec)
+                              :registry-name (or (:registry-name spec)
+                                                (str/replace block-id #"-" "_"))})]
+
     ;; Combine and return all entries
     (concat item-entries block-item-entries)))
 

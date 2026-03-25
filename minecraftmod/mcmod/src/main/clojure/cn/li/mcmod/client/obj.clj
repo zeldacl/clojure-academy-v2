@@ -222,16 +222,19 @@
           part-vertex-indices (set (mapcat (fn [{:keys [i0 i1 i2]}]
                                              [i0 i1 i2])
                                            face-list))
+          ;; Pre-calculate part-min-y once for all faces
           part-min-y (reduce min
                              (map (fn [idx]
                                     (:y (:pos (nth (:vertices model) idx))))
                                   part-vertex-indices))
-          bottom-epsilon (double *bottom-plane-epsilon*)]
+          bottom-epsilon (double *bottom-plane-epsilon*)
+          ;; Cache vertex lookups to avoid repeated nth calls
+          vertices (:vertices model)]
       (doseq [{:keys [i0 i1 i2 normal]} face-list
         :let [face-normal (map-model-normal normal)
-          v0 (nth (:vertices model) i0)
-          v1 (nth (:vertices model) i1)
-          v2 (nth (:vertices model) i2)
+          v0 (nth vertices i0)
+          v1 (nth vertices i1)
+          v2 (nth vertices i2)
           y0 (:y (:pos v0))
           y1 (:y (:pos v1))
           y2 (:y (:pos v2))
@@ -256,7 +259,7 @@
         ;; Entity RenderTypes are quad-based in modern MC. Submit a degenerate
         ;; 4th vertex so each OBJ triangle maps to one valid quad primitive.
         (doseq [vertex-idx [i0 i1 i2 i2]]
-            (let [{:keys [pos uv normal]} (nth (:vertices model) vertex-idx)
+            (let [{:keys [pos uv normal]} (nth vertices vertex-idx)
               pos (map-model-pos pos)
               normal (map-model-normal normal)
                 x (float (:x pos))
