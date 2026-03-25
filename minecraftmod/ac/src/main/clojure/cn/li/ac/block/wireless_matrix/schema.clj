@@ -6,47 +6,9 @@
   2. GUI-CONTAINER: Client-side GUI container atoms
   3. EPHEMERAL-FIELDS: Runtime state, not persisted
 
-  CRITICAL: This file contains PURE DATA ONLY (no function definitions except
-  custom load/save helpers for inventory serialization).
+  CRITICAL: This file contains PURE DATA ONLY (no function definitions).
   It can be safely imported by both server-side (block.clj) and client-side (gui.clj) code."
-  (:require [cn.li.mcmod.block.state-schema :as state-schema]
-            [cn.li.mcmod.platform.nbt :as nbt]
-            [cn.li.mcmod.platform.item :as pitem]))
-
-;; ============================================================================
-;; Custom Inventory Load/Save Helpers
-;; ============================================================================
-
-(defn- load-inventory
-  "Deserialize a ListTag of ItemStack compounds into a [s0 s1 s2 s3] vector."
-  [tag nbt-key default]
-  (if (nbt/nbt-has-key? tag nbt-key)
-    (let [inv-tag (nbt/nbt-get-list tag nbt-key)
-          size    (nbt/nbt-list-size inv-tag)]
-      (reduce
-        (fn [v i]
-          (let [slot-tag (nbt/nbt-list-get-compound inv-tag i)
-                slot     (nbt/nbt-get-int slot-tag "Slot")
-                item     (pitem/create-item-from-nbt slot-tag)]
-            (if (and (>= slot 0) (< slot (count v)))
-              (assoc v slot (when-not (pitem/item-is-empty? item) item))
-              v)))
-        default
-        (range size)))
-    default))
-
-(defn- save-inventory
-  "Serialize a [s0 s1 s2 s3] vector into a ListTag and attach to tag."
-  [state tag nbt-key]
-  (let [inv      (get state :inventory [nil nil nil nil])
-        inv-list (nbt/create-nbt-list)]
-    (doseq [slot (range (count inv))]
-      (when-let [item (nth inv slot nil)]
-        (let [slot-tag (nbt/create-nbt-compound)]
-          (nbt/nbt-set-int! slot-tag "Slot" slot)
-          (pitem/item-save-to-nbt item slot-tag)
-          (nbt/nbt-append! inv-list slot-tag))))
-    (nbt/nbt-set-tag! tag nbt-key inv-list)))
+  (:require [cn.li.mcmod.block.state-schema :as state-schema]))
 
 ;; ============================================================================
 ;; 1. NBT-PERSISTED FIELDS
@@ -129,8 +91,8 @@
     :default [nil nil nil nil]
     :persist? true
     :gui-sync? false
-    :load-fn load-inventory
-    :save-fn save-inventory
+    :load-fn 'cn.li.mcmod.block.inventory-helpers/load-inventory
+    :save-fn 'cn.li.mcmod.block.inventory-helpers/save-inventory
     :doc "Item inventory slots (3 plates + 1 core)"}])
 
 ;; ============================================================================

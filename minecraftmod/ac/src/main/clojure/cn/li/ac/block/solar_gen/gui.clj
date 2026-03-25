@@ -89,11 +89,20 @@
 (defn still-valid? [_container _player] true)
 
 (defn sync-to-client! [container]
-  (let [state (or (common/get-tile-state (:tile-entity container)) {})]
-    (reset! (:energy container)     (double (get state :energy 0.0)))
-    (reset! (:max-energy container) (double (get state :max-energy 1000.0)))
-    (reset! (:status container)     (str (get state :status "STOPPED")))
-    (reset! (:gen-speed container)  (double (get state :gen-speed 0.0)))))
+  (let [state (or (common/get-tile-state (:tile-entity container)) {})
+        new-energy (double (get state :energy 0.0))
+        new-max-energy (double (get state :max-energy 1000.0))
+        new-status (str (get state :status "STOPPED"))
+        new-gen-speed (double (get state :gen-speed 0.0))]
+    ;; Only update atoms if values changed
+    (when (not= new-energy @(:energy container))
+      (reset! (:energy container) new-energy))
+    (when (not= new-max-energy @(:max-energy container))
+      (reset! (:max-energy container) new-max-energy))
+    (when (not= new-status @(:status container))
+      (reset! (:status container) new-status))
+    (when (not= new-gen-speed @(:gen-speed container))
+      (reset! (:gen-speed container) new-gen-speed))))
 
 (defn get-sync-data [container]
   ((schema-builders/build-get-sync-data-fn solar-schema/unified-solar-schema) container))

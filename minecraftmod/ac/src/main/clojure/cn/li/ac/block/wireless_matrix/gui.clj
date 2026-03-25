@@ -274,30 +274,36 @@
       0)))
 
 (defn- calculate-matrix-stats [core-level plate-count]
-  (let [base-capacity  (* core-level 50000)
-        base-bandwidth (* core-level 1000)
-        base-range     (* core-level 16.0)
-        plate-mult     (+ 1.0 (* plate-count 0.2))
-        capacity       (int (* base-capacity plate-mult))
-        bandwidth      (int (* base-bandwidth plate-mult))
-        range          (* base-range plate-mult)]
-    {:capacity capacity
-     :bandwidth bandwidth
-     :range range}))
+  ;; Must match capability implementation in block.clj
+  (if (and (> core-level 0) (= plate-count 3))
+    {:capacity  (int (* 8 core-level))
+     :bandwidth (double (* core-level core-level 60))
+     :range     (double (* 24 (Math/sqrt core-level)))}
+    {:capacity 0
+     :bandwidth 0.0
+     :range 0.0}))
 
 (defn sync-to-client! [container]
   (let [plates   (count-plates container)
         core-lvl (get-core-level container)
-        working? (> core-lvl 0)]
-    (reset! (:core-level container) core-lvl)
-    (reset! (:plate-count container) plates)
-    (reset! (:is-working container) working?)
-    (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
-      (fn []
-        (let [stats (calculate-matrix-stats core-lvl plates)]
-          (reset! (:bandwidth container) (:bandwidth stats))
-          (reset! (:range container) (:range stats))
-          (sync-helpers/query-matrix-network-capacity! container stats))))))
+        working? (> core-lvl 0)
+        old-plates @(:plate-count container)
+        old-core @(:core-level container)]
+    ;; Only update if values changed
+    (when (not= core-lvl old-core)
+      (reset! (:core-level container) core-lvl))
+    (when (not= plates old-plates)
+      (reset! (:plate-count container) plates))
+    (when (not= working? @(:is-working container))
+      (reset! (:is-working container) working?))
+    ;; Only sync stats if core or plates changed
+    (when (or (not= core-lvl old-core) (not= plates old-plates))
+      (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
+        (fn []
+          (let [stats (calculate-matrix-stats core-lvl plates)]
+            (reset! (:bandwidth container) (:bandwidth stats))
+            (reset! (:range container) (:range stats))
+            (sync-helpers/query-matrix-network-capacity! container stats)))))))
 
 (defn get-sync-data [container]
   ((schema-builders/build-get-sync-data-fn matrix-schema/unified-matrix-schema) container))

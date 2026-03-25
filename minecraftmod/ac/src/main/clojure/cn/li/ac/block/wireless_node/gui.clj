@@ -226,22 +226,24 @@
 
 ;; Generated from schema with custom sync logic
 (defn sync-to-client! [container]
-  (let [base-sync (schema-builders/build-sync-to-client-fn node-schema/unified-node-schema)]
+  (let [base-sync (schema-builders/build-sync-to-client-fn node-schema/unified-node-schema)
+        tile (:tile-entity container)
+        state (or (common/get-tile-state tile) {})
+        old-rate @(:transfer-rate container)]
     (base-sync container)
     ;; Handle special sync logic (throttled queries, etc.)
     (when-let [ticker (:sync-ticker container)]
       (sync-helpers/with-throttled-sync! ticker 100
         (fn [] (sync-helpers/query-node-network-capacity! container))))
-    ;; Calculate transfer-rate from charging flags
+    ;; Calculate transfer-rate from charging flags - only update if changed
     (when-let [rate-atom (:transfer-rate container)]
-      (let [tile (:tile-entity container)
-            state (or (common/get-tile-state tile) {})
-            rate (cond
+      (let [rate (cond
                    (and (:charging-in state) (:charging-out state)) 200
                    (:charging-in state) 100
                    (:charging-out state) 100
                    :else 0)]
-        (reset! rate-atom rate)))))
+        (when (not= rate old-rate)
+          (reset! rate-atom rate))))))
 
 (def get-sync-data (schema-builders/build-get-sync-data-fn node-schema/unified-node-schema))
 (def apply-sync-data! (schema-builders/build-apply-sync-data-fn node-schema/unified-node-schema))
