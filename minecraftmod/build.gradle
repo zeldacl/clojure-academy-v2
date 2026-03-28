@@ -77,6 +77,22 @@ tasks.register('gatherJars', Copy) {
     }
 }
 
+subprojects {
+    // 只有应用了 java 或 clojure 插件的子工程才添加此 Task
+    plugins.withType(JavaPlugin) {
+        tasks.register('printClasspath') {
+            doLast {
+                def classpathFiles = sourceSets.main.compileClasspath + 
+                                     sourceSets.main.runtimeClasspath + 
+                                     files(sourceSets.main.allSource.srcDirs)
+                
+                // 打印出该子工程的完整类路径
+                println(classpathFiles.filter { it.exists() }.join(File.pathSeparator))
+            }
+        }
+    }
+}
+
 
 
 

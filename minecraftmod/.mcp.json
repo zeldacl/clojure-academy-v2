@@ -1,0 +1,25 @@
+{
+  "mcpServers11": {
+    "clojure-lsp": {
+      "command": "cmd.exe",
+      "args": [
+        "/c",
+        "npx -y github:vedang/clojure-mcp"
+      ],
+      "env": {
+        "CLOJURE_LSP_COMMAND": "clojure-lsp"
+      }
+    },
+    "java-lsp": {
+      "command": "cmd.exe",
+      "args": [
+        "/c",
+        "npx -y @mcp-server/java"
+      ],
+      "env": {
+        "JAVA_HOME": "C:\\Program Files\\Java\\jdk-17",
+        "CHROOT": "I:\\code\\minecraft\\clojure-academy-v2\\minecraftmod"
+      }
+    }
+  }
+}

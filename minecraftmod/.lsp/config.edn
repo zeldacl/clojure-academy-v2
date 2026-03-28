@@ -1,0 +1,25 @@
+{
+ :project-specs [{:project-path "forge-1.20.1/build.gradle"
+                  :classpath-cmd ["cmd" "/c" "gradlew.bat" ":forge-1.20.1:printClasspath"]}
+                 ;; {:project-path "fabric-1.20.1/build.gradle"
+                 ;;  :classpath-cmd [".\\gradlew.bat" ":fabric-1.20.1:printClasspath"]}
+                 ]
+ 
+ ;; 必须手动指定平铺项目的源码路径，确保 LSP 的“语义地图”覆盖全家
+ :source-paths ["api/src/main/clojure"
+                "api/src/main/java"
+                "mcmod/src/main/clojure"
+                "mcmod/src/main/java"
+                "ac/src/main/clojure"
+                "ac/src/main/java"
+                "forge-1.20.1/src/main/clojure"
+                "forge-1.20.1/src/main/java"
+                ;; "fabric-1.20.1/src/main/clojure"
+                ;; "fabric-1.20.1/src/main/java"
+                ]
+ ;; 只有在编译后 LSP 仍报红线时才开启
+ ;; :extra-paths ["forge-1.20.1/build/classes/java/main"
+ ;;               "fabric-1.20.1/build/classes/java/main"]
+ ;; 告诉 clj-kondo（LSP的内核）忽略哪些目录
+ :linters {:exclude-files ["build/.*" "bin/.*" ".gradle/.*"]}
+} 

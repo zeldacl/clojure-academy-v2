@@ -1,0 +1,6 @@
+{
+    "clojure": {
+      "command": ["clojure-lsp", "listen"],
+      "fileExtensions": ["clj", "cljs", "cljc", "edn"]
+    }
+  }

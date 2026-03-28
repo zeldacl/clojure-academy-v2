@@ -1,0 +1,39 @@
+# --- 编译器与构建产物 (重点：防止搜索重复文件) ---
+bin/
+out/
+target/
+build/
+.gradle/
+gradle/
+generated/
+minecraftmod/forge-1.20.1/src/generated/
+
+# --- IDE 配置文件 (防止 Claude 修改你的环境配置) ---
+.settings/
+.metadata/
+.classpath
+.project
+*.launch
+.idea/
+*.ipr
+*.iws
+*.iml
+
+# --- 日志与临时文件 (防止 Context 注入垃圾信息) ---
+logs/
+Logs/
+*.log
+*.Log
+*.Logs
+*.logs
+run/
+run-data/
+importcode/
+
+# --- LSP 与 Lint 缓存 (防止索引冲突) ---
+.lsp/
+.clj-kondo/
+.cache/
+
+# --- 其他噪音 ---
+forge*changelog.txt
