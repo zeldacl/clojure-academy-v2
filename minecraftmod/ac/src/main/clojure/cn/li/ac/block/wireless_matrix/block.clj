@@ -123,6 +123,19 @@
   [be]
   (if be (get (safe-state be) :core-level 0) 0))
 
+(defn- matrix-hardware-info
+  "Extract {:core-lv :plates :working?} from BE state."
+  [be]
+  (let [state   (safe-state be)
+        plates  (schema/get-field matrix-schema/unified-matrix-schema state :plate-count)
+        core-lv (schema/get-field matrix-schema/unified-matrix-schema state :core-level)]
+    {:plates   plates
+     :core-lv  core-lv
+     :working? (is-working? state)}))
+
+(defn- be-str-field [be k]
+  (str (schema/get-field matrix-schema/unified-matrix-schema (safe-state be) k)))
+
 ;; ============================================================================
 ;; Part 3.5: Capability Implementation (must be before MatrixJavaProxy)
 ;; ============================================================================
@@ -131,40 +144,20 @@
   IWirelessMatrix
 
   (getMatrixCapacity [_]
-    (let [state   (or (platform-be/get-custom-state be) matrix-default-state)
-          plates  (schema/get-field matrix-schema/unified-matrix-schema state :plate-count)
-          core-lv (schema/get-field matrix-schema/unified-matrix-schema state :core-level)]
-      (if (and (> core-lv 0) (= plates 3))
-        (int (* 8 core-lv))
-        0)))
+    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
+      (if working? (int (* 8 core-lv)) 0)))
 
   (getMatrixBandwidth [_]
-    (let [state   (or (platform-be/get-custom-state be) matrix-default-state)
-          plates  (schema/get-field matrix-schema/unified-matrix-schema state :plate-count)
-          core-lv (schema/get-field matrix-schema/unified-matrix-schema state :core-level)]
-      (if (and (> core-lv 0) (= plates 3))
-        (double (* core-lv core-lv 60))
-        0.0)))
+    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
+      (if working? (double (* core-lv core-lv 60)) 0.0)))
 
   (getMatrixRange [_]
-    (let [state   (or (platform-be/get-custom-state be) matrix-default-state)
-          plates  (schema/get-field matrix-schema/unified-matrix-schema state :plate-count)
-          core-lv (schema/get-field matrix-schema/unified-matrix-schema state :core-level)]
-      (if (and (> core-lv 0) (= plates 3))
-        (double (* 24 (Math/sqrt core-lv)))
-        0.0)))
+    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
+      (if working? (double (* 24 (Math/sqrt core-lv))) 0.0)))
 
-  (getSsid [_]
-    (let [state (or (platform-be/get-custom-state be) matrix-default-state)]
-      (str (schema/get-field matrix-schema/unified-matrix-schema state :ssid))))
-
-  (getPassword [_]
-    (let [state (or (platform-be/get-custom-state be) matrix-default-state)]
-      (str (schema/get-field matrix-schema/unified-matrix-schema state :password))))
-
-  (getPlacerName [_]
-    (let [state (or (platform-be/get-custom-state be) matrix-default-state)]
-      (str (schema/get-field matrix-schema/unified-matrix-schema state :placer-name))))
+  (getSsid       [_] (be-str-field be :ssid))
+  (getPassword   [_] (be-str-field be :password))
+  (getPlacerName [_] (be-str-field be :placer-name))
 
   Object
   (toString [_]
@@ -184,13 +177,16 @@
 
 (deftype MatrixJavaProxy [be]
   IMatrixJavaProxy
-  (getPlacerName    [_] (str (:placer-name (safe-state be))))
+  (getPlacerName    [_] (be-str-field be :placer-name))
   (getMatrixCapacity [_]
-    (long (.getMatrixCapacity ^IWirelessMatrix (->WirelessMatrixImpl be))))
+    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
+      (long (if working? (* 8 core-lv) 0))))
   (getMatrixBandwidth [_]
-    (long (.getMatrixBandwidth ^IWirelessMatrix (->WirelessMatrixImpl be))))
+    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
+      (long (if working? (* core-lv core-lv 60) 0))))
   (getMatrixRange [_]
-    (double (.getMatrixRange ^IWirelessMatrix (->WirelessMatrixImpl be))))
+    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
+      (double (if working? (* 24 (Math/sqrt core-lv)) 0.0))))
   (getLoad [_] 0)
   (getPos  [_] (pos/position-get-block-pos be))
   Object
@@ -339,6 +335,15 @@
         placer-name (.getPlacerName tile)]
     (= (str placer-name) (str player-name))))
 
+(defn- with-owner-tile
+  "Execute f with tile if tile exists and player is owner, else {:success false}."
+  [payload player f]
+  (let [world (net-helpers/get-world player)
+        tile  (net-helpers/get-tile-at world payload)]
+    (if (and tile (is-owner? tile player))
+      (f tile)
+      {:success false})))
+
 (defn handle-gather-info
   "Handle MSG_GATHER_INFO message - query network information.
 
@@ -374,16 +379,14 @@
   Request: {:pos-x :pos-y :pos-z :ssid :password}
   Response: {:success boolean}"
   [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)
-        {:keys [ssid password]} payload]
-    (if (and tile (is-owner? tile player))
-      (try
-        {:success (boolean (helper/create-network! tile ssid password))}
-        (catch Exception e
-          (log/error "Failed to initialize network:" (ex-message e))
-          {:success false}))
-      {:success false})))
+  (with-owner-tile payload player
+    (fn [tile]
+      (let [{:keys [ssid password]} payload]
+        (try
+          {:success (boolean (helper/create-network! tile ssid password))}
+          (catch Exception e
+            (log/error "Failed to initialize network:" (ex-message e))
+            {:success false}))))))
 
 (defn handle-change-ssid
   "Handle MSG_CHANGE_SSID message - change network SSID.
@@ -392,13 +395,12 @@
   Request: {:pos-x :pos-y :pos-z :new-ssid}
   Response: {:success boolean}"
   [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)
-        new-ssid (:new-ssid payload)]
-    (if (and tile (is-owner? tile player))
+  (with-owner-tile payload player
+    (fn [tile]
       (if-let [network (get-wireless-network tile)]
         (try
-          (let [old-ssid (:ssid network)]
+          (let [old-ssid (:ssid network)
+                new-ssid (:new-ssid payload)]
             (wireless-net/reset-ssid! network new-ssid)
             (swap! (:net-lookup (:world-data network)) dissoc old-ssid)
             (swap! (:net-lookup (:world-data network)) assoc new-ssid network)
@@ -406,8 +408,7 @@
           (catch Exception e
             (log/error "Failed to change SSID:" (ex-message e))
             {:success false}))
-        {:success false})
-      {:success false})))
+        {:success false}))))
 
 (defn handle-change-password
   "Handle MSG_CHANGE_PASSWORD message - change network password.
@@ -416,19 +417,16 @@
   Request: {:pos-x :pos-y :pos-z :new-password}
   Response: {:success boolean}"
   [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)
-        new-password (:new-password payload)]
-    (if (and tile (is-owner? tile player))
+  (with-owner-tile payload player
+    (fn [tile]
       (if-let [network (get-wireless-network tile)]
         (try
-          (wireless-net/reset-password! network new-password)
+          (wireless-net/reset-password! network (:new-password payload))
           {:success true}
           (catch Exception e
             (log/error "Failed to change password:" (ex-message e))
             {:success false}))
-        {:success false})
-      {:success false})))
+        {:success false}))))
 
 ;; ============================================================================
 ;; Part 8: Block Event Handlers
