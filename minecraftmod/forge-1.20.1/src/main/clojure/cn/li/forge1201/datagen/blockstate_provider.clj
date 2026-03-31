@@ -6,7 +6,8 @@
    - 本文件: 使用Forge/Minecraft API和定义生成JSON（平台特定）
    
    优势：定义层复用，易于支持新的Forge版本"
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [cn.li.forge1201.bootstrap :refer [invoke-bootstrap-helper]]
+            [cn.li.mcmod.config :as modid]
             [cn.li.ac.block.blockstate-definition :as blockstate-def]
             [cn.li.forge1201.blockstate-properties :as bsp]
             [cn.li.forge1201.mod :as forge-mod]
@@ -18,13 +19,6 @@
            [net.minecraftforge.client.model.generators BlockStateProvider]
            [net.minecraftforge.common.data ExistingFileHelper]
            [java.util.concurrent CompletableFuture]))
-
-(defn- invoke-bootstrap-helper
-  [method-name & args]
-  (clojure.lang.Reflector/invokeStaticMethod
-    "cn.li.forge1201.shim.ForgeBootstrapHelper"
-    method-name
-    (to-array args)))
 
 
 (defn- parse-rl

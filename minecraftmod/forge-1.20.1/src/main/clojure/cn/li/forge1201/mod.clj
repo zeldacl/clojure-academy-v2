@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.mod
   "Forge 1.20.1 main mod class - generated with gen-class"
-  (:require [cn.li.forge1201.init :as init]
+  (:require [cn.li.forge1201.bootstrap :refer [invoke-bootstrap-helper]]
+            [cn.li.forge1201.init :as init]
             [cn.li.forge1201.side :as side]
             [cn.li.forge1201.registry :as registry]
             [cn.li.forge1201.events :as events]
@@ -41,12 +42,6 @@
 ;; Mod ID constant
 (def mod-id modid/*mod-id*)
 
-(defn- invoke-bootstrap-helper
-  [method-name & args]
-  (clojure.lang.Reflector/invokeStaticMethod
-    "cn.li.forge1201.shim.ForgeBootstrapHelper"
-    method-name
-    (to-array args)))
 
 ;; Lazy block properties - only accessed during registration, not during namespace load
 (defonce base-properties

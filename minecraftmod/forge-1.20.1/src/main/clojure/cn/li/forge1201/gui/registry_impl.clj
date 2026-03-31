@@ -4,7 +4,8 @@
   Platform-agnostic design: Uses metadata-driven approach.
 
   IMPORTANT: Only imports from `cn.li.mcmod.gui.adapter` for the unified GUI API."
-  (:require [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.forge1201.bootstrap :refer [invoke-bootstrap-helper]]
+            [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.forge1201.gui.bridge :as bridge]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
@@ -12,12 +13,6 @@
            [net.minecraftforge.common.extensions IForgeMenuType]
            [net.minecraft.world.level.block.entity BlockEntity]))
 
-(defn- invoke-bootstrap-helper
-  [method-name & args]
-  (clojure.lang.Reflector/invokeStaticMethod
-    "cn.li.forge1201.shim.ForgeBootstrapHelper"
-    method-name
-    (to-array args)))
 
 ;; ============================================================================
 ;; MenuType Registry
