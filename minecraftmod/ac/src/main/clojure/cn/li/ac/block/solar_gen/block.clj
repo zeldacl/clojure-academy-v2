@@ -133,75 +133,65 @@
 ;; Part 6: Network Handlers (moved from gui.clj)
 ;; ============================================================================
 
+(defn- node->info
+  "Converts an IWirelessNode to a serializable map, or nil."
+  [^IWirelessNode node]
+  (when node
+    (let [p  (.getBlockPos node)
+          pw (try (str (.getPassword node)) (catch Exception _ ""))]
+      {:node-name     (try (str (.getNodeName node)) (catch Exception _ "Node"))
+       :pos-x         (when p (pos/pos-x p))
+       :pos-y         (when p (pos/pos-y p))
+       :pos-z         (when p (pos/pos-z p))
+       :is-encrypted? (not (empty? pw))})))
+
+(defn- get-linked-node
+  "Returns the IWirelessNode linked to a generator tile, or nil."
+  ^IWirelessNode [tile]
+  (when-let [conn (try (helper/get-node-conn-by-generator tile) (catch Exception _ nil))]
+    (try (node-conn/get-node conn) (catch Exception _ nil))))
+
 (defn- handle-get-status [payload player]
   (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)]
-    (if tile
-      (let [conn (try (helper/get-node-conn-by-generator tile) (catch Exception _ nil))
-            node ^IWirelessNode (when conn (try (node-conn/get-node conn) (catch Exception _ nil)))
-            node-pos (when node (.getBlockPos node))
-            pw (when node (try (str (.getPassword node)) (catch Exception _ "")))]
-        {:linked (when node
-                   {:node-name (try (str (.getNodeName node)) (catch Exception _ "Node"))
-                    :pos-x (when node-pos (pos/pos-x node-pos))
-                    :pos-y (when node-pos (pos/pos-y node-pos))
-                    :pos-z (when node-pos (pos/pos-z node-pos))
-                    :is-encrypted? (not (empty? pw))})
-         :avail []})
-      {:linked nil :avail []})))
+        tile  (net-helpers/get-tile-at world payload)]
+    {:linked (some-> tile get-linked-node node->info) :avail []}))
 
 (defn- handle-list-nodes [payload player]
   (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)]
+        tile  (net-helpers/get-tile-at world payload)]
     (if tile
-      (let [tile-pos (pos/position-get-block-pos tile)
-            linked-conn (try (helper/get-node-conn-by-generator tile) (catch Exception _ nil))
-            linked-node ^IWirelessNode (when linked-conn (try (node-conn/get-node linked-conn) (catch Exception _ nil)))
-            linked-pos (when linked-node (.getBlockPos linked-node))
-            nodes (if tile-pos (helper/get-nodes-in-range world tile-pos) [])
-            linked (when linked-node
-                     (let [pw (try (str (.getPassword linked-node)) (catch Exception _ ""))]
-                       {:node-name (try (str (.getNodeName linked-node)) (catch Exception _ "Node"))
-                        :pos-x (when linked-pos (pos/pos-x linked-pos))
-                        :pos-y (when linked-pos (pos/pos-y linked-pos))
-                        :pos-z (when linked-pos (pos/pos-z linked-pos))
-                        :is-encrypted? (not (empty? pw))}))
-            avail (->> nodes
-                       (remove (fn [^IWirelessNode node]
-                                 (let [p (.getBlockPos node)]
-                                   (and p linked-pos
-                                        (= (pos/pos-x p) (pos/pos-x linked-pos))
-                                        (= (pos/pos-y p) (pos/pos-y linked-pos))
-                                        (= (pos/pos-z p) (pos/pos-z linked-pos))))))
-                       (mapv (fn [^IWirelessNode node]
-                               (let [p (.getBlockPos node)
-                                     pw (try (str (.getPassword node)) (catch Exception _ ""))]
-                                 {:node-name (try (str (.getNodeName node)) (catch Exception _ "Node"))
-                                  :pos-x (when p (pos/pos-x p))
-                                  :pos-y (when p (pos/pos-y p))
-                                  :pos-z (when p (pos/pos-z p))
-                                  :is-encrypted? (not (empty? pw))}))))]
-        {:linked linked :avail avail})
+      (let [tile-pos    (pos/position-get-block-pos tile)
+            linked-node (get-linked-node tile)
+            linked-pos  (when linked-node (.getBlockPos linked-node))
+            nodes       (if tile-pos (helper/get-nodes-in-range world tile-pos) [])
+            avail       (->> nodes
+                             (remove (fn [^IWirelessNode n]
+                                       (let [p (.getBlockPos n)]
+                                         (and p linked-pos
+                                              (= (pos/pos-x p) (pos/pos-x linked-pos))
+                                              (= (pos/pos-y p) (pos/pos-y linked-pos))
+                                              (= (pos/pos-z p) (pos/pos-z linked-pos))))))
+                             (mapv node->info))]
+        {:linked (node->info linked-node) :avail avail})
       {:linked nil :avail []})))
 
 (defn- handle-connect [payload player]
-  (let [world (net-helpers/get-world player)
-        gen (net-helpers/get-tile-at world payload)
-        node-pos (select-keys payload [:node-x :node-y :node-z])
-        pass (:password payload "")]
+  (let [world      (net-helpers/get-world player)
+        gen        (net-helpers/get-tile-at world payload)
+        node-pos   (select-keys payload [:node-x :node-y :node-z])
+        pass       (:password payload "")
+        need-auth? (boolean (:need-auth? payload true))]
     (if (and world gen (every? number? (vals node-pos)))
-      (let [node (net-helpers/get-tile-at world {:pos-x (:node-x node-pos)
-                                                 :pos-y (:node-y node-pos)
-                                                 :pos-z (:node-z node-pos)})
-            need-auth? (boolean (:need-auth? payload true))]
-        (if node
-          {:success (boolean (helper/link-generator-to-node! gen node pass need-auth?))}
-          {:success false}))
+      (if-let [node (net-helpers/get-tile-at world {:pos-x (:node-x node-pos)
+                                                    :pos-y (:node-y node-pos)
+                                                    :pos-z (:node-z node-pos)})]
+        {:success (boolean (helper/link-generator-to-node! gen node pass need-auth?))}
+        {:success false})
       {:success false})))
 
 (defn- handle-disconnect [payload player]
   (let [world (net-helpers/get-world player)
-        gen (net-helpers/get-tile-at world payload)]
+        gen   (net-helpers/get-tile-at world payload)]
     (if (and world gen)
       (do (helper/unlink-generator-from-node! gen)
           {:success true})
