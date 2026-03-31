@@ -1,13 +1,16 @@
-{
- :project-root "."  ;; 强制锁定当前目录为项目根
- :analysis {:summary? false} ;; 减少元数据产生的噪音
- :project-specs [{:project-path "forge-1.20.1/build.gradle"
-                  :classpath-cmd ["cmd" "/c" "gradlew.bat" ":forge-1.20.1:printClasspath"]}
-                 ;; {:project-path "fabric-1.20.1/build.gradle"
-                 ;;  :classpath-cmd [".\\gradlew.bat" ":fabric-1.20.1:printClasspath"]}
-                 ]
- 
- ;; 必须手动指定平铺项目的源码路径，确保 LSP 的“语义地图”覆盖全家
+{:project-root "."
+
+ :analysis {:summary? false
+            ;; 【新增】核心止血：禁止扫描外部 JAR 包和依赖，只让 Claude 看你的源码
+            :dependency-scheme "none"
+            ;; 减少符号抓取的详细程度
+            :level :project}
+
+ ;; 【修改】暂时注释掉 classpath-cmd
+ ;; 这是 Token 飞涨的根源。除非你需要 Claude 帮你解决复杂的库调用报错，
+ ;; 否则不要让它去跑 Gradle 打印那一串几百个 JAR 包的路径。
+ :project-specs []
+
  :source-paths ["api/src/main/clojure"
                 "api/src/main/java"
                 "mcmod/src/main/clojure"
@@ -15,13 +18,9 @@
                 "ac/src/main/clojure"
                 "ac/src/main/java"
                 "forge-1.20.1/src/main/clojure"
-                "forge-1.20.1/src/main/java"
-                ;; "fabric-1.20.1/src/main/clojure"
-                ;; "fabric-1.20.1/src/main/java"
-                ]
- ;; 只有在编译后 LSP 仍报红线时才开启
- ;; :extra-paths ["forge-1.20.1/build/classes/java/main"
- ;;               "fabric-1.20.1/build/classes/java/main"]
- ;; 告诉 clj-kondo（LSP的内核）忽略哪些目录
-  :linters {:exclude-files ["build[\\\\/].*" "bin[\\\\/].*" "\\.gradle[\\\\/].*"]}
-} 
+                "forge-1.20.1/src/main/java"]
+
+ :linters {   ;; 【增强】增加排除范围，防止扫描编译产物
+           :exclude-files ["build/.*" "bin/.*" "\\.gradle/.*" "out/.*" "target/.*"]
+           :clj-kondo {:config {       ;; 告诉内核忽略对外部未定义符号的深度检索
+                                :lint-as {core.async/go clojure.core/let}}}}}
