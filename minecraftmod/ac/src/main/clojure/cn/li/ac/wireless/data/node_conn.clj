@@ -67,12 +67,9 @@
 (declare remove-receiver! remove-generator!)
 
 (defn- find-existing-node-connection
-  "Lookup existing node connection via world-data namespace at runtime.
-  Uses requiring-resolve to avoid compile-time circular dependency."
+  "Lookup existing node connection directly from world-data lookup table."
   [world-data vblock]
-  (if-let [lookup-fn (requiring-resolve 'cn.li.ac.wireless.data.world/get-node-connection)]
-    (lookup-fn world-data vblock)
-    nil))
+  (get @(:node-lookup world-data) vblock))
 
 ;; ============================================================================
 ;; Range Checking

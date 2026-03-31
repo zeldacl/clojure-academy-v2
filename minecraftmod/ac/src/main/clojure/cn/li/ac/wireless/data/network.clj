@@ -72,12 +72,24 @@
     0))
 
 (defn- find-existing-network-by-node
-  "Lookup existing network for a node via world-data namespace at runtime.
-  Uses requiring-resolve to avoid compile-time circular dependency."
+  "Lookup existing network for a node directly from world-data lookup table."
   [world-data node-vblock]
-  (if-let [lookup-fn (requiring-resolve 'cn.li.ac.wireless.data.world/get-network-by-node)]
-    (lookup-fn world-data node-vblock)
-    nil))
+  (get @(:net-lookup world-data) node-vblock))
+
+(defn- remove-from-spatial-index-local!
+  "Remove a vblock from world-data spatial index without calling world namespace."
+  [world-data vblock]
+  (let [chunk-key [(quot (:x vblock) 16)
+                   (quot (:y vblock) 16)
+                   (quot (:z vblock) 16)]]
+    (swap! (:spatial-index world-data)
+           (fn [idx]
+             (if-let [chunk-set (get idx chunk-key)]
+               (let [new-set (disj chunk-set vblock)]
+                 (if (empty? new-set)
+                   (dissoc idx chunk-key)
+                   (assoc idx chunk-key new-set)))
+               idx)))))
 
 ;; ============================================================================
 ;; Password Management
@@ -170,11 +182,9 @@
                         nodes)))
 
       ;; Remove from lookup and spatial index
-      (let [remove-spatial-fn (requiring-resolve 'cn.li.ac.wireless.data.world/remove-from-spatial-index!)]
-        (doseq [node to-remove]
-          (swap! (:net-lookup (:world-data network)) dissoc node)
-          (when remove-spatial-fn
-            (remove-spatial-fn (:world-data network) node))))
+      (doseq [node to-remove]
+        (swap! (:net-lookup (:world-data network)) dissoc node)
+        (remove-from-spatial-index-local! (:world-data network) node))
 
       ;; Clear to-remove list
       (reset! (:to-remove-nodes network) [])

@@ -193,8 +193,10 @@
   Returns: true if successful"
   [node-tile matrix-tile password]
   (when-let [network-item (get-wireless-net-by-matrix matrix-tile)]
-    (let [node-vb (vb/create-vnode node-tile)]
-      (network/add-node! network-item node-vb password))))
+    (let [world (platform-be/be-get-world-safe matrix-tile)
+          world-data (wd/get-world-data world)
+          node-vb (vb/create-vnode node-tile)]
+      (wd/link-node-to-network! world-data network-item node-vb password))))
 
 (defn unlink-node-from-network!
   "Unlink a node from its network"
@@ -221,7 +223,7 @@
           node-vb (vb/create-vnode-conn node-tile)
           conn (wd/ensure-node-connection! world-data node-vb)
           gen-vb (vb/create-vgenerator gen-tile)]
-      (node-conn/add-generator! conn gen-vb))))
+      (wd/link-generator-to-node-connection! world-data conn gen-vb))))
 
 (defn unlink-generator-from-node!
   "Unlink a generator from its node"
@@ -248,7 +250,7 @@
           node-vb (vb/create-vnode-conn node-tile)
           conn (wd/ensure-node-connection! world-data node-vb)
           rec-vb (vb/create-vreceiver rec-tile)]
-      (node-conn/add-receiver! conn rec-vb))))
+      (wd/link-receiver-to-node-connection! world-data conn rec-vb))))
 
 (defn unlink-receiver-from-node!
   "Unlink a receiver from its node"
