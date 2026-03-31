@@ -1,4 +1,4 @@
-(ns cn.li.ac.wireless.gui.gui-metadata
+(ns cn.li.ac.wireless.gui.metadata
   "Centralized GUI metadata management
   
   This namespace contains all GUI-related constants and mappings,

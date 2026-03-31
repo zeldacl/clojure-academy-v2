@@ -1,4 +1,4 @@
-(ns cn.li.ac.wireless.network
+(ns cn.li.ac.wireless.data.network
   "Wireless Energy Network implementation
   
   Manages SSID-based wireless networks:
@@ -6,7 +6,8 @@
   - Energy balancing across nodes
   - Password authentication
   - Range validation"
-  (:require [cn.li.ac.wireless.virtual-blocks :as vb]
+  (:require [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -74,7 +75,7 @@
   "Lookup existing network for a node via world-data namespace at runtime.
   Uses requiring-resolve to avoid compile-time circular dependency."
   [world-data node-vblock]
-  (if-let [lookup-fn (requiring-resolve 'cn.li.ac.wireless.world-data/get-network-by-node)]
+  (if-let [lookup-fn (requiring-resolve 'cn.li.ac.wireless.data.world/get-network-by-node)]
     (lookup-fn world-data node-vblock)
     nil))
 
@@ -169,7 +170,7 @@
                         nodes)))
 
       ;; Remove from lookup and spatial index
-      (let [remove-spatial-fn (requiring-resolve 'cn.li.ac.wireless.world-data/remove-from-spatial-index!)]
+      (let [remove-spatial-fn (requiring-resolve 'cn.li.ac.wireless.data.world/remove-from-spatial-index!)]
         (doseq [node to-remove]
           (swap! (:net-lookup (:world-data network)) dissoc node)
           (when remove-spatial-fn
@@ -307,51 +308,41 @@
   (log/info (format "Network '%s' disposed" (:ssid network))))
 
 ;; ============================================================================
-;; Network Schema Definition
-;; ============================================================================
-
-(def network-schema
-  '{:collection-name :network
-    :atom-name :networks
-    :lookup-atom :net-lookup
-    :factory {:fn create-wireless-net
-              :args [world-data matrix ssid password]}
-    :nbt-fields [{:name :matrix :type :vblock :nbt-key "matrix" :factory-arg true}
-                 {:name :ssid :type :string :nbt-key "ssid" :factory-arg true}
-                 {:name :password :type :string :nbt-key "password" :factory-arg true}
-                 {:name :buffer :type :double :nbt-key "buffer" :atom? true}
-                 {:name :nodes :type :vblock-list :nbt-key "list" :atom? true}]
-    :create {:args [matrix-vblock ssid password]
-             :expr '(cn.li.ac.wireless.network/create-wireless-net world-data matrix-vblock ssid password)
-             :return true
-             :return-on-unique-fail false
-             :unique [{:label "SSID" :value-expr 'ssid :value-fn 'identity}
-                      {:label "matrix" :value-expr 'matrix-vblock :value-fn 'cn.li.ac.wireless.virtual-blocks/vblock-to-string}]
-             :log-create "Created network: SSID='%s'"
-             :log-create-key-expr 'ssid
-             :log-create-fail "Cannot create network: %s '%s' already exists"}
-    :destroy {:log-destroy "Destroyed network: SSID='%s'"
-              :log-destroy-key-expr '(:ssid item)}
-    :direct-keys [:matrix :ssid]
-    :key-sources [{:values-expr '@(:nodes item)}]
-    :log-key-fn 'identity
-    :validator {:vblock-key :matrix
-                :log-label "networks"}
-    :tick {:fn 'cn.li.ac.wireless.network/tick-wireless-net!}
-    :nbt {:tag "networks"
-          :atom :networks
-          :to-nbt 'cn.li.ac.wireless.network/network-to-nbt
-          :from-nbt 'cn.li.ac.wireless.network/network-from-nbt
-          :skip? '(fn [net] @(:disposed net))
-          :rebuild {:lookup-atom :net-lookup
-                    :direct-keys [:matrix :ssid]
-                    :collection-keys [:nodes]}}})
-
-;; ============================================================================
 ;; NBT Serialization
 ;; ============================================================================
 
-(cn.li.ac.wireless.world-schema/defnbt-handlers-from-schema network-schema)
+(defn network-to-nbt
+  "Serialize network to NBT."
+  [network]
+  (let [nbt-compound (nbt/create-nbt-compound)
+        list-obj (nbt/create-nbt-list)
+        world (:world (:world-data network))]
+    (nbt/nbt-set-tag! nbt-compound "matrix" (vb/vblock-to-nbt (:matrix network)))
+    (nbt/nbt-set-string! nbt-compound "ssid" @(:ssid network))
+    (nbt/nbt-set-string! nbt-compound "password" @(:password network))
+    (nbt/nbt-set-double! nbt-compound "buffer" @(:buffer network))
+    (doseq [node-vb @(:nodes network)]
+      (when (or (not (vb/is-chunk-loaded? node-vb world))
+                (vb/vblock-get node-vb world))
+        (nbt/nbt-append! list-obj (vb/vblock-to-nbt node-vb))))
+    (nbt/nbt-set-tag! nbt-compound "list" list-obj)
+    nbt-compound))
+
+(defn network-from-nbt
+  "Deserialize network from NBT."
+  [world-data nbt-compound]
+  (let [matrix (vb/vblock-from-nbt (nbt/nbt-get-compound nbt-compound "matrix"))
+        ssid (nbt/nbt-get-string nbt-compound "ssid")
+        password (nbt/nbt-get-string nbt-compound "password")
+        buffer (nbt/nbt-get-double nbt-compound "buffer")
+        list-obj (nbt/nbt-get-list nbt-compound "list")
+        size (nbt/nbt-list-size list-obj)
+        nodes (vec (for [i (range size)]
+                     (vb/vblock-from-nbt (nbt/nbt-list-get-compound list-obj i))))
+        net (create-wireless-net world-data matrix ssid password)]
+    (reset! (:buffer net) buffer)
+    (reset! (:nodes net) nodes)
+    net))
 
 ;; ============================================================================
 ;; Debug

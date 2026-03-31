@@ -14,7 +14,7 @@
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.block.multiblock-core :as mb-core]
             [cn.li.mcmod.events.dispatcher :as event-dispatcher]
-            [cn.li.ac.wireless.world-data :as wd]
+            [cn.li.ac.wireless.data.world :as wd]
             ;; Auto-registration system
             [cn.li.ac.registry.content-namespaces :as content-ns]
             [cn.li.ac.registry.hooks :as hooks]))

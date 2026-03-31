@@ -1,4 +1,4 @@
-(ns cn.li.ac.wireless.helper
+(ns cn.li.ac.wireless.api
   "Wireless system helper functions
 
   Provides utility functions for querying the wireless system:
@@ -6,10 +6,10 @@
   - Node connection lookups
   - Range searches
   - Link status checks"
-  (:require [cn.li.ac.wireless.world-data :as wd]
-            [cn.li.ac.wireless.virtual-blocks :as vb]
-            [cn.li.ac.wireless.network :as network]
-            [cn.li.ac.wireless.node-connection :as node-conn]
+  (:require [cn.li.ac.wireless.data.world :as wd]
+            [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.data.network :as network]
+            [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.util.log :as log]))

@@ -1,7 +1,7 @@
 (ns cn.li.ac.wireless.gui.registry
   "Wireless GUI registration and opening system"
   (:require [cn.li.mcmod.gui.dsl :as gui-dsl]
-            [cn.li.ac.wireless.gui.gui-metadata :as gui-meta]
+            [cn.li.ac.wireless.gui.metadata :as gui-meta]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.platform.world :as pworld]
             [cn.li.mcmod.platform.entity :as entity]

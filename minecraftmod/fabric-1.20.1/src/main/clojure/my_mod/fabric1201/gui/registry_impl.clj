@@ -3,7 +3,7 @@
   (:require [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.fabric1201.gui.bridge :as bridge]
             [cn.li.ac.wireless.gui.registry :as gui-registry]
-            [cn.li.ac.wireless.gui.gui-metadata :as gui-meta]
+            [cn.li.ac.wireless.gui.metadata :as gui-meta]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.inventory MenuType]

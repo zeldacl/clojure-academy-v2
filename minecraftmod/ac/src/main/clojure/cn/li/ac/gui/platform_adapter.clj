@@ -18,9 +18,9 @@
   (gui/safe-close! container)
   (gui/get-display-name gui-id)
   ```"
-  (:require [cn.li.ac.wireless.gui.container-dispatcher :as dispatcher]
+  (:require [cn.li.ac.wireless.gui.container.dispatcher :as dispatcher]
             [cn.li.mcmod.gui.dsl :as gui-dsl]
-            [cn.li.ac.wireless.gui.gui-metadata :as metadata]
+            [cn.li.ac.wireless.gui.metadata :as metadata]
             [cn.li.ac.wireless.gui.registry :as registry]
             [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
             [cn.li.mcmod.util.log :as log]))

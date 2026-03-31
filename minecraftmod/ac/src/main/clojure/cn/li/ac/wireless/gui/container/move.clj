@@ -1,6 +1,6 @@
-(ns cn.li.ac.wireless.gui.container-move-common
+(ns cn.li.ac.wireless.gui.container.move
   "Shared helpers for quick-move/shift-click behavior"
-  (:require [cn.li.ac.wireless.gui.container-common :as common]))
+  (:require [cn.li.ac.wireless.gui.container.common :as common]))
 
 (defn move-from-container-slot!
   "Move item from container slot to player inventory

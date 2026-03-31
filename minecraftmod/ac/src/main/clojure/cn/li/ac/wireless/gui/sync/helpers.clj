@@ -1,12 +1,12 @@
-(ns cn.li.ac.wireless.gui.sync-helpers
+(ns cn.li.ac.wireless.gui.sync.helpers
   "Shared synchronization utilities for GUI containers.
   
   Provides common functions for broadcasting state and applying sync payloads
   to reduce code duplication between node and matrix sync implementations."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.wireless.virtual-blocks :as vb]
-            [cn.li.ac.wireless.world-data :as wd]
-            [cn.li.ac.wireless.interfaces :as winterfaces]
+            [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.data.world :as wd]
+            [cn.li.ac.wireless.core.interfaces :as winterfaces]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as platform-be]))
 

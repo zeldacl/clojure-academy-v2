@@ -1,4 +1,4 @@
- (ns cn.li.ac.wireless.virtual-blocks
+ (ns cn.li.ac.wireless.core.vblock
   "Virtual block reference system for wireless network.
 
   Provides position-based TileEntity references that:
@@ -11,7 +11,7 @@
   - For Clojure state maps: use :node-type / :placer-name keys
   - For Java ScriptedBlockEntity: use getCapability().isPresent() via CapabilitySlots"
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.wireless.interfaces :as interfaces]
+            [cn.li.ac.wireless.core.interfaces :as interfaces]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.capability :as platform-cap]

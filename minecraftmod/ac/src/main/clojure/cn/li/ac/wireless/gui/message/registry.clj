@@ -1,5 +1,5 @@
-(ns cn.li.ac.wireless.gui.message-registry
-  (:require [cn.li.ac.wireless.gui.messages-dsl :as msg-dsl]))
+(ns cn.li.ac.wireless.gui.message.registry
+  (:require [cn.li.ac.wireless.gui.message.dsl :as msg-dsl]))
 
 (def ^:private registry (atom {}))
 

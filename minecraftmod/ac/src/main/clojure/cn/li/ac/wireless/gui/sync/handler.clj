@@ -1,4 +1,4 @@
-(ns cn.li.ac.wireless.gui.network-handler-helpers
+(ns cn.li.ac.wireless.gui.sync.handler
   "Shared network handler utility functions
 
   Provides common helper functions for server-side network message handlers,

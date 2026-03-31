@@ -1,4 +1,4 @@
-(ns cn.li.ac.wireless.gui.container-dispatcher
+(ns cn.li.ac.wireless.gui.container.dispatcher
   "Platform-agnostic container operation dispatcher
 
   This namespace provides unified interfaces for container operations,

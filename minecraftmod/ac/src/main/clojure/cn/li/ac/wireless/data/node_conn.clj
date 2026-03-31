@@ -1,4 +1,4 @@
-(ns cn.li.ac.wireless.node-connection
+(ns cn.li.ac.wireless.data.node-conn
   "Node Connection management
   
   Manages connections between a node and generators/receivers:
@@ -7,7 +7,8 @@
   - Capacity management
   - Range validation"
   (:require [clojure.string :as str]
-            [cn.li.ac.wireless.virtual-blocks :as vb]
+            [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -69,7 +70,7 @@
   "Lookup existing node connection via world-data namespace at runtime.
   Uses requiring-resolve to avoid compile-time circular dependency."
   [world-data vblock]
-  (if-let [lookup-fn (requiring-resolve 'cn.li.ac.wireless.world-data/get-node-connection)]
+  (if-let [lookup-fn (requiring-resolve 'cn.li.ac.wireless.data.world/get-node-connection)]
     (lookup-fn world-data vblock)
     nil))
 
@@ -317,46 +318,45 @@
                     (vb/vblock-to-string (:node conn)))))
 
 ;; ============================================================================
-;; Connection Schema Definition
-;; ============================================================================
-
-(def conn-schema
-  '{:collection-name :node-connection
-    :atom-name :connections
-    :lookup-atom :node-lookup
-    :factory {:fn create-node-conn
-              :args [world-data node]}
-    :nbt-fields [{:name :node :type :vblock :nbt-key "node" :factory-arg true}
-                 {:name :receivers :type :vblock-list :nbt-key "receivers" :atom? true}
-                 {:name :generators :type :vblock-list :nbt-key "generators" :atom? true}]
-    :create {:args [node-vblock]
-         :expr '(cn.li.ac.wireless.node-connection/create-node-conn world-data node-vblock)
-             :return 'item
-             :return-on-unique-fail false
-             :log-create "Created node connection: %s"
-             :log-create-key-expr 'node-vblock}
-    :destroy {:log-destroy "Destroyed node connection: %s"
-              :log-destroy-key-expr '(:node item)}
-    :direct-keys [:node]
-    :collection-keys [:generators :receivers]
-    :log-key-fn 'cn.li.ac.wireless.virtual-blocks/vblock-to-string
-    :validator {:vblock-key :node
-                :log-label "connections"}
-    :tick {:fn 'cn.li.ac.wireless.node-connection/tick-node-conn!}
-    :nbt {:tag "connections"
-          :atom :connections
-          :to-nbt 'cn.li.ac.wireless.node-connection/node-connection-to-nbt
-          :from-nbt 'cn.li.ac.wireless.node-connection/node-connection-from-nbt
-          :skip? '(fn [conn] @(:disposed conn))
-          :rebuild {:lookup-atom :node-lookup
-                    :direct-keys [:node]
-                    :collection-keys [:generators :receivers]}}})
-
-;; ============================================================================
 ;; NBT Serialization
 ;; ============================================================================
 
-(cn.li.ac.wireless.world-schema/defnbt-handlers-from-schema conn-schema)
+(defn node-connection-to-nbt
+  "Serialize node connection to NBT."
+  [conn]
+  (let [nbt-compound (nbt/create-nbt-compound)
+        receivers-list (nbt/create-nbt-list)
+        generators-list (nbt/create-nbt-list)
+        world (:world (:world-data conn))]
+    (nbt/nbt-set-tag! nbt-compound "node" (vb/vblock-to-nbt (:node conn)))
+    (doseq [receiver-vb @(:receivers conn)]
+      (when (or (not (vb/is-chunk-loaded? receiver-vb world))
+                (vb/vblock-get receiver-vb world))
+        (nbt/nbt-append! receivers-list (vb/vblock-to-nbt receiver-vb))))
+    (doseq [generator-vb @(:generators conn)]
+      (when (or (not (vb/is-chunk-loaded? generator-vb world))
+                (vb/vblock-get generator-vb world))
+        (nbt/nbt-append! generators-list (vb/vblock-to-nbt generator-vb))))
+    (nbt/nbt-set-tag! nbt-compound "receivers" receivers-list)
+    (nbt/nbt-set-tag! nbt-compound "generators" generators-list)
+    nbt-compound))
+
+(defn node-connection-from-nbt
+  "Deserialize node connection from NBT."
+  [world-data nbt-compound]
+  (let [node-vb (vb/vblock-from-nbt (nbt/nbt-get-compound nbt-compound "node"))
+        receivers-list (nbt/nbt-get-list nbt-compound "receivers")
+        generators-list (nbt/nbt-get-list nbt-compound "generators")
+        receivers-size (nbt/nbt-list-size receivers-list)
+        generators-size (nbt/nbt-list-size generators-list)
+        receivers (vec (for [i (range receivers-size)]
+                         (vb/vblock-from-nbt (nbt/nbt-list-get-compound receivers-list i))))
+        generators (vec (for [i (range generators-size)]
+                          (vb/vblock-from-nbt (nbt/nbt-list-get-compound generators-list i))))
+        conn (create-node-conn world-data node-vb)]
+    (reset! (:receivers conn) receivers)
+    (reset! (:generators conn) generators)
+    conn))
 
 ;; ============================================================================
 ;; Debug

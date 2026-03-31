@@ -1,4 +1,4 @@
-(ns cn.li.ac.wireless.gui.messages-dsl
+(ns cn.li.ac.wireless.gui.message.dsl
   "Shared DSL helpers for wireless GUI message ids."
   (:require [clojure.string :as str]))
 

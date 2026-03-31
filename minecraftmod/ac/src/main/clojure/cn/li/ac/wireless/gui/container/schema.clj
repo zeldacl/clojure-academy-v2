@@ -1,4 +1,4 @@
-(ns cn.li.ac.wireless.gui.container-schema
+(ns cn.li.ac.wireless.gui.container.schema
   "Schema-driven utilities for GUI container atom fields.
 
   A field schema entry is a map with the following keys:

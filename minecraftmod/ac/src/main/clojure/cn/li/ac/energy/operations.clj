@@ -12,8 +12,8 @@
             [cn.li.ac.item.test-battery :as battery]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.platform.nbt :as nbt]
-            [cn.li.ac.wireless.interfaces :as winterfaces]
-            [cn.li.ac.wireless.helper :as whelper]))
+            [cn.li.ac.wireless.core.interfaces :as winterfaces]
+            [cn.li.ac.wireless.api :as whelper]))
 
 ;; ============================================================================
 ;; IFItemManager Implementation

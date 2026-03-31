@@ -1,4 +1,4 @@
-(ns cn.li.ac.wireless.gui.wireless-tab
+(ns cn.li.ac.wireless.gui.tab
   "Shared Wireless tab (page_wireless.xml) for all TechUI screens.
 
   Modes:
@@ -11,8 +11,8 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]
-            [cn.li.ac.wireless.gui.message-registry :as msg-registry]))
+            [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]))
 
 (defn- node-msg [action] (msg-registry/msg :node action))
 (defn- gen-msg [action] (msg-registry/msg :generator action))
