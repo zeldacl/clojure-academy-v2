@@ -1,26 +1,18 @@
 (ns cn.li.forge1201.datagen.item-model-provider
   "Forge 1.20.1 Item Model生成器 - 直接从item定义提取
-   
+
    架构：
    - core/item/*.clj: 定义items，model信息存储在:properties :model中
    - 本文件: 使用Forge/Minecraft API从item registry生成JSON（平台特定）
-   
+
    优势：数据不分散，直接从item定义提取，单一信息源"
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.item.dsl :as item-dsl]
-            [clojure.string :as str])
-  (:import [net.minecraft.data DataProvider PackOutput]
+            [cn.li.forge1201.datagen.resource-location :as rl])
+  (:import [net.minecraft.data PackOutput]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.common.data ExistingFileHelper]
            [net.minecraftforge.client.model.generators ItemModelProvider]))
-
-(defn- parse-parent-rl
-  [^ItemModelProvider provider parent]
-  (let [value (or parent "item/generated")]
-    (if (str/includes? value ":")
-      (let [[namespace path] (str/split value #":" 2)]
-        (ResourceLocation. namespace path))
-      (.mcLoc provider value))))
 
 (defn- texture-rl
   [texture-name]
@@ -41,7 +33,9 @@
                                           :model-parent (get-in item-spec [:properties :model-parent] "item/generated")})))
                                    all-item-names)]
         (doseq [{:keys [item-name model-texture model-parent]} items-with-model]
-          (-> (.withExistingParent this item-name (parse-parent-rl this model-parent))
+          (-> (.withExistingParent this item-name
+                                   (or (rl/parse-resource-location (or model-parent "item/generated"))
+                                       (.mcLoc this "item/generated")))
               (.texture "layer0" (texture-rl model-texture))))
         (println (str "[item-model-provider] summary: items=" (count all-item-names)
                       ", with-model=" (count items-with-model)

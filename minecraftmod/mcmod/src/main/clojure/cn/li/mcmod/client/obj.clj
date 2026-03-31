@@ -5,11 +5,9 @@
   (:require [clojure.string :as str]
             [clojure.java.io :as io]
             [cn.li.mcmod.util.render :as render]
+            [cn.li.mcmod.util.parse :as parse]
             [cn.li.mcmod.client.render.buffer :as buffer]
             [cn.li.mcmod.client.render.pose :as pose]))
-
-(defn- parse-float [s]
-  (Double/parseDouble (str s)))
 
 (defn- v3 [x y z]
   {:x (double x) :y (double y) :z (double z)})
@@ -117,18 +115,18 @@
             (case token
               "v" (when (>= (count args) 3)
                     (swap! state update :positions conj
-                           (v3 (parse-float (nth args 0))
-                               (parse-float (nth args 1))
-                               (parse-float (nth args 2)))))
+                           (v3 (parse/parse-float (nth args 0))
+                               (parse/parse-float (nth args 1))
+                               (parse/parse-float (nth args 2)))))
               "vt" (when (>= (count args) 2)
                      (swap! state update :uvs conj
-                            (v2 (parse-float (nth args 0))
-                                (parse-float (nth args 1)))))
+                            (v2 (parse/parse-float (nth args 0))
+                                (parse/parse-float (nth args 1)))))
               "vn" (when (>= (count args) 3)
                      (swap! state update :normals conj
-                            (v3 (parse-float (nth args 0))
-                                (parse-float (nth args 1))
-                                (parse-float (nth args 2)))))
+                            (v3 (parse/parse-float (nth args 0))
+                                (parse/parse-float (nth args 1))
+                                (parse/parse-float (nth args 2)))))
               ("g" "o") (when (seq args)
                             (swap! state assoc :current-group (first args)))
               "f" (let [face-verts (mapv parse-face-vertex-token args)]

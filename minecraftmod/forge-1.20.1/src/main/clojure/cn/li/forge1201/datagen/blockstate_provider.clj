@@ -10,14 +10,13 @@
             [cn.li.ac.block.blockstate-definition :as blockstate-def]
             [cn.li.forge1201.blockstate-properties :as bsp]
             [cn.li.forge1201.mod :as forge-mod]
+            [cn.li.forge1201.datagen.resource-location :as rl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
-           [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.client.model.generators BlockStateProvider]
            [net.minecraftforge.common.data ExistingFileHelper]
-           [cn.li.forge1201.block DynamicStateBlock]
            [java.util.concurrent CompletableFuture]))
 
 (defn- invoke-bootstrap-helper
@@ -31,11 +30,7 @@
 (defn- parse-rl
   ([s] (parse-rl s modid/*mod-id*))
   ([s default-namespace]
-   (let [value (str s)]
-     (if (str/includes? value ":")
-       (let [[namespace path] (str/split value #":" 2)]
-         (ResourceLocation. namespace path))
-       (ResourceLocation. default-namespace value)))))
+   (rl/parse-resource-location s default-namespace)))
 
 (defn- normalize-candidates
   [s]
