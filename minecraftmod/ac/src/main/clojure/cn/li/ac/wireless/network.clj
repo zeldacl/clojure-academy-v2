@@ -107,7 +107,7 @@
   Returns true if successful, false otherwise"
   [network node-vblock password-attempt]
   (cond
-    (not= password-attempt (:password network))
+    (not= password-attempt @(:password network))
     (do
       (log/info (format "Node add failed: incorrect password for '%s'" (:ssid network)))
       false)

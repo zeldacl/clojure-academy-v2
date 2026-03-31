@@ -138,12 +138,12 @@
   [state]
   (let [input-item (get-in state [:inventory node-input-slot-index])]
     (if (and input-item (energy/is-energy-item-supported? input-item))
-      (let [^double cur       (:energy state 0.0)
-            ^double max-e     (node-max-energy state)
-            ^double bandwidth (get-in node-types
-                                      [(keyword (:node-type state :basic)) :bandwidth] 150)
-            ^double needed    (min bandwidth (- max-e cur))
-            ^double pulled    (energy/pull-energy-from-item input-item needed false)]
+      (let [cur       (double (:energy state 0.0))
+            max-e     (double (node-max-energy state))
+            bandwidth (double (get-in node-types
+                                      [(keyword (:node-type state :basic)) :bandwidth] 150))
+            needed    (min bandwidth (- max-e cur))
+            pulled    (double (energy/pull-energy-from-item input-item needed false))]
         (if (pos? pulled)
           (assoc state :energy (+ cur pulled) :charging-in true)
           (assoc state :charging-in false)))
@@ -153,13 +153,13 @@
   "Push energy from node to inventory slot 1. Returns updated state."
   [state]
   (let [output-item (get-in state [:inventory node-output-slot-index])
-        ^double cur (:energy state 0.0)]
+        cur (double (:energy state 0.0))]
     (if (and output-item (energy/is-energy-item-supported? output-item) (pos? cur))
-      (let [^double bandwidth (get-in node-types
-                                      [(keyword (:node-type state :basic)) :bandwidth] 150)
-            ^double to-charge (min bandwidth cur)
-            ^double leftover  (energy/charge-energy-to-item output-item to-charge false)
-            ^double charged   (- to-charge leftover)]
+      (let [bandwidth (double (get-in node-types
+                                      [(keyword (:node-type state :basic)) :bandwidth] 150))
+            to-charge (min bandwidth cur)
+            leftover  (double (energy/charge-energy-to-item output-item to-charge false))
+            charged   (- to-charge leftover)]
         (if (pos? charged)
           (assoc state :energy (- cur charged) :charging-out true)
           (assoc state :charging-out false)))

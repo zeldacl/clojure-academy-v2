@@ -109,6 +109,7 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
     public Object getCustomState() { return customState; }
 
     public void setCustomState(Object state) {
+        if (java.util.Objects.equals(this.customState, state)) return;
         this.customState = state;
         setChanged();
         if (level != null && !level.isClientSide) {
@@ -145,18 +146,21 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
     // -------------------------------------------------------------------------
 
     public double getEnergy()                { return energy; }
-    public void   setEnergy(double v)        { this.energy = v; setChanged(); }
+    public void   setEnergy(double v)        { if (this.energy != v) { this.energy = v; setChanged(); } }
 
     public double getMaxEnergy()             { return maxEnergy; }
-    public void   setMaxEnergy(double v)     { this.maxEnergy = v; setChanged(); }
+    public void   setMaxEnergy(double v)     { if (this.maxEnergy != v) { this.maxEnergy = v; setChanged(); } }
 
     public String getStatusName()            { return status; }
-    public void   setStatus(String s)        { this.status = s != null ? s : "STOPPED"; setChanged(); }
+    public void   setStatus(String s)        { String newStatus = s != null ? s : "STOPPED"; if (!newStatus.equals(this.status)) { this.status = newStatus; setChanged(); } }
 
     public ItemStack getBatteryStack()       { return battery; }
     public void setBatteryStack(ItemStack s) {
-        this.battery = (s == null || s.isEmpty()) ? ItemStack.EMPTY : s;
-        setChanged();
+        ItemStack newBattery = (s == null || s.isEmpty()) ? ItemStack.EMPTY : s;
+        if (!ItemStack.matches(this.battery, newBattery)) {
+            this.battery = newBattery;
+            setChanged();
+        }
     }
 
     public void setScriptData(String key, Object value) {

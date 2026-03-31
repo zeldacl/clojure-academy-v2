@@ -13,9 +13,8 @@
 
 (defn- same-pos?
   [a b]
-  (and (= (pos/pos-x a) (pos/pos-x b))
-       (= (pos/pos-y a) (pos/pos-y b))
-       (= (pos/pos-z a) (pos/pos-z b))))
+  (= [(pos/pos-x a) (pos/pos-y a) (pos/pos-z a)]
+     [(pos/pos-x b) (pos/pos-y b) (pos/pos-z b)]))
 
 (defn- state-empty?
   [state]

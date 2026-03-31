@@ -20,7 +20,7 @@
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.ac.gui.platform-adapter :as gui]
-            [cn.li.ac.gui.tabbed-gui :as tabbed-gui]
+            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.wireless.gui.network-handler-helpers :as net-helpers]

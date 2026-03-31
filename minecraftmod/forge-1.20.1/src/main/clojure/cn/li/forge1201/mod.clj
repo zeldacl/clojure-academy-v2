@@ -5,7 +5,6 @@
             [cn.li.forge1201.side :as side]
             [cn.li.forge1201.registry :as registry]
             [cn.li.forge1201.events :as events]
-            [cn.li.forge1201.gui.impl :as gui]
             [cn.li.forge1201.gui.init :as gui-init]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
             ;; platform-impl 会在 runtime 的 mod-init 中按需加载（避免 AOT/checkClojure 阶段触发 Minecraft class init）

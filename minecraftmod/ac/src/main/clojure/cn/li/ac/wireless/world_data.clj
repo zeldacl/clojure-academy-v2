@@ -48,12 +48,17 @@
 (defn get-world-data
   "Get world data for a world, creating if it doesn't exist"
   [world]
-  (if-let [data (get @world-data-registry world)]
-    data
-    (let [new-data (create-world-data world)]
-      (swap! world-data-registry assoc world new-data)
-      (log/info (format "Created WiWorldData for world: %s" world))
-      new-data)))
+  (let [result (atom nil)]
+    (swap! world-data-registry
+           (fn [registry]
+             (if-let [existing (get registry world)]
+               (do (reset! result existing)
+                   registry)
+               (let [new-data (create-world-data world)]
+                 (reset! result new-data)
+                 (log/info (format "Created WiWorldData for world: %s" world))
+                 (assoc registry world new-data)))))
+    @result))
 
 (defn get-world-data-non-create
   "Get world data without creating if it doesn't exist"
