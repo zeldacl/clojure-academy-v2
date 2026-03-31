@@ -4,5 +4,31 @@
       "command": ["clojure-lsp", "listen"],
       "fileExtensions": ["clj", "cljs", "cljc", "edn"]
     }
-  }
+  },
+  "permissions": [
+    {
+      "type": "deny",
+      "reasons": ["Build artifacts and compiled classes"],
+      "globs": [
+        "**/bin/**",
+        "**/build/**",
+        "**/.gradle/**",
+        "**/out/**",
+        "**/target/**",
+        "**/.lsp/**",
+        "**/.clj-kondo/.cache/**"
+      ]
+    },
+    {
+      "type": "deny",
+      "reasons": ["IDE and System noise"],
+      "globs": [
+        "**/.idea/**",
+        "**/.settings/**",
+        "**/*.iml",
+        "**/.project",
+        "**/.classpath"
+      ]
+    }
+  ]
 }

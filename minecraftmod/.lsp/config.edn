@@ -1,4 +1,6 @@
 {
+ :project-root "."  ;; 强制锁定当前目录为项目根
+ :analysis {:summary? false} ;; 减少元数据产生的噪音
  :project-specs [{:project-path "forge-1.20.1/build.gradle"
                   :classpath-cmd ["cmd" "/c" "gradlew.bat" ":forge-1.20.1:printClasspath"]}
                  ;; {:project-path "fabric-1.20.1/build.gradle"
@@ -21,5 +23,5 @@
  ;; :extra-paths ["forge-1.20.1/build/classes/java/main"
  ;;               "fabric-1.20.1/build/classes/java/main"]
  ;; 告诉 clj-kondo（LSP的内核）忽略哪些目录
- :linters {:exclude-files ["build/.*" "bin/.*" ".gradle/.*"]}
+  :linters {:exclude-files ["build[\\\\/].*" "bin[\\\\/].*" "\\.gradle[\\\\/].*"]}
 } 
