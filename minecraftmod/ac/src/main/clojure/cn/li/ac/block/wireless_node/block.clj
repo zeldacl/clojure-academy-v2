@@ -138,12 +138,12 @@
   [state]
   (let [input-item (get-in state [:inventory node-input-slot-index])]
     (if (and input-item (energy/is-energy-item-supported? input-item))
-      (let [cur       (double (:energy state 0.0))
-            max-e     (double (node-max-energy state))
-            bandwidth (double (get-in node-types
-                                      [(keyword (:node-type state :basic)) :bandwidth] 150))
-            needed    (min bandwidth (- max-e cur))
-            pulled    (energy/pull-energy-from-item input-item needed false)]
+      (let [^double cur       (:energy state 0.0)
+            ^double max-e     (node-max-energy state)
+            ^double bandwidth (get-in node-types
+                                      [(keyword (:node-type state :basic)) :bandwidth] 150)
+            ^double needed    (min bandwidth (- max-e cur))
+            ^double pulled    (energy/pull-energy-from-item input-item needed false)]
         (if (pos? pulled)
           (assoc state :energy (+ cur pulled) :charging-in true)
           (assoc state :charging-in false)))
@@ -153,13 +153,13 @@
   "Push energy from node to inventory slot 1. Returns updated state."
   [state]
   (let [output-item (get-in state [:inventory node-output-slot-index])
-        cur         (double (:energy state 0.0))]
+        ^double cur (:energy state 0.0)]
     (if (and output-item (energy/is-energy-item-supported? output-item) (pos? cur))
-      (let [bandwidth (double (get-in node-types
-                                      [(keyword (:node-type state :basic)) :bandwidth] 150))
-            to-charge (min bandwidth cur)
-            leftover  (energy/charge-energy-to-item output-item to-charge false)
-            charged   (- to-charge leftover)]
+      (let [^double bandwidth (get-in node-types
+                                      [(keyword (:node-type state :basic)) :bandwidth] 150)
+            ^double to-charge (min bandwidth cur)
+            ^double leftover  (energy/charge-energy-to-item output-item to-charge false)
+            ^double charged   (- to-charge leftover)]
         (if (pos? charged)
           (assoc state :energy (- cur charged) :charging-out true)
           (assoc state :charging-out false)))
@@ -191,9 +191,14 @@
                    (let [state (try (tick-check-network state level pos) (catch Exception _ state))
                          old-sync-state (::last-broadcast-state state)
                          new-sync-state (-> (state-schema/schema->sync-payload node-state-schema state pos)
-                                            (assoc :max-energy (node-max-energy state)))]
-                     ;; Update BlockState visual (energy bar + connected glow)
-                     (update-block-state! state level pos)
+                                            (assoc :max-energy (node-max-energy state)))
+                         ;; Only update BlockState if visual properties changed
+                         old-level (energy->blockstate-level (:energy old-sync-state 0) state)
+                         new-level (energy->blockstate-level (:energy state 0) state)
+                         old-enabled (:enabled old-sync-state false)
+                         new-enabled (:enabled state false)]
+                     (when (or (not= new-level old-level) (not= new-enabled old-enabled))
+                       (update-block-state! state level pos))
                      ;; Broadcast to connected GUIs only if state changed
                      (when (not= new-sync-state old-sync-state)
                        (try

@@ -81,14 +81,14 @@
   [x y z]
   [(quot x 16) (quot y 16) (quot z 16)])
 
-(defn- add-to-spatial-index!
+(defn add-to-spatial-index!
   "Add a vblock to the spatial index"
   [world-data vblock]
   (let [chunk-key (pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
     (swap! (:spatial-index world-data)
            update chunk-key (fnil conj #{}) vblock)))
 
-(defn- remove-from-spatial-index!
+(defn remove-from-spatial-index!
   "Remove a vblock from the spatial index"
   [world-data vblock]
   (let [chunk-key (pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
@@ -158,15 +158,22 @@
   (get @(:net-lookup world-data) ssid))
 
 (defn range-search-networks
-  "Search for networks within range of coordinates
+  "Search for networks within range of coordinates using spatial index
   Returns collection of networks whose matrix is within range"
   [world-data x y z range max-results]
   (let [range-sq (* range range)
-        all-networks @(:networks world-data)]
-    (->> all-networks
-         (filter (fn [net]
-                   (let [matrix (:matrix net)]
-                     (<= (vb/dist-sq-pos matrix x y z) range-sq))))
+        ;; Use spatial index to get candidate vblocks
+        chunk-keys (get-nearby-chunks x y z range)
+        candidate-vblocks (get-vblocks-in-chunks world-data chunk-keys)
+        ;; Filter to only matrix vblocks and check distance
+        net-lookup @(:net-lookup world-data)]
+    (->> candidate-vblocks
+         (keep (fn [vblock]
+                 (when-let [net (get net-lookup vblock)]
+                   (when (= vblock (:matrix net))
+                     (when (<= (vb/dist-sq-pos vblock x y z) range-sq)
+                       net)))))
+         (distinct)
          (take max-results))))
 
 ;; ============================================================================

@@ -167,14 +167,17 @@
              (fn [nodes]
                (filterv #(not (some (partial vb/vblock-equals? %) to-remove))
                         nodes)))
-      
-      ;; Remove from lookup
-      (doseq [node to-remove]
-        (swap! (:net-lookup (:world-data network)) dissoc node))
-      
+
+      ;; Remove from lookup and spatial index
+      (let [remove-spatial-fn (requiring-resolve 'cn.li.ac.wireless.world-data/remove-from-spatial-index!)]
+        (doseq [node to-remove]
+          (swap! (:net-lookup (:world-data network)) dissoc node)
+          (when remove-spatial-fn
+            (remove-spatial-fn (:world-data network) node))))
+
       ;; Clear to-remove list
       (reset! (:to-remove-nodes network) [])
-      
+
       (log/info (format "Removed %d nodes from '%s'"
                         (count to-remove)
                         (:ssid network))))))
@@ -224,55 +227,48 @@
                             (fn [acc node-vb]
                               (if (vb/is-chunk-loaded? node-vb world)
                                 (if-let [node (vb/vblock-get node-vb world)]
-                                  (let [current (.getEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
-                                        max-energy (.getMaxEnergy ^ cn.li.acapi.wireless.IWirelessNode node)]
-                                    {:sum (+ (:sum acc) current)
-                                     :max-sum (+ (:max-sum acc) max-energy)})
-                                  acc) ; Node destroyed, skip
-                                acc))  ; Chunk not loaded, skip
-                            {:sum 0.0 :max-sum 0.0}
+                                  (let [^cn.li.acapi.wireless.IWirelessNode n node
+                                        current (.getEnergy n)
+                                        max-energy (.getMaxEnergy n)]
+                                    (-> acc
+                                        (update :sum + current)
+                                        (update :max-sum + max-energy)
+                                        (update :nodes conj {:vb node-vb :node n :current current :max max-energy})))
+                                  acc)
+                                acc))
+                            {:sum 0.0 :max-sum 0.0 :nodes []}
                             nodes-shuffled)]
           
           (when (> (:max-sum energy-data) 0)
             (let [average-percent (/ (:sum energy-data) (:max-sum energy-data))
                   buffer-current @(:buffer network)]
               
-              ;; Transfer energy
+              ;; Transfer energy using cached node data
               (let [final-buffer
-                    (loop [nodes-remaining nodes-shuffled
+                    (loop [nodes-remaining (:nodes energy-data)
                            transfer-left bandwidth
                            buffer-val buffer-current]
                       (if (and (seq nodes-remaining) (> transfer-left 0))
-                        (let [node-vb (first nodes-remaining)]
-                          (if (vb/is-chunk-loaded? node-vb world)
-                            (if-let [node (vb/vblock-get node-vb world)]
-                              (let [current (.getEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
-                                    max-energy (.getMaxEnergy ^ cn.li.acapi.wireless.IWirelessNode node)
-                                    target (* max-energy average-percent)
-                                    diff (- current target)]
-                                (if (> diff 0)
-                                  ;; Node has excess energy → pull to buffer
-                                  (let [to-pull (min diff transfer-left)
-                                        buffer-space (- BUFFER_MAX buffer-val)
-                                        actual-pull (min to-pull buffer-space)]
-                                    (.setEnergy ^ cn.li.acapi.wireless.IWirelessNode node (- current actual-pull))
-                                    (recur (rest nodes-remaining)
-                                           (- transfer-left actual-pull)
-                                           (+ buffer-val actual-pull)))
+                        (let [{:keys [node current max]} (first nodes-remaining)
+                              ^cn.li.acapi.wireless.IWirelessNode n node
+                              target (* max average-percent)
+                              diff (- current target)]
+                          (if (> diff 0)
+                            ;; Node has excess energy → pull to buffer
+                            (let [to-pull (min diff transfer-left)
+                                  buffer-space (- BUFFER_MAX buffer-val)
+                                  actual-pull (min to-pull buffer-space)]
+                              (.setEnergy n (- current actual-pull))
+                              (recur (rest nodes-remaining)
+                                     (- transfer-left actual-pull)
+                                     (+ buffer-val actual-pull)))
 
-                                  ;; Node needs energy → push from buffer
-                                  (let [to-push (min (- diff) transfer-left buffer-val)]
-                                    (.setEnergy ^ cn.li.acapi.wireless.IWirelessNode node (+ current to-push))
-                                    (recur (rest nodes-remaining)
-                                           (- transfer-left to-push)
-                                           (- buffer-val to-push)))))
-
-                              ;; Node destroyed, remove
-                              (do (remove-node! network node-vb)
-                                  (recur (rest nodes-remaining) transfer-left buffer-val)))
-
-                            ;; Chunk not loaded, skip
-                            (recur (rest nodes-remaining) transfer-left buffer-val)))
+                            ;; Node needs energy → push from buffer
+                            (let [to-push (min (- diff) transfer-left buffer-val)]
+                              (.setEnergy n (+ current to-push))
+                              (recur (rest nodes-remaining)
+                                     (- transfer-left to-push)
+                                     (- buffer-val to-push)))))
 
                         buffer-val))]
 
