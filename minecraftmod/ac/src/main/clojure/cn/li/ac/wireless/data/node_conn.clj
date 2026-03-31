@@ -88,19 +88,43 @@
 ;; Device Management (Unified)
 ;; ============================================================================
 
+(defn- capacity-available?
+  [conn]
+  (< (get-load conn) (get-capacity conn)))
+
+(defn- resolve-device-context
+  [conn device-type]
+  {:device-atom (case device-type
+                  :receiver (:receivers conn)
+                  :generator (:generators conn))
+   :remove-fn (case device-type
+                :receiver remove-receiver!
+                :generator remove-generator!)
+   :device-name (name device-type)})
+
+(defn- remove-device-from-old-connection!
+  [conn device-vb remove-fn]
+  (let [old-conn (find-existing-node-connection (:world-data conn) device-vb)]
+    (when old-conn
+      (remove-fn old-conn device-vb))))
+
+(defn- attach-device!
+  [conn device-vb device-atom device-name]
+  (swap! device-atom conj device-vb)
+  (swap! (:node-lookup (:world-data conn)) assoc device-vb conn)
+  (log/info (format "Added %s %s to node %s"
+                    device-name
+                    (vb/vblock-to-string device-vb)
+                    (vb/vblock-to-string (:node conn))))
+  true)
+
 (defn- add-device!
   "Generic function to add a device (receiver or generator) to node connection
   Returns true if successful"
   [conn device-vb device-type]
-  (let [device-atom (case device-type
-                      :receiver (:receivers conn)
-                      :generator (:generators conn))
-        remove-fn (case device-type
-                    :receiver remove-receiver!
-                    :generator remove-generator!)
-        device-name (name device-type)]
+  (let [{:keys [device-atom remove-fn device-name]} (resolve-device-context conn device-type)]
     (cond
-      (>= (get-load conn) (get-capacity conn))
+      (not (capacity-available? conn))
       (do
         (log/info (format "%s add failed: node at capacity" (str/capitalize device-name)))
         false)
@@ -112,23 +136,8 @@
 
       :else
       (do
-        ;; Remove from old connection if exists
-        (let [old-conn (find-existing-node-connection (:world-data conn) device-vb)]
-          (when old-conn
-            (remove-fn old-conn device-vb)))
-
-        ;; Add to this connection
-        (swap! device-atom conj device-vb)
-
-        ;; Update lookup
-        (swap! (:node-lookup (:world-data conn))
-               assoc device-vb conn)
-
-        (log/info (format "Added %s %s to node %s"
-                          device-name
-                          (vb/vblock-to-string device-vb)
-                          (vb/vblock-to-string (:node conn))))
-        true))))
+        (remove-device-from-old-connection! conn device-vb remove-fn)
+        (attach-device! conn device-vb device-atom device-name)))))
 
 ;; ============================================================================
 ;; Receiver Management
