@@ -14,7 +14,8 @@
              [cn.li.mcmod.platform.nbt :as nbt]
              [cn.li.mcmod.platform.position :as pos]
              [cn.li.mcmod.platform.be :as platform-be]
-             [cn.li.mcmod.platform.world :as world]))
+             [cn.li.mcmod.platform.world :as world])
+  (:import [cn.li.acapi.wireless WirelessCapabilityKeys]))
 
 ;; ============================================================================
 ;; VBlock Record
@@ -102,21 +103,21 @@
 (defn- tile-has-wireless-matrix? [tile]
   (if (map? tile)
     (contains? tile :plate-count)
-    (or (has-capability? tile "wireless-matrix")
+    (or (has-capability? tile WirelessCapabilityKeys/MATRIX)
         (instance? cn.li.acapi.wireless.IWirelessMatrix tile))))
 
 (defn- tile-has-wireless-node? [tile]
   (if (map? tile)
     (contains? tile :node-type)
-    (or (has-capability? tile "wireless-node")
+    (or (has-capability? tile WirelessCapabilityKeys/NODE)
         (instance? cn.li.acapi.wireless.IWirelessNode tile))))
 
 (defn- tile-has-wireless-generator? [tile]
-  (or (has-capability? tile "wireless-generator")
+  (or (has-capability? tile WirelessCapabilityKeys/GENERATOR)
       (instance? cn.li.acapi.wireless.IWirelessGenerator tile)))
 
 (defn- tile-has-wireless-receiver? [tile]
-  (or (has-capability? tile "wireless-receiver")
+  (or (has-capability? tile WirelessCapabilityKeys/RECEIVER)
       (instance? cn.li.acapi.wireless.IWirelessReceiver tile)))
 
 (defn vblock-get

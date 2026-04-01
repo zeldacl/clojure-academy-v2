@@ -31,7 +31,7 @@
            [net.minecraft.world.item ItemStack]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
           [org.joml Matrix4f]
-          [cn.li.acapi.wireless WirelessCapabilities]
+          [cn.li.acapi.wireless WirelessCapabilities WirelessCapabilityKeys]
           [cn.li.forge1201.capability NamedCapabilityRegistry]
           [net.minecraftforge.common MinecraftForge]))
 
@@ -375,12 +375,11 @@
   ;; capability keys (e.g. :wireless-energy) get a single anonymous token.
   (letfn [(reg-cap! [key-kw]
             (let [key-str (name key-kw)
-                  named   (case key-str
-                            "wireless-matrix"    WirelessCapabilities/MATRIX
-                            "wireless-node"      WirelessCapabilities/NODE
-                            "wireless-generator" WirelessCapabilities/GENERATOR
-                            "wireless-receiver"  WirelessCapabilities/RECEIVER
-                            nil)]
+                  named   (get {WirelessCapabilityKeys/MATRIX    WirelessCapabilities/MATRIX
+                                WirelessCapabilityKeys/NODE      WirelessCapabilities/NODE
+                                WirelessCapabilityKeys/GENERATOR WirelessCapabilities/GENERATOR
+                                WirelessCapabilityKeys/RECEIVER  WirelessCapabilities/RECEIVER}
+                               key-str)]
               (if named
                 (NamedCapabilityRegistry/register key-str named)
                 (NamedCapabilityRegistry/getOrCreate key-str))))]

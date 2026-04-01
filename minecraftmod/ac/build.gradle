@@ -62,5 +62,7 @@ dependencies {
     implementation "org.clojure:clojure:1.11.1"
     api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation project(':mcmod')
+    compileOnly 'net.minecraftforge:eventbus:6.0.5'
+    testCompileOnly 'net.minecraftforge:eventbus:6.0.5'
 }
 

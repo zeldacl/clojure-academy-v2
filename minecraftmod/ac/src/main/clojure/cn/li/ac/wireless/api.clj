@@ -14,7 +14,7 @@
             [cn.li.mcmod.platform.events :as platform-events]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix IWirelessGenerator IWirelessReceiver]
+  (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix IWirelessGenerator IWirelessReceiver WirelessCapabilityKeys]
            [cn.li.acapi.wireless.event
             WirelessNetworkEvent$GeneratorLinked
             WirelessNetworkEvent$NetworkCreated
@@ -189,7 +189,7 @@
         matrix-vb (vb/create-vmatrix matrix-tile)
         created? (wd/create-network-impl! world-data matrix-vb ssid password)]
     (when created?
-      (when-let [matrix-cap (get-cap matrix-tile "wireless-matrix")]
+      (when-let [matrix-cap (get-cap matrix-tile WirelessCapabilityKeys/MATRIX)]
         (platform-events/fire-event!
           (WirelessNetworkEvent$NetworkCreated. ^IWirelessMatrix matrix-cap ssid))))
     created?))
@@ -203,7 +203,7 @@
           ssid (:ssid network-item)
           destroyed? (wd/destroy-network-impl! world-data network-item)]
       (when destroyed?
-        (when-let [matrix-cap (get-cap matrix-tile "wireless-matrix")]
+        (when-let [matrix-cap (get-cap matrix-tile WirelessCapabilityKeys/MATRIX)]
           (platform-events/fire-event!
             (WirelessNetworkEvent$NetworkDestroyed. ^IWirelessMatrix matrix-cap ssid))))
       destroyed?)))
@@ -224,8 +224,8 @@
           node-vb (vb/create-vnode node-tile)
           linked? (wd/link-node-to-network! world-data network-item node-vb password)]
       (when linked?
-        (when-let [matrix-cap (get-cap matrix-tile "wireless-matrix")]
-          (when-let [node-cap (get-cap node-tile "wireless-node")]
+        (when-let [matrix-cap (get-cap matrix-tile WirelessCapabilityKeys/MATRIX)]
+          (when-let [node-cap (get-cap node-tile WirelessCapabilityKeys/NODE)]
             (platform-events/fire-event!
               (WirelessNetworkEvent$NodeConnected. ^IWirelessMatrix matrix-cap ^IWirelessNode node-cap)))))
       linked?)))
@@ -241,8 +241,8 @@
           node-vb (vb/create-vnode node-tile)
           removed? (network/remove-node! network-item node-vb)]
       (when removed?
-        (when-let [node-cap (get-cap node-tile "wireless-node")]
-          (when-let [matrix-cap (some-> matrix-tile (get-cap "wireless-matrix"))]
+        (when-let [node-cap (get-cap node-tile WirelessCapabilityKeys/NODE)]
+          (when-let [matrix-cap (some-> matrix-tile (get-cap WirelessCapabilityKeys/MATRIX))]
             (platform-events/fire-event!
               (WirelessNetworkEvent$NodeDisconnected. ^IWirelessMatrix matrix-cap ^IWirelessNode node-cap)))))
       removed?)))
@@ -258,7 +258,7 @@
 
   Returns: true if successful"
   [gen-tile node-tile password need-auth]
-  (when-let [node-cap (get-cap node-tile "wireless-node")]
+  (when-let [node-cap (get-cap node-tile WirelessCapabilityKeys/NODE)]
     (when (or (not need-auth)
               (= password (.getPassword ^IWirelessNode node-cap)))
       (let [world (platform-be/be-get-world-safe node-tile)
@@ -268,7 +268,7 @@
             gen-vb (vb/create-vgenerator gen-tile)
             linked? (wd/link-generator-to-node-connection! world-data conn gen-vb)]
         (when linked?
-          (when-let [gen-cap (get-cap gen-tile "wireless-generator")]
+          (when-let [gen-cap (get-cap gen-tile WirelessCapabilityKeys/GENERATOR)]
             (platform-events/fire-event!
               (WirelessNetworkEvent$GeneratorLinked.
                 ^IWirelessNode node-cap
@@ -293,7 +293,7 @@
 
   Returns: true if successful"
   [rec-tile node-tile password need-auth]
-  (when-let [node-cap (get-cap node-tile "wireless-node")]
+  (when-let [node-cap (get-cap node-tile WirelessCapabilityKeys/NODE)]
     (when (or (not need-auth)
               (= password (.getPassword ^IWirelessNode node-cap)))
       (let [world (platform-be/be-get-world-safe node-tile)
@@ -303,7 +303,7 @@
             rec-vb (vb/create-vreceiver rec-tile)
             linked? (wd/link-receiver-to-node-connection! world-data conn rec-vb)]
         (when linked?
-          (when-let [rec-cap (get-cap rec-tile "wireless-receiver")]
+          (when-let [rec-cap (get-cap rec-tile WirelessCapabilityKeys/RECEIVER)]
             (platform-events/fire-event!
               (WirelessNetworkEvent$ReceiverLinked.
                 ^IWirelessNode node-cap

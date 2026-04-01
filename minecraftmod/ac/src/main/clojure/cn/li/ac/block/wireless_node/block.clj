@@ -35,7 +35,7 @@
             [cn.li.ac.registry.hooks         :as hooks]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.util.log            :as log])
-  (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix]
+  (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix WirelessCapabilityKeys]
            [cn.li.acapi.energy IEnergyCapable]))
 
 ;; ============================================================================
@@ -297,7 +297,7 @@
                              (let [matrix (when (:matrix net)
                      (vb/vblock-get (:matrix net) world))
                   matrix-cap (when matrix
-                   (platform-be/get-capability matrix "wireless-matrix"))]
+                                                 (platform-be/get-capability matrix WirelessCapabilityKeys/MATRIX))]
               {:ssid (:ssid net)
                :is-encrypted? (not (empty? (str (:password net))))
                :load (wireless-net/get-load net)

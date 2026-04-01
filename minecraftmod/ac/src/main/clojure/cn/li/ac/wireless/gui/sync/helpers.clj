@@ -7,7 +7,8 @@
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.world :as wd]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.be :as platform-be]))
+            [cn.li.mcmod.platform.be :as platform-be])
+  (:import [cn.li.acapi.wireless WirelessCapabilityKeys]))
 
 (defn- get-active-client-container
   "Get active client container from gui.registry without creating compile-time cycle."
@@ -228,7 +229,7 @@
             (when-let [matrix (vb/vblock-get matrix-vb world)]
               (reset! (:max-capacity container)
                       (try
-                        (if-let [matrix-cap (platform-be/get-capability matrix "wireless-matrix")]
+                        (if-let [matrix-cap (platform-be/get-capability matrix WirelessCapabilityKeys/MATRIX)]
                           (.getMatrixCapacity ^cn.li.acapi.wireless.IWirelessMatrix matrix-cap)
                           0)
                         (catch Exception _ 0))))))
