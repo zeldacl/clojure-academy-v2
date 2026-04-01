@@ -2,7 +2,7 @@ package cn.li.forge1201.block.entity;
 
 import clojure.lang.RT;
 import clojure.lang.Var;
-import cn.li.forge1201.capability.CapabilitySlots;
+import cn.li.forge1201.capability.NamedCapabilityRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -280,7 +280,7 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
     @Nonnull
     @Override
     public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
-        String key = CapabilitySlots.getKey(cap);
+        String key = NamedCapabilityRegistry.getKey(cap);
         if (key != null) {
             LazyOptional<Object> cached = capCache.get(key);
             if (cached != null && cached.isPresent()) {

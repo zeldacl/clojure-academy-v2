@@ -14,6 +14,9 @@ dependencies {
     // 理论上 API 模块不应有任何依赖。
     // 如果接口中必须引用某些通用注解（如 @Nullable），请使用 compileOnly。
     compileOnly 'org.jetbrains:annotations:24.0.0'
+    // Forge-only API surface (Capability/Event/IMC) remains compile-only for consumers.
+    compileOnly 'net.minecraftforge:forge:1.20.1-47.1.0:universal'
+    compileOnly 'net.minecraftforge:eventbus:6.0.5'
 }
 
 // 核心设置：确保打包时极其纯净

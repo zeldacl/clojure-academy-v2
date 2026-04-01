@@ -11,12 +11,10 @@
   - For Clojure state maps: use :node-type / :placer-name keys
   - For Java ScriptedBlockEntity: use getCapability().isPresent() via CapabilitySlots"
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.wireless.core.interfaces :as interfaces]
-            [cn.li.mcmod.platform.nbt :as nbt]
-            [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.capability :as platform-cap]
-            [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.world :as world]))
+             [cn.li.mcmod.platform.nbt :as nbt]
+             [cn.li.mcmod.platform.position :as pos]
+             [cn.li.mcmod.platform.be :as platform-be]
+             [cn.li.mcmod.platform.world :as world]))
 
 ;; ============================================================================
 ;; VBlock Record
@@ -96,43 +94,30 @@
 ;; ============================================================================
 
 (defn- has-capability?
-  "Check if a BlockEntity has a specific capability key registered.
-  Works with Forge (CapabilitySlots) and falls back to Clojure protocol check."
+  "Return true if tile exposes the named wireless capability."
   [tile cap-key]
-  (try
-    (let [cap-slots (requiring-resolve 'cn.li.mcmod.platform.be/get-capability-slot)]
-      (when cap-slots
-        (let [cap (cap-slots cap-key)]
-          (when cap
-            (let [lo (platform-cap/get-capability tile cap nil)]
-              (platform-cap/is-present? lo))))))
-    (catch Exception _
-      ;; Fallback: check if tile is a state map with the right keys
-      nil)))
+  (try (some? (platform-be/get-capability tile cap-key))
+       (catch Exception _ false)))
 
 (defn- tile-has-wireless-matrix? [tile]
   (if (map? tile)
     (contains? tile :plate-count)
     (or (has-capability? tile "wireless-matrix")
-        (interfaces/wireless-matrix? tile))))
+        (instance? cn.li.acapi.wireless.IWirelessMatrix tile))))
 
 (defn- tile-has-wireless-node? [tile]
   (if (map? tile)
     (contains? tile :node-type)
     (or (has-capability? tile "wireless-node")
-        (interfaces/wireless-node? tile))))
+        (instance? cn.li.acapi.wireless.IWirelessNode tile))))
 
 (defn- tile-has-wireless-generator? [tile]
-  (if (map? tile)
-    (interfaces/wireless-generator? tile)
-    (or (has-capability? tile "wireless-generator")
-        (interfaces/wireless-generator? tile))))
+  (or (has-capability? tile "wireless-generator")
+      (instance? cn.li.acapi.wireless.IWirelessGenerator tile)))
 
 (defn- tile-has-wireless-receiver? [tile]
-  (if (map? tile)
-    (interfaces/wireless-receiver? tile)
-    (or (has-capability? tile "wireless-receiver")
-        (interfaces/wireless-receiver? tile))))
+  (or (has-capability? tile "wireless-receiver")
+      (instance? cn.li.acapi.wireless.IWirelessReceiver tile)))
 
 (defn vblock-get
   "Get the TileEntity/state for this vblock (lazy loading).

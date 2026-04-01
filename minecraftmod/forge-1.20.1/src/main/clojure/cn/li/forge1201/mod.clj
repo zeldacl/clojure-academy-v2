@@ -16,7 +16,8 @@
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.i18n :as i18n]
-            [cn.li.mcmod.util.log :as log])
+             [cn.li.mcmod.util.log :as log]
+             [cn.li.forge1201.wireless-imc :as wireless-imc])
   (:import [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
@@ -27,7 +28,9 @@
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
-           [net.minecraftforge.common.capabilities RegisterCapabilitiesEvent])
+          [net.minecraftforge.common.capabilities RegisterCapabilitiesEvent]
+          [net.minecraftforge.fml.event.lifecycle InterModProcessEvent]
+          [cn.li.acapi.wireless WirelessImc])
   (:gen-class
    :name com.example.my_mod1201.MyMod1201Clj
    :prefix "mod-"
@@ -257,6 +260,8 @@
 (defn on-common-setup [_event]
   (log/info "FMLCommonSetupEvent - Common setup phase")
   (gui-init/init-common!)
+  ;; Register wireless IMC dispatch listeners on the Forge game event bus.
+  (wireless-imc/init!)
   (.addListener (MinecraftForge/EVENT_BUS)
                 EventPriority/NORMAL false PlayerInteractEvent$RightClickBlock
                 (reify java.util.function.Consumer
@@ -343,7 +348,26 @@
       (.addListener mod-bus EventPriority/NORMAL false FMLClientSetupEvent
                     (reify java.util.function.Consumer
                       (accept [_ event] (on-client-setup event))))
-      ;; Generic RegisterCapabilitiesEvent: registers all java-types declared by ac.
+        ;; InterModProcessEvent: read IMC messages from external mods and store handlers.
+        (.addListener mod-bus EventPriority/NORMAL false InterModProcessEvent
+                      (reify java.util.function.Consumer
+                        (accept [_ event]
+                          (.forEachOrdered
+                            (.getIMCStream event)
+                            (reify java.util.function.Consumer
+                              (accept [_ msg]
+                                (try
+                                  (let [handler (.get (.getMessageSupplier msg))]
+                                    (condp = (.getMethod msg)
+                                      WirelessImc/REGISTER_NETWORK_HANDLER
+                                      (wireless-imc/register-network-handler! handler)
+                                      WirelessImc/REGISTER_NODE_HANDLER
+                                      (wireless-imc/register-node-handler! handler)
+                                      nil))
+                                  (catch Exception e
+                                    (log/debug "IMC registration failed from"
+                                               (.getSenderModId msg) ":" (ex-message e))))))))))
+        ;; Generic RegisterCapabilitiesEvent: registers all java-types declared by ac.
       ;; No modification needed when ac adds new capabilities.
       (.addListener mod-bus EventPriority/NORMAL false RegisterCapabilitiesEvent
                     (reify java.util.function.Consumer

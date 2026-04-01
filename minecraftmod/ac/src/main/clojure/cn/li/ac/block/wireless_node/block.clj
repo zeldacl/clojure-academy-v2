@@ -31,12 +31,11 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.api        :as helper]
             [cn.li.ac.wireless.data.network       :as wireless-net]
-            [cn.li.ac.wireless.core.interfaces    :as winterfaces]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.registry.hooks         :as hooks]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.util.log            :as log])
-  (:import [cn.li.acapi.wireless IWirelessNode]
+  (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix]
            [cn.li.acapi.energy IEnergyCapable]))
 
 ;; ============================================================================
@@ -296,19 +295,21 @@
                      (remove (fn [net] (= (:ssid net) linked-ssid)))
                      (mapv (fn [net]
                              (let [matrix (when (:matrix net)
-                                            (vb/vblock-get (:matrix net) world))]
-                               {:ssid (:ssid net)
-                                :is-encrypted? (not (empty? (str (:password net))))
-                                :load (wireless-net/get-load net)
-                                :capacity (if matrix
-                                            (try (winterfaces/get-capacity matrix) (catch Exception _ 0))
-                                            0)
-                                :bandwidth (if matrix
-                                             (try (winterfaces/get-bandwidth matrix) (catch Exception _ 0))
-                                             0)
-                                :range (if matrix
-                                         (try (winterfaces/get-range matrix) (catch Exception _ 0.0))
-                                         0.0)}))))})
+                     (vb/vblock-get (:matrix net) world))
+                  matrix-cap (when matrix
+                   (platform-be/get-capability matrix "wireless-matrix"))]
+              {:ssid (:ssid net)
+               :is-encrypted? (not (empty? (str (:password net))))
+               :load (wireless-net/get-load net)
+               :capacity (if matrix-cap
+                     (try (.getMatrixCapacity ^IWirelessMatrix matrix-cap) (catch Exception _ 0))
+                     0)
+               :bandwidth (if matrix-cap
+                      (try (.getMatrixBandwidth ^IWirelessMatrix matrix-cap) (catch Exception _ 0))
+                      0)
+               :range (if matrix-cap
+                  (try (.getMatrixRange ^IWirelessMatrix matrix-cap) (catch Exception _ 0.0))
+                  0.0)}))))})
       {:linked nil :avail []})))
 
 (defn handle-connect

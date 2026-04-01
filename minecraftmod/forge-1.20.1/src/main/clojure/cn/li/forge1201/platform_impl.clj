@@ -17,7 +17,8 @@
             [cn.li.mcmod.platform.resource :as resource]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.util.log :as log])
+             [cn.li.mcmod.platform.events :as platform-events]
+             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
@@ -29,7 +30,10 @@
            [net.minecraftforge.common.util LazyOptional]
            [net.minecraft.world.item ItemStack]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
-           [org.joml Matrix4f]))
+          [org.joml Matrix4f]
+          [cn.li.acapi.wireless WirelessCapabilities]
+          [cn.li.forge1201.capability NamedCapabilityRegistry]
+          [net.minecraftforge.common MinecraftForge]))
 
 (set! *warn-on-reflection* true)
 
@@ -365,22 +369,40 @@
     (constantly (fn [namespace path]
                   (ResourceLocation. namespace path))))
 
-  ;; Bind the Forge implementation of declare-capability!
-  ;; When ac calls declare-capability!, this fn assigns a CapabilitySlots slot.
-  (alter-var-root #'platform-cap/*declare-capability-impl*
-                  (constantly (fn [key _java-type]
-                    (cn.li.forge1201.capability.CapabilitySlots/assign (name key)))))
+  ;; Helper: map a keyword cap key to the correct named or dynamic Capability object.
+  ;; The four wireless capabilities use the public WirelessCapabilities constants so
+  ;; external mods can discover them by importing WirelessCapabilities.  All other
+  ;; capability keys (e.g. :wireless-energy) get a single anonymous token.
+  (letfn [(reg-cap! [key-kw]
+            (let [key-str (name key-kw)
+                  named   (case key-str
+                            "wireless-matrix"    WirelessCapabilities/MATRIX
+                            "wireless-node"      WirelessCapabilities/NODE
+                            "wireless-generator" WirelessCapabilities/GENERATOR
+                            "wireless-receiver"  WirelessCapabilities/RECEIVER
+                            nil)]
+              (if named
+                (NamedCapabilityRegistry/register key-str named)
+                (NamedCapabilityRegistry/getOrCreate key-str))))]
 
-  ;; Bind the platform BE capability slot lookup
-  (alter-var-root #'platform-be/*be-capability-slot-fn*
-                  (constantly (fn [key-string]
-                    (cn.li.forge1201.capability.CapabilitySlots/get key-string))))
+    ;; Bind the Forge implementation of declare-capability!
+    ;; When ac calls (declare-capability! :wireless-node ...) this assigns its slot.
+    (alter-var-root #'platform-cap/*declare-capability-impl*
+                    (constantly (fn [key _java-type] (reg-cap! key))))
 
-  ;; Client-side rendering bindings are now handled in client initialization
-  ;; See forge-1.20.1/client/init.clj for pose stack and render buffer setup
+    ;; Bind the platform BE capability slot lookup used by platform-be/get-capability.
+    (alter-var-root #'platform-be/*be-capability-slot-fn*
+                    (constantly #(NamedCapabilityRegistry/get %)))
 
-  ;; Retroactively assign slots for capabilities already declared before this ran
-  (doseq [[key {:keys [_java-type]}] @platform-cap/capability-type-registry]
-    (cn.li.forge1201.capability.CapabilitySlots/assign (name key)))
+    ;; Bind event firing to the Forge game event bus.
+    (alter-var-root #'platform-events/*fire-event-fn*
+                    (constantly (fn [event] (.post MinecraftForge/EVENT_BUS event))))
+
+    ;; Client-side rendering bindings are now handled in client initialization.
+    ;; See forge-1.20.1/client/init.clj for pose stack and render buffer setup.
+
+    ;; Retroactively register capabilities already declared before this ran.
+    (doseq [[key _] @platform-cap/capability-type-registry]
+      (reg-cap! key)))
   
   (log/info "Forge 1.20.1 platform implementations initialized successfully"))

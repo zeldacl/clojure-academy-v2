@@ -11,8 +11,17 @@
             [cn.li.ac.wireless.data.network :as network]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.events :as platform-events]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix IWirelessGenerator IWirelessReceiver]
+           [cn.li.acapi.wireless.event
+            WirelessNetworkEvent$GeneratorLinked
+            WirelessNetworkEvent$NetworkCreated
+            WirelessNetworkEvent$NetworkDestroyed
+            WirelessNetworkEvent$NodeConnected
+            WirelessNetworkEvent$NodeDisconnected
+            WirelessNetworkEvent$ReceiverLinked]))
 
 ;; ============================================================================
 ;; Network Queries
@@ -23,6 +32,12 @@
   MC 1.17+ renamed getWorld() to getLevel(); try both for compatibility."
   [tile]
   (platform-be/be-get-world-safe tile))
+
+(defn- get-cap
+  "Get a named capability from a tile, returning nil on error."
+  [tile cap-key]
+  (try (platform-be/get-capability tile cap-key)
+       (catch Exception _ nil)))
 
 (defn get-wireless-net-by-matrix
   "Get wireless network by matrix TileEntity"
@@ -171,16 +186,27 @@
   [matrix-tile ssid password]
   (let [world (platform-be/be-get-world-safe matrix-tile)
         world-data (wd/get-world-data world)
-        matrix-vb (vb/create-vmatrix matrix-tile)]
-    (wd/create-network-impl! world-data matrix-vb ssid password)))
+        matrix-vb (vb/create-vmatrix matrix-tile)
+        created? (wd/create-network-impl! world-data matrix-vb ssid password)]
+    (when created?
+      (when-let [matrix-cap (get-cap matrix-tile "wireless-matrix")]
+        (platform-events/fire-event!
+          (WirelessNetworkEvent$NetworkCreated. ^IWirelessMatrix matrix-cap ssid))))
+    created?))
 
 (defn destroy-network!
   "Destroy a wireless network"
   [matrix-tile]
   (when-let [network-item (get-wireless-net-by-matrix matrix-tile)]
     (let [world (platform-be/be-get-world-safe matrix-tile)
-          world-data (wd/get-world-data world)]
-      (wd/destroy-network-impl! world-data network-item))))
+          world-data (wd/get-world-data world)
+          ssid (:ssid network-item)
+          destroyed? (wd/destroy-network-impl! world-data network-item)]
+      (when destroyed?
+        (when-let [matrix-cap (get-cap matrix-tile "wireless-matrix")]
+          (platform-events/fire-event!
+            (WirelessNetworkEvent$NetworkDestroyed. ^IWirelessMatrix matrix-cap ssid))))
+      destroyed?)))
 
 (defn link-node-to-network!
   "Link a node to a wireless network
@@ -195,15 +221,31 @@
   (when-let [network-item (get-wireless-net-by-matrix matrix-tile)]
     (let [world (platform-be/be-get-world-safe matrix-tile)
           world-data (wd/get-world-data world)
-          node-vb (vb/create-vnode node-tile)]
-      (wd/link-node-to-network! world-data network-item node-vb password))))
+          node-vb (vb/create-vnode node-tile)
+          linked? (wd/link-node-to-network! world-data network-item node-vb password)]
+      (when linked?
+        (when-let [matrix-cap (get-cap matrix-tile "wireless-matrix")]
+          (when-let [node-cap (get-cap node-tile "wireless-node")]
+            (platform-events/fire-event!
+              (WirelessNetworkEvent$NodeConnected. ^IWirelessMatrix matrix-cap ^IWirelessNode node-cap)))))
+      linked?)))
 
 (defn unlink-node-from-network!
   "Unlink a node from its network"
   [node-tile]
   (when-let [network-item (get-wireless-net-by-node node-tile)]
-    (let [node-vb (vb/create-vnode node-tile)]
-      (network/remove-node! network-item node-vb))))
+    (let [world (platform-be/be-get-world-safe node-tile)
+          ssid (:ssid network-item)
+          matrix-tile (when-let [matrix-vb (:matrix network-item)]
+                        (vb/vblock-get matrix-vb world))
+          node-vb (vb/create-vnode node-tile)
+          removed? (network/remove-node! network-item node-vb)]
+      (when removed?
+        (when-let [node-cap (get-cap node-tile "wireless-node")]
+          (when-let [matrix-cap (some-> matrix-tile (get-cap "wireless-matrix"))]
+            (platform-events/fire-event!
+              (WirelessNetworkEvent$NodeDisconnected. ^IWirelessMatrix matrix-cap ^IWirelessNode node-cap)))))
+      removed?)))
 
 (defn link-generator-to-node!
   "Link a generator to a node
@@ -216,14 +258,22 @@
 
   Returns: true if successful"
   [gen-tile node-tile password need-auth]
-  (when (or (not need-auth)
-            (= password (.getPassword ^ cn.li.acapi.wireless.IWirelessNode node-tile)))
-    (let [world (platform-be/be-get-world-safe node-tile)
-          world-data (wd/get-world-data world)
-          node-vb (vb/create-vnode-conn node-tile)
-          conn (wd/ensure-node-connection! world-data node-vb)
-          gen-vb (vb/create-vgenerator gen-tile)]
-      (wd/link-generator-to-node-connection! world-data conn gen-vb))))
+  (when-let [node-cap (get-cap node-tile "wireless-node")]
+    (when (or (not need-auth)
+              (= password (.getPassword ^IWirelessNode node-cap)))
+      (let [world (platform-be/be-get-world-safe node-tile)
+            world-data (wd/get-world-data world)
+            node-vb (vb/create-vnode-conn node-tile)
+            conn (wd/ensure-node-connection! world-data node-vb)
+            gen-vb (vb/create-vgenerator gen-tile)
+            linked? (wd/link-generator-to-node-connection! world-data conn gen-vb)]
+        (when linked?
+          (when-let [gen-cap (get-cap gen-tile "wireless-generator")]
+            (platform-events/fire-event!
+              (WirelessNetworkEvent$GeneratorLinked.
+                ^IWirelessNode node-cap
+                ^IWirelessGenerator gen-cap))))
+        linked?))))
 
 (defn unlink-generator-from-node!
   "Unlink a generator from its node"
@@ -243,14 +293,22 @@
 
   Returns: true if successful"
   [rec-tile node-tile password need-auth]
-  (when (or (not need-auth)
-            (= password (.getPassword ^ cn.li.acapi.wireless.IWirelessNode node-tile)))
-    (let [world (platform-be/be-get-world-safe node-tile)
-          world-data (wd/get-world-data world)
-          node-vb (vb/create-vnode-conn node-tile)
-          conn (wd/ensure-node-connection! world-data node-vb)
-          rec-vb (vb/create-vreceiver rec-tile)]
-      (wd/link-receiver-to-node-connection! world-data conn rec-vb))))
+  (when-let [node-cap (get-cap node-tile "wireless-node")]
+    (when (or (not need-auth)
+              (= password (.getPassword ^IWirelessNode node-cap)))
+      (let [world (platform-be/be-get-world-safe node-tile)
+            world-data (wd/get-world-data world)
+            node-vb (vb/create-vnode-conn node-tile)
+            conn (wd/ensure-node-connection! world-data node-vb)
+            rec-vb (vb/create-vreceiver rec-tile)
+            linked? (wd/link-receiver-to-node-connection! world-data conn rec-vb)]
+        (when linked?
+          (when-let [rec-cap (get-cap rec-tile "wireless-receiver")]
+            (platform-events/fire-event!
+              (WirelessNetworkEvent$ReceiverLinked.
+                ^IWirelessNode node-cap
+                ^IWirelessReceiver rec-cap))))
+        linked?))))
 
 (defn unlink-receiver-from-node!
   "Unlink a receiver from its node"

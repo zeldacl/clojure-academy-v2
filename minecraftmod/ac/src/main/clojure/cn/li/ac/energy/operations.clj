@@ -12,8 +12,8 @@
             [cn.li.ac.item.test-battery :as battery]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.platform.nbt :as nbt]
-            [cn.li.ac.wireless.core.interfaces :as winterfaces]
-            [cn.li.ac.wireless.api :as whelper]))
+            [cn.li.ac.wireless.api :as whelper])
+  (:import [cn.li.acapi.wireless IWirelessNode IWirelessReceiver]))
 
 ;; ============================================================================
 ;; IFItemManager Implementation
@@ -75,35 +75,34 @@
 (defn is-node-supported?
   "Check if TileEntity is an IWirelessNode"
   [tile-entity]
-  (winterfaces/wireless-node? tile-entity))
+  (instance? IWirelessNode tile-entity))
 
 (defn get-node-energy
   "Get energy from node"
   [tile-entity]
   (when (is-node-supported? tile-entity)
-    (winterfaces/get-energy tile-entity)))
+    (.getEnergy ^IWirelessNode tile-entity)))
 
 (defn set-node-energy!
   "Set energy in node"
   [tile-entity energy]
   (when (is-node-supported? tile-entity)
-    (winterfaces/set-energy tile-entity energy)))
+    (.setEnergy ^IWirelessNode tile-entity energy)))
 
 (defn charge-node
   "Charge energy to node
   Returns the amount that couldn't be charged (leftover)"
   [tile-entity amount ignore-bandwidth]
   (if (is-node-supported? tile-entity)
-    (let [current (winterfaces/get-energy tile-entity)
-          max-energy (winterfaces/get-max-energy tile-entity)
-          bandwidth (winterfaces/get-bandwidth tile-entity)
-          
+    (let [node       ^IWirelessNode tile-entity
+          current    (.getEnergy node)
+          max-energy (.getMaxEnergy node)
+          bandwidth  (.getBandwidth node)
           space (- max-energy current)
           limit (if ignore-bandwidth Double/MAX_VALUE bandwidth)
           to-charge (min amount space limit)
           leftover (- amount to-charge)]
-      
-      (winterfaces/set-energy tile-entity (+ current to-charge))
+      (.setEnergy node (+ current to-charge))
       leftover)
     amount))
 
@@ -112,13 +111,12 @@
   Returns the amount actually pulled"
   [tile-entity amount ignore-bandwidth]
   (if (is-node-supported? tile-entity)
-    (let [current (winterfaces/get-energy tile-entity)
-          bandwidth (winterfaces/get-bandwidth tile-entity)
-          
+    (let [node      ^IWirelessNode tile-entity
+          current   (.getEnergy node)
+          bandwidth (.getBandwidth node)
           limit (if ignore-bandwidth Double/MAX_VALUE bandwidth)
           to-pull (min amount current limit)]
-      
-      (winterfaces/set-energy tile-entity (- current to-pull))
+      (.setEnergy node (- current to-pull))
       to-pull)
     0.0))
 
@@ -129,14 +127,14 @@
 (defn is-receiver-supported?
   "Check if TileEntity is an IWirelessReceiver"
   [tile-entity]
-  (winterfaces/wireless-receiver? tile-entity))
+  (instance? IWirelessReceiver tile-entity))
 
 (defn charge-receiver
   "Charge energy to receiver (calls inject-energy)
   Returns the amount that couldn't be charged"
   [tile-entity amount]
   (if (is-receiver-supported? tile-entity)
-    (winterfaces/inject-energy tile-entity amount)
+    (.injectEnergy ^IWirelessReceiver tile-entity amount)
     amount))
 
 (defn pull-from-receiver
@@ -144,7 +142,7 @@
   Returns the amount actually pulled"
   [tile-entity amount]
   (if (is-receiver-supported? tile-entity)
-    (winterfaces/pull-energy tile-entity amount)
+    (.pullEnergy ^IWirelessReceiver tile-entity amount)
     0.0))
 
 ;; ============================================================================

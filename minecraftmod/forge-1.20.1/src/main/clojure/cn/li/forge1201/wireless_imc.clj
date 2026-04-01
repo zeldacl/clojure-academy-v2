@@ -1,0 +1,98 @@
+(ns cn.li.forge1201.wireless-imc
+  "IMC (Inter-Mod Communication) support for the wireless energy system.
+
+  External mods register handlers during InterModEnqueueEvent by sending IMC
+  messages to this mod using the keys defined in WirelessImc. Handlers are
+  invoked after the corresponding Forge event fires, so they receive the same
+  information as a regular EventBus subscriber but via callback.
+
+  Handler isolation: a handler that throws is logged at DEBUG and removed so
+  it cannot disrupt subsequent ticks or other handlers."
+  (:require [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.acapi.wireless WirelessImc$NetworkEventHandler WirelessImc$NodeEventHandler]
+           [cn.li.acapi.wireless.event WirelessNetworkEvent$NetworkCreated
+                                       WirelessNetworkEvent$NetworkDestroyed
+                                       WirelessNetworkEvent$NodeConnected
+                                       WirelessNetworkEvent$NodeDisconnected
+                                       WirelessNetworkEvent$GeneratorLinked
+                                       WirelessNetworkEvent$ReceiverLinked]
+           [net.minecraftforge.common MinecraftForge]
+           [net.minecraftforge.eventbus.api EventPriority]))
+
+;; ============================================================================
+;; Handler registries
+;; ============================================================================
+
+(defonce ^:private network-handlers (atom []))
+(defonce ^:private node-handlers    (atom []))
+
+(defn register-network-handler!
+  "Register an IMC network event handler. Called from InterModProcessEvent."
+  [^WirelessImc$NetworkEventHandler handler]
+  (swap! network-handlers conj handler))
+
+(defn register-node-handler!
+  "Register an IMC node event handler. Called from InterModProcessEvent."
+  [^WirelessImc$NodeEventHandler handler]
+  (swap! node-handlers conj handler))
+
+;; ============================================================================
+;; Dispatch helpers
+;; ============================================================================
+
+(defn- invoke-safe
+  "Call f, return nil. If it throws, log and return ::remove-handler."
+  [f]
+  (try (f) nil
+       (catch Exception e
+         (log/debug "IMC wireless handler threw exception, removing it:" (ex-message e))
+         ::remove-handler)))
+
+(defn- dispatch-network! [type ssid matrix]
+  (let [bad (keep (fn [h]
+                    (when (= ::remove-handler
+                              (invoke-safe #(.onNetworkEvent ^WirelessImc$NetworkEventHandler h
+                                                            type ssid matrix)))
+                      h))
+                  @network-handlers)]
+    (when (seq bad)
+      (swap! network-handlers #(remove (set bad) %)))))
+
+(defn- dispatch-node! [type node]
+  (let [bad (keep (fn [h]
+                    (when (= ::remove-handler
+                              (invoke-safe #(.onNodeEvent ^WirelessImc$NodeEventHandler h type node)))
+                      h))
+                  @node-handlers)]
+    (when (seq bad)
+      (swap! node-handlers #(remove (set bad) %)))))
+
+;; ============================================================================
+;; EventBus listener – dispatches Forge events to IMC handlers
+;; ============================================================================
+
+(defn- on-wireless-event [event]
+  (condp instance? event
+    WirelessNetworkEvent$NetworkCreated  (dispatch-network! "created"     (.getSsid event) (.getMatrix event))
+    WirelessNetworkEvent$NetworkDestroyed (dispatch-network! "destroyed"   (.getSsid event) (.getMatrix event))
+    WirelessNetworkEvent$NodeConnected   (dispatch-node!    "connected"   (.getNode event))
+    WirelessNetworkEvent$NodeDisconnected (dispatch-node!    "disconnected" (.getNode event))
+    WirelessNetworkEvent$GeneratorLinked (dispatch-node!    "generator_linked" (.getNode event))
+    WirelessNetworkEvent$ReceiverLinked  (dispatch-node!    "receiver_linked"  (.getNode event))
+    nil))
+
+(defn init!
+  "Subscribe IMC dispatch listeners to the Forge game event bus.
+  Call once from on-common-setup."
+  []
+  (doseq [[cls] [[WirelessNetworkEvent$NetworkCreated]
+                 [WirelessNetworkEvent$NetworkDestroyed]
+                 [WirelessNetworkEvent$NodeConnected]
+                 [WirelessNetworkEvent$NodeDisconnected]
+                 [WirelessNetworkEvent$GeneratorLinked]
+                 [WirelessNetworkEvent$ReceiverLinked]]]
+    (.addListener ^net.minecraftforge.eventbus.api.IEventBus MinecraftForge/EVENT_BUS
+                  EventPriority/LOWEST false ^Class cls
+                  (reify java.util.function.Consumer
+                    (accept [_ evt] (on-wireless-event evt)))))
+  (log/info "Wireless IMC dispatchers registered"))

@@ -6,7 +6,6 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.world :as wd]
-            [cn.li.ac.wireless.core.interfaces :as winterfaces]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as platform-be]))
 
@@ -228,8 +227,11 @@
           (when-let [matrix-vb (:matrix network)]
             (when-let [matrix (vb/vblock-get matrix-vb world)]
               (reset! (:max-capacity container)
-                      (try (winterfaces/get-capacity matrix)
-                           (catch Exception _ 0))))))
+                      (try
+                        (if-let [matrix-cap (platform-be/get-capability matrix "wireless-matrix")]
+                          (.getMatrixCapacity ^cn.li.acapi.wireless.IWirelessMatrix matrix-cap)
+                          0)
+                        (catch Exception _ 0))))))
         (do
           (reset! (:capacity container) 0)
           (reset! (:max-capacity container) 0))))
