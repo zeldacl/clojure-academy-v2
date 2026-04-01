@@ -5,7 +5,7 @@ package cn.li.acapi.wireless;
  * Implemented by Clojure deftype in ac (WirelessNodeImpl).
  * Exposed as a Forge Capability via CapabilitySlots.
  */
-public interface IWirelessNode {
+public interface IWirelessNode extends IWirelessTile {
     /** Current energy stored. */
     double getEnergy();
 

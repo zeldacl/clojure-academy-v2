@@ -3,7 +3,7 @@ package cn.li.acapi.wireless;
 /**
  * Platform-neutral interface for wireless receiver blocks.
  */
-public interface IWirelessReceiver {
+public interface IWirelessReceiver extends IWirelessUser {
     /** How much energy this receiver needs. */
     double getRequiredEnergy();
 

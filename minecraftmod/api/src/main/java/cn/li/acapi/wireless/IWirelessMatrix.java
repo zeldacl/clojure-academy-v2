@@ -5,7 +5,7 @@ package cn.li.acapi.wireless;
  * Implemented by Clojure deftype in ac (WirelessMatrixImpl).
  * Exposed as a Forge Capability via CapabilitySlots.
  */
-public interface IWirelessMatrix {
+public interface IWirelessMatrix extends IWirelessTile {
     /** How many nodes this matrix can hold. */
     int getMatrixCapacity();
 

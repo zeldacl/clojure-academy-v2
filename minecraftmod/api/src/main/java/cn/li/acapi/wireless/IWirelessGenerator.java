@@ -3,7 +3,7 @@ package cn.li.acapi.wireless;
 /**
  * Platform-neutral interface for wireless generator blocks.
  */
-public interface IWirelessGenerator {
+public interface IWirelessGenerator extends IWirelessUser {
     /** Current energy stored. */
     double getEnergy();
 
