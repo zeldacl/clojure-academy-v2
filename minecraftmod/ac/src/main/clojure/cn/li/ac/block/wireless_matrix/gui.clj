@@ -37,13 +37,14 @@
             [cn.li.ac.block.wireless-matrix.block :as wm]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.item.constraint-plate :as plate]
             [cn.li.ac.item.mat-core :as core]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
+            [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.ac.wireless.gui.container.schema :as schema]
-            [cn.li.mcmod.gui.schema-builders :as schema-builders]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.metadata :as metadata]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -226,7 +227,7 @@
             :tile-java      proxy
             :player         player
             :container-type :matrix}
-           (schema-builders/build-gui-atoms matrix-schema/unified-matrix-schema state))))
+         (schema-runtime/build-gui-atoms matrix-schema/unified-matrix-schema state))))
 
 ;; ============================================================================
 ;; Slot Management (from matrix_container.clj)
@@ -235,10 +236,10 @@
 (def ^:private matrix-slot-schema-id wireless-matrix-id)
 
 (defn get-slot-count [_container]
-  (slot-schema/tile-slot-count matrix-slot-schema-id))
+  (slot-registry/get-slot-count matrix-slot-schema-id))
 
 (defn can-place-item? [_container slot-index item-stack]
-  (case (slot-schema/slot-type matrix-slot-schema-id slot-index)
+  (case (slot-registry/get-slot-type-for-index matrix-slot-schema-id slot-index)
     :plate (plate/is-constraint-plate? item-stack)
     :core (core/is-mat-core? item-stack)
     false))
@@ -306,10 +307,10 @@
             (sync-helpers/query-matrix-network-capacity! container stats)))))))
 
 (defn get-sync-data [container]
-  ((schema-builders/build-get-sync-data-fn matrix-schema/unified-matrix-schema) container))
+  ((schema-runtime/build-get-sync-data-fn matrix-schema/unified-matrix-schema) container))
 
 (defn apply-sync-data! [container data]
-  ((schema-builders/build-apply-sync-data-fn matrix-schema/unified-matrix-schema) container data))
+  ((schema-runtime/build-apply-sync-data-fn matrix-schema/unified-matrix-schema) container data))
 
 (defn still-valid? [container player]
   (common/still-valid? container player))
@@ -338,7 +339,7 @@
 
 (defn on-close [container]
   (log/debug "Closing wireless matrix container")
-  ((schema-builders/build-on-close-fn matrix-schema/unified-matrix-schema) container))
+  ((schema-runtime/build-on-close-fn matrix-schema/unified-matrix-schema) container))
 
 ;; ============================================================================
 ;; Sync Packet Handling (from matrix_sync.clj)

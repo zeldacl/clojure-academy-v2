@@ -156,6 +156,12 @@ Structure:
      :text (:text label-map "")
      :color (or (:color label-map) 0x404040)}))
 
+(defn- cfg-value
+  "Read config from nested group first, then legacy top-level key."
+  [spec nested-path legacy-key]
+  (or (get-in spec nested-path)
+      (get spec legacy-key)))
+
 ;; Validate GUI specification
 (defn validate-gui-spec [gui-spec]
   (when-not (and (:id gui-spec) (string? (:id gui-spec)) (not (str/blank? (:id gui-spec))))
@@ -249,7 +255,29 @@ Structure:
                 :sync sync
                 :operations operations
                 :slots slot-operations
-                :legacy-layout legacy-layout})]
+          :legacy-layout legacy-layout
+          ;; Flattened aliases for gradual call-site migration.
+          :display-name (:display-name registration)
+          :gui-type (:gui-type registration)
+          :registry-name (:registry-name registration)
+          :screen-factory-fn-kw (:screen-factory-fn-kw registration)
+          :slot-layout (:slot-layout registration)
+          :container-fn (:container-fn lifecycle)
+          :container-predicate (:container-predicate lifecycle)
+          :screen-fn (:screen-fn lifecycle)
+          :tick-fn (:tick-fn lifecycle)
+          :sync-get (:sync-get sync)
+          :sync-apply (:sync-apply sync)
+          :payload-sync-apply-fn (:payload-sync-apply-fn sync)
+          :validate-fn (:validate-fn operations)
+          :close-fn (:close-fn operations)
+          :button-click-fn (:button-click-fn operations)
+          :text-input-fn (:text-input-fn operations)
+          :slot-count-fn (:slot-count-fn slot-operations)
+          :slot-get-fn (:slot-get-fn slot-operations)
+          :slot-set-fn (:slot-set-fn slot-operations)
+          :slot-can-place-fn (:slot-can-place-fn slot-operations)
+          :slot-changed-fn (:slot-changed-fn slot-operations)})]
     (validate-gui-spec spec)
     spec))
 
@@ -296,25 +324,64 @@ Structure:
   []
   (seq (list-gui-ids)))
 
+(defn has-gui-id?
+  "Return true when a wireless/platform GUI id is registered."
+  [gui-id]
+  (contains? (:by-gui-id @gui-registry) gui-id))
+
 (defn get-registry-name
   "Get registry name for a wireless GUI by gui-id."
   [gui-id]
-  (some-> (get-gui-by-gui-id gui-id) :registration :registry-name))
+  (some-> (get-gui-by-gui-id gui-id)
+          (cfg-value [:registration :registry-name] :registry-name)))
 
 (defn get-screen-factory-fn-kw
   "Get screen factory keyword for a wireless GUI by gui-id."
   [gui-id]
-  (some-> (get-gui-by-gui-id gui-id) :registration :screen-factory-fn-kw))
+  (some-> (get-gui-by-gui-id gui-id)
+          (cfg-value [:registration :screen-factory-fn-kw] :screen-factory-fn-kw)))
 
 (defn get-gui-type
   "Get container/gui type keyword for a wireless GUI by gui-id."
   [gui-id]
-  (some-> (get-gui-by-gui-id gui-id) :registration :gui-type))
+  (some-> (get-gui-by-gui-id gui-id)
+          (cfg-value [:registration :gui-type] :gui-type)))
 
 (defn get-slot-layout
   "Get slot layout for a wireless GUI by gui-id."
   [gui-id]
-  (some-> (get-gui-by-gui-id gui-id) :registration :slot-layout))
+  (some-> (get-gui-by-gui-id gui-id)
+          (cfg-value [:registration :slot-layout] :slot-layout)))
+
+(defn get-display-name
+  "Get display name for a wireless GUI by gui-id."
+  [gui-id]
+  (some-> (get-gui-by-gui-id gui-id)
+          (cfg-value [:registration :display-name] :display-name)))
+
+(defn get-container-fn
+  "Get container creation fn for a wireless GUI by gui-id."
+  [gui-id]
+  (some-> (get-gui-by-gui-id gui-id)
+          (cfg-value [:lifecycle :container-fn] :container-fn)))
+
+(defn get-screen-fn
+  "Get screen creation fn for a wireless GUI by gui-id."
+  [gui-id]
+  (some-> (get-gui-by-gui-id gui-id)
+          (cfg-value [:lifecycle :screen-fn] :screen-fn)))
+
+(defn get-container-predicate
+  "Get container predicate fn for a wireless GUI by gui-id."
+  [gui-id]
+  (some-> (get-gui-by-gui-id gui-id)
+          (cfg-value [:lifecycle :container-predicate] :container-predicate)))
+
+(defn get-payload-sync-apply-fn
+  "Get payload sync apply fn for a wireless GUI by gui-id."
+  [gui-id]
+  (some-> (get-gui-by-gui-id gui-id)
+          (cfg-value [:sync :payload-sync-apply-fn] :payload-sync-apply-fn)))
 
 (defn get-slot-range
   "Get slot index range for a wireless GUI section.
@@ -329,7 +396,7 @@ Structure:
   "Get a registered wireless GUI spec by its :gui-type keyword."
   [gui-type]
   (some (fn [[_gui-id spec]]
-          (when (= (get-in spec [:registration :gui-type]) gui-type)
+          (when (= (cfg-value spec [:registration :gui-type] :gui-type) gui-type)
             spec))
         (:by-gui-id @gui-registry)))
 
@@ -337,7 +404,7 @@ Structure:
   "Get GUI id (int) for a :gui-type keyword, or nil."
   [gui-type]
   (some (fn [[gui-id spec]]
-          (when (= (get-in spec [:registration :gui-type]) gui-type)
+          (when (= (cfg-value spec [:registration :gui-type] :gui-type) gui-type)
             gui-id))
         (:by-gui-id @gui-registry)))
 
@@ -345,7 +412,7 @@ Structure:
   "Get GUI config by testing container against all registered predicates."
   [container]
   (some (fn [[_gui-id spec]]
-          (when-let [pred (get-in spec [:lifecycle :container-predicate])]
+          (when-let [pred (cfg-value spec [:lifecycle :container-predicate] :container-predicate)]
             (when (pred container)
               spec)))
         (:by-gui-id @gui-registry)))

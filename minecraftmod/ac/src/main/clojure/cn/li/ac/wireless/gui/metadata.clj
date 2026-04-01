@@ -66,7 +66,7 @@
   
   Returns: boolean"
   [gui-id]
-  (some? (gui-dsl/get-gui-by-gui-id gui-id)))
+  (gui-dsl/has-gui-id? gui-id))
 
 (defn get-display-name
   "Get display name for GUI ID
@@ -76,7 +76,7 @@
   
   Returns: string or \"Unknown GUI\" if invalid"
   [gui-id]
-  (or (:display-name (gui-dsl/get-gui-by-gui-id gui-id))
+  (or (gui-dsl/get-display-name gui-id)
       "Unknown GUI"))
 
 (defn get-gui-type
@@ -87,7 +87,7 @@
   
   Returns: :node, :matrix, or :unknown"
   [gui-id]
-  (or (:gui-type (gui-dsl/get-gui-by-gui-id gui-id))
+  (or (gui-dsl/get-gui-type gui-id)
       :unknown))
 
 (defn get-registry-name
@@ -98,7 +98,7 @@
   
   Returns: string (registry name) or \"unknown_gui\""
   [gui-id]
-  (or (:registry-name (gui-dsl/get-gui-by-gui-id gui-id))
+  (or (gui-dsl/get-registry-name gui-id)
       "unknown_gui"))
 
 (defn get-screen-factory-fn
@@ -109,7 +109,7 @@
   
   Returns: keyword (:create-node-screen, :create-matrix-screen, etc.) or nil"
   [gui-id]
-  (:screen-factory-fn-kw (gui-dsl/get-gui-by-gui-id gui-id)))
+  (gui-dsl/get-screen-factory-fn-kw gui-id))
 
 (defn get-slot-layout
   "Get slot layout configuration for GUI
@@ -119,7 +119,7 @@
   
   Returns: map with {:slots [...] :ranges {...}} or nil"
   [gui-id]
-  (:slot-layout (gui-dsl/get-gui-by-gui-id gui-id)))
+  (gui-dsl/get-slot-layout gui-id))
 
 (defn get-slot-range
   "Get slot index range for a GUI section
@@ -194,14 +194,17 @@
   []
   (let [errors (atom [])]
     (doseq [gui-id (get-all-gui-ids)]
-      (let [spec (gui-dsl/get-gui-by-gui-id gui-id)]
-        (when-not (:display-name spec)
+      (let [display-name (gui-dsl/get-display-name gui-id)
+            gui-type (gui-dsl/get-gui-type gui-id)
+            registry-name (gui-dsl/get-registry-name gui-id)
+            screen-factory-fn-kw (gui-dsl/get-screen-factory-fn-kw gui-id)]
+        (when-not display-name
           (swap! errors conj (str "Missing display name for GUI ID " gui-id)))
-        (when-not (:gui-type spec)
+        (when-not gui-type
           (swap! errors conj (str "Missing type for GUI ID " gui-id)))
-        (when-not (:registry-name spec)
+        (when-not registry-name
           (swap! errors conj (str "Missing registry name for GUI ID " gui-id)))
-        (when-not (:screen-factory-fn-kw spec)
+        (when-not screen-factory-fn-kw
           (swap! errors conj (str "Missing screen-factory-fn-kw for GUI ID " gui-id)))))
     
     @errors))

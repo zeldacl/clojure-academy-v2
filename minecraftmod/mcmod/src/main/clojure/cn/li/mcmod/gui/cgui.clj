@@ -24,35 +24,8 @@
 (defn- component-kind [component]
   (or (:kind component) (::kind component) :unknown))
 
-(declare add-widget!)
 
-(defn invoke-method!
-  "Compatibility helper for legacy dynamic calls.
-   Supports map-based component methods used by GUI code."
-  [target method-name & args]
-  (case method-name
-    "getName" (if (widget? target) (or @(-> target :name) "") nil)
-    "setName" (do (when (widget? target) (reset! (:name target) (first args))) target)
-    "copy" (if (widget? target)
-             (let [clone (new-widget {:name @(-> target :name)
-                                      :pos @(-> target :pos)
-                                      :size @(-> target :size)
-                                      :scale @(-> target :scale)
-                                      :z-level @(-> target :z-level)
-                                      :visible? @(-> target :visible?)
-                                      :widget-type (:widget-type target)})]
-               (reset! (:components clone)
-                       (mapv (fn [comp]
-                               (if (and (map? comp) (:state comp))
-                                 (assoc comp :state (atom @(:state comp)))
-                                 comp))
-                             @(:components target)))
-               (doseq [child @(:children target)]
-                 (add-widget! clone (invoke-method! child "copy")))
-               clone)
-             target)
-    (throw (ex-info "Unsupported invoke-method! call in pure Clojure backend"
-                    {:method method-name :args-count (count args)}))))
+(declare add-widget! copy-widget)
 
 (defn create-widget
   [& {:keys [name pos size scale z-level]
@@ -65,7 +38,22 @@
   (new-widget {:name name :pos pos :size size :scale scale :z-level z-level :widget-type :container}))
 
 (defn copy-widget [widget]
-  (invoke-method! widget "copy"))
+  (let [clone (new-widget {:name @(-> widget :name)
+                           :pos @(-> widget :pos)
+                           :size @(-> widget :size)
+                           :scale @(-> widget :scale)
+                           :z-level @(-> widget :z-level)
+                           :visible? @(-> widget :visible?)
+                           :widget-type (:widget-type widget)})]
+    (reset! (:components clone)
+            (mapv (fn [comp]
+                    (if (and (map? comp) (:state comp))
+                      (assoc comp :state (atom @(:state comp)))
+                      comp))
+                  @(:components widget)))
+    (doseq [child @(:children widget)]
+      (add-widget! clone (copy-widget child)))
+    clone))
 
 (defn add-widget!
   [container widget]
@@ -296,14 +284,6 @@
 (defn create-cgui-screen-container
   [cgui container]
   {:type :cgui-screen-container :cgui cgui :minecraft-container container})
-
-(defn read-cgui-document
-  [doc]
-  doc)
-
-(defn get-cgui-document-widget
-  [doc name]
-  (find-widget doc name))
 
 (defn progressbar-direction-enum [direction]
   direction)

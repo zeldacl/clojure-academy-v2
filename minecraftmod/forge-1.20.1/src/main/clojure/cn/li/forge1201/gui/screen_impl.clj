@@ -205,8 +205,12 @@
         (let [menu-type     (gui/get-menu-type platform gui-id)
               factory-fn-kw (gui/get-screen-factory-fn-kw gui-id)
               factory-fn    (when factory-fn-kw
-                                (ns-resolve 'cn.li.mcmod.gui.adapter
-                                          (symbol (name factory-fn-kw))))]
+                                (try
+                                  (gui/get-screen-factory-fn factory-fn-kw)
+                                  (catch Exception e
+                                    (log/debug "Screen factory registry miss for" gui-id factory-fn-kw ":" (.getMessage e) "- fallback to ns-resolve")
+                                    (ns-resolve 'cn.li.mcmod.gui.adapter
+                                                (symbol (name factory-fn-kw))))))]
           (when menu-type
             (ForgeClientHelper/registerMenuScreen
              menu-type

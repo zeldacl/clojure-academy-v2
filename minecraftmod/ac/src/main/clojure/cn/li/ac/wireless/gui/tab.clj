@@ -5,7 +5,7 @@
   - :node      -> connect a Wireless Node to a Matrix network (SSID list)
   - :generator -> connect a Generator (SolarGen) to a Wireless Node"
   (:require [cn.li.mcmod.gui.cgui :as cgui]
-            [cn.li.mcmod.gui.cgui-document :as cgui-doc]
+            [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.ac.config.modid :as modid]

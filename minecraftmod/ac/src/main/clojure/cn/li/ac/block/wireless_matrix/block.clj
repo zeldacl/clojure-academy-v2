@@ -18,6 +18,7 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.entity :as entity]
@@ -77,7 +78,7 @@
 (def ^:private matrix-slot-indexes
   (slot-schema/all-slot-indexes matrix-slot-schema-id))
 (def ^:private matrix-slot-count
-  (slot-schema/tile-slot-count matrix-slot-schema-id))
+  (slot-registry/get-slot-count matrix-slot-schema-id))
 
 ;; ============================================================================
 ;; Part 3: Business Logic
@@ -312,7 +313,7 @@
    :slots-for-face (fn [_be _face] (int-array matrix-slot-indexes))
 
    :can-place-through-face? (fn [_be slot item _face]
-                               (case (slot-schema/slot-type matrix-slot-schema-id slot)
+                               (case (slot-registry/get-slot-type-for-index matrix-slot-schema-id slot)
                                  :plate (plate/is-constraint-plate? item)
                                  :core (core/is-mat-core? item)
                                  false))

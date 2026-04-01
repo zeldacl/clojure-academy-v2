@@ -16,6 +16,7 @@
             [cn.li.mcmod.block.state-schema  :as state-schema]
             [cn.li.mcmod.block.inventory-helpers :as inv-helpers]
             [cn.li.mcmod.gui.slot-schema     :as slot-schema]
+            [cn.li.mcmod.gui.slot-registry   :as slot-registry]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.world      :as world]
             [cn.li.mcmod.platform.be         :as platform-be]
@@ -123,7 +124,7 @@
 (def ^:private node-slot-indexes
   (slot-schema/all-slot-indexes node-slot-schema-id))
 (def ^:private node-slot-count
-  (slot-schema/tile-slot-count node-slot-schema-id))
+  (slot-registry/get-slot-count node-slot-schema-id))
 
 ;; ============================================================================
 ;; Part 4: Server-Side Tick Logic

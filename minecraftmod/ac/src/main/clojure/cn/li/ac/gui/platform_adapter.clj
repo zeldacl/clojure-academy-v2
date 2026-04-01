@@ -145,8 +145,8 @@
   It routes to the appropriate GUI-specific sync handler based on gui-id."
   [payload]
   (let [gui-id (:gui-id payload)
-        spec (when (integer? gui-id) (gui-dsl/get-gui-by-gui-id gui-id))
-        apply-fn (:payload-sync-apply-fn spec)]
+        apply-fn (when (integer? gui-id)
+                   (gui-dsl/get-payload-sync-apply-fn gui-id))]
     (if apply-fn
       (apply-fn payload)
       (log/debug "Unknown gui-id in sync payload:" gui-id))))

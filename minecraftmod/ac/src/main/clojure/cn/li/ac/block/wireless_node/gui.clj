@@ -15,7 +15,7 @@
   - Wireless page (network list + connect/disconnect)
   - Animated node status indicator"
   (:require [cn.li.mcmod.gui.cgui :as cgui]
-            [cn.li.mcmod.gui.cgui-document :as cgui-doc]
+            [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -29,14 +29,15 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.energy.operations :as energy-stub]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
+            [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.ac.wireless.gui.container.schema :as schema]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.metadata :as metadata]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
-            [cn.li.mcmod.gui.schema-builders :as schema-builders]
             [cn.li.mcmod.gui.animation :as anim]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos])
@@ -82,7 +83,7 @@
 
 ;; Generate from schema
 (defn sync-field-mappings []
-  (schema-builders/build-sync-field-mappings node-schema/unified-node-schema))
+  (schema-runtime/build-sync-field-mappings node-schema/unified-node-schema))
 
 ;; ============================================================================
 ;; Animation System (Node status)
@@ -161,7 +162,7 @@
     (merge {:tile-entity    entity
             :player         player
             :container-type :node}
-           (schema-builders/build-gui-atoms node-schema/unified-node-schema entity))))
+         (schema-runtime/build-gui-atoms node-schema/unified-node-schema entity))))
 
 ;; ============================================================================
 ;; Slot Management (from node_container.clj)
@@ -172,14 +173,14 @@
 (defn- tile-state [tile] (common/get-tile-state tile))
 
 (defn get-slot-count [_container]
-  (slot-schema/tile-slot-count node-slot-schema-id))
+  (slot-registry/get-slot-count node-slot-schema-id))
 
 (defn get-owner [container]
   (let [tile (:tile-entity container)]
     (:placer-name (tile-state tile))))
 
 (defn can-place-item? [_container slot-index item-stack]
-  (case (slot-schema/slot-type node-slot-schema-id slot-index)
+  (case (slot-registry/get-slot-type-for-index node-slot-schema-id slot-index)
     :energy (energy-stub/is-energy-item-supported? item-stack)
     :output false
     false))
@@ -226,7 +227,7 @@
 
 ;; Generated from schema with custom sync logic
 (defn sync-to-client! [container]
-  (let [base-sync (schema-builders/build-sync-to-client-fn node-schema/unified-node-schema)
+  (let [base-sync (schema-runtime/build-sync-to-client-fn node-schema/unified-node-schema)
         tile (:tile-entity container)
         state (or (common/get-tile-state tile) {})
         old-rate @(:transfer-rate container)]
@@ -245,8 +246,8 @@
         (when (not= rate old-rate)
           (reset! rate-atom rate))))))
 
-(def get-sync-data (schema-builders/build-get-sync-data-fn node-schema/unified-node-schema))
-(def apply-sync-data! (schema-builders/build-apply-sync-data-fn node-schema/unified-node-schema))
+(def get-sync-data (schema-runtime/build-get-sync-data-fn node-schema/unified-node-schema))
+(def apply-sync-data! (schema-runtime/build-apply-sync-data-fn node-schema/unified-node-schema))
 
 (defn still-valid? [container player]
   (common/still-valid? container player))
@@ -282,7 +283,7 @@
 
 (defn on-close [container]
   (log/debug "Closing wireless node container")
-  ((schema-builders/build-on-close-fn node-schema/unified-node-schema) container))
+  ((schema-runtime/build-on-close-fn node-schema/unified-node-schema) container))
 
 ;; ============================================================================
 ;; Sync Packet Handling (from node_sync.clj)

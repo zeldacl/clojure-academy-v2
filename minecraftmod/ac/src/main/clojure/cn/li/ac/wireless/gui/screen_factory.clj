@@ -33,6 +33,12 @@
     (let [cfg (gui-dsl/get-gui-by-type gui-type)
           _ (when-not cfg
               (throw (ex-info "Unknown gui-type" {:gui-type gui-type})))
+        gui-id (gui-dsl/get-gui-id-for-type gui-type)
+        screen-fn (or (when gui-id (gui-dsl/get-screen-fn gui-id))
+              (:screen-fn cfg))
+        _ (when-not screen-fn
+          (throw (ex-info "GUI has no screen factory function"
+                  {:gui-type gui-type :gui-id gui-id})))
           ;; The Clojure container was stored by the client-side IContainerFactory
           ;; (registry_impl.clj) just before this screen factory is invoked.
           ;; Previously the gen-class ForgeMenuBridge had getClojureContainer(),
@@ -41,7 +47,7 @@
                             (throw (ex-info "No client container registered for screen creation"
                                             {:gui-type gui-type})))
           player (entity/inventory-get-player player-inventory)
-          cgui-screen ((:screen-fn cfg) clj-container container-or-handler player)]
+        cgui-screen (screen-fn clj-container container-or-handler player)]
       
       (log/info (str (name gui-type) " screen created successfully"))
       cgui-screen)

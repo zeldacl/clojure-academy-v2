@@ -12,7 +12,7 @@
   Uses existing XML page: assets/my_mod/guis/rework/page_solar.xml
   and composes it into TechUI tabs (inv + wireless) with InfoArea."
   (:require [cn.li.mcmod.gui.cgui :as cgui]
-            [cn.li.mcmod.gui.cgui-document :as cgui-doc]
+            [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.ac.gui.platform-adapter :as gui]
@@ -22,11 +22,12 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.energy.operations :as energy-ops]
             [cn.li.ac.wireless.gui.container.common :as common]
+            [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.ac.wireless.gui.container.schema :as schema]
-            [cn.li.mcmod.gui.schema-builders :as schema-builders]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.block.solar-gen.schema :as solar-schema]
             [cn.li.ac.registry.hooks :as hooks]
@@ -70,10 +71,10 @@
     (merge {:tile-entity    tile
             :player         player
             :container-type :solar}
-           (schema-builders/build-gui-atoms solar-schema/unified-solar-schema state))))
+           (schema-runtime/build-gui-atoms solar-schema/unified-solar-schema state))))
 
 (defn get-slot-count [_container]
-  (slot-schema/tile-slot-count solar-slot-schema-id))
+  (slot-registry/get-slot-count solar-slot-schema-id))
 
 (defn can-place-item? [_container _slot-index item-stack]
   (energy-ops/is-energy-item-supported? item-stack))
@@ -105,10 +106,10 @@
       (reset! (:gen-speed container) new-gen-speed))))
 
 (defn get-sync-data [container]
-  ((schema-builders/build-get-sync-data-fn solar-schema/unified-solar-schema) container))
+  ((schema-runtime/build-get-sync-data-fn solar-schema/unified-solar-schema) container))
 
 (defn apply-sync-data! [container data]
-  ((schema-builders/build-apply-sync-data-fn solar-schema/unified-solar-schema) container data))
+  ((schema-runtime/build-apply-sync-data-fn solar-schema/unified-solar-schema) container data))
 
 (defn tick! [container]
   (swap! (:sync-ticker container) inc)
@@ -117,7 +118,7 @@
 (defn handle-button-click! [_container _button-id _player] nil)
 
 (defn on-close [container]
-  ((schema-builders/build-on-close-fn solar-schema/unified-solar-schema) container))
+  ((schema-runtime/build-on-close-fn solar-schema/unified-solar-schema) container))
 
 ;; ============================================================================
 ;; GUI Components

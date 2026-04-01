@@ -10,7 +10,7 @@
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
-            [cn.li.mcmod.gui.cgui-document :as cgui-doc]
+            [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid]))
 
