@@ -14,6 +14,8 @@
             [cn.li.mcmod.block.multiblock-core :as mb-core]
             [cn.li.mcmod.events.dispatcher :as event-dispatcher]
             [cn.li.ac.wireless.data.world :as wd]
+            [cn.li.ac.energy.legacy-item-api-bridge :as legacy-item-api-bridge]
+            [cn.li.ac.wireless.legacy-api-bridge :as legacy-api-bridge]
             ;; Auto-registration system
             [cn.li.ac.registry.content-namespaces :as content-ns]
             [cn.li.ac.registry.hooks :as hooks]))
@@ -97,6 +99,10 @@
   (event-metadata/init-event-metadata!)
   ;; Initialize wireless world data system
   (wd/init-world-data!)
+  ;; Install Java item energy API bridge onto AC energy operations.
+  (legacy-item-api-bridge/install-item-energy-api-bridge!)
+  ;; Install Java wireless query API bridge onto the wireless system.
+  (legacy-api-bridge/install-wireless-query-api-bridge!)
   ;; Load all content namespaces (triggers DSL macros and hook registration)
   (content-ns/load-all!)
   ;; Call all registered network handlers

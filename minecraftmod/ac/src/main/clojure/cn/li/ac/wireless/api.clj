@@ -121,26 +121,17 @@
 ;; Node Range Search
 ;; ============================================================================
 
-(defn get-nodes-in-range
-  "Get all linkable nodes within range of a position
-
-  Searches for IWirelessNode TileEntities that:
-  - Are within their range of the position
-  - Have available capacity (load < capacity)
-
-  Uses spatial indexing for efficient chunk-based lookup.
+(defn get-nodes-in-range-at
+  "Get all linkable nodes within range of coordinates.
 
   Parameters:
   - world: World
-  - pos: BlockPos
+  - x, y, z: block coordinates
 
   Returns: list of IWirelessNode TileEntities"
-  [world pos]
+  [world x y z]
   (let [search-range 20.0
         max-results 100
-        x (pos/pos-x pos)
-        y (pos/pos-y pos)
-        z (pos/pos-z pos)
         world-data (wd/get-world-data world)
         ;; Get nearby chunks using spatial index
         nearby-chunks (wd/get-nearby-chunks x y z search-range)
@@ -170,6 +161,23 @@
           []
           candidate-vblocks)]
     (take max-results matching-nodes)))
+
+(defn get-nodes-in-range
+  "Get all linkable nodes within range of a position
+
+  Searches for IWirelessNode TileEntities that:
+  - Are within their range of the position
+  - Have available capacity (load < capacity)
+
+  Uses spatial indexing for efficient chunk-based lookup.
+
+  Parameters:
+  - world: World
+  - pos: BlockPos
+
+  Returns: list of IWirelessNode TileEntities"
+  [world pos]
+  (get-nodes-in-range-at world (pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos)))
 
 ;; ============================================================================
 ;; Network Operations (Event-based)
@@ -235,7 +243,6 @@
   [node-tile]
   (when-let [network-item (get-wireless-net-by-node node-tile)]
     (let [world (platform-be/be-get-world-safe node-tile)
-          ssid (:ssid network-item)
           matrix-tile (when-let [matrix-vb (:matrix network-item)]
                         (vb/vblock-get matrix-vb world))
           node-vb (vb/create-vnode node-tile)
