@@ -4,16 +4,22 @@
    Forge/Fabric adapters should forward Forge events into these handlers.
    Actual per-block behavior is looked up via `cn.li.mcmod.events.metadata`."
   (:require [cn.li.mcmod.events.metadata :as event-metadata]
-            [cn.li.mcmod.block.multiblock-core :as mb-core]))
+            [cn.li.mcmod.block.multiblock-core :as mb-core]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn on-block-right-click
   "Generic block right-click event handler.
    Dispatches to block-specific :on-right-click handlers registered in metadata."
   [ctx]
+  (log/debug "dispatcher/on-block-right-click called, ctx block-id:" (:block-id ctx))
   (let [routed-ctx (mb-core/route-to-controller-context ctx)
         routed-block-id (:block-id routed-ctx)]
-    (when-let [handler (event-metadata/get-block-event-handler routed-block-id :on-right-click)]
-      (handler routed-ctx))))
+    (log/debug "  routed-block-id:" routed-block-id)
+    (let [handler (event-metadata/get-block-event-handler routed-block-id :on-right-click)]
+      (log/debug "  handler found?" (some? handler))
+      (when handler
+        (log/debug "  calling handler...")
+        (handler routed-ctx)))))
 
 (defn on-block-place
   "Generic block place event handler.

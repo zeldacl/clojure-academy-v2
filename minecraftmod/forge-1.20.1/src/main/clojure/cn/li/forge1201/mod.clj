@@ -348,26 +348,26 @@
       (.addListener mod-bus EventPriority/NORMAL false FMLClientSetupEvent
                     (reify java.util.function.Consumer
                       (accept [_ event] (on-client-setup event))))
-        ;; InterModProcessEvent: read IMC messages from external mods and store handlers.
-        (.addListener mod-bus EventPriority/NORMAL false InterModProcessEvent
-                      (reify java.util.function.Consumer
-                        (accept [_ event]
-                          (.forEachOrdered
-                            (.getIMCStream event)
-                            (reify java.util.function.Consumer
-                              (accept [_ msg]
-                                (try
-                                  (let [handler (.get (.getMessageSupplier msg))]
-                                    (condp = (.getMethod msg)
-                                      WirelessImc/REGISTER_NETWORK_HANDLER
-                                      (wireless-imc/register-network-handler! handler)
-                                      WirelessImc/REGISTER_NODE_HANDLER
-                                      (wireless-imc/register-node-handler! handler)
-                                      nil))
-                                  (catch Exception e
-                                    (log/debug "IMC registration failed from"
-                                               (.getSenderModId msg) ":" (ex-message e))))))))))
-        ;; Generic RegisterCapabilitiesEvent: registers all java-types declared by ac.
+      ;; InterModProcessEvent: read IMC messages from external mods and store handlers.
+      (.addListener mod-bus EventPriority/NORMAL false InterModProcessEvent
+                    (reify java.util.function.Consumer
+                      (accept [_ event]
+                        ;; Iterate the stream via iterator-seq to avoid reflective
+                        ;; method resolution issues for Stream.forEachOrdered in Clojure.
+                        (let [imc-stream (.getIMCStream event)]
+                          (doseq [msg (iterator-seq (.iterator imc-stream))]
+                            (try
+                              (let [handler (.get (.getMessageSupplier msg))]
+                                (condp = (.getMethod msg)
+                                  WirelessImc/REGISTER_NETWORK_HANDLER
+                                  (wireless-imc/register-network-handler! handler)
+                                  WirelessImc/REGISTER_NODE_HANDLER
+                                  (wireless-imc/register-node-handler! handler)
+                                  nil))
+                              (catch Exception e
+                                (log/debug "IMC registration failed from"
+                                           (.getSenderModId msg) ":" (ex-message e)))))))))
+      ;; Generic RegisterCapabilitiesEvent: registers all java-types declared by ac.
       ;; No modification needed when ac adds new capabilities.
       (.addListener mod-bus EventPriority/NORMAL false RegisterCapabilitiesEvent
                     (reify java.util.function.Consumer

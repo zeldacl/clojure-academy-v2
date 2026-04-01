@@ -28,6 +28,15 @@ public final class NamedCapabilityRegistry {
     private NamedCapabilityRegistry() {}
 
     /**
+     * Create one anonymous CapabilityToken-backed capability without a type variable in
+     * the generic signature. Using method type parameter T here can produce signature
+     * TT; and fail at runtime during Forge capability token introspection.
+     */
+    private static Capability<Object> createAnonymousCapability() {
+        return CapabilityManager.get(new CapabilityToken<>() {});
+    }
+
+    /**
      * Bind a logical key string to a named capability constant.
      * Called at platform init to register {@link WirelessCapabilities} fields.
      */
@@ -45,7 +54,7 @@ public final class NamedCapabilityRegistry {
     public static synchronized <T> Capability<T> getOrCreate(String key) {
         Capability<?> existing = KEY_TO_CAP.get(key);
         if (existing != null) return (Capability<T>) existing;
-        Capability<T> cap = CapabilityManager.get(new CapabilityToken<T>() {});
+        Capability<T> cap = (Capability<T>) createAnonymousCapability();
         register(key, cap);
         return cap;
     }

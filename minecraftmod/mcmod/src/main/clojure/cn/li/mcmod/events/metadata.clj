@@ -165,21 +165,27 @@
   manually if needed (e.g., hot-reloading)."
   []
   (log/info "Synchronizing event handlers from block DSL...")
-  (doseq [block-id (bdsl/list-blocks)]
-    (when-let [block-spec (bdsl/get-block block-id)]
-      (let [events (:events block-spec)]
-        ;; Register :on-right-click handler
-        (when-let [on-right-click (:on-right-click events)]
-          (register-block-event-handler! block-id :on-right-click on-right-click))
+  (let [blocks (bdsl/list-blocks)]
+    (log/info "  Found" (count blocks) "blocks to sync")
+    (doseq [block-id blocks]
+      (when-let [block-spec (bdsl/get-block block-id)]
+        (let [events (:events block-spec)]
+          (log/debug "  Syncing events for block:" block-id)
+          ;; Register :on-right-click handler
+          (when-let [on-right-click (:on-right-click events)]
+            (log/debug "    Registering :on-right-click handler")
+            (register-block-event-handler! block-id :on-right-click on-right-click))
 
-        ;; Register :on-break handler
-        (when-let [on-break (:on-break events)]
-          (register-block-event-handler! block-id :on-break on-break))
+          ;; Register :on-break handler
+          (when-let [on-break (:on-break events)]
+            (log/debug "    Registering :on-break handler")
+            (register-block-event-handler! block-id :on-break on-break))
 
-        ;; Register :on-place handler
-        (when-let [on-place (:on-place events)]
-          (register-block-event-handler! block-id :on-place on-place)))))
-  (log/info "Synchronized" (count @block-event-handlers) "block event handlers"))
+          ;; Register :on-place handler
+          (when-let [on-place (:on-place events)]
+            (log/debug "    Registering :on-place handler")
+            (register-block-event-handler! block-id :on-place on-place)))))
+    (log/info "Synchronized" (count @block-event-handlers) "block event handlers")))
 
 (defn init-event-metadata!
   "Initialize event metadata system.

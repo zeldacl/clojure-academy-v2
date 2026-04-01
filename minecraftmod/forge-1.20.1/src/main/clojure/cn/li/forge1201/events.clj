@@ -17,29 +17,37 @@
         ;; Identify block ID from Minecraft block name
         block-id (event-metadata/identify-block-from-full-name block-name)]
     (log/info "1.20.1 Right-click event at (" x "," y "," z ") block:" block-name)
+    (log/debug "  Identified block-id:" block-id)
     
     ;; Check if this block has a registered right-click handler
-    (when (and block-id (event-metadata/has-event-handler? block-id :on-right-click))
-      (log/info "Block has registered handler, dispatching...")
-      (let [ret (dispatcher/on-block-right-click (assoc event-data :block-id block-id))]
-        (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
-          (try
-            (let [{:keys [gui-id player world pos]} ret
-                  tile-entity (.getBlockEntity world pos)]
-              (when (and tile-entity (not (.isClientSide world)))
-                (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))
-            (catch Exception e
-              (log/error "Failed to open GUI from right-click handler:" (.getMessage e)))))
-        ret))))
+    (if block-id
+      (if (event-metadata/has-event-handler? block-id :on-right-click)
+        (do
+          (log/info "Block has registered handler, dispatching...")
+          (let [ret (dispatcher/on-block-right-click (assoc event-data :block-id block-id))]
+            (log/debug "  Dispatcher returned:" ret)
+            (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
+              (try
+                (let [{:keys [gui-id player world pos]} ret
+                      tile-entity (.getBlockEntity world pos)]
+                  (when (and tile-entity (not (.isClientSide world)))
+                    (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))
+                (catch Exception e
+                  (log/error "Failed to open GUI from right-click handler:" (.getMessage e)))))
+            ret))
+        (log/debug "  Block has no registered :on-right-click handler"))
+      (log/debug "  Could not identify block-id from:" block-name))))
 
 (defn handle-right-click-event
   "Handle right-click block event directly from Forge event object"
   [^PlayerInteractEvent$RightClickBlock evt]
   (try
+    (log/info "[handle-right-click-event] Called with event:" evt)
     (let [pos (.getPos evt)
           level (.getLevel evt)
           player (.getEntity evt)
           block-state (.getBlockState level pos)]
+      (log/info "[handle-right-click-event] Extracted event components")
       (handle-right-click
         {:x (.getX pos)
          :y (.getY pos)
@@ -50,8 +58,8 @@
          :world level
          :block (.getBlock block-state)}))
     (catch Throwable t
-      (log/info "Error handling right-click event:" (.getMessage t))
-      (.printStackTrace t))))
+      (log/error "[handle-right-click-event] EXCEPTION:" (ex-message t))
+      (log/error "Stack trace:" t))))
 
 ;; ============================================================================
 ;; Block Place Events (Forge 1.20.1)

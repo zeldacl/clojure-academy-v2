@@ -465,7 +465,14 @@ Structure:
   [gui-name & {:keys [namespace payload-sync-fn] :as opts}]
   (when-not namespace
     (throw (ex-info "defgui-with-lazy-fns requires :namespace parameter" {:gui-name gui-name})))
-  (let [;; Map function names to their corresponding defgui option keywords
+  (let [ns-sym (if (and (seq? namespace) (= 'quote (first namespace)))
+                 (second namespace)
+                 namespace)
+        payload-sync-sym (when payload-sync-fn
+                           (if (and (seq? payload-sync-fn) (= 'quote (first payload-sync-fn)))
+                             (second payload-sync-fn)
+                             payload-sync-fn))
+        ;; Map function names to their corresponding defgui option keywords
         fn-mappings {'create-container :container-fn
                      'create-screen :screen-fn
                      'tick! :tick-fn
@@ -484,13 +491,13 @@ Structure:
                    (for [[fn-name opt-kw] fn-mappings]
                      [opt-kw
                       `(fn [& args#]
-                         (when-let [f# (requiring-resolve '~(symbol (str namespace) (str fn-name)))]
+                         (when-let [f# (requiring-resolve '~(symbol (str ns-sym) (str fn-name)))]
                            (apply f# args#)))]))
         ;; Add payload sync function if specified
         wrappers (if payload-sync-fn
                    (assoc wrappers :payload-sync-apply-fn
                      `(fn [& args#]
-                        (when-let [f# (requiring-resolve '~(symbol (str namespace) (str payload-sync-fn)))]
+                        (when-let [f# (requiring-resolve '~(symbol (str ns-sym) (str payload-sync-sym)))]
                           (apply f# args#))))
                    wrappers)]
     `(defgui ~gui-name

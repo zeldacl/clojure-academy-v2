@@ -95,8 +95,6 @@
                                  (mcmod-config/resource-location path)
                                  (mcmod-config/resource-location namespace path)))))
   (log/info "Initializing core for mod-id=" modid/MOD-ID)
-  ;; Initialize event metadata system
-  (event-metadata/init-event-metadata!)
   ;; Initialize wireless world data system
   (wd/init-world-data!)
   ;; Install Java item energy API bridge onto AC energy operations.
@@ -105,6 +103,9 @@
   (legacy-api-bridge/install-wireless-query-api-bridge!)
   ;; Load all content namespaces (triggers DSL macros and hook registration)
   (content-ns/load-all!)
+  ;; Initialize event metadata system AFTER content is loaded
+  ;; This syncs block event handlers from the DSL registry
+  (event-metadata/init-event-metadata!)
   ;; Call all registered network handlers
   (hooks/call-all-network-handlers!)
   ;; Register generic set-tab handler for tabbed GUIs (inv-window + panels)

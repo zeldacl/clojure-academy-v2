@@ -1,19 +1,16 @@
-(ns cn.li.mcmod.util.log)
+(ns cn.li.mcmod.util.log
+  (:import [org.slf4j LoggerFactory]))
+
+(def ^:private logger (LoggerFactory/getLogger "my_mod"))
 
 (defn info [& xs]
-  (locking System/out
-    (println (str "[my_mod] " (apply str xs)))))
+  (.info logger (str "[my_mod] " (apply str xs))))
 
 (defn debug [& xs]
-  (locking System/out
-    (println (str "[my_mod DEBUG] " (apply str xs)))))
+  (.debug logger (str "[my_mod DEBUG] " (apply str xs))))
 
 (defn warn [& xs]
-  (locking System/err
-    (binding [*out* *err*]
-      (println (str "[my_mod WARN] " (apply str xs))))))
+  (.warn logger (str "[my_mod WARN] " (apply str xs))))
 
 (defn error [& xs]
-  (locking System/err
-    (binding [*out* *err*]
-      (println (str "[my_mod ERROR] " (apply str xs))))))
+  (.error logger (str "[my_mod ERROR] " (apply str xs))))
