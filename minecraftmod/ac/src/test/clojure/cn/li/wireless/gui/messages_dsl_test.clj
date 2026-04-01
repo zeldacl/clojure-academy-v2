@@ -2,7 +2,7 @@
   "Tests for wireless GUI message DSL.
   Covers: naming conventions, uniqueness constraints,
   domain lookups, and catalog-level consistency."
-  (:require [cn.li.ac.wireless.gui.message.dsl :as msg-dsl]
+  (:require [cn.li.mcmod.gui.message.dsl :as msg-dsl]
             [cn.li.ac.wireless.gui.node-messages :as node-msgs]
             [cn.li.ac.wireless.gui.matrix-messages :as matrix-msgs]
             [cn.li.ac.wireless.gui.message.api :as wireless-msgs]))

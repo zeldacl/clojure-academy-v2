@@ -1,6 +1,48 @@
 # 无线系统实现进度
 
-## 最新更新 (2025-11-26)
+## 最新更新 (2026-04-01) — 垂直域重构完成
+
+### 重构总结
+
+本次重构完成了 Phase 1-6 的全部 Batch（运行时门禁通过，编译门禁通过，架构红线清零）：
+
+#### Phase 1: 通用 GUI 基础提取到 mcmod ✅
+- `mcmod/gui/container/schema.clj` — 通用 container atom 字段 schema 工具
+- `mcmod/gui/message/dsl.clj` — 通用无线消息 ID DSL
+- `mcmod/gui/metadata.clj` — 统一 GUI metadata 查询入口
+- AC 侧旧 wrapper 文件全部删除
+
+#### Phase 2: 垂直域拆分 (matrix/node/solar) ✅
+- 新建 `wireless/matrix/`, `wireless/node/`, `wireless/solar/`, `wireless/shared/` 目录
+- 每个域有独立的 `block.clj`, `gui.clj`, `schema.clj` 入口（当前为迁移期 delegation）
+- `wireless/node/blockstate.clj` 新增，外部引用统一走域入口
+- `block/blockstate_definition.clj` 已迁移至 `wireless.node.blockstate`
+
+#### Phase 3: 消息注册中心化 ✅
+- `wireless/shared/message_registry.clj` — 启动期一次性静态注册所有域消息
+- `content/blocks/wireless.clj` 调用 `(msg-reg/register-all!)`
+
+#### Phase 4: Content 重组 ✅
+- `content/blocks/wireless.clj` + `content/items/all.clj` — 新 content 入口
+- `registry/content_namespaces.clj` — 切换到新 content 入口
+- 旧空壳文件 `blocks.clj`, `items.clj`, `defs.clj`, `registry.clj` 已删除
+
+#### Phase 5: Adapter 收敛 ✅
+- `gui/platform_adapter.clj` — 增加 slot validator re-exports
+- `fabric/gui/slots.clj` — 改为通过 platform_adapter 访问 slot validators
+- Slot validator 注册全部中心化在 `core.clj`
+- Side separation: common 代码无 `net.minecraft.client` 引用
+
+#### Phase 6: 门禁全通过 ✅
+- `:ac:checkClojure` + `:mcmod:checkClojure` — BUILD SUCCESSFUL
+- `:forge-1.20.1:runClient` — BUILD SUCCESSFUL
+- Architecture red line: ac/forge/fabric 无越界依赖
+
+---
+
+## 历史进度
+
+### GUI架构优化 (2025-11-26)
 
 ### GUI架构优化
 

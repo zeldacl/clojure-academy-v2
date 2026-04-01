@@ -3,7 +3,6 @@
   
   This is adapted from Forge's slot system with Fabric API compatibility"
   (:require [cn.li.ac.gui.platform-adapter :as gui]
-            [cn.li.ac.gui.slot-validators :as slot-validators]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.screen.slot Slot]
            [net.minecraft.screen ScreenHandler]
@@ -31,7 +30,7 @@
 (defn -canInsert
   "Only allow energy items in this slot (Fabric's isItemValid)"
   [this stack]
-  (slot-validators/energy-item-validator stack))
+  (gui/energy-item-validator stack))
 
 (defn -getMaxItemCount
   "Energy items usually don't stack, but allow it if they do"
@@ -58,7 +57,7 @@
 (defn -canInsert
   "Only allow plate-type items in this slot"
   [this stack]
-  (slot-validators/constraint-plate-validator stack))
+  (gui/constraint-plate-validator stack))
 
 (defn -getMaxItemCount
   "Plate items limited to single stack"
@@ -85,7 +84,7 @@
 (defn -canInsert
   "Only allow core-type items in this slot"
   [this stack]
-  (slot-validators/matrix-core-validator stack))
+  (gui/matrix-core-validator stack))
 
 (defn -getMaxItemCount
   "Core items never stack"
@@ -112,7 +111,7 @@
 (defn -canInsert
   "Never allow direct insertion into output slot"
   [this stack]
-  (slot-validators/output-slot-validator stack))
+  (gui/output-slot-validator stack))
 
 (defn -canTakeItems
   "Allow taking items from output slot (Fabric's canTakeStack)"

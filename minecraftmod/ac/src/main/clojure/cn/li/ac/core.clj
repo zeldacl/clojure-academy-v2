@@ -1,6 +1,5 @@
 (ns cn.li.ac.core
-  (:require [cn.li.ac.defs :as defs]
-            [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.resource :as platform-res]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.config :as mcmod-config]
@@ -8,7 +7,7 @@
             [cn.li.mcmod.gui.adapter :as gui-adapter]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.ac.gui.platform-adapter :as platform-gui]
-            [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
+            [cn.li.ac.wireless.shared.screen-factory :as screen-factory]
             [cn.li.ac.gui.slot-validators :as slot-validators]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.events.metadata :as event-metadata]
@@ -93,7 +92,7 @@
                                (if (nil? namespace)
                                  (mcmod-config/resource-location path)
                                  (mcmod-config/resource-location namespace path)))))
-  (log/info "Initializing core for mod-id=" defs/mod-id)
+  (log/info "Initializing core for mod-id=" modid/MOD-ID)
   ;; Initialize event metadata system
   (event-metadata/init-event-metadata!)
   ;; Initialize wireless world data system

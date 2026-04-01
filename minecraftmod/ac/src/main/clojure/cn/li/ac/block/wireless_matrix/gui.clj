@@ -44,9 +44,9 @@
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
             [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
-            [cn.li.ac.wireless.gui.container.schema :as schema]
+            [cn.li.mcmod.gui.container.schema :as schema]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
-            [cn.li.ac.wireless.gui.metadata :as metadata]
+            [cn.li.mcmod.gui.metadata :as metadata]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.position :as pos])

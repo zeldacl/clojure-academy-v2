@@ -19,8 +19,9 @@
   (gui/get-display-name gui-id)
   ```"
   (:require [cn.li.ac.wireless.gui.container.dispatcher :as dispatcher]
+            [cn.li.ac.gui.slot-validators :as slot-validators]
             [cn.li.mcmod.gui.dsl :as gui-dsl]
-            [cn.li.ac.wireless.gui.metadata :as metadata]
+            [cn.li.mcmod.gui.metadata :as metadata]
             [cn.li.ac.wireless.gui.registry :as registry]
             [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
             [cn.li.mcmod.util.log :as log]))
@@ -83,6 +84,15 @@
   (let [container-type (dispatcher/get-container-type container)]
     (when (not= container-type :unknown)
       (metadata/get-gui-id-for-type container-type))))
+
+;; ============================================================================
+;; Re-export Slot Validators
+;; ============================================================================
+
+(def energy-item-validator slot-validators/energy-item-validator)
+(def constraint-plate-validator slot-validators/constraint-plate-validator)
+(def matrix-core-validator slot-validators/matrix-core-validator)
+(def output-slot-validator slot-validators/output-slot-validator)
 
 ;; ============================================================================
 ;; Re-export GUI Registry

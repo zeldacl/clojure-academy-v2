@@ -27,7 +27,7 @@
             [cn.li.ac.energy.operations :as energy-ops]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
-            [cn.li.ac.wireless.gui.container.schema :as schema]
+            [cn.li.mcmod.gui.container.schema :as schema]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.block.solar-gen.schema :as solar-schema]
             [cn.li.ac.registry.hooks :as hooks]

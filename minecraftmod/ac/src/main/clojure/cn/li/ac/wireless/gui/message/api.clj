@@ -1,6 +1,6 @@
 (ns cn.li.ac.wireless.gui.message.api
   "Aggregated wireless GUI message catalog for validation and lookup."
-  (:require [cn.li.ac.wireless.gui.message.dsl :as msg-dsl]
+  (:require [cn.li.mcmod.gui.message.dsl :as msg-dsl]
             [cn.li.ac.wireless.gui.message.registry :as registry]))
 
 (defn catalog []

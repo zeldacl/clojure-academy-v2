@@ -11,7 +11,7 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.config :as mcmod-config]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.ac.block.wireless-node.blockstate :as node-blockstate]))
+            [cn.li.ac.wireless.node.blockstate :as node-blockstate]))
 
 ;; ============================================================================
 ;; BlockState部分定义

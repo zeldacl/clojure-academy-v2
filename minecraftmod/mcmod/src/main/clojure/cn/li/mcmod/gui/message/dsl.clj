@@ -1,5 +1,5 @@
-(ns cn.li.ac.wireless.gui.message.dsl
-  "Shared DSL helpers for wireless GUI message ids."
+(ns cn.li.mcmod.gui.message.dsl
+  "Message DSL helpers shared by AC wireless GUI."
   (:require [clojure.string :as str]))
 
 (defn- action->token
@@ -8,11 +8,14 @@
       (str/replace "-" "_")))
 
 (defn message-id
+  "Build message id with a stable prefix.
+
+  Current format: wireless_<domain>_<action>."
   [domain action]
   (str "wireless_" (name domain) "_" (action->token action)))
 
 (defn build-domain-spec
-  "Build a message spec for one domain, validating duplicate actions early."
+  "Build message spec for a domain and validate duplicate actions early."
   [domain actions]
   (let [dupes (->> actions frequencies (keep (fn [[k n]] (when (> n 1) k))))]
     (when (seq dupes)
@@ -30,7 +33,7 @@
                   actions)}))
 
 (defn build-catalog
-  "Merge multiple domain specs and validate global msg-id uniqueness and format."
+  "Merge domain specs and validate global message-id uniqueness and format."
   [domain-specs]
   (let [all-specs (vec (mapcat :specs domain-specs))
         by-id (group-by :msg-id all-specs)

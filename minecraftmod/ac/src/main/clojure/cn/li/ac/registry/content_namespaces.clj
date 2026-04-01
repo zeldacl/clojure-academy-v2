@@ -9,20 +9,12 @@
 (def block-namespaces
   "All block definition namespaces.
   These define blocks using defblock DSL and may register network handlers."
-  '[cn.li.ac.block.wireless-matrix.block
-    cn.li.ac.block.wireless-matrix.gui
-    cn.li.ac.block.wireless-node.block
-    cn.li.ac.block.wireless-node.gui
-    cn.li.ac.block.solar-gen.block
-    cn.li.ac.block.solar-gen.gui])
+  '[cn.li.ac.content.blocks.wireless])
 
 (def item-namespaces
   "All item definition namespaces.
   These define items using defitem DSL."
-  '[cn.li.ac.item.components
-    cn.li.ac.item.constraint-plate
-    cn.li.ac.item.mat-core
-    cn.li.ac.item.media])
+  '[cn.li.ac.content.items.all])
 
 (defn load-all!
   "Load all content namespaces to trigger DSL macro side effects and hook registration."
