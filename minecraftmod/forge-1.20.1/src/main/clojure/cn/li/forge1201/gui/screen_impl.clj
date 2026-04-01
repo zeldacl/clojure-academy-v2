@@ -203,22 +203,25 @@
     (let [platform :forge-1.20.1]
       (doseq [gui-id (gui/get-all-gui-ids)]
         (let [menu-type     (gui/get-menu-type platform gui-id)
-              factory-fn-kw (gui/get-screen-factory-fn-kw gui-id)
-              factory-fn    (when factory-fn-kw
-                                (try
-                                  (gui/get-screen-factory-fn factory-fn-kw)
-                                  (catch Exception e
-                                    (log/debug "Screen factory registry miss for" gui-id factory-fn-kw ":" (.getMessage e) "- fallback to ns-resolve")
-                                    (ns-resolve 'cn.li.mcmod.gui.adapter
-                                                (symbol (name factory-fn-kw))))))]
+              factory-fn-kw (gui/get-screen-factory-fn-kw gui-id)]
+          (log/info "[SCREEN-INIT] Registering GUI ID:" gui-id "menu-type:" menu-type "factory-fn-kw:" factory-fn-kw)
           (when menu-type
             (ForgeClientHelper/registerMenuScreen
              menu-type
              (reify ForgeClientHelper$ScreenFactory
                (create [_ menu player-inventory title]
-                 (if factory-fn
+                 (log/info "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
+                 (let [factory-fn (when factory-fn-kw
+                                    (try
+                                      (gui/get-screen-factory-fn factory-fn-kw)
+                                      (catch Exception e
+                                        (log/error "[SCREEN-FACTORY] Screen factory not registered for" factory-fn-kw ":" (.getMessage e))
+                                        nil)))]
+                   (if factory-fn
                    (try
+                     (log/info "[SCREEN-FACTORY] Invoking factory-fn")
                      (let [screen-data (factory-fn menu player-inventory title)]
+                       (log/info "[SCREEN-FACTORY] factory-fn returned, type:" (type screen-data) "cgui-screen?" (cgui-screen-container? screen-data))
                        (if (cgui-screen-container? screen-data)
                          (do
                            (log/info "Created CGui screen for GUI ID" gui-id)
@@ -226,10 +229,13 @@
                          (do
                            (log/warn "Screen factory did not return :cgui-screen-container for GUI ID" gui-id)
                            (fallback-container-screen menu player-inventory title))))
-                     (catch Exception e
-                       (log/error "Error creating CGui screen for GUI ID" gui-id ":" (.getMessage e))
+                     (catch Throwable e
+                       (log/error "[SCREEN-FACTORY] Error creating CGui screen for GUI ID" gui-id ":" (.getMessage e))
+                       (log/error "[SCREEN-FACTORY] Exception:" e)
                        (fallback-container-screen menu player-inventory title)))
-                   (fallback-container-screen menu player-inventory title))))))
+                     (do
+                       (log/error "[SCREEN-FACTORY] Missing factory function, using fallback screen. gui-id=" gui-id "factory-fn-kw=" factory-fn-kw)
+                       (fallback-container-screen menu player-inventory title))))))))
           (log/info "Registered screen for GUI ID" gui-id))))
     (log/info "Screen factories registered successfully")
     (catch Exception e

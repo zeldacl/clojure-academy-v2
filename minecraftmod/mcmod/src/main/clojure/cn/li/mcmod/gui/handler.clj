@@ -41,7 +41,7 @@
           container-fn (gui-dsl/get-container-fn gui-id)]
       (if (and tile-entity cfg? container-fn)
         (do
-          (log/info "Creating container for player"
+          (log/debug "Creating container for player"
                     (entity/player-get-name player)
                     "gui" gui-id)
           (container-fn tile-entity player))
@@ -58,7 +58,7 @@
           screen-fn (gui-dsl/get-screen-fn gui-id)]
       (if (and tile-entity cfg? container-fn screen-fn)
         (do
-          (log/info "Creating GUI for player"
+          (log/debug "Creating GUI for player"
                     (entity/player-get-name player)
                     "gui" gui-id)
           (let [container (container-fn tile-entity player)]

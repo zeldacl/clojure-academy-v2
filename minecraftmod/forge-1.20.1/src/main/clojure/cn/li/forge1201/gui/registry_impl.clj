@@ -91,7 +91,7 @@
       ;; Sync into unified business-layer metadata via mcmod (no direct `ac` dependency).
       (gui/register-menu-type! :forge-1.20.1 gui-id menu-type)
       (log/info "Queued menu type:" registry-name "for GUI ID" gui-id)))
-  (log/info "Queued" (count @gui-menu-types) "menu types"))
+      (log/info "Queued" (count @gui-menu-types) "menu types"))
 
 ;; ============================================================================
 ;; GUI Opening
@@ -105,8 +105,9 @@
   - gui-id: int
   - tile-entity: TileEntity (optional, can be nil)"
   [player gui-id tile-entity]
-  (log/info "Opening GUI" gui-id "for player" (.getName player))
+  (log/info "[OPEN-GUI-FOR-PLAYER] Starting GUI open: gui-id=" gui-id "player=" (.getName player) "has-tile-entity=" (not (nil? tile-entity)))
   (try
+    (log/info "[OPEN-GUI-FOR-PLAYER] Creating MenuProvider...")
     (let [provider (bridge/create-menu-provider gui-id tile-entity)
           pos (when tile-entity
                 (try
@@ -114,18 +115,23 @@
                     (:pos tile-entity)
                     (.getBlockPos ^BlockEntity tile-entity))
                   (catch Exception _ nil)))]
+      (log/info "[OPEN-GUI-FOR-PLAYER] MenuProvider created, pos=" pos "calling NetworkHooks...")
       (if pos
-        (NetworkHooks/openScreen
-          player
-          provider
-          (reify java.util.function.Consumer
-            (accept [_ buf]
-              (.writeBlockPos buf pos))))
-        (NetworkHooks/openScreen player provider))
-      (log/info "GUI opened successfully"))
+        (do
+          (log/info "[OPEN-GUI-FOR-PLAYER] Opening screen with position data to client...")
+          (NetworkHooks/openScreen
+            player
+            provider
+            (reify java.util.function.Consumer
+              (accept [_ buf]
+                (.writeBlockPos buf pos)))))
+        (do
+          (log/info "[OPEN-GUI-FOR-PLAYER] Opening screen without position data...")
+          (NetworkHooks/openScreen player provider)))
+      (log/info "[OPEN-GUI-FOR-PLAYER] NetworkHooks called, GUI open request queued"))
     (catch Exception e
-      (log/error "Failed to open GUI:" (.getMessage e))
-      (.printStackTrace e))))
+      (log/error "[OPEN-GUI-FOR-PLAYER] Failed to open GUI:" (.getMessage e))
+      (log/error "[OPEN-GUI-FOR-PLAYER] Exception:" e))))
 
 ;; ============================================================================
 ;; Registry Implementation

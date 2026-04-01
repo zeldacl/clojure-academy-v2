@@ -449,15 +449,20 @@
    leftPos and topPos (used to transform widget coordinates into screen space)."
   [^GuiGraphics gg root left top]
   (when root
-    ;; Use the widget tree's own logical coordinates without applying additional
-    ;; screen-size based alignment here. XML/TechUI layouts already encode all
-    ;; positions/sizes explicitly, and extra alignment tends to distort them.
-    (doseq [[widget [abs-x abs-y] scale]
-            (collect-widgets-z-ordered root [0 0] 1.0 nil)]
-      (try
-        (render-widget! gg widget [abs-x abs-y] scale left top)
-        (catch Exception e
-          (log/debug "CGUI render widget error:" (.getMessage e)))))))
+    (let [visible (cgui/visible? root)
+          size (cgui/get-size root)
+          widgets (collect-widgets-z-ordered root [0 0] 1.0 nil)
+          widget-count (count widgets)]
+      ;; Debug log on first render
+      (when (not (get @(:metadata root) :cgui-render-debug-logged false))
+        (log/info "CGUI render-tree! root visible:" visible "size:" size "widget count:" widget-count)
+        (swap! (:metadata root) assoc :cgui-render-debug-logged true))
+      (doseq [[widget [abs-x abs-y] scale]
+              widgets]
+        (try
+          (render-widget! gg widget [abs-x abs-y] scale left top)
+          (catch Exception e
+            (log/debug "CGUI render widget error:" (.getMessage e))))))))
 
 (defn hit-test
   "Return the deepest visible widget that contains point (mx, my). Coordinates are in

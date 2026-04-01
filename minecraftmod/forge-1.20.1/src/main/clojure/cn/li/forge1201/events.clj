@@ -6,6 +6,7 @@
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
+           [net.minecraft.world InteractionHand]
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
             BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
 
@@ -16,50 +17,57 @@
         block-name (str block)
         ;; Identify block ID from Minecraft block name
         block-id (event-metadata/identify-block-from-full-name block-name)]
-    (log/info "1.20.1 Right-click event at (" x "," y "," z ") block:" block-name)
-    (log/debug "  Identified block-id:" block-id)
+    (log/info "[RIGHT-CLICK] Event at (" x "," y "," z ") block:" block-name)
+    (log/info "[RIGHT-CLICK] Identified block-id:" block-id)
     
     ;; Check if this block has a registered right-click handler
     (if block-id
       (if (event-metadata/has-event-handler? block-id :on-right-click)
         (do
-          (log/info "Block has registered handler, dispatching...")
+          (log/info "[RIGHT-CLICK] Block has registered handler, dispatching to dispatcher...")
           (let [ret (dispatcher/on-block-right-click (assoc event-data :block-id block-id))]
-            (log/debug "  Dispatcher returned:" ret)
+            (log/info "[RIGHT-CLICK] Dispatcher returned:" ret)
             (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
               (try
                 (let [{:keys [gui-id player world pos]} ret
                       tile-entity (.getBlockEntity world pos)]
+                  (log/info "[RIGHT-CLICK] GUI result received: gui-id=" gui-id "pos=" pos "tile-entity=" (if tile-entity "present" "nil"))
                   (when (and tile-entity (not (.isClientSide world)))
+                    (log/info "[RIGHT-CLICK] Opening GUI on server side...")
                     (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))
                 (catch Exception e
-                  (log/error "Failed to open GUI from right-click handler:" (.getMessage e)))))
+                  (log/error "[RIGHT-CLICK] Failed to open GUI:" (.getMessage e))
+                  (log/error "[RIGHT-CLICK] Exception:" e))))
             ret))
-        (log/debug "  Block has no registered :on-right-click handler"))
-      (log/debug "  Could not identify block-id from:" block-name))))
+        (log/info "[RIGHT-CLICK] Block has no registered :on-right-click handler"))
+      (log/info "[RIGHT-CLICK] Could not identify block-id from:" block-name))))
 
 (defn handle-right-click-event
   "Handle right-click block event directly from Forge event object"
   [^PlayerInteractEvent$RightClickBlock evt]
   (try
-    (log/info "[handle-right-click-event] Called with event:" evt)
     (let [pos (.getPos evt)
           level (.getLevel evt)
           player (.getEntity evt)
-          block-state (.getBlockState level pos)]
-      (log/info "[handle-right-click-event] Extracted event components")
-      (handle-right-click
-        {:x (.getX pos)
-         :y (.getY pos)
-         :z (.getZ pos)
-         :pos pos
-         :sneaking (.isShiftKeyDown player)
-         :player player
-         :world level
-         :block (.getBlock block-state)}))
+          hand (.getHand evt)]
+      ;; Forge fires this on both sides and both hands; only open GUI once on server main hand.
+      (if (or (.isClientSide level) (not= hand InteractionHand/MAIN_HAND))
+        (log/debug "[FORGE-RIGHT-CLICK-EVENT] Ignored: client-side or off-hand event")
+        (let [block-state (.getBlockState level pos)]
+          (log/info "[FORGE-RIGHT-CLICK-EVENT] Received Forge right-click event:" evt)
+          (log/info "[FORGE-RIGHT-CLICK-EVENT] Extracted components: pos=" pos "player=" (.getGameProfile player) "block=" (.getBlock block-state))
+          (handle-right-click
+            {:x (.getX pos)
+             :y (.getY pos)
+             :z (.getZ pos)
+             :pos pos
+             :sneaking (.isShiftKeyDown player)
+             :player player
+             :world level
+             :block (.getBlock block-state)}))))
     (catch Throwable t
-      (log/error "[handle-right-click-event] EXCEPTION:" (ex-message t))
-      (log/error "Stack trace:" t))))
+      (log/error "[FORGE-RIGHT-CLICK-EVENT] EXCEPTION:" (ex-message t))
+      (log/error "[FORGE-RIGHT-CLICK-EVENT] Stack trace:" t))))
 
 ;; ============================================================================
 ;; Block Place Events (Forge 1.20.1)

@@ -27,33 +27,43 @@
   
   Returns: CGuiScreenContainer instance or nil on error"
   [gui-type container-or-handler player-inventory title]
-  (log/info "Creating" (name gui-type) "screen (platform-agnostic factory)")
+  (log/info "[SCREEN-FACTORY-CORE] Creating" (name gui-type) "screen (platform-agnostic factory)")
+  (log/info "[SCREEN-FACTORY-CORE] gui-type=" gui-type "container=" (type container-or-handler))
   
   (try
+    (log/info "[SCREEN-FACTORY-CORE] Getting GUI config for gui-type:" gui-type)
     (let [cfg (gui-dsl/get-gui-by-type gui-type)
           _ (when-not cfg
               (throw (ex-info "Unknown gui-type" {:gui-type gui-type})))
         gui-id (gui-dsl/get-gui-id-for-type gui-type)
+        _ (log/info "[SCREEN-FACTORY-CORE] gui-id=" gui-id "cfg found=" (not (nil? cfg)))
         screen-fn (or (when gui-id (gui-dsl/get-screen-fn gui-id))
               (:screen-fn cfg))
         _ (when-not screen-fn
           (throw (ex-info "GUI has no screen factory function"
                   {:gui-type gui-type :gui-id gui-id})))
+        _ (log/info "[SCREEN-FACTORY-CORE] screen-fn resolved=" (if screen-fn "YES" "NO"))
           ;; The Clojure container was stored by the client-side IContainerFactory
           ;; (registry_impl.clj) just before this screen factory is invoked.
           ;; Previously the gen-class ForgeMenuBridge had getClojureContainer(),
           ;; but the proxy replacement has no such method.
-          clj-container (or (gui-registry/get-client-container)
+        _ (log/info "[SCREEN-FACTORY-CORE] Getting client container...")
+        clj-container (or (gui-registry/get-client-container)
                             (throw (ex-info "No client container registered for screen creation"
                                             {:gui-type gui-type})))
-          player (entity/inventory-get-player player-inventory)
+        _ (log/info "[SCREEN-FACTORY-CORE] Got clj-container=" (type clj-container))
+        player (entity/inventory-get-player player-inventory)
+        _ (log/info "[SCREEN-FACTORY-CORE] Got player=" (.getName player))
+        _ (log/info "[SCREEN-FACTORY-CORE] Calling screen-fn...")
         cgui-screen (screen-fn clj-container container-or-handler player)]
       
-      (log/info (str (name gui-type) " screen created successfully"))
+      (log/info "[SCREEN-FACTORY-CORE] Screen function returned:" (type cgui-screen))
+      (log/info "[SCREEN-FACTORY-CORE] " (name gui-type) " screen created successfully")
       cgui-screen)
     
-    (catch Exception e
-      (log/error (str "Failed to create " (name gui-type) " screen:")(ex-message e))
+    (catch Throwable e
+      (log/error "[SCREEN-FACTORY-CORE] Failed to create " (name gui-type) " screen:" (ex-message e))
+      (log/error "[SCREEN-FACTORY-CORE] Exception:" e)
       (.printStackTrace e)
       nil)))
 

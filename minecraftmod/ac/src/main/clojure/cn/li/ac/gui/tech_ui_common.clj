@@ -47,6 +47,8 @@
         (let [page-xml (cgui-doc/read-xml (modid/namespaced-path "guis/rework/page_inv.xml"))
           page-widget (cgui-doc/get-widget page-xml "main")]
       
+      (log/info "TechUI page loaded, widget size:" (cgui/get-size page-widget) "visible:" (cgui/visible? page-widget))
+      
       ;; Add breathing effect to all UI elements
       (doseq [widget (cgui/get-draw-list page-widget)]
         (when (str/starts-with? (cgui/get-name widget) "ui_")
@@ -57,9 +59,11 @@
         (comp/set-texture! ui-block 
           (modid/asset-path "textures" (str "guis/ui/ui_" name ".png"))))
       
+      (log/info "TechUI inventory page created:" name)
       {:id "inv" :window page-widget})
     (catch Exception e
       (log/error "Error creating inventory page:"(ex-message e))
+      (log/error "Stack trace:" (.printStackTrace e))
       {:id "inv" :window (cgui/create-container :pos [0 0] :size [gui-width gui-height])})))
 
 ;; ============================================================================

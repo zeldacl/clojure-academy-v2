@@ -262,11 +262,8 @@
   (gui-init/init-common!)
   ;; Register wireless IMC dispatch listeners on the Forge game event bus.
   (wireless-imc/init!)
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false PlayerInteractEvent$RightClickBlock
-                (reify java.util.function.Consumer
-                  (accept [_ evt]
-                    (events/handle-right-click-event evt))))
+  ;; Right-click block is handled by Java ForgeEventHandler (@SubscribeEvent).
+  ;; Do not register it again here, otherwise one click is processed twice.
   ;; Block place events for multi-block overlap checks and :on-place handlers
   (.addListener (MinecraftForge/EVENT_BUS)
                 EventPriority/NORMAL false net.minecraftforge.event.level.BlockEvent$EntityPlaceEvent

@@ -253,7 +253,7 @@
                              wm/recalculate-counts))
 
 (defn slot-changed! [_container slot-index]
-  (log/info "Matrix container slot" slot-index "changed"))
+  (log/debug "Matrix container slot" slot-index "changed"))
 
 ;; ============================================================================
 ;; Container Sync (from matrix_container.clj)

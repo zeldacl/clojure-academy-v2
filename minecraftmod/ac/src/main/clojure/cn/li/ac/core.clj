@@ -28,13 +28,6 @@
   (alter-var-root #'mcmod-config/*mod-id*
                   (constantly modid/MOD-ID))
 
-  ;; Auto-register all GUI screen factories
-  (doseq [gui-id (gui-adapter/get-all-gui-ids)]
-    (when-let [gui-type (platform-gui/get-gui-type gui-id)]
-      (gui-adapter/register-screen-factory!
-        (keyword (str "create-" (name gui-type) "-screen"))
-        (partial screen-factory/create-screen gui-type))))
-
   ;; Register slot validators used by platform GUI slot implementations.
   (slot-registry/register-slot-validator! :energy
                                             slot-validators/energy-item-validator)
@@ -103,6 +96,20 @@
   (legacy-api-bridge/install-wireless-query-api-bridge!)
   ;; Load all content namespaces (triggers DSL macros and hook registration)
   (content-ns/load-all!)
+
+  ;; Auto-register GUI screen factories AFTER GUI DSL metadata is loaded.
+  ;; If done before `content-ns/load-all!`, GUI IDs can still be empty and
+  ;; screen creation falls back to the black placeholder screen.
+  (let [gui-ids (gui-adapter/get-all-gui-ids)]
+    (log/info "Registering screen factories for GUI IDs:" gui-ids)
+    (doseq [gui-id gui-ids]
+      (when-let [gui-type (platform-gui/get-gui-type gui-id)]
+        (let [screen-fn-kw (keyword (str "create-" (name gui-type) "-screen"))]
+          (gui-adapter/register-screen-factory!
+            screen-fn-kw
+            (partial screen-factory/create-screen gui-type))
+          (log/info "Registered screen factory" screen-fn-kw "for GUI ID" gui-id)))))
+
   ;; Initialize event metadata system AFTER content is loaded
   ;; This syncs block event handlers from the DSL registry
   (event-metadata/init-event-metadata!)

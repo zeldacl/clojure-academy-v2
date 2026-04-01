@@ -396,36 +396,46 @@
   (try
     (let [tile (:tile-entity container)
           inv-page (tech-ui/create-inventory-page "node")
+          _ (log/info "DEBUG: inv-page created, id=" (:id inv-page) "window size=" (cgui/get-size (:window inv-page)) "visible=" (cgui/visible? (:window inv-page)))
           ;; Use the inventory page window as the size reference so that the
           ;; wrapper container matches the XML layout (176x187) instead of
           ;; the smaller TechUI logical width. This prevents the background
           ;; from appearing zoomed or clipped.
           inv-window (:window inv-page)
           info-area (tech-ui/create-info-area)
+          _ (log/info "DEBUG: info-area created, size=" (cgui/get-size info-area))
           ;; create animation widget (includes anim-state and poller)
           {:keys [widget]} (create-anim-widget tile)
           anim-widget widget
+          _ (log/info "DEBUG: anim-widget created, size=" (cgui/get-size anim-widget) "visible=" (cgui/visible? anim-widget))
           wireless-panel (create-wireless-panel container)
+          _ (log/info "DEBUG: wireless-panel created, size=" (cgui/get-size wireless-panel) "visible=" (cgui/visible? wireless-panel))
           pages [inv-page {:id "wireless" :window wireless-panel}]
+          _ (log/info "DEBUG: pages created, count=" (count pages))
           container-id (when-let [m (:menu opts)] (gui/get-menu-container-id m))
           ;; Compose tech UI from pages (inventory, info, wireless)
           tech-ui (apply tech-ui/create-tech-ui pages)
+          _ (log/info "DEBUG: tech-ui created, window size=" (cgui/get-size (:window tech-ui)) "current=" @(:current tech-ui))
           ;; Attach generic tab-change sync (pages sequence, tech-ui map, container, container-id)
           _ (tabbed-gui/attach-tab-sync! pages tech-ui container container-id)
           ;tech-ui (tech-ui/create-tech-ui)
           main-widget (:window tech-ui)
+          _ (log/info "DEBUG: main-widget extracted, size=" (cgui/get-size main-widget) "children count=" (count (cgui/get-widgets main-widget)))
           ;show-info! (fn [] ((:show-page-fn tech-ui) "info"))
           ;show-wireless! (fn [] ((:show-page-fn tech-ui) "wireless"))
           ]
       
       (cgui/add-widget! inv-window anim-widget)
+      (log/info "DEBUG: anim-widget added to inv-window")
 
       ;; Position and build info area (create-tech-ui has already attached it,
       ;; but we need to position and populate it)
       (cgui/set-position! info-area (+ (cgui/get-width inv-window) 7) 5)
       (build-info-area! info-area container player)
+      (log/info "DEBUG: info-area positioned and built")
 
       (cgui/add-widget! main-widget info-area)
+      (log/info "DEBUG: info-area added to main-widget")
       
       (log/info "Created Wireless Node GUI (TechUI)")
       ;; When opts has :menu (screen path), return map so screen can block slot clicks when tab != inv
@@ -434,6 +444,7 @@
         main-widget))
     (catch Exception e
       (log/error "Error creating Node GUI:"(ex-message e))
+      (log/error "Stack trace:" (.printStackTrace e))
       (throw e))))
 
 ;; ============================================================================

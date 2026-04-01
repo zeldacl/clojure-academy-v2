@@ -39,20 +39,31 @@
       )
 
     (createMenu [_ window-id player-inventory player]
-      (let [handler (gui/get-gui-handler)
-            world (.level player)
-            pos (tile->pos tile-entity player)]
-        (log/info "Creating menu for GUI" gui-id)
-        (let [clj-container (.get-server-container handler gui-id player world pos)]
-          (when-not clj-container
-            (throw (ex-info "Failed to create Clojure container"
-                            {:gui-id gui-id :player player})))
-          (gui/register-active-container! clj-container)
-          (gui/register-player-container! player clj-container)
-          (let [menu-type (gui/get-menu-type :forge-1.20.1 gui-id)]
-            (when-not menu-type
-              (throw (ex-info "MenuType not registered" {:gui-id gui-id})))
-            (menu-bridge/create-menu-bridge window-id menu-type clj-container)))))))
+      (log/info "[MENU-PROVIDER] createMenu called: gui-id=" gui-id "window-id=" window-id "player=" (.getGameProfile player))
+      (try
+        (let [handler (gui/get-gui-handler)
+              world (.level player)
+              pos (tile->pos tile-entity player)]
+          (log/info "[MENU-PROVIDER] Handler obtained for GUI" gui-id)
+          (log/info "[MENU-PROVIDER] Creating server-side container...")
+          (let [clj-container (.get-server-container handler gui-id player world pos)]
+            (if clj-container
+              (do
+                (log/info "[MENU-PROVIDER] Server container created successfully")
+                (gui/register-active-container! clj-container)
+                (gui/register-player-container! player clj-container)
+                (let [menu-type (gui/get-menu-type :forge-1.20.1 gui-id)]
+                  (if menu-type
+                    (do
+                      (log/info "[MENU-PROVIDER] MenuType found, creating menu-bridge...")
+                      (menu-bridge/create-menu-bridge window-id menu-type clj-container))
+                    (throw (ex-info "MenuType not registered" {:gui-id gui-id})))))
+              (throw (ex-info "Failed to create Clojure container"
+                              {:gui-id gui-id :player player})))))
+        (catch Exception e
+          (log/error "[MENU-PROVIDER] Error creating menu:" (.getMessage e))
+          (log/error "[MENU-PROVIDER] Stack trace:" e)
+          (throw e))))))
 
 (defn create-extended-menu-provider
   "Forge has no separate extended provider type; keep a unified API."

@@ -435,7 +435,7 @@
 
 (defn handle-matrix-right-click []
   (fn [event-data]
-    (log/info "Wireless Matrix right-clicked!")
+    (log/debug "Wireless Matrix right-clicked!")
     (let [{:keys [player world pos sneaking]} event-data
           be         (world/world-get-tile-entity world pos)
           state      (when be (safe-state be))
@@ -459,10 +459,10 @@
                                    dx (- (:x controller-offset) (:x part-offset))
                                    dy (- (:y controller-offset) (:y part-offset))
                                    dz (- (:z controller-offset) (:z part-offset))]
-                               (log/info "Part block clicked, sub-id:" sub-id)
-                               (log/info "  Part offset:" part-offset)
-                               (log/info "  Controller offset:" controller-offset)
-                               (log/info "  Delta:" dx dy dz)
+                               (log/debug "Part block clicked, sub-id:" sub-id)
+                               (log/debug "  Part offset:" part-offset)
+                               (log/debug "  Controller offset:" controller-offset)
+                               (log/debug "  Delta:" dx dy dz)
                                (pos/create-block-pos
                                  (+ (pos/pos-x pos) dx)
                                  (+ (pos/pos-y pos) dy)
@@ -475,23 +475,23 @@
           ;; Get controller's block entity
           controller-be (world/world-get-tile-entity world controller-pos)
           controller-state (when controller-be (safe-state controller-be))]
-      (log/info "Controller pos:" controller-pos "sub-id:" (:sub-id controller-state 0))
+      (log/debug "Controller pos:" controller-pos "sub-id:" (:sub-id controller-state 0))
       (if controller-state
         (if-not sneaking
-          (do
-            (log/info "Opening Matrix GUI")
-            (log/info "  Plates:" (:plate-count controller-state))
-            (log/info "  Core Level:" (:core-level controller-state))
-            (log/info "  Working:" (is-working? controller-state))
+            (do
+            (log/debug "Opening Matrix GUI")
+            (log/debug "  Plates:" (:plate-count controller-state))
+            (log/debug "  Core Level:" (:core-level controller-state))
+            (log/debug "  Working:" (is-working? controller-state))
             (try
-              (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
+                (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
                 (let [result (open-gui-by-type player :matrix world controller-pos)]
-                  (log/info "open-gui-by-type returned:" result)
-                  (log/info "  Result keys:" (when (map? result) (keys result)))
-                  (log/info "  gui-id:" (:gui-id result))
-                  (log/info "  player:" (:player result))
-                  (log/info "  world:" (:world result))
-                  (log/info "  pos:" (:pos result))
+                  (log/debug "open-gui-by-type returned:" result)
+                  (log/debug "  Result keys:" (when (map? result) (keys result)))
+                  (log/debug "  gui-id:" (:gui-id result))
+                  (log/debug "  player:" (:player result))
+                  (log/debug "  world:" (:world result))
+                  (log/debug "  pos:" (:pos result))
                   result)
                 (do (log/error "Failed to open Matrix GUI: open-gui-by-type not resolved") nil))
               (catch Exception e

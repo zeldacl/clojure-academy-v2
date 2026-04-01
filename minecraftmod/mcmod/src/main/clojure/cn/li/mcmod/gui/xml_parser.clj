@@ -424,6 +424,7 @@
     \"my_mod:guis/rework/page_inv.xml\"  -> assets/my_mod/guis/rework/page_inv.xml
     \"assets/my_mod/guis/rework/page_inv.xml\""
   [resource-loc]
+  (log/info "[XML-PARSER] load-xml START:" resource-loc)
   (let [path (if (str/includes? resource-loc ":")
                (str "assets/" (str/replace resource-loc #":" "/"))
                resource-loc)
@@ -432,9 +433,13 @@
         _ (when-not xml-resource
             (throw (ex-info (str "XML resource not found: " path)
                             {:resource-loc resource-loc :path path})))
+        _ (log/info "[XML-PARSER] XML resource found, parsing...")
         parsed (xml/parse (io/input-stream xml-resource))
         root-widget-node (x/get-element parsed :Widget)]
-    (build-widget root-widget-node)))
+    (log/info "[XML-PARSER] XML parsed successfully, building widget...")
+    (let [result (build-widget root-widget-node)]
+      (log/info "[XML-PARSER] Widget built, size:" (cgui/get-size result) "visible:" (cgui/visible? result))
+      result)))
 
 (defn get-widget
   "Get named widget from parsed widget tree.
