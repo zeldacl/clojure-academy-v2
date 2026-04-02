@@ -2,7 +2,8 @@
   "Shared container utility functions for wireless GUI system."
   (:require [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.entity :as entity]))
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn get-slot-item
   "Get item from slot by accessing tile entity inventory."
@@ -79,8 +80,11 @@
               state' (-> state
                          (assoc-in [:inventory slot-index] item-stack)
                          post-write)]
+          (log/info "set-slot-item-be! state-before=" state)
+          (log/info "set-slot-item-be! state-after=" state')
           (platform-be/set-custom-state! tile state'))
-        (catch Exception _
+        (catch Exception e
+          (log/error "set-slot-item-be! failed:" (ex-message e))
           (set-slot-item! container slot-index item-stack))))))
 
 (defn get-tile-state

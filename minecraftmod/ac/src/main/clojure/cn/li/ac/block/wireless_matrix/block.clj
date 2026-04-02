@@ -40,7 +40,7 @@
 
 (msg-registry/register-block-messages!
   :matrix
-  [:gather-info :init :change-ssid :change-password])
+  [:gather-info :init :change-ssid :change-password :sync-state])
 
 (defn- msg
   "Generate message ID for matrix actions."
@@ -70,15 +70,45 @@
   [be]
   (or (platform-be/get-custom-state be) matrix-default-state))
 
+(defn- resolve-controller-be
+  "Resolve controller BE for rendering/state reads.
+  If `be` is a multiblock part, use stored controller position; otherwise return `be`."
+  [be]
+  (if-not be
+    nil
+    (let [state (safe-state be)
+          sub-id (long (:sub-id state 0))]
+      (if (zero? sub-id)
+        be
+        (let [world-obj (platform-be/be-get-world-safe be)
+              cx (:controller-pos-x state)
+              cy (:controller-pos-y state)
+              cz (:controller-pos-z state)]
+          (if (and world-obj (number? cx) (number? cy) (number? cz))
+            (or (world/world-get-tile-entity world-obj (pos/create-block-pos (long cx) (long cy) (long cz)))
+                be)
+            be))))))
+
+;; Slot indexes are lazily resolved from the slot schema.
+;; `delay` ensures the schema is already registered by the time the value is first needed
+;; (gui.clj requires block.clj, so gui.clj loads after us and registers the schema later).
 (def ^:private matrix-slot-schema-id :wireless-matrix)
 (def ^:private matrix-plate-slot-indexes
-  (slot-schema/slot-indexes-by-type matrix-slot-schema-id :plate))
+  (delay (slot-schema/slot-indexes-by-type matrix-slot-schema-id :plate)))
 (def ^:private matrix-core-slot-index
-  (slot-schema/slot-index matrix-slot-schema-id :core))
+  (delay (slot-schema/slot-index matrix-slot-schema-id :core)))
 (def ^:private matrix-slot-indexes
-  (slot-schema/all-slot-indexes matrix-slot-schema-id))
+  (delay (slot-schema/all-slot-indexes matrix-slot-schema-id)))
 (def ^:private matrix-slot-count
-  (slot-registry/get-slot-count matrix-slot-schema-id))
+  (delay (slot-schema/tile-slot-count matrix-slot-schema-id)))
+
+(defn- slot-has-stack?
+  [stk]
+  (and stk
+       (try
+         (pos? (long (pitem/item-get-count stk)))
+         (catch Exception _
+           true))))
 
 ;; ============================================================================
 ;; Part 3: Business Logic
@@ -87,42 +117,55 @@
 (defn- set-inv-slot [state slot item] (assoc-in state [:inventory slot] item))
 
 (defn- recalculate-plate-count
-  "Count non-nil items in matrix plate slots."
+  "Count occupied matrix plate slots.
+  Slot schema already guarantees only plate items can be placed there."
   [state]
   (assoc state :plate-count
-         (count (for [slot matrix-plate-slot-indexes
+         (count (for [slot @matrix-plate-slot-indexes
                       :let [stk (get-in state [:inventory slot])]
-                      :when (and stk (not (pitem/item-is-empty? stk)))]
+                      :when (slot-has-stack? stk)]
                   slot))))
 
 (defn- recalculate-core-level
-  "Update :core-level from core slot."
+  "Update :core-level from core slot occupancy.
+  Core slot accepts only matrix cores, so derive level directly from damage + 1."
   [state]
-  (assoc state :core-level
-         (core/get-core-level (get-in state [:inventory matrix-core-slot-index]))))
+  (let [core-stack (get-in state [:inventory @matrix-core-slot-index])]
+    (assoc state :core-level
+           (if (slot-has-stack? core-stack)
+             (inc (int (max 0 (pitem/item-get-damage core-stack))))
+             0))))
 
 (defn recalculate-counts
   "Recalculate plate-count and core-level from current inventory."
   [state]
-  (-> state recalculate-plate-count recalculate-core-level))
+  (let [state' (-> state recalculate-plate-count recalculate-core-level)]
+    (log/info "recalculate-counts inventory=" (:inventory state')
+              " plate=" (:plate-count state')
+              " core=" (:core-level state'))
+    state'))
 
 (defn is-working?
   "Is matrix operational? Requires 3 plates + a core."
   [state]
   (and (> (:core-level state 0) 0)
-       (= (:plate-count state 0) (count matrix-plate-slot-indexes))))
+       (= (:plate-count state 0) (count @matrix-plate-slot-indexes))))
 
 (defn get-plate-count
   "Return plate count (0–3) from block entity state. For use by renderers.
   Returns 0 when be is nil."
   [be]
-  (if be (get (safe-state be) :plate-count 0) 0))
+  (if-let [controller-be (resolve-controller-be be)]
+    (get (safe-state controller-be) :plate-count 0)
+    0))
 
 (defn get-core-level
   "Return core level (0–3) from block entity state. For use by renderers.
   Returns 0 when be is nil."
   [be]
-  (if be (get (safe-state be) :core-level 0) 0))
+  (if-let [controller-be (resolve-controller-be be)]
+    (get (safe-state controller-be) :core-level 0)
+    0))
 
 (defn- matrix-hardware-info
   "Extract {:core-lv :plates :working?} from BE state."
@@ -274,7 +317,7 @@
 ;; ============================================================================
 
 (def ^:private matrix-container-fns
-  {:get-size (fn [_be] matrix-slot-count)
+  {:get-size (fn [_be] @matrix-slot-count)
 
    :get-item (fn [be slot]
                (get-in (safe-state be) [:inventory slot]))
@@ -305,18 +348,18 @@
                               item))
 
    :clear! (fn [be]
-             (platform-be/set-custom-state! be (assoc (safe-state be) :inventory (vec (repeat matrix-slot-count nil))
+             (platform-be/set-custom-state! be (assoc (safe-state be) :inventory (vec (repeat @matrix-slot-count nil))
                                                          :plate-count 0 :core-level 0)))
 
    :still-valid? (fn [_be _player] true)
 
-   :slots-for-face (fn [_be _face] (int-array matrix-slot-indexes))
+   :slots-for-face (fn [_be _face] (int-array @matrix-slot-indexes))
 
    :can-place-through-face? (fn [_be slot item _face]
-                               (case (slot-registry/get-slot-type-for-index matrix-slot-schema-id slot)
-                                 :plate (plate/is-constraint-plate? item)
-                                 :core (core/is-mat-core? item)
-                                 false))
+                              (cond
+                                (contains? (set @matrix-plate-slot-indexes) slot) (plate/is-constraint-plate? item)
+                                (= slot @matrix-core-slot-index) (core/is-mat-core? item)
+                                :else false))
 
    :can-take-through-face? (fn [_be _slot _item _face] true)})
 

@@ -217,17 +217,26 @@
         [tile {}]))))
 
 (defn create-container
-  "Create a Matrix GUI container instance."
+  "Create a Matrix GUI container instance.
+   Creates DataSlots for Menu-tracked integer synchronization."
   [tile player]
   (let [[be state] (resolve-state tile)
-        proxy      (if be
-                     (wm/->MatrixJavaProxy be)
-                     (wm/->MatrixJavaProxy tile))]
-    (merge {:tile-entity    (or be tile)
-            :tile-java      proxy
-            :player         player
-            :container-type :matrix}
-         (schema-runtime/build-gui-atoms matrix-schema/unified-matrix-schema state))))
+    proxy      (if be
+         (wm/->MatrixJavaProxy be)
+         (wm/->MatrixJavaProxy tile))
+    gui-atoms (schema-runtime/build-gui-atoms matrix-schema/unified-matrix-schema state)
+    ;; Initialize DataSlots from current container atom values.
+    plate-count-slot (doto (net.minecraft.world.inventory.DataSlot/standalone)
+           (.set (int @(:plate-count gui-atoms))))
+    core-level-slot (doto (net.minecraft.world.inventory.DataSlot/standalone)
+          (.set (int @(:core-level gui-atoms))))]
+    (assoc gui-atoms
+       :tile-entity (or be tile)
+       :tile-java proxy
+       :player player
+       :container-type :matrix
+       :data-slots {:plate-count plate-count-slot
+        :core-level core-level-slot})))
 
 ;; ============================================================================
 ;; Slot Management (from matrix_container.clj)
@@ -248,12 +257,22 @@
   (common/get-slot-item-be container slot-index))
 
 (defn set-slot-item! [container slot-index item-stack]
-  (common/set-slot-item-be! container slot-index item-stack
-                             wm/matrix-default-state
-                             wm/recalculate-counts))
+  (let [tile (:tile-entity container)]
+    (log/info "set-slot-item! - tile=" tile " slot=" slot-index " item=" item-stack)
+    (common/set-slot-item-be! container slot-index item-stack
+                              wm/matrix-default-state
+                              wm/recalculate-counts)
+    (when tile
+      (log/info "set-slot-item! after-write - plate=" (wm/get-plate-count tile)
+                " core=" (wm/get-core-level tile)))
+    ;; DataSlot synchronization is handled by Menu.broadcastChanges(),
+    ;; which reads plate-count and core-level from container atoms every tick.
+    nil))
 
-(defn slot-changed! [_container slot-index]
-  (log/debug "Matrix container slot" slot-index "changed"))
+(defn slot-changed! [container slot-index]
+  ;; Trigger BE update with recalculation
+  (let [item (get-slot-item container slot-index)]
+    (set-slot-item! container slot-index item)))
 
 ;; ============================================================================
 ;; Container Sync (from matrix_container.clj)
@@ -348,11 +367,11 @@
 (defn broadcast-matrix-state [world pos sync-data]
   (sync-helpers/broadcast-state world pos sync-data "matrix"))
 
-(defn- matrix-container? [source]
+(defn- matrix-source-container? [source]
   (= (:container-type source) :matrix))
 
 (defn make-sync-packet [source]
-  (let [container? (matrix-container? source)
+  (let [container? (matrix-source-container? source)
         tile       (if container? (:tile-entity source) source)
         container  (when container? source)
         block-pos  (pos/position-get-block-pos tile)]

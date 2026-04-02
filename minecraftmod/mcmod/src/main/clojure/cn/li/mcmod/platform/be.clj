@@ -83,6 +83,7 @@
   (when be
     (try
       (be-set-custom-state! be state)
+      (be-set-changed! be)
       (catch Exception e
         (log/error "set-custom-state! failed:" (ex-message e))))))
 

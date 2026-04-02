@@ -16,66 +16,66 @@
 
 (defn- create-tile-inventory-adapter
   "Expose Clojure container slot access as a vanilla `Container` so Forge Slot
-   rendering/interaction can work without Java container classes." 
+   rendering/interaction can work without Java container classes."
   [clj-container]
   (reify Container
-      (getContainerSize [_]
-        (int (or (gui/slot-count clj-container) 0)))
+    (getContainerSize [_]
+      (int (or (gui/slot-count clj-container) 0)))
 
-      (isEmpty [_]
-        (let [n (int (or (gui/slot-count clj-container) 0))]
-          (not-any? (fn [idx]
-                      (let [stack (gui/slot-get-item clj-container idx)]
-                        (and stack (not (.isEmpty ^ItemStack stack)))))
-                    (range n))))
+    (isEmpty [_]
+      (let [n (int (or (gui/slot-count clj-container) 0))]
+        (not-any? (fn [idx]
+                    (let [stack (gui/slot-get-item clj-container idx)]
+                      (and stack (not (.isEmpty ^ItemStack stack)))))
+                  (range n))))
 
-      (getItem [_ slot]
-        (or (gui/slot-get-item clj-container (int slot))
-            ItemStack/EMPTY))
+    (getItem [_ slot]
+      (or (gui/slot-get-item clj-container (int slot))
+          ItemStack/EMPTY))
 
-      (removeItem [_ slot amount]
-        (let [slot (int slot)
-              amount (int amount)
-              current (or (gui/slot-get-item clj-container slot)
-                          ItemStack/EMPTY)]
-          (if (or (nil? current) (.isEmpty ^ItemStack current) (<= amount 0))
-            ItemStack/EMPTY
-            (let [taken (.split ^ItemStack current amount)]
-              (if (.isEmpty ^ItemStack current)
-                (gui/slot-set-item! clj-container slot nil)
-                (gui/slot-set-item! clj-container slot current))
-              (gui/slot-changed! clj-container slot)
-              taken))))
+    (removeItem [_ slot amount]
+      (let [slot (int slot)
+            amount (int amount)
+            current (or (gui/slot-get-item clj-container slot)
+                        ItemStack/EMPTY)]
+        (if (or (nil? current) (.isEmpty ^ItemStack current) (<= amount 0))
+          ItemStack/EMPTY
+          (let [taken (.split ^ItemStack current amount)]
+            (if (.isEmpty ^ItemStack current)
+              (gui/slot-set-item! clj-container slot nil)
+              (gui/slot-set-item! clj-container slot current))
+            (gui/slot-changed! clj-container slot)
+            taken))))
 
-      (removeItemNoUpdate [_ slot]
-        (let [slot (int slot)
-              current (or (gui/slot-get-item clj-container slot)
-                          ItemStack/EMPTY)]
-          (gui/slot-set-item! clj-container slot nil)
-          (gui/slot-changed! clj-container slot)
-          current))
+    (removeItemNoUpdate [_ slot]
+      (let [slot (int slot)
+            current (or (gui/slot-get-item clj-container slot)
+                        ItemStack/EMPTY)]
+        (gui/slot-set-item! clj-container slot nil)
+        (gui/slot-changed! clj-container slot)
+        current))
 
-      (setItem [_ slot stack]
-        (gui/slot-set-item! clj-container (int slot) stack)
-        (gui/slot-changed! clj-container (int slot)))
+    (setItem [_ slot stack]
+      (gui/slot-set-item! clj-container (int slot) stack)
+      (gui/slot-changed! clj-container (int slot)))
 
-      (setChanged [_]
-        (let [n (int (or (gui/slot-count clj-container) 0))]
-          (doseq [idx (range n)]
-            (gui/slot-changed! clj-container idx))))
+    (setChanged [_]
+      (let [n (int (or (gui/slot-count clj-container) 0))]
+        (doseq [idx (range n)]
+          (gui/slot-changed! clj-container idx))))
 
-      (stillValid [_ player]
-        (boolean (gui/safe-validate clj-container player)))
+    (stillValid [_ player]
+      (boolean (gui/safe-validate clj-container player)))
 
-      (canPlaceItem [_ slot stack]
-        (boolean (gui/slot-can-place? clj-container (int slot) stack)))
+    (canPlaceItem [_ slot stack]
+      (boolean (gui/slot-can-place? clj-container (int slot) stack)))
 
-      (clearContent [_]
-        (let [n (int (or (gui/slot-count clj-container) 0))]
-          (doseq [idx (range n)]
-            (gui/slot-set-item! clj-container idx nil))
-          (doseq [idx (range n)]
-            (gui/slot-changed! clj-container idx))))))
+    (clearContent [_]
+      (let [n (int (or (gui/slot-count clj-container) 0))]
+        (doseq [idx (range n)]
+          (gui/slot-set-item! clj-container idx nil))
+        (doseq [idx (range n)]
+          (gui/slot-changed! clj-container idx))))))
 
 (def tab-data-slot-index 0)
 
@@ -101,6 +101,14 @@
   (when (and tab-slot clj-container (:tab-index clj-container))
     (.set tab-slot (int @(:tab-index clj-container)))))
 
+(defn- sync-data-slots-from-container!
+  "Update all business DataSlots (e.g. plate-count/core-level) from container atoms."
+  [clj-container]
+  (when-let [data-slots (:data-slots clj-container)]
+    (doseq [[k ^DataSlot slot] data-slots]
+      (when-let [atom-ref (get clj-container k)]
+        (.set slot (int @atom-ref))))))
+
 (defn- setup-menu-slots!
   [^AbstractContainerMenu menu clj-container tab-slot]
   (let [gui-id (gui/get-gui-id-for-container clj-container)
@@ -112,6 +120,9 @@
         active?-fn (when tabbed? (fn [] (tabbed/slots-active? clj-container)))]
     (when tab-slot
       (.addDataSlot menu tab-slot))
+    (when-let [data-slots (:data-slots clj-container)]
+      (doseq [^DataSlot data-slot (vals data-slots)]
+        (.addDataSlot menu data-slot)))
     (when (and gui-id player-inventory)
       ;; Offsets aligned with AcademyCraft TechUIContainer: tile at (0,0) => schema coords are absolute; player inv at (6, 105) => hotbar at 163
       (slots/add-gui-slots menu tile-inventory gui-id 0 0 (when tabbed? active?-fn))
@@ -124,19 +135,18 @@
   DynamicClassLoader, so it works without AOT compilation.
 
   Args:
-  - window-id:     int        — Forge menu container id
-  - menu-type:     MenuType   — registered MenuType for this GUI
-  - clj-container: map        — Clojure-side container (NodeContainer, etc.)"
+  - window-id:     int        - Forge menu container id
+  - menu-type:     MenuType   - registered MenuType for this GUI
+  - clj-container: map        - Clojure-side container (NodeContainer, etc.)"
   [window-id menu-type clj-container]
   (let [tab-slot (when (tabbed/tabbed-container? clj-container)
                    (create-tab-data-slot clj-container))
-        ;; Ref updated every tick from container so clicked/quickMoveStack see latest tab
-        tab-idx-ref (atom (int (or (when (and (tabbed/tabbed-container? clj-container) (:tab-index clj-container))
-                                    @(:tab-index clj-container))
-                                  0)))
+        tab-idx-ref (atom (int (or (when (and (tabbed/tabbed-container? clj-container)
+                                              (:tab-index clj-container))
+                                     @(:tab-index clj-container))
+                                   0)))
         menu
         (proxy [AbstractContainerMenu] [menu-type (int window-id)]
-
           (stillValid [player]
             (gui/safe-validate clj-container player))
 
@@ -156,12 +166,11 @@
             (when (and (tabbed/tabbed-container? clj-container) (:tab-index clj-container))
               (reset! tab-idx-ref (int @(:tab-index clj-container))))
             (sync-tab-slot-from-container! tab-slot clj-container)
+            (sync-data-slots-from-container! clj-container)
             (proxy-super broadcastChanges)
             (gui/safe-sync! clj-container))
 
-          ;; Block all slot clicks when not on inv-window tab; use tab by container-id so client menu sees correct tab.
-          ;; clicked() runs only on the SERVER when the server receives a slot-click packet. If the client blocks the
-          ;; click (Screen mouseClicked/slotClicked/findSlot), no packet is sent and this is never called.
+          ;; clicked() runs only on the server when it receives click packets.
           (clicked [slot-index button click-type player]
             (when (or (not (tabbed/tabbed-container? clj-container))
                       (tabbed/slots-active-for-menu? this clj-container))

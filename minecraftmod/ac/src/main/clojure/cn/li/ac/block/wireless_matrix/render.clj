@@ -30,6 +30,9 @@
 (defonce texture 
   (delay (res/texture-location "models/matrix")))
 
+(defonce ^:private last-shield-hw-state
+  (atom nil))
+
 ;; ============================================================================
 ;; Rendering Functions
 ;; ============================================================================
@@ -58,6 +61,10 @@
         dtheta (/ 360.0 (max active-plates 1))
         phase (mod (* time 50.0) 360.0)
         ht-phase-offset 40.0]
+    (let [hw-state {:plate-count plate-count :core-level core-level :active-plates active-plates}]
+      (when (not= hw-state @last-shield-hw-state)
+        (reset! last-shield-hw-state hw-state)
+        (println (str "[SHIELD-CLIENT] " hw-state " tile=" tile))))
     (dotimes [i active-plates]
       (.pushPose pose-stack)
       (try

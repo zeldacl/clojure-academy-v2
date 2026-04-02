@@ -62,7 +62,10 @@
   "Protocol for Item operations (the item type, not the stack)."
 
   (item-get-description-id [this]
-    "Get the translation key/description ID for this item. Returns String."))
+    "Get the translation key/description ID for this item. Returns String.")
+
+  (item-get-registry-name [this]
+    "Get the Minecraft registry path/name for this item. Returns String or nil."))
 
 ;; ============================================================================
 ;; Platform Factory Registration

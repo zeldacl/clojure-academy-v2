@@ -34,12 +34,13 @@
   [item-stack]
   (when item-stack
     (let [id-from-spec #(when (map? %) (:id %))
-          desc (try
-                 (let [item-obj (item/item-get-item item-stack)]
-                   (str (item/item-get-description-id item-obj)))
-                 (catch Throwable _ nil))
-          id-from-stack (when desc (last (str/split desc #"\\.")))
-          id (or id-from-stack (id-from-spec item-stack))
+       item-obj (try (item/item-get-item item-stack) (catch Throwable _ nil))
+       registry-name (when item-obj
+             (try (item/item-get-registry-name item-obj) (catch Throwable _ nil)))
+       desc (when item-obj
+         (try (str (item/item-get-description-id item-obj)) (catch Throwable _ nil)))
+       id-from-stack (or registry-name (when desc (last (str/split desc #"\\."))))
+       id (or id-from-stack (id-from-spec item-stack))
           result (boolean
                   (or (= id (:id constraint-plate))
                       (and (string? desc) (str/includes? desc (:id constraint-plate)))))]

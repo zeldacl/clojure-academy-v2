@@ -21,6 +21,7 @@
              [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
+           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.world.level Level]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockState StateDefinition]
@@ -242,7 +243,10 @@
    (eval
      '(extend-type net.minecraft.world.item.Item
         cn.li.mcmod.platform.item/IItem
-        (item-get-description-id [^net.minecraft.world.item.Item this] (.getDescriptionId this)))))
+        (item-get-description-id [^net.minecraft.world.item.Item this] (.getDescriptionId this))
+        (item-get-registry-name [^net.minecraft.world.item.Item this]
+          (when-let [key (.getKey net.minecraft.core.registries.BuiltInRegistries/ITEM this)]
+            (.getPath key))))))
 
 ;; ============================================================================
 ;; World Protocol Implementation (Forge 1.20.1)
