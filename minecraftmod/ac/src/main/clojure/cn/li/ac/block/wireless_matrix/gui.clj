@@ -258,12 +258,12 @@
 
 (defn set-slot-item! [container slot-index item-stack]
   (let [tile (:tile-entity container)]
-    (log/info "set-slot-item! - tile=" tile " slot=" slot-index " item=" item-stack)
+    (log/debug "set-slot-item! - tile=" tile " slot=" slot-index " item=" item-stack)
     (common/set-slot-item-be! container slot-index item-stack
                               wm/matrix-default-state
                               wm/recalculate-counts)
     (when tile
-      (log/info "set-slot-item! after-write - plate=" (wm/get-plate-count tile)
+      (log/debug "set-slot-item! after-write - plate=" (wm/get-plate-count tile)
                 " core=" (wm/get-core-level tile)))
     ;; DataSlot synchronization is handled by Menu.broadcastChanges(),
     ;; which reads plate-count and core-level from container atoms every tick.

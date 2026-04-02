@@ -77,14 +77,14 @@
 
 (defn get-nearby-chunks
   "Get chunk keys within range of a position."
-  [x y z range]
-  (let [chunk-range (inc (quot range 16))
+  [x y z search-radius]
+  (let [chunk-range (inc (quot search-radius 16))
         cx (quot x 16)
         cy (quot y 16)
         cz (quot z 16)]
-    (for [dx (range (- chunk-range) (inc chunk-range))
-          dy (range (- chunk-range) (inc chunk-range))
-          dz (range (- chunk-range) (inc chunk-range))]
+    (for [dx (clojure.core/range (- chunk-range) (inc chunk-range))
+          dy (clojure.core/range (- chunk-range) (inc chunk-range))
+          dz (clojure.core/range (- chunk-range) (inc chunk-range))]
       [(+ cx dx) (+ cy dy) (+ cz dz)])))
 
 (defn get-vblocks-in-chunks
@@ -115,9 +115,9 @@
 
 (defn range-search-networks
   "Search for networks within range of coordinates using the spatial index."
-  [world-data x y z range max-results]
-  (let [range-sq (* range range)
-        chunk-keys (get-nearby-chunks x y z range)
+  [world-data x y z search-radius max-results]
+  (let [range-sq (* search-radius search-radius)
+        chunk-keys (get-nearby-chunks x y z search-radius)
         candidate-vblocks (get-vblocks-in-chunks world-data chunk-keys)
         net-lookup @(:net-lookup world-data)]
     (->> candidate-vblocks

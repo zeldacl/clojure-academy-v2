@@ -80,8 +80,8 @@
               state' (-> state
                          (assoc-in [:inventory slot-index] item-stack)
                          post-write)]
-          (log/info "set-slot-item-be! state-before=" state)
-          (log/info "set-slot-item-be! state-after=" state')
+          (log/debug "set-slot-item-be! state-before=" state)
+          (log/debug "set-slot-item-be! state-after=" state')
           (platform-be/set-custom-state! tile state'))
         (catch Exception e
           (log/error "set-slot-item-be! failed:" (ex-message e))

@@ -192,6 +192,9 @@
   (world-remove-block [this block-pos]
     (.destroyBlock this block-pos false))
 
+  (world-break-block [this block-pos drop?]
+    (.destroyBlock this block-pos (boolean drop?)))
+
   (world-place-block-by-id [this block-id block-pos flags]
     (if-let [get-registered-block (requiring-resolve 'cn.li.fabric1201.mod/get-registered-block)]
       (if-let [block (get-registered-block block-id)]

@@ -140,7 +140,7 @@
   "Recalculate plate-count and core-level from current inventory."
   [state]
   (let [state' (-> state recalculate-plate-count recalculate-core-level)]
-    (log/info "recalculate-counts inventory=" (:inventory state')
+    (log/debug "recalculate-counts inventory=" (:inventory state')
               " plate=" (:plate-count state')
               " core=" (:core-level state'))
     state'))

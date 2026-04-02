@@ -130,5 +130,7 @@
         (doseq [bp (structure-positions controller-pos controller-spec)
                 :when (or remove-all?
                           (not (same-pos? bp controller-pos)))]
-          (world/world-remove-block world bp))
+          (if (and remove-all? (same-pos? bp controller-pos))
+            (world/world-break-block world bp true)
+            (world/world-remove-block world bp)))
         {:cancel-break? remove-all?}))))

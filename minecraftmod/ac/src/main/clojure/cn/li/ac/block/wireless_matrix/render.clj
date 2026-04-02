@@ -63,8 +63,7 @@
         ht-phase-offset 40.0]
     (let [hw-state {:plate-count plate-count :core-level core-level :active-plates active-plates}]
       (when (not= hw-state @last-shield-hw-state)
-        (reset! last-shield-hw-state hw-state)
-        (println (str "[SHIELD-CLIENT] " hw-state " tile=" tile))))
+        (reset! last-shield-hw-state hw-state)))
     (dotimes [i active-plates]
       (.pushPose pose-stack)
       (try

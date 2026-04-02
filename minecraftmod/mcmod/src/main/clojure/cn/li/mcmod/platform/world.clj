@@ -54,6 +54,15 @@
 
     Returns: boolean - true if successful")
 
+  (world-break-block [this pos drop?]
+    "Break block at position, optionally spawning vanilla drops.
+
+    Args:
+    - pos: IBlockPos
+    - drop?: boolean - whether the block should drop resources
+
+    Returns: boolean - true if successful")
+
   (world-place-block-by-id [this block-id pos flags]
     "Place block by DSL block-id using platform registry lookup.
 
