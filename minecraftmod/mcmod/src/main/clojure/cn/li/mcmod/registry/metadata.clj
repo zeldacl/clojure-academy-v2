@@ -8,7 +8,7 @@
   Architecture:
   - Platform code queries this module for what to register
   - This module queries DSL systems for available blocks/items
-  - Game logic remains in core, platform code remains generic"
+  - Game content lives in ac (and DSL registries in mcmod); platform code stays generic"
   (:require [clojure.string :as str]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]

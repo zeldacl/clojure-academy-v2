@@ -4,7 +4,7 @@
   When adding new content:
   1. Add namespace to appropriate list below
   2. Add hook registration in the namespace file
-  3. No changes to core.clj needed")
+  3. No changes to cn.li.ac.core/init needed unless load order must change")
 
 (def block-namespaces
   "All block definition namespaces.

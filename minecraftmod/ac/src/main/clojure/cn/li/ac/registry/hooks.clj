@@ -1,7 +1,7 @@
 (ns cn.li.ac.registry.hooks
   "Hook registry system for auto-registration of network handlers and client renderers.
 
-  Blocks/items/GUIs register their hooks during namespace load, then core.clj
+  Blocks/items/GUIs register their hooks during namespace load, then cn.li.ac.core/init
   calls all registered hooks during initialization.")
 
 ;; Registry of network handler registration functions.
