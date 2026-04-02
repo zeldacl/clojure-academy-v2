@@ -1,6 +1,8 @@
 # GUI DSL 使用与实现
 
-本文档合并自 GUI DSL 使用指南与实现总结。当前平台为 Forge 1.20.1、Fabric 1.20.1；能量相关使用 `cn.li.energy.operations`。
+本文档合并自 GUI DSL 使用指南与实现总结。**默认构建为 Forge 1.20.1**；Fabric 子工程存在但未纳入根 `settings.gradle`。能量相关使用 **`cn.li.ac.energy.operations`**。
+
+**架构**：`defgui` 元数据在 **`cn.li.mcmod.gui.dsl`**；具体 Wireless 等 GUI 在 **`ac`**；**`cn.li.ac.core/init`** 在加载 **`content-ns/load-all!`** 之后注册 screen factory。模块边界与启动顺序见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。
 
 ---
 
@@ -38,7 +40,7 @@
 - `:screen-fn`：`(fn [container minecraft-container player] -> screen)`（客户端 screen 创建）
 - `:payload-sync-apply-fn`：`(fn [payload] ...)`（客户端应用网络 payload，可选）
 
-实际项目中，Wireless GUI 的声明集中在 `core/src/main/clojure/my_mod/gui/definitions.clj`，新增 GUI 通常只需要新增一条 `defgui`，平台层不需要再改硬编码表。
+实际项目中，Wireless 等 GUI 的 `defgui` / `defgui-with-lazy-fns` 声明在 **内容层**，例如 `ac/src/main/clojure/cn/li/ac/block/wireless_node/gui.clj`、`wireless_matrix/gui.clj` 等；通用 DSL 在 `mcmod/src/main/clojure/cn/li/mcmod/gui/dsl.clj`。新增 GUI 通常以 DSL + 元数据为主，Forge 侧只做注册与桥接。
 
 **Slot**：`{:index :x :y :filter :on-change}`；**Button**：`{:id :x :y :width :height :text :on-click}`；**Label**：`{:x :y :text :color}`。
 
@@ -73,7 +75,7 @@
 (dsl/create-gui-instance my-gui player world pos)
 ```
 
-插槽过滤与能量物品支持可依赖 `cn.li.energy.operations`（如 `is-energy-item-supported?`）。
+插槽过滤与能量物品支持可依赖 `cn.li.ac.energy.operations`（如 `is-energy-item-supported?`，以实际导出为准）。
 
 ---
 
@@ -83,4 +85,4 @@
 - 详见 `05-wireless/Node_GUI.md`、`05-wireless/Matrix_GUI.md`。
 
 **更新（当前架构）**：
-- Wireless GUI 的“元数据源”已统一到 `cn.li.mcmod.gui.dsl` 的 registry；`cn.li.wireless.gui.gui-metadata` 仅保留查询与平台 MenuType 存储，不再需要手工维护中心映射表。
+- Wireless GUI 的“元数据源”以 `cn.li.mcmod.gui.dsl` 的 registry 与 `cn.li.mcmod.gui.metadata` 为主；具体各 GUI 定义在 `ac` 对应 `gui.clj` 中。

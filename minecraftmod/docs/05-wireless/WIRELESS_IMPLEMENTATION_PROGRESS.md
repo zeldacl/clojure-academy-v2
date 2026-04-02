@@ -1,5 +1,11 @@
 # 无线系统实现进度
 
+> **与当前仓库对齐（2026-04）**  
+> - Gradle 子工程：`api`、`mcmod`、`ac`、`forge-1.20.1`；根 `settings.gradle` 中 **`fabric-1.20.1` 默认未 include**。  
+> - 下文历史段落中若出现 **Forge 1.16.5**、**「core」路径** 或三平台并列表述，均为迁移过程记录，**不代表当前默认构建矩阵**。  
+> - 能量命名空间：**`cn.li.ac.energy.operations`**。  
+> - Wireless 屏幕工厂等逻辑在 **`ac`**（如 `cn.li.ac.wireless.gui.screen-factory`），不在已删除的 `core/my_mod/...`。
+
 ## 最新更新 (2026-04-01) — 垂直域重构完成
 
 ### 重构总结
@@ -48,17 +54,14 @@
 
 **重构内容**：将屏幕创建游戏逻辑从平台特定代码中分离
 
-1. **新增文件**：
-   - `core/my_mod/wireless/gui/screen_factory.clj` (103行)
-     - 平台无关的屏幕工厂
-     - `create-node-screen`和`create-matrix-screen`
-     - 从平台包装器提取Clojure容器
-     - 统一错误处理
+1. **新增/归属文件**（当前仓库）：
+   - 屏幕工厂逻辑在 **`ac`**：`cn.li.ac.wireless.gui.screen-factory` 等（原 `screen_factory.clj` 已迁入 `ac` 命名空间结构）。
+   - `create-node-screen` / `create-matrix-screen` 从平台包装器提取，统一错误处理。
 
 2. **重构文件**：
-   - `forge-1.20.1/gui/screen_impl.clj`: 移除重复逻辑，调用screen-factory
-   - `fabric-1.20.1/gui/screen_impl.clj`: 移除重复逻辑，调用screen-factory
-   - 平台文件仅保留注册机制
+   - `forge-1.20.1/.../gui/screen_impl.clj`：移除重复逻辑，调用 screen-factory。
+   - Fabric 侧若启用子工程，对应 `fabric-1.20.1/.../gui/screen_impl.clj` 同理。
+   - 平台文件仅保留注册机制。
 
 3. **效果**：
    - ✅ 消除代码重复（~100行减少到~20行×2平台）

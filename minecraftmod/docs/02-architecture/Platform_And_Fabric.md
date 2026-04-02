@@ -1,75 +1,70 @@
-# 平台实现与 Fabric 支持
+# 平台实现与 Fabric 说明
 
-本文档合并自平台实现指南、Fabric 支持文档与 Fabric 1.20.1 实现报告。**当前支持的平台为 Forge 1.20.1 与 Fabric 1.20.1**。
+本文档合并自平台实现指南与 Fabric 相关说明。**日常开发与默认构建以 Forge 1.20.1 为主**；`fabric-1.20.1` 子目录保留适配代码，但根 `settings.gradle` 中 **`include 'fabric-1.20.1'` 默认注释**，根工程不会编译 Fabric 模块，除非手动恢复。
 
 ---
 
 ## 设计原则
 
-- 平台代码**零游戏名硬编码**；所有内容通过元数据与 registry 动态发现。
-- 各平台采用相同架构模式：Java 入口 → Clojure mod.clj（注册、事件、GUI 桥接）→ core 逻辑。
+- 平台代码**不写死游戏内资源 ID**；内容通过 `mcmod` 元数据与 registry 发现。
+- **Forge**：Java 入口 → `cn.li.forge1201.*` → `mcmod` / `ac`。
+- **Fabric**（若启用子工程）：结构类似，入口在 `fabric-1.20.1` 的 Java `ModInitializer` 与 `cn.li.fabric1201.*` / 历史 `my_mod.fabric1201.*` 混排处需以仓库实际代码为准。
 
 ---
 
-## 平台结构
+## 平台结构（Forge 1.20.1，当前启用）
 
 ```
-forge-1.20.1/ 或 fabric-1.20.1/
-├── src/main/
-│   ├── java/
-│   │   └── my_mod/ 或 com/example/...   # 入口与 DataGenerator 等
-│   └── clojure/my_mod/forge1201 或 fabric1201/
-│       ├── mod.clj
-│       ├── bridge.clj (容器/菜单桥接)
-│       ├── events.clj
-│       ├── registry_impl.clj (MenuType / ScreenHandlerType)
-│       └── init.clj
-└── src/main/resources/
-    └── META-INF/mods.toml 或 fabric.mod.json
+forge-1.20.1/
+├── src/main/java/cn/li/forge1201/
+│   ├── MyMod1201.java              # @Mod 入口
+│   └── datagen/DataGeneratorSetup.java
+└── src/main/clojure/cn/li/forge1201/
+    ├── mod.clj
+    ├── gui/                        # 菜单桥接、注册等
+    └── datagen/                    # DataGenerator Clojure 实现
 ```
 
-- **Forge 入口**：`my_mod/MyMod1201.java`，包名 `my_mod.*`。
-- **Fabric 入口**：`com.example.my_mod1201.MyModFabric`、DataGenerator 为 `com.example.fabric1201.datagen.DataGeneratorSetup`。
+- **资源**：`forge-1.20.1/src/main/resources/META-INF/mods.toml` 等；游戏资源也可在 `ac/src/main/resources/assets/<mod_id>/` 维护。
+
+### Fabric 子工程（可选，默认未加入根构建）
+
+仓库中存在 `fabric-1.20.1/`，内含 `fabric.mod.json`、Java 入口与 Clojure 适配。**启用前**请在根 `settings.gradle` 取消 `include 'fabric-1.20.1'` 的注释，并解决与当前 `mcmod`/`ac` 分支的同步问题。
 
 ---
 
-## mod.clj 要点
+## mod.clj 要点（Forge）
 
-- 动态方块/物品注册：从 `registry_metadata` 获取 ID 与规格，无硬编码名称。
-- BlockItem 为需要物品的方块统一创建并注册。
-- 不依赖 `block-demo`、`item-demo` 等游戏模块；仅依赖 core 的 registry/events 元数据。
+- 动态方块/物品注册：从 `cn.li.mcmod.registry.metadata` 等获取 ID 与规格。
+- BlockItem 等为需要物品的方块统一创建并注册。
+- 不依赖演示用硬编码模块；以元数据为准。
 
 ---
 
-## 平台对象协议边界（非兼容残留）
+## 平台对象协议边界
 
-- `cn.li.platform.item/IItemStack` 是当前在用的跨平台抽象，不是历史兼容层。
-- Forge/Fabric 都在各自 `platform_impl.clj` 中对原生 `ItemStack` 做了 `extend-type` 实现。
-- core/content 代码通过 `cn.li.platform.item` 调用统一方法（如 `item-is-empty?`、`item-save-to-nbt`、`item-set-damage!`、`create-item-from-nbt`）。
-
-结论：`IItemStack` 需保留；清理标准应为“无实现且无调用”。
+- **`cn.li.mcmod.platform.item`**（历史文档曾写作 `cn.li.platform.item`）是跨平台 `ItemStack` 抽象。
+- Forge 在 `cn.li.forge1201.platform_impl`（或等价命名空间）中对原生类型 `extend-type`。
+- `mcmod` 与 `ac` 通过上述协议访问物品（如 `item-is-empty?`、`item-save-to-nbt` 等），避免在内容层直接依赖 Minecraft 类。
 
 ---
 
 ## 事件与 GUI
 
-- **事件**：通过 `events/metadata` 识别方块与处理器（如 `:on-right-click`），调用 core 的 on-block-right-click 等。
-- **GUI**：容器/菜单由 bridge 与 slot-manager 配合；屏幕创建委托给 core 的 screen_factory；MenuType / ScreenHandlerType 由元数据驱动注册。
+- **事件**：`cn.li.mcmod.events.metadata` 等识别方块与处理器（如 `:on-right-click`）。
+- **GUI**：DSL 与元数据在 `mcmod`；具体 Wireless 等屏幕工厂与容器逻辑多在 **`ac`**（如 `cn.li.ac.wireless.gui.*`、`cn.li.ac.block.wireless-node.gui`）。Forge 负责 MenuType 注册与桥接类。
 
 ---
 
-## Fabric 与 Forge 差异摘要
+## Fabric 与 Forge 差异摘要（参考）
 
-| 概念         | Forge 1.20.1           | Fabric 1.20.1                 |
-|--------------|------------------------|-------------------------------|
-| 容器         | AbstractContainerMenu  | ScreenHandler                 |
-| 类型注册     | MenuType               | ScreenHandlerType             |
-| 打开 GUI     | NetworkHooks.openScreen| openHandledScreen             |
-| 提供者       | MenuProvider           | NamedScreenHandlerFactory     |
-| 网络         | SimpleChannel          | Fabric Networking API         |
-| 快速移动     | quickMoveStack         | quickMove                     |
+当 Fabric 子工程重新纳入构建时，典型差异如下（与 Minecraft 1.20.1 文档一致）：
 
-Fabric 1.20.1 已实现 bridge、registry_impl、screen_impl、network、slots、init 等，与 Forge 功能对齐，使用相同 core 逻辑。
+| 概念     | Forge 1.20.1            | Fabric 1.20.1            |
+|----------|-------------------------|--------------------------|
+| 容器     | AbstractContainerMenu   | ScreenHandler            |
+| 类型注册 | MenuType                | ScreenHandlerType        |
+| 打开 GUI | NetworkHooks.openScreen | openHandledScreen 等     |
 
 ---
 

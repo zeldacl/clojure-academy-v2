@@ -2,13 +2,17 @@
 
 ## 概述
 
-Item DSL 提供了一种声明式的方式来定义 Minecraft 物品，无需编写繁琐的 Java 代码。通过简洁的 Clojure 语法，您可以快速定义各种类型的物品，包括基础物品、工具、食物、特殊物品等。
+Item DSL 提供声明式方式定义 **`ItemSpec`** 并写入 **`item-registry`**（atom），与 Block DSL 对称；Forge 通过 **`cn.li.mcmod.registry.metadata/get-all-item-ids`** 等在 **`cn.li.forge1201.mod/register-all-items!`** 中注册。
+
+- **宏与 API**：**`cn.li.mcmod.item.dsl`**（**`idsl`**）。
+- **内容加载**：在 **`ac`** 中定义（例如 **`cn.li.ac.content.items.all`**），并列入 **`cn.li.ac.registry.content-namespaces`** 的 **`item-namespaces`**，由 **`load-all!`** 触发。
+- **架构总览**：见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。
 
 ## 核心概念
 
-### 1. Item DSL 核心 (`cn.li.item.dsl`)
+### 1. Item DSL 核心 (`cn.li.mcmod.item.dsl`)
 
-提供声明式物品定义宏和运行时管理。
+提供 **`defitem`**、**`item-registry`** 及 **`get-item`** / **`list-items`**。
 
 #### 基础语法
 
@@ -176,8 +180,8 @@ Item DSL 提供了多种预设，用于快速创建常见类型的物品。
 
 ```clojure
 (ns cn.li.my-items
-  (:require [cn.li.item.dsl :as idsl]
-            [cn.li.util.log :as log]))
+  (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; 铜锭
 (idsl/defitem copper-ingot
@@ -493,49 +497,48 @@ Item DSL 支持三种主要的交互处理器：
 
 ## 初始化物品
 
-在您的 mod 初始化代码中调用：
+**当前项目不需要**单独的 `init-demo-items!`：只要把物品定义放在 **`ac`** 的命名空间中，并在 **`cn.li.ac.registry.content-namespaces`** 的 **`item-namespaces`** 里声明，**`cn.li.ac.core/init`** → **`content-ns/load-all!`** 会在适当时机加载；Forge 侧 **`register-all-items!`** 读取 **`registry.metadata`**。
 
 ```clojure
-(ns cn.li.my-items-init
-  (:require [cn.li.item.demo :as item-demo]))
+;; 仅作概念示例：物品命名空间被 require 后 defitem 即生效
+(ns cn.li.ac.content.items.all
+  (:require [cn.li.mcmod.item.dsl :as idsl]))
 
-(defn init! []
-  ;; 初始化所有演示物品
-  (item-demo/init-demo-items!)
-  
-  ;; 注册物品到游戏
-  ;; (由平台适配器实现具体注册逻辑)
-  )
+(idsl/defitem example-ingot
+  :id "example_ingot"
+  :max-stack-size 64)
 ```
 
 ## 最佳实践
 
 ### 1. 组织物品定义
 
-按类型组织物品：
+按类型拆分为多个 **`ac`** 下命名空间（示例路径）：
 
 ```clojure
-;; materials.clj - 材料物品
-(ns cn.li.items.materials
-  (:require [cn.li.item.dsl :as idsl]))
+;; ac/.../content/items/materials.clj
+(ns cn.li.ac.content.items.materials
+  (:require [cn.li.mcmod.item.dsl :as idsl]))
 
 (idsl/defitem copper-ingot ...)
 (idsl/defitem steel-ingot ...)
 
-;; tools.clj - 工具物品
-(ns cn.li.items.tools
-  (:require [cn.li.item.dsl :as idsl]))
+;; ac/.../content/items/tools.clj
+(ns cn.li.ac.content.items.tools
+  (:require [cn.li.mcmod.item.dsl :as idsl]))
 
 (idsl/defitem copper-pickaxe ...)
 (idsl/defitem steel-sword ...)
 
-;; food.clj - 食物物品
-(ns cn.li.items.food
-  (:require [cn.li.item.dsl :as idsl]))
+;; ac/.../content/items/food.clj
+(ns cn.li.ac.content.items.food
+  (:require [cn.li.mcmod.item.dsl :as idsl]))
 
 (idsl/defitem magic-bread ...)
 (idsl/defitem healing-potion ...)
 ```
+
+并在 **`content-namespaces.clj`** 的 **`item-namespaces`** 中列出上述命名空间。
 
 ### 2. 使用预设减少重复
 

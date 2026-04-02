@@ -16,7 +16,7 @@
 - **Node GUI**：若仍引用以下路径，需确保文件存在或改为占位/默认纹理：  
   `node_background.png`、`ui_inventory.png`、`ui_wireless_node.png`、`effect_node.png`、`wireless_node.png` 等。
 - **Matrix GUI**：`wireless_matrix.png`、Matrix 用 XML 布局（若使用 `page_wireless_matrix`）需放在 `my_mod` 资源下而非 academy。
-- **XML 布局**：`page_wireless_matrix.xml` 应在 `core/src/main/resources/assets/my_mod/guis/`（或项目约定的 guis 子路径）下，与 `matrix_gui_xml.clj` 加载路径一致。
+- **XML 布局**：`page_wireless_matrix.xml` 等应在 **`ac/src/main/resources/assets/my_mod/guis/`**（或项目约定的 guis 子路径）下，与对应 `gui.clj` / XML 加载路径一致。
 
 ---
 
@@ -26,7 +26,7 @@
 - **快速移动**：通过元数据/槽位配置修正 shift-click 行为。
 - **性能**：网络轮询与充电相关逻辑已降频（如轮询 0.2 TPS、充电 2 TPS），避免每 tick 执行。
 - **容器生命周期**：容器关闭时清理，避免泄漏。
-- **架构**：网络处理器在 core 中初始化，平台层仅做 API 适配；能量相关使用 `cn.li.energy.operations`。
+- **架构**：协议与分发在 `mcmod`/`ac` 中初始化，Forge 层做 API 适配；能量相关使用 **`cn.li.ac.energy.operations`**。
 
 ---
 

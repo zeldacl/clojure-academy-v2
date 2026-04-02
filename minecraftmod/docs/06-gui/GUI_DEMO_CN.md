@@ -1,6 +1,6 @@
 # Demo Mod 使用说明
 
-**说明**：当前项目支持 **Forge 1.20.1** 与 **Fabric 1.20.1**；下文中 1.16.5 仅为历史参考，实际适配层为 forge1201 / fabric1201。
+**说明**：默认构建为 **Forge 1.20.1**。Fabric 代码在 `fabric-1.20.1/`，但根 `settings.gradle` 默认不 include 该子工程。下文若出现已删除的 `cn.li.mcmod.gui.core` / `cn.li.core` 等命名空间，请以当前仓库中的 **`cn.li.ac.core`**、`cn.li.mcmod.gui.*`、`cn.li.forge1201.*` 为准。
 
 ## 功能概述
 
@@ -17,23 +17,15 @@
 
 ### ✅ 已完成的 Clojure 代码
 
-#### Core 层（版本无关）
-- `cn.li.mcmod.gui.core`：GUI 核心逻辑
-  - `gui-slots` atom：存储 GUI 槽位状态
-  - `register-gui-slot`：注册槽位和物品
-  - `clear-slot`：清空槽位（销毁物品）
-  - `on-destroy-button-clicked`：按钮点击处理
-  - `validate-gui-open`：验证 GUI 是否可以打开
-
-- `cn.li.core`：主逻辑
-  - `on-block-right-click`：右键点击方块时调用 `gui-api/open-gui`
+#### mcmod / ac 层（版本无关逻辑）
+- GUI 槽位、校验与打开流程由 **`cn.li.mcmod.gui.*`**（DSL、adapter、metadata）与 **`cn.li.ac.gui.*`**、**`cn.li.ac.core/init`** 协同完成；具体符号名以仓库为准，不再使用已废弃的 `cn.li.mcmod.gui.core`、`cn.li.core` 命名空间。
 
 #### Forge 1.20.1 适配层
 - `cn.li.forge1201.events`：handle-right-click 等
 - `cn.li.forge1201.gui.impl`：on-button-clicked、on-slot-changed、create-menu-title、get-slot-count
 
-#### Fabric 1.20.1 适配层
-- 与 Forge 1.20.1 对应的实现，使用 Fabric API（ScreenHandler 等）
+#### Fabric 1.20.1 适配层（可选）
+- 子工程存在时需单独启用 Gradle include；API 与 Forge 侧类似（ScreenHandler 等）。
 
 ### ⚠️ 需要 Java 层配合的部分
 
@@ -47,7 +39,7 @@
 ## Clojure 代码工作流程
 
 1. 玩家右键点击方块 → 平台事件 → Clojure handle-right-click（检查 demo_block）
-2. cn.li.core/on-block-right-click → gui-core/validate-gui-open、gui-api/open-gui
+2. 事件经 `cn.li.mcmod.events.dispatcher` 等到内容处理器 → GUI 校验与 `gui-adapter`/平台打开 GUI
 3. 平台 gui.impl/open-gui 返回 gui-id 与 pos → [Java] 打开 GUI
 4. 槽位变化 / 按钮点击 → Clojure on-slot-changed、on-destroy-button-clicked 等
 

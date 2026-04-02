@@ -112,7 +112,7 @@ Status: ✅ PASS
 
 ### cgui_document.clj Status
 
-**File**: `core/src/main/clojure/my_mod/gui/cgui_document.clj`
+**File**: `mcmod/src/main/clojure/cn/li/mcmod/gui/cgui.clj`（旧版 `cgui_document` 逻辑已并入 `xml_parser` 等，以仓库为准）
 
 **Enhancements Applied**:
 1. ✅ Added `normalize-component-kind` function

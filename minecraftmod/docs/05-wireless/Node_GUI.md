@@ -1,6 +1,6 @@
 # Wireless Node GUI
 
-本文档合并自：原始实现分析、移植实现报告、迁移总结。当前项目资源路径以 `assets/my_mod/guis/`、`my_mod:guis/rework/` 为准；能量相关逻辑见 `cn.li.energy.operations`。
+本文档合并自：原始实现分析、移植实现报告、迁移总结。当前项目资源路径以 `ac/src/main/resources/assets/my_mod/guis/`、`my_mod:guis/rework/` 为准；能量相关逻辑见 **`cn.li.ac.energy.operations`**。
 
 ---
 
@@ -32,5 +32,5 @@
 ## 三、迁移总结
 
 - 已完成：容器结构、插槽验证、数据同步、XML 解析与 DSL、Node GUI 逻辑（布局加载、动画、直方图、属性、轮询）。
-- 能量相关：统一使用 `cn.li.energy.operations`（物品支持、充放电等）。
+- 能量相关：统一使用 `cn.li.ac.energy.operations`（物品支持、充放电等）。
 - 文档内相互引用已统一为本文档（Node_GUI.md）。

@@ -1,6 +1,6 @@
 # Wireless Matrix GUI
 
-本文档合并自：原始实现分析、移植实现报告、迁移总结。资源路径以 `assets/my_mod/guis/`、`my_mod:guis/` 为准；与 Node GUI 共用 XML 解析器与 DSL。
+本文档合并自：原始实现分析、移植实现报告、迁移总结。资源路径以 **`ac/src/main/resources/assets/my_mod/guis/`**、`my_mod:guis/` 为准；与 Node GUI 共用 `cn.li.mcmod.gui` 下 XML 解析器与 DSL。
 
 ---
 
@@ -14,8 +14,8 @@
 
 ## 二、Clojure 移植架构
 
-- **复用**：`gui/xml_parser.clj`、`dsl.clj` 的 `defgui-from-xml`；直方图/属性/按钮创建模式与 Node GUI 一致。
-- **Matrix 特有**：`wireless/gui/matrix_gui_xml.clj`（动态 UI 重建、初始化表单、文本输入框）；`matrix_network_handler.clj` 处理上述 4 类消息。
+- **复用**：`mcmod` 中 `cn.li.mcmod.gui.xml-parser`、`cn.li.mcmod.gui.dsl` 的 `defgui-from-xml`；直方图/属性/按钮创建模式与 Node GUI 一致。
+- **Matrix 特有**：实现位于 **`ac`**（如 `cn.li.ac.block.wireless-matrix.*` 下的 gui / 网络处理）；历史文件名 `matrix_gui_xml.clj` 等若已合并，以仓库内实际路径为准。
 - **布局**：XML 定义 4 插槽、容量直方图、属性与网络信息/初始化表单；路径以当前项目 `my_mod` 资源为准，不写 academy 目录。
 
 ---

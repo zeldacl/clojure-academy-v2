@@ -1,10 +1,12 @@
 # Tile DSL（`deftile` / `deftile-kind`）使用指南
 
-本项目的 BlockEntity（旧称 tile entity）注册采用 **元数据驱动**：内容逻辑在 `core` 声明，Forge/Fabric 适配层只“遍历元数据并注册”，避免在平台层硬编码内容列表。
+本项目的 BlockEntity（旧称 tile entity）注册采用 **元数据驱动**：Tile DSL 与元数据在 **`mcmod`** 声明，具体方块内容在 **`ac`**；Forge 适配层遍历元数据并注册，避免在平台层硬编码内容列表。（Fabric 子工程默认未加入根构建。）
+
+与 **`defblock`**、Forge **`register-block-entities!`** 的衔接见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。
 
 相关代码位置：
-- `core/src/main/clojure/my_mod/block/tile_dsl.clj`：Tile DSL（`deftile`、`deftile-kind`）
-- `core/src/main/clojure/my_mod/registry/metadata.clj`：平台侧查询入口（tile-id / block->tile 映射）
+- `mcmod/src/main/clojure/cn/li/mcmod/block/tile_dsl.clj`：Tile DSL（`deftile`、`deftile-kind`）
+- `mcmod/src/main/clojure/cn/li/mcmod/registry/metadata.clj`：平台侧查询入口（tile-id / block->tile 映射）
 
 ---
 
@@ -13,8 +15,8 @@
 当多个 tile 共享同一套 tick/NBT 逻辑时，优先用 `deftile-kind` 注册默认逻辑，然后在 `deftile` 中只填写 `:tile-kind` 即可，减少样板代码。
 
 ```clojure
-(ns cn.li.block.my-machine
-  (:require [cn.li.block.tile-dsl :as tdsl]))
+(ns cn.li.ac.block.my-machine
+  (:require [cn.li.mcmod.block.tile-dsl :as tdsl]))
 
 (defn my-tick [level pos state be] ...)
 (defn my-read [tag] ...)
@@ -69,12 +71,12 @@
 
 ## 4. 平台侧如何消费（你不需要改平台代码）
 
-Forge/Fabric 适配层会通过 `cn.li.registry.metadata` 查询：
+Forge 适配层会通过 `cn.li.mcmod.registry.metadata` 查询：
 - `get-all-tile-ids`
 - `get-tile-registry-name`
 - `get-tile-block-ids`
 - `get-tile-spec`
 - `get-block-tile-id`（block-id -> tile-id）
 
-因此新增 tile 内容通常只需要在 core 中新增 `deftile`（以及可选的 `deftile-kind`），平台侧注册循环无需修改。
+因此新增 tile 内容通常只需要在内容层新增 `deftile`（以及可选的 `deftile-kind`），平台侧注册循环无需修改。
 
