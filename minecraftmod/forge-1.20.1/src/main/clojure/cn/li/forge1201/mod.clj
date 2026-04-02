@@ -7,6 +7,7 @@
             [cn.li.forge1201.events :as events]
             [cn.li.forge1201.gui.init :as gui-init]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
+            [cn.li.forge1201.config.bridge :as config-bridge]
             ;; platform-impl 会在 runtime 的 mod-init 中按需加载（避免 AOT/checkClojure 阶段触发 Minecraft class init）
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
@@ -334,6 +335,7 @@
     ;; Clojure's reify erases generic type info, so Forge cannot infer the event
     ;; type from the Consumer alone.
     (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
+      (config-bridge/register-all! mod-bus)
       (.register (force blocks-register) mod-bus)
       (.register (force items-register) mod-bus)
       (.register (force block-entities-register) mod-bus)

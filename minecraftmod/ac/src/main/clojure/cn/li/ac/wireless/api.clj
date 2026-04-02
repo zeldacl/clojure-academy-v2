@@ -7,6 +7,7 @@
   - Range searches
   - Link status checks"
   (:require [cn.li.ac.wireless.data.world :as wd]
+            [cn.li.ac.wireless.search-config :as search-config]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.network :as network]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
@@ -130,8 +131,8 @@
 
   Returns: list of IWirelessNode TileEntities"
   [world x y z]
-  (let [search-range 20.0
-        max-results 100
+    (let [search-range (search-config/node-search-range)
+      max-results (search-config/max-results)
         world-data (wd/get-world-data world)
         ;; Get nearby chunks using spatial index
         nearby-chunks (wd/get-nearby-chunks x y z search-range)

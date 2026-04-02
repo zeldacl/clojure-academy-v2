@@ -25,16 +25,11 @@
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.wireless.api :as helper]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
+            [cn.li.ac.block.solar-gen.config :as solar-config]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid])
   (:import [cn.li.acapi.wireless IWirelessGenerator IWirelessNode]))
-
-;; ============================================================================
-;; Part 1: Constants
-;; ============================================================================
-
-(def ^:private max-energy 1000.0)
 
 ;; Message Registration
 (msg-registry/register-block-messages! :generator
@@ -51,7 +46,7 @@
   [level pos]
   (when (and level pos)
     (let [time (rem (long (world/world-get-day-time level)) 24000)
-          day? (<= time 12500)]
+          day? (<= time (solar-config/daytime-threshold-ticks))]
       (and day? (world/world-can-see-sky level
                   (pos/create-block-pos (pos/pos-x pos) (inc (pos/pos-y pos)) (pos/pos-z pos)))))))
 
@@ -73,9 +68,10 @@
                             raining?          "WEAK"
                             :else             "STRONG")
           bright      (if generating? 1.0 0.0)
-          bright*     (if (and (> bright 0) raining?) (* bright 0.2) bright)
-          gen         (* bright* 3.0)
+          bright*     (if (and (> bright 0) raining?) (* bright (solar-config/rain-multiplier)) bright)
+          gen         (* bright* (solar-config/generation-rate))
           current     (double (get state :energy 0.0))
+          max-energy  (solar-config/max-energy)
           new-energy  (min max-energy (+ current gen))
           changed?    (and (> gen 0) (not= new-energy current))
           new-state   (cond-> (assoc state
@@ -98,7 +94,7 @@
   {:energy     (if (nbt/nbt-has-key? tag "Energy")
                  (nbt/nbt-get-double tag "Energy")
                  0.0)
-   :max-energy max-energy
+    :max-energy (solar-config/max-energy)
    :status     "STOPPED"
    :battery    (when (nbt/nbt-has-key? tag "Battery")
                  (item/create-item-from-nbt (nbt/nbt-get-compound tag "Battery")))})

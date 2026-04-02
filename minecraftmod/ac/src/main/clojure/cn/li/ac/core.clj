@@ -16,6 +16,7 @@
             [cn.li.ac.wireless.data.world :as wd]
             [cn.li.ac.energy.legacy-item-api-bridge :as legacy-item-api-bridge]
             [cn.li.ac.wireless.legacy-api-bridge :as legacy-api-bridge]
+            [cn.li.ac.config.registry :as config-registry]
             ;; Auto-registration system
             [cn.li.ac.registry.content-namespaces :as content-ns]
             [cn.li.ac.registry.hooks :as hooks]))
@@ -94,6 +95,8 @@
   (legacy-item-api-bridge/install-item-energy-api-bridge!)
   ;; Install Java wireless query API bridge onto the wireless system.
   (legacy-api-bridge/install-wireless-query-api-bridge!)
+  ;; Register distributed AC config descriptors/defaults into the shared registry.
+  (config-registry/init-configs!)
   ;; Load all content namespaces (triggers DSL macros and hook registration)
   (content-ns/load-all!)
 

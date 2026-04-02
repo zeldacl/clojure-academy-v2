@@ -9,7 +9,8 @@
   CRITICAL: This file contains PURE DATA ONLY (no function definitions).
   It can be safely imported by both server-side (block.clj) and client-side (gui.clj) code."
   (:require [cn.li.mcmod.block.state-schema :as state-schema]
-            [cn.li.ac.config.nbt-keys :as nbt-keys]))
+            [cn.li.ac.config.nbt-keys :as nbt-keys]
+            [cn.li.ac.block.solar-gen.config :as solar-config]))
 
 ;; ============================================================================
 ;; 1. NBT-PERSISTED FIELDS
@@ -55,7 +56,7 @@
    ;; Derived/computed fields
    {:key :max-energy
     :gui-only? true
-    :gui-init (fn [s] (double (get s :max-energy 1000.0)))
+    :gui-init (fn [s] (double (get s :max-energy (solar-config/max-energy))))
     :gui-sync? true
     :gui-coerce double
     :gui-close-reset 0.0

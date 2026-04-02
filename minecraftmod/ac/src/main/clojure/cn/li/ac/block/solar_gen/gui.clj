@@ -30,6 +30,7 @@
             [cn.li.mcmod.gui.container.schema :as schema]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.block.solar-gen.schema :as solar-schema]
+            [cn.li.ac.block.solar-gen.config :as solar-config]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessNode]))
@@ -92,7 +93,7 @@
 (defn sync-to-client! [container]
   (let [state (or (common/get-tile-state (:tile-entity container)) {})
         new-energy (double (get state :energy 0.0))
-        new-max-energy (double (get state :max-energy 1000.0))
+  new-max-energy (double (get state :max-energy (solar-config/max-energy)))
         new-status (str (get state :status "STOPPED"))
         new-gen-speed (double (get state :gen-speed 0.0))]
     ;; Only update atoms if values changed

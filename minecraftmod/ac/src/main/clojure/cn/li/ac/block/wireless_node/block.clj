@@ -26,8 +26,10 @@
             [cn.li.mcmod.network.server      :as net-server]
             [clojure.string                  :as str]
             [cn.li.ac.energy.operations      :as energy]
+            [cn.li.ac.block.wireless-node.config :as node-config]
             [cn.li.ac.wireless.data.world    :as world-data]
             [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.search-config :as search-config]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.api        :as helper]
             [cn.li.ac.wireless.data.network       :as wireless-net]
@@ -55,16 +57,19 @@
 ;; Part 1: Node Type Specifications and State Schema
 ;; ============================================================================
 
-(def node-types
+(defn node-types
   "Single source of truth for per-tier capability values."
-  {:basic    {:max-energy  15000 :bandwidth 150 :range  9 :capacity  5}
-   :standard {:max-energy  50000 :bandwidth 300 :range 12 :capacity 10}
-   :advanced {:max-energy 200000 :bandwidth 900 :range 19 :capacity 20}})
+  []
+  (node-config/node-types))
+
+(defn- node-tier
+  [state]
+  (keyword (:node-type state :basic)))
 
 (defn node-max-energy
   "Derive the max-energy for a state map from its :node-type."
   [state]
-  (get-in node-types [(keyword (:node-type state :basic)) :max-energy] 15000))
+  (node-config/max-energy (node-tier state)))
 
 (defn energy->blockstate-level
   "Transform energy value to BlockState level (0-4) for visual display."
@@ -140,8 +145,7 @@
     (if (and input-item (energy/is-energy-item-supported? input-item))
       (let [cur       (double (:energy state 0.0))
             max-e     (double (node-max-energy state))
-            bandwidth (double (get-in node-types
-                                      [(keyword (:node-type state :basic)) :bandwidth] 150))
+            bandwidth (double (node-config/bandwidth (node-tier state)))
             needed    (min bandwidth (- max-e cur))
             pulled    (double (energy/pull-energy-from-item input-item needed false))]
         (if (pos? pulled)
@@ -155,8 +159,7 @@
   (let [output-item (get-in state [:inventory node-output-slot-index])
         cur (double (:energy state 0.0))]
     (if (and output-item (energy/is-energy-item-supported? output-item) (pos? cur))
-      (let [bandwidth (double (get-in node-types
-                                      [(keyword (:node-type state :basic)) :bandwidth] 150))
+      (let [bandwidth (double (node-config/bandwidth (node-tier state)))
             to-charge (min bandwidth cur)
             leftover  (double (energy/charge-energy-to-item output-item to-charge false))
             charged   (- to-charge leftover)]
@@ -186,8 +189,8 @@
         ;; Every tick: charge in/out
         state    (try (tick-charge-in state)  (catch Exception _ state))
         state    (try (tick-charge-out state) (catch Exception _ state))
-        ;; Every 20 ticks: check network + sync
-        state    (if (zero? (mod ticker 20))
+          ;; Every configured interval: check network + sync
+          state    (if (zero? (mod ticker (node-config/sync-interval)))
                    (let [state (try (tick-check-network state level pos) (catch Exception _ state))
                          old-sync-state (::last-broadcast-state state)
                          new-sync-state (-> (state-schema/schema->sync-payload node-state-schema state pos)
@@ -287,7 +290,7 @@
             y (double (:pos-y payload))
             z (double (:pos-z payload))
             range (try (.getRange ^IWirelessNode tile) (catch Exception _ 20.0))
-            nets (helper/get-nets-in-range world x y z range 100)]
+            nets (helper/get-nets-in-range world x y z range (search-config/max-results))]
         {:linked (when linked
                    {:ssid (:ssid linked)
                     :is-encrypted? (not (empty? (str (:password linked))))})
@@ -436,17 +439,17 @@
   (getBandwidth [_]
     (let [state     (or (platform-be/get-custom-state be) node-default-state)
           node-type (keyword (state-schema/get-field node-state-schema state :node-type))]
-      (double (get-in node-types [node-type :bandwidth] 150))))
+      (double (node-config/bandwidth node-type))))
 
   (getCapacity [_]
     (let [state     (or (platform-be/get-custom-state be) node-default-state)
           node-type (keyword (state-schema/get-field node-state-schema state :node-type))]
-      (int (get-in node-types [node-type :capacity] 5))))
+      (int (node-config/capacity node-type))))
 
   (getRange [_]
     (let [state     (or (platform-be/get-custom-state be) node-default-state)
           node-type (keyword (state-schema/get-field node-state-schema state :node-type))]
-      (double (get-in node-types [node-type :range] 9))))
+      (double (node-config/range-blocks node-type))))
 
   (getNodeName [_]
     (let [state (or (platform-be/get-custom-state be) node-default-state)]
@@ -576,7 +579,7 @@
 
 (defn init-wireless-nodes! []
   (log/info "Initialized Wireless Nodes (Design-3: customState, schema-driven):")
-  (doseq [[tier cfg] node-types]
+  (doseq [[tier cfg] (node-types)]
     (log/info "  -" (name tier) ": max-energy=" (:max-energy cfg)))
   (log/info "  - Capabilities :wireless-node + :wireless-energy registered"))
 

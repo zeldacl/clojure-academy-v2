@@ -8,7 +8,7 @@
   to colocate it with the node block implementation."
   (:require [clojure.string :as str]
             [cn.li.mcmod.config :as mcmod-config]
-            [cn.li.ac.block.wireless-node.block :as wireless-node]
+            [cn.li.ac.block.wireless-node.config :as node-config]
             [cn.li.ac.block.wireless-node.schema :as node-schema]))
 
 ;; ============================================================================
@@ -61,7 +61,7 @@
         energy-max (get-in props [:energy :max])
         connected-type (get-in props [:connected :type])]
     (into {}
-          (for [node-type (sort (keys wireless-node/node-types))
+        (for [node-type (sort (keys (node-config/node-types)))
                 :let [node-type-name (name node-type)
                       block-key (keyword (str "wireless-node-" node-type-name))
                       registry-name (str "node_" node-type-name)
@@ -102,7 +102,7 @@
   Returns:
     regex pattern matching node model names like 'node_basic_base'"
   []
-  (let [node-type-str (str "(" (str/join "|" (map name (sort (keys wireless-node/node-types)))) ")")
+  (let [node-type-str (str "(" (str/join "|" (map name (sort (keys (node-config/node-types))))) ")")
         variant-str   "(base|energy_\\d+|connected)"]
     (re-pattern (str "node_" node-type-str "_" variant-str))))
 

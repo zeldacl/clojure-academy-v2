@@ -28,6 +28,7 @@
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.wireless.api :as helper]
             [cn.li.ac.wireless.data.network :as wireless-net]
+            [cn.li.ac.block.wireless-matrix.config :as matrix-config]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
@@ -180,6 +181,17 @@
 (defn- be-str-field [be k]
   (str (schema/get-field matrix-schema/unified-matrix-schema (safe-state be) k)))
 
+(defn- matrix-params
+  [be]
+  (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
+    (if working?
+      {:capacity (int (* (matrix-config/capacity-per-core-level) core-lv))
+       :bandwidth (double (* core-lv core-lv (matrix-config/bandwidth-factor)))
+       :range (double (* (matrix-config/range-base) (Math/sqrt core-lv)))}
+      {:capacity 0
+       :bandwidth 0.0
+       :range 0.0})))
+
 ;; ============================================================================
 ;; Part 3.5: Capability Implementation (must be before MatrixJavaProxy)
 ;; ============================================================================
@@ -188,16 +200,13 @@
   IWirelessMatrix
 
   (getMatrixCapacity [_]
-    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
-      (if working? (int (* 8 core-lv)) 0)))
+    (:capacity (matrix-params be)))
 
   (getMatrixBandwidth [_]
-    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
-      (if working? (double (* core-lv core-lv 60)) 0.0)))
+    (:bandwidth (matrix-params be)))
 
   (getMatrixRange [_]
-    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
-      (if working? (double (* 24 (Math/sqrt core-lv))) 0.0)))
+    (:range (matrix-params be)))
 
   (getSsid       [_] (be-str-field be :ssid))
   (getPassword   [_] (be-str-field be :password))
@@ -223,14 +232,11 @@
   IMatrixJavaProxy
   (getPlacerName    [_] (be-str-field be :placer-name))
   (getMatrixCapacity [_]
-    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
-      (long (if working? (* 8 core-lv) 0))))
+    (long (:capacity (matrix-params be))))
   (getMatrixBandwidth [_]
-    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
-      (long (if working? (* core-lv core-lv 60) 0))))
+    (long (:bandwidth (matrix-params be))))
   (getMatrixRange [_]
-    (let [{:keys [core-lv working?]} (matrix-hardware-info be)]
-      (double (if working? (* 24 (Math/sqrt core-lv)) 0.0))))
+    (double (:range (matrix-params be))))
   (getLoad [_] 0)
   (getPos  [_] (pos/position-get-block-pos be))
   Object
@@ -248,7 +254,7 @@
         state (assoc state :update-ticker ticker)
         broken? (atom false)
         state (if (and (zero? (:sub-id state 0))
-                       (zero? (mod ticker 15)))
+                       (zero? (mod ticker (matrix-config/gui-sync-interval))))
                 (try
                   (if-let [broadcast-fn (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/broadcast-matrix-state)]
                     (let [impl ^IWirelessMatrix (->WirelessMatrixImpl be)
@@ -266,8 +272,8 @@
                     (log/debug "Matrix sync skipped:" (ex-message e))
                     state))
                 state)]
-    ;; Verify structure every 20 ticks
-    (when (zero? (mod ticker 20))
+    ;; Verify structure at configured interval.
+    (when (zero? (mod ticker (matrix-config/validate-interval)))
       (try
         (let [block-spec (bdsl/get-block :wireless-matrix)]
           (when (and block-spec

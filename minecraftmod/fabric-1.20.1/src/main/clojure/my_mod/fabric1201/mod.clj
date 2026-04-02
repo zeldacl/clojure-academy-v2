@@ -8,6 +8,7 @@
               [cn.li.fabric1201.gui.impl :as gui]
               [cn.li.fabric1201.gui.init :as gui-init]
               [cn.li.fabric1201.gui.registry-impl :as gui-registry-impl]
+              [cn.li.fabric1201.config.bridge :as config-bridge]
               [cn.li.fabric1201.platform-impl :as platform-impl]
               [cn.li.mcmod.block.dsl :as bdsl]
               [cn.li.mcmod.block.tile-logic :as tile-logic]
@@ -203,6 +204,9 @@
   ;; Initialize core systems and load all content namespaces (blocks/items/guis/tiles).
   ;; This is required so metadata-driven registration sees the full registry.
   (core/init)
+
+  ;; Load platform config files after AC has registered all config descriptors/defaults.
+  (config-bridge/load-all!)
   
   ;; Initialize BlockState properties from Clojure metadata
   ;; Must happen before block registration so Property objects are ready

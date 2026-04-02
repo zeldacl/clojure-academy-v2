@@ -7,15 +7,9 @@
   - Password authentication
   - Range validation"
   (:require [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.data.network-config :as network-config]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
-
-;; ============================================================================
-;; Constants
-;; ============================================================================
-
-(def ^:private UPDATE_INTERVAL 40)     ; Tick between balance updates
-(def ^:private BUFFER_MAX 2000.0)      ; Maximum energy buffer
 
 ;; ============================================================================
 ;; WirelessNet Record
@@ -280,7 +274,7 @@
                           (if (> diff 0)
                             ;; Node has excess energy → pull to buffer
                             (let [to-pull (min diff transfer-left)
-                                  buffer-space (- BUFFER_MAX buffer-val)
+                                  buffer-space (- (network-config/buffer-max) buffer-val)
                                   actual-pull (min to-pull buffer-space)]
                               (.setEnergy n (- current actual-pull))
                               (recur (rest nodes-remaining)
@@ -312,8 +306,8 @@
       ;; Increment counter
       (swap! (:update-counter network) inc)
       
-      ;; Balance energy every UPDATE_INTERVAL ticks
-      (when (>= @(:update-counter network) UPDATE_INTERVAL)
+      ;; Balance energy every configured interval.
+      (when (>= @(:update-counter network) (network-config/update-interval-ticks))
         (reset! (:update-counter network) 0)
         (balance-energy! network))
       
@@ -376,7 +370,7 @@
   [network]
   (log/info (format "=== Network: %s ===" (:ssid network)))
   (log/info (format "  Load: %d/%d" (get-load network) (get-capacity network)))
-  (log/info (format "  Buffer: %.1f/%.1f" @(:buffer network) BUFFER_MAX))
+  (log/info (format "  Buffer: %.1f/%.1f" @(:buffer network) (network-config/buffer-max)))
   (log/info (format "  Nodes: %d" (count @(:nodes network))))
   (log/info (format "  Disposed: %s" @(:disposed network))))
 
