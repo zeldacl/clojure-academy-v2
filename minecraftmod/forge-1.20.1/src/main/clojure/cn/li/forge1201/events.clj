@@ -6,9 +6,17 @@
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
-           [net.minecraft.world InteractionHand]
+       [net.minecraft.world InteractionHand InteractionResult]
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
             BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
+
+  (defn- gui-open-result?
+    [ret]
+    (and (map? ret)
+      (contains? ret :gui-id)
+      (contains? ret :player)
+      (contains? ret :world)
+      (contains? ret :pos)))
 
 (defn handle-right-click
   "Handle right-click block event from event data map"
@@ -53,18 +61,23 @@
       ;; Forge fires this on both sides and both hands; only open GUI once on server main hand.
       (if (or (.isClientSide level) (not= hand InteractionHand/MAIN_HAND))
         (log/debug "[FORGE-RIGHT-CLICK-EVENT] Ignored: client-side or off-hand event")
-        (let [block-state (.getBlockState level pos)]
+        (let [block-state (.getBlockState level pos)
+              ret (handle-right-click
+                    {:x (.getX pos)
+                     :y (.getY pos)
+                     :z (.getZ pos)
+                     :pos pos
+                     :sneaking (.isShiftKeyDown player)
+                     :player player
+                     :world level
+                     :block (.getBlock block-state)})]
           (log/info "[FORGE-RIGHT-CLICK-EVENT] Received Forge right-click event:" evt)
           (log/info "[FORGE-RIGHT-CLICK-EVENT] Extracted components: pos=" pos "player=" (.getGameProfile player) "block=" (.getBlock block-state))
-          (handle-right-click
-            {:x (.getX pos)
-             :y (.getY pos)
-             :z (.getZ pos)
-             :pos pos
-             :sneaking (.isShiftKeyDown player)
-             :player player
-             :world level
-             :block (.getBlock block-state)}))))
+          ;; GUI was opened: consume this interaction so vanilla item use
+          ;; does not place the held block as a follow-up action.
+          (when (gui-open-result? ret)
+            (.setCancellationResult evt InteractionResult/CONSUME)
+            (.setCanceled evt true)))))
     (catch Throwable t
       (log/error "[FORGE-RIGHT-CLICK-EVENT] EXCEPTION:" (ex-message t))
       (log/error "[FORGE-RIGHT-CLICK-EVENT] Stack trace:" t))))

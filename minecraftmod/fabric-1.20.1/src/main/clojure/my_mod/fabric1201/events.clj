@@ -10,6 +10,14 @@
            [net.minecraft.world InteractionResult]
            [net.fabricmc.fabric.api.event.lifecycle.v1 ServerWorldEvents]))
 
+  (defn- gui-open-result?
+    [ret]
+    (and (map? ret)
+      (contains? ret :gui-id)
+      (contains? ret :player)
+      (contains? ret :world)
+      (contains? ret :pos)))
+
 (defn handle-right-click
   "Handle right-click block event from event data map"
   [event-data]
@@ -39,7 +47,7 @@
   (try
     (let [pos (.getBlockPos hit-result)
           block-state (.getBlockState world pos)]
-      (handle-right-click
+      (let [ret (handle-right-click
         {:x (.getX pos)
          :y (.getY pos)
          :z (.getZ pos)
@@ -47,9 +55,12 @@
          :sneaking (.isShiftKeyDown player)
          :player player
          :world world
-         :block (.getBlock block-state)})
-      ;; Return PASS to allow other handlers to process
-      InteractionResult/PASS)
+         :block (.getBlock block-state)})]
+        ;; GUI was opened: consume this interaction so vanilla item use
+        ;; does not place the held block as a follow-up action.
+        (if (gui-open-result? ret)
+          InteractionResult/CONSUME
+          InteractionResult/PASS)))
     (catch Throwable t
       (log/info "Error handling use block event:" (.getMessage t))
       (.printStackTrace t)
