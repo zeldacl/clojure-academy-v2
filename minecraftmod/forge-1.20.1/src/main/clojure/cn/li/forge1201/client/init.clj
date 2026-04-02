@@ -9,6 +9,9 @@
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.client.render.init :as render-init]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
+            [cn.li.forge1201.client.ability-runtime :as ability-runtime]
+            [cn.li.forge1201.client.ability-hud :as ability-hud]
+            [cn.li.forge1201.client.ability-gui :as ability-gui]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
             [cn.li.forge1201.mod :as forge-mod]
             [cn.li.forge1201.client.pose-impl :as pose-impl]
@@ -99,5 +102,10 @@
 
   ;; Then register renderers
   (register-renderers)
+
+  ;; Ability client systems
+  (ability-runtime/init!)
+  (ability-hud/init!)
+  (ability-gui/init!)
 
   (log/info "Forge 1.20.1 client-side systems initialized"))

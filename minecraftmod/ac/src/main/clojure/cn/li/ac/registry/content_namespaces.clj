@@ -16,8 +16,13 @@
   These define items using defitem DSL."
   '[cn.li.ac.content.items.all])
 
+(def ability-namespaces
+  "Ability content namespaces.
+  These define categories and skills via ability DSL."
+  '[cn.li.ac.content.ability])
+
 (defn load-all!
   "Load all content namespaces to trigger DSL macro side effects and hook registration."
   []
-  (doseq [ns-sym (concat block-namespaces item-namespaces)]
+  (doseq [ns-sym (concat block-namespaces item-namespaces ability-namespaces)]
     (require ns-sym)))

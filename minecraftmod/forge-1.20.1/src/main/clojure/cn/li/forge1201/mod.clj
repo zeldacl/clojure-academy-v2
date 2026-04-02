@@ -7,6 +7,7 @@
             [cn.li.forge1201.events :as events]
             [cn.li.forge1201.gui.init :as gui-init]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
+            [cn.li.forge1201.ability.lifecycle :as ability-lifecycle]
             [cn.li.forge1201.config.bridge :as config-bridge]
             ;; platform-impl 会在 runtime 的 mod-init 中按需加载（避免 AOT/checkClojure 阶段触发 Minecraft class init）
             [cn.li.mcmod.block.dsl :as bdsl]
@@ -261,6 +262,7 @@
 (defn on-common-setup [_event]
   (log/info "FMLCommonSetupEvent - Common setup phase")
   (gui-init/init-common!)
+  (ability-lifecycle/init-common!)
   ;; Register wireless IMC dispatch listeners on the Forge game event bus.
   (wireless-imc/init!)
   ;; Right-click block is handled by Java ForgeEventHandler (@SubscribeEvent).

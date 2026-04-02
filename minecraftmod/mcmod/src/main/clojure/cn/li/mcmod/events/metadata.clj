@@ -193,3 +193,37 @@
   Called during mod initialization to sync handlers from DSL."
   []
   (sync-handlers-from-dsl!))
+
+;; ============================================================
+;; Player Event Handlers (Ability System)
+;; ============================================================
+
+(defonce player-event-handlers
+  ^{:doc "Registry of player lifecycle and ability event handlers.
+  Structure: {event-type-keyword -> handler-fn}
+  event-type-keyword examples:
+    :player/logged-in  :player/logged-out  :player/respawn  :player/clone
+    :player/tick       :player/death
+    :ability/tick      (server tick for ability resource recovery)"}
+  (atom {}))
+
+(defn register-player-event-handler!
+  "Register a handler for a player-level event type.
+  Only one handler per event-type is supported (latest registration wins).
+
+  Args:
+    event-type: Keyword – e.g. :player/tick, :ability/tick
+    handler-fn: (fn [ctx]) where ctx is a platform-neutral event map"
+  [event-type handler-fn]
+  (when handler-fn
+    (swap! player-event-handlers assoc event-type handler-fn)
+    (log/info "Registered player event handler for" event-type)))
+
+(defn get-player-event-handler
+  "Return the handler-fn for event-type, or nil."
+  [event-type]
+  (get @player-event-handlers event-type))
+
+(defn has-player-event-handler?
+  [event-type]
+  (some? (get-player-event-handler event-type)))
