@@ -163,7 +163,7 @@
 
                         (log/info "PlasmaCannon: Fired at" [target-x target-y target-z] "damage:" (int damage)))
 
-                      (log/debug "PlasmaCannon: No target found"))))))
+                      (log/debug "PlasmaCannon: No target found")))))))
 
           (log/debug "PlasmaCannon: Released before fully charged, aborting"))))
     (catch Exception e

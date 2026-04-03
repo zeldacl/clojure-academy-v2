@@ -4,15 +4,6 @@
             [cn.li.forge1201.ability.sync :as ability-sync]
             [cn.li.forge1201.ability.network :as ability-network]
             [cn.li.forge1201.ability.store :as ability-store]
-            [cn.li.forge1201.ability.world-effects :as world-effects]
-            [cn.li.forge1201.ability.entity-damage :as entity-damage]
-            [cn.li.forge1201.ability.raycast :as raycast]
-            [cn.li.forge1201.ability.potion-effects :as potion-effects]
-            [cn.li.forge1201.ability.teleportation :as teleportation]
-            [cn.li.forge1201.ability.saved-locations :as saved-locations]
-            [cn.li.forge1201.ability.player-motion :as player-motion]
-            [cn.li.forge1201.ability.block-manipulation :as block-manipulation]
-            [cn.li.forge1201.ability.damage-interception :as damage-interception]
             [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.damage-handler :as damage-handler]
@@ -64,19 +55,47 @@
       (ability-sync/tick-sync! ability-network/send-sync-to-client!)
       (ctx-mgr/tick-context-manager!))))
 
+(defn- try-install! [ns-sym fn-sym label]
+  (try
+    (require ns-sym)
+    (if-let [f (resolve fn-sym)]
+      (f)
+      (log/warn "Install function not found for" label "(" fn-sym ")"))
+    (catch Exception e
+      (log/warn "Failed to install" label ":" (ex-message e)))))
+
 (defn init-common!
   "Register all forge-side lifecycle listeners for ability runtime."
   []
   (ability-store/install-store!)
-  (world-effects/install-world-effects!)
-  (entity-damage/install-entity-damage!)
-  (raycast/install-raycast!)
-  (potion-effects/install-potion-effects!)
-  (teleportation/install-teleportation!)
-  (saved-locations/install-saved-locations!)
-  (player-motion/install-player-motion!)
-  (block-manipulation/install-block-manipulation!)
-  (damage-interception/install-damage-interception!)
+  ;; TODO: All ability module installs disabled; bootstrap issue resolution pending
+  #_(try-install! 'cn.li.forge1201.ability.world-effects
+                'cn.li.forge1201.ability.world-effects/install-world-effects!
+                "world-effects")
+  #_(try-install! 'cn.li.forge1201.ability.entity-damage
+                'cn.li.forge1201.ability.entity-damage/install-entity-damage!
+                "entity-damage")
+  #_(try-install! 'cn.li.forge1201.ability.raycast
+                'cn.li.forge1201.ability.raycast/install-raycast!
+                "raycast")
+  #_(try-install! 'cn.li.forge1201.ability.potion-effects
+                'cn.li.forge1201.ability.potion-effects/install-potion-effects!
+                "potion-effects")
+  #_(try-install! 'cn.li.forge1201.ability.teleportation
+                'cn.li.forge1201.ability.teleportation/install-teleportation!
+                "teleportation") 
+  #_(try-install! 'cn.li.forge1201.ability.saved-locations
+                'cn.li.forge1201.ability.saved-locations/install-saved-locations!
+                "saved-locations")
+  #_(try-install! 'cn.li.forge1201.ability.player-motion
+                'cn.li.forge1201.ability.player-motion/install-player-motion!
+                "player-motion")
+  #_(try-install! 'cn.li.forge1201.ability.block-manipulation
+                'cn.li.forge1201.ability.block-manipulation/install-block-manipulation!
+                "block-manipulation")
+  #_(try-install! 'cn.li.forge1201.ability.damage-interception
+                'cn.li.forge1201.ability.damage-interception/install-damage-interception!
+                "damage-interception")
   (ability-network/init!)
   (.addListener (MinecraftForge/EVENT_BUS)
                 EventPriority/NORMAL false PlayerEvent$PlayerLoggedInEvent

@@ -12,7 +12,7 @@
 
 (defn- create-key-mapping
   "Create a KeyMapping with proper type hints to avoid reflection."
-  [^String translation-key ^int key-code ^String category]
+  [^String translation-key key-code ^String category]
   (KeyMapping. translation-key
                InputConstants$Type/KEYSYM
                key-code

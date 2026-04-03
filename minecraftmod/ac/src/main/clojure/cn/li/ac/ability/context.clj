@@ -108,6 +108,11 @@
 (defn get-context [ctx-id]
   (get @context-registry ctx-id))
 
+(defn get-all-contexts
+  "Get all registered contexts as {ctx-id -> ctx-data}."
+  []
+  @context-registry)
+
 (defn update-context! [ctx-id f & args]
   (apply swap! context-registry update ctx-id f args))
 

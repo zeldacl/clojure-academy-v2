@@ -42,28 +42,31 @@
           (loop [remaining-handlers handlers
                  current-damage original-damage]
             (if (empty? remaining-handlers)
-              ;; All handlers processed - set final damage
+              ;; 所有 handler 处理完毕
               (when (not= current-damage original-damage)
                 (.setAmount event (float current-damage))
                 (log/debug "Damage modified:" original-damage "->" current-damage))
+          
+              ;; 处理下一个 handler
+              (let [[handler-id handler-fn] (first remaining-handlers)
+                    ;; 1. 将 try 缩小到仅包裹不稳定的函数调用
+                    next-damage (try
+                                  (let [result (handler-fn player-id attacker-id current-damage damage-source)]
+                                    (if (vector? result)
+                                      (let [[new-damage _metadata] result]
+                                        (if (number? new-damage)
+                                          new-damage
+                                          (do (log/warn "Handler" handler-id "returned invalid damage:" new-damage)
+                                              current-damage)))
+                                      (do (log/warn "Handler" handler-id "returned invalid result:" result)
+                                          current-damage)))
+                                  (catch Exception e
+                                    (log/warn "Handler" handler-id "failed:" (ex-message e))
+                                    current-damage))]
+                ;; 2. recur 现在位于 try 块之外，符合编译器要求
+                (recur (rest remaining-handlers) next-damage))))
 
-              ;; Process next handler
-              (let [[handler-id handler-fn] (first remaining-handlers)]
-                (try
-                  (let [result (handler-fn player-id attacker-id current-damage damage-source)]
-                    (if (vector? result)
-                      (let [[new-damage _metadata] result]
-                        (if (number? new-damage)
-                          (recur (rest remaining-handlers) new-damage)
-                          (do
-                            (log/warn "Handler" handler-id "returned invalid damage:" new-damage)
-                            (recur (rest remaining-handlers) current-damage))))
-                      (do
-                        (log/warn "Handler" handler-id "returned invalid result:" result)
-                        (recur (rest remaining-handlers) current-damage))))
-                  (catch Exception e
-                    (log/warn "Handler" handler-id "failed:" (ex-message e))
-                    (recur (rest remaining-handlers) current-damage)))))))))
+                    )))
     (catch Exception e
       (log/warn "Damage interception failed:" (ex-message e)))))
 

@@ -10,12 +10,27 @@
 (set! *warn-on-reflection* true)
 
 (defn- get-item-id
-  "Get item registry ID from ItemStack."
+  "Get item registry ID from ItemStack. Uses reflection to avoid MC bootstrap trigger."
   [^ItemStack stack]
   (when-not (.isEmpty stack)
-    (let [item (.getItem stack)
-          registry-name (.getKey (net.minecraft.core.registries.BuiltInRegistries/ITEM) item)]
-      (str (.getNamespace registry-name) ":" (.getPath registry-name)))))
+    (try
+      (let [item (.getItem stack)
+            ;; Load BuiltInRegistries class and get ITEM field reflectively at runtime
+            builtin-regs-cls (Class/forName "net.minecraft.core.registries.BuiltInRegistries")
+            item-field (.getField builtin-regs-cls "ITEM")
+            item-registry (.get item-field nil)
+            ;; Call getKey() method reflectively
+            get-key-method (.getMethod (class item-registry) "getKey" (into-array Class [Object]))
+            registry-name (.invoke get-key-method item-registry (object-array [item]))]
+        (when registry-name
+          (str (.invoke (.getMethod (class registry-name) "getNamespace" (into-array Class []))
+                        registry-name (object-array []))
+               ":"
+               (.invoke (.getMethod (class registry-name) "getPath" (into-array Class []))
+                        registry-name (object-array [])))))
+      (catch Exception e
+        (log/warn "Failed to get item ID:" (ex-message e))
+        nil))))
 
 (defn- on-item-use
   "Handle item right-click event."

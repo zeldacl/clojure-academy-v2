@@ -264,7 +264,8 @@
   (log/info "FMLCommonSetupEvent - Common setup phase")
   (gui-init/init-common!)
   (ability-lifecycle/init-common!)
-  (ability-item-handler/init!)
+  ;; TODO: Re-enable item-handler/init! after bootstrap issues resolved
+  ;; (ability-item-handler/init!)
   ;; Register wireless IMC dispatch listeners on the Forge game event bus.
   (wireless-imc/init!)
   ;; Right-click block is handled by Java ForgeEventHandler (@SubscribeEvent).

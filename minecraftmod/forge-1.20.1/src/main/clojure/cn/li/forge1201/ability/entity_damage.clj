@@ -5,7 +5,7 @@
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.entity LivingEntity]
-           [net.minecraft.world.damagesource DamageSource DamageSources]
+           [net.minecraft.world.damagesource DamageSource]
            [net.minecraft.world.phys AABB Vec3]
            [net.minecraftforge.server ServerLifecycleHooks]
            [java.util UUID]))
@@ -24,13 +24,22 @@
       nil)))
 
 (defn- get-damage-source [^ServerLevel level source-type]
-  (let [^DamageSources sources (.damageSources level)]
-    (case source-type
-      :magic (.magic sources)
-      :lightning (.lightningBolt sources)
-      :explosion (.explosion sources)
-      :generic (.generic sources)
-      (.generic sources))))
+  ;; DamageSources is bootstrap-sensitive; access via reflection at runtime
+  (try
+    (let [sources-method (.getMethod (class level) "damageSources" (into-array Class []))
+          ^Object sources (.invoke sources-method level (object-array []))
+          sources-class (class sources)
+          method-name (case source-type
+                        :magic "magic"
+                        :lightning "lightningBolt"
+                        :explosion "explosion"
+                        :generic "generic"
+                        "generic")
+          dam-method (.getMethod sources-class method-name (into-array Class []))]
+      (.invoke dam-method sources (object-array [])))
+    (catch Exception e
+      (log/warn "Failed to get damage source:" source-type (ex-message e))
+      nil)))
 
 (defn- apply-direct-damage-impl! [world-id entity-uuid damage source-type]
   (try

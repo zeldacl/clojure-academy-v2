@@ -66,73 +66,68 @@
       (doseq [[idx line] (map-indexed vector tooltip-lines)]
         (.drawString graphics line (+ mouse-x 10) (+ mouse-y 10 (* idx 12)) 0xFFFFFF)))))
 
-(deftype SkillTreeScreen []
-  Screen
+(defn- create-skill-tree-screen []
+  (proxy [Screen] [(Component/literal "Skill Tree")]
+    (init []
+      (proxy-super init))
 
-  (^Component getTitle [_this]
-    (Component/literal "Skill Tree"))
+    (render [^GuiGraphics graphics mouse-x mouse-y _partial-tick]
+      (try
+        ;; Get render data from AC layer
+        (when-let [render-data (ac-skill-tree/build-screen-render-data)]
+          ;; Render background
+          (.renderBackground graphics)
 
-  (^void init [this]
-    ;; Call parent init
-    (.init ^Screen this))
+          ;; Render ability info panel
+          (when-let [info (:ability-info render-data)]
+            (render-ability-info graphics info))
 
-  (^void render [_this ^GuiGraphics graphics ^int mouse-x ^int mouse-y ^float _partial-tick]
-    (try
-      ;; Get render data from AC layer
-      (when-let [render-data (ac-skill-tree/build-screen-render-data)]
-        ;; Render background
-        (.renderBackground graphics)
-
-        ;; Render ability info panel
-        (when-let [info (:ability-info render-data)]
-          (render-ability-info graphics info))
-
-        ;; Render skill nodes
-        (doseq [node (:skill-nodes render-data)]
-          (when node
-            (render-skill-node graphics node)))
-
-        ;; Update hover state
-        (ac-skill-tree/on-mouse-move mouse-x mouse-y)
-
-        ;; Render tooltip for hovered skill
-        (when-let [hover-id (:hover-skill render-data)]
-          (when-let [hovered-node (first (filter #(= (:skill-id %) hover-id)
-                                                 (:skill-nodes render-data)))]
-            (render-skill-tooltip graphics hovered-node mouse-x mouse-y))))
-      (catch Exception e
-        (log/error "Error rendering skill tree screen" e))))
-
-  (^boolean mouseClicked [_this ^double mouse-x ^double mouse-y ^int _button]
-    (try
-      (when-let [render-data (ac-skill-tree/build-screen-render-data)]
-        ;; Check skill node clicks
-        (let [clicked? (atom false)]
+          ;; Render skill nodes
           (doseq [node (:skill-nodes render-data)]
-            (when (and node (not @clicked?))
-              (let [dx (- mouse-x (:x node))
-                    dy (- mouse-y (:y node))
-                    dist-sq (+ (* dx dx) (* dy dy))]
-                (when (< dist-sq 400)
-                  (ac-skill-tree/on-skill-click (:skill-id node))
-                  (reset! clicked? true)))))
+            (when node
+              (render-skill-node graphics node)))
 
-          ;; Check level-up button click
-          (when (and (not @clicked?)
-                     (get-in render-data [:ability-info :can-level-up])
-                     (>= mouse-x 10) (<= mouse-x 90)
-                     (>= mouse-y 200) (<= mouse-y 220))
-            (ac-skill-tree/on-level-up-click)
-            (reset! clicked? true))
+          ;; Update hover state
+          (ac-skill-tree/on-mouse-move mouse-x mouse-y)
 
-          @clicked?))
-      (catch Exception e
-        (log/error "Error handling skill tree click" e)
-        false)))
+          ;; Render tooltip for hovered skill
+          (when-let [hover-id (:hover-skill render-data)]
+            (when-let [hovered-node (first (filter #(= (:skill-id %) hover-id)
+                                                   (:skill-nodes render-data)))]
+              (render-skill-tooltip graphics hovered-node mouse-x mouse-y))))
+        (catch Exception e
+          (log/error "Error rendering skill tree screen" e))))
 
-  (^void onClose [this]
-    (ac-skill-tree/close-screen!)
-    (.onClose ^Screen this)))
+    (mouseClicked [mouse-x mouse-y _button]
+      (try
+        (when-let [render-data (ac-skill-tree/build-screen-render-data)]
+          ;; Check skill node clicks
+          (let [clicked? (atom false)]
+            (doseq [node (:skill-nodes render-data)]
+              (when (and node (not @clicked?))
+                (let [dx (- mouse-x (:x node))
+                      dy (- mouse-y (:y node))
+                      dist-sq (+ (* dx dx) (* dy dy))]
+                  (when (< dist-sq 400)
+                    (ac-skill-tree/on-skill-click (:skill-id node))
+                    (reset! clicked? true)))))
+
+            ;; Check level-up button click
+            (when (and (not @clicked?)
+                       (get-in render-data [:ability-info :can-level-up])
+                       (>= mouse-x 10) (<= mouse-x 90)
+                       (>= mouse-y 200) (<= mouse-y 220))
+              (ac-skill-tree/on-level-up-click)
+              (reset! clicked? true))
+
+            @clicked?))
+        (catch Exception e
+          (log/error "Error handling skill tree click" e)
+          false)))
+
+    (onClose []
+      (ac-skill-tree/close-screen!)
+      (proxy-super onClose))))
 
 ;; ============================================================================
 ;; Preset Editor Screen
@@ -164,102 +159,98 @@
     (.fill graphics x y (+ x 150) (+ y 20) color)
     (.drawString graphics (:skill-name skill) (+ x 5) (+ y 5) 0xFFFFFF)))
 
-(deftype PresetEditorScreen []
-  Screen
+(defn- create-preset-editor-screen []
+  (proxy [Screen] [(Component/literal "Preset Editor")]
+    (init []
+      (proxy-super init))
 
-  (^Component getTitle [_this]
-    (Component/literal "Preset Editor"))
+    (render [^GuiGraphics graphics mouse-x mouse-y _partial-tick]
+      (try
+        (when-let [render-data (ac-preset-editor/build-preset-editor-render-data)]
+          ;; Render background
+          (.renderBackground graphics)
 
-  (^void init [this]
-    (.init ^Screen this))
-
-  (^void render [_this ^GuiGraphics graphics ^int mouse-x ^int mouse-y ^float _partial-tick]
-    (try
-      (when-let [render-data (ac-preset-editor/build-preset-editor-render-data)]
-        ;; Render background
-        (.renderBackground graphics)
-
-        ;; Render preset tabs
-        (doseq [preset-idx (:presets render-data)]
-          (render-preset-tab graphics preset-idx
-                            (= preset-idx (:selected-preset render-data))
-                            (= preset-idx (:active-preset render-data))
-                            (+ 10 (* preset-idx 45)) 10))
-
-        ;; Render slot assignments
-        (doseq [[idx slot] (map-indexed vector (:slots render-data))]
-          (when slot
-            (render-slot-assignment graphics slot 10 (+ 40 (* idx 25)))))
-
-        ;; Render available skills
-        (.drawString graphics "Available Skills:" 170 40 0xFFFFFF)
-        (doseq [[idx skill] (map-indexed vector (:available-skills render-data))]
-          (render-available-skill graphics skill
-                                 (= (:skill-id skill) (:selected-skill render-data))
-                                 170 (+ 60 (* idx 22))))
-
-        ;; Render buttons
-        (.fill graphics 10 200 90 220 0xFF00AA00)
-        (.drawString graphics "Save" 35 205 0xFFFFFF)
-
-        (.fill graphics 100 200 180 220 0xFF0000AA)
-        (.drawString graphics "Set Active" 110 205 0xFFFFFF))
-      (catch Exception e
-        (log/error "Error rendering preset editor screen" e))))
-
-  (^boolean mouseClicked [_this ^double mouse-x ^double mouse-y ^int _button]
-    (try
-      (when-let [render-data (ac-preset-editor/build-preset-editor-render-data)]
-        (let [clicked? (atom false)]
-          ;; Check preset tab clicks
+          ;; Render preset tabs
           (doseq [preset-idx (:presets render-data)]
-            (when (and (not @clicked?)
-                       (>= mouse-x (+ 10 (* preset-idx 45)))
-                       (<= mouse-x (+ 50 (* preset-idx 45)))
-                       (>= mouse-y 10) (<= mouse-y 30))
-              (ac-preset-editor/on-preset-tab-click preset-idx)
-              (reset! clicked? true)))
+            (render-preset-tab graphics preset-idx
+                              (= preset-idx (:selected-preset render-data))
+                              (= preset-idx (:active-preset render-data))
+                              (+ 10 (* preset-idx 45)) 10))
 
-          ;; Check slot clicks
-          (doseq [idx (range 4)]
-            (when (and (not @clicked?)
-                       (>= mouse-x 10) (<= mouse-x 110)
-                       (>= mouse-y (+ 40 (* idx 25)))
-                       (<= mouse-y (+ 60 (* idx 25))))
-              (ac-preset-editor/on-slot-click idx)
-              (reset! clicked? true)))
+          ;; Render slot assignments
+          (doseq [[idx slot] (map-indexed vector (:slots render-data))]
+            (when slot
+              (render-slot-assignment graphics slot 10 (+ 40 (* idx 25)))))
 
-          ;; Check available skill clicks
+          ;; Render available skills
+          (.drawString graphics "Available Skills:" 170 40 0xFFFFFF)
           (doseq [[idx skill] (map-indexed vector (:available-skills render-data))]
+            (render-available-skill graphics skill
+                                   (= (:skill-id skill) (:selected-skill render-data))
+                                   170 (+ 60 (* idx 22))))
+
+          ;; Render buttons
+          (.fill graphics 10 200 90 220 0xFF00AA00)
+          (.drawString graphics "Save" 35 205 0xFFFFFF)
+
+          (.fill graphics 100 200 180 220 0xFF0000AA)
+          (.drawString graphics "Set Active" 110 205 0xFFFFFF))
+        (catch Exception e
+          (log/error "Error rendering preset editor screen" e))))
+
+    (mouseClicked [mouse-x mouse-y _button]
+      (try
+        (when-let [render-data (ac-preset-editor/build-preset-editor-render-data)]
+          (let [clicked? (atom false)]
+            ;; Check preset tab clicks
+            (doseq [preset-idx (:presets render-data)]
+              (when (and (not @clicked?)
+                         (>= mouse-x (+ 10 (* preset-idx 45)))
+                         (<= mouse-x (+ 50 (* preset-idx 45)))
+                         (>= mouse-y 10) (<= mouse-y 30))
+                (ac-preset-editor/on-preset-tab-click preset-idx)
+                (reset! clicked? true)))
+
+            ;; Check slot clicks
+            (doseq [idx (range 4)]
+              (when (and (not @clicked?)
+                         (>= mouse-x 10) (<= mouse-x 110)
+                         (>= mouse-y (+ 40 (* idx 25)))
+                         (<= mouse-y (+ 60 (* idx 25))))
+                (ac-preset-editor/on-slot-click idx)
+                (reset! clicked? true)))
+
+            ;; Check available skill clicks
+            (doseq [[idx skill] (map-indexed vector (:available-skills render-data))]
+              (when (and (not @clicked?)
+                         (>= mouse-x 170) (<= mouse-x 320)
+                         (>= mouse-y (+ 60 (* idx 22)))
+                         (<= mouse-y (+ 82 (* idx 22))))
+                (ac-preset-editor/on-skill-select (:skill-id skill))
+                (reset! clicked? true)))
+
+            ;; Check save button
             (when (and (not @clicked?)
-                       (>= mouse-x 170) (<= mouse-x 320)
-                       (>= mouse-y (+ 60 (* idx 22)))
-                       (<= mouse-y (+ 82 (* idx 22))))
-              (ac-preset-editor/on-skill-select (:skill-id skill))
-              (reset! clicked? true)))
+                       (>= mouse-x 10) (<= mouse-x 90)
+                       (>= mouse-y 200) (<= mouse-y 220))
+              (ac-preset-editor/on-save-click)
+              (reset! clicked? true))
 
-          ;; Check save button
-          (when (and (not @clicked?)
-                     (>= mouse-x 10) (<= mouse-x 90)
-                     (>= mouse-y 200) (<= mouse-y 220))
-            (ac-preset-editor/on-save-click)
-            (reset! clicked? true))
+            ;; Check set active button
+            (when (and (not @clicked?)
+                       (>= mouse-x 100) (<= mouse-x 180)
+                       (>= mouse-y 200) (<= mouse-y 220))
+              (ac-preset-editor/on-set-active-click)
+              (reset! clicked? true))
 
-          ;; Check set active button
-          (when (and (not @clicked?)
-                     (>= mouse-x 100) (<= mouse-x 180)
-                     (>= mouse-y 200) (<= mouse-y 220))
-            (ac-preset-editor/on-set-active-click)
-            (reset! clicked? true))
+            @clicked?))
+        (catch Exception e
+          (log/error "Error handling preset editor click" e)
+          false)))
 
-          @clicked?))
-      (catch Exception e
-        (log/error "Error handling preset editor click" e)
-        false)))
-
-  (^void onClose [this]
-    (ac-preset-editor/close-screen!)
-    (.onClose ^Screen this)))
+    (onClose []
+      (ac-preset-editor/close-screen!)
+      (proxy-super onClose))))
 
 ;; ============================================================================
 ;; Screen Opening Functions
@@ -271,7 +262,7 @@
   (let [result (ac-skill-tree/open-screen! player-uuid)]
     (when (= (:command result) :open-screen)
       (let [^Minecraft mc (Minecraft/getInstance)]
-        (.setScreen mc (SkillTreeScreen.))))))
+        (.setScreen mc (create-skill-tree-screen))))))
 
 (defn open-preset-editor-screen!
   "Open preset editor screen. Called by AC layer via keybinds."
@@ -279,7 +270,7 @@
   (let [result (ac-preset-editor/open-screen! player-uuid)]
     (when (= (:command result) :open-screen)
       (let [^Minecraft mc (Minecraft/getInstance)]
-        (.setScreen mc (PresetEditorScreen.))))))
+        (.setScreen mc (create-preset-editor-screen))))))
 
 (defn init!
   "Initialize screen bridge."

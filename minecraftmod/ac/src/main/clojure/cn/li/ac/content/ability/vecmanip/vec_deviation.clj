@@ -93,25 +93,17 @@
                                                                     world-id x y z 5.0)
                     visited (get-in ctx-data [:skill-state :vec-deviation-visited] #{})]
 
-                ;; Process each entity
                 (doseq [entity entities]
                   (let [entity-id (:uuid entity)]
-                    (when-not (or (= entity-id player-id)
-                                 (contains? visited entity-id))
-                      ;; Stop entity motion (deflect)
+                    (when (and (not= entity-id player-id)
+                               (not (contains? visited entity-id)))
                       (when player-motion/*player-motion*
                         (player-motion/set-velocity! player-motion/*player-motion*
-                                                    entity-id 0.0 0.0 0.0))
-
-                      ;; Mark as visited
+                                                     entity-id 0.0 0.0 0.0))
                       (ctx/update-context! ctx-id update-in [:skill-state :vec-deviation-visited] conj entity-id)
-
-                      ;; Consume CP for deflection
                       (let [deflect-cost (scaling/lerp 15.0 12.0 exp)]
                         (ps/update-ability-data! player-id
-                                                #(update-in % [:cp-data :cp] - deflect-cost)))
-
-                      ;; Grant experience
+                                                 #(update-in % [:cp-data :cp] - deflect-cost)))
                       (when-let [state (ps/get-player-state player-id)]
                         (let [{:keys [data events]} (learning/add-skill-exp
                                                      (:ability-data state)
@@ -122,8 +114,7 @@
                           (ps/update-ability-data! player-id (constantly data))
                           (doseq [e events]
                             (ability-evt/fire-ability-event! e))))
-
-                      (log/debug "VecDeviation: Deflected entity" entity-id))))))))
+                      (log/debug "VecDeviation: Deflected entity" entity-id))))))))))
     (catch Exception e
       (log/warn "VecDeviation key-tick failed:" (ex-message e)))))
 

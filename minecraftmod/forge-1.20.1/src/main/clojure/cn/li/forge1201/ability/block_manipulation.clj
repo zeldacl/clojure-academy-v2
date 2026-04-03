@@ -5,11 +5,12 @@
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer ServerLevel]
            [net.minecraft.world.level Level]
-           [net.minecraft.world.level.block Blocks Block]
+           [net.minecraft.world.level.block Block]
            [net.minecraft.core BlockPos]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.server ServerLifecycleHooks]
            [net.minecraftforge.common MinecraftForge]
+           [net.minecraftforge.registries ForgeRegistries]
            [net.minecraftforge.event.level BlockEvent$BreakEvent]
            [java.util UUID]))
 
@@ -50,7 +51,7 @@
 
             (when-not (.isCanceled event)
               (when drop?
-                (.dropResources state level pos))
+                (Block/dropResources state level pos))
               (.removeBlock level pos false)
               true)))))
     (catch Exception e
@@ -62,7 +63,7 @@
     (when-let [^ServerLevel level (get-level-by-id world-id)]
       (let [pos (BlockPos. (int x) (int y) (int z))
             res-loc (ResourceLocation. block-id)
-            block (.get (.REGISTRY Block/REGISTRY) res-loc)]
+            block (.getValue ForgeRegistries/BLOCKS res-loc)]
         (when block
           (.setBlock level pos (.defaultBlockState block) 3)
           true)))
@@ -76,8 +77,8 @@
       (let [pos (BlockPos. (int x) (int y) (int z))
             state (.getBlockState level pos)
             block (.getBlock state)]
-        (when-not (= block Blocks/AIR)
-          (str (.getRegistryName block)))))
+        (when-not (.isAir state)
+          (str (.getKey ForgeRegistries/BLOCKS block)))))
     (catch Exception e
       (log/warn "Failed to get block:" (ex-message e))
       nil)))
@@ -120,12 +121,12 @@
                 pos (BlockPos. (int x) (int y) (int z))
                 state (.getBlockState level pos)
                 block (.getBlock state)]
-            (when-not (= block Blocks/AIR)
+            (when-not (.isAir state)
               (swap! results conj
                      {:x (int x)
                       :y (int y)
                       :z (int z)
-                      :block-id (str (.getRegistryName block))
+                      :block-id (str (.getKey ForgeRegistries/BLOCKS block))
                       :hardness (.getDestroySpeed state level pos)}))))
         @results))
     (catch Exception e

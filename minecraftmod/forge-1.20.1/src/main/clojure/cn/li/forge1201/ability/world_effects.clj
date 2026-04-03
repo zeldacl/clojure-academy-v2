@@ -4,12 +4,11 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
-           [net.minecraft.world.entity EntityType]
-           [net.minecraft.world.level Level]
+           [net.minecraft.world.entity Entity LivingEntity]
+           [net.minecraft.world.level Level Level$ExplosionInteraction]
            [net.minecraft.core BlockPos]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world.phys AABB Vec3]
-           [net.minecraft.world.entity LivingEntity]
            [net.minecraft.world.level.block Block]
            [net.minecraftforge.server ServerLifecycleHooks]))
 
@@ -26,10 +25,15 @@
 (defn- spawn-lightning-impl! [world-id x y z]
   (try
     (when-let [^ServerLevel level (get-level world-id)]
-      (let [lightning (EntityType/LIGHTNING_BOLT (.create level))]
-        (.moveTo lightning x y z)
-        (.addFreshEntity level lightning)
-        true))
+      ;; Use Class/forName to avoid loading EntityType at AOT compile time (MC bootstrap issue).
+      ;; Reflective .create call avoids loading Level.class at compile time (also triggers bootstrap).
+      (let [et-class (Class/forName "net.minecraft.world.entity.EntityType")
+            lightning-bolt (.get (.getDeclaredField et-class "LIGHTNING_BOLT") nil)
+            lightning (.create lightning-bolt level)]
+        (when lightning
+          (.moveTo ^Entity lightning (double x) (double y) (double z))
+          (.addFreshEntity level ^Entity lightning)
+          true)))
     (catch Exception e
       (log/warn "Failed to spawn lightning:" (ex-message e))
       false)))

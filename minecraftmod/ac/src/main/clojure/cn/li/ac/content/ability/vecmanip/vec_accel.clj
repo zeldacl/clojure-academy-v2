@@ -91,81 +91,50 @@
             charge-ticks (:charge-ticks skill-state 0)
             can-perform? (:can-perform skill-state false)
             exp (get-skill-exp player-id)]
-
-        (if can-perform?
-          (do
-            ;; Get player look direction
-            (when raycast/*raycast*
-              (when-let [look-vec (raycast/get-player-look-vector raycast/*raycast* player-id)]
-                (let [;; Adjust pitch by -10 degrees
-                      ;; Convert to radians: -10° = -0.174533 rad
-                      pitch-adjust -0.174533
-
-                      ;; Current look vector
-                      look-x (:x look-vec)
-                      look-y (:y look-vec)
-                      look-z (:z look-vec)
-
-                      ;; Calculate horizontal length
-                      horiz-len (Math/sqrt (+ (* look-x look-x) (* look-z look-z)))
-
-                      ;; Calculate current pitch
-                      current-pitch (Math/atan2 (- look-y) horiz-len)
-
-                      ;; New pitch
-                      new-pitch (+ current-pitch pitch-adjust)
-
-                      ;; Calculate new direction vector
-                      cos-pitch (Math/cos new-pitch)
-                      sin-pitch (Math/sin new-pitch)
-
-                      ;; Horizontal direction (normalized)
-                      horiz-x (/ look-x horiz-len)
-                      horiz-z (/ look-z horiz-len)
-
-                      ;; New direction vector
-                      new-x (* cos-pitch horiz-x)
-                      new-y (- sin-pitch)
-                      new-z (* cos-pitch horiz-z)
-
-                      ;; Calculate speed based on charge
-                      speed (calculate-speed charge-ticks)
-
-                      ;; Final velocity
-                      vel-x (* new-x speed)
-                      vel-y (* new-y speed)
-                      vel-z (* new-z speed)]
-
-                  ;; Set player velocity
-                  (when player-motion/*player-motion*
-                    (player-motion/set-velocity! player-motion/*player-motion*
-                                                player-id
-                                                vel-x vel-y vel-z)
-
-                    ;; Dismount riding entity
-                    (player-motion/dismount-riding! player-motion/*player-motion* player-id))
-
-                  ;; Reset fall damage
-                  (when teleportation/*teleportation*
-                    (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
-
-                  ;; Grant experience
-                  (when-let [state (ps/get-player-state player-id)]
-                    (let [{:keys [data events]} (learning/add-skill-exp
-                                                 (:ability-data state)
-                                                 player-id
-                                                 :vec-accel
-                                                 0.002
-                                                 1.0)]
-                      (ps/update-ability-data! player-id (constantly data))
-                      (doseq [e events]
-                        (ability-evt/fire-ability-event! e))))
-
-                  (log/info "VecAccel: Accelerated with speed" (format "%.2f" speed)
-                           "charge:" charge-ticks))))
-
-          ;; Cannot perform
-          (log/debug "VecAccel: Cannot perform (not on ground and exp <50%)"))))
+        (if-not can-perform?
+          (log/debug "VecAccel: Cannot perform (not on ground and exp <50%)")
+          ;; Get player look direction
+          (when (and raycast/*raycast*
+                     (some? (raycast/get-player-look-vector raycast/*raycast* player-id)))
+            (let [look-vec (raycast/get-player-look-vector raycast/*raycast* player-id)
+                  ;; Convert to radians: -10° = -0.174533 rad
+                  pitch-adjust -0.174533
+                  look-x (:x look-vec)
+                  look-y (:y look-vec)
+                  look-z (:z look-vec)
+                  horiz-len (Math/sqrt (+ (* look-x look-x) (* look-z look-z)))
+                  current-pitch (Math/atan2 (- look-y) horiz-len)
+                  new-pitch (+ current-pitch pitch-adjust)
+                  cos-pitch (Math/cos new-pitch)
+                  sin-pitch (Math/sin new-pitch)
+                  horiz-x (/ look-x horiz-len)
+                  horiz-z (/ look-z horiz-len)
+                  new-x (* cos-pitch horiz-x)
+                  new-y (- sin-pitch)
+                  new-z (* cos-pitch horiz-z)
+                  speed (calculate-speed charge-ticks)
+                  vel-x (* new-x speed)
+                  vel-y (* new-y speed)
+                  vel-z (* new-z speed)]
+              (when player-motion/*player-motion*
+                (player-motion/set-velocity! player-motion/*player-motion*
+                                             player-id
+                                             vel-x vel-y vel-z)
+                (player-motion/dismount-riding! player-motion/*player-motion* player-id))
+              (when teleportation/*teleportation*
+                (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
+              (when-let [state (ps/get-player-state player-id)]
+                (let [{:keys [data events]} (learning/add-skill-exp
+                                             (:ability-data state)
+                                             player-id
+                                             :vec-accel
+                                             0.002
+                                             1.0)]
+                  (ps/update-ability-data! player-id (constantly data))
+                  (doseq [e events]
+                    (ability-evt/fire-ability-event! e))))
+              (log/info "VecAccel: Accelerated with speed" (format "%.2f" speed)
+                        "charge:" charge-ticks))))))
     (catch Exception e
       (log/warn "VecAccel key-up failed:" (ex-message e)))))
 

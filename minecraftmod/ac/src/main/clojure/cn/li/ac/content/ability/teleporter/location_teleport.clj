@@ -113,10 +113,7 @@
           (log/debug "LocationTeleport: No saved locations")
 
           (let [locations (:locations skill-state)
-                selected-index (:selected-index skill-state 0)
                 current-pos (:current-pos skill-state)
-
-                ;; Get selected location (for now, just use first location)
                 selected-location (first locations)]
 
             (if-not selected-location
@@ -137,13 +134,12 @@
                     distance (calculate-distance current-x current-y current-z
                                                  target-x target-y target-z)]
 
-                ;; Check if cross-dimension teleport is allowed
                 (if (and cross-dimension? (< exp 0.8))
                   (log/info "LocationTeleport: Cross-dimension requires 80%+ experience")
 
-                  (let [energy-cost (calculate-energy-cost distance cross-dimension?)]
-
-                    ;; Teleport player with nearby entities
+                  (do
+                    ;; Keep the cost computed for future CP integration.
+                    (calculate-energy-cost distance cross-dimension?)
                     (when teleportation/*teleportation*
                       (let [result (teleportation/teleport-with-entities!
                                     teleportation/*teleportation*
@@ -152,13 +148,9 @@
                                     target-x
                                     target-y
                                     target-z
-                                    5.0)]  ; 5 block radius
-
+                                    5.0)]
                         (when (:success result)
-                          ;; Reset fall damage
                           (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
-
-                          ;; Grant experience based on distance
                           (when-let [state (ps/get-player-state player-id)]
                             (let [exp-gain (scaling/lerp 0.015 0.03 (min 1.0 (/ distance 1000.0)))
                                   {:keys [data events]} (learning/add-skill-exp
@@ -170,10 +162,9 @@
                               (ps/update-ability-data! player-id (constantly data))
                               (doseq [e events]
                                 (ability-evt/fire-ability-event! e))))
-
                           (log/info "LocationTeleport: Teleported to" location-name
                                     "distance:" (int distance)
-                                    "entities:" (:teleported-count result)))))))))))))))
+                                    "entities:" (:teleported-count result)))))))))))))
     (catch Exception e
       (log/warn "LocationTeleport key-up failed:" (ex-message e)))))
 

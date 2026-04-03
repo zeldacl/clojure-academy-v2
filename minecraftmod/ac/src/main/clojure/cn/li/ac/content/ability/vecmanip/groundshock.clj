@@ -106,7 +106,8 @@
 
               ;; Process blocks
               new-energy (atom energy)
-              new-affected-blocks (atom affected-blocks)]
+              new-affected-blocks (atom affected-blocks)
+              new-affected-entities (atom affected-entities)]
 
           ;; Process each position
           (doseq [[bx by bz] positions]
@@ -148,7 +149,7 @@
               (doseq [entity entities]
                 (let [entity-id (:uuid entity)]
                   (when-not (or (= entity-id player-id)
-                               (contains? affected-entities entity-id))
+                               (contains? @new-affected-entities entity-id))
                     ;; Damage entity
                     (when entity-damage/*entity-damage*
                       (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
@@ -166,7 +167,7 @@
                                                   0.0))
 
                     (swap! new-energy - 1.0)
-                    (set! affected-entities (conj affected-entities entity-id)))))))
+                                (swap! new-affected-entities conj entity-id))))))
 
           ;; Move forward
           (recur @new-energy
@@ -174,7 +175,7 @@
                  (+ x dir-x)
                  (+ z dir-z)
                  @new-affected-blocks
-                 affected-entities))))))
+                              @new-affected-entities))))))
 
 (defn groundshock-on-key-up
   "Perform the ground slam."

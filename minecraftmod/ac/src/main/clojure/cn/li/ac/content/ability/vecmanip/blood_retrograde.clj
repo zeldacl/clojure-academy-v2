@@ -42,10 +42,6 @@
                           :max-charge-ticks 30
                           :executed false})
 
-    ;; Slow player movement
-    (when player-motion/*player-motion*
-      (player-motion/set-walk-speed! player-motion/*player-motion* player-id 0.007))
-
     (log/debug "BloodRetrograde: Charge started")
     (catch Exception e
       (log/warn "BloodRetrograde key-down failed:" (ex-message e)))))
@@ -145,11 +141,6 @@
 
                   (log/info "BloodRetrograde: Hit entity" target-id "damage:" (int damage)))
                 (log/debug "BloodRetrograde: No target found")))))))
-
-    ;; Restore player movement speed
-    (when player-motion/*player-motion*
-      (player-motion/set-walk-speed! player-motion/*player-motion* player-id 0.1))
-
     (catch Exception e
       (log/warn "BloodRetrograde key-up failed:" (ex-message e)))))
 
@@ -158,10 +149,6 @@
   [{:keys [ctx-id player-id]}]
   (try
     (ctx/update-context! ctx-id dissoc :skill-state)
-
-    ;; Restore player movement speed
-    (when player-motion/*player-motion*
-      (player-motion/set-walk-speed! player-motion/*player-motion* player-id 0.1))
 
     (log/debug "BloodRetrograde aborted")
     (catch Exception e
