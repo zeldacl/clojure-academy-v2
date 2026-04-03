@@ -9,7 +9,11 @@
 (def block-namespaces
   "All block definition namespaces.
   These define blocks using defblock DSL and may register network handlers."
-  '[cn.li.ac.content.blocks.wireless])
+  '[cn.li.ac.content.blocks.wireless
+    cn.li.ac.content.blocks.generators
+    cn.li.ac.content.blocks.crafting
+    cn.li.ac.content.blocks.ability
+    cn.li.ac.content.blocks.misc])
 
 (def item-namespaces
   "All item definition namespaces.
