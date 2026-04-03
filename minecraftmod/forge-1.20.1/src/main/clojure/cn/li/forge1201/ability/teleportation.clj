@@ -1,0 +1,140 @@
+(ns cn.li.forge1201.ability.teleportation
+  "Forge implementation of ITeleportation protocol."
+  (:require [cn.li.mcmod.platform.teleportation :as ptp]
+            [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraft.server MinecraftServer]
+           [net.minecraft.server.level ServerLevel ServerPlayer]
+           [net.minecraft.world.entity Entity]
+           [net.minecraft.world.phys Vec3 AABB]
+           [net.minecraft.resources ResourceLocation]
+           [net.minecraft.core BlockPos]
+           [net.minecraftforge.server ServerLifecycleHooks]
+           [java.util UUID]))
+
+(set! *warn-on-reflection* true)
+
+(defn- get-server ^MinecraftServer []
+  (ServerLifecycleHooks/getCurrentServer))
+
+(defn- get-player-by-uuid [uuid-str]
+  (try
+    (when-let [^MinecraftServer server (get-server)]
+      (let [uuid (UUID/fromString uuid-str)]
+        (.getPlayer (.getPlayerList server) uuid)))
+    (catch Exception e
+      (log/warn "Failed to get player by UUID:" uuid-str (ex-message e))
+      nil)))
+
+(defn- get-level ^ServerLevel [world-id]
+  (when-let [^MinecraftServer server (get-server)]
+    (let [res-loc (ResourceLocation. world-id)]
+      (.getLevel server res-loc))))
+
+(defn- teleport-player-impl! [player-uuid world-id x y z]
+  (try
+    (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
+      (when-let [^ServerLevel target-level (get-level world-id)]
+        (let [current-level (.level player)]
+          (if (= current-level target-level)
+            ;; Same dimension - simple teleport
+            (do
+              (.teleportTo player x y z)
+              true)
+            ;; Cross-dimension teleport
+            (do
+              (.teleportTo player target-level x y z)
+              true)))))
+    (catch Exception e
+      (log/warn "Failed to teleport player:" (ex-message e))
+      false)))
+
+(defn- teleport-with-entities-impl! [player-uuid world-id x y z radius]
+  (try
+    (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
+      (when-let [^ServerLevel target-level (get-level world-id)]
+        (let [current-level (.level player)
+              player-pos (.position player)
+              px (.x player-pos)
+              py (.y player-pos)
+              pz (.z player-pos)
+
+              ;; Find nearby entities
+              aabb (AABB. (- px radius) (- py radius) (- pz radius)
+                          (+ px radius) (+ py radius) (+ pz radius))
+              entities (.getEntities current-level nil aabb)
+
+              teleported-count (atom 0)]
+
+          ;; Teleport player first
+          (if (= current-level target-level)
+            (.teleportTo player x y z)
+            (.teleportTo player target-level x y z))
+          (swap! teleported-count inc)
+
+          ;; Teleport nearby entities
+          (doseq [^Entity entity entities]
+            (when (not= entity player)
+              (try
+                (if (= current-level target-level)
+                  (.teleportTo entity x y z)
+                  (.changeDimension entity target-level))
+                (swap! teleported-count inc)
+                (catch Exception e
+                  (log/debug "Failed to teleport entity:" (ex-message e))))))
+
+          {:success true :teleported-count @teleported-count})))
+    (catch Exception e
+      (log/warn "Failed to teleport with entities:" (ex-message e))
+      {:success false :teleported-count 0})))
+
+(defn- reset-fall-damage-impl! [player-uuid]
+  (try
+    (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
+      (.resetFallDistance player)
+      true)
+    (catch Exception e
+      (log/warn "Failed to reset fall damage:" (ex-message e))
+      false)))
+
+(defn- get-player-position-impl [player-uuid]
+  (try
+    (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
+      (let [pos (.position player)
+            level (.level player)
+            dimension-key (.dimension level)
+            world-id (str (.location dimension-key))]
+        {:world-id world-id
+         :x (.x pos)
+         :y (.y pos)
+         :z (.z pos)}))
+    (catch Exception e
+      (log/warn "Failed to get player position:" (ex-message e))
+      nil)))
+
+(defn- get-player-dimension-impl [player-uuid]
+  (try
+    (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
+      (let [level (.level player)
+            dimension-key (.dimension level)]
+        (str (.location dimension-key))))
+    (catch Exception e
+      (log/warn "Failed to get player dimension:" (ex-message e))
+      nil)))
+
+(defn forge-teleportation []
+  (reify ptp/ITeleportation
+    (teleport-player! [_ player-uuid world-id x y z]
+      (teleport-player-impl! player-uuid world-id x y z))
+    (teleport-with-entities! [_ player-uuid world-id x y z radius]
+      (teleport-with-entities-impl! player-uuid world-id x y z radius))
+    (reset-fall-damage! [_ player-uuid]
+      (reset-fall-damage-impl! player-uuid))
+    (get-player-position [_ player-uuid]
+      (get-player-position-impl player-uuid))
+    (get-player-dimension [_ player-uuid]
+      (get-player-dimension-impl player-uuid))))
+
+(defn install-teleportation! []
+  (alter-var-root #'ptp/*teleportation*
+                  (constantly (forge-teleportation)))
+  (log/info "Forge teleportation installed"))

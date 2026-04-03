@@ -4,8 +4,18 @@
             [cn.li.forge1201.ability.sync :as ability-sync]
             [cn.li.forge1201.ability.network :as ability-network]
             [cn.li.forge1201.ability.store :as ability-store]
+            [cn.li.forge1201.ability.world-effects :as world-effects]
+            [cn.li.forge1201.ability.entity-damage :as entity-damage]
+            [cn.li.forge1201.ability.raycast :as raycast]
+            [cn.li.forge1201.ability.potion-effects :as potion-effects]
+            [cn.li.forge1201.ability.teleportation :as teleportation]
+            [cn.li.forge1201.ability.saved-locations :as saved-locations]
+            [cn.li.forge1201.ability.player-motion :as player-motion]
+            [cn.li.forge1201.ability.block-manipulation :as block-manipulation]
+            [cn.li.forge1201.ability.damage-interception :as damage-interception]
             [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.damage-handler :as damage-handler]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
@@ -55,9 +65,18 @@
       (ctx-mgr/tick-context-manager!))))
 
 (defn init-common!
-  "Register all forge-side lifecycle listeners for ability runtime." 
+  "Register all forge-side lifecycle listeners for ability runtime."
   []
   (ability-store/install-store!)
+  (world-effects/install-world-effects!)
+  (entity-damage/install-entity-damage!)
+  (raycast/install-raycast!)
+  (potion-effects/install-potion-effects!)
+  (teleportation/install-teleportation!)
+  (saved-locations/install-saved-locations!)
+  (player-motion/install-player-motion!)
+  (block-manipulation/install-block-manipulation!)
+  (damage-interception/install-damage-interception!)
   (ability-network/init!)
   (.addListener (MinecraftForge/EVENT_BUS)
                 EventPriority/NORMAL false PlayerEvent$PlayerLoggedInEvent
@@ -79,4 +98,8 @@
                 EventPriority/NORMAL false TickEvent$PlayerTickEvent
                 (reify java.util.function.Consumer
                   (accept [_ evt] (on-player-tick evt))))
+
+  ;; Initialize damage handlers after all protocols are installed
+  (damage-handler/init-damage-handlers!)
+
   (log/info "Forge ability lifecycle initialized"))
