@@ -14,6 +14,7 @@
             [cn.li.ac.ability.service.learning  :as lrn]
             [cn.li.ac.ability.service.resource  :as res]
             [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.context-runtime :as ctx-rt]
             [cn.li.ac.ability.context           :as ctx]
             [cn.li.ac.ability.event             :as evt]
             [cn.li.mcmod.util.log               :as log]))
@@ -75,7 +76,7 @@
     [{:keys [preset-idx]} player]
     (let [uuid (uuid-of player)]
       (ps/update-preset-data! uuid preset-data/set-active-preset preset-idx)
-      (evt/fire-ability-event! {:type      evt/EVT-PRESET-SWITCH
+      (evt/fire-ability-event! {:event/type evt/EVT-PRESET-SWITCH
                                  :player-id uuid
                                  :preset    preset-idx})))
 
@@ -106,7 +107,31 @@
 
   (defn- handle-ctx-terminate
     [{:keys [ctx-id]} _player]
-    (ctx/terminate-context! ctx-id nil))
+    (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
+
+  (defn- handle-ctx-channel
+    [{:keys [ctx-id channel payload]} _player]
+    (ctx/ctx-send-to-local! ctx-id channel payload))
+
+  (defn- handle-skill-key-down
+    [{:keys [ctx-id] :as payload} player]
+    (let [ctx0 (ctx/get-context ctx-id)
+          _ (when (nil? ctx0)
+              (when-let [skill-id (:skill-id payload)]
+                (ctx-mgr/establish-context! (uuid-of player) ctx-id skill-id)))]
+      (ctx-rt/handle-key-down! ctx-id payload ctx-mgr/send-terminated-context!)))
+
+  (defn- handle-skill-key-tick
+    [{:keys [ctx-id] :as payload} _player]
+    (ctx-rt/handle-key-tick! ctx-id payload ctx-mgr/send-terminated-context!))
+
+  (defn- handle-skill-key-up
+    [{:keys [ctx-id] :as payload} _player]
+    (ctx-rt/handle-key-up! ctx-id payload ctx-mgr/send-terminated-context!))
+
+  (defn- handle-skill-key-abort
+    [{:keys [ctx-id] :as payload} _player]
+    (ctx-rt/handle-key-abort! ctx-id payload ctx-mgr/send-terminated-context!))
 
 ;; ============================================================================
 ;; Registration
@@ -121,4 +146,9 @@
   (net-srv/register-handler catalog/MSG-CTX-BEGIN-LINK     handle-ctx-begin-link)
   (net-srv/register-handler catalog/MSG-CTX-KEEPALIVE      handle-ctx-keepalive)
   (net-srv/register-handler catalog/MSG-CTX-TERMINATE      handle-ctx-terminate)
+  (net-srv/register-handler catalog/MSG-CTX-CHANNEL        handle-ctx-channel)
+  (net-srv/register-handler catalog/MSG-SKILL-KEY-DOWN     handle-skill-key-down)
+  (net-srv/register-handler catalog/MSG-SKILL-KEY-TICK     handle-skill-key-tick)
+  (net-srv/register-handler catalog/MSG-SKILL-KEY-UP       handle-skill-key-up)
+  (net-srv/register-handler catalog/MSG-SKILL-KEY-ABORT    handle-skill-key-abort)
   (log/info "Ability network handlers registered"))

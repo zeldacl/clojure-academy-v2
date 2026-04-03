@@ -64,9 +64,11 @@
 
         resp-handler
         (fn [request-id response-bytes]
-          (net-client/handle-response
-            (int request-id)
-            (deserialize response-bytes)))]
+          (let [rid (int request-id)
+                payload (deserialize response-bytes)]
+            (if (neg? rid)
+              (net-client/handle-push (:msg-id payload) (:payload payload))
+              (net-client/handle-response rid payload))))]
 
     (ClojureNetwork/init req-handler resp-handler))
   (log/info "Forge 1.20.1 GUI network system initialized"))

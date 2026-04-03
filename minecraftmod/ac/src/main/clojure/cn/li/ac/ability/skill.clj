@@ -68,6 +68,7 @@
                   :damage-scale           1.0
                   :cp-consume-speed       1.0
                   :overload-consume-speed 1.0
+                  :cooldown-ticks         nil
                   :exp-incr-speed         1.0
                   :destroy-blocks?        true
                   :enabled                true
@@ -118,3 +119,12 @@
   [skill-id]
   (when-let [s (get-skill skill-id)]
     [(:category-id s) (or (:ctrl-id s) skill-id)]))
+
+(defn get-skill-by-controllable
+  "Resolve skill-id by controllable pair [category-id ctrl-id]."
+  [category-id ctrl-id]
+  (some (fn [[sid s]]
+          (when (and (= (:category-id s) category-id)
+                     (= (or (:ctrl-id s) sid) ctrl-id))
+            sid))
+        @skill-registry))

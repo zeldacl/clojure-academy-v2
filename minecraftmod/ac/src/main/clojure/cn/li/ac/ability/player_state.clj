@@ -89,7 +89,8 @@
   (mark-dirty! uuid-str))
 
 (defn update-cooldown-data! [uuid-str f & args]
-  (apply update-player-state! uuid-str update :cooldown-data f args))
+  (apply update-player-state! uuid-str update :cooldown-data f args)
+  (mark-dirty! uuid-str))
 
 (defn update-preset-data! [uuid-str f & args]
   (apply update-player-state! uuid-str update :preset-data f args)

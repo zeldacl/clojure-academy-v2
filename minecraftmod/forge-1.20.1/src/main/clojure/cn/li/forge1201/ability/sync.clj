@@ -5,7 +5,7 @@
   - mark-player-dirty! is called by lifecycle/tick or request handlers
   - tick-sync! flushes at fixed interval and logs sync payload size
 
-  Transport integration for client HUD will be attached in phase 6.
+  Transport integration now uses ability-network/send-sync-to-client!.
   This namespace keeps the dirty-set and flush cadence centralized."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.mcmod.util.log :as log]))

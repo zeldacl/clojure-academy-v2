@@ -51,7 +51,7 @@
       (ps/get-or-create-player-state! uuid)
       (ps/server-tick-player! uuid nil)
       (ability-sync/mark-player-dirty! uuid)
-      (ability-sync/tick-sync! nil)
+      (ability-sync/tick-sync! ability-network/send-sync-to-client!)
       (ctx-mgr/tick-context-manager!))))
 
 (defn init-common!

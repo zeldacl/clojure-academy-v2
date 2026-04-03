@@ -17,6 +17,7 @@
 (def MSG-CTX-KEEPALIVE    "ability:ctx/keepalive")
 (def MSG-CTX-TERMINATE    "ability:ctx/terminate")
 (def MSG-CTX-TERMINATED   "ability:ctx/terminated")
+(def MSG-CTX-CHANNEL      "ability:ctx/channel")
 
 ;; ============================================================================
 ;; Skill Execution Messages (routed through context channel)
@@ -53,6 +54,7 @@
 (def all-messages
   "All registered message IDs."
   #{MSG-CTX-BEGIN-LINK MSG-CTX-ESTABLISH MSG-CTX-KEEPALIVE MSG-CTX-TERMINATE MSG-CTX-TERMINATED
+    MSG-CTX-CHANNEL
     MSG-SKILL-KEY-DOWN MSG-SKILL-KEY-TICK MSG-SKILL-KEY-UP MSG-SKILL-KEY-ABORT
     MSG-SYNC-ABILITY MSG-SYNC-RESOURCE MSG-SYNC-COOLDOWN MSG-SYNC-PRESET
     MSG-REQ-LEARN-SKILL MSG-REQ-LEVEL-UP MSG-REQ-SET-PRESET MSG-REQ-SWITCH-PRESET

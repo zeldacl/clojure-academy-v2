@@ -50,6 +50,22 @@
   60)
 
 ;; ============================================================================
+;; Context runtime defaults (used when skill spec omits per-skill values)
+;; ============================================================================
+
+(def ^:dynamic *runtime-cp-consume-per-tick*
+  "Default CP consume base used by context key-tick runtime."
+  1.0)
+
+(def ^:dynamic *runtime-overload-per-tick*
+  "Default overload add base used by context key-tick runtime."
+  0.6)
+
+(def ^:dynamic *runtime-main-cooldown-ticks*
+  "Default main cooldown ticks applied on key-up when skill has no override."
+  20)
+
+;; ============================================================================
 ;; Progression / experience
 ;; ============================================================================
 

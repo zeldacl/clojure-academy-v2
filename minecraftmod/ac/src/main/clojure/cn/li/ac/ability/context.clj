@@ -45,6 +45,7 @@
 ;;  :player-uuid    string
 ;;  :skill-id       keyword
 ;;  :status         keyword   ; :constructed :alive :terminated
+;;  :input-state    keyword   ; :idle :active :released :aborted
 ;;  :message-buffer []        ; messages queued while CONSTRUCTED
 ;;  :listeners      {channel-key [fn ...]}
 ;;  :last-keepalive-ms long | nil}
@@ -55,6 +56,11 @@
 
 (defonce ^:private context-registry
   (atom {}))
+
+(defonce ^:private route-fns
+  (atom {:to-server nil
+         :to-client nil
+         :to-except-local nil}))
 
 (defonce ^:private client-id-counter (atom 0))
 (defonce ^:private server-id-counter (atom 0))
@@ -72,6 +78,7 @@
      :player-uuid    player-uuid
      :skill-id       skill-id
      :status         STATUS-CONSTRUCTED
+    :input-state    :idle
      :message-buffer []
      :listeners      {}
      :last-keepalive-ms nil}))
@@ -85,6 +92,7 @@
      :player-uuid    player-uuid
      :skill-id       skill-id
      :status         STATUS-ALIVE      ; server-side starts ALIVE after validation
+    :input-state    :idle
      :message-buffer []
      :listeners      {}
      :last-keepalive-ms (System/currentTimeMillis)}))
@@ -188,6 +196,53 @@
   (when-let [ctx (get-context ctx-id)]
     (doseq [h (get-in ctx [:listeners channel] [])]
       (try (h msg) (catch Exception e (log/warn "Listener threw" (ex-message e)))))))
+
+(defn register-route-fns!
+  "Register platform route callbacks used by context message APIs.
+
+  Expected callback signatures:
+  - to-server       (fn [ctx-id channel msg])
+  - to-client       (fn [ctx-id channel msg])
+  - to-except-local (fn [ctx-id channel msg])"
+  [{:keys [to-server to-client to-except-local]}]
+  (reset! route-fns {:to-server to-server
+                     :to-client to-client
+                     :to-except-local to-except-local}))
+
+(defn ctx-send-to-server!
+  "Route context message to server side.
+  If context is CONSTRUCTED, message is buffered and sent after ESTABLISH."
+  [ctx-id channel msg]
+  (ctx-buffer-or-send! ctx-id
+                       {:channel channel :payload msg}
+                       (fn [m]
+                         (when-let [f (:to-server @route-fns)]
+                           (f ctx-id (:channel m) (:payload m))))))
+
+(defn ctx-send-to-client!
+  "Route context message to origin client side.
+  If context is CONSTRUCTED, message is buffered and sent after ESTABLISH."
+  [ctx-id channel msg]
+  (ctx-buffer-or-send! ctx-id
+                       {:channel channel :payload msg}
+                       (fn [m]
+                         (when-let [f (:to-client @route-fns)]
+                           (f ctx-id (:channel m) (:payload m))))))
+
+(defn ctx-send-to-except-local!
+  "Broadcast context message to nearby receivers except local player.
+  If context is CONSTRUCTED, message is buffered and sent after ESTABLISH."
+  [ctx-id channel msg]
+  (ctx-buffer-or-send! ctx-id
+                       {:channel channel :payload msg}
+                       (fn [m]
+                         (when-let [f (:to-except-local @route-fns)]
+                           (f ctx-id (:channel m) (:payload m))))))
+
+(defn ctx-send-to-self!
+  "Deliver context message to local listeners immediately."
+  [ctx-id channel msg]
+  (ctx-send-to-local! ctx-id channel msg))
 
 (defn ctx-on!
   "Register a listener for channel on a context."

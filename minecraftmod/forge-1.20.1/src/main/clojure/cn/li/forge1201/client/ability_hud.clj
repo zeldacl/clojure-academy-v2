@@ -4,11 +4,16 @@
   Rendering hook integration is intentionally thin here; this file prepares
   stable data for any future GUI overlay renderer."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.forge1201.client.ability-runtime :as runtime]
             [cn.li.mcmod.util.log :as log]))
+
+(defn- source-state [player-uuid]
+  (or (ps/get-player-state player-uuid)
+      (runtime/latest-sync player-uuid)))
 
 (defn hud-model
   [player-uuid]
-  (when-let [s (ps/get-player-state player-uuid)]
+  (when-let [s (source-state player-uuid)]
     (let [r (:resource-data s)
           p (:preset-data s)]
       {:cp {:cur (:cur-cp r) :max (:max-cp r)}

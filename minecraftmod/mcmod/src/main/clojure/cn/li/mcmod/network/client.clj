@@ -5,6 +5,7 @@
 
 (defonce ^:private request-counter (atom 0))
 (defonce ^:private pending-requests (atom {}))
+(defonce ^:private push-handlers (atom {}))
 
 (defn- next-request-id []
   (swap! request-counter inc))
@@ -28,6 +29,30 @@
         (catch Exception e
           (log/error "Error in response callback:"(ex-message e)))))
     (log/warn "No pending request for response" request-id)))
+
+(defn register-push-handler!
+  "Register one-way client push handler.
+
+  Args:
+  - msg-id: string message identifier
+  - handler-fn: (fn [payload])"
+  [msg-id handler-fn]
+  (swap! push-handlers assoc msg-id handler-fn)
+  nil)
+
+(defn handle-push
+  "Handle one-way server push message.
+
+  Args:
+  - msg-id: string message identifier
+  - payload: map"
+  [msg-id payload]
+  (if-let [handler (get @push-handlers msg-id)]
+    (try
+      (handler payload)
+      (catch Exception e
+        (log/error "Error in push handler" msg-id ":" (ex-message e))))
+    (log/warn "No push handler registered for" msg-id)))
 
 (defmulti send-request
   "Platform-specific transport for RPC requests"

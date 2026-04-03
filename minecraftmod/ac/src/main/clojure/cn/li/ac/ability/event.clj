@@ -85,6 +85,10 @@
 ;; -- Input --
 (def EVT-PRESET-UPDATE       :ability/preset-update)
 (def EVT-PRESET-SWITCH       :ability/preset-switch)
+(def EVT-CONTEXT-KEY-DOWN    :ability/context-key-down)
+(def EVT-CONTEXT-KEY-TICK    :ability/context-key-tick)
+(def EVT-CONTEXT-KEY-UP      :ability/context-key-up)
+(def EVT-CONTEXT-KEY-ABORT   :ability/context-key-abort)
 
 ;; -- Calc (modifiable) --
 (def CALC-SKILL-ATTACK       :calc/skill-attack)

@@ -98,6 +98,11 @@
   [player-uuid]
   (ctx/abort-all-contexts-for-player! player-uuid send-terminated!))
 
+(defn send-terminated-context!
+  "Notify client that a specific context has terminated."
+  [ctx-id]
+  (send-terminated! ctx-id))
+
 ;; ============================================================================
 ;; Server tick
 ;; ============================================================================
