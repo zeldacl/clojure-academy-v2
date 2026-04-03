@@ -38,7 +38,13 @@
   :creative-tab :tools
   :properties {:tooltip ["终端安装工具"
                          "用于在方块上安装无线通信终端"]
-               :model-texture "terminal_installer"})
+               :model-texture "terminal_installer"}
+  :on-right-click (fn [event-data]
+                    (let [{:keys [player]} event-data]
+                      ;; Open terminal GUI (client-side)
+                      (when-let [open-fn (requiring-resolve
+                                          'cn.li.ac.terminal.terminal-gui/open-terminal)]
+                        (open-fn player)))))
 
 ;; ============================================================================
 ;; Silbarn - Resonance material

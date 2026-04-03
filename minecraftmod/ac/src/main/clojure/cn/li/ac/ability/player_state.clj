@@ -53,6 +53,8 @@
    :resource-data (rd/new-resource-data)
    :cooldown-data (cd/new-cooldown-data)
    :preset-data   (pd/new-preset-data)
+   :terminal-data {:terminal-installed? false
+                   :installed-apps #{}}
    :dirty?        false})
 
 (defn get-or-create-player-state! [uuid-str]

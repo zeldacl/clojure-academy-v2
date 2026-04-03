@@ -14,6 +14,7 @@
             [cn.li.forge1201.client.ability-hud :as ability-hud]
             [cn.li.forge1201.client.ability-hud-bridge :as ability-hud-bridge]
             [cn.li.forge1201.client.ability-screen-bridge :as ability-screen-bridge]
+            [cn.li.forge1201.client.terminal-screen-bridge :as terminal-screen-bridge]
             [cn.li.forge1201.client.effects.particle-bridge :as particle-bridge]
             [cn.li.forge1201.client.effects.sound-bridge :as sound-bridge]
             [cn.li.forge1201.client.ability-gui :as ability-gui]
@@ -114,6 +115,7 @@
   (ability-hud/init!)
   (ability-hud-bridge/init!)
   (ability-screen-bridge/init!)
+  (terminal-screen-bridge/init!)
   (particle-bridge/init!)
   (sound-bridge/init!)
   (ability-gui/init!)

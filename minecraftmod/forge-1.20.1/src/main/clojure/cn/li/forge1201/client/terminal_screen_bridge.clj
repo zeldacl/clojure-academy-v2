@@ -1,0 +1,161 @@
+(ns cn.li.forge1201.client.terminal-screen-bridge
+  "CLIENT-ONLY screen bridge for terminal GUI (Forge layer)."
+  (:require [cn.li.ac.terminal.terminal-gui :as terminal-gui]
+            [cn.li.forge1201.gui.cgui-runtime :as cgui-rt]
+            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraft.client.gui.screens Screen]
+           [net.minecraft.client.gui GuiGraphics]
+           [net.minecraft.network.chat Component]
+           [net.minecraft.client Minecraft]))
+
+(set! *warn-on-reflection* true)
+
+;; ============================================================================
+;; Terminal Screen
+;; ============================================================================
+
+(defn- create-terminal-screen
+  "Create a Minecraft Screen that renders the terminal CGui."
+  [player]
+  (let [gui-widget (terminal-gui/create-terminal-gui player)
+        left (atom 0)
+        top (atom 0)]
+    (proxy [Screen] [(Component/literal "Data Terminal")]
+      (init []
+        (proxy-super init))
+
+      (render [^GuiGraphics graphics mouse-x mouse-y partial-tick]
+        (try
+          ;; Render background
+          (.renderBackground this graphics)
+
+          ;; Calculate centered position
+          (let [screen-width (.width this)
+                screen-height (.height this)
+                [gui-width gui-height] (cgui/get-size gui-widget)
+                left-pos (int (/ (- screen-width gui-width) 2))
+                top-pos (int (/ (- screen-height gui-height) 2))]
+            (reset! left left-pos)
+            (reset! top top-pos)
+
+            ;; Tick and render CGui
+            (cgui-rt/frame-tick! gui-widget {:partial-ticks partial-tick})
+            (cgui-rt/render-tree! graphics gui-widget left-pos top-pos))
+          (catch Exception e
+            (log/error "Error rendering terminal screen:" (.getMessage e))
+            (log/error "Exception:" e))))
+
+      (mouseClicked [mouse-x mouse-y button]
+        (try
+          (cgui-rt/mouse-click! gui-widget (int mouse-x) (int mouse-y) @left @top button)
+          true
+          (catch Exception e
+            (log/error "Error handling terminal mouse click:" (.getMessage e))
+            false)))
+
+      (mouseDragged [mouse-x mouse-y button drag-x drag-y]
+        (try
+          (cgui-rt/mouse-drag! gui-widget (int mouse-x) (int mouse-y) @left @top)
+          true
+          (catch Exception e
+            (log/error "Error handling terminal mouse drag:" (.getMessage e))
+            false)))
+
+      (keyPressed [key-code scan-code modifiers]
+        (try
+          (cgui-rt/key-input! gui-widget key-code scan-code (char 0))
+          (proxy-super keyPressed key-code scan-code modifiers)
+          (catch Exception e
+            (log/error "Error handling terminal key press:" (.getMessage e))
+            false)))
+
+      (charTyped [code-point modifiers]
+        (try
+          (cgui-rt/key-input! gui-widget 0 0 (char code-point))
+          (proxy-super charTyped code-point modifiers)
+          (catch Exception e
+            (log/error "Error handling terminal char typed:" (.getMessage e))
+            false)))
+
+      (onClose []
+        (try
+          (cgui-rt/dispose! gui-widget)
+          (catch Exception e
+            (log/error "Error disposing terminal GUI:" (.getMessage e))))
+        (proxy-super onClose)))))
+
+;; ============================================================================
+;; Screen Opening Functions
+;; ============================================================================
+
+(defn open-terminal-screen!
+  "Open terminal screen. Called by AC layer via item right-click."
+  [player]
+  (try
+    (log/info "Opening terminal screen for player:" player)
+    (let [^Minecraft mc (Minecraft/getInstance)]
+      (.setScreen mc (create-terminal-screen player)))
+    (catch Exception e
+      (log/error "Failed to open terminal screen:" (.getMessage e))
+      (log/error "Exception:" e))))
+
+(defn open-simple-gui!
+  "Open a simple CGui screen (for apps like About, Tutorial, etc).
+
+  Args:
+  - gui-widget: CGui widget tree
+  - title: Screen title string"
+  [gui-widget title]
+  (try
+    (log/info "Opening simple GUI screen:" title)
+    (let [^Minecraft mc (Minecraft/getInstance)
+          left (atom 0)
+          top (atom 0)
+          screen (proxy [Screen] [(Component/literal title)]
+                   (init []
+                     (proxy-super init))
+
+                   (render [^GuiGraphics graphics mouse-x mouse-y partial-tick]
+                     (try
+                       ;; Render background
+                       (.renderBackground this graphics)
+
+                       ;; Calculate centered position
+                       (let [screen-width (.width this)
+                             screen-height (.height this)
+                             [gui-width gui-height] (cgui/get-size gui-widget)
+                             left-pos (int (/ (- screen-width gui-width) 2))
+                             top-pos (int (/ (- screen-height gui-height) 2))]
+                         (reset! left left-pos)
+                         (reset! top top-pos)
+
+                         ;; Tick and render CGui
+                         (cgui-rt/frame-tick! gui-widget {:partial-ticks partial-tick})
+                         (cgui-rt/render-tree! graphics gui-widget left-pos top-pos))
+                       (catch Exception e
+                         (log/error "Error rendering simple GUI:" (.getMessage e)))))
+
+                   (mouseClicked [mouse-x mouse-y button]
+                     (try
+                       (cgui-rt/mouse-click! gui-widget (int mouse-x) (int mouse-y) @left @top button)
+                       true
+                       (catch Exception e
+                         (log/error "Error handling mouse click:" (.getMessage e))
+                         false)))
+
+                   (onClose []
+                     (try
+                       (cgui-rt/dispose! gui-widget)
+                       (catch Exception e
+                         (log/error "Error disposing GUI:" (.getMessage e))))
+                     (proxy-super onClose)))]
+      (.setScreen mc screen))
+    (catch Exception e
+      (log/error "Failed to open simple GUI:" (.getMessage e))
+      (log/error "Exception:" e))))
+
+(defn init!
+  "Initialize terminal screen bridge."
+  []
+  (log/info "Terminal screen bridge initialized"))

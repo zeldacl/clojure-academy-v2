@@ -25,8 +25,16 @@
   These define categories and skills via ability DSL."
   '[cn.li.ac.content.ability])
 
+(def system-namespaces
+  "System feature namespaces (terminal, etc).
+  These provide game systems and frameworks."
+  '[cn.li.ac.terminal.init])
+
 (defn load-all!
   "Load all content namespaces to trigger DSL macro side effects and hook registration."
   []
-  (doseq [ns-sym (concat block-namespaces item-namespaces ability-namespaces)]
-    (require ns-sym)))
+  (doseq [ns-sym (concat block-namespaces item-namespaces ability-namespaces system-namespaces)]
+    (require ns-sym))
+  ;; Initialize terminal system after all content is loaded
+  (when-let [init-fn (requiring-resolve 'cn.li.ac.terminal.init/init-terminal!)]
+    (init-fn)))
