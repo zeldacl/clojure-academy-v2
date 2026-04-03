@@ -13,7 +13,8 @@
     cn.li.ac.content.blocks.generators
     cn.li.ac.content.blocks.crafting
     cn.li.ac.content.blocks.ability
-    cn.li.ac.content.blocks.misc])
+    cn.li.ac.content.blocks.misc
+    cn.li.ac.content.blocks.integration])
 
 (def item-namespaces
   "All item definition namespaces.

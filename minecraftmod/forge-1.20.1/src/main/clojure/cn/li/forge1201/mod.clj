@@ -20,7 +20,9 @@
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.i18n :as i18n]
              [cn.li.mcmod.util.log :as log]
-             [cn.li.forge1201.wireless-imc :as wireless-imc])
+             [cn.li.forge1201.wireless-imc :as wireless-imc]
+             [cn.li.forge1201.integration.forge-energy :as forge-energy]
+             [cn.li.forge1201.integration.ic2-energy :as ic2-energy])
   (:import [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
@@ -264,6 +266,10 @@
   (log/info "FMLCommonSetupEvent - Common setup phase")
   (gui-init/init-common!)
   (ability-lifecycle/init-common!)
+  ;; Initialize Forge Energy integration
+  (forge-energy/init-forge-energy!)
+  ;; Initialize IC2 integration (optional - no-op if IC2 not present)
+  (ic2-energy/init-ic2-energy!)
   ;; TODO: Re-enable item-handler/init! after bootstrap issues resolved
   ;; (ability-item-handler/init!)
   ;; Register wireless IMC dispatch listeners on the Forge game event bus.
