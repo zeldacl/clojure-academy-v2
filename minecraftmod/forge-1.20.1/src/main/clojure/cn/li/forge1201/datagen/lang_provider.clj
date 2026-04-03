@@ -12,10 +12,66 @@
   (-> (GsonBuilder.) (.setPrettyPrinting) (.disableHtmlEscaping) (.create)))
 
 ;; TODO: Load translation data from ac metadata system instead of hardcoding
-;; For now, keep minimal translations for creative tab
+;; For now, keep minimal translations for creative tab and commands
 (def ^:private lang-data
-  {"en_us.json" {"itemGroup.my_mod.items" "My Mod Items"}
-   "zh_cn.json" {"itemGroup.my_mod.items" "My Mod Items"}})
+  {"en_us.json" {"itemGroup.my_mod.items" "My Mod Items"
+                 ;; Command translations
+                 "command.academy.acach.success" "Granted advancement %s to %s"
+                 "command.academy.acach.not_found" "Advancement not found: %s"
+                 "command.academy.acach.missing_advancement" "Missing advancement argument"
+                 "command.academy.aim.cat.success" "Switched to category: %s"
+                 "command.academy.aim.cat.not_found" "Category not found: %s"
+                 "command.academy.aim.catlist.success" "Available categories: %s"
+                 "command.academy.aim.catlist.empty" "No categories available"
+                 "command.academy.aim.reset.success" "Reset all abilities"
+                 "command.academy.aim.learn.success" "Learned skill: %s"
+                 "command.academy.aim.learn.not_found" "Skill not found: %s"
+                 "command.academy.aim.learn.already" "Already learned: %s"
+                 "command.academy.aim.unlearn.success" "Unlearned skill: %s"
+                 "command.academy.aim.unlearn.not_found" "Skill not found: %s"
+                 "command.academy.aim.learn_all.success" "Learned all skills in category"
+                 "command.academy.aim.learned.list" "Learned skills: %s"
+                 "command.academy.aim.skills.list" "Available skills: %s"
+                 "command.academy.aim.level.success" "Set level to %s"
+                 "command.academy.aim.level.invalid" "Invalid level: %s (must be 1-5)"
+                 "command.academy.aim.exp.success" "Set experience for %s to %s"
+                 "command.academy.aim.exp.not_found" "Skill not found: %s"
+                 "command.academy.aim.exp.invalid" "Invalid experience value: %s (must be 0.0-1.0)"
+                 "command.academy.aim.fullcp.success" "Restored CP to full"
+                 "command.academy.aim.cd_clear.success" "Cleared all cooldowns"
+                 "command.academy.aim.maxout.success" "Maxed out progression"
+                 "command.academy.aim.cheats_on.success" "Enabled cheat mode"
+                 "command.academy.aim.cheats_off.success" "Disabled cheat mode"
+                 "command.academy.aim.help" "Available commands: cat, catlist, reset, learn, unlearn, learn_all, learned, skills, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"}
+   "zh_cn.json" {"itemGroup.my_mod.items" "My Mod Items"
+                 ;; 命令翻译
+                 "command.academy.acach.success" "已授予进度 %s 给 %s"
+                 "command.academy.acach.not_found" "未找到进度: %s"
+                 "command.academy.acach.missing_advancement" "缺少进度参数"
+                 "command.academy.aim.cat.success" "已切换到类别: %s"
+                 "command.academy.aim.cat.not_found" "未找到类别: %s"
+                 "command.academy.aim.catlist.success" "可用类别: %s"
+                 "command.academy.aim.catlist.empty" "没有可用类别"
+                 "command.academy.aim.reset.success" "已重置所有能力"
+                 "command.academy.aim.learn.success" "已学习技能: %s"
+                 "command.academy.aim.learn.not_found" "未找到技能: %s"
+                 "command.academy.aim.learn.already" "已经学习过: %s"
+                 "command.academy.aim.unlearn.success" "已遗忘技能: %s"
+                 "command.academy.aim.unlearn.not_found" "未找到技能: %s"
+                 "command.academy.aim.learn_all.success" "已学习类别中的所有技能"
+                 "command.academy.aim.learned.list" "已学习的技能: %s"
+                 "command.academy.aim.skills.list" "可用技能: %s"
+                 "command.academy.aim.level.success" "已设置等级为 %s"
+                 "command.academy.aim.level.invalid" "无效等级: %s (必须为 1-5)"
+                 "command.academy.aim.exp.success" "已设置 %s 的经验值为 %s"
+                 "command.academy.aim.exp.not_found" "未找到技能: %s"
+                 "command.academy.aim.exp.invalid" "无效经验值: %s (必须为 0.0-1.0)"
+                 "command.academy.aim.fullcp.success" "已恢复CP至满值"
+                 "command.academy.aim.cd_clear.success" "已清除所有冷却"
+                 "command.academy.aim.maxout.success" "已最大化进度"
+                 "command.academy.aim.cheats_on.success" "已启用作弊模式"
+                 "command.academy.aim.cheats_off.success" "已禁用作弊模式"
+                 "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, skills, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"}})
 
 (defn create
   [^PackOutput pack-output _exfile-helper]
