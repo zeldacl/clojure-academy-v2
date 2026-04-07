@@ -59,68 +59,45 @@
       ;;   (int (/ (- (.height this) (.getYSize this)) 2)))
       
       ;; Slot rendering reads leftPos/topPos directly; set them with type-hinted set! so slots align with the enlarged GUI.
-      (init []
-        (log/info "Initializing CGUI container screen with size delta" size-dx "x" size-dy)
-        (log/info "Original size:" (.getImageWidthPublic this) "x" (.getImageHeightPublic this))
-        (when (or (not= size-dx 0) (not= size-dy 0))
-          (let [new-x (int (+ size-dx (.getImageWidthPublic this)))
-                new-y (int (+ size-dy (.getImageHeightPublic this)))]
-            (.setImageSize this new-x new-y)))
-        (log/info "Adjusted size:" (.getImageWidthPublic this) "x" (.getImageHeightPublic this))
-        ;(log/info "Initial left/top:" (.-leftPos ^AbstractContainerScreen this) "/" (.-topPos ^AbstractContainerScreen this))
-        ;; (when (or (not= size-dx 0) (not= size-dy 0))
-        ;;   (let [new-left (int (/ (- (.width this) (.getXSize this)) 2))
-        ;;         new-top (int (/ (- (.height this) (.getYSize this)) 2))]
-        ;;     (set! (.-leftPos ^AbstractContainerScreen this) new-left)
-        ;;     (set! (.-topPos ^AbstractContainerScreen this) new-top)))
-        (proxy-super init) 
-            ;(log/info "Post-init left/top:" (.-leftPos ^AbstractContainerScreen this) "/" (.-topPos ^AbstractContainerScreen this))
-        )
+      (containerTick []
+        (let [^CGuiContainerScreen s this]
+          (when (or (not= size-dx 0) (not= size-dy 0))
+            (let [new-x (int (+ size-dx (.getImageWidthPublic s)))
+                  new-y (int (+ size-dy (.getImageHeightPublic s)))]
+              (.setImageSize s new-x new-y)))))
       
       (render [^GuiGraphics gg mouse-x mouse-y partial-ticks]
+        (let [^CGuiContainerScreen s this]
         (when root
           (try
-            (cgui-rt/resize-root! root (.getXSize this) (.getYSize this))
+            (cgui-rt/resize-root! root (.getXSize s) (.getYSize s))
             (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
             (catch Exception e
               (log/debug "CGUI frame-tick error:" (.getMessage e)))))
         ;; Non-inv tab: skip full vanilla render so no slots/highlight are drawn; only background + our renderBg (CGui) + tooltip
         (if (slots-visible? cgui-screen)
-          (proxy-super render gg mouse-x mouse-y partial-ticks)
+          (.callSuperRender s gg (int mouse-x) (int mouse-y) (float partial-ticks))
           (do
-            (.renderBackground this gg)
-            (.renderBg this gg (float partial-ticks) (int mouse-x) (int mouse-y))
-            (.renderTooltip this gg (int mouse-x) (int mouse-y)))))
+            (.callSuperRenderBackground s gg)
+            (reset! left (.getGuiLeft s))
+            (reset! top (.getGuiTop s))
+            (when root
+              (try
+                (cgui-rt/render-tree! gg root @left @top)
+                (catch Exception e
+                  (log/debug "CGUI non-slot tab render error:" (.getMessage e)))))
+            (.callSuperRenderTooltip s gg (int mouse-x) (int mouse-y))))))
       (renderLabels [^GuiGraphics gg mouse-x mouse-y] (comment "skip labels"))
       
-      ;; Tabbed GUI: draw slot highlight only when on inv tab (use client tab atom so no delay)
-      (renderSlotHighlight [^GuiGraphics gg x y]
-        (when (slots-visible? cgui-screen)
-          (proxy-super renderSlotHighlight gg x y)))
-      
-      ;; Tabbed GUI: draw slot (and item) only when on inv tab; on other tabs hide slots and items
-      (renderSlot [^GuiGraphics gg ^Slot slot]
-        (when (slots-visible? cgui-screen)
-          (proxy-super renderSlot gg slot)))
-      
-      ;; Return null when on non-inv tab so hoveredSlot stays null and no slot is "under" mouse
-      (findSlot [x y]
-        (if (slots-enabled-for-click? cgui-screen)
-          (proxy-super findSlot x y)
-          nil))
-      
-      ;; Block the actual slot-click→packet path when on non-inv tab (even if something calls this directly)
-      (slotClicked [^Slot slot slot-id button ^ClickType action-type]
-        (when (slots-enabled-for-click? cgui-screen)
-          (proxy-super slotClicked slot slot-id button action-type)))
-      
       (renderBg [^GuiGraphics gg _partial-ticks _mouse-x _mouse-y]
-        (reset! left (.getGuiLeft this))
-        (reset! top (.getGuiTop this))
+        (let [^CGuiContainerScreen s this]
+          (reset! left (.getGuiLeft s))
+          (reset! top (.getGuiTop s)))
         (let [left-val @left
               top-val @top
-              right (+ left-val (.getXSize this))
-              bottom (+ top-val (.getYSize this))]
+              ^CGuiContainerScreen s this
+              right (+ left-val (.getXSize s))
+              bottom (+ top-val (.getYSize s))]
                   ;(.fill gg left-val top-val right bottom (unchecked-int 0xC0101010))
                   ;(.fill gg left-val top-val right bottom (unchecked-int 0xD0101010))
           )
@@ -136,52 +113,58 @@
             (cgui-rt/mouse-click! root (int mouse-x) (int mouse-y) @left @top button)
             (catch Exception _ nil)))
         ;; Only forward to vanilla (slot handling) when on inv tab; otherwise consume click to block slot interaction
-        (if (slots-enabled-for-click? cgui-screen)
-          (proxy-super mouseClicked mouse-x mouse-y button)
-          true))
+        (let [^CGuiContainerScreen s this]
+          (if (slots-enabled-for-click? cgui-screen)
+            (.callSuperMouseClicked s mouse-x mouse-y button)
+            true)))
       
       (mouseReleased [mouse-x mouse-y button]
-        (if (slots-enabled-for-click? cgui-screen)
-          (proxy-super mouseReleased mouse-x mouse-y button)
-          true))
+        (let [^CGuiContainerScreen s this]
+          (if (slots-enabled-for-click? cgui-screen)
+            (.callSuperMouseReleased s mouse-x mouse-y button)
+            true)))
       
       (mouseDragged [mouse-x mouse-y button drag-x drag-y]
         (when root
           (try
             (cgui-rt/mouse-drag! root (int mouse-x) (int mouse-y) @left @top)
             (catch Exception _ nil)))
-        (if (slots-enabled-for-click? cgui-screen)
-          (proxy-super mouseDragged mouse-x mouse-y button drag-x drag-y)
-          true))
+        (let [^CGuiContainerScreen s this]
+          (if (slots-enabled-for-click? cgui-screen)
+            (.callSuperMouseDragged s mouse-x mouse-y button drag-x drag-y)
+            true)))
       
       (keyPressed [key-code scan-code modifiers]
         (when root
           (try
             (cgui-rt/key-input! root key-code scan-code (char 0))
             (catch Exception _ nil)))
-        (proxy-super keyPressed key-code scan-code modifiers))
+        (let [^CGuiContainerScreen s this]
+          (.callSuperKeyPressed s key-code scan-code modifiers)))
       
       (charTyped [code-point modifiers]
         (when root
           (try
             (cgui-rt/key-input! root 0 0 (char code-point))
             (catch Exception _ nil)))
-        (proxy-super charTyped code-point modifiers))
+        (let [^CGuiContainerScreen s this]
+          (.callSuperCharTyped s code-point modifiers)))
       
-      (onClose []
+      (removed []
         (when root
           (try (cgui-rt/dispose! root) (catch Exception _ nil)))
-        (proxy-super onClose)))))
+        ))))
 
 (defn- fallback-container-screen
   "Minimal AbstractContainerScreen that only draws a dark gradient (no CGUI)."
   [menu player-inventory title]
   (proxy [CGuiContainerScreen] [menu player-inventory title]
     (renderBg [^GuiGraphics gg _partial _mx _my]
-      (let [left (.getGuiLeft this)
-            top (.getGuiTop this)
-            right (+ left (.getXSize this))
-            bottom (+ top (.getYSize this))]
+    (let [^CGuiContainerScreen s this
+      left (.getGuiLeft s)
+      top (.getGuiTop s)
+      right (+ left (.getXSize s))
+      bottom (+ top (.getYSize s))]
         (.fill gg left top right bottom (unchecked-int 0xC0101010))
         (.fill gg left top right bottom (unchecked-int 0xD0101010))))))
 

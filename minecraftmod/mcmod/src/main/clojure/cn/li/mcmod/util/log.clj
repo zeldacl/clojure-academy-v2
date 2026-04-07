@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.util.log
-  (:import [org.slf4j LoggerFactory]))
+  (:import [org.slf4j Logger LoggerFactory]))
 
-(def ^:private logger (LoggerFactory/getLogger "my_mod"))
+(def ^Logger ^:private logger (LoggerFactory/getLogger "my_mod"))
 
 (defn info [& xs]
   (.info logger (str "[my_mod] " (apply str xs))))

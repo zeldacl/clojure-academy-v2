@@ -10,7 +10,7 @@
             [cn.li.ac.integration.crafttweaker.bridge :as ct-bridge]
             [cn.li.mcmod.util.log :as log]))
 
-(set! *warn-on-reflection* true)
+(set! *warn-on-reflection* false)
 
 (defn- load-class-no-init ^Class [class-name]
   (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))

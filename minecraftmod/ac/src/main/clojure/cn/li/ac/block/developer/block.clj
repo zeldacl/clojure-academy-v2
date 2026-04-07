@@ -154,8 +154,8 @@
         tile (net-helpers/get-tile-at world payload)]
     (if tile
       (let [state (or (platform-be/get-custom-state tile) dev-default-state)
-            player-uuid (str (.getUUID player))
-            player-name (str (.getName player))]
+        player-uuid (str player)
+        player-name (str player)]
         (if (:structure-valid state false)
           (do
             (platform-be/set-custom-state! tile

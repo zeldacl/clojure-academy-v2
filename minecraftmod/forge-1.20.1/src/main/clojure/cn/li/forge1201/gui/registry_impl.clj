@@ -136,7 +136,7 @@
             provider
             (reify java.util.function.Consumer
               (accept [_ buf]
-                (.writeBlockPos buf pos)))))
+                (.writeBlockPos ^FriendlyByteBuf buf pos)))))
         (do
           (log/info "[OPEN-GUI-FOR-PLAYER] Opening screen without position data...")
           (NetworkHooks/openScreen player provider)))

@@ -8,10 +8,17 @@
            [net.minecraftforge.common MinecraftForge]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.gui GuiGraphics]
+           [net.minecraft.client.gui Font]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.eventbus.api EventPriority]))
 
 (set! *warn-on-reflection* true)
+
+(defn- draw-string!
+  [^GuiGraphics graphics ^String text x y color]
+  (let [^Minecraft mc (Minecraft/getInstance)
+        ^Font font (.-font mc)]
+    (.drawString graphics font text (int x) (int y) (int color))))
 
 (defn- render-bar
   "Render a progress bar (CP or overload)."
@@ -31,7 +38,7 @@
   (let [{:keys [x y activated]} indicator-data]
     (when activated
       ;; Draw a simple colored circle or text
-      (.drawString graphics "●" x y 0x00FF00))))
+      (draw-string! graphics "●" x y 0x00FF00))))
 
 (defn- render-skill-slot
   "Render a single skill slot with icon, name, and cooldown overlay."
@@ -41,7 +48,7 @@
     (.fill graphics x y (+ x 20) (+ y 20) 0x80000000)
 
     ;; Render key label
-    (.drawString graphics key-label (+ x 2) (+ y 2) 0xFFFFFF)
+    (draw-string! graphics (str key-label) (+ x 2) (+ y 2) 0xFFFFFF)
 
     ;; Render skill icon (if texture exists)
     (when skill-icon
@@ -53,7 +60,7 @@
           nil)))
 
     ;; Render skill name
-    (.drawString graphics skill-name (+ x 45) (+ y 6) 0xFFFFFF)
+    (draw-string! graphics (str skill-name) (+ x 45) (+ y 6) 0xFFFFFF)
 
     ;; Render cooldown overlay and time
     (when in-cooldown
@@ -63,7 +70,7 @@
       ;; Render cooldown time text (centered on icon)
       (when (pos? cooldown-seconds)
         (let [time-text (format "%.1fs" cooldown-seconds)]
-          (.drawString graphics time-text (+ x 3) (+ y 10) 0xFFFFFF))))))
+          (draw-string! graphics time-text (+ x 3) (+ y 10) 0xFFFFFF))))))
 
 (defn- get-client-player-uuid
   "Get current client player UUID."

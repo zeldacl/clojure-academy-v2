@@ -8,7 +8,7 @@
            [net.minecraftforge.server ServerLifecycleHooks]
            [java.util UUID]))
 
-(set! *warn-on-reflection* true)
+(set! *warn-on-reflection* false)
 
 (defn- load-class-no-init ^Class [class-name]
   (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))

@@ -7,7 +7,8 @@
   IC2 integration is completely optional - if IC2 is not present, this module
   will not be loaded and no errors will occur."
   (:require [cn.li.mcmod.platform.capability :as platform-cap]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.acapi.energy IEnergyCapable]))
 
 (set! *warn-on-reflection* true)
 
@@ -73,15 +74,16 @@
 
   Returns:
     IEnergySink proxy object"
-  [energy-capable tier]
+  [^IEnergyCapable energy-capable tier]
   (try
     ;; Use reflection to create IC2 interface implementation
     ;; This avoids compile-time dependency on IC2
-    (let [proxy-obj (proxy [Object] []
+    (let [^IEnergyCapable ec energy-capable
+          proxy-obj (proxy [Object] []
                       ;; getDemandedEnergy() - how much EU can be accepted
                       (getDemandedEnergy []
-                        (let [current (.getEnergyStored energy-capable)
-                              max-energy (.getMaxEnergyStored energy-capable)
+                        (let [current (.getEnergyStored ec)
+                              max-energy (.getMaxEnergyStored ec)
                               space (- max-energy current)]
                           (if-to-eu space)))
 
@@ -92,7 +94,7 @@
                       ;; injectEnergy(EnumFacing, double, double) - receive EU
                       (injectEnergy [direction amount voltage]
                         (let [if-amount (eu-to-if amount)
-                              received (.receiveEnergy energy-capable (int if-amount) false)
+                              received (.receiveEnergy ec (int if-amount) false)
                               eu-received (if-to-eu received)
                               rejected (- amount eu-received)]
                           rejected))
@@ -116,18 +118,19 @@
 
   Returns:
     IEnergySource proxy object"
-  [energy-capable tier]
+  [^IEnergyCapable energy-capable tier]
   (try
-    (let [proxy-obj (proxy [Object] []
+    (let [^IEnergyCapable ec energy-capable
+          proxy-obj (proxy [Object] []
                       ;; getOfferedEnergy() - how much EU is available
                       (getOfferedEnergy []
-                        (let [current (.getEnergyStored energy-capable)]
+                        (let [current (.getEnergyStored ec)]
                           (if-to-eu current)))
 
                       ;; drawEnergy(double) - extract EU
                       (drawEnergy [amount]
                         (let [if-amount (eu-to-if amount)]
-                          (.extractEnergy energy-capable (int if-amount) false)))
+                          (.extractEnergy ec (int if-amount) false)))
 
                       ;; getSourceTier() - IC2 voltage tier
                       (getSourceTier []

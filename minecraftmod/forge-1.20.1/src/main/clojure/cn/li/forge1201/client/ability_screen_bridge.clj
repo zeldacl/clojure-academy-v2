@@ -5,11 +5,18 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens Screen]
            [net.minecraft.client.gui GuiGraphics]
+           [net.minecraft.client.gui Font]
            [net.minecraft.network.chat Component]
            [net.minecraft.client Minecraft]
            [net.minecraft.resources ResourceLocation]))
 
 (set! *warn-on-reflection* true)
+
+(defn- draw-string!
+  [^GuiGraphics graphics ^String text x y color]
+  (let [^Minecraft mc (Minecraft/getInstance)
+        ^Font font (.-font mc)]
+    (.drawString graphics font text (int x) (int y) (int color))))
 
 ;; ============================================================================
 ;; Skill Tree Screen
@@ -42,15 +49,15 @@
   "Render ability info panel."
   [^GuiGraphics graphics info]
   (let [{:keys [category-name level cp overload can-level-up]} info]
-    (.drawString graphics category-name 10 10 0xFFFFFF)
-    (.drawString graphics (str "Level: " level "/5") 10 25 0xFFFFFF)
-    (.drawString graphics (str "CP: " (:cur cp) "/" (:max cp)) 10 40 0xFFFFFF)
-    (.drawString graphics (str "Overload: " (:cur overload) "/" (:max overload)) 10 55 0xFFFFFF)
+    (draw-string! graphics (str category-name) 10 10 0xFFFFFF)
+    (draw-string! graphics (str "Level: " level "/5") 10 25 0xFFFFFF)
+    (draw-string! graphics (str "CP: " (:cur cp) "/" (:max cp)) 10 40 0xFFFFFF)
+    (draw-string! graphics (str "Overload: " (:cur overload) "/" (:max overload)) 10 55 0xFFFFFF)
 
     ;; Render level-up button if available
     (when can-level-up
       (.fill graphics 10 200 90 220 0xFF00AA00)
-      (.drawString graphics "Level Up" 15 205 0xFFFFFF))))
+      (draw-string! graphics "Level Up" 15 205 0xFFFFFF))))
 
 (defn- render-skill-tooltip
   "Render tooltip for hovered skill."
@@ -64,19 +71,17 @@
                              (map #(str "✗ " (or (:description %) "Condition not met")) conditions))))]
       ;; Simple tooltip rendering
       (doseq [[idx line] (map-indexed vector tooltip-lines)]
-        (.drawString graphics line (+ mouse-x 10) (+ mouse-y 10 (* idx 12)) 0xFFFFFF)))))
+        (draw-string! graphics (str line) (+ mouse-x 10) (+ mouse-y 10 (* idx 12)) 0xFFFFFF)))))
 
 (defn- create-skill-tree-screen []
   (proxy [Screen] [(Component/literal "Skill Tree")]
-    (init []
-      (proxy-super init))
-
     (render [^GuiGraphics graphics mouse-x mouse-y _partial-tick]
       (try
         ;; Get render data from AC layer
         (when-let [render-data (ac-skill-tree/build-screen-render-data)]
           ;; Render background
-          (.renderBackground graphics)
+          (let [^Screen screen this]
+            (.renderBackground screen graphics))
 
           ;; Render ability info panel
           (when-let [info (:ability-info render-data)]
@@ -125,9 +130,8 @@
           (log/error "Error handling skill tree click" e)
           false)))
 
-    (onClose []
-      (ac-skill-tree/close-screen!)
-      (proxy-super onClose))))
+    (removed []
+      (ac-skill-tree/close-screen!))))
 
 ;; ============================================================================
 ;; Preset Editor Screen
@@ -141,34 +145,32 @@
                selected? 0xFFFFFF00
                :else 0xFF808080)]
     (.fill graphics x y (+ x 40) (+ y 20) color)
-    (.drawString graphics (str "P" (inc preset-idx)) (+ x 10) (+ y 5) 0xFFFFFF)))
+    (draw-string! graphics (str "P" (inc preset-idx)) (+ x 10) (+ y 5) 0xFFFFFF)))
 
 (defn- render-slot-assignment
   "Render a slot assignment."
   [^GuiGraphics graphics slot x y]
   (let [key-label (nth ["Z" "X" "C" "V"] (:idx slot))]
     (.fill graphics x y (+ x 100) (+ y 20) 0xFF404040)
-    (.drawString graphics key-label (+ x 5) (+ y 5) 0xFFFFFF)
+    (draw-string! graphics key-label (+ x 5) (+ y 5) 0xFFFFFF)
     (when-let [skill-name (:skill-name slot)]
-      (.drawString graphics skill-name (+ x 25) (+ y 5) 0xFFFFFF))))
+      (draw-string! graphics (str skill-name) (+ x 25) (+ y 5) 0xFFFFFF))))
 
 (defn- render-available-skill
   "Render an available skill in the list."
   [^GuiGraphics graphics skill selected? x y]
   (let [color (if selected? 0xFF404080 0xFF202020)]
     (.fill graphics x y (+ x 150) (+ y 20) color)
-    (.drawString graphics (:skill-name skill) (+ x 5) (+ y 5) 0xFFFFFF)))
+    (draw-string! graphics (str (:skill-name skill)) (+ x 5) (+ y 5) 0xFFFFFF)))
 
 (defn- create-preset-editor-screen []
   (proxy [Screen] [(Component/literal "Preset Editor")]
-    (init []
-      (proxy-super init))
-
     (render [^GuiGraphics graphics mouse-x mouse-y _partial-tick]
       (try
         (when-let [render-data (ac-preset-editor/build-preset-editor-render-data)]
           ;; Render background
-          (.renderBackground graphics)
+          (let [^Screen screen this]
+            (.renderBackground screen graphics))
 
           ;; Render preset tabs
           (doseq [preset-idx (:presets render-data)]
@@ -183,7 +185,7 @@
               (render-slot-assignment graphics slot 10 (+ 40 (* idx 25)))))
 
           ;; Render available skills
-          (.drawString graphics "Available Skills:" 170 40 0xFFFFFF)
+          (draw-string! graphics "Available Skills:" 170 40 0xFFFFFF)
           (doseq [[idx skill] (map-indexed vector (:available-skills render-data))]
             (render-available-skill graphics skill
                                    (= (:skill-id skill) (:selected-skill render-data))
@@ -191,10 +193,10 @@
 
           ;; Render buttons
           (.fill graphics 10 200 90 220 0xFF00AA00)
-          (.drawString graphics "Save" 35 205 0xFFFFFF)
+          (draw-string! graphics "Save" 35 205 0xFFFFFF)
 
           (.fill graphics 100 200 180 220 0xFF0000AA)
-          (.drawString graphics "Set Active" 110 205 0xFFFFFF))
+          (draw-string! graphics "Set Active" 110 205 0xFFFFFF))
         (catch Exception e
           (log/error "Error rendering preset editor screen" e))))
 
@@ -248,9 +250,8 @@
           (log/error "Error handling preset editor click" e)
           false)))
 
-    (onClose []
-      (ac-preset-editor/close-screen!)
-      (proxy-super onClose))))
+    (removed []
+      (ac-preset-editor/close-screen!))))
 
 ;; ============================================================================
 ;; Screen Opening Functions

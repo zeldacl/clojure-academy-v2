@@ -10,7 +10,8 @@
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
             [cn.li.forge1201.gui.slots :as slots]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.world.inventory AbstractContainerMenu DataSlot]
+  (:import [net.minecraft.server.level ServerPlayer]
+           [net.minecraft.world.inventory AbstractContainerMenu DataSlot Slot]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.world Container]))
 
@@ -79,15 +80,6 @@
 
 (def tab-data-slot-index 0)
 
-(defn get-tab-index-from-menu
-  "Read tab index from menu's first DataSlot (for tabbed GUIs). Returns nil if not tabbed or read fails."
-  [^AbstractContainerMenu menu]
-  (when (and menu (pos? (.getDataSlotCount menu)))
-    (try
-      (let [slot (.getDataSlot menu (int tab-data-slot-index))]
-        (when slot (.get ^net.minecraft.world.inventory.DataSlot slot)))
-      (catch Exception _ nil))))
-
 (defn- create-tab-data-slot
   "Create a standalone DataSlot and sync from container's :tab-index.
    Avoids proxy (which breaks for DataSlot.get() due to 0-param Java method / arity mismatch)."
@@ -112,7 +104,7 @@
 (defn- setup-menu-slots!
   [^AbstractContainerMenu menu clj-container tab-slot]
   (let [gui-id (gui/get-gui-id-for-container clj-container)
-        player (:player clj-container)
+      ^ServerPlayer player (:player clj-container)
         player-inventory (when player
                            (.getInventory player))
         tile-inventory (create-tile-inventory-adapter clj-container)
@@ -156,11 +148,10 @@
                 (tabbed/clear-tab-index-by-container-id! cid)
                 (gui/unregister-container-by-id! cid)))
             (gui/unregister-menu-container! this)
-            (proxy-super removed player)
             (gui/safe-close! clj-container)
             (gui/unregister-active-container! clj-container)
             (gui/unregister-player-container! player)
-            (log/info "Menu closed for player" (.getName player)))
+            (log/info "Menu closed for player" (str player)))
 
           (broadcastChanges []
             (when (and (tabbed/tabbed-container? clj-container) (:tab-index clj-container))
@@ -181,9 +172,9 @@
                      (not (tabbed/slots-active-for-menu? this clj-container)))
               ItemStack/EMPTY
               (try
-                (let [slot (.getSlot this slot-index)]
+                (let [^Slot slot (.getSlot ^AbstractContainerMenu this slot-index)]
                   (if (and slot (.hasItem slot))
-                    (let [stack (.getItem slot)]
+                    (let [^ItemStack stack (.getItem slot)]
                       (gui/execute-quick-move-forge this clj-container slot-index slot stack))
                     ItemStack/EMPTY))
                 (catch Exception e

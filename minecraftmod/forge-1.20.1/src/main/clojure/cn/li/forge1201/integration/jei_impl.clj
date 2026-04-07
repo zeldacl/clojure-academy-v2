@@ -22,7 +22,7 @@
            [net.minecraft.world.item ItemStack]
            [net.minecraft.world.level ItemLike]))
 
-(set! *warn-on-reflection* true)
+(set! *warn-on-reflection* false)
 
 (defn- parse-item-id
   "Parse item ID string to ItemStack.

@@ -13,7 +13,7 @@
            [net.minecraftforge.event.level BlockEvent$BreakEvent]
            [java.util UUID]))
 
-(set! *warn-on-reflection* true)
+(set! *warn-on-reflection* false)
 
 (defn- get-server ^MinecraftServer []
   (ServerLifecycleHooks/getCurrentServer))

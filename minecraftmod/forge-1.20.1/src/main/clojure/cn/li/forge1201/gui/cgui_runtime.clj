@@ -14,10 +14,13 @@
   (:import
     (net.minecraft.client.gui Font)
     (net.minecraft.client.gui GuiGraphics)
+    (net.minecraft.client Minecraft)
+    (net.minecraft.client.renderer.texture TextureManager)
     (net.minecraft.resources ResourceLocation)
     (com.mojang.blaze3d.systems RenderSystem)
     (javax.imageio ImageIO)
     (cn.li.forge1201.client ClientProxy GuiGraphicsHelper)
+    (java.lang.reflect Field)
     (org.lwjgl.opengl GL11)))
 
   (defonce ^:private texture-size-cache (atom {}))
@@ -50,38 +53,22 @@
         (if cached
           cached
               (let [mc (ClientProxy/getMinecraft)
-                tm (try (.getTextureManager mc) (catch Exception _ nil))
+                ^TextureManager tm (try (.getTextureManager ^Minecraft mc) (catch Exception _ nil))
                 tex (try (when tm (.getTexture tm resource-location)) (catch Exception _ nil))
                 ;; try multiple ways to obtain width/height
                 size (try
                        (or
                          ;; preferred: read the actual PNG from mod resources
                          (get-texture-size-from-resource resource-location)
-                         ;; common: texture object exposes getWidth/getHeight
-                         (when tex
-                           (try
-                             (let [w (try (.getWidth tex) (catch Exception _ nil))
-                                   h (try (.getHeight tex) (catch Exception _ nil))]
-                               (when (and w h) [(int w) (int h)]))
-                             (catch Exception _ nil)))
-                         ;; some implementations wrap an image object
-                         (when tex
-                           (try
-                             (let [img (try (.getTextureImage tex) (catch Exception _ nil))]
-                               (when img
-                                 (let [w (try (.getWidth img) (catch Exception _ nil))
-                                       h (try (.getHeight img) (catch Exception _ nil))]
-                                   (when (and w h) [(int w) (int h)]))))
-                             (catch Exception _ nil)))
                          ;; as a last resort: try accessing fields reflectively
                          (when tex
                            (try
                              (let [cls (class tex)
-                                   wf (try (.getDeclaredField cls "width") (catch Exception _ nil))
-                                   hf (try (.getDeclaredField cls "height") (catch Exception _ nil))]
+                                   ^Field wf (try (.getDeclaredField cls "width") (catch Exception _ nil))
+                                   ^Field hf (try (.getDeclaredField cls "height") (catch Exception _ nil))]
                                (when (and wf hf)
-                                 (doto wf (.setAccessible true))
-                                 (doto hf (.setAccessible true))
+                                 (.setAccessible wf true)
+                                 (.setAccessible hf true)
                                  (let [w (.getInt wf tex)
                                        h (.getInt hf tex)]
                                    (when (and (number? w) (number? h)) [(int w) (int h)]))))

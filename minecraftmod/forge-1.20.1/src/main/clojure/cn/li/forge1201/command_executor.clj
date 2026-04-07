@@ -86,7 +86,7 @@
           (do
             (send-feedback source "command.academy.acach.not_found" true [advancement-id] true)
             {:success? false :message "Advancement not found"})
-          (let [player-advancements (.getPlayerAdvancements advancement-manager player)
+          (let [player-advancements (.getAdvancements player)
                 ^AdvancementProgress progress (.getOrStartProgress player-advancements advancement)]
             (doseq [criterion (.getRemainingCriteria progress)]
               (.grant player-advancements advancement criterion))

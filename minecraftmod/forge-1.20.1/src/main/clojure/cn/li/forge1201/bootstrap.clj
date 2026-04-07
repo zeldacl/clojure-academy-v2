@@ -5,5 +5,5 @@
   [method-name & args]
   (clojure.lang.Reflector/invokeStaticMethod
     "cn.li.forge1201.shim.ForgeBootstrapHelper"
-    method-name
+    ^String method-name
     (to-array args)))

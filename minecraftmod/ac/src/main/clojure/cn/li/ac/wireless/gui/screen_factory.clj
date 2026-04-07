@@ -53,7 +53,7 @@
                                             {:gui-type gui-type})))
         _ (log/info "[SCREEN-FACTORY-CORE] Got clj-container=" (type clj-container))
         player (entity/inventory-get-player player-inventory)
-        _ (log/info "[SCREEN-FACTORY-CORE] Got player=" (.getName player))
+        _ (log/info "[SCREEN-FACTORY-CORE] Got player=" (str player))
         _ (log/info "[SCREEN-FACTORY-CORE] Calling screen-fn...")
         cgui-screen (screen-fn clj-container container-or-handler player)]
       

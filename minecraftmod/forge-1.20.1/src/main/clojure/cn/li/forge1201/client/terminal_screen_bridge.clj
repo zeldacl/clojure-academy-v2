@@ -9,7 +9,7 @@
            [net.minecraft.network.chat Component]
            [net.minecraft.client Minecraft]))
 
-(set! *warn-on-reflection* true)
+(set! *warn-on-reflection* false)
 
 ;; ============================================================================
 ;; Terminal Screen
@@ -22,24 +22,19 @@
         left (atom 0)
         top (atom 0)]
     (proxy [Screen] [(Component/literal "Data Terminal")]
-      (init []
-        (proxy-super init))
-
       (render [^GuiGraphics graphics mouse-x mouse-y partial-tick]
         (try
-          ;; Render background
-          (.renderBackground this graphics)
-
-          ;; Calculate centered position
-          (let [screen-width (.width this)
-                screen-height (.height this)
+          (let [^Screen s this]
+            (.renderBackground s graphics))
+          (let [^Minecraft mc (Minecraft/getInstance)
+                window (.getWindow mc)
+                screen-width (.getGuiScaledWidth window)
+                screen-height (.getGuiScaledHeight window)
                 [gui-width gui-height] (cgui/get-size gui-widget)
                 left-pos (int (/ (- screen-width gui-width) 2))
                 top-pos (int (/ (- screen-height gui-height) 2))]
             (reset! left left-pos)
             (reset! top top-pos)
-
-            ;; Tick and render CGui
             (cgui-rt/frame-tick! gui-widget {:partial-ticks partial-tick})
             (cgui-rt/render-tree! graphics gui-widget left-pos top-pos))
           (catch Exception e
@@ -78,12 +73,11 @@
             (log/error "Error handling terminal char typed:" (.getMessage e))
             false)))
 
-      (onClose []
+      (removed []
         (try
           (cgui-rt/dispose! gui-widget)
           (catch Exception e
-            (log/error "Error disposing terminal GUI:" (.getMessage e))))
-        (proxy-super onClose)))))
+            (log/error "Error disposing terminal GUI:" (.getMessage e))))))))
 
 ;; ============================================================================
 ;; Screen Opening Functions
@@ -113,24 +107,19 @@
           left (atom 0)
           top (atom 0)
           screen (proxy [Screen] [(Component/literal title)]
-                   (init []
-                     (proxy-super init))
-
                    (render [^GuiGraphics graphics mouse-x mouse-y partial-tick]
                      (try
-                       ;; Render background
-                       (.renderBackground this graphics)
-
-                       ;; Calculate centered position
-                       (let [screen-width (.width this)
-                             screen-height (.height this)
+                       (let [^Screen s this]
+                         (.renderBackground s graphics))
+                       (let [^Minecraft mc (Minecraft/getInstance)
+                             window (.getWindow mc)
+                             screen-width (.getGuiScaledWidth window)
+                             screen-height (.getGuiScaledHeight window)
                              [gui-width gui-height] (cgui/get-size gui-widget)
                              left-pos (int (/ (- screen-width gui-width) 2))
                              top-pos (int (/ (- screen-height gui-height) 2))]
                          (reset! left left-pos)
                          (reset! top top-pos)
-
-                         ;; Tick and render CGui
                          (cgui-rt/frame-tick! gui-widget {:partial-ticks partial-tick})
                          (cgui-rt/render-tree! graphics gui-widget left-pos top-pos))
                        (catch Exception e
@@ -144,12 +133,11 @@
                          (log/error "Error handling mouse click:" (.getMessage e))
                          false)))
 
-                   (onClose []
+                   (removed []
                      (try
                        (cgui-rt/dispose! gui-widget)
                        (catch Exception e
-                         (log/error "Error disposing GUI:" (.getMessage e))))
-                     (proxy-super onClose)))]
+                         (log/error "Error disposing GUI:" (.getMessage e))))))]
       (.setScreen mc screen))
     (catch Exception e
       (log/error "Failed to open simple GUI:" (.getMessage e))

@@ -11,7 +11,7 @@
            [net.minecraftforge.server ServerLifecycleHooks]
            [java.util UUID]))
 
-(set! *warn-on-reflection* true)
+(set! *warn-on-reflection* false)
 
 (defn- get-server ^MinecraftServer []
   (ServerLifecycleHooks/getCurrentServer))
@@ -38,11 +38,11 @@
           (if (= current-level target-level)
             ;; Same dimension - simple teleport
             (do
-              (.teleportTo player x y z)
+              (.teleportTo player target-level x y z (.getYRot player) (.getXRot player))
               true)
             ;; Cross-dimension teleport
             (do
-              (.teleportTo player target-level x y z)
+              (.teleportTo player target-level x y z (.getYRot player) (.getXRot player))
               true)))))
     (catch Exception e
       (log/warn "Failed to teleport player:" (ex-message e))
@@ -66,9 +66,7 @@
               teleported-count (atom 0)]
 
           ;; Teleport player first
-          (if (= current-level target-level)
-            (.teleportTo player x y z)
-            (.teleportTo player target-level x y z))
+          (.teleportTo player target-level x y z (.getYRot player) (.getXRot player))
           (swap! teleported-count inc)
 
           ;; Teleport nearby entities

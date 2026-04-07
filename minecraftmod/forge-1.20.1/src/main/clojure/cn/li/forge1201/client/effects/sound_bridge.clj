@@ -6,7 +6,7 @@
            [net.minecraft.sounds SoundSource]
            [net.minecraft.resources ResourceLocation]))
 
-(set! *warn-on-reflection* true)
+(set! *warn-on-reflection* false)
 
 (defn- play-sound-effect
   "Play a sound effect."

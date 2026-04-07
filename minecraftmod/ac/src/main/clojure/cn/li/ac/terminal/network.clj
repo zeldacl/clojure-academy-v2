@@ -8,7 +8,8 @@
   (:require [cn.li.ac.terminal.player-data :as term-data]
             [cn.li.ac.terminal.app-registry :as app-reg]
             [cn.li.mcmod.network.server :as net-server]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraft.server.level ServerPlayer]))
 
 ;; ============================================================================
 ;; Message IDs
@@ -29,7 +30,7 @@
 
 (defn handle-install-terminal
   "Handle terminal installation request."
-  [_payload player]
+  [_payload ^ServerPlayer player]
   (try
     (let [uuid-str (str (.getUUID player))]
       (term-data/install-terminal! uuid-str)
@@ -40,7 +41,7 @@
 
 (defn handle-install-app
   "Handle app installation request."
-  [payload player]
+  [payload ^ServerPlayer player]
   (try
     (let [uuid-str (str (.getUUID player))
           app-id (keyword (:app-id payload))]
@@ -55,7 +56,7 @@
 
 (defn handle-uninstall-app
   "Handle app uninstallation request."
-  [payload player]
+  [payload ^ServerPlayer player]
   (try
     (let [uuid-str (str (.getUUID player))
           app-id (keyword (:app-id payload))]
@@ -67,7 +68,7 @@
 
 (defn handle-get-state
   "Handle terminal state query."
-  [_payload player]
+  [_payload ^ServerPlayer player]
   (try
     (let [uuid-str (str (.getUUID player))
           terminal-data (term-data/get-terminal-data uuid-str)
