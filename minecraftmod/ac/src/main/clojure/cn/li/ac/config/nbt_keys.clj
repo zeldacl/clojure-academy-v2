@@ -11,6 +11,10 @@
   {;; Common keys
    :placer "Placer"
    :energy "Energy"
+  :mode "Mode"
+  :input-slot "InputSlot"
+  :output-slot "OutputSlot"
+  :face-config "FaceConfig"
 
    ;; Wireless Node keys
    :node-type "NodeType"
@@ -18,6 +22,9 @@
    :password "Password"
    :enabled "Enabled"
    :node-inventory "NodeInventory"
+  :wireless-enabled "WirelessEnabled"
+  :wireless-mode "WirelessMode"
+  :wireless-bandwidth "WirelessBandwidth"
 
    ;; Wireless Matrix keys
    :plate-count "PlateCount"

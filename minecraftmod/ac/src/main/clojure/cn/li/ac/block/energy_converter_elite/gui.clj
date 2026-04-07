@@ -4,6 +4,7 @@
   Reuses the basic converter GUI components with elite tier configuration."
   (:require [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.block.energy-converter.gui :as base-gui]
@@ -51,7 +52,7 @@
            (schema-runtime/build-gui-atoms converter-schema/unified-converter-schema state))))
 
 (defn get-slot-count [_container]
-  (slot-schema/get-slot-count converter-slot-schema-id))
+  (slot-registry/get-slot-count converter-slot-schema-id))
 
 (def can-place-item? base-gui/can-place-item?)
 (def get-slot-item base-gui/get-slot-item)

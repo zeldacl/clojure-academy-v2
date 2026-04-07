@@ -218,25 +218,18 @@
 
 (defn create-container
   "Create a Matrix GUI container instance.
-   Creates DataSlots for Menu-tracked integer synchronization."
+  Uses container atoms for sync; platform layer may attach DataSlots if needed."
   [tile player]
   (let [[be state] (resolve-state tile)
     proxy      (if be
          (wm/->MatrixJavaProxy be)
          (wm/->MatrixJavaProxy tile))
-    gui-atoms (schema-runtime/build-gui-atoms matrix-schema/unified-matrix-schema state)
-    ;; Initialize DataSlots from current container atom values.
-    plate-count-slot (doto (net.minecraft.world.inventory.DataSlot/standalone)
-           (.set (int @(:plate-count gui-atoms))))
-    core-level-slot (doto (net.minecraft.world.inventory.DataSlot/standalone)
-          (.set (int @(:core-level gui-atoms))))]
+   gui-atoms (schema-runtime/build-gui-atoms matrix-schema/unified-matrix-schema state)]
     (assoc gui-atoms
        :tile-entity (or be tile)
        :tile-java proxy
        :player player
-       :container-type :matrix
-       :data-slots {:plate-count plate-count-slot
-        :core-level core-level-slot})))
+     :container-type :matrix)))
 
 ;; ============================================================================
 ;; Slot Management (from matrix_container.clj)

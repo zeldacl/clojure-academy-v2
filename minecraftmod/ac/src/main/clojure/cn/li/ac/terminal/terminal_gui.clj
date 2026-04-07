@@ -228,7 +228,7 @@
 
     ;; Load terminal.xml
     (let [xml-path (modid/asset-path "guis" "terminal.xml")
-          root-widget (cgui-doc/load-xml xml-path)]
+          root-widget (cgui-doc/read-xml xml-path)]
 
       (if-not root-widget
         (do

@@ -43,25 +43,7 @@
 
     (getGeneratorBandwidth [_]
       (let [state (get-state-fn)]
-        (double (get state :wireless-bandwidth 1000.0))))
-
-    ;; IWirelessUser methods
-    (getPassword [_]
-      ;; No password required for converters
-      "")
-
-    (setPassword [_ _password]
-      ;; No-op
-      nil)
-
-    ;; IWirelessTile methods
-    (getRange [_]
-      ;; Converters don't have range, they link to nodes
-      0.0)
-
-    (setRange [_ _range]
-      ;; No-op
-      nil)))
+        (double (get state :wireless-bandwidth 1000.0))))))
 
 ;; ============================================================================
 ;; Wireless Receiver Implementation
@@ -109,21 +91,7 @@
 
     (getReceiverBandwidth [_]
       (let [state (get-state-fn)]
-        (double (get state :wireless-bandwidth 1000.0))))
-
-    ;; IWirelessUser methods
-    (getPassword [_]
-      "")
-
-    (setPassword [_ _password]
-      nil)
-
-    ;; IWirelessTile methods
-    (getRange [_]
-      0.0)
-
-    (setRange [_ _range]
-      nil)))
+        (double (get state :wireless-bandwidth 1000.0))))))
 
 ;; ============================================================================
 ;; Wireless Integration Helpers

@@ -1,61 +1,3 @@
-// plugins {
-//   id 'java'
-//   id "java-library"
-//   id 'dev.clojurephant.clojure' version '0.9.1'
-// }
-
-// // 阻止 common 产出无意义的 jar，因为它会被注入到子模块中
-// jar { enabled = false }
-
-// java {
-//   toolchain { languageVersion = JavaLanguageVersion.of(17) }
-// }
-
-// repositories {
-//   mavenCentral()
-// }
-
-// dependencies {
-//   implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version') ?: '1.12.4'}"
-//   implementation "org.clojure:data.json:2.4.0"
-// }
-
-// clojure {
-//   builds {
-//     main {
-//       reflection = 'skip'
-//     }
-//     // test {
-//     //   sourceSet = sourceSets.test
-//     //   reflection = 'skip'
-//     // }
-//   }
-// }
-
-// tasks.matching { it.name == 'checkClojure' }.configureEach {
-//   enabled = false
-// }
-
-// sourceSets {
-//   main {
-//     java { srcDirs = ["src/main/java"] }
-//     clojure { srcDirs = ["src/main/clojure"] }
-//     resources { srcDirs = [] }
-//   }
-//   test {
-//     clojure { srcDirs = ["src/test/clojure"] }
-//   }
-// }
-
-// // tasks.named('processResources', ProcessResources).configure {
-// //   from(sourceSets.main.clojure.srcDirs) { include '**/*.clj' }
-// //   duplicatesStrategy = DuplicatesStrategy.INCLUDE
-// // }
-
-// tasks.named('jar', Jar).configure {
-//   duplicatesStrategy = DuplicatesStrategy.INCLUDE
-// }
-
 plugins {
     id "java-library"
     id "dev.clojurephant.clojure"
@@ -63,6 +5,7 @@ plugins {
 dependencies {
     api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation "org.clojure:clojure:1.11.1"
+    api("org.slf4j:slf4j-api:1.7.25")
 }
 
 

@@ -14,7 +14,6 @@
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.ac.block.developer.config :as dev-config]
             [cn.li.ac.block.developer.schema :as dev-schema]
@@ -212,26 +211,7 @@
 ;; ============================================================================
 
 (deftype WirelessUserImpl [be]
-  IWirelessUser
-
-  (getUserUUID [_]
-    (let [state (or (platform-be/get-custom-state be) dev-default-state)]
-      (str (:user-uuid state ""))))
-
-  (getUserName [_]
-    (let [state (or (platform-be/get-custom-state be) dev-default-state)]
-      (str (:user-name state ""))))
-
-  (isDeveloping [_]
-    (let [state (or (platform-be/get-custom-state be) dev-default-state)]
-      (boolean (:is-developing state false))))
-
-  (getBlockPos [_]
-    (pos/position-get-block-pos be))
-
-  Object
-  (toString [_]
-    (str "WirelessUserImpl@" (pos/position-get-block-pos be))))
+  IWirelessUser)
 
 (platform-cap/declare-capability! :wireless-user IWirelessUser
   (fn [be _side] (->WirelessUserImpl be)))
