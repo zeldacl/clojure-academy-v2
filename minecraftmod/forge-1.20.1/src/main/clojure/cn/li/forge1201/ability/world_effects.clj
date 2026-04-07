@@ -4,15 +4,15 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
-           [net.minecraft.world.entity Entity LivingEntity]
-           [net.minecraft.world.level Level Level$ExplosionInteraction]
            [net.minecraft.core BlockPos]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraft.world.phys AABB Vec3]
-           [net.minecraft.world.level.block Block]
+           [net.minecraft.world.phys AABB]
            [net.minecraftforge.server ServerLifecycleHooks]))
 
 (set! *warn-on-reflection* true)
+
+(defn- load-class-no-init ^Class [class-name]
+  (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
 
 (defn- get-server ^MinecraftServer []
   (ServerLifecycleHooks/getCurrentServer))
@@ -25,38 +25,36 @@
 (defn- spawn-lightning-impl! [world-id x y z]
   (try
     (when-let [^ServerLevel level (get-level world-id)]
-      ;; Use Class/forName to avoid loading EntityType at AOT compile time (MC bootstrap issue).
-      ;; Reflective .create call avoids loading Level.class at compile time (also triggers bootstrap).
-      (let [et-class (Class/forName "net.minecraft.world.entity.EntityType")
+      ;; Resolve EntityType lazily so checkClojure does not trigger registry bootstrap.
+      (let [et-class (load-class-no-init "net.minecraft.world.entity.EntityType")
             lightning-bolt (.get (.getDeclaredField et-class "LIGHTNING_BOLT") nil)
             lightning (.create lightning-bolt level)]
         (when lightning
-          (.moveTo ^Entity lightning (double x) (double y) (double z))
-          (.addFreshEntity level ^Entity lightning)
+          (.moveTo lightning (double x) (double y) (double z))
+          (.addFreshEntity level lightning)
           true)))
     (catch Exception e
       (log/warn "Failed to spawn lightning:" (ex-message e))
       false)))
-
 (defn- create-explosion-impl! [world-id x y z radius fire?]
   (try
     (when-let [^ServerLevel level (get-level world-id)]
-      (.explode level nil x y z (float radius)
-                (if fire?
-                  Level$ExplosionInteraction/MOB
-                  Level$ExplosionInteraction/NONE))
-      true)
+      (let [explosion-interaction-class (load-class-no-init "net.minecraft.world.level.Level$ExplosionInteraction")
+            enum-name (if fire? "MOB" "NONE")
+            interaction (java.lang.Enum/valueOf explosion-interaction-class enum-name)]
+        (.explode level nil x y z (float radius) interaction)
+        true))
     (catch Exception e
       (log/warn "Failed to create explosion:" (ex-message e))
       false)))
-
 (defn- find-entities-in-radius-impl [world-id x y z radius]
   (try
     (when-let [^ServerLevel level (get-level world-id)]
       (let [aabb (AABB. (- x radius) (- y radius) (- z radius)
                         (+ x radius) (+ y radius) (+ z radius))
-            entities (.getEntitiesOfClass level LivingEntity aabb)]
-        (mapv (fn [^LivingEntity entity]
+            living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
+            entities (.getEntitiesOfClass level living-entity-class aabb)]
+        (mapv (fn [entity]
                 (let [pos (.position entity)]
                   {:uuid (str (.getUUID entity))
                    :x (.x pos)
@@ -67,7 +65,6 @@
     (catch Exception e
       (log/warn "Failed to find entities:" (ex-message e))
       [])))
-
 (defn- find-blocks-in-radius-impl [world-id x y z radius block-predicate]
   (try
     (when-let [^ServerLevel level (get-level world-id)]

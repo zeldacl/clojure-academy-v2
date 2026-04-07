@@ -14,13 +14,13 @@
                                        IRecipeRegistration
                                        IRecipeCatalystRegistration]
            [mezz.jei.api.recipe.category IRecipeCategory]
+           [mezz.jei.api.recipe IFocusGroup]
            [mezz.jei.api.gui.builder IRecipeLayoutBuilder]
            [mezz.jei.api.helpers IGuiHelper]
            [mezz.jei.api.recipe RecipeIngredientRole]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world.item ItemStack]
-           [net.minecraft.world.level ItemLike]
-           [net.minecraft.core.registries BuiltInRegistries]))
+           [net.minecraft.world.level ItemLike]))
 
 (set! *warn-on-reflection* true)
 
@@ -32,7 +32,11 @@
     (let [[id-part count-str] (str/split item-id #"#")
           count (if count-str (Integer/parseInt count-str) 1)
           res-loc (ResourceLocation. id-part)
-          item (.get BuiltInRegistries/ITEM res-loc)]
+          regs-cls (Class/forName "net.minecraft.core.registries.BuiltInRegistries")
+          item-field (.getField regs-cls "ITEM")
+          item-registry (.get item-field nil)
+          get-method (.getMethod (class item-registry) "get" (into-array Class [Object]))
+          item (.invoke get-method item-registry (object-array [res-loc]))]
       (when item
         (ItemStack. ^ItemLike item (int count))))
     (catch Exception e
@@ -68,7 +72,7 @@
         ;; TODO: Get block icon from registry
         nil)
 
-      (setRecipe [_ ^IRecipeLayoutBuilder builder recipe-map]
+      (^void setRecipe [_ ^IRecipeLayoutBuilder builder recipe-map ^IFocusGroup _focuses]
         ;; recipe-map is the formatted recipe from categories/format-recipe-for-jei
         (let [inputs (get recipe-map :inputs [])
               outputs (get recipe-map :outputs [])]
@@ -97,7 +101,8 @@
                       (.addSlot RecipeIngredientRole/OUTPUT
                                (int (:x slot-pos))
                                (int (:y slot-pos)))
-                      (.addItemStack item-stack)))))))))))
+                      (.addItemStack item-stack))))))
+          nil)))))
 
 (defn- register-categories
   "Register all AC recipe categories with JEI."

@@ -8,12 +8,12 @@
   this module will not be loaded."
   (:require [cn.li.ac.integration.crafttweaker.recipes :as ct-recipes]
             [cn.li.ac.integration.crafttweaker.bridge :as ct-bridge]
-            [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.world.item ItemStack]
-           [net.minecraft.core.registries BuiltInRegistries]
-           [net.minecraft.resources ResourceLocation]))
+            [cn.li.mcmod.util.log :as log]))
 
 (set! *warn-on-reflection* true)
+
+(defn- load-class-no-init ^Class [class-name]
+  (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
 
 ;; CraftTweaker type conversion
 
@@ -25,10 +25,14 @@
 
   Returns:
     Item spec map {:item 'modid:item' :count N}"
-  [^ItemStack stack]
+  [stack]
   (when (and stack (not (.isEmpty stack)))
     (let [item (.getItem stack)
-          res-loc (.getKey BuiltInRegistries/ITEM item)
+          regs-cls (load-class-no-init "net.minecraft.core.registries.BuiltInRegistries")
+          item-field (.getField regs-cls "ITEM")
+          item-registry (.get item-field nil)
+          get-key-method (.getMethod (class item-registry) "getKey" (into-array Class [Object]))
+          res-loc (.invoke get-key-method item-registry (object-array [item]))
           item-id (str (.getNamespace res-loc) ":" (.getPath res-loc))
           count (.getCount stack)]
       {:item item-id
@@ -49,8 +53,9 @@
   (try
     ;; CraftTweaker's IItemStack can be converted to Minecraft ItemStack
     ;; via CraftTweakerMC.getItemStack(IItemStack)
-    (let [ct-mc-class (Class/forName "com.blamejared.crafttweaker.api.CraftTweakerAPI")
-          get-stack-method (.getMethod ct-mc-class "getIItemStack" (into-array Class [ItemStack]))]
+    (let [ct-mc-class (load-class-no-init "com.blamejared.crafttweaker.api.CraftTweakerAPI")
+          item-stack-class (load-class-no-init "net.minecraft.world.item.ItemStack")
+          get-stack-method (.getMethod ct-mc-class "getIItemStack" (into-array Class [item-stack-class]))]
       (when-let [mc-stack (.invoke get-stack-method nil (into-array Object [ct-stack]))]
         (itemstack-to-item-spec mc-stack)))
     (catch Exception e

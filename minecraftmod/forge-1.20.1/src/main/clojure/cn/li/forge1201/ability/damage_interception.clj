@@ -30,9 +30,9 @@
   (try
     (let [entity (.getEntity event)]
       (when (instance? ServerPlayer entity)
-        (let [^ServerPlayer player entity
+          (let [^ServerPlayer player entity
               player-id (str (.getUUID player))
-              original-damage (.getAmount event)
+            original-damage (double (.getAmount event))
               damage-source (.getSource event)
               attacker (.getEntity damage-source)
               attacker-id (when attacker (str (.getUUID attacker)))
@@ -55,7 +55,7 @@
                                     (if (vector? result)
                                       (let [[new-damage _metadata] result]
                                         (if (number? new-damage)
-                                          new-damage
+                                          (double new-damage)
                                           (do (log/warn "Handler" handler-id "returned invalid damage:" new-damage)
                                               current-damage)))
                                       (do (log/warn "Handler" handler-id "returned invalid result:" result)
@@ -64,7 +64,7 @@
                                     (log/warn "Handler" handler-id "failed:" (ex-message e))
                                     current-damage))]
                 ;; 2. recur 现在位于 try 块之外，符合编译器要求
-                (recur (rest remaining-handlers) next-damage))))
+                (recur (rest remaining-handlers) (double next-damage)))))
 
                     )))
     (catch Exception e

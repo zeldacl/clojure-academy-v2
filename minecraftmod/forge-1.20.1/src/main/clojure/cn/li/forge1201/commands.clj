@@ -12,8 +12,19 @@
            [com.mojang.brigadier.builder LiteralArgumentBuilder RequiredArgumentBuilder]
            [com.mojang.brigadier.arguments StringArgumentType IntegerArgumentType FloatArgumentType BoolArgumentType]
            [com.mojang.brigadier.context CommandContext]
-           [net.minecraft.commands CommandSourceStack]
-           [net.minecraft.commands.arguments EntityArgument]))
+           [net.minecraft.commands CommandSourceStack]))
+
+(defn- entity-arg-player-type []
+  (clojure.lang.Reflector/invokeStaticMethod
+    "net.minecraft.commands.arguments.EntityArgument"
+    "player"
+    (object-array 0)))
+
+(defn- entity-arg-get-player [^CommandContext brigadier-ctx arg-name]
+  (clojure.lang.Reflector/invokeStaticMethod
+    "net.minecraft.commands.arguments.EntityArgument"
+    "getPlayer"
+    (object-array [brigadier-ctx arg-name])))
 
 ;; ============================================================================
 ;; Argument Type Mapping
@@ -29,7 +40,7 @@
     Brigadier ArgumentType instance"
   [arg-spec]
   (case (:type arg-spec)
-    :player (EntityArgument/player)
+    :player (entity-arg-player-type)
     :string (StringArgumentType/string)
     :word (StringArgumentType/word)
     :greedy-string (StringArgumentType/greedyString)
@@ -56,7 +67,7 @@
   [^CommandContext brigadier-ctx arg-name arg-type]
   (try
     (case arg-type
-      :player (EntityArgument/getPlayer brigadier-ctx arg-name)
+      :player (entity-arg-get-player brigadier-ctx arg-name)
       :string (StringArgumentType/getString brigadier-ctx arg-name)
       :word (StringArgumentType/getString brigadier-ctx arg-name)
       :greedy-string (StringArgumentType/getString brigadier-ctx arg-name)
@@ -144,12 +155,12 @@
     Brigadier Command instance"
   [executor-fn arg-specs target-player-arg]
   (reify com.mojang.brigadier.Command
-    (run [_ ^CommandContext ctx]
+    (^int run [_ ^CommandContext ctx]
       (let [target-player (when target-player-arg
                             (try
-                              (EntityArgument/getPlayer ctx target-player-arg)
+                              (entity-arg-get-player ctx target-player-arg)
                               (catch Exception _ nil)))]
-        (execute-command executor-fn ctx arg-specs target-player)))))
+        (int (execute-command executor-fn ctx arg-specs target-player))))))
 
 (defn build-argument-node
   "Build a Brigadier argument node.

@@ -7,4 +7,5 @@
             [cn.li.ac.block.metal-former.block]
             [cn.li.ac.block.metal-former.gui]))
 
-(msg-reg/register-all!)
+(when (not= "true" (System/getProperty "ac.check.clojure"))
+  (msg-reg/register-all!))

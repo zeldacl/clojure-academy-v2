@@ -10,4 +10,5 @@
             [cn.li.ac.block.phase-gen.gui]
             [cn.li.ac.block.cat-engine.block]))
 
-(msg-reg/register-all!)
+(when (not= "true" (System/getProperty "ac.check.clojure"))
+  (msg-reg/register-all!))

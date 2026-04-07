@@ -10,7 +10,6 @@
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.server ServerLifecycleHooks]
            [net.minecraftforge.common MinecraftForge]
-           [net.minecraftforge.registries ForgeRegistries]
            [net.minecraftforge.event.level BlockEvent$BreakEvent]
            [java.util UUID]))
 
@@ -36,6 +35,21 @@
     (catch Exception e
       (log/warn "Failed to get level:" world-id (ex-message e))
       nil)))
+
+(defn- blocks-registry []
+  (let [regs-cls (Class/forName "net.minecraftforge.registries.ForgeRegistries")
+        blocks-field (.getField regs-cls "BLOCKS")]
+    (.get blocks-field nil)))
+
+(defn- get-block-by-resource-location [^ResourceLocation res-loc]
+  (let [registry (blocks-registry)
+        get-value-method (.getMethod (class registry) "getValue" (into-array Class [ResourceLocation]))]
+    (.invoke get-value-method registry (object-array [res-loc]))))
+
+(defn- get-block-key [^Block block]
+  (let [registry (blocks-registry)
+        get-key-method (.getMethod (class registry) "getKey" (into-array Class [Object]))]
+    (.invoke get-key-method registry (object-array [block]))))
 
 (defn- break-block-impl! [player-uuid world-id x y z drop?]
   (try
@@ -63,7 +77,7 @@
     (when-let [^ServerLevel level (get-level-by-id world-id)]
       (let [pos (BlockPos. (int x) (int y) (int z))
             res-loc (ResourceLocation. block-id)
-            block (.getValue ForgeRegistries/BLOCKS res-loc)]
+            block (get-block-by-resource-location res-loc)]
         (when block
           (.setBlock level pos (.defaultBlockState block) 3)
           true)))
@@ -78,7 +92,7 @@
             state (.getBlockState level pos)
             block (.getBlock state)]
         (when-not (.isAir state)
-          (str (.getKey ForgeRegistries/BLOCKS block)))))
+          (str (get-block-key block)))))
     (catch Exception e
       (log/warn "Failed to get block:" (ex-message e))
       nil)))
@@ -126,7 +140,7 @@
                      {:x (int x)
                       :y (int y)
                       :z (int z)
-                      :block-id (str (.getKey ForgeRegistries/BLOCKS block))
+                      :block-id (str (get-block-key block))
                       :hardness (.getDestroySpeed state level pos)}))))
         @results))
     (catch Exception e

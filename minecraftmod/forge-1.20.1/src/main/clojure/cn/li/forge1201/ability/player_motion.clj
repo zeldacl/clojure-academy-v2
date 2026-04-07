@@ -4,6 +4,7 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]
+           [net.minecraft.world.entity Entity]
            [net.minecraftforge.server ServerLifecycleHooks]
            [java.util UUID]))
 
@@ -25,7 +26,7 @@
   (try
     (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
       (.setDeltaMovement player x y z)
-      (.hurtMarked player true)
+      (set! (.-hurtMarked ^Entity player) true)
       true)
     (catch Exception e
       (log/warn "Failed to set velocity:" (ex-message e))
@@ -39,7 +40,7 @@
                           (+ (.x current) x)
                           (+ (.y current) y)
                           (+ (.z current) z))
-        (.hurtMarked player true)
+        (set! (.-hurtMarked ^Entity player) true)
         true))
     (catch Exception e
       (log/warn "Failed to add velocity:" (ex-message e))

@@ -19,13 +19,23 @@
                 sound-loc (ResourceLocation. ^String sound-id)
                 pos-x (or x (.getX player))
                 pos-y (or y (.getY player))
-                pos-z (or z (.getZ player))]
+              pos-z (or z (.getZ player))
+              sound-event (try
+                      (let [regs-cls (Class/forName "net.minecraft.core.registries.BuiltInRegistries")
+                        field-sound (.getField regs-cls "SOUND_EVENT")
+                        sound-registry (.get field-sound nil)
+                        get-method (.getMethod (class sound-registry) "get" (into-array Class [Object]))
+                        holder (.invoke get-method sound-registry (object-array [sound-loc]))]
+                      (when holder
+                        (.value holder)))
+                      (catch Exception _ nil))]
+            (when sound-event
             (.playLocalSound level pos-x pos-y pos-z
-                           (.value (.get (net.minecraft.core.registries.BuiltInRegistries/SOUND_EVENT) sound-loc))
+                     sound-event
                            SoundSource/PLAYERS
                            (float volume)
                            (float pitch)
-                           false)))))
+                     false))))))
     (catch Exception e
       (log/error "Error playing sound effect" e))))
 

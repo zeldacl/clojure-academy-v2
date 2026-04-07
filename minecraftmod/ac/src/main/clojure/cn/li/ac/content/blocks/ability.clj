@@ -7,4 +7,5 @@
             [cn.li.ac.block.ability-interferer.block]
             [cn.li.ac.block.ability-interferer.gui]))
 
-(msg-reg/register-all!)
+(when (not= "true" (System/getProperty "ac.check.clojure"))
+  (msg-reg/register-all!))

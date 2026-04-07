@@ -21,16 +21,7 @@
              [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
-           [net.minecraft.core.registries BuiltInRegistries]
-           [net.minecraft.world.level Level]
-           [net.minecraft.world.level.block Block]
-           [net.minecraft.world.level.block.state BlockState StateDefinition]
-           [net.minecraft.world.level.block.state.properties Property]
-           [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraftforge.common.util LazyOptional]
-           [net.minecraft.world.item ItemStack]
-           [cn.li.forge1201.block.entity ScriptedBlockEntity]
           [org.joml Matrix4f]
           [cn.li.acapi.wireless WirelessCapabilities WirelessCapabilityKeys]
           [cn.li.forge1201.capability NamedCapabilityRegistry]
@@ -137,81 +128,6 @@
   (pos-z [^BlockPos this]
     (.getZ this)))
 
-;; Extend BlockEntity to support position access
-(extend-type BlockEntity
-  pos/IHasPosition
-
-  (position-get-block-pos [^BlockEntity this]
-    (.getBlockPos this))
-
-  (position-get-pos [^BlockEntity this]
-    ;; Fallback for older code that might call this
-    (.getBlockPos this))
-
-  platform-cap/ICapabilityProvider
-
-  (get-capability [^BlockEntity this cap side]
-    (.getCapability this cap side))
-
-  platform-be/IBlockEntity
-
-  (be-get-level [^BlockEntity this]
-    (.getLevel this))
-
-  (be-get-world [^BlockEntity this]
-    ;; Fallback for older code
-    (.getLevel this))
-
-  ;; Additional BE interop implemented in platform_impl (keeps core free of
-  ;; direct Minecraft class references)
-  (be-get-custom-state [^BlockEntity this]
-    (when (instance? ScriptedBlockEntity this)
-      (.getCustomState ^ScriptedBlockEntity this)))
-
-  (be-set-custom-state! [^BlockEntity this state]
-    (when (instance? ScriptedBlockEntity this)
-      (.setCustomState ^ScriptedBlockEntity this state)))
-
-  (be-get-block-id [^BlockEntity this]
-    (when (instance? ScriptedBlockEntity this)
-      (.getBlockId ^ScriptedBlockEntity this)))
-
-  (be-set-changed! [^BlockEntity this]
-    (.setChanged this)))
-
-;; ==========================================================================
-;; BlockState protocol implementations for Forge
-;; ==========================================================================
-
-(extend-type BlockState
-  world/IBlockStateOps
-  (block-state-is-air [^BlockState this]
-    (.isAir this))
-  (block-state-get-block [^BlockState this]
-    (.getBlock this))
-  (block-state-get-state-definition [^BlockState this]
-    (.getStateDefinition (.getBlock this)))
-  (block-state-get-property [^BlockState this state-def prop-name]
-    (.getProperty ^StateDefinition state-def ^String prop-name))
-  (block-state-set-property [^BlockState this prop value]
-    (.setValue this ^Property prop value)))
-
-;; ============================================================================
-;; Capability LazyOptional Protocol Implementation (Forge 1.20.1)
-;; ============================================================================
-
-(extend-type LazyOptional
-  platform-cap/ILazyOptional
-
-  (is-present? [^LazyOptional this]
-    (.isPresent this))
-
-  (or-else [^LazyOptional this default]
-    (.orElse this default)))
-
-;; ============================================================================
-;; World Protocol Implementation (Forge 1.20.1)
-
 ;; ============================================================================
 ;; ItemStack Protocol Implementation (Forge 1.20.1)
 ;; ============================================================================
@@ -245,53 +161,99 @@
         cn.li.mcmod.platform.item/IItem
         (item-get-description-id [^net.minecraft.world.item.Item this] (.getDescriptionId this))
         (item-get-registry-name [^net.minecraft.world.item.Item this]
-          (when-let [key (.getKey net.minecraft.core.registries.BuiltInRegistries/ITEM this)]
-            (.getPath key))))))
+          (try
+            (let [regs-cls (Class/forName "net.minecraft.core.registries.BuiltInRegistries")
+                  item-field (.getField regs-cls "ITEM")
+                  item-registry (.get item-field nil)
+                  get-key-method (.getMethod (class item-registry) "getKey" (into-array Class [Object]))
+                  key (.invoke get-key-method item-registry (object-array [this]))]
+              (when key
+                (.getPath key)))
+            (catch Exception _
+              nil))))))
 
-;; ============================================================================
-;; World Protocol Implementation (Forge 1.20.1)
-;; ============================================================================
-;; ============================================================================
+(defn- install-block-and-world-impls!
+  []
+  (eval
+    '(extend-type net.minecraft.world.level.block.entity.BlockEntity
+       cn.li.mcmod.platform.position/IHasPosition
+       (position-get-block-pos [^net.minecraft.world.level.block.entity.BlockEntity this]
+         (.getBlockPos this))
+       (position-get-pos [^net.minecraft.world.level.block.entity.BlockEntity this]
+         (.getBlockPos this))
 
-(extend-type Level
-  world/IWorldAccess
+       cn.li.mcmod.platform.capability/ICapabilityProvider
+       (get-capability [^net.minecraft.world.level.block.entity.BlockEntity this cap side]
+         (.getCapability this cap side))
 
-  (world-get-tile-entity [^Level this block-pos]
-    (.getBlockEntity this block-pos))
+       cn.li.mcmod.platform.be/IBlockEntity
+       (be-get-level [^net.minecraft.world.level.block.entity.BlockEntity this]
+         (.getLevel this))
+       (be-get-world [^net.minecraft.world.level.block.entity.BlockEntity this]
+         (.getLevel this))
+       (be-get-custom-state [^net.minecraft.world.level.block.entity.BlockEntity this]
+         (when (instance? cn.li.forge1201.block.entity.ScriptedBlockEntity this)
+           (.getCustomState ^cn.li.forge1201.block.entity.ScriptedBlockEntity this)))
+       (be-set-custom-state! [^net.minecraft.world.level.block.entity.BlockEntity this state]
+         (when (instance? cn.li.forge1201.block.entity.ScriptedBlockEntity this)
+           (.setCustomState ^cn.li.forge1201.block.entity.ScriptedBlockEntity this state)))
+       (be-get-block-id [^net.minecraft.world.level.block.entity.BlockEntity this]
+         (when (instance? cn.li.forge1201.block.entity.ScriptedBlockEntity this)
+           (.getBlockId ^cn.li.forge1201.block.entity.ScriptedBlockEntity this)))
+       (be-set-changed! [^net.minecraft.world.level.block.entity.BlockEntity this]
+         (.setChanged this))))
 
-  (world-get-block-state [^Level this block-pos]
-    (.getBlockState this block-pos))
+  (eval
+    '(extend-type net.minecraft.world.level.block.state.BlockState
+       cn.li.mcmod.platform.world/IBlockStateOps
+       (block-state-is-air [^net.minecraft.world.level.block.state.BlockState this]
+         (.isAir this))
+       (block-state-get-block [^net.minecraft.world.level.block.state.BlockState this]
+         (.getBlock this))
+       (block-state-get-state-definition [^net.minecraft.world.level.block.state.BlockState this]
+         (.getStateDefinition (.getBlock this)))
+       (block-state-get-property [^net.minecraft.world.level.block.state.BlockState this state-def prop-name]
+         (.getProperty ^net.minecraft.world.level.block.state.StateDefinition state-def ^String prop-name))
+       (block-state-set-property [^net.minecraft.world.level.block.state.BlockState this prop value]
+         (.setValue this ^net.minecraft.world.level.block.state.properties.Property prop value))))
 
-  (world-set-block [^Level this block-pos state flags]
-    (.setBlock this block-pos state flags))
+  (eval
+    '(extend-type net.minecraftforge.common.util.LazyOptional
+       cn.li.mcmod.platform.capability/ILazyOptional
+       (is-present? [^net.minecraftforge.common.util.LazyOptional this]
+         (.isPresent this))
+       (or-else [^net.minecraftforge.common.util.LazyOptional this default]
+         (.orElse this default))))
 
-  (world-remove-block [^Level this block-pos]
-    (.destroyBlock this block-pos false))
-
-  (world-break-block [^Level this block-pos drop?]
-    (.destroyBlock this block-pos (boolean drop?)))
-
-  (world-place-block-by-id [^Level this block-id block-pos flags]
-    (if-let [get-registered-block (requiring-resolve 'cn.li.forge1201.mod/get-registered-block)]
-      (if-let [^Block block (get-registered-block block-id)]
-        (.setBlock this block-pos (.defaultBlockState block) flags)
-        false)
-      false))
-
-  (world-is-chunk-loaded? [^Level this chunk-x chunk-z]
-    (.hasChunk this chunk-x chunk-z))
-
-  (world-get-day-time [^Level this]
-    (.getDayTime this))
-
-  (world-is-raining [^Level this]
-    (.isRaining this))
-
-  (world-is-client-side [^Level this]
-    (.isClientSide this))
-
-  (world-can-see-sky [^Level this pos]
-    (.canSeeSky this pos)))
+  (eval
+    '(extend-type net.minecraft.world.level.Level
+       cn.li.mcmod.platform.world/IWorldAccess
+       (world-get-tile-entity [^net.minecraft.world.level.Level this block-pos]
+         (.getBlockEntity this block-pos))
+       (world-get-block-state [^net.minecraft.world.level.Level this block-pos]
+         (.getBlockState this block-pos))
+       (world-set-block [^net.minecraft.world.level.Level this block-pos state flags]
+         (.setBlock this block-pos state flags))
+       (world-remove-block [^net.minecraft.world.level.Level this block-pos]
+         (.destroyBlock this block-pos false))
+       (world-break-block [^net.minecraft.world.level.Level this block-pos drop?]
+         (.destroyBlock this block-pos (boolean drop?)))
+       (world-place-block-by-id [^net.minecraft.world.level.Level this block-id block-pos flags]
+         (if-let [get-registered-block (requiring-resolve 'cn.li.forge1201.mod/get-registered-block)]
+           (if-let [block (get-registered-block block-id)]
+             (.setBlock this block-pos (.defaultBlockState block) flags)
+             false)
+           false))
+       (world-is-chunk-loaded? [^net.minecraft.world.level.Level this chunk-x chunk-z]
+         (.hasChunk this chunk-x chunk-z))
+       (world-get-day-time [^net.minecraft.world.level.Level this]
+         (.getDayTime this))
+       (world-is-raining [^net.minecraft.world.level.Level this]
+         (.isRaining this))
+       (world-is-client-side [^net.minecraft.world.level.Level this]
+         (.isClientSide this))
+       (world-can-see-sky [^net.minecraft.world.level.Level this pos]
+         (.canSeeSky this pos)))))
 
 ;; ==========================================================================
 ;; Entity / Player / Inventory / Menu protocol implementations
@@ -351,6 +313,7 @@
   ;; Install protocol extensions that may indirectly trigger Minecraft class loading.
   ;; This must run only during real mod initialization, not during AOT/checkClojure.
   (install-itemstack-impls!)
+  (install-block-and-world-impls!)
   ;; Install entity/inventory/menu impls at runtime to avoid registry bootstrap issues
   (install-entity-impls!)
   (install-inventory-and-menu-impls!)
@@ -369,7 +332,7 @@
   (alter-var-root #'item/*item-factory*
     (constantly
       (fn [nbt]
-        (ItemStack/of ^CompoundTag nbt))))
+        (net.minecraft.world.item.ItemStack/of ^CompoundTag nbt))))
 
   ;; Register resource identifier factory
   (alter-var-root #'resource/*resource-factory*

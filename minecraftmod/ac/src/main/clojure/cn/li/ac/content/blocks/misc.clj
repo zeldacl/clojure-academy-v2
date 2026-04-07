@@ -4,4 +4,5 @@
             ;; Misc block implementations
             [cn.li.ac.block.ores]))
 
-(msg-reg/register-all!)
+(when (not= "true" (System/getProperty "ac.check.clojure"))
+  (msg-reg/register-all!))

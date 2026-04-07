@@ -24,6 +24,7 @@
 (defn init
   "Core init hook invoked by per-version entry classes."
   []
+  (let [check-mode? (= "true" (System/getProperty "ac.check.clojure"))]
   ;; Bind mod-id into mcmod config so resource helpers and resource-location
   ;; injection become consistent across modules.
   (alter-var-root #'mcmod-config/*mod-id*
@@ -97,6 +98,9 @@
   (legacy-api-bridge/install-wireless-query-api-bridge!)
   ;; Register distributed AC config descriptors/defaults into the shared registry.
   (config-registry/init-configs!)
+  (when check-mode?
+    (log/info "Skipping runtime content bootstrap during checkClojure"))
+  (when-not check-mode?
   ;; Load all content namespaces (triggers DSL macros and hook registration)
   (content-ns/load-all!)
 
@@ -119,7 +123,7 @@
   ;; Call all registered network handlers
   (hooks/call-all-network-handlers!)
   ;; Register generic set-tab handler for tabbed GUIs (inv-window + panels)
-  (tabbed-gui/register-set-tab-handler!))
+  (tabbed-gui/register-set-tab-handler!))))
 
 (defn on-block-right-click
   "Backwards-compatible forwarding shim. Actual implementation lives in

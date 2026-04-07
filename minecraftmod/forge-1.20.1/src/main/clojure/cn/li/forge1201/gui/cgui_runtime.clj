@@ -12,6 +12,7 @@
     [cn.li.mcmod.config :as modid]
     [cn.li.mcmod.util.log :as log])
   (:import
+    (net.minecraft.client.gui Font)
     (net.minecraft.client.gui GuiGraphics)
     (net.minecraft.resources ResourceLocation)
     (com.mojang.blaze3d.systems RenderSystem)
@@ -102,6 +103,10 @@
             ;; default: none
             (RenderSystem/disableDepthTest)))
 
+(defn- round-int
+  [value]
+  (int (Math/round (double value))))
+
 (defn- component-kind [c]
   (or (:kind c) (::kind c) :unknown))
 
@@ -160,13 +165,13 @@
           align-h (when-let [a (:align-height tm)] (-> a name str/lower-case keyword))
           ;; compute alignment offsets in logical units relative to parent size
           align-offset-x (case align-w
-                           :center (int (Math/round (/ (- pw w) 2.0)))
-                           :right  (int (Math/round (- pw w)))
+                           :center (round-int (/ (- pw w) 2.0))
+                           :right  (round-int (- pw w))
                            ;; default :left or nil
                            0)
           align-offset-y (case align-h
-                           :center (int (Math/round (/ (- ph h) 2.0)))
-                           :bottom (int (Math/round (- ph h)))
+                           :center (round-int (/ (- ph h) 2.0))
+                           :bottom (round-int (- ph h))
                            ;; default :top or nil
                            0)
           ;; pivot is fraction of widget size; shift top-left so pivot point is at position
@@ -253,8 +258,8 @@
         [w h] size
         x (int (+ left abs-x))
         y (int (+ top abs-y))
-        w-int (int (Math/round (* (double w) scale)))
-        h-int (int (Math/round (* (double h) scale)))
+      w-int (round-int (* (double w) scale))
+      h-int (round-int (* (double h) scale))
         components @(:components root)]
     (doseq [c components]
       (let [kind (component-kind c)
@@ -289,10 +294,10 @@
                       cell-h (max 1 (int (Math/floor (/ tex-h 3.0))))]
                   (doseq [i (range 3)
                           j (range 3)]
-                    (let [x0 (int (Math/round (nth xs i)))
-                          y0 (int (Math/round (nth ys j)))
-                          x1 (int (Math/round (nth xs (inc i))))
-                          y1 (int (Math/round (nth ys (inc j))))
+                      (let [x0 (round-int (nth xs i))
+                        y0 (round-int (nth ys j))
+                        x1 (round-int (nth xs (inc i)))
+                        y1 (round-int (nth ys (inc j)))
                           tw (max 1 (- x1 x0))
                           th (max 1 (- y1 y0))
                           u (* i cell-w)
@@ -302,14 +307,14 @@
                 ;; line overlays (1.12 HudUtils.rect on lineTex)
                 (when line-tex
                   (let [mrg 3.2
-                        top-x (int (Math/round (- x mrg)))
-                        top-y (int (Math/round (- y 8.6)))
-                        top-w (int (Math/round (+ w-int (* mrg 2.0))))
-                        top-h (int (Math/round 12.0))
-                        bot-x (int (Math/round (- x mrg)))
-                        bot-y (int (Math/round (+ y h-int -2.0)))
-                        bot-w (int (Math/round (+ w-int (* mrg 2.0))))
-                        bot-h (int (Math/round 8.0))
+                    top-x (round-int (- x mrg))
+                    top-y (round-int (- y 8.6))
+                    top-w (round-int (+ w-int (* mrg 2.0)))
+                    top-h (round-int 12.0)
+                    bot-x (round-int (- x mrg))
+                    bot-y (round-int (+ y h-int -2.0))
+                    bot-w (round-int (+ w-int (* mrg 2.0)))
+                    bot-h (round-int 8.0)
                         line-size (get-texture-size line-tex)
                         lw (max 1 (int (or (first line-size) 1)))
                         lh (max 1 (int (or (second line-size) 1)))]
@@ -338,13 +343,13 @@
                                       (<= (double uw) 1.0) (<= (double uh) 1.0))
                     basis-w (if (and tex-size (number? (first tex-size))) (first tex-size) w-int)
                     basis-h (if (and tex-size (number? (second tex-size))) (second tex-size) h-int)
-                    u-px (if fractional? (int (Math/round (* (double u) (double basis-w)))) (int u))
-                    v-px (if fractional? (int (Math/round (* (double v) (double basis-h)))) (int v))
+                    u-px (if fractional? (round-int (* (double u) (double basis-w))) (int u))
+                    v-px (if fractional? (round-int (* (double v) (double basis-h))) (int v))
                 src-w (if fractional?
-                  (int (Math/round (* (double uw) (double basis-w))))
+                  (round-int (* (double uw) (double basis-w)))
                   (int uw))
                 src-h (if fractional?
-                  (int (Math/round (* (double uh) (double basis-h))))
+                  (round-int (* (double uh) (double basis-h)))
                   (int uh))
                     ;; Full atlas dimensions for UV normalization.
                     ;; When no sub-region UV is used src == atlas; prefer the
@@ -399,19 +404,19 @@
                        (apply str (repeat (count raw-text) \*))
                        raw-text)
                 color (unchecked-int (or (:color state) 0xFFFFFF))
-                font  (ClientProxy/getFont)]
+                ^Font font  (ClientProxy/getFont)]
             (when (seq text)
-              (.drawString gg font text x y color))
+              (.drawString ^GuiGraphics gg font ^String text x y color))
             ;; caret rendering for editable textboxes when focused
             (when (and (:editable? state)
                        (some-> @(:metadata root) :focused?) )
               (try
-                (let [font (ClientProxy/getFont)
+                (let [^Font font (ClientProxy/getFont)
                       ;; compute caret x at end of text for now
                       caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
-                      caret-x (+ x (int (.width font text)))]
+                      caret-x (+ x (int (.width font ^String text)))]
                   (when caret-visible?
-                    (.drawString gg font "|" caret-x y color)))
+                  (.drawString ^GuiGraphics gg font "|" caret-x y color)))
                 (catch Exception _ nil))))
 
           (kind-matches? kind :progressbar)
@@ -420,10 +425,10 @@
                 color-full  (unchecked-int (or (:color-full state) 0x00FF00))
                 color-empty (unchecked-int (or (:color-empty state) 0x404040))]
             (if (= dir :vertical)
-              (let [fill-h (int (Math/round (* progress h-int)))]
+              (let [fill-h (round-int (* progress h-int))]
                 (.fill gg x (+ y h-int (- fill-h)) (+ x w-int) (+ y h-int) color-empty)
                 (.fill gg x (+ y h-int (- fill-h)) (+ x w-int) (+ y h-int) color-full))
-              (let [fill-w (int (Math/round (* progress w-int)))]
+              (let [fill-w (round-int (* progress w-int))]
                 (.fill gg x y (+ x w-int) (+ y h-int) color-empty)
                 (.fill gg x y (+ x fill-w) (+ y h-int) color-full))))
 

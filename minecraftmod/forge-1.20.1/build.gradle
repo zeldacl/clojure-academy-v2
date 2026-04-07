@@ -252,9 +252,9 @@ plugins {
     id "com.github.johnrengelman.shadow"
 }
 
-tasks.matching { it.name == 'checkClojure' }.configureEach {
-    enabled = false
-}
+// tasks.matching { it.name == 'checkClojure' }.configureEach {
+//     enabled = false
+// }
 
 // 物理注入 ac 和 mcmod 的源码与资源
 sourceSets {
@@ -341,6 +341,14 @@ dependencies {
     forgeRuntimeLibrary "org.clojure:clojure:1.11.1"
     forgeRuntimeLibrary "org.clojure:spec.alpha:0.3.218"
     forgeRuntimeLibrary "org.clojure:core.specs.alpha:0.2.62"
+
+    compileOnly('com.blamejared.crafttweaker:CraftTweaker-common-1.20.1:14.0.60')
+
+    // compile against the JEI API but do not include it at runtime
+    modCompileOnlyApi("mezz.jei:jei-${mc_version}-common-api:${jei_version}")
+    modCompileOnlyApi("mezz.jei:jei-${mc_version}-forge-api:${jei_version}")
+    // at runtime, use the full JEI jar for Forge
+    modRuntimeOnly("mezz.jei:jei-${mc_version}-forge:${jei_version}")
 }
 
 // 配置 ShadowJar 把 Clojure 运行环境打入
@@ -367,7 +375,7 @@ clojure {
     builds {
         main {
             aotAll()
-            reflection = 'warn'
+            reflection = 'silent'
         }
     }
 }
@@ -407,5 +415,18 @@ tasks.named('compileClojure').configure {
 
 tasks.matching { it.name in ['runClient', 'runServer', 'runData'] }.configureEach {
     dependsOn tasks.named('copyClojureClassesToJavaOutput')
+}
+
+tasks.matching { it.name == 'checkClojure' }.configureEach {
+    def existingArgs = forkOptions.jvmArgs ?: []
+    forkOptions.jvmArgs = existingArgs + ['-Dac.check.clojure=true']
+    if (project.hasProperty('checkNsOnly')) {
+        def requestedNamespaces = project.property('checkNsOnly')
+            .toString()
+            .split(',')
+            .collect { it.trim() }
+            .findAll { !it.isEmpty() } as Set
+        namespaces.set(requestedNamespaces)
+    }
 }
 

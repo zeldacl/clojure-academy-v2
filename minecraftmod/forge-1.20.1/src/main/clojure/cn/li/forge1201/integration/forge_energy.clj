@@ -70,7 +70,7 @@
     true
   (catch Exception e
     (log/error "Failed to register Forge Energy capability:" (ex-message e))
-    false))))
+    false)))
 
 (defn init-forge-energy!
   "Initialize Forge Energy integration.

@@ -6,11 +6,20 @@
   IMPORTANT: Only imports from `cn.li.mcmod.gui.adapter` for the unified GUI API."
   (:require [cn.li.forge1201.bootstrap :refer [invoke-bootstrap-helper]]
             [cn.li.mcmod.gui.adapter :as gui]
+            [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.forge1201.gui.bridge :as bridge]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.network NetworkHooks IContainerFactory]
            [net.minecraftforge.common.extensions IForgeMenuType]
+           [net.minecraftforge.registries DeferredRegister RegistryObject]
+           [net.minecraft.network FriendlyByteBuf]
+           [net.minecraft.server.level ServerPlayer]
+           [net.minecraft.world MenuProvider]
+           [net.minecraft.world.inventory MenuType]
+           [net.minecraft.world.entity.player Inventory]
+           [net.minecraft.world.level Level]
+           [net.minecraft.core BlockPos]
            [net.minecraft.world.level.block.entity BlockEntity]))
 
 
@@ -40,7 +49,7 @@
   
   Returns: MenuType or nil"
   [gui-id]
-  (when-let [ro (get @gui-menu-types gui-id)]
+  (when-let [^RegistryObject ro (get @gui-menu-types gui-id)]
     (.get ro)))
 
 (defn create-menu-type
@@ -57,10 +66,10 @@
         ;; This factory is invoked on the CLIENT when Forge recreates the menu
         ;; after receiving the open-screen packet.
         (let [handler (gui/get-gui-handler)
-              player (.player player-inventory)
-              world (.level player)
-              pos (.readBlockPos buf)
-              clj-container (.get-server-container handler gui-id player world pos)]
+              ^ServerPlayer player (.player ^Inventory player-inventory)
+              ^Level world (.level player)
+              ^BlockPos pos (.readBlockPos ^FriendlyByteBuf buf)
+              clj-container (gui-handler/get-server-container handler gui-id player world pos)]
           (if clj-container
             (do
               ;; Store for screen_factory.clj which needs to read it back.
@@ -68,7 +77,9 @@
               ;; we replaced gen-class with proxy.)
               (gui/set-client-container! clj-container)
               (bridge/wrap-clojure-container window-id (get-menu-type gui-id) clj-container))
-            (do (log/error "Failed to create container for GUI" gui-id) nil)))))))
+            (do
+              (log/error "Failed to create container for GUI" gui-id)
+              nil)))))))
 
 (defn register-menu-types!
   "Populate menu-register DeferredRegister with all GUI menu types.
@@ -81,7 +92,8 @@
           ;; Create IForgeMenuType eagerly; the embedded IContainerFactory is a
           ;; lazy callback that resolves get-menu-type at GUI-open time (runtime).
           menu-type (create-menu-type gui-id)
-          ro (.register (force menu-register) registry-name
+          ^DeferredRegister deferred-register (force menu-register)
+          ro (.register deferred-register registry-name
                (reify java.util.function.Supplier
                  (get [_]
                    ;; Called by Forge during RegisterEvent — registries are open here.
@@ -104,12 +116,12 @@
   - player: ServerPlayerEntity
   - gui-id: int
   - tile-entity: TileEntity (optional, can be nil)"
-  [player gui-id tile-entity]
+  [^ServerPlayer player gui-id tile-entity]
   (log/info "[OPEN-GUI-FOR-PLAYER] Starting GUI open: gui-id=" gui-id "player=" (.getName player) "has-tile-entity=" (not (nil? tile-entity)))
   (try
     (log/info "[OPEN-GUI-FOR-PLAYER] Creating MenuProvider...")
-    (let [provider (bridge/create-menu-provider gui-id tile-entity)
-          pos (when tile-entity
+    (let [^MenuProvider provider (bridge/create-menu-provider gui-id tile-entity)
+          ^BlockPos pos (when tile-entity
                 (try
                   (if (map? tile-entity)
                     (:pos tile-entity)

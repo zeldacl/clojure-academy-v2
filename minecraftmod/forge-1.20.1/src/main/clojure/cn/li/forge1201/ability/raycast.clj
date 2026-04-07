@@ -4,14 +4,17 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel ServerPlayer]
-           [net.minecraft.world.entity LivingEntity]
-           [net.minecraft.world.level ClipContext ClipContext$Block ClipContext$Fluid]
-           [net.minecraft.world.phys BlockHitResult EntityHitResult HitResult$Type Vec3 AABB]
-           [net.minecraft.world.level.block.state BlockState]
+           [net.minecraft.world.phys Vec3 AABB]
            [net.minecraftforge.server ServerLifecycleHooks]
            [java.util UUID]))
 
 (set! *warn-on-reflection* true)
+
+(defn- load-class-no-init ^Class [class-name]
+  (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
+
+(defn- enum-constant [class-name enum-name]
+  (java.lang.Enum/valueOf (load-class-no-init class-name) enum-name))
 
 (defn- get-server ^MinecraftServer []
   (ServerLifecycleHooks/getCurrentServer))
@@ -34,14 +37,15 @@
               end (Vec3. (+ start-x (* dir-x max-distance))
                          (+ start-y (* dir-y max-distance))
                          (+ start-z (* dir-z max-distance)))
-              clip-context (ClipContext. start end
-                                         ClipContext$Block/OUTLINE
-                                         ClipContext$Fluid/NONE
-                                         nil)
-              ^BlockHitResult result (.clip level clip-context)]
-          (when (= (.getType result) HitResult$Type/BLOCK)
+              clip-context (net.minecraft.world.level.ClipContext.
+                             start end
+                             (enum-constant "net.minecraft.world.level.ClipContext$Block" "OUTLINE")
+                             (enum-constant "net.minecraft.world.level.ClipContext$Fluid" "NONE")
+                             nil)
+              result (.clip level clip-context)]
+          (when (= (.getType result) (enum-constant "net.minecraft.world.phys.HitResult$Type" "BLOCK"))
             (let [pos (.getBlockPos result)
-                  block-state ^BlockState (.getBlockState level pos)
+                  block-state (.getBlockState level pos)
                   block (.getBlock block-state)
                   hit-vec (.getLocation result)
                   distance (.distanceTo start hit-vec)]
@@ -69,9 +73,10 @@
                           (max start-x (+ start-x (* dir-x max-distance)))
                           (max start-y (+ start-y (* dir-y max-distance)))
                           (max start-z (+ start-z (* dir-z max-distance))))
-              entities (.getEntitiesOfClass level LivingEntity (.inflate aabb 2.0))
+              living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
+              entities (.getEntitiesOfClass level living-entity-class (.inflate aabb 2.0))
               hits (atom [])]
-          (doseq [^LivingEntity entity entities]
+          (doseq [entity entities]
             (let [entity-aabb (.getBoundingBox entity)
                   optional-hit (.clip entity-aabb start end)]
               (when (.isPresent optional-hit)
@@ -141,8 +146,9 @@
                         (max start-x (+ start-x (* dir-x max-distance)))
                         (max start-y (+ start-y (* dir-y max-distance)))
                         (max start-z (+ start-z (* dir-z max-distance))))
+            living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
             entities (if living-only?
-                      (.getEntitiesOfClass level LivingEntity (.inflate aabb 2.0))
+                      (.getEntitiesOfClass level living-entity-class (.inflate aabb 2.0))
                       (.getEntities level nil (.inflate aabb 2.0)))
             hits (atom [])]
         (doseq [entity entities]

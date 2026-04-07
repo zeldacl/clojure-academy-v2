@@ -15,4 +15,5 @@
                         [cn.li.ac.block.solar-gen.block]
                         [cn.li.ac.block.solar-gen.gui]))
 
-(msg-reg/register-all!)
+(when (not= "true" (System/getProperty "ac.check.clojure"))
+    (msg-reg/register-all!))
