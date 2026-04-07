@@ -4,6 +4,8 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
+           [net.minecraft.world.entity Entity LivingEntity]
+           [net.minecraft.world.damagesource DamageSource]
            [net.minecraft.world.phys AABB Vec3]
            [net.minecraftforge.server ServerLifecycleHooks]
            [java.util UUID]))
@@ -24,7 +26,7 @@
       (log/warn "Failed to get entity by UUID:" uuid-str (ex-message e))
       nil)))
 
-(defn- get-damage-source [^ServerLevel level source-type]
+(defn- get-damage-source ^DamageSource [^ServerLevel level source-type]
   ;; DamageSources is bootstrap-sensitive; access via reflection at runtime
   (try
     (let [sources-method (.getMethod (class level) "damageSources" (into-array Class []))
@@ -42,14 +44,14 @@
       (log/warn "Failed to get damage source:" source-type (ex-message e))
       nil)))
 
-(defn- apply-direct-damage-impl! [world-id entity-uuid damage source-type]
+(defn- apply-direct-damage-impl! [_world-id entity-uuid damage source-type]
   (try
     (when-let [^MinecraftServer server (get-server)]
       (when-let [^ServerLevel level (.overworld server)]
         (when-let [entity (get-entity-by-uuid level entity-uuid)]
           (when (instance? (load-class-no-init "net.minecraft.world.entity.LivingEntity") entity)
-            (let [living entity
-                  dmg-source (get-damage-source level source-type)]
+            (let [^LivingEntity living entity
+                  ^DamageSource dmg-source (get-damage-source level source-type)]
               (.hurt living dmg-source (float damage))
               true)))))
     (catch Exception e
@@ -61,7 +63,7 @@
                 (* (- y2 y1) (- y2 y1))
                 (* (- z2 z1) (- z2 z1)))))
 
-(defn- apply-aoe-damage-impl! [world-id x y z radius damage source-type falloff?]
+(defn- apply-aoe-damage-impl! [_world-id x y z radius damage source-type falloff?]
   (try
     (when-let [^MinecraftServer server (get-server)]
       (when-let [^ServerLevel level (.overworld server)]
@@ -69,10 +71,10 @@
                           (+ x radius) (+ y radius) (+ z radius))
               living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
               entities (.getEntitiesOfClass level living-entity-class aabb)
-              dmg-source (get-damage-source level source-type)
+              ^DamageSource dmg-source (get-damage-source level source-type)
               damaged (atom [])]
-          (doseq [entity entities]
-            (let [pos (.position entity)
+          (doseq [^LivingEntity entity entities]
+            (let [^Vec3 pos (.position entity)
                   dist (distance-3d x y z (.x pos) (.y pos) (.z pos))]
               (when (<= dist radius)
                 (let [actual-damage (if falloff?
@@ -92,9 +94,10 @@
         living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
         entities (.getEntitiesOfClass level living-entity-class aabb)]
     (->> entities
-         (filter #(not= (.getUUID %) (.getUUID exclude)))
-         (map (fn [e]
-                (let [pos (.position e)
+        (filter (fn [^LivingEntity e]
+             (not= (.getUUID e) (.getUUID ^Entity exclude))))
+        (map (fn [^LivingEntity e]
+          (let [^Vec3 pos (.position e)
                       dist (distance-3d x y z (.x pos) (.y pos) (.z pos))]
                   [e dist])))
          (filter (fn [[_ dist]] (<= dist max-radius)))
@@ -102,14 +105,14 @@
          (first)
          (first))))
 
-(defn- apply-reflection-damage-impl! [world-id entity-uuid damage source-type reflection-count max-reflections]
+(defn- apply-reflection-damage-impl! [_world-id entity-uuid damage source-type reflection-count max-reflections]
   (try
     (when-let [^MinecraftServer server (get-server)]
       (when-let [^ServerLevel level (.overworld server)]
         (when-let [entity (get-entity-by-uuid level entity-uuid)]
           (when (instance? (load-class-no-init "net.minecraft.world.entity.LivingEntity") entity)
-            (let [living entity
-                  dmg-source (get-damage-source level source-type)
+            (let [^LivingEntity living entity
+                  ^DamageSource dmg-source (get-damage-source level source-type)
                   hit-entities (atom [(str (.getUUID living))])]
               ;; Apply damage to initial target
               (.hurt living dmg-source (float damage))
@@ -119,15 +122,15 @@
                      current-damage damage
                      reflection-num reflection-count]
                 (when (< reflection-num max-reflections)
-                  (let [pos (.position current-entity)
-                        next-entity (find-nearest-living-entity level current-entity
+                  (let [^Vec3 pos (.position ^LivingEntity current-entity)
+                        next-entity (find-nearest-living-entity level ^LivingEntity current-entity
                                                                  (.x pos) (.y pos) (.z pos)
                                                                  10.0)]
                     (when next-entity
                       (let [reflected-damage (* current-damage 0.5)]
-                        (.hurt next-entity dmg-source (float reflected-damage))
-                        (swap! hit-entities conj (str (.getUUID next-entity)))
-                        (recur next-entity reflected-damage (inc reflection-num)))))))
+                        (.hurt ^LivingEntity next-entity dmg-source (float reflected-damage))
+                        (swap! hit-entities conj (str (.getUUID ^LivingEntity next-entity)))
+                        (recur ^LivingEntity next-entity reflected-damage (inc reflection-num)))))))
 
               @hit-entities)))))
     (catch Exception e

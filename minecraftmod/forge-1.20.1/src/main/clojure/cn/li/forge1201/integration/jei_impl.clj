@@ -18,13 +18,16 @@
            [mezz.jei.api.gui.builder IRecipeLayoutBuilder]
            [mezz.jei.api.helpers IGuiHelper]
            [mezz.jei.api.recipe RecipeIngredientRole]
+           [mezz.jei.api.recipe RecipeType]
+           [mezz.jei.api.gui.builder IRecipeSlotBuilder]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world.item ItemStack]
-           [net.minecraft.world.level ItemLike]))
+           [net.minecraft.world.level ItemLike]
+           [java.util ArrayList]))
 
 (set! *warn-on-reflection* true)
 
-(defn- parse-item-id
+(defn- parse-item-id ^ItemStack
   "Parse item ID string to ItemStack.
   Format: 'modid:item_name' or 'modid:item_name#count'"
   [^String item-id]
@@ -82,26 +85,24 @@
             (when (< idx (count inputs))
               (let [input (nth inputs idx)
                     item-id (:item input)
-                    item-stack (parse-item-id item-id)]
+                    ^ItemStack item-stack (parse-item-id item-id)]
                 (when item-stack
-                  (-> builder
-                      (.addSlot RecipeIngredientRole/INPUT
-                               (int (:x slot-pos))
-                               (int (:y slot-pos)))
-                      (.addItemStack item-stack))))))
+                  (let [^IRecipeSlotBuilder slot-builder (.addSlot builder RecipeIngredientRole/INPUT
+                                                                  (int (:x slot-pos))
+                                                                  (int (:y slot-pos)))]
+                    (.addItemStack slot-builder item-stack))))))
 
           ;; Add output slots
           (doseq [[idx slot-pos] (map-indexed vector output-slots)]
             (when (< idx (count outputs))
               (let [output (nth outputs idx)
                     item-id (:item output)
-                    item-stack (parse-item-id item-id)]
+                    ^ItemStack item-stack (parse-item-id item-id)]
                 (when item-stack
-                  (-> builder
-                      (.addSlot RecipeIngredientRole/OUTPUT
-                               (int (:x slot-pos))
-                               (int (:y slot-pos)))
-                      (.addItemStack item-stack))))))
+                  (let [^IRecipeSlotBuilder slot-builder (.addSlot builder RecipeIngredientRole/OUTPUT
+                                                                  (int (:x slot-pos))
+                                                                  (int (:y slot-pos)))]
+                    (.addItemStack slot-builder item-stack))))))
           nil)))))
 
 (defn- register-categories
@@ -124,12 +125,12 @@
     (doseq [category-meta categories/all-categories]
       (let [recipes (categories/get-recipes-for-category category-meta)
             formatted-recipes (map categories/format-recipe-for-jei recipes)
-            recipe-type (mezz.jei.api.recipe.RecipeType/create
+            ^RecipeType recipe-type (mezz.jei.api.recipe.RecipeType/create
                           (.getNamespace (ResourceLocation. (:id category-meta)))
                           (.getPath (ResourceLocation. (:id category-meta)))
                           java.util.Map)]
         (when (seq formatted-recipes)
-          (.addRecipes registration recipe-type (java.util.ArrayList. formatted-recipes))
+          (.addRecipes registration recipe-type (ArrayList. formatted-recipes))
           (log/info (str "Registered " (count formatted-recipes) " recipes for " (:id category-meta))))))
     (catch Exception e
       (log/error "Failed to register JEI recipes:" (ex-message e)))))
@@ -140,13 +141,13 @@
   (try
     (doseq [category-meta categories/all-categories]
       (let [block-id (:block-id category-meta)
-            item-stack (parse-item-id block-id)
-            recipe-type (mezz.jei.api.recipe.RecipeType/create
+            ^ItemStack item-stack (parse-item-id block-id)
+            ^RecipeType recipe-type (mezz.jei.api.recipe.RecipeType/create
                           (.getNamespace (ResourceLocation. (:id category-meta)))
                           (.getPath (ResourceLocation. (:id category-meta)))
                           java.util.Map)]
         (when item-stack
-          (.addRecipeCatalyst registration recipe-type item-stack)
+          (.addRecipeCatalyst registration item-stack (into-array RecipeType [recipe-type]))
           (log/info (str "Registered JEI catalyst: " block-id " for " (:id category-meta))))))
     (catch Exception e
       (log/error "Failed to register JEI catalysts:" (ex-message e)))))

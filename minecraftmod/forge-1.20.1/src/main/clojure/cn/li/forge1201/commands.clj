@@ -9,10 +9,12 @@
             [cn.li.forge1201.command-executor]  ; Load action implementations
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.brigadier CommandDispatcher]
+           [com.mojang.brigadier.builder ArgumentBuilder]
            [com.mojang.brigadier.builder LiteralArgumentBuilder RequiredArgumentBuilder]
            [com.mojang.brigadier.arguments StringArgumentType IntegerArgumentType FloatArgumentType BoolArgumentType]
            [com.mojang.brigadier.context CommandContext]
-           [net.minecraft.commands CommandSourceStack]))
+           [net.minecraft.commands CommandSourceStack]
+           [net.minecraft.server.level ServerPlayer]))
 
 (defn- entity-arg-player-type []
   (clojure.lang.Reflector/invokeStaticMethod
@@ -117,8 +119,8 @@
   [executor-fn ^CommandContext brigadier-ctx arg-specs target-player]
   (try
     (let [^CommandSourceStack source (.getSource brigadier-ctx)
-          player (try (.getPlayerOrException source)
-                      (catch Exception _ nil))
+          ^ServerPlayer player (try (.getPlayerOrException source)
+                   (catch Exception _ nil))
           world (when player (.level player))
           arguments (extract-all-arguments brigadier-ctx arg-specs)
           ctx (cmd-ctx/create-context
@@ -194,16 +196,16 @@
   [arg-specs executor-fn target-player-arg]
   (when (seq arg-specs)
     (loop [remaining (reverse arg-specs)
-           current-node nil]
+           ^ArgumentBuilder current-node nil]
       (if (empty? remaining)
         current-node
         (let [arg-spec (first remaining)
               is-last? (nil? current-node)
-              node (build-argument-node
-                     arg-spec
-                     (when is-last? executor-fn)
-                     arg-specs
-                     target-player-arg)]
+              ^RequiredArgumentBuilder node (build-argument-node
+                                            arg-spec
+                                            (when is-last? executor-fn)
+                                            arg-specs
+                                            target-player-arg)]
           (when current-node
             (.then node current-node))
           (recur (rest remaining) node))))))
@@ -220,19 +222,15 @@
   Returns:
     LiteralArgumentBuilder"
   [subcommand-name subcommand-spec parent-args target-player-arg]
-  (let [literal (LiteralArgumentBuilder/literal subcommand-name)
+  (let [^LiteralArgumentBuilder literal (LiteralArgumentBuilder/literal subcommand-name)
         executor-fn (:executor-fn subcommand-spec)
         sub-args (:arguments subcommand-spec)
         all-args (vec (concat parent-args sub-args))]
-
-    ;; If subcommand has arguments, build argument chain
     (if (seq sub-args)
-      (let [arg-chain (build-arguments-chain sub-args executor-fn target-player-arg)]
+      (let [^RequiredArgumentBuilder arg-chain (build-arguments-chain sub-args executor-fn target-player-arg)]
         (.then literal arg-chain))
-      ;; No arguments, attach executor directly
       (when executor-fn
         (.executes literal (build-executor executor-fn all-args target-player-arg))))
-
     literal))
 
 (defn build-command-node
@@ -245,14 +243,14 @@
     LiteralArgumentBuilder"
   [command-spec]
   (let [command-id (:id command-spec)
-        literal (LiteralArgumentBuilder/literal command-id)
+        ^LiteralArgumentBuilder literal (LiteralArgumentBuilder/literal command-id)
         permission-level (:permission-level command-spec)]
 
     ;; Set permission requirement
     (.requires literal
       (reify java.util.function.Predicate
         (test [_ source]
-          (>= (.getPermissionLevel ^CommandSourceStack source) permission-level))))
+          (.hasPermission ^CommandSourceStack source (int permission-level)))))
 
     ;; Handle command tree (with subcommands)
     (if-let [subcommands (:subcommands command-spec)]
@@ -263,36 +261,36 @@
                                     (name (:name first-arg)))))]
         ;; Build parent arguments if any
         (if (seq parent-args)
-          (let [arg-chain-builder (fn [parent-node]
+          (let [arg-chain-builder (fn [^ArgumentBuilder parent-node]
                                     (doseq [[sub-name sub-spec] subcommands]
-                                      (let [sub-node (build-subcommand-node
-                                                       (name sub-name)
-                                                       sub-spec
-                                                       parent-args
-                                                       target-player-arg)]
+                                      (let [^LiteralArgumentBuilder sub-node (build-subcommand-node
+                                                                            (name sub-name)
+                                                                            sub-spec
+                                                                            parent-args
+                                                                            target-player-arg)]
                                         (.then parent-node sub-node)))
                                     parent-node)
-                first-arg-node (build-argument-node
-                                 (first parent-args)
-                                 nil
-                                 parent-args
-                                 target-player-arg)]
+                ^RequiredArgumentBuilder first-arg-node (build-argument-node
+                                                         (first parent-args)
+                                                         nil
+                                                         parent-args
+                                                         target-player-arg)]
             (arg-chain-builder first-arg-node)
             (.then literal first-arg-node))
           ;; No parent arguments, attach subcommands directly
           (doseq [[sub-name sub-spec] subcommands]
-            (let [sub-node (build-subcommand-node
-                             (name sub-name)
-                             sub-spec
-                             []
-                             nil)]
+            (let [^LiteralArgumentBuilder sub-node (build-subcommand-node
+                                                    (name sub-name)
+                                                    sub-spec
+                                                    []
+                                                    nil)]
               (.then literal sub-node)))))
 
       ;; Simple command (no subcommands)
       (let [executor-fn (:executor-fn command-spec)
             arg-specs (:arguments command-spec)]
         (if (seq arg-specs)
-          (let [arg-chain (build-arguments-chain arg-specs executor-fn nil)]
+          (let [^RequiredArgumentBuilder arg-chain (build-arguments-chain arg-specs executor-fn nil)]
             (.then literal arg-chain))
           (when executor-fn
             (.executes literal (build-executor executor-fn [] nil))))))

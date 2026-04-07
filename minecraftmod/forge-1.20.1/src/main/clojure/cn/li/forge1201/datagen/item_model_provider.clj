@@ -12,9 +12,9 @@
   (:import [net.minecraft.data PackOutput]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.common.data ExistingFileHelper]
-           [net.minecraftforge.client.model.generators ItemModelProvider]))
+           [net.minecraftforge.client.model.generators ItemModelProvider ItemModelBuilder]))
 
-(defn- texture-rl
+(defn- texture-rl ^ResourceLocation
   [texture-name]
   (ResourceLocation. modid/*mod-id* (str "item/" texture-name)))
 
@@ -28,15 +28,17 @@
                                      (let [item-spec (item-dsl/get-item item-name)
                                            model-texture (get-in item-spec [:properties :model-texture])]
                                        (when model-texture
-                                         {:item-name item-name
+                                         {:item-name (str item-name)
                                           :model-texture model-texture
                                           :model-parent (get-in item-spec [:properties :model-parent] "item/generated")})))
                                    all-item-names)]
         (doseq [{:keys [item-name model-texture model-parent]} items-with-model]
-          (-> (.withExistingParent this item-name
-                                   (or (rl/parse-resource-location (or model-parent "item/generated"))
-                                       (.mcLoc this "item/generated")))
-              (.texture "layer0" (texture-rl model-texture))))
+          (let [^String item-name (str item-name)
+                ^String model-texture (str model-texture)
+                ^ResourceLocation parent-rl (or (rl/parse-resource-location (or model-parent "item/generated"))
+                                                (.mcLoc ^ItemModelProvider this "item/generated"))
+                ^ItemModelBuilder builder (.withExistingParent ^ItemModelProvider this item-name parent-rl)]
+              (.texture builder "layer0" ^ResourceLocation (texture-rl model-texture))))
         (println (str "[item-model-provider] summary: items=" (count all-item-names)
                       ", with-model=" (count items-with-model)
                       ", written=" (count items-with-model)))))))

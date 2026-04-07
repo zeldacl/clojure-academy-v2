@@ -16,8 +16,12 @@
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
+           [net.minecraft.resources ResourceLocation]
+           [net.minecraft.world.level.block Block]
            [net.minecraftforge.client.model.generators BlockStateProvider]
+           [net.minecraftforge.client.model.generators ItemModelBuilder BlockModelBuilder ModelFile]
            [net.minecraftforge.common.data ExistingFileHelper]
+           [net.minecraftforge.registries RegistryObject]
            [java.util.concurrent CompletableFuture]))
 
 
@@ -36,8 +40,8 @@
 (defn- registry-object->block
   [registry-object]
   (try
-    (when (and registry-object (.isPresent registry-object))
-      (.get registry-object))
+    (when (and registry-object (.isPresent ^RegistryObject registry-object))
+      (.get ^RegistryObject registry-object))
     (catch Throwable _
       nil)))
 
@@ -62,6 +66,10 @@
 ;; into the `eval`ed form. Clojure refuses to compile those as literals.
 (def ^:dynamic *datagen-pack-output* nil)
 (def ^:dynamic *datagen-exfile-helper* nil)
+
+(defn- eval-with-source
+  [form]
+  (eval (with-meta form {:file "cn/li/forge1201/datagen/blockstate_provider.clj" :line 1})))
 
 (defn- resolve-from-forge-registry
   [block-key registry-name]
@@ -120,25 +128,37 @@
   (str/replace model-id #".*:block/" ""))
 
 (defn- write-flat-item-model!
-  [^BlockStateProvider provider registry-name texture-rl]
+  [^BlockStateProvider provider ^String registry-name texture-rl]
   (let [item-models (.itemModels provider)
-        builder (.withExistingParent item-models registry-name "item/generated")]
-    (.texture builder "layer0" (parse-rl texture-rl))
+    ^ItemModelBuilder builder (.withExistingParent item-models registry-name "item/generated")
+    ^ResourceLocation texture-loc (parse-rl texture-rl)]
+  (.texture builder "layer0" texture-loc)
     builder))
 
-(defn- ensure-block-model!
+(defn- invoke-part-condition!
+  [part-builder property typed-values]
+  (let [m (.getMethod (class part-builder) "condition" (into-array Class [Object (class typed-values)]))]
+    (.invoke m part-builder (object-array [property typed-values]))
+    part-builder))
+
+(defn- end-part-builder!
+  [part-builder]
+  (let [m (.getMethod (class part-builder) "end" (into-array Class []))]
+    (.invoke m part-builder (object-array []))))
+
+(defn- ensure-block-model! ^ModelFile
   "Generate block model using Forge API.
    Queries business layer for texture configuration, then uses appropriate Forge API:
    - .cube() for models with custom side/vert textures (e.g., node blocks)
    - parent-driven model for explicit :model-parent definitions
    - .cubeAll() fallback for simple textured blocks"
   [^BlockStateProvider provider model-id]
-  (let [model-name (model-id->model-name model-id)]
+  (let [^String model-name (model-id->model-name model-id)]
     ;; Query business layer for texture configuration
     (if-let [tex-cfg (blockstate-def/get-model-texture-config model-name)]
       ;; Special model: use .cube() with side/vert textures
-      (let [side-texture (parse-rl (:side tex-cfg))
-            vert-texture (parse-rl (:vert tex-cfg))
+      (let [^ResourceLocation side-texture (parse-rl (:side tex-cfg))
+        ^ResourceLocation vert-texture (parse-rl (:vert tex-cfg))
             builder (.cube (.models provider)
                           model-name
                           vert-texture   ; down
@@ -149,22 +169,24 @@
                           side-texture)] ; west
         builder)
       ;; Default model: honor explicit DSL parent/textures first.
-      (let [registry-name (infer-registry-name-from-model model-name)
+      (let [^String registry-name (infer-registry-name-from-model model-name)
             block-spec (registry-name->block-spec registry-name)
-        parent (parent-from-spec block-spec)
-        explicit-texture (some-> (or (get-in block-spec [:rendering :textures :all])
+        ^String parent (parent-from-spec block-spec)
+        ^String explicit-texture (some-> (or (get-in block-spec [:rendering :textures :all])
                      (get-in block-spec [:properties :textures :all]))
                  normalize-block-texture)]
         (if (or (not= parent "minecraft:block/cube_all") explicit-texture)
-          (let [builder (.withExistingParent (.models provider)
-                     model-name
-                     (parse-rl parent "minecraft"))]
-        (when explicit-texture
-          (.texture builder "all" (parse-rl explicit-texture)))
-        builder)
-          (let [texture-all (parse-rl (texture-from-spec block-spec model-name))
-            builder (.cubeAll (.models provider) model-name texture-all)]
-        builder))))))
+          (let [^ResourceLocation parent-rl (parse-rl parent "minecraft")
+                ^BlockModelBuilder builder (.withExistingParent (.models provider)
+                                            model-name
+                                            parent-rl)]
+            (when explicit-texture
+              (let [^ResourceLocation tex-rl (parse-rl explicit-texture)]
+                (.texture builder "all" tex-rl)))
+            builder)
+          (let [^ResourceLocation texture-all (parse-rl (texture-from-spec block-spec model-name))
+                builder (.cubeAll (.models provider) model-name texture-all)]
+            builder))))))
 
 (defn- condition->typed
   [property-key value]
@@ -181,8 +203,8 @@
     (doseq [[property-key raw-value] condition]
       (if-let [property (bsp/get-property block-id-str property-key)]
       ;; Use the dynamically retrieved property object
-      (.condition part-builder property
-                 (into-array Comparable [(condition->typed property-key raw-value)]))
+        (invoke-part-condition! part-builder property
+                    (into-array Comparable [(condition->typed property-key raw-value)]))
       ;; Fallback: warn if property not found
       (log/warn "Property not found for block" block-id-str ":" property-key))))
   part-builder)
@@ -190,13 +212,13 @@
 (defn build-simple-block!
   [^BlockStateProvider provider block-key definition]
   (let [registry-name (:registry-name definition)
-        block (resolve-registered-block block-key registry-name)
+      ^Block block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
     (when (invoke-bootstrap-helper "isAirBlock" block (invoke-bootstrap-helper "getAirBlock"))
       (throw (ex-info "Simple block not resolvable for datagen"
                       {:block-key block-key :registry-name registry-name})))
     (let [model-id (first (:models (first (:parts definition))))
-          model-file (ensure-block-model! provider model-id)
+          ^ModelFile model-file (ensure-block-model! provider model-id)
           block-spec (registry-name->block-spec registry-name)]
       (.simpleBlock provider block model-file)
       (when (registry-metadata/should-create-block-item? block-id)
@@ -209,7 +231,7 @@
 (defn build-multipart-block!
   [^BlockStateProvider provider block-key definition]
   (let [registry-name (:registry-name definition)
-        block (resolve-registered-block block-key registry-name)
+      ^Block block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
     (when (invoke-bootstrap-helper "isAirBlock" block (invoke-bootstrap-helper "getAirBlock"))
       (throw (ex-info "Multipart block not resolvable for datagen"
@@ -224,8 +246,8 @@
           (if-let [condition (:condition part)]
             (-> part-builder
                 (apply-node-condition! block-key condition)
-                (.end))
-            (.end part-builder))))
+              (end-part-builder!))
+            (end-part-builder! part-builder))))
       ;; For node blocks, use _base variant for item model
       (when (registry-metadata/should-create-block-item? block-id)
         (let [item-model-id (blockstate-def/get-item-model-id modid/*mod-id* registry-name)]
@@ -241,24 +263,25 @@
         ;; Important: do NOT embed Java objects (PackOutput/ExistingFileHelper) into the
         ;; evaled form. Clojure refuses to compile those literals. Instead, bind them
         ;; to dynamic vars and reference the vars in the generated proxy call.
-        ^BlockStateProvider provider (binding [*datagen-pack-output* pack-output
-                                               *datagen-exfile-helper* exfile-helper]
-                                      (eval
-                                       `(proxy [BlockStateProvider] [*datagen-pack-output* ~modid/*mod-id* *datagen-exfile-helper*]
-                                           (registerStatesAndModels []
-                                             (doseq [[block-key# definition#] ~all-defs]
-                                               (if (blockstate-def/is-multipart-block? definition#)
-                                                 (do
-                                                   (cn.li.forge1201.datagen.blockstate-provider/build-multipart-block!
-                                                    ~'this block-key# definition#)
-                                                   (swap! *datagen-multipart-count* inc))
-                                                 (do
-                                                   (cn.li.forge1201.datagen.blockstate-provider/build-simple-block!
-                                                    ~'this block-key# definition#)
-                                                   (swap! *datagen-simple-count* inc))))))))]
-         :future (binding [*datagen-simple-count* simple-count
-               *datagen-multipart-count* multipart-count]
-             (.run provider cache))
+        ^BlockStateProvider provider
+        (binding [*datagen-pack-output* pack-output
+                  *datagen-exfile-helper* exfile-helper]
+          (eval-with-source
+           `(proxy [BlockStateProvider] [*datagen-pack-output* ~modid/*mod-id* *datagen-exfile-helper*]
+              (registerStatesAndModels []
+                (doseq [[block-key# definition#] ~all-defs]
+                  (if (blockstate-def/is-multipart-block? definition#)
+                    (do
+                      (cn.li.forge1201.datagen.blockstate-provider/build-multipart-block!
+                       ~'this block-key# definition#)
+                      (swap! *datagen-multipart-count* inc))
+                    (do
+                      (cn.li.forge1201.datagen.blockstate-provider/build-simple-block!
+                       ~'this block-key# definition#)
+                      (swap! *datagen-simple-count* inc))))))))]
+    {:future (binding [*datagen-simple-count* simple-count
+                       *datagen-multipart-count* multipart-count]
+               (.run provider cache))
      :simple @simple-count
      :multipart @multipart-count}))
 

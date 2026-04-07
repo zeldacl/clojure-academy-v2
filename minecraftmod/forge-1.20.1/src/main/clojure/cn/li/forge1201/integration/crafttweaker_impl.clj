@@ -8,7 +8,9 @@
   this module will not be loaded."
   (:require [cn.li.ac.integration.crafttweaker.recipes :as ct-recipes]
             [cn.li.ac.integration.crafttweaker.bridge :as ct-bridge]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraft.world.item ItemStack]
+           [net.minecraft.resources ResourceLocation]))
 
 (set! *warn-on-reflection* true)
 
@@ -26,17 +28,18 @@
   Returns:
     Item spec map {:item 'modid:item' :count N}"
   [stack]
-  (when (and stack (not (.isEmpty stack)))
-    (let [item (.getItem stack)
+  (let [^ItemStack stack stack]
+    (when (and stack (not (.isEmpty stack)))
+      (let [item (.getItem stack)
           regs-cls (load-class-no-init "net.minecraft.core.registries.BuiltInRegistries")
           item-field (.getField regs-cls "ITEM")
           item-registry (.get item-field nil)
           get-key-method (.getMethod (class item-registry) "getKey" (into-array Class [Object]))
-          res-loc (.invoke get-key-method item-registry (object-array [item]))
+          ^ResourceLocation res-loc (.invoke get-key-method item-registry (object-array [item]))
           item-id (str (.getNamespace res-loc) ":" (.getPath res-loc))
           count (.getCount stack)]
-      {:item item-id
-       :count count})))
+        {:item item-id
+         :count count}))))
 
 (defn crafttweaker-itemstack-to-spec
   "Convert a CraftTweaker IItemStack to AC item spec.

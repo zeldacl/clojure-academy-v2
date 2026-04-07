@@ -70,7 +70,7 @@
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
-      (boolean (active?-fn))
+      (boolean (active?-fn)))
     (mayPickup [_player]
       (boolean (active?-fn)))))
 

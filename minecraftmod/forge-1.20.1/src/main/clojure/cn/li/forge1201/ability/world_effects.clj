@@ -6,7 +6,8 @@
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.core BlockPos]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraft.world.phys AABB]
+           [net.minecraft.world.entity Entity EntityType LivingEntity]
+           [net.minecraft.world.phys AABB Vec3]
            [net.minecraftforge.server ServerLifecycleHooks]))
 
 (set! *warn-on-reflection* true)
@@ -27,8 +28,8 @@
     (when-let [^ServerLevel level (get-level world-id)]
       ;; Resolve EntityType lazily so checkClojure does not trigger registry bootstrap.
       (let [et-class (load-class-no-init "net.minecraft.world.entity.EntityType")
-            lightning-bolt (.get (.getDeclaredField et-class "LIGHTNING_BOLT") nil)
-            lightning (.create lightning-bolt level)]
+        ^EntityType lightning-bolt (.get (.getDeclaredField et-class "LIGHTNING_BOLT") nil)
+        ^Entity lightning (.create lightning-bolt level)]
         (when lightning
           (.moveTo lightning (double x) (double y) (double z))
           (.addFreshEntity level lightning)
@@ -54,8 +55,8 @@
                         (+ x radius) (+ y radius) (+ z radius))
             living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
             entities (.getEntitiesOfClass level living-entity-class aabb)]
-        (mapv (fn [entity]
-                (let [pos (.position entity)]
+            (mapv (fn [^LivingEntity entity]
+              (let [^Vec3 pos (.position entity)]
                   {:uuid (str (.getUUID entity))
                    :x (.x pos)
                    :y (.y pos)

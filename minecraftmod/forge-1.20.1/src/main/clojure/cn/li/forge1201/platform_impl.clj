@@ -29,6 +29,10 @@
 
 (set! *warn-on-reflection* true)
 
+(defn- eval-with-source
+  [form]
+  (eval (with-meta form {:file "cn/li/forge1201/platform_impl.clj" :line 1})))
+
 ;; ============================================================================
 ;; NBT Protocol Implementation (Forge 1.20.1)
 ;; ============================================================================
@@ -137,7 +141,7 @@
    ;; Use runtime `eval` to defer `extend-type` macroexpansion until Minecraft
    ;; registries are bootstrapped (AOT/checkClojure would otherwise touch them).
    ;; Fully qualify protocol symbols: `eval` does not see this ns's `item` alias.
-   (eval
+   (eval-with-source
      '(extend-type net.minecraft.world.item.ItemStack
         cn.li.mcmod.platform.item/IItemStack
         (item-is-empty? [^net.minecraft.world.item.ItemStack this] (.isEmpty this))
@@ -156,7 +160,7 @@
         (item-get-item [^net.minecraft.world.item.ItemStack this] (.getItem this))
         (item-get-tag-compound [^net.minecraft.world.item.ItemStack this] (.getTag this))))
 
-   (eval
+   (eval-with-source
      '(extend-type net.minecraft.world.item.Item
         cn.li.mcmod.platform.item/IItem
         (item-get-description-id [^net.minecraft.world.item.Item this] (.getDescriptionId this))
@@ -174,7 +178,7 @@
 
 (defn- install-block-and-world-impls!
   []
-  (eval
+  (eval-with-source
     '(extend-type net.minecraft.world.level.block.entity.BlockEntity
        cn.li.mcmod.platform.position/IHasPosition
        (position-get-block-pos [^net.minecraft.world.level.block.entity.BlockEntity this]
@@ -203,7 +207,7 @@
        (be-set-changed! [^net.minecraft.world.level.block.entity.BlockEntity this]
          (.setChanged this))))
 
-  (eval
+  (eval-with-source
     '(extend-type net.minecraft.world.level.block.state.BlockState
        cn.li.mcmod.platform.world/IBlockStateOps
        (block-state-is-air [^net.minecraft.world.level.block.state.BlockState this]
@@ -217,7 +221,7 @@
        (block-state-set-property [^net.minecraft.world.level.block.state.BlockState this prop value]
          (.setValue this ^net.minecraft.world.level.block.state.properties.Property prop value))))
 
-  (eval
+  (eval-with-source
     '(extend-type net.minecraftforge.common.util.LazyOptional
        cn.li.mcmod.platform.capability/ILazyOptional
        (is-present? [^net.minecraftforge.common.util.LazyOptional this]
@@ -225,7 +229,7 @@
        (or-else [^net.minecraftforge.common.util.LazyOptional this default]
          (.orElse this default))))
 
-  (eval
+  (eval-with-source
     '(extend-type net.minecraft.world.level.Level
        cn.li.mcmod.platform.world/IWorldAccess
        (world-get-tile-entity [^net.minecraft.world.level.Level this block-pos]
@@ -264,13 +268,13 @@
 ;; implementations are installed during `init-platform!` below.
 (defn- install-entity-impls!
   []
-  (eval
+  (eval-with-source
     '(extend-type net.minecraft.world.entity.Entity
        cn.li.mcmod.platform.entity/IEntityOps
        (entity-distance-to-sqr [^net.minecraft.world.entity.Entity this x y z]
          (.distanceToSqr this (double x) (double y) (double z)))))
 
-  (eval
+  (eval-with-source
     '(extend-type net.minecraft.world.entity.player.Player
        cn.li.mcmod.platform.entity/IEntityOps
        (entity-distance-to-sqr [^net.minecraft.world.entity.player.Player this x y z]
@@ -286,13 +290,13 @@
 
 (defn- install-inventory-and-menu-impls!
   []
-  (eval
+  (eval-with-source
     '(extend-type net.minecraft.world.entity.player.Inventory
        cn.li.mcmod.platform.entity/IEntityOps
        (inventory-get-player [^net.minecraft.world.entity.player.Inventory this]
          (.player this))))
 
-  (eval
+  (eval-with-source
     '(extend-type net.minecraft.world.inventory.AbstractContainerMenu
        cn.li.mcmod.platform.entity/IEntityOps
        (menu-get-container-id [^net.minecraft.world.inventory.AbstractContainerMenu this]
