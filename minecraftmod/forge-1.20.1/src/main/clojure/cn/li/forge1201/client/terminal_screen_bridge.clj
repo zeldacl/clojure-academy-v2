@@ -9,7 +9,7 @@
            [net.minecraft.network.chat Component]
            [net.minecraft.client Minecraft]))
 
-(set! *warn-on-reflection* false)
+(set! *warn-on-reflection* true)
 
 ;; ============================================================================
 ;; Terminal Screen
@@ -60,7 +60,7 @@
       (keyPressed [key-code scan-code modifiers]
         (try
           (cgui-rt/key-input! gui-widget key-code scan-code (char 0))
-          (proxy-super keyPressed key-code scan-code modifiers)
+          true
           (catch Exception e
             (log/error "Error handling terminal key press:" (.getMessage e))
             false)))
@@ -68,7 +68,7 @@
       (charTyped [code-point modifiers]
         (try
           (cgui-rt/key-input! gui-widget 0 0 (char code-point))
-          (proxy-super charTyped code-point modifiers)
+          true
           (catch Exception e
             (log/error "Error handling terminal char typed:" (.getMessage e))
             false)))

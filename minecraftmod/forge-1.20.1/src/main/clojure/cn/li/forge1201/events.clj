@@ -7,6 +7,7 @@
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
        [net.minecraft.world InteractionHand InteractionResult]
+         [net.minecraft.world.level Level]
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
             BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
 
@@ -38,9 +39,9 @@
             (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
               (try
                 (let [{:keys [gui-id player world pos]} ret
-                      tile-entity (.getBlockEntity world pos)]
+                      tile-entity (.getBlockEntity ^Level world pos)]
                   (log/info "[RIGHT-CLICK] GUI result received: gui-id=" gui-id "pos=" pos "tile-entity=" (if tile-entity "present" "nil"))
-                  (when (and tile-entity (not (.isClientSide world)))
+                  (when (and tile-entity (not (.isClientSide ^Level world)))
                     (log/info "[RIGHT-CLICK] Opening GUI on server side...")
                     (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))
                 (catch Exception e
@@ -55,7 +56,7 @@
   [^PlayerInteractEvent$RightClickBlock evt]
   (try
     (let [pos (.getPos evt)
-          level (.getLevel evt)
+          ^Level level (.getLevel evt)
           player (.getEntity evt)
           hand (.getHand evt)]
       ;; Forge fires this on both sides and both hands; only open GUI once on server main hand.

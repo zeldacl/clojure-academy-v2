@@ -11,7 +11,7 @@
            [net.minecraftforge.server ServerLifecycleHooks]
            [java.util UUID]))
 
-(set! *warn-on-reflection* false)
+(set! *warn-on-reflection* true)
 
 (defn- get-server ^MinecraftServer []
   (ServerLifecycleHooks/getCurrentServer))

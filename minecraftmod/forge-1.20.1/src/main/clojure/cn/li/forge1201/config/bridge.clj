@@ -3,9 +3,11 @@
             [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.mcmod.util.log :as log])
   (:import [java.util.function Consumer]
-           [net.minecraftforge.common ForgeConfigSpec ForgeConfigSpec$Builder]
+           [net.minecraftforge.common ForgeConfigSpec ForgeConfigSpec$Builder ForgeConfigSpec$ConfigValue]
            [net.minecraftforge.eventbus.api EventPriority]
+           [net.minecraftforge.eventbus.api IEventBus]
            [net.minecraftforge.fml ModLoadingContext]
+           [net.minecraftforge.fml.event.config ModConfigEvent]
            [net.minecraftforge.fml.config ModConfig$Type]))
 
 (defonce registered-configs
@@ -32,15 +34,15 @@
   [^ForgeConfigSpec$Builder builder comment]
   (if (str/blank? (str comment))
     builder
-    (.comment builder (into-array String [(str comment)]))))
+    (.comment builder ^"[Ljava.lang.String;" (into-array String [(str comment)]))))
 
 (defn- define-entry!
   [^ForgeConfigSpec$Builder builder descriptor]
   (let [default (:default descriptor)
         min-val (:min descriptor)
         max-val (:max descriptor)
-        leaf (leaf-name descriptor)
-        builder (comment-builder builder (:comment descriptor))]
+      ^String leaf (leaf-name descriptor)
+        ^ForgeConfigSpec$Builder builder (comment-builder builder (:comment descriptor))]
     (case (:type descriptor)
       :int (.defineInRange builder leaf (int default) (int (or min-val Integer/MIN_VALUE)) (int (or max-val Integer/MAX_VALUE)))
       :double (.defineInRange builder leaf (double default) (double (or min-val Double/MIN_VALUE)) (double (or max-val Double/MAX_VALUE)))
@@ -72,19 +74,19 @@
   [{:keys [domain file-name entries]}]
   (let [values (into {}
                      (map (fn [[config-key entry]]
-                            [config-key (.get entry)]))
+                            [config-key (.get ^ForgeConfigSpec$ConfigValue entry)]))
                      entries)]
     (config-reg/set-config-values! domain values)
     (log/info "Loaded Forge config domain" domain "from" file-name)))
 
 (defn- handle-config-event!
-  [event]
+  [^ModConfigEvent event]
   (let [file-name (some-> event .getConfig .getFileName)]
     (when-let [domain-info (get @registered-configs file-name)]
       (load-domain-values! domain-info))))
 
 (defn register-all!
-  [mod-bus]
+  [^IEventBus mod-bus]
   (let [domains (seq (config-reg/get-all-config-domains))
         loading-class (Class/forName "net.minecraftforge.fml.event.config.ModConfigEvent$Loading")
         reloading-class (Class/forName "net.minecraftforge.fml.event.config.ModConfigEvent$Reloading")]

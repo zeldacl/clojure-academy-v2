@@ -72,14 +72,32 @@
 ;; ============================================================================
 
 (defn- on-wireless-event [event]
-  (condp instance? event
-    WirelessNetworkEvent$NetworkCreated  (dispatch-network! "created"     (.getSsid event) (.getMatrix event))
-    WirelessNetworkEvent$NetworkDestroyed (dispatch-network! "destroyed"   (.getSsid event) (.getMatrix event))
-    WirelessNetworkEvent$NodeConnected   (dispatch-node!    "connected"   (.getNode event))
-    WirelessNetworkEvent$NodeDisconnected (dispatch-node!    "disconnected" (.getNode event))
-    WirelessNetworkEvent$GeneratorLinked (dispatch-node!    "generator_linked" (.getNode event))
-    WirelessNetworkEvent$ReceiverLinked  (dispatch-node!    "receiver_linked"  (.getNode event))
-    nil))
+  (cond
+    (instance? WirelessNetworkEvent$NetworkCreated event)
+    (let [^WirelessNetworkEvent$NetworkCreated e event]
+      (dispatch-network! "created" (.getSsid e) (.getMatrix e)))
+
+    (instance? WirelessNetworkEvent$NetworkDestroyed event)
+    (let [^WirelessNetworkEvent$NetworkDestroyed e event]
+      (dispatch-network! "destroyed" (.getSsid e) (.getMatrix e)))
+
+    (instance? WirelessNetworkEvent$NodeConnected event)
+    (let [^WirelessNetworkEvent$NodeConnected e event]
+      (dispatch-node! "connected" (.getNode e)))
+
+    (instance? WirelessNetworkEvent$NodeDisconnected event)
+    (let [^WirelessNetworkEvent$NodeDisconnected e event]
+      (dispatch-node! "disconnected" (.getNode e)))
+
+    (instance? WirelessNetworkEvent$GeneratorLinked event)
+    (let [^WirelessNetworkEvent$GeneratorLinked e event]
+      (dispatch-node! "generator_linked" (.getNode e)))
+
+    (instance? WirelessNetworkEvent$ReceiverLinked event)
+    (let [^WirelessNetworkEvent$ReceiverLinked e event]
+      (dispatch-node! "receiver_linked" (.getNode e)))
+
+    :else nil))
 
 (defn init!
   "Subscribe IMC dispatch listeners to the Forge game event bus.

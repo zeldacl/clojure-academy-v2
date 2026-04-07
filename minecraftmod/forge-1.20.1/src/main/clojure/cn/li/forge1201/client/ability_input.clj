@@ -15,7 +15,7 @@
   [^String translation-key key-code ^String category]
   (KeyMapping. translation-key
                InputConstants$Type/KEYSYM
-               key-code
+               (int key-code)
                category))
 
 (defn register-keybinds!

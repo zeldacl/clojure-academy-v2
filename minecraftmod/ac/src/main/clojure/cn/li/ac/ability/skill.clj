@@ -42,11 +42,16 @@
 
 (def developer-type-order [:portable :normal :advanced])
 
+(def ^:private developer-type-rank
+  {:portable 0
+   :normal 1
+   :advanced 2})
+
 (defn developer-type-gte?
   "True when developer-type a is at least as powerful as b."
   [a b]
-  (>= (.indexOf developer-type-order a)
-      (.indexOf developer-type-order b)))
+  (>= (long (get developer-type-rank a -1))
+      (long (get developer-type-rank b -1))))
 
 ;; ============================================================================
 ;; Learning cost

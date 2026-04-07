@@ -336,6 +336,8 @@
 (deftype WiSavedDataWrapper
   [^:volatile-mutable wi-data]
   Object
+  (getWiData [_]
+    wi-data)
   (toString [_]
     (str "WiSavedDataWrapper["
          (if wi-data (str (count @(:networks wi-data)) " networks") "uninitialized")
@@ -351,7 +353,7 @@
   [saved-data]
   (when saved-data
     (try
-      (.-wi-data saved-data)
+      (.getWiData ^WiSavedDataWrapper saved-data)
       (catch Exception _ nil))))
 
 (defn on-world-load

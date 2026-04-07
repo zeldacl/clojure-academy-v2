@@ -241,24 +241,24 @@
         ;; Important: do NOT embed Java objects (PackOutput/ExistingFileHelper) into the
         ;; evaled form. Clojure refuses to compile those literals. Instead, bind them
         ;; to dynamic vars and reference the vars in the generated proxy call.
-        provider (binding [*datagen-pack-output* pack-output
-                            *datagen-exfile-helper* exfile-helper]
-                   (eval
-                    `(proxy [BlockStateProvider] [*datagen-pack-output* ~modid/*mod-id* *datagen-exfile-helper*]
-                        (registerStatesAndModels []
-                          (doseq [[block-key# definition#] ~all-defs]
-                            (if (blockstate-def/is-multipart-block? definition#)
-                              (do
-                                (cn.li.forge1201.datagen.blockstate-provider/build-multipart-block!
-                                 ~'this block-key# definition#)
-                                (swap! *datagen-multipart-count* inc))
-                              (do
-                                (cn.li.forge1201.datagen.blockstate-provider/build-simple-block!
-                                 ~'this block-key# definition#)
-                                (swap! *datagen-simple-count* inc))))))))]
-    {:future (binding [*datagen-simple-count* simple-count
-                       *datagen-multipart-count* multipart-count]
-               (.run provider cache))
+        ^BlockStateProvider provider (binding [*datagen-pack-output* pack-output
+                                               *datagen-exfile-helper* exfile-helper]
+                                      (eval
+                                       `(proxy [BlockStateProvider] [*datagen-pack-output* ~modid/*mod-id* *datagen-exfile-helper*]
+                                           (registerStatesAndModels []
+                                             (doseq [[block-key# definition#] ~all-defs]
+                                               (if (blockstate-def/is-multipart-block? definition#)
+                                                 (do
+                                                   (cn.li.forge1201.datagen.blockstate-provider/build-multipart-block!
+                                                    ~'this block-key# definition#)
+                                                   (swap! *datagen-multipart-count* inc))
+                                                 (do
+                                                   (cn.li.forge1201.datagen.blockstate-provider/build-simple-block!
+                                                    ~'this block-key# definition#)
+                                                   (swap! *datagen-simple-count* inc))))))))]
+         :future (binding [*datagen-simple-count* simple-count
+               *datagen-multipart-count* multipart-count]
+             (.run provider cache))
      :simple @simple-count
      :multipart @multipart-count}))
 
@@ -278,7 +278,8 @@
                       ", simple-fallback=0"
                       ", multipart=" multipart
                       ", written=" written-count))
-        (CompletableFuture/allOf (into-array CompletableFuture [future]))))
+        (CompletableFuture/allOf ^"[Ljava.util.concurrent.CompletableFuture;"
+               (into-array CompletableFuture [future]))))
     (getName [_this]
       "MyMod BlockStates (from core definitions)")))
 

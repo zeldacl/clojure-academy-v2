@@ -10,7 +10,8 @@
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
             [cn.li.forge1201.gui.slots :as slots]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.server.level ServerPlayer]
+  (:import [cn.li.forge1201.gui CMenuBridge]
+           [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.inventory AbstractContainerMenu DataSlot Slot]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.world Container]))
@@ -102,7 +103,7 @@
         (.set slot (int @atom-ref))))))
 
 (defn- setup-menu-slots!
-  [^AbstractContainerMenu menu clj-container tab-slot]
+  [^CMenuBridge menu clj-container tab-slot]
   (let [gui-id (gui/get-gui-id-for-container clj-container)
       ^ServerPlayer player (:player clj-container)
         player-inventory (when player
@@ -111,10 +112,10 @@
         tabbed? (tabbed/tabbed-container? clj-container)
         active?-fn (when tabbed? (fn [] (tabbed/slots-active? clj-container)))]
     (when tab-slot
-      (.addDataSlot menu tab-slot))
+      (.addDataSlotPublic menu tab-slot))
     (when-let [data-slots (:data-slots clj-container)]
       (doseq [^DataSlot data-slot (vals data-slots)]
-        (.addDataSlot menu data-slot)))
+        (.addDataSlotPublic menu data-slot)))
     (when (and gui-id player-inventory)
       ;; Offsets aligned with AcademyCraft TechUIContainer: tile at (0,0) => schema coords are absolute; player inv at (6, 105) => hotbar at 163
       (slots/add-gui-slots menu tile-inventory gui-id 0 0 (when tabbed? active?-fn))
@@ -138,7 +139,7 @@
                                      @(:tab-index clj-container))
                                    0)))
         menu
-        (proxy [AbstractContainerMenu] [menu-type (int window-id)]
+        (proxy [CMenuBridge] [menu-type (int window-id)]
           (stillValid [player]
             (gui/safe-validate clj-container player))
 
@@ -158,14 +159,16 @@
               (reset! tab-idx-ref (int @(:tab-index clj-container))))
             (sync-tab-slot-from-container! tab-slot clj-container)
             (sync-data-slots-from-container! clj-container)
-            (proxy-super broadcastChanges)
+            (let [^CMenuBridge s this]
+              (.callSuperBroadcastChanges s))
             (gui/safe-sync! clj-container))
 
           ;; clicked() runs only on the server when it receives click packets.
           (clicked [slot-index button click-type player]
             (when (or (not (tabbed/tabbed-container? clj-container))
                       (tabbed/slots-active-for-menu? this clj-container))
-              (proxy-super clicked slot-index button click-type player)))
+              (let [^CMenuBridge s this]
+                (.callSuperClicked s slot-index button click-type player))))
 
           (quickMoveStack [player slot-index]
             (if (and (tabbed/tabbed-container? clj-container)

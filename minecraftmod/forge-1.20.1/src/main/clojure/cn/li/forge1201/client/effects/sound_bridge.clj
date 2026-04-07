@@ -3,10 +3,11 @@
   (:require [cn.li.ac.ability.client.effects.sounds :as ac-sounds]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
+           [net.minecraft.core Holder]
            [net.minecraft.sounds SoundSource]
            [net.minecraft.resources ResourceLocation]))
 
-(set! *warn-on-reflection* false)
+(set! *warn-on-reflection* true)
 
 (defn- play-sound-effect
   "Play a sound effect."
@@ -27,7 +28,7 @@
                         get-method (.getMethod (class sound-registry) "get" (into-array Class [Object]))
                         holder (.invoke get-method sound-registry (object-array [sound-loc]))]
                       (when holder
-                        (.value holder)))
+                        (.value ^Holder holder)))
                       (catch Exception _ nil))]
             (when sound-event
             (.playLocalSound level pos-x pos-y pos-z

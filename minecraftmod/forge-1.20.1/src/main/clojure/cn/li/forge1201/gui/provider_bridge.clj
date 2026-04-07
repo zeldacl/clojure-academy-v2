@@ -4,13 +4,15 @@
   Uses reify MenuProvider and delegates menu creation to menu-bridge."
   (:require [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.forge1201.gui.menu-bridge :as menu-bridge])
   (:import [net.minecraft.world MenuProvider]
            [net.minecraft.network.chat Component]
+           [net.minecraft.world.entity.player Player]
            [net.minecraft.world.level.block.entity BlockEntity]))
 
 (defn- tile->pos
-  [tile-entity player]
+  [tile-entity ^Player player]
   (cond
     (nil? tile-entity)
     (.blockPosition player)
@@ -38,7 +40,7 @@
       (Component/empty)
       )
 
-    (createMenu [_ window-id player-inventory player]
+    (createMenu [_ window-id _player-inventory player]
       (log/info "[MENU-PROVIDER] createMenu called: gui-id=" gui-id "window-id=" window-id "player=" (.getGameProfile player))
       (try
         (let [handler (gui/get-gui-handler)
@@ -46,7 +48,7 @@
               pos (tile->pos tile-entity player)]
           (log/info "[MENU-PROVIDER] Handler obtained for GUI" gui-id)
           (log/info "[MENU-PROVIDER] Creating server-side container...")
-          (let [clj-container (.get-server-container handler gui-id player world pos)]
+          (let [clj-container (gui-handler/get-server-container handler gui-id player world pos)]
             (if clj-container
               (do
                 (log/info "[MENU-PROVIDER] Server container created successfully")

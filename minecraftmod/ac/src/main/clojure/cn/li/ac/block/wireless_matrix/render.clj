@@ -65,15 +65,15 @@
       (when (not= hw-state @last-shield-hw-state)
         (reset! last-shield-hw-state hw-state)))
     (dotimes [i active-plates]
-      (.pushPose pose-stack)
+      (pose/push-pose pose-stack)
       (try
         (let [float-height 0.1
               y-offset (* float-height (Math/sin (+ (* time 1.111) (* ht-phase-offset i))))]
-          (.translate pose-stack (double 0.0) (double y-offset) (double 0.0))
+          (pose/translate pose-stack (double 0.0) (double y-offset) (double 0.0))
           (pose/apply-y-rotation pose-stack (+ phase (* dtheta i)))
           (obj/render-part-consumer @model "Shield" pose-stack vertex-consumer packed-light packed-overlay))
         (finally
-          (.popPose pose-stack))))))
+          (pose/pop-pose pose-stack))))))
 
 (defn render-at-origin
   "Main render function - renders complete matrix at multiblock origin
@@ -83,8 +83,8 @@
   - partial-ticks, pose-stack, buffer-source, packed-light, packed-overlay"
   [tile partial-ticks pose-stack buffer-source packed-light packed-overlay]
   ;; Lift above support top to eliminate origin-cell depth conflict.
-  (.translate pose-stack (double 0.0) (double 0.02) (double 0.0))
-    (let [vc (rb/get-solid-buffer buffer-source @texture)]
+  (pose/translate pose-stack (double 0.0) (double 0.02) (double 0.0))
+  (let [vc (rb/get-solid-buffer buffer-source @texture)]
     (binding [obj/*skip-flat-bottom-plane* true
               obj/*bottom-plane-epsilon* 0.0008]
       (render-base tile pose-stack vc packed-light packed-overlay)

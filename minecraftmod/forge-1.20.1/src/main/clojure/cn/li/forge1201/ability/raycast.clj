@@ -4,11 +4,12 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel ServerPlayer]
+           [net.minecraft.world.entity Entity]
            [net.minecraft.world.phys Vec3 AABB]
            [net.minecraftforge.server ServerLifecycleHooks]
-           [java.util UUID]))
+           [java.util UUID Optional]))
 
-(set! *warn-on-reflection* false)
+(set! *warn-on-reflection* true)
 
 (defn- load-class-no-init ^Class [class-name]
   (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
@@ -29,7 +30,7 @@
       (log/warn "Failed to get player by UUID:" uuid-str (ex-message e))
       nil)))
 
-(defn- raycast-blocks-impl [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
+(defn- raycast-blocks-impl [_world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
   (try
     (when-let [^MinecraftServer server (get-server)]
       (when-let [^ServerLevel level (.overworld server)]
@@ -59,7 +60,7 @@
       (log/warn "Failed to raycast blocks:" (ex-message e))
       nil)))
 
-(defn- raycast-entities-impl [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
+(defn- raycast-entities-impl [_world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
   (try
     (when-let [^MinecraftServer server (get-server)]
       (when-let [^ServerLevel level (.overworld server)]
@@ -76,13 +77,13 @@
               living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
               entities (.getEntitiesOfClass level living-entity-class (.inflate aabb 2.0))
               hits (atom [])]
-          (doseq [entity entities]
-            (let [entity-aabb (.getBoundingBox entity)
-                  optional-hit (.clip entity-aabb start end)]
+          (doseq [^Entity entity entities]
+            (let [^AABB entity-aabb (.getBoundingBox entity)
+                  ^Optional optional-hit (.clip entity-aabb start end)]
               (when (.isPresent optional-hit)
-                (let [hit-vec (.get optional-hit)
+                (let [^Vec3 hit-vec (.get optional-hit)
                       distance (.distanceTo start hit-vec)
-                      pos (.position entity)]
+                      ^Vec3 pos (.position entity)]
                   (swap! hits conj {:uuid (str (.getUUID entity))
                                     :x (.x pos)
                                     :y (.y pos)
@@ -135,7 +136,7 @@
             dir-x (.x look-vec)
             dir-y (.y look-vec)
             dir-z (.z look-vec)
-            level (.level player)
+            ^ServerLevel level (.serverLevel player)
             start (Vec3. start-x start-y start-z)
             end (Vec3. (+ start-x (* dir-x max-distance))
                        (+ start-y (* dir-y max-distance))
@@ -149,16 +150,16 @@
             living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
             entities (if living-only?
                       (.getEntitiesOfClass level living-entity-class (.inflate aabb 2.0))
-                      (.getEntities level nil (.inflate aabb 2.0)))
+                      (.getEntitiesOfClass level Entity (.inflate aabb 2.0)))
             hits (atom [])]
-        (doseq [entity entities]
+        (doseq [^Entity entity entities]
           (when-not (= entity player)  ; Don't hit self
-            (let [entity-aabb (.getBoundingBox entity)
-                  optional-hit (.clip entity-aabb start end)]
+            (let [^AABB entity-aabb (.getBoundingBox entity)
+                  ^Optional optional-hit (.clip entity-aabb start end)]
               (when (.isPresent optional-hit)
-                (let [hit-vec (.get optional-hit)
+                (let [^Vec3 hit-vec (.get optional-hit)
                       distance (.distanceTo start hit-vec)
-                      pos (.position entity)]
+                      ^Vec3 pos (.position entity)]
                   (swap! hits conj {:entity-id (str (.getUUID entity))
                                     :x (.x pos)
                                     :y (.y pos)

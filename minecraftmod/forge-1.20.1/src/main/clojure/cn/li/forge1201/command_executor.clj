@@ -89,7 +89,7 @@
           (let [player-advancements (.getAdvancements player)
                 ^AdvancementProgress progress (.getOrStartProgress player-advancements advancement)]
             (doseq [criterion (.getRemainingCriteria progress)]
-              (.grant player-advancements advancement criterion))
+              (.award player-advancements advancement criterion))
             (send-feedback source "command.academy.acach.success" true
                            [advancement-id (.getName (.getGameProfile player))] false)
             {:success? true})))

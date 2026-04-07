@@ -28,6 +28,7 @@
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
            [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab]
            [net.minecraft.network.chat Component]
+           [net.minecraftforge.registries DeferredRegister RegistryObject]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
            [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
            [net.minecraftforge.eventbus.api EventPriority]
@@ -95,7 +96,7 @@
           has-be? (registry-metadata/has-block-entity? block-id)
           tile-id (when has-be?
                     (or (registry-metadata/get-block-tile-id block-id) block-id))
-          registered-obj (.register (force blocks-register) registry-name
+          registered-obj (.register ^DeferredRegister (force blocks-register) registry-name
                                     (reify java.util.function.Supplier
                                       (get [_]
                                         (cond
@@ -142,7 +143,7 @@
       (when (seq ros)
         (let [registered-obj
               (.register
-                (force block-entities-register)
+                ^DeferredRegister (force block-entities-register)
                 registry-name
                 (reify java.util.function.Supplier
                   (get [_]
@@ -171,7 +172,7 @@
                       tile-or-block-id)
                     (registry-metadata/get-block-tile-id tile-or-block-id))]
     (when-let [registered-obj (and tile-id (get @registered-block-entities tile-id))]
-      (.get registered-obj))))
+      (.get ^RegistryObject registered-obj))))
 
 ;; Dynamic item registration using metadata
 (defn register-all-items!
@@ -181,8 +182,7 @@
   ;; Register standalone items
   (doseq [item-id (registry-metadata/get-all-item-ids)]
     (let [registry-name (registry-metadata/get-item-registry-name item-id)
-          item-spec (registry-metadata/get-item-spec item-id)
-          registered-obj (.register (force items-register) registry-name
+          registered-obj (.register ^DeferredRegister (force items-register) registry-name
                           (reify java.util.function.Supplier
                             (get [_]
                               (Item. (Item$Properties.)))))]
@@ -193,10 +193,10 @@
     (when (registry-metadata/should-create-block-item? block-id)
       (let [registry-name (registry-metadata/get-block-registry-name block-id)
             block-registered (get @registered-blocks block-id)
-            registered-obj (.register (force items-register) registry-name
+            registered-obj (.register ^DeferredRegister (force items-register) registry-name
                             (reify java.util.function.Supplier
                               (get [_]
-                                (BlockItem. (.get block-registered) (Item$Properties.)))))]
+                                (BlockItem. (.get ^RegistryObject block-registered) (Item$Properties.)))))]
         (swap! registered-items assoc (str block-id "-item") registered-obj)))))
 
 ;; ============================================================================
@@ -213,7 +213,7 @@
     RegistryObject - The registered block, or nil if not found"
   [block-id]
   (when-let [registered-obj (get @registered-blocks block-id)]
-    (.get registered-obj)))
+    (.get ^RegistryObject registered-obj)))
 
 (defn get-registered-item
   "Get a registered item by its DSL ID.
@@ -225,7 +225,7 @@
     RegistryObject - The registered item, or nil if not found"
   [item-id]
   (when-let [registered-obj (get @registered-items item-id)]
-    (.get registered-obj)))
+    (.get ^RegistryObject registered-obj)))
 
 (defn get-registered-block-item
   "Get a registered block item by its block ID.
@@ -237,11 +237,12 @@
     RegistryObject - The registered block item, or nil if not found"
   [block-id]
   (when-let [registered-obj (get @registered-items (str block-id "-item"))]
-    (.get registered-obj)))
+    (.get ^RegistryObject registered-obj)))
 
-(defn- build-creative-tab []
+(defn- build-creative-tab
   "Build the mod creative tab. displayItems callback runs lazily (when tab is opened),
   so registered-items/registered-blocks atoms are fully populated by then."
+  []
   (-> (CreativeModeTab/builder)
       (.title (Component/translatable (str "itemGroup." mod-id ".items")))
       (.icon (reify java.util.function.Supplier
@@ -249,7 +250,7 @@
              (try
                (let [items-cls (Class/forName "net.minecraft.world.item.Items")
                      barrier-field (.getField items-cls "BARRIER")
-                     barrier-item (.get barrier-field nil)]
+                     ^Item barrier-item (.get barrier-field nil)]
                  (.getDefaultInstance barrier-item))
                (catch Exception _
                  (net.minecraft.world.item.ItemStack/EMPTY))))))
@@ -261,7 +262,7 @@
                                             (get-registered-block-item item-id)
                                             (get-registered-item item-id))]
                              (when item-obj
-                               (.accept output (net.minecraft.world.item.ItemStack. item-obj 1))))))))
+                               (.accept output (net.minecraft.world.item.ItemStack. item-obj))))))))
       (.build)))
 
 ;; ============================================================================
@@ -297,7 +298,7 @@
                     (events/handle-block-break-event evt)))))
 
 ;; Helper: Client setup phase (called from event handler)
-(defn on-client-setup [event]
+(defn on-client-setup [_event]
   (log/info "FMLClientSetupEvent - Client setup phase")
   ;; Only proceed if we're actually on the client side
   (when (side/client-side?)
@@ -414,12 +415,12 @@
 ;; ============================================================================
 
 ;; Gen-class method implementations (required by gen-class contract)
-(defn mod-commonSetup [this event]
+(defn mod-commonSetup [_this event]
   (on-common-setup event))
 
-(defn mod-clientSetup [this event]
+(defn mod-clientSetup [_this event]
   (on-client-setup event))
 
 ;; Event handler method (required by gen-class, but not used directly in 1.20.1)
-(defn mod-onRightClickBlock [this event]
+(defn mod-onRightClickBlock [_this event]
   (events/handle-right-click-event event))

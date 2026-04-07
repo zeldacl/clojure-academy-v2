@@ -13,7 +13,7 @@
            [net.minecraftforge.event.level BlockEvent$BreakEvent]
            [java.util UUID]))
 
-(set! *warn-on-reflection* false)
+(set! *warn-on-reflection* true)
 
 (defn- get-server ^MinecraftServer []
   (ServerLifecycleHooks/getCurrentServer))
@@ -77,7 +77,7 @@
     (when-let [^ServerLevel level (get-level-by-id world-id)]
       (let [pos (BlockPos. (int x) (int y) (int z))
             res-loc (ResourceLocation. block-id)
-            block (get-block-by-resource-location res-loc)]
+        ^Block block (get-block-by-resource-location res-loc)]
         (when block
           (.setBlock level pos (.defaultBlockState block) 3)
           true)))
