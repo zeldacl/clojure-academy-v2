@@ -13,9 +13,9 @@
             ;; platform-impl 会在 runtime 的 mod-init 中按需加载（避免 AOT/checkClojure 阶段触发 Minecraft class init）
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
-            [cn.li.mcmod.platform.capability :as platform-cap]
-            [cn.li.forge1201.blockstate-properties :as bsp]
             [cn.li.mcmod.item.dsl :as idsl]
+              [cn.li.mcmod.platform.capability :as platform-cap]
+              [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.i18n :as i18n]
@@ -99,17 +99,18 @@
           registered-obj (.register ^DeferredRegister (force blocks-register) registry-name
                                     (reify java.util.function.Supplier
                                       (get [_]
+                                          (let [^java.util.function.Function get-props (requiring-resolve 'cn.li.forge1201.blockstate-properties/get-all-properties)]
                                         (cond
                                           (and needs-dynamic-properties? has-be?)
-                                          (let [props (bsp/get-all-properties block-id)]
+                                              (let [props (.apply get-props block-id)]
                                             (invoke-bootstrap-helper "createCarrierScriptedDynamicBlock" block-id tile-id props @carrier-properties))
                                           needs-dynamic-properties?
-                                          (let [props (bsp/get-all-properties block-id)]
+                                            (let [props (.apply get-props block-id)]
                                             (invoke-bootstrap-helper "createDynamicStateBlock" block-id props @base-properties))
                                           has-be?
                                           (invoke-bootstrap-helper "createCarrierScriptedBlock" block-id tile-id @carrier-properties)
                                           :else
-                                          (invoke-bootstrap-helper "createPlainBlock" @base-properties)))))]
+                                            (invoke-bootstrap-helper "createPlainBlock" @base-properties))))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
 
 (defn register-scripted-tile-hooks!
@@ -330,7 +331,8 @@
 
     ;; Initialize BlockState properties from Clojure metadata
     ;; Must happen before block registration so Property objects are ready
-    (bsp/init-all-properties!)
+    (when-let [init-props! (requiring-resolve 'cn.li.forge1201.blockstate-properties/init-all-properties!)]
+      (init-props!))
 
     ;; Register all blocks and items using metadata-driven approach
     ;; DSL systems are automatically initialized when namespaces load

@@ -3,7 +3,9 @@
   "permissions": {
     "allow": [
       "Bash(grep -E \"\\\\.clj$\")",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   },
   "enabledMcpjsonServers": [

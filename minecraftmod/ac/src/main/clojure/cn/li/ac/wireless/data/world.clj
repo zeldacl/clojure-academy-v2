@@ -10,6 +10,10 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
+;; Protocol for saved data wrapper to support Clojure deftype
+(defprotocol IWiSavedData
+  (get-wi-data [this] "Get the WiWorldData from the wrapper"))
+
 (defrecord WiWorldData
   [world
    net-lookup
@@ -335,9 +339,10 @@
 
 (deftype WiSavedDataWrapper
   [^:volatile-mutable wi-data]
-  Object
-  (getWiData [_]
+  IWiSavedData
+  (get-wi-data [_]
     wi-data)
+  Object
   (toString [_]
     (str "WiSavedDataWrapper["
          (if wi-data (str (count @(:networks wi-data)) " networks") "uninitialized")
@@ -353,7 +358,7 @@
   [saved-data]
   (when saved-data
     (try
-      (.getWiData ^WiSavedDataWrapper saved-data)
+      (get-wi-data saved-data)
       (catch Exception _ nil))))
 
 (defn on-world-load

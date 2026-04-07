@@ -1,0 +1,26 @@
+; Jacking in...
+; Connecting using "Clojure (projectless)" project type.
+; Starting Jack-in: pushd i:\code\minecraft\clojure-academy-v2\minecraftmod & java -jar "c:\Users\lxy\.vscode\extensions\betterthantomorrow.calva-2.0.569\deps.clj.jar" -Sdeps "{:deps {nrepl/nrepl {:mvn/version,\"1.5.1\"},cider/cider-nrepl {:mvn/version,\"0.58.0\"}}}" -M -m nrepl.cmdline --middleware "[cider.nrepl/cider-middleware]" & popd
+; Using host:port kubernetes.docker.internal:10586 ...
+; Hooking up nREPL sessions on port 10586...
+; Connected session: clj, port: 10586
+; Evaluating code from settings: 'calva.autoEvaluateCode.onConnect.clj'
+nil
+clj꞉user꞉> 
+"Please see https://calva.io/output/#about-stdout-in-the-repl-window
+about why stdout printed to this file is prepended with `;` to be line comments."
+clj꞉user꞉> 
+; Jack-in done.
+clj꞉user꞉> 
+; Syntax error compiling at (i:\code\minecraft\clojure-academy-v2\minecraftmod\ac\src\main\clojure\cn\li\ac\block\wireless_matrix\block.clj:580:1).
+; No such namespace: bdsl
+clj꞉cn.li.ac.block.wireless-matrix.block꞉> 
+; Syntax error compiling at (i:\code\minecraft\clojure-academy-v2\minecraftmod\ac\src\main\clojure\cn\li\ac\block\wireless_matrix\block.clj:580:1).
+; No such namespace: bdsl
+clj꞉cn.li.ac.block.wireless-matrix.block꞉> 
+; Syntax error compiling at (i:\code\minecraft\clojure-academy-v2\minecraftmod\ac\src\main\clojure\cn\li\ac\block\wireless_matrix\block.clj:0:0).
+; No such namespace: bdsl
+clj꞉cn.li.ac.block.wireless-matrix.block꞉> 
+; Syntax error compiling at (i:\code\minecraft\clojure-academy-v2\minecraftmod\ac\src\main\clojure\cn\li\ac\block\wireless_matrix\block.clj:580:1).
+; No such namespace: bdsl
+clj꞉cn.li.ac.block.wireless-matrix.block꞉> 
