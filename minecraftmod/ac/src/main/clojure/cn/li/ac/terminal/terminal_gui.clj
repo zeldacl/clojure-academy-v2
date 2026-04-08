@@ -15,8 +15,7 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.terminal.app-registry :as app-reg]
-            [cn.li.ac.terminal.network :as term-net]))
+            [cn.li.ac.terminal.app-registry :as app-reg]))
 
 ;; ============================================================================
 ;; Terminal State
@@ -33,7 +32,8 @@
 ;; ============================================================================
 
 (defn- msg-id [action]
-  (term-net/msg-id action))
+  (let [msg-id-fn (requiring-resolve 'cn.li.ac.terminal.network/msg-id)]
+    (msg-id-fn action)))
 
 (defn query-terminal-state!
   "Query terminal state from server."

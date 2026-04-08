@@ -6,7 +6,6 @@
   - Network handler registration
   - System initialization"
   (:require [cn.li.ac.terminal.app-registry :as app-reg]
-            [cn.li.ac.terminal.network :as term-net]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.util.log :as log]))
 
@@ -36,7 +35,8 @@
 (defn register-network-handlers!
   "Register terminal network handlers."
   []
-  (term-net/register-handlers!))
+  (when-let [register-handlers! (requiring-resolve 'cn.li.ac.terminal.network/register-handlers!)]
+    (register-handlers!)))
 
 ;; ============================================================================
 ;; System Initialization
