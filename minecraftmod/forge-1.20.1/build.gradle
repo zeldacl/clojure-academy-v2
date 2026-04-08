@@ -417,20 +417,35 @@ tasks.matching { it.name in ['runClient', 'runServer', 'runData'] }.configureEac
     dependsOn tasks.named('copyClojureClassesToJavaOutput')
 }
 
-tasks.matching { it.name == 'checkClojure' }.configureEach {
-    def existingArgs = forkOptions.jvmArgs ?: []
-    forkOptions.jvmArgs = existingArgs + ['-Dac.check.clojure=true']
-    if (project.hasProperty('checkNsOnly')) {
-        def requestedNamespaces = project.property('checkNsOnly')
-            .toString()
-            .split(',')
-            .collect { it.trim() }
-            .findAll { !it.isEmpty() } as Set
-        namespaces.set(requestedNamespaces)
-    } else {
-        // This namespace loads bootstrap-sensitive Minecraft classes and cannot
-        // be analyzed safely in checkClojure's pre-bootstrap JVM.
-        namespaces.set((namespaces.get() as Set).findAll { it != 'cn.li.forge1201.ability.raycast' } as Set)
-    }
+tasks.named('checkClojure') {
+    dependsOn('copyClojureClassesToJavaOutput')
 }
+
+// tasks.matching { it.name == 'checkClojure' }.configureEach {
+//     def existingArgs = forkOptions.jvmArgs ?: []
+//     forkOptions.jvmArgs = existingArgs + ['-Dac.check.clojure=true']
+//     if (project.hasProperty('checkNsOnly')) {
+//         def requestedNamespaces = project.property('checkNsOnly')
+//             .toString()
+//             .split(',')
+//             .collect { it.trim() }
+//             .findAll { !it.isEmpty() } as Set
+//         namespaces.set(requestedNamespaces)
+//     } else {
+//         // This namespace loads bootstrap-sensitive Minecraft classes and cannot
+//         // be analyzed safely in checkClojure's pre-bootstrap JVM.
+//         namespaces.set((namespaces.get() as Set).findAll { it != 'cn.li.forge1201.ability.raycast' } as Set)
+//     }
+// }
+
+// tasks.matching { it.name == 'compileClojure' }.configureEach {
+//     if (project.hasProperty('compileNsOnly')) {
+//         def requestedNamespaces = project.property('compileNsOnly')
+//             .toString()
+//             .split(',')
+//             .collect { it.trim() }
+//             .findAll { !it.isEmpty() } as Set
+//         namespaces.set(requestedNamespaces)
+//     }
+// }
 

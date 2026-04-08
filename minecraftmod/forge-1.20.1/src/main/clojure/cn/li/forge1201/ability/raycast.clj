@@ -2,27 +2,33 @@
   "Forge implementation of IRaycast protocol."
   (:require [cn.li.mcmod.platform.raycast :as prc]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.server MinecraftServer]
-           [net.minecraft.server.level ServerLevel ServerPlayer]
-           [net.minecraft.world.entity Entity]
-           [net.minecraft.world.phys Vec3 AABB]
-           [net.minecraftforge.server ServerLifecycleHooks]
-           [java.util UUID Optional]))
+  (:import [java.util UUID]))
 
 (set! *warn-on-reflection* true)
 
 (defn- load-class-no-init ^Class [class-name]
   (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
 
+(defn- new-instance
+  [class-name & args]
+  (clojure.lang.Reflector/invokeConstructor (load-class-no-init class-name) (to-array args)))
+
+(defn- invoke-static-no-init
+  [class-name method-name & args]
+  (clojure.lang.Reflector/invokeStaticMethod (load-class-no-init class-name) method-name (to-array args)))
+
 (defn- enum-constant [class-name enum-name]
   (java.lang.Enum/valueOf (load-class-no-init class-name) enum-name))
 
-(defn- get-server ^MinecraftServer []
-  (ServerLifecycleHooks/getCurrentServer))
+(def entity-class (delay (load-class-no-init "net.minecraft.world.entity.Entity")))
+(def living-entity-class (delay (load-class-no-init "net.minecraft.world.entity.LivingEntity")))
+
+(defn- get-server []
+  (invoke-static-no-init "net.minecraftforge.server.ServerLifecycleHooks" "getCurrentServer"))
 
 (defn- get-player-by-uuid [uuid-str]
   (try
-    (when-let [^MinecraftServer server (get-server)]
+    (when-let [server (get-server)]
       (let [uuid (UUID/fromString uuid-str)]
         (.getPlayerList server)
         (.getPlayer (.getPlayerList server) uuid)))
@@ -32,17 +38,18 @@
 
 (defn- raycast-blocks-impl [_world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
   (try
-    (when-let [^MinecraftServer server (get-server)]
-      (when-let [^ServerLevel level (.overworld server)]
-        (let [start (Vec3. start-x start-y start-z)
-              end (Vec3. (+ start-x (* dir-x max-distance))
-                         (+ start-y (* dir-y max-distance))
-                         (+ start-z (* dir-z max-distance)))
-              clip-context (net.minecraft.world.level.ClipContext.
-                             start end
-                             (enum-constant "net.minecraft.world.level.ClipContext$Block" "OUTLINE")
-                             (enum-constant "net.minecraft.world.level.ClipContext$Fluid" "NONE")
-                             nil)
+    (when-let [server (get-server)]
+      (when-let [level (.overworld server)]
+        (let [start (new-instance "net.minecraft.world.phys.Vec3" start-x start-y start-z)
+              end (new-instance "net.minecraft.world.phys.Vec3"
+                                (+ start-x (* dir-x max-distance))
+                                (+ start-y (* dir-y max-distance))
+                                (+ start-z (* dir-z max-distance)))
+              clip-context (new-instance "net.minecraft.world.level.ClipContext"
+                                         start end
+                                         (enum-constant "net.minecraft.world.level.ClipContext$Block" "OUTLINE")
+                                         (enum-constant "net.minecraft.world.level.ClipContext$Fluid" "NONE")
+                                         nil)
               result (.clip level clip-context)]
           (when (= (.getType result) (enum-constant "net.minecraft.world.phys.HitResult$Type" "BLOCK"))
             (let [pos (.getBlockPos result)
@@ -62,28 +69,29 @@
 
 (defn- raycast-entities-impl [_world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
   (try
-    (when-let [^MinecraftServer server (get-server)]
-      (when-let [^ServerLevel level (.overworld server)]
-        (let [start (Vec3. start-x start-y start-z)
-              end (Vec3. (+ start-x (* dir-x max-distance))
-                         (+ start-y (* dir-y max-distance))
-                         (+ start-z (* dir-z max-distance)))
-              aabb (AABB. (min start-x (+ start-x (* dir-x max-distance)))
-                          (min start-y (+ start-y (* dir-y max-distance)))
-                          (min start-z (+ start-z (* dir-z max-distance)))
-                          (max start-x (+ start-x (* dir-x max-distance)))
-                          (max start-y (+ start-y (* dir-y max-distance)))
-                          (max start-z (+ start-z (* dir-z max-distance))))
-              living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
-              entities (.getEntitiesOfClass level living-entity-class (.inflate aabb 2.0))
+    (when-let [server (get-server)]
+      (when-let [level (.overworld server)]
+        (let [start (new-instance "net.minecraft.world.phys.Vec3" start-x start-y start-z)
+              end (new-instance "net.minecraft.world.phys.Vec3"
+                                (+ start-x (* dir-x max-distance))
+                                (+ start-y (* dir-y max-distance))
+                                (+ start-z (* dir-z max-distance)))
+              aabb (new-instance "net.minecraft.world.phys.AABB"
+                                 (min start-x (+ start-x (* dir-x max-distance)))
+                                 (min start-y (+ start-y (* dir-y max-distance)))
+                                 (min start-z (+ start-z (* dir-z max-distance)))
+                                 (max start-x (+ start-x (* dir-x max-distance)))
+                                 (max start-y (+ start-y (* dir-y max-distance)))
+                                 (max start-z (+ start-z (* dir-z max-distance))))
+              entities (.getEntitiesOfClass level @living-entity-class (.inflate aabb 2.0))
               hits (atom [])]
-          (doseq [^Entity entity entities]
-            (let [^AABB entity-aabb (.getBoundingBox entity)
-                  ^Optional optional-hit (.clip entity-aabb start end)]
+          (doseq [entity entities]
+            (let [entity-aabb (.getBoundingBox entity)
+                  optional-hit (.clip entity-aabb start end)]
               (when (.isPresent optional-hit)
-                (let [^Vec3 hit-vec (.get optional-hit)
+                (let [hit-vec (.get optional-hit)
                       distance (.distanceTo start hit-vec)
-                      ^Vec3 pos (.position entity)]
+                      pos (.position entity)]
                   (swap! hits conj {:uuid (str (.getUUID entity))
                                     :x (.x pos)
                                     :y (.y pos)
@@ -116,7 +124,7 @@
 
 (defn- get-player-look-vector-impl [player-uuid]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
+    (when-let [player (get-player-by-uuid player-uuid)]
       (let [look-vec (.getLookAngle player)]
         {:x (.x look-vec)
          :y (.y look-vec)
@@ -127,7 +135,7 @@
 
 (defn- raycast-from-player-impl [player-uuid max-distance living-only?]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
+    (when-let [player (get-player-by-uuid player-uuid)]
       (let [eye-pos (.getEyePosition player)
             look-vec (.getLookAngle player)
             start-x (.x eye-pos)
@@ -136,30 +144,31 @@
             dir-x (.x look-vec)
             dir-y (.y look-vec)
             dir-z (.z look-vec)
-            ^ServerLevel level (.serverLevel player)
-            start (Vec3. start-x start-y start-z)
-            end (Vec3. (+ start-x (* dir-x max-distance))
-                       (+ start-y (* dir-y max-distance))
-                       (+ start-z (* dir-z max-distance)))
-            aabb (AABB. (min start-x (+ start-x (* dir-x max-distance)))
-                        (min start-y (+ start-y (* dir-y max-distance)))
-                        (min start-z (+ start-z (* dir-z max-distance)))
-                        (max start-x (+ start-x (* dir-x max-distance)))
-                        (max start-y (+ start-y (* dir-y max-distance)))
-                        (max start-z (+ start-z (* dir-z max-distance))))
-            living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
+            level (.serverLevel player)
+            start (new-instance "net.minecraft.world.phys.Vec3" start-x start-y start-z)
+            end (new-instance "net.minecraft.world.phys.Vec3"
+                              (+ start-x (* dir-x max-distance))
+                              (+ start-y (* dir-y max-distance))
+                              (+ start-z (* dir-z max-distance)))
+            aabb (new-instance "net.minecraft.world.phys.AABB"
+                               (min start-x (+ start-x (* dir-x max-distance)))
+                               (min start-y (+ start-y (* dir-y max-distance)))
+                               (min start-z (+ start-z (* dir-z max-distance)))
+                               (max start-x (+ start-x (* dir-x max-distance)))
+                               (max start-y (+ start-y (* dir-y max-distance)))
+                               (max start-z (+ start-z (* dir-z max-distance))))
             entities (if living-only?
-                      (.getEntitiesOfClass level living-entity-class (.inflate aabb 2.0))
-                      (.getEntitiesOfClass level Entity (.inflate aabb 2.0)))
+                      (.getEntitiesOfClass level @living-entity-class (.inflate aabb 2.0))
+                      (.getEntitiesOfClass level @entity-class (.inflate aabb 2.0)))
             hits (atom [])]
-        (doseq [^Entity entity entities]
+        (doseq [entity entities]
           (when-not (= entity player)  ; Don't hit self
-            (let [^AABB entity-aabb (.getBoundingBox entity)
-                  ^Optional optional-hit (.clip entity-aabb start end)]
+            (let [entity-aabb (.getBoundingBox entity)
+                  optional-hit (.clip entity-aabb start end)]
               (when (.isPresent optional-hit)
-                (let [^Vec3 hit-vec (.get optional-hit)
+                (let [hit-vec (.get optional-hit)
                       distance (.distanceTo start hit-vec)
-                      ^Vec3 pos (.position entity)]
+                      pos (.position entity)]
                   (swap! hits conj {:entity-id (str (.getUUID entity))
                                     :x (.x pos)
                                     :y (.y pos)
