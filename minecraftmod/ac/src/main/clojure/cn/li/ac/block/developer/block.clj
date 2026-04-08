@@ -243,11 +243,11 @@
            :rendering {:light-level 1.0}}
   :controller {:registry-name "developer_normal"
                :rendering {:flat-item-icon? true
-                           :textures {:all (modid/asset-path "block" "developer_normal")}}
+             :textures {:all (modid/asset-path "models" "developer_normal")}}
                :events {:on-right-click open-developer-gui!}}
   :part {:registry-name "developer_normal_part"
          :rendering {:model-parent "minecraft:block/cube_all"
-                     :textures {:all (modid/asset-path "block" "developer_normal_part")}}})
+           :textures {:all (modid/asset-path "models" "developer_normal")}}})
 
 (bdsl/defmultiblock 'developer-advanced
   :multi-block {:positions multiblock-positions
@@ -262,11 +262,11 @@
            :rendering {:light-level 2.0}}
   :controller {:registry-name "developer_advanced"
                :rendering {:flat-item-icon? true
-                           :textures {:all (modid/asset-path "block" "developer_advanced")}}
+             :textures {:all (modid/asset-path "models" "developer_advanced")}}
                :events {:on-right-click open-developer-gui!}}
   :part {:registry-name "developer_advanced_part"
          :rendering {:model-parent "minecraft:block/cube_all"
-                     :textures {:all (modid/asset-path "block" "developer_advanced_part")}}})
+           :textures {:all (modid/asset-path "models" "developer_advanced")}}})
 
 ;; ============================================================================
 ;; Auto-Registration

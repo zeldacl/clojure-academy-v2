@@ -16,7 +16,9 @@
             [clojure.string :as str])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [net.minecraft.resources ResourceLocation]
+           [net.minecraft.server.packs PackType]
            [net.minecraft.world.level.block Block]
+           [net.minecraft.world.level.block.state.properties Property]
            [net.minecraftforge.client.model.generators BlockStateProvider]
            [net.minecraftforge.client.model.generators ItemModelBuilder BlockModelBuilder ModelFile]
            [net.minecraftforge.common.data ExistingFileHelper]
@@ -105,6 +107,36 @@
   (when texture
     (str texture)))
 
+(defn- texture-exists?
+  [^ResourceLocation texture-rl]
+  (and *datagen-exfile-helper*
+       (.exists ^ExistingFileHelper *datagen-exfile-helper*
+                texture-rl
+                PackType/CLIENT_RESOURCES
+                ".png"
+                "textures")))
+
+(defn- texture-fallback-candidates
+  [texture]
+  (let [normalized (normalize-block-texture texture)]
+    (when normalized
+      (distinct [normalized
+                 (str/replace normalized ":block/" ":models/")]))))
+
+(defn- resolve-existing-texture
+  [texture]
+  (let [candidates (texture-fallback-candidates texture)]
+    (or (some (fn [candidate]
+                (let [texture-rl (parse-rl candidate)]
+                  (when (texture-exists? texture-rl)
+                    (when-not (= candidate (first candidates))
+                      (log/warn "Datagen texture fallback" (first candidates) "->" candidate))
+                    texture-rl)))
+              candidates)
+        (do
+          (log/warn "Datagen texture missing, using fallback" texture "-> minecraft:block/stone")
+          (parse-rl "minecraft:block/stone" "minecraft")))))
+
 (defn- texture-from-spec
   [block-spec model-name]
   (or (get-in block-spec [:model-textures model-name])
@@ -130,13 +162,13 @@
   [^BlockStateProvider provider ^String registry-name texture-rl]
   (let [item-models (.itemModels provider)
     ^ItemModelBuilder builder (.withExistingParent item-models registry-name "item/generated")
-    ^ResourceLocation texture-loc (parse-rl texture-rl)]
+    ^ResourceLocation texture-loc (resolve-existing-texture texture-rl)]
   (.texture builder "layer0" texture-loc)
     builder))
 
 (defn- invoke-part-condition!
   [part-builder property typed-values]
-  (let [m (.getMethod (class part-builder) "condition" (into-array Class [Object (class typed-values)]))]
+  (let [m (.getMethod (class part-builder) "condition" (into-array Class [Property (class typed-values)]))]
     (.invoke m part-builder (object-array [property typed-values]))
     part-builder))
 
@@ -180,10 +212,10 @@
                                             model-name
                                             parent-rl)]
             (when explicit-texture
-              (let [^ResourceLocation tex-rl (parse-rl explicit-texture)]
+              (let [^ResourceLocation tex-rl (resolve-existing-texture explicit-texture)]
                 (.texture builder "all" tex-rl)))
             builder)
-          (let [^ResourceLocation texture-all (parse-rl (texture-from-spec block-spec model-name))
+          (let [^ResourceLocation texture-all (resolve-existing-texture (texture-from-spec block-spec model-name))
                 builder (.cubeAll (.models provider) model-name texture-all)]
             builder))))))
 

@@ -19,6 +19,9 @@
   (assert (= "wireless_matrix_gather_info"
              (msg-dsl/message-id :matrix :gather-info))
           "Compound action should produce correct token")
+  (assert (= "wireless_wind_gen_get_status_main"
+         (msg-dsl/message-id :wind-gen :get-status-main))
+       "Hyphenated domain and action should both map to underscore tokens")
   (assert (= "wireless_node_connect"
              (msg-dsl/message-id :node :connect))
           "Single-word action stays unchanged"))

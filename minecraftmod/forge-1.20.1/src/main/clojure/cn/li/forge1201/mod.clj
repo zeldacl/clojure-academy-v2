@@ -398,9 +398,10 @@
                     (reify java.util.function.Consumer
                       (accept [_ event]
                         (let [^RegisterCapabilitiesEvent event event]
-                          (doseq [[_key {:keys [java-type]}] @platform-cap/capability-type-registry]
-                          (when java-type
-                            (.register event java-type))))))))
+                          (doseq [^Class java-type (distinct (keep (fn [[_key {:keys [java-type]}]]
+                                                                    java-type)
+                                                                  @platform-cap/capability-type-registry))]
+                            (.register event java-type)))))))
     
     ;; Return state
     [[] nil]

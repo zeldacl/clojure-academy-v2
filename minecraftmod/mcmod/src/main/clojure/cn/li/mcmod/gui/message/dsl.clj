@@ -10,9 +10,10 @@
 (defn message-id
   "Build message id with a stable prefix.
 
-  Current format: wireless_<domain>_<action>."
+  Current format: wireless_<domain>_<action>.
+  Both domain and action are normalized to underscore tokens."
   [domain action]
-  (str "wireless_" (name domain) "_" (action->token action)))
+  (str "wireless_" (action->token domain) "_" (action->token action)))
 
 (defn build-domain-spec
   "Build message spec for a domain and validate duplicate actions early."
