@@ -13,9 +13,8 @@
             ;; platform-impl 会在 runtime 的 mod-init 中按需加载（避免 AOT/checkClojure 阶段触发 Minecraft class init）
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.item.dsl :as idsl]
-              [cn.li.mcmod.platform.capability :as platform-cap]
-              [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.i18n :as i18n]
@@ -27,15 +26,17 @@
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
            [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab]
+           [net.minecraft.world.level ItemLike]
            [net.minecraft.network.chat Component]
            [net.minecraftforge.registries DeferredRegister RegistryObject]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
            [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
-           [net.minecraftforge.eventbus.api EventPriority]
+       [net.minecraftforge.eventbus.api EventPriority IEventBus]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
           [net.minecraftforge.common.capabilities RegisterCapabilitiesEvent]
           [net.minecraftforge.fml.event.lifecycle InterModProcessEvent]
+      [net.minecraftforge.fml InterModComms$IMCMessage]
           [cn.li.acapi.wireless WirelessImc])
   (:gen-class
    :name com.example.my_mod1201.MyMod1201Clj
@@ -99,18 +100,18 @@
           registered-obj (.register ^DeferredRegister (force blocks-register) registry-name
                                     (reify java.util.function.Supplier
                                       (get [_]
-                                          (let [^java.util.function.Function get-props (requiring-resolve 'cn.li.forge1201.blockstate-properties/get-all-properties)]
-                                        (cond
-                                          (and needs-dynamic-properties? has-be?)
-                                              (let [props (.apply get-props block-id)]
-                                            (invoke-bootstrap-helper "createCarrierScriptedDynamicBlock" block-id tile-id props @carrier-properties))
-                                          needs-dynamic-properties?
-                                            (let [props (.apply get-props block-id)]
-                                            (invoke-bootstrap-helper "createDynamicStateBlock" block-id props @base-properties))
-                                          has-be?
-                                          (invoke-bootstrap-helper "createCarrierScriptedBlock" block-id tile-id @carrier-properties)
-                                          :else
-                                            (invoke-bootstrap-helper "createPlainBlock" @base-properties))))))))]
+                                        (let [get-props (requiring-resolve 'cn.li.forge1201.blockstate-properties/get-all-properties)]
+                                          (cond
+                                            (and needs-dynamic-properties? has-be?)
+                                            (let [props (get-props block-id)]
+                                              (invoke-bootstrap-helper "createCarrierScriptedDynamicBlock" block-id tile-id props @carrier-properties))
+                                            needs-dynamic-properties?
+                                            (let [props (get-props block-id)]
+                                              (invoke-bootstrap-helper "createDynamicStateBlock" block-id props @base-properties))
+                                            has-be?
+                                            (invoke-bootstrap-helper "createCarrierScriptedBlock" block-id tile-id @carrier-properties)
+                                            :else
+                                            (invoke-bootstrap-helper "createPlainBlock" @base-properties))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
 
 (defn register-scripted-tile-hooks!
@@ -149,7 +150,7 @@
                 (reify java.util.function.Supplier
                   (get [_]
                     ;; Resolve RegistryObjects to Blocks at registration time
-                    (let [pairs (map (fn [[block-id ro]]
+                    (let [pairs (map (fn [[block-id ^RegistryObject ro]]
                                        [block-id (.get ro)])
                                      ros)
                           block-insts (mapv second pairs)
@@ -263,7 +264,7 @@
                                             (get-registered-block-item item-id)
                                             (get-registered-item item-id))]
                              (when item-obj
-                               (.accept output (net.minecraft.world.item.ItemStack. item-obj))))))))
+                               (.accept output (net.minecraft.world.item.ItemStack. ^ItemLike item-obj))))))))
       (.build)))
 
 ;; ============================================================================
@@ -320,13 +321,16 @@
 ;; Constructor implementation
 (defn mod-init []
   (log/info "Initializing MyMod1201 from Clojure...")
-  (try
+  (if (= "true" (System/getProperty "ac.check.clojure"))
+    (do
+      (log/info "checkClojure mode detected, skipping Forge bootstrap-sensitive mod-init")
+      [[] nil])
+    (try
     ;; CRITICAL: Initialize platform abstractions FIRST
     ;; This must happen before any core code runs that uses NBT/BlockPos/World
     (when-let [init-platform! (requiring-resolve 'cn.li.forge1201.platform-impl/init-platform!)]
       (init-platform!))
-    ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources
-    ;; ac namespaces load here; deftile-kind / declare-capability! calls execute at this point
+    ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources.
     (init/init-from-java)
 
     ;; Initialize BlockState properties from Clojure metadata
@@ -343,7 +347,7 @@
     
     ;; Register creative tab (safe icon = BARRIER so no dependency on item registry order)
     (log/info "Registering Forge creative tab...")
-    (.register (force creative-tabs-register) "items"
+    (.register ^DeferredRegister (force creative-tabs-register) "items"
                (reify java.util.function.Supplier
                  (get [_] (build-creative-tab))))
 
@@ -355,13 +359,13 @@
     ;; Must use addListener(EventPriority, boolean, Class<T>, Consumer<T>) overload:
     ;; Clojure's reify erases generic type info, so Forge cannot infer the event
     ;; type from the Consumer alone.
-    (let [mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
+    (let [^IEventBus mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
       (config-bridge/register-all! mod-bus)
-      (.register (force blocks-register) mod-bus)
-      (.register (force items-register) mod-bus)
-      (.register (force block-entities-register) mod-bus)
-      (.register (force creative-tabs-register) mod-bus)
-      (.register (force gui-registry-impl/menu-register) mod-bus)
+      (.register ^DeferredRegister (force blocks-register) mod-bus)
+      (.register ^DeferredRegister (force items-register) mod-bus)
+      (.register ^DeferredRegister (force block-entities-register) mod-bus)
+      (.register ^DeferredRegister (force creative-tabs-register) mod-bus)
+      (.register ^DeferredRegister (force gui-registry-impl/menu-register) mod-bus)
       (.addListener mod-bus EventPriority/NORMAL false FMLCommonSetupEvent
                     (reify java.util.function.Consumer
                       (accept [_ event] (on-common-setup event))))
@@ -374,8 +378,9 @@
                       (accept [_ event]
                         ;; Iterate the stream via iterator-seq to avoid reflective
                         ;; method resolution issues for Stream.forEachOrdered in Clojure.
-                        (let [imc-stream (.getIMCStream event)]
-                          (doseq [msg (iterator-seq (.iterator imc-stream))]
+                        (let [^InterModProcessEvent event event
+                              ^java.util.stream.Stream imc-stream (.getIMCStream event)]
+                          (doseq [^InterModComms$IMCMessage msg (iterator-seq (.iterator imc-stream))]
                             (try
                               (let [handler (.get (.getMessageSupplier msg))]
                                 (condp = (.getMethod msg)
@@ -392,9 +397,10 @@
       (.addListener mod-bus EventPriority/NORMAL false RegisterCapabilitiesEvent
                     (reify java.util.function.Consumer
                       (accept [_ event]
-                        (doseq [[_key {:keys [java-type]}] @platform-cap/capability-type-registry]
+                        (let [^RegisterCapabilitiesEvent event event]
+                          (doseq [[_key {:keys [java-type]}] @platform-cap/capability-type-registry]
                           (when java-type
-                            (.register event java-type)))))))
+                            (.register event java-type))))))))
     
     ;; Return state
     [[] nil]
@@ -404,7 +410,7 @@
           (do
             (log/warn "Skipping Forge mod-init during checkClojure: Minecraft registries not bootstrapped")
             [[] nil])
-          (throw e))))))
+          (throw e)))))))
 
 ;; (defn start-repl-safe []
 ;;   (let [cl (.getContextClassLoader (Thread/currentThread))]

@@ -9,7 +9,6 @@
   (:require [cn.li.forge1201.bootstrap :refer [invoke-bootstrap-helper]]
             [cn.li.mcmod.config :as modid]
             [cn.li.ac.block.blockstate-definition :as blockstate-def]
-            [cn.li.forge1201.blockstate-properties :as bsp]
             [cn.li.forge1201.mod :as forge-mod]
             [cn.li.forge1201.datagen.resource-location :as rl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
@@ -146,7 +145,7 @@
   (let [m (.getMethod (class part-builder) "end" (into-array Class []))]
     (.invoke m part-builder (object-array []))))
 
-(defn- ensure-block-model! ^ModelFile
+(defn- ensure-block-model!
   "Generate block model using Forge API.
    Queries business layer for texture configuration, then uses appropriate Forge API:
    - .cube() for models with custom side/vert textures (e.g., node blocks)
@@ -158,7 +157,7 @@
     (if-let [tex-cfg (blockstate-def/get-model-texture-config model-name)]
       ;; Special model: use .cube() with side/vert textures
       (let [^ResourceLocation side-texture (parse-rl (:side tex-cfg))
-        ^ResourceLocation vert-texture (parse-rl (:vert tex-cfg))
+            ^ResourceLocation vert-texture (parse-rl (:vert tex-cfg))
             builder (.cube (.models provider)
                           model-name
                           vert-texture   ; down
@@ -171,10 +170,10 @@
       ;; Default model: honor explicit DSL parent/textures first.
       (let [^String registry-name (infer-registry-name-from-model model-name)
             block-spec (registry-name->block-spec registry-name)
-        ^String parent (parent-from-spec block-spec)
-        ^String explicit-texture (some-> (or (get-in block-spec [:rendering :textures :all])
-                     (get-in block-spec [:properties :textures :all]))
-                 normalize-block-texture)]
+            ^String parent (parent-from-spec block-spec)
+            ^String explicit-texture (some-> (or (get-in block-spec [:rendering :textures :all])
+                                                 (get-in block-spec [:properties :textures :all]))
+                                       normalize-block-texture)]
         (if (or (not= parent "minecraft:block/cube_all") explicit-texture)
           (let [^ResourceLocation parent-rl (parse-rl parent "minecraft")
                 ^BlockModelBuilder builder (.withExistingParent (.models provider)
@@ -199,9 +198,10 @@
   "Apply block state condition for a block.
   Gets Property objects dynamically from blockstate-properties module."
   [part-builder block-id condition]
-  (let [block-id-str (if (keyword? block-id) (name block-id) block-id)]
+  (let [block-id-str (if (keyword? block-id) (name block-id) block-id)
+        get-property (requiring-resolve 'cn.li.forge1201.blockstate-properties/get-property)]
     (doseq [[property-key raw-value] condition]
-      (if-let [property (bsp/get-property block-id-str property-key)]
+      (if-let [property (get-property block-id-str property-key)]
       ;; Use the dynamically retrieved property object
         (invoke-part-condition! part-builder property
                     (into-array Comparable [(condition->typed property-key raw-value)]))
@@ -291,7 +291,8 @@
   (reify DataProvider
     (run [_this cache]
       ;; Datagen runs outside normal mod init order; ensure Property registry is seeded.
-      (bsp/init-all-properties!)
+      (when-let [init-all-properties! (requiring-resolve 'cn.li.forge1201.blockstate-properties/init-all-properties!)]
+        (init-all-properties!))
       (let [all-defs (blockstate-def/get-all-definitions)
             {:keys [future simple multipart]} (generate-with-forge-builder!
                                                cache pack-output exfile-helper all-defs)

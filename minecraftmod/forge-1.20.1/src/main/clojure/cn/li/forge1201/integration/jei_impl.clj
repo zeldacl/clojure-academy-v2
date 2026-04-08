@@ -27,10 +27,10 @@
 
 (set! *warn-on-reflection* true)
 
-(defn- parse-item-id ^ItemStack
+(defn- parse-item-id
   "Parse item ID string to ItemStack.
   Format: 'modid:item_name' or 'modid:item_name#count'"
-  [^String item-id]
+  ^ItemStack [^String item-id]
   (try
     (let [[id-part count-str] (str/split item-id #"#")
           count (if count-str (Integer/parseInt count-str) 1)
@@ -124,13 +124,13 @@
   (try
     (doseq [category-meta categories/all-categories]
       (let [recipes (categories/get-recipes-for-category category-meta)
-            formatted-recipes (map categories/format-recipe-for-jei recipes)
+            ^java.util.List formatted-recipes (mapv categories/format-recipe-for-jei recipes)
             ^RecipeType recipe-type (mezz.jei.api.recipe.RecipeType/create
                           (.getNamespace (ResourceLocation. (:id category-meta)))
                           (.getPath (ResourceLocation. (:id category-meta)))
                           java.util.Map)]
         (when (seq formatted-recipes)
-          (.addRecipes registration recipe-type (ArrayList. formatted-recipes))
+          (.addRecipes registration recipe-type (ArrayList. ^java.util.Collection formatted-recipes))
           (log/info (str "Registered " (count formatted-recipes) " recipes for " (:id category-meta))))))
     (catch Exception e
       (log/error "Failed to register JEI recipes:" (ex-message e)))))
@@ -145,9 +145,10 @@
             ^RecipeType recipe-type (mezz.jei.api.recipe.RecipeType/create
                           (.getNamespace (ResourceLocation. (:id category-meta)))
                           (.getPath (ResourceLocation. (:id category-meta)))
-                          java.util.Map)]
+                          java.util.Map)
+            ^"[Lmezz.jei.api.recipe.RecipeType;" recipe-types (into-array RecipeType [recipe-type])]
         (when item-stack
-          (.addRecipeCatalyst registration item-stack (into-array RecipeType [recipe-type]))
+          (.addRecipeCatalyst registration item-stack recipe-types)
           (log/info (str "Registered JEI catalyst: " block-id " for " (:id category-meta))))))
     (catch Exception e
       (log/error "Failed to register JEI catalysts:" (ex-message e)))))

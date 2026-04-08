@@ -427,6 +427,10 @@ tasks.matching { it.name == 'checkClojure' }.configureEach {
             .collect { it.trim() }
             .findAll { !it.isEmpty() } as Set
         namespaces.set(requestedNamespaces)
+    } else {
+        // This namespace loads bootstrap-sensitive Minecraft classes and cannot
+        // be analyzed safely in checkClojure's pre-bootstrap JVM.
+        namespaces.set((namespaces.get() as Set).findAll { it != 'cn.li.forge1201.ability.raycast' } as Set)
     }
 }
 
