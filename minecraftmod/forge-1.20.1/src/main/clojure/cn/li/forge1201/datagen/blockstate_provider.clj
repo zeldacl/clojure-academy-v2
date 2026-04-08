@@ -13,10 +13,10 @@
             [cn.li.forge1201.datagen.resource-location :as rl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
+            [clojure.java.io :as io]
             [clojure.string :as str])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraft.server.packs PackType]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state.properties Property]
            [net.minecraftforge.client.model.generators BlockStateProvider]
@@ -107,35 +107,40 @@
   (when texture
     (str texture)))
 
-(defn- texture-exists?
-  [^ResourceLocation texture-rl]
-  (and *datagen-exfile-helper*
-       (.exists ^ExistingFileHelper *datagen-exfile-helper*
-                texture-rl
-                PackType/CLIENT_RESOURCES
-                ".png"
-                "textures")))
+(def ^:private texture-aliases
+  {"my_mod:block/wind_gen_main" "my_mod:block/windgen_main"
+   "my_mod:block/wind_gen_base" "my_mod:block/windgen_base"
+   "my_mod:block/wind_gen_pillar" "my_mod:block/windgen_pillar"
+   "my_mod:block/constrained_ore" "my_mod:block/constraint_metal"
+   "my_mod:block/imaginary_ore" "my_mod:block/imagsil_ore"
+   "my_mod:block/developer_normal" "my_mod:block/dev_normal"
+   "my_mod:block/developer_advanced" "my_mod:block/dev_advanced"
+   "my_mod:block/developer_normal_part" "my_mod:block/dev_normal"
+   "my_mod:block/developer_advanced_part" "my_mod:block/dev_advanced"
+   "my_mod:block/ability_interferer" "my_mod:block/ability_interf_off"
+   "my_mod:block/imag_fusor" "my_mod:block/machine_frame"
+   "my_mod:block/energy_converter" "my_mod:block/machine_frame"
+   "my_mod:block/energy_converter_advanced" "my_mod:block/machine_frame"
+   "my_mod:block/energy_converter_elite" "my_mod:block/machine_frame"
+   "my_mod:block/metal_former" "my_mod:block/metal_former_front"})
 
-(defn- texture-fallback-candidates
+(defn- normalize-texture-id
   [texture]
-  (let [normalized (normalize-block-texture texture)]
-    (when normalized
-      (distinct [normalized
-                 (str/replace normalized ":block/" ":models/")]))))
+  (when-let [normalized (normalize-block-texture texture)]
+    (get texture-aliases normalized normalized)))
 
-(defn- resolve-existing-texture
+(defn- ensure-texture-exists!
   [texture]
-  (let [candidates (texture-fallback-candidates texture)]
-    (or (some (fn [candidate]
-                (let [texture-rl (parse-rl candidate)]
-                  (when (texture-exists? texture-rl)
-                    (when-not (= candidate (first candidates))
-                      (log/warn "Datagen texture fallback" (first candidates) "->" candidate))
-                    texture-rl)))
-              candidates)
-        (do
-          (log/warn "Datagen texture missing, using fallback" texture "-> minecraft:block/stone")
-          (parse-rl "minecraft:block/stone" "minecraft")))))
+  (let [texture-id (normalize-texture-id texture)
+        texture-rl (parse-rl texture-id)
+        resource-path (str "assets/" (.getNamespace texture-rl)
+                           "/textures/" (.getPath texture-rl) ".png")]
+    (when-not (io/resource resource-path)
+      (throw (ex-info "Datagen texture missing after alias resolution"
+                      {:requested texture
+                       :resolved texture-id
+                       :resource-path resource-path})))
+    texture-rl))
 
 (defn- texture-from-spec
   [block-spec model-name]
@@ -162,7 +167,7 @@
   [^BlockStateProvider provider ^String registry-name texture-rl]
   (let [item-models (.itemModels provider)
     ^ItemModelBuilder builder (.withExistingParent item-models registry-name "item/generated")
-    ^ResourceLocation texture-loc (resolve-existing-texture texture-rl)]
+    ^ResourceLocation texture-loc (ensure-texture-exists! texture-rl)]
   (.texture builder "layer0" texture-loc)
     builder))
 
@@ -212,10 +217,10 @@
                                             model-name
                                             parent-rl)]
             (when explicit-texture
-              (let [^ResourceLocation tex-rl (resolve-existing-texture explicit-texture)]
+              (let [^ResourceLocation tex-rl (ensure-texture-exists! explicit-texture)]
                 (.texture builder "all" tex-rl)))
             builder)
-          (let [^ResourceLocation texture-all (resolve-existing-texture (texture-from-spec block-spec model-name))
+          (let [^ResourceLocation texture-all (ensure-texture-exists! (texture-from-spec block-spec model-name))
                 builder (.cubeAll (.models provider) model-name texture-all)]
             builder))))))
 
