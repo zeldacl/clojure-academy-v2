@@ -371,6 +371,12 @@ remapJar {
     dependsOn jar
 }
 
+tasks.named('jar', Jar).configure {
+    // AOT classes exist in both build/clojure/main and build/classes/java/main
+    // after copyClojureClassesToJavaOutput; keep the first entry when packaging.
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 clojure {
     builds {
         main {
@@ -380,13 +386,62 @@ clojure {
     }
 }
 
+// Strip LocalVariableTable / LocalVariableTypeTable from Clojure AOT bytecode.
+// TinyRemapper (used by remapJar) crashes with ArrayIndexOutOfBoundsException when
+// it encounters LVT entries whose slot index is -1, which Clojure 1.12 AOT can emit
+// for closure/try-catch patterns.  Line numbers are preserved so stack traces are
+// still readable.
+def stripClojureLVT = tasks.register('stripClojureLVT') {
+    dependsOn tasks.named('compileClojure')
+    outputs.upToDateWhen { false }
+    doLast {
+        def clojureDir = layout.buildDirectory.dir('clojure/main').get().asFile
+        if (!clojureDir.isDirectory()) {
+            logger.lifecycle('[stripClojureLVT] skipping – clojure/main not found')
+            return
+        }
+        int count = 0
+        clojureDir.eachFileRecurse { file ->
+            if (!file.name.endsWith('.class')) return
+            try {
+                def bytes = file.bytes
+                def reader = new org.objectweb.asm.ClassReader(bytes)
+                def writer = new org.objectweb.asm.ClassWriter(0)
+                // Read with 0 flags so StackMapTable frames are preserved (passed
+                // through via visitFrame). Only LVT entries are dropped below.
+                def cv = new org.objectweb.asm.ClassVisitor(org.objectweb.asm.Opcodes.ASM9, writer) {
+                    @Override
+                    org.objectweb.asm.MethodVisitor visitMethod(int ac, String nm, String desc,
+                                                                  String sig, String[] ex) {
+                        def mv = super.visitMethod(ac, nm, desc, sig, ex)
+                        return new org.objectweb.asm.MethodVisitor(
+                                org.objectweb.asm.Opcodes.ASM9, mv) {
+                            @Override
+                            void visitLocalVariable(String n, String d, String s,
+                                                    org.objectweb.asm.Label st,
+                                                    org.objectweb.asm.Label en,
+                                                    int idx) { /* drop LVT entry */ }
+                        }
+                    }
+                }
+                reader.accept(cv, 0)
+                file.bytes = writer.toByteArray()
+                count++
+            } catch (Exception ex) {
+                logger.warn("[stripClojureLVT] skipping ${file.name}: ${ex.message}")
+            }
+        }
+        logger.lifecycle("[stripClojureLVT] stripped LVT from ${count} Clojure AOT class files")
+    }
+}
+
 // Clojurephant emits AOT to `build/clojure/main`, but Loom/Forge userdev only puts
 // `build/classes/java/main` on the transformed mod classpath. Copy (do not use Sync:
 // it would delete Java outputs) so `require` finds `__init.class` next to Java classes.
 def copyClojureClassesToJavaOutput = tasks.register('copyClojureClassesToJavaOutput', Copy) {
     from layout.buildDirectory.dir('clojure/main')
     into layout.buildDirectory.dir('classes/java/main')
-    dependsOn tasks.named('compileClojure')
+    dependsOn tasks.named('compileClojure'), stripClojureLVT
 }
 
 // 确保 Java 接口先编译，供 Clojure 调用
