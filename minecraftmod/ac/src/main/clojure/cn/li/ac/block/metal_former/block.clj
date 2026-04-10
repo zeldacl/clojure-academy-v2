@@ -25,9 +25,6 @@
 ;; Message Registration
 ;; ============================================================================
 
-(msg-registry/register-block-messages! :metal-former
-  [:get-status])
-
 (defn- msg [action] (msg-registry/msg :metal-former action))
 
 ;; ============================================================================
@@ -217,41 +214,40 @@
 ;; Tile Registration
 ;; ============================================================================
 
-(tdsl/deftile metal-former-tile
-  :id "metal-former"
-  :registry-name "metal_former"
-  :impl :scripted
-  :blocks ["metal-former"]
-  :tick-fn former-tick-fn
-  :read-nbt-fn former-scripted-load-fn
-  :write-nbt-fn former-scripted-save-fn)
-
-(tile-logic/register-container! "metal-former" former-container-fns)
-
 ;; ============================================================================
-;; Block Definition
+;; Runtime Installation (Scheme A)
 ;; ============================================================================
 
-(bdsl/defblock metal-former
-  :registry-name "metal_former"
-  :physical {:material :metal
-             :hardness 3.5
-             :resistance 6.0
-             :requires-tool true
-             :harvest-tool :pickaxe
-             :harvest-level 1
-             :sounds :metal}
-  :rendering {:model-parent "minecraft:block/cube_all"
-              :textures {:all (modid/asset-path "block" "metal_former")}
-              :flat-item-icon? true}
-  :events {:on-right-click open-former-gui!})
-
-;; ============================================================================
-;; Auto-Registration
-;; ============================================================================
-
-(hooks/register-network-handler! register-network-handlers!)
+(defonce ^:private metal-former-installed? (atom false))
 
 (defn init-metal-former!
   []
-  (log/info "Initialized Metal Former block"))
+  (when (compare-and-set! metal-former-installed? false true)
+    (msg-registry/register-block-messages! :metal-former [:get-status])
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "metal-former"
+        {:registry-name "metal_former"
+         :impl :scripted
+         :blocks ["metal-former"]
+         :tick-fn former-tick-fn
+         :read-nbt-fn former-scripted-load-fn
+         :write-nbt-fn former-scripted-save-fn}))
+    (tile-logic/register-container! "metal-former" former-container-fns)
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "metal-former"
+        {:registry-name "metal_former"
+         :physical {:material :metal
+                    :hardness 3.5
+                    :resistance 6.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 1
+                    :sounds :metal}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "metal_former")}
+                     :flat-item-icon? true}
+         :events {:on-right-click open-former-gui!}}))
+    (hooks/register-network-handler! register-network-handlers!)
+    (log/info "Initialized Metal Former block")))

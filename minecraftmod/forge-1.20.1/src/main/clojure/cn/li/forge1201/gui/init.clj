@@ -1,8 +1,6 @@
 (ns cn.li.forge1201.gui.init
   "Forge 1.20.1 GUI System Initialization"
-  (:require [cn.li.forge1201.gui.registry-impl :as registry-impl]
-            [cn.li.forge1201.gui.network :as network]
-            [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.util.log :as log]))
 
 (defn init-common!
@@ -11,7 +9,9 @@
   only non-registry setup belongs here."
   []
   (log/info "=== Initializing Forge 1.20.1 GUI System (Common) ===")
-  (network/init!)
+  (if-let [network-init! (requiring-resolve 'cn.li.forge1201.gui.network/init!)]
+    (network-init!)
+    (log/warn "Forge GUI network init fn not available"))
   (log/info "=== Forge 1.20.1 GUI System (Common) Initialized ==="))
 
 ;; ============================================================================
@@ -62,10 +62,11 @@
   (log/info "Verifying GUI system initialization...")
   
   (let [;; Dynamically check all GUI IDs from metadata
+      get-menu-type (requiring-resolve 'cn.li.forge1201.gui.registry-impl/get-menu-type)
         checks (into {}
                     (for [gui-id (gui/get-all-gui-ids)]
                       (let [check-key (keyword (str "gui-" gui-id "-menu-type"))
-                            menu-type (registry-impl/get-menu-type gui-id)]
+              menu-type (when get-menu-type (get-menu-type gui-id))]
                         [check-key (some? menu-type)])))]
     
     (doseq [[check-name result] checks]

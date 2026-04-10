@@ -41,36 +41,10 @@
                      "带宽倍率: 960"
                      "范围倍率: 48.0"]}})
 
-;; ============================================================================
-;; Matrix Core Items
-;; ============================================================================
 
-(idsl/defitem mat-core-tier-1
-  :id "mat_core_0"
-  :max-stack-size 1
-  :creative-tab :misc
-  :max-damage 0
-  :properties {:tooltip (get-in core-tiers [:tier-1 :tooltip])
-               :display-name (get-in core-tiers [:tier-1 :name])
-               :model-texture "mat_core_0"})
+(def ^:private core-item-ids ["mat_core_0" "mat_core_1" "mat_core_2"])
 
-(idsl/defitem mat-core-tier-2
-  :id "mat_core_1"
-  :max-stack-size 1
-  :creative-tab :misc
-  :max-damage 1
-  :properties {:tooltip (get-in core-tiers [:tier-2 :tooltip])
-               :display-name (get-in core-tiers [:tier-2 :name])
-               :model-texture "mat_core_1"})
-
-(idsl/defitem mat-core-tier-3
-  :id "mat_core_2"
-  :max-stack-size 1
-  :creative-tab :misc
-  :max-damage 2
-  :properties {:tooltip (get-in core-tiers [:tier-3 :tooltip])
-               :display-name (get-in core-tiers [:tier-3 :name])
-               :model-texture "mat_core_2"})
+(defonce ^:private mat-cores-installed? (atom false))
 
 ;; Tier 4 disabled - missing mat_core_3.png texture
 ;; (idsl/defitem mat-core-tier-4 ...)
@@ -98,12 +72,11 @@
        id-from-stack (or registry-name (when desc (last (str/split desc #"\\."))))
        id (or id-from-stack (id-from-spec item-stack))
           ;; Match if derived desc contains DSL id (handles different desc formats)
-          result (boolean
-                   (some (fn [spec]
-                           (let [spec-id (:id spec)]
-                             (or (= id spec-id)
-                                 (and (string? desc) (str/includes? desc spec-id)))))
-                         [mat-core-tier-1 mat-core-tier-2 mat-core-tier-3]))]
+            result (boolean
+               (some (fn [spec-id]
+                 (or (= id spec-id)
+                     (and (string? desc) (str/includes? desc spec-id))))
+               core-item-ids))]
       ;; (try
       ;;   (log/debug "is-mat-core?" {:stack-class (class item-stack)
       ;;                                :desc desc
@@ -121,4 +94,32 @@
     0))
 
 (defn init-mat-cores! []
-  (log/info "Matrix Cores initialized: 3 tiers"))
+  (when (compare-and-set! mat-cores-installed? false true)
+    (idsl/register-item!
+      (idsl/create-item-spec
+        "mat_core_0"
+        {:max-stack-size 1
+         :creative-tab :misc
+         :max-damage 0
+         :properties {:tooltip (get-in core-tiers [:tier-1 :tooltip])
+                      :display-name (get-in core-tiers [:tier-1 :name])
+                      :model-texture "mat_core_0"}}))
+    (idsl/register-item!
+      (idsl/create-item-spec
+        "mat_core_1"
+        {:max-stack-size 1
+         :creative-tab :misc
+         :max-damage 1
+         :properties {:tooltip (get-in core-tiers [:tier-2 :tooltip])
+                      :display-name (get-in core-tiers [:tier-2 :name])
+                      :model-texture "mat_core_1"}}))
+    (idsl/register-item!
+      (idsl/create-item-spec
+        "mat_core_2"
+        {:max-stack-size 1
+         :creative-tab :misc
+         :max-damage 2
+         :properties {:tooltip (get-in core-tiers [:tier-3 :tooltip])
+                      :display-name (get-in core-tiers [:tier-3 :name])
+                      :model-texture "mat_core_2"}}))
+    (log/info "Matrix Cores initialized: 3 tiers")))

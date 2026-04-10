@@ -24,13 +24,6 @@
             [cn.li.ac.config.modid :as modid])
   (:import [cn.li.acapi.wireless IWirelessUser]))
 
-;; ============================================================================
-;; Message Registration
-;; ============================================================================
-
-(msg-registry/register-block-messages! :developer
-  [:get-status :start-development :stop-development])
-
 (defn- msg [action] (msg-registry/msg :developer action))
 
 ;; ============================================================================
@@ -185,39 +178,11 @@
   (log/info "Developer network handlers registered"))
 
 ;; ============================================================================
-;; Tile Registration
-;; ============================================================================
-
-(tdsl/deftile developer-normal-tile
-  :id "developer-normal"
-  :registry-name "developer_normal"
-  :impl :scripted
-  :blocks ["developer-normal"]
-  :tick-fn developer-tick-fn
-  :read-nbt-fn dev-scripted-load-fn
-  :write-nbt-fn dev-scripted-save-fn)
-
-(tdsl/deftile developer-advanced-tile
-  :id "developer-advanced"
-  :registry-name "developer_advanced"
-  :impl :scripted
-  :blocks ["developer-advanced"]
-  :tick-fn developer-tick-fn
-  :read-nbt-fn dev-scripted-load-fn
-  :write-nbt-fn dev-scripted-save-fn)
-
-;; ============================================================================
 ;; Capability Implementation
 ;; ============================================================================
 
 (deftype WirelessUserImpl [be]
   IWirelessUser)
-
-(platform-cap/declare-capability! :wireless-user IWirelessUser
-  (fn [be _side] (->WirelessUserImpl be)))
-
-(tile-logic/register-tile-capability! "developer-normal" :wireless-user)
-(tile-logic/register-tile-capability! "developer-advanced" :wireless-user)
 
 ;; ============================================================================
 ;; Block Definitions
@@ -230,50 +195,109 @@
         z (range 3)]
     [x y z]))
 
-(bdsl/defmultiblock 'developer-normal
-  :multi-block {:positions multiblock-positions
-                :rotation-center [1.0 1.0 1.0]}
-  :common {:physical {:material :metal
-                      :hardness 4.0
-                      :resistance 10.0
-                      :requires-tool true
-                      :harvest-tool :pickaxe
-                      :harvest-level 2
-                      :sounds :metal}
-           :rendering {:light-level 1.0}}
-  :controller {:registry-name "developer_normal"
-               :rendering {:flat-item-icon? true
-             :textures {:all (modid/asset-path "block" "dev_normal")}}
-               :events {:on-right-click open-developer-gui!}}
-  :part {:registry-name "developer_normal_part"
-         :rendering {:model-parent "minecraft:block/cube_all"
-           :textures {:all (modid/asset-path "block" "dev_normal")}}})
-
-(bdsl/defmultiblock 'developer-advanced
-  :multi-block {:positions multiblock-positions
-                :rotation-center [1.0 1.0 1.0]}
-  :common {:physical {:material :metal
-                      :hardness 5.0
-                      :resistance 12.0
-                      :requires-tool true
-                      :harvest-tool :pickaxe
-                      :harvest-level 2
-                      :sounds :metal}
-           :rendering {:light-level 2.0}}
-  :controller {:registry-name "developer_advanced"
-               :rendering {:flat-item-icon? true
-             :textures {:all (modid/asset-path "block" "dev_advanced")}}
-               :events {:on-right-click open-developer-gui!}}
-  :part {:registry-name "developer_advanced_part"
-         :rendering {:model-parent "minecraft:block/cube_all"
-           :textures {:all (modid/asset-path "block" "dev_advanced")}}})
-
-;; ============================================================================
-;; Auto-Registration
-;; ============================================================================
-
-(hooks/register-network-handler! register-network-handlers!)
+(defonce ^:private developer-installed? (atom false))
 
 (defn init-developer!
   []
-  (log/info "Initialized Developer blocks (Normal and Advanced)"))
+  (when (compare-and-set! developer-installed? false true)
+    (msg-registry/register-block-messages! :developer [:get-status :start-development :stop-development])
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "developer-normal"
+        {:registry-name "developer_normal"
+         :impl :scripted
+         :blocks ["developer-normal"]
+         :tick-fn developer-tick-fn
+         :read-nbt-fn dev-scripted-load-fn
+         :write-nbt-fn dev-scripted-save-fn}))
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "developer-advanced"
+        {:registry-name "developer_advanced"
+         :impl :scripted
+         :blocks ["developer-advanced"]
+         :tick-fn developer-tick-fn
+         :read-nbt-fn dev-scripted-load-fn
+         :write-nbt-fn dev-scripted-save-fn}))
+    (platform-cap/declare-capability! :wireless-user IWirelessUser
+      (fn [be _side] (->WirelessUserImpl be)))
+    (tile-logic/register-tile-capability! "developer-normal" :wireless-user)
+    (tile-logic/register-tile-capability! "developer-advanced" :wireless-user)
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "developer-normal"
+        {:multi-block {:positions multiblock-positions
+                       :rotation-center [1.0 1.0 1.0]}
+         :multiblock-mode :controller-parts
+         :controller-block-id "developer-normal"
+         :part-block-id "developer-normal-part"
+         :registry-name "developer_normal"
+         :physical {:material :metal
+                    :hardness 4.0
+                    :resistance 10.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 2
+                    :sounds :metal}
+         :rendering {:light-level 1.0
+                     :flat-item-icon? true
+                     :textures {:all (modid/asset-path "block" "dev_normal")}}
+         :events {:on-right-click open-developer-gui!}}))
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "developer-normal-part"
+        {:multiblock-mode :controller-parts
+         :controller-block-id "developer-normal"
+         :part-block-id "developer-normal-part"
+         :registry-name "developer_normal_part"
+         :physical {:material :metal
+                    :hardness 4.0
+                    :resistance 10.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 2
+                    :sounds :metal}
+         :rendering {:light-level 1.0
+                     :has-item-form? false
+                     :model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "dev_normal")}}}))
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "developer-advanced"
+        {:multi-block {:positions multiblock-positions
+                       :rotation-center [1.0 1.0 1.0]}
+         :multiblock-mode :controller-parts
+         :controller-block-id "developer-advanced"
+         :part-block-id "developer-advanced-part"
+         :registry-name "developer_advanced"
+         :physical {:material :metal
+                    :hardness 5.0
+                    :resistance 12.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 2
+                    :sounds :metal}
+         :rendering {:light-level 2.0
+                     :flat-item-icon? true
+                     :textures {:all (modid/asset-path "block" "dev_advanced")}}
+         :events {:on-right-click open-developer-gui!}}))
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "developer-advanced-part"
+        {:multiblock-mode :controller-parts
+         :controller-block-id "developer-advanced"
+         :part-block-id "developer-advanced-part"
+         :registry-name "developer_advanced_part"
+         :physical {:material :metal
+                    :hardness 5.0
+                    :resistance 12.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 2
+                    :sounds :metal}
+         :rendering {:light-level 2.0
+                     :has-item-form? false
+                     :model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "dev_advanced")}}}))
+    (hooks/register-network-handler! register-network-handlers!)
+    (log/info "Initialized Developer blocks (Normal and Advanced)")))

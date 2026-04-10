@@ -9,6 +9,7 @@
   Must be loaded via side-checked requiring-resolve from platform layer."
   (:require [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
+            [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -290,8 +291,7 @@
       (fn [response]
         (if (:terminal-installed? response)
           ;; Terminal installed - open GUI via platform bridge
-          (when-let [open-fn (requiring-resolve 'cn.li.forge1201.client.terminal-screen-bridge/open-terminal-screen!)]
-            (open-fn player))
+          (client-bridge/open-terminal-screen! player)
           ;; Terminal not installed - install first
           (do
             (log/info "Terminal not installed, installing...")
@@ -299,8 +299,7 @@
               (fn [install-response]
                 (if (:success install-response)
                   ;; Open GUI after installation via platform bridge
-                  (when-let [open-fn (requiring-resolve 'cn.li.forge1201.client.terminal-screen-bridge/open-terminal-screen!)]
-                    (open-fn player))
+                  (client-bridge/open-terminal-screen! player)
                   (log/error "Failed to install terminal"))))))))
     (catch Exception e
       (log/error "Error opening terminal:" (ex-message e)))))

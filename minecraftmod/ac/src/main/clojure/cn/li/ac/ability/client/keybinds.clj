@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.client.keybinds
   "Key binding state tracking and event handling (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.client.ability-runtime :as runtime]))
+  (:require [cn.li.ac.ability.client.ability-runtime :as runtime]
+            [cn.li.ac.client.platform-bridge :as client-bridge]))
 
 ;; Dynamic var for getting player UUID (set by forge layer)
 (def ^:dynamic *get-player-uuid-fn* nil)
@@ -47,12 +48,10 @@
       (when-let [player-uuid (get-client-player-uuid)]
         (case gui-type
           :skill-tree
-          (when-let [open-fn (resolve 'cn.li.forge1201.client.ability-screen-bridge/open-skill-tree-screen!)]
-            (@open-fn player-uuid))
+          (client-bridge/open-skill-tree-screen! player-uuid)
 
           :preset-editor
-          (when-let [open-fn (resolve 'cn.li.forge1201.client.ability-screen-bridge/open-preset-editor-screen!)]
-            (@open-fn player-uuid))
+          (client-bridge/open-preset-editor-screen! player-uuid)
 
           nil)))
 

@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.apps.settings
   "Settings app - Configure game settings."
   (:require [cn.li.ac.terminal.app-registry :as reg]
+            [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.ac.config.modid :as modid]
@@ -69,9 +70,7 @@
   [player]
   (log/info "Opening settings for player:" player)
   (let [gui (create-settings-gui player)]
-    ;; Open via platform bridge
-    (when-let [open-fn (requiring-resolve 'cn.li.forge1201.client.terminal-screen-bridge/open-simple-gui!)]
-      (open-fn gui "Settings"))))
+    (client-bridge/open-simple-gui! gui "Settings")))
 
 ;; ============================================================================
 ;; App Registration
@@ -85,4 +84,9 @@
    :gui-fn 'cn.li.ac.terminal.apps.settings/open-settings-gui
    :category :system})
 
-(reg/register-app! settings-app)
+(defonce ^:private settings-app-installed? (atom false))
+
+(defn init-settings-app!
+  []
+  (when (compare-and-set! settings-app-installed? false true)
+    (reg/register-app! settings-app)))

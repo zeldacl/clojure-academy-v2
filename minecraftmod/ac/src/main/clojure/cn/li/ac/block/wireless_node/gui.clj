@@ -40,8 +40,7 @@
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.gui.animation :as anim]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.position :as pos])
-  (:import [cn.li.acapi.wireless IWirelessNode]))
+            [cn.li.mcmod.platform.position :as pos]))
 
 ;; ============================================================================
 ;; Slot Schema
@@ -49,22 +48,27 @@
 
 (def wireless-node-id :wireless-node)
 
-(def wireless-node-slot-schema
-  (slot-schema/register-slot-schema!
-    {:schema-id wireless-node-id
-     :slots [{:id :input :type :energy :x 42 :y 10}
-             {:id :output :type :output :x 42 :y 80}]}))
+(defn- ensure-wireless-node-slot-schema!
+  []
+  (if-let [ensure-fn (requiring-resolve 'cn.li.ac.block.wireless-node.block/ensure-node-slot-schema!)]
+    (ensure-fn)
+    (slot-schema/register-slot-schema!
+      {:schema-id wireless-node-id
+       :slots [{:id :input :type :energy :x 42 :y 10}
+               {:id :output :type :output :x 42 :y 80}]})))
 
 (def ^:private inventory-pred
   (fn [slot-index player-inventory-start]
     (>= slot-index player-inventory-start)))
 
-(def wireless-node-quick-move-config
-  (slot-schema/build-quick-move-config
-    wireless-node-id
-    {:inventory-pred inventory-pred
-     :rules [{:accept? energy-stub/is-energy-item-supported?
-              :slot-ids [:input]}]}))
+(def ^:private wireless-node-quick-move-config*
+  (delay
+    (ensure-wireless-node-slot-schema!)
+    (slot-schema/build-quick-move-config
+      wireless-node-id
+      {:inventory-pred inventory-pred
+       :rules [{:accept? energy-stub/is-energy-item-supported?
+                :slot-ids [:input]}]})))
 
 (defn- msg
   "Generate message ID for node actions."
@@ -157,7 +161,7 @@
         [tile {}]))))
 
 (defn create-container [tile player]
-  (let [[be state] (resolve-state tile)
+  (let [[be _state] (resolve-state tile)
         entity     (or be tile)]
     (merge {:tile-entity    entity
             :player         player
@@ -279,7 +283,7 @@
 (defn quick-move-stack [container slot-index player-inventory-start]
   (move-common/quick-move-with-rules
     container slot-index player-inventory-start
-    wireless-node-quick-move-config))
+    @wireless-node-quick-move-config*))
 
 (defn on-close [container]
   (log/debug "Closing wireless node container")
@@ -341,7 +345,12 @@
 
       (tech-ui/reset-info-area! info-area)
 
-      (let [y (tech-ui/add-histogram
+      (let [node-range (fn []
+                         (try
+                           (str (.getRange tile))
+                           (catch Exception _
+                             "0.0")))
+            y (tech-ui/add-histogram
                 info-area
                 [(tech-ui/hist-energy
                    (fn [] @(:energy container))
@@ -352,7 +361,7 @@
                 0)
             y (tech-ui/add-sepline info-area "Info" y)
             y (tech-ui/add-property info-area "Range"
-                                    (fn [] (str (try (.getRange ^ IWirelessNode tile) (catch Exception _ 0.0))))
+                                    node-range
                                     y)
             y (tech-ui/add-property info-area "Owner" owner-name y)]
 
@@ -472,10 +481,39 @@
   [container player]
   (create-node-gui container player))
 
+(declare node-container?)
+(defonce ^:private wireless-node-gui-installed? (atom false))
+
 (defn init!
   "Initialize Node GUI module"
   []
-  (log/info "Wireless Node GUI module initialized"))
+  (when (compare-and-set! wireless-node-gui-installed? false true)
+    (ensure-wireless-node-slot-schema!)
+    (gui-dsl/register-gui!
+      (gui-dsl/create-gui-spec
+        "wireless-node"
+        {:gui-id 0
+         :display-name "Wireless Node"
+         :gui-type :node
+         :registry-name "wireless_node_gui"
+         :screen-factory-fn-kw :create-node-screen
+         :slot-layout (slot-schema/get-slot-layout wireless-node-id)
+         :container-predicate node-container?
+         :container-fn create-container
+         :screen-fn create-screen
+         :tick-fn tick!
+         :sync-get get-sync-data
+         :sync-apply apply-sync-data!
+         :payload-sync-apply-fn apply-node-sync-payload!
+         :validate-fn still-valid?
+         :close-fn on-close
+         :button-click-fn handle-button-click!
+         :slot-count-fn get-slot-count
+         :slot-get-fn get-slot-item
+         :slot-set-fn set-slot-item!
+         :slot-can-place-fn can-place-item?
+         :slot-changed-fn slot-changed!}))
+    (log/info "Wireless Node GUI module initialized")))
 
 ;; ============================================================================
 ;; GUI Registration
@@ -486,17 +524,3 @@
        (contains? container :tile-entity)
        (contains? container :ssid)
        (contains? container :password)))
-
-(def ^:private node-slot-layout
-  (slot-schema/get-slot-layout wireless-node-id))
-
-(gui-dsl/defgui-with-lazy-fns wireless-node
-  :gui-id 0
-  :namespace 'cn.li.ac.block.wireless-node.gui
-  :payload-sync-fn 'apply-node-sync-payload!
-  :display-name "Wireless Node"
-  :gui-type :node
-  :registry-name "wireless_node_gui"
-  :screen-factory-fn-kw :create-node-screen
-  :slot-layout node-slot-layout
-  :container-predicate node-container?)

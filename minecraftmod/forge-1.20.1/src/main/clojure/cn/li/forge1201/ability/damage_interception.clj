@@ -30,43 +30,36 @@
   (try
     (let [entity (.getEntity event)]
       (when (instance? ServerPlayer entity)
-          (let [^ServerPlayer player entity
+        (let [^ServerPlayer player entity
               player-id (str (.getUUID player))
-            original-damage (double (.getAmount event))
+              original-damage (double (.getAmount event))
               damage-source (.getSource event)
               attacker (.getEntity damage-source)
               attacker-id (when attacker (str (.getUUID attacker)))
               handlers (get-sorted-handlers)]
-
-          ;; Call each handler in priority order
           (loop [remaining-handlers handlers
                  current-damage original-damage]
             (if (empty? remaining-handlers)
-              ;; 所有 handler 处理完毕
               (when (not= current-damage original-damage)
                 (.setAmount event (float current-damage))
                 (log/debug "Damage modified:" original-damage "->" current-damage))
-          
-              ;; 处理下一个 handler
               (let [[handler-id handler-fn] (first remaining-handlers)
-                    ;; 1. 将 try 缩小到仅包裹不稳定的函数调用
                     next-damage (try
                                   (let [result (handler-fn player-id attacker-id current-damage damage-source)]
                                     (if (vector? result)
                                       (let [[new-damage _metadata] result]
                                         (if (number? new-damage)
                                           (double new-damage)
-                                          (do (log/warn "Handler" handler-id "returned invalid damage:" new-damage)
-                                              current-damage)))
-                                      (do (log/warn "Handler" handler-id "returned invalid result:" result)
-                                          current-damage)))
+                                          (do
+                                            (log/warn "Handler" handler-id "returned invalid damage:" new-damage)
+                                            current-damage)))
+                                      (do
+                                        (log/warn "Handler" handler-id "returned invalid result:" result)
+                                        current-damage)))
                                   (catch Exception e
                                     (log/warn "Handler" handler-id "failed:" (ex-message e))
                                     current-damage))]
-                ;; 2. recur 现在位于 try 块之外，符合编译器要求
-                (recur (rest remaining-handlers) (double next-damage)))))
-
-                    )))
+                (recur (rest remaining-handlers) (double next-damage))))))))
     (catch Exception e
       (log/warn "Damage interception failed:" (ex-message e)))))
 

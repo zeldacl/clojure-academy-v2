@@ -68,7 +68,7 @@
                          (concat
                            [(str skill-name " (Lv" skill-level ")")]
                            (when-not can-learn
-                             (map #(str "âœ— " (or (:description %) "Condition not met")) conditions))))]
+                             (map #(str "âœ?" (or (:description %) "Condition not met")) conditions))))]
       ;; Simple tooltip rendering
       (doseq [[idx line] (map-indexed vector tooltip-lines)]
         (draw-string! graphics (str line) (+ mouse-x 10) (+ mouse-y 10 (* idx 12)) 0xFFFFFF)))))

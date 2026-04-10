@@ -27,10 +27,6 @@
   (:import [cn.li.acapi.energy IEnergyCapable]
            [cn.li.acapi.wireless IWirelessGenerator IWirelessReceiver]))
 
-;; Message Registration
-(msg-registry/register-block-messages! :energy-converter-advanced
-  [:get-status :set-mode])
-
 (defn- msg [action] (msg-registry/msg :energy-converter-advanced action))
 
 ;; Reuse the same tick, NBT, and capability logic from basic converter
@@ -225,48 +221,44 @@
         (log/error "Failed to open Advanced EnergyConverter GUI:" (ex-message e))
         nil))))
 
-;; Register tile logic
-(tdsl/deftile energy-converter-advanced-tile
-  :id "energy-converter-advanced"
-  :registry-name "energy_converter_advanced"
-  :impl :scripted
-  :blocks ["energy-converter-advanced"]
-  :tick-fn converter-tick-fn
-  :read-nbt-fn converter-read-nbt-fn
-  :write-nbt-fn converter-write-nbt-fn)
-
-;; Register capabilities
-(platform-cap/declare-capability! :energy-converter-advanced IEnergyCapable
-  (fn [be _side] (create-converter-capability be)))
-
-(platform-cap/declare-capability! :wireless-generator-advanced IWirelessGenerator
-  get-wireless-capability)
-
-(platform-cap/declare-capability! :wireless-receiver-advanced IWirelessReceiver
-  get-wireless-capability)
-
-(tile-logic/register-tile-capability! "energy-converter-advanced" :energy-converter-advanced)
-(tile-logic/register-tile-capability! "energy-converter-advanced" :wireless-generator-advanced)
-(tile-logic/register-tile-capability! "energy-converter-advanced" :wireless-receiver-advanced)
-
-;; Define block
-(bdsl/defblock energy-converter-advanced
-  :registry-name "energy_converter_advanced"
-  :physical {:material :metal
-             :hardness 3.0
-             :resistance 12.0
-             :requires-tool true
-             :harvest-tool :pickaxe
-             :harvest-level 2
-             :sounds :metal}
-  :rendering {:model-parent "minecraft:block/cube_all"
-              :textures {:all (modid/asset-path "block" "energy_converter_advanced")}
-              :flat-item-icon? true}
-  :events {:on-right-click open-converter-gui!})
-
-;; Auto-Registration
-(hooks/register-network-handler! register-network-handlers!)
+(defonce ^:private energy-converter-advanced-installed? (atom false))
 
 (defn init-energy-converter-advanced!
   []
-  (log/info "Initialized Advanced Energy Converter block"))
+  (when (compare-and-set! energy-converter-advanced-installed? false true)
+    (msg-registry/register-block-messages! :energy-converter-advanced [:get-status :set-mode])
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "energy-converter-advanced"
+        {:registry-name "energy_converter_advanced"
+         :impl :scripted
+         :blocks ["energy-converter-advanced"]
+         :tick-fn converter-tick-fn
+         :read-nbt-fn converter-read-nbt-fn
+         :write-nbt-fn converter-write-nbt-fn}))
+    (platform-cap/declare-capability! :energy-converter-advanced IEnergyCapable
+      (fn [be _side] (create-converter-capability be)))
+    (platform-cap/declare-capability! :wireless-generator-advanced IWirelessGenerator
+      get-wireless-capability)
+    (platform-cap/declare-capability! :wireless-receiver-advanced IWirelessReceiver
+      get-wireless-capability)
+    (tile-logic/register-tile-capability! "energy-converter-advanced" :energy-converter-advanced)
+    (tile-logic/register-tile-capability! "energy-converter-advanced" :wireless-generator-advanced)
+    (tile-logic/register-tile-capability! "energy-converter-advanced" :wireless-receiver-advanced)
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "energy-converter-advanced"
+        {:registry-name "energy_converter_advanced"
+         :physical {:material :metal
+                    :hardness 3.0
+                    :resistance 12.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 2
+                    :sounds :metal}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "energy_converter_advanced")}
+                     :flat-item-icon? true}
+         :events {:on-right-click open-converter-gui!}}))
+    (hooks/register-network-handler! register-network-handlers!)
+    (log/info "Initialized Advanced Energy Converter block")))

@@ -32,10 +32,6 @@
   (:import [cn.li.acapi.energy IEnergyCapable]
            [cn.li.acapi.wireless IWirelessGenerator IWirelessReceiver WirelessCapabilityKeys]))
 
-;; Message Registration
-(msg-registry/register-block-messages! :energy-converter
-  [:get-status :set-mode])
-
 (defn- msg [action] (msg-registry/msg :energy-converter action))
 
 ;; ============================================================================
@@ -283,53 +279,47 @@
         nil))))
 
 ;; ============================================================================
-;; Part 6: Registration
+;; Part 6: Runtime Installation (Scheme A)
 ;; ============================================================================
 
-;; Register tile logic
-(tdsl/deftile energy-converter-tile
-  :id "energy-converter"
-  :registry-name "energy_converter"
-  :impl :scripted
-  :blocks ["energy-converter"]
-  :tick-fn converter-tick-fn
-  :read-nbt-fn converter-read-nbt-fn
-  :write-nbt-fn converter-write-nbt-fn)
+(defonce ^:private energy-converter-installed? (atom false))
 
-;; Register capability
-(platform-cap/declare-capability! :energy-converter IEnergyCapable
-  (fn [be _side] (create-converter-capability be)))
-
-;; Register wireless capabilities
-(platform-cap/declare-capability! :wireless-generator IWirelessGenerator
-  get-wireless-capability)
-
-(platform-cap/declare-capability! :wireless-receiver IWirelessReceiver
-  get-wireless-capability)
-
-(tile-logic/register-tile-capability! "energy-converter" :energy-converter)
-(tile-logic/register-tile-capability! "energy-converter" :wireless-generator)
-(tile-logic/register-tile-capability! "energy-converter" :wireless-receiver)
-
-;; Define block
-(bdsl/defblock energy-converter
-  :registry-name "energy_converter"
-  :physical {:material :metal
-             :hardness 2.0
-             :resistance 8.0
-             :requires-tool true
-             :harvest-tool :pickaxe
-             :harvest-level 1
-             :sounds :metal}
-  :rendering {:model-parent "minecraft:block/cube_all"
-              :textures {:all (modid/asset-path "block" "energy_converter")}
-              :flat-item-icon? true}
-  :events {:on-right-click open-converter-gui!})
-
-;; Auto-Registration
-(hooks/register-network-handler! register-network-handlers!)
-
-;; Helper functions
 (defn init-energy-converter!
   []
-  (log/info "Initialized Energy Converter block"))
+  (when (compare-and-set! energy-converter-installed? false true)
+    (msg-registry/register-block-messages! :energy-converter [:get-status :set-mode])
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "energy-converter"
+        {:registry-name "energy_converter"
+         :impl :scripted
+         :blocks ["energy-converter"]
+         :tick-fn converter-tick-fn
+         :read-nbt-fn converter-read-nbt-fn
+         :write-nbt-fn converter-write-nbt-fn}))
+    (platform-cap/declare-capability! :energy-converter IEnergyCapable
+      (fn [be _side] (create-converter-capability be)))
+    (platform-cap/declare-capability! :wireless-generator IWirelessGenerator
+      get-wireless-capability)
+    (platform-cap/declare-capability! :wireless-receiver IWirelessReceiver
+      get-wireless-capability)
+    (tile-logic/register-tile-capability! "energy-converter" :energy-converter)
+    (tile-logic/register-tile-capability! "energy-converter" :wireless-generator)
+    (tile-logic/register-tile-capability! "energy-converter" :wireless-receiver)
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "energy-converter"
+        {:registry-name "energy_converter"
+         :physical {:material :metal
+                    :hardness 2.0
+                    :resistance 8.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 1
+                    :sounds :metal}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "energy_converter")}
+                     :flat-item-icon? true}
+         :events {:on-right-click open-converter-gui!}}))
+    (hooks/register-network-handler! register-network-handlers!)
+    (log/info "Initialized Energy Converter block")))

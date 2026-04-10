@@ -5,13 +5,17 @@
   allowing external mods (Mekanism, Thermal, etc.) to interact with AC energy."
   (:require [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.block.energy-converter.config :as converter-config])
+            [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.energy IEnergyCapable]
-           [cn.li.forge1201.capability ForgeEnergyAdapter]
-           [net.minecraftforge.common.capabilities Capability ForgeCapabilities]))
+           [cn.li.forge1201.capability ForgeEnergyAdapter]))
 
 (set! *warn-on-reflection* true)
+
+(defn- fe-conversion-rate
+  []
+  (if-let [f (requiring-resolve 'cn.li.ac.block.energy-converter.config/fe-conversion-rate)]
+    (double (f))
+    1.0))
 
 (defn- create-forge-energy-adapter
   "Create a ForgeEnergyAdapter that wraps an IEnergyCapable.
@@ -45,7 +49,7 @@
         (let [ac-energy (platform-cap/or-else ac-energy-cap nil)]
           (when ac-energy
             ;; Wrap it in a Forge Energy adapter
-            (create-forge-energy-adapter ac-energy (converter-config/fe-conversion-rate))))))
+            (create-forge-energy-adapter ac-energy (fe-conversion-rate))))))
     (catch Exception e
       (log/error "Error creating Forge Energy capability:" (ex-message e))
       nil)))
@@ -66,7 +70,7 @@
     (tile-logic/register-tile-capability! "energy-converter" :forge-energy)
 
     (log/info "Registered Forge Energy capability for energy converters")
-    (log/info (format "Conversion rate: 1 IF = %.1f FE" (converter-config/fe-conversion-rate)))
+    (log/info (format "Conversion rate: 1 IF = %.1f FE" (fe-conversion-rate)))
     true
   (catch Exception e
     (log/error "Failed to register Forge Energy capability:" (ex-message e))

@@ -374,8 +374,9 @@ remapJar {
 clojure {
     builds {
         main {
-            aotAll()
             reflection = 'warn'
+            // Removed aotAll() to avoid bootstrap during checkClojure/compileClojure
+            // Classes will be compiled only when explicitly needed, not during generic compilation
         }
     }
 }
@@ -398,6 +399,17 @@ tasks.named('compileClojure').configure {
     doFirst {
         def clojureOutDir = layout.buildDirectory.dir('clojure/main').get().asFile
         def javaMainDir = layout.buildDirectory.dir('classes/java/main').get().asFile
+
+        // Always start from a clean Clojure AOT output dir. Stale __init.class files in
+        // build/clojure/main are on compile classpath and can execute during compilation.
+        if (clojureOutDir.isDirectory()) {
+            clojureOutDir.eachFileRecurse { f ->
+                if (f.isFile() && f.name.endsWith('.class')) {
+                    f.delete()
+                }
+            }
+        }
+
         if (!clojureOutDir.isDirectory() || !javaMainDir.isDirectory()) {
             return
         }
@@ -421,22 +433,29 @@ tasks.named('checkClojure') {
     dependsOn('copyClojureClassesToJavaOutput')
 }
 
-// tasks.matching { it.name == 'checkClojure' }.configureEach {
-//     def existingArgs = forkOptions.jvmArgs ?: []
-//     forkOptions.jvmArgs = existingArgs + ['-Dac.check.clojure=true']
-//     if (project.hasProperty('checkNsOnly')) {
-//         def requestedNamespaces = project.property('checkNsOnly')
-//             .toString()
-//             .split(',')
-//             .collect { it.trim() }
-//             .findAll { !it.isEmpty() } as Set
-//         namespaces.set(requestedNamespaces)
-//     } else {
-//         // This namespace loads bootstrap-sensitive Minecraft classes and cannot
-//         // be analyzed safely in checkClojure's pre-bootstrap JVM.
-//         namespaces.set((namespaces.get() as Set).findAll { it != 'cn.li.forge1201.ability.raycast' } as Set)
-//     }
-// }
+tasks.matching { it.name == 'checkClojure' }.configureEach {
+    if (project.hasProperty('checkNsFile')) {
+        def nsFile = rootProject.file(project.property('checkNsFile').toString())
+        if (!nsFile.isFile()) {
+            throw new GradleException("checkNsFile not found: ${nsFile}")
+        }
+        def requestedNamespaces = nsFile.readLines('UTF-8')
+            .collect { it.trim() }
+            .findAll { it && !it.startsWith('#') } as Set
+        namespaces.set(requestedNamespaces)
+        logger.lifecycle('[checkClojure] checkNsFile active, namespaces={} file={}', requestedNamespaces.size(), nsFile)
+    } else if (project.hasProperty('checkNsOnly')) {
+        def requestedNamespaces = project.property('checkNsOnly')
+            .toString()
+            .split(',')
+            .collect { it.trim() }
+            .findAll { !it.isEmpty() } as Set
+        namespaces.set(requestedNamespaces)
+        logger.lifecycle('[checkClojure] checkNsOnly active, namespaces={}', requestedNamespaces.size())
+    } else {
+        logger.lifecycle('[checkClojure] full namespace set active, namespaces={}', (namespaces.get() as Set).size())
+    }
+}
 
 // tasks.matching { it.name == 'compileClojure' }.configureEach {
 //     if (project.hasProperty('compileNsOnly')) {
@@ -448,4 +467,231 @@ tasks.named('checkClojure') {
 //         namespaces.set(requestedNamespaces)
 //     }
 // }
+
+def baseExcludedAotNamespaces = [
+    'cn.li.forge1201.gui.cgui-runtime',
+    'cn.li.forge1201.gui.init',
+    'cn.li.forge1201.gui.menu-bridge',
+    'cn.li.forge1201.gui.network'
+] as Set
+
+
+def loadExcludedAotNamespaces = {
+    def excluded = new LinkedHashSet<String>(baseExcludedAotNamespaces)
+    def dynamicFile = rootProject.file('build/aot-excluded-ns.txt')
+    if (dynamicFile.isFile()) {
+        dynamicFile.readLines('UTF-8')
+            .collect { it.trim() }
+            .findAll { it && !it.startsWith('#') }
+            .each { excluded.add(it) }
+    }
+    excluded
+}
+
+tasks.matching { it.name == 'compileClojure' }.configureEach {
+    def excludedAotNamespaces = loadExcludedAotNamespaces()
+    if (project.hasProperty('compileNsOnly')) {
+        def requestedNamespaces = project.property('compileNsOnly')
+            .toString()
+            .split(',')
+            .collect { it.trim() }
+            .findAll { !it.isEmpty() } as Set
+        if (!requestedNamespaces.isEmpty()) {
+            namespaces.set(requestedNamespaces)
+            logger.lifecycle("[compileClojure] compileNsOnly active, namespaces={} ", requestedNamespaces.size())
+        }
+    } else {
+        // CLIENT-ONLY runtime namespace. AOT/check phase can run before full MC bootstrap,
+        // and compiling this namespace in that phase consistently triggers bootstrap errors.
+        // Keep it source-loaded at runtime, but exclude it from default AOT compile set.
+        namespaces.set((namespaces.get() as Set)
+            .findAll { !excludedAotNamespaces.contains(it) } as Set)
+    }
+}
+
+def cljFileToNamespace = { File root, File cljFile ->
+    def rel = root.toPath().relativize(cljFile.toPath()).toString().replace('\\', '/')
+    def nsPath = rel.replaceAll(/\.clj$/, '')
+    nsPath = nsPath.replace('/', '.').replace('_', '-')
+    return nsPath
+}
+
+def collectMainClojureNamespaces = {
+    def result = new LinkedHashSet<String>()
+    sourceSets.main.clojure.srcDirs.each { File srcDir ->
+        if (srcDir?.isDirectory()) {
+            fileTree(srcDir) {
+                include '**/*.clj'
+            }.files.each { File f ->
+                result.add(cljFileToNamespace(srcDir, f))
+            }
+        }
+    }
+    result as List<String>
+}
+
+tasks.register('bisectCompileClojure') {
+    group = 'verification'
+    description = 'Binary search first failing namespace for :forge-1.20.1:compileClojure (each trial runs clean first).'
+
+    doLast {
+        def excludedAotNamespaces = loadExcludedAotNamespaces()
+        def allNamespaces = collectMainClojureNamespaces()
+            .findAll { !excludedAotNamespaces.contains(it) }
+            .sort()
+        if (allNamespaces.isEmpty()) {
+            throw new GradleException('No Clojure namespaces found in sourceSets.main.clojure.srcDirs')
+        }
+
+        logger.lifecycle("[bisect] namespace total={}", allNamespaces.size())
+
+        def rootDir = rootProject.projectDir
+        def isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows()
+        def gradlew = isWindows ?
+            new File(rootDir, 'gradlew.bat').absolutePath :
+            new File(rootDir, 'gradlew').absolutePath
+
+        def runSubset = { List<String> subset ->
+            def propValue = subset.join(',')
+            logger.lifecycle("[bisect] trial size={} first={} last={}", subset.size(), subset.first(), subset.last())
+            int maxAttempts = 3
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                def execResult = exec {
+                    workingDir rootDir
+                    if (isWindows) {
+                        commandLine 'cmd', '/c', gradlew,
+                            ':forge-1.20.1:clean',
+                            ':forge-1.20.1:compileClojure',
+                            "\"-PcompileNsOnly=${propValue}\"",
+                            '--no-daemon',
+                            '--stacktrace',
+                            '--info'
+                    } else {
+                        commandLine gradlew,
+                            ':forge-1.20.1:clean',
+                            ':forge-1.20.1:compileClojure',
+                            "-PcompileNsOnly=${propValue}",
+                            '--no-daemon',
+                            '--stacktrace',
+                            '--info'
+                    }
+                    ignoreExitValue = true
+                }
+                if (execResult.exitValue == 0) {
+                    return true
+                }
+                if (attempt < maxAttempts) {
+                    logger.lifecycle('[bisect] trial failed (attempt {}/{}), retrying...', attempt, maxAttempts)
+                }
+            }
+            false
+        }
+
+        int lo = 0
+        int hi = allNamespaces.size() - 1
+        String firstFailing = null
+
+        if (runSubset(allNamespaces)) {
+            logger.lifecycle('[bisect] All namespaces compile successfully. No failing namespace found.')
+            return
+        }
+
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1
+            def subset = allNamespaces.subList(0, mid + 1)
+            if (runSubset(subset)) {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+
+        firstFailing = allNamespaces.get(lo)
+        logger.lifecycle('[bisect] first failing namespace={}', firstFailing)
+        logger.lifecycle('[bisect] reproducer: ./gradlew :forge-1.20.1:clean :forge-1.20.1:compileClojure "-PcompileNsOnly={}"', firstFailing)
+        throw new GradleException("First failing namespace: ${firstFailing}")
+    }
+}
+
+tasks.register('bisectCheckClojure') {
+    group = 'verification'
+    description = 'Find first failing namespace for :forge-1.20.1:checkClojure via deterministic single-namespace scan (each trial runs clean first).'
+
+    doLast {
+        def allNamespaces = collectMainClojureNamespaces()
+            .sort()
+        if (allNamespaces.isEmpty()) {
+            throw new GradleException('No Clojure namespaces found in sourceSets.main.clojure.srcDirs')
+        }
+
+        logger.lifecycle("[bisect-check] namespace total={}", allNamespaces.size())
+
+        def rootDir = rootProject.projectDir
+        def isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows()
+        def gradlew = isWindows ?
+            new File(rootDir, 'gradlew.bat').absolutePath :
+            new File(rootDir, 'gradlew').absolutePath
+        def nsSubsetFile = new File(rootDir, 'build/bisect-check-subset.txt')
+
+        def runSubset = { List<String> subset ->
+            nsSubsetFile.parentFile.mkdirs()
+            nsSubsetFile.setText(subset.join(System.lineSeparator()), 'UTF-8')
+            logger.lifecycle("[bisect-check] trial size={} first={} last={}", subset.size(), subset.first(), subset.last())
+            int maxAttempts = 3
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                def execResult = exec {
+                    workingDir rootDir
+                    if (isWindows) {
+                        commandLine 'cmd', '/c', gradlew,
+                            ':forge-1.20.1:clean',
+                            ':forge-1.20.1:checkClojure',
+                            "\"-PcheckNsFile=build/bisect-check-subset.txt\"",
+                            '--no-daemon',
+                            '--stacktrace',
+                            '--info'
+                    } else {
+                        commandLine gradlew,
+                            ':forge-1.20.1:clean',
+                            ':forge-1.20.1:checkClojure',
+                            '-PcheckNsFile=build/bisect-check-subset.txt',
+                            '--no-daemon',
+                            '--stacktrace',
+                            '--info'
+                    }
+                    ignoreExitValue = true
+                }
+                if (execResult.exitValue == 0) {
+                    return true
+                }
+                if (attempt < maxAttempts) {
+                    logger.lifecycle('[bisect-check] trial failed (attempt {}/{}), retrying...', attempt, maxAttempts)
+                }
+            }
+            false
+        }
+
+        int lo = 0
+        int hi = allNamespaces.size() - 1
+
+        if (runSubset(allNamespaces)) {
+            logger.lifecycle('[bisect-check] All namespaces pass checkClojure. No failing namespace found.')
+            return
+        }
+
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1
+            def subset = allNamespaces.subList(0, mid + 1)
+            if (runSubset(subset)) {
+                lo = mid + 1
+            } else {
+                hi = mid
+            }
+        }
+
+        def firstFailing = allNamespaces.get(lo)
+        logger.lifecycle('[bisect-check] first failing namespace={}', firstFailing)
+        logger.lifecycle('[bisect-check] reproducer: ./gradlew :forge-1.20.1:clean :forge-1.20.1:checkClojure "-PcheckNsOnly={}"', firstFailing)
+        throw new GradleException("First failing namespace (check): ${firstFailing}")
+    }
+}
 

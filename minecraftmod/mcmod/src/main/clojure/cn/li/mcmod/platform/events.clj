@@ -2,8 +2,12 @@
   "Platform-neutral event bridge.
 
   Forge binds *fire-event-fn* during platform init. Code in ac can call
-  fire-event! without importing any Forge or Minecraft classes."
-  (:require [cn.li.mcmod.util.log :as log]))
+  fire-event! without importing any Forge or Minecraft classes.")
+
+(defn- log-warn
+  [& xs]
+  (when-let [f (requiring-resolve 'cn.li.mcmod.util.log/warn)]
+    (apply f xs)))
 
 (def ^:dynamic *fire-event-fn*
   "Bound by the platform (Forge) to (fn [event]).
@@ -19,4 +23,4 @@
     (try
       (*fire-event-fn* event)
       (catch Exception e
-        (log/warn "Event dispatch failed:" (ex-message e))))))
+        (log-warn "Event dispatch failed:" (ex-message e))))))

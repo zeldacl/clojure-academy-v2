@@ -21,20 +21,6 @@
 
 (def energy-converter-advanced-id :energy-converter-advanced)
 
-(def energy-converter-advanced-slot-schema
-  (slot-schema/register-slot-schema!
-    {:schema-id energy-converter-advanced-id
-     :slots [{:id :input :type :item :x 56 :y 35}
-             {:id :output :type :item :x 56 :y 71}]}))
-
-;; ============================================================================
-;; Message Registration
-;; ============================================================================
-
-(msg-registry/register-block-messages!
-  :energy-converter-advanced
-  [:get-status :set-mode])
-
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)
 
@@ -153,15 +139,36 @@
        (contains? container :mode)
        (= :energy-converter-advanced (:container-type container))))
 
-(def ^:private converter-slot-layout
-  (slot-schema/get-slot-layout energy-converter-advanced-id))
+(defonce ^:private energy-converter-advanced-gui-installed? (atom false))
 
-(gui-dsl/defgui-with-lazy-fns energy-converter-advanced
-  :gui-id 11
-  :namespace 'cn.li.ac.block.energy-converter-advanced.gui
-  :display-name "Advanced Energy Converter"
-  :gui-type :energy-converter-advanced
-  :registry-name "energy_converter_advanced_gui"
-  :screen-factory-fn-kw :create-converter-screen
-  :slot-layout converter-slot-layout
-  :container-predicate converter-container?)
+(defn init-energy-converter-advanced-gui!
+  []
+  (when (compare-and-set! energy-converter-advanced-gui-installed? false true)
+    (slot-schema/register-slot-schema!
+      {:schema-id energy-converter-advanced-id
+       :slots [{:id :input :type :item :x 56 :y 35}
+               {:id :output :type :item :x 56 :y 71}]})
+    (msg-registry/register-block-messages! :energy-converter-advanced [:get-status :set-mode])
+    (gui-dsl/register-gui!
+      (gui-dsl/create-gui-spec
+        "energy-converter-advanced"
+        {:gui-id 11
+         :display-name "Advanced Energy Converter"
+         :gui-type :energy-converter-advanced
+         :registry-name "energy_converter_advanced_gui"
+         :screen-factory-fn-kw :create-converter-screen
+         :slot-layout (slot-schema/get-slot-layout energy-converter-advanced-id)
+         :container-predicate converter-container?
+         :container-fn create-container
+         :screen-fn create-screen
+         :tick-fn tick!
+         :sync-get get-sync-data
+         :sync-apply apply-sync-data!
+         :validate-fn still-valid?
+         :close-fn on-close
+         :button-click-fn handle-button-click!
+         :slot-count-fn get-slot-count
+         :slot-get-fn get-slot-item
+         :slot-set-fn set-slot-item!
+         :slot-can-place-fn can-place-item?
+         :slot-changed-fn slot-changed!}))))

@@ -33,6 +33,9 @@
 ## 📜 Coding Rules
 - **Official-First**: **ALWAYS prioritize official Minecraft, Forge, or Fabric recommended patterns.** Use standard platform APIs and events over custom hacks or unofficial workarounds.
 - **No Reflection**: All Java interop **MUST** use type hints (`^TypeName`). Set `*warn-on-reflection* true`.
+- **Remap Safety**: Do not rely on `eval`, string `Class/forName`, or cross-layer `resolve` for Minecraft/Forge symbols. Loom/Tiny Remapper remaps bytecode references, not arbitrary strings.
+- **Eval Rule**: `eval` forms must not contain `net.minecraft.*` / `net.minecraftforge.*` class symbols or class-name strings. Move such logic to Java Bridge or another static bytecode path.
+- **Resolve Rule**: `ac` must not `resolve` / `requiring-resolve` `cn.li.forge1201.*`. Use injected bridge vars/functions instead.
 - **Breaking Changes**: **DO NOT maintain compatibility with legacy code.** Prioritize clean, idiomatic, and modernized implementations over supporting deprecated patterns or old data structures.
 - **Side Separation (Minecraft)**:
     - `**/client/**` = CLIENT-ONLY. Load via `side/resolve-client-fn`.

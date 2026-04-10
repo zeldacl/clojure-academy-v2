@@ -31,7 +31,6 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.block.solar-gen.schema :as solar-schema]
             [cn.li.ac.block.solar-gen.config :as solar-config]
-            [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
@@ -40,19 +39,6 @@
 ;; ============================================================================
 
 (def solar-gen-id :solar-gen)
-
-(def solar-gen-slot-schema
-  (slot-schema/register-slot-schema!
-    {:schema-id solar-gen-id
-     :slots [{:id :energy :type :energy :x 42 :y 81}]}))
-
-;; ============================================================================
-;; Message Registration
-;; ============================================================================
-
-(msg-registry/register-block-messages!
-  :generator
-  [:get-status :list-nodes :connect :disconnect])
 
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)
@@ -219,23 +205,36 @@
        (contains? container :energy)
        (contains? container :status)))
 
-(def ^:private solar-slot-layout
-  (slot-schema/get-slot-layout solar-gen-id))
+(defonce ^:private solar-gui-installed? (atom false))
 
-(gui-dsl/defgui-with-lazy-fns solar-gen
-  :gui-id 2
-  :namespace 'cn.li.ac.block.solar-gen.gui
-  :display-name "Solar Generator"
-  :gui-type :solar
-  :registry-name "solar_gen_gui"
-  :screen-factory-fn-kw :create-solar-screen
-  :slot-layout solar-slot-layout
-  :container-predicate solar-container?)
-
-;; ============================================================================
-;; Auto-Registration Hooks
-;; ============================================================================
-
-;; Register client renderer
-(hooks/register-client-renderer! 'cn.li.ac.block.solar-gen.render/init!)
+(defn init-solar-gui!
+  []
+  (when (compare-and-set! solar-gui-installed? false true)
+    (slot-schema/register-slot-schema!
+      {:schema-id solar-gen-id
+       :slots [{:id :energy :type :energy :x 42 :y 81}]})
+    (msg-registry/register-block-messages! :generator [:get-status :list-nodes :connect :disconnect])
+    (gui-dsl/register-gui!
+      (gui-dsl/create-gui-spec
+        "solar-gen"
+        {:gui-id 2
+         :display-name "Solar Generator"
+         :gui-type :solar
+         :registry-name "solar_gen_gui"
+         :screen-factory-fn-kw :create-solar-screen
+         :slot-layout (slot-schema/get-slot-layout solar-gen-id)
+         :container-predicate solar-container?
+         :container-fn create-container
+         :screen-fn create-screen
+         :tick-fn tick!
+         :sync-get get-sync-data
+         :sync-apply apply-sync-data!
+         :validate-fn still-valid?
+         :close-fn on-close
+         :button-click-fn handle-button-click!
+         :slot-count-fn get-slot-count
+         :slot-get-fn get-slot-item
+         :slot-set-fn set-slot-item!
+         :slot-can-place-fn can-place-item?
+            :slot-changed-fn slot-changed!}))))
 

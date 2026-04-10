@@ -9,7 +9,6 @@
   (:require [cn.li.forge1201.bootstrap :refer [invoke-bootstrap-helper]]
             [cn.li.mcmod.config :as modid]
             [cn.li.ac.block.blockstate-definition :as blockstate-def]
-            [cn.li.forge1201.mod :as forge-mod]
             [cn.li.forge1201.datagen.resource-location :as rl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
@@ -48,13 +47,19 @@
 
 (defn- resolve-from-registered-map
   [block-key registry-name]
-  (let [key-name (name block-key)
+  (let [registered-blocks-var (try
+                                (requiring-resolve 'cn.li.forge1201.mod/registered-blocks)
+                                (catch Throwable _ nil))
+        registered-blocks-map (when registered-blocks-var
+                                @(var-get registered-blocks-var))
+        key-name (name block-key)
         candidates (distinct (concat (normalize-candidates key-name)
                                      (normalize-candidates registry-name)))]
-    (some (fn [candidate]
-            (when-let [registry-object (get @forge-mod/registered-blocks candidate)]
-              (registry-object->block registry-object)))
-          candidates)))
+    (when registered-blocks-map
+      (some (fn [candidate]
+              (when-let [registry-object (get registered-blocks-map candidate)]
+                (registry-object->block registry-object)))
+            candidates))))
 
 ;; Blockstate definition is now provided by mcmod (no ac dependency).
 

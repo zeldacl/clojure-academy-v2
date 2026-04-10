@@ -15,9 +15,19 @@
 (defn init-from-java
   "Called from Java @Mod constructor - sets up version dispatch"
   []
-  (log/info "Initializing Forge 1.20.1 adapter")
-  (set-version!)
-  ;; Ensure shared content init is registered (without Forge referencing
-  ;; the shared content namespace directly).
-  (content/ensure-content-init-registered!)
-  (lifecycle/run-content-init!))
+  (let [aot? (boolean *compile-files*)
+        cphant? (boolean (System/getProperty "clojure.server.clojurephant"))
+        check? (= "true" (System/getProperty "ac.check.clojure"))]
+    (log/info "[BOOTSTRAP_TRACE_INIT] init-from-java enter"
+              {:aot aot?
+               :clojurephant cphant?
+               :ac-check check?})
+    (if (or aot? cphant? check?)
+      (log/info "[BOOTSTRAP_TRACE_INIT] skip content init during compilation/check")
+      (do
+        (log/info "Initializing Forge 1.20.1 adapter")
+        (set-version!)
+        ;; Ensure shared content init is registered (without Forge referencing
+        ;; the shared content namespace directly).
+        (content/ensure-content-init-registered!)
+        (lifecycle/run-content-init!)))))

@@ -31,10 +31,6 @@
             [cn.li.ac.config.modid :as modid])
   (:import [cn.li.acapi.wireless IWirelessGenerator IWirelessNode]))
 
-;; Message Registration
-(msg-registry/register-block-messages! :generator
-  [:get-status :list-nodes :connect :disconnect])
-
 (defn- msg [action] (msg-registry/msg :generator action))
 
 ;; ============================================================================
@@ -204,41 +200,39 @@
 ;; Part 7: Registration
 ;; ============================================================================
 
-;; Register tile logic
-(tdsl/deftile solar-gen-tile
-  :id "solar-gen"
-  :registry-name "solar_gen"
-  :impl :scripted
-  :blocks ["solar-gen"]
-  :tick-fn solar-tick-fn
-  :read-nbt-fn solar-read-nbt-fn
-  :write-nbt-fn solar-write-nbt-fn)
-
-;; Register capability
-(platform-cap/declare-capability! :wireless-generator IWirelessGenerator
-  (fn [be _side] (impls/->WirelessGeneratorImpl be)))
-
-(tile-logic/register-tile-capability! "solar-gen" :wireless-generator)
-
-;; Define block
-(bdsl/defblock solar-gen
-  :registry-name "solar_gen"
-  :physical {:material :stone
-             :hardness 1.5
-             :resistance 6.0
-             :requires-tool true
-             :harvest-tool :pickaxe
-             :harvest-level 1
-             :sounds :stone}
-  :rendering {:model-parent "minecraft:block/cube_all"
-              :textures {:all (modid/asset-path "block" "solar_gen")}
-              :flat-item-icon? true}
-  :events {:on-right-click open-solar-gui!})
-
-;; Auto-Registration
-(hooks/register-network-handler! register-network-handlers!)
+(defonce ^:private solar-gen-installed? (atom false))
 
 ;; Helper functions
 (defn init-solar-gen!
   []
-  (log/info "Initialized Solar Generator block"))
+  (when (compare-and-set! solar-gen-installed? false true)
+    (msg-registry/register-block-messages! :generator [:get-status :list-nodes :connect :disconnect])
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "solar-gen"
+        {:registry-name "solar_gen"
+         :impl :scripted
+         :blocks ["solar-gen"]
+         :tick-fn solar-tick-fn
+         :read-nbt-fn solar-read-nbt-fn
+         :write-nbt-fn solar-write-nbt-fn}))
+    (platform-cap/declare-capability! :wireless-generator IWirelessGenerator
+      (fn [be _side] (impls/->WirelessGeneratorImpl be)))
+    (tile-logic/register-tile-capability! "solar-gen" :wireless-generator)
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "solar-gen"
+        {:registry-name "solar_gen"
+         :physical {:material :stone
+                    :hardness 1.5
+                    :resistance 6.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 1
+                    :sounds :stone}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "solar_gen")}
+                     :flat-item-icon? true}
+         :events {:on-right-click open-solar-gui!}}))
+    (hooks/register-network-handler! register-network-handlers!)
+    (log/info "Initialized Solar Generator block")))

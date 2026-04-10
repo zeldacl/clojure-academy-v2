@@ -51,6 +51,14 @@
 ;; Mod ID constant
 (def mod-id modid/*mod-id*)
 
+(defn- aot-compilation?
+  []
+  (boolean *compile-files*))
+
+(defn- clojurephant-compilation?
+  []
+  (boolean (System/getProperty "clojure.server.clojurephant")))
+
 
 ;; Lazy block properties - only accessed during registration, not during namespace load
 (defonce base-properties
@@ -320,98 +328,103 @@
 
 ;; Constructor implementation
 (defn mod-init []
-  (log/info "Initializing MyMod1201 from Clojure...")
-  (if (= "true" (System/getProperty "ac.check.clojure"))
-    (do
-      (log/info "checkClojure mode detected, skipping Forge bootstrap-sensitive mod-init")
-      [[] nil])
-    (try
-    ;; CRITICAL: Initialize platform abstractions FIRST
-    ;; This must happen before any core code runs that uses NBT/BlockPos/World
-    (when-let [init-platform! (requiring-resolve 'cn.li.forge1201.platform-impl/init-platform!)]
-      (init-platform!))
-    ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources.
-    (init/init-from-java)
+  (let [aot? (aot-compilation?)
+        cphant? (clojurephant-compilation?)
+        check? (= "true" (System/getProperty "ac.check.clojure"))]
+    (log/info "[BOOTSTRAP_TRACE] mod-init enter"
+              {:aot aot?
+               :clojurephant cphant?
+               :ac-check check?
+               :compile-files (boolean *compile-files*)})
+    (if (or aot? cphant? check?)
+      (do
+        (log/warn "[BOOTSTRAP_TRACE] mod-init skip bootstrap-sensitive path"
+                  {:reason {:aot aot? :clojurephant cphant? :ac-check check?}})
+        [[] nil])
+      (try
+        (log/info "[BOOTSTRAP_TRACE] mod-init runtime path begin")
+        ;; CRITICAL: Initialize platform abstractions FIRST
+        ;; This must happen before any core code runs that uses NBT/BlockPos/World
+        (when-let [init-platform! (requiring-resolve 'cn.li.forge1201.platform-impl/init-platform!)]
+          (init-platform!))
+        ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources.
+        (init/init-from-java)
+        ;; Runtime content load is delay-backed in ac.core and explicitly activated here.
+        (when-let [activate-content! (requiring-resolve 'cn.li.ac.core/activate-runtime-content!)]
+          (log/info "[BOOTSTRAP_TRACE] activating runtime content")
+          (activate-content!))
 
-    ;; Initialize BlockState properties from Clojure metadata
-    ;; Must happen before block registration so Property objects are ready
-    (when-let [init-props! (requiring-resolve 'cn.li.forge1201.blockstate-properties/init-all-properties!)]
-      (init-props!))
+        ;; Initialize BlockState properties from Clojure metadata
+        ;; Must happen before block registration so Property objects are ready
+        (when-let [init-props! (requiring-resolve 'cn.li.forge1201.blockstate-properties/init-all-properties!)]
+          (init-props!))
 
-    ;; Register all blocks and items using metadata-driven approach
-    ;; DSL systems are automatically initialized when namespaces load
-    (register-scripted-tile-hooks!)
-    (register-all-blocks!)
-    (register-block-entities!)
-    (register-all-items!)
-    
-    ;; Register creative tab (safe icon = BARRIER so no dependency on item registry order)
-    (log/info "Registering Forge creative tab...")
-    (.register ^DeferredRegister (force creative-tabs-register) "items"
-               (reify java.util.function.Supplier
-                 (get [_] (build-creative-tab))))
+        ;; Register all blocks and items using metadata-driven approach
+        ;; DSL systems are automatically initialized when namespaces load
+        (register-scripted-tile-hooks!)
+        (register-all-blocks!)
+        (register-block-entities!)
+        (register-all-items!)
 
-    ;; Populate GUI DeferredRegister before it is registered with the bus.
-    ;; Must happen here (during mod-init) — registries are locked by FMLCommonSetupEvent.
-    (gui-registry-impl/register-menu-types!)
+        ;; Register creative tab (safe icon = BARRIER so no dependency on item registry order)
+        (log/info "Registering Forge creative tab...")
+        (.register ^DeferredRegister (force creative-tabs-register) "items"
+                   (reify java.util.function.Supplier
+                     (get [_] (build-creative-tab))))
 
-    ;; Register DeferredRegisters and lifecycle event listeners on mod event bus.
-    ;; Must use addListener(EventPriority, boolean, Class<T>, Consumer<T>) overload:
-    ;; Clojure's reify erases generic type info, so Forge cannot infer the event
-    ;; type from the Consumer alone.
-    (let [^IEventBus mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
-      (config-bridge/register-all! mod-bus)
-      (.register ^DeferredRegister (force blocks-register) mod-bus)
-      (.register ^DeferredRegister (force items-register) mod-bus)
-      (.register ^DeferredRegister (force block-entities-register) mod-bus)
-      (.register ^DeferredRegister (force creative-tabs-register) mod-bus)
-      (.register ^DeferredRegister (force gui-registry-impl/menu-register) mod-bus)
-      (.addListener mod-bus EventPriority/NORMAL false FMLCommonSetupEvent
-                    (reify java.util.function.Consumer
-                      (accept [_ event] (on-common-setup event))))
-      (.addListener mod-bus EventPriority/NORMAL false FMLClientSetupEvent
-                    (reify java.util.function.Consumer
-                      (accept [_ event] (on-client-setup event))))
-      ;; InterModProcessEvent: read IMC messages from external mods and store handlers.
-      (.addListener mod-bus EventPriority/NORMAL false InterModProcessEvent
-                    (reify java.util.function.Consumer
-                      (accept [_ event]
-                        ;; Iterate the stream via iterator-seq to avoid reflective
-                        ;; method resolution issues for Stream.forEachOrdered in Clojure.
-                        (let [^InterModProcessEvent event event
-                              ^java.util.stream.Stream imc-stream (.getIMCStream event)]
-                          (doseq [^InterModComms$IMCMessage msg (iterator-seq (.iterator imc-stream))]
-                            (try
-                              (let [handler (.get (.getMessageSupplier msg))]
-                                (condp = (.getMethod msg)
-                                  WirelessImc/REGISTER_NETWORK_HANDLER
-                                  (wireless-imc/register-network-handler! handler)
-                                  WirelessImc/REGISTER_NODE_HANDLER
-                                  (wireless-imc/register-node-handler! handler)
-                                  nil))
-                              (catch Exception e
-                                (log/debug "IMC registration failed from"
-                                           (.getSenderModId msg) ":" (ex-message e)))))))))
-      ;; Generic RegisterCapabilitiesEvent: registers all java-types declared by ac.
-      ;; No modification needed when ac adds new capabilities.
-      (.addListener mod-bus EventPriority/NORMAL false RegisterCapabilitiesEvent
-                    (reify java.util.function.Consumer
-                      (accept [_ event]
-                        (let [^RegisterCapabilitiesEvent event event]
-                          (doseq [^Class java-type (distinct (keep (fn [[_key {:keys [java-type]}]]
-                                                                    java-type)
-                                                                  @platform-cap/capability-type-registry))]
-                            (.register event java-type)))))))
-    
-    ;; Return state
-    [[] nil]
-    (catch IllegalArgumentException e
-      (let [msg (some-> e .getMessage str)]
-        (if (and msg (.contains msg "Not bootstrapped"))
-          (do
-            (log/warn "Skipping Forge mod-init during checkClojure: Minecraft registries not bootstrapped")
-            [[] nil])
-          (throw e)))))))
+        ;; Populate GUI DeferredRegister before it is registered with the bus.
+        ;; Must happen here (during mod-init) — registries are locked by FMLCommonSetupEvent.
+        (gui-registry-impl/register-menu-types!)
+
+        ;; Register DeferredRegisters and lifecycle event listeners on mod event bus.
+        (let [^IEventBus mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
+          (config-bridge/register-all! mod-bus)
+          (.register ^DeferredRegister (force blocks-register) mod-bus)
+          (.register ^DeferredRegister (force items-register) mod-bus)
+          (.register ^DeferredRegister (force block-entities-register) mod-bus)
+          (.register ^DeferredRegister (force creative-tabs-register) mod-bus)
+          (.register ^DeferredRegister (force gui-registry-impl/menu-register) mod-bus)
+          (.addListener mod-bus EventPriority/NORMAL false FMLCommonSetupEvent
+                        (reify java.util.function.Consumer
+                          (accept [_ event] (on-common-setup event))))
+          (.addListener mod-bus EventPriority/NORMAL false FMLClientSetupEvent
+                        (reify java.util.function.Consumer
+                          (accept [_ event] (on-client-setup event))))
+          (.addListener mod-bus EventPriority/NORMAL false InterModProcessEvent
+                        (reify java.util.function.Consumer
+                          (accept [_ event]
+                            (let [^InterModProcessEvent event event
+                                  ^java.util.stream.Stream imc-stream (.getIMCStream event)]
+                              (doseq [^InterModComms$IMCMessage msg (iterator-seq (.iterator imc-stream))]
+                                (try
+                                  (let [handler (.get (.getMessageSupplier msg))]
+                                    (condp = (.getMethod msg)
+                                      WirelessImc/REGISTER_NETWORK_HANDLER
+                                      (wireless-imc/register-network-handler! handler)
+                                      WirelessImc/REGISTER_NODE_HANDLER
+                                      (wireless-imc/register-node-handler! handler)
+                                      nil))
+                                  (catch Exception e
+                                    (log/debug "IMC registration failed from"
+                                               (.getSenderModId msg) ":" (ex-message e)))))))))
+          (.addListener mod-bus EventPriority/NORMAL false RegisterCapabilitiesEvent
+                        (reify java.util.function.Consumer
+                          (accept [_ event]
+                            (let [^RegisterCapabilitiesEvent event event]
+                              (doseq [^Class java-type (distinct (keep (fn [[_key {:keys [java-type]}]]
+                                                                        java-type)
+                                                                      @platform-cap/capability-type-registry))]
+                                (.register event java-type)))))))
+
+        (log/info "[BOOTSTRAP_TRACE] mod-init runtime path end")
+        [[] nil]
+        (catch IllegalArgumentException e
+          (let [msg (some-> e .getMessage str)]
+            (if (and msg (.contains msg "Not bootstrapped"))
+              (do
+                (log/warn "Skipping Forge mod-init during checkClojure: Minecraft registries not bootstrapped")
+                [[] nil])
+              (throw e))))))))
 
 ;; (defn start-repl-safe []
 ;;   (let [cl (.getContextClassLoader (Thread/currentThread))]

@@ -17,12 +17,14 @@
   "Load and register all terminal apps."
   []
   (try
-    ;; Load all app namespaces (they self-register via register-app!)
-    (require 'cn.li.ac.terminal.apps.skill-tree)
-    (require 'cn.li.ac.terminal.apps.settings)
-    (require 'cn.li.ac.terminal.apps.tutorial)
-    (require 'cn.li.ac.terminal.apps.freq-transmitter)
-    (require 'cn.li.ac.terminal.apps.about)
+    ;; Load all app namespaces, then perform explicit registration.
+    (doseq [init-sym '[cn.li.ac.terminal.apps.skill-tree/init-skill-tree-app!
+                      cn.li.ac.terminal.apps.settings/init-settings-app!
+                      cn.li.ac.terminal.apps.tutorial/init-tutorial-app!
+                      cn.li.ac.terminal.apps.freq-transmitter/init-freq-transmitter-app!
+                      cn.li.ac.terminal.apps.about/init-about-app!]]
+      (when-let [init-fn (requiring-resolve init-sym)]
+        (init-fn)))
 
     (log/info "Registered" (app-reg/app-count) "terminal apps")
     (catch Exception e

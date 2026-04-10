@@ -39,10 +39,6 @@
 ;; Message ID Helper
 ;; ============================================================================
 
-(msg-registry/register-block-messages!
-  :matrix
-  [:gather-info :init :change-ssid :change-password :sync-state])
-
 (defn- msg
   "Generate message ID for matrix actions."
   [action]
@@ -91,17 +87,37 @@
             be))))))
 
 ;; Slot indexes are lazily resolved from the slot schema.
-;; `delay` ensures the schema is already registered by the time the value is first needed
-;; (gui.clj requires block.clj, so gui.clj loads after us and registers the schema later).
+;; `delay` avoids schema access during namespace load.
 (def ^:private matrix-slot-schema-id :wireless-matrix)
+(defonce ^:private matrix-slot-schema-installed? (atom false))
+
+(defn ensure-matrix-slot-schema!
+  []
+  (when (compare-and-set! matrix-slot-schema-installed? false true)
+    (slot-schema/register-slot-schema!
+      {:schema-id matrix-slot-schema-id
+       :slots [{:id :plate-a :type :plate :x 78 :y 11}
+               {:id :plate-b :type :plate :x 53 :y 60}
+               {:id :plate-c :type :plate :x 104 :y 60}
+               {:id :core :type :core :x 78 :y 36}]}))
+  matrix-slot-schema-id)
+
 (def ^:private matrix-plate-slot-indexes
-  (delay (slot-schema/slot-indexes-by-type matrix-slot-schema-id :plate)))
+  (delay
+    (ensure-matrix-slot-schema!)
+    (slot-schema/slot-indexes-by-type matrix-slot-schema-id :plate)))
 (def ^:private matrix-core-slot-index
-  (delay (slot-schema/slot-index matrix-slot-schema-id :core)))
+  (delay
+    (ensure-matrix-slot-schema!)
+    (slot-schema/slot-index matrix-slot-schema-id :core)))
 (def ^:private matrix-slot-indexes
-  (delay (slot-schema/all-slot-indexes matrix-slot-schema-id)))
+  (delay
+    (ensure-matrix-slot-schema!)
+    (slot-schema/all-slot-indexes matrix-slot-schema-id)))
 (def ^:private matrix-slot-count
-  (delay (slot-schema/tile-slot-count matrix-slot-schema-id)))
+  (delay
+    (ensure-matrix-slot-schema!)
+    (slot-schema/tile-slot-count matrix-slot-schema-id)))
 
 (defn- slot-has-stack?
   [stk]
@@ -579,29 +595,6 @@
 ;; Part 9: Registration
 ;; ============================================================================
 
-;; Register tile logic
-(tile-logic/register-tile-kind!
-  :wireless-matrix
-  {:tick-fn matrix-scripted-tick-fn
-   :read-nbt-fn matrix-scripted-load-fn
-   :write-nbt-fn matrix-scripted-save-fn})
-
-(def wireless-matrix-tile
-  (tdsl/register-tile!
-    (tdsl/create-tile-spec
-      "wireless-matrix"
-      {:registry-name "matrix"
-       :impl :scripted
-       :blocks ["wireless-matrix" "wireless-matrix-part"]
-       :tile-kind :wireless-matrix})))
-
-;; Register capability and container
-(platform-cap/declare-capability! :wireless-matrix IWirelessMatrix
-  (fn [be _side] (->WirelessMatrixImpl be)))
-
-(tile-logic/register-tile-capability! "wireless-matrix" :wireless-matrix)
-(tile-logic/register-container! "wireless-matrix" matrix-container-fns)
-
 ;; Register network handlers
 (defn register-network-handlers!
   "Register all network message handlers."
@@ -624,34 +617,54 @@
 
   (log/info "Matrix network handlers registered"))
 
-;; Register block definition
-(bdsl/defmultiblock 'wireless-matrix
-  :multi-block {:positions [[0 0 0] [0 0 1] [1 0 1] [1 0 0]
-                            [0 1 0] [0 1 1] [1 1 1] [1 1 0]]
-                :rotation-center [1.0 0 1.0]}
-  :common {:physical {:material :stone
-                      :hardness 3.0
-                      :resistance 6.0
-                      :requires-tool true
-                      :harvest-tool :pickaxe
-                      :harvest-level 1
-                      :sounds :stone}
-           :rendering {:light-level 1.0}}
-  :controller {:registry-name "matrix"
-               :rendering {:flat-item-icon? true}
-               :events {:on-right-click (handle-matrix-right-click)
-                        :on-place (handle-matrix-place)
-                        :on-break (handle-matrix-break)}}
-  :part {:registry-name "matrix_part"
-         :rendering {:model-parent "minecraft:block/block"}
-         :events {:on-right-click (handle-matrix-right-click)}})
-
 ;; ============================================================================
-;; Part 10: Auto-Registration Hooks
+;; Part 10: Runtime Installation (Scheme A)
 ;; ============================================================================
 
-;; Register network handlers with hook system
-(hooks/register-network-handler! register-network-handlers!)
+(defonce ^:private wireless-matrix-installed? (atom false))
 
-;; Register client renderer
-(hooks/register-client-renderer! 'cn.li.ac.block.wireless-matrix.render/init!)
+(defn init-wireless-matrix!
+  []
+  (when (compare-and-set! wireless-matrix-installed? false true)
+    (ensure-matrix-slot-schema!)
+    (msg-registry/register-block-messages!
+      :matrix
+      [:gather-info :init :change-ssid :change-password :sync-state])
+    (tile-logic/register-tile-kind!
+      :wireless-matrix
+      {:tick-fn matrix-scripted-tick-fn
+       :read-nbt-fn matrix-scripted-load-fn
+       :write-nbt-fn matrix-scripted-save-fn})
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "wireless-matrix"
+        {:registry-name "matrix"
+         :impl :scripted
+         :blocks ["wireless-matrix" "wireless-matrix-part"]
+         :tile-kind :wireless-matrix}))
+    (platform-cap/declare-capability! :wireless-matrix IWirelessMatrix
+      (fn [be _side] (->WirelessMatrixImpl be)))
+    (tile-logic/register-tile-capability! "wireless-matrix" :wireless-matrix)
+    (tile-logic/register-container! "wireless-matrix" matrix-container-fns)
+    (bdsl/defmultiblock 'wireless-matrix
+      :multi-block {:positions [[0 0 0] [0 0 1] [1 0 1] [1 0 0]
+                                [0 1 0] [0 1 1] [1 1 1] [1 1 0]]
+                    :rotation-center [1.0 0 1.0]}
+      :common {:physical {:material :stone
+                          :hardness 3.0
+                          :resistance 6.0
+                          :requires-tool true
+                          :harvest-tool :pickaxe
+                          :harvest-level 1
+                          :sounds :stone}
+               :rendering {:light-level 1.0}}
+      :controller {:registry-name "matrix"
+                   :rendering {:flat-item-icon? true}
+                   :events {:on-right-click (handle-matrix-right-click)
+                            :on-place (handle-matrix-place)
+                            :on-break (handle-matrix-break)}}
+      :part {:registry-name "matrix_part"
+             :rendering {:model-parent "minecraft:block/block"}
+             :events {:on-right-click (handle-matrix-right-click)}})
+    (hooks/register-network-handler! register-network-handlers!)
+    (hooks/register-client-renderer! 'cn.li.ac.block.wireless-matrix.render/init!)))

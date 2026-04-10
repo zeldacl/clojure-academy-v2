@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.apps.tutorial
   "Tutorial app - Learn how to use abilities."
   (:require [cn.li.ac.terminal.app-registry :as reg]
+            [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.ac.config.modid :as modid]
@@ -69,9 +70,7 @@
   [player]
   (log/info "Opening tutorial for player:" player)
   (let [gui (create-tutorial-gui player)]
-    ;; Open via platform bridge
-    (when-let [open-fn (requiring-resolve 'cn.li.forge1201.client.terminal-screen-bridge/open-simple-gui!)]
-      (open-fn gui "Tutorial"))))
+    (client-bridge/open-simple-gui! gui "Tutorial")))
 
 ;; ============================================================================
 ;; App Registration
@@ -85,4 +84,9 @@
    :gui-fn 'cn.li.ac.terminal.apps.tutorial/open-tutorial-gui
    :category :help})
 
-(reg/register-app! tutorial-app)
+(defonce ^:private tutorial-app-installed? (atom false))
+
+(defn init-tutorial-app!
+  []
+  (when (compare-and-set! tutorial-app-installed? false true)
+    (reg/register-app! tutorial-app)))

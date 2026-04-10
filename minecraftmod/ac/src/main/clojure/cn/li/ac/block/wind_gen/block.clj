@@ -27,13 +27,6 @@
             [cn.li.ac.config.modid :as modid])
   (:import [cn.li.acapi.wireless IWirelessGenerator]))
 
-;; ============================================================================
-;; Message Registration
-;; ============================================================================
-
-(msg-registry/register-block-messages! :wind-gen
-  [:get-status-main :get-status-base])
-
 (defn- msg [action] (msg-registry/msg :wind-gen action))
 
 ;; ============================================================================
@@ -332,97 +325,85 @@
   (net-server/register-handler (msg :get-status-base) handle-get-status-base)
   (log/info "Wind Generator network handlers registered"))
 
-;; ============================================================================
-;; Tile Registration
-;; ============================================================================
-
-(tdsl/deftile wind-gen-main-tile
-  :id "wind-gen-main"
-  :registry-name "wind_gen_main"
-  :impl :scripted
-  :blocks ["wind-gen-main"]
-  :tick-fn main-tick-fn
-  :read-nbt-fn main-scripted-load-fn
-  :write-nbt-fn main-scripted-save-fn)
-
-(tdsl/deftile wind-gen-base-tile
-  :id "wind-gen-base"
-  :registry-name "wind_gen_base"
-  :impl :scripted
-  :blocks ["wind-gen-base"]
-  :tick-fn base-tick-fn
-  :read-nbt-fn base-scripted-load-fn
-  :write-nbt-fn base-scripted-save-fn)
-
-(tdsl/deftile wind-gen-pillar-tile
-  :id "wind-gen-pillar"
-  :registry-name "wind_gen_pillar"
-  :impl :scripted
-  :blocks ["wind-gen-pillar"]
-  :tick-fn pillar-tick-fn
-  :read-nbt-fn pillar-scripted-load-fn
-  :write-nbt-fn pillar-scripted-save-fn)
-
-;; ============================================================================
-;; Capability Registration
-;; ============================================================================
-
-(platform-cap/declare-capability! :wind-generator IWirelessGenerator
-  (fn [be _side] (impls/->WirelessGeneratorImpl be)))
-
-(tile-logic/register-tile-capability! "wind-gen-base" :wind-generator)
-
-;; ============================================================================
-;; Block Definitions
-;; ============================================================================
-
-(bdsl/defblock wind-gen-main
-  :registry-name "wind_gen_main"
-  :physical {:material :metal
-             :hardness 3.0
-             :resistance 6.0
-             :requires-tool true
-             :harvest-tool :pickaxe
-             :harvest-level 1
-             :sounds :metal}
-  :rendering {:model-parent "minecraft:block/cube_all"
-              :textures {:all (modid/asset-path "block" "wind_gen_main")}
-              :flat-item-icon? true}
-  :events {:on-right-click open-wind-main-gui!})
-
-(bdsl/defblock wind-gen-base
-  :registry-name "wind_gen_base"
-  :physical {:material :metal
-             :hardness 3.0
-             :resistance 6.0
-             :requires-tool true
-             :harvest-tool :pickaxe
-             :harvest-level 1
-             :sounds :metal}
-  :rendering {:model-parent "minecraft:block/cube_all"
-              :textures {:all (modid/asset-path "block" "wind_gen_base")}
-              :flat-item-icon? true}
-  :events {:on-right-click open-wind-base-gui!})
-
-(bdsl/defblock wind-gen-pillar
-  :registry-name "wind_gen_pillar"
-  :physical {:material :metal
-             :hardness 3.0
-             :resistance 6.0
-             :requires-tool true
-             :harvest-tool :pickaxe
-             :harvest-level 1
-             :sounds :metal}
-  :rendering {:model-parent "minecraft:block/cube_all"
-              :textures {:all (modid/asset-path "block" "wind_gen_pillar")}
-              :flat-item-icon? true})
-
-;; ============================================================================
-;; Auto-Registration
-;; ============================================================================
-
-(hooks/register-network-handler! register-network-handlers!)
+(defonce ^:private wind-gen-installed? (atom false))
 
 (defn init-wind-gen!
   []
-  (log/info "Initialized Wind Generator blocks (3-part structure)"))
+  (when (compare-and-set! wind-gen-installed? false true)
+    (msg-registry/register-block-messages! :wind-gen [:get-status-main :get-status-base])
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "wind-gen-main"
+        {:registry-name "wind_gen_main"
+         :impl :scripted
+         :blocks ["wind-gen-main"]
+         :tick-fn main-tick-fn
+         :read-nbt-fn main-scripted-load-fn
+         :write-nbt-fn main-scripted-save-fn}))
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "wind-gen-base"
+        {:registry-name "wind_gen_base"
+         :impl :scripted
+         :blocks ["wind-gen-base"]
+         :tick-fn base-tick-fn
+         :read-nbt-fn base-scripted-load-fn
+         :write-nbt-fn base-scripted-save-fn}))
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "wind-gen-pillar"
+        {:registry-name "wind_gen_pillar"
+         :impl :scripted
+         :blocks ["wind-gen-pillar"]
+         :tick-fn pillar-tick-fn
+         :read-nbt-fn pillar-scripted-load-fn
+         :write-nbt-fn pillar-scripted-save-fn}))
+    (platform-cap/declare-capability! :wind-generator IWirelessGenerator
+      (fn [be _side] (impls/->WirelessGeneratorImpl be)))
+    (tile-logic/register-tile-capability! "wind-gen-base" :wind-generator)
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "wind-gen-main"
+        {:registry-name "wind_gen_main"
+         :physical {:material :metal
+                    :hardness 3.0
+                    :resistance 6.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 1
+                    :sounds :metal}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "wind_gen_main")}
+                     :flat-item-icon? true}
+         :events {:on-right-click open-wind-main-gui!}}))
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "wind-gen-base"
+        {:registry-name "wind_gen_base"
+         :physical {:material :metal
+                    :hardness 3.0
+                    :resistance 6.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 1
+                    :sounds :metal}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "wind_gen_base")}
+                     :flat-item-icon? true}
+         :events {:on-right-click open-wind-base-gui!}}))
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "wind-gen-pillar"
+        {:registry-name "wind_gen_pillar"
+         :physical {:material :metal
+                    :hardness 3.0
+                    :resistance 6.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 1
+                    :sounds :metal}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "wind_gen_pillar")}
+                     :flat-item-icon? true}}))
+    (hooks/register-network-handler! register-network-handlers!)
+    (log/info "Initialized Wind Generator blocks (3-part structure)")))

@@ -22,7 +22,9 @@
             [cn.li.ac.content.ability.vecmanip.directed-blastwave :as directed-blastwave]
             [cn.li.ac.content.ability.vecmanip.storm-wing :as storm-wing]
             [cn.li.ac.content.ability.vecmanip.blood-retrograde :as blood-retrograde]
-            [cn.li.ac.content.ability.vecmanip.plasma-cannon :as plasma-cannon]))
+            [cn.li.ac.content.ability.vecmanip.plasma-cannon :as plasma-cannon]
+            [cn.li.ac.ability.category :as category]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn- add-skill-exp!
   [player-id skill-id amount]
@@ -472,3 +474,17 @@
   :on-key-up plasma-cannon/plasma-cannon-on-key-up
   :on-key-abort plasma-cannon/plasma-cannon-on-key-abort
   :prerequisites [{:skill-id :directed-blastwave :min-exp 0.7}])
+
+(defonce ^:private ability-content-installed? (atom false))
+
+(defn init-ability-content!
+  []
+  (when (compare-and-set! ability-content-installed? false true)
+    (doseq [[_sym var] (ns-publics *ns*)]
+      (let [v (var-get var)]
+        (when (map? v)
+          (case (:ac/content-type v)
+            :category (category/register-category! (dissoc v :ac/content-type))
+            :skill (skill/register-skill! (dissoc v :ac/content-type))
+            nil))))
+    (log/info "Ability content initialized")))

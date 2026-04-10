@@ -17,6 +17,21 @@
                    cn.li.ac.block.solar-gen.gui]]
     (require ns-sym)))
 
-(when (not= "true" (System/getProperty "ac.check.clojure"))
-    (load-wireless-blocks!)
-    (msg-reg/register-all!))
+(defn- init-wireless-block-definitions! []
+    (doseq [init-sym '[cn.li.ac.block.wireless-matrix.block/init-wireless-matrix!
+                                        cn.li.ac.block.wireless-matrix.gui/init-wireless-matrix-gui!
+                                        cn.li.ac.block.wireless-node.block/init-wireless-nodes!
+                                        cn.li.ac.block.wireless-node.gui/init!
+                                        cn.li.ac.block.solar-gen.block/init-solar-gen!
+                                        cn.li.ac.block.solar-gen.gui/init-solar-gui!]]
+        (when-let [init-fn (requiring-resolve init-sym)]
+            (init-fn))))
+
+(defonce ^:private wireless-blocks-installed? (atom false))
+
+(defn init-wireless-blocks!
+    []
+    (when (compare-and-set! wireless-blocks-installed? false true)
+        (load-wireless-blocks!)
+        (init-wireless-block-definitions!)
+        (msg-reg/register-all!)))

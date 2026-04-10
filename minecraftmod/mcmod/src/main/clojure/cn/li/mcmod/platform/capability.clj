@@ -3,8 +3,12 @@
 
   ac code calls declare-capability! to register a capability type and its
   handler factory. forge/fabric platform implementations bind
-  *declare-capability-impl* to perform the platform-specific slot assignment."
-  (:require [cn.li.mcmod.util.log :as log]))
+  *declare-capability-impl* to perform the platform-specific slot assignment.")
+
+(defn- log-info
+  [& xs]
+  (when-let [f (requiring-resolve 'cn.li.mcmod.util.log/info)]
+    (apply f xs)))
 
 ;; ============================================================================
 ;; Registry
@@ -49,7 +53,7 @@
   (swap! capability-type-registry assoc key
          {:java-type         java-type
           :handler-factory-fn handler-factory-fn})
-  (log/info "Declared capability" key "->" (.getName ^Class java-type))
+  (log-info "Declared capability" key "->" (.getName ^Class java-type))
   (when *declare-capability-impl*
     (*declare-capability-impl* key java-type))
   nil)

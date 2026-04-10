@@ -23,16 +23,27 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.ac.registry.hooks :as hooks]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.config.modid :as modid]))
+            [cn.li.ac.registry.hooks :as hooks]))
+
+(defn- log-info
+  [& xs]
+  (when-let [f (requiring-resolve 'cn.li.mcmod.util.log/info)]
+    (apply f xs)))
+
+(defn- log-error
+  [& xs]
+  (when-let [f (requiring-resolve 'cn.li.mcmod.util.log/error)]
+    (apply f xs)))
+
+(defn- asset-path
+  [category filename]
+  (if-let [f (requiring-resolve 'cn.li.ac.config.modid/asset-path)]
+    (f category filename)
+    (str "my_mod:" category "/" filename)))
 
 ;; ============================================================================
 ;; Message Registration
 ;; ============================================================================
-
-(msg-registry/register-block-messages! :imag-fusor
-  [:get-status])
 
 (defn- msg [action] (msg-registry/msg :imag-fusor action))
 
@@ -132,7 +143,7 @@
 
 (defn- fusor-tick-fn
   "Tick handler for imaginary fusor"
-  [level pos _block-state be]
+  [level _pos _block-state be]
   (when (and level (not (world/world-is-client-side level)))
     (let [state (or (platform-be/get-custom-state be) fusor-default-state)
           ticker (inc (get state :update-ticker 0))
@@ -217,9 +228,9 @@
     (try
       (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
         (open-gui-by-type player :imag-fusor world pos)
-        (do (log/error "Imag Fusor GUI open fn not found") nil))
+        (do (log-error "Imag Fusor GUI open fn not found") nil))
       (catch Exception e
-        (log/error "Failed to open Imag Fusor GUI:" (ex-message e))
+        (log-error "Failed to open Imag Fusor GUI:" (ex-message e))
         nil))))
 
 ;; ============================================================================
@@ -240,47 +251,46 @@
 
 (defn register-network-handlers! []
   (net-server/register-handler (msg :get-status) handle-get-status)
-  (log/info "Imaginary Fusor network handlers registered"))
+  (log-info "Imaginary Fusor network handlers registered"))
 
 ;; ============================================================================
 ;; Tile Registration
 ;; ============================================================================
 
-(tdsl/deftile imag-fusor-tile
-  :id "imag-fusor"
-  :registry-name "imag_fusor"
-  :impl :scripted
-  :blocks ["imag-fusor"]
-  :tick-fn fusor-tick-fn
-  :read-nbt-fn fusor-scripted-load-fn
-  :write-nbt-fn fusor-scripted-save-fn)
-
-(tile-logic/register-container! "imag-fusor" fusor-container-fns)
-
 ;; ============================================================================
-;; Block Definition
+;; Runtime Installation (Scheme A)
 ;; ============================================================================
 
-(bdsl/defblock imag-fusor
-  :registry-name "imag_fusor"
-  :physical {:material :metal
-             :hardness 3.5
-             :resistance 6.0
-             :requires-tool true
-             :harvest-tool :pickaxe
-             :harvest-level 1
-             :sounds :metal}
-  :rendering {:model-parent "minecraft:block/cube_all"
-              :textures {:all (modid/asset-path "block" "imag_fusor")}
-              :flat-item-icon? true}
-  :events {:on-right-click open-fusor-gui!})
-
-;; ============================================================================
-;; Auto-Registration
-;; ============================================================================
-
-(hooks/register-network-handler! register-network-handlers!)
+(defonce ^:private imag-fusor-installed? (atom false))
 
 (defn init-imag-fusor!
   []
-  (log/info "Initialized Imaginary Fusor block"))
+  (when (compare-and-set! imag-fusor-installed? false true)
+    (msg-registry/register-block-messages! :imag-fusor [:get-status])
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "imag-fusor"
+        {:registry-name "imag_fusor"
+         :impl :scripted
+         :blocks ["imag-fusor"]
+         :tick-fn fusor-tick-fn
+         :read-nbt-fn fusor-scripted-load-fn
+         :write-nbt-fn fusor-scripted-save-fn}))
+    (tile-logic/register-container! "imag-fusor" fusor-container-fns)
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "imag-fusor"
+        {:registry-name "imag_fusor"
+         :physical {:material :metal
+                    :hardness 3.5
+                    :resistance 6.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 1
+                    :sounds :metal}
+         :rendering {:model-parent "minecraft:block/cube_all"
+               :textures {:all (asset-path "block" "imag_fusor")}
+                     :flat-item-icon? true}
+         :events {:on-right-click open-fusor-gui!}}))
+    (hooks/register-network-handler! register-network-handlers!)
+          (log-info "Initialized Imaginary Fusor block")))

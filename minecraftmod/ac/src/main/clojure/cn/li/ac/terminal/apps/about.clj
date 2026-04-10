@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.apps.about
   "About app - Credits and information."
   (:require [cn.li.ac.terminal.app-registry :as reg]
+            [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.ac.config.modid :as modid]
@@ -62,9 +63,7 @@
   [player]
   (log/info "Opening about screen for player:" player)
   (let [gui (create-about-gui player)]
-    ;; Open via platform bridge
-    (when-let [open-fn (requiring-resolve 'cn.li.forge1201.client.terminal-screen-bridge/open-simple-gui!)]
-      (open-fn gui "About"))))
+    (client-bridge/open-simple-gui! gui "About")))
 
 ;; ============================================================================
 ;; App Registration
@@ -78,4 +77,9 @@
    :gui-fn 'cn.li.ac.terminal.apps.about/open-about-gui
    :category :help})
 
-(reg/register-app! about-app)
+(defonce ^:private about-app-installed? (atom false))
+
+(defn init-about-app!
+  []
+  (when (compare-and-set! about-app-installed? false true)
+    (reg/register-app! about-app)))

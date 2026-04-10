@@ -21,20 +21,6 @@
 
 (def energy-converter-elite-id :energy-converter-elite)
 
-(def energy-converter-elite-slot-schema
-  (slot-schema/register-slot-schema!
-    {:schema-id energy-converter-elite-id
-     :slots [{:id :input :type :item :x 56 :y 35}
-             {:id :output :type :item :x 56 :y 71}]}))
-
-;; ============================================================================
-;; Message Registration
-;; ============================================================================
-
-(msg-registry/register-block-messages!
-  :energy-converter-elite
-  [:get-status :set-mode])
-
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)
 
@@ -153,15 +139,36 @@
        (contains? container :mode)
        (= :energy-converter-elite (:container-type container))))
 
-(def ^:private converter-slot-layout
-  (slot-schema/get-slot-layout energy-converter-elite-id))
+(defonce ^:private energy-converter-elite-gui-installed? (atom false))
 
-(gui-dsl/defgui-with-lazy-fns energy-converter-elite
-  :gui-id 12
-  :namespace 'cn.li.ac.block.energy-converter-elite.gui
-  :display-name "Elite Energy Converter"
-  :gui-type :energy-converter-elite
-  :registry-name "energy_converter_elite_gui"
-  :screen-factory-fn-kw :create-converter-screen
-  :slot-layout converter-slot-layout
-  :container-predicate converter-container?)
+(defn init-energy-converter-elite-gui!
+  []
+  (when (compare-and-set! energy-converter-elite-gui-installed? false true)
+    (slot-schema/register-slot-schema!
+      {:schema-id energy-converter-elite-id
+       :slots [{:id :input :type :item :x 56 :y 35}
+               {:id :output :type :item :x 56 :y 71}]})
+    (msg-registry/register-block-messages! :energy-converter-elite [:get-status :set-mode])
+    (gui-dsl/register-gui!
+      (gui-dsl/create-gui-spec
+        "energy-converter-elite"
+        {:gui-id 12
+         :display-name "Elite Energy Converter"
+         :gui-type :energy-converter-elite
+         :registry-name "energy_converter_elite_gui"
+         :screen-factory-fn-kw :create-converter-screen
+         :slot-layout (slot-schema/get-slot-layout energy-converter-elite-id)
+         :container-predicate converter-container?
+         :container-fn create-container
+         :screen-fn create-screen
+         :tick-fn tick!
+         :sync-get get-sync-data
+         :sync-apply apply-sync-data!
+         :validate-fn still-valid?
+         :close-fn on-close
+         :button-click-fn handle-button-click!
+         :slot-count-fn get-slot-count
+         :slot-get-fn get-slot-item
+         :slot-set-fn set-slot-item!
+         :slot-can-place-fn can-place-item?
+         :slot-changed-fn slot-changed!}))))

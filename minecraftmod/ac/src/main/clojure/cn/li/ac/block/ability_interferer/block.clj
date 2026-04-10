@@ -27,13 +27,6 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid]))
 
-;; ============================================================================
-;; Message Registration
-;; ============================================================================
-
-(msg-registry/register-block-messages! :ability-interferer
-  [:get-status :change-range :toggle-enabled :add-to-whitelist :remove-from-whitelist])
-
 (defn- msg [action] (msg-registry/msg :ability-interferer action))
 
 ;; ============================================================================
@@ -250,45 +243,41 @@
   (log/info "Ability Interferer network handlers registered"))
 
 ;; ============================================================================
-;; Tile Registration
+;; Runtime Installation (Scheme A)
 ;; ============================================================================
 
-(tdsl/deftile ability-interferer-tile
-  :id "ability-interferer"
-  :registry-name "ability_interferer"
-  :impl :scripted
-  :blocks ["ability-interferer"]
-  :tick-fn interferer-tick-fn
-  :read-nbt-fn interferer-scripted-load-fn
-  :write-nbt-fn interferer-scripted-save-fn)
-
-(tile-logic/register-container! "ability-interferer" interferer-container-fns)
-
-;; ============================================================================
-;; Block Definition
-;; ============================================================================
-
-(bdsl/defblock ability-interferer
-  :registry-name "ability_interferer"
-  :physical {:material :metal
-             :hardness 3.0
-             :resistance 8.0
-             :requires-tool true
-             :harvest-tool :pickaxe
-             :harvest-level 2
-             :sounds :metal}
-  :rendering {:model-parent "minecraft:block/cube_all"
-              :textures {:all (modid/asset-path "block" "ability_interferer")}
-              :flat-item-icon? true
-              :light-level 3}
-  :events {:on-right-click open-interferer-gui!})
-
-;; ============================================================================
-;; Auto-Registration
-;; ============================================================================
-
-(hooks/register-network-handler! register-network-handlers!)
+(defonce ^:private ability-interferer-installed? (atom false))
 
 (defn init-ability-interferer!
   []
-  (log/info "Initialized Ability Interferer block"))
+  (when (compare-and-set! ability-interferer-installed? false true)
+    (msg-registry/register-block-messages! :ability-interferer
+      [:get-status :change-range :toggle-enabled :add-to-whitelist :remove-from-whitelist])
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "ability-interferer"
+        {:registry-name "ability_interferer"
+         :impl :scripted
+         :blocks ["ability-interferer"]
+         :tick-fn interferer-tick-fn
+         :read-nbt-fn interferer-scripted-load-fn
+         :write-nbt-fn interferer-scripted-save-fn}))
+    (tile-logic/register-container! "ability-interferer" interferer-container-fns)
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "ability-interferer"
+        {:registry-name "ability_interferer"
+         :physical {:material :metal
+                    :hardness 3.0
+                    :resistance 8.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 2
+                    :sounds :metal}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "ability_interferer")}
+                     :flat-item-icon? true
+                     :light-level 3}
+         :events {:on-right-click open-interferer-gui!}}))
+    (hooks/register-network-handler! register-network-handlers!)
+    (log/info "Initialized Ability Interferer block")))

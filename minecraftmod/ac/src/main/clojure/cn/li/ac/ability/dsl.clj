@@ -30,8 +30,7 @@
   (let [kv-map    (apply hash-map opts)
         id        (get kv-map :id (keyword (name sym)))
         rest-map  (dissoc kv-map :id)]
-    `(let [category-map# (assoc ~rest-map :id ~id)]
-       (cat/register-category! category-map#)
+    `(let [category-map# (assoc ~rest-map :id ~id :ac/content-type :category)]
        (def ~sym category-map#))))
 
 ;; ============================================================================
@@ -46,6 +45,5 @@
   (let [kv-map  (apply hash-map opts)
         id      (get kv-map :id (keyword (name sym)))
         rest-map (dissoc kv-map :id)]
-    `(let [skill-map# (assoc ~rest-map :id ~id)]
-       (sk/register-skill! skill-map#)
+    `(let [skill-map# (assoc ~rest-map :id ~id :ac/content-type :skill)]
        (def ~sym skill-map#))))

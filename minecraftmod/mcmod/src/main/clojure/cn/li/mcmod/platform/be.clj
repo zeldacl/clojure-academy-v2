@@ -3,10 +3,32 @@
 
   ac code should use these functions instead of calling Java interop directly.
   Platform implementations must bind *be-capability-slot-fn* during init so
-  that get-capability-slot can retrieve Forge Capability objects by key."
-  (:require [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.platform.capability :as platform-cap]
-            [cn.li.mcmod.util.log :as log]))
+  that get-capability-slot can retrieve Forge Capability objects by key.")
+
+(defn- call-log
+  [level & xs]
+  (when-let [f (requiring-resolve (symbol "cn.li.mcmod.util.log" (name level)))]
+    (apply f xs)))
+
+(defn- world-get-tile-entity*
+  [w block-pos]
+  (when-let [f (requiring-resolve 'cn.li.mcmod.platform.world/world-get-tile-entity)]
+    (f w block-pos)))
+
+(defn- capability-present?
+  [lo]
+  (when-let [f (requiring-resolve 'cn.li.mcmod.platform.capability/is-present?)]
+    (f lo)))
+
+(defn- capability-or-else
+  [lo default]
+  (when-let [f (requiring-resolve 'cn.li.mcmod.platform.capability/or-else)]
+    (f lo default)))
+
+(defn- capability-get
+  [provider cap side]
+  (when-let [f (requiring-resolve 'cn.li.mcmod.platform.capability/get-capability)]
+    (f provider cap side)))
 
 ;; ============================================================================
 ;; BlockEntity Protocol
@@ -60,9 +82,9 @@
   "Get the BlockEntity at world+pos. Returns nil if none."
   [w block-pos]
   (try
-    (world/world-get-tile-entity w block-pos)
+    (world-get-tile-entity* w block-pos)
     (catch Exception e
-      (log/warn "get-block-entity failed:" (ex-message e))
+      (call-log :warn "get-block-entity failed:" (ex-message e))
       nil)))
 
 (defn get-custom-state
@@ -73,7 +95,7 @@
     (try
       (be-get-custom-state be)
       (catch Exception e
-        (log/warn "get-custom-state failed:" (ex-message e))
+        (call-log :warn "get-custom-state failed:" (ex-message e))
         nil))))
 
 (defn set-custom-state!
@@ -85,7 +107,7 @@
       (be-set-custom-state! be state)
       (be-set-changed! be)
       (catch Exception e
-        (log/error "set-custom-state! failed:" (ex-message e))))))
+        (call-log :error "set-custom-state! failed:" (ex-message e))))))
 
 (defn get-block-id
   "Get the block ID string from a ScriptedBlockEntity.
@@ -95,7 +117,7 @@
     (try
       (be-get-block-id be)
       (catch Exception e
-        (log/warn "get-block-id failed:" (ex-message e))
+        (call-log :warn "get-block-id failed:" (ex-message e))
         nil))))
 
 (defn set-changed!
@@ -106,7 +128,7 @@
     (try
       (be-set-changed! be)
       (catch Exception e
-        (log/warn "set-changed! failed:" (ex-message e))
+        (call-log :warn "set-changed! failed:" (ex-message e))
         nil))))
 
 (defn get-capability-slot
@@ -127,8 +149,8 @@
     (try
       (let [cap (*be-capability-slot-fn* key-string)]
         (when cap
-          (let [lo (platform-cap/get-capability be cap nil)]
-            (when (platform-cap/is-present? lo)
-              (platform-cap/or-else lo nil)))))
+          (let [lo (capability-get be cap nil)]
+            (when (and lo (capability-present? lo))
+              (capability-or-else lo nil)))))
       (catch Exception _
         nil))))

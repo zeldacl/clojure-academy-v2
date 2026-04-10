@@ -21,10 +21,42 @@
             [cn.li.ac.registry.content-namespaces :as content-ns]
             [cn.li.ac.registry.hooks :as hooks]))
 
+(defonce runtime-content-loader
+  (delay
+    ;; Load all content namespaces (triggers DSL macros and hook registration)
+    (content-ns/load-all!)
+
+    ;; Auto-register GUI screen factories AFTER GUI DSL metadata is loaded.
+    ;; If done before `content-ns/load-all!`, GUI IDs can still be empty and
+    ;; screen creation falls back to the black placeholder screen.
+    (let [gui-ids (gui-adapter/get-all-gui-ids)]
+      (log/info "Registering screen factories for GUI IDs:" gui-ids)
+      (doseq [gui-id gui-ids]
+        (when-let [gui-type (platform-gui/get-gui-type gui-id)]
+          (let [screen-fn-kw (keyword (str "create-" (name gui-type) "-screen"))]
+            (gui-adapter/register-screen-factory!
+              screen-fn-kw
+              (partial screen-factory/create-screen gui-type))
+            (log/info "Registered screen factory" screen-fn-kw "for GUI ID" gui-id)))))
+
+    ;; Initialize event metadata system AFTER content is loaded
+    ;; This syncs block event handlers from the DSL registry
+    (event-metadata/init-event-metadata!)
+    ;; Call all registered network handlers
+    (hooks/call-all-network-handlers!)
+    ;; Register generic set-tab handler for tabbed GUIs (inv-window + panels)
+    (tabbed-gui/register-set-tab-handler!)))
+
+(defn activate-runtime-content!
+  "Load and initialize AC runtime content once.
+  Safe to call repeatedly from platform lifecycle code."
+  []
+  (force runtime-content-loader)
+  nil)
+
 (defn init
   "Core init hook invoked by per-version entry classes."
   []
-  (let [check-mode? (= "true" (System/getProperty "ac.check.clojure"))]
   ;; Bind mod-id into mcmod config so resource helpers and resource-location
   ;; injection become consistent across modules.
   (alter-var-root #'mcmod-config/*mod-id*
@@ -97,33 +129,7 @@
   ;; Install Java wireless query API bridge onto the wireless system.
   (legacy-api-bridge/install-wireless-query-api-bridge!)
   ;; Register distributed AC config descriptors/defaults into the shared registry.
-  (config-registry/init-configs!)
-  (when check-mode?
-    (log/info "Skipping runtime content bootstrap during checkClojure"))
-  (when-not check-mode?
-  ;; Load all content namespaces (triggers DSL macros and hook registration)
-  (content-ns/load-all!)
-
-  ;; Auto-register GUI screen factories AFTER GUI DSL metadata is loaded.
-  ;; If done before `content-ns/load-all!`, GUI IDs can still be empty and
-  ;; screen creation falls back to the black placeholder screen.
-  (let [gui-ids (gui-adapter/get-all-gui-ids)]
-    (log/info "Registering screen factories for GUI IDs:" gui-ids)
-    (doseq [gui-id gui-ids]
-      (when-let [gui-type (platform-gui/get-gui-type gui-id)]
-        (let [screen-fn-kw (keyword (str "create-" (name gui-type) "-screen"))]
-          (gui-adapter/register-screen-factory!
-            screen-fn-kw
-            (partial screen-factory/create-screen gui-type))
-          (log/info "Registered screen factory" screen-fn-kw "for GUI ID" gui-id)))))
-
-  ;; Initialize event metadata system AFTER content is loaded
-  ;; This syncs block event handlers from the DSL registry
-  (event-metadata/init-event-metadata!)
-  ;; Call all registered network handlers
-  (hooks/call-all-network-handlers!)
-  ;; Register generic set-tab handler for tabbed GUIs (inv-window + panels)
-  (tabbed-gui/register-set-tab-handler!))))
+  (config-registry/init-configs!))
 
 (defn on-block-right-click
   "Backwards-compatible forwarding shim. Actual implementation lives in

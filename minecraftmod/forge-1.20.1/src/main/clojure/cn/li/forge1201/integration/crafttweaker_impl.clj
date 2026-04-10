@@ -6,16 +6,26 @@
 
   CraftTweaker integration is optional - if CraftTweaker is not present,
   this module will not be loaded."
-  (:require [cn.li.ac.integration.crafttweaker.recipes :as ct-recipes]
-            [cn.li.ac.integration.crafttweaker.bridge :as ct-bridge]
-            [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.world.item ItemStack]
-           [net.minecraft.resources ResourceLocation]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 (set! *warn-on-reflection* true)
 
 (defn- load-class-no-init ^Class [class-name]
   (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
+
+(defonce ^:private resolved-vars
+  (atom {}))
+
+(defn- resolve-var
+  [var-sym]
+  (or (@resolved-vars var-sym)
+      (let [v (requiring-resolve var-sym)]
+        (swap! resolved-vars assoc var-sym v)
+        v)))
+
+(defn- invoke-ac
+  [var-sym & args]
+  (apply (resolve-var var-sym) args))
 
 ;; CraftTweaker type conversion
 
@@ -28,18 +38,27 @@
   Returns:
     Item spec map {:item 'modid:item' :count N}"
   [stack]
-  (let [^ItemStack stack stack]
-    (when (and stack (not (.isEmpty stack)))
-      (let [item (.getItem stack)
-          regs-cls (load-class-no-init "net.minecraft.core.registries.BuiltInRegistries")
-          item-field (.getField regs-cls "ITEM")
-          item-registry (.get item-field nil)
-          get-key-method (.getMethod (class item-registry) "getKey" (into-array Class [Object]))
-          ^ResourceLocation res-loc (.invoke get-key-method item-registry (object-array [item]))
-          item-id (str (.getNamespace res-loc) ":" (.getPath res-loc))
-          count (.getCount stack)]
-        {:item item-id
-         :count count}))))
+  (when stack
+    (let [itemstack-cls (load-class-no-init "net.minecraft.world.item.ItemStack")
+          is-empty-method (.getMethod itemstack-cls "isEmpty" (make-array Class 0))]
+      (when-not (boolean (.invoke is-empty-method stack (object-array 0)))
+        (let [get-item-method (.getMethod itemstack-cls "getItem" (make-array Class 0))
+              get-count-method (.getMethod itemstack-cls "getCount" (make-array Class 0))
+              item (.invoke get-item-method stack (object-array 0))
+              regs-cls (load-class-no-init "net.minecraft.core.registries.BuiltInRegistries")
+              item-field (.getField regs-cls "ITEM")
+              item-registry (.get item-field nil)
+              get-key-method (.getMethod (class item-registry) "getKey" (into-array Class [Object]))
+              res-loc (.invoke get-key-method item-registry (object-array [item]))
+              resloc-cls (load-class-no-init "net.minecraft.resources.ResourceLocation")
+              get-namespace-method (.getMethod resloc-cls "getNamespace" (make-array Class 0))
+              get-path-method (.getMethod resloc-cls "getPath" (make-array Class 0))
+              item-id (str (.invoke get-namespace-method res-loc (object-array 0))
+                           ":"
+                           (.invoke get-path-method res-loc (object-array 0)))
+              count (.invoke get-count-method stack (object-array 0))]
+          {:item item-id
+           :count count})))))
 
 (defn crafttweaker-itemstack-to-spec
   "Convert a CraftTweaker IItemStack to AC item spec.
@@ -85,11 +104,13 @@
           output-spec (crafttweaker-itemstack-to-spec output)]
       (if (and input-spec output-spec)
         (do
-          (ct-recipes/add-fusor-recipe! input-spec output-spec (double energy))
+          (invoke-ac 'cn.li.ac.integration.crafttweaker.recipes/add-fusor-recipe!
+            input-spec output-spec (double energy))
           (log/info (str "CraftTweaker: Added Imag Fusor recipe - "
-                        (ct-bridge/describe-recipe {:input input-spec
-                                                    :output output-spec
-                                                    :energy energy})))
+                        (invoke-ac 'cn.li.ac.integration.crafttweaker.bridge/describe-recipe
+                          {:input input-spec
+                           :output output-spec
+                           :energy energy})))
           true)
         (do
           (log/error "CraftTweaker: Invalid Imag Fusor recipe parameters")
@@ -110,7 +131,8 @@
   (try
     (let [output-spec (crafttweaker-itemstack-to-spec output)]
       (if output-spec
-        (ct-recipes/remove-fusor-recipe! (:item output-spec))
+        (invoke-ac 'cn.li.ac.integration.crafttweaker.recipes/remove-fusor-recipe!
+          (:item output-spec))
         0))
     (catch Exception e
       (log/error "CraftTweaker: Failed to remove Imag Fusor recipe:" (ex-message e))
@@ -136,12 +158,14 @@
           energy 1000.0]
       (if (and input-spec output-spec)
         (do
-          (ct-recipes/add-former-recipe! input-spec output-spec mode energy)
+          (invoke-ac 'cn.li.ac.integration.crafttweaker.recipes/add-former-recipe!
+            input-spec output-spec mode energy)
           (log/info (str "CraftTweaker: Added Metal Former recipe (" mode ") - "
-                        (ct-bridge/describe-recipe {:input input-spec
-                                                    :output output-spec
-                                                    :mode mode
-                                                    :energy energy})))
+                        (invoke-ac 'cn.li.ac.integration.crafttweaker.bridge/describe-recipe
+                          {:input input-spec
+                           :output output-spec
+                           :mode mode
+                           :energy energy})))
           true)
         (do
           (log/error (str "CraftTweaker: Invalid Metal Former recipe parameters (mode: " mode ")"))
@@ -199,7 +223,8 @@
   (try
     (let [output-spec (crafttweaker-itemstack-to-spec output)]
       (if output-spec
-        (ct-recipes/remove-former-recipe! (:item output-spec) mode)
+        (invoke-ac 'cn.li.ac.integration.crafttweaker.recipes/remove-former-recipe!
+          (:item output-spec) mode)
         0))
     (catch Exception e
       (log/error "CraftTweaker: Failed to remove Metal Former recipe:" (ex-message e))

@@ -4,13 +4,12 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer ServerLevel]
-           [net.minecraft.world.level Level]
            [net.minecraft.world.level.block Block]
            [net.minecraft.core BlockPos]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.server ServerLifecycleHooks]
-           [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event.level BlockEvent$BreakEvent]
+           [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [java.util UUID]))
 
 (set! *warn-on-reflection* true)
@@ -36,20 +35,11 @@
       (log/warn "Failed to get level:" world-id (ex-message e))
       nil)))
 
-(defn- blocks-registry []
-  (let [regs-cls (Class/forName "net.minecraftforge.registries.ForgeRegistries")
-        blocks-field (.getField regs-cls "BLOCKS")]
-    (.get blocks-field nil)))
-
 (defn- get-block-by-resource-location [^ResourceLocation res-loc]
-  (let [registry (blocks-registry)
-        get-value-method (.getMethod (class registry) "getValue" (into-array Class [ResourceLocation]))]
-    (.invoke get-value-method registry (object-array [res-loc]))))
+  (ForgeRuntimeBridge/getBlockById (str res-loc)))
 
 (defn- get-block-key [^Block block]
-  (let [registry (blocks-registry)
-        get-key-method (.getMethod (class registry) "getKey" (into-array Class [Object]))]
-    (.invoke get-key-method registry (object-array [block]))))
+  (ForgeRuntimeBridge/getBlockKey block))
 
 (defn- break-block-impl! [player-uuid world-id x y z drop?]
   (try
@@ -57,17 +47,16 @@
       (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
         (let [pos (BlockPos. (int x) (int y) (int z))
               state (.getBlockState level pos)
-              block (.getBlock state)]
+              event (BlockEvent$BreakEvent. level pos state player)]
 
           ;; Fire break event to check permissions
-          (let [event (BlockEvent$BreakEvent. level pos state player)]
-            (.post (MinecraftForge/EVENT_BUS) event)
+          (ForgeRuntimeBridge/postEvent event)
 
-            (when-not (.isCanceled event)
-              (when drop?
-                (Block/dropResources state level pos))
-              (.removeBlock level pos false)
-              true)))))
+          (when-not (.isCanceled event)
+            (when drop?
+              (Block/dropResources state level pos))
+            (.removeBlock level pos false)
+            true))))
     (catch Exception e
       (log/warn "Failed to break block:" (ex-message e))
       false)))
@@ -112,11 +101,11 @@
     (when-let [^ServerLevel level (get-level-by-id world-id)]
       (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
         (let [pos (BlockPos. (int x) (int y) (int z))
-              state (.getBlockState level pos)]
+              state (.getBlockState level pos)
+              event (BlockEvent$BreakEvent. level pos state player)]
           ;; Fire break event to check permissions
-          (let [event (BlockEvent$BreakEvent. level pos state player)]
-            (.post (MinecraftForge/EVENT_BUS) event)
-            (not (.isCanceled event))))))
+          (ForgeRuntimeBridge/postEvent event)
+          (not (.isCanceled event)))))
     (catch Exception e
       (log/warn "Failed to check can-break-block:" (ex-message e))
       false)))

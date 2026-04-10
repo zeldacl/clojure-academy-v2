@@ -6,10 +6,7 @@
 
   This file contains node-specific blockstate logic extracted from blockstate_definition.clj
   to colocate it with the node block implementation."
-  (:require [clojure.string :as str]
-            [cn.li.mcmod.config :as mcmod-config]
-            [cn.li.ac.block.wireless-node.config :as node-config]
-            [cn.li.ac.block.wireless-node.schema :as node-schema]))
+  (:require [clojure.string :as str]))
 
 ;; ============================================================================
 ;; BlockState Definition Record (copied from blockstate_definition.clj)
@@ -27,15 +24,31 @@
 ;; Node BlockState Generation
 ;; ============================================================================
 
+(defn- resolve-var-value
+  [sym]
+  (some-> (requiring-resolve sym) deref))
+
+(defn- node-types*
+  []
+  (if-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.config/node-types)]
+    (f)
+    {}))
+
+(defn- blockstate-property-fields*
+  []
+  (or (resolve-var-value 'cn.li.ac.block.wireless-node.schema/blockstate-property-fields)
+      []))
+
 (defn- mod-id []
-  mcmod-config/*mod-id*)
+  (or (resolve-var-value 'cn.li.mcmod.config/*mod-id*)
+      "my_mod"))
 
 (defn- extract-blockstate-props
   "Extract BlockState properties from schema into a map.
    Returns: {property-keyword {:name :type :min :max :default}}"
   []
   (into {}
-    (for [field node-schema/blockstate-property-fields
+    (for [field (blockstate-property-fields*)
           :when (:block-state field)
           :let [bs (:block-state field)
                 prop-name (:prop bs)]]
@@ -61,7 +74,7 @@
         energy-max (get-in props [:energy :max])
         connected-type (get-in props [:connected :type])]
     (into {}
-        (for [node-type (sort (keys (node-config/node-types)))
+      (for [node-type (sort (keys (node-types*)))
                 :let [node-type-name (name node-type)
                       block-key (keyword (str "wireless-node-" node-type-name))
                       registry-name (str "node_" node-type-name)
@@ -102,7 +115,7 @@
   Returns:
     regex pattern matching node model names like 'node_basic_base'"
   []
-  (let [node-type-str (str "(" (str/join "|" (map name (sort (keys (node-config/node-types))))) ")")
+  (let [node-type-str (str "(" (str/join "|" (map name (sort (keys (node-types*)))) )")")
         variant-str   "(base|energy_\\d+|connected)"]
     (re-pattern (str "node_" node-type-str "_" variant-str))))
 

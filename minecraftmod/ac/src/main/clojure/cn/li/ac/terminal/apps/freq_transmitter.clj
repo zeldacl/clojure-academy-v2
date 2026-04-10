@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.apps.freq-transmitter
   "Frequency Transmitter app - Manage wireless frequencies."
   (:require [cn.li.ac.terminal.app-registry :as reg]
+            [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.ac.config.modid :as modid]
@@ -72,9 +73,7 @@
   [player]
   (log/info "Opening frequency transmitter for player:" player)
   (let [gui (create-freq-transmitter-gui player)]
-    ;; Open via platform bridge
-    (when-let [open-fn (requiring-resolve 'cn.li.forge1201.client.terminal-screen-bridge/open-simple-gui!)]
-      (open-fn gui "Frequency Transmitter"))))
+    (client-bridge/open-simple-gui! gui "Frequency Transmitter")))
 
 ;; ============================================================================
 ;; App Registration
@@ -88,4 +87,9 @@
    :gui-fn 'cn.li.ac.terminal.apps.freq-transmitter/open-freq-transmitter-gui
    :category :wireless})
 
-(reg/register-app! freq-transmitter-app)
+(defonce ^:private freq-transmitter-installed? (atom false))
+
+(defn init-freq-transmitter-app!
+  []
+  (when (compare-and-set! freq-transmitter-installed? false true)
+    (reg/register-app! freq-transmitter-app)))

@@ -5,8 +5,7 @@
   Main cooldown uses sub-id :main (equivalent to old subID=0).
   Sub-cooldowns use user-defined keywords.
 
-  Map schema: {[ctrl-id sub-id] remaining-ticks}"
-  (:require [cn.li.mcmod.util.log :as log]))
+  Map schema: {[ctrl-id sub-id] remaining-ticks}")
 
 ;; ============================================================================
 ;; Constructors

@@ -15,7 +15,9 @@
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]
             [clojure.edn :as edn])
-  (:import [cn.li.forge1201.network ClojureNetwork]))
+  (:import [cn.li.forge1201.network ClojureNetwork]
+           [net.minecraft.server.level ServerPlayer]
+           [clojure.lang IFn]))
 
 ;; ---------------------------------------------------------------------------
 ;; EDN serialization helpers
@@ -35,9 +37,27 @@
 ;; Platform multimethod implementation
 ;; ---------------------------------------------------------------------------
 
+(defn- invoke-network-static
+  [method-name & args]
+  (case method-name
+    "sendToServer"
+    (let [[msg-id request-id payload] args]
+      (ClojureNetwork/sendToServer ^String msg-id (int request-id) ^bytes payload))
+
+    "sendToClient"
+    (let [[player req-id response] args]
+      (ClojureNetwork/sendToClient ^ServerPlayer player (int req-id) ^bytes response))
+
+    "init"
+    (let [[req-handler resp-handler] args]
+      (ClojureNetwork/init ^IFn req-handler ^IFn resp-handler))
+
+    (throw (IllegalArgumentException.
+             (str "Unknown ClojureNetwork method: " method-name)))))
+
 (defmethod net-client/send-request :forge-1.20.1
   [msg-id payload request-id]
-  (ClojureNetwork/sendToServer msg-id (int request-id) (serialize payload)))
+  (invoke-network-static "sendToServer" msg-id (int request-id) (serialize payload)))
 
 ;; ---------------------------------------------------------------------------
 ;; Initialization
@@ -51,7 +71,7 @@
         (fn [msg-id request-id payload-bytes player]
           (let [payload (deserialize payload-bytes)
                 respond-fn (fn [req-id response]
-                             (ClojureNetwork/sendToClient
+                             (invoke-network-static "sendToClient"
                                player
                                (int req-id)
                                (serialize response)))]
@@ -70,5 +90,5 @@
               (net-client/handle-push (:msg-id payload) (:payload payload))
               (net-client/handle-response rid payload))))]
 
-    (ClojureNetwork/init req-handler resp-handler))
+    (invoke-network-static "init" req-handler resp-handler))
   (log/info "Forge 1.20.1 GUI network system initialized"))

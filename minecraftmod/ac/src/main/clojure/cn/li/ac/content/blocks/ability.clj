@@ -9,6 +9,18 @@
                    cn.li.ac.block.ability-interferer.gui]]
     (require ns-sym)))
 
-(when (not= "true" (System/getProperty "ac.check.clojure"))
-  (load-ability-blocks!)
-  (msg-reg/register-all!))
+(defn- init-ability-block-definitions! []
+  (doseq [init-sym '[cn.li.ac.block.developer.block/init-developer!
+                    cn.li.ac.block.developer.gui/init-developer-gui!
+                    cn.li.ac.block.ability-interferer.block/init-ability-interferer!]]
+    (when-let [init-fn (requiring-resolve init-sym)]
+      (init-fn))))
+
+(defonce ^:private ability-blocks-installed? (atom false))
+
+(defn init-ability-blocks!
+  []
+  (when (compare-and-set! ability-blocks-installed? false true)
+    (load-ability-blocks!)
+    (init-ability-block-definitions!)
+    (msg-reg/register-all!)))

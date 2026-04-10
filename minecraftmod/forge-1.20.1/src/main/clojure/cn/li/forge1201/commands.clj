@@ -316,6 +316,8 @@
   ;; Ensure command definitions are loaded
   (try
     (require 'cn.li.ac.command.commands)
+    (when-let [init-fn (requiring-resolve 'cn.li.ac.command.commands/init-commands!)]
+      (init-fn))
     (catch Exception e
       (log/error "Failed to load command definitions:" (ex-message e))))
 

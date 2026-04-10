@@ -38,7 +38,7 @@
   (let [{:keys [x y activated]} indicator-data]
     (when activated
       ;; Draw a simple colored circle or text
-      (draw-string! graphics "●" x y 0x00FF00))))
+      (draw-string! graphics "*" x y 0x00FF00))))
 
 (defn- render-skill-slot
   "Render a single skill slot with icon, name, and cooldown overlay."

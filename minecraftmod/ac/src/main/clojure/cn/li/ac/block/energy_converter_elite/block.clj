@@ -26,10 +26,6 @@
   (:import [cn.li.acapi.energy IEnergyCapable]
            [cn.li.acapi.wireless IWirelessGenerator IWirelessReceiver]))
 
-;; Message Registration
-(msg-registry/register-block-messages! :energy-converter-elite
-  [:get-status :set-mode])
-
 (defn- msg [action] (msg-registry/msg :energy-converter-elite action))
 
 (defn- converter-tick-fn [level _pos _block-state be]
@@ -221,48 +217,44 @@
         (log/error "Failed to open Elite EnergyConverter GUI:" (ex-message e))
         nil))))
 
-;; Register tile logic
-(tdsl/deftile energy-converter-elite-tile
-  :id "energy-converter-elite"
-  :registry-name "energy_converter_elite"
-  :impl :scripted
-  :blocks ["energy-converter-elite"]
-  :tick-fn converter-tick-fn
-  :read-nbt-fn converter-read-nbt-fn
-  :write-nbt-fn converter-write-nbt-fn)
-
-;; Register capabilities
-(platform-cap/declare-capability! :energy-converter-elite IEnergyCapable
-  (fn [be _side] (create-converter-capability be)))
-
-(platform-cap/declare-capability! :wireless-generator-elite IWirelessGenerator
-  get-wireless-capability)
-
-(platform-cap/declare-capability! :wireless-receiver-elite IWirelessReceiver
-  get-wireless-capability)
-
-(tile-logic/register-tile-capability! "energy-converter-elite" :energy-converter-elite)
-(tile-logic/register-tile-capability! "energy-converter-elite" :wireless-generator-elite)
-(tile-logic/register-tile-capability! "energy-converter-elite" :wireless-receiver-elite)
-
-;; Define block
-(bdsl/defblock energy-converter-elite
-  :registry-name "energy_converter_elite"
-  :physical {:material :metal
-             :hardness 4.0
-             :resistance 16.0
-             :requires-tool true
-             :harvest-tool :pickaxe
-             :harvest-level 3
-             :sounds :metal}
-  :rendering {:model-parent "minecraft:block/cube_all"
-              :textures {:all (modid/asset-path "block" "energy_converter_elite")}
-              :flat-item-icon? true}
-  :events {:on-right-click open-converter-gui!})
-
-;; Auto-Registration
-(hooks/register-network-handler! register-network-handlers!)
+(defonce ^:private energy-converter-elite-installed? (atom false))
 
 (defn init-energy-converter-elite!
   []
-  (log/info "Initialized Elite Energy Converter block"))
+  (when (compare-and-set! energy-converter-elite-installed? false true)
+    (msg-registry/register-block-messages! :energy-converter-elite [:get-status :set-mode])
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "energy-converter-elite"
+        {:registry-name "energy_converter_elite"
+         :impl :scripted
+         :blocks ["energy-converter-elite"]
+         :tick-fn converter-tick-fn
+         :read-nbt-fn converter-read-nbt-fn
+         :write-nbt-fn converter-write-nbt-fn}))
+    (platform-cap/declare-capability! :energy-converter-elite IEnergyCapable
+      (fn [be _side] (create-converter-capability be)))
+    (platform-cap/declare-capability! :wireless-generator-elite IWirelessGenerator
+      get-wireless-capability)
+    (platform-cap/declare-capability! :wireless-receiver-elite IWirelessReceiver
+      get-wireless-capability)
+    (tile-logic/register-tile-capability! "energy-converter-elite" :energy-converter-elite)
+    (tile-logic/register-tile-capability! "energy-converter-elite" :wireless-generator-elite)
+    (tile-logic/register-tile-capability! "energy-converter-elite" :wireless-receiver-elite)
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "energy-converter-elite"
+        {:registry-name "energy_converter_elite"
+         :physical {:material :metal
+                    :hardness 4.0
+                    :resistance 16.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 3
+                    :sounds :metal}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "energy_converter_elite")}
+                     :flat-item-icon? true}
+         :events {:on-right-click open-converter-gui!}}))
+    (hooks/register-network-handler! register-network-handlers!)
+    (log/info "Initialized Elite Energy Converter block")))

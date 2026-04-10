@@ -104,32 +104,8 @@
 ;; Tile Registration
 ;; ============================================================================
 
-(tdsl/deftile cat-engine-tile
-  :id "cat-engine"
-  :registry-name "cat_engine"
-  :impl :scripted
-  :blocks ["cat-engine"]
-  :tick-fn cat-tick-fn
-  :read-nbt-fn cat-scripted-load-fn
-  :write-nbt-fn cat-scripted-save-fn)
 
-;; ============================================================================
-;; Block Definition
-;; ============================================================================
-
-(bdsl/defblock cat-engine
-  :registry-name "cat_engine"
-  :physical {:material :metal
-             :hardness 2.0
-             :resistance 6.0
-             :requires-tool true
-             :harvest-tool :pickaxe
-             :harvest-level 1
-             :sounds :metal}
-  :rendering {:model-parent "minecraft:block/cube_all"
-              :textures {:all (modid/asset-path "block" "cat_engine")}
-              :flat-item-icon? true
-              :light-level 0})
+(defonce ^:private cat-engine-installed? (atom false))
 
 ;; ============================================================================
 ;; Initialization
@@ -137,4 +113,29 @@
 
 (defn init-cat-engine!
   []
-  (log/info "Initialized Cat Engine block"))
+  (when (compare-and-set! cat-engine-installed? false true)
+    (tdsl/register-tile!
+      (tdsl/create-tile-spec
+        "cat-engine"
+        {:registry-name "cat_engine"
+         :impl :scripted
+         :blocks ["cat-engine"]
+         :tick-fn cat-tick-fn
+         :read-nbt-fn cat-scripted-load-fn
+         :write-nbt-fn cat-scripted-save-fn}))
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "cat-engine"
+        {:registry-name "cat_engine"
+         :physical {:material :metal
+                    :hardness 2.0
+                    :resistance 6.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 1
+                    :sounds :metal}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "cat_engine")}
+                     :flat-item-icon? true
+                     :light-level 0}}))
+    (log/info "Initialized Cat Engine block")))

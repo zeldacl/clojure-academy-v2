@@ -7,22 +7,23 @@
             [cn.li.mcmod.platform.item :as item]
             [clojure.string :as str]))
 
-;; ============================================================================
-;; Constraint Plate Item
-;; ============================================================================
+(def ^:private constraint-plate-id "constraint_plate")
 
-(idsl/defitem constraint-plate
-  :id "constraint_plate"
-  :max-stack-size 64
-  :creative-tab :misc
-  :properties {:tooltip ["用于无线矩阵的限制板"
-                         "需要3个才能激活矩阵"]
-               :model-texture "constraint_plate"}
-  :on-use (fn [event-data]
-            (log/debug "Using constraint plate")))
+(defonce ^:private constraint-plate-installed? (atom false))
 
 (defn init-constraint-plate! []
-  (log/info "Constraint Plate initialized"))
+  (when (compare-and-set! constraint-plate-installed? false true)
+    (idsl/register-item!
+      (idsl/create-item-spec
+        constraint-plate-id
+        {:max-stack-size 64
+         :creative-tab :misc
+         :properties {:tooltip ["用于无线矩阵的限制板"
+                                "需要3个才能激活矩阵"]
+                      :model-texture "constraint_plate"}
+         :on-use (fn [_event-data]
+                   (log/debug "Using constraint plate"))}))
+    (log/info "Constraint Plate initialized")))
 
 (defn is-constraint-plate?
   "Check if ItemStack (or item-like value) is a constraint plate.
@@ -41,9 +42,9 @@
          (try (str (item/item-get-description-id item-obj)) (catch Throwable _ nil)))
        id-from-stack (or registry-name (when desc (last (str/split desc #"\\."))))
        id (or id-from-stack (id-from-spec item-stack))
-          result (boolean
-                  (or (= id (:id constraint-plate))
-                      (and (string? desc) (str/includes? desc (:id constraint-plate)))))]
+            result (boolean
+                (or (= id constraint-plate-id)
+                  (and (string? desc) (str/includes? desc constraint-plate-id))))]
       (try
         (log/debug "is-constraint-plate?" {:stack-class (class item-stack)
                                             :desc desc

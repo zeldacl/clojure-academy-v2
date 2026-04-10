@@ -6,11 +6,24 @@
 
   IC2 integration is completely optional - if IC2 is not present, this module
   will not be loaded and no errors will occur."
-  (:require [cn.li.mcmod.platform.capability :as platform-cap]
-            [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.energy IEnergyCapable]))
 
 (set! *warn-on-reflection* true)
+
+(defonce ^:private resolved-vars
+  (atom {}))
+
+(defn- resolve-var
+  [var-sym]
+  (or (@resolved-vars var-sym)
+      (let [v (requiring-resolve var-sym)]
+        (swap! resolved-vars assoc var-sym v)
+        v)))
+
+(defn- cap-call
+  [var-sym & args]
+  (apply (resolve-var var-sym) args))
 
 ;; IC2 detection
 
@@ -160,9 +173,9 @@
   [be _side mode]
   (try
     ;; Get the AC energy capability first
-    (when-let [ac-energy-cap (platform-cap/get-capability be :energy-converter nil)]
-      (when (platform-cap/is-present? ac-energy-cap)
-        (let [ac-energy (platform-cap/or-else ac-energy-cap nil)
+    (when-let [ac-energy-cap (cap-call 'cn.li.mcmod.platform.capability/get-capability be :energy-converter nil)]
+      (when (cap-call 'cn.li.mcmod.platform.capability/is-present? ac-energy-cap)
+        (let [ac-energy (cap-call 'cn.li.mcmod.platform.capability/or-else ac-energy-cap nil)
               tier 2] ;; Default to tier 2 (Medium Voltage, 128 EU/t)
           (when ac-energy
             ;; Create appropriate IC2 interface based on mode

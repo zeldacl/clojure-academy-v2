@@ -7,15 +7,6 @@
   Minecraft on the classpath.")
 
 (defprotocol IEntityOps
-  "Protocol for a small set of entity/player/menu helpers.")
-
-(defprotocol IEntityOps
-  "Protocol for entity operations.")
-
-(defprotocol IEntityOps
-  "Real protocol methods defined below.")
-
-(defprotocol IEntityOps
   (entity-distance-to-sqr [entity x y z]
     "Calculate squared distance from entity to coordinates: returns double")
 

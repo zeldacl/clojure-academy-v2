@@ -4,7 +4,8 @@
   This namespace must be loaded via side-checked requiring-resolve from the
   platform layer. It contains client-only initialization code including
   renderer registration and texture binding."
-  (:require [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.ac.client.platform-bridge :as ac-client-bridge]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.client.render.init :as render-init]
@@ -19,7 +20,6 @@
             [cn.li.forge1201.client.effects.sound-bridge :as sound-bridge]
             [cn.li.forge1201.client.ability-gui :as ability-gui]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
-            [cn.li.forge1201.mod :as forge-mod]
             [cn.li.forge1201.client.pose-impl :as pose-impl]
             [cn.li.forge1201.client.render-buffer-impl :as buffer-impl]
             [cn.li.mcmod.client.render.pose :as pose]
@@ -62,12 +62,13 @@
     (doseq [tile-id (registry-metadata/get-all-tile-ids)]
       (let [block-ids (or (seq (registry-metadata/get-tile-block-ids tile-id)) [tile-id])]
         (when (some tesr-api/get-scripted-tile-renderer block-ids)
-          (when-let [be-type (forge-mod/get-registered-block-entity-type tile-id)]
-            (ForgeClientHelper/registerBlockEntityRenderer
-              be-type
-              (reify ForgeClientHelper$RendererFactory
-                (create [_this]
-                  (tesr-impl/new-renderer))))))))
+          (when-let [get-be-type (requiring-resolve 'cn.li.forge1201.mod/get-registered-block-entity-type)]
+            (when-let [be-type (get-be-type tile-id)]
+              (ForgeClientHelper/registerBlockEntityRenderer
+                be-type
+                (reify ForgeClientHelper$RendererFactory
+                  (create [_this]
+                    (tesr-impl/new-renderer)))))))))
     
     (catch Exception e
       (log/error "Failed to register block renderers" (.printStackTrace e)))))
@@ -96,6 +97,17 @@
 
   (log/info "Client-side rendering bindings complete"))
 
+(defn- init-ac-client-bridge!
+  []
+  (ac-client-bridge/install-client-bridge!
+    {:slot-key-down ability-runtime/on-slot-key-down!
+     :slot-key-tick ability-runtime/on-slot-key-tick!
+     :slot-key-up ability-runtime/on-slot-key-up!
+     :open-skill-tree-screen ability-screen-bridge/open-skill-tree-screen!
+     :open-preset-editor-screen ability-screen-bridge/open-preset-editor-screen!
+     :open-terminal-screen terminal-screen-bridge/open-terminal-screen!
+     :open-simple-gui terminal-screen-bridge/open-simple-gui!}))
+
 (defn init-client
   "Initialize client-side systems for Forge 1.20.1.
   Called from within the FMLClientSetupEvent handler in mod.clj — do work directly,
@@ -105,6 +117,7 @@
 
   ;; Bind client-side rendering implementations first
   (init-render-bindings!)
+  (init-ac-client-bridge!)
 
   ;; Then register renderers
   (register-renderers)

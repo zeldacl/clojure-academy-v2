@@ -2,180 +2,54 @@
   "Forge implementation of IRaycast protocol."
   (:require [cn.li.mcmod.platform.raycast :as prc]
             [cn.li.mcmod.util.log :as log])
-  (:import [java.util UUID]))
+  (:import [cn.li.forge1201.ability RaycastBridge]))
 
 (set! *warn-on-reflection* true)
 
-(defn- load-class-no-init ^Class [class-name]
-  (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
-
-(defn- new-instance
-  [class-name & args]
-  (clojure.lang.Reflector/invokeConstructor (load-class-no-init class-name) (to-array args)))
-
-(defn- invoke-static-no-init
-  [class-name method-name & args]
-  (clojure.lang.Reflector/invokeStaticMethod (load-class-no-init class-name) method-name (to-array args)))
-
-(defn- enum-constant [class-name enum-name]
-  (java.lang.Enum/valueOf (load-class-no-init class-name) enum-name))
-
-(def entity-class (delay (load-class-no-init "net.minecraft.world.entity.Entity")))
-(def living-entity-class (delay (load-class-no-init "net.minecraft.world.entity.LivingEntity")))
-
-(defn- get-server []
-  (invoke-static-no-init "net.minecraftforge.server.ServerLifecycleHooks" "getCurrentServer"))
-
-(defn- get-player-by-uuid [uuid-str]
-  (try
-    (when-let [server (get-server)]
-      (let [uuid (UUID/fromString uuid-str)]
-        (.getPlayerList server)
-        (.getPlayer (.getPlayerList server) uuid)))
-    (catch Exception e
-      (log/warn "Failed to get player by UUID:" uuid-str (ex-message e))
-      nil)))
+(defn- normalize-bridge-map
+  [result]
+  (when result
+    (let [normalized (into {}
+                           (map (fn [[key value]] [(keyword key) value]))
+                           result)]
+      (cond-> normalized
+        (string? (:face normalized)) (update :face keyword)
+        (string? (:hit-type normalized)) (update :hit-type keyword)))))
 
 (defn- raycast-blocks-impl [_world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
   (try
-    (when-let [server (get-server)]
-      (when-let [level (.overworld server)]
-        (let [start (new-instance "net.minecraft.world.phys.Vec3" start-x start-y start-z)
-              end (new-instance "net.minecraft.world.phys.Vec3"
-                                (+ start-x (* dir-x max-distance))
-                                (+ start-y (* dir-y max-distance))
-                                (+ start-z (* dir-z max-distance)))
-              clip-context (new-instance "net.minecraft.world.level.ClipContext"
-                                         start end
-                                         (enum-constant "net.minecraft.world.level.ClipContext$Block" "OUTLINE")
-                                         (enum-constant "net.minecraft.world.level.ClipContext$Fluid" "NONE")
-                                         nil)
-              result (.clip level clip-context)]
-          (when (= (.getType result) (enum-constant "net.minecraft.world.phys.HitResult$Type" "BLOCK"))
-            (let [pos (.getBlockPos result)
-                  block-state (.getBlockState level pos)
-                  block (.getBlock block-state)
-                  hit-vec (.getLocation result)
-                  distance (.distanceTo start hit-vec)]
-              {:x (.getX pos)
-               :y (.getY pos)
-               :z (.getZ pos)
-               :block-id (str (.getDescriptionId block))
-               :face (keyword (str (.getDirection result)))
-               :distance distance})))))
+    (normalize-bridge-map
+      (RaycastBridge/raycastBlocks _world-id start-x start-y start-z dir-x dir-y dir-z max-distance))
     (catch Exception e
       (log/warn "Failed to raycast blocks:" (ex-message e))
       nil)))
 
 (defn- raycast-entities-impl [_world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
   (try
-    (when-let [server (get-server)]
-      (when-let [level (.overworld server)]
-        (let [start (new-instance "net.minecraft.world.phys.Vec3" start-x start-y start-z)
-              end (new-instance "net.minecraft.world.phys.Vec3"
-                                (+ start-x (* dir-x max-distance))
-                                (+ start-y (* dir-y max-distance))
-                                (+ start-z (* dir-z max-distance)))
-              aabb (new-instance "net.minecraft.world.phys.AABB"
-                                 (min start-x (+ start-x (* dir-x max-distance)))
-                                 (min start-y (+ start-y (* dir-y max-distance)))
-                                 (min start-z (+ start-z (* dir-z max-distance)))
-                                 (max start-x (+ start-x (* dir-x max-distance)))
-                                 (max start-y (+ start-y (* dir-y max-distance)))
-                                 (max start-z (+ start-z (* dir-z max-distance))))
-              entities (.getEntitiesOfClass level @living-entity-class (.inflate aabb 2.0))
-              hits (atom [])]
-          (doseq [entity entities]
-            (let [entity-aabb (.getBoundingBox entity)
-                  optional-hit (.clip entity-aabb start end)]
-              (when (.isPresent optional-hit)
-                (let [hit-vec (.get optional-hit)
-                      distance (.distanceTo start hit-vec)
-                      pos (.position entity)]
-                  (swap! hits conj {:uuid (str (.getUUID entity))
-                                    :x (.x pos)
-                                    :y (.y pos)
-                                    :z (.z pos)
-                                    :type (str (.getDescriptionId (.getType entity)))
-                                    :distance distance})))))
-          (when (seq @hits)
-            (first (sort-by :distance @hits))))))
+    (normalize-bridge-map
+      (RaycastBridge/raycastEntities _world-id start-x start-y start-z dir-x dir-y dir-z max-distance))
     (catch Exception e
       (log/warn "Failed to raycast entities:" (ex-message e))
       nil)))
 
 (defn- raycast-combined-impl [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
-  (let [block-hit (raycast-blocks-impl world-id start-x start-y start-z dir-x dir-y dir-z max-distance)
-        entity-hit (raycast-entities-impl world-id start-x start-y start-z dir-x dir-y dir-z max-distance)]
-    (cond
-      (and block-hit entity-hit)
-      (if (< (:distance block-hit) (:distance entity-hit))
-        (assoc block-hit :hit-type :block)
-        (assoc entity-hit :hit-type :entity))
-
-      block-hit
-      (assoc block-hit :hit-type :block)
-
-      entity-hit
-      (assoc entity-hit :hit-type :entity)
-
-      :else
+  (try
+    (normalize-bridge-map
+      (RaycastBridge/raycastCombined world-id start-x start-y start-z dir-x dir-y dir-z max-distance))
+    (catch Exception e
+      (log/warn "Failed to raycast combined:" (ex-message e))
       nil)))
 
 (defn- get-player-look-vector-impl [player-uuid]
   (try
-    (when-let [player (get-player-by-uuid player-uuid)]
-      (let [look-vec (.getLookAngle player)]
-        {:x (.x look-vec)
-         :y (.y look-vec)
-         :z (.z look-vec)}))
+    (normalize-bridge-map (RaycastBridge/getPlayerLookVector player-uuid))
     (catch Exception e
       (log/warn "Failed to get player look vector:" (ex-message e))
       nil)))
 
 (defn- raycast-from-player-impl [player-uuid max-distance living-only?]
   (try
-    (when-let [player (get-player-by-uuid player-uuid)]
-      (let [eye-pos (.getEyePosition player)
-            look-vec (.getLookAngle player)
-            start-x (.x eye-pos)
-            start-y (.y eye-pos)
-            start-z (.z eye-pos)
-            dir-x (.x look-vec)
-            dir-y (.y look-vec)
-            dir-z (.z look-vec)
-            level (.serverLevel player)
-            start (new-instance "net.minecraft.world.phys.Vec3" start-x start-y start-z)
-            end (new-instance "net.minecraft.world.phys.Vec3"
-                              (+ start-x (* dir-x max-distance))
-                              (+ start-y (* dir-y max-distance))
-                              (+ start-z (* dir-z max-distance)))
-            aabb (new-instance "net.minecraft.world.phys.AABB"
-                               (min start-x (+ start-x (* dir-x max-distance)))
-                               (min start-y (+ start-y (* dir-y max-distance)))
-                               (min start-z (+ start-z (* dir-z max-distance)))
-                               (max start-x (+ start-x (* dir-x max-distance)))
-                               (max start-y (+ start-y (* dir-y max-distance)))
-                               (max start-z (+ start-z (* dir-z max-distance))))
-            entities (if living-only?
-                      (.getEntitiesOfClass level @living-entity-class (.inflate aabb 2.0))
-                      (.getEntitiesOfClass level @entity-class (.inflate aabb 2.0)))
-            hits (atom [])]
-        (doseq [entity entities]
-          (when-not (= entity player)  ; Don't hit self
-            (let [entity-aabb (.getBoundingBox entity)
-                  optional-hit (.clip entity-aabb start end)]
-              (when (.isPresent optional-hit)
-                (let [hit-vec (.get optional-hit)
-                      distance (.distanceTo start hit-vec)
-                      pos (.position entity)]
-                  (swap! hits conj {:entity-id (str (.getUUID entity))
-                                    :x (.x pos)
-                                    :y (.y pos)
-                                    :z (.z pos)
-                                    :distance distance}))))))
-        (when (seq @hits)
-          (first (sort-by :distance @hits)))))
+    (normalize-bridge-map (RaycastBridge/raycastFromPlayer player-uuid max-distance living-only?))
     (catch Exception e
       (log/warn "Failed to raycast from player:" (ex-message e))
       nil)))

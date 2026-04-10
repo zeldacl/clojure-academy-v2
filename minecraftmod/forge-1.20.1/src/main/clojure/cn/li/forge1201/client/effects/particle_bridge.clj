@@ -3,7 +3,7 @@
   (:require [cn.li.ac.ability.client.effects.particles :as ac-particles]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
-           [net.minecraft.core.particles ParticleTypes]
+           [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.client.multiplayer ClientLevel]))
 
 (set! *warn-on-reflection* true)
@@ -11,16 +11,7 @@
 (defn- get-particle-type
   "Map AC particle type keyword to Minecraft ParticleType."
   [particle-type-kw]
-  (case particle-type-kw
-    :electric-spark ParticleTypes/ELECTRIC_SPARK
-    :portal ParticleTypes/PORTAL
-    :flame ParticleTypes/FLAME
-    :end-rod ParticleTypes/END_ROD
-    :enchant ParticleTypes/ENCHANT
-    :angry-villager ParticleTypes/ANGRY_VILLAGER
-    :totem-of-undying ParticleTypes/TOTEM_OF_UNDYING
-    :generic ParticleTypes/GLOW
-    ParticleTypes/GLOW))
+  (ForgeRuntimeBridge/getParticleType (name particle-type-kw)))
 
 (defn- spawn-particle-effect
   "Spawn a particle effect in the world."
