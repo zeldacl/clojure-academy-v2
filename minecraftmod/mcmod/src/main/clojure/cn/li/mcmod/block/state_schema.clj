@@ -64,7 +64,7 @@
               (let [nk (:nbt-key spec)]
                 (if-let [load-fn (:load-fn spec)]
                   (assoc state k (load-fn tag nk dflt))
-                  (if (nbt/nbt-has-key? tag nk)
+                  (if (nbt/nbt-has-key-safe? tag nk)
                     (if-let [reader (get nbt-readers (:type spec))]
                       (assoc state k (reader tag nk))
                       (assoc state k dflt))
@@ -131,7 +131,7 @@
   (let [bs-specs (filterv :block-state-prop schema)]
     (fn [state level pos]
       (try
-        (when-let [blk-state (platform-world/world-get-block-state level pos)]
+        (when-let [blk-state (platform-world/world-get-block-state* level pos)]
               (let [state-def (platform-world/block-state-get-state-definition blk-state)
                 new-bs    (reduce
                            (fn [bs spec]
@@ -148,7 +148,7 @@
                            blk-state
                            bs-specs)]
             (when (not= new-bs blk-state)
-              (platform-world/world-set-block level pos new-bs 3))))
+              (platform-world/world-set-block* level pos new-bs 3))))
         (catch Exception _)))))
 
 ;; ============================================================================
@@ -209,7 +209,7 @@
   (let [bs-specs (filterv :block-state blockstate-fields)]
     (fn [state level pos]
       (try
-        (when-let [blk-state (platform-world/world-get-block-state level pos)]
+        (when-let [blk-state (platform-world/world-get-block-state* level pos)]
           (let [state-def (platform-world/block-state-get-state-definition blk-state)
                 new-bs    (reduce
                            (fn [bs spec]
@@ -230,7 +230,7 @@
                            blk-state
                            bs-specs)]
             (when (not= new-bs blk-state)
-              (platform-world/world-set-block level pos new-bs 3))))
+              (platform-world/world-set-block* level pos new-bs 3))))
         (catch Exception _)))))
 
 ;; ============================================================================
@@ -293,3 +293,4 @@
   Example: (filter-by-tag schema :network-editable?) returns only network-editable fields."
   [schema tag-key]
   (filterv #(get % tag-key) schema))
+

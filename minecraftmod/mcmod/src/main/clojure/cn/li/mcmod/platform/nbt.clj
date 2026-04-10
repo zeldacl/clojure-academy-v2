@@ -111,6 +111,13 @@
   *nbt-factory*
   nil)
 
+(defonce ^{:dynamic true
+           :doc "Optional platform override for nbt-has-key? (fn [nbt key] -> boolean).
+
+Set by platform bootstrap to avoid protocol dispatch timing issues during early init."}
+  *nbt-has-key-fn*
+  nil)
+
 ;; ============================================================================
 ;; Factory Functions
 ;; ============================================================================
@@ -147,6 +154,15 @@
     (throw (ex-info "NBT factory not initialized - platform must call init-platform! first"
                     {:hint "Check that platform mod initialization calls platform-impl/init-platform!"}))))
 
+(defn nbt-has-key-safe?
+  "Check whether key exists in NBT compound.
+
+Uses platform override when installed; otherwise falls back to protocol dispatch."
+  [this key]
+  (if-let [f *nbt-has-key-fn*]
+    (boolean (f this key))
+    (nbt-has-key? this key)))
+
 ;; ============================================================================
 ;; Utility Functions
 ;; ============================================================================
@@ -160,16 +176,16 @@
   (into {}
         (for [k keys]
           [k (cond
-               (nbt-has-key? compound (str k "-int"))
+               (nbt-has-key-safe? compound (str k "-int"))
                (nbt-get-int compound (str k "-int"))
                
-               (nbt-has-key? compound (str k "-str"))
+               (nbt-has-key-safe? compound (str k "-str"))
                (nbt-get-string compound (str k "-str"))
                
-               (nbt-has-key? compound (str k "-bool"))
+               (nbt-has-key-safe? compound (str k "-bool"))
                (nbt-get-boolean compound (str k "-bool"))
                
-               (nbt-has-key? compound (str k "-double"))
+               (nbt-has-key-safe? compound (str k "-double"))
                (nbt-get-double compound (str k "-double"))
                
                :else

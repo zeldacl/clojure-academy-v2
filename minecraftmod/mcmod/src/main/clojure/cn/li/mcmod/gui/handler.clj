@@ -36,7 +36,7 @@
 (defrecord WirelessGuiHandler []
   IGuiHandler
   (get-server-container [_ gui-id player world pos]
-    (let [tile-entity (pworld/world-get-tile-entity world pos)
+    (let [tile-entity (pworld/world-get-tile-entity* world pos)
           cfg? (get-gui-config gui-id)
           container-fn (gui-dsl/get-container-fn gui-id)]
       (if (and tile-entity cfg? container-fn)
@@ -52,7 +52,7 @@
             (log/warn "Missing :container-fn for GUI ID:" gui-id))
           nil))))
   (get-client-gui [_ gui-id player world pos]
-    (let [tile-entity (pworld/world-get-tile-entity world pos)
+    (let [tile-entity (pworld/world-get-tile-entity* world pos)
           cfg? (get-gui-config gui-id)
           container-fn (gui-dsl/get-container-fn gui-id)
           screen-fn (gui-dsl/get-screen-fn gui-id)]

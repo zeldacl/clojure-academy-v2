@@ -18,7 +18,7 @@
     :read (fn [nbt key]
             (nbt/nbt-get-double nbt key))
     :has-key? (fn [nbt key]
-                (nbt/nbt-has-key? nbt key))}
+                (nbt/nbt-has-key-safe? nbt key))}
 
    :string
    {:write (fn [nbt key value]
@@ -26,7 +26,7 @@
     :read (fn [nbt key]
             (nbt/nbt-get-string nbt key))
     :has-key? (fn [nbt key]
-                (nbt/nbt-has-key? nbt key))}
+                (nbt/nbt-has-key-safe? nbt key))}
 
    :int
    {:write (fn [nbt key value]
@@ -34,7 +34,7 @@
     :read (fn [nbt key]
             (nbt/nbt-get-int nbt key))
     :has-key? (fn [nbt key]
-                (nbt/nbt-has-key? nbt key))}
+                (nbt/nbt-has-key-safe? nbt key))}
 
    :boolean
    {:write (fn [nbt key value]
@@ -42,7 +42,7 @@
     :read (fn [nbt key]
             (nbt/nbt-get-boolean nbt key))
     :has-key? (fn [nbt key]
-                (nbt/nbt-has-key? nbt key))}
+                (nbt/nbt-has-key-safe? nbt key))}
 
    :float
    {:write (fn [nbt key value]
@@ -50,7 +50,7 @@
     :read (fn [nbt key]
             (nbt/nbt-get-float nbt key))
     :has-key? (fn [nbt key]
-                (nbt/nbt-has-key? nbt key))}
+                (nbt/nbt-has-key-safe? nbt key))}
 
    :long
    {:write (fn [nbt key value]
@@ -58,7 +58,7 @@
     :read (fn [nbt key]
             (nbt/nbt-get-long nbt key))
     :has-key? (fn [nbt key]
-                (nbt/nbt-has-key? nbt key))}
+                (nbt/nbt-has-key-safe? nbt key))}
 
      :keyword
      {:write (fn [nbt key value]
@@ -66,7 +66,7 @@
       :read (fn [nbt key]
         (keyword (nbt/nbt-get-string nbt key)))
       :has-key? (fn [nbt key]
-      (nbt/nbt-has-key? nbt key))}
+      (nbt/nbt-has-key-safe? nbt key))}
 
      :atom
      {:write (fn [_nbt key _value]
@@ -156,7 +156,7 @@
   (let [{:keys [field-key nbt-key type atom? setter custom-read default transform-read]} field-spec
         has-key? (if-let [converter (get type-converters type)]
                    ((:has-key? converter) nbt nbt-key)
-                   (nbt/nbt-has-key? nbt nbt-key))]
+                   (nbt/nbt-has-key-safe? nbt nbt-key))]
     (when has-key?
       (let [value (if custom-read
                     (custom-read tile nbt nbt-key)
@@ -212,7 +212,7 @@
   - from-nbt-fn: (fn [world-data item-nbt] -> item)
   - rebuild-fn: optional (fn [world-data item] -> void)"
   [nbt tag world-data collection-atom from-nbt-fn rebuild-fn]
-  (when (nbt/nbt-has-key? nbt tag)
+  (when (nbt/nbt-has-key-safe? nbt tag)
     (let [list (nbt/nbt-get-list nbt tag)
           size (nbt/nbt-list-size list)]
       (dotimes [i size]
@@ -414,7 +414,7 @@
 (defn read-atom-int
   "Read an integer into an atom"
   [tile nbt nbt-key]
-  (when (nbt/nbt-has-key? nbt nbt-key)
+  (when (nbt/nbt-has-key-safe? nbt nbt-key)
     (reset! (get-in tile [nbt-key]) (nbt/nbt-get-int nbt nbt-key))))
 
 (defn write-atom-double
@@ -425,7 +425,7 @@
 (defn read-atom-double
   "Read a double into an atom"
   [tile nbt nbt-key]
-  (when (nbt/nbt-has-key? nbt nbt-key)
+  (when (nbt/nbt-has-key-safe? nbt nbt-key)
     (reset! (get-in tile [nbt-key]) (nbt/nbt-get-double nbt nbt-key))))
 
 (defn write-atom-boolean
@@ -436,7 +436,7 @@
 (defn read-atom-boolean
   "Read a boolean into an atom"
   [tile nbt nbt-key]
-  (when (nbt/nbt-has-key? nbt nbt-key)
+  (when (nbt/nbt-has-key-safe? nbt nbt-key)
     (reset! (get-in tile [nbt-key]) (nbt/nbt-get-boolean nbt nbt-key))))
 
 ;; ============================================================================
@@ -458,3 +458,4 @@
                       {:type (:type spec)
                        :available-types (keys type-converters)}))))
   true)
+

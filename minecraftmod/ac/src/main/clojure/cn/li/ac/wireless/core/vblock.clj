@@ -88,7 +88,7 @@
   [vblock w]
   (let [chunk-x (bit-shift-right (:x vblock) 4)
         chunk-z (bit-shift-right (:z vblock) 4)]
-    (world/world-is-chunk-loaded? w chunk-x chunk-z)))
+    (world/world-is-chunk-loaded?* w chunk-x chunk-z)))
 
 ;; ============================================================================
 ;; Capability-based type checking
@@ -134,7 +134,7 @@
   (when w
     (when (or (:ignore-chunk vblock) (is-chunk-loaded? vblock w))
       (let [block-pos (vblock-pos vblock)
-            tile      (world/world-get-tile-entity w block-pos)]
+            tile      (world/world-get-tile-entity* w block-pos)]
         (when tile
           (case (:block-type vblock)
             :matrix    (when (tile-has-wireless-matrix?    tile) tile)

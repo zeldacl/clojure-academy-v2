@@ -52,7 +52,7 @@
           occupied? (some (fn [bp]
                             (if (same-pos? bp pos)
                               false
-                              (let [state (world/world-get-block-state world bp)]
+                              (let [state (world/world-get-block-state* world bp)]
                                 (not (state-empty? state)))))
                           (structure-positions pos controller-spec))]
       (when occupied?
@@ -74,8 +74,8 @@
         {:cancel-place? true})
       (doseq [bp (structure-positions pos controller-spec)
               :when (not (same-pos? bp pos))]
-        (world/world-place-block-by-id world part-block-id bp 3)
-        (when-let [be (world/world-get-tile-entity world bp)]
+        (world/world-place-block-by-id* world part-block-id bp 3)
+        (when-let [be (world/world-get-tile-entity* world bp)]
           (set-be-state! be {:controller-pos-x mx
                              :controller-pos-y my
                              :controller-pos-z mz
@@ -90,7 +90,7 @@
     pos
 
     (registry-metadata/is-part-block? block-id)
-    (let [be (world/world-get-tile-entity world pos)
+    (let [be (world/world-get-tile-entity* world pos)
           st (be-state be)
           cx (:controller-pos-x st)
           cy (:controller-pos-y st)
@@ -131,6 +131,6 @@
                 :when (or remove-all?
                           (not (same-pos? bp controller-pos)))]
           (if (and remove-all? (same-pos? bp controller-pos))
-            (world/world-break-block world bp true)
-            (world/world-remove-block world bp)))
+            (world/world-break-block* world bp true)
+            (world/world-remove-block* world bp)))
         {:cancel-break? remove-all?}))))

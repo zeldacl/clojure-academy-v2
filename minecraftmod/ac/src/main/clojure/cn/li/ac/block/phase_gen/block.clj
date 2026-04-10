@@ -43,7 +43,7 @@
 (defn- phase-tick-fn
   "Tick handler for phase generator"
   [level pos _block-state be]
-  (when (and level (not (world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) phase-default-state)
           ticker (inc (get state :update-ticker 0))
           state (assoc state :update-ticker ticker)
@@ -141,3 +141,4 @@
          :events {:on-right-click open-phase-gen-gui!}}))
     (hooks/register-network-handler! register-network-handlers!)
     (log/info "Initialized Phase Generator block")))
+

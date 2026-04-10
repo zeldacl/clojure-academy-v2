@@ -109,7 +109,7 @@
 (defn- former-tick-fn
   "Tick handler for metal former"
   [level _pos _block-state be]
-  (when (and level (not (world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) former-default-state)
           ticker (inc (get state :update-ticker 0))
           state (assoc state :update-ticker ticker)
@@ -251,3 +251,4 @@
          :events {:on-right-click open-former-gui!}}))
     (hooks/register-network-handler! register-network-handlers!)
     (log/info "Initialized Metal Former block")))
+

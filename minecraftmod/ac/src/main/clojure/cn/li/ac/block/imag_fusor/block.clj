@@ -144,7 +144,7 @@
 (defn- fusor-tick-fn
   "Tick handler for imaginary fusor"
   [level _pos _block-state be]
-  (when (and level (not (world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) fusor-default-state)
           ticker (inc (get state :update-ticker 0))
           state (assoc state :update-ticker ticker)
@@ -294,3 +294,4 @@
          :events {:on-right-click open-fusor-gui!}}))
     (hooks/register-network-handler! register-network-handlers!)
           (log-info "Initialized Imaginary Fusor block")))
+

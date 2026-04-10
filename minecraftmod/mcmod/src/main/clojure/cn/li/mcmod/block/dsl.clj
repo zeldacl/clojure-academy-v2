@@ -262,7 +262,7 @@
                       master-pos (pos/create-block-pos (:x master-map)
                                                        (:y master-map)
                                                        (:z master-map))]
-                  (when (world/world-get-tile-entity world master-pos)
+                  (when (world/world-get-tile-entity* world master-pos)
                     master-pos)))
               positions)))))
 
@@ -296,7 +296,7 @@
       (let [positions (all-multi-block-positions master-pos block-spec)]
         (every?
           (fn [p]
-            (let [state (world/world-get-block-state world p)]
+            (let [state (world/world-get-block-state* world p)]
               (nil? state)))
           positions)))))
 
@@ -332,14 +332,14 @@
                           (pos/create-block-pos x y z)))]
 
           ;; Check origin first - must be controller block
-          (let [origin-state (world/world-get-block-state world origin-pos)]
+          (let [origin-state (world/world-get-block-state* world origin-pos)]
             (if-not origin-state
               (do
                 (log/debug "Multi-block validation failed: origin block missing at" origin-pos)
                 false)
               ;; Check if origin is controller (when controller-parts mode)
               (if (and controller-id part-id)
-                (let [origin-be (world/world-get-tile-entity world origin-pos)
+                (let [origin-be (world/world-get-tile-entity* world origin-pos)
                       origin-block-id (when origin-be
                                         (try
                                           (when-let [get-id (requiring-resolve 'cn.li.mcmod.platform.be/be-get-block-id)]
@@ -359,13 +359,13 @@
                                          (if is-origin?
                                            true  ; Already checked origin
                                            (let [pos (abs-pos rel-pos)
-                                                 block-state (world/world-get-block-state world pos)]
+                                                 block-state (world/world-get-block-state* world pos)]
                                              (if-not block-state
                                                (do
                                                  (log/debug "Multi-block validation failed: missing block at" pos "rel-pos" rel-pos)
                                                  false)
                                                ;; Verify it's a part block
-                                               (let [be (world/world-get-tile-entity world pos)
+                                               (let [be (world/world-get-tile-entity* world pos)
                                                      block-id (when be
                                                                 (try
                                                                   (when-let [get-id (requiring-resolve 'cn.li.mcmod.platform.be/be-get-block-id)]
@@ -388,7 +388,7 @@
                                (fn [rel-pos]
                                  (try
                                    (let [pos (abs-pos rel-pos)
-                                         block-state (world/world-get-block-state world pos)]
+                                         block-state (world/world-get-block-state* world pos)]
                                      (when-not block-state
                                        (log/debug "Multi-block validation failed: missing block at" pos "rel-pos" rel-pos))
                                      (if block-state true false))

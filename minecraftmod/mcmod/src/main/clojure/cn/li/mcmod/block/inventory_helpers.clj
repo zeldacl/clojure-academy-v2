@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.block.inventory-helpers
   "Generic inventory NBT serialization utilities.
 
-  Provides load/save functions for item vector ↔ NBT ListTag conversion.
+  Provides load/save functions for item vector 鈫?NBT ListTag conversion.
   Reusable across any block with inventory slots."
   (:require [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.item :as pitem]
@@ -17,7 +17,7 @@
 
   Returns: Vector of ItemStack or nil per slot"
   [tag nbt-key default]
-  (if (nbt/nbt-has-key? tag nbt-key)
+  (if (nbt/nbt-has-key-safe? tag nbt-key)
     (let [inv-tag (nbt/nbt-get-list tag nbt-key)
           size    (nbt/nbt-list-size inv-tag)]
       (reduce
@@ -66,3 +66,4 @@
     (pbe/set-custom-state! be (assoc state field value))
     (try (pbe/set-changed! be) (catch Exception _))
     be))
+

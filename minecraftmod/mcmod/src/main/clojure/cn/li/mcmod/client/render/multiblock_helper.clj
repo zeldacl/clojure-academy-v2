@@ -48,7 +48,7 @@
 
 (defn- tile-block-id-at
   [world-obj x y z]
-  (when-let [te (world/world-get-tile-entity world-obj (pos/create-block-pos x y z))]
+  (when-let [te (world/world-get-tile-entity* world-obj (pos/create-block-pos x y z))]
     (get-tile-block-id te)))
 
 (defn- lexicographic-min-pos

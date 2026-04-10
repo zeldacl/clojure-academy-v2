@@ -82,7 +82,7 @@
               cy (:controller-pos-y state)
               cz (:controller-pos-z state)]
           (if (and world-obj (number? cx) (number? cy) (number? cz))
-            (or (world/world-get-tile-entity world-obj (pos/create-block-pos (long cx) (long cy) (long cz)))
+            (or (world/world-get-tile-entity* world-obj (pos/create-block-pos (long cx) (long cy) (long cz)))
                 be)
             be))))))
 
@@ -502,7 +502,7 @@
   (fn [event-data]
     (log/debug "Wireless Matrix right-clicked!")
     (let [{:keys [player world pos sneaking]} event-data
-          be         (world/world-get-tile-entity world pos)
+          be         (world/world-get-tile-entity* world pos)
           state      (when be (safe-state be))
           ;; If this is a part block (sub-id != 0), find the controller
           sub-id     (when state (:sub-id state 0))
@@ -538,7 +538,7 @@
                            ;; This is the controller
                            pos)
           ;; Get controller's block entity
-          controller-be (world/world-get-tile-entity world controller-pos)
+          controller-be (world/world-get-tile-entity* world controller-pos)
           controller-state (when controller-be (safe-state controller-be))]
       (log/debug "Controller pos:" controller-pos "sub-id:" (:sub-id controller-state 0))
       (if controller-state
@@ -575,7 +575,7 @@
     (log/info "Placing Wireless Matrix")
     (let [{:keys [player world pos]} event-data
           player-name (str player)
-          be (world/world-get-tile-entity world pos)]
+          be (world/world-get-tile-entity* world pos)]
       (when be
         (let [state (or (platform-be/get-custom-state be) matrix-default-state)]
           (platform-be/set-custom-state! be (assoc state :placer-name player-name))))
@@ -585,7 +585,7 @@
   (fn [event-data]
     (log/info "Breaking Wireless Matrix")
     (let [{:keys [world pos]} event-data
-          be (world/world-get-tile-entity world pos)]
+          be (world/world-get-tile-entity* world pos)]
       (when be
         (let [state (safe-state be)]
           (doseq [[idx item] (map-indexed vector (:inventory state []))]

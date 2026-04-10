@@ -60,7 +60,7 @@
 (defn- cat-tick-fn
   "Tick handler for cat engine"
   [level pos _block-state be]
-  (when (and level (not (world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) cat-default-state)
           ticker (inc (get state :update-ticker 0))
           state (assoc state :update-ticker ticker)
@@ -139,3 +139,4 @@
                      :flat-item-icon? true
                      :light-level 0}}))
     (log/info "Initialized Cat Engine block")))
+

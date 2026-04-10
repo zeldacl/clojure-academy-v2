@@ -32,7 +32,7 @@
   [world {:keys [pos-x pos-y pos-z]}]
   (when (and world (number? pos-x) (number? pos-y) (number? pos-z))
     (let [block-pos (pos/create-block-pos pos-x pos-y pos-z)]
-      (world/world-get-tile-entity world block-pos))))
+      (world/world-get-tile-entity* world block-pos))))
 
 ;; ============================================================================
 ;; Payload Construction Helpers

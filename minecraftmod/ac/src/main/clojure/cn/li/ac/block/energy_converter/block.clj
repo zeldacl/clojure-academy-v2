@@ -47,7 +47,7 @@
 
   All mutable state is stored in BE customState as a Clojure keyword map."
   [level _pos _block-state be]
-  (when (and level (not (world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) {})
           tick-counter (int (get state :tick-counter 0))
           tick-interval (converter-config/tick-interval)]
@@ -89,46 +89,46 @@
 ;; ============================================================================
 
 (defn- converter-read-nbt-fn
-  "Deserialize CompoundTag → state keyword map (stored in BE customState)."
+  "Deserialize CompoundTag 鈫?state keyword map (stored in BE customState)."
   [tag]
-  {:energy      (if (nbt/nbt-has-key? tag "Energy")
+  {:energy      (if (nbt/nbt-has-key-safe? tag "Energy")
                   (nbt/nbt-get-double tag "Energy")
                   0.0)
    :max-energy  (converter-config/max-energy)
-   :mode        (if (nbt/nbt-has-key? tag "Mode")
+   :mode        (if (nbt/nbt-has-key-safe? tag "Mode")
                   (nbt/nbt-get-string tag "Mode")
                   "charge-items")
-   :input-slot  (when (nbt/nbt-has-key? tag "InputSlot")
+   :input-slot  (when (nbt/nbt-has-key-safe? tag "InputSlot")
                   (item/create-item-from-nbt (nbt/nbt-get-compound tag "InputSlot")))
-   :output-slot (when (nbt/nbt-has-key? tag "OutputSlot")
+   :output-slot (when (nbt/nbt-has-key-safe? tag "OutputSlot")
                   (item/create-item-from-nbt (nbt/nbt-get-compound tag "OutputSlot")))
-   :wireless-enabled (if (nbt/nbt-has-key? tag "WirelessEnabled")
+   :wireless-enabled (if (nbt/nbt-has-key-safe? tag "WirelessEnabled")
                        (nbt/nbt-get-boolean tag "WirelessEnabled")
                        false)
-   :wireless-mode (if (nbt/nbt-has-key? tag "WirelessMode")
+   :wireless-mode (if (nbt/nbt-has-key-safe? tag "WirelessMode")
                     (nbt/nbt-get-string tag "WirelessMode")
                     "generator")
-   :wireless-bandwidth (if (nbt/nbt-has-key? tag "WirelessBandwidth")
+   :wireless-bandwidth (if (nbt/nbt-has-key-safe? tag "WirelessBandwidth")
                          (nbt/nbt-get-double tag "WirelessBandwidth")
                          1000.0)
-   :face-config (if (nbt/nbt-has-key? tag "FaceConfig")
+   :face-config (if (nbt/nbt-has-key-safe? tag "FaceConfig")
                   (let [face-tag (nbt/nbt-get-compound tag "FaceConfig")]
-                    {:north (if (nbt/nbt-has-key? face-tag "north")
+                    {:north (if (nbt/nbt-has-key-safe? face-tag "north")
                               (nbt/nbt-get-string face-tag "north")
                               "none")
-                     :south (if (nbt/nbt-has-key? face-tag "south")
+                     :south (if (nbt/nbt-has-key-safe? face-tag "south")
                               (nbt/nbt-get-string face-tag "south")
                               "none")
-                     :east (if (nbt/nbt-has-key? face-tag "east")
+                     :east (if (nbt/nbt-has-key-safe? face-tag "east")
                              (nbt/nbt-get-string face-tag "east")
                              "none")
-                     :west (if (nbt/nbt-has-key? face-tag "west")
+                     :west (if (nbt/nbt-has-key-safe? face-tag "west")
                              (nbt/nbt-get-string face-tag "west")
                              "none")
-                     :up (if (nbt/nbt-has-key? face-tag "up")
+                     :up (if (nbt/nbt-has-key-safe? face-tag "up")
                            (nbt/nbt-get-string face-tag "up")
                            "none")
-                     :down (if (nbt/nbt-has-key? face-tag "down")
+                     :down (if (nbt/nbt-has-key-safe? face-tag "down")
                              (nbt/nbt-get-string face-tag "down")
                              "none")})
                   (face-config/default-face-config))
@@ -136,7 +136,7 @@
    :transfer-rate 0.0})
 
 (defn- converter-write-nbt-fn
-  "Serialize BE customState → CompoundTag."
+  "Serialize BE customState 鈫?CompoundTag."
   [be tag]
   (let [state (or (platform-be/get-custom-state be) {})]
     (nbt/nbt-set-double! tag "Energy" (double (get state :energy 0.0)))
@@ -323,3 +323,4 @@
          :events {:on-right-click open-converter-gui!}}))
     (hooks/register-network-handler! register-network-handlers!)
     (log/info "Initialized Energy Converter block")))
+

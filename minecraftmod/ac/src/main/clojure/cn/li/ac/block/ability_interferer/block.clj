@@ -89,7 +89,7 @@
 (defn- interferer-tick-fn
   "Tick handler for ability interferer"
   [level pos _block-state be]
-  (when (and level (not (world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) interferer-default-state)
           ticker (inc (get state :update-ticker 0))
           state (assoc state :update-ticker ticker)
@@ -281,3 +281,4 @@
          :events {:on-right-click open-interferer-gui!}}))
     (hooks/register-network-handler! register-network-handlers!)
     (log/info "Initialized Ability Interferer block")))
+

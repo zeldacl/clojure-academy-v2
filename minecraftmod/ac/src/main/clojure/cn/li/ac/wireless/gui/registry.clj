@@ -72,7 +72,7 @@
     (throw (ex-info "Invalid GUI ID" {:gui-id gui-id})))
   
   ;; Validate tile entity exists
-  (let [tile-entity (pworld/world-get-tile-entity world pos)]
+  (let [tile-entity (pworld/world-get-tile-entity* world pos)]
     (when-not tile-entity
       (log/warn "No tile entity at position:" pos)
       (throw (ex-info "No tile entity at position" {:pos pos}))))

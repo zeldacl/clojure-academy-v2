@@ -86,7 +86,7 @@
 (defn- developer-tick-fn
   "Tick handler for developer controller"
   [level pos _block-state be]
-  (when (and level (not (world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) dev-default-state)
           ticker (inc (get state :update-ticker 0))
           state (assoc state :update-ticker ticker)
@@ -301,3 +301,4 @@
                      :textures {:all (modid/asset-path "block" "dev_advanced")}}}))
     (hooks/register-network-handler! register-network-handlers!)
     (log/info "Initialized Developer blocks (Normal and Advanced)")))
+

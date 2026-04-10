@@ -41,9 +41,9 @@
   "True when the level is daytime and the block above has sky access."
   [level pos]
   (when (and level pos)
-    (let [time (rem (long (world/world-get-day-time level)) 24000)
+    (let [time (rem (long (world/world-get-day-time* level)) 24000)
           day? (<= time (solar-config/daytime-threshold-ticks))]
-      (and day? (world/world-can-see-sky level
+      (and day? (world/world-can-see-sky* level
                   (pos/create-block-pos (pos/pos-x pos) (inc (pos/pos-y pos)) (pos/pos-z pos)))))))
 
 ;; ============================================================================
@@ -54,12 +54,12 @@
   "Tick handler for solar generator ScriptedBlockEntity.
 
   All mutable state is stored in BE customState as a Clojure keyword map.
-  No reflection — uses direct Java interop and getCustomState/setCustomState."
+  No reflection 鈥?uses direct Java interop and getCustomState/setCustomState."
   [level pos _block-state be]
-  (when (and level (not (world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side* level)))
     (let [state       (or (platform-be/get-custom-state be) {})
           generating? (can-generate? level pos)
-          raining?    (world/world-is-raining level)
+          raining?    (world/world-is-raining* level)
           status      (cond (not generating?) "STOPPED"
                             raining?          "WEAK"
                             :else             "STRONG")
@@ -85,18 +85,18 @@
 ;; ============================================================================
 
 (defn- solar-read-nbt-fn
-  "Deserialize CompoundTag → state keyword map (stored in BE customState)."
+  "Deserialize CompoundTag 鈫?state keyword map (stored in BE customState)."
   [tag]
-  {:energy     (if (nbt/nbt-has-key? tag "Energy")
+  {:energy     (if (nbt/nbt-has-key-safe? tag "Energy")
                  (nbt/nbt-get-double tag "Energy")
                  0.0)
     :max-energy (solar-config/max-energy)
    :status     "STOPPED"
-   :battery    (when (nbt/nbt-has-key? tag "Battery")
+   :battery    (when (nbt/nbt-has-key-safe? tag "Battery")
                  (item/create-item-from-nbt (nbt/nbt-get-compound tag "Battery")))})
 
 (defn- solar-write-nbt-fn
-  "Serialize BE customState → CompoundTag."
+  "Serialize BE customState 鈫?CompoundTag."
   [be tag]
   (let [state (or (platform-be/get-custom-state be) {})]
     (nbt/nbt-set-double! tag "Energy" (double (get state :energy 0.0)))
@@ -236,3 +236,4 @@
          :events {:on-right-click open-solar-gui!}}))
     (hooks/register-network-handler! register-network-handlers!)
     (log/info "Initialized Solar Generator block")))
+

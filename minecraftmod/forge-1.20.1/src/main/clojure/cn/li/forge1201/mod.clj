@@ -9,6 +9,7 @@
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
             [cn.li.forge1201.ability.lifecycle :as ability-lifecycle]
             [cn.li.forge1201.ability.item-handler :as ability-item-handler]
+            [cn.li.forge1201.platform-impl :as platform-impl]
             [cn.li.forge1201.config.bridge :as config-bridge]
             ;; platform-impl 会在 runtime 的 mod-init 中按需加载（避免 AOT/checkClojure 阶段触发 Minecraft class init）
             [cn.li.mcmod.block.dsl :as bdsl]
@@ -360,8 +361,7 @@
         (log/info "[BOOTSTRAP_TRACE] mod-init runtime path begin")
         ;; CRITICAL: Initialize platform abstractions FIRST
         ;; This must happen before any core code runs that uses NBT/BlockPos/World
-        (when-let [init-platform! (requiring-resolve 'cn.li.forge1201.platform-impl/init-platform!)]
-          (init-platform!))
+        (platform-impl/init-platform!)
         ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources.
         (init/init-from-java)
         ;; Runtime content load is delay-backed in ac.core and explicitly activated here.

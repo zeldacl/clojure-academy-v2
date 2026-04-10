@@ -89,7 +89,7 @@
     (when (and (>= y -64)
                (< distance max-distance))
       (let [check-pos (pos/create-block-pos (pos/pos-x pos) y (pos/pos-z pos))
-            be (world/world-get-tile-entity level check-pos)]
+            be (world/world-get-tile-entity* level check-pos)]
         (if (and be (= "wind-gen-base" (platform-be/get-block-id be)))
           check-pos
           (let [block-id (when be (platform-be/get-block-id be))]
@@ -105,7 +105,7 @@
     (when (and (<= y 320)
                (< distance max-distance))
       (let [check-pos (pos/create-block-pos (pos/pos-x pos) y (pos/pos-z pos))
-            be (world/world-get-tile-entity level check-pos)]
+            be (world/world-get-tile-entity* level check-pos)]
         (if (and be (= "wind-gen-main" (platform-be/get-block-id be)))
           check-pos
           (let [block-id (when be (platform-be/get-block-id be))]
@@ -141,7 +141,7 @@
 (defn- main-tick-fn
   "Tick handler for wind generator main block"
   [level pos _block-state be]
-  (when (and level (not (world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) main-default-state)
           ticker (inc (get state :update-ticker 0))
           wind-ticker (inc (get state :wind-change-ticker 0))
@@ -190,7 +190,7 @@
 (defn- base-tick-fn
   "Tick handler for wind generator base block"
   [level pos _block-state be]
-  (when (and level (not (world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) base-default-state)
           ticker (inc (get state :update-ticker 0))
           state (assoc state :update-ticker ticker)
@@ -216,7 +216,7 @@
                         main-z (:main-pos-z state)]
                     (when (and main-x main-y main-z)
                       (let [main-pos (pos/create-block-pos main-x main-y main-z)
-                            main-be (world/world-get-tile-entity level main-pos)]
+                            main-be (world/world-get-tile-entity* level main-pos)]
                         (when main-be
                           (let [main-state (platform-be/get-custom-state main-be)
                                 main-energy (double (get main-state :energy 0.0))]
@@ -250,7 +250,7 @@
 (defn- pillar-tick-fn
   "Tick handler for wind generator pillar block"
   [level pos _block-state be]
-  (when (and level (not (world/world-is-client-side level)))
+  (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) pillar-default-state)
           ticker (inc (get state :update-ticker 0))
           state (assoc state :update-ticker ticker)
@@ -407,3 +407,4 @@
                      :flat-item-icon? true}}))
     (hooks/register-network-handler! register-network-handlers!)
     (log/info "Initialized Wind Generator blocks (3-part structure)")))
+

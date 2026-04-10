@@ -371,7 +371,7 @@
   (fn [event-data]
     (log/info "Wireless Node (" (name node-type) ") right-clicked!")
     (let [{:keys [player world pos]} event-data
-          be    (world/world-get-tile-entity world pos)
+          be    (world/world-get-tile-entity* world pos)
           state (when be (or (platform-be/get-custom-state be) node-default-state))]
       (if state
         (do
@@ -395,7 +395,7 @@
     (log/info "Placing Wireless Node (" (name node-type) ")")
     (let [{:keys [player world pos]} event-data
           player-name (str player)
-          be          (world/world-get-tile-entity world pos)]
+          be          (world/world-get-tile-entity* world pos)]
       (when be
         (let [state (or (platform-be/get-custom-state be) node-default-state)]
           (platform-be/set-custom-state! be (assoc state
@@ -407,7 +407,7 @@
   (fn [event-data]
     (log/info "Breaking Wireless Node (" (name node-type) ")")
     (let [{:keys [world pos]} event-data
-          be (world/world-get-tile-entity world pos)]
+          be (world/world-get-tile-entity* world pos)]
       (when be
         (let [state (or (platform-be/get-custom-state be) node-default-state)]
           (doseq [item (:inventory state [])]

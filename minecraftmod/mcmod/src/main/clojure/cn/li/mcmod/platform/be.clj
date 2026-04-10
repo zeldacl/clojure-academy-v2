@@ -1,156 +1,123 @@
 (ns cn.li.mcmod.platform.be
-  "Platform-neutral utilities for interacting with ScriptedBlockEntity.
+	"Platform-neutral utilities for interacting with ScriptedBlockEntity.
 
-  ac code should use these functions instead of calling Java interop directly.
-  Platform implementations must bind *be-capability-slot-fn* during init so
-  that get-capability-slot can retrieve Forge Capability objects by key.")
+	ac code should use these functions instead of calling Java interop directly.
+	Platform implementations must bind *be-capability-slot-fn* during init so
+	that get-capability-slot can retrieve Forge Capability objects by key."
+	(:require [cn.li.mcmod.util.log :as log]
+						[cn.li.mcmod.platform.world :as world]
+						[cn.li.mcmod.platform.capability :as cap]))
 
 (defn- call-log
-  [level & xs]
-  (when-let [f (requiring-resolve (symbol "cn.li.mcmod.util.log" (name level)))]
-    (apply f xs)))
+	[level & xs]
+	(case level
+		:error (apply log/error xs)
+		:warn (apply log/warn xs)
+		:info (apply log/info xs)
+		nil))
 
 (defn- world-get-tile-entity*
-  [w block-pos]
-  (when-let [f (requiring-resolve 'cn.li.mcmod.platform.world/world-get-tile-entity)]
-    (f w block-pos)))
+	[w block-pos]
+	(world/world-get-tile-entity* w block-pos))
 
 (defn- capability-present?
-  [lo]
-  (when-let [f (requiring-resolve 'cn.li.mcmod.platform.capability/is-present?)]
-    (f lo)))
+	[lo]
+	(cap/is-present? lo))
 
 (defn- capability-or-else
-  [lo default]
-  (when-let [f (requiring-resolve 'cn.li.mcmod.platform.capability/or-else)]
-    (f lo default)))
+	[lo default]
+	(cap/or-else lo default))
 
 (defn- capability-get
-  [provider cap side]
-  (when-let [f (requiring-resolve 'cn.li.mcmod.platform.capability/get-capability)]
-    (f provider cap side)))
-
-;; ============================================================================
-;; BlockEntity Protocol
-;; ============================================================================
+	[provider capability side]
+	(cap/get-capability provider capability side))
 
 (defprotocol IBlockEntity
-  "Protocol for BlockEntity operations. Platform implementations must extend
-  this protocol on the platform BlockEntity class to perform Java interop.
-  Core code should call these protocol functions instead of raw interop."
+	"Protocol for BlockEntity operations. Platform implementations must extend
+	this protocol on the platform BlockEntity class to perform Java interop.
+	Core code should call these protocol functions instead of raw interop."
+	(be-get-level [this])
+	(be-get-world [this])
+	(be-get-custom-state [this])
+	(be-set-custom-state! [this state])
+	(be-get-block-id [this])
+	(be-set-changed! [this]))
 
-  (be-get-level [this]
-    "Get the Level/World from BlockEntity (MC 1.17+ method name)")
+(def ^:dynamic *be-capability-slot-fn* nil)
+(def ^:dynamic *be-get-level-fn* nil)
+(def ^:dynamic *be-get-world-fn* nil)
+(def ^:dynamic *be-get-custom-state-fn* nil)
+(def ^:dynamic *be-set-custom-state-fn* nil)
+(def ^:dynamic *be-get-block-id-fn* nil)
+(def ^:dynamic *be-set-changed-fn* nil)
 
-  (be-get-world [this]
-    "Get the World from BlockEntity (MC 1.16.5 method name)")
+(defn be-get-world-safe [be]
+	(or (try (if *be-get-level-fn* (*be-get-level-fn* be) (be-get-level be))
+					 (catch Exception _ nil))
+			(try (if *be-get-world-fn* (*be-get-world-fn* be) (be-get-world be))
+					 (catch Exception _ nil))))
 
-  (be-get-custom-state [this]
-    "Return the customState map from ScriptedBlockEntity, or nil")
+(defn get-block-entity [w block-pos]
+	(try
+		(world-get-tile-entity* w block-pos)
+		(catch Exception e
+			(call-log :warn "get-block-entity failed:" (ex-message e))
+			nil)))
 
-  (be-set-custom-state! [this state]
-    "Set the customState map on ScriptedBlockEntity")
+(defn get-custom-state [be]
+	(when be
+		(try
+			(if *be-get-custom-state-fn*
+				(*be-get-custom-state-fn* be)
+				(be-get-custom-state be))
+			(catch Exception e
+				(call-log :warn "get-custom-state failed:" (ex-message e))
+				nil))))
 
-  (be-get-block-id [this]
-    "Return stable block id identifier string for this BE")
+(defn set-custom-state! [be state]
+	(when be
+		(try
+			(if *be-set-custom-state-fn*
+				(*be-set-custom-state-fn* be state)
+				(be-set-custom-state! be state))
+			(if *be-set-changed-fn*
+				(*be-set-changed-fn* be)
+				(be-set-changed! be))
+			(catch Exception e
+				(call-log :error "set-custom-state! failed:" (ex-message e))))))
 
-  (be-set-changed! [this]
-    "Mark the BE as changed so it will be saved."))
+(defn get-block-id [be]
+	(when be
+		(try
+			(if *be-get-block-id-fn*
+				(*be-get-block-id-fn* be)
+				(be-get-block-id be))
+			(catch Exception e
+				(call-log :warn "get-block-id failed:" (ex-message e))
+				nil))))
 
-;; Helper function to get world from BlockEntity (tries both methods)
-(defn be-get-world-safe
-  "Get world from BlockEntity, trying both getLevel() and getWorld()"
-  [be]
-  (or (try (be-get-level be) (catch Exception _ nil))
-      (try (be-get-world be) (catch Exception _ nil))))
+(defn set-changed! [be]
+	(when be
+		(try
+			(if *be-set-changed-fn*
+				(*be-set-changed-fn* be)
+				(be-set-changed! be))
+			(catch Exception e
+				(call-log :warn "set-changed! failed:" (ex-message e))
+				nil))))
 
-;; ============================================================================
-;; Platform hook
-;; ============================================================================
+(defn get-capability-slot [key-string]
+	(when *be-capability-slot-fn*
+		(try
+			(*be-capability-slot-fn* key-string)
+			(catch Exception _ nil))))
 
-(def ^:dynamic *be-capability-slot-fn*
-  "Platform-specific function (fn [key-string] -> Capability-or-nil).
-  Bound by forge init to CapabilitySlots/get.
-  nil on platforms that don't use Forge Capabilities."
-  nil)
-
-;; ============================================================================
-;; Block entity access
-;; ============================================================================
-
-(defn get-block-entity
-  "Get the BlockEntity at world+pos. Returns nil if none."
-  [w block-pos]
-  (try
-    (world-get-tile-entity* w block-pos)
-    (catch Exception e
-      (call-log :warn "get-block-entity failed:" (ex-message e))
-      nil)))
-
-(defn get-custom-state
-  "Get the customState Clojure map from a ScriptedBlockEntity.
-  Returns nil if be is nil or doesn't have customState."
-  [be]
-  (when be
-    (try
-      (be-get-custom-state be)
-      (catch Exception e
-        (call-log :warn "get-custom-state failed:" (ex-message e))
-        nil))))
-
-(defn set-custom-state!
-  "Set the customState map on a ScriptedBlockEntity.
-  Marks the BE as changed so it will be saved."
-  [be state]
-  (when be
-    (try
-      (be-set-custom-state! be state)
-      (be-set-changed! be)
-      (catch Exception e
-        (call-log :error "set-custom-state! failed:" (ex-message e))))))
-
-(defn get-block-id
-  "Get the block ID string from a ScriptedBlockEntity.
-  Returns nil if be is nil or doesn't have getBlockId."
-  [be]
-  (when be
-    (try
-      (be-get-block-id be)
-      (catch Exception e
-        (call-log :warn "get-block-id failed:" (ex-message e))
-        nil))))
-
-(defn set-changed!
-  "Mark a BlockEntity as changed so it will be saved.
-  This is a platform-specific operation."
-  [be]
-  (when be
-    (try
-      (be-set-changed! be)
-      (catch Exception e
-        (call-log :warn "set-changed! failed:" (ex-message e))
-        nil))))
-
-(defn get-capability-slot
-  "Return the Forge Capability object for the given logical key string.
-  Returns nil on non-Forge platforms or if the key has not been assigned."
-  [key-string]
-  (when *be-capability-slot-fn*
-    (try
-      (*be-capability-slot-fn* key-string)
-      (catch Exception _
-        nil))))
-
-(defn get-capability
-  "Retrieve a capability handler from a BlockEntity by logical key.
-  Returns the handler object, or nil if the capability is not present."
-  [be key-string]
-  (when (and be *be-capability-slot-fn*)
-    (try
-      (let [cap (*be-capability-slot-fn* key-string)]
-        (when cap
-          (let [lo (capability-get be cap nil)]
-            (when (and lo (capability-present? lo))
-              (capability-or-else lo nil)))))
-      (catch Exception _
-        nil))))
+(defn get-capability [be key-string]
+	(when (and be *be-capability-slot-fn*)
+		(try
+			(let [capability (*be-capability-slot-fn* key-string)]
+				(when capability
+					(let [lo (capability-get be capability nil)]
+						(when (and lo (capability-present? lo))
+							(capability-or-else lo nil)))))
+			(catch Exception _ nil))))
