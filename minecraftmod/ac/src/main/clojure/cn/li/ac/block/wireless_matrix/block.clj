@@ -266,6 +266,7 @@
   "Tick: read state from BE, do work, write state back."
   [level pos _state be]
   (let [state (safe-state be)
+        already-broken? (true? (:structure-broken? state))
         ticker (inc (get state :update-ticker 0))
         state (assoc state :update-ticker ticker)
         broken? (atom false)
@@ -323,16 +324,19 @@
               (log/debug "Master found?" master-found?)
               (when (not master-found?)
                 (reset! broken? true)
-                (log/info "Matrix structure broken at" pos)
+                (when-not already-broken?
+                  (log/info "Matrix structure broken at" pos))
                 ;; Drop inventory items
                 (doseq [[idx item] (map-indexed vector (:inventory state []))]
                   (when item (log/info "Dropping item from slot" idx)))
                 ;; Keep runtime ticker but clear persistent matrix state
-                (platform-be/set-custom-state! be (assoc matrix-default-state :update-ticker ticker))))))
+                (platform-be/set-custom-state! be (assoc matrix-default-state :update-ticker ticker :structure-broken? true))))))
         (catch Exception e
           (log/error "Error verifying matrix structure:" (ex-message e)))))
     (when-not @broken?
-      (platform-be/set-custom-state! be (assoc state :update-ticker ticker)))))
+      (platform-be/set-custom-state! be (-> state
+                                            (assoc :update-ticker ticker)
+                                            (dissoc :structure-broken?))))))
 
 ;; ============================================================================
 ;; Part 6: Container Functions (Slot Access)

@@ -7,12 +7,40 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as be]
             [cn.li.forge1201.platform-bindings :as bindings]))
 
 
 (defonce ^:private initialized? (atom false))
+(defonce ^:private entity-ops-installed? (atom false))
+
+(defn- install-entity-ops!
+  []
+  (when (compare-and-set! entity-ops-installed? false true)
+    (let [entity-cls (Class/forName "net.minecraft.world.entity.Entity")
+    player-cls (Class/forName "net.minecraft.world.entity.player.Player")
+    inventory-cls (Class/forName "net.minecraft.world.entity.player.Inventory")
+    menu-cls (Class/forName "net.minecraft.world.inventory.AbstractContainerMenu")]
+      (extend entity-cls entity/IEntityOps
+        {:entity-distance-to-sqr (fn [this x y z]
+           (.distanceToSqr this (double x) (double y) (double z)))})
+      (extend player-cls entity/IEntityOps
+        {:player-get-level (fn [this]
+           (clojure.lang.Reflector/getInstanceField this "level"))
+         :player-get-name (fn [this]
+          (str (.getName this)))
+         :player-get-uuid (fn [this]
+          (.getUUID this))
+         :player-get-container-menu (fn [this]
+              (clojure.lang.Reflector/getInstanceField this "containerMenu"))})
+      (extend inventory-cls entity/IEntityOps
+        {:inventory-get-player (fn [this]
+               (clojure.lang.Reflector/getInstanceField this "player"))})
+      (extend menu-cls entity/IEntityOps
+        {:menu-get-container-id (fn [this]
+          (clojure.lang.Reflector/getInstanceField this "containerId"))}))))
 
 (defn init-platform!
   "Initialize Forge 1.20.1 platform implementations.
@@ -21,6 +49,9 @@
   stable entrypoint for Java SPI provider invocation."
   []
   (when (compare-and-set! initialized? false true)
+    ;; Install entity protocol implementations with runtime class lookup only,
+    ;; avoiding compile-time MC class loading during checkClojure.
+    (install-entity-ops!)
     (alter-var-root #'nbt/*nbt-factory*
       (constantly {:create-compound bindings/create-nbt-compound
                    :create-list bindings/create-nbt-list}))

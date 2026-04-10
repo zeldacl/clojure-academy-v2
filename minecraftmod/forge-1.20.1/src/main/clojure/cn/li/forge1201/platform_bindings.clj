@@ -3,11 +3,13 @@
 
 	These functions use direct typed calls so Loom remapping remains valid in packaged jars."
 	(:require [cn.li.mcmod.platform.nbt :as nbt]
-						[cn.li.mcmod.platform.position :as pos])
+					[cn.li.mcmod.platform.position :as pos]
+					[cn.li.mcmod.registry.metadata :as registry-metadata])
 	(:import [net.minecraft.nbt CompoundTag ListTag]
-					 [net.minecraft.core BlockPos]
-					 [net.minecraft.world.level Level]
-					 [cn.li.forge1201.block.entity ScriptedBlockEntity]))
+				 [net.minecraft.core BlockPos]
+				 [net.minecraft.world.level Level]
+				 [net.minecraft.world.level.block Block]
+				 [cn.li.forge1201.block.entity ScriptedBlockEntity]))
 
 (extend-type CompoundTag
 	nbt/INBTCompound
@@ -91,8 +93,18 @@
 	(.canSeeSky level pos))
 
 (defn world-place-block-by-id
-	[_ _ _ _]
-	false)
+	[^Level level block-id ^BlockPos pos flags]
+	(try
+		(let [dsl-id (str block-id)
+					registry-name (or (registry-metadata/get-block-registry-name dsl-id) dsl-id)
+					get-registered-block (requiring-resolve 'cn.li.forge1201.mod/get-registered-block)
+					^Block blk (or (get-registered-block dsl-id)
+											(get-registered-block registry-name))]
+			(when blk
+				(.setBlock level pos (.defaultBlockState blk) (int flags))
+				true))
+		(catch Exception _
+			false)))
 
 (defn be-get-level
 	[^ScriptedBlockEntity be]

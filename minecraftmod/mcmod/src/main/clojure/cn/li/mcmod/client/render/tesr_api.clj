@@ -106,10 +106,9 @@
   
   Dispatches to appropriate renderer based on TileEntity type."
   [tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
-  (if-let [renderer (get-tile-renderer tile-entity)]
+(when-let [renderer (get-tile-renderer tile-entity)]
     (try
       (render-tile renderer tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay)
       (catch Exception e
         (log/error "Error rendering tile entity:"(ex-message e))
-        (.printStackTrace e)))
-    (log/warn "No renderer registered for" (class tile-entity))))
+        (.printStackTrace e)))))
