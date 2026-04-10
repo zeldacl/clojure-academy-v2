@@ -48,6 +48,13 @@
 	(pos-y [this] (.getY this))
 	(pos-z [this] (.getZ this)))
 
+(extend-type ScriptedBlockEntity
+	pos/IHasPosition
+	(position-get-block-pos [this]
+		(.getBlockPos this))
+	(position-get-pos [this]
+		(.getBlockPos this)))
+
 (defn nbt-has-key?
 	[^CompoundTag nbt ^String key]
 	(.contains nbt key))
