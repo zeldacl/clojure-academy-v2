@@ -48,6 +48,21 @@
              [commonSetup [net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent] void]
              [clientSetup [net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent] void]]))
 
+;; (alter-var-root #'*err* (fn [orig]
+;;                           (proxy [java.io.PrintWriter] [orig]
+;;                             (write
+;;                               ([^String s]
+;;                                (.write orig s)
+;;                                ;; 当发现反射警告包含 "flush" 时，强行打印当前调用栈
+;;                                (when (and (.contains s "Reflection warning") (.contains s "flush"))
+;;                                  (.println orig "--- 反射源追踪开始 ---")
+;;                                  (doseq [st (.getStackTrace (Thread/currentThread))]
+;;                                    (.println orig (str "  at " st)))
+;;                                  (.println orig "--- 反射源追踪结束 ---")))
+;;                               ([^String s ^Integer off ^Integer len]
+;;                                (.write orig s off len))))))
+
+
 ;; Mod ID constant
 (def mod-id modid/*mod-id*)
 

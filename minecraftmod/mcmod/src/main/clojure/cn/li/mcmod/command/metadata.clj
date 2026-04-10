@@ -18,7 +18,11 @@
   "Lazily resolve the command registry from ac namespace"
   []
   (when-let [registry-var (requiring-resolve 'cn.li.ac.command.dsl/command-registry)]
-    @registry-var))
+    (let [registry @registry-var]
+      (cond
+        (map? registry) registry
+        (instance? clojure.lang.IDeref registry) @registry
+        :else nil))))
 
 ;; ============================================================================
 ;; Command Registration Metadata

@@ -177,7 +177,7 @@ dependencies {
     // 编译依赖项
     implementation project(':ac')
     implementation project(':mcmod')
-    implementation "org.clojure:clojure:1.11.1"
+    implementation "org.clojure:clojure:1.12.4"
 }
 
 shadowJar {

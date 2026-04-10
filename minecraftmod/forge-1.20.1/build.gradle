@@ -332,13 +332,13 @@ dependencies {
 //     implementation project(':mcmod')
 //         compileOnly project(':ac')
 //     compileOnly project(':mcmod')
-    implementation "org.clojure:clojure:1.11.1"
+    implementation "org.clojure:clojure:1.12.4"
     implementation "org.clojure:spec.alpha:0.3.218"
     implementation "org.clojure:core.specs.alpha:0.2.62"
 
     // Forge dev/runtime classloader does not automatically expose regular
     // implementation deps to transformed mod classes.
-    forgeRuntimeLibrary "org.clojure:clojure:1.11.1"
+    forgeRuntimeLibrary "org.clojure:clojure:1.12.4"
     forgeRuntimeLibrary "org.clojure:spec.alpha:0.3.218"
     forgeRuntimeLibrary "org.clojure:core.specs.alpha:0.2.62"
 
