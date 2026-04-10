@@ -15,9 +15,7 @@
                                        WirelessNetworkEvent$NodeConnected
                                        WirelessNetworkEvent$NodeDisconnected
                                        WirelessNetworkEvent$GeneratorLinked
-                                       WirelessNetworkEvent$ReceiverLinked]
-           [net.minecraftforge.common MinecraftForge]
-           [net.minecraftforge.eventbus.api EventPriority]))
+                                       WirelessNetworkEvent$ReceiverLinked]))
 
 ;; ============================================================================
 ;; Handler registries
@@ -68,7 +66,7 @@
       (swap! node-handlers #(remove (set bad) %)))))
 
 ;; ============================================================================
-;; EventBus listener – dispatches Forge events to IMC handlers
+;; Event dispatch – dispatches wireless payload events to IMC handlers
 ;; ============================================================================
 
 (defn- on-wireless-event [event]
@@ -99,18 +97,13 @@
 
     :else nil))
 
+(defn dispatch-event!
+  "Dispatch a wireless runtime payload event to registered IMC handlers."
+  [event]
+  (on-wireless-event event)
+  nil)
+
 (defn init!
-  "Subscribe IMC dispatch listeners to the Forge game event bus.
-  Call once from on-common-setup."
+  "Initialize wireless IMC bridge. Dispatch is bound through platform-events."
   []
-  (doseq [[cls] [[WirelessNetworkEvent$NetworkCreated]
-                 [WirelessNetworkEvent$NetworkDestroyed]
-                 [WirelessNetworkEvent$NodeConnected]
-                 [WirelessNetworkEvent$NodeDisconnected]
-                 [WirelessNetworkEvent$GeneratorLinked]
-                 [WirelessNetworkEvent$ReceiverLinked]]]
-    (.addListener ^net.minecraftforge.eventbus.api.IEventBus MinecraftForge/EVENT_BUS
-                  EventPriority/LOWEST false ^Class cls
-                  (reify java.util.function.Consumer
-                    (accept [_ evt] (on-wireless-event evt)))))
-  (log/info "Wireless IMC dispatchers registered"))
+  (log/info "Wireless IMC dispatcher ready (direct payload dispatch mode)"))

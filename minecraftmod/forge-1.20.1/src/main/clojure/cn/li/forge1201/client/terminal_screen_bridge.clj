@@ -9,7 +9,6 @@
            [net.minecraft.network.chat Component]
            [net.minecraft.client Minecraft]))
 
-(set! *warn-on-reflection* true)
 
 ;; ============================================================================
 ;; Terminal Screen

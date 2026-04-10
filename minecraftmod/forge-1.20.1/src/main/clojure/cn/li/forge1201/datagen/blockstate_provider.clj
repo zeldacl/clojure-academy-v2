@@ -137,7 +137,7 @@
 (defn- ensure-texture-exists!
   [texture]
   (let [texture-id (normalize-texture-id texture)
-        texture-rl (parse-rl texture-id)
+  ^ResourceLocation texture-rl (parse-rl texture-id)
         resource-path (str "assets/" (.getNamespace texture-rl)
                            "/textures/" (.getPath texture-rl) ".png")]
     (when-not (io/resource resource-path)

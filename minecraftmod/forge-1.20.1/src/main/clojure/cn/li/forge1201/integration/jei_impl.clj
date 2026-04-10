@@ -24,7 +24,6 @@
            [net.minecraft.world.level ItemLike]
            [java.util ArrayList]))
 
-(set! *warn-on-reflection* true)
 
 (defonce ^:private resolved-vars
   (atom {}))

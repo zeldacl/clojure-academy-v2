@@ -40,7 +40,8 @@
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.gui.animation :as anim]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.position :as pos]))
+            [cn.li.mcmod.platform.position :as pos])
+  (:import [cn.li.acapi.wireless IWirelessNode]))
 
 ;; ============================================================================
 ;; Slot Schema
@@ -347,7 +348,7 @@
 
       (let [node-range (fn []
                          (try
-                           (str (.getRange tile))
+                           (str (.getRange ^IWirelessNode tile))
                            (catch Exception _
                              "0.0")))
             y (tech-ui/add-histogram

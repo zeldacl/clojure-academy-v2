@@ -13,7 +13,11 @@
     [cn.li.mcmod.util.log :as log]
     [cn.li.forge1201.gui.cgui-runtime :as runtime])
   (:import
+    (net.minecraft.client Minecraft)
+    (net.minecraft.client.gui GuiGraphics Font)
+    (net.minecraft.client.renderer.texture TextureManager)
     (net.minecraft.resources ResourceLocation)
+    (com.mojang.blaze3d.vertex PoseStack)
     (com.mojang.blaze3d.systems RenderSystem)
     (javax.imageio ImageIO)
     (cn.li.forge1201.client ClientProxy GuiGraphicsHelper)
@@ -49,8 +53,8 @@
             cached (@texture-size-cache k)]
         (if cached
           cached
-              (let [mc (ClientProxy/getMinecraft)
-                tm (try (.getTextureManager mc) (catch Exception _ nil))
+              (let [^Minecraft mc (ClientProxy/getMinecraft)
+                ^TextureManager tm (try (.getTextureManager mc) (catch Exception _ nil))
                 tex (try (when tm (.getTexture tm resource-location)) (catch Exception _ nil))
                 ;; try multiple ways to obtain width/height
                 size (try
@@ -201,14 +205,14 @@
    normalization.  For standalone textures (no sub-region) these equal src-w
    and src-h.  For sprite-sheet sub-regions pass the atlas width/height so the
    UV fraction is computed correctly."
-  [gg tex-loc x y target-w target-h u-px v-px src-w src-h z-level tex-atlas-w tex-atlas-h]
+  [^GuiGraphics gg tex-loc x y target-w target-h u-px v-px src-w src-h z-level tex-atlas-w tex-atlas-h]
   (let [safe-src-w   (max 1 (int src-w))
         safe-src-h   (max 1 (int src-h))
         safe-atlas-w (max 1 (int tex-atlas-w))
         safe-atlas-h (max 1 (int tex-atlas-h))
         scale-x      (/ (double (max 1 target-w)) (double safe-src-w))
         scale-y      (/ (double (max 1 target-h)) (double safe-src-h))
-        ps           (.pose gg)]
+        ^PoseStack ps (.pose gg)]
     (.pushPose ps)
     (when-not (zero? z-level)
       (.translate ps 0.0 0.0 (double z-level)))
@@ -235,7 +239,7 @@
  (defn render-widget!
   "Render a single widget at the given absolute position and scale using GuiGraphics.
    Draws :drawtexture, :textbox, :progressbar, :outline, :tint as applicable."
-  [gg root [abs-x abs-y] scale left top]
+  [^GuiGraphics gg root [abs-x abs-y] scale left top]
   (when-not (cgui/visible? root)
     (throw (ex-info "render-widget! called on invisible widget" {})))
   (let [size (cgui/get-size root)
@@ -388,7 +392,7 @@
                        (apply str (repeat (count raw-text) \*))
                        raw-text)
                 color (unchecked-int (or (:color state) 0xFFFFFF))
-                font  (ClientProxy/getFont)]
+                ^Font font  (ClientProxy/getFont)]
             (when (seq text)
               (.drawString gg font ^String text x y color))
             ;; caret rendering for editable textboxes when focused
@@ -436,7 +440,7 @@
 (defn render-tree!
   "Render the entire widget tree rooted at root. left and top are the container screen's
    leftPos and topPos (used to transform widget coordinates into screen space)."
-  [gg root left top]
+  [^GuiGraphics gg root left top]
   (when root
     (let [visible (cgui/visible? root)
           size (cgui/get-size root)

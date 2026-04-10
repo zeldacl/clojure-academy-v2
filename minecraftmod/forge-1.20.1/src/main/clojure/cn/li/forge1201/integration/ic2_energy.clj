@@ -9,7 +9,6 @@
   (:require [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.energy IEnergyCapable]))
 
-(set! *warn-on-reflection* true)
 
 (defonce ^:private resolved-vars
   (atom {}))

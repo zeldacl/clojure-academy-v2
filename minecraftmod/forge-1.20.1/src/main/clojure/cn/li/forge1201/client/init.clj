@@ -85,6 +85,7 @@
   (alter-var-root #'pose/*push-pose-fn* (constantly pose-impl/push-pose))
   (alter-var-root #'pose/*pop-pose-fn* (constantly pose-impl/pop-pose))
   (alter-var-root #'pose/*translate-fn* (constantly pose-impl/translate))
+  (alter-var-root #'pose/*scale-fn* (constantly pose-impl/scale))
   (alter-var-root #'pose/*get-matrix-fn* (constantly pose-impl/get-pose-matrix))
 
   ;; Bind vertex consumer implementation

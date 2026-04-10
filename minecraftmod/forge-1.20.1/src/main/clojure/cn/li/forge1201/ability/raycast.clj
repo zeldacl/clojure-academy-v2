@@ -4,7 +4,6 @@
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.ability RaycastBridge]))
 
-(set! *warn-on-reflection* true)
 
 (defn- normalize-bridge-map
   [result]

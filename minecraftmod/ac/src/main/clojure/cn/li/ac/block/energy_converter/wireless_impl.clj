@@ -7,7 +7,6 @@
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessGenerator IWirelessReceiver]))
 
-(set! *warn-on-reflection* true)
 
 ;; ============================================================================
 ;; Wireless Generator Implementation

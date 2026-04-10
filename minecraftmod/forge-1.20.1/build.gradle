@@ -374,9 +374,8 @@ remapJar {
 clojure {
     builds {
         main {
+            aotAll()
             reflection = 'warn'
-            // Removed aotAll() to avoid bootstrap during checkClojure/compileClojure
-            // Classes will be compiled only when explicitly needed, not during generic compilation
         }
     }
 }
@@ -429,11 +428,11 @@ tasks.matching { it.name in ['runClient', 'runServer', 'runData'] }.configureEac
     dependsOn tasks.named('copyClojureClassesToJavaOutput')
 }
 
-tasks.named('checkClojure') {
-    dependsOn('copyClojureClassesToJavaOutput')
-}
-
 tasks.matching { it.name == 'checkClojure' }.configureEach {
+    reflection = 'skip'
+    def existingArgs = forkOptions.jvmArgs ?: []
+    forkOptions.jvmArgs = existingArgs + ['-Dclojure.compiler.warn-on-reflection=false']
+        dependsOn tasks.named('copyClojureClassesToJavaOutput')
     if (project.hasProperty('checkNsFile')) {
         def nsFile = rootProject.file(project.property('checkNsFile').toString())
         if (!nsFile.isFile()) {
@@ -457,39 +456,7 @@ tasks.matching { it.name == 'checkClojure' }.configureEach {
     }
 }
 
-// tasks.matching { it.name == 'compileClojure' }.configureEach {
-//     if (project.hasProperty('compileNsOnly')) {
-//         def requestedNamespaces = project.property('compileNsOnly')
-//             .toString()
-//             .split(',')
-//             .collect { it.trim() }
-//             .findAll { !it.isEmpty() } as Set
-//         namespaces.set(requestedNamespaces)
-//     }
-// }
-
-def baseExcludedAotNamespaces = [
-    'cn.li.forge1201.gui.cgui-runtime',
-    'cn.li.forge1201.gui.init',
-    'cn.li.forge1201.gui.menu-bridge',
-    'cn.li.forge1201.gui.network'
-] as Set
-
-
-def loadExcludedAotNamespaces = {
-    def excluded = new LinkedHashSet<String>(baseExcludedAotNamespaces)
-    def dynamicFile = rootProject.file('build/aot-excluded-ns.txt')
-    if (dynamicFile.isFile()) {
-        dynamicFile.readLines('UTF-8')
-            .collect { it.trim() }
-            .findAll { it && !it.startsWith('#') }
-            .each { excluded.add(it) }
-    }
-    excluded
-}
-
 tasks.matching { it.name == 'compileClojure' }.configureEach {
-    def excludedAotNamespaces = loadExcludedAotNamespaces()
     if (project.hasProperty('compileNsOnly')) {
         def requestedNamespaces = project.property('compileNsOnly')
             .toString()
@@ -500,12 +467,6 @@ tasks.matching { it.name == 'compileClojure' }.configureEach {
             namespaces.set(requestedNamespaces)
             logger.lifecycle("[compileClojure] compileNsOnly active, namespaces={} ", requestedNamespaces.size())
         }
-    } else {
-        // CLIENT-ONLY runtime namespace. AOT/check phase can run before full MC bootstrap,
-        // and compiling this namespace in that phase consistently triggers bootstrap errors.
-        // Keep it source-loaded at runtime, but exclude it from default AOT compile set.
-        namespaces.set((namespaces.get() as Set)
-            .findAll { !excludedAotNamespaces.contains(it) } as Set)
     }
 }
 
@@ -535,9 +496,7 @@ tasks.register('bisectCompileClojure') {
     description = 'Binary search first failing namespace for :forge-1.20.1:compileClojure (each trial runs clean first).'
 
     doLast {
-        def excludedAotNamespaces = loadExcludedAotNamespaces()
         def allNamespaces = collectMainClojureNamespaces()
-            .findAll { !excludedAotNamespaces.contains(it) }
             .sort()
         if (allNamespaces.isEmpty()) {
             throw new GradleException('No Clojure namespaces found in sourceSets.main.clojure.srcDirs')

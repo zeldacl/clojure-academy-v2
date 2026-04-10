@@ -17,7 +17,6 @@
            [net.minecraftforge.event TickEvent$PlayerTickEvent TickEvent$Phase]
            [net.minecraft.server.level ServerPlayer]))
 
-(set! *warn-on-reflection* true)
 
 (defn- server-player [player]
   (when (instance? ServerPlayer player) player))

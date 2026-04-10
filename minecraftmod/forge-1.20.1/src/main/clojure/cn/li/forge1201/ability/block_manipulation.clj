@@ -12,7 +12,6 @@
            [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [java.util UUID]))
 
-(set! *warn-on-reflection* true)
 
 (defn- get-server ^MinecraftServer []
   (ServerLifecycleHooks/getCurrentServer))

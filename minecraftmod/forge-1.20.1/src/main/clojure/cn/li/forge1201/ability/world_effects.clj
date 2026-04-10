@@ -10,7 +10,6 @@
            [net.minecraft.world.phys AABB Vec3]
            [net.minecraftforge.server ServerLifecycleHooks]))
 
-(set! *warn-on-reflection* true)
 
 (defn- load-class-no-init ^Class [class-name]
   (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))

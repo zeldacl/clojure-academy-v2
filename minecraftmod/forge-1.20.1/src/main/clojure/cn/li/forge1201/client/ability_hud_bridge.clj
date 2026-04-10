@@ -12,7 +12,6 @@
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.eventbus.api EventPriority]))
 
-(set! *warn-on-reflection* true)
 
 (defn- draw-string!
   [^GuiGraphics graphics ^String text x y color]

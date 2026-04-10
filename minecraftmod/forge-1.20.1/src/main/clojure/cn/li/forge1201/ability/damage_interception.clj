@@ -10,7 +10,6 @@
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.damagesource DamageSource]))
 
-(set! *warn-on-reflection* true)
 
 (def ^:private damage-handlers
   "Atom holding registered damage handlers.

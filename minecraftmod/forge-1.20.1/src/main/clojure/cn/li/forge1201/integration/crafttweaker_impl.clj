@@ -8,7 +8,6 @@
   this module will not be loaded."
   (:require [cn.li.mcmod.util.log :as log]))
 
-(set! *warn-on-reflection* true)
 
 (defn- load-class-no-init ^Class [class-name]
   (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))

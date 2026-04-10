@@ -20,13 +20,6 @@ tasks.matching { it.name == 'checkClojure' }.configureEach {
             .collect { it.trim() }
             .findAll { !it.isEmpty() } as Set
         namespaces.set(requestedNamespaces)
-    } else {
-        // These namespaces import Minecraft runtime classes that are unavailable
-        // in AC checkClojure classpath (platform-agnostic module).
-        namespaces.set((namespaces.get() as Set).findAll {
-            it != 'cn.li.ac.block.solar-gen.render' &&
-            it != 'cn.li.ac.terminal.network'
-        } as Set)
     }
 }
 

@@ -9,7 +9,6 @@
   (:import [cn.li.acapi.energy IEnergyCapable]
            [cn.li.forge1201.capability ForgeEnergyAdapter]))
 
-(set! *warn-on-reflection* true)
 
 (defn- fe-conversion-rate
   []

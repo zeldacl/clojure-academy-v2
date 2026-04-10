@@ -7,6 +7,7 @@
   - Terminal state queries"
   (:require [cn.li.ac.terminal.player-data :as term-data]
             [cn.li.ac.terminal.app-registry :as app-reg]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]))
 
@@ -31,7 +32,7 @@
   "Handle terminal installation request."
   [_payload player]
   (try
-    (let [uuid-str (str (.getUUID player))]
+    (let [uuid-str (str (entity/player-get-uuid player))]
       (term-data/install-terminal! uuid-str)
       {:success true})
     (catch Exception e
@@ -42,7 +43,7 @@
   "Handle app installation request."
   [payload player]
   (try
-    (let [uuid-str (str (.getUUID player))
+    (let [uuid-str (str (entity/player-get-uuid player))
           app-id (keyword (:app-id payload))]
       (if (app-reg/get-app app-id)
         (do
@@ -57,7 +58,7 @@
   "Handle app uninstallation request."
   [payload player]
   (try
-    (let [uuid-str (str (.getUUID player))
+    (let [uuid-str (str (entity/player-get-uuid player))
           app-id (keyword (:app-id payload))]
       (term-data/uninstall-app! uuid-str app-id)
       {:success true :app-id app-id})
@@ -69,7 +70,7 @@
   "Handle terminal state query."
   [_payload player]
   (try
-    (let [uuid-str (str (.getUUID player))
+    (let [uuid-str (str (entity/player-get-uuid player))
           terminal-data (term-data/get-terminal-data uuid-str)
           available-apps (app-reg/list-available-apps player)]
       {:terminal-installed? (:terminal-installed? terminal-data)

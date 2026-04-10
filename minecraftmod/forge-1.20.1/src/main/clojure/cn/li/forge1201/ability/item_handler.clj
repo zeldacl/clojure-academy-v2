@@ -7,7 +7,6 @@
            [net.minecraft.world.item ItemStack]
            [net.minecraft.resources ResourceLocation]))
 
-(set! *warn-on-reflection* true)
 
 (defn- get-item-id
   "Get item registry ID from ItemStack. Uses reflection to avoid MC bootstrap trigger."

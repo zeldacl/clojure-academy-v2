@@ -8,7 +8,6 @@
            [net.minecraftforge.server ServerLifecycleHooks]
            [java.util UUID]))
 
-(set! *warn-on-reflection* true)
 
 (def ^:private MAX-LOCATIONS 16)
 

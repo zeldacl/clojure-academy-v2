@@ -12,7 +12,6 @@
   (:import [net.minecraft.server.level ServerPlayer]
            [net.minecraft.nbt CompoundTag]))
 
-(set! *warn-on-reflection* true)
 
 (def ^:private ability-state-key "ac_ability_state")
 

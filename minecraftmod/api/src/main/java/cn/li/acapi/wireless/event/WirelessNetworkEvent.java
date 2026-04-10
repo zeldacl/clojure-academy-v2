@@ -4,7 +4,6 @@ import cn.li.acapi.wireless.IWirelessMatrix;
 import cn.li.acapi.wireless.IWirelessNode;
 import cn.li.acapi.wireless.IWirelessGenerator;
 import cn.li.acapi.wireless.IWirelessReceiver;
-import net.minecraftforge.eventbus.api.Event;
 
 /**
  * Hierarchy of events fired on the Forge event bus when the wireless energy
@@ -22,10 +21,11 @@ import net.minecraftforge.eventbus.api.Event;
  * }
  * }</pre>
  *
- * <p>All subclasses are fired on the <em>server-side Forge event bus</em> (not the mod bus).
- * Client-side projection or GUI updates should be driven by network packets, not these events.
+ * <p>All subclasses are platform-neutral payload objects emitted by the wireless
+ * runtime bridge. Platform adapters decide how to dispatch them (event bus, callbacks,
+ * or direct handlers).
  */
-public abstract class WirelessNetworkEvent extends Event {
+public abstract class WirelessNetworkEvent {
 
     private final IWirelessMatrix matrix;
 
@@ -93,26 +93,32 @@ public abstract class WirelessNetworkEvent extends Event {
     // -------------------------------------------------------------------------
 
     /** Fired after a generator is linked to a node. */
-    public static final class GeneratorLinked extends Event {
+    public static final class GeneratorLinked {
         private final IWirelessNode node;
         private final IWirelessGenerator generator;
+
         public GeneratorLinked(IWirelessNode node, IWirelessGenerator generator) {
             this.node = node;
             this.generator = generator;
         }
+
         public IWirelessNode getNode() { return node; }
+
         public IWirelessGenerator getGenerator() { return generator; }
     }
 
     /** Fired after a receiver is linked to a node. */
-    public static final class ReceiverLinked extends Event {
+    public static final class ReceiverLinked {
         private final IWirelessNode node;
         private final IWirelessReceiver receiver;
+
         public ReceiverLinked(IWirelessNode node, IWirelessReceiver receiver) {
             this.node = node;
             this.receiver = receiver;
         }
+
         public IWirelessNode getNode() { return node; }
+
         public IWirelessReceiver getReceiver() { return receiver; }
     }
 }

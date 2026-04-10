@@ -6,7 +6,6 @@
            [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.client.multiplayer ClientLevel]))
 
-(set! *warn-on-reflection* true)
 
 (defn- get-particle-type
   "Map AC particle type keyword to Minecraft ParticleType."

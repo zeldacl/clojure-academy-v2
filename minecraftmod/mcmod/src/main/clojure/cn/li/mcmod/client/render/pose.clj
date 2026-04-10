@@ -15,6 +15,7 @@
 (def ^:dynamic *push-pose-fn* nil)
 (def ^:dynamic *pop-pose-fn* nil)
 (def ^:dynamic *translate-fn* nil)
+(def ^:dynamic *scale-fn* nil)
 
 (def ^:dynamic *get-matrix-fn* nil)
 
@@ -77,6 +78,19 @@
       (catch Exception e
         (log/error "Error translating pose-stack:"(ex-message e))))
     (log/warn "No platform translate function bound; skipping translate")))
+
+(defn scale
+  "Scale the pose-stack by (x y z) using platform implementation.
+
+  All arguments should be numeric.
+  "
+  [pose-stack x y z]
+  (if *scale-fn*
+    (try
+      (*scale-fn* pose-stack x y z)
+      (catch Exception e
+        (log/error "Error scaling pose-stack:"(ex-message e))))
+    (log/warn "No platform scale function bound; skipping scale")))
 
 (defn get-matrix
   "Return the current transformation matrix object for `pose-stack`.

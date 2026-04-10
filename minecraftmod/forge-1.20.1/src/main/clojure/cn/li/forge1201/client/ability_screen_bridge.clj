@@ -10,7 +10,6 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.resources ResourceLocation]))
 
-(set! *warn-on-reflection* true)
 
 (defn- draw-string!
   [^GuiGraphics graphics ^String text x y color]

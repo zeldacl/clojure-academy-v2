@@ -1,6 +1,5 @@
 package cn.li.forge1201.capability;
 
-import cn.li.acapi.wireless.WirelessCapabilities;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.CapabilityManager;
 import net.minecraftforge.common.capabilities.CapabilityToken;
@@ -12,8 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Named capability registry that replaces the old anonymous-slot pool.
  *
- * <p>Wireless capabilities are bound to the public {@link WirelessCapabilities} named
- * constants, which are directly discoverable by external mods via a simple import.
+ * <p>Wireless capabilities are bound to stable key strings registered at platform init.
  * Non-wireless capabilities (e.g. "wireless-energy") receive a single anonymous
  * {@link CapabilityToken} created on first use.
  *
@@ -37,8 +35,8 @@ public final class NamedCapabilityRegistry {
     }
 
     /**
-     * Bind a logical key string to a named capability constant.
-     * Called at platform init to register {@link WirelessCapabilities} fields.
+    * Bind a logical key string to a capability instance.
+    * Called at platform init before block entities resolve capabilities.
      */
     public static synchronized <T> void register(String key, Capability<T> cap) {
         KEY_TO_CAP.put(key, cap);

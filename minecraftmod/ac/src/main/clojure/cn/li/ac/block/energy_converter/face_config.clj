@@ -7,7 +7,6 @@
   - 'none' - Disabled, no energy transfer"
   (:require [cn.li.mcmod.util.log :as log]))
 
-(set! *warn-on-reflection* true)
 
 ;; ============================================================================
 ;; Face Configuration

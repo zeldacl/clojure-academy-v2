@@ -54,6 +54,20 @@
   [^PoseStack pose-stack x y z]
   (.translate pose-stack (double x) (double y) (double z)))
 
+(defn scale
+  "Scale the pose stack.
+
+  Args:
+    pose-stack: PoseStack
+    x: float
+    y: float
+    z: float
+
+  Returns:
+    nil"
+  [^PoseStack pose-stack x y z]
+  (.scale pose-stack (float x) (float y) (float z)))
+
 (defn get-pose-matrix
   "Get the current pose matrix from the stack.
 
