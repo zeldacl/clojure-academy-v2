@@ -3,16 +3,13 @@
   (:require [cn.li.mcmod.platform.world-effects :as pwe]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
+           [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.core BlockPos]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraft.world.entity Entity EntityType LivingEntity]
+           [net.minecraft.world.entity LivingEntity]
            [net.minecraft.world.phys AABB Vec3]
            [net.minecraftforge.server ServerLifecycleHooks]))
-
-
-(defn- load-class-no-init ^Class [class-name]
-  (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
 
 (defn- get-server ^MinecraftServer []
   (ServerLifecycleHooks/getCurrentServer))
@@ -25,35 +22,26 @@
 (defn- spawn-lightning-impl! [world-id x y z]
   (try
     (when-let [^ServerLevel level (get-level world-id)]
-      ;; Resolve EntityType lazily so checkClojure does not trigger registry bootstrap.
-      (let [et-class (load-class-no-init "net.minecraft.world.entity.EntityType")
-        ^EntityType lightning-bolt (.get (.getDeclaredField et-class "LIGHTNING_BOLT") nil)
-        ^Entity lightning (.create lightning-bolt level)]
-        (when lightning
-          (.moveTo lightning (double x) (double y) (double z))
-          (.addFreshEntity level lightning)
-          true)))
+      (ForgeRuntimeBridge/spawnLightning level (double x) (double y) (double z)))
     (catch Exception e
       (log/warn "Failed to spawn lightning:" (ex-message e))
       false)))
+
 (defn- create-explosion-impl! [world-id x y z radius fire?]
   (try
     (when-let [^ServerLevel level (get-level world-id)]
-      (let [explosion-interaction-class (load-class-no-init "net.minecraft.world.level.Level$ExplosionInteraction")
-            enum-name (if fire? "MOB" "NONE")
-            interaction (java.lang.Enum/valueOf explosion-interaction-class enum-name)]
-        (.explode level nil x y z (float radius) interaction)
-        true))
+      (ForgeRuntimeBridge/createExplosion level x y z (float radius) (boolean fire?))
+      true)
     (catch Exception e
       (log/warn "Failed to create explosion:" (ex-message e))
       false)))
+
 (defn- find-entities-in-radius-impl [world-id x y z radius]
   (try
     (when-let [^ServerLevel level (get-level world-id)]
       (let [aabb (AABB. (- x radius) (- y radius) (- z radius)
                         (+ x radius) (+ y radius) (+ z radius))
-            living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
-            entities (.getEntitiesOfClass level living-entity-class aabb)]
+            entities (ForgeRuntimeBridge/getLivingEntitiesInAabb level aabb)]
             (mapv (fn [^LivingEntity entity]
               (let [^Vec3 pos (.position entity)]
                   {:uuid (str (.getUUID entity))

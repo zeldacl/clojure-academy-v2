@@ -2,9 +2,9 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.mcmod.util.log :as log])
-  (:import [java.util.function Consumer]
+  (:import [cn.li.forge1201.bridge ConfigEventBridge]
+           [java.util.function Consumer]
            [net.minecraftforge.common ForgeConfigSpec ForgeConfigSpec$Builder ForgeConfigSpec$ConfigValue]
-           [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraftforge.eventbus.api IEventBus]
            [net.minecraftforge.fml ModLoadingContext]
            [net.minecraftforge.fml.event.config ModConfigEvent]
@@ -87,9 +87,7 @@
 
 (defn register-all!
   [^IEventBus mod-bus]
-  (let [domains (seq (config-reg/get-all-config-domains))
-        loading-class (Class/forName "net.minecraftforge.fml.event.config.ModConfigEvent$Loading")
-        reloading-class (Class/forName "net.minecraftforge.fml.event.config.ModConfigEvent$Reloading")]
+  (let [domains (seq (config-reg/get-all-config-domains))]
     (doseq [domain domains]
       (let [descriptors (config-reg/get-config-descriptors domain)]
         (when (seq descriptors)
@@ -97,12 +95,8 @@
             (.registerConfig (ModLoadingContext/get) ModConfig$Type/COMMON spec file-name)
             (swap! registered-configs assoc file-name domain-info)
             (log/info "Registered Forge config file" file-name "for domain" domain)))))
-    (.addListener mod-bus EventPriority/NORMAL false loading-class
-                  (reify Consumer
-                    (accept [_ event]
-                      (handle-config-event! event))))
-    (.addListener mod-bus EventPriority/NORMAL false reloading-class
-                  (reify Consumer
-                    (accept [_ event]
-                      (handle-config-event! event))))
+    (ConfigEventBridge/addConfigListeners mod-bus
+                                          (reify Consumer
+                                            (accept [_ event]
+                                              (handle-config-event! event))))
     nil))

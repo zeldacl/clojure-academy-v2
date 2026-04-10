@@ -34,12 +34,6 @@
       (log/warn "Failed to get level:" world-id (ex-message e))
       nil)))
 
-(defn- get-block-by-resource-location [^ResourceLocation res-loc]
-  (ForgeRuntimeBridge/getBlockById (str res-loc)))
-
-(defn- get-block-key [^Block block]
-  (ForgeRuntimeBridge/getBlockKey block))
-
 (defn- break-block-impl! [player-uuid world-id x y z drop?]
   (try
     (when-let [^ServerLevel level (get-level-by-id world-id)]
@@ -65,7 +59,7 @@
     (when-let [^ServerLevel level (get-level-by-id world-id)]
       (let [pos (BlockPos. (int x) (int y) (int z))
             res-loc (ResourceLocation. block-id)
-        ^Block block (get-block-by-resource-location res-loc)]
+            ^Block block (ForgeRuntimeBridge/getBlockById (str res-loc))]
         (when block
           (.setBlock level pos (.defaultBlockState block) 3)
           true)))
@@ -80,7 +74,7 @@
             state (.getBlockState level pos)
             block (.getBlock state)]
         (when-not (.isAir state)
-          (str (get-block-key block)))))
+          (str (ForgeRuntimeBridge/getBlockKey block)))))
     (catch Exception e
       (log/warn "Failed to get block:" (ex-message e))
       nil)))
@@ -128,7 +122,7 @@
                      {:x (int x)
                       :y (int y)
                       :z (int z)
-                      :block-id (str (get-block-key block))
+                      :block-id (str (ForgeRuntimeBridge/getBlockKey block))
                       :hardness (.getDestroySpeed state level pos)}))))
         @results))
     (catch Exception e

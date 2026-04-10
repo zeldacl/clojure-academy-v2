@@ -6,12 +6,6 @@
            [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.client.multiplayer ClientLevel]))
 
-
-(defn- get-particle-type
-  "Map AC particle type keyword to Minecraft ParticleType."
-  [particle-type-kw]
-  (ForgeRuntimeBridge/getParticleType (name particle-type-kw)))
-
 (defn- spawn-particle-effect
   "Spawn a particle effect in the world."
   [particle-cmd]
@@ -19,7 +13,7 @@
     (when-let [^Minecraft mc (Minecraft/getInstance)]
       (when-let [^ClientLevel level (.level mc)]
         (let [{:keys [particle-type x y z count speed offset-x offset-y offset-z]} particle-cmd
-              particle (get-particle-type particle-type)]
+              particle (ForgeRuntimeBridge/getParticleType (name particle-type))]
           (.addParticle level particle
                        x y z
                        (* offset-x speed)

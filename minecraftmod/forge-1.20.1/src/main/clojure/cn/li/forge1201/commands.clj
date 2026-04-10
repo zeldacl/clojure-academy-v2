@@ -3,7 +3,8 @@
 
   This namespace builds Brigadier command trees from the command DSL metadata
   and registers them with Minecraft's command system."
-  (:require [cn.li.mcmod.command.metadata :as cmd-meta]
+  (:require [cn.li.forge1201.compile-bootstrap]
+            [cn.li.mcmod.command.metadata :as cmd-meta]
             [cn.li.mcmod.command.context :as cmd-ctx]
             [cn.li.mcmod.command.actions :as cmd-actions]
             [cn.li.forge1201.command-executor]  ; Load action implementations
@@ -14,19 +15,14 @@
            [com.mojang.brigadier.arguments StringArgumentType IntegerArgumentType FloatArgumentType BoolArgumentType]
            [com.mojang.brigadier.context CommandContext]
            [net.minecraft.commands CommandSourceStack]
+           [net.minecraft.commands.arguments EntityArgument]
            [net.minecraft.server.level ServerPlayer]))
 
 (defn- entity-arg-player-type []
-  (clojure.lang.Reflector/invokeStaticMethod
-    "net.minecraft.commands.arguments.EntityArgument"
-    "player"
-    (object-array 0)))
+  (EntityArgument/player))
 
 (defn- entity-arg-get-player [^CommandContext brigadier-ctx arg-name]
-  (clojure.lang.Reflector/invokeStaticMethod
-    "net.minecraft.commands.arguments.EntityArgument"
-    "getPlayer"
-    (object-array [brigadier-ctx arg-name])))
+  (EntityArgument/getPlayer brigadier-ctx arg-name))
 
 ;; ============================================================================
 ;; Argument Type Mapping

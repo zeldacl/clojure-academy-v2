@@ -1,10 +1,12 @@
 (ns cn.li.forge1201.client.effects.sound-bridge
   "CLIENT-ONLY sound effect bridge (Forge layer)."
-  (:require [cn.li.ac.ability.client.effects.sounds :as ac-sounds]
+  (:require [cn.li.forge1201.compile-bootstrap]
+            [cn.li.ac.ability.client.effects.sounds :as ac-sounds]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
-           [net.minecraft.core Holder]
+           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.sounds SoundSource]
+           [net.minecraft.sounds SoundEvent]
            [net.minecraft.resources ResourceLocation]))
 
 
@@ -19,23 +21,15 @@
                 sound-loc (ResourceLocation. ^String sound-id)
                 pos-x (or x (.getX player))
                 pos-y (or y (.getY player))
-              pos-z (or z (.getZ player))
-              sound-event (try
-                      (let [regs-cls (Class/forName "net.minecraft.core.registries.BuiltInRegistries")
-                        field-sound (.getField regs-cls "SOUND_EVENT")
-                        sound-registry (.get field-sound nil)
-                        get-method (.getMethod (class sound-registry) "get" (into-array Class [Object]))
-                        holder (.invoke get-method sound-registry (object-array [sound-loc]))]
-                      (when holder
-                        (.value ^Holder holder)))
-                      (catch Exception _ nil))]
+                pos-z (or z (.getZ player))
+                ^SoundEvent sound-event (.get BuiltInRegistries/SOUND_EVENT sound-loc)]
             (when sound-event
-            (.playLocalSound level pos-x pos-y pos-z
-                     sound-event
-                           SoundSource/PLAYERS
-                           (float volume)
-                           (float pitch)
-                     false))))))
+              (.playLocalSound level pos-x pos-y pos-z
+                               sound-event
+                               SoundSource/PLAYERS
+                               (float volume)
+                               (float pitch)
+                               false))))))
     (catch Exception e
       (log/error "Error playing sound effect" e))))
 

@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.mod
   "Forge 1.20.1 main mod class - generated with gen-class"
-  (:require [cn.li.forge1201.bootstrap :refer [invoke-bootstrap-helper]]
+  (:require [cn.li.forge1201.compile-bootstrap]
+            [cn.li.forge1201.bootstrap :as bootstrap]
             [cn.li.forge1201.init :as init]
             [cn.li.forge1201.side :as side]
             [cn.li.forge1201.registry :as registry]
@@ -26,7 +27,7 @@
   (:import [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
-           [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab]
+           [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab Items]
            [net.minecraft.world.level ItemLike]
            [net.minecraft.network.chat Component]
            [net.minecraftforge.registries DeferredRegister RegistryObject]
@@ -78,26 +79,26 @@
 
 ;; Lazy block properties - only accessed during registration, not during namespace load
 (defonce base-properties
-  (delay (invoke-bootstrap-helper "createStoneProperties")))
+  (delay (bootstrap/create-stone-properties)))
 
 (defonce carrier-properties
-  (delay (invoke-bootstrap-helper "carrierBlockProperties" @base-properties)))
+  (delay (bootstrap/carrier-block-properties @base-properties)))
 
 ;; DeferredRegister instances
 (defonce blocks-register
   ;; AOT/checkClojure 阶段 Minecraft registries 尚未 bootstrapped。
   ;; 延迟创建，避免触发 Bootstrap。
-  (delay (invoke-bootstrap-helper "createBlocksRegister" mod-id)))
+  (delay (bootstrap/create-blocks-register mod-id)))
 
 (defonce items-register
-  (delay (invoke-bootstrap-helper "createItemsRegister" mod-id)))
+  (delay (bootstrap/create-items-register mod-id)))
 
 (defonce creative-tabs-register
-  (delay (invoke-bootstrap-helper "createCreativeTabsRegister" mod-id)))
+  (delay (bootstrap/create-creative-tabs-register mod-id)))
 
 ;; BlockEntity types
 (defonce block-entities-register
-  (delay (invoke-bootstrap-helper "createBlockEntityTypesRegister" mod-id)))
+  (delay (bootstrap/create-block-entity-types-register mod-id)))
 
 ;; Storage for registered blocks and items (populated during initialization)
 (defonce registered-blocks (atom {}))
@@ -128,14 +129,14 @@
                                           (cond
                                             (and needs-dynamic-properties? has-be?)
                                             (let [props (get-props block-id)]
-                                              (invoke-bootstrap-helper "createCarrierScriptedDynamicBlock" block-id tile-id props @carrier-properties))
+                                              (bootstrap/create-carrier-scripted-dynamic-block block-id tile-id props @carrier-properties))
                                             needs-dynamic-properties?
                                             (let [props (get-props block-id)]
-                                              (invoke-bootstrap-helper "createDynamicStateBlock" block-id props @base-properties))
+                                              (bootstrap/create-dynamic-state-block block-id props @base-properties))
                                             has-be?
-                                            (invoke-bootstrap-helper "createCarrierScriptedBlock" block-id tile-id @carrier-properties)
+                                            (bootstrap/create-carrier-scripted-block block-id tile-id @carrier-properties)
                                             :else
-                                            (invoke-bootstrap-helper "createPlainBlock" @base-properties))))))]
+                                            (bootstrap/create-plain-block @base-properties))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
 
 (defn register-scripted-tile-hooks!
@@ -181,8 +182,7 @@
                           block-id-by-inst (java.util.IdentityHashMap.)]
                       (doseq [[block-id inst] pairs]
                         (.put block-id-by-inst inst block-id))
-                      (let [be-type (invoke-bootstrap-helper
-                                      "createScriptedBlockEntityType"
+                      (let [be-type (bootstrap/create-scripted-block-entity-type
                                       tile-id
                                       block-insts
                                       (reify java.util.function.Function
@@ -274,10 +274,7 @@
       (.icon (reify java.util.function.Supplier
            (get [_]
              (try
-               (let [items-cls (Class/forName "net.minecraft.world.item.Items")
-                     barrier-field (.getField items-cls "BARRIER")
-                     ^Item barrier-item (.get barrier-field nil)]
-                 (.getDefaultInstance barrier-item))
+               (.getDefaultInstance Items/BARRIER)
                (catch Exception _
                  (net.minecraft.world.item.ItemStack/EMPTY))))))
       (.displayItems (reify net.minecraft.world.item.CreativeModeTab$DisplayItemsGenerator

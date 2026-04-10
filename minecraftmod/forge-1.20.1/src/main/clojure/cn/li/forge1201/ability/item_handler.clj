@@ -1,32 +1,24 @@
 (ns cn.li.forge1201.ability.item-handler
   "Item use event handler for ability items (Forge layer)."
-  (:require [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.forge1201.compile-bootstrap]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickItem]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
+           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.resources ResourceLocation]))
 
 
 (defn- get-item-id
-  "Get item registry ID from ItemStack. Uses reflection to avoid MC bootstrap trigger."
+  "Get item registry ID from ItemStack."
   [^ItemStack stack]
   (when-not (.isEmpty stack)
     (try
       (let [item (.getItem stack)
-            ;; Load BuiltInRegistries class and get ITEM field reflectively at runtime
-            builtin-regs-cls (Class/forName "net.minecraft.core.registries.BuiltInRegistries")
-            item-field (.getField builtin-regs-cls "ITEM")
-            item-registry (.get item-field nil)
-            ;; Call getKey() method reflectively
-            get-key-method (.getMethod (class item-registry) "getKey" (into-array Class [Object]))
-            registry-name (.invoke get-key-method item-registry (object-array [item]))]
+            ^ResourceLocation registry-name (.getKey BuiltInRegistries/ITEM item)]
         (when registry-name
-          (str (.invoke (.getMethod (class registry-name) "getNamespace" (into-array Class []))
-                        registry-name (object-array []))
-               ":"
-               (.invoke (.getMethod (class registry-name) "getPath" (into-array Class []))
-                        registry-name (object-array [])))))
+          (str (.getNamespace registry-name) ":" (.getPath registry-name))))
       (catch Exception e
         (log/warn "Failed to get item ID:" (ex-message e))
         nil))))

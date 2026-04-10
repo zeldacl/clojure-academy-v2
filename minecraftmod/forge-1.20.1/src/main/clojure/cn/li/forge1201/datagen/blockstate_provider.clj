@@ -6,7 +6,8 @@
    - 本文件: 使用Forge/Minecraft API和定义生成JSON（平台特定）
    
    优势：定义层复用，易于支持新的Forge版本"
-  (:require [cn.li.forge1201.bootstrap :refer [invoke-bootstrap-helper]]
+  (:require [cn.li.forge1201.compile-bootstrap]
+            [cn.li.forge1201.bootstrap :as bootstrap]
             [cn.li.mcmod.config :as modid]
             [cn.li.ac.block.blockstate-definition :as blockstate-def]
             [cn.li.forge1201.datagen.resource-location :as rl]
@@ -83,7 +84,7 @@
         candidates (distinct (concat (normalize-candidates registry-name)
                                      (normalize-candidates key-name)))]
     (some (fn [candidate]
-          (invoke-bootstrap-helper "findBlock" modid/*mod-id* candidate))
+          (bootstrap/find-block modid/*mod-id* candidate))
           candidates)))
 
 (defn- resolve-registered-block
@@ -256,7 +257,7 @@
   (let [registry-name (:registry-name definition)
       ^Block block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
-    (when (invoke-bootstrap-helper "isAirBlock" block (invoke-bootstrap-helper "getAirBlock"))
+    (when (bootstrap/air-block? block (bootstrap/get-air-block))
       (throw (ex-info "Simple block not resolvable for datagen"
                       {:block-key block-key :registry-name registry-name})))
     (let [model-id (first (:models (first (:parts definition))))
@@ -275,7 +276,7 @@
   (let [registry-name (:registry-name definition)
       ^Block block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
-    (when (invoke-bootstrap-helper "isAirBlock" block (invoke-bootstrap-helper "getAirBlock"))
+    (when (bootstrap/air-block? block (bootstrap/get-air-block))
       (throw (ex-info "Multipart block not resolvable for datagen"
                       {:block-key block-key :registry-name registry-name})))
     (let [builder (.getMultipartBuilder provider block)]

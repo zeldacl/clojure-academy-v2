@@ -4,7 +4,8 @@
   Platform-agnostic design: Uses metadata-driven approach.
 
   IMPORTANT: Only imports from `cn.li.mcmod.gui.adapter` for the unified GUI API."
-  (:require [cn.li.forge1201.bootstrap :refer [invoke-bootstrap-helper]]
+  (:require [cn.li.forge1201.compile-bootstrap]
+            [cn.li.forge1201.bootstrap :as bootstrap]
             [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.forge1201.gui.bridge :as bridge]
@@ -32,7 +33,7 @@
 (defonce menu-register
   ;; AOT/checkClojure 阶段 Minecraft registries 尚未 bootstrapped。
   ;; 延迟创建，避免编译期触发 Bootstrap。
-  (delay (invoke-bootstrap-helper "createMenusRegister" modid/*mod-id*)))
+  (delay (bootstrap/create-menus-register modid/*mod-id*)))
 
 (defonce gui-menu-types
   ^{:doc "Map from GUI ID to RegistryObject<MenuType>.

@@ -3,16 +3,13 @@
   (:require [cn.li.mcmod.platform.entity-damage :as ped]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
+           [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.entity Entity LivingEntity]
            [net.minecraft.world.damagesource DamageSource]
            [net.minecraft.world.phys AABB Vec3]
            [net.minecraftforge.server ServerLifecycleHooks]
            [java.util UUID]))
-
-
-(defn- load-class-no-init ^Class [class-name]
-  (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
 
 (defn- get-server ^MinecraftServer []
   (ServerLifecycleHooks/getCurrentServer))
@@ -48,7 +45,7 @@
     (when-let [^MinecraftServer server (get-server)]
       (when-let [^ServerLevel level (.overworld server)]
         (when-let [entity (get-entity-by-uuid level entity-uuid)]
-          (when (instance? (load-class-no-init "net.minecraft.world.entity.LivingEntity") entity)
+          (when (ForgeRuntimeBridge/isLivingEntity ^Entity entity)
             (let [^LivingEntity living entity
                   ^DamageSource dmg-source (get-damage-source level source-type)]
               (.hurt living dmg-source (float damage))
@@ -68,8 +65,7 @@
       (when-let [^ServerLevel level (.overworld server)]
         (let [aabb (AABB. (- x radius) (- y radius) (- z radius)
                           (+ x radius) (+ y radius) (+ z radius))
-              living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
-              entities (.getEntitiesOfClass level living-entity-class aabb)
+              entities (ForgeRuntimeBridge/getLivingEntitiesInAabb level aabb)
               ^DamageSource dmg-source (get-damage-source level source-type)
               damaged (atom [])]
           (doseq [^LivingEntity entity entities]
@@ -90,8 +86,7 @@
 (defn- find-nearest-living-entity [^ServerLevel level exclude x y z max-radius]
   (let [aabb (AABB. (- x max-radius) (- y max-radius) (- z max-radius)
                     (+ x max-radius) (+ y max-radius) (+ z max-radius))
-        living-entity-class (load-class-no-init "net.minecraft.world.entity.LivingEntity")
-        entities (.getEntitiesOfClass level living-entity-class aabb)]
+        entities (ForgeRuntimeBridge/getLivingEntitiesInAabb level aabb)]
     (->> entities
         (filter (fn [^LivingEntity e]
              (not= (.getUUID e) (.getUUID ^Entity exclude))))
@@ -109,7 +104,7 @@
     (when-let [^MinecraftServer server (get-server)]
       (when-let [^ServerLevel level (.overworld server)]
         (when-let [entity (get-entity-by-uuid level entity-uuid)]
-          (when (instance? (load-class-no-init "net.minecraft.world.entity.LivingEntity") entity)
+          (when (ForgeRuntimeBridge/isLivingEntity ^Entity entity)
             (let [^LivingEntity living entity
                   ^DamageSource dmg-source (get-damage-source level source-type)
                   hit-entities (atom [(str (.getUUID living))])]

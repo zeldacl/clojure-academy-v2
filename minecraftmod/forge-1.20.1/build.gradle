@@ -375,7 +375,7 @@ clojure {
     builds {
         main {
             aotAll()
-            reflection = 'warn'
+            reflection = 'fail'
         }
     }
 }
@@ -392,6 +392,7 @@ def copyClojureClassesToJavaOutput = tasks.register('copyClojureClassesToJavaOut
 // 确保 Java 接口先编译，供 Clojure 调用
 tasks.named('compileClojure').configure {
     dependsOn 'compileJava'
+    forkOptions.memoryMaximumSize = '2g'
     // Merged AOT lives in `classes/java/main` for Loom runs. Those `.class` files must not
     // stay on the compile classpath for the next `compileClojure`, or loaders will execute
     // `__init` during compilation and trip Minecraft bootstrap.
@@ -429,10 +430,8 @@ tasks.matching { it.name in ['runClient', 'runServer', 'runData'] }.configureEac
 }
 
 tasks.matching { it.name == 'checkClojure' }.configureEach {
-    reflection = 'skip'
-    def existingArgs = forkOptions.jvmArgs ?: []
-    forkOptions.jvmArgs = existingArgs + ['-Dclojure.compiler.warn-on-reflection=false']
-        dependsOn tasks.named('copyClojureClassesToJavaOutput')
+    reflection = 'fail'
+    dependsOn tasks.named('copyClojureClassesToJavaOutput')
     if (project.hasProperty('checkNsFile')) {
         def nsFile = rootProject.file(project.property('checkNsFile').toString())
         if (!nsFile.isFile()) {

@@ -1,22 +1,18 @@
 (ns cn.li.forge1201.blockstate-properties
   "Forge 1.20.1 adapter: create Minecraft BlockState Property objects from ac definitions."
-  (:require [cn.li.mcmod.block.blockstate-properties :as shared]
+  (:require [cn.li.forge1201.compile-bootstrap]
+            [cn.li.mcmod.block.blockstate-properties :as shared]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraft.world.level.block.state.properties IntegerProperty BooleanProperty]))
 
 (defonce property-registry (shared/create-property-registry))
 
 (defn- create-integer-property [property-name min-value max-value]
-  (clojure.lang.Reflector/invokeStaticMethod
-    "net.minecraft.world.level.block.state.properties.IntegerProperty"
-    "create"
-    (to-array [property-name (int min-value) (int max-value)])))
+  (IntegerProperty/create property-name (int min-value) (int max-value)))
 
 (defn- create-boolean-property [property-name]
-  (clojure.lang.Reflector/invokeStaticMethod
-    "net.minecraft.world.level.block.state.properties.BooleanProperty"
-    "create"
-    (to-array [property-name])))
+  (BooleanProperty/create property-name))
 
 (defn register-block-properties!
   [block-id block-state-properties]

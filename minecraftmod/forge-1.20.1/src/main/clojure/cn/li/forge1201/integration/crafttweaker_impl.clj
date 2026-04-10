@@ -6,10 +6,13 @@
 
   CraftTweaker integration is optional - if CraftTweaker is not present,
   this module will not be loaded."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]))
 
 
 (defn- load-class-no-init ^Class [class-name]
+  ;; Used only for optional third-party dep checks (e.g. CraftTweaker).
+  ;; Must NOT be used for Minecraft classes — use direct imports instead.
   (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
 
 (defonce ^:private resolved-vars
@@ -37,27 +40,11 @@
   Returns:
     Item spec map {:item 'modid:item' :count N}"
   [stack]
-  (when stack
-    (let [itemstack-cls (load-class-no-init "net.minecraft.world.item.ItemStack")
-          is-empty-method (.getMethod itemstack-cls "isEmpty" (make-array Class 0))]
-      (when-not (boolean (.invoke is-empty-method stack (object-array 0)))
-        (let [get-item-method (.getMethod itemstack-cls "getItem" (make-array Class 0))
-              get-count-method (.getMethod itemstack-cls "getCount" (make-array Class 0))
-              item (.invoke get-item-method stack (object-array 0))
-              regs-cls (load-class-no-init "net.minecraft.core.registries.BuiltInRegistries")
-              item-field (.getField regs-cls "ITEM")
-              item-registry (.get item-field nil)
-              get-key-method (.getMethod (class item-registry) "getKey" (into-array Class [Object]))
-              res-loc (.invoke get-key-method item-registry (object-array [item]))
-              resloc-cls (load-class-no-init "net.minecraft.resources.ResourceLocation")
-              get-namespace-method (.getMethod resloc-cls "getNamespace" (make-array Class 0))
-              get-path-method (.getMethod resloc-cls "getPath" (make-array Class 0))
-              item-id (str (.invoke get-namespace-method res-loc (object-array 0))
-                           ":"
-                           (.invoke get-path-method res-loc (object-array 0)))
-              count (.invoke get-count-method stack (object-array 0))]
-          {:item item-id
-           :count count})))))
+  (when (and stack (not (ForgeRuntimeBridge/isItemStackEmpty stack)))
+    (let [item-id (ForgeRuntimeBridge/getItemKeyString (ForgeRuntimeBridge/getItemFromStack stack))]
+      (when item-id
+        {:item  item-id
+         :count (ForgeRuntimeBridge/getItemStackCount stack)}))))
 
 (defn crafttweaker-itemstack-to-spec
   "Convert a CraftTweaker IItemStack to AC item spec.
@@ -75,8 +62,7 @@
     ;; CraftTweaker's IItemStack can be converted to Minecraft ItemStack
     ;; via CraftTweakerMC.getItemStack(IItemStack)
     (let [ct-mc-class (load-class-no-init "com.blamejared.crafttweaker.api.CraftTweakerAPI")
-          item-stack-class (load-class-no-init "net.minecraft.world.item.ItemStack")
-          get-stack-method (.getMethod ct-mc-class "getIItemStack" (into-array Class [item-stack-class]))]
+          get-stack-method (.getMethod ct-mc-class "getIItemStack" (into-array Class [(ForgeRuntimeBridge/getItemStackClass)]))]
       (when-let [mc-stack (.invoke get-stack-method nil (into-array Object [ct-stack]))]
         (itemstack-to-item-spec mc-stack)))
     (catch Exception e

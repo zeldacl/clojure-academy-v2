@@ -12,7 +12,10 @@
             [cn.li.mcmod.platform.resource :as resource]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as be]
-            [cn.li.forge1201.platform-bindings :as bindings]))
+            [cn.li.forge1201.platform-bindings :as bindings]
+            [cn.li.forge1201.side :as side])
+  (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]
+           [net.minecraft.resources ResourceLocation]))
 
 
 (defonce ^:private initialized? (atom false))
@@ -22,8 +25,8 @@
 (defn- install-item-ops!
   []
   (when (compare-and-set! item-ops-installed? false true)
-    (let [item-stack-cls (Class/forName "net.minecraft.world.item.ItemStack")
-          item-cls (Class/forName "net.minecraft.world.item.Item")]
+    (let [item-stack-cls (ForgeRuntimeBridge/getItemStackClass)
+          item-cls (ForgeRuntimeBridge/getItemClass)]
       (extend item-stack-cls item/IItemStack
               {:item-is-empty? (fn [this]
                                  (.isEmpty this))
@@ -60,28 +63,21 @@
 (defn- install-entity-ops!
   []
   (when (compare-and-set! entity-ops-installed? false true)
-    (let [entity-cls (Class/forName "net.minecraft.world.entity.Entity")
-          player-cls (Class/forName "net.minecraft.world.entity.player.Player")
-          inventory-cls (Class/forName "net.minecraft.world.entity.player.Inventory")
-          menu-cls (Class/forName "net.minecraft.world.inventory.AbstractContainerMenu")
-          server-player-cls (Class/forName "net.minecraft.server.level.ServerPlayer")
-          local-player-cls (Class/forName "net.minecraft.client.player.LocalPlayer")
+    (let [entity-cls (ForgeRuntimeBridge/getEntityClass)
+          player-cls (ForgeRuntimeBridge/getPlayerClass)
+          inventory-cls (ForgeRuntimeBridge/getInventoryClass)
+          menu-cls (ForgeRuntimeBridge/getAbstractContainerMenuClass)
+          server-player-cls (ForgeRuntimeBridge/getServerPlayerClass)
           player-impl {:entity-distance-to-sqr (fn [this x y z]
                                                  (.distanceToSqr this (double x) (double y) (double z)))
                        :player-get-level (fn [this]
-                                           (try
-                                             (.level this)
-                                             (catch Exception _
-                                               (clojure.lang.Reflector/getInstanceField this "level"))))
+                                           (ForgeRuntimeBridge/getEntityLevel this))
                        :player-get-name (fn [this]
                                           (str (.getName this)))
                        :player-get-uuid (fn [this]
                                           (.getUUID this))
                        :player-get-container-menu (fn [this]
-                                                    (try
-                                                      (.containerMenu this)
-                                                      (catch Exception _
-                                                        (clojure.lang.Reflector/getInstanceField this "containerMenu"))))}]
+                                                    (ForgeRuntimeBridge/getPlayerContainerMenu this))}]
       (extend entity-cls entity/IEntityOps
         {:entity-distance-to-sqr (fn [this x y z]
            (.distanceToSqr this (double x) (double y) (double z)))})
@@ -89,21 +85,25 @@
       ;; Concrete classes are extended explicitly because some transformed runtime
       ;; classes do not reliably inherit protocol maps from Player in dev environment.
       (extend server-player-cls entity/IEntityOps player-impl)
-      (extend local-player-cls entity/IEntityOps player-impl)
+      ;; LocalPlayer is client-only; ClientPlatformBridge is @OnlyIn(Dist.CLIENT).
+      ;; Access it via our own (non-remapped) class name at runtime, client-side only.
+      (when (side/client-side?)
+        (let [local-player-cls (-> (Class/forName "cn.li.forge1201.bridge.ClientPlatformBridge")
+                                   (.getMethod "getLocalPlayerClass" (into-array Class []))
+                                   (.invoke nil (object-array [])))]
+          (extend local-player-cls entity/IEntityOps player-impl)))
       (extend inventory-cls entity/IEntityOps
         {:inventory-get-player (fn [this]
-               (clojure.lang.Reflector/getInstanceField this "player"))})
+               (ForgeRuntimeBridge/getInventoryPlayer this))})
       (extend menu-cls entity/IEntityOps
         {:menu-get-container-id (fn [this]
-          (clojure.lang.Reflector/getInstanceField this "containerId"))}))))
+          (ForgeRuntimeBridge/getMenuContainerId this))})))) 
 
 (defn- install-resource-factory!
   []
-  (let [resource-location-cls (Class/forName "net.minecraft.resources.ResourceLocation")
-        ctor (.getConstructor resource-location-cls (into-array Class [String String]))]
-    (alter-var-root #'resource/*resource-factory*
-                    (constantly (fn [namespace path]
-                                  (.newInstance ctor (object-array [(str namespace) (str path)])))))))
+  (alter-var-root #'resource/*resource-factory*
+                  (constantly (fn [namespace path]
+                                (ResourceLocation. (str namespace) (str path))))))
 
 (defn init-platform!
   "Initialize Forge 1.20.1 platform implementations.
@@ -122,9 +122,7 @@
                    :create-list bindings/create-nbt-list}))
     (alter-var-root #'item/*item-factory*
       (constantly (fn [nbt]
-                    (let [item-stack-cls (Class/forName "net.minecraft.world.item.ItemStack")
-                          of-method (.getMethod item-stack-cls "of" (into-array Class [(Class/forName "net.minecraft.nbt.CompoundTag")]))]
-                      (.invoke of-method nil (object-array [nbt]))))))
+                    (ForgeRuntimeBridge/itemStackOf nbt))))
     (alter-var-root #'nbt/*nbt-has-key-fn* (constantly bindings/nbt-has-key?))
     (alter-var-root #'pos/*position-factory* (constantly bindings/create-block-pos))
     (alter-var-root #'pos/*pos-above-fn* (constantly bindings/pos-above))

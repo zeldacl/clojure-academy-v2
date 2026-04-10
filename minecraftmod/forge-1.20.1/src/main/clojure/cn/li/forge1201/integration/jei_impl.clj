@@ -6,7 +6,8 @@
 
   JEI integration is optional - if JEI is not present, this module
   will not be loaded."
-  (:require [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.forge1201.compile-bootstrap]
+            [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [mezz.jei.api IModPlugin]
            [mezz.jei.api.registration IRecipeCategoryRegistration
@@ -19,6 +20,7 @@
            [mezz.jei.api.recipe RecipeIngredientRole]
            [mezz.jei.api.recipe RecipeType]
            [mezz.jei.api.gui.builder IRecipeSlotBuilder]
+           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.world.level ItemLike]
@@ -55,11 +57,7 @@
     (let [[id-part count-str] (str/split item-id #"#")
           count (if count-str (Integer/parseInt count-str) 1)
           res-loc (ResourceLocation. id-part)
-          regs-cls (Class/forName "net.minecraft.core.registries.BuiltInRegistries")
-          item-field (.getField regs-cls "ITEM")
-          item-registry (.get item-field nil)
-          get-method (.getMethod (class item-registry) "get" (into-array Class [Object]))
-          item (.invoke get-method item-registry (object-array [res-loc]))]
+          item (.get BuiltInRegistries/ITEM res-loc)]
       (when item
         (ItemStack. ^ItemLike item (int count))))
     (catch Exception e
