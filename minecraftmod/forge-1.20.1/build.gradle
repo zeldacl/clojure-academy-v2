@@ -457,20 +457,28 @@ tasks.named('compileClojure').configure {
 
         // Always start from a clean Clojure AOT output dir. Stale __init.class files in
         // build/clojure/main are on compile classpath and can execute during compilation.
-        if (clojureOutDir.isDirectory()) {
-            clojureOutDir.eachFileRecurse { f ->
-                if (f.isFile() && f.name.endsWith('.class')) {
-                    f.delete()
-                }
-            }
-        }
-
-        if (!clojureOutDir.isDirectory() || !javaMainDir.isDirectory()) {
+        //
+        // IMPORTANT: collect relative paths *before* deleting under clojure/main. The previous
+        // two-pass logic deleted all *.class in clojure/main first, so the second pass never
+        // saw any *.class and never removed the mirrored copies under classes/java/main —
+        // leaving stale AOT on disk when Gradle skips this task (UP-TO-DATE). That stale
+        // output + source dirs on checkClojure's classpath makes `load` sometimes compile
+        // .clj again with *warn-on-reflection* true → reflection noise without `clean`.
+        if (!clojureOutDir.isDirectory()) {
             return
         }
+        def relPaths = []
         clojureOutDir.eachFileRecurse { f ->
             if (f.isFile() && f.name.endsWith('.class')) {
-                def rel = clojureOutDir.toPath().relativize(f.toPath()).toString()
+                relPaths << clojureOutDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            }
+        }
+        relPaths.each { rel ->
+            def cljFile = clojureOutDir.toPath().resolve(rel).toFile()
+            if (cljFile.isFile()) {
+                cljFile.delete()
+            }
+            if (javaMainDir.isDirectory()) {
                 def victim = new File(javaMainDir, rel.replace('/', File.separator))
                 if (victim.isFile()) {
                     victim.delete()

@@ -115,7 +115,7 @@
     (.getMaxStackSize this))
   
   (item-is-equal? [this other]
-    (.sameItem this other))
+    (ItemStack/matches this other))
   
   (item-save-to-nbt [this nbt]
     (.save this nbt))

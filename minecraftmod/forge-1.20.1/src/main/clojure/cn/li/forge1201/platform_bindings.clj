@@ -36,12 +36,14 @@
 	nbt/INBTList
 	(nbt-append! [this element] (.add this element) this)
 	(nbt-list-size [this] (.size this))
-	(nbt-list-get [this index]
-		(when (and (>= index 0) (< index (.size this)))
-			(.get this index)))
-	(nbt-list-get-compound [this index]
-		(when (and (>= index 0) (< index (.size this)))
-			(.getCompound this index))))
+	(nbt-list-get [^ListTag this index]
+		(let [i (int index)]
+		  (when (and (>= i 0) (< i (.size this)))
+		    (.get this ^int i))))
+	(nbt-list-get-compound [^ListTag this index]
+		(let [i (int index)]
+		  (when (and (>= i 0) (< i (.size this)))
+		    (.getCompound this ^int i)))))
 
 (extend-type BlockPos
 	pos/IBlockPos

@@ -52,7 +52,7 @@
   
   Returns: Decoded value"
   [buffer read-byte-fn read-int-fn read-float-fn read-str-fn read-bool-fn]
-  (let [type-id (read-byte-fn buffer)]
+  (let [type-id (unchecked-int (int (read-byte-fn buffer)))]
     (case type-id
       0 (read-int-fn buffer)
       1 (read-float-fn buffer)

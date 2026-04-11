@@ -2,8 +2,8 @@
 (ns cn.li.forge1201.platform-impl-impl
   "Bridge-invoked platform initializer.
 
-  This namespace is intentionally free of direct Minecraft/Forge imports so it can
-  be AOT-compiled safely under checkClojure/compileClojure."
+  Keeps business logic free of hardcoded Minecraft types except minimal `^Type` hints on
+  `extend` lambdas so checkClojure stays reflection-clean (types are Forge 1.20.1 remapped)."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
@@ -15,7 +15,10 @@
             [cn.li.forge1201.platform-bindings :as bindings]
             [cn.li.forge1201.side :as side])
   (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]
-           [net.minecraft.resources ResourceLocation]))
+           [net.minecraft.resources ResourceLocation]
+           [net.minecraft.world.entity Entity]
+           [net.minecraft.world.entity.player Player]
+           [net.minecraft.world.item Item ItemStack]))
 
 
 (defonce ^:private initialized? (atom false))
@@ -29,32 +32,32 @@
     (let [item-stack-cls (ForgeRuntimeBridge/getItemStackClass)
           item-cls (ForgeRuntimeBridge/getItemClass)]
       (extend item-stack-cls item/IItemStack
-              {:item-is-empty? (fn [this]
+              {:item-is-empty? (fn [^ItemStack this]
                                  (.isEmpty this))
-               :item-get-count (fn [this]
+               :item-get-count (fn [^ItemStack this]
                                  (.getCount this))
-               :item-get-max-stack-size (fn [this]
+               :item-get-max-stack-size (fn [^ItemStack this]
                                           (.getMaxStackSize this))
-               :item-is-equal? (fn [this other]
-                                 (.sameItem this other))
-               :item-save-to-nbt (fn [this nbt]
+               :item-is-equal? (fn [^ItemStack this ^ItemStack other]
+                                 (ItemStack/matches this other))
+               :item-save-to-nbt (fn [^ItemStack this nbt]
                                    (.save this nbt))
-               :item-get-or-create-tag (fn [this]
+               :item-get-or-create-tag (fn [^ItemStack this]
                                          (.getOrCreateTag this))
-               :item-get-max-damage (fn [this]
+               :item-get-max-damage (fn [^ItemStack this]
                                       (.getMaxDamage this))
-               :item-set-damage! (fn [this damage]
+               :item-set-damage! (fn [^ItemStack this damage]
                                    (.setDamageValue this (int damage)))
-               :item-get-damage (fn [this]
+               :item-get-damage (fn [^ItemStack this]
                                   (.getDamageValue this))
-               :item-get-item (fn [this]
+               :item-get-item (fn [^ItemStack this]
                                 (.getItem this))
-               :item-get-tag-compound (fn [this]
+               :item-get-tag-compound (fn [^ItemStack this]
                                         (.getTag this))
-               :item-split (fn [this amount]
+               :item-split (fn [^ItemStack this amount]
                              (.split this (int amount)))})
       (extend item-cls item/IItem
-              {:item-get-description-id (fn [this]
+              {:item-get-description-id (fn [^Item this]
                                           (.getDescriptionId this))
                :item-get-registry-name (fn [this]
                                          (when-let [get-item-registry-name
@@ -86,18 +89,18 @@
           inventory-cls (ForgeRuntimeBridge/getInventoryClass)
           menu-cls (ForgeRuntimeBridge/getAbstractContainerMenuClass)
           server-player-cls (ForgeRuntimeBridge/getServerPlayerClass)
-          player-impl {:entity-distance-to-sqr (fn [this x y z]
+          player-impl {:entity-distance-to-sqr (fn [^Entity this x y z]
                                                  (.distanceToSqr this (double x) (double y) (double z)))
-                       :player-get-level (fn [this]
+                       :player-get-level (fn [^Player this]
                                            (ForgeRuntimeBridge/getEntityLevel this))
-                       :player-get-name (fn [this]
+                       :player-get-name (fn [^Player this]
                                           (str (.getName this)))
-                       :player-get-uuid (fn [this]
+                       :player-get-uuid (fn [^Player this]
                                           (.getUUID this))
-                       :player-get-container-menu (fn [this]
+                       :player-get-container-menu (fn [^Player this]
                                                     (ForgeRuntimeBridge/getPlayerContainerMenu this))}]
       (extend entity-cls entity/IEntityOps
-        {:entity-distance-to-sqr (fn [this x y z]
+        {:entity-distance-to-sqr (fn [^Entity this x y z]
            (.distanceToSqr this (double x) (double y) (double z)))})
       (extend player-cls entity/IEntityOps player-impl)
       ;; Concrete classes are extended explicitly because some transformed runtime
