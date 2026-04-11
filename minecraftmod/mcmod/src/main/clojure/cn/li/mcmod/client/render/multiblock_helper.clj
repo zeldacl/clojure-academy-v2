@@ -35,7 +35,7 @@
 (defn- spec-relative-positions
   "Return relative positions [x y z] including origin for a block spec."
   [block-spec]
-  (let [custom (:multi-block-positions block-spec)
+  (let [custom (:multi-block-positions (:multi-block block-spec))
         origin [0 0 0]]
     (if (seq custom)
       (let [rel (mapv (fn [m]
@@ -76,7 +76,7 @@
         block-id (or (get-tile-block-id tile) (:block-id state))
         direction (normalize-direction (:direction state :north))
         cur (current-pos-xyz tile)]
-    (when (and world-obj block-id cur (:multi-block? block-spec))
+    (when (and world-obj block-id cur (get-in block-spec [:multi-block :multi-block?]))
       (let [[cx cy cz] cur
             rotated (mapv #(rotate-rel-pos % direction) (spec-relative-positions block-spec))
             candidates (for [[rx ry rz] rotated]
@@ -232,8 +232,8 @@
              (registry-metadata/get-block-spec block-id))
             direction (normalize-direction (:direction state :north))
             [pivot-x pivot-z] (get-pivot-offset direction)
-            raw-rot-center (or (:multi-block-rotation-center block-spec)
-                   (get-rotation-center direction))
+            raw-rot-center (or (get-in block-spec [:multi-block :multi-block-rotation-center])
+                              (get-rotation-center direction))
             [rot-x rot-y rot-z] (direction->rotation-center raw-rot-center direction)
             rotation (get-rotation-angle direction)
             tx (+ pivot-x rot-x)
