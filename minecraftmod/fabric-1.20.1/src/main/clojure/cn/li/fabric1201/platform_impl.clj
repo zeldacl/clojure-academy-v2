@@ -18,13 +18,16 @@
             [cn.li.fabric1201.platform.resource :as resource]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.client.render.pose :as pose]
-            [cn.li.fabric1201.client.render.buffer :as buffer])
+            [cn.li.fabric1201.client.render.buffer :as buffer]
+            [cn.li.mcmod.platform.position :as mcmod-pos]
+            [cn.li.mcmod.platform.be :as pbe])
   (:import [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
            [net.minecraft.world.level.block.state BlockState]
            [net.minecraft.world.item ItemStack]
-           [net.minecraft.resources ResourceLocation]))
+           [net.minecraft.resources ResourceLocation]
+           [cn.li.fabric1201.block.entity ScriptedBlockEntity]))
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Fabric 1.20.1)
@@ -204,6 +207,22 @@
   
   (world-is-chunk-loaded? [this chunk-x chunk-z]
     (.hasChunk this chunk-x chunk-z)))
+
+;; ============================================================================
+;; Scripted tile entity — mcmod IHasPosition / IBlockEntity (TESR / multiblock)
+;; ============================================================================
+
+(extend-type ScriptedBlockEntity
+  mcmod-pos/IHasPosition
+  (position-get-block-pos [this] (.getBlockPos ^ScriptedBlockEntity this))
+  (position-get-pos [this] (.getBlockPos ^ScriptedBlockEntity this))
+  pbe/IBlockEntity
+  (be-get-level [this] (.getLevel ^ScriptedBlockEntity this))
+  (be-get-world [this] (.getLevel ^ScriptedBlockEntity this))
+  (be-get-custom-state [this] (.getCustomState ^ScriptedBlockEntity this))
+  (be-set-custom-state! [this state] (.setCustomState ^ScriptedBlockEntity this state))
+  (be-get-block-id [this] (.getBlockId ^ScriptedBlockEntity this))
+  (be-set-changed! [this] (.setChanged ^ScriptedBlockEntity this)))
 
 ;; ============================================================================
 ;; Entity / Player / Inventory / Menu protocol implementations (Fabric)

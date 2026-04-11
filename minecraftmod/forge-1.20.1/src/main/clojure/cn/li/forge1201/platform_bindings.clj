@@ -4,6 +4,7 @@
 	These functions use direct typed calls so Loom remapping remains valid in packaged jars."
 	(:require [cn.li.mcmod.platform.nbt :as nbt]
 					[cn.li.mcmod.platform.position :as pos]
+					[cn.li.mcmod.platform.be :as pbe]
 					[cn.li.mcmod.registry.metadata :as registry-metadata])
 	(:import [net.minecraft.nbt CompoundTag ListTag]
 				 [net.minecraft.core BlockPos]
@@ -53,7 +54,14 @@
 	(position-get-block-pos [this]
 		(.getBlockPos this))
 	(position-get-pos [this]
-		(.getBlockPos this)))
+		(.getBlockPos this))
+	pbe/IBlockEntity
+	(be-get-level [this] (.getLevel this))
+	(be-get-world [this] (.getLevel this))
+	(be-get-custom-state [this] (.getCustomState this))
+	(be-set-custom-state! [this state] (.setCustomState this state))
+	(be-get-block-id [this] (.getBlockId this))
+	(be-set-changed! [this] (.setChanged this)))
 
 (defn nbt-has-key?
 	[^CompoundTag nbt ^String key]

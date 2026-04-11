@@ -76,8 +76,7 @@
         (.printStackTrace e)))))
 
 (defn- get-block-id [tile-entity]
-  "Use `get-block-id` (dynamic fn + fallback), not protocol `be-get-block-id`:
-  ScriptedBlockEntity is not extended onto IBlockEntity; Forge binds *be-get-block-id-fn*."
+  "Resolves block-id via `platform.be/get-block-id` (dynamic fn when bound, else IBlockEntity)."
   (when tile-entity
     (let [v (platform-be/get-block-id tile-entity)]
       (when (string? v) v))))
