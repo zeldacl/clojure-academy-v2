@@ -1,7 +1,6 @@
 (ns cn.li.forge1201.blockstate-properties
   "Forge 1.20.1 adapter: create Minecraft BlockState Property objects from ac definitions."
-  (:require [cn.li.forge1201.compile-bootstrap]
-            [cn.li.mcmod.block.blockstate-properties :as shared]
+  (:require [cn.li.mcmod.block.blockstate-properties :as shared]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.level.block.state.properties IntegerProperty BooleanProperty]))

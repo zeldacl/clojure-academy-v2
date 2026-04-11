@@ -3,8 +3,7 @@
 
   This namespace builds Brigadier command trees from the command DSL metadata
   and registers them with Minecraft's command system."
-  (:require [cn.li.forge1201.compile-bootstrap]
-            [cn.li.mcmod.command.metadata :as cmd-meta]
+  (:require [cn.li.mcmod.command.metadata :as cmd-meta]
             [cn.li.mcmod.command.context :as cmd-ctx]
             [cn.li.mcmod.command.actions :as cmd-actions]
             [cn.li.forge1201.command-executor]  ; Load action implementations

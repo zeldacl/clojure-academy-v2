@@ -1,7 +1,6 @@
 (ns cn.li.forge1201.mod
   "Forge 1.20.1 main mod class - generated with gen-class"
-  (:require [cn.li.forge1201.compile-bootstrap]
-            [cn.li.forge1201.bootstrap :as bootstrap]
+  (:require [cn.li.forge1201.bootstrap :as bootstrap]
             [cn.li.forge1201.init :as init]
             [cn.li.forge1201.side :as side]
             [cn.li.forge1201.registry :as registry]

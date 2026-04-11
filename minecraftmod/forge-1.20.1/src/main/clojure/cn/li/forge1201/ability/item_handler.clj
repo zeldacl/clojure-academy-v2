@@ -1,7 +1,6 @@
 (ns cn.li.forge1201.ability.item-handler
   "Item use event handler for ability items (Forge layer)."
-  (:require [cn.li.forge1201.compile-bootstrap]
-            [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickItem]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]

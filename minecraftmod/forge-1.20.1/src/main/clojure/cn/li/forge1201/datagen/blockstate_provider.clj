@@ -6,8 +6,7 @@
    - 本文件: 使用Forge/Minecraft API和定义生成JSON（平台特定）
    
    优势：定义层复用，易于支持新的Forge版本"
-  (:require [cn.li.forge1201.compile-bootstrap]
-            [cn.li.forge1201.bootstrap :as bootstrap]
+  (:require [cn.li.forge1201.bootstrap :as bootstrap]
             [cn.li.mcmod.config :as modid]
             [cn.li.ac.block.blockstate-definition :as blockstate-def]
             [cn.li.forge1201.datagen.resource-location :as rl]

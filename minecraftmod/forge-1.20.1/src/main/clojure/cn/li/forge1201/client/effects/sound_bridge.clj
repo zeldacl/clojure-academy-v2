@@ -1,7 +1,6 @@
 (ns cn.li.forge1201.client.effects.sound-bridge
   "CLIENT-ONLY sound effect bridge (Forge layer)."
-  (:require [cn.li.forge1201.compile-bootstrap]
-            [cn.li.ac.ability.client.effects.sounds :as ac-sounds]
+  (:require [cn.li.ac.ability.client.effects.sounds :as ac-sounds]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.core.registries BuiltInRegistries]

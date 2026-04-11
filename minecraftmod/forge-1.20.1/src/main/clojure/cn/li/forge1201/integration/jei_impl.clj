@@ -6,8 +6,7 @@
 
   JEI integration is optional - if JEI is not present, this module
   will not be loaded."
-  (:require [cn.li.forge1201.compile-bootstrap]
-            [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [mezz.jei.api IModPlugin]
            [mezz.jei.api.registration IRecipeCategoryRegistration
