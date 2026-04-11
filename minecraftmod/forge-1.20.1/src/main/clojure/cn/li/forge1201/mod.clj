@@ -320,19 +320,21 @@
                     (events/handle-block-break-event evt)))))
 
 ;; Helper: Client setup phase (called from event handler)
-(defn on-client-setup [_event]
+(defn on-client-setup [^FMLClientSetupEvent event]
   (log/info "FMLClientSetupEvent - Client setup phase")
-  ;; Only proceed if we're actually on the client side
+  ;; Forge fires this event on parallel mod-loading workers. BlockEntityRenderer
+  ;; registration (and related client registry work) must run on the main client
+  ;; thread via enqueueWork or renders silently never attach.
   (when (side/client-side?)
-    ;; Client-only initialization
-    (gui-init/init-client!)
-    ;; Install platform i18n implementation via client module
-    (when-let [install-i18n! (side/resolve-client-fn 'cn.li.forge1201.client.i18n-impl 'install-client-i18n!)]
-      (install-i18n!))
-    ;; Initialize client-side systems
-    (if-let [init-client! (side/resolve-client-fn 'cn.li.forge1201.client.init 'init-client)]
-      (init-client!)
-      (log/error "Client-side detected but client init failed to load"))))
+    (.enqueueWork event
+      (reify Runnable
+        (run [_]
+          (gui-init/init-client!)
+          (when-let [install-i18n! (side/resolve-client-fn 'cn.li.forge1201.client.i18n-impl 'install-client-i18n!)]
+            (install-i18n!))
+          (if-let [init-client! (side/resolve-client-fn 'cn.li.forge1201.client.init 'init-client)]
+            (init-client!)
+            (log/error "Client-side detected but client init failed to load")))))))
 
 ;; ============================================================================
 ;; Constructor Implementation
@@ -401,6 +403,9 @@
           (.addListener mod-bus EventPriority/NORMAL false FMLClientSetupEvent
                         (reify java.util.function.Consumer
                           (accept [_ event] (on-client-setup event))))
+          ;; Scripted BER: use @Mod.EventBusSubscriber Java class ModClientRenderSetup —
+          ;; addListener(modBus, Class, Consumer) for EntityRenderersEvent$RegisterRenderers
+          ;; did not reliably dispatch from Clojure reify.
           (.addListener mod-bus EventPriority/NORMAL false InterModProcessEvent
                         (reify java.util.function.Consumer
                           (accept [_ event]

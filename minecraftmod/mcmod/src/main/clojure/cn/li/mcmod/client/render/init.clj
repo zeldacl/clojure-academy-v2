@@ -10,8 +10,6 @@
   keep their own `register!` implementations."
   (:require [cn.li.mcmod.util.log :as log]))
 
-(def ^:private registered? (atom false))
-
 (def ^:private renderer-init-fns
   ;; Vector of (fn [] ...) or Var values implementing IFn.
   (atom []))
@@ -40,15 +38,21 @@
   nil)
 
 (defn register-all-renderers!
-  "Require and register all renderers (idempotent)."
-  []
-  (when (compare-and-set! registered? false true)
-    (log/info "Registering all core renderers...")
-    (let [fns @renderer-init-fns]
-      (when (empty? fns)
-        (log/warn "No renderer init callbacks registered; skipping."))
-      (doseq [f fns]
-        (f)))
+  "Run every queued `register!` callback (typically once from platform client setup).
 
-    (log/info "Core renderers registered.")))
+  Intentionally not gated by a \"ran once\" flag: if this ever ran while the
+  callback queue was still empty, a compare-and-swap gate would permanently
+  skip real registrations (matrix/solar TESRs would never attach)."
+  []
+  (let [fns @renderer-init-fns]
+    (log/info "Registering all core renderers..." (count fns) "callbacks")
+    (when (empty? fns)
+      (log/warn "No renderer init callbacks registered; skipping."))
+    (doseq [f fns]
+      (try
+        (f)
+        (catch Throwable t
+          (log/error "Renderer init callback failed:" (ex-message t))
+          (.printStackTrace t)))))
+  (log/info "Core renderers registered."))
 

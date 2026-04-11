@@ -40,6 +40,9 @@
   (try
     (render/register-texture-binder! bind-texture-fabric!)
 
+    ;; Must run before register-all-renderers! so ac hooks can enqueue register! fns.
+    (render-init/register-default-renderer-init-fns!)
+
     (render-init/register-all-renderers!)
 
     ;; Bind universal BER only to tile-ids that have at least one block with a

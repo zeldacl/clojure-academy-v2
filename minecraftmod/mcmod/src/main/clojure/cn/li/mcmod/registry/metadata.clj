@@ -66,21 +66,31 @@
   [block-id]
   (= :controller-parts (get-in (get-block-spec block-id) [:multi-block :multiblock-mode])))
 
+(defn- norm-block-id-for-compare
+  "Match BE / DSL ids whether stored as keyword or string (defrecord vs runtime)."
+  [x]
+  (when (some? x)
+    (if (keyword? x) (name x) (str x))))
+
 (defn is-controller-block?
   "Return true when block-id is the controller block in controller+parts mode."
   [block-id]
   (let [spec (get-block-spec block-id)
-        multi-block (:multi-block spec)]
+        multi-block (:multi-block spec)
+        cid (:controller-block-id multi-block)]
     (and (= :controller-parts (:multiblock-mode multi-block))
-         (= (str block-id) (:controller-block-id multi-block)))))
+         (some? cid)
+         (= (norm-block-id-for-compare block-id) (norm-block-id-for-compare cid)))))
 
 (defn is-part-block?
   "Return true when block-id is the part block in controller+parts mode."
   [block-id]
   (let [spec (get-block-spec block-id)
-        multi-block (:multi-block spec)]
+        multi-block (:multi-block spec)
+        pid (:part-block-id multi-block)]
     (and (= :controller-parts (:multiblock-mode multi-block))
-         (= (str block-id) (:part-block-id multi-block)))))
+         (some? pid)
+         (= (norm-block-id-for-compare block-id) (norm-block-id-for-compare pid)))))
 
 (defn get-controller-block-id
   "Get controller block-id for a block participating in controller+parts mode."

@@ -14,7 +14,7 @@
 (defn- get-tile-block-id
   [tile]
   (when tile
-    (pbe/be-get-block-id tile)))
+    (pbe/get-block-id tile)))
 
 (defn- normalize-direction [direction]
   (cond
@@ -181,11 +181,13 @@
   "Check if this tile should render the multiblock
   
   Only renders if:
-  - Tile has :sub-id field
-  - sub-id is 0 (origin block)
+  - sub-id is 0 (origin / controller). Missing :sub-id is treated as 0 so
+    client tiles match server/schema defaults before the first sync packet
+    (ScriptedBlock uses RenderShape.INVISIBLE; without TESR the block is gone).
+  - Part tiles must set :sub-id to a positive index (see multiblock-core).
   
   Args:
-  - tile: TileEntity with :sub-id field
+  - tile: TileEntity with optional :sub-id in custom state
   
   Returns: boolean"
   [tile]
@@ -193,8 +195,7 @@
                 tile
                 (or (pbe/get-custom-state tile) {}))]
     (and (map? state)
-         (contains? state :sub-id)
-         (zero? (long (:sub-id state)))
+         (zero? (long (:sub-id state 0)))
          (if-let [block-id (or (get-tile-block-id tile) (:block-id state))]
            (if-let [block-spec (registry-metadata/get-block-spec block-id)]
              (if-let [canonical (canonical-origin-pos tile state block-spec)]

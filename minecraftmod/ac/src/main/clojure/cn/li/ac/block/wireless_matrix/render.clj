@@ -110,6 +110,15 @@
     ;; Multiblock part tiles share the same BlockEntity type and renderer dispatch.
     (tesr-api/register-scripted-tile-renderer! "wireless-matrix-part" renderer)))
 
+(defonce ^:private matrix-renderer-installed? (atom false))
+
+(defn init!
+  "Entry for `ac.registry.hooks/load-all-client-renderers!` (matches solar-gen pattern)."
+  []
+  (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
+    (when (compare-and-set! matrix-renderer-installed? false true)
+      (register-fn register!))))
+
 ;; ============================================================================
 ;; Platform Integration Notes
 ;; ============================================================================
@@ -151,9 +160,3 @@
 ;; - "Main": Base structure
 ;; - "Core": Central core
 ;; - "Shield": Rotating plate (rendered 3 times if active)
-
-
-
-;; Auto-register at namespace load time
-(when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-  (register-fn register!))

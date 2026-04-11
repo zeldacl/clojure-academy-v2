@@ -69,17 +69,18 @@
           mx (pos/pos-x pos)
           my (pos/pos-y pos)
           mz (pos/pos-z pos)]
-      (when-not part-block-id
-        (log/error "Missing :part-block-id for controller block" block-id)
-        {:cancel-place? true})
-      (doseq [bp (structure-positions pos controller-spec)
-              :when (not (same-pos? bp pos))]
-        (world/world-place-block-by-id* world part-block-id bp 3)
-        (when-let [be (world/world-get-tile-entity* world bp)]
-          (set-be-state! be {:controller-pos-x mx
-                             :controller-pos-y my
-                             :controller-pos-z mz
-                             :sub-id 1}))))))
+      (if-not part-block-id
+        (do
+          (log/error "Missing :part-block-id for controller block" block-id)
+          {:cancel-place? true})
+        (doseq [bp (structure-positions pos controller-spec)
+                :when (not (same-pos? bp pos))]
+          (world/world-place-block-by-id* world part-block-id bp 3)
+          (when-let [be (world/world-get-tile-entity* world bp)]
+            (set-be-state! be {:controller-pos-x mx
+                               :controller-pos-y my
+                               :controller-pos-z mz
+                               :sub-id 1})))))))
 
 (defn resolve-controller-pos
   "Resolve controller pos for both controller/part contexts.

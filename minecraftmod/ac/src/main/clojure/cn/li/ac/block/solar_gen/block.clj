@@ -235,5 +235,6 @@
                      :flat-item-icon? true}
          :events {:on-right-click open-solar-gui!}}))
     (hooks/register-network-handler! register-network-handlers!)
+    (hooks/register-client-renderer! 'cn.li.ac.block.solar-gen.render/init!)
     (log/info "Initialized Solar Generator block")))
 

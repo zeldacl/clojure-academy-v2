@@ -24,7 +24,9 @@
             [cn.li.forge1201.client.render-buffer-impl :as buffer-impl]
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.buffer :as buffer])
-  (:import [cn.li.forge1201.shim ForgeClientHelper ForgeClientHelper$RendererFactory]))
+  (:import [cn.li.forge1201.shim ForgeClientHelper]
+           [net.minecraftforge.client.event EntityRenderersEvent$RegisterRenderers]
+           [net.minecraft.client.renderer.blockentity BlockEntityRendererProvider]))
 
 ;; ============================================================================
 ;; Client Registration
@@ -55,20 +57,7 @@
 
     (render-init/register-all-renderers!)
 
-    ;; Bind universal BER only to tile-ids that have at least one block with a
-    ;; registered scripted renderer. Tiles using standard static models (e.g.
-    ;; wireless nodes) have no renderer and must be skipped to avoid per-frame
-    ;; "no renderer registered" log spam.
-    (doseq [tile-id (registry-metadata/get-all-tile-ids)]
-      (let [block-ids (or (seq (registry-metadata/get-tile-block-ids tile-id)) [tile-id])]
-        (when (some tesr-api/get-scripted-tile-renderer block-ids)
-          (when-let [get-be-type (requiring-resolve 'cn.li.forge1201.mod/get-registered-block-entity-type)]
-            (when-let [be-type (get-be-type tile-id)]
-              (ForgeClientHelper/registerBlockEntityRenderer
-                be-type
-                (reify ForgeClientHelper$RendererFactory
-                  (create [_this]
-                    (tesr-impl/new-renderer)))))))))
+    ;; Scripted BER: `ModClientRenderSetup` (Java @Mod.EventBusSubscriber) on mod bus.
     
     (catch Exception e
       (log/error "Failed to register block renderers" (.printStackTrace e)))))
@@ -97,6 +86,40 @@
   (alter-var-root #'buffer/*cutout-no-cull-buffer-fn* (constantly buffer-impl/get-cutout-no-cull-buffer))
 
   (log/info "Client-side rendering bindings complete"))
+
+(defn- ensure-client-render-platform-for-ber!
+  "Forge can fire RegisterRenderers before FMLClientSetup enqueueWork. Without pose
+  and buffer roots, TESR runs with nil fns (skips transforms) or throws from
+  get-solid-buffer."
+  []
+  (render/register-texture-binder! bind-texture-forge!)
+  (init-render-bindings!))
+
+(defn register-scripted-block-entity-renderers!
+  "Bind universal BER for scripted tiles. Must run under
+  `EntityRenderersEvent.RegisterRenderers` (Forge 1.20.1 mod bus), not
+  `BlockEntityRenderers.register` from client setup."
+  [^EntityRenderersEvent$RegisterRenderers evt]
+  (ensure-client-render-platform-for-ber!)
+  (log/info "RegisterRenderers - attaching scripted block entity renderers")
+  ;; `FMLClientSetupEvent` work is often enqueued; this event can run first. Populate
+  ;; scripted TESR callbacks only when still empty (no duplicate when order is normal).
+  (when (empty? @tesr-api/scripted-renderer-registry)
+    (log/info "RegisterRenderers - scripted registry empty; running renderer init (event-order fallback)")
+    (render-init/register-default-renderer-init-fns!)
+    (render-init/register-all-renderers!))
+  (doseq [tile-id (registry-metadata/get-all-tile-ids)]
+    (let [block-ids (or (seq (registry-metadata/get-tile-block-ids tile-id)) [tile-id])]
+      (when (some tesr-api/get-scripted-tile-renderer block-ids)
+        (when-let [get-be-type (requiring-resolve 'cn.li.forge1201.mod/get-registered-block-entity-type)]
+          (when-let [be-type (get-be-type tile-id)]
+            (.registerBlockEntityRenderer
+              evt
+              be-type
+              (reify BlockEntityRendererProvider
+                (create [_ _ctx]
+                  (tesr-impl/new-renderer))))
+            (log/info (str "  BER registered for tile-id " tile-id))))))))
 
 (defn- init-ac-client-bridge!
   []

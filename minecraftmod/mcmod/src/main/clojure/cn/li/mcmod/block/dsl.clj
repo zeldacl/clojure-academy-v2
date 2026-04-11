@@ -3,7 +3,8 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.world :as world]))
+            [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.platform.be :as platform-be]))
 
 ;; Block Registry - stores all defined blocks
 (defonce block-registry (atom {}))
@@ -300,6 +301,12 @@
               (nil? state)))
           positions)))))
 
+(defn- dsl-block-id-str
+  "Normalize block-id values from BE / specs for comparison (keyword vs string)."
+  [x]
+  (when (some? x)
+    (if (keyword? x) (name x) (str x))))
+
 (defn is-multi-block-complete?
   "Check if all parts of a multi-block structure are present
    world: world object
@@ -321,33 +328,29 @@
               origin-pos (if (map? master-pos)
                            (pos/create-block-pos mx my mz)
                            master-pos)
-              controller-id (:controller-block-id multi-block)
-              part-id (:part-block-id multi-block)
+              controller-id-str (dsl-block-id-str (:controller-block-id multi-block))
+              part-id-str (dsl-block-id-str (:part-block-id multi-block))
 
               ;; Function to calculate absolute position
               abs-pos (fn [rel-pos]
                         (let [x (+ mx (or (:relative-x rel-pos) (:x rel-pos) 0))
                               y (+ my (or (:relative-y rel-pos) (:y rel-pos) 0))
                               z (+ mz (or (:relative-z rel-pos) (:z rel-pos) 0))]
-                          (pos/create-block-pos x y z)))]
+                          (pos/create-block-pos x y z)))
+              origin-state (world/world-get-block-state* world origin-pos)]
 
           ;; Check origin first - must be controller block
-          (let [origin-state (world/world-get-block-state* world origin-pos)]
-            (if-not origin-state
+          (if-not origin-state
               (do
                 (log/debug "Multi-block validation failed: origin block missing at" origin-pos)
                 false)
               ;; Check if origin is controller (when controller-parts mode)
-              (if (and controller-id part-id)
+              (if (and controller-id-str part-id-str)
                 (let [origin-be (world/world-get-tile-entity* world origin-pos)
-                      origin-block-id (when origin-be
-                                        (try
-                                          (when-let [get-id (requiring-resolve 'cn.li.mcmod.platform.be/be-get-block-id)]
-                                            (get-id origin-be))
-                                          (catch Exception _ nil)))]
-                  (if (not= origin-block-id controller-id)
+                      origin-block-id-str (some-> origin-be platform-be/get-block-id dsl-block-id-str)]
+                  (if (not= origin-block-id-str controller-id-str)
                     (do
-                      (log/debug "Multi-block validation failed: origin is not controller. Expected:" controller-id "Got:" origin-block-id)
+                      (log/debug "Multi-block validation failed: origin is not controller. Expected:" controller-id-str "Got:" origin-block-id-str)
                       false)
                     ;; Check all other positions - must be part blocks
                     (let [result (every?
@@ -366,14 +369,10 @@
                                                  false)
                                                ;; Verify it's a part block
                                                (let [be (world/world-get-tile-entity* world pos)
-                                                     block-id (when be
-                                                                (try
-                                                                  (when-let [get-id (requiring-resolve 'cn.li.mcmod.platform.be/be-get-block-id)]
-                                                                    (get-id be))
-                                                                  (catch Exception _ nil)))]
-                                                 (if (not= block-id part-id)
+                                                     bid-str (some-> be platform-be/get-block-id dsl-block-id-str)]
+                                                 (if (not= bid-str part-id-str)
                                                    (do
-                                                     (log/debug "Multi-block validation failed: wrong block type at" pos ". Expected:" part-id "Got:" block-id)
+                                                     (log/debug "Multi-block validation failed: wrong block type at" pos ". Expected:" part-id-str "Got:" bid-str)
                                                      false)
                                                    true))))))
                                        (catch Exception e
@@ -398,7 +397,7 @@
                                (or positions []))]
                   (when result
                     (log/debug "Multi-block validation passed for structure at" origin-pos))
-                  result)))))
+                  result))))
 
         (catch Exception e
           (log/error "Error checking multi-block structure:"(ex-message e))

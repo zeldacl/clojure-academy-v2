@@ -266,7 +266,7 @@
   "Tick: read state from BE, do work, write state back."
   [level pos _state be]
   (let [state (safe-state be)
-        already-broken? (true? (:structure-broken? state))
+        already-broken? (boolean (:structure-broken? state))
         ticker (inc (get state :update-ticker 0))
         state (assoc state :update-ticker ticker)
         broken? (atom false)
@@ -296,33 +296,10 @@
           (when (and block-spec
                      (zero? (:sub-id state 0)))
             (log/debug "Validating matrix structure at" pos "sub-id:" (:sub-id state 0))
-            (log/debug "Block spec keys:" (keys block-spec))
-            (log/debug "Block spec multi-block:" (:multi-block block-spec))
-            (let [multi-block (:multi-block block-spec)
-                  _ (log/debug "  multi-block keys:" (when multi-block (keys multi-block)))
-                  origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})
-                  custom-pos (:multi-block-positions multi-block)
-                  multi-block-size (:multi-block-size multi-block)
-                  _ (log/debug "  custom-pos:" custom-pos)
-                  _ (log/debug "  multi-block-size:" multi-block-size)
-                  _ (log/debug "  origin:" origin)
-                  positions (if custom-pos
-                              (bdsl/calculate-multi-block-positions custom-pos origin)
-                              (if multi-block-size
-                                (bdsl/calculate-multi-block-positions multi-block-size origin)
-                                []))
-                  part-pos-map {:x (pos/pos-x pos) :y (pos/pos-y pos) :z (pos/pos-z pos)}
-                  _ (log/debug "Matrix positions:" (count positions) "positions, origin:" origin)
-                  _ (log/debug "Current pos:" part-pos-map)
-                  master-found? (some (fn [rel-pos]
-                                        (let [master-map (bdsl/get-multi-block-master-pos part-pos-map rel-pos)]
-                                          (log/debug "Testing master at" master-map "from rel-pos" rel-pos)
-                                          (let [result (bdsl/is-multi-block-complete? level master-map block-spec)]
-                                            (log/debug "  Result:" result)
-                                            result)))
-                                      positions)]
-              (log/debug "Master found?" master-found?)
-              (when (not master-found?)
+            ;; Controller BE sits at the multiblock origin; validate that footprint directly.
+            (let [master-found? (boolean (bdsl/is-multi-block-complete? level pos block-spec))]
+              (log/debug "Matrix multiblock complete?" master-found? "at" pos)
+              (when-not master-found?
                 (reset! broken? true)
                 (when-not already-broken?
                   (log/info "Matrix structure broken at" pos))

@@ -21,6 +21,7 @@
 (defonce ^:private initialized? (atom false))
 (defonce ^:private entity-ops-installed? (atom false))
 (defonce ^:private item-ops-installed? (atom false))
+(defonce ^:private block-state-ops-installed? (atom false))
 
 (defn- install-item-ops!
   []
@@ -59,6 +60,23 @@
                                          (when-let [get-item-registry-name
                                                     (requiring-resolve 'cn.li.forge1201.ability.item-handler/get-item-registry-name)]
                                            (get-item-registry-name this)))}))))
+
+(defn- install-block-state-ops!
+  "Extend IBlockStateOps onto BlockState at runtime (after MC bootstrap).
+
+  Do not use extend-type BlockState in platform-bindings: CheckClojure loads that
+  namespace and would initialize BlockState before bootstrap."
+  []
+  (when (compare-and-set! block-state-ops-installed? false true)
+    (let [block-state-cls (ForgeRuntimeBridge/getBlockStateClass)]
+      (extend block-state-cls world/IBlockStateOps
+              {:block-state-is-air (fn [s] (ForgeRuntimeBridge/blockStateIsAir s))
+               :block-state-get-block (fn [s] (ForgeRuntimeBridge/blockStateGetBlock s))
+               :block-state-get-state-definition (fn [s] (ForgeRuntimeBridge/blockStateGetStateDefinition s))
+               :block-state-get-property (fn [_s state-def prop-name]
+                                           (ForgeRuntimeBridge/blockStateGetProperty state-def prop-name))
+               :block-state-set-property (fn [s prop value]
+                                           (ForgeRuntimeBridge/blockStateSetProperty s prop value))}))))
 
 (defn- install-entity-ops!
   []
@@ -116,6 +134,7 @@
     ;; avoiding compile-time MC class loading during checkClojure.
     (install-entity-ops!)
     (install-item-ops!)
+    (install-block-state-ops!)
     (install-resource-factory!)
     (alter-var-root #'nbt/*nbt-factory*
       (constantly {:create-compound bindings/create-nbt-compound

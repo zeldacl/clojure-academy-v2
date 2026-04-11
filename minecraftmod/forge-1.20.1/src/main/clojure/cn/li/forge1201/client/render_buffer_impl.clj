@@ -7,16 +7,11 @@
            [net.minecraft.resources ResourceLocation]))
 
 (defn get-solid-buffer
-  "Get a solid entity render buffer.
-
-  Args:
-    buffer-source: MultiBufferSource - The buffer source
-    texture: ResourceLocation - Texture to use
-
-  Returns:
-    VertexConsumer for solid rendering"
+  "Buffered solid draw for OBJ/TESR. Uses entityCutoutNoCull so faces are not
+  over-aggressively culled and alpha edges behave like typical mod BERs; entitySolid
+  can leave scripted models invisible depending on normals/pipeline."
   [^MultiBufferSource buffer-source ^ResourceLocation texture]
-  (.getBuffer buffer-source (RenderType/entitySolid texture)))
+  (.getBuffer buffer-source (RenderType/entityCutoutNoCull texture)))
 
 (defn get-translucent-buffer
   "Get a translucent entity render buffer.

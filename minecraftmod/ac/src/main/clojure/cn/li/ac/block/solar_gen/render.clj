@@ -56,7 +56,7 @@
 
 (defn init!
   []
-  (when (compare-and-set! solar-renderer-installed? false true)
-    (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-      (register-fn register!))
-    (log/info "Registered solar renderer for block-id" "solar-gen")))
+  (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
+    (when (compare-and-set! solar-renderer-installed? false true)
+      (register-fn register!)
+      (log/info "Registered solar renderer for block-id" "solar-gen"))))

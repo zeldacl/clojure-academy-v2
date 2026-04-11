@@ -18,6 +18,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraftforge.common.MinecraftForge;
@@ -95,6 +98,35 @@ public final class ForgeRuntimeBridge {
     public static Class<?> getInventoryClass() { return Inventory.class; }
     public static Class<?> getServerPlayerClass() { return ServerPlayer.class; }
     public static Class<?> getAbstractContainerMenuClass() { return AbstractContainerMenu.class; }
+
+    public static Class<?> getBlockStateClass() {
+        return BlockState.class;
+    }
+
+    // ---- BlockState helpers (Clojure extends IBlockStateOps at runtime after bootstrap) ----
+
+    public static boolean blockStateIsAir(Object state) {
+        return ((BlockState) state).isAir();
+    }
+
+    public static Object blockStateGetBlock(Object state) {
+        return ((BlockState) state).getBlock();
+    }
+
+    public static Object blockStateGetStateDefinition(Object state) {
+        return ((BlockState) state).getBlock().getStateDefinition();
+    }
+
+    @SuppressWarnings("unchecked")
+    public static Object blockStateGetProperty(Object stateDef, Object propName) {
+        String name = propName instanceof String s ? s : String.valueOf(propName);
+        return ((StateDefinition<?, ?>) stateDef).getProperty(name);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static Object blockStateSetProperty(Object state, Object prop, Object value) {
+        return ((BlockState) state).setValue((Property) prop, (Comparable) value);
+    }
 
     // ---- Factory methods ----
     // ---- ItemStack instance helpers (avoids importing ItemStack which may trigger bootstrap) ----
