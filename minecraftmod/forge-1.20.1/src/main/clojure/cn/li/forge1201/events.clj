@@ -8,6 +8,7 @@
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
        [net.minecraft.world InteractionHand InteractionResult]
          [net.minecraft.world.level Level]
+           [net.minecraftforge.eventbus.api Event$Result]
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
             BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
 
@@ -59,9 +60,8 @@
           ^Level level (.getLevel evt)
           player (.getEntity evt)
           hand (.getHand evt)]
-      ;; Forge fires this on both sides and both hands; only open GUI once on server main hand.
-      (if (or (.isClientSide level) (not= hand InteractionHand/MAIN_HAND))
-        (log/debug "[FORGE-RIGHT-CLICK-EVENT] Ignored: client-side or off-hand event")
+      ;; Forge fires on both sides and both hands. Main hand only.
+      (when (= hand InteractionHand/MAIN_HAND)
         (let [block-state (.getBlockState level pos)
               ret (handle-right-click
                     {:x (.getX pos)
@@ -72,13 +72,17 @@
                      :player player
                      :world level
                      :block (.getBlock block-state)})]
-          (log/info "[FORGE-RIGHT-CLICK-EVENT] Received Forge right-click event:" evt)
-          (log/info "[FORGE-RIGHT-CLICK-EVENT] Extracted components: pos=" pos "player=" (.getGameProfile player) "block=" (.getBlock block-state))
-          ;; GUI was opened: consume this interaction so vanilla item use
-          ;; does not place the held block as a follow-up action.
           (when (gui-open-result? ret)
-            (.setCancellationResult evt InteractionResult/CONSUME)
-            (.setCanceled evt true)))))
+            (if (.isClientSide level)
+              ;; Client: deny Item#useOn / onItemUseFirst only so BlockItem does not show a
+              ;; placement ghost; do not cancel the whole event (can block server handling).
+              (.setUseItem evt Event$Result/DENY)
+              (do
+                (log/info "[FORGE-RIGHT-CLICK-EVENT] pos=" pos "player=" (.getGameProfile player)
+                          "block=" (.getBlock block-state))
+                ;; Server: consume so vanilla item use does not place the held block afterward.
+                (.setCancellationResult evt InteractionResult/CONSUME)
+                (.setCanceled evt true)))))))
     (catch Throwable t
       (log/error "[FORGE-RIGHT-CLICK-EVENT] EXCEPTION:" (ex-message t))
       (log/error "[FORGE-RIGHT-CLICK-EVENT] Stack trace:" t))))
