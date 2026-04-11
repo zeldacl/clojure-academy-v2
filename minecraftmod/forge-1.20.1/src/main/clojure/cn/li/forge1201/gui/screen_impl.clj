@@ -7,10 +7,13 @@
     (:require [cn.li.mcmod.gui.adapter :as gui]
               [cn.li.forge1201.gui.cgui-runtime :as cgui-rt]
               [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.client.gui GuiGraphics]
+    (:import [net.minecraft.client.gui GuiGraphics]
+           [net.minecraft.client.gui.screens Screen]
           [cn.li.forge1201.shim ForgeClientHelper ForgeClientHelper$ScreenFactory]
            [cn.li.forge1201.gui CGuiContainerScreen]
-           [net.minecraft.world.inventory Slot ClickType]))
+           [net.minecraft.world.inventory Slot ClickType]
+           [net.minecraftforge.common MinecraftForge]
+           [net.minecraftforge.client.event ScreenEvent$BackgroundRendered]))
 
 ;; ============================================================================
 ;; CGUI Screen Proxy
@@ -68,25 +71,28 @@
       
       (render [^GuiGraphics gg mouse-x mouse-y partial-ticks]
         (let [^CGuiContainerScreen s this]
-        (when root
-          (try
-            (cgui-rt/resize-root! root (.getXSize s) (.getYSize s))
-            (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
-            (catch Exception e
-              (log/debug "CGUI frame-tick error:" (.getMessage e)))))
-        ;; Non-inv tab: skip full vanilla render so no slots/highlight are drawn; only background + our renderBg (CGui) + tooltip
-        (if (slots-visible? cgui-screen)
-          (.callSuperRender s gg (int mouse-x) (int mouse-y) (float partial-ticks))
-          (do
-            (.callSuperRenderBackground s gg)
-            (reset! left (.getGuiLeft s))
-            (reset! top (.getGuiTop s))
-            (when root
-              (try
-                (cgui-rt/render-tree! gg root @left @top)
-                (catch Exception e
-                  (log/debug "CGUI non-slot tab render error:" (.getMessage e)))))
-            (.callSuperRenderTooltip s gg (int mouse-x) (int mouse-y))))))
+          (when root
+            (try
+              (cgui-rt/resize-root! root (.getXSize s) (.getYSize s))
+              (cgui-rt/frame-tick! root {:partial-ticks partial-ticks})
+              (catch Exception e
+                (log/debug "CGUI frame-tick error:" (.getMessage e)))))
+          ;; Non-inv tab: skip full vanilla render so no slots/highlight are drawn; only background + our renderBg (CGui) + tooltip
+          (if (slots-visible? cgui-screen)
+            (.callSuperRender s gg (int mouse-x) (int mouse-y) (float partial-ticks))
+            (do
+              (.callSuperRenderBackground s gg)
+              (reset! left (.getGuiLeft s))
+              (reset! top (.getGuiTop s))
+              (when root
+                (try
+                  (cgui-rt/render-tree! gg root @left @top)
+                  (catch Exception e
+                    (log/debug "CGUI non-slot tab render error:" (.getMessage e)))))
+              (.callSuperRenderTooltip s gg (int mouse-x) (int mouse-y))))
+          ;; JEI 15: GuiEventHandler listens to ScreenEvent.BackgroundRendered to set drawnOnBackground.
+          ;; Fire once per frame after our draw path (inv + non-inv); vanilla may also post earlier.
+          (.post MinecraftForge/EVENT_BUS (ScreenEvent$BackgroundRendered. ^Screen s gg))))
       (renderLabels [^GuiGraphics gg mouse-x mouse-y] (comment "skip labels"))
       
       (renderBg [^GuiGraphics gg _partial-ticks _mouse-x _mouse-y]

@@ -22,6 +22,15 @@ public abstract class CGuiContainerScreen<T extends AbstractContainerMenu> exten
         super(menu, playerInventory, title);
     }
 
+    /**
+     * Explicit pass-through so container screens always invoke the vanilla/Screen background path.
+     * Some mods (e.g. JEI) expect this override to exist on custom container screen subclasses.
+     */
+    @Override
+    public void renderBackground(GuiGraphics gg) {
+        super.renderBackground(gg);
+    }
+
     /** Set both imageWidth and imageHeight. */
     public void setImageSize(int w, int h) {
         this.imageWidth = w;

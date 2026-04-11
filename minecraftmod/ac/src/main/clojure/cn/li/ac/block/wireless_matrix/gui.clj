@@ -46,6 +46,7 @@
             [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.mcmod.gui.container.schema :as schema]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.gui.metadata :as metadata]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.item :as pitem]
@@ -86,9 +87,9 @@
                 :slot-type :plate}]})))
 
 (defn- msg
-  "Generate message ID for matrix actions."
+  "Generate message ID for matrix actions (must match server DSL / underscores)."
   [action]
-  (str "wireless_matrix_" (name action)))
+  (msg-registry/msg :matrix action))
 
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)

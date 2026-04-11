@@ -33,7 +33,7 @@
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.acapi.wireless IWirelessMatrix]))
+  (:import [cn.li.acapi.wireless IWirelessMatrix WirelessCapabilityKeys]))
 
 ;; ============================================================================
 ;; Message ID Helper
@@ -375,20 +375,32 @@
   [tile]
   (helper/get-wireless-net-by-matrix tile))
 
+(defn- matrix-wireless-cap
+  "IWirelessMatrix for ScriptedBlockEntity at controller (multiblock-safe), or nil."
+  [be]
+  (when be
+    (let [ctrl (resolve-controller-be be)]
+      (when ctrl
+        (or (platform-be/get-capability ctrl WirelessCapabilityKeys/MATRIX)
+            (when (instance? IWirelessMatrix ctrl) ctrl))))))
+
 (defn- is-owner?
   "Check if player is the Matrix owner."
-  [^IWirelessMatrix tile player]
+  [^IWirelessMatrix matrix-cap player]
   (let [player-name (entity/player-get-name player)
-        placer-name (.getPlacerName tile)]
+        placer-name (.getPlacerName matrix-cap)]
     (= (str placer-name) (str player-name))))
 
 (defn- with-owner-tile
-  "Execute f with tile if tile exists and player is owner, else {:success false}."
+  "Execute f with controller block entity if present, player is owner, and matrix cap exists.
+  f receives the controller ScriptedBlockEntity (for world/pos APIs), not the cap object."
   [payload player f]
   (let [world (net-helpers/get-world player)
-        tile  (net-helpers/get-tile-at world payload)]
-    (if (and tile (is-owner? tile player))
-      (f tile)
+        be (net-helpers/get-tile-at world payload)
+        ctrl (when be (resolve-controller-be be))
+        cap (when be (matrix-wireless-cap be))]
+    (if (and ctrl cap (is-owner? cap player))
+      (f ctrl)
       {:success false})))
 
 (defn handle-gather-info
@@ -397,26 +409,28 @@
   Request: {:pos-x :pos-y :pos-z}
   Response: {:ssid :password :load :initialized :owner :max-capacity :range :bandwidth}"
   [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)]
-    (if-let [network (and tile (get-wireless-network tile))]
+  (let [be (net-helpers/get-tile-at (net-helpers/get-world player) payload)
+        ctrl (when be (resolve-controller-be be))
+        cap (when be (matrix-wireless-cap be))
+        network (when ctrl (get-wireless-network ctrl))]
+    (if network
       ;; Network exists
       {:ssid (:ssid network)
        :password (:password network)
-       :owner (str (.getPlacerName ^IWirelessMatrix tile))
+       :owner (if cap (str (.getPlacerName ^IWirelessMatrix cap)) "Unknown")
        :load (wireless-net/get-load network)
-       :max-capacity (.getMatrixCapacity ^IWirelessMatrix tile)
-       :range (.getMatrixRange ^IWirelessMatrix tile)
-       :bandwidth (.getMatrixBandwidth ^IWirelessMatrix tile)
+       :max-capacity (if cap (.getMatrixCapacity ^IWirelessMatrix cap) 16)
+       :range (if cap (.getMatrixRange ^IWirelessMatrix cap) 64.0)
+       :bandwidth (if cap (.getMatrixBandwidth ^IWirelessMatrix cap) 100)
        :initialized true}
       ;; Network not created
       {:ssid nil
        :password nil
-       :owner (if tile (str (.getPlacerName ^IWirelessMatrix tile)) "Unknown")
+       :owner (if cap (str (.getPlacerName ^IWirelessMatrix cap)) "Unknown")
        :load 0
-       :max-capacity (if tile (.getMatrixCapacity ^IWirelessMatrix tile) 16)
-       :range (if tile (.getMatrixRange ^IWirelessMatrix tile) 64.0)
-       :bandwidth (if tile (.getMatrixBandwidth ^IWirelessMatrix tile) 100)
+       :max-capacity (if cap (.getMatrixCapacity ^IWirelessMatrix cap) 16)
+       :range (if cap (.getMatrixRange ^IWirelessMatrix cap) 64.0)
+       :bandwidth (if cap (.getMatrixBandwidth ^IWirelessMatrix cap) 100)
        :initialized false})))
 
 (defn handle-init-network

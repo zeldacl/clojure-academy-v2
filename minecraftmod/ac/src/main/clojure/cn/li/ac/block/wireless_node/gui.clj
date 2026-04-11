@@ -36,6 +36,7 @@
             [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.mcmod.gui.container.schema :as schema]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.gui.metadata :as metadata]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.gui.animation :as anim]
@@ -72,9 +73,9 @@
                 :slot-ids [:input]}]})))
 
 (defn- msg
-  "Generate message ID for node actions."
+  "Generate message ID for node actions (must match server DSL / underscores)."
   [action]
-  (str "wireless_node_" (name action)))
+  (msg-registry/msg :node action))
 
 ;; ============================================================================
 ;; GUI Dimensions (shared)
