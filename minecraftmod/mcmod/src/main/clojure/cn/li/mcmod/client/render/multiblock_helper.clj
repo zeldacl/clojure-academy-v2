@@ -11,6 +11,13 @@
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.registry.metadata :as registry-metadata]))
 
+(defn- tile-custom-state
+  "Custom state map for multiblock TESR (same shape as tile-logic read-nbt output)."
+  [tile]
+  (if (map? tile)
+    tile
+    (or (pbe/get-custom-state tile) {})))
+
 (defn- get-tile-block-id
   [tile]
   (when tile
@@ -55,6 +62,22 @@
   [positions]
   (first (sort-by (fn [[x y z]] [x y z]) positions)))
 
+(defn- norm-id-str
+  [x]
+  (when (some? x)
+    (if (keyword? x) (name x) (str x))))
+
+(defn- footprint-allowed-block-ids
+  "DSL block-ids allowed at any cell of this multiblock footprint (single path for
+  all multiblocks). Controller+parts: controller + part ids; otherwise the block's :id."
+  [block-spec]
+  (let [mb (:multi-block block-spec)]
+    (if (= :controller-parts (:multiblock-mode mb))
+      (into #{} (comp (map norm-id-str) (remove str/blank?))
+            [(:controller-block-id mb) (:part-block-id mb)])
+      (when-let [bid (norm-id-str (:id block-spec))]
+        #{bid}))))
+
 (defn- current-pos-xyz
   [tile]
   (when tile
@@ -81,10 +104,12 @@
             rotated (mapv #(rotate-rel-pos % direction) (spec-relative-positions block-spec))
             candidates (for [[rx ry rz] rotated]
                          [(- cx rx) (- cy ry) (- cz rz)])
+            allowed (footprint-allowed-block-ids block-spec)
             valid? (fn [[ox oy oz]]
                      (every?
                       (fn [[rx ry rz]]
-                        (= block-id (tile-block-id-at world-obj (+ ox rx) (+ oy ry) (+ oz rz))))
+                        (when-let [bid (tile-block-id-at world-obj (+ ox rx) (+ oy ry) (+ oz rz))]
+                          (boolean (and allowed (contains? allowed (norm-id-str bid))))))
                       rotated))
             valids (filter valid? candidates)]
         (when (seq valids)
@@ -178,31 +203,29 @@
 ;; ============================================================================
 
 (defn should-render-multiblock?
-  "Check if this tile should render the multiblock
-  
-  Only renders if:
-  - sub-id is 0 (origin / controller). Missing :sub-id is treated as 0 so
-    client tiles match server/schema defaults before the first sync packet
-    (ScriptedBlock uses RenderShape.INVISIBLE; without TESR the block is gone).
-  - Part tiles must set :sub-id to a positive index (see multiblock-core).
-  
+  "Whether this BE should run the multiblock TESR (one model for the whole footprint).
+
+  For `:controller-parts` multiblocks only the **controller** BE may draw: part
+  specs omit the full footprint, so canonical checks would otherwise succeed at
+  every part cell. Other multiblock modes keep the prior canonical / sub-id rules.
+
   Args:
-  - tile: TileEntity with optional :sub-id in custom state
-  
+  - tile: block entity with :sub-id and :direction in custom state
+
   Returns: boolean"
   [tile]
-  (let [state (if (map? tile)
-                tile
-                (or (pbe/get-custom-state tile) {}))]
+  (let [state (tile-custom-state tile)
+        block-id (or (get-tile-block-id tile) (:block-id state))]
     (and (map? state)
          (zero? (long (:sub-id state 0)))
-         (if-let [block-id (or (get-tile-block-id tile) (:block-id state))]
-           (if-let [block-spec (registry-metadata/get-block-spec block-id)]
-             (if-let [canonical (canonical-origin-pos tile state block-spec)]
-               (= canonical (current-pos-xyz tile))
-               true)
-             true)
-           true))))
+         (some? block-id)
+         (if-let [block-spec (registry-metadata/get-block-spec block-id)]
+           (and (or (not (registry-metadata/controller-parts-block? block-id))
+                    (registry-metadata/is-controller-block? block-id))
+                (if-let [canonical (canonical-origin-pos tile state block-spec)]
+                  (= canonical (current-pos-xyz tile))
+                  (not (registry-metadata/controller-parts-block? block-id))))
+           false))))
 
 ;; ============================================================================
 ;; Main Render Function
@@ -223,15 +246,16 @@
   [tile render-fn partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (when (should-render-multiblock? tile)
     (try
-      (let [state (if (map? tile)
-                    tile
-                    (or (pbe/get-custom-state tile) {}))
+      (let [state (tile-custom-state tile)
             block-id (or (get-tile-block-id tile)
              (:block-id state))
             block-spec (when block-id
              (registry-metadata/get-block-spec block-id))
             direction (normalize-direction (:direction state :north))
-            [pivot-x pivot-z] (get-pivot-offset direction)
+            [pivot-x pivot-z]
+            (if-let [o (:pivot-xz-override (:multi-block block-spec))]
+              [(double (nth o 0 0.0)) (double (nth o 1 0.0))]
+              (get-pivot-offset direction))
             raw-rot-center (or (get-in block-spec [:multi-block :multi-block-rotation-center])
                               (get-rotation-center direction))
             [rot-x rot-y rot-z] (direction->rotation-center raw-rot-center direction)

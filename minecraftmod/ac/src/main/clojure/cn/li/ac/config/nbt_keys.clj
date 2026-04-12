@@ -37,7 +37,10 @@
    :matrix-inventory "Inventory"
 
    ;; Solar Generator keys
-   :battery "Battery"})
+   :battery "Battery"
+
+   ;; Ability Developer
+   :developer-inventory "DeveloperInv"})
 
 (defn get-key
   "Get NBT key string by semantic keyword.

@@ -37,6 +37,10 @@ tasks.register('gatherJars', Copy) {
 }
 
 subprojects {
+    // clojurephant 0.9.1：checkClojure 在每个 namespace load 后用字符串 eval `(.flush *err*)`，
+    // *err* 无类型提示 → 大量 NO_SOURCE_PATH 反射告警。由 buildSrc 替换为带 ^java.io.Writer 的 flush。
+    local.ClojurephantFlushFix.configure(project)
+
     // 只有应用了 java 或 clojure 插件的子工程才添加此 Task
     plugins.withType(JavaPlugin) {
         tasks.register('printClasspath') {

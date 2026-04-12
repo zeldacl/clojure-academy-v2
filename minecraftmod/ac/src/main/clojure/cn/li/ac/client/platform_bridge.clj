@@ -45,10 +45,12 @@
 		(log/debug "Client bridge slot-key-up not available")))
 
 (defn open-skill-tree-screen!
-	[player-uuid]
-	(if *open-skill-tree-screen-fn*
-		(*open-skill-tree-screen-fn* player-uuid)
-		(log/debug "Client bridge skill-tree screen not available")))
+	([player-uuid]
+	 (open-skill-tree-screen! player-uuid nil))
+	([player-uuid learn-context]
+	 (if *open-skill-tree-screen-fn*
+		 (*open-skill-tree-screen-fn* player-uuid learn-context)
+		 (log/debug "Client bridge skill-tree screen not available"))))
 
 (defn open-preset-editor-screen!
 	[player-uuid]

@@ -1,37 +1,29 @@
 (ns cn.li.ac.block.developer.config
-  "Developer configuration - ability development multi-block")
+  "Developer configuration — values aligned with AcademyCraft `DeveloperType`
+  energy / stimulation pacing (gameplay constants, not 1:1 Java port).")
 
-;; Developer tiers
-(def tiers
-  "Developer tier configurations"
-  {:normal {:max-energy 100000.0
-            :energy-per-tick 100.0
-            :development-speed 1.0
-            :max-users 1}
-   :advanced {:max-energy 200000.0
-              :energy-per-tick 150.0
-              :development-speed 2.0
-              :max-users 2}})
-
-(defn tier-config
-  "Get configuration for a specific tier"
-  [tier]
-  (get tiers tier (:normal tiers)))
-
-;; Structure
-(def structure-size
-  "3x3x3 cube structure"
-  {:width 3 :height 3 :depth 3})
+;; Structure footprint: `cn.li.ac.block.developer.block/developer-multiblock-positions`
 
 (def validate-interval
-  "Ticks between structure validation checks"
+  "Ticks between multi-block structure validation."
   100)
 
-;; Development
-(def development-tick-interval
-  "Ticks between development progress updates"
-  20)
+(def ^:private tier-table
+  "Per-tier limits (NORMAL / ADVANCED from classic AC).
+  - :max-energy — buffer size (IF)
+  - :energy-per-stimulation — IF consumed each stimulation when developing
+  - :stimulation-interval-ticks — ticks between stimulations (classic `tps`)
+  - :wireless-bandwidth — IF/tick cap for `IWirelessReceiver` inject path"
+  {:normal {:max-energy 50000.0
+            :energy-per-stimulation 700.0
+            :stimulation-interval-ticks 20
+            :wireless-bandwidth 1000.0}
+   :advanced {:max-energy 200000.0
+              :energy-per-stimulation 600.0
+              :stimulation-interval-ticks 15
+              :wireless-bandwidth 1200.0}})
 
-(def sync-interval
-  "Ticks between GUI sync broadcasts"
-  20)
+(defn tier-config
+  "Keyword tier `:normal` / `:advanced` → config map."
+  [tier]
+  (get tier-table (keyword tier) (:normal tier-table)))

@@ -101,7 +101,9 @@
           (log/error "Tile tick error" block-id(ex-message e)))))))
 
 (defn read-nbt
-  "Called from ScriptedBlockEntity.load(tag). Returns a data map for the BE to apply (setFromData).
+  "Called from ScriptedBlockEntity.load(tag). Returns the custom-state map for the BE.
+
+  `read-nbt-fn` must return a Clojure map (multiblock BER and client rendering assume map?).
   tag is the platform NBT compound (INBTCompound)."
   [block-id tag]
   (if-let [cfg (get-tile-logic block-id)]

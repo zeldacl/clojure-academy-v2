@@ -5,10 +5,15 @@
   (:require [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.ability.catalog :as catalog]))
 
-(defn req-learn-skill! [skill-id callback]
-  (net-client/send-to-server catalog/MSG-REQ-LEARN-SKILL
-                             {:skill-id skill-id}
-                             callback))
+(defn req-learn-skill!
+  "Send learn-skill request. Optional `extra` map may include
+  `:pos-x` `:pos-y` `:pos-z` (integers) to charge IF from that Ability Developer."
+  ([skill-id callback]
+   (req-learn-skill! skill-id nil callback))
+  ([skill-id extra callback]
+   (net-client/send-to-server catalog/MSG-REQ-LEARN-SKILL
+                                (merge {:skill-id skill-id} (or extra {}))
+                                callback)))
 
 (defn req-level-up! [callback]
   (net-client/send-to-server catalog/MSG-REQ-LEVEL-UP {} callback))

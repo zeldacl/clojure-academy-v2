@@ -16,6 +16,7 @@
 
 (defn- node-msg [action] (msg-registry/msg :node action))
 (defn- gen-msg [action] (msg-registry/msg :generator action))
+(defn- dev-msg [action] (msg-registry/msg :developer action))
 
 (defn- widget-textbox [widget] (comp/get-textbox-component widget))
 (defn- widget-drawtexture [widget] (comp/get-drawtexture-component widget))
@@ -230,15 +231,54 @@
 
     root))
 
+(defn create-wireless-panel-receiver
+  "Wireless tab for IF receivers (e.g. Ability Developer): link receiver -> wireless node."
+  [container]
+  (let [doc (base-wireless-doc)
+        root (cgui-doc/get-widget doc "main")
+        payload (net-helpers/tile-pos-payload (:tile-entity container))]
+    (when-let [logo (cgui/find-widget root "icon_logo")]
+      (comp/add-component! logo (comp/breathe-effect)))
+
+    (letfn [(rebuild! []
+              (net-client/send-to-server
+                (dev-msg :list-nodes)
+                payload
+                (fn [resp]
+                  (rebuild-page! root
+                                 {:linked (:linked resp)
+                                  :avail (vec (:avail resp []))
+                                  :name-fn (fn [t] (:node-name t))
+                                  :encrypted?-fn (fn [t] (boolean (:is-encrypted? t)))
+                                  :disconnect-fn (fn [_linked]
+                                                   (net-client/send-to-server
+                                                     (dev-msg :disconnect)
+                                                     payload
+                                                     (fn [_] (rebuild!))))
+                                  :connect-fn (fn [target pass]
+                                                (net-client/send-to-server
+                                                  (dev-msg :connect)
+                                                  (assoc payload
+                                                         :node-x (:pos-x target)
+                                                         :node-y (:pos-y target)
+                                                         :node-z (:pos-z target)
+                                                         :password pass
+                                                         :need-auth? true)
+                                                  (fn [_] (rebuild!))))}))))]
+      (rebuild!))
+
+    root))
+
 (defn create-wireless-panel
   "Create shared wireless tab panel.
 
   opts:
-  - :mode      :node or :generator
+  - :mode      :node | :generator | :receiver
   - :container the GUI container (must have :tile-entity)"
   [{:keys [mode container]}]
   (case mode
     :generator (create-wireless-panel-generator container)
+    :receiver (create-wireless-panel-receiver container)
     :node (create-wireless-panel-node container)
     (do
       (log/warn "Unknown wireless-tab mode:" mode ", falling back to :node")

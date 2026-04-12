@@ -79,7 +79,7 @@
 (defrecord MultiBlockConfig
   [multi-block? multi-block-size multi-block-positions multi-block-origin
    multi-block-rotation-center multi-block-master? multiblock-mode
-   controller-block-id part-block-id]
+   controller-block-id part-block-id pivot-xz-override]
   ;; Multi-block structure configuration.
   ;;
   ;; Fields:
@@ -92,6 +92,7 @@
   ;; - multiblock-mode: Multi-block mode (:controller-parts, etc.)
   ;; - controller-block-id: ID of the controller block (for controller-parts mode)
   ;; - part-block-id: ID of the part block (for controller-parts mode)
+  ;; - pivot-xz-override: Optional [dx dz] to skip legacy 2×2×2 pivot table in TESR (nil = default)
   )
 
 ;; Block specifications
@@ -504,6 +505,10 @@
                                         (:multi-block-rotation-center options)
                                         (when (map? multi-block-config)
                                           (:rotation-center multi-block-config)))
+        pivot-xz-override (or (:pivot-xz-override multi-block-opts)
+                              (:pivot-xz-override options)
+                              (when (map? multi-block-config)
+                                (:pivot-xz-override multi-block-config)))
 
         multi-block (map->MultiBlockConfig
                       {:multi-block? multi-block?
@@ -516,7 +521,8 @@
                                                 false)
                        :multiblock-mode (or (:multiblock-mode multi-block-opts) (:multiblock-mode options))
                        :controller-block-id (or (:controller-block-id multi-block-opts) (:controller-block-id options))
-                       :part-block-id (or (:part-block-id multi-block-opts) (:part-block-id options))})]
+                       :part-block-id (or (:part-block-id multi-block-opts) (:part-block-id options))
+                       :pivot-xz-override pivot-xz-override})]
 
     (map->BlockSpec
       {:id block-id

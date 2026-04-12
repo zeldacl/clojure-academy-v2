@@ -67,7 +67,7 @@
                          (concat
                            [(str skill-name " (Lv" skill-level ")")]
                            (when-not can-learn
-                             (map #(str "‚ú?" (or (:description %) "Condition not met")) conditions))))]
+                             (map #(str "ù?" (or (:description %) "Condition not met")) conditions))))]
       ;; Simple tooltip rendering
       (doseq [[idx line] (map-indexed vector tooltip-lines)]
         (draw-string! graphics (str line) (+ mouse-x 10) (+ mouse-y 10 (* idx 12)) 0xFFFFFF)))))
@@ -257,12 +257,14 @@
 ;; ============================================================================
 
 (defn open-skill-tree-screen!
-  "Open skill tree screen. Called by AC layer via keybinds."
-  [player-uuid]
-  (let [result (ac-skill-tree/open-screen! player-uuid)]
-    (when (= (:command result) :open-screen)
-      (let [^Minecraft mc (Minecraft/getInstance)]
-        (.setScreen mc (create-skill-tree-screen))))))
+  "Open skill tree screen. Called by AC layer via keybinds or developer GUI."
+  ([player-uuid]
+   (open-skill-tree-screen! player-uuid nil))
+  ([player-uuid learn-context]
+   (let [result (ac-skill-tree/open-screen! player-uuid learn-context)]
+     (when (= (:command result) :open-screen)
+       (let [^Minecraft mc (Minecraft/getInstance)]
+         (.setScreen mc (create-skill-tree-screen)))))))
 
 (defn open-preset-editor-screen!
   "Open preset editor screen. Called by AC layer via keybinds."

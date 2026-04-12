@@ -9,7 +9,8 @@
 ;; Screen state (no Minecraft imports)
 (defonce ^:private screen-state
   (atom {:hover-skill nil
-         :player-uuid nil}))
+         :player-uuid nil
+         :learn-context nil}))
 
 ;; ============================================================================
 ;; Layout Calculations (Pure Functions)
@@ -36,7 +37,7 @@
 
 (defn build-skill-node-render-data
   "Build render data for a single skill node."
-  [skill-pos player-state]
+  [skill-pos player-state developer-type]
   (let [{:keys [skill x y]} skill-pos
         ability-data (:ability-data player-state)
         learned? (adata/is-learned? ability-data (:skill-id skill))
@@ -45,7 +46,7 @@
                      (:skill-id skill)
                      ability-data
                      (:level ability-data)
-                     :normal) ; TODO: get actual developer-type from player
+                     developer-type)
         skill-exp (adata/get-skill-exp ability-data (:skill-id skill))]
     {:x x
      :y y
@@ -82,10 +83,11 @@
             skills (when category
                     (skill/get-skills-for-category (:category-id category)))
             positions (when skills
-                       (calculate-skill-positions skills))]
+                       (calculate-skill-positions skills))
+            dev-type (or (:developer-type (:learn-context @screen-state)) :normal)]
         {:ability-info (build-ability-info-render-data player-state)
          :skill-nodes (when positions
-                       (mapv #(build-skill-node-render-data % player-state) positions))
+                       (mapv #(build-skill-node-render-data % player-state dev-type) positions))
          :hover-skill (:hover-skill @screen-state)}))))
 
 ;; ============================================================================
@@ -98,14 +100,17 @@
   (when-let [player-uuid (:player-uuid @screen-state)]
     (when-let [player-state (ps/get-player-state player-uuid)]
       (let [ability-data (:ability-data player-state)
-            category-id (:category-id ability-data)
+            ctx (:learn-context @screen-state)
+            dev-type (or (:developer-type ctx) :normal)
             conditions (learning/check-all-conditions
-                         skill-id
-                         ability-data
-                         (:level ability-data)
-                         :normal)] ; TODO: get actual developer-type
+                           skill-id
+                           ability-data
+                           (:level ability-data)
+                           dev-type)
+            pos-extra (when (every? number? [(:pos-x ctx) (:pos-y ctx) (:pos-z ctx)])
+                        (select-keys ctx [:pos-x :pos-y :pos-z]))]
         (when (:pass? conditions)
-          (api/req-learn-skill! skill-id nil))))))
+          (api/req-learn-skill! skill-id pos-extra nil))))))
 
 (defn on-level-up-click
   "Handle level-up button click."
@@ -129,13 +134,16 @@
     (swap! screen-state assoc :hover-skill (:skill-id hovered))))
 
 (defn open-screen!
-  "Open skill tree screen. Returns command for forge layer."
-  [player-uuid]
-  (swap! screen-state assoc :player-uuid player-uuid)
-  {:command :open-screen
-   :screen-type :skill-tree})
+  "Open skill tree screen. Returns command for forge layer.
+  Optional `learn-context`: `{:pos-x :pos-y :pos-z :developer-type}` from Ability Developer."
+  ([player-uuid]
+   (open-screen! player-uuid nil))
+  ([player-uuid learn-context]
+   (swap! screen-state assoc :player-uuid player-uuid :learn-context learn-context)
+   {:command :open-screen
+    :screen-type :skill-tree}))
 
 (defn close-screen!
   "Close skill tree screen and clean up state."
   []
-  (swap! screen-state assoc :player-uuid nil :hover-skill nil))
+  (swap! screen-state assoc :player-uuid nil :hover-skill nil :learn-context nil))
