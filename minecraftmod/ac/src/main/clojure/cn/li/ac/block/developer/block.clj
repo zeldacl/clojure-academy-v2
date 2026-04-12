@@ -136,7 +136,12 @@
                   state)
           state (if (:structure-valid state false)
                   (tick-development state ticker)
-                  state)]
+                  state)
+          ;; Flush wireless inject accumulator → last-tick for GUI (real sync bar).
+          state (-> state
+                     (assoc :wireless-inject-last-tick
+                            (double (:wireless-inject-this-tick state 0.0)))
+                     (assoc :wireless-inject-this-tick 0.0))]
       (when (not= state (platform-be/get-custom-state be))
         (platform-be/set-custom-state! be state)
         (platform-be/set-changed! be)))))
@@ -306,7 +311,15 @@
     (fn [] (or (platform-be/get-custom-state be) dev-default-state))
     (fn [s]
       (platform-be/set-custom-state! be s)
-      (platform-be/set-changed! be))))
+      (platform-be/set-changed! be))
+    {:after-inject!
+     (fn [^double accepted]
+       (when (pos? accepted)
+         (let [st (or (platform-be/get-custom-state be) dev-default-state)
+               cur (double (:wireless-inject-this-tick st 0.0))]
+           (platform-be/set-custom-state! be
+             (assoc st :wireless-inject-this-tick (+ cur accepted)))
+           (platform-be/set-changed! be))))}))
 
 ;; ============================================================================
 ;; Block Definitions
@@ -356,10 +369,13 @@
       (bdsl/create-block-spec
         "developer-normal"
         {:multi-block {:positions developer-multiblock-positions
-                       ;; AABB center from controller block min corner (1×3×3 cells).
-                       :rotation-center [0.5 1.5 1.5]
-                       ;; pivot-offsets in helper are for 2×2×2; this footprint is not.
-                       :pivot-xz-override [0.0 0.0]}
+                       ;; Footprint floor in controller space; Z +1 block vs prior center (user: 往前一格).
+                       ;; Legacy direction->rotation-center is for 2×2×2; use raw + Y override here.
+                       :rotation-center [0.5 0.0 0.5]
+                       :pivot-xz-override [0.0 0.0]
+                       :tesr-use-raw-rotation-center? true
+                       ;; Tile has no :direction yet; default :north would apply 180° in helper.
+                       :tesr-y-deg-override 0.0}
          :multiblock-mode :controller-parts
          :controller-block-id "developer-normal"
          :part-block-id "developer-normal-part"
@@ -397,8 +413,10 @@
       (bdsl/create-block-spec
         "developer-advanced"
         {:multi-block {:positions developer-multiblock-positions
-                       :rotation-center [0.5 1.5 1.5]
-                       :pivot-xz-override [0.0 0.0]}
+                       :rotation-center [0.5 0.0 0.5]
+                       :pivot-xz-override [0.0 0.0]
+                       :tesr-use-raw-rotation-center? true
+                       :tesr-y-deg-override 0.0}
          :multiblock-mode :controller-parts
          :controller-block-id "developer-advanced"
          :part-block-id "developer-advanced-part"

@@ -409,8 +409,14 @@
 
       nil)))
 
+(defn- widget-attrs-name
+  "Widget `name` from XML attrs (some parsers use string keys)."
+  [widget-node]
+  (or (get-in widget-node [:attrs :name])
+      (get-in widget-node [:attrs "name"])))
+
 (defn- build-widget [widget-node]
-  (let [widget (cgui/create-container :name (get-in widget-node [:attrs :name]))]
+  (let [widget (cgui/create-container :name (widget-attrs-name widget-node))]
     (doseq [component-node (x/get-elements widget-node :Component)]
       (apply-component! widget component-node))
     (doseq [child-node (x/get-elements widget-node :Widget)]
@@ -443,12 +449,21 @@
 
 (defn get-widget
   "Get named widget from parsed widget tree.
-  If root name matches, returns root directly."
+  If root name matches (trimmed string compare), returns root directly.
+
+  Fallbacks:
+  - `read-xml` root is almost always the logical `main`; if the root name does not
+    match exactly (encoding/whitespace/case) or `find-widget` misses, requesting
+    `\"main\"` falls back to `doc` so callers never get nil."
   [doc name]
   (when doc
-    (if (= name (cgui/get-name doc))
-      doc
-      (cgui/find-widget doc name))))
+    (let [want (str/trim (str name))
+          root-nm (str/trim (str (cgui/get-name doc)))]
+      (if (= want root-nm)
+        doc
+        (or (cgui/find-widget doc name)
+            (cgui/find-widget doc want)
+            (when (= "main" want) doc))))))
 
 ;; ============================================================================
 ;; Example Usage

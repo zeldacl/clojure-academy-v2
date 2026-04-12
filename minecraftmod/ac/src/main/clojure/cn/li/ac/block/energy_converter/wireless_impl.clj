@@ -55,42 +55,49 @@
     _tile-entity - The ScriptedBlockEntity instance (unused, kept for API consistency)
     get-state-fn - Function to get current state map
     set-state-fn - Function to update state map
+    opts - optional map:
+      :after-inject! — (fn [^double accepted-if]) called after a positive wireless inject (for UI sync rate).
 
   Returns:
     IWirelessReceiver implementation"
-  [_tile-entity get-state-fn set-state-fn]
-  (reify IWirelessReceiver
-    (getRequiredEnergy [_]
-      ;; How much energy we need
-      (let [state (get-state-fn)
-            current-energy (double (get state :energy 0.0))
-            max-energy (double (get state :max-energy 100000.0))
-            space (- max-energy current-energy)
-            bandwidth (double (get state :wireless-bandwidth 1000.0))]
-        (double (min space bandwidth))))
+  ([tile-entity get-state-fn set-state-fn]
+   (create-wireless-receiver tile-entity get-state-fn set-state-fn nil))
+  ([_tile-entity get-state-fn set-state-fn opts]
+   (let [after-inject! (when (map? opts) (:after-inject! opts))]
+     (reify IWirelessReceiver
+       (getRequiredEnergy [_]
+         ;; How much energy we need
+         (let [state (get-state-fn)
+               current-energy (double (get state :energy 0.0))
+               max-energy (double (get state :max-energy 100000.0))
+               space (- max-energy current-energy)
+               bandwidth (double (get state :wireless-bandwidth 1000.0))]
+           (double (min space bandwidth))))
 
-    (injectEnergy [_ amt]
-      ;; Receive energy into internal buffer
-      (let [state (get-state-fn)
-            current-energy (double (get state :energy 0.0))
-            max-energy (double (get state :max-energy 100000.0))
-            space (- max-energy current-energy)
-            to-inject (min amt space)
-            leftover (- amt to-inject)]
-        (set-state-fn (assoc state :energy (+ current-energy to-inject)))
-        (double leftover)))
+       (injectEnergy [_ amt]
+         ;; Receive energy into internal buffer
+         (let [state (get-state-fn)
+               current-energy (double (get state :energy 0.0))
+               max-energy (double (get state :max-energy 100000.0))
+               space (- max-energy current-energy)
+               to-inject (min amt space)
+               leftover (- amt to-inject)]
+           (set-state-fn (assoc state :energy (+ current-energy to-inject)))
+           (when (and after-inject! (pos? to-inject))
+             (try (after-inject! (double to-inject)) (catch Exception _ nil)))
+           (double leftover)))
 
-    (pullEnergy [_ amt]
-      ;; Pull energy from internal buffer
-      (let [state (get-state-fn)
-            current-energy (double (get state :energy 0.0))
-            to-pull (min amt current-energy)]
-        (set-state-fn (assoc state :energy (- current-energy to-pull)))
-        (double to-pull)))
+       (pullEnergy [_ amt]
+         ;; Pull energy from internal buffer
+         (let [state (get-state-fn)
+               current-energy (double (get state :energy 0.0))
+               to-pull (min amt current-energy)]
+           (set-state-fn (assoc state :energy (- current-energy to-pull)))
+           (double to-pull)))
 
-    (getReceiverBandwidth [_]
-      (let [state (get-state-fn)]
-        (double (get state :wireless-bandwidth 1000.0))))))
+       (getReceiverBandwidth [_]
+         (let [state (get-state-fn)]
+           (double (get state :wireless-bandwidth 1000.0))))))))
 
 ;; ============================================================================
 ;; Wireless Integration Helpers

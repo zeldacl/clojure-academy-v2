@@ -69,7 +69,7 @@
 (defcategory electromaster
   :id :electromaster
   :name-key "ability.category.electromaster"
-  :icon "textures/ability/category/electromaster.png"
+  :icon "textures/abilities/electromaster/icon.png"
   :color [0.27 0.69 1.0 1.0]
   :prog-incr-rate 1.0
   :enabled true)
@@ -77,7 +77,7 @@
 (defcategory telekinesis
   :id :telekinesis
   :name-key "ability.category.telekinesis"
-  :icon "textures/ability/category/telekinesis.png"
+  :icon "textures/abilities/generic/skills/mind_course.png"
   :color [0.92 0.73 0.27 1.0]
   :prog-incr-rate 1.0
   :enabled true)
@@ -85,7 +85,7 @@
 (defcategory meltdowner
   :id :meltdowner
   :name-key "ability.category.meltdowner"
-  :icon "textures/ability/category/meltdowner.png"
+  :icon "textures/abilities/meltdowner/icon.png"
   :color [0.1 1.0 0.3 1.0]
   :prog-incr-rate 1.0
   :enabled true)
@@ -93,7 +93,7 @@
 (defcategory teleporter
   :id :teleporter
   :name-key "ability.category.teleporter"
-  :icon "textures/ability/category/teleporter.png"
+  :icon "textures/abilities/teleporter/icon.png"
   :color [1.0 1.0 1.0 1.0]
   :prog-incr-rate 1.0
   :enabled true)
@@ -101,7 +101,7 @@
 (defcategory vecmanip
   :id :vecmanip
   :name-key "ability.category.vecmanip"
-  :icon "textures/ability/category/vecmanip.png"
+  :icon "textures/abilities/vecmanip/icon.png"
   :color [0.0 0.0 0.0 1.0]
   :prog-incr-rate 1.0
   :enabled true)
@@ -112,7 +112,7 @@
   :category-id :electromaster
   :name-key "ability.skill.electromaster.arc_gen"
   :description-key "ability.skill.electromaster.arc_gen.desc"
-  :icon "textures/ability/skill/arc_gen.png"
+  :icon "textures/abilities/electromaster/skills/arc_gen.png"
   :level 1
   :controllable? true
   :ctrl-id :arc-gen
@@ -127,7 +127,7 @@
   :category-id :electromaster
   :name-key "ability.skill.electromaster.thunder_bolt"
   :description-key "ability.skill.electromaster.thunder_bolt.desc"
-  :icon "textures/ability/skill/thunder_bolt.png"
+  :icon "textures/abilities/electromaster/skills/thunder_bolt.png"
   :level 2
   :controllable? false
   :ctrl-id :thunder-bolt
@@ -145,7 +145,7 @@
   :category-id :electromaster
   :name-key "ability.skill.electromaster.thunder_clap"
   :description-key "ability.skill.electromaster.thunder_clap.desc"
-  :icon "textures/ability/skill/thunder_clap.png"
+  :icon "textures/abilities/electromaster/skills/thunder_clap.png"
   :level 1
   :controllable? true
   :ctrl-id :thunder-clap
@@ -162,7 +162,7 @@
   :category-id :electromaster
   :name-key "ability.skill.electromaster.current_charging"
   :description-key "ability.skill.electromaster.current_charging.desc"
-  :icon "textures/ability/skill/current_charging.png"
+  :icon "textures/abilities/electromaster/skills/charging.png"
   :level 2
   :controllable? true
   :ctrl-id :current-charging
@@ -180,7 +180,7 @@
   :category-id :electromaster
   :name-key "ability.skill.electromaster.body_intensify"
   :description-key "ability.skill.electromaster.body_intensify.desc"
-  :icon "textures/ability/skill/body_intensify.png"
+  :icon "textures/abilities/electromaster/skills/body_intensify.png"
   :level 4
   :controllable? true
   :ctrl-id :body-intensify
@@ -198,7 +198,7 @@
   :category-id :electromaster
   :name-key "ability.skill.electromaster.mag_movement"
   :description-key "ability.skill.electromaster.mag_movement.desc"
-  :icon "textures/ability/skill/mag_movement.png"
+  :icon "textures/abilities/electromaster/skills/mag_movement.png"
   :level 3
   :controllable? true
   :ctrl-id :mag-movement
@@ -216,7 +216,7 @@
   :category-id :electromaster
   :name-key "ability.skill.electromaster.railgun"
   :description-key "ability.skill.electromaster.railgun.desc"
-  :icon "textures/ability/skill/railgun.png"
+  :icon "textures/abilities/electromaster/skills/railgun.png"
   :level 3
   :controllable? true
   :ctrl-id :railgun
@@ -235,7 +235,7 @@
   :category-id :telekinesis
   :name-key "ability.skill.telekinesis.vec_manip"
   :description-key "ability.skill.telekinesis.vec_manip.desc"
-  :icon "textures/ability/skill/vec_manip.png"
+  :icon "textures/abilities/electromaster/skills/mag_manip.png"
   :level 1
   :controllable? true
   :ctrl-id :vec-manip
@@ -250,7 +250,7 @@
   :category-id :telekinesis
   :name-key "ability.skill.telekinesis.storm_wind"
   :description-key "ability.skill.telekinesis.storm_wind.desc"
-  :icon "textures/ability/skill/storm_wind.png"
+  :icon "textures/abilities/vecmanip/skills/storm_wing.png"
   :level 2
   :controllable? true
   :ctrl-id :storm-wind
@@ -265,7 +265,7 @@
   :category-id :meltdowner
   :name-key "ability.skill.meltdowner.meltdowner"
   :description-key "ability.skill.meltdowner.meltdowner.desc"
-  :icon "textures/ability/skill/meltdowner.png"
+  :icon "textures/abilities/meltdowner/skills/meltdowner.png"
   :level 1
   :controllable? true
   :ctrl-id :meltdowner
@@ -283,7 +283,7 @@
   :category-id :teleporter
   :name-key "ability.skill.teleporter.mark_teleport"
   :description-key "ability.skill.teleporter.mark_teleport.desc"
-  :icon "textures/ability/skill/mark_teleport.png"
+  :icon "textures/abilities/teleporter/skills/mark_teleport.png"
   :level 1
   :controllable? true
   :ctrl-id :mark-teleport
@@ -300,7 +300,7 @@
   :category-id :teleporter
   :name-key "ability.skill.teleporter.location_teleport"
   :description-key "ability.skill.teleporter.location_teleport.desc"
-  :icon "textures/ability/skill/location_teleport.png"
+  :icon "textures/abilities/teleporter/skills/location_teleport.png"
   :level 2
   :controllable? false
   :ctrl-id :location-teleport
@@ -319,7 +319,7 @@
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.directed_shock"
   :description-key "ability.skill.vecmanip.directed_shock.desc"
-  :icon "textures/ability/skill/directed_shock.png"
+  :icon "textures/abilities/vecmanip/skills/dir_shock.png"
   :level 1
   :controllable? false
   :ctrl-id :directed-shock
@@ -336,7 +336,7 @@
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.groundshock"
   :description-key "ability.skill.vecmanip.groundshock.desc"
-  :icon "textures/ability/skill/groundshock.png"
+  :icon "textures/abilities/vecmanip/skills/ground_shock.png"
   :level 1
   :controllable? false
   :ctrl-id :groundshock
@@ -354,7 +354,7 @@
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.vec_accel"
   :description-key "ability.skill.vecmanip.vec_accel.desc"
-  :icon "textures/ability/skill/vec_accel.png"
+  :icon "textures/abilities/vecmanip/skills/vec_accel.png"
   :level 2
   :controllable? false
   :ctrl-id :vec-accel
@@ -372,7 +372,7 @@
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.vec_deviation"
   :description-key "ability.skill.vecmanip.vec_deviation.desc"
-  :icon "textures/ability/skill/vec_deviation.png"
+  :icon "textures/abilities/vecmanip/skills/vec_deviation.png"
   :level 2
   :controllable? true
   :ctrl-id :vec-deviation
@@ -390,7 +390,7 @@
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.vec_reflection"
   :description-key "ability.skill.vecmanip.vec_reflection.desc"
-  :icon "textures/ability/skill/vec_reflection.png"
+  :icon "textures/abilities/vecmanip/skills/vec_reflection.png"
   :level 4
   :controllable? true
   :ctrl-id :vec-reflection
@@ -408,7 +408,7 @@
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.directed_blastwave"
   :description-key "ability.skill.vecmanip.directed_blastwave.desc"
-  :icon "textures/ability/skill/directed_blastwave.png"
+  :icon "textures/abilities/vecmanip/skills/dir_blast.png"
   :level 3
   :controllable? false
   :ctrl-id :directed-blastwave
@@ -426,7 +426,7 @@
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.storm_wing"
   :description-key "ability.skill.vecmanip.storm_wing.desc"
-  :icon "textures/ability/skill/storm_wing.png"
+  :icon "textures/abilities/vecmanip/skills/storm_wing.png"
   :level 3
   :controllable? true
   :ctrl-id :storm-wing
@@ -444,7 +444,7 @@
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.blood_retrograde"
   :description-key "ability.skill.vecmanip.blood_retrograde.desc"
-  :icon "textures/ability/skill/blood_retrograde.png"
+  :icon "textures/abilities/vecmanip/skills/blood_retro.png"
   :level 4
   :controllable? false
   :ctrl-id :blood-retrograde
@@ -462,7 +462,7 @@
   :category-id :vecmanip
   :name-key "ability.skill.vecmanip.plasma_cannon"
   :description-key "ability.skill.vecmanip.plasma_cannon.desc"
-  :icon "textures/ability/skill/plasma_cannon.png"
+  :icon "textures/abilities/vecmanip/skills/plasma_cannon.png"
   :level 5
   :controllable? false
   :ctrl-id :plasma-cannon

@@ -79,7 +79,8 @@
 (defrecord MultiBlockConfig
   [multi-block? multi-block-size multi-block-positions multi-block-origin
    multi-block-rotation-center multi-block-master? multiblock-mode
-   controller-block-id part-block-id pivot-xz-override]
+   controller-block-id part-block-id pivot-xz-override
+   tesr-use-raw-rotation-center? tesr-y-deg-override]
   ;; Multi-block structure configuration.
   ;;
   ;; Fields:
@@ -93,6 +94,9 @@
   ;; - controller-block-id: ID of the controller block (for controller-parts mode)
   ;; - part-block-id: ID of the part block (for controller-parts mode)
   ;; - pivot-xz-override: Optional [dx dz] to skip legacy 2×2×2 pivot table in TESR (nil = default)
+  ;; - tesr-use-raw-rotation-center?: When true, TESR uses :multi-block-rotation-center as literal
+  ;;   [x y z] offsets (no direction->rotation-center remap; for irregular footprints).
+  ;; - tesr-y-deg-override: When a number, TESR Y rotation uses this instead of direction-rotations.
   )
 
 ;; Block specifications
@@ -509,6 +513,15 @@
                               (:pivot-xz-override options)
                               (when (map? multi-block-config)
                                 (:pivot-xz-override multi-block-config)))
+        tesr-use-raw-rotation-center?
+        (boolean (or (:tesr-use-raw-rotation-center? multi-block-opts)
+                     (:tesr-use-raw-rotation-center? options)
+                     (when (map? multi-block-config)
+                       (:tesr-use-raw-rotation-center? multi-block-config))))
+        tesr-y-deg-override (or (:tesr-y-deg-override multi-block-opts)
+                              (:tesr-y-deg-override options)
+                              (when (map? multi-block-config)
+                                (:tesr-y-deg-override multi-block-config)))
 
         multi-block (map->MultiBlockConfig
                       {:multi-block? multi-block?
@@ -522,7 +535,9 @@
                        :multiblock-mode (or (:multiblock-mode multi-block-opts) (:multiblock-mode options))
                        :controller-block-id (or (:controller-block-id multi-block-opts) (:controller-block-id options))
                        :part-block-id (or (:part-block-id multi-block-opts) (:part-block-id options))
-                       :pivot-xz-override pivot-xz-override})]
+                       :pivot-xz-override pivot-xz-override
+                       :tesr-use-raw-rotation-center? tesr-use-raw-rotation-center?
+                       :tesr-y-deg-override tesr-y-deg-override})]
 
     (map->BlockSpec
       {:id block-id

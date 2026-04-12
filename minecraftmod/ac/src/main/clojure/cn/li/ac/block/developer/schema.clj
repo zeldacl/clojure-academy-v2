@@ -88,7 +88,23 @@
    {:key :update-ticker
     :type :int
     :default 0
-    :persist? false}])
+    :persist? false}
+
+   {:key :wireless-inject-this-tick
+    :type :double
+    :default 0.0
+    :persist? false
+    :gui-sync? true
+    :gui-coerce double
+    :doc "IF accepted from wireless this game tick (server, flushed each tick)."}
+
+   {:key :wireless-inject-last-tick
+    :type :double
+    :default 0.0
+    :persist? false
+    :gui-sync? true
+    :gui-coerce double
+    :doc "IF accepted from wireless previous tick (for classic sync-rate bar)."}])
 
 (def ^:private gui-only-fields
   "Client container atoms (TechUI / sync helpers)."

@@ -63,13 +63,15 @@
    - Connected element shows icon+name; connect icon click disconnects only if linked.
    - Avail list: encrypted shows pass box and key; else hides them.
    - Pass box confirm triggers connect.
-   - Key icon alpha toggles on focus."
-  [root {:keys [linked avail connect-fn disconnect-fn name-fn encrypted?-fn]}]
-  (let [wlist (cgui/find-widget root "panel_wireless/zone_elementlist")
-        elem-template (cgui/find-widget root "panel_wireless/zone_elementlist/element")
-        connected-elem (cgui/find-widget root "panel_wireless/elem_connected")
-        btn-up (cgui/find-widget root "panel_wireless/btn_arrowup")
-        btn-down (cgui/find-widget root "panel_wireless/btn_arrowdown")
+   - Key icon alpha toggles on focus.
+
+  `wireless-root` must be the `panel_wireless` widget (paths are relative to it)."
+  [wireless-root {:keys [linked avail connect-fn disconnect-fn name-fn encrypted?-fn]}]
+  (let [wlist (cgui/find-widget wireless-root "zone_elementlist")
+        elem-template (cgui/find-widget wireless-root "zone_elementlist/element")
+        connected-elem (cgui/find-widget wireless-root "elem_connected")
+        btn-up (cgui/find-widget wireless-root "btn_arrowup")
+        btn-down (cgui/find-widget wireless-root "btn_arrowdown")
         elist (comp/element-list :spacing 2)
         linked-atom (atom linked)]
 
@@ -155,13 +157,18 @@
 
             (comp/list-add! elist elem))))))
 
-    root)
+    wireless-root)
+
+(defn- wireless-panel-from-main
+  [main-root]
+  (or (cgui/find-widget main-root "panel_wireless") main-root))
 
 (defn create-wireless-panel-node
   "Wireless tab for Wireless Node: connect node -> matrix network (SSID list)."
   [container]
   (let [doc (base-wireless-doc)
         root (cgui-doc/get-widget doc "main")
+        pw (wireless-panel-from-main root)
         payload (net-helpers/tile-pos-payload (:tile-entity container))]
 
     ;; nodePage sets icon_logo to toMatrixIcon
@@ -174,7 +181,7 @@
                 (node-msg :list-networks)
                 payload
                 (fn [resp]
-                  (rebuild-page! root
+                  (rebuild-page! pw
                                  {:linked (:linked resp)
                                   :avail (vec (:avail resp []))
                                   :name-fn (fn [t] (:ssid t))
@@ -198,6 +205,7 @@
   [container]
   (let [doc (base-wireless-doc)
         root (cgui-doc/get-widget doc "main")
+        pw (wireless-panel-from-main root)
         payload (net-helpers/tile-pos-payload (:tile-entity container))]
     (when-let [logo (cgui/find-widget root "icon_logo")]
       (comp/add-component! logo (comp/breathe-effect)))
@@ -207,7 +215,7 @@
                 (gen-msg :list-nodes)
                 payload
                 (fn [resp]
-                  (rebuild-page! root
+                  (rebuild-page! pw
                                  {:linked (:linked resp)
                                   :avail (vec (:avail resp []))
                                   :name-fn (fn [t] (:node-name t))
@@ -231,54 +239,106 @@
 
     root))
 
+(defn- install-developer-receiver-rebuild!
+  "Start list/connect polling for a `panel_wireless` widget (tab or embedded classic)."
+  [panel payload {:keys [connected-row-logo-path]}]
+  (letfn [(rebuild! []
+            (net-client/send-to-server
+              (dev-msg :list-nodes)
+              payload
+              (fn [resp]
+                (rebuild-page! panel
+                               {:linked (:linked resp)
+                                :avail (vec (:avail resp []))
+                                :name-fn (fn [t] (:node-name t))
+                                :encrypted?-fn (fn [t] (boolean (:is-encrypted? t)))
+                                :disconnect-fn (fn [_linked]
+                                                 (net-client/send-to-server
+                                                   (dev-msg :disconnect)
+                                                   payload
+                                                   (fn [_] (rebuild!))))
+                                :connect-fn (fn [target pass]
+                                              (net-client/send-to-server
+                                                (dev-msg :connect)
+                                                (assoc payload
+                                                       :node-x (:pos-x target)
+                                                       :node-y (:pos-y target)
+                                                       :node-z (:pos-z target)
+                                                       :password pass
+                                                       :need-auth? true)
+                                                (fn [_] (rebuild!))))})
+                (when connected-row-logo-path
+                  (when-let [row-logo (cgui/find-widget panel "elem_connected/icon_logo")]
+                    (set-drawtexture! row-logo connected-row-logo-path))))))]
+    (rebuild!)))
+
 (defn create-wireless-panel-receiver
-  "Wireless tab for IF receivers (e.g. Ability Developer): link receiver -> wireless node."
-  [container]
+  "Wireless tab for IF receivers (e.g. Ability Developer): link receiver -> wireless node.
+
+  Optional `opts`:
+  - :tab-logo-path — top-left tab icon (classic receiver uses wireless node icon).
+  - :connected-row-logo-path — `elem_connected` row icon (match developer machine strip).
+  - :defer-initial-rebuild? — skip first `:list-nodes` until `developer-wireless-tab-lazy-activator` runs (developer GUI)."
+  [container & [{:keys [tab-logo-path connected-row-logo-path defer-initial-rebuild?]}]]
   (let [doc (base-wireless-doc)
         root (cgui-doc/get-widget doc "main")
+        pw (wireless-panel-from-main root)
         payload (net-helpers/tile-pos-payload (:tile-entity container))]
     (when-let [logo (cgui/find-widget root "icon_logo")]
-      (comp/add-component! logo (comp/breathe-effect)))
+      (comp/add-component! logo (comp/breathe-effect))
+      (when tab-logo-path
+        (set-drawtexture! logo tab-logo-path)))
 
-    (letfn [(rebuild! []
-              (net-client/send-to-server
-                (dev-msg :list-nodes)
-                payload
-                (fn [resp]
-                  (rebuild-page! root
-                                 {:linked (:linked resp)
-                                  :avail (vec (:avail resp []))
-                                  :name-fn (fn [t] (:node-name t))
-                                  :encrypted?-fn (fn [t] (boolean (:is-encrypted? t)))
-                                  :disconnect-fn (fn [_linked]
-                                                   (net-client/send-to-server
-                                                     (dev-msg :disconnect)
-                                                     payload
-                                                     (fn [_] (rebuild!))))
-                                  :connect-fn (fn [target pass]
-                                                (net-client/send-to-server
-                                                  (dev-msg :connect)
-                                                  (assoc payload
-                                                         :node-x (:pos-x target)
-                                                         :node-y (:pos-y target)
-                                                         :node-z (:pos-z target)
-                                                         :password pass
-                                                         :need-auth? true)
-                                                  (fn [_] (rebuild!))))}))))]
-      (rebuild!))
+    (when-not defer-initial-rebuild?
+      (install-developer-receiver-rebuild! pw payload {:connected-row-logo-path connected-row-logo-path}))
 
     root))
+
+(defn developer-wireless-tab-lazy-activator
+  "Return a zero-arg fn: first call runs `install-developer-receiver-rebuild!` (use when tab used `:defer-initial-rebuild?`).
+  `main-root` must be the same root widget returned by `create-wireless-panel-receiver`."
+  [main-root container connected-row-logo-path]
+  (let [done? (atom false)
+        pw (wireless-panel-from-main main-root)
+        payload (net-helpers/tile-pos-payload (:tile-entity container))]
+    (fn []
+      (when (compare-and-set! done? false true)
+        (install-developer-receiver-rebuild! pw payload {:connected-row-logo-path connected-row-logo-path})))))
+
+(defn create-embedded-developer-wireless-panel!
+  "Detach `panel_wireless` from `page_wireless.xml` and attach under `host-widget` (classic `parent_right/area`).
+  Same list/connect behavior as the Wireless tab, without editing `page_developer.xml`."
+  [container host-widget & [{:keys [connected-row-logo-path]}]]
+  (when (and container (:tile-entity container) host-widget)
+    (let [doc (base-wireless-doc)
+          main-root (cgui-doc/get-widget doc "main")
+          panel (wireless-panel-from-main main-root)
+          payload (net-helpers/tile-pos-payload (:tile-entity container))]
+      (cgui/remove-widget! main-root panel)
+      (cgui/add-widget! host-widget panel)
+      (cgui/set-position! panel 0 0)
+      ;; `panel_wireless` transform is CENTER in XML; wide `parent_right/area` would offset it.
+      (cgui/set-w-align! panel :left)
+      (cgui/set-h-align! panel :top)
+      (install-developer-receiver-rebuild! panel payload {:connected-row-logo-path connected-row-logo-path})
+      panel)))
 
 (defn create-wireless-panel
   "Create shared wireless tab panel.
 
   opts:
   - :mode      :node | :generator | :receiver
-  - :container the GUI container (must have :tile-entity)"
-  [{:keys [mode container]}]
+  - :container the GUI container (must have :tile-entity)
+  - :receiver-tab-logo-path / :receiver-connected-logo-path — only for :receiver
+  - :receiver-defer-initial-rebuild? — receiver only: skip first list fetch until lazy activator (developer GUI)"
+  [{:keys [mode container receiver-tab-logo-path receiver-connected-logo-path
+           receiver-defer-initial-rebuild?]}]
   (case mode
     :generator (create-wireless-panel-generator container)
-    :receiver (create-wireless-panel-receiver container)
+    :receiver (create-wireless-panel-receiver container
+                {:tab-logo-path receiver-tab-logo-path
+                 :connected-row-logo-path receiver-connected-logo-path
+                 :defer-initial-rebuild? receiver-defer-initial-rebuild?})
     :node (create-wireless-panel-node container)
     (do
       (log/warn "Unknown wireless-tab mode:" mode ", falling back to :node")

@@ -103,11 +103,11 @@
           (swap! m assoc :tech-ui/info-area-state a)
           a))))
 
-(defn- widget-tree
-  "Return a seq of widget and all descendants (depth-first)."
+(defn widget-subtree-seq
+  "Depth-first sequence of `root` and all descendant widgets (shared TechUI helper)."
   [root]
   (when root
-    (cons root (mapcat widget-tree (cgui/get-widgets root)))))
+    (tree-seq (constantly true) cgui/get-widgets root)))
 
 (defn- register-blend-targets!
   "Scan widget subtree and register any components that should participate in InfoArea fade-in."
@@ -116,7 +116,7 @@
     (swap! state-a
            (fn [st]
              (let [targets
-                   (->> (widget-tree widget)
+                   (->> (widget-subtree-seq widget)
                         (mapcat (fn [w]
                                   (mapcat
                                     (fn [c]
@@ -448,11 +448,25 @@
 ;; ============================================================================
 
 (defn apply-breathe-to-ui!
-  "Apply breathe effect to all child widgets whose name starts with `ui_`."
+  "Apply breathe effect to all **direct** child widgets whose name starts with `ui_`."
   [page-widget]
   (doseq [w (cgui/get-draw-list page-widget)]
     (when (clojure.string/starts-with? (cgui/get-name w) "ui_")
       (comp/add-component! w (comp/breathe-effect)))))
+
+(defn apply-breathe-to-ui-descendants!
+  "Apply breathe to every descendant named `ui_*` (e.g. nested `ui_left` / `ui_right` in `page_developer.xml`)."
+  [page-root]
+  (doseq [w (widget-subtree-seq page-root)]
+    (when (str/starts-with? (cgui/get-name w) "ui_")
+      (comp/add-component! w (comp/breathe-effect)))))
+
+(defn- tech-ui-opts-map?
+  "True if trailing map is TechUI composer options (`:on-tab-change`, `:main-size`, etc.)."
+  [m]
+  (and (map? m)
+       (or (contains? m :on-tab-change)
+           (contains? m :main-size))))
 
 (defn page-button
   "Create a page-select button using icon texture and hover animation.
@@ -517,36 +531,46 @@
   "Create a tech UI composed from given pages.
 
   Each page should be a map {:id \"inv\" :window widget}.
-  If the last argument is a map with :on-tab-change key, it is opts; :on-tab-change is (fn [page-id]).
+  Optional trailing opts map:
+  - `:on-tab-change` — (fn [page-id])
+  - `:main-size` — [width height] for `tech_ui_main` (defaults to `gui-width` × `gui-height`).
   Returns a map {:id \"tech\" :window main-widget :pages {id page-map} :current atom}
   "
   [& args]
-  (let [opts (when (and (seq args) (map? (last args)) (contains? (last args) :on-tab-change))
+  (let [opts (when (and (seq args) (tech-ui-opts-map? (last args)))
                (last args))
         pages (if opts (drop-last args) args)
         pages (if (and (= 1 (count pages)) (sequential? (first pages))) (first pages) pages)
         on-tab-change (:on-tab-change opts)
-        main (cgui/create-widget :name "tech_ui_main" :pos [0 0] :size [gui-width gui-height])
+        main-size (vec (or (:main-size opts) [gui-width gui-height]))
+        mw (double (nth main-size 0 gui-width))
+        mh (double (nth main-size 1 gui-height))
+        main (cgui/create-widget :name "tech_ui_main" :pos [0 0] :size [mw mh])
         current (atom (when (seq pages) (:id (first pages))))
         pages-map (into {} (map (fn [p] [(:id p) p]) pages))]
 
     ;; Add pages and page buttons
     (doseq [[p idx] (map vector pages (range))]
       (let [pw (:window p)]
-        (cgui/set-pos! pw 0 0)
-        (cgui/set-visible! pw false)
-        (cgui/add-widget! main pw)
+        (when-not pw
+          (log/error (str "create-tech-ui: page " (:id p) " has nil :window — skipping")))
+        (when pw
+          (cgui/set-pos! pw 0 0)
+          (cgui/set-visible! pw false)
+          (cgui/add-widget! main pw)
 
-        (let [btn (page-button (:id p) idx current pages pw nil on-tab-change)]
-          (cgui/add-widget! main btn))))
+          (let [btn (page-button (:id p) idx current pages pw nil on-tab-change)]
+            (cgui/add-widget! main btn)))))
 
     ;; show first page by default
     (when-let [first-page (first pages)]
-      (cgui/set-visible! (:window first-page) true))
+      (when-let [fw (:window first-page)]
+        (cgui/set-visible! fw true)))
 
     ;; apply breathe effect to inventory-like pages
     (doseq [p pages]
-      (apply-breathe-to-ui! (:window p)))
+      (when-let [w (:window p)]
+        (apply-breathe-to-ui! w)))
 
     {:id "tech"
      :window main

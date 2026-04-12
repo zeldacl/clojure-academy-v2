@@ -3,6 +3,7 @@
 
    This is shared client/server tab switching logic used by platform GUI/menu bridges."
   (:require [cn.li.mcmod.gui.adapter :as gui]
+            [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.platform.entity :as entity]
@@ -71,6 +72,17 @@
   [pages index]
   (when (and (>= index 0) (< index (count pages)))
     (:id (nth pages index))))
+
+(defn switch-tab!
+  "Client: show the page whose `:id` is `page-id`, hide others, and `reset!` TechUI `:current`.
+  Use with the map from `cn.li.ac.gui.tech-ui-common/create-tech-ui` after `attach-tab-sync!` so
+  server `:tab-index` and slot gating stay in sync."
+  [tech-ui pages page-id]
+  (when-let [cur (:current tech-ui)]
+    (doseq [q pages]
+      (when-let [w (:window q)]
+        (cgui/set-visible! w (= page-id (:id q)))))
+    (reset! cur page-id)))
 
 ;; ============================================================================
 ;; Set-tab C2S handler (server)

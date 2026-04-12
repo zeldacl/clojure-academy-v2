@@ -258,8 +258,17 @@
               (get-pivot-offset direction))
             raw-rot-center (or (get-in block-spec [:multi-block :multi-block-rotation-center])
                               (get-rotation-center direction))
-            [rot-x rot-y rot-z] (direction->rotation-center raw-rot-center direction)
-            rotation (get-rotation-angle direction)
+            mb (:multi-block block-spec)
+            [rot-x rot-y rot-z]
+            (if (:tesr-use-raw-rotation-center? mb)
+              (let [v (vec (map double (if (sequential? raw-rot-center)
+                                         raw-rot-center
+                                         [0.5 0.0 0.5])))]
+                [(nth v 0 0.5) (nth v 1 0.0) (nth v 2 0.5)])
+              (direction->rotation-center raw-rot-center direction))
+            rotation (if (number? (:tesr-y-deg-override mb))
+                       (double (:tesr-y-deg-override mb))
+                       (get-rotation-angle direction))
             tx (+ pivot-x rot-x)
             ty rot-y
             tz (+ pivot-z rot-z)]
