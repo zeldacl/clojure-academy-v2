@@ -16,8 +16,8 @@
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.multiblock-helper :as mb-helper]
-            [cn.li.mcmod.client.render.buffer :as rb]
             [cn.li.mcmod.client.render.pose :as pose]
+            [cn.li.mcmod.client.render.obj-tesr-common :as obj-tesr]
             [cn.li.ac.block.wireless-matrix.block :as wm]))
 
 ;; ============================================================================
@@ -44,8 +44,7 @@
   - tile: TileMatrix instance
   - pose-stack, vertex-consumer, packed-light, packed-overlay"
   [_tile pose-stack vertex-consumer packed-light packed-overlay]
-  (obj/render-part-consumer @model "Main" pose-stack vertex-consumer packed-light packed-overlay)
-  (obj/render-part-consumer @model "Core" pose-stack vertex-consumer packed-light packed-overlay))
+  (obj-tesr/render-obj-parts! @model ["Main" "Core"] pose-stack vertex-consumer packed-light packed-overlay))
 
 (defn render-shields
   "Render animated shield plates using PoseStack and buffered vertex consumer.
@@ -82,11 +81,9 @@
   - tile: TileMatrix instance
   - partial-ticks, pose-stack, buffer-source, packed-light, packed-overlay"
   [tile partial-ticks pose-stack buffer-source packed-light packed-overlay]
-  ;; Lift above support top to eliminate origin-cell depth conflict.
-  (pose/translate pose-stack (double 0.0) (double 0.02) (double 0.0))
-  (let [vc (rb/get-solid-buffer buffer-source @texture)]
-    (binding [obj/*skip-flat-bottom-plane* true
-              obj/*bottom-plane-epsilon* 0.0008]
+  (obj-tesr/translate-obj-y-lift! pose-stack)
+  (obj-tesr/with-solid-vc-and-obj-bindings! buffer-source @texture
+    (fn [vc]
       (render-base tile pose-stack vc packed-light packed-overlay)
       (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay))))
 

@@ -369,8 +369,7 @@
       (bdsl/create-block-spec
         "developer-normal"
         {:multi-block {:positions developer-multiblock-positions
-                       ;; Footprint floor in controller space; Z +1 block vs prior center (user: 往前一格).
-                       ;; Legacy direction->rotation-center is for 2×2×2; use raw + Y override here.
+                       ;; TESR pivot: controller block bottom center (mesh is re-centered in model space).
                        :rotation-center [0.5 0.0 0.5]
                        :pivot-xz-override [0.0 0.0]
                        :tesr-use-raw-rotation-center? true

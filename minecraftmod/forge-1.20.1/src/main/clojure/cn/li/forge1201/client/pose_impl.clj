@@ -4,7 +4,7 @@
   This namespace wraps com.mojang.blaze3d.vertex.PoseStack and VertexConsumer
   and must only be loaded on the client side via side-checked requiring-resolve."
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
-           [org.joml Matrix4f]))
+           [org.joml Matrix3f Matrix4f]))
 
 (defn rotate-y
   "Rotate pose stack around Y axis.
@@ -80,26 +80,17 @@
   (.pose (.last pose-stack)))
 
 (defn submit-vertex
-  "Submit a vertex to the vertex consumer.
+  "Submit a vertex using the current pose entry's position and normal matrices.
 
-  Args:
-    vc: VertexConsumer
-    matrix: Matrix4f - Transformation matrix
-    x, y, z: float - Position
-    r, g, b, a: float - Color (0.0-1.0)
-    u, v: float - Texture coordinates
-    overlay: int - Overlay coordinates
-    uv2: int - Light map coordinates
-    nx, ny, nz: float - Normal vector
-
-  Returns:
-    nil"
-  [^VertexConsumer vc ^Matrix4f matrix x y z r g b a u v overlay uv2 nx ny nz]
-  (-> vc
-      (.vertex matrix (float x) (float y) (float z))
-      (.color (float r) (float g) (float b) (float a))
-      (.uv (float u) (float v))
-      (.overlayCoords (int overlay))
-      (.uv2 (int uv2))
-      (.normal (float nx) (float ny) (float nz))
-      (.endVertex)))
+  Normals must be transformed when the pose includes scale (e.g. OBJ BER); use
+  `VertexConsumer.normal(Matrix3f, nx, ny, nz)` with `(.normal (.last pose-stack))`."
+  [^VertexConsumer vc ^PoseStack pose-stack x y z r g b a u v overlay uv2 nx ny nz]
+  (let [entry (.last pose-stack)]
+    (-> vc
+        (.vertex ^Matrix4f (.pose entry) (float x) (float y) (float z))
+        (.color (float r) (float g) (float b) (float a))
+        (.uv (float u) (float v))
+        (.overlayCoords (int overlay))
+        (.uv2 (int uv2))
+        (.normal ^Matrix3f (.normal entry) (float nx) (float ny) (float nz))
+        (.endVertex))))

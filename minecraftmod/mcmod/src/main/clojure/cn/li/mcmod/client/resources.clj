@@ -30,8 +30,10 @@
   - model-name: String name without extension (e.g., 'matrix')
   
   Returns: parsed OBJ model map"
-  [model-name]
-  (obj/load-obj-model (str "models/" model-name ".obj")))
+  ([model-name]
+   (load-obj-model model-name nil))
+  ([model-name opts]
+   (obj/load-obj-model (str "models/" model-name ".obj") opts)))
 
 ;; ============================================================================
 ;; Texture Loading

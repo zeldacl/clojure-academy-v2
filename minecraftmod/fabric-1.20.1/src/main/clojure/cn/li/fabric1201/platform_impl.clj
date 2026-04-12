@@ -18,7 +18,7 @@
             [cn.li.fabric1201.platform.resource :as resource]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.client.render.pose :as pose]
-            [cn.li.fabric1201.client.render.buffer :as buffer]
+            [cn.li.mcmod.client.render.buffer :as buffer]
             [cn.li.mcmod.platform.position :as mcmod-pos]
             [cn.li.mcmod.platform.be :as pbe])
   (:import [net.minecraft.nbt CompoundTag ListTag]
@@ -27,7 +27,9 @@
            [net.minecraft.world.level.block.state BlockState]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.resources ResourceLocation]
-           [cn.li.fabric1201.block.entity ScriptedBlockEntity]))
+           [cn.li.fabric1201.block.entity ScriptedBlockEntity]
+           [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
+           [org.joml Matrix3f Matrix4f]))
 
 ;; ============================================================================
 ;; NBT Protocol Implementation (Fabric 1.20.1)
@@ -298,6 +300,10 @@
     (constantly (fn [pose-stack x y z]
                   (.translate pose-stack (double x) (double y) (double z)))))
 
+  (alter-var-root #'pose/*scale-fn*
+    (constantly (fn [pose-stack x y z]
+                  (.scale pose-stack (float x) (float y) (float z)))))
+
   ;; Bind platform accessor for current matrix from PoseStack
   (alter-var-root #'pose/*get-matrix-fn*
     (constantly (fn [pose-stack]
@@ -306,11 +312,12 @@
 
   ;; Bind submit-vertex helper to avoid core calling VertexConsumer methods
   (alter-var-root #'buffer/*submit-vertex-fn*
-    (constantly (fn [vc matrix x y z r g b a u v overlay uv2 nx ny nz]
-                  (-> (.vertex vc matrix (float x) (float y) (float z))
-                      (.color (int r) (int g) (int b) (int a))
-                      (.uv (float u) (float v))
-                      (.overlayCoords (int overlay))
-                      (.uv2 (int uv2))
-                      (.normal (float nx) (float ny) (float nz))
-                      (.endVertex))))))
+    (constantly (fn [^VertexConsumer vc ^PoseStack pose-stack x y z r g b a u v overlay uv2 nx ny nz]
+                  (let [entry (.last pose-stack)]
+                    (-> (.vertex vc ^Matrix4f (.pose entry) (float x) (float y) (float z))
+                        (.color (float r) (float g) (float b) (float a))
+                        (.uv (float u) (float v))
+                        (.overlayCoords (int overlay))
+                        (.uv2 (int uv2))
+                        (.normal ^Matrix3f (.normal entry) (float nx) (float ny) (float nz))
+                        (.endVertex)))))))

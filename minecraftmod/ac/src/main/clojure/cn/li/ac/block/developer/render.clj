@@ -1,16 +1,38 @@
 (ns cn.li.ac.block.developer.render
   "CLIENT-ONLY: Developer station TESR (normal / advanced) using OBJ models.
 
+  Uses the same solid-buffer + OBJ bottom-plane defaults as wireless-matrix
+  (`cn.li.mcmod.client.render.obj-tesr-common`). Model-local center + scale,
+  then matrix-style Y lift in block space.
+
   Loaded only from client init via hooks; uses mcmod protocols only."
   (:require [cn.li.mcmod.client.resources :as res]
             [cn.li.mcmod.client.obj :as obj]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.multiblock-helper :as mb-helper]
-            [cn.li.mcmod.client.render.buffer :as rb]
             [cn.li.mcmod.client.render.pose :as pose]
+            [cn.li.mcmod.client.render.obj-tesr-common :as obj-tesr]
             [cn.li.mcmod.util.log :as log]))
 
+(defn- obj-bottom-center-offset
+  "Return `[cx miny cz]` for MilkShape-exported meshes: AABB bottom-center to
+  origin. Pair with multiblock pivot at the **controller** cell `[0.5 0 0.5]`,
+  not the full footprint center (avoids a 1-block Z mismatch for this OBJ)."
+  [model]
+  (when-let [verts (seq (:vertices model))]
+    (let [pos (map :pos verts)
+          xs (map #(double (:x %)) pos)
+          ys (map #(double (:y %)) pos)
+          zs (map #(double (:z %)) pos)
+          minx (reduce min xs)
+          maxx (reduce max xs)
+          miny (reduce min ys)
+          minz (reduce min zs)
+          maxz (reduce max zs)]
+      [(* 0.5 (+ minx maxx)) miny (* 0.5 (+ minz maxz))])))
+
 (defonce ^:private normal-model (delay (res/load-obj-model "developer_normal")))
+;; Block atlas path (same stem as `blockstates` / cube); for UV atlas like matrix use `models/developer_normal`.
 (defonce ^:private normal-tex (delay (res/texture-location "block/dev_normal")))
 
 (defonce ^:private advanced-model (delay (res/load-obj-model "developer_advanced")))
@@ -20,17 +42,21 @@
   [model-delay tex-delay _tile _partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (pose/push-pose pose-stack)
   (try
-    (let [;; Footprint pivot + facing already applied by `render-multiblock-tesr`.
-          ;; Do not add extra Y rotation here (would stack on block :direction).
-          ;; Slight Y lift only to reduce z-fighting with ground.
-          _ (pose/translate pose-stack 0.0 0.001 0.0)
-          ;; OBJ spans ~6 units on Y; multiblock footprint is 3 blocks tall.
-          s (float 0.5)
-          _ (pose/scale pose-stack s s s)
-          vc (rb/get-solid-buffer buffer-source @tex-delay)]
-      (binding [obj/*skip-flat-bottom-plane* true
-                obj/*bottom-plane-epsilon* 0.0008]
-        (obj/render-all! @model-delay pose-stack vc packed-light packed-overlay)))
+    (let [model @model-delay
+          tex @tex-delay
+          [cx miny cz] (or (obj-bottom-center-offset model) [0.0 0.0 0.0])
+          ;; MilkShape → AABB bottom-center at local origin (then scale).
+          _ (pose/translate pose-stack (- cx) (- miny) (- cz))
+          s (float 0.5)]
+      (pose/scale pose-stack s s s)
+      ;; Block-space lift after scale (matches matrix: small Y in block units).
+      (obj-tesr/translate-obj-y-lift! pose-stack)
+      (obj-tesr/with-solid-vc-and-obj-bindings! buffer-source tex
+        (fn [vc]
+          ;; Developer has many near-coplanar bottom faces; flat-bottom culling
+          ;; strips real geometry and reads as a “shattered” mesh. Matrix keeps it on.
+          (binding [obj/*skip-flat-bottom-plane* false]
+            (obj-tesr/render-obj-parts! model (sort (keys (:faces model))) pose-stack vc packed-light packed-overlay)))))
     (finally
       (pose/pop-pose pose-stack))))
 

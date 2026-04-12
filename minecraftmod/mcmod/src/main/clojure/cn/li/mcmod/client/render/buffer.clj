@@ -48,21 +48,21 @@
 
   Args:
   - vertex-consumer: platform vertex consumer
-  - matrix: platform matrix/mutable pose entry
+  - pose-stack: platform pose stack (for correct normals under scale)
   - x y z: vertex position (numbers)
   - r g b a: color components (ints 0-255)
   - u v: texture coords (numbers)
   - overlay: overlay coords (int)
   - uv2: light/uv2 packed int
-  - nx ny nz: normal (numbers)
+  - nx ny nz: model-space normal (numbers)
 
   This delegates to a platform-provided function bound to `*submit-vertex-fn*`.
   "
-  [vertex-consumer matrix x y z r g b a u v overlay uv2 nx ny nz]
+  [vertex-consumer pose-stack x y z r g b a u v overlay uv2 nx ny nz]
   (or *submit-vertex-fn*
       (throw (ex-info "No platform submit-vertex function bound"
                       {:hint "Call platform-impl/init-platform! to bind buffer helpers"})))
   (try
-    (*submit-vertex-fn* vertex-consumer matrix x y z r g b a u v overlay uv2 nx ny nz)
+    (*submit-vertex-fn* vertex-consumer pose-stack x y z r g b a u v overlay uv2 nx ny nz)
     (catch Exception e
       (throw e))))

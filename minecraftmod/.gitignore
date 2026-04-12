@@ -38,3 +38,4 @@ gradle
 .gradle
 .clj-kondo
 .lsp
+_upstream
