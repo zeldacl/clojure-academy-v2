@@ -79,6 +79,7 @@
 
   ;; Bind vertex consumer implementation
   (alter-var-root #'buffer/*submit-vertex-fn* (constantly pose-impl/submit-vertex))
+  (alter-var-root #'buffer/*triangle-vertex-order* (constantly [0 1 2 2]))
 
   ;; Bind render buffer selectors
   (alter-var-root #'buffer/*solid-buffer-fn* (constantly buffer-impl/get-solid-buffer))

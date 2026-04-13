@@ -14,6 +14,14 @@
 
 (def ^:dynamic *submit-vertex-fn* nil)
 
+(def ^:dynamic *triangle-vertex-order*
+  "Backend triangle emission order.
+
+  Default `[0 1 2]` emits one triangle (OBJ-spec semantics).
+  Some backend buffers are quad-oriented and may set `[0 1 2 2]` so each
+  triangle is submitted as a degenerate quad without changing core OBJ logic."
+  [0 1 2])
+
 (defn- require-buffer-fn
   [buffer-fn kind]
   (or buffer-fn

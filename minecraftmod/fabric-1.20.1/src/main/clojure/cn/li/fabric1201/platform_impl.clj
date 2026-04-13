@@ -321,3 +321,6 @@
                         (.uv2 (int uv2))
                         (.normal ^Matrix3f (.normal entry) (float nx) (float ny) (float nz))
                         (.endVertex)))))))
+
+  (alter-var-root #'buffer/*triangle-vertex-order*
+    (constantly [0 1 2 2]))
