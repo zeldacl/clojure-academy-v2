@@ -245,7 +245,7 @@
   [^String text]
   (-> (str text)
       (str/replace #"^\uFEFF" "")
-      (str/replace #"\\\r?\n" "")))
+      (str/replace #"\\\\\r?\n" "")))
 
 (defn- obj-text->logical-lines [text]
   (->> (str/split-lines (preprocess-obj-text text))
@@ -256,6 +256,20 @@
   (when (and s (not (str/blank? (str s))))
     (try (Long/parseLong (str/trim (str s)))
          (catch Exception _ nil))))
+
+(defn- parse-smoothing-token [s]
+  (let [v (some-> s str str/trim str/lower-case)]
+    (cond
+      (or (nil? v) (str/blank? v) (= v "off") (= v "0")) nil
+      :else s)))
+
+(defn- parse-merging-token [group-token resolution-token]
+  (let [g (some-> group-token str str/trim)
+        g-lc (some-> g str/lower-case)
+        r (parse-long-safe resolution-token)]
+    (cond
+      (or (nil? g) (str/blank? g) (= g-lc "off") (= g "0")) nil
+      :else {:group g :resolution r})))
 
 (defn- parse-face-vertex-token
   "Parse one `f` corner reference per Wavefront OBJ: `i`, `i/j`, `i//k`, `i/j/k`.
@@ -275,7 +289,13 @@
 
 (defn- tokenize-line [line]
   (->> (str/split (str/trim line) #"\s+")
-       (remove str/blank?)))
+       (remove str/blank?)
+       ;; Wavefront comments start with '#'; allow trailing comments on data lines.
+       (take-while #(not (str/starts-with? % "#")))))
+
+(defn- split-quoted-or-bare-tokens [s]
+  (let [m (re-seq #"\"[^\"]+\"|'[^']+'|[^\s]+" (str s))]
+    (mapv strip-quotes-path m)))
 
 (defn- parse-mtl [mtl-text base-dir]
   (let [current! (atom nil)
@@ -311,13 +331,15 @@
 (defn parse-obj
   "Parse OBJ text into renderable model data (Wavefront polygon + basic MTL).
 
-  Supports: `v`, `vt` (u v), `vn`, `g` / `o`, `f` (`i`, `i/j`, `i//k`, `i/j/k`),
-  `mtllib`, `usemtl` (per-face material name); UTF-8 BOM; `\\\\` line continuation.
+  Supports: `v`, `vt` (`u [v] [w]`, keeps `u`/`v`), `vn`, `vp`, `g` / `o`, `s`, `mg`,
+  `f` (`i`, `i/j`, `i//k`, `i/j/k`),
+  `l`, `p`, `mtllib`, `usemtl` (per-face material name);
+  UTF-8 BOM; `\\` line continuation.
   N-gons use 2D ear clipping after projection onto the dominant plane of the
   polygon normal; degenerate / non-simple cases fall back to triangle fan.
 
-  Does not parse: Bezier/surface (`vp`, `cstype`, `deg`, `surf`, `curv`, …),
-  `p`/`l`, `call`, full MTL (illum, bump maps, options on `map_Kd`, …).
+  Does not parse: Bezier/surface (`cstype`, `deg`, `surf`, `curv`, …),
+  `call`, full MTL (illum, bump maps, options on `map_Kd`, …).
 
   Optional second arg `opts`: `{:asset-parent \"models/\"}` — directory of the
   OBJ file under `assets/my_mod/` (used to resolve `mtllib` and `map_Kd`)."
@@ -327,8 +349,14 @@
          state (atom {:positions []
                       :uvs []
                       :normals []
+                      :param-vertices []
                       :raw-faces []
-                      :current-group "Default"
+                      :raw-lines []
+                      :raw-points []
+                      :current-groups ["Default"]
+                      :current-object nil
+                      :current-smoothing nil
+                      :current-merging nil
                       :current-material nil
                       :mtllib []})]
      (doseq [line (obj-text->logical-lines obj-text)]
@@ -340,19 +368,26 @@
                           (v3 (parse/parse-float (nth args 0))
                               (parse/parse-float (nth args 1))
                               (parse/parse-float (nth args 2)))))
-             "vt" (when (>= (count args) 2)
+             "vt" (when (seq args)
                     (swap! state update :uvs conj
                            (v2 (parse/parse-float (nth args 0))
-                               (parse/parse-float (nth args 1)))))
+                               (parse/parse-float (nth args 1) 0.0))))
              "vn" (when (>= (count args) 3)
                     (swap! state update :normals conj
                            (v3 (parse/parse-float (nth args 0))
                                (parse/parse-float (nth args 1))
                                (parse/parse-float (nth args 2)))))
-             ("g" "o") (when (seq args)
-                         (swap! state assoc :current-group (first args)))
+                   "vp" (when (seq args)
+                    (swap! state update :param-vertices conj
+                      {:u (parse/parse-float (nth args 0))
+                  :v (parse/parse-float (nth args 1) 0.0)
+                  :w (parse/parse-float (nth args 2) 1.0)}))
+             "g" (swap! state assoc :current-groups (if (seq args) (vec args) ["Default"]))
+             "o" (swap! state assoc :current-object (when (seq args) (str/join " " args)))
+                   "s" (swap! state assoc :current-smoothing (parse-smoothing-token (first args)))
+                   "mg" (swap! state assoc :current-merging (parse-merging-token (first args) (second args)))
              "mtllib" (when (seq args)
-                        (swap! state update :mtllib into args))
+                        (swap! state update :mtllib into (split-quoted-or-bare-tokens (str/join " " args))))
              "usemtl" (when (seq args)
                         (swap! state assoc :current-material (str/join " " args)))
              "f" (let [face-verts (->> args
@@ -360,16 +395,60 @@
                                         (remove nil?)
                                         vec)]
                    (when (>= (count face-verts) 3)
-                     (swap! state update :raw-faces conj
-                            {:group (:current-group @state)
-                             :verts face-verts
-                             :material (:current-material @state)})))
+                     (let [groups (let [gs (:current-groups @state)
+                                        obj-name (:current-object @state)]
+                                    (cond
+                                      (seq gs) gs
+                                      (some? obj-name) [obj-name]
+                                      :else ["Default"]))]
+                       (swap! state update :raw-faces conj
+                              {:groups groups
+                               :verts face-verts
+                               :smoothing (:current-smoothing @state)
+                               :merging (:current-merging @state)
+                               :material (:current-material @state)}))))
+             "l" (let [line-verts (->> args
+                                        (map parse-face-vertex-token)
+                                        (remove nil?)
+                                        vec)]
+                   (when (>= (count line-verts) 2)
+                     (let [groups (let [gs (:current-groups @state)
+                                        obj-name (:current-object @state)]
+                                    (cond
+                                      (seq gs) gs
+                                      (some? obj-name) [obj-name]
+                                      :else ["Default"]))]
+                       (swap! state update :raw-lines conj
+                              {:groups groups
+                               :verts line-verts
+                               :smoothing (:current-smoothing @state)
+                               :merging (:current-merging @state)
+                               :material (:current-material @state)}))))
+             "p" (let [point-verts (->> args
+                                         (map parse-face-vertex-token)
+                                         (remove nil?)
+                                         vec)]
+                   (when (seq point-verts)
+                     (let [groups (let [gs (:current-groups @state)
+                                        obj-name (:current-object @state)]
+                                    (cond
+                                      (seq gs) gs
+                                      (some? obj-name) [obj-name]
+                                      :else ["Default"]))]
+                       (swap! state update :raw-points conj
+                              {:groups groups
+                               :verts point-verts
+                               :smoothing (:current-smoothing @state)
+                               :merging (:current-merging @state)
+                               :material (:current-material @state)}))))
              nil))))
-     (let [{:keys [positions uvs normals raw-faces mtllib]} @state
+     (let [{:keys [positions uvs normals param-vertices raw-faces raw-lines raw-points mtllib]} @state
            materials (merge-mtllibs asset-parent (vec mtllib))
            generated (atom {})
            vertices (atom [])
            faces-by-group (atom {})
+            lines-by-group (atom {})
+            points-by-group (atom {})
            add-vertex! (fn [vref]
                          (let [pid (resolve-obj-index (:v vref) (count positions))]
                            (when (some? pid)
@@ -388,7 +467,7 @@
                                                          :normal nrm
                                                          :tangent (v3 0.0 0.0 0.0)})
                                    idx))))))
-           add-face! (fn [group material i0 i1 i2]
+           add-face! (fn [group smoothing material i0 i1 i2]
                        (when (and (some? i0) (some? i1) (some? i2))
                          (let [v0 (nth @vertices i0)
                                v1 (nth @vertices i1)
@@ -412,17 +491,69 @@
                                face-normal (v3-norm cross)
                                face-base {:i0 i0 :i1 i1 :i2 i2 :tangent tangent :normal face-normal}]
                            (swap! faces-by-group update group (fnil conj [])
-                                  (cond-> face-base material (assoc :material material))))))]
-       (doseq [{:keys [group verts material]} raw-faces]
+                                  (cond-> face-base
+                                    smoothing (assoc :smoothing smoothing)
+                                    material (assoc :material material))))))
+           add-line! (fn [group smoothing material idxs]
+                       (when (>= (count idxs) 2)
+                         (swap! lines-by-group update group (fnil conj [])
+                                (cond-> {:idxs idxs}
+                                  smoothing (assoc :smoothing smoothing)
+                                  material (assoc :material material)))))
+           add-point! (fn [group smoothing material idx]
+                        (when (some? idx)
+                          (swap! points-by-group update group (fnil conj [])
+                                 (cond-> {:idx idx}
+                                   smoothing (assoc :smoothing smoothing)
+                                   material (assoc :material material)))))]
+       (doseq [{:keys [groups verts smoothing merging material]} raw-faces]
          (doseq [[ia ib ic] (corner-triplets-for-ngon positions verts)]
            (let [tri [(nth verts ia) (nth verts ib) (nth verts ic)]
                  [i0 i1 i2] (mapv add-vertex! tri)]
              (when (every? some? [i0 i1 i2])
-               (add-face! group material i0 i1 i2)))))
+               (doseq [group groups]
+                 (add-face! group smoothing material i0 i1 i2)
+                 (when merging
+                   (swap! faces-by-group update group
+                          (fn [items]
+                            (if (seq items)
+                              (let [last-idx (dec (count items))
+                                    item (nth items last-idx)]
+                                (assoc items last-idx (assoc item :merging merging)))
+                              items)))))))))
+       (doseq [{:keys [groups verts smoothing merging material]} raw-lines]
+         (let [idxs (->> verts (map add-vertex!) (filter some?) vec)]
+           (when (>= (count idxs) 2)
+             (doseq [group groups]
+               (add-line! group smoothing material idxs)
+               (when merging
+                 (swap! lines-by-group update group
+                        (fn [items]
+                          (if (seq items)
+                            (let [last-idx (dec (count items))
+                                  item (nth items last-idx)]
+                              (assoc items last-idx (assoc item :merging merging)))
+                            items))))))))
+       (doseq [{:keys [groups verts smoothing merging material]} raw-points]
+         (doseq [vref verts]
+           (when-let [idx (add-vertex! vref)]
+             (doseq [group groups]
+               (add-point! group smoothing material idx)
+               (when merging
+                 (swap! points-by-group update group
+                        (fn [items]
+                          (if (seq items)
+                            (let [last-idx (dec (count items))
+                                  item (nth items last-idx)]
+                              (assoc items last-idx (assoc item :merging merging)))
+                            items))))))))
        (cond-> {:vertices (mapv (fn [v]
-                                 (update v :tangent v3-norm))
-                               @vertices)
+                                  (update v :tangent v3-norm))
+                                @vertices)
                 :faces @faces-by-group}
+         (seq @lines-by-group) (assoc :lines @lines-by-group)
+         (seq @points-by-group) (assoc :points @points-by-group)
+         (seq param-vertices) (assoc :param-vertices (vec param-vertices))
          (seq materials) (assoc :materials materials))))))
 
 (defn load-obj-model
@@ -476,7 +607,8 @@
                       (v3 0.0 1.0 0.0)
                       (v3 (/ fnx fn-len) (/ fny fn-len) (/ fnz fn-len)))
           align-thresh (double *obj-vn-face-align-min-dot*)]
-      (doseq [vertex-idx [i0 i1 i2 i2]]
+      ;; VertexConsumer is fed as triangle list; each face must emit exactly 3 vertices.
+      (doseq [vertex-idx [i0 i1 i2]]
         (let [{:keys [pos uv normal]} (nth vertices vertex-idx)
               pos (map-model-pos pos)
               vn-raw (map-model-normal normal)
