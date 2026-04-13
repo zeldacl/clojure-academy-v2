@@ -32,11 +32,11 @@
       [(* 0.5 (+ minx maxx)) miny (* 0.5 (+ minz maxz))])))
 
 (defonce ^:private normal-model (delay (res/load-obj-model "developer_normal")))
-;; Block atlas path (same stem as `blockstates` / cube); for UV atlas like matrix use `models/developer_normal`.
-(defonce ^:private normal-tex (delay (res/texture-location "block/dev_normal")))
+;; OBJ uses dedicated UV-unwrapped texture, not the tiny block icon tile.
+(defonce ^:private normal-tex (delay (res/texture-location "models/developer_normal")))
 
 (defonce ^:private advanced-model (delay (res/load-obj-model "developer_advanced")))
-(defonce ^:private advanced-tex (delay (res/texture-location "block/dev_advanced")))
+(defonce ^:private advanced-tex (delay (res/texture-location "models/developer_advanced")))
 
 (defn- render-obj-at-origin!
   [model-delay tex-delay _tile _partial-ticks pose-stack buffer-source packed-light packed-overlay]
