@@ -11,6 +11,7 @@
   (:require [cn.li.mcmod.util.log :as log]))
 
 (def ^:dynamic *y-rotation-fn* nil)
+(def ^:dynamic *z-rotation-fn* nil)
 
 (def ^:dynamic *push-pose-fn* nil)
 (def ^:dynamic *pop-pose-fn* nil)
@@ -41,6 +42,18 @@
       (catch Exception e
         (log/error "Error applying Y-rotation:"(ex-message e))))
     (log/warn "No platform Y-rotation function bound; skipping rotation")))
+
+(defn apply-z-rotation
+  "Apply Z-axis rotation to `pose-stack` using the platform-provided
+  function stored in `*z-rotation-fn*`. Used for fan/blade rotation around
+  the shaft axis."
+  [pose-stack angle-degrees]
+  (if *z-rotation-fn*
+    (try
+      (*z-rotation-fn* pose-stack angle-degrees)
+      (catch Exception e
+        (log/error "Error applying Z-rotation:" (ex-message e))))
+    (log/warn "No platform Z-rotation function bound; skipping rotation")))
 
 (defn push-pose
   "Push current pose onto the matrix stack using platform implementation.

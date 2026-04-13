@@ -1,83 +1,60 @@
 (ns cn.li.ac.block.wind-gen.config
-  "Wind Generator configuration - height-based energy generation")
+  "Wind Generator configuration aligned with AcademyCraft 1.12 behavior.")
 
-;; Energy generation rates
-(def base-generation-rate
-  "Base energy generation per tick at optimal height"
-  20.0)
+;; Structure
+(def min-pillars
+  "Minimum pillar count required for a complete wind generator tower."
+  8)
 
-(def optimal-height-min
-  "Minimum Y-level for optimal generation"
-  120)
+(def max-pillars
+  "Maximum pillar count allowed for a valid wind generator tower."
+  40)
 
-(def optimal-height-max
-  "Maximum Y-level (higher doesn't increase generation)"
-  256)
+;; Generation
+(def max-generation-speed
+  "Maximum IF/t at full altitude factor."
+  15.0)
 
-(def min-height
-  "Minimum Y-level for any generation"
-  64)
+(def base-height
+  "Altitude baseline used by the original height curve."
+  70.0)
 
-(def height-multiplier-curve
-  "Generation multiplier based on height
-   Below min-height: 0%
-   min-height to optimal-min: linear scale 0% to 100%
-   optimal-min to optimal-max: 100%
-   Above optimal-max: 100%"
-  {:min-height min-height
-   :optimal-min optimal-height-min
-   :optimal-max optimal-height-max})
+(def height-range
+  "Altitude range over which factor lerps from 0.5 to 1.0."
+  90.0)
+
+(def min-height-factor
+  "Lower clamp of altitude generation factor."
+  0.5)
+
+(def max-height-factor
+  "Upper clamp of altitude generation factor."
+  1.0)
 
 ;; Energy storage
-(def max-energy-main
-  "Maximum energy storage for main generator"
-  50000.0)
-
 (def max-energy-base
-  "Maximum energy storage for base block"
-  100000.0)
+  "Base internal buffer (same as original TileWindGenBase)."
+  20000.0)
 
-;; Structure validation
-(def validate-interval
-  "Ticks between structure validation checks"
-  100)
+(def structure-update-interval
+  "Ticks between structure scans (original: 10)."
+  10)
 
 ;; Sync interval
 (def sync-interval
   "Ticks between GUI sync broadcasts"
   20)
 
-;; Wind speed simulation
-(def wind-variation-enabled?
-  "Enable random wind speed variations"
-  true)
-
-(def wind-variation-min
-  "Minimum wind speed multiplier (70%)"
-  0.7)
-
-(def wind-variation-max
-  "Maximum wind speed multiplier (130%)"
-  1.3)
-
-(def wind-change-interval
-  "Ticks between wind speed changes"
-  200)
-
 (defn calculate-height-multiplier
-  "Calculate generation multiplier based on Y-level"
+  "Original height curve: lerp(0.5, 1.0, clamp((y-70)/90, 0, 1))."
   [y-level]
-  (cond
-    (< y-level min-height) 0.0
-    (< y-level optimal-height-min)
-    (let [range (- optimal-height-min min-height)
-          progress (- y-level min-height)]
-      (/ (double progress) (double range)))
-    :else 1.0))
+  (let [ratio (/ (- (double y-level) base-height) height-range)
+        clamped (-> ratio (max 0.0) (min 1.0))]
+    (+ min-height-factor
+       (* (- max-height-factor min-height-factor) clamped))))
 
 (defn calculate-generation-rate
-  "Calculate actual generation rate based on height and wind speed"
-  [y-level wind-multiplier]
-  (* base-generation-rate
-     (calculate-height-multiplier y-level)
-     wind-multiplier))
+  "Calculate IF/t output from main block altitude."
+  [y-level]
+  (* max-generation-speed
+     (calculate-height-multiplier y-level)))

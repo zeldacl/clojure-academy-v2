@@ -1,13 +1,5 @@
 (ns cn.li.ac.block.wind-gen.block
-  "Wind Generator blocks - 3-part structure for height-based energy generation.
-
-  Structure:
-  - Main (top): Generates energy based on height, has blades
-  - Pillar (middle): Support structure, can be stacked
-  - Base (bottom): Energy storage and wireless capability
-
-  Architecture:
-  All persistent state lives in ScriptedBlockEntity.customState as Clojure maps."
+  "Wind Generator blocks aligned with AcademyCraft 1.12 semantics."
   (:require [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
@@ -16,10 +8,12 @@
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.ac.block.role-impls :as impls]
             [cn.li.ac.block.wind-gen.config :as wind-config]
             [cn.li.ac.block.wind-gen.schema :as wind-schema]
+            [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.registry.hooks :as hooks]
@@ -29,296 +23,210 @@
 
 (defn- msg [action] (msg-registry/msg :wind-gen action))
 
-;; ============================================================================
-;; Schema Generation - Main Block
-;; ============================================================================
+(def main-state-schema (state-schema/filter-server-fields wind-schema/wind-gen-main-schema))
+(def base-state-schema (state-schema/filter-server-fields wind-schema/wind-gen-base-schema))
+(def pillar-state-schema (state-schema/filter-server-fields wind-schema/wind-gen-pillar-schema))
 
-(def main-state-schema
-  (state-schema/filter-server-fields wind-schema/wind-gen-main-schema))
+(def main-default-state (state-schema/schema->default-state main-state-schema))
+(def base-default-state (state-schema/schema->default-state base-state-schema))
+(def pillar-default-state (state-schema/schema->default-state pillar-state-schema))
 
-(def main-default-state
-  (state-schema/schema->default-state main-state-schema))
+(def main-scripted-load-fn (state-schema/schema->load-fn main-state-schema))
+(def main-scripted-save-fn (state-schema/schema->save-fn main-state-schema))
+(def base-scripted-load-fn (state-schema/schema->load-fn base-state-schema))
+(def base-scripted-save-fn (state-schema/schema->save-fn base-state-schema))
+(def pillar-scripted-load-fn (state-schema/schema->load-fn pillar-state-schema))
+(def pillar-scripted-save-fn (state-schema/schema->save-fn pillar-state-schema))
 
-(def main-scripted-load-fn
-  (state-schema/schema->load-fn main-state-schema))
+(def ^:private wind-main-ids #{"wind-gen-main" "wind-gen-main-part"})
+(def ^:private wind-base-ids #{"wind-gen-base" "wind-gen-base-part"})
 
-(def main-scripted-save-fn
-  (state-schema/schema->save-fn main-state-schema))
+(defn- sub-id-zero? [be]
+  (zero? (long (get (or (platform-be/get-custom-state be) {}) :sub-id 0))))
 
-;; ============================================================================
-;; Schema Generation - Base Block
-;; ============================================================================
+(defn- fan-item-stack? [stack]
+  (when (and stack (not (item/item-is-empty? stack)))
+    (let [rn (try (some-> stack item/item-get-item item/item-get-registry-name) (catch Exception _ nil))
+          s (str rn)]
+      (or (= rn "windgen_fan") (= rn "my_mod:windgen_fan") (.endsWith s ":windgen_fan")))))
 
-(def base-state-schema
-  (state-schema/filter-server-fields wind-schema/wind-gen-base-schema))
+(defn- rotate-offset [direction [x y z]]
+  (case (keyword (name (or direction :north)))
+    :east [(- z) y x]
+    :south [(- x) y (- z)]
+    :west [z y (- x)]
+    [x y z]))
 
-(def base-default-state
-  (state-schema/schema->default-state base-state-schema))
+(defn- no-obstacle? [level p direction]
+  (loop [i -7]
+    (if (> i 7)
+      true
+      (if-let [hit
+               (loop [j -7]
+                 (cond
+                   (> j 7) nil
+                   (and (zero? i) (zero? j)) (recur (inc j))
+                   :else
+                   (let [[dx dy dz] (rotate-offset direction [i j -1])
+                         check-pos (pos/create-block-pos (+ (pos/pos-x p) dx)
+                                                         (+ (pos/pos-y p) dy)
+                                                         (+ (pos/pos-z p) dz))
+                         st (world/world-get-block-state* level check-pos)]
+                     (if (world/block-state-is-air? st) (recur (inc j)) j))))]
+        false
+        (recur (inc i))))))
 
-(def base-scripted-load-fn
-  (state-schema/schema->load-fn base-state-schema))
+(defn- find-base-below [level p]
+  (loop [y (dec (pos/pos-y p)) pillars 0]
+    (let [check-pos (pos/create-block-pos (pos/pos-x p) y (pos/pos-z p))
+          be (world/world-get-tile-entity* level check-pos)
+          bid (when be (platform-be/get-block-id be))]
+      (cond
+        (= bid "wind-gen-pillar")
+        (if (< pillars wind-config/max-pillars) (recur (dec y) (inc pillars)) nil)
 
-(def base-scripted-save-fn
-  (state-schema/schema->save-fn base-state-schema))
+        (contains? wind-base-ids bid)
+        {:base-pos check-pos :pillars pillars}
 
-;; ============================================================================
-;; Schema Generation - Pillar Block
-;; ============================================================================
+        :else nil))))
 
-(def pillar-state-schema
-  (state-schema/filter-server-fields wind-schema/wind-gen-pillar-schema))
+(defn- find-main-above-from-base [level base-pos]
+  (loop [y (+ (pos/pos-y base-pos) 2) pillars 0]
+    (let [check-pos (pos/create-block-pos (pos/pos-x base-pos) y (pos/pos-z base-pos))
+          be (world/world-get-tile-entity* level check-pos)
+          bid (when be (platform-be/get-block-id be))]
+      (cond
+        (= bid "wind-gen-pillar")
+        (if (< pillars wind-config/max-pillars)
+          (recur (inc y) (inc pillars))
+          {:completeness :no-top})
 
-(def pillar-default-state
-  (state-schema/schema->default-state pillar-state-schema))
+        (contains? wind-main-ids bid)
+        (if (and be (sub-id-zero? be) (>= pillars wind-config/min-pillars))
+          {:completeness :complete :main-pos check-pos :pillars pillars}
+          {:completeness :no-top})
 
-(def pillar-scripted-load-fn
-  (state-schema/schema->load-fn pillar-state-schema))
+        :else
+        {:completeness (if (< pillars wind-config/min-pillars) :base-only :no-top)}))))
 
-(def pillar-scripted-save-fn
-  (state-schema/schema->save-fn pillar-state-schema))
+(defn- completeness->status [completeness generating?]
+  (case completeness
+    :complete (if generating? "COMPLETE" "COMPLETE_NOT_WORKING")
+    :no-top "NO_TOP"
+    "BASE_ONLY"))
 
-;; ============================================================================
-;; Structure Validation
-;; ============================================================================
+(defn- maybe-charge-output-item [state]
+  (let [stack (get-in state [:inventory 0])
+        cur (double (get state :energy 0.0))]
+    (if (and stack (energy/is-energy-item-supported? stack) (pos? cur))
+      (let [item-cur (double (energy/get-item-energy stack))
+            item-max (double (energy/get-item-max-energy stack))
+            need (max 0.0 (- item-max item-cur))
+            amount (min cur need)
+            leftover (double (energy/charge-energy-to-item stack amount false))
+            accepted (max 0.0 (- amount leftover))]
+        (if (pos? accepted)
+          (assoc state :energy (- cur accepted))
+          state))
+      state)))
 
-(defn- find-base-below
-  "Find the base block below the current position"
-  [level pos max-distance]
-  (loop [y (dec (pos/pos-y pos))
-         distance 0]
-    (when (and (>= y -64)
-               (< distance max-distance))
-      (let [check-pos (pos/create-block-pos (pos/pos-x pos) y (pos/pos-z pos))
-            be (world/world-get-tile-entity* level check-pos)]
-        (if (and be (= "wind-gen-base" (platform-be/get-block-id be)))
-          check-pos
-          (let [block-id (when be (platform-be/get-block-id be))]
-            (if (= "wind-gen-pillar" block-id)
-              (recur (dec y) (inc distance))
-              nil)))))))
+(defn- main-tick-fn [level p _block-state be]
+  (when (and level (not (world/world-is-client-side* level)) (sub-id-zero? be))
+    (let [state0 (or (platform-be/get-custom-state be) main-default-state)
+          ticker (inc (int (get state0 :update-ticker 0)))
+          state1 (assoc state0 :update-ticker ticker)]
+      (if (zero? (mod ticker wind-config/structure-update-interval))
+        (let [fan? (boolean (fan-item-stack? (get-in state1 [:inventory 0])))
+              base-info (find-base-below level p)
+              complete? (and base-info (>= (:pillars base-info 0) wind-config/min-pillars))
+              obstacle-free? (and complete? (no-obstacle? level p (:direction state1 :north)))
+              state2 (assoc state1
+                       :fan-installed fan?
+                       :complete (boolean complete?)
+                       :no-obstacle (boolean obstacle-free?)
+                       :status (if complete? "COMPLETE" "INCOMPLETE"))]
+          (when (not= state2 state0)
+            (platform-be/set-custom-state! be state2)
+            (platform-be/set-changed! be)))
+        (when (not= state1 state0)
+          (platform-be/set-custom-state! be state1))))))
 
-(defn- find-main-above
-  "Find the main block above the current position"
-  [level pos max-distance]
-  (loop [y (inc (pos/pos-y pos))
-         distance 0]
-    (when (and (<= y 320)
-               (< distance max-distance))
-      (let [check-pos (pos/create-block-pos (pos/pos-x pos) y (pos/pos-z pos))
-            be (world/world-get-tile-entity* level check-pos)]
-        (if (and be (= "wind-gen-main" (platform-be/get-block-id be)))
-          check-pos
-          (let [block-id (when be (platform-be/get-block-id be))]
-            (if (= "wind-gen-pillar" block-id)
-              (recur (inc y) (inc distance))
-              nil)))))))
+(defn- base-tick-fn [level p _block-state be]
+  (when (and level (not (world/world-is-client-side* level)) (sub-id-zero? be))
+    (let [state0 (or (platform-be/get-custom-state be) base-default-state)
+          ticker (inc (int (get state0 :update-ticker 0)))
+          state1 (assoc state0 :update-ticker ticker)
+          scan-info (when (zero? (mod ticker wind-config/structure-update-interval))
+                      (find-main-above-from-base level p))
+          state2 (if scan-info
+                   (let [comp (:completeness scan-info :base-only)
+                         mpos (:main-pos scan-info)]
+                     (cond-> (assoc state1 :completeness (name comp))
+                       mpos (assoc :main-pos-x (pos/pos-x mpos)
+                                   :main-pos-y (pos/pos-y mpos)
+                                   :main-pos-z (pos/pos-z mpos))))
+                   state1)
+          main-pos (when (= (:completeness state2) "complete")
+                     (let [mx (:main-pos-x state2)
+                           my (:main-pos-y state2)
+                           mz (:main-pos-z state2)]
+                       (when (and (number? mx) (number? my) (number? mz))
+                         (pos/create-block-pos mx my mz))))
+          main-be (when main-pos (world/world-get-tile-entity* level main-pos))
+          main-state (when main-be (platform-be/get-custom-state main-be))
+          working? (and (= (:completeness state2) "complete")
+                        (true? (:no-obstacle main-state))
+                        (true? (:fan-installed main-state)))
+          gen-speed (if working? (wind-config/calculate-generation-rate (:main-pos-y state2)) 0.0)
+          energy-before (double (get state2 :energy 0.0))
+          max-energy (double (get state2 :max-energy wind-config/max-energy-base))
+          energy-after (min max-energy (+ energy-before gen-speed))
+          state3 (assoc state2
+                   :energy energy-after
+                   :gen-speed (double gen-speed)
+                   :status (completeness->status (keyword (:completeness state2 "base-only")) working?))
+          state4 (maybe-charge-output-item state3)]
+      (when (not= state4 state0)
+        (platform-be/set-custom-state! be state4)
+        (platform-be/set-changed! be)))))
 
-(defn- validate-structure-from-main
-  "Validate structure from main block perspective"
-  [level pos]
-  (let [base-pos (find-base-below level pos 64)]
-    (boolean base-pos)))
-
-
-;; ============================================================================
-;; Main Block Tick Logic
-;; ============================================================================
-
-(defn- update-wind-speed
-  "Update wind speed with random variation"
-  [state]
-  (if wind-config/wind-variation-enabled?
-    (let [ticker (:wind-change-ticker state 0)]
-      (if (zero? (mod ticker wind-config/wind-change-interval))
-        (let [new-multiplier (+ wind-config/wind-variation-min
-                                (* (rand)
-                                   (- wind-config/wind-variation-max
-                                      wind-config/wind-variation-min)))]
-          (assoc state :wind-multiplier new-multiplier))
-        state))
-    state))
-
-(defn- main-tick-fn
-  "Tick handler for wind generator main block"
-  [level pos _block-state be]
+(defn- pillar-tick-fn [level _p _block-state be]
   (when (and level (not (world/world-is-client-side* level)))
-    (let [state (or (platform-be/get-custom-state be) main-default-state)
-          ticker (inc (get state :update-ticker 0))
-          wind-ticker (inc (get state :wind-change-ticker 0))
-          state (assoc state :update-ticker ticker :wind-change-ticker wind-ticker)
+    (let [state0 (or (platform-be/get-custom-state be) pillar-default-state)
+          state1 (update state0 :update-ticker (fnil inc 0))]
+      (when (not= state1 state0)
+        (platform-be/set-custom-state! be state1)))))
 
-          ;; Validate structure periodically
-          state (if (zero? (mod ticker wind-config/validate-interval))
-                  (let [valid? (validate-structure-from-main level pos)]
-                    (assoc state :structure-valid valid?))
-                  state)
-
-          ;; Update wind speed
-          state (update-wind-speed state)
-
-          ;; Generate energy if structure is valid
-          generating? (:structure-valid state false)
-          y-level (pos/pos-y pos)
-          wind-mult (:wind-multiplier state 1.0)
-          gen-rate (if generating?
-                     (wind-config/calculate-generation-rate y-level wind-mult)
-                     0.0)
-          current-energy (double (get state :energy 0.0))
-          max-energy (double (get state :max-energy wind-config/max-energy-main))
-          new-energy (min max-energy (+ current-energy gen-rate))
-          changed? (and (> gen-rate 0) (not= new-energy current-energy))
-
-          status (cond
-                   (not generating?) "STOPPED"
-                   (>= current-energy max-energy) "FULL"
-                   :else "GENERATING")
-
-          new-state (cond-> (assoc state
-                                   :status status
-                                   :gen-speed gen-rate)
-                      changed? (assoc :energy new-energy))]
-
-      (when (not= new-state state)
-        (platform-be/set-custom-state! be new-state)
-        (when changed?
-          (platform-be/set-changed! be))))))
-
-;; ============================================================================
-;; Base Block Tick Logic
-;; ============================================================================
-
-(defn- base-tick-fn
-  "Tick handler for wind generator base block"
-  [level pos _block-state be]
-  (when (and level (not (world/world-is-client-side* level)))
-    (let [state (or (platform-be/get-custom-state be) base-default-state)
-          ticker (inc (get state :update-ticker 0))
-          state (assoc state :update-ticker ticker)
-
-          ;; Validate structure periodically
-          state (if (zero? (mod ticker wind-config/validate-interval))
-                  (let [main-pos (find-main-above level pos 64)
-                        valid? (boolean main-pos)]
-                    (if main-pos
-                      (assoc state
-                             :structure-valid valid?
-                             :main-pos-x (pos/pos-x main-pos)
-                             :main-pos-y (pos/pos-y main-pos)
-                             :main-pos-z (pos/pos-z main-pos))
-                      (assoc state :structure-valid valid?)))
-                  state)
-
-          ;; Transfer energy from main block if structure is valid
-          state (if (and (:structure-valid state false)
-                         (zero? (mod ticker 20)))
-                  (let [main-x (:main-pos-x state)
-                        main-y (:main-pos-y state)
-                        main-z (:main-pos-z state)]
-                    (when (and main-x main-y main-z)
-                      (let [main-pos (pos/create-block-pos main-x main-y main-z)
-                            main-be (world/world-get-tile-entity* level main-pos)]
-                        (when main-be
-                          (let [main-state (platform-be/get-custom-state main-be)
-                                main-energy (double (get main-state :energy 0.0))]
-                            (when (pos? main-energy)
-                              (let [base-energy (double (get state :energy 0.0))
-                                    base-max (double (get state :max-energy wind-config/max-energy-base))
-                                    can-receive (- base-max base-energy)
-                                    transfer (min main-energy can-receive)]
-                                (when (pos? transfer)
-                                  (platform-be/set-custom-state! main-be
-                                    (assoc main-state :energy (- main-energy transfer)))
-                                  (platform-be/set-changed! main-be)
-                                  (assoc state :energy (+ base-energy transfer))))))))))
-                  state)
-
-          status (cond
-                   (not (:structure-valid state false)) "INVALID"
-                   (>= (get state :energy 0.0) (get state :max-energy wind-config/max-energy-base)) "FULL"
-                   (pos? (get state :energy 0.0)) "ACTIVE"
-                   :else "IDLE")]
-
-      (when (not= (:status state) status)
-        (let [new-state (assoc state :status status)]
-          (platform-be/set-custom-state! be new-state)
-          (platform-be/set-changed! be))))))
-
-;; ============================================================================
-;; Pillar Block Tick Logic
-;; ============================================================================
-
-(defn- pillar-tick-fn
-  "Tick handler for wind generator pillar block"
-  [level pos _block-state be]
-  (when (and level (not (world/world-is-client-side* level)))
-    (let [state (or (platform-be/get-custom-state be) pillar-default-state)
-          ticker (inc (get state :update-ticker 0))
-          state (assoc state :update-ticker ticker)
-
-          ;; Validate structure periodically
-          state (if (zero? (mod ticker wind-config/validate-interval))
-                  (let [main-pos (find-main-above level pos 64)
-                        base-pos (find-base-below level pos 64)
-                        valid? (and (boolean main-pos) (boolean base-pos))]
-                    (assoc state :structure-valid valid?))
-                  state)]
-
-      (when (not= state (platform-be/get-custom-state be))
-        (platform-be/set-custom-state! be state)))))
-
-;; ============================================================================
-;; Event Handlers
-;; ============================================================================
-
-(defn- open-wind-main-gui!
-  [{:keys [player world pos sneaking] :as _ctx}]
+(defn- open-wind-main-gui! [{:keys [player world pos sneaking]}]
   (when (and player world pos (not sneaking))
-    (try
-      (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
-        (open-gui-by-type player :wind-gen-main world pos)
-        (do (log/error "Wind Gen Main GUI open fn not found") nil))
-      (catch Exception e
-        (log/error "Failed to open Wind Gen Main GUI:" (ex-message e))
-        nil))))
+    (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
+      (open-gui-by-type player :wind-gen-main world pos)
+      nil)))
 
-(defn- open-wind-base-gui!
-  [{:keys [player world pos sneaking] :as _ctx}]
+(defn- open-wind-base-gui! [{:keys [player world pos sneaking]}]
   (when (and player world pos (not sneaking))
-    (try
-      (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
-        (open-gui-by-type player :wind-gen-base world pos)
-        (do (log/error "Wind Gen Base GUI open fn not found") nil))
-      (catch Exception e
-        (log/error "Failed to open Wind Gen Base GUI:" (ex-message e))
-        nil))))
-
-;; ============================================================================
-;; Network Handlers
-;; ============================================================================
+    (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
+      (open-gui-by-type player :wind-gen-base world pos)
+      nil)))
 
 (defn- handle-get-status-main [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)]
-    (if tile
-      (let [state (or (platform-be/get-custom-state tile) main-default-state)]
-        {:energy (:energy state 0.0)
-         :max-energy (:max-energy state wind-config/max-energy-main)
-         :gen-speed (:gen-speed state 0.0)
-         :wind-multiplier (:wind-multiplier state 1.0)
-         :status (:status state "STOPPED")
-         :structure-valid (:structure-valid state false)})
-      {:energy 0.0 :max-energy 0.0 :gen-speed 0.0 :status "ERROR"})))
+  (let [w (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at w payload)
+        state (or (and tile (platform-be/get-custom-state tile)) main-default-state)]
+    {:complete (boolean (:complete state false))
+     :no-obstacle (boolean (:no-obstacle state false))
+     :fan-installed (boolean (:fan-installed state false))
+     :status (str (:status state "INCOMPLETE"))}))
 
 (defn- handle-get-status-base [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)]
-    (if tile
-      (let [state (or (platform-be/get-custom-state tile) base-default-state)]
-        {:energy (:energy state 0.0)
-         :max-energy (:max-energy state wind-config/max-energy-base)
-         :status (:status state "IDLE")
-         :structure-valid (:structure-valid state false)})
-      {:energy 0.0 :max-energy 0.0 :status "ERROR"})))
+  (let [w (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at w payload)
+        state (or (and tile (platform-be/get-custom-state tile)) base-default-state)]
+    {:energy (double (:energy state 0.0))
+     :max-energy (double (:max-energy state wind-config/max-energy-base))
+     :gen-speed (double (:gen-speed state 0.0))
+     :status (str (:status state "BASE_ONLY"))
+     :completeness (str (:completeness state "BASE_ONLY"))}))
 
 (defn register-network-handlers! []
   (net-server/register-handler (msg :get-status-main) handle-get-status-main)
@@ -327,28 +235,30 @@
 
 (defonce ^:private wind-gen-installed? (atom false))
 
-(defn init-wind-gen!
-  []
+(defn init-wind-gen! []
   (when (compare-and-set! wind-gen-installed? false true)
     (msg-registry/register-block-messages! :wind-gen [:get-status-main :get-status-base])
+
     (tdsl/register-tile!
       (tdsl/create-tile-spec
         "wind-gen-main"
         {:registry-name "wind_gen_main"
          :impl :scripted
-         :blocks ["wind-gen-main"]
+         :blocks ["wind-gen-main" "wind-gen-main-part"]
          :tick-fn main-tick-fn
          :read-nbt-fn main-scripted-load-fn
          :write-nbt-fn main-scripted-save-fn}))
+
     (tdsl/register-tile!
       (tdsl/create-tile-spec
         "wind-gen-base"
         {:registry-name "wind_gen_base"
          :impl :scripted
-         :blocks ["wind-gen-base"]
+         :blocks ["wind-gen-base" "wind-gen-base-part"]
          :tick-fn base-tick-fn
          :read-nbt-fn base-scripted-load-fn
          :write-nbt-fn base-scripted-save-fn}))
+
     (tdsl/register-tile!
       (tdsl/create-tile-spec
         "wind-gen-pillar"
@@ -358,39 +268,51 @@
          :tick-fn pillar-tick-fn
          :read-nbt-fn pillar-scripted-load-fn
          :write-nbt-fn pillar-scripted-save-fn}))
+
     (platform-cap/declare-capability! :wind-generator IWirelessGenerator
       (fn [be _side] (impls/->WirelessGeneratorImpl be)))
     (tile-logic/register-tile-capability! "wind-gen-base" :wind-generator)
-    (bdsl/register-block!
-      (bdsl/create-block-spec
-        "wind-gen-main"
-        {:registry-name "wind_gen_main"
-         :physical {:material :metal
-                    :hardness 3.0
-                    :resistance 6.0
-                    :requires-tool true
-                    :harvest-tool :pickaxe
-                    :harvest-level 1
-                    :sounds :metal}
-         :rendering {:model-parent "minecraft:block/cube_all"
-                     :textures {:all (modid/asset-path "block" "wind_gen_main")}
-                     :flat-item-icon? true}
-         :events {:on-right-click open-wind-main-gui!}}))
-    (bdsl/register-block!
-      (bdsl/create-block-spec
-        "wind-gen-base"
-        {:registry-name "wind_gen_base"
-         :physical {:material :metal
-                    :hardness 3.0
-                    :resistance 6.0
-                    :requires-tool true
-                    :harvest-tool :pickaxe
-                    :harvest-level 1
-                    :sounds :metal}
-         :rendering {:model-parent "minecraft:block/cube_all"
-                     :textures {:all (modid/asset-path "block" "wind_gen_base")}
-                     :flat-item-icon? true}
-         :events {:on-right-click open-wind-base-gui!}}))
+
+    (bdsl/defmultiblock 'wind-gen-main
+      :multi-block {:positions [[0 0 0] [0 0 -1] [0 0 1]]
+                    :rotation-center [0.5 0.0 0.4]
+                    :tesr-use-raw-rotation-center? true}
+      :common {:physical {:material :metal
+                          :hardness 3.0
+                          :resistance 6.0
+                          :requires-tool true
+                          :harvest-tool :pickaxe
+                          :harvest-level 1
+                          :sounds :metal}}
+      :controller {:registry-name "wind_gen_main"
+                   :rendering {:flat-item-icon? true
+                               :textures {:all (modid/asset-path "block" "wind_gen_main")}}
+                   :events {:on-right-click open-wind-main-gui!}}
+      :part {:registry-name "wind_gen_main_part"
+             :rendering {:model-parent "minecraft:block/cube_all"
+                         :textures {:all (modid/asset-path "block" "wind_gen_main")}}
+             :events {:on-right-click open-wind-main-gui!}})
+
+    (bdsl/defmultiblock 'wind-gen-base
+      :multi-block {:positions [[0 0 0] [0 1 0]]
+                    :rotation-center [0.5 0.0 0.5]
+                    :tesr-use-raw-rotation-center? true}
+      :common {:physical {:material :metal
+                          :hardness 3.0
+                          :resistance 6.0
+                          :requires-tool true
+                          :harvest-tool :pickaxe
+                          :harvest-level 1
+                          :sounds :metal}}
+      :controller {:registry-name "wind_gen_base"
+                   :rendering {:flat-item-icon? true
+                               :textures {:all (modid/asset-path "block" "wind_gen_base")}}
+                   :events {:on-right-click open-wind-base-gui!}}
+      :part {:registry-name "wind_gen_base_part"
+             :rendering {:model-parent "minecraft:block/cube_all"
+                         :textures {:all (modid/asset-path "block" "wind_gen_base")}}
+             :events {:on-right-click open-wind-base-gui!}})
+
     (bdsl/register-block!
       (bdsl/create-block-spec
         "wind-gen-pillar"
@@ -405,6 +327,7 @@
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "wind_gen_pillar")}
                      :flat-item-icon? true}}))
-    (hooks/register-network-handler! register-network-handlers!)
-    (log/info "Initialized Wind Generator blocks (3-part structure)")))
 
+    (hooks/register-network-handler! register-network-handlers!)
+    (hooks/register-client-renderer! 'cn.li.ac.block.wind-gen.render/init!)
+    (log/info "Initialized Wind Generator blocks (main/base multiblock + pillar)")))

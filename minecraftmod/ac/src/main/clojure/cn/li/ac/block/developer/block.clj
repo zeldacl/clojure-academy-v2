@@ -150,30 +150,35 @@
 ;; Event Handlers
 ;; ============================================================================
 
-(defn- open-developer-gui!
-  "Server: claim session (`TileDeveloper#use`) when idle or same player; then open TechUI.
-  Client: open screen metadata only (Forge opens menu from server)."
-  [{:keys [player world pos sneaking] :as _ctx}]
-  (when (and player world pos (not sneaking))
-    (try
-      (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
-        (if (world/world-is-client-side* world)
-          (open-gui-by-type player :developer world pos)
-          (when-let [be (world/world-get-tile-entity* world pos)]
-            (let [state (or (platform-be/get-custom-state be) dev-default-state)
-                  pid (str (entity/player-get-uuid player))
-                  cur (str (:user-uuid state ""))]
-              (when (or (str/blank? cur) (= cur pid))
-                (let [state (assoc state
-                              :user-uuid pid
-                              :user-name (entity/player-get-name player))]
-                  (platform-be/set-custom-state! be state)
-                  (platform-be/set-changed! be)
-                  (open-gui-by-type player :developer world pos))))))
-        (do (log/error "Developer GUI open fn not found") nil))
-      (catch Exception e
-        (log/error "Failed to open Developer GUI:" (ex-message e))
-        nil))))
+(defn- open-developer-gui-for
+  "Return right-click handler that always opens the controller GUI, even when a
+  developer part block is clicked."
+  [controller-block-id]
+  (fn [{:keys [player world pos sneaking] :as _ctx}]
+    (when (and player world pos (not sneaking))
+      (try
+        (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
+          (let [block-spec (bdsl/get-block controller-block-id)
+                controller-pos (or (when block-spec
+                                     (bdsl/resolve-multi-block-master-pos world pos block-spec))
+                                   pos)]
+            (if (world/world-is-client-side* world)
+              (open-gui-by-type player :developer world controller-pos)
+              (when-let [be (world/world-get-tile-entity* world controller-pos)]
+                (let [state (or (platform-be/get-custom-state be) dev-default-state)
+                      pid (str (entity/player-get-uuid player))
+                      cur (str (:user-uuid state ""))]
+                  (when (or (str/blank? cur) (= cur pid))
+                    (let [state (assoc state
+                                  :user-uuid pid
+                                  :user-name (entity/player-get-name player))]
+                      (platform-be/set-custom-state! be state)
+                      (platform-be/set-changed! be)
+                      (open-gui-by-type player :developer world controller-pos)))))))
+          (do (log/error "Developer GUI open fn not found") nil))
+        (catch Exception e
+          (log/error "Failed to open Developer GUI:" (ex-message e))
+          nil)))))
 
 ;; ============================================================================
 ;; Network Handlers
@@ -389,7 +394,7 @@
          :rendering {:light-level 1.0
                      :flat-item-icon? true
                      :textures {:all (modid/asset-path "block" "dev_normal")}}
-         :events {:on-right-click open-developer-gui!}}))
+         :events {:on-right-click (open-developer-gui-for "developer-normal")}}))
     (bdsl/register-block!
       (bdsl/create-block-spec
         "developer-normal-part"
@@ -407,7 +412,8 @@
          :rendering {:light-level 1.0
                      :has-item-form? false
                      :model-parent "minecraft:block/cube_all"
-                     :textures {:all (modid/asset-path "block" "dev_normal")}}}))
+                     :textures {:all (modid/asset-path "block" "dev_normal")}}
+         :events {:on-right-click (open-developer-gui-for "developer-normal")}}))
     (bdsl/register-block!
       (bdsl/create-block-spec
         "developer-advanced"
@@ -430,7 +436,7 @@
          :rendering {:light-level 2.0
                      :flat-item-icon? true
                      :textures {:all (modid/asset-path "block" "dev_advanced")}}
-         :events {:on-right-click open-developer-gui!}}))
+         :events {:on-right-click (open-developer-gui-for "developer-advanced")}}))
     (bdsl/register-block!
       (bdsl/create-block-spec
         "developer-advanced-part"
@@ -448,7 +454,8 @@
          :rendering {:light-level 2.0
                      :has-item-form? false
                      :model-parent "minecraft:block/cube_all"
-                     :textures {:all (modid/asset-path "block" "dev_advanced")}}}))
+                     :textures {:all (modid/asset-path "block" "dev_advanced")}}
+         :events {:on-right-click (open-developer-gui-for "developer-advanced")}}))
     (hooks/register-network-handler! register-network-handlers!)
     (hooks/register-client-renderer! 'cn.li.ac.block.developer.render/init!)
     (log/info "Initialized Developer blocks (Normal and Advanced)")))

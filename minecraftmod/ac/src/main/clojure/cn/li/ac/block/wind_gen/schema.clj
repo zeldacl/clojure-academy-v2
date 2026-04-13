@@ -1,43 +1,42 @@
 (ns cn.li.ac.block.wind-gen.schema
-  "Wind Generator state schemas for main, base, and pillar blocks")
+  "Wind Generator state schemas aligned with AcademyCraft windgen behavior."
+  (:require [cn.li.mcmod.block.inventory-helpers :as inv-helpers]))
 
 ;; ============================================================================
 ;; Wind Generator Main Schema
 ;; ============================================================================
 
 (def wind-gen-main-schema
-  "Schema for wind generator main block (top part with blades)"
-  [{:key :energy
-    :nbt-key "Energy"
-    :type :double
-    :default 0.0
+  "Main block stores fan inventory + structure/obstacle state."
+  [{:key :inventory
+    :nbt-key "Inventory"
+    :type :inventory
+    :default [nil]
     :persist? true
-    :gui-sync? true
-    :gui-coerce double}
+    :gui-sync? false
+    :load-fn inv-helpers/load-inventory
+    :save-fn inv-helpers/save-inventory}
 
-   {:key :max-energy
-    :nbt-key "MaxEnergy"
-    :type :double
-    :default 50000.0
+   {:key :complete
+    :nbt-key "Complete"
+    :type :boolean
+    :default false
     :persist? true
-    :gui-sync? true
-    :gui-coerce double}
+    :gui-sync? true}
 
-   {:key :gen-speed
-    :nbt-key "GenSpeed"
-    :type :double
-    :default 0.0
+   {:key :no-obstacle
+    :nbt-key "NoObstacle"
+    :type :boolean
+    :default false
     :persist? true
-    :gui-sync? true
-    :gui-coerce double}
+    :gui-sync? true}
 
-   {:key :wind-multiplier
-    :nbt-key "WindMultiplier"
-    :type :double
-    :default 1.0
+   {:key :fan-installed
+    :nbt-key "FanInstalled"
+    :type :boolean
+    :default false
     :persist? true
-    :gui-sync? true
-    :gui-coerce double}
+    :gui-sync? true}
 
    {:key :status
     :nbt-key "Status"
@@ -67,7 +66,7 @@
 ;; ============================================================================
 
 (def wind-gen-base-schema
-  "Schema for wind generator base block (bottom part with energy storage)"
+  "Base block stores energy, battery slot, and tower completeness state."
   [{:key :energy
     :nbt-key "Energy"
     :type :double
@@ -79,10 +78,34 @@
    {:key :max-energy
     :nbt-key "MaxEnergy"
     :type :double
-    :default 100000.0
+    :default 20000.0
     :persist? true
     :gui-sync? true
     :gui-coerce double}
+
+     {:key :gen-speed
+    :nbt-key "GenSpeed"
+    :type :double
+    :default 0.0
+    :persist? true
+    :gui-sync? true
+    :gui-coerce double}
+
+     {:key :inventory
+    :nbt-key "Inventory"
+    :type :inventory
+    :default [nil]
+    :persist? true
+    :gui-sync? false
+    :load-fn inv-helpers/load-inventory
+    :save-fn inv-helpers/save-inventory}
+
+     {:key :completeness
+    :nbt-key "Completeness"
+    :type :string
+    :default "BASE_ONLY"
+    :persist? true
+    :gui-sync? true}
 
    {:key :status
     :nbt-key "Status"
@@ -125,7 +148,7 @@
 ;; ============================================================================
 
 (def wind-gen-pillar-schema
-  "Schema for wind generator pillar block (support structure)"
+  "Pillar block only tracks lightweight structure-check state."
   [{:key :structure-valid
     :type :boolean
     :default false
