@@ -14,10 +14,13 @@
             [cn.li.mcmod.client.render.obj-tesr-common :as obj-tesr]
             [cn.li.mcmod.util.log :as log]))
 
-(defn- obj-bottom-center-offset
-  "Return `[cx miny cz]` for MilkShape-exported meshes: AABB bottom-center to
-  origin. Pair with multiblock pivot at the **controller** cell `[0.5 0 0.5]`,
-  not the full footprint center (avoids a 1-block Z mismatch for this OBJ)."
+(defn- obj-controller-anchor-offset
+  "Return `[ax miny az]` anchoring the mesh to the controller cell center.
+
+  Developer is a `1x3` multiblock laid out along `+Z`, with the controller in
+  the first cell. Using full AABB center on Z shifts the whole model toward the
+  footprint center; instead we anchor to the first-cell center derived from the
+  mesh extent."
   [model]
   (when-let [verts (seq (:vertices model))]
     (let [pos (map :pos verts)
@@ -28,8 +31,12 @@
           maxx (reduce max xs)
           miny (reduce min ys)
           minz (reduce min zs)
-          maxz (reduce max zs)]
-      [(* 0.5 (+ minx maxx)) miny (* 0.5 (+ minz maxz))])))
+          maxz (reduce max zs)
+          x-cells 1.0
+          z-cells 3.0
+          ax (+ minx (/ (- maxx minx) (* 2.0 x-cells)))
+          az (+ minz (/ (- maxz minz) (* 2.0 z-cells)))]
+      [ax miny az])))
 
 (defonce ^:private normal-model (delay (res/load-obj-model "developer_normal")))
 ;; OBJ uses dedicated UV-unwrapped texture, not the tiny block icon tile.
@@ -44,9 +51,9 @@
   (try
     (let [model @model-delay
           tex @tex-delay
-          [cx miny cz] (or (obj-bottom-center-offset model) [0.0 0.0 0.0])
-          ;; MilkShape → AABB bottom-center at local origin (then scale).
-          _ (pose/translate pose-stack (- cx) (- miny) (- cz))
+          [ax miny az] (or (obj-controller-anchor-offset model) [0.0 0.0 0.0])
+          ;; Re-anchor the mesh so controller cell center maps to local origin.
+          _ (pose/translate pose-stack (- ax) (- miny) (- az))
           s (float 0.5)]
       (pose/scale pose-stack s s s)
       ;; Block-space lift after scale (matches matrix: small Y in block units).
