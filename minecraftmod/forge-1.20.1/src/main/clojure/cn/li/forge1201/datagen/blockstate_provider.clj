@@ -230,6 +230,7 @@
   [property-key value]
   (case property-key
     :energy (Integer/valueOf (int (if (string? value) (Integer/parseInt value) value)))
+    :on (Boolean/valueOf (str value))
     :connected (Boolean/valueOf (str value))
     value))
 

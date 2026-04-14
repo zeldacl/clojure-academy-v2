@@ -44,7 +44,9 @@
 ;; 简单block = 所有未在复杂blockstate定义中出现的block
 (def SIMPLE_BLOCKS
   (let [;; Collect all block-keys that have complex blockstate definitions
-        complex-block-keys (set (keys (node-blockstate/get-all-node-definitions)))]
+    complex-block-keys (set (concat
+              (keys (node-blockstate/get-all-node-definitions))
+              [:ability-interferer]))]
     (into {}
           (for [block-id (registry-metadata/get-all-block-ids)
                 :let [block-key (keyword block-id)
@@ -58,6 +60,16 @@
               {}
               [{:condition nil
                 :models [(str (mod-id) ":block/" registry-name)]}])]))))
+
+(def COMPLEX_BLOCKS
+  {:ability-interferer
+   (BlockStateDefinition.
+     "ability_interferer"
+     {:on {:name "on" :type :boolean :default false}}
+     [{:condition {:on true}
+       :models [(str (mod-id) ":block/ability_interferer")]}
+      {:condition {:on false}
+         :models [(str (mod-id) ":block/ability_interf_off")]}])})
 
 ;; ============================================================================
 ;; Node Blocks - Delegated to wireless-node/blockstate.clj
@@ -109,7 +121,8 @@
    返回：
      BlockStateDefinition 或 nil"
   [block-key]
-  (or (get SIMPLE_BLOCKS block-key)
+    (or (get COMPLEX_BLOCKS block-key)
+      (get SIMPLE_BLOCKS block-key)
       (node-blockstate/get-node-blockstate-definition block-key)))
 
 (defn get-all-definitions
@@ -118,7 +131,7 @@
    返回：
      map of block-key -> BlockStateDefinition"
   []
-  (merge SIMPLE_BLOCKS (node-blockstate/get-all-node-definitions)))
+  (merge SIMPLE_BLOCKS COMPLEX_BLOCKS (node-blockstate/get-all-node-definitions)))
 
 (defn get-definitions-for-platform
   "获取特定平台的block定义
@@ -128,7 +141,7 @@
    
    返回：
      所有该平台支持的block定义"
-  [platform]
+  [_platform]
   ;; 对于现在，所有平台支持所有block
   ;; 未来可以根据平台做过滤
   (get-all-definitions))

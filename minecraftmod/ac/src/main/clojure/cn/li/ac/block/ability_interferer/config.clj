@@ -2,47 +2,23 @@
   "Ability Interferer configuration")
 
 ;; Range settings
-(def min-range
-  "Minimum interference range (blocks)"
-  10.0)
+(defonce min-range 10.0) ; Minimum interference range (blocks)
 
-(def max-range
-  "Maximum interference range (blocks)"
-  100.0)
+(defonce max-range 100.0) ; Maximum interference range (blocks)
 
-(def default-range
-  "Default interference range (blocks)"
-  20.0)
+(defonce default-range 10.0) ; Default interference range (blocks)
 
-;; Energy consumption
-(def base-energy-per-tick
-  "Base energy consumption per tick"
-  10.0)
+;; Energy / transfer (mirrors classic interferer behavior)
+(defonce battery-pull-per-tick 50.0) ; Maximum IF pulled from battery each tick
 
-(def energy-per-player-per-tick
-  "Additional energy per affected player per tick"
-  5.0)
-
-(def energy-per-range-unit
-  "Energy cost multiplier per range unit"
-  0.1)
-
-(def max-energy
-  "Maximum energy storage"
-  50000.0)
+(defonce max-energy 10000.0) ; Maximum energy storage
 
 ;; Operation
-(def check-interval
-  "Ticks between player detection checks"
-  20)
+(defonce check-interval 10) ; Ticks between player detection checks
 
-(def sync-interval
-  "Ticks between GUI sync broadcasts"
-  20)
+(defonce sync-interval 20) ; Ticks between GUI sync broadcasts
 
-(defn calculate-energy-cost
-  "Calculate energy cost based on range and player count"
-  [range player-count]
-  (+ base-energy-per-tick
-     (* energy-per-range-unit range)
-     (* energy-per-player-per-tick player-count)))
+(defonce calculate-energy-cost
+  (fn [range]
+    (let [r (double range)]
+      (* r r))))

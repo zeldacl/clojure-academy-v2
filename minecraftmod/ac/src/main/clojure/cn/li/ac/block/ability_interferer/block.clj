@@ -16,6 +16,8 @@
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.platform.ability :as platform-ability]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.ac.block.ability-interferer.config :as interferer-config]
@@ -25,7 +27,9 @@
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.config.modid :as modid]))
+            [cn.li.ac.config.modid :as modid]
+            [clojure.string :as str]
+            [clojure.set :as set]))
 
 (defn- msg [action] (msg-registry/msg :ability-interferer action))
 
@@ -45,10 +49,14 @@
 (def interferer-scripted-save-fn
   (state-schema/schema->save-fn interferer-state-schema))
 
-(def network-handlers
-  (state-schema/build-network-handlers
-    [{:key :range :network-msg :change-range}
-     {:key :enabled :network-msg :toggle-enabled}]))
+(def interferer-blockstate-fields
+  (filterv :block-state interferer-schema/ability-interferer-schema))
+
+(def interferer-block-state-properties
+  (state-schema/extract-block-state-properties interferer-blockstate-fields))
+
+(def interferer-blockstate-updater
+  (state-schema/build-block-state-updater interferer-blockstate-fields))
 
 ;; ============================================================================
 ;; Inventory
@@ -61,26 +69,91 @@
 ;; Player Detection
 ;; ============================================================================
 
+(defn- clamp-range [v]
+  (let [r (double (or v interferer-config/default-range))]
+    (-> r
+        (max interferer-config/min-range)
+        (min interferer-config/max-range))))
+
+(defn- source-id
+  [level pos]
+  (let [dim-id (or (try
+                     (when-let [rk (.dimension level)]
+                       (str (.location rk)))
+                     (catch Exception _ nil))
+                   "unknown")]
+    (str "interferer@" dim-id "/" (pos/pos-x pos) "," (pos/pos-y pos) "," (pos/pos-z pos))))
+
+(defn- player-name [player]
+  (let [n (try (entity/player-get-name player) (catch Exception _ nil))]
+    (if (and n (not (str/blank? (str n)))) (str n) "")))
+
+(defn- player-uuid-str [player]
+  (some-> (try (entity/player-get-uuid player) (catch Exception _ nil)) str))
+
+(defn- player-creative?
+  [player]
+  (or (try (boolean (.isCreative player)) (catch Exception _ false))
+      (try (boolean (.. player getAbilities instabuild)) (catch Exception _ false))))
+
+(defn- player-spectator?
+  [player]
+  (try (boolean (.isSpectator player)) (catch Exception _ false)))
+
+(defn- raw-level-players
+  [level]
+  (or (try (seq (.players level)) (catch Exception _ nil))
+      (try (seq (.getPlayers level)) (catch Exception _ nil))
+      []))
+
 (defn- find-players-in-range
   "Find all players within interference range"
   [level pos range]
-  ;; TODO: Implement player detection
-  ;; This needs to use Minecraft's player list and distance calculation
-  ;; For now, return empty list
-  [])
+  (let [cx (+ 0.5 (double (pos/pos-x pos)))
+        cy (+ 0.5 (double (pos/pos-y pos)))
+        cz (+ 0.5 (double (pos/pos-z pos)))
+        max-d2 (* (double range) (double range))]
+    (->> (raw-level-players level)
+         (filter (fn [p]
+                   (and p
+                        (not (player-creative? p))
+                        (not (player-spectator? p))
+                        (<= (double (entity/entity-distance-to-sqr p cx cy cz)) max-d2))))
+         vec)))
 
-(defn- is-whitelisted?
-  "Check if a player is in the whitelist"
-  [player-name whitelist]
-  (some #(= % player-name) whitelist))
+(defn- apply-interference-effect!
+  [player src-id]
+  (when-let [uuid (player-uuid-str player)]
+    (try
+      (let [store (platform-ability/player-ability-store)]
+        (platform-ability/res-add-interference! store uuid src-id)
+        true)
+      (catch Exception e
+        (log/warn "Failed to add interference for" uuid ":" (ex-message e))
+        false))))
 
-(defn- apply-interference-effect
-  "Apply interference effect to a player"
-  [player]
-  ;; TODO: Implement interference effect
-  ;; This needs to interact with the ability system
-  ;; For now, do nothing
-  nil)
+(defn- remove-interference-effect-by-uuid!
+  [uuid src-id]
+  (when (and uuid src-id)
+    (try
+      (let [store (platform-ability/player-ability-store)]
+        (platform-ability/res-remove-interference! store uuid src-id)
+        true)
+      (catch Exception e
+        (log/warn "Failed to remove interference for" uuid ":" (ex-message e))
+        false))))
+
+(defn- clear-interference-by-uuids!
+  [uuids src-id]
+  (doseq [uuid uuids]
+    (remove-interference-effect-by-uuid! uuid src-id)))
+
+(defn- update-be-state!
+  [be level pos state]
+  (platform-be/set-custom-state! be state)
+  (platform-be/set-changed! be)
+  (when (seq interferer-blockstate-fields)
+    (interferer-blockstate-updater state level pos)))
 
 ;; ============================================================================
 ;; Tick Logic
@@ -92,47 +165,64 @@
   (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) interferer-default-state)
           ticker (inc (get state :update-ticker 0))
-          state (assoc state :update-ticker ticker)
+          state (assoc state :update-ticker ticker
+                             :range (clamp-range (:range state)))
+          src-id (source-id level pos)
+          prev-uuids (set (:affected-player-uuids state []))
 
           ;; Charge from battery slot
           battery-item (get-in state [:inventory battery-slot])
           state (if (and battery-item (energy/is-energy-item-supported? battery-item))
                   (let [cur-energy (double (:energy state 0.0))
                         max-energy (double (:max-energy state interferer-config/max-energy))
-                        needed (- max-energy cur-energy)
-                        pulled (double (energy/pull-energy-from-item battery-item needed false))]
+                        needed (max 0.0 (- max-energy cur-energy))
+                        wanted (min needed interferer-config/battery-pull-per-tick)
+                        pulled (double (energy/pull-energy-from-item battery-item wanted false))]
                     (if (pos? pulled)
-                      (assoc state :energy (+ cur-energy pulled))
+                      (assoc state :energy (+ cur-energy (min pulled wanted)))
                       state))
                   state)
 
-          ;; Check for players and apply interference
+          state (if (and (not (:enabled state false)) (seq prev-uuids))
+                  (do
+                    (clear-interference-by-uuids! prev-uuids src-id)
+                    (assoc state :affected-player-count 0
+                                 :affected-player-uuids []))
+                  state)
+
           state (if (and (:enabled state false)
                          (zero? (mod ticker interferer-config/check-interval)))
-                  (let [range (:range state interferer-config/default-range)
+                  (let [range (clamp-range (:range state interferer-config/default-range))
                         players (find-players-in-range level pos range)
-                        whitelist (:whitelist state [])
-                        affected-players (remove #(is-whitelisted? (str %) whitelist) players)
-                        player-count (count affected-players)
-                        energy-cost (interferer-config/calculate-energy-cost range player-count)
-                        current-energy (:energy state 0.0)]
+                        whitelist (set (map str (:whitelist state [])))
+                        affected-players (remove #(contains? whitelist (player-name %)) players)
+                        affected-uuids (set (keep player-uuid-str affected-players))
+                        player-count (count affected-uuids)
+                        energy-cost (interferer-config/calculate-energy-cost range)
+                        current-energy (double (:energy state 0.0))]
                     (if (>= current-energy energy-cost)
                       (do
-                        ;; Apply interference to affected players
+                        ;; Keep per-player interference set aligned with current affected players.
+                        (doseq [uuid (set/difference prev-uuids affected-uuids)]
+                          (remove-interference-effect-by-uuid! uuid src-id))
                         (doseq [player affected-players]
-                          (apply-interference-effect player))
+                          (apply-interference-effect! player src-id))
                         (assoc state
+                               :range range
                                :energy (- current-energy energy-cost)
-                               :affected-player-count player-count))
-                      ;; Not enough energy, disable
-                      (assoc state
-                             :enabled false
-                             :affected-player-count 0)))
+                               :affected-player-count player-count
+                               :affected-player-uuids (vec affected-uuids)))
+                      (do
+                        (clear-interference-by-uuids! prev-uuids src-id)
+                        ;; Classic behavior: auto-disable when IF depletes.
+                        (assoc state
+                               :enabled false
+                               :affected-player-count 0
+                               :affected-player-uuids []))))
                   state)]
 
       (when (not= state (platform-be/get-custom-state be))
-        (platform-be/set-custom-state! be state)
-        (platform-be/set-changed! be)))))
+        (update-be-state! be level pos state)))))
 
 ;; ============================================================================
 ;; Container Functions
@@ -187,6 +277,38 @@
         (log/error "Failed to open Ability Interferer GUI:" (ex-message e))
         nil))))
 
+(defn- on-interferer-placed!
+  [{:keys [player world pos] :as _ctx}]
+  (when (and player world pos)
+    (let [tile (world/world-get-tile-entity* world pos)]
+      (when tile
+        (let [state (or (platform-be/get-custom-state tile) interferer-default-state)
+              existing-placer (str (get state :placer-name ""))
+              placer-name (player-name player)
+              should-init? (str/blank? existing-placer)
+              whitelist (vec (or (:whitelist state) []))
+              whitelist' (if (or (str/blank? placer-name)
+                                 (some #(= % placer-name) whitelist))
+                           whitelist
+                           (conj whitelist placer-name))
+              state' (if should-init?
+                       (assoc state :placer-name placer-name
+                                    :whitelist whitelist')
+                       state)]
+          (when (not= state state')
+            (update-be-state! tile world pos state')))))))
+
+(defn- on-interferer-break!
+  [{:keys [world pos] :as _ctx}]
+  (when (and world pos)
+    (let [tile (world/world-get-tile-entity* world pos)]
+      (when tile
+        (let [state (or (platform-be/get-custom-state tile) interferer-default-state)
+              uuids (set (:affected-player-uuids state []))
+              src-id (source-id world pos)]
+          (when (seq uuids)
+            (clear-interference-by-uuids! uuids src-id)))))))
+
 ;; ============================================================================
 ;; Network Handlers
 ;; ============================================================================
@@ -200,13 +322,62 @@
          :max-energy (:max-energy state interferer-config/max-energy)
          :range (:range state interferer-config/default-range)
          :enabled (:enabled state false)
+         :placer-name (:placer-name state "")
          :whitelist (:whitelist state [])
          :affected-player-count (:affected-player-count state 0)})
-      {:energy 0.0 :max-energy 0.0 :range 20.0 :enabled false
-       :whitelist [] :affected-player-count 0})))
+      {:energy 0.0 :max-energy 0.0 :range interferer-config/default-range :enabled false
+       :placer-name "" :whitelist [] :affected-player-count 0})))
 
-(def handle-change-range (get network-handlers :change-range))
-(def handle-toggle-enabled (get network-handlers :toggle-enabled))
+(defn- handle-change-range [payload player]
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)
+        requested (:range payload)]
+    (if (and tile (number? requested))
+      (let [state (or (platform-be/get-custom-state tile) interferer-default-state)
+            state' (assoc state :range (clamp-range requested))]
+        (platform-be/set-custom-state! tile state')
+        (platform-be/set-changed! tile)
+        {:success true :range (:range state')})
+      {:success false})))
+
+(defn- handle-toggle-enabled [payload player]
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)
+        new-enabled (boolean (:enabled payload))]
+    (if tile
+      (let [state (or (platform-be/get-custom-state tile) interferer-default-state)
+            src-id (source-id world (pos/position-get-block-pos tile))
+            uuids (set (:affected-player-uuids state []))
+            state' (if new-enabled
+                     (assoc state :enabled true)
+                     (do
+                       (clear-interference-by-uuids! uuids src-id)
+                       (assoc state
+                              :enabled false
+                              :affected-player-count 0
+                              :affected-player-uuids [])))]
+        (platform-be/set-custom-state! tile state')
+        (platform-be/set-changed! tile)
+        {:success true :enabled (:enabled state')})
+      {:success false})))
+
+(defn- handle-set-whitelist [payload player]
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)
+        names (:whitelist payload)]
+    (if (and tile (sequential? names))
+      (let [state (or (platform-be/get-custom-state tile) interferer-default-state)
+            cleaned (->> names
+                         (map #(str/trim (str %)))
+                         (remove str/blank?)
+                         distinct
+                         sort
+                         vec)
+            state' (assoc state :whitelist cleaned)]
+        (platform-be/set-custom-state! tile state')
+        (platform-be/set-changed! tile)
+        {:success true :whitelist cleaned})
+      {:success false})))
 
 (defn- handle-add-to-whitelist [payload player]
   (let [world (net-helpers/get-world player)
@@ -238,6 +409,7 @@
   (net-server/register-handler (msg :get-status) handle-get-status)
   (net-server/register-handler (msg :change-range) handle-change-range)
   (net-server/register-handler (msg :toggle-enabled) handle-toggle-enabled)
+  (net-server/register-handler (msg :set-whitelist) handle-set-whitelist)
   (net-server/register-handler (msg :add-to-whitelist) handle-add-to-whitelist)
   (net-server/register-handler (msg :remove-from-whitelist) handle-remove-from-whitelist)
   (log/info "Ability Interferer network handlers registered"))
@@ -252,7 +424,7 @@
   []
   (when (compare-and-set! ability-interferer-installed? false true)
     (msg-registry/register-block-messages! :ability-interferer
-      [:get-status :change-range :toggle-enabled :add-to-whitelist :remove-from-whitelist])
+      [:get-status :change-range :toggle-enabled :set-whitelist :add-to-whitelist :remove-from-whitelist])
     (tdsl/register-tile!
       (tdsl/create-tile-spec
         "ability-interferer"
@@ -275,10 +447,13 @@
                     :harvest-level 2
                     :sounds :metal}
          :rendering {:model-parent "minecraft:block/cube_all"
-                     :textures {:all (modid/asset-path "block" "ability_interferer")}
+               :textures {:all (modid/asset-path "block" "ability_interf_off")}
                      :flat-item-icon? true
                      :light-level 3}
-         :events {:on-right-click open-interferer-gui!}}))
+            :block-state {:block-state-properties interferer-block-state-properties}
+            :events {:on-right-click open-interferer-gui!
+               :on-place on-interferer-placed!
+               :on-break on-interferer-break!}}))
     (hooks/register-network-handler! register-network-handlers!)
     (log/info "Initialized Ability Interferer block")))
 

@@ -12,7 +12,8 @@
 (defn- init-ability-block-definitions! []
   (doseq [init-sym '[cn.li.ac.block.developer.block/init-developer!
                     cn.li.ac.block.developer.gui/init-developer-gui!
-                    cn.li.ac.block.ability-interferer.block/init-ability-interferer!]]
+                    cn.li.ac.block.ability-interferer.block/init-ability-interferer!
+                    cn.li.ac.block.ability-interferer.gui/init-ability-interferer-gui!]]
     (when-let [init-fn (requiring-resolve init-sym)]
       (init-fn))))
 

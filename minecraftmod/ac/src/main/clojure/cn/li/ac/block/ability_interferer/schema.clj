@@ -1,8 +1,7 @@
 (ns cn.li.ac.block.ability-interferer.schema
   "Ability Interferer state schema")
 
-(def ability-interferer-schema
-  "Schema for ability interferer block"
+(defonce ability-interferer-schema
   [{:key :energy
     :nbt-key "Energy"
     :type :double
@@ -14,7 +13,7 @@
    {:key :max-energy
     :nbt-key "MaxEnergy"
     :type :double
-    :default 50000.0
+    :default 10000.0
     :persist? true
     :gui-sync? true
     :gui-coerce double}
@@ -22,7 +21,7 @@
    {:key :range
     :nbt-key "Range"
     :type :double
-    :default 20.0
+    :default 10.0
     :persist? true
     :gui-sync? true
     :gui-coerce double
@@ -35,8 +34,18 @@
     :default false
     :persist? true
     :gui-sync? true
+    :block-state {:prop "on"
+            :type :boolean
+            :default false}
     :network-editable? true
     :network-msg :toggle-enabled}
+
+     {:key :placer-name
+    :nbt-key "Placer"
+    :type :string
+    :default ""
+    :persist? true
+    :gui-sync? true}
 
    {:key :whitelist
     :nbt-key "Whitelist"
@@ -56,9 +65,14 @@
    {:key :inventory
     :nbt-key "Inventory"
     :type :item-list
-    :default []
+    :default [nil]
     :persist? true
     :size 1}
+
+     {:key :affected-player-uuids
+    :type :string-list
+    :default []
+    :persist? false}
 
    {:key :update-ticker
     :type :int
