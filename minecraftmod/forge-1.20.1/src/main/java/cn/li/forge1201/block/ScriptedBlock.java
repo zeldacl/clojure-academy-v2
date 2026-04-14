@@ -132,42 +132,42 @@ public class ScriptedBlock extends BaseEntityBlock {
 
     @Override
     public RenderShape getRenderShape(BlockState state) {
-        return hasDynamicProps ? RenderShape.MODEL : RenderShape.INVISIBLE;
+        return RenderShape.MODEL;
     }
 
     @Override
     public boolean propagatesSkylightDown(BlockState state, BlockGetter level, BlockPos pos) {
-        return !hasDynamicProps || super.propagatesSkylightDown(state, level, pos);
+        return super.propagatesSkylightDown(state, level, pos);
     }
 
     @Override
     public int getLightBlock(BlockState state, BlockGetter level, BlockPos pos) {
-        return hasDynamicProps ? super.getLightBlock(state, level, pos) : 0;
+        return super.getLightBlock(state, level, pos);
     }
 
     @Override
     public float getShadeBrightness(BlockState state, BlockGetter level, BlockPos pos) {
-        return hasDynamicProps ? super.getShadeBrightness(state, level, pos) : 1.0F;
+        return super.getShadeBrightness(state, level, pos);
     }
 
     @Override
     public VoxelShape getOcclusionShape(BlockState state, BlockGetter level, BlockPos pos) {
-        return hasDynamicProps ? super.getOcclusionShape(state, level, pos) : Shapes.empty();
+        return super.getOcclusionShape(state, level, pos);
     }
 
     @Override
     public VoxelShape getVisualShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return hasDynamicProps ? super.getVisualShape(state, level, pos, context) : Shapes.empty();
+        return super.getVisualShape(state, level, pos, context);
     }
 
     @Override
     public boolean useShapeForLightOcclusion(BlockState state) {
-        return hasDynamicProps && super.useShapeForLightOcclusion(state);
+        return super.useShapeForLightOcclusion(state);
     }
 
     @Override
     public boolean skipRendering(BlockState state, BlockState adjacentBlockState, Direction side) {
-        return !hasDynamicProps || super.skipRendering(state, adjacentBlockState, side);
+        return super.skipRendering(state, adjacentBlockState, side);
     }
 
     @Nullable
