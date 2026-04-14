@@ -13,6 +13,7 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.block.ability-interferer.config :as cfg]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.wireless.gui.container.common :as common]
@@ -22,6 +23,21 @@
 
 (def ^:private interferer-slot-schema-id :ability-interferer)
 (def ^:private interferer-gui-type :ability-interferer)
+
+(defn- interferer-slot-layout
+  "Match original AcademyCraft behavior:
+   machine slot + player hotbar only (no player main inventory grid)."
+  []
+  (let [layout (slot-schema/get-slot-layout interferer-slot-schema-id)
+        tile-slot-count (slot-registry/get-slot-count interferer-slot-schema-id)
+        tile-end (dec tile-slot-count)
+        hotbar-start tile-slot-count
+        hotbar-end (+ hotbar-start 8)]
+    (assoc layout
+           :player-inventory-mode :hotbar-only
+           :ranges {:tile [0 tile-end]
+                    :player-main [1 0]
+                    :player-hotbar [hotbar-start hotbar-end]})))
 
 (defn- msg [action]
   (msg-registry/msg interferer-gui-type action))
@@ -142,8 +158,8 @@
     (comp/set-texture!
       dt
       (if enabled?
-        "academy:textures/guis/button/button_switch_on.png"
-        "academy:textures/guis/button/button_switch_off.png"))))
+        (modid/asset-path "textures" "guis/button/button_switch_on.png")
+        (modid/asset-path "textures" "guis/button/button_switch_off.png")))))
 
 (defn- wire-xml-controls!
   [inv-window container]
@@ -254,7 +270,7 @@
          :gui-type interferer-gui-type
          :registry-name "ability_interferer_gui"
          :screen-factory-fn-kw :create-ability-interferer-screen
-         :slot-layout (slot-schema/get-slot-layout interferer-slot-schema-id)
+         :slot-layout (interferer-slot-layout)
          :container-predicate interferer-container?
          :container-fn create-container
          :screen-fn create-screen

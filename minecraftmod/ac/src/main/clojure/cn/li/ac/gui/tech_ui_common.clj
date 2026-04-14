@@ -299,45 +299,46 @@
         idle-color 0xFFFFFFFF
         edit-color 0xFF2180d8
         value-color (if editable? edit-color idle-color)
-        value-box (comp/text-box :text value-text :color value-color :scale 0.8 :masked? masked?)]
+        value-box-spec (comp/text-box :text value-text :color value-color :scale 0.8 :masked? masked?)]
     
     (comp/add-component! key-area label-box)
-    (comp/add-component! value-area value-box)
+    (comp/add-component! value-area value-box-spec)
     (cgui/add-widget! prop-widget key-area)
     (cgui/add-widget! prop-widget value-area)
+    (let [value-box (comp/get-textbox-component value-area)]
 
-    (when (instance? clojure.lang.IAtom content-cell)
-      (reset! content-cell value-box))
+      (when (instance? clojure.lang.IAtom content-cell)
+        (reset! content-cell value-box))
     
-    (when editable?
-      (comp/set-editable! value-box true)
-      ;; Visual brackets around editable value area.
-      (let [box (fn [ch x]
-                  ;; size 0 so it won't steal focus in hit-test, but still renders text
-                  (let [w (cgui/create-widget :pos [x 0] :size [0 0])
-                        tb (comp/text-box :text ch :color 0xFFAAAAAA :scale 0.8)]
-                    (comp/add-component! w tb)
-                    w))
-            left (box "[" -4)
-            right (box "]" (+ (cgui/get-width value-area) 2))]
-        (cgui/add-widget! value-area left)
-        (cgui/add-widget! value-area right))
-      (when on-change
-        (events/on-confirm-input value-box
-          (fn [new-val]
-            (on-change new-val)
-            (when color-change?
-              (comp/set-text-color! value-box idle-color))))
-        (when color-change?
-          (events/on-change-content value-box
+      (when editable?
+        (comp/set-editable! value-box true)
+        ;; Visual brackets around editable value area.
+        (let [box (fn [ch x]
+                    ;; size 0 so it won't steal focus in hit-test, but still renders text
+                    (let [w (cgui/create-widget :pos [x 0] :size [0 0])
+                          tb (comp/text-box :text ch :color 0xFFAAAAAA :scale 0.8)]
+                      (comp/add-component! w tb)
+                      w))
+              left (box "[" -4)
+              right (box "]" (+ (cgui/get-width value-area) 2))]
+          (cgui/add-widget! value-area left)
+          (cgui/add-widget! value-area right))
+        (when on-change
+          (events/on-confirm-input value-box
+            (fn [new-val]
+              (on-change new-val)
+              (when color-change?
+                (comp/set-text-color! value-box idle-color))))
+          (when color-change?
+            (events/on-change-content value-box
+              (fn [_]
+                (comp/set-text-color! value-box edit-color))))))
+    
+      (when-not editable?
+        (when (fn? value)
+          (events/on-frame value-area
             (fn [_]
-              (comp/set-text-color! value-box edit-color))))))
-    
-    (when-not editable?
-      (when (fn? value)
-        (events/on-frame value-area
-          (fn [_]
-            (comp/set-text! value-box (value))))))
+              (comp/set-text! value-box (value)))))))
     
     (info-area-element! info-area prop-widget)
     (double (:elem-y @(info-area-state-atom info-area)))))

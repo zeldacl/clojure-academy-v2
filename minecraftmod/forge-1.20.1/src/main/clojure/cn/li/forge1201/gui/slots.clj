@@ -150,6 +150,29 @@
              ^Slot s (slot-fn player-inventory slot-index x y)]
          (add-slot! ^CMenuBridge container s))))))
 
+(defn add-player-hotbar-slots
+  "Add only player hotbar slots (1x9).
+   When active?-fn is provided (tabbed GUI), slots are conditional on it.
+
+  Args:
+  - container:        AbstractContainerMenu to add slots to
+  - player-inventory: Inventory
+  - x-offset:         int (left edge x position)
+  - y-offset:         int (top edge y position for main inventory; hotbar is at +58)
+  - active?-fn:       optional (fn [] boolean)"
+  ([container player-inventory x-offset y-offset]
+   (add-player-hotbar-slots container player-inventory x-offset y-offset nil))
+  ([^AbstractContainerMenu container ^Inventory player-inventory x-offset y-offset active?-fn]
+   (let [slot-fn (if active?-fn
+                   (fn [inv idx x y] (create-conditional-slot inv idx x y active?-fn))
+                   (fn [inv idx x y] (create-standard-slot inv idx x y)))]
+     (doseq [col (range 9)]
+       (let [slot-index col
+             x (+ x-offset (* col 18))
+             y (+ y-offset 58)
+             ^Slot s (slot-fn player-inventory slot-index x y)]
+         (add-slot! ^CMenuBridge container s))))))
+
 (defn add-gui-slots
   "Add GUI-specific slots based on metadata-driven layout.
    When active?-fn is provided (tabbed GUI), slots are conditional on it.

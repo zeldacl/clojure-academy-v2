@@ -108,6 +108,8 @@
       ^ServerPlayer player (:player clj-container)
         player-inventory (when player
                            (.getInventory player))
+        slot-layout (when gui-id (gui/get-slot-layout gui-id))
+        player-inventory-mode (keyword (or (:player-inventory-mode slot-layout) :full))
         tile-inventory (create-tile-inventory-adapter clj-container)
         tabbed? (tabbed/tabbed-container? clj-container)
         active?-fn (when tabbed? (fn [] (tabbed/slots-active? clj-container)))]
@@ -119,7 +121,10 @@
     (when (and gui-id player-inventory)
       ;; Offsets aligned with AcademyCraft TechUIContainer: tile at (0,0) => schema coords are absolute; player inv at (6, 105) => hotbar at 163
       (slots/add-gui-slots menu tile-inventory gui-id 0 0 (when tabbed? active?-fn))
-      (slots/add-player-inventory-slots menu player-inventory 6 105 (when tabbed? active?-fn)))))
+      (case player-inventory-mode
+        :none nil
+        :hotbar-only (slots/add-player-hotbar-slots menu player-inventory 6 105 (when tabbed? active?-fn))
+        (slots/add-player-inventory-slots menu player-inventory 6 105 (when tabbed? active?-fn))))))
 
 (defn create-menu-bridge
   "Create an AbstractContainerMenu proxy wrapping a Clojure container.
