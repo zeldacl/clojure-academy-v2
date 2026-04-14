@@ -26,7 +26,9 @@ import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Merged block: generic block with ScriptedBlockEntity and optional dynamic BlockState.
@@ -35,6 +37,33 @@ import java.util.Map;
 public class ScriptedBlock extends BaseEntityBlock {
 
     private static final Map<String, List<Property<?>>> BLOCK_PROPERTIES = new HashMap<>();
+    /**
+     * Blocks that should be rendered by BER only (no static block model pass).
+     * Matches original AcademyCraft PhaseGen behavior (invisible block model + TESR/BER).
+     */
+    private static final Set<String> BER_ONLY_BLOCK_IDS = Set.of(
+        // Single-block BER-only blocks
+        "phase-gen",
+        "cat-engine",
+        "solar-gen",
+
+        // Wind generator multiblock (controller + parts + pillar)
+        "wind-gen-base",
+        "wind-gen-base-part",
+        "wind-gen-main",
+        "wind-gen-main-part",
+        "wind-gen-pillar",
+
+        // Wireless matrix multiblock
+        "wireless-matrix",
+        "wireless-matrix-part",
+
+        // Developer station multiblock
+        "developer-normal",
+        "developer-normal-part",
+        "developer-advanced",
+        "developer-advanced-part"
+    );
     private static final ThreadLocal<InitContext> INIT_CONTEXT = new ThreadLocal<>();
 
     private static final class InitContext {
@@ -132,6 +161,12 @@ public class ScriptedBlock extends BaseEntityBlock {
 
     @Override
     public RenderShape getRenderShape(BlockState state) {
+        String normalizedId = blockId == null
+            ? ""
+            : blockId.toLowerCase(Locale.ROOT).replace('_', '-');
+        if (BER_ONLY_BLOCK_IDS.contains(normalizedId)) {
+            return RenderShape.ENTITYBLOCK_ANIMATED;
+        }
         return RenderShape.MODEL;
     }
 

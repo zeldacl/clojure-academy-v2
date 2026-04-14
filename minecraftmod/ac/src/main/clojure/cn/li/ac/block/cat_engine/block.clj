@@ -60,10 +60,18 @@
   (getProvidedEnergy [_ req]
     (let [state (or (platform-be/get-custom-state be) cat-default-state)
           energy (double (get state :energy 0.0))
-          max-out (double cat-config/generator-bandwidth)
-          actual (min (double req) energy max-out)]
-      (when (pos? actual)
-        (platform-be/set-custom-state! be (assoc state :energy (- energy actual)))
+          requested (max 0.0 (double req))
+          ;; Match TileGeneratorBase#getProvidedEnergy(req): clamp by internal energy only.
+          ;; Bandwidth limiting is applied by wireless transfer path (NodeConn).
+          actual (min requested energy)]
+      (when (or (pos? actual)
+                (not= (double (get state :this-tick-gen 0.0)) 0.0))
+        (platform-be/set-custom-state! be (assoc state
+                                            :energy (- energy actual)
+                                            ;; Parity with TileCatEngine#getGeneration(required):
+                                            ;; this-tick-gen is updated when output is requested.
+                                            :this-tick-gen (double actual)
+                                            :gen-speed (double actual)))
         (platform-be/set-changed! be))
       (double actual)))
 
@@ -154,8 +162,10 @@
                      (assoc :update-ticker ticker)
                      (assoc :energy energy*)
                      (assoc :max-energy max-energy)
-                     (assoc :this-tick-gen generated)
-                     (assoc :gen-speed generated))
+                     ;; Reset per-tick output indicator; real value is set in getProvidedEnergy(req)
+                     ;; when network demand actually pulls energy from this generator.
+                     (assoc :this-tick-gen 0.0)
+                     (assoc :gen-speed 0.0))
           state2 (sync-link-state be state1)]
       (when (not= state2 state0)
         (platform-be/set-custom-state! be state2)

@@ -1,5 +1,6 @@
 (ns cn.li.ac.block.phase-gen.schema
-  "Phase Generator state schema")
+  "Phase Generator state schema"
+  (:require [cn.li.mcmod.block.inventory-helpers :as inv-helpers]))
 
 (def phase-gen-schema
   "Schema for phase generator block"
@@ -14,7 +15,7 @@
    {:key :max-energy
     :nbt-key "MaxEnergy"
     :type :double
-    :default 80000.0
+    :default 6000.0
     :persist? true
     :gui-sync? true
     :gui-coerce double}
@@ -35,6 +36,23 @@
     :gui-sync? true
     :gui-coerce int}
 
+   {:key :tank-size
+    :nbt-key "TankSize"
+    :type :int
+    :default 8000
+    :persist? true
+    :gui-sync? true
+    :gui-coerce int}
+
+   {:key :inventory
+    :nbt-key "Inventory"
+    :type :inventory
+    :default [nil nil nil]
+    :persist? true
+    :gui-sync? false
+    :load-fn inv-helpers/load-inventory
+    :save-fn inv-helpers/save-inventory}
+
    {:key :status
     :nbt-key "Status"
     :type :string
@@ -45,10 +63,4 @@
    {:key :update-ticker
     :type :int
     :default 0
-    :persist? false}
-
-   {:key :has-liquid-source
-    :type :boolean
-    :default false
-    :persist? false
-    :gui-sync? true}])
+    :persist? false}])

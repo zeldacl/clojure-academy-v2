@@ -10,10 +10,12 @@
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.ac.block.role-impls :as impls]
             [cn.li.ac.block.phase-gen.config :as phase-config]
             [cn.li.ac.block.phase-gen.schema :as phase-schema]
+            [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.registry.hooks :as hooks]
@@ -35,48 +37,185 @@
 (def phase-scripted-save-fn
   (state-schema/schema->save-fn phase-state-schema))
 
-(defn- check-for-phase-liquid
-  "Check adjacent blocks for imaginary phase liquid source"
-  [_level _pos]
-  false)
+(defn- stack-empty?
+  [stack]
+  (or (nil? stack)
+      (try (boolean (pitem/item-is-empty? stack))
+           (catch Exception _ false))))
+
+(defn- stack-count
+  [stack]
+  (if (stack-empty? stack)
+    0
+    (try (int (pitem/item-get-count stack))
+         (catch Exception _ 0))))
+
+(defn- stack-id
+  [stack]
+  (when-not (stack-empty? stack)
+    (try (some-> stack pitem/item-get-item pitem/item-get-registry-name str)
+         (catch Exception _ nil))))
+
+(defn- rebuild-stack
+  [stack new-count]
+  (when (and stack (pos? (int new-count)))
+    (when-let [item-id (stack-id stack)]
+      (pitem/create-item-stack-by-id item-id (int new-count)))))
+
+(defn- consume-stack
+  [stack amount]
+  (let [left (- (stack-count stack) (int amount))]
+    (when (pos? left)
+      (rebuild-stack stack left))))
+
+(defn- matter-unit-kind
+  [stack]
+  (when (and (not (stack-empty? stack))
+             (= (stack-id stack) phase-config/matter-unit-item-id))
+    (case (int (try (pitem/item-get-damage stack) (catch Exception _ -1)))
+      0 :none
+      1 :phase-liquid
+      nil)))
+
+(defn- phase-liquid-unit?
+  [stack]
+  (= :phase-liquid (matter-unit-kind stack)))
+
+(defn- empty-matter-unit?
+  [stack]
+  (= :none (matter-unit-kind stack)))
+
+(defn- make-empty-matter-unit
+  [count]
+  (let [stack (pitem/create-item-stack-by-id phase-config/matter-unit-item-id (int count))]
+    (when stack
+      (try
+        (pitem/item-set-damage! stack phase-config/matter-unit-none-meta)
+        (catch Exception _ nil))
+      stack)))
+
+(defn- convert-phase-unit
+  [state]
+  (let [in-slot phase-config/liquid-in-slot
+        out-slot phase-config/liquid-out-slot
+        in-unit (get-in state [:inventory in-slot])
+        out-unit (get-in state [:inventory out-slot])
+        liquid (int (get state :liquid-amount 0))
+        tank-size (int (get state :tank-size phase-config/tank-size))
+        can-consume? (and (phase-liquid-unit? in-unit)
+                          (pos? (stack-count in-unit))
+                          (<= (+ liquid phase-config/liquid-per-unit) tank-size))
+        can-output? (or (stack-empty? out-unit)
+                        (and (empty-matter-unit? out-unit)
+                             (< (stack-count out-unit)
+                                (int (or (try (pitem/item-get-max-stack-size out-unit)
+                                              (catch Exception _ 16))
+                                         16)))))]
+    (if (and can-consume? can-output?)
+      (let [new-input (consume-stack in-unit 1)
+            add-count (if (stack-empty? out-unit) 1 (inc (stack-count out-unit)))
+            new-output (or (when-not (stack-empty? out-unit)
+                             (rebuild-stack out-unit add-count))
+                           (make-empty-matter-unit add-count))]
+        (-> state
+            (assoc :liquid-amount (+ liquid phase-config/liquid-per-unit))
+            (assoc-in [:inventory in-slot] new-input)
+            (assoc-in [:inventory out-slot] new-output)))
+      state)))
+
+(defn- maybe-charge-output-item
+  [state]
+  (let [slot phase-config/output-slot
+        stack (get-in state [:inventory slot])
+        cur (double (get state :energy 0.0))]
+    (if (and stack (energy/is-energy-item-supported? stack) (pos? cur))
+      (let [item-cur (double (energy/get-item-energy stack))
+            item-max (double (energy/get-item-max-energy stack))
+            need (max 0.0 (- item-max item-cur))
+            amount (min cur need)
+            leftover (double (energy/charge-energy-to-item stack amount false))
+            accepted (max 0.0 (- amount leftover))]
+        (if (pos? accepted)
+          (assoc state :energy (- cur accepted))
+          state))
+      state)))
+
+(defn- calc-generation
+  [state]
+  (let [liquid (double (max 0 (int (get state :liquid-amount 0))))
+        current-energy (double (get state :energy 0.0))
+        max-energy (double (get state :max-energy phase-config/max-energy))
+        energy-room (max 0.0 (- max-energy current-energy))
+        max-drain-by-config (double phase-config/liquid-consume-per-tick)
+        max-drain-by-energy (if (pos? phase-config/gen-per-mb)
+                              (/ energy-room phase-config/gen-per-mb)
+                              0.0)
+        drain (int (Math/floor (max 0.0 (min liquid max-drain-by-config max-drain-by-energy))))
+        gen (* (double drain) phase-config/gen-per-mb)]
+    {:drain drain
+     :gen gen}))
 
 (defn- phase-tick-fn
-  "Tick handler for phase generator"
-  [level pos _block-state be]
+  "Tick handler for phase generator (TilePhaseGen parity)."
+  [level _pos _block-state be]
   (when (and level (not (world/world-is-client-side* level)))
-    (let [state (or (platform-be/get-custom-state be) phase-default-state)
-          ticker (inc (get state :update-ticker 0))
-          state (assoc state :update-ticker ticker)
-          state (if (zero? (mod ticker phase-config/validate-interval))
-                  (let [has-liquid? (check-for-phase-liquid level pos)]
-                    (assoc state :has-liquid-source has-liquid?))
-                  state)
-          generating? (:has-liquid-source state false)
-          liquid-amount (get state :liquid-amount 0)
-          gen-rate (if generating?
-                     (phase-config/calculate-generation-rate liquid-amount)
-                     0.0)
-          current-energy (double (get state :energy 0.0))
-          max-energy (double (get state :max-energy phase-config/max-energy))
-          new-energy (min max-energy (+ current-energy gen-rate))
-          changed? (and (> gen-rate 0) (not= new-energy current-energy))
-          new-liquid-amount (if (and generating? (> gen-rate 0))
-                              (max 0 (- liquid-amount phase-config/liquid-consumption-rate))
-                              liquid-amount)
-          status (cond
-                   (not generating?) "NO_LIQUID"
-                   (>= current-energy max-energy) "FULL"
-                   (> gen-rate 0) "GENERATING"
-                   :else "IDLE")
-          new-state (cond-> (assoc state
-                                   :status status
-                                   :gen-speed gen-rate
-                                   :liquid-amount new-liquid-amount)
-                      changed? (assoc :energy new-energy))]
-      (when (not= new-state state)
-        (platform-be/set-custom-state! be new-state)
-        (when changed?
-          (platform-be/set-changed! be))))))
+    (let [state0 (or (platform-be/get-custom-state be) phase-default-state)
+          state1 (-> state0
+                     (assoc :update-ticker (inc (int (get state0 :update-ticker 0))))
+                     (assoc :tank-size (int (get state0 :tank-size phase-config/tank-size)))
+                     (assoc :max-energy (double (get state0 :max-energy phase-config/max-energy))))
+          state2 (convert-phase-unit state1)
+          {:keys [drain gen]} (calc-generation state2)
+          cur-energy (double (get state2 :energy 0.0))
+          liquid-before (int (get state2 :liquid-amount 0))
+          state3 (-> state2
+                     (assoc :energy (+ cur-energy gen))
+                     (assoc :liquid-amount (max 0 (- liquid-before drain)))
+                     (assoc :gen-speed (double gen))
+                     (assoc :status (cond
+                                      (<= liquid-before 0) "NO_LIQUID"
+                                      (pos? gen) "GENERATING"
+                                      :else "IDLE")))
+          state4 (maybe-charge-output-item state3)]
+      (when (not= state4 state0)
+        (platform-be/set-custom-state! be state4)
+        (platform-be/set-changed! be)))))
+
+(def phase-container-fns
+  {:get-size (fn [_be] phase-config/total-slots)
+   :get-item (fn [be slot]
+               (get-in (or (platform-be/get-custom-state be) phase-default-state)
+                       [:inventory slot]))
+   :set-item! (fn [be slot item]
+                (let [state (or (platform-be/get-custom-state be) phase-default-state)]
+                  (platform-be/set-custom-state! be (assoc-in state [:inventory slot] item))))
+   :remove-item (fn [be slot amount]
+                  (let [state (or (platform-be/get-custom-state be) phase-default-state)
+                        item (get-in state [:inventory slot])]
+                    (when item
+                      (let [cnt (stack-count item)]
+                        (if (<= cnt amount)
+                          (do (platform-be/set-custom-state! be (assoc-in state [:inventory slot] nil))
+                              item)
+                          (pitem/item-split item amount))))))
+   :remove-item-no-update (fn [be slot]
+                            (let [state (or (platform-be/get-custom-state be) phase-default-state)
+                                  item (get-in state [:inventory slot])]
+                              (platform-be/set-custom-state! be (assoc-in state [:inventory slot] nil))
+                              item))
+   :clear! (fn [be]
+             (platform-be/set-custom-state! be
+               (assoc (or (platform-be/get-custom-state be) phase-default-state)
+                      :inventory (vec (repeat phase-config/total-slots nil)))))
+   :still-valid? (fn [_be _player] true)
+   :can-place-through-face? (fn [_be slot item _face]
+                              (case slot
+                                0 (phase-liquid-unit? item)
+                                2 (energy/is-energy-item-supported? item)
+                                false))
+   :can-take-through-face? (fn [_be slot _item _face]
+                             (or (= slot phase-config/liquid-out-slot)
+                                 (= slot phase-config/output-slot)))})
 
 (defn- open-phase-gen-gui!
   [{:keys [player world pos sneaking] :as _ctx}]
@@ -98,8 +237,8 @@
          :max-energy (:max-energy state phase-config/max-energy)
          :gen-speed (:gen-speed state 0.0)
          :liquid-amount (:liquid-amount state 0)
-         :status (:status state "IDLE")
-         :has-liquid-source (:has-liquid-source state false)})
+         :tank-size (:tank-size state phase-config/tank-size)
+         :status (:status state "IDLE")})
       {:energy 0.0 :max-energy 0.0 :gen-speed 0.0 :status "ERROR"})))
 
 (defn register-network-handlers! []
@@ -121,6 +260,7 @@
          :tick-fn phase-tick-fn
          :read-nbt-fn phase-scripted-load-fn
          :write-nbt-fn phase-scripted-save-fn}))
+    (tile-logic/register-container! "phase-gen" phase-container-fns)
     (platform-cap/declare-capability! :phase-generator IWirelessGenerator
       (fn [be _side] (impls/->WirelessGeneratorImpl be)))
     (tile-logic/register-tile-capability! "phase-gen" :phase-generator)
@@ -135,10 +275,11 @@
                     :harvest-tool :pickaxe
                     :harvest-level 1
                     :sounds :metal}
-         :rendering {:model-parent "minecraft:block/cube_all"
+         :rendering {:model-parent "minecraft:block/block"
                      :textures {:all (modid/asset-path "block" "phase_gen")}
                      :flat-item-icon? true}
          :events {:on-right-click open-phase-gen-gui!}}))
     (hooks/register-network-handler! register-network-handlers!)
+    (hooks/register-client-renderer! 'cn.li.ac.block.phase-gen.render/init!)
     (log/info "Initialized Phase Generator block")))
 

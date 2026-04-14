@@ -229,18 +229,22 @@
               (let [gen-vb (first gens-remaining)]
                 (if (vb/is-chunk-loaded? gen-vb world)
                   (if-let [gen (vb/vblock-get gen-vb world)]
-                    (let [;; Get energy from generator
-                          energy-available (.getEnergy ^cn.li.acapi.wireless.IWirelessGenerator gen)
-                          to-collect (min energy-available transfer-left)
-
-                          ;; Charge to node
+                    (let [gen-cap ^cn.li.acapi.wireless.IWirelessGenerator gen
+                          ;; Match AC NodeConn semantics:
+                          ;; request by node transfer-left, generator bandwidth, and node free space.
                           node-max (.getMaxEnergy ^cn.li.acapi.wireless.IWirelessNode node)
                           node-current (.getEnergy ^cn.li.acapi.wireless.IWirelessNode node)
                           node-space (- node-max node-current)
-                          actual-transfer (min to-collect node-space)]
-
-                      ;; Transfer energy
-                      (.setEnergy ^cn.li.acapi.wireless.IWirelessGenerator gen (- energy-available actual-transfer))
+                          required (min transfer-left
+                                        (double (.getGeneratorBandwidth gen-cap))
+                                        node-space)
+                          provided (double (.getProvidedEnergy gen-cap required))
+                          actual-transfer (if (> provided required)
+                                            (do
+                                              (log/warn "Energy input overflow for generator" (str gen-cap)
+                                                        "provided=" provided "required=" required)
+                                              required)
+                                            provided)]
                       (.setEnergy ^cn.li.acapi.wireless.IWirelessNode node (+ node-current actual-transfer))
 
                       (recur (rest gens-remaining)
@@ -267,13 +271,16 @@
               (let [rec-vb (first recs-remaining)]
                 (if (vb/is-chunk-loaded? rec-vb world)
                   (if-let [rec (vb/vblock-get rec-vb world)]
-                    (let [;; Pull from node
+                    (let [rec-cap ^cn.li.acapi.wireless.IWirelessReceiver rec
+                          ;; Match AC NodeConn semantics:
+                          ;; bounded by node energy, node transfer-left, receiver bandwidth and requirement.
                           node-current (.getEnergy ^cn.li.acapi.wireless.IWirelessNode node)
-                          to-send (min node-current transfer-left)
-
-                          ;; Inject to receiver
-                          leftover (.injectEnergy ^cn.li.acapi.wireless.IWirelessReceiver rec to-send)
-                          actual-transfer (- to-send leftover)]
+                          give0 (min node-current
+                                     transfer-left
+                                     (double (.getReceiverBandwidth rec-cap)))
+                          give (min give0 (double (.getRequiredEnergy rec-cap)))
+                          leftover (double (.injectEnergy rec-cap give))
+                          actual-transfer (- give leftover)]
 
                       ;; Update node energy
                       (.setEnergy ^cn.li.acapi.wireless.IWirelessNode node (- node-current actual-transfer))

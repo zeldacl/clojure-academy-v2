@@ -57,10 +57,17 @@
         rot (next-rotation! tile tick-gen)
         t (render/get-render-time)
         bob (* 0.03 (Math/sin (* t 0.006)))
+        p (pos/position-get-block-pos tile)
+        wx (+ 0.5 (double (pos/pos-x p)))
+        wz (+ 0.5 (double (pos/pos-z p)))
+        yaw-deg (+ 180.0 (Math/toDegrees (Math/atan2 wx wz)))
         vc (rb/get-cutout-no-cull-buffer buffer-source @texture)]
     (pose/push-pose pose-stack)
     (try
       (pose/translate pose-stack 0.5 (+ 0.03 bob) 0.5)
+      ;; Preserve original RenderCatEngine behavior: rotate quad by a world-pos-derived yaw
+      ;; so the rotor plane doesn't stay in a fixed axis-aligned orientation.
+      (pose/apply-y-rotation pose-stack yaw-deg)
       (pose/translate pose-stack 0.0 0.5 0.0)
       (pose/apply-x-rotation pose-stack rot)
       (pose/translate pose-stack -0.5 -0.5 0.0)
