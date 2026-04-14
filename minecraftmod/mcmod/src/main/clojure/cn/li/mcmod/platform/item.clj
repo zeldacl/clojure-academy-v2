@@ -88,6 +88,16 @@
   *item-factory*
   nil)
 
+  (defonce ^{:dynamic true
+         :doc "Platform-specific ItemStack resolver by registry id.
+
+           Expected signature: (fn [item-id count] -> IItemStack-or-nil)
+
+           item-id format: \"namespace:path\".
+           count should be positive integer."}
+    *item-stack-resolver*
+    nil)
+
 ;; ============================================================================
 ;; Factory Functions
 ;; ============================================================================
@@ -106,6 +116,15 @@
     (throw (ex-info "ItemStack factory not initialized - platform must call init-platform! first"
                     {:hint "Check that platform mod initialization calls platform-impl/init-platform!"}))))
 
+(defn create-item-stack-by-id
+  "Create ItemStack from registry id and count using platform resolver.
+
+  Returns nil if resolver is unavailable or item cannot be resolved."
+  [item-id count]
+  (let [n (int (or count 1))]
+    (when (and (string? item-id) (pos? n) *item-stack-resolver*)
+      (*item-stack-resolver* item-id n))))
+
 ;; ============================================================================
 ;; Utility Functions
 ;; ============================================================================
@@ -114,5 +133,10 @@
   "Check if the ItemStack factory has been initialized by platform code."
   []
   (some? *item-factory*))
+
+(defn resolver-initialized?
+  "Check if item-id resolver has been initialized by platform code."
+  []
+  (some? *item-stack-resolver*))
 
 ;; `item-split` is implemented per-platform via the IItemStack protocol

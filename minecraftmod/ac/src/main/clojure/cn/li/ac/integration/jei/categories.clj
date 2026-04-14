@@ -14,6 +14,12 @@
 (defn- slot-pos [x y]
   {:x x :y y})
 
+(defn- recipe-source->seq
+  [source]
+  (if (instance? clojure.lang.IDeref source)
+    @source
+    source))
+
 ;; Imag Fusor category metadata
 (def imag-fusor-category
   {:id imag-fusor-category-id
@@ -25,7 +31,7 @@
    :input-slots [(slot-pos 5 36)]
    :output-slots [(slot-pos 93 36)]
    :energy-display {:x 50 :y 10 :width 20 :height 50}
-   :recipe-loader (fn [] fusor-recipes/recipes)})
+  :recipe-loader (fn [] (recipe-source->seq fusor-recipes/recipes))})
 
 ;; Metal Former category metadata
 (def metal-former-category
@@ -38,7 +44,7 @@
    :input-slots [(slot-pos 5 23)]
    :output-slots [(slot-pos 71 23)]
    :energy-display {:x 40 :y 10 :width 14 :height 37}
-   :recipe-loader (fn [] former-recipes/recipes)})
+  :recipe-loader (fn [] (recipe-source->seq former-recipes/recipes))})
 
 ;; All categories
 (def all-categories

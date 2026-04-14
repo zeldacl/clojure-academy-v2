@@ -7,9 +7,10 @@
                     cn.li.ac.block.metal-former.block/init-metal-former!]]
     (when-let [init-fn (requiring-resolve init-sym)]
       (init-fn)))
-  (doseq [ns-sym '[cn.li.ac.block.imag-fusor.gui
-                   cn.li.ac.block.metal-former.gui]]
-    (require ns-sym)))
+  (doseq [gui-init-sym '[cn.li.ac.block.imag-fusor.gui/init-imag-fusor-gui!
+                        cn.li.ac.block.metal-former.gui/init-metal-former-gui!]]
+    (when-let [gui-init-fn (requiring-resolve gui-init-sym)]
+      (gui-init-fn))))
 
 (defonce ^:private crafting-blocks-installed? (atom false))
 

@@ -1,14 +1,11 @@
 (ns cn.li.ac.block.imag-fusor.block
-  "Imaginary Fusor block - crafting machine with custom recipes.
+  "Imaginary Fusor block - AcademyCraft parity implementation.
 
-  Features:
-  - Directional facing
-  - Energy consumption during crafting
-  - Custom recipe system
-  - GUI with progress bar
-
-  Architecture:
-  All persistent state lives in ScriptedBlockEntity.customState as Clojure maps."
+  Ported behavior:
+  - 1 crystal input slot + 1 crystal output slot
+  - MatterUnit phase-liquid input/output pair with internal liquid tank
+  - Tick-based work loop with per-tick energy consume and liquid consume on finish
+  - Slot IO rules matching legacy container semantics"
   (:require [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
@@ -17,6 +14,7 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.network.server :as net-server]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.block.imag-fusor.config :as fusor-config]
             [cn.li.ac.block.imag-fusor.schema :as fusor-schema]
             [cn.li.ac.block.imag-fusor.recipes :as recipes]
@@ -63,91 +61,258 @@
 (def fusor-scripted-save-fn
   (state-schema/schema->save-fn fusor-state-schema))
 
+(def fusor-blockstate-fields
+  (filterv :block-state fusor-schema/imag-fusor-schema))
+
+(def fusor-block-state-properties
+  (merge (state-schema/extract-block-state-properties fusor-blockstate-fields)
+         {:facing {:name "facing"
+                   :type :horizontal-facing
+                   :default "north"}}))
+
+(def fusor-blockstate-updater
+  (state-schema/build-block-state-updater fusor-blockstate-fields))
+
 ;; ============================================================================
 ;; Inventory Helpers
 ;; ============================================================================
 
-(def input-slot-0 0)
-(def input-slot-1 1)
-(def output-slot 2)
+(def input-slot 0)
+(def output-slot 1)
+(def imag-input-slot fusor-config/imag-input-slot-index)
 (def energy-slot fusor-config/energy-slot-index)
-(def total-slots 4)
+(def imag-output-slot fusor-config/imag-output-slot-index)
+(def total-slots fusor-config/total-slots)
 
-(defn- get-input-items
-  "Get items from input slots"
+(defn- stack-empty?
+  [stack]
+  (or (nil? stack)
+      (try (boolean (pitem/item-is-empty? stack))
+           (catch Exception _ false))))
+
+(defn- stack-count
+  [stack]
+  (if (stack-empty? stack)
+    0
+    (try (int (pitem/item-get-count stack))
+         (catch Exception _ 0))))
+
+(defn- stack-id
+  [stack]
+  (recipes/item-id-from-stack stack))
+
+(defn- rebuild-stack
+  [stack new-count]
+  (when (and stack (pos? (int new-count)))
+    (when-let [item-id (stack-id stack)]
+      (pitem/create-item-stack-by-id item-id (int new-count)))))
+
+(defn- consume-stack
+  [stack amount]
+  (let [left (- (stack-count stack) (int amount))]
+    (when (pos? left)
+      (rebuild-stack stack left))))
+
+(defn- merge-stack-count
+  [existing produced]
+  (cond
+    (stack-empty? produced) existing
+    (stack-empty? existing) produced
+    :else (rebuild-stack existing (+ (stack-count existing) (stack-count produced)))))
+
+(defn- get-input-item
   [state]
-  [(get-in state [:inventory input-slot-0])
-   (get-in state [:inventory input-slot-1])])
+  (get-in state [:inventory input-slot]))
 
 (defn- get-output-item
-  "Get item from output slot"
   [state]
   (get-in state [:inventory output-slot]))
+
+(defn- matter-unit-kind
+  [stack]
+  (when (and (not (stack-empty? stack))
+             (= (stack-id stack) fusor-config/matter-unit-item-id))
+    (case (int (try (pitem/item-get-damage stack) (catch Exception _ -1)))
+      0 :none
+      1 :phase-liquid
+      nil)))
+
+(defn- phase-liquid-unit?
+  [stack]
+  (= :phase-liquid (matter-unit-kind stack)))
+
+(defn- empty-matter-unit?
+  [stack]
+  (= :none (matter-unit-kind stack)))
+
+(defn- make-empty-matter-unit
+  [count]
+  (let [stack (pitem/create-item-stack-by-id fusor-config/matter-unit-item-id (int count))]
+    (when stack
+      (try
+        (pitem/item-set-damage! stack fusor-config/matter-unit-none-meta)
+        (catch Exception _ nil))
+      stack)))
 
 ;; ============================================================================
 ;; Crafting Logic
 ;; ============================================================================
 
-(defn- can-start-crafting?
-  "Check if crafting can start"
+(defn- get-current-recipe
   [state]
-  (let [inputs (get-input-items state)
-        recipe (recipes/find-recipe inputs)
-        energy (:energy state 0.0)]
+  (when-let [rid (:current-recipe-id state)]
+    (recipes/get-recipe-by-id rid)))
+
+(defn- can-start-crafting?
+  [state]
+  (let [input-item (get-input-item state)
+        recipe (when-not (stack-empty? input-item)
+                 (recipes/find-recipe input-item))]
     (and recipe
-         (recipes/can-craft? recipe inputs energy)
-         (not (:working state false)))))
+         (not (:working state false))
+         recipe)))
+
+(defn- start-working
+  [state recipe]
+  (assoc state
+         :working true
+         :work-progress 0.0
+         :crafting-progress 0
+         :max-progress (int (or (:time recipe) fusor-config/craft-time-ticks))
+         :current-recipe-id (:id recipe "")
+         :current-recipe-liquid (int (:consume-liquid recipe 0))))
+
+(defn- abort-working
+  [state]
+  (assoc state
+         :working false
+         :work-progress 0.0
+         :crafting-progress 0
+         :current-recipe-id ""
+         :current-recipe-liquid 0))
+
+(defn- finish-working
+  [state recipe]
+  (let [input-item (get-input-item state)
+        output-item (get-output-item state)
+        produced (recipes/build-output-stack recipe)
+        consume-count (int (get-in recipe [:input :count] 1))
+        consume-liquid (int (:consume-liquid recipe 0))
+        new-input (consume-stack input-item consume-count)
+        new-output (merge-stack-count output-item produced)
+        new-liquid (max 0 (- (int (:liquid-amount state 0)) consume-liquid))]
+    (if (stack-empty? produced)
+      (abort-working state)
+      (-> state
+          (assoc-in [:inventory input-slot] new-input)
+          (assoc-in [:inventory output-slot] new-output)
+          (assoc :liquid-amount new-liquid
+                 :check-cooldown 0)
+          (abort-working)))))
 
 (defn- tick-crafting
-  "Process one tick of crafting"
   [state]
   (if (:working state false)
-    (let [progress (:crafting-progress state 0)
-          max-prog (:max-progress state fusor-config/max-progress)
+    (let [recipe (get-current-recipe state)
+          input-item (get-input-item state)
+          output-item (get-output-item state)
           energy (:energy state 0.0)
-          energy-cost fusor-config/energy-per-tick]
-      (if (>= energy energy-cost)
-        (let [new-progress (inc progress)
-              new-energy (- energy energy-cost)]
-          (if (>= new-progress max-prog)
-            ;; Crafting complete
-            (assoc state
-                   :crafting-progress 0
-                   :working false
-                   :energy new-energy
-                   :current-recipe-id "")
-            ;; Continue crafting
-            (assoc state
-                   :crafting-progress new-progress
-                   :energy new-energy)))
-        ;; Not enough energy, stop crafting
-        (assoc state :working false)))
+          liquid-amount (int (:liquid-amount state 0))
+          max-progress (max 1 (int (:max-progress state fusor-config/craft-time-ticks)))]
+      (if (recipes/can-craft? recipe input-item output-item energy liquid-amount)
+        (let [progress (double (:work-progress state 0.0))
+              work-step (/ 1.0 (double max-progress))
+              new-progress (+ progress work-step)
+              new-energy (- (double energy) fusor-config/energy-per-tick)
+              percent (int (Math/floor (* 100.0 (min 1.0 new-progress))))
+              next-state (assoc state
+                                :energy new-energy
+                                :work-progress (min 1.0 new-progress)
+                                :crafting-progress percent)]
+          (if (>= new-progress 1.0)
+            (finish-working next-state recipe)
+            next-state))
+        (abort-working state)))
     state))
 
 (defn- try-start-crafting
-  "Try to start a new crafting operation"
   [state]
   (if (can-start-crafting? state)
-    (let [inputs (get-input-items state)
-          recipe (recipes/find-recipe inputs)]
-      (assoc state
-             :working true
-             :crafting-progress 0
-             :current-recipe-id (:id recipe "")
-             :max-progress (or (:time recipe) fusor-config/craft-time-ticks)))
+    (let [recipe (recipes/find-recipe (get-input-item state))]
+      (if recipe
+        (start-working state recipe)
+        state))
     state))
+
+(defn- can-convert-phase-unit?
+  [state]
+  (let [input-unit (get-in state [:inventory imag-input-slot])
+        output-unit (get-in state [:inventory imag-output-slot])
+        liquid (int (:liquid-amount state 0))
+        tank-size (int (:tank-size state fusor-config/tank-size))
+        has-input (and (phase-liquid-unit? input-unit)
+                       (pos? (stack-count input-unit)))
+        can-store (<= (+ liquid fusor-config/liquid-per-unit) tank-size)
+        can-output (or (stack-empty? output-unit)
+                       (and (empty-matter-unit? output-unit)
+                            (< (stack-count output-unit)
+                               (int (or (try (pitem/item-get-max-stack-size output-unit)
+                                             (catch Exception _ 16))
+                                        16)))))]
+    (and has-input can-store can-output)))
+
+(defn- convert-phase-unit
+  [state]
+  (if (can-convert-phase-unit? state)
+    (let [input-unit (get-in state [:inventory imag-input-slot])
+          output-unit (get-in state [:inventory imag-output-slot])
+          new-input (consume-stack input-unit 1)
+          add-count (if (stack-empty? output-unit) 1 (inc (stack-count output-unit)))
+          new-output (or (when-not (stack-empty? output-unit)
+                           (rebuild-stack output-unit add-count))
+                         (make-empty-matter-unit add-count))]
+      (-> state
+          (assoc :liquid-amount (+ (int (:liquid-amount state 0)) fusor-config/liquid-per-unit))
+          (assoc-in [:inventory imag-input-slot] new-input)
+          (assoc-in [:inventory imag-output-slot] new-output)))
+    state))
+
+(defn- update-idle-state
+  [state]
+  (let [cooldown (int (:check-cooldown state fusor-config/check-interval))
+        next-cooldown (dec cooldown)]
+    (if (<= next-cooldown 0)
+      (-> state
+          (assoc :check-cooldown fusor-config/check-interval)
+          (try-start-crafting))
+      (assoc state :check-cooldown next-cooldown))))
+
+(defn- animated-frame
+  [working? day-time]
+  (if working?
+    (inc (mod (quot (long day-time) 8) 4))
+    0))
+
+(defn- update-be-state!
+  [be level pos state]
+  (platform-be/set-custom-state! be state)
+  (platform-be/set-changed! be)
+  (when (seq fusor-blockstate-fields)
+    (fusor-blockstate-updater state level pos)))
 
 ;; ============================================================================
 ;; Tick Logic
 ;; ============================================================================
 
 (defn- fusor-tick-fn
-  "Tick handler for imaginary fusor"
-  [level _pos _block-state be]
+  [level pos _block-state be]
   (when (and level (not (world/world-is-client-side* level)))
     (let [state (or (platform-be/get-custom-state be) fusor-default-state)
           ticker (inc (get state :update-ticker 0))
-          state (assoc state :update-ticker ticker)
+          state (assoc state
+                       :update-ticker ticker
+                       :tank-size (int (:tank-size state fusor-config/tank-size))
+                       :check-cooldown (int (:check-cooldown state fusor-config/check-interval)))
 
           ;; Charge from energy slot
           energy-item (get-in state [:inventory energy-slot])
@@ -161,14 +326,19 @@
                       state))
                   state)
 
+          ;; Matter unit => liquid tank
+          state (convert-phase-unit state)
+
           ;; Process crafting
           state (if (:working state false)
                   (tick-crafting state)
-                  (try-start-crafting state))]
+                  (update-idle-state state))
+
+          state (assoc state :frame (animated-frame (:working state false)
+                                                    (world/world-get-day-time* level)))]
 
       (when (not= state (platform-be/get-custom-state be))
-        (platform-be/set-custom-state! be state)
-        (platform-be/set-changed! be)))))
+        (update-be-state! be level pos state)))))
 
 ;; ============================================================================
 ;; Container Functions
@@ -210,12 +380,16 @@
    :still-valid? (fn [_be _player] true)
 
    :can-place-through-face? (fn [_be slot item _face]
-                               (or (< slot output-slot)
+                   (or (and (= slot input-slot)
+                      (boolean (recipes/find-recipe item)))
+                     (and (= slot imag-input-slot)
+                      (phase-liquid-unit? item))
                                    (and (= slot energy-slot)
                                         (energy/is-energy-item-supported? item))))
 
    :can-take-through-face? (fn [_be slot _item _face]
-                             (or (= slot output-slot)
+                 (or (= slot output-slot)
+                   (= slot imag-output-slot)
                                  (= slot energy-slot)))})
 
 ;; ============================================================================
@@ -245,9 +419,15 @@
         {:energy (:energy state 0.0)
          :max-energy (:max-energy state fusor-config/max-energy)
          :crafting-progress (:crafting-progress state 0)
-         :max-progress (:max-progress state fusor-config/max-progress)
+         :work-progress (:work-progress state 0.0)
+         :max-progress (:max-progress state fusor-config/craft-time-ticks)
+         :current-recipe-liquid (:current-recipe-liquid state 0)
+         :liquid-amount (:liquid-amount state 0)
+         :tank-size (:tank-size state fusor-config/tank-size)
          :working (:working state false)})
-      {:energy 0.0 :max-energy 0.0 :crafting-progress 0 :max-progress 100 :working false})))
+      {:energy 0.0 :max-energy 0.0 :crafting-progress 0 :work-progress 0.0
+       :max-progress fusor-config/craft-time-ticks :current-recipe-liquid 0
+       :liquid-amount 0 :tank-size fusor-config/tank-size :working false})))
 
 (defn register-network-handlers! []
   (net-server/register-handler (msg :get-status) handle-get-status)
@@ -288,9 +468,10 @@
                     :harvest-tool :pickaxe
                     :harvest-level 1
                     :sounds :metal}
-         :rendering {:model-parent "minecraft:block/cube_all"
-               :textures {:all (asset-path "block" "imag_fusor")}
+           :rendering {:model-parent "minecraft:block/cube_all"
+             :textures {:all (modid/asset-path "block" "imag_fusor")}
                      :flat-item-icon? true}
+           :block-state {:block-state-properties fusor-block-state-properties}
          :events {:on-right-click open-fusor-gui!}}))
     (hooks/register-network-handler! register-network-handlers!)
           (log-info "Initialized Imaginary Fusor block")))

@@ -3,7 +3,7 @@
   (:require [cn.li.mcmod.block.blockstate-properties :as shared]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.world.level.block.state.properties IntegerProperty BooleanProperty]))
+  (:import [net.minecraft.world.level.block.state.properties IntegerProperty BooleanProperty BlockStateProperties]))
 
 (defonce property-registry (shared/create-property-registry))
 
@@ -13,12 +13,17 @@
 (defn- create-boolean-property [property-name]
   (BooleanProperty/create property-name))
 
+(defn- create-horizontal-facing-property
+  [_property-name]
+  BlockStateProperties/HORIZONTAL_FACING)
+
 (defn register-block-properties!
   [block-id block-state-properties]
   (shared/register-block-properties!
     property-registry block-id block-state-properties
     create-integer-property
-    create-boolean-property))
+    create-boolean-property
+    create-horizontal-facing-property))
 
 (defn get-property [block-id property-key]
   (shared/get-property property-registry block-id property-key))

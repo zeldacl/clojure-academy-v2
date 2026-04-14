@@ -1,10 +1,15 @@
 package cn.li.forge1201.block;
 
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.core.Direction;
+
+import javax.annotation.Nullable;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -73,5 +78,25 @@ public class DynamicStateBlock extends Block {
         if (properties != null && !properties.isEmpty()) {
             builder.add(properties.toArray(new Property<?>[0]));
         }
+    }
+
+    private BlockState withHorizontalFacing(BlockState state, @Nullable BlockPlaceContext context) {
+        if (context == null) {
+            return state;
+        }
+        Property<?> prop = this.getStateDefinition().getProperty("facing");
+        if (prop instanceof DirectionProperty directionProperty) {
+            Direction placedFacing = context.getHorizontalDirection().getOpposite();
+            if (directionProperty.getPossibleValues().contains(placedFacing)) {
+                return state.setValue(directionProperty, placedFacing);
+            }
+        }
+        return state;
+    }
+
+    @Nullable
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext context) {
+        return withHorizontalFacing(this.defaultBlockState(), context);
     }
 }

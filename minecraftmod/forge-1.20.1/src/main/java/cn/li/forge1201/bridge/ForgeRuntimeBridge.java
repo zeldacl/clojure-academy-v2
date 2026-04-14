@@ -16,6 +16,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -36,6 +37,27 @@ public final class ForgeRuntimeBridge {
     public static String getItemRegistryPath(Item item) {
         ResourceLocation key = BuiltInRegistries.ITEM.getKey(item);
         return key != null ? key.getPath() : null;
+    }
+
+    public static Item getItemById(String itemId) {
+        try {
+            if (itemId == null || itemId.isEmpty()) {
+                return null;
+            }
+            ResourceLocation id = new ResourceLocation(itemId);
+            Item item = BuiltInRegistries.ITEM.get(id);
+            return item == Items.AIR ? null : item;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    public static ItemStack createItemStackById(String itemId, int count) {
+        Item item = getItemById(itemId);
+        if (item == null || count <= 0) {
+            return ItemStack.EMPTY;
+        }
+        return new ItemStack(item, count);
     }
 
     public static Block getBlockById(String blockId) {

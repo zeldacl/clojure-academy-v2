@@ -59,10 +59,8 @@
       (extend item-cls item/IItem
               {:item-get-description-id (fn [^Item this]
                                           (.getDescriptionId this))
-               :item-get-registry-name (fn [this]
-                                         (when-let [get-item-registry-name
-                                                    (requiring-resolve 'cn.li.forge1201.ability.item-handler/get-item-registry-name)]
-                                           (get-item-registry-name this)))}))))
+               :item-get-registry-name (fn [^Item this]
+                 (ForgeRuntimeBridge/getItemKeyString this))}))))
 
 (defn- install-block-state-ops!
   "Extend IBlockStateOps onto BlockState at runtime (after MC bootstrap).
@@ -145,6 +143,11 @@
     (alter-var-root #'item/*item-factory*
       (constantly (fn [nbt]
                     (ForgeRuntimeBridge/itemStackOf nbt))))
+    (alter-var-root #'item/*item-stack-resolver*
+      (constantly (fn [item-id count]
+                    (let [stack (ForgeRuntimeBridge/createItemStackById (str item-id) (int count))]
+                      (when-not (ForgeRuntimeBridge/isItemStackEmpty stack)
+                        stack)))))
     (alter-var-root #'nbt/*nbt-has-key-fn* (constantly bindings/nbt-has-key?))
     (alter-var-root #'pos/*position-factory* (constantly bindings/create-block-pos))
     (alter-var-root #'pos/*pos-above-fn* (constantly bindings/pos-above))

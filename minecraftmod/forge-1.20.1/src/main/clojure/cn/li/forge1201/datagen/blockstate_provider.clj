@@ -16,6 +16,7 @@
             [clojure.string :as str])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [net.minecraft.resources ResourceLocation]
+           [net.minecraft.core Direction]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state.properties Property]
            [net.minecraftforge.client.model.generators BlockStateProvider]
@@ -193,43 +194,66 @@
   [^BlockStateProvider provider model-id]
   (let [^String model-name (model-id->model-name model-id)]
     ;; Query business layer for texture configuration
-    (if-let [tex-cfg (blockstate-def/get-model-texture-config model-name)]
-      ;; Special model: use .cube() with side/vert textures
-      (let [^ResourceLocation side-texture (parse-rl (:side tex-cfg))
-            ^ResourceLocation vert-texture (parse-rl (:vert tex-cfg))
-            builder (.cube (.models provider)
-                          model-name
-                          vert-texture   ; down
-                          vert-texture   ; up
-                          side-texture   ; north
-                          side-texture   ; south
-                          side-texture   ; east
-                          side-texture)] ; west
-        builder)
-      ;; Default model: honor explicit DSL parent/textures first.
-      (let [^String registry-name (infer-registry-name-from-model model-name)
-            block-spec (registry-name->block-spec registry-name)
-            ^String parent (parent-from-spec block-spec)
-            ^String explicit-texture (some-> (or (get-in block-spec [:rendering :textures :all])
-                                                 (get-in block-spec [:properties :textures :all]))
-                                       normalize-block-texture)]
-        (if (or (not= parent "minecraft:block/cube_all") explicit-texture)
-          (let [^ResourceLocation parent-rl (parse-rl parent "minecraft")
-                ^BlockModelBuilder builder (.withExistingParent (.models provider)
-                                            model-name
-                                            parent-rl)]
-            (when explicit-texture
-              (let [^ResourceLocation tex-rl (ensure-texture-exists! explicit-texture)]
-                (.texture builder "all" tex-rl)))
-            builder)
-          (let [^ResourceLocation texture-all (ensure-texture-exists! (texture-from-spec block-spec model-name))
-                builder (.cubeAll (.models provider) model-name texture-all)]
-            builder))))))
+    (if-let [cube-tex (blockstate-def/get-model-cube-texture-config model-name)]
+      (let [^ResourceLocation down-texture (ensure-texture-exists! (:down cube-tex))
+            ^ResourceLocation up-texture (ensure-texture-exists! (:up cube-tex))
+            ^ResourceLocation north-texture (ensure-texture-exists! (:north cube-tex))
+            ^ResourceLocation south-texture (ensure-texture-exists! (:south cube-tex))
+            ^ResourceLocation east-texture (ensure-texture-exists! (:east cube-tex))
+            ^ResourceLocation west-texture (ensure-texture-exists! (:west cube-tex))]
+        (.cube (.models provider)
+               model-name
+               down-texture
+               up-texture
+               north-texture
+               south-texture
+               east-texture
+               west-texture))
+      (if-let [tex-cfg (blockstate-def/get-model-texture-config model-name)]
+        ;; Special model: use .cube() with side/vert textures
+        (let [^ResourceLocation side-texture (parse-rl (:side tex-cfg))
+              ^ResourceLocation vert-texture (parse-rl (:vert tex-cfg))
+              builder (.cube (.models provider)
+                            model-name
+                            vert-texture   ; down
+                            vert-texture   ; up
+                            side-texture   ; north
+                            side-texture   ; south
+                            side-texture   ; east
+                            side-texture)] ; west
+          builder)
+        ;; Default model: honor explicit DSL parent/textures first.
+        (let [^String registry-name (infer-registry-name-from-model model-name)
+              block-spec (registry-name->block-spec registry-name)
+              ^String parent (parent-from-spec block-spec)
+              ^String explicit-texture (some-> (or (get-in block-spec [:rendering :textures :all])
+                                                   (get-in block-spec [:properties :textures :all]))
+                                         normalize-block-texture)]
+          (if (or (not= parent "minecraft:block/cube_all") explicit-texture)
+            (let [^ResourceLocation parent-rl (parse-rl parent "minecraft")
+                  ^BlockModelBuilder builder (.withExistingParent (.models provider)
+                                              model-name
+                                              parent-rl)]
+              (when explicit-texture
+                (let [^ResourceLocation tex-rl (ensure-texture-exists! explicit-texture)]
+                  (.texture builder "all" tex-rl)))
+              builder)
+            (let [^ResourceLocation texture-all (ensure-texture-exists! (texture-from-spec block-spec model-name))
+                  builder (.cubeAll (.models provider) model-name texture-all)]
+              builder)))))))
+
+(defn- parse-facing
+  [value]
+  (let [raw (if (keyword? value) (name value) (str value))]
+    (or (Direction/byName (str/lower-case raw))
+        Direction/NORTH)))
 
 (defn- condition->typed
   [property-key value]
   (case property-key
     :energy (Integer/valueOf (int (if (string? value) (Integer/parseInt value) value)))
+    :frame (Integer/valueOf (int (if (string? value) (Integer/parseInt value) value)))
+    :facing (parse-facing value)
     :on (Boolean/valueOf (str value))
     :connected (Boolean/valueOf (str value))
     value))
