@@ -52,11 +52,12 @@
 
 (defn can-place-item?
   [_container slot-index item-stack]
-  (case slot-index
-    0 (boolean (recipes/find-recipe item-stack))
-    2 (phase-liquid-unit? item-stack)
-    3 (energy/is-energy-item-supported? item-stack)
-    false))
+  (let [slot-index (int slot-index)]
+    (case slot-index
+      0 (boolean (recipes/find-recipe item-stack))
+      2 (phase-liquid-unit? item-stack)
+      3 (energy/is-energy-item-supported? item-stack)
+      false)))
 
 (defn still-valid? [_container _player] true)
 

@@ -123,7 +123,11 @@
 
 (defn- cycle-mode
   [state delta]
-  (let [idx (.indexOf recipes/mode-order (current-mode state))
+  (let [idx (or (first (keep-indexed (fn [i mode]
+                                       (when (= mode (current-mode state))
+                                         i))
+                                     recipes/mode-order))
+                -1)
         current-idx (if (neg? idx) 0 idx)
         next-idx (mod (+ current-idx (int delta)) (count recipes/mode-order))]
     (assoc state :mode (recipes/mode->string (nth recipes/mode-order next-idx)))))

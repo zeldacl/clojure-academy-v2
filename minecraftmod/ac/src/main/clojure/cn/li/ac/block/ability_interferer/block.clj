@@ -78,8 +78,7 @@
 (defn- source-id
   [level pos]
   (let [dim-id (or (try
-                     (when-let [rk (.dimension level)]
-                       (str (.location rk)))
+                     (world/world-get-dimension-id* level)
                      (catch Exception _ nil))
                    "unknown")]
     (str "interferer@" dim-id "/" (pos/pos-x pos) "," (pos/pos-y pos) "," (pos/pos-z pos))))
@@ -93,17 +92,15 @@
 
 (defn- player-creative?
   [player]
-  (or (try (boolean (.isCreative player)) (catch Exception _ false))
-      (try (boolean (.. player getAbilities instabuild)) (catch Exception _ false))))
+  (try (boolean (entity/player-creative? player)) (catch Exception _ false)))
 
 (defn- player-spectator?
   [player]
-  (try (boolean (.isSpectator player)) (catch Exception _ false)))
+  (try (boolean (entity/player-spectator? player)) (catch Exception _ false)))
 
 (defn- raw-level-players
   [level]
-  (or (try (seq (.players level)) (catch Exception _ nil))
-      (try (seq (.getPlayers level)) (catch Exception _ nil))
+  (or (try (world/world-get-players* level) (catch Exception _ nil))
       []))
 
 (defn- find-players-in-range

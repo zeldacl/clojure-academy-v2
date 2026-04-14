@@ -91,6 +91,10 @@
                                                  (.distanceToSqr this (double x) (double y) (double z)))
                        :player-get-level (fn [^Player this]
                                            (ForgeRuntimeBridge/getEntityLevel this))
+                       :player-creative? (fn [^Player this]
+                                           (.isCreative this))
+                       :player-spectator? (fn [^Player this]
+                                            (.isSpectator this))
                        :player-get-name (fn [^Player this]
                                           (str (.getName this)))
                        :player-get-uuid (fn [^Player this]
@@ -159,6 +163,8 @@
     (alter-var-root #'world/*world-place-block-by-id-fn* (constantly bindings/world-place-block-by-id))
     (alter-var-root #'world/*world-is-chunk-loaded-fn* (constantly bindings/world-is-chunk-loaded?))
     (alter-var-root #'world/*world-get-day-time-fn* (constantly bindings/world-get-day-time))
+    (alter-var-root #'world/*world-get-dimension-id-fn* (constantly bindings/world-get-dimension-id))
+    (alter-var-root #'world/*world-get-players-fn* (constantly bindings/world-get-players))
     (alter-var-root #'world/*world-is-raining-fn* (constantly bindings/world-is-raining))
     (alter-var-root #'world/*world-is-client-side-fn* (constantly bindings/world-is-client-side))
     (alter-var-root #'world/*world-can-see-sky-fn* (constantly bindings/world-can-see-sky))

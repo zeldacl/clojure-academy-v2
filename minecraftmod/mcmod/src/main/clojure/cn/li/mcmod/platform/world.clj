@@ -87,6 +87,12 @@
 
     Returns: long - current time in ticks")
 
+  (world-get-dimension-id [this]
+    "Return the world's dimension identifier as a string")
+
+  (world-get-players [this]
+    "Return a seq of players currently present in the world")
+
   (world-is-raining [this]
     "Check if it is currently raining.
 
@@ -120,6 +126,8 @@ Set by platform bootstrap to avoid protocol dispatch timing issues during early 
 (defonce ^:dynamic *world-place-block-by-id-fn* nil)
 (defonce ^:dynamic *world-is-chunk-loaded-fn* nil)
 (defonce ^:dynamic *world-get-day-time-fn* nil)
+(defonce ^:dynamic *world-get-dimension-id-fn* nil)
+(defonce ^:dynamic *world-get-players-fn* nil)
 (defonce ^:dynamic *world-is-raining-fn* nil)
 (defonce ^:dynamic *world-can-see-sky-fn* nil)
 
@@ -232,6 +240,18 @@ Uses platform override when installed; otherwise falls back to protocol dispatch
   (if-let [f *world-get-day-time-fn*]
     (long (f this))
     (world-get-day-time this)))
+
+(defn world-get-dimension-id*
+  [this]
+  (if-let [f *world-get-dimension-id-fn*]
+    (some-> (f this) str)
+    (some-> (world-get-dimension-id this) str)))
+
+(defn world-get-players*
+  [this]
+  (if-let [f *world-get-players-fn*]
+    (or (seq (f this)) [])
+    (or (seq (world-get-players this)) [])))
 
 (defn world-is-raining*
   [this]

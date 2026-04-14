@@ -101,6 +101,14 @@
 	[^Level level]
 	(.getDayTime level))
 
+(defn world-get-dimension-id
+	[^Level level]
+	(str (.location (.dimension level))))
+
+(defn world-get-players
+	[^Level level]
+	(seq (.players level)))
+
 (defn world-is-raining
 	[^Level level]
 	(.isRaining level))

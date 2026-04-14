@@ -38,9 +38,6 @@
 
 (defn- validate-slots!
   [schema-id slots]
-  (when-not (seq slots)
-    (throw (ex-info "Slot schema requires at least one slot"
-                    {:schema-id schema-id})))
   (let [ids (map :id slots)
         duplicate-ids (->> ids frequencies (filter (fn [[_id n]] (> n 1))) (map first) seq)]
     (when duplicate-ids

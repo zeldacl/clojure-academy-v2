@@ -208,7 +208,25 @@
       false))
   
   (world-is-chunk-loaded? [this chunk-x chunk-z]
-    (.hasChunk this chunk-x chunk-z)))
+    (.hasChunk this chunk-x chunk-z))
+
+  (world-get-day-time [this]
+    (.getDayTime this))
+
+  (world-get-dimension-id [this]
+    (str (.location (.dimension this))))
+
+  (world-get-players [this]
+    (seq (.players this)))
+
+  (world-is-raining [this]
+    (.isRaining this))
+
+  (world-is-client-side [this]
+    (.isClientSide this))
+
+  (world-can-see-sky [this block-pos]
+    (.canSeeSky this block-pos)))
 
 ;; ============================================================================
 ;; Scripted tile entity — mcmod IHasPosition / IBlockEntity (TESR / multiblock)
@@ -239,6 +257,10 @@
   cn.li.mcmod.platform.entity/IEntityOps
   (player-get-level [this]
     (.level ^net.minecraft.world.entity.player.Player this))
+  (player-creative? [this]
+    (.isCreative ^net.minecraft.world.entity.player.Player this))
+  (player-spectator? [this]
+    (.isSpectator ^net.minecraft.world.entity.player.Player this))
   (player-get-name [this]
     (str (.getName ^net.minecraft.world.entity.player.Player this)))
   (player-get-uuid [this]
@@ -282,6 +304,30 @@
   (alter-var-root #'item/*item-factory*
     (constantly (fn [nbt]
                   (ItemStack/of nbt))))
+
+  (alter-var-root #'world/*world-get-day-time-fn*
+    (constantly (fn [^Level level]
+                  (.getDayTime level))))
+
+  (alter-var-root #'world/*world-get-dimension-id-fn*
+    (constantly (fn [^Level level]
+                  (str (.location (.dimension level))))))
+
+  (alter-var-root #'world/*world-get-players-fn*
+    (constantly (fn [^Level level]
+                  (seq (.players level)))))
+
+  (alter-var-root #'world/*world-is-raining-fn*
+    (constantly (fn [^Level level]
+                  (.isRaining level))))
+
+  (alter-var-root #'world/*world-is-client-side-fn*
+    (constantly (fn [^Level level]
+                  (.isClientSide level))))
+
+  (alter-var-root #'world/*world-can-see-sky-fn*
+    (constantly (fn [^Level level block-pos]
+                  (.canSeeSky level block-pos))))
 
   ;; Bind platform PoseStack implementations for mcmod
   (alter-var-root #'pose/*y-rotation-fn*

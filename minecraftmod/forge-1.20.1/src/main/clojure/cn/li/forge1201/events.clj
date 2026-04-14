@@ -7,6 +7,7 @@
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
        [net.minecraft.world InteractionHand InteractionResult]
+       [net.minecraft.world.entity.player Player]
        [net.minecraft.network.chat Component]
          [net.minecraft.world.level Level]
            [net.minecraftforge.eventbus.api Event$Result]
@@ -34,7 +35,7 @@
 (defn- emit-feedback!
   [event-data ret]
   (let [^Level world (:world event-data)
-        player (:player event-data)
+        ^Player player (:player event-data)
         messages (when (map? ret) (:messages ret))]
     (when (and world player (not (.isClientSide world)) (seq messages))
       (doseq [m messages]

@@ -13,6 +13,12 @@
   (player-get-level [player]
     "Return the Level/World for a player")
 
+  (player-creative? [player]
+    "Return true when the player is in a creative-like mode")
+
+  (player-spectator? [player]
+    "Return true when the player is a spectator")
+
   (player-get-name [player]
     "Return the player's name as a string")
 

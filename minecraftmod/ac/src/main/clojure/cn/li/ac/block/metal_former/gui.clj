@@ -51,9 +51,10 @@
 (defn- slot-changed! [_container _slot-index] nil)
 
 (defn- can-place-item? [_container slot-index item-stack]
-  (case slot-index
-    2 (energy/is-energy-item-supported? item-stack)
-    true))
+  (let [slot-index (int slot-index)]
+    (case slot-index
+      2 (energy/is-energy-item-supported? item-stack)
+      true)))
 
 (defn- still-valid? [_container _player] true)
 
