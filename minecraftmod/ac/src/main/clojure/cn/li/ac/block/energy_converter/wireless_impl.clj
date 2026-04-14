@@ -30,14 +30,21 @@
 
     (setEnergy [_ energy]
       (let [state (get-state-fn)]
-        (set-state-fn (assoc state :energy (double energy)))))
+          (let [prev (double (get state :energy 0.0))
+                delta (- (double energy) prev)]
+            (set-state-fn
+              (cond-> (assoc state :energy (double energy))
+                ;; Track how much was extracted from this generator
+                (neg? delta) (update :wireless-out-accumulator #(+ (or % 0.0) (- delta))))))))
 
     (getProvidedEnergy [_ req]
-      ;; Provide energy from internal buffer
+      ;; Provide energy from internal buffer and deduct the provided amount
       (let [state (get-state-fn)
             current-energy (double (get state :energy 0.0))
             bandwidth (double (get state :wireless-bandwidth 1000.0))
             can-provide (min current-energy bandwidth req)]
+        (when (pos? can-provide)
+          (set-state-fn (assoc state :energy (- current-energy can-provide))))
         (double can-provide)))
 
     (getGeneratorBandwidth [_]
@@ -82,7 +89,9 @@
                space (- max-energy current-energy)
                to-inject (min amt space)
                leftover (- amt to-inject)]
-           (set-state-fn (assoc state :energy (+ current-energy to-inject)))
+          (set-state-fn (-> state
+                            (assoc :energy (+ current-energy to-inject))
+                            (update :wireless-in-accumulator #(+ (or % 0.0) to-inject))))
            (when (and after-inject! (pos? to-inject))
              (try (after-inject! (double to-inject)) (catch Exception _ nil)))
            (double leftover)))

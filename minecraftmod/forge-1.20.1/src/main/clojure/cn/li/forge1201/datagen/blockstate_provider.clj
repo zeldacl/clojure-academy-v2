@@ -124,9 +124,6 @@
    "my_mod:block/developer_advanced_part" "my_mod:block/dev_advanced"
    "my_mod:block/ability_interferer" "my_mod:block/ability_interf_off"
    "my_mod:block/imag_fusor" "my_mod:block/machine_frame"
-   "my_mod:block/energy_converter" "my_mod:block/machine_frame"
-   "my_mod:block/energy_converter_advanced" "my_mod:block/machine_frame"
-   "my_mod:block/energy_converter_elite" "my_mod:block/machine_frame"
    "my_mod:block/metal_former" "my_mod:block/metal_former_front"})
 
 (defn- normalize-texture-id
