@@ -14,11 +14,13 @@
 (defonce base-model (delay (res/load-obj-model "windgen_base")))
 (defonce main-model (delay (res/load-obj-model "windgen_main")))
 (defonce fan-model (delay (res/load-obj-model "windgen_fan")))
+(defonce pillar-model (delay (res/load-obj-model "windgen_pillar")))
 
 (defonce base-tex-normal (delay (res/texture-location "models/windgen_base")))
 (defonce base-tex-disabled (delay (res/texture-location "models/windgen_base_disabled")))
 (defonce main-tex (delay (res/texture-location "models/windgen_main")))
 (defonce fan-tex (delay (res/texture-location "models/windgen_fan")))
+(defonce pillar-tex (delay (res/texture-location "models/windgen_pillar")))
 
 (defonce ^:private fan-rot-cache (atom {}))
 
@@ -69,6 +71,19 @@
 				(finally
 					(pose/pop-pose pose-stack))))))
 
+(defn- render-pillar-at-origin
+	[_tile _partial-ticks pose-stack buffer-source packed-light packed-overlay]
+	(let [vc (rb/get-solid-buffer buffer-source @pillar-tex)]
+		(pose/push-pose pose-stack)
+		(try
+			;; Single-block TESR origin is block corner; move OBJ to block center.
+			(pose/translate pose-stack 0.5 0.0 0.5)
+			(binding [obj/*skip-flat-bottom-plane* true
+								obj/*bottom-plane-epsilon* 0.0008]
+				(obj/render-all! @pillar-model pose-stack vc packed-light packed-overlay))
+			(finally
+				(pose/pop-pose pose-stack)))))
+
 (defn register!
 	[]
 	(let [base-renderer
@@ -85,12 +100,20 @@
 						(mb-helper/render-multiblock-tesr
 						 tile-entity
 						 render-main-at-origin
+						 partial-ticks pose-stack buffer-source packed-light packed-overlay)))
+
+				pillar-renderer
+				(reify tesr-api/ITileEntityRenderer
+					(render-tile [_ tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay]
+						(render-pillar-at-origin
+						 tile-entity
 						 partial-ticks pose-stack buffer-source packed-light packed-overlay)))]
 
 		(tesr-api/register-scripted-tile-renderer! "wind-gen-base" base-renderer)
 		(tesr-api/register-scripted-tile-renderer! "wind-gen-base-part" base-renderer)
 		(tesr-api/register-scripted-tile-renderer! "wind-gen-main" main-renderer)
-		(tesr-api/register-scripted-tile-renderer! "wind-gen-main-part" main-renderer)))
+		(tesr-api/register-scripted-tile-renderer! "wind-gen-main-part" main-renderer)
+		(tesr-api/register-scripted-tile-renderer! "wind-gen-pillar" pillar-renderer)))
 
 (defonce ^:private wind-renderer-installed? (atom false))
 

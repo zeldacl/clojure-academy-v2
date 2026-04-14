@@ -33,11 +33,14 @@
       (log/info "Registering screen factories for GUI IDs:" gui-ids)
       (doseq [gui-id gui-ids]
         (when-let [gui-type (platform-gui/get-gui-type gui-id)]
-          (let [screen-fn-kw (keyword (str "create-" (name gui-type) "-screen"))]
+          (let [declared-screen-fn-kw (platform-gui/get-screen-factory-fn-kw gui-id)
+                screen-fn-kw (or declared-screen-fn-kw
+                                 (keyword (str "create-" (name gui-type) "-screen")))]
             (gui-adapter/register-screen-factory!
               screen-fn-kw
               (partial screen-factory/create-screen gui-type))
-            (log/info "Registered screen factory" screen-fn-kw "for GUI ID" gui-id)))))
+            (log/info "Registered screen factory" screen-fn-kw "for GUI ID" gui-id
+                      "gui-type=" gui-type "declared?" (boolean declared-screen-fn-kw))))))
 
     ;; Initialize event metadata system AFTER content is loaded
     ;; This syncs block event handlers from the DSL registry

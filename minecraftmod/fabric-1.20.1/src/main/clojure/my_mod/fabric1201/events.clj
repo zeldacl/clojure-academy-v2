@@ -65,10 +65,11 @@
 
 (defn handle-use-block
   "Handle Fabric UseBlockCallback event"
-  [player world _hand hit-result]
+  [player world hand hit-result]
   (try
     (let [pos (.getBlockPos hit-result)
         block-state (.getBlockState world pos)
+        item-stack (.getStackInHand player hand)
         ret (handle-right-click
           {:x (.getX pos)
            :y (.getY pos)
@@ -76,6 +77,8 @@
            :pos pos
            :sneaking (.isShiftKeyDown player)
            :player player
+           :hand hand
+           :item-stack item-stack
            :world world
            :block (.getBlock block-state)})]
     ;; GUI was opened: consume this interaction so vanilla item use

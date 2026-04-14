@@ -86,6 +86,7 @@
       ;; Forge fires on both sides and both hands. Main hand only.
       (when (= hand InteractionHand/MAIN_HAND)
         (let [block-state (.getBlockState level pos)
+              item-stack (.getItemInHand player hand)
               ret (handle-right-click
                     {:x (.getX pos)
                      :y (.getY pos)
@@ -93,6 +94,8 @@
                      :pos pos
                      :sneaking (.isShiftKeyDown player)
                      :player player
+                     :hand hand
+                     :item-stack item-stack
                      :world level
                      :block (.getBlock block-state)})]
           (when (or (gui-open-result? ret)
