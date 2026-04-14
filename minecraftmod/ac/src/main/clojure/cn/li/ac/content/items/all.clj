@@ -2,6 +2,7 @@
   "Content entrypoint for AC item declarations."
   (:require [cn.li.ac.item.components :as components]
             [cn.li.ac.item.constraint-plate :as constraint-plate]
+            [cn.li.ac.item.legacy-materials :as legacy-materials]
             [cn.li.ac.item.mat-core :as mat-core]
             [cn.li.ac.item.media :as media]
             [cn.li.ac.item.windgen-fan :as windgen-fan]))
@@ -11,6 +12,7 @@
 (defn init-items!
   []
   (when (compare-and-set! items-installed? false true)
+    (legacy-materials/init-legacy-materials!)
     (components/init-components!)
     (constraint-plate/init-constraint-plate!)
     (mat-core/init-mat-cores!)

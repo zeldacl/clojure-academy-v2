@@ -14,26 +14,25 @@
    {:key :max-energy
     :nbt-key "MaxEnergy"
     :type :double
-    :default 15000.0
+    :default 3000.0
     :persist? true
     :gui-sync? true
     :gui-coerce double}
 
-   {:key :crafting-progress
-    :nbt-key "CraftingProgress"
+     {:key :work-counter
+    :nbt-key "WorkCounter"
     :type :int
     :default 0
     :persist? true
     :gui-sync? true
     :gui-coerce int}
 
-   {:key :max-progress
-    :nbt-key "MaxProgress"
-    :type :int
-    :default 100
+     {:key :mode
+    :nbt-key "Mode"
+    :type :string
+    :default "plate"
     :persist? true
-    :gui-sync? true
-    :gui-coerce int}
+    :gui-sync? true}
 
    {:key :working
     :nbt-key "Working"

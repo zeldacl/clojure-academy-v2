@@ -56,4 +56,18 @@
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "reso_ore")}
                      :flat-item-icon? true}}))
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "crystal-ore"
+        {:registry-name "crystal_ore"
+         :physical {:material :stone
+                    :hardness 3.0
+                    :resistance 3.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 2
+                    :sounds :stone}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "crystal_ore")}
+                     :flat-item-icon? true}}))
     (log/info "Initialized ore blocks")))

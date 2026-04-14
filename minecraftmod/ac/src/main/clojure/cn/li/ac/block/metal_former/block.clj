@@ -3,7 +3,8 @@
 
   Architecture:
   All persistent state lives in ScriptedBlockEntity.customState as Clojure maps."
-  (:require [cn.li.mcmod.block.dsl :as bdsl]
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.block.state-schema :as state-schema]
@@ -43,6 +44,11 @@
 (def former-scripted-save-fn
   (state-schema/schema->save-fn former-state-schema))
 
+(def former-block-state-properties
+  {:facing {:name "facing"
+            :type :horizontal-facing
+            :default "north"}})
+
 ;; ============================================================================
 ;; Inventory
 ;; ============================================================================
@@ -52,55 +58,115 @@
 (def energy-slot 2)
 (def total-slots 3)
 
+(defn- stack-empty?
+  [stack]
+  (or (nil? stack)
+      (try (boolean (pitem/item-is-empty? stack))
+           (catch Exception _ false))))
+
+(defn- stack-count
+  [stack]
+  (if (stack-empty? stack)
+    0
+    (try (int (pitem/item-get-count stack))
+         (catch Exception _ 0))))
+
+(defn- rebuild-stack
+  [stack new-count]
+  (when (and stack (pos? (int new-count)))
+    (when-let [item-id (recipes/item-id-from-stack stack)]
+      (let [new-stack (pitem/create-item-stack-by-id item-id (int new-count))]
+        (when new-stack
+          (try
+            (when-let [damage-fn (requiring-resolve 'cn.li.mcmod.platform.item/item-get-damage)]
+              (when-let [set-damage-fn (requiring-resolve 'cn.li.mcmod.platform.item/item-set-damage!)]
+                (set-damage-fn new-stack (int (damage-fn stack)))))
+            (catch Exception _ nil))
+          new-stack)))))
+
+(defn- consume-stack
+  [stack amount]
+  (let [left (- (stack-count stack) (int amount))]
+    (when (pos? left)
+      (rebuild-stack stack left))))
+
+(defn- merge-stack-count
+  [existing produced]
+  (cond
+    (stack-empty? produced) existing
+    (stack-empty? existing) produced
+    :else (rebuild-stack existing (+ (stack-count existing) (stack-count produced)))))
+
+(defn- current-mode
+  [state]
+  (recipes/normalize-mode (:mode state :plate)))
+
+(defn- face-name
+  [face]
+  (some-> face name str/lower-case))
+
+(defn- get-current-recipe
+  [state]
+  (when-let [rid (:current-recipe-id state)]
+    (recipes/get-recipe-by-id rid)))
+
+(defn- reset-work
+  [state]
+  (assoc state
+         :working false
+         :work-counter 0
+         :current-recipe-id ""))
+
 ;; ============================================================================
 ;; Forming Logic
 ;; ============================================================================
 
-(defn- can-start-forming?
-  "Check if forming can start"
-  [state]
-  (let [input-item (get-in state [:inventory input-slot])
-        recipe (when input-item (recipes/find-recipe input-item))
-        energy (:energy state 0.0)]
-    (and recipe
-         (recipes/can-form? recipe input-item energy)
-         (not (:working state false)))))
+(defn- cycle-mode
+  [state delta]
+  (let [idx (.indexOf recipes/mode-order (current-mode state))
+        current-idx (if (neg? idx) 0 idx)
+        next-idx (mod (+ current-idx (int delta)) (count recipes/mode-order))]
+    (assoc state :mode (recipes/mode->string (nth recipes/mode-order next-idx)))))
 
 (defn- tick-forming
-  "Process one tick of forming"
   [state]
-  (if (:working state false)
-    (let [progress (:crafting-progress state 0)
-          max-prog (:max-progress state former-config/max-progress)
-          energy (:energy state 0.0)
-          energy-cost former-config/energy-per-tick]
-      (if (>= energy energy-cost)
-        (let [new-progress (inc progress)
-              new-energy (- energy energy-cost)]
-          (if (>= new-progress max-prog)
-            (assoc state
-                   :crafting-progress 0
-                   :working false
-                   :energy new-energy
-                   :current-recipe-id "")
-            (assoc state
-                   :crafting-progress new-progress
-                   :energy new-energy)))
-        (assoc state :working false)))
-    state))
+  (let [recipe (get-current-recipe state)
+        input-item (get-in state [:inventory input-slot])
+        output-item (get-in state [:inventory output-slot])
+        energy (double (:energy state 0.0))]
+    (if (and recipe
+             (recipes/can-form? recipe input-item output-item (current-mode state))
+             (>= energy former-config/energy-per-tick))
+      (let [new-counter (inc (int (:work-counter state 0)))
+            new-energy (- energy former-config/energy-per-tick)]
+        (if (>= new-counter former-config/work-ticks)
+          (let [produced (recipes/build-output-stack recipe)
+                new-input (consume-stack input-item (get-in recipe [:input :count] 1))
+                new-output (merge-stack-count output-item produced)]
+            (-> state
+                (assoc :energy new-energy)
+                (assoc-in [:inventory input-slot] new-input)
+                (assoc-in [:inventory output-slot] new-output)
+                reset-work))
+          (assoc state
+                 :energy new-energy
+                 :working true
+                 :work-counter new-counter)))
+      (reset-work state))))
 
-(defn- try-start-forming
-  "Try to start a new forming operation"
+(defn- try-find-recipe
   [state]
-  (if (can-start-forming? state)
-    (let [input-item (get-in state [:inventory input-slot])
-          recipe (recipes/find-recipe input-item)]
-      (assoc state
-             :working true
-             :crafting-progress 0
-             :current-recipe-id (:id recipe "")
-             :max-progress (or (:time recipe) former-config/form-time-ticks)))
-    state))
+  (let [counter (inc (int (:work-counter state 0)))]
+    (if (>= counter former-config/recipe-check-interval)
+      (let [recipe (recipes/find-recipe (get-in state [:inventory input-slot])
+                                        (current-mode state))]
+        (if recipe
+          (assoc state
+                 :working true
+                 :work-counter 0
+                 :current-recipe-id (:id recipe))
+          (assoc state :work-counter 0)))
+      (assoc state :work-counter counter))))
 
 ;; ============================================================================
 ;; Tick Logic
@@ -108,11 +174,13 @@
 
 (defn- former-tick-fn
   "Tick handler for metal former"
-  [level _pos _block-state be]
+  [level _block-pos _block-state be]
   (when (and level (not (world/world-is-client-side* level)))
-    (let [state (or (platform-be/get-custom-state be) former-default-state)
-          ticker (inc (get state :update-ticker 0))
-          state (assoc state :update-ticker ticker)
+    (let [orig-state (or (platform-be/get-custom-state be) former-default-state)
+          ticker (inc (int (get orig-state :update-ticker 0)))
+          state (assoc orig-state
+                       :update-ticker ticker
+                       :max-energy (double former-config/max-energy))
 
           ;; Charge from energy slot
           energy-item (get-in state [:inventory energy-slot])
@@ -129,9 +197,9 @@
           ;; Process forming
           state (if (:working state false)
                   (tick-forming state)
-                  (try-start-forming state))]
+                  (try-find-recipe state))]
 
-      (when (not= state (platform-be/get-custom-state be))
+      (when (not= state orig-state)
         (platform-be/set-custom-state! be state)
         (platform-be/set-changed! be)))))
 
@@ -167,13 +235,18 @@
                (assoc (or (platform-be/get-custom-state be) former-default-state)
                       :inventory (vec (repeat total-slots nil)))))
    :still-valid? (fn [_be _player] true)
-   :can-place-through-face? (fn [_be slot item _face]
-                               (or (= slot input-slot)
+       :can-place-through-face? (fn [_be slot item face]
+                     (or (and (= slot input-slot)
+                        (or (nil? face)
+                          (= (face-name face) "up")))
                                    (and (= slot energy-slot)
+                        (not= (face-name face) "down")
                                         (energy/is-energy-item-supported? item))))
-   :can-take-through-face? (fn [_be slot _item _face]
-                             (or (= slot output-slot)
-                                 (= slot energy-slot)))})
+     :can-take-through-face? (fn [_be slot _item face]
+                   (let [f (face-name face)]
+                   (and (= f "down")
+                    (or (= slot output-slot)
+                      (= slot energy-slot)))))})
 
 ;; ============================================================================
 ;; Event Handlers
@@ -201,13 +274,27 @@
       (let [state (or (platform-be/get-custom-state tile) former-default-state)]
         {:energy (:energy state 0.0)
          :max-energy (:max-energy state former-config/max-energy)
-         :crafting-progress (:crafting-progress state 0)
-         :max-progress (:max-progress state former-config/max-progress)
+         :work-counter (:work-counter state 0)
+         :mode (or (:mode state) "plate")
          :working (:working state false)})
-      {:energy 0.0 :max-energy 0.0 :crafting-progress 0 :max-progress 100 :working false})))
+      {:energy 0.0 :max-energy 0.0 :work-counter 0 :mode "plate" :working false})))
+
+(defn- handle-alternate [payload player]
+  (let [world (net-helpers/get-world player)
+        tile (net-helpers/get-tile-at world payload)
+        delta (int (or (:dir payload) 0))]
+    (if-not tile
+      {:success false}
+      (let [state (or (platform-be/get-custom-state tile) former-default-state)
+            next-state (cycle-mode state delta)]
+        (platform-be/set-custom-state! tile next-state)
+        (platform-be/set-changed! tile)
+        {:success true
+         :mode (:mode next-state)}))))
 
 (defn register-network-handlers! []
   (net-server/register-handler (msg :get-status) handle-get-status)
+  (net-server/register-handler (msg :alternate) handle-alternate)
   (log/info "Metal Former network handlers registered"))
 
 ;; ============================================================================
@@ -223,7 +310,7 @@
 (defn init-metal-former!
   []
   (when (compare-and-set! metal-former-installed? false true)
-    (msg-registry/register-block-messages! :metal-former [:get-status])
+    (msg-registry/register-block-messages! :metal-former [:get-status :alternate])
     (tdsl/register-tile!
       (tdsl/create-tile-spec
         "metal-former"
@@ -239,15 +326,16 @@
         "metal-former"
         {:registry-name "metal_former"
          :physical {:material :metal
-                    :hardness 3.5
+              :hardness 3.0
                     :resistance 6.0
                     :requires-tool true
                     :harvest-tool :pickaxe
                     :harvest-level 1
                     :sounds :metal}
-         :rendering {:model-parent "minecraft:block/cube_all"
-                     :textures {:all (modid/asset-path "block" "metal_former")}
+            :rendering {:model-parent "minecraft:block/cube_all"
+               :textures {:all (modid/asset-path "block" "metal_former_front")}
                      :flat-item-icon? true}
+            :block-state {:block-state-properties former-block-state-properties}
          :events {:on-right-click open-former-gui!}}))
     (hooks/register-network-handler! register-network-handlers!)
     (log/info "Initialized Metal Former block")))

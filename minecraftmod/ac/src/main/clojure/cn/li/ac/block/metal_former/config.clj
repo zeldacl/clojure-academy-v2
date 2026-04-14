@@ -3,19 +3,19 @@
 
 (def energy-per-tick
   "Energy consumed per tick while forming"
-  40.0)
+  13.3)
 
 (def max-energy
   "Maximum energy storage"
-  15000.0)
+  3000.0)
 
-(def form-time-ticks
-  "Base forming time in ticks"
-  150)
+(def work-ticks
+  "Ticks required to complete one recipe."
+  60)
 
-(def max-progress
-  "Maximum forming progress value"
-  100)
+(def recipe-check-interval
+  "Idle ticks between recipe scans."
+  5)
 
 (def sync-interval
   "Ticks between GUI sync broadcasts"

@@ -78,7 +78,9 @@
    :energy 1000.0
    :time 200}"
   [recipe]
-  {:inputs (or (:inputs recipe) [])
+  {:inputs (or (:inputs recipe)
+               (when-let [input (:input recipe)] [input])
+               [])
    :outputs [(or (:output recipe) {})]
    :energy (or (:energy recipe) 0.0)
    :time (or (:time recipe) 0)})

@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "my_mod:block/crystal_ore"
+    }
+  }
+}

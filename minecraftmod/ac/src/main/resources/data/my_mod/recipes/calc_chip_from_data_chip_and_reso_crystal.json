@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "my_mod:data_chip"
+    },
+    {
+      "item": "my_mod:reso_crystal"
+    }
+  ],
+  "result": {
+    "item": "my_mod:calc_chip",
+    "count": 1
+  }
+}
