@@ -7,6 +7,7 @@
             [cn.li.ac.wireless.data.world :as wd])
   (:import [net.fabricmc.fabric.api.event.player UseBlockCallback]
            [net.fabricmc.fabric.api.event.player PlayerBlockBreakEvents]
+           [net.minecraft.network.chat Component]
            [net.minecraft.world InteractionResult]
            [net.fabricmc.fabric.api.event.lifecycle.v1 ServerWorldEvents]))
 
@@ -17,6 +18,26 @@
       (contains? ret :player)
       (contains? ret :world)
       (contains? ret :pos)))
+
+(defn- consume-result? [ret]
+  (and (map? ret) (true? (:consume? ret))))
+
+(defn- feedback-component
+  [{:keys [type key args text]}]
+  (case type
+    :translatable (Component/translatable (str key) (into-array Object (map str (or args []))))
+    :literal (Component/literal (str text))
+    nil))
+
+(defn- emit-feedback!
+  [event-data ret]
+  (let [world (:world event-data)
+        player (:player event-data)
+        messages (when (map? ret) (:messages ret))]
+    (when (and world player (not (.isClientSide world)) (seq messages))
+      (doseq [m messages]
+        (when-let [c (feedback-component m)]
+          (.sendSystemMessage player c))))))
 
 (defn handle-right-click
   "Handle right-click block event from event data map"
@@ -31,6 +52,7 @@
     (when (and block-id (event-metadata/has-event-handler? block-id :on-right-click))
       (log/info "Block has registered handler, dispatching...")
       (let [ret (core/on-block-right-click (assoc event-data :block-id block-id))]
+        (emit-feedback! event-data ret)
         (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
           (try
             (let [{:keys [gui-id player world pos]} ret
@@ -46,21 +68,22 @@
   [player world _hand hit-result]
   (try
     (let [pos (.getBlockPos hit-result)
-          block-state (.getBlockState world pos)]
-      (let [ret (handle-right-click
-        {:x (.getX pos)
-         :y (.getY pos)
-         :z (.getZ pos)
-         :pos pos
-         :sneaking (.isShiftKeyDown player)
-         :player player
-         :world world
-         :block (.getBlock block-state)})]
-        ;; GUI was opened: consume this interaction so vanilla item use
-        ;; does not place the held block as a follow-up action.
-        (if (gui-open-result? ret)
-          InteractionResult/CONSUME
-          InteractionResult/PASS)))
+        block-state (.getBlockState world pos)
+        ret (handle-right-click
+          {:x (.getX pos)
+           :y (.getY pos)
+           :z (.getZ pos)
+           :pos pos
+           :sneaking (.isShiftKeyDown player)
+           :player player
+           :world world
+           :block (.getBlock block-state)})]
+    ;; GUI was opened: consume this interaction so vanilla item use
+    ;; does not place the held block as a follow-up action.
+    (if (or (gui-open-result? ret)
+        (consume-result? ret))
+      InteractionResult/CONSUME
+      InteractionResult/PASS))
     (catch Throwable t
       (log/info "Error handling use block event:" (.getMessage t))
       (.printStackTrace t)

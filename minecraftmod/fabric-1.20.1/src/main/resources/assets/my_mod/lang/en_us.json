@@ -1,3 +1,6 @@
 {
-  "itemGroup.my_mod.items": "My Mod Items"
+  "itemGroup.my_mod.items": "My Mod Items",
+  "ac.cat_engine.unlink": "Cat Engine unlinked",
+  "ac.cat_engine.notfound": "No wireless node found nearby",
+  "ac.cat_engine.linked": "Cat Engine linked to %s"
 }

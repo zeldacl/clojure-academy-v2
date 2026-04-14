@@ -11,6 +11,7 @@
   (:require [cn.li.mcmod.util.log :as log]))
 
 (def ^:dynamic *y-rotation-fn* nil)
+(def ^:dynamic *x-rotation-fn* nil)
 (def ^:dynamic *z-rotation-fn* nil)
 
 (def ^:dynamic *push-pose-fn* nil)
@@ -42,6 +43,17 @@
       (catch Exception e
         (log/error "Error applying Y-rotation:"(ex-message e))))
     (log/warn "No platform Y-rotation function bound; skipping rotation")))
+
+(defn apply-x-rotation
+  "Apply X-axis rotation to `pose-stack` using the platform-provided
+  function stored in `*x-rotation-fn*`."
+  [pose-stack angle-degrees]
+  (if *x-rotation-fn*
+    (try
+      (*x-rotation-fn* pose-stack angle-degrees)
+      (catch Exception e
+        (log/error "Error applying X-rotation:" (ex-message e))))
+    (log/warn "No platform X-rotation function bound; skipping rotation")))
 
 (defn apply-z-rotation
   "Apply Z-axis rotation to `pose-stack` using the platform-provided

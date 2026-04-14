@@ -18,6 +18,11 @@
   [^PoseStack pose-stack angle]
   (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/YP (float angle))))
 
+(defn rotate-x
+  "Rotate pose stack around X axis."
+  [^PoseStack pose-stack angle]
+  (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/XP (float angle))))
+
 (defn rotate-z
   "Rotate pose stack around Z axis.
 

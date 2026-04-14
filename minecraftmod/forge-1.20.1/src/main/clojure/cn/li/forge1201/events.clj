@@ -7,6 +7,7 @@
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
        [net.minecraft.world InteractionHand InteractionResult]
+       [net.minecraft.network.chat Component]
          [net.minecraft.world.level Level]
            [net.minecraftforge.eventbus.api Event$Result]
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
@@ -19,6 +20,26 @@
       (contains? ret :player)
       (contains? ret :world)
       (contains? ret :pos)))
+
+(defn- consume-result? [ret]
+  (and (map? ret) (true? (:consume? ret))))
+
+(defn- feedback-component
+  [{:keys [type key args text]}]
+  (case type
+    :translatable (Component/translatable (str key) (into-array Object (map str (or args []))))
+    :literal (Component/literal (str text))
+    nil))
+
+(defn- emit-feedback!
+  [event-data ret]
+  (let [^Level world (:world event-data)
+        player (:player event-data)
+        messages (when (map? ret) (:messages ret))]
+    (when (and world player (not (.isClientSide world)) (seq messages))
+      (doseq [m messages]
+        (when-let [c (feedback-component m)]
+          (.sendSystemMessage player c))))))
 
 (defn handle-right-click
   "Handle right-click block event from event data map"
@@ -37,6 +58,7 @@
           (log/info "[RIGHT-CLICK] Block has registered handler, dispatching to dispatcher...")
           (let [ret (dispatcher/on-block-right-click (assoc event-data :block-id block-id))]
             (log/info "[RIGHT-CLICK] Dispatcher returned:" ret)
+            (emit-feedback! event-data ret)
             (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
               (try
                 (let [{:keys [gui-id player world pos]} ret
@@ -72,7 +94,8 @@
                      :player player
                      :world level
                      :block (.getBlock block-state)})]
-          (when (gui-open-result? ret)
+          (when (or (gui-open-result? ret)
+                    (consume-result? ret))
             (if (.isClientSide level)
               ;; Client: deny Item#useOn / onItemUseFirst only so BlockItem does not show a
               ;; placement ghost; do not cancel the whole event (can block server handling).

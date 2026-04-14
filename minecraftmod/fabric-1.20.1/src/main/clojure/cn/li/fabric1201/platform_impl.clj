@@ -288,6 +288,14 @@
     (constantly (fn [pose-stack angle]
                   (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/YP (float angle))))))
 
+  (alter-var-root #'pose/*x-rotation-fn*
+    (constantly (fn [pose-stack angle]
+                  (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/XP (float angle))))))
+
+  (alter-var-root #'pose/*z-rotation-fn*
+    (constantly (fn [pose-stack angle]
+                  (.mulPose pose-stack (.rotationDegrees com.mojang.math.Axis/ZP (float angle))))))
+
   (alter-var-root #'pose/*push-pose-fn*
       (constantly (fn [pose-stack]
             (.pushPose pose-stack))))

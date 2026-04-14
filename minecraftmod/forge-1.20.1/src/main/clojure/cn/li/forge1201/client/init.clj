@@ -71,6 +71,7 @@
 
   ;; Bind pose stack implementations
   (alter-var-root #'pose/*y-rotation-fn* (constantly pose-impl/rotate-y))
+  (alter-var-root #'pose/*x-rotation-fn* (constantly pose-impl/rotate-x))
   (alter-var-root #'pose/*z-rotation-fn* (constantly pose-impl/rotate-z))
   (alter-var-root #'pose/*push-pose-fn* (constantly pose-impl/push-pose))
   (alter-var-root #'pose/*pop-pose-fn* (constantly pose-impl/pop-pose))

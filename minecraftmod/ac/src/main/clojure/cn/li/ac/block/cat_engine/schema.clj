@@ -3,7 +3,36 @@
 
 (def cat-engine-schema
   "Schema for cat engine block"
-  [{:key :linked-node-x
+  [{:key :energy
+    :nbt-key "Energy"
+    :type :double
+    :default 0.0
+    :persist? true}
+
+   {:key :max-energy
+    :nbt-key "MaxEnergy"
+    :type :double
+    :default 2000.0
+    :persist? true}
+
+   {:key :this-tick-gen
+    :nbt-key "TickGen"
+    :type :double
+    :default 0.0
+    :persist? true}
+
+   {:key :gen-speed
+    :type :double
+    :default 0.0
+    :persist? false}
+
+   {:key :linked-node-name
+    :nbt-key "LinkedNodeName"
+    :type :string
+    :default ""
+    :persist? true}
+
+   {:key :linked-node-x
     :nbt-key "LinkedNodeX"
     :type :int
     :default 0
@@ -25,18 +54,6 @@
     :nbt-key "HasLink"
     :type :boolean
     :default false
-    :persist? true}
-
-   {:key :search-cooldown
-    :nbt-key "SearchCooldown"
-    :type :int
-    :default 0
-    :persist? true}
-
-   {:key :link-attempts
-    :nbt-key "LinkAttempts"
-    :type :int
-    :default 0
     :persist? true}
 
    {:key :update-ticker

@@ -1,28 +1,14 @@
 (ns cn.li.ac.block.cat-engine.config
-  "Cat Engine configuration - automatic wireless linking")
+  "Cat Engine configuration aligned to AcademyCraft 1.12 semantics.")
 
-;; Search parameters
-(def search-radius
-  "Radius to search for wireless nodes (blocks)"
-  16.0)
+(def max-energy
+  "Internal energy buffer upper bound. Mirrors TileGeneratorBase ctor (max=2000)."
+  2000.0)
 
-(def search-interval
-  "Ticks between node search attempts"
-  100)
+(def generation-per-tick
+  "Energy generated each server tick before transmission."
+  500.0)
 
-(def link-cooldown
-  "Ticks to wait after failed link attempt"
-  200)
-
-;; Link behavior
-(def auto-link-enabled?
-  "Enable automatic linking to nearby nodes"
-  true)
-
-(def prefer-closest?
-  "Prefer closest node over random selection"
-  false)
-
-(def max-link-attempts
-  "Maximum link attempts before cooldown"
-  3)
+(def generator-bandwidth
+  "Wireless generator bandwidth used by IWirelessGenerator."
+  500.0)
