@@ -208,12 +208,12 @@
                (assoc (or (platform-be/get-custom-state be) phase-default-state)
                       :inventory (vec (repeat phase-config/total-slots nil)))))
    :still-valid? (fn [_be _player] true)
-   :can-place-through-face? (fn [_be slot item _face]
+   :can-place-through-face? (fn [_be ^long slot item _face]
                               (case slot
                                 0 (phase-liquid-unit? item)
                                 2 (energy/is-energy-item-supported? item)
                                 false))
-   :can-take-through-face? (fn [_be slot _item _face]
+   :can-take-through-face? (fn [_be ^long slot _item _face]
                              (or (= slot phase-config/liquid-out-slot)
                                  (= slot phase-config/output-slot)))})
 

@@ -12,7 +12,7 @@
      :x 10 :y 10
      :width 100 :height 10
      :percent (double percent)
-     :texture "ac:textures/guis/cpbar/cp_bar.png"}))
+    :texture "my_mod:textures/guis/cpbar/cp.png"}))
 
 (defn build-overload-bar-render-data
   "Build overload bar render data."
@@ -25,8 +25,8 @@
      :percent (double percent)
      :overloaded (not fine)
      :texture (if fine
-                "ac:textures/guis/cpbar/ol_bar_normal.png"
-                "ac:textures/guis/cpbar/ol_bar_overload.png")}))
+                "my_mod:textures/guis/cpbar/back_normal.png"
+                "my_mod:textures/guis/cpbar/back_overload.png")}))
 
 (defn build-skill-slot-render-data
   "Build skill slot render data with cooldown info."

@@ -22,21 +22,25 @@
   "Register all ability key bindings with Minecraft."
   []
   (let [category "key.categories.ac.ability"]
-    ;; Create skill slot keys (Z, X, C, V)
-    (reset! skill-keys
-            [(create-key-mapping "key.ac.skill.0" GLFW/GLFW_KEY_Z category)
-             (create-key-mapping "key.ac.skill.1" GLFW/GLFW_KEY_X category)
-             (create-key-mapping "key.ac.skill.2" GLFW/GLFW_KEY_C category)
-             (create-key-mapping "key.ac.skill.3" GLFW/GLFW_KEY_V category)])
 
-    ;; Create GUI keys
-    (reset! gui-keys
-            {:skill-tree (create-key-mapping "key.ac.open_skill_tree"
-                                            GLFW/GLFW_KEY_K
-                                            category)
-             :preset-editor (create-key-mapping "key.ac.open_preset_editor"
-                                               GLFW/GLFW_KEY_P
-                                               category)})
+        ;; Create skill slot keys (Z, X, C, B)
+        (reset! skill-keys
+          [(create-key-mapping "key.ac.skill.0" GLFW/GLFW_KEY_Z category)
+           (create-key-mapping "key.ac.skill.1" GLFW/GLFW_KEY_X category)
+           (create-key-mapping "key.ac.skill.2" GLFW/GLFW_KEY_C category)
+           (create-key-mapping "key.ac.skill.3" GLFW/GLFW_KEY_B category)])
+
+        ;; Create GUI keys
+        (reset! gui-keys
+          {:skill-tree (create-key-mapping "key.ac.open_skill_tree"
+            GLFW/GLFW_KEY_GRAVE_ACCENT
+            category)
+           :preset-editor (create-key-mapping "key.ac.open_preset_editor"
+               GLFW/GLFW_KEY_G
+               category)
+           :mode-switch (create-key-mapping "key.ac.mode_switch"
+             GLFW/GLFW_KEY_V
+             category)})
 
     ;; Register with Minecraft (done via FMLClientSetupEvent in init.clj)
     (log/info "Ability key bindings created")))

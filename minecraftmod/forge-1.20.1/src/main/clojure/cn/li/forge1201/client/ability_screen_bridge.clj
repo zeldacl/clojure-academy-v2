@@ -1,8 +1,9 @@
-(ns cn.li.forge1201.client.ability-screen-bridge
-  "CLIENT-ONLY screen bridge for ability GUIs (Forge layer)."
-  (:require [cn.li.ac.ability.client.screens.skill-tree :as ac-skill-tree]
-            [cn.li.ac.ability.client.screens.preset-editor :as ac-preset-editor]
-            [cn.li.mcmod.util.log :as log])
+ (ns cn.li.forge1201.client.ability-screen-bridge
+   "CLIENT-ONLY screen bridge for ability GUIs (Forge layer)."
+   (:require [cn.li.ac.ability.client.screens.skill-tree :as ac-skill-tree]
+             [cn.li.ac.ability.client.screens.preset-editor :as ac-preset-editor]
+             [cn.li.mcmod.util.log :as log]
+             [clojure.string :as str])
   (:import [net.minecraft.client.gui.screens Screen]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client.gui Font]
@@ -21,18 +22,28 @@
 ;; Skill Tree Screen
 ;; ============================================================================
 
+
+
+(defn- normalize-skill-icon-path [icon]
+  ;; 只保留 my_mod:guis/skill_tree/xxx 形式，不带 textures/ 和 .png
+  (when (and icon (not (clojure.string/blank? icon)))
+    (let [icon (clojure.string/replace icon #"^my_mod:textures/" "my_mod:")
+          icon (clojure.string/replace icon #"\\.png$" "")]
+      icon)))
+
 (defn- render-skill-node
   "Render a single skill node."
   [^GuiGraphics graphics node]
-  (let [{:keys [x y learned can-learn exp]} node
-        texture (if learned
-                 "ac:textures/guis/developer/skill_learned.png"
-                 "ac:textures/guis/developer/skill_locked.png")
+  (let [{:keys [x y learned can-learn exp skill-icon]} node
+        texture (or (normalize-skill-icon-path skill-icon)
+                    (if learned
+                      "my_mod:guis/skill_tree/skill_back"
+                      "my_mod:guis/skill_tree/skill_outline"))
         color (cond
                learned 0x00FF00
                can-learn 0xFFFF00
                :else 0xFF0000)]
-    ;; Render node circle (20x20)
+    ;; Render node icon or fallback
     (try
       (.blit graphics (ResourceLocation. texture) x y 0 0 20 20 20 20)
       (catch Exception _e
@@ -67,7 +78,7 @@
                          (concat
                            [(str skill-name " (Lv" skill-level ")")]
                            (when-not can-learn
-                             (map #(str "�?" (or (:description %) "Condition not met")) conditions))))]
+                             (map #(str "�?" (or (:description %) "Condition not met")) conditions))))]
       ;; Simple tooltip rendering
       (doseq [[idx line] (map-indexed vector tooltip-lines)]
         (draw-string! graphics (str line) (+ mouse-x 10) (+ mouse-y 10 (* idx 12)) 0xFFFFFF)))))
@@ -102,10 +113,15 @@
         (catch Exception e
           (log/error "Error rendering skill tree screen" e))))
 
+    (keyPressed [^long key ^long scancode ^long modifiers]
+      ;; 只处理ESC，其他按键返回false让MC继续处理
+      (if (= key 256) ; GLFW_KEY_ESCAPE
+        (proxy-super keyPressed key scancode modifiers)
+        false))
+
     (mouseClicked [mouse-x mouse-y _button]
       (try
-        (when-let [render-data (ac-skill-tree/build-screen-render-data)]
-          ;; Check skill node clicks
+        (if-let [render-data (ac-skill-tree/build-screen-render-data)]
           (let [clicked? (atom false)]
             (doseq [node (:skill-nodes render-data)]
               (when (and node (not @clicked?))
@@ -124,7 +140,8 @@
               (ac-skill-tree/on-level-up-click)
               (reset! clicked? true))
 
-            @clicked?))
+            (boolean @clicked?))
+          false)
         (catch Exception e
           (log/error "Error handling skill tree click" e)
           false)))

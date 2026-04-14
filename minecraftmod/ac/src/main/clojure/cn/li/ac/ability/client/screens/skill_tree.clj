@@ -139,9 +139,11 @@
   ([player-uuid]
    (open-screen! player-uuid nil))
   ([player-uuid learn-context]
-   (swap! screen-state assoc :player-uuid player-uuid :learn-context learn-context)
-   {:command :open-screen
-    :screen-type :skill-tree}))
+    ;; 确保player-state存在，防止UI卡死
+    (ps/get-or-create-player-state! player-uuid)
+    (swap! screen-state assoc :player-uuid player-uuid :learn-context learn-context)
+    {:command :open-screen
+     :screen-type :skill-tree}))
 
 (defn close-screen!
   "Close skill tree screen and clean up state."

@@ -39,8 +39,9 @@
     ;; Update state
     (swap! key-states assoc-in [:skill-keys key-idx] is-down)))
 
+
 (defn on-gui-key-event
-  "Handle GUI key state change. Opens screens on key press."
+  "Handle GUI key state change. Opens screens or toggles mode on key press."
   [gui-type is-down]
   (let [was-down (get-in @key-states [:gui-keys gui-type])]
     ;; Only trigger on key press (not held or released)
