@@ -18,6 +18,7 @@
 (defonce ^:private slot-active-contexts (atom {}))
 (defonce ^:private railgun-local-state (atom {}))
 (defonce ^:private body-intensify-local-state (atom {}))
+(defonce ^:private current-charging-local-state (atom {}))
 (defonce ^:private client-tick-counter (atom 0))
 (defonce ^:private tick-listener-registered? (atom false))
 
@@ -27,6 +28,7 @@
 (def ^:private railgun-accepted-items #{"minecraft:iron_ingot" "minecraft:iron_block"})
 (def ^:private body-intensify-max-time 40)
 (def ^:private body-intensify-tolerant-time 100)
+(def ^:private current-charging-loop-interval 8)
 
 (defn active-contexts [] @local-contexts)
 
@@ -199,6 +201,62 @@
                           :offset-z 0.12})))
     (swap! body-intensify-local-state dissoc ctx-id)))
 
+(defn- local-player-eye-pos
+  []
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    (when-let [player (.player mc)]
+      {:x (.getX player)
+       :y (+ (.getY player) 1.62)
+       :z (.getZ player)})))
+
+(defn- local-player-look-end
+  [distance]
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    (when-let [player (.player mc)]
+      (let [look (.getLookAngle player)
+            eye (local-player-eye-pos)]
+        {:x (+ (:x eye) (* (.x look) distance))
+         :y (+ (:y eye) (* (.y look) distance))
+         :z (+ (:z eye) (* (.z look) distance))}))))
+
+(defn- start-current-charging-fx!
+  [ctx-id is-item]
+  (swap! current-charging-local-state assoc
+         ctx-id
+         {:active? true
+          :is-item (boolean is-item)
+          :good? false
+          :charge-ticks 0
+          :target nil
+          :block-pos nil
+          :last-loop-sound-tick 0
+          :blend-out-until-ms 0}))
+
+(defn- update-current-charging-fx!
+  [ctx-id payload]
+  (swap! current-charging-local-state update
+         ctx-id
+         (fn [st]
+           (let [base (or st {:active? true
+                              :is-item (boolean (:is-item payload))
+                              :last-loop-sound-tick 0
+                              :blend-out-until-ms 0})]
+             (assoc base
+                    :active? true
+                    :is-item (boolean (:is-item payload))
+                    :good? (boolean (:good? payload))
+                    :charge-ticks (long (or (:charge-ticks payload) (:charge-ticks base) 0))
+                    :target (:target payload)
+                    :block-pos (:block-pos payload))))))
+
+(defn- finish-current-charging-fx!
+  [ctx-id]
+  (let [until (+ (now-ms) 1000)]
+    (swap! current-charging-local-state update ctx-id
+           (fn [st]
+             (when st
+               (assoc st :active? false :blend-out-until-ms until))))))
+
 (defn- body-intensify-loop-envelope
   [charge-ticks]
   (let [ticks (max 0 (long charge-ticks))
@@ -229,7 +287,17 @@
     (when (= skill-id :body-intensify)
       (@ctx-on-fn ctx-id :body-intensify/fx-end
                  (fn [{:keys [performed?]}]
-                   (finish-body-intensify-fx! ctx-id (boolean performed?)))))))
+                   (finish-body-intensify-fx! ctx-id (boolean performed?)))))
+    (when (= skill-id :current-charging)
+      (@ctx-on-fn ctx-id :current-charging/fx-start
+                 (fn [{:keys [is-item]}]
+                   (start-current-charging-fx! ctx-id (boolean is-item))))
+      (@ctx-on-fn ctx-id :current-charging/fx-update
+                 (fn [payload]
+                   (update-current-charging-fx! ctx-id payload)))
+      (@ctx-on-fn ctx-id :current-charging/fx-end
+                 (fn [_]
+                   (finish-current-charging-fx! ctx-id))))))
 
 (defn- local-player-item-id
   []
@@ -401,7 +469,64 @@
                            :sound-id "my_mod:em.intensify_loop"
                            :volume volume
                            :pitch pitch})
-            (swap! body-intensify-local-state update ctx-id assoc :last-loop-sound-tick tick)))))))
+            (swap! body-intensify-local-state update ctx-id assoc :last-loop-sound-tick tick)))))
+
+    ;; CurrentCharging local visuals/sounds.
+    (doseq [[ctx-id st] @current-charging-local-state]
+      (let [active? (boolean (:active? st))
+            expires (long (or (:blend-out-until-ms st) 0))]
+        (if (and (not active?) (<= expires (now-ms)))
+          (swap! current-charging-local-state dissoc ctx-id)
+          (let [is-item (boolean (:is-item st))
+                good? (boolean (:good? st))
+                target (or (:target st) (local-player-look-end 15.0))
+                eye (local-player-eye-pos)
+                block-pos (:block-pos st)
+                last-loop (long (or (:last-loop-sound-tick st) 0))]
+            (when (and active? (>= (- tick last-loop) current-charging-loop-interval))
+              (queue-sound! {:type :sound
+                             :sound-id "my_mod:em.charge_loop"
+                             :volume 0.3
+                             :pitch 1.0})
+              (swap! current-charging-local-state update ctx-id assoc :last-loop-sound-tick tick))
+
+            (if is-item
+              (when-let [{:keys [x y z]} (local-player-pos)]
+                (queue-particle! {:type :particle
+                                  :particle-type :electric-spark
+                                  :x x :y (+ y 1.3) :z z
+                                  :count (if active? 4 2)
+                                  :speed 0.05
+                                  :offset-x 0.22
+                                  :offset-y 0.18
+                                  :offset-z 0.22}))
+              (do
+                (when (and eye target)
+                  (let [distance (max 1.0 (Math/sqrt (+ (Math/pow (- (:x target) (:x eye)) 2.0)
+                                                        (Math/pow (- (:y target) (:y eye)) 2.0)
+                                                        (Math/pow (- (:z target) (:z eye)) 2.0))))
+                        segments (int (Math/max 6.0 (Math/min 18.0 (* 1.1 distance))))]
+                    (doseq [{:keys [x y z]} (line-points eye target segments)]
+                      (queue-particle! {:type :particle
+                                        :particle-type :electric-spark
+                                        :x x :y y :z z
+                                        :count 1
+                                        :speed 0.01
+                                        :offset-x 0.02
+                                        :offset-y 0.02
+                                        :offset-z 0.02}))))
+                (when (and good? block-pos)
+                  (let [[bx by bz] block-pos]
+                    (queue-particle! {:type :particle
+                                      :particle-type :electric-spark
+                                      :x (+ (double bx) 0.5)
+                                      :y (+ (double by) 0.5)
+                                      :z (+ (double bz) 0.5)
+                                      :count (if active? 6 2)
+                                      :speed 0.04
+                                      :offset-x 0.25
+                                      :offset-y 0.25
+                                      :offset-z 0.25})))))))))))
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
   (when (= TickEvent$Phase/END (.phase evt))
@@ -417,6 +542,7 @@
 (defn- on-ctx-terminate!
   [{:keys [ctx-id]}]
   (finish-body-intensify-fx! ctx-id false)
+  (finish-current-charging-fx! ctx-id)
   (ability-runtime/client-terminate-context! ctx-id nil)
   (swap! local-contexts dissoc ctx-id))
 
@@ -487,8 +613,8 @@
   [ctx-id]
   (when-let [ctx-map (get @local-contexts ctx-id)]
     (ability-net/send-to-server! catalog/MSG-SKILL-KEY-UP {:ctx-id ctx-id})
-    ;; BodyIntensify needs server feedback (:body-intensify/fx-end) before local teardown.
-    (when-not (= (:skill-id ctx-map) :body-intensify)
+    ;; BodyIntensify/CurrentCharging need server feedback before local teardown.
+    (when-not (#{:body-intensify :current-charging} (:skill-id ctx-map))
       (ability-runtime/client-terminate-context! ctx-id nil)
       (swap! local-contexts dissoc ctx-id))))
 
@@ -528,7 +654,25 @@
   (reset! slot-active-contexts {})
   (reset! railgun-local-state {})
   (reset! body-intensify-local-state {})
+  (reset! current-charging-local-state {})
   (reset! local-contexts {}))
+
+(defn current-charging-visual-state
+  []
+  (let [now (now-ms)
+        states (vals @current-charging-local-state)
+        active-states (filter :active? states)
+        latest (last (sort-by :charge-ticks active-states))
+        blend? (some (fn [st]
+                       (and (not (:active? st))
+                            (> (long (or (:blend-out-until-ms st) 0)) now)))
+                     states)]
+    {:active? (boolean (seq active-states))
+     :blending? (boolean blend?)
+     :is-item (boolean (:is-item latest))
+     :good? (boolean (:good? latest))
+     :charge-ticks (long (or (:charge-ticks latest) 0))
+     :charge-ratio (min 1.0 (/ (double (long (or (:charge-ticks latest) 0))) 40.0))}))
 
 (defn init! []
   (register-push-handlers!)

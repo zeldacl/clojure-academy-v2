@@ -167,6 +167,32 @@
         (draw-string! graphics (str "Body Intensify " pct "%") x (- y 10) 0xFFFFFF)
         (draw-string! graphics (str "T:" (int charge-ticks)) (+ x w 6) y 0x99CCFF)))))
 
+(defn- render-current-charging-overlay
+  [^GuiGraphics graphics screen-width screen-height]
+  (let [{:keys [active? blending? is-item good? charge-ratio charge-ticks]}
+        (client-runtime/current-charging-visual-state)]
+    (when (or active? blending?)
+      (let [alpha (if active? 52 28)
+            r (if good? 40 20)
+            g (if good? 90 55)
+            b (if good? 180 140)
+            x (- (int (/ screen-width 2)) 68)
+            y (- (int screen-height) 34)
+            w 136
+            h 8
+            fill (int (* (double (max 0.0 (min 1.0 charge-ratio))) w))]
+        (.fill graphics 0 0 (int screen-width) (int screen-height)
+               (argb alpha r g b))
+        (.fill graphics x y (+ x w) (+ y h) -2013265920)
+        (when (pos? fill)
+          (.fill graphics x y (+ x fill) (+ y h)
+                 (if good? -1018113 -10066177)))
+        (draw-string! graphics
+                      (str "Current Charging " (if is-item "[Item]" "[Block]"))
+                      x (- y 10)
+                      (if good? 0xD8F0FF 0xAABBD0))
+        (draw-string! graphics (str "T:" (int charge-ticks)) (+ x w 6) y 0x99CCFF)))))
+
 (defn- get-client-player-uuid
   "Get current client player UUID as string (consistent with server-sync key format)."
   []
@@ -217,7 +243,10 @@
           (render-resource-numbers graphics hud-model)
 
           ;; BodyIntensify charging HUD (CurrentChargingHUD equivalent).
-          (render-body-intensify-charge graphics screen-width screen-height))))
+          (render-body-intensify-charge graphics screen-width screen-height)
+
+          ;; CurrentCharging HUD mask/indicator.
+          (render-current-charging-overlay graphics screen-width screen-height))))
     (catch Exception e
       (log/error "Error rendering ability HUD" e))))
 

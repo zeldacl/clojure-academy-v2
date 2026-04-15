@@ -16,6 +16,7 @@ public final class ModSounds {
             DeferredRegister.create(ForgeRegistries.SOUND_EVENTS, MyMod1201.MODID);
 
     public static final RegistryObject<SoundEvent> EM_RAILGUN = register("em.railgun");
+    public static final RegistryObject<SoundEvent> EM_CHARGE_LOOP = register("em.charge_loop");
     public static final RegistryObject<SoundEvent> EM_INTENSIFY_ACTIVATE = register("em.intensify_activate");
     public static final RegistryObject<SoundEvent> EM_INTENSIFY_LOOP = register("em.intensify_loop");
 

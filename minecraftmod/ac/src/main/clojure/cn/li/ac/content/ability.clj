@@ -173,8 +173,8 @@
   :level 2
   :controllable? true
   :ctrl-id :current-charging
-  :cp-consume-speed 0.5
-  :overload-consume-speed 0.4
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
   :cooldown-ticks 40
   :on-key-down current-charging/current-charging-on-key-down
   :on-key-tick current-charging/current-charging-on-key-tick

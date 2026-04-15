@@ -70,6 +70,9 @@
   (try-install! 'cn.li.forge1201.ability.raycast
                 'cn.li.forge1201.ability.raycast/install-raycast!
                 "raycast")
+  (try-install! 'cn.li.forge1201.ability.interop
+                'cn.li.forge1201.ability.interop/install-ability-interop!
+                "ability-interop")
   (try-install! 'cn.li.forge1201.ability.world-effects
                 'cn.li.forge1201.ability.world-effects/install-world-effects!
                 "world-effects")
