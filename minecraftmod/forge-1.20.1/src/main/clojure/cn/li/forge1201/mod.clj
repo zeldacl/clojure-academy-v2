@@ -300,10 +300,16 @@
   (forge-energy/init-forge-energy!)
   ;; Initialize IC2 integration (optional - no-op if IC2 not present)
   (ic2-energy/init-ic2-energy!)
-  ;; TODO: Re-enable item-handler/init! after bootstrap issues resolved
-  ;; (ability-item-handler/init!)
+  (ability-item-handler/init!)
   ;; Register wireless IMC dispatch listeners on the Forge game event bus.
   (wireless-imc/init!)
+  ;; Left-click block must be intercepted early to avoid client-side fake break effects
+  ;; when ability mode blocks real breaking.
+  (.addListener (MinecraftForge/EVENT_BUS)
+                EventPriority/NORMAL false net.minecraftforge.event.entity.player.PlayerInteractEvent$LeftClickBlock
+                (reify java.util.function.Consumer
+                  (accept [_ evt]
+                    (events/handle-left-click-block-event evt))))
   ;; Right-click block is handled by Java ForgeEventHandler (@SubscribeEvent).
   ;; Do not register it again here, otherwise one click is processed twice.
   ;; Block place events for multi-block overlap checks and :on-place handlers

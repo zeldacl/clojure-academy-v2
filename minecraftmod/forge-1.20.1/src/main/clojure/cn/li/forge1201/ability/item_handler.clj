@@ -28,18 +28,24 @@
   [^PlayerInteractEvent$RightClickItem event]
   (try
     (let [player (.getEntity event)
+          player-uuid (str (.getUUID player))
+          ability-activated? (boolean (get-in (ability-runtime/get-player-state player-uuid)
+                                              [:resource-data :activated]))
           stack (.getItemStack event)
           item-id (get-item-id stack)
           action (ability-runtime/resolve-item-use-action item-id)]
 
-      (when (= action :open-skill-tree)
-        (when (.isClientSide (.level player))
-          ;; Open skill tree screen on client side
-          (when-let [open-fn (resolve 'cn.li.forge1201.client.ability-screen-bridge/open-skill-tree-screen!)]
-            (@open-fn (.getUUID player)))
+      (if ability-activated?
+        ;; Original behavior alignment: in ability mode, item interaction is blocked.
+        (.setCanceled event true)
+        (when (= action :open-skill-tree)
+          (when (.isClientSide (.level player))
+            ;; Open skill tree screen on client side
+            (when-let [open-fn (resolve 'cn.li.forge1201.client.ability-screen-bridge/open-skill-tree-screen!)]
+              (@open-fn (.getUUID player)))
 
-          ;; Cancel event to prevent other interactions
-          (.setCanceled event true))))
+            ;; Cancel event to prevent other interactions
+            (.setCanceled event true)))))
     (catch Exception e
       (log/error "Error handling item use event" e))))
 

@@ -1,11 +1,13 @@
 (ns cn.li.forge1201.events
   "Forge 1.20.1 event handlers"
   (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
+            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle])
-  (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
+  (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock
+            PlayerInteractEvent$LeftClickBlock]
        [net.minecraft.world InteractionHand InteractionResult]
        [net.minecraft.world.entity.player Player]
        [net.minecraft.network.chat Component]
@@ -85,34 +87,69 @@
           hand (.getHand evt)]
       ;; Forge fires on both sides and both hands. Main hand only.
       (when (= hand InteractionHand/MAIN_HAND)
-        (let [block-state (.getBlockState level pos)
-              item-stack (.getItemInHand player hand)
-              ret (handle-right-click
-                    {:x (.getX pos)
-                     :y (.getY pos)
-                     :z (.getZ pos)
-                     :pos pos
-                     :sneaking (.isShiftKeyDown player)
-                     :player player
-                     :hand hand
-                     :item-stack item-stack
-                     :world level
-                     :block (.getBlock block-state)})]
-          (when (or (gui-open-result? ret)
-                    (consume-result? ret))
-            (if (.isClientSide level)
-              ;; Client: deny Item#useOn / onItemUseFirst only so BlockItem does not show a
-              ;; placement ghost; do not cancel the whole event (can block server handling).
-              (.setUseItem evt Event$Result/DENY)
-              (do
-                (log/info "[FORGE-RIGHT-CLICK-EVENT] pos=" pos "player=" (.getGameProfile player)
-                          "block=" (.getBlock block-state))
-                ;; Server: consume so vanilla item use does not place the held block afterward.
-                (.setCancellationResult evt InteractionResult/CONSUME)
-                (.setCanceled evt true)))))))
+        (let [player-uuid (str (.getUUID player))
+              ability-activated? (boolean (get-in (ability-runtime/get-player-state player-uuid)
+                                                  [:resource-data :activated]))]
+          (when ability-activated?
+            ;; Original behavior alignment: in ability mode, block interaction is blocked.
+            (.setUseItem evt Event$Result/DENY)
+            (.setUseBlock evt Event$Result/DENY)
+            (when-not (.isClientSide level)
+              (.setCancellationResult evt InteractionResult/FAIL)
+              (.setCanceled evt true)))
+
+          (when-not ability-activated?
+            (let [block-state (.getBlockState level pos)
+                  item-stack (.getItemInHand player hand)
+                  ret (handle-right-click
+                        {:x (.getX pos)
+                         :y (.getY pos)
+                         :z (.getZ pos)
+                         :pos pos
+                         :sneaking (.isShiftKeyDown player)
+                         :player player
+                         :hand hand
+                         :item-stack item-stack
+                         :world level
+                         :block (.getBlock block-state)})]
+              (when (or (gui-open-result? ret)
+                        (consume-result? ret))
+                (if (.isClientSide level)
+                  ;; Client: deny Item#useOn / onItemUseFirst only so BlockItem does not show a
+                  ;; placement ghost; do not cancel the whole event (can block server handling).
+                  (.setUseItem evt Event$Result/DENY)
+                  (do
+                    (log/info "[FORGE-RIGHT-CLICK-EVENT] pos=" pos "player=" (.getGameProfile player)
+                              "block=" (.getBlock block-state))
+                    ;; Server: consume so vanilla item use does not place the held block afterward.
+                    (.setCancellationResult evt InteractionResult/CONSUME)
+                    (.setCanceled evt true)))))))))
     (catch Throwable t
       (log/error "[FORGE-RIGHT-CLICK-EVENT] EXCEPTION:" (ex-message t))
       (log/error "[FORGE-RIGHT-CLICK-EVENT] Stack trace:" t))))
+
+(defn handle-left-click-block-event
+  "Handle left-click block event directly from Forge event object.
+   We cancel early in ability mode so client doesn't show fake break effects
+   when server-side breaking is disallowed."
+  [^PlayerInteractEvent$LeftClickBlock evt]
+  (try
+    (let [^Level level (.getLevel evt)
+          player (.getEntity evt)
+          hand (.getHand evt)]
+      ;; Main hand only; mirror right-click filtering.
+      (when (= hand InteractionHand/MAIN_HAND)
+        (let [player-uuid (str (.getUUID player))
+              ability-activated? (boolean (get-in (ability-runtime/get-player-state player-uuid)
+                                                  [:resource-data :activated]))]
+          (when ability-activated?
+            ;; Deny vanilla interaction path on both sides to suppress visual-only break feedback.
+            (.setUseItem evt Event$Result/DENY)
+            (.setUseBlock evt Event$Result/DENY)
+            (.setCanceled evt true)))))
+    (catch Throwable t
+      (log/error "[FORGE-LEFT-CLICK-BLOCK-EVENT] EXCEPTION:" (ex-message t))
+      (log/error "[FORGE-LEFT-CLICK-BLOCK-EVENT] Stack trace:" t))))
 
 ;; ============================================================================
 ;; Block Place Events (Forge 1.20.1)
@@ -138,16 +175,21 @@
           entity (.getEntity evt)
           placed-state (.getPlacedBlock evt)]
       (when (and level pos)
-        (let [ret (handle-block-place
-                    {:x (.getX pos)
-                     :y (.getY pos)
-                     :z (.getZ pos)
-                     :pos pos
-                     :player entity
-                     :world level
-                     :block (.getBlock placed-state)})]
-          (when (and (map? ret) (:cancel-place? ret))
-            (.setCanceled evt true)))))
+        (if (and entity
+                 (instance? Player entity)
+                 (boolean (get-in (ability-runtime/get-player-state (str (.getUUID ^Player entity)))
+                                  [:resource-data :activated])))
+          (.setCanceled evt true)
+          (let [ret (handle-block-place
+                      {:x (.getX pos)
+                       :y (.getY pos)
+                       :z (.getZ pos)
+                       :pos pos
+                       :player entity
+                       :world level
+                       :block (.getBlock placed-state)})]
+            (when (and (map? ret) (:cancel-place? ret))
+              (.setCanceled evt true))))))
     (catch Throwable t
       (log/info "Error handling block place event:" (.getMessage t))
       (.printStackTrace t))))
@@ -161,18 +203,21 @@
           player (.getPlayer evt)
           block-state (.getBlockState level pos)
           block-id (event-metadata/identify-block-from-full-name (str (.getBlock block-state)))]
-      (when block-id
-        (let [ret (dispatcher/on-block-break
-                    {:x (.getX pos)
-                     :y (.getY pos)
-                     :z (.getZ pos)
-                     :pos pos
-                     :player player
-                     :world level
-                     :block (.getBlock block-state)
-                     :block-id block-id})]
-          (when (and (map? ret) (:cancel-break? ret))
-            (.setCanceled evt true)))))
+      (if (boolean (get-in (ability-runtime/get-player-state (str (.getUUID player)))
+                           [:resource-data :activated]))
+        (.setCanceled evt true)
+        (when block-id
+          (let [ret (dispatcher/on-block-break
+                      {:x (.getX pos)
+                       :y (.getY pos)
+                       :z (.getZ pos)
+                       :pos pos
+                       :player player
+                       :world level
+                       :block (.getBlock block-state)
+                       :block-id block-id})]
+            (when (and (map? ret) (:cancel-break? ret))
+              (.setCanceled evt true))))))
     (catch Throwable t
       (log/info "Error handling block break event:" (.getMessage t))
       (.printStackTrace t))))
