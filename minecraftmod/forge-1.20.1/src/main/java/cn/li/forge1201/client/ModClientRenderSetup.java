@@ -3,6 +3,8 @@ package cn.li.forge1201.client;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.forge1201.MyMod1201;
+import cn.li.forge1201.client.effect.IntensifyEffectRenderer;
+import cn.li.forge1201.entity.ModEntities;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -21,6 +23,8 @@ public final class ModClientRenderSetup {
 
     @SubscribeEvent
     public static void onRegisterBlockEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerEntityRenderer(ModEntities.INTENSIFY_EFFECT.get(), IntensifyEffectRenderer::new);
+
         // RegisterRenderers can run before FMLClientSetup / resolve-client-fn loads this NS.
         IFn require = Clojure.var("clojure.core", "require");
         require.invoke(Clojure.read("cn.li.forge1201.client.init"));

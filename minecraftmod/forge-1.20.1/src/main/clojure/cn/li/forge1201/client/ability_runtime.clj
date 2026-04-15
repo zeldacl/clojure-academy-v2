@@ -10,12 +10,14 @@
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraft.client Minecraft]
-           [net.minecraft.core.registries BuiltInRegistries]))
+           [net.minecraft.core.registries BuiltInRegistries]
+           [cn.li.forge1201.client.effect IntensifyEffectSpawner]))
 
 (defonce ^:private local-contexts (atom {}))
 (defonce ^:private sync-cache (atom {}))
 (defonce ^:private slot-active-contexts (atom {}))
 (defonce ^:private railgun-local-state (atom {}))
+(defonce ^:private body-intensify-local-state (atom {}))
 (defonce ^:private client-tick-counter (atom 0))
 (defonce ^:private tick-listener-registered? (atom false))
 
@@ -23,6 +25,8 @@
 (def ^:private railgun-coin-window-ms 1000)
 (def ^:private railgun-item-charge-ticks 20)
 (def ^:private railgun-accepted-items #{"minecraft:iron_ingot" "minecraft:iron_block"})
+(def ^:private body-intensify-max-time 40)
+(def ^:private body-intensify-tolerant-time 100)
 
 (defn active-contexts [] @local-contexts)
 
@@ -59,6 +63,8 @@
   [sound-cmd]
   (when-let [queue-fn (resolve 'cn.li.ac.ability.client.effects.sounds/queue-sound-effect!)]
     (@queue-fn sound-cmd)))
+
+(declare local-player-pos)
 
 (defn- line-points
   [start end segments]
@@ -146,6 +152,71 @@
                      :volume 0.45
                      :pitch 1.18}))))
 
+(defn- start-body-intensify-fx!
+  [ctx-id]
+  (swap! body-intensify-local-state assoc
+         ctx-id
+         {:charging? true
+          :charge-ticks 0
+          :last-loop-sound-tick 0})
+  (when-let [{:keys [x y z]} (local-player-pos)]
+    (queue-particle! {:type :particle
+                      :particle-type :electric-spark
+                      :x x :y (+ y 1.2) :z z
+                      :count 8
+                      :speed 0.06
+                      :offset-x 0.22
+                      :offset-y 0.14
+                      :offset-z 0.22})))
+
+(defn- finish-body-intensify-fx!
+  [ctx-id performed?]
+  (let [{:keys [charge-ticks]} (get @body-intensify-local-state ctx-id)
+        ticks (long (or charge-ticks 0))]
+    (when-let [{:keys [x y z]} (local-player-pos)]
+      (if performed?
+        (do
+          (IntensifyEffectSpawner/spawnLocal)
+          (queue-sound! {:type :sound
+                         :sound-id "my_mod:em.intensify_activate"
+                         :volume 0.45
+                         :pitch 1.0})
+          (queue-particle! {:type :particle
+                            :particle-type :electric-spark
+                            :x x :y (+ y 1.25) :z z
+                            :count (int (min 40 (+ 12 (* 0.6 ticks))))
+                            :speed 0.08
+                            :offset-x 0.4
+                            :offset-y 0.3
+                            :offset-z 0.4}))
+        (queue-particle! {:type :particle
+                          :particle-type :electric-spark
+                          :x x :y (+ y 1.25) :z z
+                          :count 4
+                          :speed 0.03
+                          :offset-x 0.12
+                          :offset-y 0.1
+                          :offset-z 0.12})))
+    (swap! body-intensify-local-state dissoc ctx-id)))
+
+(defn- body-intensify-loop-envelope
+  [charge-ticks]
+  (let [ticks (max 0 (long charge-ticks))
+        active-ratio (min 1.0 (/ (double ticks) (double body-intensify-max-time)))
+        tolerant-ratio (if (<= ticks body-intensify-max-time)
+                         0.0
+                         (min 1.0 (/ (double (- ticks body-intensify-max-time))
+                                     (double (max 1 (- body-intensify-tolerant-time body-intensify-max-time))))))
+        fade-scale (- 1.0 (* 0.55 tolerant-ratio))
+        volume (* (+ 0.1 (* 0.24 active-ratio)) fade-scale)
+        pitch (+ 0.88 (* 0.2 active-ratio) (* -0.08 tolerant-ratio))
+        base-interval (Math/round (double (+ 14.0 (* -8.0 active-ratio))))
+        interval (+ (int base-interval)
+                    (int (Math/round (double (* 8.0 tolerant-ratio)))))]
+    {:volume (float (max 0.08 volume))
+     :pitch (float (max 0.8 pitch))
+     :interval (max 4 interval)}))
+
 (defn- register-context-fx-listeners!
   [ctx-id skill-id]
   (when-let [ctx-on-fn (resolve 'cn.li.ac.ability.context/ctx-on)]
@@ -154,7 +225,11 @@
       (@ctx-on-fn ctx-id :railgun/fx-reflect play-railgun-shot-fx!))
     (when (= skill-id :mag-manip)
       (@ctx-on-fn ctx-id :mag-manip/fx-hold play-mag-manip-hold-fx!)
-      (@ctx-on-fn ctx-id :mag-manip/fx-throw play-mag-manip-throw-fx!))))
+      (@ctx-on-fn ctx-id :mag-manip/fx-throw play-mag-manip-throw-fx!))
+    (when (= skill-id :body-intensify)
+      (@ctx-on-fn ctx-id :body-intensify/fx-end
+                 (fn [{:keys [performed?]}]
+                   (finish-body-intensify-fx! ctx-id (boolean performed?)))))))
 
 (defn- local-player-item-id
   []
@@ -205,16 +280,19 @@
   (let [k (slot-key player-uuid key-idx)
         ctx-id (get @slot-active-contexts k)
         charge? (pos? (long (or (get-in (railgun-state k) [:charge-ticks]) 0)))
-  coin-state (railgun-state [player-uuid :coin])
-  now (now-ms)
-  coin-progress (let [start (long (or (:coin-started-at coin-state) now))
-          expires (long (or (:coin-expires-at coin-state) now))
-          window (max 1 (- expires start))]
-      (/ (double (max 0 (- now start))) (double window)))
-  coin? (let [expires (long (or (:coin-expires-at coin-state) 0))]
-    (> expires now))]
+        body-state (when ctx-id (get @body-intensify-local-state ctx-id))
+        body-charge? (boolean (:charging? body-state))
+        coin-state (railgun-state [player-uuid :coin])
+        now (now-ms)
+        coin-progress (let [start (long (or (:coin-started-at coin-state) now))
+                            expires (long (or (:coin-expires-at coin-state) now))
+                            window (max 1 (- expires start))]
+                        (/ (double (max 0 (- now start))) (double window)))
+        coin? (let [expires (long (or (:coin-expires-at coin-state) 0))]
+                (> expires now))]
     (cond
       charge? :charge
+      body-charge? :charge
       coin? (if (< coin-progress 0.6) :charge :active)
       ctx-id :active
       :else :idle)))
@@ -233,6 +311,16 @@
      :charge-ticks max-charge
      :coin-active? coin-active?
      :charge-ratio (double (/ (double max-charge) (double railgun-item-charge-ticks)))}))
+
+(defn body-intensify-charge-visual-state
+  []
+  (let [charge (reduce (fn [acc [_ st]]
+                         (max acc (long (or (:charge-ticks st) 0))))
+                       0
+                       @body-intensify-local-state)]
+    {:active? (pos? charge)
+     :charge-ticks charge
+     :charge-ratio (min 1.0 (/ (double charge) (double body-intensify-max-time)))}))
 
 (defn- abort-slot-contexts-for-player!
   [player-uuid]
@@ -287,7 +375,33 @@
         (= key-idx :coin)
         (let [expires (long (or (:coin-expires-at st) 0))]
           (when (<= expires (now-ms))
-            (clear-railgun-state! k)))))))
+            (clear-railgun-state! k)))))
+    ;; Local body-intensify charge visuals/sounds while context is active.
+    (doseq [[ctx-id st] @body-intensify-local-state]
+      (if-not (get @local-contexts ctx-id)
+        (swap! body-intensify-local-state dissoc ctx-id)
+        (let [next-charge (inc (long (or (:charge-ticks st) 0)))
+              last-loop (long (or (:last-loop-sound-tick st) 0))
+              {:keys [volume pitch interval]} (body-intensify-loop-envelope next-charge)]
+          (swap! body-intensify-local-state assoc
+                 ctx-id
+                 (assoc st :charge-ticks next-charge))
+          (when (zero? (mod tick 2))
+            (when-let [{:keys [x y z]} (local-player-pos)]
+              (queue-particle! {:type :particle
+                                :particle-type :electric-spark
+                                :x x :y (+ y 1.25) :z z
+                                :count 2
+                                :speed 0.03
+                                :offset-x 0.15
+                                :offset-y 0.12
+                                :offset-z 0.15})))
+          (when (>= (- tick last-loop) interval)
+            (queue-sound! {:type :sound
+                           :sound-id "my_mod:em.intensify_loop"
+                           :volume volume
+                           :pitch pitch})
+            (swap! body-intensify-local-state update ctx-id assoc :last-loop-sound-tick tick)))))))
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
   (when (= TickEvent$Phase/END (.phase evt))
@@ -296,10 +410,13 @@
 (defn- on-ctx-establish!
   [{:keys [ctx-id server-id]}]
   (ability-runtime/client-transition-to-alive! ctx-id server-id nil)
-  (refresh-local-context! ctx-id))
+  (refresh-local-context! ctx-id)
+  (when (= :body-intensify (:skill-id (get @local-contexts ctx-id)))
+    (start-body-intensify-fx! ctx-id)))
 
 (defn- on-ctx-terminate!
   [{:keys [ctx-id]}]
+  (finish-body-intensify-fx! ctx-id false)
   (ability-runtime/client-terminate-context! ctx-id nil)
   (swap! local-contexts dissoc ctx-id))
 
@@ -368,10 +485,12 @@
 
 (defn on-key-up!
   [ctx-id]
-  (when (get @local-contexts ctx-id)
+  (when-let [ctx-map (get @local-contexts ctx-id)]
     (ability-net/send-to-server! catalog/MSG-SKILL-KEY-UP {:ctx-id ctx-id})
-    (ability-runtime/client-terminate-context! ctx-id nil)
-    (swap! local-contexts dissoc ctx-id)))
+    ;; BodyIntensify needs server feedback (:body-intensify/fx-end) before local teardown.
+    (when-not (= (:skill-id ctx-map) :body-intensify)
+      (ability-runtime/client-terminate-context! ctx-id nil)
+      (swap! local-contexts dissoc ctx-id))))
 
 (defn on-slot-key-down!
   [player-uuid key-idx]
@@ -408,6 +527,7 @@
     (ability-runtime/client-terminate-context! ctx-id nil))
   (reset! slot-active-contexts {})
   (reset! railgun-local-state {})
+  (reset! body-intensify-local-state {})
   (reset! local-contexts {}))
 
 (defn init! []

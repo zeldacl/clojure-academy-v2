@@ -73,7 +73,7 @@
   (try-install! 'cn.li.forge1201.ability.world-effects
                 'cn.li.forge1201.ability.world-effects/install-world-effects!
                 "world-effects")
-  #_(try-install! 'cn.li.forge1201.ability.potion-effects
+  (try-install! 'cn.li.forge1201.ability.potion-effects
                 'cn.li.forge1201.ability.potion-effects/install-potion-effects!
                 "potion-effects")
   #_(try-install! 'cn.li.forge1201.ability.teleportation

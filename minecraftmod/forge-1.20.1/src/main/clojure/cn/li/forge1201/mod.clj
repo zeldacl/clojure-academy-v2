@@ -26,6 +26,8 @@
   (:import [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
+           [cn.li.forge1201.entity ModEntities]
+           [cn.li.forge1201.sound ModSounds]
            [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab Items]
            [net.minecraft.world.level ItemLike]
            [net.minecraft.network.chat Component]
@@ -398,6 +400,8 @@
         ;; Register DeferredRegisters and lifecycle event listeners on mod event bus.
         (let [^IEventBus mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
           (config-bridge/register-all! mod-bus)
+          (ModEntities/register mod-bus)
+          (ModSounds/register mod-bus)
           (.register ^DeferredRegister (force blocks-register) mod-bus)
           (.register ^DeferredRegister (force items-register) mod-bus)
           (.register ^DeferredRegister (force block-entities-register) mod-bus)

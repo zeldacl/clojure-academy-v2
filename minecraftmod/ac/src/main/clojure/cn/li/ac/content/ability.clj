@@ -192,8 +192,8 @@
   :level 4
   :controllable? true
   :ctrl-id :body-intensify
-  :cp-consume-speed 1.5
-  :overload-consume-speed 1.3
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
   :cooldown-ticks 750
   :on-key-down body-intensify/body-intensify-on-key-down
   :on-key-tick body-intensify/body-intensify-on-key-tick

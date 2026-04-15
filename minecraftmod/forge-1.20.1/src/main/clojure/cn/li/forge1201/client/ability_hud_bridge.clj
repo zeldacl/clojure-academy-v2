@@ -151,6 +151,22 @@
         (draw-string! graphics cp-text 120 10 color)
         (draw-string! graphics ol-text 120 24 color)))))
 
+(defn- render-body-intensify-charge
+  [^GuiGraphics graphics screen-width screen-height]
+  (let [{:keys [active? charge-ratio charge-ticks]} (client-runtime/body-intensify-charge-visual-state)]
+    (when active?
+      (let [w 108
+            h 10
+            x (- (int (/ screen-width 2)) (int (/ w 2)))
+            y (- (int screen-height) 54)
+            fill (int (* (double (max 0.0 (min 1.0 charge-ratio))) w))
+            pct (int (* 100.0 (double (max 0.0 (min 1.0 charge-ratio)))))]
+        (.fill graphics x y (+ x w) (+ y h) -1879048192)
+        (when (pos? fill)
+          (.fill graphics x y (+ x fill) (+ y h) -13027015))
+        (draw-string! graphics (str "Body Intensify " pct "%") x (- y 10) 0xFFFFFF)
+        (draw-string! graphics (str "T:" (int charge-ticks)) (+ x w 6) y 0x99CCFF)))))
+
 (defn- get-client-player-uuid
   "Get current client player UUID as string (consistent with server-sync key format)."
   []
@@ -198,7 +214,10 @@
                 (render-skill-slot graphics slot vstate))))
 
           ;; Render CP/OL numeric hints (V key feedback)
-          (render-resource-numbers graphics hud-model))))
+          (render-resource-numbers graphics hud-model)
+
+          ;; BodyIntensify charging HUD (CurrentChargingHUD equivalent).
+          (render-body-intensify-charge graphics screen-width screen-height))))
     (catch Exception e
       (log/error "Error rendering ability HUD" e))))
 
