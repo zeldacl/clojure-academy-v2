@@ -78,6 +78,13 @@
   [a b]
   (vlen (v- a b)))
 
+(defn- distance-sq-3d
+  [a b]
+  (let [dx (- (double (:x a)) (double (:x b)))
+        dy (- (double (:y a)) (double (:y b)))
+        dz (- (double (:z a)) (double (:z b)))]
+    (+ (* dx dx) (* dy dy) (* dz dz))))
+
 (defn- floor-int [value]
   (int (Math/floor (double value))))
 
@@ -219,8 +226,13 @@
            (filter (fn [{:keys [forward-dist radial-dist]}]
                      (and (<= 0.0 forward-dist beam-max-distance)
                           (<= radial-dist (* beam-radius 1.2)))))
-           (sort-by :forward-dist)
            vec))))
+
+(defn- compute-entity-damage
+  [start-damage radial-distance]
+  (let [dist (min beam-max-distance (max 0.0 (double radial-distance)))
+        factor (lerp 1.0 0.2 (/ dist beam-max-distance))]
+    (* (double start-damage) factor)))
 
 (defn- toggle-active?
   [player-id skill-id]
@@ -323,7 +335,10 @@
   [player-id ctx-id exp]
   (let [world-id (player-world-id player-id)
         origin-pos (player-state-pos player-id)
-        start-pos (eye-pos origin-pos)
+        visual-start-pos (eye-pos origin-pos)
+        damage-start-pos {:x (double (:x origin-pos))
+                          :y (double (:y origin-pos))
+                          :z (double (:z origin-pos))}
         look-vec (when raycast/*raycast*
                    (raycast/get-player-look-vector raycast/*raycast* player-id))]
     (if-not look-vec
@@ -331,20 +346,17 @@
       (let [dir (normalize {:x (:dx look-vec) :y (:dy look-vec) :z (:dz look-vec)})
             damage (lerp 60.0 110.0 exp)
             block-energy (lerp 900.0 2000.0 exp)
-            candidates (railgun-candidates player-id world-id start-pos dir)
+            candidates (->> (railgun-candidates player-id world-id damage-start-pos dir)
+                            (sort-by (fn [{:keys [x y z]}]
+                                       (distance-sq-3d origin-pos {:x x :y y :z z})))
+                            vec)
             step-result (fn [{:keys [stop? reflection-distance reflection-hit? normal-hit-count] :as acc}
-                             {:keys [uuid x y z]}]
+                             {:keys [uuid x y z radial-dist]}]
                           (if stop?
                             (reduced acc)
                             (if (and (ps/get-player-state uuid)
                                      (vec-reflection-can-reflect? uuid damage))
                               (let [distance-to-reflector (distance-3d origin-pos {:x x :y y :z z})
-                                    _ (when entity-damage/*entity-damage*
-                                        (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
-                                                                           world-id
-                                                                           uuid
-                                                                           damage
-                                                                           :magic))
                                     reflected-hit? (boolean (perform-reflection-shot! ctx-id uuid))]
                                 (reduced {:stop? true
                                           :reflection-distance distance-to-reflector
@@ -355,7 +367,7 @@
                                   (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
                                                                      world-id
                                                                      uuid
-                                                                     damage
+                                                                     (compute-entity-damage damage radial-dist)
                                                                      :magic))
                                 {:stop? false
                                  :reflection-distance reflection-distance
@@ -369,11 +381,11 @@
                            candidates)
             block-distance (min beam-max-distance (double (or (:reflection-distance result) beam-max-distance)))
             visual-distance (min beam-visual-distance (double (or (:reflection-distance result) beam-visual-distance)))
-            end-pos (v+ start-pos (v* dir visual-distance))]
-        (break-beam-blocks! player-id world-id start-pos dir block-distance block-energy)
+            end-pos (v+ visual-start-pos (v* dir visual-distance))]
+          (break-beam-blocks! player-id world-id damage-start-pos dir block-distance block-energy)
         (ctx/ctx-send-to-client! ctx-id :railgun/fx-shot
                                  {:mode :perform
-                                  :start start-pos
+                        :start visual-start-pos
                                   :end end-pos
                                   :hit-distance visual-distance})
         {:performed? true

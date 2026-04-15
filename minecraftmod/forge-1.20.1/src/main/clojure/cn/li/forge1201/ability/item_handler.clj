@@ -7,6 +7,7 @@
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.world InteractionResult]
+           [net.minecraft.world InteractionHand]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.resources ResourceLocation]))
 
@@ -45,6 +46,12 @@
               (@client-fn player-uuid)))
           (when (and (= action :railgun-coin-throw)
                      (not (.isClientSide (.level player))))
+            (when-not (.. player (getAbilities) instabuild)
+              (let [^InteractionHand hand (.getHand event)]
+                (when (and stack (not (.isEmpty stack)))
+                  (.shrink stack 1)
+                  (when (.isEmpty stack)
+                    (.setItemInHand player hand ItemStack/EMPTY)))))
             (ability-runtime/on-ability-item-action!
               action
               player-uuid

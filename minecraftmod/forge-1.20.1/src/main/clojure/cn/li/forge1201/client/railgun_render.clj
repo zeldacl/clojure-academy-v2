@@ -21,7 +21,7 @@
 (defonce ^:private tick-listener-registered? (atom false))
 (defonce ^:private render-listener-registered? (atom false))
 
-(def ^:private beam-life-ticks 5)
+(def ^:private beam-life-ticks 12)
 (def ^:private full-bright-uv2 15728880)
 (def ^:private beam-texture
 	(ResourceLocation. "minecraft" "textures/entity/beacon_beam.png"))
@@ -132,21 +132,21 @@
 (defn- beam-palette
 	[mode]
 	(case mode
-		:reflect {:outer {:r 255 :g 206 :b 112}
-					  :inner {:r 255 :g 241 :b 210}
-					  :flash {:r 255 :g 232 :b 168}}
-		:perform {:outer {:r 98 :g 188 :b 255}
-					 :inner {:r 215 :g 236 :b 255}
-					 :flash {:r 200 :g 230 :b 255}}
-		:entity-hit {:outer {:r 98 :g 188 :b 255}
-							 :inner {:r 215 :g 236 :b 255}
-							 :flash {:r 200 :g 230 :b 255}}
-		:block-hit {:outer {:r 88 :g 228 :b 238}
-							:inner {:r 195 :g 255 :b 242}
-							:flash {:r 170 :g 250 :b 230}}
-		{:outer {:r 90 :g 205 :b 255}
-		 :inner {:r 185 :g 245 :b 255}
-		 :flash {:r 195 :g 245 :b 255}}))
+		:reflect {:outer {:r 236 :g 170 :b 93}
+						:inner {:r 241 :g 240 :b 222}
+						:flash {:r 255 :g 228 :b 176}}
+		:perform {:outer {:r 236 :g 170 :b 93}
+					 :inner {:r 241 :g 240 :b 222}
+					 :flash {:r 255 :g 228 :b 176}}
+		:entity-hit {:outer {:r 236 :g 170 :b 93}
+							 :inner {:r 241 :g 240 :b 222}
+							 :flash {:r 255 :g 228 :b 176}}
+		:block-hit {:outer {:r 236 :g 170 :b 93}
+							:inner {:r 241 :g 240 :b 222}
+							:flash {:r 255 :g 228 :b 176}}
+		{:outer {:r 236 :g 170 :b 93}
+		 :inner {:r 241 :g 240 :b 222}
+		 :flash {:r 255 :g 228 :b 176}}))
 
 (defn- ring-noise
 	[idx age]

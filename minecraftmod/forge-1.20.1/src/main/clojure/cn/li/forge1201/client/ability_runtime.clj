@@ -102,9 +102,9 @@
                         :offset-z 0.2}))
     (when (= mode :perform)
       (queue-sound! {:type :sound
-                     :sound-id "minecraft:entity.lightning_bolt.impact"
-                     :volume 0.55
-                     :pitch 1.25}))))
+                     :sound-id "my_mod:em.railgun"
+                     :volume 0.5
+                     :pitch 1.0}))))
 
 (defn- play-mag-manip-hold-fx!
   [{:keys [mode focus]}]
