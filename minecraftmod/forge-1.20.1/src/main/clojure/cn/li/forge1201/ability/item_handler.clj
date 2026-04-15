@@ -37,7 +37,20 @@
 
       (if ability-activated?
         ;; Original behavior alignment: in ability mode, item interaction is blocked.
-        (.setCanceled event true)
+        (do
+          (when (and (= action :railgun-coin-throw)
+                     (.isClientSide (.level player)))
+            (when-let [client-fn (resolve 'cn.li.forge1201.client.ability-runtime/notify-railgun-coin-throw-client!)]
+              (@client-fn player-uuid)))
+          (when (and (= action :railgun-coin-throw)
+                     (not (.isClientSide (.level player))))
+            (ability-runtime/on-ability-item-action!
+              action
+              player-uuid
+              {:item-id item-id
+               :hand :main
+               :timestamp-ms (System/currentTimeMillis)}))
+          (.setCanceled event true))
         (when (= action :open-skill-tree)
           (when (.isClientSide (.level player))
             ;; Open skill tree screen on client side

@@ -63,16 +63,16 @@
 (defn init-common!
   "Register all forge-side lifecycle listeners for ability runtime."
   []
-  ;; TODO: All ability module installs disabled; bootstrap issue resolution pending
-  #_(try-install! 'cn.li.forge1201.ability.world-effects
-                'cn.li.forge1201.ability.world-effects/install-world-effects!
-                "world-effects")
-  #_(try-install! 'cn.li.forge1201.ability.entity-damage
+  ;; Keep this minimal and enable only adapters currently relied upon by migrated skills.
+  (try-install! 'cn.li.forge1201.ability.entity-damage
                 'cn.li.forge1201.ability.entity-damage/install-entity-damage!
                 "entity-damage")
-  #_(try-install! 'cn.li.forge1201.ability.raycast
+  (try-install! 'cn.li.forge1201.ability.raycast
                 'cn.li.forge1201.ability.raycast/install-raycast!
                 "raycast")
+  #_(try-install! 'cn.li.forge1201.ability.world-effects
+                  'cn.li.forge1201.ability.world-effects/install-world-effects!
+                  "world-effects")
   #_(try-install! 'cn.li.forge1201.ability.potion-effects
                 'cn.li.forge1201.ability.potion-effects/install-potion-effects!
                 "potion-effects")

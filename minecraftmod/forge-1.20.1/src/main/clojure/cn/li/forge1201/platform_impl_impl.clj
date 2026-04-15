@@ -15,6 +15,7 @@
             [cn.li.forge1201.platform-bindings :as bindings]
             [cn.li.forge1201.side :as side])
   (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]
+           [net.minecraft.world InteractionHand]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world.entity Entity]
            [net.minecraft.world.entity.player Player]
@@ -99,6 +100,27 @@
                                           (str (.getName this)))
                        :player-get-uuid (fn [^Player this]
                                           (.getUUID this))
+                       :player-get-main-hand-item-id (fn [^Player this]
+                                                       (let [^ItemStack stack (.getItemInHand this InteractionHand/MAIN_HAND)]
+                                                         (when (and stack (not (.isEmpty stack)))
+                                                           (ForgeRuntimeBridge/getItemKeyString (.getItem stack)))))
+                       :player-get-main-hand-item-count (fn [^Player this]
+                                                          (let [^ItemStack stack (.getItemInHand this InteractionHand/MAIN_HAND)]
+                                                            (if (and stack (not (.isEmpty stack)))
+                                                              (.getCount stack)
+                                                              0)))
+                       :player-consume-main-hand-item! (fn [^Player this amount]
+                                                         (let [n (int (max 0 (or amount 0)))]
+                                                           (cond
+                                                             (zero? n) true
+                                                             (.isCreative this) true
+                                                             :else
+                                                             (let [^ItemStack stack (.getItemInHand this InteractionHand/MAIN_HAND)]
+                                                               (if (or (nil? stack) (.isEmpty stack) (< (.getCount stack) n))
+                                                                 false
+                                                                 (do
+                                                                   (.shrink stack n)
+                                                                   true))))))
                        :player-get-container-menu (fn [^Player this]
                                                     (ForgeRuntimeBridge/getPlayerContainerMenu this))}]
       (extend entity-cls entity/IEntityOps

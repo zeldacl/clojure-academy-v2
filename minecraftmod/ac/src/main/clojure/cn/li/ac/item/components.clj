@@ -81,5 +81,13 @@
          :properties {:tooltip ["针状组件"
                                 "精密制造的微小部件"]
                       :model-texture "needle"}}))
+    (idsl/register-item!
+      (idsl/create-item-spec
+        "coin"
+        {:max-stack-size 64
+         :creative-tab :misc
+         :properties {:tooltip ["能力硬币"
+                                "电磁炮 QTE 投掷触发物"]
+                      :model-texture "needle"}}))
     (log/info "Component items initialized: wafer, tutorial, terminal-installer, silbarn,"
-              "reso-crystal, resonance-component, reinforced-iron-plate, needle")))
+              "reso-crystal, resonance-component, reinforced-iron-plate, needle, coin")))

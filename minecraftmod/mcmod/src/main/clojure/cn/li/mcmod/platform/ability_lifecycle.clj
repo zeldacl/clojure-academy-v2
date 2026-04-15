@@ -30,6 +30,7 @@
          :get-active-damage-handlers (fn [] [])
          :process-damage-interception (fn [_ _ damage _] damage)
          :resolve-item-use-action (fn [_] nil)
+         :on-ability-item-action! noop
          :compute-aoe-damage (fn [_ _ _ damage _] damage)
          :select-reflection-target (fn [_ _ _ _] nil)
          :compute-reflected-damage identity
@@ -157,6 +158,10 @@
 (defn resolve-item-use-action
   [item-id]
   ((:resolve-item-use-action @runtime-hooks) item-id))
+
+(defn on-ability-item-action!
+  [action player-uuid payload]
+  ((:on-ability-item-action! @runtime-hooks) action player-uuid payload))
 
 (defn compute-aoe-damage
   [origin-pos target-pos radius damage falloff?]

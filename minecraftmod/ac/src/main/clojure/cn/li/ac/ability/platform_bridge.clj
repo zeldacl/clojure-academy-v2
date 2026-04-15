@@ -19,6 +19,7 @@
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.damage-handler :as damage-handler]
+            [cn.li.ac.content.ability.electromaster.railgun :as railgun]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private hooks-installed? (atom false))
@@ -121,8 +122,17 @@
 
        :resolve-item-use-action
        (fn [item-id]
-         (when (= item-id "ac:app_skill_tree")
-           :open-skill-tree))
+         (cond
+           (= item-id "ac:app_skill_tree") :open-skill-tree
+           (= item-id "my_mod:coin") :railgun-coin-throw
+           :else nil))
+
+       :on-ability-item-action!
+       (fn [action player-uuid payload]
+         (case action
+           :railgun-coin-throw
+           (railgun/register-coin-throw! player-uuid payload)
+           nil))
 
        :compute-aoe-damage
        (fn [origin-pos target-pos radius damage falloff?]

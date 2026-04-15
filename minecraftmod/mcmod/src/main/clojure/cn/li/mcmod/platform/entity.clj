@@ -25,6 +25,15 @@
   (player-get-uuid [player]
     "Return the player's UUID")
 
+  (player-get-main-hand-item-id [player]
+    "Return registry ID of main-hand item as string (namespace:path), or nil when empty")
+
+  (player-get-main-hand-item-count [player]
+    "Return stack count of player's main-hand item. Returns 0 when empty")
+
+  (player-consume-main-hand-item! [player amount]
+    "Consume amount from main-hand item unless creative. Returns true when consumed/allowed")
+
   (player-get-container-menu [player]
     "Return the player's open container/menu")
 

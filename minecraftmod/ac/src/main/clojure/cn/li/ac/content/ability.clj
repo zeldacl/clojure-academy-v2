@@ -220,9 +220,9 @@
   :level 3
   :controllable? true
   :ctrl-id :railgun
-  :cp-consume-speed 1.6
-  :overload-consume-speed 1.4
-  :cooldown-ticks 200
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 1
   :on-key-down railgun/railgun-on-key-down
   :on-key-tick railgun/railgun-on-key-tick
   :on-key-up railgun/railgun-on-key-up

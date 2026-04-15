@@ -26,6 +26,7 @@
   {:ctx-id (:id ctx-map)
    :server-id (:server-id ctx-map)
    :player-id (:player-uuid ctx-map)
+  :player (:player payload)
    :skill-id (:skill-id ctx-map)
    :payload payload})
 
@@ -133,7 +134,10 @@
                 (= (:input-state ctx-map) INPUT-ACTIVE))
        (let [released-ctx (set-input-state! ctx-id INPUT-RELEASED)]
          (dispatch-skill-callback! released-ctx :on-key-up evt/EVT-CONTEXT-KEY-UP payload)
-         (apply-main-cooldown! released-ctx)
+         (let [latest-ctx (ctx/get-context ctx-id)
+               skip-default-cooldown? (boolean (get-in latest-ctx [:skill-state :skip-default-cooldown]))]
+           (when-not skip-default-cooldown?
+             (apply-main-cooldown! released-ctx)))
          (ctx/terminate-context! ctx-id terminate-fn)
          true)))))
 

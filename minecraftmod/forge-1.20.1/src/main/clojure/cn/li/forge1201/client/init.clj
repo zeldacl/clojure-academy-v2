@@ -18,6 +18,7 @@
             [cn.li.forge1201.client.terminal-screen-bridge :as terminal-screen-bridge]
             [cn.li.forge1201.client.effects.particle-bridge :as particle-bridge]
             [cn.li.forge1201.client.effects.sound-bridge :as sound-bridge]
+            [cn.li.forge1201.client.railgun-render :as railgun-render]
             [cn.li.forge1201.client.ability-gui :as ability-gui]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
             [cn.li.forge1201.client.pose-impl :as pose-impl]
@@ -171,6 +172,7 @@
   (terminal-screen-bridge/init!)
   (particle-bridge/init!)
   (sound-bridge/init!)
+  (railgun-render/init!)
   (ability-gui/init!)
 
   (log/info "Forge 1.20.1 client-side systems initialized"))

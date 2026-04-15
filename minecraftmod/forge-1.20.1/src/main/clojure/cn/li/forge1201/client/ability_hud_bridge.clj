@@ -3,6 +3,7 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.forge1201.client.ability-hud :as hud]
+            [cn.li.forge1201.client.ability-runtime :as client-runtime]
             [cn.li.forge1201.client.ability-client-state :as client-state]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.client.event RenderGuiOverlayEvent$Post]
@@ -80,10 +81,14 @@
 
 (defn- render-skill-slot
   "Render a single skill slot with icon, name, and cooldown overlay."
-  [^GuiGraphics graphics slot-data]
+  [^GuiGraphics graphics slot-data visual-state]
   (let [{:keys [x y key-label skill-icon skill-name in-cooldown cooldown-seconds]} slot-data]
     ;; Render key hint background
-    (.fill graphics x y (+ x 20) (+ y 20) -2147483648)
+    (.fill graphics x y (+ x 20) (+ y 20)
+           (case visual-state
+             :charge -1442500609
+             :active -1602223873
+             -2147483648))
 
     ;; Render key label
     (draw-string! graphics (str key-label) (+ x 2) (+ y 2) 0xFFFFFF)
@@ -189,7 +194,8 @@
           ;; Render skill slots
           (doseq [slot (:skill-slots render-data)]
             (when slot
-              (render-skill-slot graphics slot)))
+              (let [vstate (client-runtime/slot-visual-state player-uuid (:idx slot))]
+                (render-skill-slot graphics slot vstate))))
 
           ;; Render CP/OL numeric hints (V key feedback)
           (render-resource-numbers graphics hud-model))))

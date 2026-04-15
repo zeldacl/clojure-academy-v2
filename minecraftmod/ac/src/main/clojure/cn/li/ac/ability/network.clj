@@ -196,23 +196,24 @@
 
   (defn- handle-skill-key-down
     [{:keys [ctx-id] :as payload} player]
-    (let [ctx0 (ctx/get-context ctx-id)
+    (let [payload* (assoc payload :player player)
+          ctx0 (ctx/get-context ctx-id)
           _ (when (nil? ctx0)
-              (when-let [skill-id (:skill-id payload)]
+              (when-let [skill-id (:skill-id payload*)]
                 (ctx-mgr/establish-context! (uuid-of player) ctx-id skill-id)))]
-      (ctx-rt/handle-key-down! ctx-id payload ctx-mgr/send-terminated-context!)))
+      (ctx-rt/handle-key-down! ctx-id payload* ctx-mgr/send-terminated-context!)))
 
   (defn- handle-skill-key-tick
-    [{:keys [ctx-id] :as payload} _player]
-    (ctx-rt/handle-key-tick! ctx-id payload ctx-mgr/send-terminated-context!))
+    [{:keys [ctx-id] :as payload} player]
+    (ctx-rt/handle-key-tick! ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!))
 
   (defn- handle-skill-key-up
-    [{:keys [ctx-id] :as payload} _player]
-    (ctx-rt/handle-key-up! ctx-id payload ctx-mgr/send-terminated-context!))
+    [{:keys [ctx-id] :as payload} player]
+    (ctx-rt/handle-key-up! ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!))
 
   (defn- handle-skill-key-abort
-    [{:keys [ctx-id] :as payload} _player]
-    (ctx-rt/handle-key-abort! ctx-id payload ctx-mgr/send-terminated-context!))
+    [{:keys [ctx-id] :as payload} player]
+    (ctx-rt/handle-key-abort! ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!))
 
 ;; ============================================================================
 ;; Registration
