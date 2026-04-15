@@ -129,6 +129,20 @@
 	[color a]
 	(assoc color :a (int (max 0 (min 255 a)))))
 
+(defn- clamp01
+	[v]
+	(max 0.0 (min 1.0 (double v))))
+
+(defn- temporal-profile
+	[ttl max-ttl]
+	(let [life (clamp01 (/ (double ttl) (double (max 1 max-ttl))))
+				age (- 1.0 life)
+				head (Math/exp (* -12.0 age))
+				tail (Math/pow life 2.05)
+				glow (* tail (+ 1.0 (* 0.95 head)))
+				scroll (+ 1.0 (* 1.6 head))]
+		{:life life :age age :head head :tail tail :glow glow :scroll scroll}))
+
 (defn- beam-palette
 	[mode]
 	(case mode
@@ -188,15 +202,16 @@
 	[^VertexConsumer vc mat cam-pos {:keys [mode start end ttl max-ttl hit-distance]}]
 	(let [dist (double (or hit-distance (vlen (v- end start))))
 				right (beam-right-axis start end cam-pos)
-				w0 (beam-width-by-distance dist)
+				{:keys [age glow scroll head]} (temporal-profile ttl max-ttl)
+				width-boost (+ 1.0 (* 0.22 head))
+				w0 (* (beam-width-by-distance dist) width-boost)
 				w1 (* w0 0.58)
-				fade (/ (double ttl) (double (max 1 max-ttl)))
-				age (- (double max-ttl) (double ttl))
+				age-ticks (* age (double max-ttl))
 				palette (beam-palette mode)
-				alpha-main (+ 80 (int (* 120 fade)))
-				alpha-core (+ 110 (int (* 130 fade)))
-				u-main (* 0.18 age)
-				u-core (* 0.43 age)
+				alpha-main (int (min 255 (+ 20 (* 210 glow))))
+				alpha-core (int (min 255 (+ 42 (* 230 glow))))
+				u-main (* 0.22 age-ticks scroll)
+				u-core (* 0.52 age-ticks scroll)
 				r0 (v* right w0)
 				r1 (v* right w1)
 				p0 (v+ start r0)
@@ -224,18 +239,19 @@
 	[^VertexConsumer vc mat {:keys [mode start end ttl max-ttl hit-distance]}]
 	(let [dist (max 0.8 (double (or hit-distance (vlen (v- end start)))))
 				dir (vnormalize (v- end start))
+				{:keys [age glow head]} (temporal-profile ttl max-ttl)
 				axis-a (let [raw (vcross dir {:x 0.0 :y 1.0 :z 0.0})]
 						 (if (> (vlen raw) 1.0e-6) (vnormalize raw) {:x 1.0 :y 0.0 :z 0.0}))
 				axis-b (vnormalize (vcross dir axis-a))
 				segments (int (max 8 (min 36 (Math/round (* 1.35 dist)))))
-				age (- (double max-ttl) (double ttl))
-				fade (/ (double ttl) (double (max 1 max-ttl)))
-				base-amp (* (max 0.04 (min 0.16 (- 0.16 (* 0.0015 dist)))) (+ 0.65 (* 0.35 fade)))
+				age-ticks (* age (double max-ttl))
+				base-amp (* (max 0.04 (min 0.16 (- 0.16 (* 0.0015 dist))))
+								(+ (* 0.5 glow) (* 0.4 head) 0.28))
 				arcs 3]
 		(dotimes [arc arcs]
-			(let [phase (+ (* arc 1.9) (* age 0.52))
+			(let [phase (+ (* arc 1.9) (* age-ticks 0.52))
 					freq (+ 8.0 (* arc 1.7))
-					alpha (int (* (+ 58 (* 78 fade)) (- 1.0 (* arc 0.16))))
+					alpha (int (min 255 (* (+ 20 (* 155 glow) (* 65 head)) (- 1.0 (* arc 0.16)))))
 					color (beam-arc-color mode alpha)]
 				(loop [i 0 prev nil]
 					(when (<= i segments)
@@ -255,9 +271,12 @@
 
 (defn- draw-hit-flash!
 	[^VertexConsumer vc mat cam-pos {:keys [mode end ttl max-ttl]}]
-	(when (>= ttl (- max-ttl 2))
-		(let [fade (/ (double ttl) (double (max 1 max-ttl)))
-				size (+ 0.09 (* 0.18 fade))
+	(when (>= ttl (- max-ttl 4))
+		(let [{:keys [life age head]} (temporal-profile ttl max-ttl)
+				impact (* 1.15 head)
+				decay (Math/pow life 2.6)
+				intensity (max 0.0 (+ impact (* 0.28 decay)))
+				size (+ 0.1 (* 0.26 intensity))
 				palette (beam-palette mode)
 				to-cam (vnormalize (v- cam-pos end))
 				axis-x (let [raw (vcross {:x 0.0 :y 1.0 :z 0.0} to-cam)]
@@ -265,11 +284,13 @@
 				axis-y (vnormalize (vcross to-cam axis-x))
 				axis-x2 (vnormalize (v+ axis-x axis-y))
 				axis-y2 (vnormalize (v- axis-y axis-x))
-				alpha (+ 80 (int (* 160 fade)))
+				alpha (int (min 255 (+ 18 (* 360 intensity))))
 				x0 (v* axis-x size)
 				y0 (v* axis-y size)
 				x1 (v* axis-x2 (* size 0.86))
 				y1 (v* axis-y2 (* size 0.86))
+				x2 (v* axis-x (* size 0.56))
+				y2 (v* axis-y (* size 0.56))
 				p0 (v+ (v+ end x0) y0)
 				p1 (v+ (v- end x0) y0)
 				p2 (v- (v- end x0) y0)
@@ -278,9 +299,15 @@
 				q1 (v+ (v- end x1) y1)
 				q2 (v- (v- end x1) y1)
 				q3 (v- (v+ end x1) y1)
-				color (with-alpha (:flash palette) alpha)]
+				r0 (v+ (v+ end x2) y2)
+				r1 (v+ (v- end x2) y2)
+				r2 (v- (v- end x2) y2)
+				r3 (v- (v+ end x2) y2)
+				color (with-alpha (:flash palette) alpha)
+				core-color (with-alpha {:r 255 :g 246 :b 220} (int (min 255 (+ 35 (* 280 intensity)))))]
 			(emit-quad! vc mat p0 p1 p2 p3 0.0 1.0 0.0 1.0 color)
-			(emit-quad! vc mat q0 q1 q2 q3 0.0 1.0 0.0 1.0 color))))
+			(emit-quad! vc mat q0 q1 q2 q3 0.0 1.0 0.0 1.0 color)
+			(emit-quad! vc mat r0 r1 r2 r3 0.0 1.0 0.0 1.0 core-color))))
 
 (defn- draw-hit-expansion-ring!
 	[^VertexConsumer vc mat cam-pos {:keys [mode end ttl max-ttl]}]
