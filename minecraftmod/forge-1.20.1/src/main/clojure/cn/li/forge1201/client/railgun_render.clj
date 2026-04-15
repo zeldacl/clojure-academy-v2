@@ -132,6 +132,12 @@
 (defn- beam-palette
 	[mode]
 	(case mode
+		:reflect {:outer {:r 255 :g 206 :b 112}
+					  :inner {:r 255 :g 241 :b 210}
+					  :flash {:r 255 :g 232 :b 168}}
+		:perform {:outer {:r 98 :g 188 :b 255}
+					 :inner {:r 215 :g 236 :b 255}
+					 :flash {:r 200 :g 230 :b 255}}
 		:entity-hit {:outer {:r 98 :g 188 :b 255}
 							 :inner {:r 215 :g 236 :b 255}
 							 :flash {:r 200 :g 230 :b 255}}
@@ -207,6 +213,45 @@
 						 (with-alpha (:outer palette) alpha-main))
 		(emit-quad! vc mat c0 c1 c2 c3 (+ u-core 0.12) (+ u-core 0.88) 0.0 1.0
 						 (with-alpha (:inner palette) alpha-core))))
+
+(defn- beam-arc-color
+	[mode alpha]
+	(case mode
+		:reflect {:r 255 :g 224 :b 166 :a alpha}
+		{:r 165 :g 230 :b 255 :a alpha}))
+
+(defn- draw-beam-sub-arcs!
+	[^VertexConsumer vc mat {:keys [mode start end ttl max-ttl hit-distance]}]
+	(let [dist (max 0.8 (double (or hit-distance (vlen (v- end start)))))
+				dir (vnormalize (v- end start))
+				axis-a (let [raw (vcross dir {:x 0.0 :y 1.0 :z 0.0})]
+						 (if (> (vlen raw) 1.0e-6) (vnormalize raw) {:x 1.0 :y 0.0 :z 0.0}))
+				axis-b (vnormalize (vcross dir axis-a))
+				segments (int (max 8 (min 36 (Math/round (* 1.35 dist)))))
+				age (- (double max-ttl) (double ttl))
+				fade (/ (double ttl) (double (max 1 max-ttl)))
+				base-amp (* (max 0.04 (min 0.16 (- 0.16 (* 0.0015 dist)))) (+ 0.65 (* 0.35 fade)))
+				arcs 3]
+		(dotimes [arc arcs]
+			(let [phase (+ (* arc 1.9) (* age 0.52))
+					freq (+ 8.0 (* arc 1.7))
+					alpha (int (* (+ 58 (* 78 fade)) (- 1.0 (* arc 0.16))))
+					color (beam-arc-color mode alpha)]
+				(loop [i 0 prev nil]
+					(when (<= i segments)
+						(let [t (/ (double i) (double segments))
+								base (v+ start (v* dir (* dist t)))
+								swing (+ (* 0.72 (Math/sin (+ phase (* freq t))))
+											 (* 0.38 (Math/sin (+ (* 2.4 phase) (* (+ 4.0 freq) t)))))
+								sway (+ (* 0.63 (Math/cos (+ (* 1.3 phase) (* (+ 2.0 freq) t))))
+										(* 0.27 (Math/sin (+ (* 3.1 phase) (* (+ 6.0 freq) t)))))
+								amp (* base-amp (+ 0.25 (* 0.75 (Math/sin (* Math/PI t)))))
+								offset (v+ (v* axis-a (* amp swing))
+											  (v* axis-b (* amp sway)))
+								cur (v+ base offset)]
+							(when prev
+								(emit-line! vc mat prev cur color))
+							(recur (inc i) cur))))))))
 
 (defn- draw-hit-flash!
 	[^VertexConsumer vc mat cam-pos {:keys [mode end ttl max-ttl]}]
@@ -392,6 +437,7 @@
 							(let [mat (.pose (.last pose-stack))]
 								(doseq [beam beams]
 									(draw-beam-ribbon! beam-vc mat cam-pos beam)
+									(draw-beam-sub-arcs! line-vc mat beam)
 									(draw-hit-flash! beam-vc mat cam-pos beam)
 									(draw-hit-expansion-ring! line-vc mat cam-pos beam)
 									(draw-block-hit-sparks! line-vc mat beam))

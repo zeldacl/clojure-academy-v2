@@ -6,6 +6,7 @@
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraft.core.registries BuiltInRegistries]
+           [net.minecraft.world InteractionResult]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.resources ResourceLocation]))
 
@@ -50,6 +51,7 @@
               {:item-id item-id
                :hand :main
                :timestamp-ms (System/currentTimeMillis)}))
+          (.setCancellationResult event InteractionResult/CONSUME)
           (.setCanceled event true))
         (when (= action :open-skill-tree)
           (when (.isClientSide (.level player))
@@ -58,6 +60,7 @@
               (@open-fn (.getUUID player)))
 
             ;; Cancel event to prevent other interactions
+            (.setCancellationResult event InteractionResult/CONSUME)
             (.setCanceled event true)))))
     (catch Exception e
       (log/error "Error handling item use event" e))))

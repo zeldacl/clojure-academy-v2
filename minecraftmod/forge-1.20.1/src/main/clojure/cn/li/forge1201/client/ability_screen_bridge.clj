@@ -57,8 +57,23 @@
 
     ;; Render exp bar if learned
     (when (and learned (pos? exp))
-      (let [bar-width (int (* 20 exp))]
+      (let [bar-width (int (* 20 (max 0.0 (min 1.0 exp))))]
         (.fill graphics x (+ y 22) (+ x bar-width) (+ y 24) 0xFF00FF00)))))
+
+(defn- render-connection
+  [^GuiGraphics graphics {:keys [from-x from-y to-x to-y satisfied? locked?]}]
+  (let [dx (- to-x from-x)
+        dy (- to-y from-y)
+        steps (max 1 (int (Math/ceil (max (Math/abs dx) (Math/abs dy)))))
+        color (cond
+                locked? 0x55333333
+                satisfied? 0xFF58C8FF
+                :else 0xAA7A6F3A)]
+    (dotimes [idx (inc steps)]
+      (let [t (/ (double idx) (double steps))
+            px (int (Math/round (+ from-x (* dx t))))
+            py (int (Math/round (+ from-y (* dy t))))]
+        (.fill graphics px py (+ px 2) (+ py 2) color)))))
 
 (defn- render-ability-info
   "Render ability info panel."
@@ -101,6 +116,10 @@
           ;; Render ability info panel
           (when-let [info (:ability-info render-data)]
             (render-ability-info graphics info))
+
+          ;; Render prerequisite connections below nodes.
+          (doseq [connection (:connections render-data)]
+            (render-connection graphics connection))
 
           ;; Render skill nodes
           (doseq [node (:skill-nodes render-data)]

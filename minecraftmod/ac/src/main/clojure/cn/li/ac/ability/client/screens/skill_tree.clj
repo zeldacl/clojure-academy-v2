@@ -19,17 +19,50 @@
 (defn calculate-skill-positions
   "Calculate radial layout positions for skills."
   [skills]
-  (let [center-x 200
+  (let [ordered-skills (vec (sort-by (juxt :level :id) skills))
+        center-x 200
         center-y 120
         radius 80
-        skill-count (count skills)]
+        skill-count (max 1 (count ordered-skills))]
     (map-indexed
       (fn [idx skill]
-        (let [angle (* idx (/ (* 2 Math/PI) skill-count))]
-          {:skill skill
-           :x (int (+ center-x (* radius (Math/cos angle))))
-           :y (int (+ center-y (* radius (Math/sin angle))))}))
-      skills)))
+        (if-let [[px py] (:ui-position skill)]
+          {:skill skill :x (int px) :y (int py)}
+          (let [angle (* idx (/ (* 2 Math/PI) skill-count))]
+            {:skill skill
+             :x (int (+ center-x (* radius (Math/cos angle))))
+             :y (int (+ center-y (* radius (Math/sin angle))))})))
+      ordered-skills)))
+
+(defn- build-skill-connections
+  [skill-positions player-state developer-type]
+  (let [ability-data (:ability-data player-state)
+        node-by-id (into {}
+                         (map (fn [{:keys [skill] :as node}]
+                                [(:id skill) node]))
+                         skill-positions)]
+    (vec
+      (remove nil?
+    (apply concat
+      (map (fn [{:keys [skill x y]}]
+        (let [target-skill-id (:id skill)
+              locked? (not (:pass? (learning/check-all-conditions
+                 target-skill-id
+                 ability-data
+                 (:level ability-data)
+                 developer-type)))]
+          (for [{source-skill-id :skill-id min-exp :min-exp}
+           (:prerequisites skill)
+           :let [{from-x :x from-y :y} (get node-by-id source-skill-id)]
+           :when from-x]
+            {:from-x (+ from-x 10)
+             :from-y (+ from-y 10)
+             :to-x (+ x 10)
+             :to-y (+ y 10)
+             :satisfied? (>= (or (adata/get-skill-exp ability-data source-skill-id) 0.0)
+              (double min-exp))
+             :locked? locked?})))
+           skill-positions))))))
 
 ;; ============================================================================
 ;; Render Data Builders
@@ -39,23 +72,24 @@
   "Build render data for a single skill node."
   [skill-pos player-state developer-type]
   (let [{:keys [skill x y]} skill-pos
+        skill-id (or (:skill-id skill) (:id skill))
         ability-data (:ability-data player-state)
-        learned? (adata/is-learned? ability-data (:skill-id skill))
+        learned? (adata/is-learned? ability-data skill-id)
         ;; check-all-conditions needs: skill-id, ability-data, player-level, developer-type
         conditions (learning/check-all-conditions
-                     (:skill-id skill)
+                     skill-id
                      ability-data
                      (:level ability-data)
                      developer-type)
-        skill-exp (adata/get-skill-exp ability-data (:skill-id skill))]
+        skill-exp (adata/get-skill-exp ability-data skill-id)]
     {:x x
      :y y
      :learned learned?
      :can-learn (:pass? conditions)
      :conditions (:failures conditions)
-     :skill-id (:skill-id skill)
-     :skill-name (:name skill)
-      :skill-icon (skill/get-skill-icon-path (:skill-id skill))
+     :skill-id skill-id
+     :skill-name (or (:name skill) (:name-key skill) (name skill-id))
+     :skill-icon (skill/get-skill-icon-path skill-id)
      :skill-level (:level skill)
      :exp (or skill-exp 0.0)}))
 
@@ -86,8 +120,11 @@
                        (calculate-skill-positions skills))
             dev-type (or (:developer-type (:learn-context @screen-state)) :normal)]
         {:ability-info (build-ability-info-render-data player-state)
+         :category-color (:color category)
          :skill-nodes (when positions
                        (mapv #(build-skill-node-render-data % player-state dev-type) positions))
+         :connections (when positions
+            (build-skill-connections positions player-state dev-type))
          :hover-skill (:hover-skill @screen-state)}))))
 
 ;; ============================================================================

@@ -70,9 +70,9 @@
   (try-install! 'cn.li.forge1201.ability.raycast
                 'cn.li.forge1201.ability.raycast/install-raycast!
                 "raycast")
-  #_(try-install! 'cn.li.forge1201.ability.world-effects
-                  'cn.li.forge1201.ability.world-effects/install-world-effects!
-                  "world-effects")
+  (try-install! 'cn.li.forge1201.ability.world-effects
+                'cn.li.forge1201.ability.world-effects/install-world-effects!
+                "world-effects")
   #_(try-install! 'cn.li.forge1201.ability.potion-effects
                 'cn.li.forge1201.ability.potion-effects/install-potion-effects!
                 "potion-effects")
@@ -85,10 +85,10 @@
   #_(try-install! 'cn.li.forge1201.ability.player-motion
                 'cn.li.forge1201.ability.player-motion/install-player-motion!
                 "player-motion")
-  #_(try-install! 'cn.li.forge1201.ability.block-manipulation
+  (try-install! 'cn.li.forge1201.ability.block-manipulation
                 'cn.li.forge1201.ability.block-manipulation/install-block-manipulation!
                 "block-manipulation")
-  #_(try-install! 'cn.li.forge1201.ability.damage-interception
+  (try-install! 'cn.li.forge1201.ability.damage-interception
                 'cn.li.forge1201.ability.damage-interception/install-damage-interception!
                 "damage-interception")
   (ability-network/init!)

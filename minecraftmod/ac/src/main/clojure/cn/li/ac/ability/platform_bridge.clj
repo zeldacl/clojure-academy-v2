@@ -124,7 +124,8 @@
        (fn [item-id]
          (cond
            (= item-id "ac:app_skill_tree") :open-skill-tree
-           (= item-id "my_mod:coin") :railgun-coin-throw
+           (or (= item-id "my_mod:coin")
+               (= item-id "ac:coin")) :railgun-coin-throw
            :else nil))
 
        :on-ability-item-action!

@@ -1,13 +1,5 @@
 (ns cn.li.ac.content.ability.electromaster.railgun
-  "Railgun skill - reflectible beam attack with dual activation modes.
-
-  Mechanics:
-  - Dual activation: throw coin for QTE window OR charge with iron ingot/block in hand
-  - Energy: 180-120 overload + 200-450 CP + 900-2000 per shot (scales with exp)
-  - Damage: 60-110 (scales with exp)
-  - Cooldown: 300-160 ticks
-  - Reflection: Damage bounces off entities (50% per bounce, max 3 reflections)
-  - Grants 0.01 exp on entity hits
+  "Railgun skill port aligned to the original Electromaster behavior.
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
@@ -16,11 +8,12 @@
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.util.scaling :as scaling]
-            [cn.li.ac.ability.util.reflection :as reflection]
+            [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private accepted-item-ids
@@ -30,10 +23,78 @@
 (def ^:private coin-active-threshold 0.6)
 (def ^:private coin-perform-threshold 0.7)
 (def ^:private item-charge-ticks 20)
+(def ^:private beam-radius 2.0)
+(def ^:private beam-query-radius 30.0)
+(def ^:private beam-step 0.9)
+(def ^:private beam-max-distance 50.0)
+(def ^:private beam-visual-distance 45.0)
+(def ^:private reflect-distance 15.0)
+(def ^:private reflect-damage 14.0)
 
 (defn- lerp
   [a b t]
   (+ a (* (- b a) (double t))))
+
+(defn- v+
+  [a b]
+  {:x (+ (double (:x a)) (double (:x b)))
+   :y (+ (double (:y a)) (double (:y b)))
+   :z (+ (double (:z a)) (double (:z b)))} )
+
+(defn- v-
+  [a b]
+  {:x (- (double (:x a)) (double (:x b)))
+   :y (- (double (:y a)) (double (:y b)))
+   :z (- (double (:z a)) (double (:z b)))})
+
+(defn- v*
+  [a scale]
+  {:x (* (double (:x a)) (double scale))
+   :y (* (double (:y a)) (double scale))
+   :z (* (double (:z a)) (double scale))})
+
+(defn- dot
+  [a b]
+  (+ (* (:x a) (:x b))
+     (* (:y a) (:y b))
+     (* (:z a) (:z b))))
+
+(defn- vlen
+  [a]
+  (Math/sqrt (dot a a)))
+
+(defn- normalize
+  [a]
+  (let [len (max 1.0e-6 (vlen a))]
+    (v* a (/ 1.0 len))))
+
+(defn- cross
+  [a b]
+  {:x (- (* (:y a) (:z b)) (* (:z a) (:y b)))
+   :y (- (* (:z a) (:x b)) (* (:x a) (:z b)))
+   :z (- (* (:x a) (:y b)) (* (:y a) (:x b)))})
+
+(defn- distance-3d
+  [a b]
+  (vlen (v- a b)))
+
+(defn- floor-int [value]
+  (int (Math/floor (double value))))
+
+(defn- eye-pos
+  [{:keys [x y z]}]
+  {:x (double x)
+   :y (+ (double y) 1.62)
+   :z (double z)})
+
+(defn- orthonormal-basis
+  [dir]
+  (let [up-axis (if (> (Math/abs (:y dir)) 0.95)
+                  {:x 1.0 :y 0.0 :z 0.0}
+                  {:x 0.0 :y 1.0 :z 0.0})
+        right (normalize (cross dir up-axis))
+        up (normalize (cross right dir))]
+    [right up]))
 
 (defn register-coin-throw!
   "Register a railgun coin throw window for a player.
@@ -53,6 +114,16 @@
 (defn- get-skill-exp [player-id]
   (when-let [state (ps/get-player-state player-id)]
     (get-in state [:ability-data :skills :railgun :exp] 0.0)))
+
+(defn- player-state-pos
+  [player-id]
+  (get (ps/get-player-state player-id) :position {:world-id "minecraft:overworld"
+                                                  :x 0.0 :y 64.0 :z 0.0}))
+
+(defn- player-world-id
+  [player-id]
+  (or (get-in (ps/get-player-state player-id) [:position :world-id])
+      "minecraft:overworld"))
 
 (defn- current-main-hand-item-id
   [player]
@@ -128,62 +199,187 @@
          :active? (>= p coin-active-threshold)
          :perform? (>= p coin-perform-threshold)}))))
 
-(defn- perform-railgun-shot!
-  [player-id ctx-id exp]
-  (let [base-range 45.0
+(defn- railgun-candidates
+  [origin-player-id world-id start-pos dir]
+  (if-not world-effects/*world-effects*
+    []
+    (let [mid-pos (v+ start-pos (v* dir (/ beam-max-distance 2.0)))]
+      (->> (world-effects/find-entities-in-radius world-effects/*world-effects*
+                                                  world-id
+                                                  (:x mid-pos) (:y mid-pos) (:z mid-pos)
+                                                  beam-query-radius)
+           (remove (fn [{:keys [uuid]}]
+                     (= uuid origin-player-id)))
+             (map (fn [{:keys [x y z] :as target}]
+                  (let [to-target (v- {:x x :y y :z z} start-pos)
+                        forward-dist (dot to-target dir)
+                        closest-point (v+ start-pos (v* dir forward-dist))
+                        radial-dist (distance-3d {:x x :y y :z z} closest-point)]
+                    (assoc target :forward-dist forward-dist :radial-dist radial-dist))))
+           (filter (fn [{:keys [forward-dist radial-dist]}]
+                     (and (<= 0.0 forward-dist beam-max-distance)
+                          (<= radial-dist (* beam-radius 1.2)))))
+           (sort-by :forward-dist)
+           vec))))
+
+(defn- toggle-active?
+  [player-id skill-id]
+  (some (fn [[_ ctx-data]]
+          (and (= (:player-id ctx-data) player-id)
+               (toggle/is-toggle-active? ctx-data skill-id)))
+        (ctx/get-all-contexts)))
+
+(defn- vec-reflection-can-reflect?
+  [target-player-id incoming-damage]
+  (when (toggle-active? target-player-id :vec-reflection)
+    (when-let [state (ps/get-player-state target-player-id)]
+      (let [exp (get-in state [:ability-data :skills :vec-reflection :exp] 0.0)
+            consumption (* incoming-damage (lerp 20.0 15.0 exp))
+            current-cp (get-in state [:ability-data :cp-data :cp] 0.0)]
+        (>= (double current-cp) (double consumption))))))
+
+(defn- break-beam-blocks!
+  [player-id world-id start-pos dir max-distance energy]
+  (when (and block-manip/*block-manipulation* (pos? energy) (pos? max-distance))
+    (let [[right up] (orthonormal-basis dir)
+          processed-starts (atom #{})
+          sample-points (transient [])]
+      (doseq [s (range (- beam-radius) (+ beam-radius beam-step) beam-step)
+              t (range (- beam-radius) (+ beam-radius beam-step) beam-step)]
+        (when (<= (+ (* s s) (* t t)) (* beam-radius beam-radius))
+          (let [offset (v+ (v* right s) (v* up t))
+                origin (v+ start-pos offset)
+                key [(floor-int (:x origin)) (floor-int (:y origin)) (floor-int (:z origin))]]
+            (when-not (contains? @processed-starts key)
+              (swap! processed-starts conj key)
+              (conj! sample-points origin)))))
+      (let [origins (persistent! sample-points)
+            line-energy (if (seq origins)
+                          (/ (double energy) (double (count origins)))
+                          0.0)
+            neighbor-offsets [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]]
+        (doseq [origin origins]
+          (loop [travel 0.0
+                 remaining-energy (* line-energy (+ 0.95 (* 0.1 (rand))))]
+            (when (and (<= travel max-distance) (pos? remaining-energy))
+              (let [pos (v+ origin (v* dir travel))
+                    bx (floor-int (:x pos))
+                    by (floor-int (:y pos))
+                    bz (floor-int (:z pos))
+                    hardness (block-manip/get-block-hardness block-manip/*block-manipulation*
+                                                             world-id bx by bz)]
+                (if (or (nil? hardness) (neg? (double hardness)))
+                  (recur (+ travel 1.0) remaining-energy)
+                  (if (and (pos? (double hardness))
+                           (<= (double hardness) remaining-energy)
+                           (block-manip/can-break-block? block-manip/*block-manipulation*
+                                                         player-id world-id bx by bz))
+                    (do
+                      (block-manip/break-block! block-manip/*block-manipulation*
+                                                player-id world-id bx by bz (< (rand) 0.05))
+                      (when (< (rand) 0.05)
+                        (let [[ox oy oz] (rand-nth neighbor-offsets)
+                              nx (+ bx ox)
+                              ny (+ by oy)
+                              nz (+ bz oz)]
+                          (when (block-manip/can-break-block? block-manip/*block-manipulation*
+                                                              player-id world-id nx ny nz)
+                            (block-manip/break-block! block-manip/*block-manipulation*
+                                                      player-id world-id nx ny nz false))))
+                      (recur (+ travel 1.0) (- remaining-energy (double hardness))))
+                    (recur (+ travel 1.0) 0.0)))))))))))
+
+(defn- perform-reflection-shot!
+  [ctx-id reflector-player-id]
+  (let [world-id (player-world-id reflector-player-id)
+        origin-pos (player-state-pos reflector-player-id)
         look-vec (when raycast/*raycast*
-                   (raycast/get-player-look-vector raycast/*raycast* player-id))
-        player-state (ps/get-player-state player-id)
-        player-pos (get player-state :position {:x 0.0 :y 64.0 :z 0.0})]
+                   (raycast/get-player-look-vector raycast/*raycast* reflector-player-id))]
+    (when look-vec
+      (let [start-pos (eye-pos origin-pos)
+            hit (raycast/raycast-entities raycast/*raycast*
+                                          world-id
+                                          (:x start-pos) (:y start-pos) (:z start-pos)
+                                          (:dx look-vec) (:dy look-vec) (:dz look-vec)
+                                          reflect-distance)
+            actual-distance (if (= (:hit-type hit) :entity)
+                              (double (or (:distance hit) reflect-distance))
+                              reflect-distance)
+            end-pos (v+ start-pos (v* {:x (:dx look-vec) :y (:dy look-vec) :z (:dz look-vec)} actual-distance))]
+        (ctx/ctx-send-to-client! ctx-id :railgun/fx-reflect
+                                 {:mode :reflect
+                                  :start start-pos
+                                  :end end-pos
+                                  :hit-distance actual-distance})
+        (when (and (= (:hit-type hit) :entity) entity-damage/*entity-damage*)
+          (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+                                             world-id
+                                             (:uuid hit)
+                                             reflect-damage
+                                             :magic)
+          true)))))
+
+(defn- perform-main-shot!
+  [player-id ctx-id exp]
+  (let [world-id (player-world-id player-id)
+        origin-pos (player-state-pos player-id)
+        start-pos (eye-pos origin-pos)
+        look-vec (when raycast/*raycast*
+                   (raycast/get-player-look-vector raycast/*raycast* player-id))]
     (if-not look-vec
-      (do
-        (ctx/update-context! ctx-id assoc :skill-state {:skip-default-cooldown true :fired false})
-        false)
-      (let [{:keys [x y z]} player-pos
-            {:keys [dx dy dz]} look-vec
-            start-pos {:x x :y (+ y 1.6) :z z}
-            hit (when raycast/*raycast*
-                  (raycast/raycast-combined raycast/*raycast*
-                                            "minecraft:overworld"
-                                            (:x start-pos) (:y start-pos) (:z start-pos)
-                                            dx dy dz
-                                            base-range))]
-        (if (nil? hit)
-          (do
-            (ctx/update-context! ctx-id assoc :skill-state {:skip-default-cooldown true :fired false})
-            false)
-          (let [hit-type (:hit-type hit)
-                hit-distance (double (or (:distance hit) base-range))
-                end-pos {:x (+ (:x start-pos) (* dx hit-distance))
-                         :y (+ (:y start-pos) (* dy hit-distance))
-                         :z (+ (:z start-pos) (* dz hit-distance))}
-                base-damage (lerp 60.0 110.0 exp)
-                hit-entities (if (and (= hit-type :entity) entity-damage/*entity-damage*)
-                               (entity-damage/apply-reflection-damage!
-                                 entity-damage/*entity-damage*
-                                 "minecraft:overworld"
-                                 (:uuid hit)
-                                 base-damage
-                                 :magic
-                                 0
-                                 2)
-                               [])
-                hit-count (count hit-entities)
-                exp-gain (if (pos? hit-count) 0.01 0.005)]
-            (ctx/ctx-send-to-client! ctx-id :railgun/fx-shot
-                                     {:mode (if (= hit-type :entity) :entity-hit :block-hit)
-                                      :start start-pos
-                                      :end end-pos
-                                      :hit-distance hit-distance
-                                      :hit-count hit-count})
-            (add-railgun-exp! player-id exp-gain)
-            (apply-railgun-cooldown! player-id exp)
-            (ctx/update-context! ctx-id assoc :skill-state
-                                 {:skip-default-cooldown true
-                                  :fired true
-                                  :hit-count hit-count
-                                  :mode :performed})
-            true))))))
+      {:performed? false}
+      (let [dir (normalize {:x (:dx look-vec) :y (:dy look-vec) :z (:dz look-vec)})
+            damage (lerp 60.0 110.0 exp)
+            block-energy (lerp 900.0 2000.0 exp)
+            candidates (railgun-candidates player-id world-id start-pos dir)
+            step-result (fn [{:keys [stop? reflection-distance reflection-hit? normal-hit-count] :as acc}
+                             {:keys [uuid x y z]}]
+                          (if stop?
+                            (reduced acc)
+                            (if (and (ps/get-player-state uuid)
+                                     (vec-reflection-can-reflect? uuid damage))
+                              (let [distance-to-reflector (distance-3d origin-pos {:x x :y y :z z})
+                                    _ (when entity-damage/*entity-damage*
+                                        (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+                                                                           world-id
+                                                                           uuid
+                                                                           damage
+                                                                           :magic))
+                                    reflected-hit? (boolean (perform-reflection-shot! ctx-id uuid))]
+                                (reduced {:stop? true
+                                          :reflection-distance distance-to-reflector
+                                          :reflection-hit? reflected-hit?
+                                          :normal-hit-count normal-hit-count}))
+                              (do
+                                (when entity-damage/*entity-damage*
+                                  (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+                                                                     world-id
+                                                                     uuid
+                                                                     damage
+                                                                     :magic))
+                                {:stop? false
+                                 :reflection-distance reflection-distance
+                                 :reflection-hit? reflection-hit?
+                                 :normal-hit-count (inc normal-hit-count)}))))
+            result (reduce step-result
+                           {:stop? false
+                            :reflection-distance nil
+                            :reflection-hit? false
+                            :normal-hit-count 0}
+                           candidates)
+            block-distance (min beam-max-distance (double (or (:reflection-distance result) beam-max-distance)))
+            visual-distance (min beam-visual-distance (double (or (:reflection-distance result) beam-visual-distance)))
+            end-pos (v+ start-pos (v* dir visual-distance))]
+        (break-beam-blocks! player-id world-id start-pos dir block-distance block-energy)
+        (ctx/ctx-send-to-client! ctx-id :railgun/fx-shot
+                                 {:mode :perform
+                                  :start start-pos
+                                  :end end-pos
+                                  :hit-distance visual-distance})
+        {:performed? true
+         :reflection-hit? (:reflection-hit? result)
+         :normal-hit-count (:normal-hit-count result)
+         :visual-distance visual-distance}))))
 
 (defn railgun-on-key-down
   "Railgun activation logic.
@@ -197,8 +393,15 @@
       (cond
         (:perform? qte)
         (if (consume-railgun-cost! player-id player exp)
-          (do
-            (perform-railgun-shot! player-id ctx-id exp)
+          (let [{:keys [performed? reflection-hit? normal-hit-count]} (perform-main-shot! player-id ctx-id exp)]
+            (when performed?
+              (add-railgun-exp! player-id (if reflection-hit? 0.01 0.005))
+              (apply-railgun-cooldown! player-id exp)
+              (ctx/update-context! ctx-id assoc :skill-state
+                                   {:skip-default-cooldown true
+                                    :fired true
+                                    :mode :performed
+                                    :hit-count normal-hit-count}))
             (log/debug "Railgun coin-QTE perform" player-id))
           (ctx/update-context! ctx-id assoc :skill-state {:skip-default-cooldown true :fired false :mode :coin-qte-no-resource}))
 
@@ -234,7 +437,15 @@
                 (if (and (accepted-item-in-hand? player)
                          (consume-item-for-shot! player)
                          (consume-railgun-cost! player-id player (get-skill-exp player-id)))
-                  (perform-railgun-shot! player-id ctx-id (get-skill-exp player-id))
+                  (let [{:keys [performed? reflection-hit? normal-hit-count]} (perform-main-shot! player-id ctx-id (get-skill-exp player-id))]
+                    (when performed?
+                      (add-railgun-exp! player-id (if reflection-hit? 0.01 0.005))
+                      (apply-railgun-cooldown! player-id (get-skill-exp player-id))
+                      (ctx/update-context! ctx-id assoc :skill-state
+                                           {:skip-default-cooldown true
+                                            :fired true
+                                            :mode :performed
+                                            :hit-count normal-hit-count})))
                   (ctx/update-context! ctx-id assoc :skill-state
                                        (assoc skill-state :fired false :mode :item-charge-failed)))
                 (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] 0))

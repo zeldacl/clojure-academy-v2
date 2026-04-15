@@ -100,16 +100,61 @@
                         :offset-x 0.2
                         :offset-y 0.2
                         :offset-z 0.2}))
-    (queue-sound! {:type :sound
-                   :sound-id "minecraft:entity.lightning_bolt.impact"
-                   :volume 0.55
-                   :pitch 1.25})))
+    (when (= mode :perform)
+      (queue-sound! {:type :sound
+                     :sound-id "minecraft:entity.lightning_bolt.impact"
+                     :volume 0.55
+                     :pitch 1.25}))))
+
+(defn- play-mag-manip-hold-fx!
+  [{:keys [mode focus]}]
+  (when focus
+    (queue-particle! {:type :particle
+                      :particle-type :electric-spark
+                      :x (:x focus)
+                      :y (:y focus)
+                      :z (:z focus)
+                      :count (if (= mode :hold-start) 10 4)
+                      :speed 0.05
+                      :offset-x 0.12
+                      :offset-y 0.12
+                      :offset-z 0.12})
+    (when (= mode :hold-start)
+      (queue-sound! {:type :sound
+                     :sound-id "minecraft:block.beacon.activate"
+                     :volume 0.35
+                     :pitch 1.3}))))
+
+(defn- play-mag-manip-throw-fx!
+  [{:keys [start end]}]
+  (when (and start end)
+    (let [distance (max 1.0 (Math/sqrt (+ (Math/pow (- (:x end) (:x start)) 2.0)
+                                          (Math/pow (- (:y end) (:y start)) 2.0)
+                                          (Math/pow (- (:z end) (:z start)) 2.0))))
+          segments (int (Math/max 8.0 (Math/min 32.0 (* 1.4 distance))))]
+      (doseq [{:keys [x y z]} (line-points start end segments)]
+        (queue-particle! {:type :particle
+                          :particle-type :electric-spark
+                          :x x :y y :z z
+                          :count 2
+                          :speed 0.03
+                          :offset-x 0.06
+                          :offset-y 0.06
+                          :offset-z 0.06}))
+      (queue-sound! {:type :sound
+                     :sound-id "minecraft:entity.trident.throw"
+                     :volume 0.45
+                     :pitch 1.18}))))
 
 (defn- register-context-fx-listeners!
   [ctx-id skill-id]
-  (when (= skill-id :railgun)
-    (when-let [ctx-on-fn (resolve 'cn.li.ac.ability.context/ctx-on)]
-      (@ctx-on-fn ctx-id :railgun/fx-shot play-railgun-shot-fx!))))
+  (when-let [ctx-on-fn (resolve 'cn.li.ac.ability.context/ctx-on)]
+    (when (= skill-id :railgun)
+      (@ctx-on-fn ctx-id :railgun/fx-shot play-railgun-shot-fx!)
+      (@ctx-on-fn ctx-id :railgun/fx-reflect play-railgun-shot-fx!))
+    (when (= skill-id :mag-manip)
+      (@ctx-on-fn ctx-id :mag-manip/fx-hold play-mag-manip-hold-fx!)
+      (@ctx-on-fn ctx-id :mag-manip/fx-throw play-mag-manip-throw-fx!))))
 
 (defn- local-player-item-id
   []
@@ -141,8 +186,10 @@
 (defn notify-railgun-coin-throw-client!
   [player-uuid]
   (let [k [player-uuid :coin]
-        expires-at (+ (now-ms) railgun-coin-window-ms)]
-    (set-railgun-state! k {:coin-expires-at expires-at})
+        started-at (now-ms)
+        expires-at (+ started-at railgun-coin-window-ms)]
+    (set-railgun-state! k {:coin-started-at started-at
+                           :coin-expires-at expires-at})
     (when-let [{:keys [x y z]} (local-player-pos)]
       (queue-particle! {:type :particle
                         :particle-type :electric-spark
@@ -158,10 +205,17 @@
   (let [k (slot-key player-uuid key-idx)
         ctx-id (get @slot-active-contexts k)
         charge? (pos? (long (or (get-in (railgun-state k) [:charge-ticks]) 0)))
-        coin? (let [expires (long (or (get-in (railgun-state [player-uuid :coin]) [:coin-expires-at]) 0))]
-                (> expires (now-ms)))]
+  coin-state (railgun-state [player-uuid :coin])
+  now (now-ms)
+  coin-progress (let [start (long (or (:coin-started-at coin-state) now))
+          expires (long (or (:coin-expires-at coin-state) now))
+          window (max 1 (- expires start))]
+      (/ (double (max 0 (- now start))) (double window)))
+  coin? (let [expires (long (or (:coin-expires-at coin-state) 0))]
+    (> expires now))]
     (cond
-      (or charge? coin?) :charge
+      charge? :charge
+      coin? (if (< coin-progress 0.6) :charge :active)
       ctx-id :active
       :else :idle)))
 
@@ -211,7 +265,7 @@
       (doseq [ctx-id (keys @local-contexts)]
         (send-keepalive! ctx-id)))
     ;; Local railgun charge visuals (client prediction only).
-    (doseq [[[uuid key-idx :as k] st] @railgun-local-state]
+    (doseq [[[_ key-idx :as k] st] @railgun-local-state]
       (cond
         (number? key-idx)
         (let [ticks-left (long (or (:charge-ticks st) 0))]

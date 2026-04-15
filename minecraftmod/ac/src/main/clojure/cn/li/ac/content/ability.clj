@@ -10,6 +10,7 @@
             [cn.li.ac.content.ability.electromaster.body-intensify :as body-intensify]
             [cn.li.ac.content.ability.electromaster.current-charging :as current-charging]
             [cn.li.ac.content.ability.electromaster.mag-movement :as mag-movement]
+            [cn.li.ac.content.ability.electromaster.mag-manip :as mag-manip]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
             [cn.li.ac.content.ability.meltdowner.meltdowner :as meltdowner]
             [cn.li.ac.content.ability.teleporter.mark-teleport :as mark-teleport]
@@ -113,6 +114,7 @@
   :name-key "ability.skill.electromaster.arc_gen"
   :description-key "ability.skill.electromaster.arc_gen.desc"
   :icon "textures/abilities/electromaster/skills/arc_gen.png"
+  :ui-position [24 46]
   :level 1
   :controllable? true
   :ctrl-id :arc-gen
@@ -128,6 +130,7 @@
   :name-key "ability.skill.electromaster.thunder_bolt"
   :description-key "ability.skill.electromaster.thunder_bolt.desc"
   :icon "textures/abilities/electromaster/skills/thunder_bolt.png"
+  :ui-position [86 67]
   :level 2
   :controllable? false
   :ctrl-id :thunder-bolt
@@ -138,7 +141,8 @@
   :on-key-tick thunder-bolt/thunder-bolt-on-key-tick
   :on-key-up thunder-bolt/thunder-bolt-on-key-up
   :on-key-abort thunder-bolt/thunder-bolt-on-key-abort
-  :prerequisites [{:skill-id :arc-gen :min-exp 0.3}])
+  :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
+                  {:skill-id :current-charging :min-exp 0.7}])
 
 (defskill thunder-clap
   :id :thunder-clap
@@ -146,6 +150,7 @@
   :name-key "ability.skill.electromaster.thunder_clap"
   :description-key "ability.skill.electromaster.thunder_clap.desc"
   :icon "textures/abilities/electromaster/skills/thunder_clap.png"
+  :ui-position [204 80]
   :level 1
   :controllable? true
   :ctrl-id :thunder-clap
@@ -155,7 +160,8 @@
   :on-key-down thunder-clap/thunder-clap-on-key-down
   :on-key-tick thunder-clap/thunder-clap-on-key-tick
   :on-key-up thunder-clap/thunder-clap-on-key-up
-  :on-key-abort thunder-clap/thunder-clap-on-key-abort)
+  :on-key-abort thunder-clap/thunder-clap-on-key-abort
+  :prerequisites [{:skill-id :thunder-bolt :min-exp 1.0}])
 
 (defskill current-charging
   :id :current-charging
@@ -163,6 +169,7 @@
   :name-key "ability.skill.electromaster.current_charging"
   :description-key "ability.skill.electromaster.current_charging.desc"
   :icon "textures/abilities/electromaster/skills/charging.png"
+  :ui-position [55 18]
   :level 2
   :controllable? true
   :ctrl-id :current-charging
@@ -173,7 +180,7 @@
   :on-key-tick current-charging/current-charging-on-key-tick
   :on-key-up current-charging/current-charging-on-key-up
   :on-key-abort current-charging/current-charging-on-key-abort
-  :prerequisites [{:skill-id :arc-gen :min-exp 0.4}])
+  :prerequisites [{:skill-id :arc-gen :min-exp 0.3}])
 
 (defskill body-intensify
   :id :body-intensify
@@ -181,6 +188,7 @@
   :name-key "ability.skill.electromaster.body_intensify"
   :description-key "ability.skill.electromaster.body_intensify.desc"
   :icon "textures/abilities/electromaster/skills/body_intensify.png"
+  :ui-position [97 15]
   :level 4
   :controllable? true
   :ctrl-id :body-intensify
@@ -191,7 +199,8 @@
   :on-key-tick body-intensify/body-intensify-on-key-tick
   :on-key-up body-intensify/body-intensify-on-key-up
   :on-key-abort body-intensify/body-intensify-on-key-abort
-  :prerequisites [{:skill-id :thunder-bolt :min-exp 0.5}])
+  :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
+                  {:skill-id :current-charging :min-exp 1.0}])
 
 (defskill mag-movement
   :id :mag-movement
@@ -199,6 +208,7 @@
   :name-key "ability.skill.electromaster.mag_movement"
   :description-key "ability.skill.electromaster.mag_movement.desc"
   :icon "textures/abilities/electromaster/skills/mag_movement.png"
+  :ui-position [137 35]
   :level 3
   :controllable? true
   :ctrl-id :mag-movement
@@ -209,7 +219,27 @@
   :on-key-tick mag-movement/mag-movement-on-key-tick
   :on-key-up mag-movement/mag-movement-on-key-up
   :on-key-abort mag-movement/mag-movement-on-key-abort
-  :prerequisites [{:skill-id :current-charging :min-exp 0.5}])
+  :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
+                  {:skill-id :current-charging :min-exp 0.7}])
+
+(defskill mag-manip
+  :id :mag-manip
+  :category-id :electromaster
+  :name-key "ability.skill.electromaster.mag_manip"
+  :description-key "ability.skill.electromaster.mag_manip.desc"
+  :icon "textures/abilities/electromaster/skills/mag_manip.png"
+  :ui-position [204 33]
+  :level 3
+  :controllable? true
+  :ctrl-id :mag-manip
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 38
+  :on-key-down mag-manip/mag-manip-on-key-down
+  :on-key-tick mag-manip/mag-manip-on-key-tick
+  :on-key-up mag-manip/mag-manip-on-key-up
+  :on-key-abort mag-manip/mag-manip-on-key-abort
+  :prerequisites [{:skill-id :mag-movement :min-exp 0.5}])
 
 (defskill railgun
   :id :railgun
@@ -217,6 +247,7 @@
   :name-key "ability.skill.electromaster.railgun"
   :description-key "ability.skill.electromaster.railgun.desc"
   :icon "textures/abilities/electromaster/skills/railgun.png"
+  :ui-position [164 59]
   :level 3
   :controllable? true
   :ctrl-id :railgun
@@ -227,7 +258,8 @@
   :on-key-tick railgun/railgun-on-key-tick
   :on-key-up railgun/railgun-on-key-up
   :on-key-abort railgun/railgun-on-key-abort
-  :prerequisites [{:skill-id :arc-gen :min-exp 0.6}])
+  :prerequisites [{:skill-id :thunder-bolt :min-exp 0.3}
+                  {:skill-id :mag-manip :min-exp 1.0}])
 
 ;; Telekinesis skills
 (defskill vec-manip

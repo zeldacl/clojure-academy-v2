@@ -41,7 +41,7 @@
             (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-visited] #{})
             (let [overload-keep (scaling/lerp 350.0 250.0 exp)]
               (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-overload-keep] overload-keep)
-              (when-let [state (ps/get-player-state player-id)]
+              (when (ps/get-player-state player-id)
                 (ps/update-ability-data! player-id
                                          #(update-in % [:cp-data :overload] + overload-keep))))
             (log/info "VecReflection: Activated")))))
@@ -150,11 +150,14 @@
             (ps/update-ability-data! player-id
                                      #(update-in % [:cp-data :cp] - consumption))
             (when (and attacker-id entity-damage/*entity-damage*)
+              (let [world-id (or (get-in state [:position :world-id])
+                                 (get-in (ps/get-player-state attacker-id) [:position :world-id])
+                                 "minecraft:overworld")]
               (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+                                                 world-id
                                                  attacker-id
-                                                 player-id
                                                  reflected-damage
-                                                 "vec_reflection"))
+                                                 :generic)))
             (let [{:keys [data events]} (learning/add-skill-exp
                                          (:ability-data state)
                                          player-id
