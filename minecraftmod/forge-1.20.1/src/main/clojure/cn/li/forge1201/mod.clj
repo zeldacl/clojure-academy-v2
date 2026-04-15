@@ -403,6 +403,18 @@
           (.addListener mod-bus EventPriority/NORMAL false FMLClientSetupEvent
                         (reify java.util.function.Consumer
                           (accept [_ event] (on-client-setup event))))
+
+          (when (side/client-side?)
+            (try
+              (let [rk-class (Class/forName "net.minecraftforge.client.event.RegisterKeyMappingsEvent")]
+                (.addListener mod-bus EventPriority/NORMAL false rk-class
+                              (reify java.util.function.Consumer
+                                (accept [_ event]
+                                  (when-let [register-keys! (side/resolve-client-fn 'cn.li.forge1201.client.init 'register-key-mappings!)]
+                                    (register-keys! event))))))
+              (catch Exception e
+                (log/error "Failed to register key mapping listener" e))))
+
           ;; Scripted BER: use @Mod.EventBusSubscriber Java class ModClientRenderSetup —
           ;; addListener(modBus, Class, Consumer) for EntityRenderersEvent$RegisterRenderers
           ;; did not reliably dispatch from Clojure reify.

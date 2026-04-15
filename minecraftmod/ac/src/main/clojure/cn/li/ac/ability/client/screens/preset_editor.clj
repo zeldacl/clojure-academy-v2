@@ -42,16 +42,16 @@
                               skill-obj (skill/get-skill-by-controllable cat-id ctrl-id)]
                           (when skill-obj
                             {:idx idx
-                             :skill-id (:skill-id skill-obj)
-                             :skill-name (:name skill-obj)
+                             :skill-id skill-obj
+                             :skill-name (:name (skill/get-skill skill-obj))
                              :skill-icon (skill/get-skill-icon-path skill-obj)}))))))
          :available-skills (mapv
                              (fn [s]
                                {:skill-id (:skill-id s)
                                 :skill-name (:name s)
-                                :skill-icon (skill/get-skill-icon-path s)
+                                :skill-icon (skill/get-skill-icon-path (:skill-id s))
                                 :cat-id (:category-id s)
-                                :ctrl-id (:controllable-id s)})
+                                :ctrl-id (or (:ctrl-id s) (:skill-id s))})
                              controllable-skills)
          :selected-skill (:selected-skill @editor-state)
          :has-changes (not (empty? (:pending-changes @editor-state)))}))))

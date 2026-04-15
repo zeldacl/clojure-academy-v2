@@ -12,7 +12,8 @@
      :x 10 :y 10
      :width 100 :height 10
      :percent (double percent)
-    :texture "my_mod:textures/guis/cpbar/cp.png"}))
+     :bg-texture "my_mod:textures/guis/cpbar/back_normal.png"
+     :fg-texture "my_mod:textures/guis/cpbar/cp.png"}))
 
 (defn build-overload-bar-render-data
   "Build overload bar render data."
@@ -24,9 +25,10 @@
      :width 100 :height 10
      :percent (double percent)
      :overloaded (not fine)
-     :texture (if fine
-                "my_mod:textures/guis/cpbar/back_normal.png"
-                "my_mod:textures/guis/cpbar/back_overload.png")}))
+     :bg-texture (if fine
+                   "my_mod:textures/guis/cpbar/back_normal.png"
+                   "my_mod:textures/guis/cpbar/back_overload.png")
+     :fg-texture "my_mod:textures/guis/cpbar/front_overload.png"}))
 
 (defn build-skill-slot-render-data
   "Build skill slot render data with cooldown info."
@@ -47,7 +49,7 @@
                :idx idx
                :x (- screen-width 150)
                :y (+ (- screen-height 100) (* idx 22))
-               :key-label (nth ["Z" "X" "C" "V"] idx)
+               :key-label (nth ["Z" "X" "C" "B"] idx)
                :skill-icon (skill/get-skill-icon-path skill-info)
                :skill-name (:name skill-info)
                :in-cooldown in-cooldown

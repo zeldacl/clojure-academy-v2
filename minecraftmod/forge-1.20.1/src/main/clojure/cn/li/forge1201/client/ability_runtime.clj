@@ -5,6 +5,7 @@
             [cn.li.ac.ability.skill :as skill]
             [cn.li.mcmod.ability.catalog :as catalog]
             [cn.li.forge1201.ability.network :as ability-net]
+            [cn.li.forge1201.client.ability-client-state :as client-state]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.common MinecraftForge]
@@ -111,6 +112,8 @@
   (when uuid
     (ps/get-or-create-player-state! uuid)
     (ps/update-resource-data! uuid (constantly resource-data))
+    ;; Server sync is authoritative; clear client-side optimistic overlay
+    (client-state/clear-client-activated!)
     (swap! sync-cache update uuid (fnil assoc {}) :resource-data resource-data)))
 
 (defn- on-sync-cooldown!

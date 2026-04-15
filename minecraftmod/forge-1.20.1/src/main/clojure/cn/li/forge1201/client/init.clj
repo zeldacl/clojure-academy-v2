@@ -26,6 +26,8 @@
             [cn.li.mcmod.client.render.buffer :as buffer])
   (:import [cn.li.forge1201.shim ForgeClientHelper]
            [net.minecraftforge.client.event EntityRenderersEvent$RegisterRenderers]
+           [net.minecraftforge.client.event RegisterKeyMappingsEvent]
+           [net.minecraft.client KeyMapping]
            [net.minecraft.client.renderer.blockentity BlockEntityRendererProvider]))
 
 ;; ============================================================================
@@ -134,6 +136,17 @@
      :open-preset-editor-screen ability-screen-bridge/open-preset-editor-screen!
      :open-terminal-screen terminal-screen-bridge/open-terminal-screen!
      :open-simple-gui terminal-screen-bridge/open-simple-gui!}))
+
+(defn register-key-mappings!
+  "Register all ability KeyMapping instances to Forge input system."
+  [^RegisterKeyMappingsEvent event]
+  ;; Ensure mappings are created even if this event fires before client setup enqueueWork.
+  (ability-input/register-keybinds!)
+  (let [all-keys (concat (ability-input/get-skill-keys)
+                         (ability-input/get-gui-keys))]
+    (doseq [^KeyMapping key all-keys]
+      (.register event key))
+    (log/info "Registered ability key mappings:" (count all-keys))))
 
 (defn init-client
   "Initialize client-side systems for Forge 1.20.1.

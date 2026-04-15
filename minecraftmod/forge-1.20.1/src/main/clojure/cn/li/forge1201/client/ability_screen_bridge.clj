@@ -18,6 +18,14 @@
         ^Font font (.-font mc)]
     (.drawString graphics font text (int x) (int y) (int color))))
 
+(defn- normalize-texture-path
+  [path]
+  (when (and path (not (clojure.string/blank? path)))
+    (cond
+      (str/includes? path ":") path
+      (str/starts-with? path "textures/") (str "my_mod:" path)
+      :else (str "my_mod:textures/" path))))
+
 ;; ============================================================================
 ;; Skill Tree Screen
 ;; ============================================================================
@@ -25,11 +33,7 @@
 
 
 (defn- normalize-skill-icon-path [icon]
-  ;; 只保留 my_mod:guis/skill_tree/xxx 形式，不带 textures/ 和 .png
-  (when (and icon (not (clojure.string/blank? icon)))
-    (let [icon (clojure.string/replace icon #"^my_mod:textures/" "my_mod:")
-          icon (clojure.string/replace icon #"\\.png$" "")]
-      icon)))
+  (normalize-texture-path icon))
 
 (defn- render-skill-node
   "Render a single skill node."
@@ -45,7 +49,9 @@
                :else 0xFF0000)]
     ;; Render node icon or fallback
     (try
-      (.blit graphics (ResourceLocation. texture) x y 0 0 20 20 20 20)
+      (if-let [loc (ResourceLocation/tryParse texture)]
+        (.blit graphics loc x y 0 0 20 20 20 20)
+        (.fill graphics x y (+ x 20) (+ y 20) (bit-or 0xFF000000 color)))
       (catch Exception _e
         ;; Fallback: render colored square
         (.fill graphics x y (+ x 20) (+ y 20) (bit-or 0xFF000000 color))))
@@ -78,7 +84,7 @@
                          (concat
                            [(str skill-name " (Lv" skill-level ")")]
                            (when-not can-learn
-                             (map #(str "�?" (or (:description %) "Condition not met")) conditions))))]
+                             (map #(str "- " (or (:description %) "Condition not met")) conditions))))]
       ;; Simple tooltip rendering
       (doseq [[idx line] (map-indexed vector tooltip-lines)]
         (draw-string! graphics (str line) (+ mouse-x 10) (+ mouse-y 10 (* idx 12)) 0xFFFFFF)))))
@@ -116,7 +122,9 @@
     (keyPressed [^long key ^long scancode ^long modifiers]
       ;; 只处理ESC，其他按键返回false让MC继续处理
       (if (= key 256) ; GLFW_KEY_ESCAPE
-        (proxy-super keyPressed key scancode modifiers)
+        (let [^Minecraft mc (Minecraft/getInstance)]
+          (.setScreen mc nil)
+          true)
         false))
 
     (mouseClicked [mouse-x mouse-y _button]
@@ -166,7 +174,7 @@
 (defn- render-slot-assignment
   "Render a slot assignment."
   [^GuiGraphics graphics slot x y]
-  (let [key-label (nth ["Z" "X" "C" "V"] (:idx slot))]
+  (let [key-label (nth ["Z" "X" "C" "B"] (:idx slot))]
     (.fill graphics x y (+ x 100) (+ y 20) 0xFF404040)
     (draw-string! graphics key-label (+ x 5) (+ y 5) 0xFFFFFF)
     (when-let [skill-name (:skill-name slot)]

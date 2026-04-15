@@ -162,7 +162,15 @@
     (let [uuid  (uuid-of player)
           state (get-state uuid)
           rd    (:resource-data state)
-    {:keys [data events]} (res/set-activated rd uuid activated)]
+          before (boolean (:activated rd))
+          {:keys [data events]} (res/set-activated rd uuid activated)
+          after (boolean (:activated data))]
+      (log/info "[V-TRACE][AC][SERVER][REQ-SET-ACTIVATED]"
+                {:uuid uuid
+                 :requested (boolean activated)
+                 :before before
+                 :after after
+                 :events (count events)})
       (ps/update-resource-data! uuid (constantly data))
       (doseq [e events] (evt/fire-ability-event! e))))
 

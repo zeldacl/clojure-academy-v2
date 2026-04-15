@@ -55,7 +55,7 @@
      :conditions (:failures conditions)
      :skill-id (:skill-id skill)
      :skill-name (:name skill)
-     :skill-icon (skill/get-skill-icon-path skill)
+      :skill-icon (skill/get-skill-icon-path (:skill-id skill))
      :skill-level (:level skill)
      :exp (or skill-exp 0.0)}))
 
