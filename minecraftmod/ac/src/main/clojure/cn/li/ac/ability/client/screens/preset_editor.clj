@@ -96,6 +96,50 @@
   []
   (api/req-switch-preset! (:selected-preset @editor-state) nil))
 
+(defn handle-screen-click!
+  "Handle clicks inside the preset editor screen using current render data."
+  [mouse-x mouse-y]
+  (if-let [render-data (build-preset-editor-render-data)]
+    (let [clicked? (atom false)]
+      (doseq [preset-idx (:presets render-data)]
+        (when (and (not @clicked?)
+                   (>= mouse-x (+ 10 (* preset-idx 45)))
+                   (<= mouse-x (+ 50 (* preset-idx 45)))
+                   (>= mouse-y 10) (<= mouse-y 30))
+          (on-preset-tab-click preset-idx)
+          (reset! clicked? true)))
+
+      (doseq [idx (range 4)]
+        (when (and (not @clicked?)
+                   (>= mouse-x 10) (<= mouse-x 110)
+                   (>= mouse-y (+ 40 (* idx 25)))
+                   (<= mouse-y (+ 60 (* idx 25))))
+          (on-slot-click idx)
+          (reset! clicked? true)))
+
+      (doseq [[idx skill] (map-indexed vector (:available-skills render-data))]
+        (when (and (not @clicked?)
+                   (>= mouse-x 170) (<= mouse-x 320)
+                   (>= mouse-y (+ 60 (* idx 22)))
+                   (<= mouse-y (+ 82 (* idx 22))))
+          (on-skill-select (:skill-id skill))
+          (reset! clicked? true)))
+
+      (when (and (not @clicked?)
+                 (>= mouse-x 10) (<= mouse-x 90)
+                 (>= mouse-y 200) (<= mouse-y 220))
+        (on-save-click)
+        (reset! clicked? true))
+
+      (when (and (not @clicked?)
+                 (>= mouse-x 100) (<= mouse-x 180)
+                 (>= mouse-y 200) (<= mouse-y 220))
+        (on-set-active-click)
+        (reset! clicked? true))
+
+      (boolean @clicked?))
+    false))
+
 (defn open-screen!
   "Open preset editor screen."
   [player-uuid]

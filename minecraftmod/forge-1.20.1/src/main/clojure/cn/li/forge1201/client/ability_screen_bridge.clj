@@ -1,7 +1,6 @@
  (ns cn.li.forge1201.client.ability-screen-bridge
    "CLIENT-ONLY screen bridge for ability GUIs (Forge layer)."
-   (:require [cn.li.ac.ability.client.screens.skill-tree :as ac-skill-tree]
-             [cn.li.ac.ability.client.screens.preset-editor :as ac-preset-editor]
+   (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
              [cn.li.mcmod.util.log :as log]
              [clojure.string :as str])
   (:import [net.minecraft.client.gui.screens Screen]
@@ -20,7 +19,7 @@
 
 (defn- normalize-texture-path
   [path]
-  (when (and path (not (clojure.string/blank? path)))
+  (when (and path (not (str/blank? path)))
     (cond
       (str/includes? path ":") path
       (str/starts-with? path "textures/") (str "my_mod:" path)
@@ -94,7 +93,7 @@
     (render [^GuiGraphics graphics mouse-x mouse-y _partial-tick]
       (try
         ;; Get render data from AC layer
-        (when-let [render-data (ac-skill-tree/build-screen-render-data)]
+        (when-let [render-data (ability-runtime/client-build-skill-tree-render-data)]
           ;; Render background
           (let [^Screen screen this]
             (.renderBackground screen graphics))
@@ -109,7 +108,7 @@
               (render-skill-node graphics node)))
 
           ;; Update hover state
-          (ac-skill-tree/on-mouse-move mouse-x mouse-y)
+          (ability-runtime/client-handle-skill-tree-hover! mouse-x mouse-y)
 
           ;; Render tooltip for hovered skill
           (when-let [hover-id (:hover-skill render-data)]
@@ -129,33 +128,13 @@
 
     (mouseClicked [mouse-x mouse-y _button]
       (try
-        (if-let [render-data (ac-skill-tree/build-screen-render-data)]
-          (let [clicked? (atom false)]
-            (doseq [node (:skill-nodes render-data)]
-              (when (and node (not @clicked?))
-                (let [dx (- mouse-x (:x node))
-                      dy (- mouse-y (:y node))
-                      dist-sq (+ (* dx dx) (* dy dy))]
-                  (when (< dist-sq 400)
-                    (ac-skill-tree/on-skill-click (:skill-id node))
-                    (reset! clicked? true)))))
-
-            ;; Check level-up button click
-            (when (and (not @clicked?)
-                       (get-in render-data [:ability-info :can-level-up])
-                       (>= mouse-x 10) (<= mouse-x 90)
-                       (>= mouse-y 200) (<= mouse-y 220))
-              (ac-skill-tree/on-level-up-click)
-              (reset! clicked? true))
-
-            (boolean @clicked?))
-          false)
+        (boolean (ability-runtime/client-handle-skill-tree-click! mouse-x mouse-y))
         (catch Exception e
           (log/error "Error handling skill tree click" e)
           false)))
 
     (removed []
-      (ac-skill-tree/close-screen!))))
+      (ability-runtime/client-close-skill-tree-screen!))))
 
 ;; ============================================================================
 ;; Preset Editor Screen
@@ -191,7 +170,7 @@
   (proxy [Screen] [(Component/literal "Preset Editor")]
     (render [^GuiGraphics graphics mouse-x mouse-y _partial-tick]
       (try
-        (when-let [render-data (ac-preset-editor/build-preset-editor-render-data)]
+        (when-let [render-data (ability-runtime/client-build-preset-editor-render-data)]
           ;; Render background
           (let [^Screen screen this]
             (.renderBackground screen graphics))
@@ -226,56 +205,13 @@
 
     (mouseClicked [mouse-x mouse-y _button]
       (try
-        (when-let [render-data (ac-preset-editor/build-preset-editor-render-data)]
-          (let [clicked? (atom false)]
-            ;; Check preset tab clicks
-            (doseq [preset-idx (:presets render-data)]
-              (when (and (not @clicked?)
-                         (>= mouse-x (+ 10 (* preset-idx 45)))
-                         (<= mouse-x (+ 50 (* preset-idx 45)))
-                         (>= mouse-y 10) (<= mouse-y 30))
-                (ac-preset-editor/on-preset-tab-click preset-idx)
-                (reset! clicked? true)))
-
-            ;; Check slot clicks
-            (doseq [idx (range 4)]
-              (when (and (not @clicked?)
-                         (>= mouse-x 10) (<= mouse-x 110)
-                         (>= mouse-y (+ 40 (* idx 25)))
-                         (<= mouse-y (+ 60 (* idx 25))))
-                (ac-preset-editor/on-slot-click idx)
-                (reset! clicked? true)))
-
-            ;; Check available skill clicks
-            (doseq [[idx skill] (map-indexed vector (:available-skills render-data))]
-              (when (and (not @clicked?)
-                         (>= mouse-x 170) (<= mouse-x 320)
-                         (>= mouse-y (+ 60 (* idx 22)))
-                         (<= mouse-y (+ 82 (* idx 22))))
-                (ac-preset-editor/on-skill-select (:skill-id skill))
-                (reset! clicked? true)))
-
-            ;; Check save button
-            (when (and (not @clicked?)
-                       (>= mouse-x 10) (<= mouse-x 90)
-                       (>= mouse-y 200) (<= mouse-y 220))
-              (ac-preset-editor/on-save-click)
-              (reset! clicked? true))
-
-            ;; Check set active button
-            (when (and (not @clicked?)
-                       (>= mouse-x 100) (<= mouse-x 180)
-                       (>= mouse-y 200) (<= mouse-y 220))
-              (ac-preset-editor/on-set-active-click)
-              (reset! clicked? true))
-
-            @clicked?))
+        (boolean (ability-runtime/client-handle-preset-editor-click! mouse-x mouse-y))
         (catch Exception e
           (log/error "Error handling preset editor click" e)
           false)))
 
     (removed []
-      (ac-preset-editor/close-screen!))))
+      (ability-runtime/client-close-preset-editor-screen!))))
 
 ;; ============================================================================
 ;; Screen Opening Functions
@@ -286,7 +222,7 @@
   ([player-uuid]
    (open-skill-tree-screen! player-uuid nil))
   ([player-uuid learn-context]
-   (let [result (ac-skill-tree/open-screen! player-uuid learn-context)]
+   (let [result (ability-runtime/client-open-skill-tree-screen! player-uuid learn-context)]
      (when (= (:command result) :open-screen)
        (let [^Minecraft mc (Minecraft/getInstance)]
          (.setScreen mc (create-skill-tree-screen)))))))
@@ -294,7 +230,7 @@
 (defn open-preset-editor-screen!
   "Open preset editor screen. Called by AC layer via keybinds."
   [player-uuid]
-  (let [result (ac-preset-editor/open-screen! player-uuid)]
+  (let [result (ability-runtime/client-open-preset-editor-screen! player-uuid)]
     (when (= (:command result) :open-screen)
       (let [^Minecraft mc (Minecraft/getInstance)]
         (.setScreen mc (create-preset-editor-screen))))))

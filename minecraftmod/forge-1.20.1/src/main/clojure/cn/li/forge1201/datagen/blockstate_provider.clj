@@ -8,7 +8,7 @@
    优势：定义层复用，易于支持新的Forge版本"
   (:require [cn.li.forge1201.bootstrap :as bootstrap]
             [cn.li.mcmod.config :as modid]
-            [cn.li.ac.block.blockstate-definition :as blockstate-def]
+            [cn.li.mcmod.block.blockstate-definition :as blockstate-def]
             [cn.li.forge1201.datagen.resource-location :as rl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]

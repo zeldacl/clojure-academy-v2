@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.client.ability-hud-bridge
   "CLIENT-ONLY HUD rendering bridge (Forge layer)."
-  (:require [cn.li.ac.ability.client.hud-renderer :as ac-hud]
-            [cn.li.ac.ability.player-state :as ps]
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.forge1201.client.ability-hud :as hud]
             [cn.li.forge1201.client.ability-client-state :as client-state]
             [cn.li.mcmod.util.log :as log])
@@ -47,10 +47,10 @@
 
 (defn- normalize-texture-path
   [path]
-  (when (and path (not (clojure.string/blank? path)))
+  (when (and path (not (str/blank? path)))
     (cond
-      (clojure.string/includes? path ":") path
-      (clojure.string/starts-with? path "textures/") (str "my_mod:" path)
+      (str/includes? path ":") path
+      (str/starts-with? path "textures/") (str "my_mod:" path)
       :else (str "my_mod:textures/" path))))
 
 (defn- render-bar
@@ -168,9 +168,9 @@
             hud-model (if-let [ov @client-state/client-activated-overlay]
                         (when raw-hud-model (assoc raw-hud-model :activated ov))
                         raw-hud-model)
-            cooldown-data (when-let [state (ps/get-player-state player-uuid)]
+            cooldown-data (when-let [state (ability-runtime/get-player-state player-uuid)]
                            (:cooldown-data state))
-            render-data (ac-hud/build-hud-render-data hud-model screen-width screen-height cooldown-data)]
+            render-data (ability-runtime/client-build-hud-render-data hud-model screen-width screen-height cooldown-data)]
 
         ;; Original behavior: HUD is visible only in activated ability mode.
         (when (and render-data (:activated hud-model))

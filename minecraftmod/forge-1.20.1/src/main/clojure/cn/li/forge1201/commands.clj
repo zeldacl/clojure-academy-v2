@@ -6,6 +6,7 @@
   (:require [cn.li.mcmod.command.metadata :as cmd-meta]
             [cn.li.mcmod.command.context :as cmd-ctx]
             [cn.li.mcmod.command.actions :as cmd-actions]
+            [cn.li.mcmod.platform.command-runtime :as command-runtime]
             [cn.li.forge1201.command-executor]  ; Load action implementations
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.brigadier CommandDispatcher]
@@ -310,9 +311,7 @@
 
   ;; Ensure command definitions are loaded
   (try
-    (require 'cn.li.ac.command.commands)
-    (when-let [init-fn (requiring-resolve 'cn.li.ac.command.commands/init-commands!)]
-      (init-fn))
+    (command-runtime/init-commands!)
     (catch Exception e
       (log/error "Failed to load command definitions:" (ex-message e))))
 

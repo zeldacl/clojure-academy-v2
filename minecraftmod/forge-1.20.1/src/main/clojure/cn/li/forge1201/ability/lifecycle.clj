@@ -3,10 +3,7 @@
   (:require [cn.li.forge1201.ability.nbt :as ability-nbt]
             [cn.li.forge1201.ability.sync :as ability-sync]
             [cn.li.forge1201.ability.network :as ability-network]
-            [cn.li.forge1201.ability.store :as ability-store]
-            [cn.li.ac.ability.player-state :as ps]
-            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
-            [cn.li.ac.ability.damage-handler :as damage-handler]
+            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
@@ -24,23 +21,25 @@
 (defn- on-player-login [^PlayerEvent$PlayerLoggedInEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
     (ability-nbt/load-player-state! p)
+    (ability-runtime/on-player-login! (str (.getUUID p)))
     (ability-sync/mark-player-dirty! (str (.getUUID p)))))
 
 (defn- on-player-logout [^PlayerEvent$PlayerLoggedOutEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
     (ability-nbt/save-player-state! p)
-    (ctx-mgr/abort-player-contexts! (str (.getUUID p)))
-    (ps/remove-player-state! (str (.getUUID p)))))
+    (ability-runtime/on-player-logout! (str (.getUUID p)))))
 
 (defn- on-player-clone [^PlayerEvent$Clone evt]
   (when (not (.isWasDeath evt))
     (when-let [^ServerPlayer oldp (server-player (.getOriginal evt))]
       (when-let [^ServerPlayer newp (server-player (.getEntity evt))]
-        (ability-nbt/clone-player-state! oldp newp)))))
+        (ability-nbt/clone-player-state! oldp newp)
+        (ability-runtime/on-player-clone! (str (.getUUID oldp))
+                                          (str (.getUUID newp)))))))
 
 (defn- on-player-death [^LivingDeathEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
-    (ctx-mgr/abort-player-contexts! (str (.getUUID p)))
+    (ability-runtime/on-player-death! (str (.getUUID p)))
     (ability-nbt/save-player-state! p)))
 
 (defn- on-player-tick [^TickEvent$PlayerTickEvent evt]
@@ -48,11 +47,9 @@
              (server-player (.player evt)))
     (let [^ServerPlayer p (.player evt)
           uuid (str (.getUUID p))]
-      (ps/get-or-create-player-state! uuid)
-      (ps/server-tick-player! uuid nil)
+      (ability-runtime/on-player-tick! uuid)
       (ability-sync/mark-player-dirty! uuid)
-      (ability-sync/tick-sync! ability-network/send-sync-to-client!)
-      (ctx-mgr/tick-context-manager!))))
+      (ability-sync/tick-sync! ability-network/send-sync-to-client!))))
 
 (defn- try-install! [ns-sym fn-sym label]
   (try
@@ -66,7 +63,6 @@
 (defn init-common!
   "Register all forge-side lifecycle listeners for ability runtime."
   []
-  (ability-store/install-store!)
   ;; TODO: All ability module installs disabled; bootstrap issue resolution pending
   #_(try-install! 'cn.li.forge1201.ability.world-effects
                 'cn.li.forge1201.ability.world-effects/install-world-effects!
@@ -118,6 +114,6 @@
                   (accept [_ evt] (on-player-tick evt))))
 
   ;; Initialize damage handlers after all protocols are installed
-  (damage-handler/init-damage-handlers!)
+  (ability-runtime/init-damage-handlers!)
 
   (log/info "Forge ability lifecycle initialized"))

@@ -3,25 +3,13 @@
 
   Intercepts LivingHurtEvent to allow skills to modify incoming damage."
   (:require [cn.li.mcmod.platform.damage-interception :as pdi]
+            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraftforge.event.entity.living LivingHurtEvent]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.damagesource DamageSource]))
-
-
-(def ^:private damage-handlers
-  "Atom holding registered damage handlers.
-  Structure: {handler-id {:fn handler-fn :priority int}}"
-  (atom {}))
-
-(defn- get-sorted-handlers
-  "Get handlers sorted by priority (lower = earlier)."
-  []
-  (->> @damage-handlers
-       (sort-by (fn [[_id data]] (:priority data)))
-       (map (fn [[id data]] [id (:fn data)]))))
 
 (defn- on-living-hurt
   "Handle LivingHurtEvent - intercept damage and call registered handlers."
@@ -35,62 +23,22 @@
               damage-source (.getSource event)
               attacker (.getEntity damage-source)
               attacker-id (when attacker (str (.getUUID attacker)))
-              handlers (get-sorted-handlers)]
-          (loop [remaining-handlers handlers
-                 current-damage original-damage]
-            (if (empty? remaining-handlers)
-              (when (not= current-damage original-damage)
-                (.setAmount event (float current-damage))
-                (log/debug "Damage modified:" original-damage "->" current-damage))
-              (let [[handler-id handler-fn] (first remaining-handlers)
-                    next-damage (try
-                                  (let [result (handler-fn player-id attacker-id current-damage damage-source)]
-                                    (if (vector? result)
-                                      (let [[new-damage _metadata] result]
-                                        (if (number? new-damage)
-                                          (double new-damage)
-                                          (do
-                                            (log/warn "Handler" handler-id "returned invalid damage:" new-damage)
-                                            current-damage)))
-                                      (do
-                                        (log/warn "Handler" handler-id "returned invalid result:" result)
-                                        current-damage)))
-                                  (catch Exception e
-                                    (log/warn "Handler" handler-id "failed:" (ex-message e))
-                                    current-damage))]
-                (recur (rest remaining-handlers) (double next-damage))))))))
+              next-damage (ability-runtime/process-damage-interception
+                            player-id attacker-id original-damage damage-source)]
+          (when (not= next-damage original-damage)
+            (.setAmount event (float next-damage))
+            (log/debug "Damage modified:" original-damage "->" next-damage)))))
     (catch Exception e
       (log/warn "Damage interception failed:" (ex-message e)))))
-
-(defn- register-damage-handler-impl! [handler-id handler-fn priority]
-  (try
-    (swap! damage-handlers assoc handler-id {:fn handler-fn :priority priority})
-    (log/debug "Registered damage handler:" handler-id "priority:" priority)
-    true
-    (catch Exception e
-      (log/warn "Failed to register damage handler:" (ex-message e))
-      false)))
-
-(defn- unregister-damage-handler-impl! [handler-id]
-  (try
-    (swap! damage-handlers dissoc handler-id)
-    (log/debug "Unregistered damage handler:" handler-id)
-    true
-    (catch Exception e
-      (log/warn "Failed to unregister damage handler:" (ex-message e))
-      false)))
-
-(defn- get-active-handlers-impl []
-  (keys @damage-handlers))
 
 (defn forge-damage-interception []
   (reify pdi/IDamageInterception
     (register-damage-handler! [_ handler-id handler-fn priority]
-      (register-damage-handler-impl! handler-id handler-fn priority))
+      (ability-runtime/register-damage-handler! handler-id handler-fn priority))
     (unregister-damage-handler! [_ handler-id]
-      (unregister-damage-handler-impl! handler-id))
+      (ability-runtime/unregister-damage-handler! handler-id))
     (get-active-handlers [_]
-      (get-active-handlers-impl))))
+      (ability-runtime/get-active-damage-handlers))))
 
 (defn install-damage-interception! []
   ;; Install protocol implementation

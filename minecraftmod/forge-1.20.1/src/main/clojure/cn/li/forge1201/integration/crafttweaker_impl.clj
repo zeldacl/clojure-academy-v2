@@ -6,7 +6,8 @@
 
   CraftTweaker integration is optional - if CraftTweaker is not present,
   this module will not be loaded."
-  (:require [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.mcmod.platform.integration-runtime :as integration-runtime]
+            [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]))
 
 
@@ -14,20 +15,6 @@
   ;; Used only for optional third-party dep checks (e.g. CraftTweaker).
   ;; Must NOT be used for Minecraft classes — use direct imports instead.
   (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
-
-(defonce ^:private resolved-vars
-  (atom {}))
-
-(defn- resolve-var
-  [var-sym]
-  (or (@resolved-vars var-sym)
-      (let [v (requiring-resolve var-sym)]
-        (swap! resolved-vars assoc var-sym v)
-        v)))
-
-(defn- invoke-ac
-  [var-sym & args]
-  (apply (resolve-var var-sym) args))
 
 ;; CraftTweaker type conversion
 
@@ -89,10 +76,10 @@
           output-spec (crafttweaker-itemstack-to-spec output)]
       (if (and input-spec output-spec)
         (do
-          (invoke-ac 'cn.li.ac.integration.crafttweaker.recipes/add-fusor-recipe!
+          (integration-runtime/crafttweaker-add-fusor-recipe!
             input-spec output-spec (double energy))
           (log/info (str "CraftTweaker: Added Imag Fusor recipe - "
-                        (invoke-ac 'cn.li.ac.integration.crafttweaker.bridge/describe-recipe
+                        (integration-runtime/crafttweaker-describe-recipe
                           {:input input-spec
                            :output output-spec
                            :energy energy})))
@@ -116,7 +103,7 @@
   (try
     (let [output-spec (crafttweaker-itemstack-to-spec output)]
       (if output-spec
-        (invoke-ac 'cn.li.ac.integration.crafttweaker.recipes/remove-fusor-recipe!
+        (integration-runtime/crafttweaker-remove-fusor-recipe!
           (:item output-spec))
         0))
     (catch Exception e
@@ -143,10 +130,10 @@
           energy 1000.0]
       (if (and input-spec output-spec)
         (do
-          (invoke-ac 'cn.li.ac.integration.crafttweaker.recipes/add-former-recipe!
+          (integration-runtime/crafttweaker-add-former-recipe!
             input-spec output-spec mode energy)
           (log/info (str "CraftTweaker: Added Metal Former recipe (" mode ") - "
-                        (invoke-ac 'cn.li.ac.integration.crafttweaker.bridge/describe-recipe
+                        (integration-runtime/crafttweaker-describe-recipe
                           {:input input-spec
                            :output output-spec
                            :mode mode
@@ -208,7 +195,7 @@
   (try
     (let [output-spec (crafttweaker-itemstack-to-spec output)]
       (if output-spec
-        (invoke-ac 'cn.li.ac.integration.crafttweaker.recipes/remove-former-recipe!
+        (integration-runtime/crafttweaker-remove-former-recipe!
           (:item output-spec) mode)
         0))
     (catch Exception e

@@ -6,7 +6,8 @@
 
   JEI integration is optional - if JEI is not present, this module
   will not be loaded."
-  (:require [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.mcmod.platform.integration-runtime :as integration-runtime]
+            [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [mezz.jei.api IModPlugin]
            [mezz.jei.api.registration IRecipeCategoryRegistration
@@ -24,29 +25,6 @@
            [net.minecraft.world.item ItemStack]
            [net.minecraft.world.level ItemLike]
            [java.util ArrayList]))
-
-
-(defonce ^:private resolved-vars
-  (atom {}))
-
-(defn- resolve-var
-  [var-sym]
-  (or (@resolved-vars var-sym)
-      (let [v (requiring-resolve var-sym)]
-        (swap! resolved-vars assoc var-sym v)
-        v)))
-
-(defn- categories-all
-  []
-  @(resolve-var 'cn.li.ac.integration.jei.categories/all-categories))
-
-(defn- categories-get-recipes-for-category
-  [category-meta]
-  ((resolve-var 'cn.li.ac.integration.jei.categories/get-recipes-for-category) category-meta))
-
-(defn- categories-format-recipe-for-jei
-  [recipe]
-  ((resolve-var 'cn.li.ac.integration.jei.categories/format-recipe-for-jei) recipe))
 
 (defn- parse-item-id
   "Parse item ID string to ItemStack.
@@ -128,7 +106,7 @@
   (try
     (let [gui-helper (.getJeiHelpers registration)
           gui-helper (.getGuiHelper gui-helper)]
-      (doseq [category-meta (categories-all)]
+      (doseq [category-meta (integration-runtime/jei-get-all-categories)]
         (let [recipe-category (create-recipe-category gui-helper category-meta)]
           (.addRecipeCategories registration (into-array IRecipeCategory [recipe-category]))
           (log/info (str "Registered JEI category: " (:id category-meta))))))
@@ -139,9 +117,9 @@
   "Register all AC recipes with JEI."
   [^IRecipeRegistration registration]
   (try
-    (doseq [category-meta (categories-all)]
-      (let [recipes (categories-get-recipes-for-category category-meta)
-            ^java.util.List formatted-recipes (mapv categories-format-recipe-for-jei recipes)
+    (doseq [category-meta (integration-runtime/jei-get-all-categories)]
+      (let [recipes (integration-runtime/jei-get-recipes category-meta)
+            ^java.util.List formatted-recipes (mapv integration-runtime/jei-format-recipe recipes)
             ^RecipeType recipe-type (mezz.jei.api.recipe.RecipeType/create
                           (.getNamespace (ResourceLocation. (:id category-meta)))
                           (.getPath (ResourceLocation. (:id category-meta)))
@@ -156,7 +134,7 @@
   "Register recipe catalysts (the blocks that perform the recipes)."
   [^IRecipeCatalystRegistration registration]
   (try
-    (doseq [category-meta (categories-all)]
+    (doseq [category-meta (integration-runtime/jei-get-all-categories)]
       (let [block-id (:block-id category-meta)
             ^ItemStack item-stack (parse-item-id block-id)
             ^RecipeType recipe-type (mezz.jei.api.recipe.RecipeType/create

@@ -7,7 +7,7 @@
 
   Transport integration now uses ability-network/send-sync-to-client!.
   This namespace keeps the dirty-set and flush cadence centralized."
-  (:require [cn.li.ac.ability.player-state :as ps]
+  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private dirty-players (atom #{}))
@@ -18,15 +18,10 @@
   (swap! dirty-players conj uuid))
 
 (defn mark-all-dirty! []
-  (reset! dirty-players (set (keys @ps/player-states))))
+  (reset! dirty-players (set (ability-runtime/list-player-uuids))))
 
 (defn- build-sync-payload [uuid]
-  (let [state (ps/get-player-state uuid)]
-    {:uuid uuid
-     :ability-data (:ability-data state)
-     :resource-data (:resource-data state)
-     :cooldown-data (:cooldown-data state)
-     :preset-data (:preset-data state)}))
+  (ability-runtime/build-sync-payload uuid))
 
 (defn tick-sync!
   "Flush dirty player snapshots periodically.
@@ -35,8 +30,8 @@
   (let [t (swap! tick-counter inc)]
     (when (zero? (mod t flush-interval-ticks))
       (doseq [uuid @dirty-players]
-        (when-let [state (ps/get-player-state uuid)]
+        (when-let [payload (build-sync-payload uuid)]
           (when send-fn
-            (send-fn uuid (build-sync-payload uuid)))
-          (ps/mark-clean! uuid)))
+            (send-fn uuid payload))
+          (ability-runtime/mark-player-clean! uuid)))
       (reset! dirty-players #{}))))

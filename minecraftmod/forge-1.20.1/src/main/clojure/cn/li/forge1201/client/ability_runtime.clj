@@ -1,8 +1,6 @@
 (ns cn.li.forge1201.client.ability-runtime
   "CLIENT-ONLY ability input runtime (minimal runnable loop)."
-  (:require [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.player-state :as ps]
-            [cn.li.ac.ability.skill :as skill]
+  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.ability.catalog :as catalog]
             [cn.li.forge1201.ability.network :as ability-net]
             [cn.li.forge1201.client.ability-client-state :as client-state]
@@ -28,7 +26,7 @@
 
 (defn- player-runtime-state
   [player-uuid]
-  (or (ps/get-player-state player-uuid)
+  (or (ability-runtime/get-player-state player-uuid)
       (latest-sync player-uuid)))
 
 (defn- resolve-slot-skill-id
@@ -38,7 +36,7 @@
           active (or (:active-preset preset) 0)
           binding (get-in preset [:slots [active key-idx]])]
       (when (and (vector? binding) (= 2 (count binding)))
-        (skill/get-skill-by-controllable (first binding) (second binding))))))
+        (ability-runtime/client-get-skill-by-controllable (first binding) (second binding))))))
 
 (defn- slot-key
   [player-uuid key-idx]
@@ -46,17 +44,17 @@
 
 (defn- abort-slot-contexts-for-player!
   [player-uuid]
-  (doseq [[[uuid _key] ctx-id] @slot-active-contexts]
+  (doseq [[[uuid key-idx] ctx-id] @slot-active-contexts]
     (when (= uuid player-uuid)
       (when (get @local-contexts ctx-id)
         (ability-net/send-to-server! catalog/MSG-SKILL-KEY-ABORT {:ctx-id ctx-id})
-        (ctx/terminate-context! ctx-id nil)
+        (ability-runtime/client-terminate-context! ctx-id nil)
         (swap! local-contexts dissoc ctx-id))
-      (swap! slot-active-contexts dissoc [uuid _key]))))
+      (swap! slot-active-contexts dissoc [uuid key-idx]))))
 
 (defn- refresh-local-context! [ctx-id]
-  (if-let [c (ctx/get-context ctx-id)]
-    (swap! local-contexts assoc ctx-id c)
+  (if-let [ctx-map (ability-runtime/client-get-context ctx-id)]
+    (swap! local-contexts assoc ctx-id ctx-map)
     (swap! local-contexts dissoc ctx-id)))
 
 (defn- send-keepalive! [ctx-id]
@@ -65,19 +63,12 @@
 (defn tick-client!
   []
   (let [tick (swap! client-tick-counter inc)]
-    ;; Poll key inputs (delegates to ability-input)
     (when-let [tick-input-fn (resolve 'cn.li.forge1201.client.ability-input/tick-input!)]
       (@tick-input-fn))
-
-    ;; Poll particle effects
     (when-let [tick-particles-fn (resolve 'cn.li.forge1201.client.effects.particle-bridge/tick-particles!)]
       (@tick-particles-fn))
-
-    ;; Poll sound effects
     (when-let [tick-sounds-fn (resolve 'cn.li.forge1201.client.effects.sound-bridge/tick-sounds!)]
       (@tick-sounds-fn))
-
-    ;; Send keepalive for active contexts
     (when (zero? (mod tick keepalive-interval-ticks))
       (doseq [ctx-id (keys @local-contexts)]
         (send-keepalive! ctx-id)))))
@@ -88,39 +79,35 @@
 
 (defn- on-ctx-establish!
   [{:keys [ctx-id server-id]}]
-  (ctx/transition-to-alive! ctx-id server-id nil)
+  (ability-runtime/client-transition-to-alive! ctx-id server-id nil)
   (refresh-local-context! ctx-id))
 
 (defn- on-ctx-terminate!
   [{:keys [ctx-id]}]
-  (ctx/terminate-context! ctx-id nil)
+  (ability-runtime/client-terminate-context! ctx-id nil)
   (swap! local-contexts dissoc ctx-id))
 
 (defn- on-ctx-channel!
   [{:keys [ctx-id channel payload]}]
-  (ctx/ctx-send-to-local! ctx-id channel payload))
+  (ability-runtime/client-send-context-local! ctx-id channel payload))
 
 (defn- on-sync-ability!
   [{:keys [uuid ability-data]}]
   (when uuid
-    (ps/get-or-create-player-state! uuid)
-    (ps/update-ability-data! uuid (constantly ability-data))
+    (ability-runtime/client-update-ability-data! uuid ability-data)
     (swap! sync-cache update uuid (fnil assoc {}) :ability-data ability-data)))
 
 (defn- on-sync-resource!
   [{:keys [uuid resource-data]}]
   (when uuid
-    (ps/get-or-create-player-state! uuid)
-    (ps/update-resource-data! uuid (constantly resource-data))
-    ;; Server sync is authoritative; clear client-side optimistic overlay
+    (ability-runtime/client-update-resource-data! uuid resource-data)
     (client-state/clear-client-activated!)
     (swap! sync-cache update uuid (fnil assoc {}) :resource-data resource-data)))
 
 (defn- on-sync-cooldown!
   [{:keys [uuid cooldown-data]}]
   (when uuid
-    (ps/get-or-create-player-state! uuid)
-    (ps/update-cooldown-data! uuid (constantly cooldown-data))
+    (ability-runtime/client-update-cooldown-data! uuid cooldown-data)
     (swap! sync-cache update uuid (fnil assoc {}) :cooldown-data cooldown-data)))
 
 (defn- on-sync-preset!
@@ -132,8 +119,7 @@
                  (some? new-active)
                  (not= old-active new-active))
         (abort-slot-contexts-for-player! uuid)))
-    (ps/get-or-create-player-state! uuid)
-    (ps/update-preset-data! uuid (constantly preset-data))
+    (ability-runtime/client-update-preset-data! uuid preset-data)
     (swap! sync-cache update uuid (fnil assoc {}) :preset-data preset-data)))
 
 (defn register-push-handlers!
@@ -148,26 +134,26 @@
 
 (defn on-key-down!
   [player-uuid skill-id]
-  (let [c (ctx/new-context player-uuid skill-id)]
-    (ctx/register-context! c)
-    (swap! local-contexts assoc (:id c) c)
+  (let [ctx-map (ability-runtime/client-new-context player-uuid skill-id)]
+    (ability-runtime/client-register-context! ctx-map)
+    (swap! local-contexts assoc (:id ctx-map) ctx-map)
     (ability-net/send-to-server! catalog/MSG-CTX-BEGIN-LINK
-                                 {:ctx-id (:id c) :skill-id skill-id})
+                                 {:ctx-id (:id ctx-map) :skill-id skill-id})
     (ability-net/send-to-server! catalog/MSG-SKILL-KEY-DOWN
-                                 {:ctx-id (:id c) :skill-id skill-id})
-    c))
+                                 {:ctx-id (:id ctx-map) :skill-id skill-id})
+    ctx-map))
 
 (defn on-key-tick!
   [ctx-id]
-  (when-let [c (get @local-contexts ctx-id)]
+  (when-let [ctx-map (get @local-contexts ctx-id)]
     (ability-net/send-to-server! catalog/MSG-SKILL-KEY-TICK
-                                 {:ctx-id ctx-id :skill-id (:skill-id c)})))
+                                 {:ctx-id ctx-id :skill-id (:skill-id ctx-map)})))
 
 (defn on-key-up!
   [ctx-id]
   (when (get @local-contexts ctx-id)
     (ability-net/send-to-server! catalog/MSG-SKILL-KEY-UP {:ctx-id ctx-id})
-    (ctx/terminate-context! ctx-id nil)
+    (ability-runtime/client-terminate-context! ctx-id nil)
     (swap! local-contexts dissoc ctx-id)))
 
 (defn on-slot-key-down!
@@ -175,9 +161,9 @@
   (let [k (slot-key player-uuid key-idx)]
     (when-not (get @slot-active-contexts k)
       (when-let [skill-id (resolve-slot-skill-id player-uuid key-idx)]
-        (let [c (on-key-down! player-uuid skill-id)]
-          (swap! slot-active-contexts assoc k (:id c))
-          c)))))
+        (let [ctx-map (on-key-down! player-uuid skill-id)]
+          (swap! slot-active-contexts assoc k (:id ctx-map))
+          ctx-map)))))
 
 (defn on-slot-key-tick!
   [player-uuid key-idx]
@@ -195,7 +181,7 @@
   []
   (doseq [ctx-id (keys @local-contexts)]
     (ability-net/send-to-server! catalog/MSG-SKILL-KEY-ABORT {:ctx-id ctx-id})
-    (ctx/terminate-context! ctx-id nil))
+    (ability-runtime/client-terminate-context! ctx-id nil))
   (reset! slot-active-contexts {})
   (reset! local-contexts {}))
 

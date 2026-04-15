@@ -117,6 +117,30 @@
   []
   (api/req-level-up! nil))
 
+(defn handle-screen-click!
+  "Handle clicks inside the skill tree screen using current render data."
+  [mouse-x mouse-y]
+  (if-let [render-data (build-screen-render-data)]
+    (let [clicked? (atom false)]
+      (doseq [node (:skill-nodes render-data)]
+        (when (and node (not @clicked?))
+          (let [dx (- mouse-x (:x node))
+                dy (- mouse-y (:y node))
+                dist-sq (+ (* dx dx) (* dy dy))]
+            (when (< dist-sq 400)
+              (on-skill-click (:skill-id node))
+              (reset! clicked? true)))))
+
+      (when (and (not @clicked?)
+                 (get-in render-data [:ability-info :can-level-up])
+                 (>= mouse-x 10) (<= mouse-x 90)
+                 (>= mouse-y 200) (<= mouse-y 220))
+        (on-level-up-click)
+        (reset! clicked? true))
+
+      (boolean @clicked?))
+    false))
+
 (defn on-mouse-move
   "Handle mouse movement for hover detection."
   [mouse-x mouse-y]

@@ -1,8 +1,8 @@
 (ns cn.li.forge1201.integration.forge-energy
   "Forge Energy integration for RF converters (rf-input/rf-output)."
   (:require [cn.li.mcmod.platform.capability :as platform-cap]
+            [cn.li.mcmod.platform.energy-integration :as energy-integration]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
-            [cn.li.ac.integration.block.energy-converter.config :as ec-config]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.energy IEnergyCapable]
            [cn.li.forge1201.capability ForgeEnergyAdapter]
@@ -10,7 +10,7 @@
 
 (defn- fe-conversion-rate
   []
-  (double ec-config/rf-conversion-ratio))
+  (double (energy-integration/forge-energy-conversion-rate)))
 
 (defn- create-forge-energy-adapter
   [^IEnergyCapable energy-capable conversion-rate]

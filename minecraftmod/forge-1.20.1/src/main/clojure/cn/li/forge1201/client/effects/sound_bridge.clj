@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.client.effects.sound-bridge
   "CLIENT-ONLY sound effect bridge (Forge layer)."
-  (:require [cn.li.ac.ability.client.effects.sounds :as ac-sounds]
+  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.core.registries BuiltInRegistries]
@@ -36,7 +36,7 @@
   "Poll and play queued sound effects. Called every client tick."
   []
   (try
-    (doseq [sound-cmd (ac-sounds/poll-sound-effects!)]
+    (doseq [sound-cmd (ability-runtime/client-poll-sound-effects)]
       (play-sound-effect sound-cmd))
     (catch Exception e
       (log/error "Error in sound tick" e))))

@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.ability.item-handler
   "Item use event handler for ability items (Forge layer)."
-  (:require [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickItem]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
@@ -28,10 +29,10 @@
   (try
     (let [player (.getEntity event)
           stack (.getItemStack event)
-          item-id (get-item-id stack)]
+          item-id (get-item-id stack)
+          action (ability-runtime/resolve-item-use-action item-id)]
 
-      ;; Check if it's the skill tree app item
-      (when (= item-id "ac:app_skill_tree")
+      (when (= action :open-skill-tree)
         (when (.isClientSide (.level player))
           ;; Open skill tree screen on client side
           (when-let [open-fn (resolve 'cn.li.forge1201.client.ability-screen-bridge/open-skill-tree-screen!)]

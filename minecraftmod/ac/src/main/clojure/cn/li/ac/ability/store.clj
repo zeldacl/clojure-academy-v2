@@ -1,5 +1,7 @@
-(ns cn.li.forge1201.ability.store
-  "Forge binding for mcmod.platform.ability/*player-ability-store*."
+(ns cn.li.ac.ability.store
+  "AC-owned binding for mcmod.platform.ability/*player-ability-store*.
+
+  The store operates on AC player-state/maps and is platform-neutral."
   (:require [cn.li.mcmod.platform.ability :as pability]
             [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.model.ability-data :as ad]
@@ -10,7 +12,7 @@
 (defn- ensure-state! [uuid]
   (ps/get-or-create-player-state! uuid))
 
-(defn forge-player-ability-store []
+(defn ac-player-ability-store []
   (reify
     pability/IPlayerAbilityData
     (ability-get-category [_ uuid]
@@ -88,4 +90,4 @@
 
 (defn install-store! []
   (alter-var-root #'pability/*player-ability-store*
-                  (constantly (forge-player-ability-store))))
+                  (constantly (ac-player-ability-store))))

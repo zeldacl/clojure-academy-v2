@@ -7,7 +7,7 @@
   This is intentionally platform-layer code (forge module) because it touches
   CompoundTag/ServerPlayer APIs."
   (:require [clojure.edn :as edn]
-            [cn.li.ac.ability.player-state :as ps]
+            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server.level ServerPlayer]
            [net.minecraft.nbt CompoundTag]))
@@ -33,18 +33,18 @@
         tag  (player-tag player)]
     (if (.contains tag ability-state-key)
       (if-let [m (safe-read-edn (.getString tag ability-state-key))]
-        (ps/set-player-state! uuid (assoc m :dirty? false))
-        (ps/get-or-create-player-state! uuid))
-      (ps/get-or-create-player-state! uuid))))
+        (ability-runtime/set-player-state! uuid (assoc m :dirty? false))
+        (ability-runtime/get-or-create-player-state! uuid))
+      (ability-runtime/get-or-create-player-state! uuid))))
 
 (defn save-player-state!
   "Save in-memory ability state to player persistent NBT."
   [^ServerPlayer player]
   (let [uuid  (str (.getUUID player))
-        state (ps/get-or-create-player-state! uuid)
+        state (ability-runtime/get-or-create-player-state! uuid)
         tag   (player-tag player)]
     (.putString tag ability-state-key (pr-str (dissoc state :dirty?)))
-    (ps/mark-clean! uuid)
+    (ability-runtime/mark-player-clean! uuid)
     true))
 
 (defn clone-player-state!
@@ -53,8 +53,8 @@
   [^ServerPlayer old-player ^ServerPlayer new-player]
   (let [old-uuid (str (.getUUID old-player))
         new-uuid (str (.getUUID new-player))
-        state    (or (ps/get-player-state old-uuid)
+        state    (or (ability-runtime/get-player-state old-uuid)
                      (load-player-state! old-player)
-                     (ps/fresh-state))]
-    (ps/set-player-state! new-uuid (assoc state :dirty? true))
+                     (ability-runtime/fresh-player-state))]
+    (ability-runtime/set-player-state! new-uuid (assoc state :dirty? true))
     (save-player-state! new-player)))

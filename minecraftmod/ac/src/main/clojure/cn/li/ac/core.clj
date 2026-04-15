@@ -14,6 +14,12 @@
             [cn.li.mcmod.block.multiblock-core :as mb-core]
             [cn.li.mcmod.events.dispatcher :as event-dispatcher]
             [cn.li.ac.wireless.data.world :as wd]
+            [cn.li.ac.block.platform-bridge :as block-platform-bridge]
+            [cn.li.ac.ability.platform-bridge :as ability-platform-bridge]
+            [cn.li.ac.command.platform-bridge :as command-platform-bridge]
+            [cn.li.ac.integration.platform-bridge :as integration-platform-bridge]
+            [cn.li.ac.integration.block.energy-converter.platform-bridge :as energy-platform-bridge]
+            [cn.li.ac.terminal.platform-bridge :as terminal-platform-bridge]
             [cn.li.ac.energy.legacy-item-api-bridge :as legacy-item-api-bridge]
             [cn.li.ac.wireless.legacy-api-bridge :as legacy-api-bridge]
             [cn.li.ac.config.registry :as config-registry]
@@ -131,6 +137,18 @@
   (legacy-item-api-bridge/install-item-energy-api-bridge!)
   ;; Install Java wireless query API bridge onto the wireless system.
   (legacy-api-bridge/install-wireless-query-api-bridge!)
+  ;; Bind AC ability lifecycle handlers into the platform-neutral bridge.
+  (ability-platform-bridge/install-ability-runtime-hooks!)
+  ;; Bind AC blockstate datagen handlers into the platform-neutral bridge.
+  (block-platform-bridge/install-blockstate-hooks!)
+  ;; Bind AC command initialization into the platform-neutral bridge.
+  (command-platform-bridge/install-command-hooks!)
+  ;; Bind AC optional integration hooks into the platform-neutral bridge.
+  (integration-platform-bridge/install-integration-hooks!)
+  ;; Bind AC energy integration config into the platform-neutral bridge.
+  (energy-platform-bridge/install-energy-integration-hooks!)
+  ;; Bind AC terminal GUI builders into the platform-neutral bridge.
+  (terminal-platform-bridge/install-terminal-ui-hooks!)
   ;; Register distributed AC config descriptors/defaults into the shared registry.
   (config-registry/init-configs!))
 

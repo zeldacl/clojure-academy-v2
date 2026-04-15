@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.client.terminal-screen-bridge
   "CLIENT-ONLY screen bridge for terminal GUI (Forge layer)."
-  (:require [cn.li.ac.terminal.terminal-gui :as terminal-gui]
+  (:require [cn.li.mcmod.platform.terminal-ui :as terminal-ui]
             [cn.li.forge1201.gui.cgui-runtime :as cgui-rt]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.util.log :as log])
@@ -17,7 +17,8 @@
 (defn- create-terminal-screen
   "Create a Minecraft Screen that renders the terminal CGui."
   [player]
-  (let [gui-widget (terminal-gui/create-terminal-gui player)
+  (let [gui-widget (or (terminal-ui/create-terminal-gui player)
+                       (cgui/create-widget :size [640 785]))
         left (atom 0)
         top (atom 0)]
     (proxy [Screen] [(Component/literal "Data Terminal")]

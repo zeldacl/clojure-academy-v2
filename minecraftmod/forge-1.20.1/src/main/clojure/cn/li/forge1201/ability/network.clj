@@ -6,9 +6,7 @@
   - client-side requests use mcmod.network.client/send-to-server
 
   Here we provide helper send-fns for context manager and sync service."
-  (:require [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
-            [cn.li.ac.ability.network :as ability-net]
-            [cn.li.ac.ability.context :as ctx]
+  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.ability.catalog :as catalog]
             [cn.li.mcmod.util.log :as log])
@@ -55,8 +53,8 @@
 
 (defn- send-context-channel-to-client!
   [ctx-id channel payload]
-  (when-let [ctx-map (ctx/get-context ctx-id)]
-    (send-to-client! (:player-uuid ctx-map)
+  (when-let [player-uuid (ability-runtime/get-context-player-uuid ctx-id)]
+    (send-to-client! player-uuid
                      catalog/MSG-CTX-CHANNEL
                      {:ctx-id ctx-id :channel channel :payload payload})))
 
@@ -68,10 +66,10 @@
 (defn init!
   "Initialize ability network stack: register server handlers and injected send fns."
   []
-  (ability-net/register-handlers!)
-  (ctx/register-route-fns! {:to-server send-context-channel-to-server!
-                            :to-client send-context-channel-to-client!
-                            :to-except-local send-context-channel-to-except-local!})
-  (ctx-mgr/register-send-fns! {:to-server send-to-server!
-                               :to-client send-to-client!})
+  (ability-runtime/register-network-handlers!)
+  (ability-runtime/register-context-route-fns! {:to-server send-context-channel-to-server!
+                                                :to-client send-context-channel-to-client!
+                                                :to-except-local send-context-channel-to-except-local!})
+  (ability-runtime/register-context-send-fns! {:to-server send-to-server!
+                                               :to-client send-to-client!})
   (log/info "Forge ability network initialized"))

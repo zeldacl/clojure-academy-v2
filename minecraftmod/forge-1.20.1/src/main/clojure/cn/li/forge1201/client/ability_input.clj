@@ -1,7 +1,6 @@
 (ns cn.li.forge1201.client.ability-input
   "CLIENT-ONLY key binding registration and polling (Forge layer)."
-  (:require [cn.li.ac.ability.client.keybinds :as ac-keybinds]
-            [cn.li.ac.ability.player-state :as ac-ps]
+  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.forge1201.client.ability-client-state :as client-state]
             [cn.li.forge1201.client.ability-hud-bridge :as hud-bridge]
             [cn.li.mcmod.util.log :as log])
@@ -66,10 +65,10 @@
             (if-let [uuid (get-player-uuid)]
               (do
                 (log/info "[V-TRACE][CLIENT][TRIGGER]" {:uuid (str uuid)})
-                ;; Compute next-activated for immediate HUD overlay (must read before trigger-mode-switch! clears nothing)
-                (let [cur-activated (boolean (get-in (ac-ps/get-player-state uuid) [:resource-data :activated]))]
+                ;; Compute next-activated for immediate HUD overlay before server sync arrives.
+                (let [cur-activated (boolean (get-in (ability-runtime/get-player-state uuid) [:resource-data :activated]))]
                   (client-state/set-client-activated! (not cur-activated))
-                  (ac-keybinds/trigger-mode-switch! uuid)))
+                  (ability-runtime/client-trigger-mode-switch! uuid)))
               (log/warn "[V-TRACE][CLIENT][TRIGGER-SKIP] no player uuid"))))
 
         :else nil))))
@@ -105,7 +104,7 @@
         (when (and (pos? pending)
                    (< held-ns mode-switch-short-press-threshold-ns))
           (when-let [uuid (get-player-uuid)]
-            (ac-keybinds/trigger-mode-switch! uuid)))
+            (ability-runtime/client-trigger-mode-switch! uuid)))
         (swap! mode-switch-state assoc
                :was-down false
                :down-at-ns nil
@@ -115,7 +114,7 @@
       (and (not is-down) (not was-down) (pos? pending))
       (do
         (when-let [uuid (get-player-uuid)]
-          (ac-keybinds/trigger-mode-switch! uuid))
+          (ability-runtime/client-trigger-mode-switch! uuid))
         (swap! mode-switch-state assoc :pending-clicks 0))
 
       ;; Keep state fresh in all other cases.
@@ -181,21 +180,19 @@
   "Poll key states and delegate to AC layer. Called every client tick."
   []
   ;; Mode switch is handled by raw key event fallback to guarantee V responsiveness.
+  (ability-runtime/client-tick-keys!
+    (fn [key-id]
+      (case (first key-id)
+        :skill
+        (when-let [^KeyMapping key (nth @skill-keys (second key-id) nil)]
+          (.isDown key))
 
-  ;; Provide key state function to AC layer with player UUID in binding
-  (binding [cn.li.ac.ability.client.keybinds/*get-player-uuid-fn* get-player-uuid]
-    (ac-keybinds/tick-keys!
-      (fn [key-id]
-        (case (first key-id)
-          :skill
-          (when-let [^KeyMapping key (nth @skill-keys (second key-id) nil)]
-            (.isDown key))
+        :gui
+        (when-let [^KeyMapping key (get @gui-keys (second key-id))]
+          (.isDown key))
 
-          :gui
-          (when-let [^KeyMapping key (get @gui-keys (second key-id))]
-            (.isDown key))
-
-          false)))))
+        false))
+    get-player-uuid))
 
 (defn init!
   "Initialize key binding system."
