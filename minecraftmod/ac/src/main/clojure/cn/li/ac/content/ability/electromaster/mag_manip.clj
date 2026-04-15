@@ -20,10 +20,14 @@
 						[cn.li.mcmod.platform.block-manipulation :as block-manip]
 						[cn.li.mcmod.util.log :as log]))
 
-(def ^:private max-grab-range 20.0)
-(def ^:private max-throw-range 28.0)
-(def ^:private hold-distance 2.2)
-(def ^:private hold-height-offset 0.2)
+; Original: traceLiving(player, 10, ...) = 10 blocks
+(def ^:private max-grab-range 10.0)
+; Original: getLookingPos(player, 20) = 20 blocks
+(def ^:private max-throw-range 20.0)
+; Original: multiply(player.getLookVec(), 2.0)
+(def ^:private hold-distance 2.0)
+; Original: subtract(entityHeadPos(player), new Vec3d(0, 0.1, 0)) -> -0.1 on Y
+(def ^:private hold-head-y-offset 0.1)
 (def ^:private throw-hit-radius 1.15)
 
 (def ^:private strong-metal-blocks
@@ -123,12 +127,13 @@
 								:y (double (:y look))
 								:z (double (:z look))})))
 
+; Original: origin = entityHeadPos(player) - (0, 0.1, 0); pos = origin + look * 2.0
 (defn- hold-focus
 	[player-id]
-	(let [start (eye-pos player-id)
-				dir (or (look-dir player-id) {:x 0.0 :y 0.0 :z 1.0})
-				p (v+ start (v* dir hold-distance))]
-		(update p :y + hold-height-offset)))
+	(let [{:keys [x y z]} (player-pos player-id)
+				origin {:x (double x) :y (- (+ (double y) 1.62) hold-head-y-offset) :z (double z)}
+				dir (or (look-dir player-id) {:x 0.0 :y 0.0 :z 1.0})]
+		(v+ origin (v* dir hold-distance))))
 
 (defn- metal-block-id?
 	[block-id exp]
@@ -180,16 +185,18 @@
 							 :block-id block-id
 							 :hardness hardness})))))))
 
+; Original: (int) MathUtils.lerpf(60, 40, ctx.getSkillExp())
 (defn- apply-mag-manip-cooldown!
 	[player-id exp]
-	(let [cd-ticks (int (Math/round (lerp 38.0 22.0 exp)))]
+	(let [cd-ticks (int (Math/round (double (lerp 60.0 40.0 exp))))]
 		(ps/update-cooldown-data! player-id cd/set-main-cooldown :mag-manip (max 1 cd-ticks))))
 
+; Original: consumption = lerpf(140, 270, exp); overload = lerpf(35, 20, exp)
 (defn- consume-mag-manip-cost!
 	[player-id player exp]
 	(when-let [state (ps/get-player-state player-id)]
-		(let [cp (lerp 110.0 40.0 exp)
-					overload (lerp 50.0 18.0 exp)
+		(let [cp (lerp 140.0 270.0 exp)
+					overload (lerp 35.0 20.0 exp)
 					creative? (boolean (and player (entity/player-creative? player)))
 					{:keys [data success? events]} (res/perform-resource
 																					 (:resource-data state)
@@ -237,38 +244,73 @@
 				(block-manip/set-block! block-manip/*block-manipulation* world-id bx by bz held-block-id)
 				true))))
 
+; Original s_makeAlive: 1) check held item in hand, 2) fallback to raycast world block,
+; 3) if neither found, terminate context.
 (defn mag-manip-on-key-down
-	[{:keys [player-id ctx-id]}]
+	[{:keys [player-id ctx-id player]}]
 	(try
-		(let [exp (get-skill-exp player-id)]
-			(if-let [{:keys [world-id x y z block-id]} (pick-up-target-block player-id exp)]
-				(do
-					(when (block-manip/can-break-block? block-manip/*block-manipulation* player-id world-id x y z)
-						(block-manip/break-block! block-manip/*block-manipulation* player-id world-id x y z false))
-					(let [focus (hold-focus player-id)]
-						(ctx/update-context! ctx-id assoc :skill-state
-																 {:skip-default-cooldown true
-																	:fired false
-																	:mode :holding
-																	:hold-ticks 0
-																	:held-block {:block-id block-id
-																							 :from-world? true
-																							 :world-id world-id
-																							 :source-x x
-																							 :source-y y
-																							 :source-z z}
-																	:focus focus})
-						(ctx/ctx-send-to-client! ctx-id :mag-manip/fx-hold
-																		 {:mode :hold-start
-																			:focus focus
-																			:block-id block-id})))
-				(ctx/update-context! ctx-id assoc :skill-state
-														 {:skip-default-cooldown true
-															:fired false
-															:mode :no-target})))
+		(let [exp (get-skill-exp player-id)
+					world-id (player-world-id player-id)
+					;; First check: does player hold a metal block in main hand?
+					hand-item-id (when player
+												 (entity/player-get-main-hand-item-id player))
+					held-metal? (and (string? hand-item-id)
+											 (metal-block-id? hand-item-id exp))]
+			(cond
+				;; Case 1: holding a metal block in hand
+				held-metal?
+				(let [creative? (boolean (and player (entity/player-creative? player)))
+							_ (when-not creative?
+									(entity/player-consume-main-hand-item! player 1))
+							focus (hold-focus player-id)]
+					(ctx/update-context! ctx-id assoc :skill-state
+												 {:skip-default-cooldown true
+													:fired false
+													:mode :holding
+													:hold-ticks 0
+													:held-block {:block-id hand-item-id
+																	 :from-world? false
+																	 :from-hand? true
+																	 :world-id world-id}
+													:focus focus})
+					(ctx/ctx-send-to-client! ctx-id :mag-manip/fx-hold
+												 {:mode :hold-start
+													:focus focus
+													:block-id hand-item-id}))
+
+				;; Case 2: raycast world block
+				:else
+				(if-let [{:keys [world-id x y z block-id]} (pick-up-target-block player-id exp)]
+					(do
+						(when (block-manip/can-break-block? block-manip/*block-manipulation* player-id world-id x y z)
+							(block-manip/break-block! block-manip/*block-manipulation* player-id world-id x y z false))
+						(let [focus (hold-focus player-id)]
+							(ctx/update-context! ctx-id assoc :skill-state
+													 {:skip-default-cooldown true
+														:fired false
+														:mode :holding
+														:hold-ticks 0
+														:held-block {:block-id block-id
+																		 :from-world? true
+																		 :world-id world-id
+																		 :source-x x
+																		 :source-y y
+																		 :source-z z}
+														:focus focus})
+							(ctx/ctx-send-to-client! ctx-id :mag-manip/fx-hold
+													 {:mode :hold-start
+														:focus focus
+														:block-id block-id})))
+					;; No target at all
+					(ctx/update-context! ctx-id assoc :skill-state
+											 {:skip-default-cooldown true
+												:fired false
+												:mode :no-target}))))
 		(catch Exception e
 			(log/warn "MagManip key-down failed:" (ex-message e)))))
 
+; Original s_tick: just calls updateMoveTo() every tick.
+; We track hold-ticks, update focus, and send FX to client every 2 ticks.
 (defn mag-manip-on-key-tick
 	[{:keys [player-id ctx-id]}]
 	(try
@@ -281,14 +323,15 @@
 						(ctx/update-context! ctx-id assoc-in [:skill-state :focus] focus)
 						(when (zero? (mod ticks 2))
 							(ctx/ctx-send-to-client! ctx-id :mag-manip/fx-hold
-																			 {:mode :hold-loop
-																				:focus focus
-																				:block-id (get-in skill-state [:held-block :block-id])}))
-						(when (zero? (mod ticks 5))
-							(add-mag-manip-exp! player-id 0.0002))))))
+														 {:mode :hold-loop
+															:focus focus
+															:block-id (get-in skill-state [:held-block :block-id])}))))))
 		(catch Exception e
 			(log/warn "MagManip key-tick failed:" (ex-message e)))))
 
+; Original s_perform: check distsq < 25, then ctx.consume, then throw with speed.
+; Entity damage is always 10 (hardcoded in MagManipEntityBlock constructor).
+; Exp gain on throw: 0.005F (ctx.addSkillExp(0.005F))
 (defn mag-manip-on-key-up
 	[{:keys [player-id ctx-id player]}]
 	(try
@@ -299,68 +342,83 @@
 				(if-not (and (= :holding (:mode skill-state)) held-block)
 					(ctx/update-context! ctx-id assoc :skill-state
 															 (assoc skill-state :skip-default-cooldown true :fired false :mode :idle))
-					(if-not (consume-mag-manip-cost! player-id player exp)
-						(do
-							(restore-held-block! held-block)
-							(ctx/update-context! ctx-id assoc :skill-state
-																	 (assoc skill-state :skip-default-cooldown true :fired false :mode :no-resource)))
-						(let [world-id (player-world-id player-id)
-									start (or (:focus skill-state) (hold-focus player-id))
-									dir (or (look-dir player-id) {:x 0.0 :y 0.0 :z 1.0})
-									hit (when raycast/*raycast*
-												(raycast/raycast-combined raycast/*raycast*
-																									world-id
-																									(:x start) (:y start) (:z start)
-																									(:x dir) (:y dir) (:z dir)
-																									max-throw-range))
-									end (if hit
-												{:x (double (:x hit)) :y (double (:y hit)) :z (double (:z hit))}
-												(v+ start (v* dir max-throw-range)))
-									damage (lerp 7.0 18.0 exp)
-									direct-hit? (and (= (:hit-type hit) :entity)
-																	 (:uuid hit)
-																	 entity-damage/*entity-damage*)
-									_ (when direct-hit?
-											(entity-damage/apply-direct-damage! entity-damage/*entity-damage*
-																												 world-id
-																												 (:uuid hit)
-																												 damage
-																												 :magic))
-									_ (when (and (not direct-hit?) world-effects/*world-effects* entity-damage/*entity-damage*)
-											(let [mid (v* (v+ start end) 0.5)
-														radius (+ (* 0.5 (vlen (v- end start))) 2.0)
-														entities (sort-by :uuid
-																							(remove #(= (:uuid %) player-id)
-																											(world-effects/find-entities-in-radius world-effects/*world-effects*
-																																														world-id
-																																														(:x mid) (:y mid) (:z mid)
-																																														radius)))]
-												(when-let [target (first
-																						(filter (fn [{:keys [x y z]}]
-																											(let [{:keys [distance t]} (distance-to-segment {:x x :y y :z z} start end)]
-																												(and (<= distance throw-hit-radius)
-																														 (<= 0.0 t 1.0))))
-																										entities))]
+					;; Check distance: entity (at focus position) must be within 5 blocks of player
+					(let [focus-pos (or (:focus skill-state) (hold-focus player-id))
+								player-now (player-pos player-id)
+								dist-sq (+ (Math/pow (- (:x player-now) (:x focus-pos)) 2.0)
+													 (Math/pow (- (:y player-now) (:y focus-pos)) 2.0)
+													 (Math/pow (- (:z player-now) (:z focus-pos)) 2.0))
+								too-far? (>= dist-sq 25.0)]
+						(if too-far?
+							;; Out of range: restore block, no cost, no throw
+							(do
+								(restore-held-block! held-block)
+								(ctx/update-context! ctx-id assoc :skill-state
+																 (assoc skill-state :skip-default-cooldown true :fired false :mode :too-far)))
+							(if-not (consume-mag-manip-cost! player-id player exp)
+								(do
+									(restore-held-block! held-block)
+									(ctx/update-context! ctx-id assoc :skill-state
+																		 (assoc skill-state :skip-default-cooldown true :fired false :mode :no-resource)))
+								(let [world-id (player-world-id player-id)
+											start focus-pos
+											dir (or (look-dir player-id) {:x 0.0 :y 0.0 :z 1.0})
+											hit (when raycast/*raycast*
+														(raycast/raycast-combined raycast/*raycast*
+																											world-id
+																											(:x start) (:y start) (:z start)
+																											(:x dir) (:y dir) (:z dir)
+																											max-throw-range))
+											end (if hit
+														{:x (double (:x hit)) :y (double (:y hit)) :z (double (:z hit))}
+														(v+ start (v* dir max-throw-range)))
+											;; Original entity damage: always 10 (MagManipEntityBlock(player, 10))
+											damage 10.0
+											direct-hit? (and (= (:hit-type hit) :entity)
+																			 (:uuid hit)
+																			 entity-damage/*entity-damage*)
+											_ (when direct-hit?
 													(entity-damage/apply-direct-damage! entity-damage/*entity-damage*
 																														 world-id
-																														 (:uuid target)
+																														 (:uuid hit)
 																														 damage
-																														 :magic))))
-									_ (when (= (:hit-type hit) :block)
-											(try-place-thrown-block! world-id end (:block-id held-block)))
-									_ (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-throw
-																						 {:mode :throw
-																							:start start
-																							:end end
-																							:hit-type (:hit-type hit)
-																							:block-id (:block-id held-block)})]
-							(apply-mag-manip-cooldown! player-id exp)
-							(add-mag-manip-exp! player-id 0.012)
-							(ctx/update-context! ctx-id assoc :skill-state
-																	 {:skip-default-cooldown true
-																		:fired true
-																		:mode :thrown
-																		:held-block nil}))))))
+																														 :magic))
+											_ (when (and (not direct-hit?) world-effects/*world-effects* entity-damage/*entity-damage*)
+													(let [mid (v* (v+ start end) 0.5)
+																radius (+ (* 0.5 (vlen (v- end start))) 2.0)
+																entities (sort-by :uuid
+																									(remove #(= (:uuid %) player-id)
+																													(world-effects/find-entities-in-radius world-effects/*world-effects*
+																																															 world-id
+																																															 (:x mid) (:y mid) (:z mid)
+																																															 radius)))]
+														(when-let [target (first
+																					 (filter (fn [{:keys [x y z]}]
+																										 (let [{:keys [distance t]} (distance-to-segment {:x x :y y :z z} start end)]
+																											 (and (<= distance throw-hit-radius)
+																													 (<= 0.0 t 1.0))))
+																									 entities))]
+															(entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+																																 world-id
+																																 (:uuid target)
+																																 damage
+																																 :magic))))
+											_ (when (= (:hit-type hit) :block)
+													(try-place-thrown-block! world-id end (:block-id held-block)))
+											_ (ctx/ctx-send-to-client! ctx-id :mag-manip/fx-throw
+																									 {:mode :throw
+																										:start start
+																										:end end
+																										:hit-type (:hit-type hit)
+																										:block-id (:block-id held-block)})]
+									(apply-mag-manip-cooldown! player-id exp)
+									;; Original: ctx.addSkillExp(0.005F)
+									(add-mag-manip-exp! player-id 0.005)
+									(ctx/update-context! ctx-id assoc :skill-state
+																		 {:skip-default-cooldown true
+																			:fired true
+																			:mode :thrown
+																			:held-block nil}))))))))
 		(catch Exception e
 			(log/warn "MagManip key-up failed:" (ex-message e)))))
 

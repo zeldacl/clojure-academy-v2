@@ -234,7 +234,7 @@
   :ctrl-id :mag-manip
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks 38
+  :cooldown-ticks 60
   :on-key-down mag-manip/mag-manip-on-key-down
   :on-key-tick mag-manip/mag-manip-on-key-tick
   :on-key-up mag-manip/mag-manip-on-key-up

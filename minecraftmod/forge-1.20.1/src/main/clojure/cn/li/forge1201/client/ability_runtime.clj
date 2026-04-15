@@ -19,6 +19,7 @@
 (defonce ^:private railgun-local-state (atom {}))
 (defonce ^:private body-intensify-local-state (atom {}))
 (defonce ^:private current-charging-local-state (atom {}))
+(defonce ^:private mag-manip-local-state (atom {}))
 (defonce ^:private client-tick-counter (atom 0))
 (defonce ^:private tick-listener-registered? (atom false))
 
@@ -115,27 +116,49 @@
                      :pitch 1.0}))))
 
 (defn- play-mag-manip-hold-fx!
-  [{:keys [mode focus]}]
+  [{:keys [mode focus block-id]}]
   (when focus
+    (when (= mode :hold-start)
+      (reset! mag-manip-local-state {:active? true :last-loop-ms 0 :block-id block-id}))
     (queue-particle! {:type :particle
                       :particle-type :electric-spark
                       :x (:x focus)
                       :y (:y focus)
                       :z (:z focus)
-                      :count (if (= mode :hold-start) 10 4)
+                  :count (if (= mode :hold-start) 12 4)
                       :speed 0.05
-                      :offset-x 0.12
-                      :offset-y 0.12
-                      :offset-z 0.12})
+                  :offset-x 0.14
+                  :offset-y 0.14
+                  :offset-z 0.14})
+    (queue-particle! {:type :particle
+                  :particle-type :electric-spark
+                  :x (:x focus)
+                  :y (:y focus)
+                  :z (:z focus)
+                  :count (if (= mode :hold-start) 4 2)
+                  :speed 0.02
+                  :offset-x 0.36
+                  :offset-y 0.24
+                  :offset-z 0.36})
     (when (= mode :hold-start)
       (queue-sound! {:type :sound
-                     :sound-id "minecraft:block.beacon.activate"
-                     :volume 0.35
-                     :pitch 1.3}))))
+                 :sound-id "my_mod:em.lf_loop"
+                 :volume 0.20
+                 :pitch 1.0}))
+    (when (= mode :hold-loop)
+      (let [now (now-ms)
+            last-ms (long (or (:last-loop-ms @mag-manip-local-state) 0))]
+        (when (>= (- now last-ms) 420)
+          (queue-sound! {:type :sound
+                     :sound-id "my_mod:em.lf_loop"
+                     :volume 0.14
+                     :pitch 1.0})
+          (swap! mag-manip-local-state assoc :last-loop-ms now))))))
 
 (defn- play-mag-manip-throw-fx!
   [{:keys [start end]}]
   (when (and start end)
+    (reset! mag-manip-local-state {:active? false :last-loop-ms 0})
     (let [distance (max 1.0 (Math/sqrt (+ (Math/pow (- (:x end) (:x start)) 2.0)
                                           (Math/pow (- (:y end) (:y start)) 2.0)
                                           (Math/pow (- (:z end) (:z start)) 2.0))))
@@ -150,9 +173,9 @@
                           :offset-y 0.06
                           :offset-z 0.06}))
       (queue-sound! {:type :sound
-                     :sound-id "minecraft:entity.trident.throw"
-                     :volume 0.45
-                     :pitch 1.18}))))
+                 :sound-id "my_mod:em.mag_manip"
+                 :volume 0.45
+                 :pitch 1.0}))))
 
 (defn- start-body-intensify-fx!
   [ctx-id]
@@ -527,7 +550,6 @@
                                       :offset-x 0.25
                                       :offset-y 0.25
                                       :offset-z 0.25})))))))))))
-
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
   (when (= TickEvent$Phase/END (.phase evt))
     (tick-client!)))
@@ -543,6 +565,7 @@
   [{:keys [ctx-id]}]
   (finish-body-intensify-fx! ctx-id false)
   (finish-current-charging-fx! ctx-id)
+  (reset! mag-manip-local-state {})
   (ability-runtime/client-terminate-context! ctx-id nil)
   (swap! local-contexts dissoc ctx-id))
 

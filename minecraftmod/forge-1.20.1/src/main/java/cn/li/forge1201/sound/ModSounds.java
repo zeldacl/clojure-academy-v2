@@ -19,6 +19,8 @@ public final class ModSounds {
     public static final RegistryObject<SoundEvent> EM_CHARGE_LOOP = register("em.charge_loop");
     public static final RegistryObject<SoundEvent> EM_INTENSIFY_ACTIVATE = register("em.intensify_activate");
     public static final RegistryObject<SoundEvent> EM_INTENSIFY_LOOP = register("em.intensify_loop");
+    public static final RegistryObject<SoundEvent> EM_LF_LOOP = register("em.lf_loop");
+    public static final RegistryObject<SoundEvent> EM_MAG_MANIP = register("em.mag_manip");
 
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUND_EVENTS.register(name,
