@@ -189,6 +189,23 @@
     (level-effects/enqueue-level-effect! :plasma-cannon {:mode       :end
                                                           :performed? (boolean (:performed? payload))})
 
+    :storm-wing/fx-start
+    (level-effects/enqueue-level-effect! :storm-wing {:mode :start
+                                                       :charge-ticks (long (or (:charge-ticks payload) 70))})
+
+    :storm-wing/fx-update
+    (level-effects/enqueue-level-effect! :storm-wing {:mode :update
+                                                       :phase (or (:phase payload) :charging)
+                                                       :charge-ticks (long (or (:charge-ticks payload) 0))
+                                                       :charge-ratio (double (or (:charge-ratio payload) 0.0))})
+
+    :storm-wing/fx-end
+    (level-effects/enqueue-level-effect! :storm-wing {:mode :end})
+
+    :storm-wing/move-dir
+    ;; Client sends WASD-derived movement direction; route to server-side context
+    nil
+
     :location-teleport/ui-open
     (do
       (location-teleport-screen/apply-server-payload! payload)

@@ -469,9 +469,9 @@
   :level 3
   :controllable? true
   :ctrl-id :storm-wing
-  :cp-consume-speed 40.0
-  :overload-consume-speed 10.0
-  :cooldown-ticks 30
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 0
   :on-key-down storm-wing/storm-wing-on-key-down
   :on-key-tick storm-wing/storm-wing-on-key-tick
   :on-key-up storm-wing/storm-wing-on-key-up

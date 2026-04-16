@@ -41,6 +41,10 @@
 (def ^:private plasma-cannon-loop-sound "my_mod:vecmanip.plasma_cannon")
 (def ^:private plasma-cannon-charged-sound "my_mod:vecmanip.plasma_cannon_t")
 
+;; Storm Wing: looping flight sound + tornado visual state
+(defonce ^:private storm-wing-effect (atom nil))
+(def ^:private storm-wing-loop-sound "my_mod:vecmanip.storm_wing")
+
 (declare tick-thunder-bolt-arcs!)
 
 
@@ -466,6 +470,36 @@
 
           nil))
 
+      :storm-wing
+      (let [{:keys [mode phase charge-ticks charge-ratio]} payload]
+        (case mode
+          :start
+          (do
+            (reset! storm-wing-effect {:active? true
+                                       :phase :charging
+                                       :charge-ticks 0
+                                       :charge-ticks-needed (long (or charge-ticks 70))
+                                       :ticks 0})
+            (client-sounds/queue-sound-effect!
+              {:type :sound
+               :sound-id storm-wing-loop-sound
+               :volume 0.8
+               :pitch 1.0}))
+
+          :update
+          (swap! storm-wing-effect
+                 (fn [st]
+                   (assoc (or st {})
+                          :active? true
+                          :phase (or phase :charging)
+                          :charge-ticks (long (or charge-ticks 0))
+                          :charge-ratio (double (or charge-ratio 0.0)))))
+
+          :end
+          (reset! storm-wing-effect {:active? false :ticks 0})
+
+          nil))
+
       nil))
 
 (defn tick-level-effects! []
@@ -560,6 +594,20 @@
                         :count 4
                         :speed 0.2
                         :offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
+                 (assoc st :ticks ticks))
+               nil))))
+  ;; Storm Wing: loop sound + tick counter
+  (swap! storm-wing-effect
+         (fn [st]
+           (when st
+             (if (:active? st)
+               (let [ticks (inc (long (or (:ticks st) 0)))]
+                 (when (zero? (mod ticks 10))
+                   (client-sounds/queue-sound-effect!
+                     {:type     :sound
+                      :sound-id storm-wing-loop-sound
+                      :volume   0.5
+                      :pitch    1.0}))
                  (assoc st :ticks ticks))
                nil))))
   (swap! meltdowner-rays
@@ -1066,6 +1114,7 @@
         meltdowner @meltdowner-effect
     blood-retrograde @blood-retrograde-effect
   directed-blastwave @directed-blastwave-effect
+        storm-wing @storm-wing-effect
         player-uuid (:player-uuid hand-center-pos)
         charge-state (when player-uuid
                        (client-runtime/railgun-charge-visual-state player-uuid))
@@ -1134,6 +1183,63 @@
                                       (boolean (:punched? directed-blastwave)))
                                     [])
                                   (mapcat directed-blastwave-wave-ops @directed-blastwave-waves))
+        ;; Storm Wing: spawn dirt particles around player when flying, emit tornado ring visuals
+        storm-wing-plan (if (and hand-center-pos storm-wing (:active? storm-wing))
+                          (let [center (dissoc hand-center-pos :player-uuid)
+                                sw-ticks (long (or (:ticks storm-wing) 0))
+                                phase (or (:phase storm-wing) :charging)
+                                charge-ratio (double (or (:charge-ratio storm-wing) 0.0))
+                                ;; Spawn 12 dirt particles in sphere r=3-8 around player (flying only)
+                                _ (when (= phase :flying)
+                                    (dotimes [_ 12]
+                                      (let [r  (+ 3.0 (* (rand) 5.0))
+                                            theta (* (rand) Math/PI)
+                                            phi   (* (rand) 2.0 Math/PI)]
+                                        (client-particles/queue-particle-effect!
+                                          {:type          :particle
+                                           :particle-type :block-crack
+                                           :block-id      "minecraft:dirt"
+                                           :x (+ (double (:x center)) (* r (Math/sin theta) (Math/cos phi)))
+                                           :y (+ (double (:y center)) (* r (Math/cos theta)))
+                                           :z (+ (double (:z center)) (* r (Math/sin theta) (Math/sin phi)))
+                                           :count 1
+                                           :speed 0.05
+                                           :offset-x 0.1 :offset-y 0.1 :offset-z 0.1}))))
+                                ;; Tornado rings: 4 spinning quad-like line rings at player's back
+                                alpha-raw (case phase
+                                            :charging (* 0.7 charge-ratio)
+                                            :flying   0.7
+                                            0.0)
+                                alpha (int (* 255 alpha-raw))
+                                offsets [[-0.1 -0.3 0.1 0]
+                                         [0.1  -0.3 0.1 45]
+                                         [-0.1 -0.5 -0.1 90]
+                                         [0.1  -0.5 -0.1 135]]]
+                            (when (> alpha 0)
+                              (vec
+                                (mapcat
+                                  (fn [[ox oy oz sep-deg]]
+                                    (let [ring-center {:x (+ (double (:x center)) ox)
+                                                       :y (+ (double (:y center)) oy)
+                                                       :z (+ (double (:z center)) oz)}
+                                          ;; Spin angle
+                                          angle (+ (* 3.0 (double sw-ticks)) sep-deg)
+                                          radius 0.35
+                                          segments 10
+                                          color {:r 200 :g 230 :b 255 :a alpha}]
+                                      (vec
+                                        (for [i (range segments)
+                                              :let [a0 (Math/toRadians (+ angle (* 36.0 i)))
+                                                    a1 (Math/toRadians (+ angle (* 36.0 (inc i))))
+                                                    p0 {:x (+ (:x ring-center) (* radius (Math/cos a0)))
+                                                        :y (:y ring-center)
+                                                        :z (+ (:z ring-center) (* radius (Math/sin a0)))}
+                                                    p1 {:x (+ (:x ring-center) (* radius (Math/cos a1)))
+                                                        :y (:y ring-center)
+                                                        :z (+ (:z ring-center) (* radius (Math/sin a1)))}]]
+                                          (line-op p0 p1 color)))))
+                                  offsets))))
+                          [])
         blood-retrograde-walk-speed (when (and blood-retrograde (:active? blood-retrograde))
                                       (blood-retrograde-local-walk-speed (:ticks blood-retrograde)))
         local-walk-speed (let [cand (filter number? [thunder-clap-walk-speed
@@ -1152,6 +1258,7 @@
               (seq meltdowner-ray-plan)
                     (seq blood-retrograde-plan)
                 (seq directed-blastwave-plan)
+              (seq storm-wing-plan)
               (seq tb-arc-plan)
               (seq thunder-clap-plan)
               local-walk-speed)
@@ -1164,5 +1271,6 @@
                          tb-arc-plan
                    meltdowner-ray-plan
                  blood-retrograde-plan
-                 directed-blastwave-plan))
+                 directed-blastwave-plan
+                 storm-wing-plan))
        :local-walk-speed local-walk-speed})))
