@@ -54,6 +54,11 @@
 (defonce ^:private vec-deviation-waves (atom []))
 (def ^:private vec-deviation-sound "my_mod:vecmanip.vec_deviation")
 
+;; VecReflection: sustained ring + reflection shock wave + reflection sound
+(defonce ^:private vec-reflection-effect (atom nil))
+(defonce ^:private vec-reflection-waves (atom []))
+(def ^:private vec-reflection-sound "my_mod:vecmanip.vec_reflection")
+
 (declare tick-thunder-bolt-arcs! billboard-up-axis)
 
 
@@ -572,6 +577,52 @@
 
           nil))
 
+      :vec-reflection
+      (let [{:keys [mode x y z]} payload]
+        (case mode
+          :start
+          (reset! vec-reflection-effect {:active? true :ticks 0})
+
+          :end
+          (reset! vec-reflection-effect {:active? false :ticks 0})
+
+          :reflect-entity
+          (let [life (+ 12 (rand-int 6))]
+            (swap! vec-reflection-waves conj
+                   {:x (double x)
+                    :y (double y)
+                    :z (double z)
+                    :ttl life
+                    :max-ttl life})
+            (client-sounds/queue-sound-effect!
+              {:type :sound
+               :sound-id vec-reflection-sound
+               :volume 0.5
+               :pitch 1.0
+               :x (double x)
+               :y (double y)
+               :z (double z)}))
+
+          :play
+          (do
+            (let [life (+ 10 (rand-int 4))]
+              (swap! vec-reflection-waves conj
+                     {:x (double x)
+                      :y (double y)
+                      :z (double z)
+                      :ttl life
+                      :max-ttl life}))
+            (client-sounds/queue-sound-effect!
+              {:type :sound
+               :sound-id vec-reflection-sound
+               :volume 0.5
+               :pitch 1.0
+               :x (double x)
+               :y (double y)
+               :z (double z)}))
+
+          nil))
+
       nil))
 
 (defn tick-level-effects! []
@@ -688,7 +739,19 @@
              (if (:active? st)
                (update st :ticks (fnil inc 0))
                nil))))
+  (swap! vec-reflection-effect
+         (fn [st]
+           (when st
+             (if (:active? st)
+               (update st :ticks (fnil inc 0))
+               nil))))
   (swap! vec-deviation-waves
+         (fn [xs]
+           (->> xs
+                (map #(update % :ttl dec))
+                (filter #(pos? (long (:ttl %))))
+                vec)))
+  (swap! vec-reflection-waves
          (fn [xs]
            (->> xs
                 (map #(update % :ttl dec))
@@ -1109,6 +1172,53 @@
               p0 p1 p2 p3
               {:r 190 :g 225 :b 255 :a alpha})]))
 
+(defn- vec-reflection-ring-ops [center ticks]
+  (let [radius (+ 0.82 (* 0.1 (Math/sin (* 0.23 (double ticks)))))
+        y (+ (double (:y center)) 0.3)
+        segments 30
+        outer-color {:r 225 :g 245 :b 255 :a 180}
+        inner-color {:r 170 :g 220 :b 245 :a 135}
+        inner-radius (* radius 0.72)]
+    (vec
+      (mapcat
+        (fn [idx]
+          (let [a0 (/ (* 2.0 Math/PI idx) segments)
+                a1 (/ (* 2.0 Math/PI (inc idx)) segments)
+                p0 {:x (+ (:x center) (* radius (Math/cos a0)))
+                    :y y
+                    :z (+ (:z center) (* radius (Math/sin a0)))}
+                p1 {:x (+ (:x center) (* radius (Math/cos a1)))
+                    :y y
+                    :z (+ (:z center) (* radius (Math/sin a1)))}
+                q0 {:x (+ (:x center) (* inner-radius (Math/cos a0)))
+                    :y (+ y 0.02)
+                    :z (+ (:z center) (* inner-radius (Math/sin a0)))}
+                q1 {:x (+ (:x center) (* inner-radius (Math/cos a1)))
+                    :y (+ y 0.02)
+                    :z (+ (:z center) (* inner-radius (Math/sin a1)))}]
+            [(line-op p0 p1 outer-color)
+             (line-op q0 q1 inner-color)]))
+        (range segments)))))
+
+(defn- vec-reflection-wave-ops [cam-pos {:keys [x y z ttl max-ttl]}]
+  (let [life (/ (double ttl) (double (max 1 max-ttl)))
+        alpha (int (max 0 (min 255 (* 185.0 life))))
+        center {:x (double x)
+                :y (double y)
+                :z (double z)}
+        right (camera-facing-right-axis center cam-pos)
+        up (billboard-up-axis center cam-pos right)
+        half-size (+ 0.55 (* 0.85 (- 1.0 life)))
+        side (v* right half-size)
+        lift (v* up half-size)
+        p0 (v+ (v- center side) lift)
+        p1 (v+ (v+ center side) lift)
+        p2 (v- (v+ center side) lift)
+        p3 (v- (v- center side) lift)]
+    [(quad-op "my_mod:textures/effects/glow_circle.png"
+              p0 p1 p2 p3
+              {:r 236 :g 248 :b 255 :a alpha})]))
+
 (defn- thunder-bolt-arc-ops [cam-pos {:keys [start end ttl max-ttl is-aoe?]}]
   ;; Electric arc: bright white-yellow core, electric blue outer glow
   (let [life       (/ (double ttl) (double (max 1 max-ttl)))
@@ -1313,6 +1423,7 @@
         storm-wing @storm-wing-effect
         vec-accel @vec-accel-effect
         vec-deviation @vec-deviation-effect
+        vec-reflection @vec-reflection-effect
         player-uuid (:player-uuid hand-center-pos)
         charge-state (when player-uuid
                        (client-runtime/railgun-charge-visual-state player-uuid))
@@ -1380,6 +1491,17 @@
                              (mapcat (fn [wave]
                                        (vec-deviation-wave-ops camera-pos wave))
                                      @vec-deviation-waves))
+        vec-reflection-plan (concat
+                              (if (and hand-center-pos
+                                       vec-reflection
+                                       (:active? vec-reflection))
+                                (vec-reflection-ring-ops
+                                  (dissoc hand-center-pos :player-uuid)
+                                  (long (or (:ticks vec-reflection) 0)))
+                                [])
+                              (mapcat (fn [wave]
+                                        (vec-reflection-wave-ops camera-pos wave))
+                                      @vec-reflection-waves))
         blood-retrograde-plan (concat
                                 (mapcat (fn [splash]
                                           (blood-retrograde-splash-ops camera-pos splash))
@@ -1470,6 +1592,7 @@
               (seq meltdowner-ray-plan)
               (seq vec-accel-plan)
               (seq vec-deviation-plan)
+              (seq vec-reflection-plan)
                     (seq blood-retrograde-plan)
                 (seq directed-blastwave-plan)
               (seq storm-wing-plan)
@@ -1486,6 +1609,7 @@
                    meltdowner-ray-plan
                  vec-accel-plan
                  vec-deviation-plan
+                   vec-reflection-plan
                  blood-retrograde-plan
                  directed-blastwave-plan
                  storm-wing-plan))

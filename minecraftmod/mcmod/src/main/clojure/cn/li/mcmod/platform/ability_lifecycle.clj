@@ -29,6 +29,7 @@
          :unregister-damage-handler! (fn [_] false)
          :get-active-damage-handlers (fn [] [])
          :process-damage-interception (fn [_ _ damage _] damage)
+         :should-cancel-attack-interception? (fn [_ _ _ _] false)
          :resolve-item-use-action (fn [_] nil)
          :on-ability-item-action! noop
          :build-item-use-plan (fn [_ _ _ _] nil)
@@ -182,6 +183,10 @@
 (defn process-damage-interception
   [player-id attacker-id damage damage-source]
   ((:process-damage-interception @runtime-hooks) player-id attacker-id damage damage-source))
+
+(defn should-cancel-attack-interception?
+  [player-id attacker-id damage damage-source]
+  ((:should-cancel-attack-interception? @runtime-hooks) player-id attacker-id damage damage-source))
 
 (defn resolve-item-use-action
   [item-id]

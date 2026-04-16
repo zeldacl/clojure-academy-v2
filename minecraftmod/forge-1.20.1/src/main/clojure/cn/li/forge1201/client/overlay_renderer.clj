@@ -80,12 +80,37 @@
     (when (pos? cooldown-seconds)
       (draw-string! graphics (format "%.1fs" cooldown-seconds) (+ x 3) (+ y 10) 0xFFFFFF))))
 
+(defn- render-vec-reflection-crosshair!
+  [^GuiGraphics graphics {:keys [x y phase intensity]}]
+  (let [cx (int (or x 0))
+        cy (int (or y 0))
+        p (double (or phase 0.0))
+        amp (double (or intensity 1.0))
+        pulse (+ 1.0 (* 0.5 (Math/sin (* 2.0 Math/PI p))))
+        radius (+ 11.0 (* 4.0 pulse amp))
+        gap (+ 6 (int (* 2.0 pulse amp)))
+        len (+ 8 (int (* 2.0 pulse amp)))
+        line-color 0xB4E8F8FF
+        ring-color 0x88DDF2FF]
+    ;; Bracket-like reticle arms around the crosshair center.
+    (.fill graphics (- cx len) (dec cy) (- cx gap) (inc cy) line-color)
+    (.fill graphics (+ cx gap) (dec cy) (+ cx len) (inc cy) line-color)
+    (.fill graphics (dec cx) (- cy len) (inc cx) (- cy gap) line-color)
+    (.fill graphics (dec cx) (+ cy gap) (inc cx) (+ cy len) line-color)
+    ;; Animated dotted ring wave.
+    (doseq [idx (range 24)]
+      (let [a (/ (* 2.0 Math/PI idx) 24.0)
+            rx (+ cx (int (Math/round (* radius (Math/cos a)))))
+            ry (+ cy (int (Math/round (* radius (Math/sin a)))))]
+        (.fill graphics (dec rx) (dec ry) (inc rx) (inc ry) ring-color)))))
+
 (defn- render-element! [^GuiGraphics graphics element screen-width screen-height]
   (case (:kind element)
     :bar (render-bar! graphics element)
     :activation-indicator (when (:activated element)
                             (draw-string! graphics "*" (:x element) (:y element) 0x00FF00))
     :skill-slot (render-skill-slot! graphics element)
+    :vec-reflection-crosshair (render-vec-reflection-crosshair! graphics element)
     :text (draw-string! graphics (str (:text element)) (:x element) (:y element)
                         (if (map? (:color element)) (argb (:color element)) (:color element)))
     :fill (.fill graphics (:x element) (:y element) (+ (:x element) (:w element)) (+ (:y element) (:h element))

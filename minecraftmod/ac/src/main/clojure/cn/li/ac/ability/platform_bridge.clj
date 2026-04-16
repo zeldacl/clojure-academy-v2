@@ -6,11 +6,13 @@
             [cn.li.mcmod.ability.catalog :as catalog]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.model.preset-data :as preset-data]
             [cn.li.ac.ability.store :as ability-store]
             [cn.li.ac.ability.network :as ability-network]
             [cn.li.ac.ability.damage-runtime :as damage-runtime]
             [cn.li.ac.ability.entity-damage-runtime :as entity-damage-runtime]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.client.hud-renderer :as hud-renderer]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -30,6 +32,72 @@
 
 (defonce ^:private hooks-installed? (atom false))
 (defonce ^:private client-push-handlers-registered? (atom false))
+
+(defn- vec-reflection-active?
+  [player-uuid]
+  (boolean
+    (some (fn [[_ctx-id ctx-data]]
+            (and (= (:player-uuid ctx-data) player-uuid)
+                 (toggle/is-toggle-active? ctx-data :vec-reflection)))
+          (ctx/get-all-contexts))))
+
+(defn- build-hud-model-from-state
+  [player-state activated-override]
+  (when player-state
+    (let [resource-data (:resource-data player-state)
+          preset-data-map (:preset-data player-state)
+          activated (if (contains? activated-override :value)
+                      (:value activated-override)
+                      (boolean (:activated resource-data)))]
+      {:cp {:cur (double (or (:cur-cp resource-data) 0.0))
+            :max (double (or (:max-cp resource-data) 1.0))}
+       :overload {:cur (double (or (:cur-overload resource-data) 0.0))
+                  :max (double (or (:max-overload resource-data) 1.0))
+                  :fine (boolean (get resource-data :overload-fine true))}
+       :active-slots (vec (preset-data/get-active-slots preset-data-map))
+       :activated activated})))
+
+(defn- hud-render-data->overlay-elements
+  [hud-render-data]
+  (let [cp-bar (some-> (:cp-bar hud-render-data)
+                       (assoc :kind :bar)
+                       (dissoc :type))
+        overload-bar (some-> (:overload-bar hud-render-data)
+                             (assoc :kind :bar)
+                             (dissoc :type))
+        activation-indicator (some-> (:activation-indicator hud-render-data)
+                                     (assoc :kind :activation-indicator)
+                                     (dissoc :type))
+        skill-slots (mapv (fn [slot]
+                            (-> slot
+                                (assoc :kind :skill-slot)
+                                (dissoc :type)))
+                          (or (:skill-slots hud-render-data) []))]
+    (vec (concat (keep identity [cp-bar overload-bar activation-indicator])
+                 skill-slots))))
+
+(defn- build-client-overlay-plan
+  [player-uuid screen-width screen-height overlay-state]
+  (let [player-state (ps/get-player-state player-uuid)
+        activated-override {:value (if (contains? overlay-state :activated-override)
+                                     (boolean (:activated-override overlay-state))
+                                     (boolean (get-in player-state [:resource-data :activated] false)))}
+        hud-model (build-hud-model-from-state player-state activated-override)
+        cooldown-data (:cooldown-data player-state)
+        hud-render-data (hud-renderer/build-hud-render-data hud-model screen-width screen-height cooldown-data)
+        base-elements (hud-render-data->overlay-elements hud-render-data)
+        reflection-active? (vec-reflection-active? player-uuid)
+        now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))
+        phase (double (/ (mod now-ms 1200) 1200.0))
+        crosshair (when reflection-active?
+                    {:kind :vec-reflection-crosshair
+                     :x (int (/ screen-width 2))
+                     :y (int (/ screen-height 2))
+                     :phase phase
+                     :intensity 1.0})]
+    {:elements (if crosshair
+                 (conj base-elements crosshair)
+                 base-elements)}))
 
 (defn- on-context-channel-push!
   [{:keys [ctx-id channel payload]}]
@@ -176,6 +244,24 @@
                                 :x (double (or (:x payload) 0.0))
                                 :y (double (or (:y payload) 0.0))
                                 :z (double (or (:z payload) 0.0))})
+
+    :vec-reflection/fx-start
+    (level-effects/enqueue-level-effect! :vec-reflection {:mode :start})
+
+    :vec-reflection/fx-end
+    (level-effects/enqueue-level-effect! :vec-reflection {:mode :end})
+
+    :vec-reflection/fx-reflect-entity
+    (level-effects/enqueue-level-effect! :vec-reflection {:mode :reflect-entity
+                   :x (double (or (:x payload) 0.0))
+                   :y (double (or (:y payload) 0.0))
+                   :z (double (or (:z payload) 0.0))})
+
+    :vec-reflection/fx-play
+    (level-effects/enqueue-level-effect! :vec-reflection {:mode :play
+                   :x (double (or (:x payload) 0.0))
+                   :y (double (or (:y payload) 0.0))
+                   :z (double (or (:z payload) 0.0))})
 
     :groundshock/fx-start
     (hand-effects/enqueue-hand-effect! :groundshock {:mode :start})
@@ -398,6 +484,14 @@
        (fn [player-id attacker-id damage damage-source]
          (damage-runtime/process-damage! player-id attacker-id damage damage-source))
 
+       :should-cancel-attack-interception?
+       (fn [player-id attacker-id damage _damage-source]
+         (if-let [vec-reflection-ns (find-ns 'cn.li.ac.content.ability.vecmanip.vec-reflection)]
+           (if-let [precheck-fn (ns-resolve vec-reflection-ns 'can-cancel-attack?)]
+             (boolean (precheck-fn player-id attacker-id damage))
+             false)
+           false))
+
        :resolve-item-use-action
        (fn [item-id]
          (cond
@@ -476,6 +570,10 @@
        :client-build-hud-render-data
        (fn [hud-model screen-width screen-height cooldown-data]
          (hud-renderer/build-hud-render-data hud-model screen-width screen-height cooldown-data))
+
+       :client-build-overlay-plan
+       (fn [player-uuid screen-width screen-height overlay-state]
+         (build-client-overlay-plan player-uuid screen-width screen-height overlay-state))
 
        :client-req-learn-skill!
        (fn [skill-id extra callback]
