@@ -8,6 +8,13 @@
 (defonce ^:private mag-movement-effect (atom nil))
 (def ^:private mag-movement-loop-sound "my_mod:em.move_loop")
 
+(defonce ^:private thunder-bolt-arcs (atom []))
+(def ^:private tb-main-arc-life 20)
+(def ^:private tb-aoe-arc-life 20)
+
+(declare tick-thunder-bolt-arcs!)
+
+
 (defn enqueue-level-effect! [effect-id payload]
   (case effect-id
     :railgun-shot
@@ -46,7 +53,30 @@
 
         nil))
 
-    nil))
+      :thunder-bolt-strike
+      (let [{:keys [start end aoe-points]} payload]
+        (when (and start end)
+          ;; 3 main arcs from caster eye to strike point (matching original 3 EntityArc)
+          (dotimes [_ 3]
+            (swap! thunder-bolt-arcs conj {:start start :end end
+                                           :ttl tb-main-arc-life
+                                           :max-ttl tb-main-arc-life
+                                           :is-aoe? false}))
+          ;; AOE arcs from strike point to each nearby entity
+          (doseq [pt aoe-points]
+            (when (map? pt)
+              (let [life (+ 15 (rand-int 11))]
+                (swap! thunder-bolt-arcs conj {:start end :end pt
+                                               :ttl life :max-ttl life
+                                               :is-aoe? true}))))
+          ;; Sound (original: ACSounds.playClient "em.arc_strong" volume 0.6)
+          (client-sounds/queue-sound-effect!
+            {:type :sound
+             :sound-id "my_mod:em.arc_strong"
+             :volume 0.6
+             :pitch 1.0})))
+
+      nil))
 
 (defn tick-level-effects! []
   (swap! beam-effects
@@ -66,6 +96,15 @@
                     :volume 0.4
                     :pitch 1.0}))
                (assoc st :ticks ticks))))))
+  (tick-thunder-bolt-arcs!))
+
+(defn tick-thunder-bolt-arcs! []
+  (swap! thunder-bolt-arcs
+         (fn [xs]
+           (->> xs
+                (map #(update % :ttl dec))
+                (filter #(pos? (long (:ttl %))))
+                vec))))
 
 (defn- v+ [a b]
   {:x (+ (double (:x a)) (double (:x b)))
@@ -199,6 +238,31 @@
              (line-op center p0 {:r 90 :g 190 :b 255 :a 120})]))
         (range points)))))
 
+(defn- thunder-bolt-arc-ops [cam-pos {:keys [start end ttl max-ttl is-aoe?]}]
+  ;; Electric arc: bright white-yellow core, electric blue outer glow
+  (let [life       (/ (double ttl) (double (max 1 max-ttl)))
+        right      (beam-right-axis start end cam-pos)
+        width      (if is-aoe?
+                     (* 0.04 (+ 0.4 (* 0.6 life)))
+                     (* 0.07 (+ 0.5 (* 0.5 life))))
+        core-width (* width 0.4)
+        ;; Bright yellow-white outer, pure white core (electric arc palette)
+        outer-a    (with-alpha {:r 200 :g 230 :b 255} (int (+ 40 (* 180 life))))
+        inner-a    (with-alpha {:r 255 :g 255 :b 255} (int (+ 60 (* 180 life))))
+        r0         (v* right width)
+        r1         (v* right core-width)
+        p0         (v+ start r0)
+        p1         (v- start r0)
+        p2         (v- end r0)
+        p3         (v+ end r0)
+        c0         (v+ start r1)
+        c1         (v- start r1)
+        c2         (v- end r1)
+        c3         (v+ end r1)]
+    [(quad-op "minecraft:textures/entity/beacon_beam.png" p0 p1 p2 p3 outer-a)
+     (quad-op "minecraft:textures/entity/beacon_beam.png" c0 c1 c2 c3 inner-a)
+     (line-op start end (with-alpha {:r 160 :g 220 :b 255} (int (+ 60 (* 140 life)))))]))
+
 (defn build-level-effect-plan [camera-pos hand-center-pos tick]
   (let [beams @beam-effects
         mag-move @mag-movement-effect
@@ -223,6 +287,9 @@
                                        (:charge-ratio charge-state)
                                        (:coin-active? charge-state)
                                        tick)
-                      [])]
-    (when (or (seq beam-plan) (seq mag-plan) (seq charge-plan))
-      {:ops (vec (concat beam-plan mag-plan charge-plan))})))
+                      [])
+        tb-arc-plan (mapcat (fn [arc]
+                              (thunder-bolt-arc-ops camera-pos arc))
+                            @thunder-bolt-arcs)]
+    (when (or (seq beam-plan) (seq mag-plan) (seq charge-plan) (seq tb-arc-plan))
+      {:ops (vec (concat beam-plan mag-plan charge-plan tb-arc-plan))})))

@@ -34,6 +34,9 @@
     (:railgun/fx-shot :railgun/fx-reflect)
     (level-effects/enqueue-level-effect! :railgun-shot payload)
 
+    :thunder-bolt/fx-perform
+    (level-effects/enqueue-level-effect! :thunder-bolt-strike payload)
+
     :mag-movement/fx-start
     (level-effects/enqueue-level-effect! :mag-movement {:mode :start
                                                          :target (get payload :target)})
