@@ -7,12 +7,16 @@ import java.util.Optional;
 import java.util.UUID;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -72,6 +76,9 @@ public final class RaycastBridge {
         hit.put("x", pos.getX());
         hit.put("y", pos.getY());
         hit.put("z", pos.getZ());
+        hit.put("hit-x", result.getLocation().x);
+        hit.put("hit-y", result.getLocation().y);
+        hit.put("hit-z", result.getLocation().z);
         hit.put("block-id", blockState.getBlock().getDescriptionId());
         hit.put("face", result.getDirection().getSerializedName());
         hit.put("distance", start.distanceTo(result.getLocation()));
@@ -122,6 +129,10 @@ public final class RaycastBridge {
             nearest.put("x", entity.position().x);
             nearest.put("y", entity.position().y);
             nearest.put("z", entity.position().z);
+            nearest.put("hit-x", hitVec.x);
+            nearest.put("hit-y", hitVec.y);
+            nearest.put("hit-z", hitVec.z);
+            nearest.put("eye-height", entity.getEyeHeight());
             nearest.put("type", entity.getType().getDescriptionId());
             nearest.put("distance", distance);
         }
@@ -222,7 +233,18 @@ public final class RaycastBridge {
             return null;
         }
 
-        return server.overworld();
+        if (worldId == null || worldId.isEmpty()) {
+            return server.overworld();
+        }
+
+        try {
+            ResourceLocation id = new ResourceLocation(worldId);
+            ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, id);
+            ServerLevel level = server.getLevel(key);
+            return level != null ? level : server.overworld();
+        } catch (IllegalArgumentException ignored) {
+            return server.overworld();
+        }
     }
 
     private static AABB createSearchBox(

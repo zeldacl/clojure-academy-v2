@@ -63,6 +63,22 @@
     :mag-movement/fx-end
     (level-effects/enqueue-level-effect! :mag-movement {:mode :end})
 
+    :mark-teleport/fx-start
+    (level-effects/enqueue-level-effect! :mark-teleport {:mode :start})
+
+    :mark-teleport/fx-update
+    (level-effects/enqueue-level-effect! :mark-teleport {:mode :update
+                               :target (:target payload)
+                               :distance (double (or (:distance payload) 0.0))})
+
+    :mark-teleport/fx-end
+    (level-effects/enqueue-level-effect! :mark-teleport {:mode :end})
+
+    :mark-teleport/fx-perform
+    (level-effects/enqueue-level-effect! :mark-teleport {:mode :perform
+                               :target (:target payload)
+                               :distance (double (or (:distance payload) 0.0))})
+
     :meltdowner/fx-start
     (level-effects/enqueue-level-effect! :meltdowner {:mode :start})
 

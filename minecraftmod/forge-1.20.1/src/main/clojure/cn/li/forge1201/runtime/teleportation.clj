@@ -33,6 +33,8 @@
   (try
     (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
       (when-let [^ServerLevel target-level (get-level world-id)]
+        (when (.isPassenger player)
+          (.stopRiding player))
         (let [current-level (.level player)]
           (if (= current-level target-level)
             ;; Same dimension - simple teleport
@@ -87,6 +89,8 @@
               teleported-count (atom 0)]
 
           ;; Teleport caster first, then keep nearby entities' relative offsets.
+          (when (.isPassenger player)
+            (.stopRiding player))
           (.teleportTo player target-level x y z (.getYRot player) (.getXRot player))
           (swap! teleported-count inc)
 

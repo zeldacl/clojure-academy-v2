@@ -1,12 +1,14 @@
 (ns cn.li.ac.ability.client.level-effects
   "Pure level effect state + render-plan generation for client-side ability visuals."
   (:require [cn.li.ac.ability.client.ability-runtime :as client-runtime]
+            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
 (defonce ^:private beam-effects (atom []))
 (def ^:private beam-life-ticks 12)
 (defonce ^:private mag-movement-effect (atom nil))
 (def ^:private mag-movement-loop-sound "my_mod:em.move_loop")
+(defonce ^:private mark-teleport-effect (atom nil))
 
 (defonce ^:private thunder-bolt-arcs (atom []))
 (def ^:private tb-main-arc-life 20)
@@ -59,6 +61,49 @@
         (reset! mag-movement-effect nil)
 
         nil))
+
+      :mark-teleport
+      (let [{:keys [mode target distance]} payload]
+        (case mode
+          :start
+          (reset! mark-teleport-effect {:active? true
+                                        :target nil
+                                        :distance 0.0
+                                        :ticks 0})
+
+          :update
+          (swap! mark-teleport-effect
+                 (fn [st]
+                   (assoc (or st {})
+                          :active? true
+                          :target target
+                          :distance (double (or distance 0.0))
+                          :ticks (long (or (:ticks st) 0)))))
+
+          :perform
+          (do
+            (when (map? target)
+              (client-particles/queue-particle-effect!
+                {:type :particle
+                 :particle-type :portal
+                 :x (:x target)
+                 :y (double (or (:y target) 0.0))
+                 :z (:z target)
+                 :count 16
+                 :speed 0.08
+                 :offset-x 0.9
+                 :offset-y 0.8
+                 :offset-z 0.9}))
+            (client-sounds/queue-sound-effect!
+              {:type :sound
+               :sound-id "my_mod:tp.tp"
+               :volume 0.5
+               :pitch 1.0}))
+
+          :end
+          (reset! mark-teleport-effect nil)
+
+          nil))
 
       :thunder-clap
       (let [{:keys [mode ticks charge-ratio target performed?]} payload]
@@ -191,6 +236,24 @@
                     :volume 0.4
                     :pitch 1.0}))
                (assoc st :ticks ticks)))))
+    (swap! mark-teleport-effect
+           (fn [st]
+             (when (:active? st)
+               (let [ticks (inc (long (or (:ticks st) 0)))
+                     target (:target st)]
+                 (when (and target (zero? (mod ticks 3)))
+                   (client-particles/queue-particle-effect!
+                     {:type :particle
+                      :particle-type :portal
+                      :x (:x target)
+                      :y (- (double (or (:y target) 0.0)) 0.5)
+                      :z (:z target)
+                      :count 2
+                      :speed 0.03
+                      :offset-x 0.9
+                      :offset-y 0.7
+                      :offset-z 0.9}))
+                 (assoc st :ticks ticks)))))
   (swap! thunder-clap-effect
          (fn [st]
            (when st
@@ -271,6 +334,14 @@
         mid (v* (v+ start end) 0.5)
         to-cam (vnormalize (v- cam-pos mid))
         raw (vcross dir to-cam)]
+    (if (> (vlen raw) 1.0e-5)
+      (vnormalize raw)
+      {:x 1.0 :y 0.0 :z 0.0})))
+
+(defn- camera-facing-right-axis [center cam-pos]
+  (let [to-cam (vnormalize (v- cam-pos center))
+        up {:x 0.0 :y 1.0 :z 0.0}
+        raw (vcross up to-cam)]
     (if (> (vlen raw) 1.0e-5)
       (vnormalize raw)
       {:x 1.0 :y 0.0 :z 0.0})))
@@ -357,6 +428,56 @@
             [(line-op p0 p1 {:r 120 :g 220 :b 255 :a alpha})
              (line-op center p0 {:r 90 :g 190 :b 255 :a 120})]))
         (range points)))))
+
+(defn- mark-teleport-ground-ring-ops [target ticks distance]
+  (let [base-radius (+ 0.55 (* 0.08 (Math/sin (* 0.18 (double ticks)))))
+        radius (+ base-radius (* 0.04 (min 1.0 (/ (double distance) 20.0))))
+        y (+ (double (:y target)) 0.02)
+        segments 24
+        color {:r 230 :g 236 :b 255 :a 180}]
+    (vec
+      (for [idx (range segments)
+            :let [a0 (/ (* 2.0 Math/PI idx) segments)
+                  a1 (/ (* 2.0 Math/PI (inc idx)) segments)
+                  p0 {:x (+ (:x target) (* radius (Math/cos a0)))
+                      :y y
+                      :z (+ (:z target) (* radius (Math/sin a0)))}
+                  p1 {:x (+ (:x target) (* radius (Math/cos a1)))
+                      :y y
+                      :z (+ (:z target) (* radius (Math/sin a1)))}]]
+        (line-op p0 p1 color)))))
+
+(defn- mark-teleport-billboard-ops [cam-pos target ticks]
+  (let [center {:x (:x target)
+                :y (+ (double (:y target)) 0.9)
+                :z (:z target)}
+        right (camera-facing-right-axis center cam-pos)
+        half-width (+ 0.34 (* 0.04 (Math/sin (* 0.22 (double ticks)))))
+        half-height 0.9
+        up {:x 0.0 :y half-height :z 0.0}
+        side (v* right half-width)
+        p0 (v+ (v- center side) up)
+        p1 (v+ (v+ center side) up)
+        p2 (v- (v+ center side) up)
+        p3 (v- (v- center side) up)
+        halo-width (* half-width 1.35)
+        halo-height 1.12
+        halo-side (v* right halo-width)
+        halo-up {:x 0.0 :y halo-height :z 0.0}
+        h0 (v+ (v- center halo-side) halo-up)
+        h1 (v+ (v+ center halo-side) halo-up)
+        h2 (v- (v+ center halo-side) halo-up)
+        h3 (v- (v- center halo-side) halo-up)
+        alpha (+ 85 (* 35 (+ 1.0 (Math/sin (* 0.25 (double ticks))))))]
+    [(quad-op "my_mod:textures/effects/glow_circle.png" h0 h1 h2 h3 {:r 160 :g 196 :b 255 :a (int alpha)})
+     (quad-op "my_mod:textures/effects/glow_circle.png" p0 p1 p2 p3 {:r 245 :g 250 :b 255 :a 180})]))
+
+(defn- mark-teleport-effect-ops [cam-pos mark-state]
+  (let [{:keys [target ticks distance]} mark-state]
+    (when (map? target)
+      (concat
+        (mark-teleport-ground-ring-ops target ticks distance)
+        (mark-teleport-billboard-ops cam-pos target ticks)))))
 
 (defn- thunder-bolt-arc-ops [cam-pos {:keys [start end ttl max-ttl is-aoe?]}]
   ;; Electric arc: bright white-yellow core, electric blue outer glow
@@ -476,6 +597,7 @@
 (defn build-level-effect-plan [camera-pos hand-center-pos tick]
   (let [beams @beam-effects
         mag-move @mag-movement-effect
+  mark-teleport @mark-teleport-effect
         thunder-clap @thunder-clap-effect
         meltdowner @meltdowner-effect
         player-uuid (:player-uuid hand-center-pos)
@@ -494,6 +616,11 @@
                                           (:target mag-move)
                                           tick)
                    [])
+         mark-teleport-plan (if (and mark-teleport
+                 (:active? mark-teleport)
+                 (map? (:target mark-teleport)))
+               (mark-teleport-effect-ops camera-pos mark-teleport)
+               [])
         charge-plan (if (and hand-center-pos (:active? charge-state))
                       (charge-hand-ops (dissoc hand-center-pos :player-uuid)
                                        (:charge-ratio charge-state)
@@ -534,6 +661,7 @@
                             @thunder-bolt-arcs)]
     (when (or (seq beam-plan)
               (seq mag-plan)
+              (seq mark-teleport-plan)
               (seq charge-plan)
               (seq meltdowner-plan)
               (seq meltdowner-ray-plan)
@@ -542,6 +670,7 @@
               local-walk-speed)
       {:ops (vec (concat beam-plan
                          mag-plan
+                         mark-teleport-plan
                          charge-plan
                          meltdowner-plan
                          thunder-clap-plan

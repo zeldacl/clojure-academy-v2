@@ -319,8 +319,8 @@
   :level 1
   :controllable? true
   :ctrl-id :mark-teleport
-  :cp-consume-speed 0.8
-  :overload-consume-speed 0.5
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
   :cooldown-ticks 20
   :on-key-down mark-teleport/mark-teleport-on-key-down
   :on-key-tick mark-teleport/mark-teleport-on-key-tick
