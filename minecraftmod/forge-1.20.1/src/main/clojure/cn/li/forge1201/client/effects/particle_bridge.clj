@@ -3,8 +3,25 @@
   (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
+           [net.minecraft.core BlockPos]
+           [net.minecraft.core.particles BlockParticleOption ParticleTypes]
            [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.client.multiplayer ClientLevel]))
+
+(defn- resolve-particle
+  [^ClientLevel level particle-cmd]
+  (let [{:keys [particle-type block-id x y z]} particle-cmd]
+    (if (= :block-crack particle-type)
+      (let [state (or (when block-id
+                        (some-> (ForgeRuntimeBridge/getBlockById ^String block-id)
+                                (.defaultBlockState)))
+                      (.getBlockState level (BlockPos. (int (Math/floor (double x)))
+                                                       (int (Math/floor (double y)))
+                                                       (int (Math/floor (double z))))))]
+        (if (.isAir state)
+          ParticleTypes/SMOKE
+          (BlockParticleOption. ParticleTypes/BLOCK state)))
+      (ForgeRuntimeBridge/getParticleType (name particle-type)))))
 
 (defn- spawn-particle-effect
   "Spawn a particle effect in the world."
@@ -12,8 +29,8 @@
   (try
     (when-let [^Minecraft mc (Minecraft/getInstance)]
       (when-let [^ClientLevel level (.level mc)]
-        (let [{:keys [particle-type x y z count speed offset-x offset-y offset-z]} particle-cmd
-              particle (ForgeRuntimeBridge/getParticleType (name particle-type))]
+        (let [{:keys [x y z count speed offset-x offset-y offset-z]} particle-cmd
+              particle (resolve-particle level particle-cmd)]
           (.addParticle level particle
                        x y z
                        (* offset-x speed)

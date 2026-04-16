@@ -6,7 +6,9 @@
            [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.core BlockPos]
+           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]
+           [net.minecraft.sounds SoundSource SoundEvent]
            [net.minecraft.world.entity LivingEntity]
            [net.minecraft.world.phys AABB Vec3]
            [net.minecraftforge.server ServerLifecycleHooks]))
@@ -80,6 +82,40 @@
       (log/warn "Failed to find blocks:" (ex-message e))
       [])))
 
+(def ^:private sound-source-map
+  {:ambient SoundSource/AMBIENT
+   :players SoundSource/PLAYERS
+   :blocks SoundSource/BLOCKS
+   :hostile SoundSource/HOSTILE
+   :neutral SoundSource/NEUTRAL
+   :music SoundSource/MUSIC
+   :master SoundSource/MASTER
+   :weather SoundSource/WEATHER
+   :records SoundSource/RECORDS})
+
+(defn- resolve-sound-source [source]
+  (or (get sound-source-map source)
+      SoundSource/AMBIENT))
+
+(defn- play-sound-impl! [world-id x y z sound-id source volume pitch]
+  (try
+    (when-let [^ServerLevel level (get-level world-id)]
+      (let [^SoundEvent sound-event (.get BuiltInRegistries/SOUND_EVENT (ResourceLocation. ^String sound-id))]
+        (when sound-event
+          (.playSound level
+                      nil
+                      (double x)
+                      (double y)
+                      (double z)
+                      sound-event
+                      (resolve-sound-source source)
+                      (float volume)
+                      (float pitch))
+          true)))
+    (catch Exception e
+      (log/warn "Failed to play world sound:" (ex-message e))
+      false)))
+
 (defn forge-world-effects []
   (reify pwe/IWorldEffects
     (spawn-lightning! [_ world-id x y z]
@@ -89,7 +125,9 @@
     (find-entities-in-radius [_ world-id x y z radius]
       (find-entities-in-radius-impl world-id x y z radius))
     (find-blocks-in-radius [_ world-id x y z radius block-predicate]
-      (find-blocks-in-radius-impl world-id x y z radius block-predicate))))
+      (find-blocks-in-radius-impl world-id x y z radius block-predicate))
+    (play-sound! [_ world-id x y z sound-id source volume pitch]
+      (boolean (play-sound-impl! world-id x y z sound-id source volume pitch)))))
 
 (defn install-world-effects! []
   (alter-var-root #'pwe/*world-effects*

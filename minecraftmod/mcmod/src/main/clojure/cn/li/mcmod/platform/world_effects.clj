@@ -38,7 +38,17 @@
     - x, y, z: double coordinates
     - radius: double search radius
     - block-predicate: fn [block-id] -> boolean (block-id is string like \"minecraft:iron_ore\")
-    Returns: seq of block maps {:x int :y int :z int :block-id string}"))
+    Returns: seq of block maps {:x int :y int :z int :block-id string}")
+
+  (play-sound! [this world-id x y z sound-id source volume pitch]
+    "Play a world sound at position and broadcast to nearby players.
+    - world-id: string dimension id
+    - x, y, z: double coordinates
+    - sound-id: string registry id, e.g. \"minecraft:block.anvil.destroy\"
+    - source: keyword, one of :ambient :players :blocks :hostile :neutral :music :master :weather :records
+    - volume: float-like
+    - pitch: float-like
+    Returns true if successful."))
 
 (def ^:dynamic *world-effects*
   "Bound by platform (forge) to a reified IWorldEffects implementation.

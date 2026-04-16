@@ -78,6 +78,7 @@ public final class ForgeRuntimeBridge {
             case "electric-spark" -> ParticleTypes.ELECTRIC_SPARK;
             case "portal" -> ParticleTypes.PORTAL;
             case "flame" -> ParticleTypes.FLAME;
+            case "smoke" -> ParticleTypes.SMOKE;
             case "end-rod" -> ParticleTypes.END_ROD;
             case "enchant" -> ParticleTypes.ENCHANT;
             case "angry-villager" -> ParticleTypes.ANGRY_VILLAGER;

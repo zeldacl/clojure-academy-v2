@@ -140,6 +140,24 @@
     (level-effects/enqueue-level-effect! :directed-blastwave {:mode :end
                                                                :performed? (boolean (:performed? payload))})
 
+    :groundshock/fx-start
+    (hand-effects/enqueue-hand-effect! :groundshock {:mode :start})
+
+    :groundshock/fx-update
+    (hand-effects/enqueue-hand-effect! :groundshock {:mode :update
+                                                      :charge-ticks (long (or (:charge-ticks payload) 0))})
+
+    :groundshock/fx-perform
+    (do
+      (hand-effects/enqueue-hand-effect! :groundshock {:mode :perform})
+      (level-effects/enqueue-level-effect! :groundshock {:mode :perform
+                                                         :affected-blocks (:affected-blocks payload)
+                                                         :broken-blocks (:broken-blocks payload)}))
+
+    :groundshock/fx-end
+    (hand-effects/enqueue-hand-effect! :groundshock {:mode :end
+                                                      :performed? (boolean (:performed? payload))})
+
     :directed-shock/fx-start
     (hand-effects/enqueue-hand-effect! :directed-shock {:mode :start})
 

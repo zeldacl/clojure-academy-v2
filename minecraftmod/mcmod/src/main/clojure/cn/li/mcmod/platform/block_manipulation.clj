@@ -29,7 +29,13 @@
 
   (find-blocks-in-line [this world-id x1 y1 z1 dx dy dz max-distance]
     "Find blocks along a line (for Groundshock propagation).
-    Returns vector of {:x :y :z :block-id :hardness} maps."))
+    Returns vector of {:x :y :z :block-id :hardness} maps.")
+
+  (liquid-block? [this world-id x y z]
+    "Returns true if target block is liquid by platform material/fluid-state check.")
+
+  (farmland-block? [this world-id x y z]
+    "Returns true if target block is farmland (platform-native check)."))
 
 (def ^:dynamic *block-manipulation*
   "Dynamic var bound to IBlockManipulation implementation by platform layer."

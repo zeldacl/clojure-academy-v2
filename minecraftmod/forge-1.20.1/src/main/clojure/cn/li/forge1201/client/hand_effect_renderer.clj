@@ -3,6 +3,7 @@
   (:require [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.shim ForgeClientHelper]
+           [net.minecraft.client Minecraft]
            [net.minecraftforge.client.event RenderHandEvent]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
@@ -13,7 +14,11 @@
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
   (when (= TickEvent$Phase/END (.phase evt))
-    (hand-effects/tick-hand-effects!)))
+    (hand-effects/tick-hand-effects!)
+    (when-let [mc (Minecraft/getInstance)]
+      (when-let [player (.player mc)]
+        (doseq [delta (hand-effects/consume-camera-pitch-deltas!)]
+          (.setXRot player (+ (.getXRot player) (float delta))))))))
 
 (defn- on-render-hand [^RenderHandEvent evt]
   (try

@@ -33,6 +33,8 @@
 (def ^:private directed-blastwave-sound "my_mod:vecmanip.directed_blast")
 (def ^:private directed-blastwave-wave-life 15)
 
+(def ^:private groundshock-sound "my_mod:vecmanip.groundshock")
+
 (declare tick-thunder-bolt-arcs!)
 
 
@@ -334,6 +336,45 @@
                                              :charge-ticks 0
                                              :punched? false
                                              :performed? (boolean performed?)})
+
+          nil))
+
+      :groundshock
+      (let [{:keys [mode affected-blocks]} payload]
+        (case mode
+          :perform
+          (do
+            (client-sounds/queue-sound-effect!
+              {:type :sound
+               :sound-id groundshock-sound
+               :volume 2.0
+               :pitch 1.0})
+            (doseq [{:keys [x y z block-id]} affected-blocks]
+              (client-particles/queue-particle-effect!
+                {:type :particle
+                 :particle-type :block-crack
+                 :block-id (or block-id "minecraft:stone")
+                 :x (+ (double x) 0.5)
+                 :y (+ (double y) 1.0)
+                 :z (+ (double z) 0.5)
+                 :count (+ 4 (rand-int 4))
+                 :speed 0.2
+                 :offset-x 1.0
+                 :offset-y 0.6
+                 :offset-z 1.0})
+              (when (< (rand) 0.5)
+                (client-particles/queue-particle-effect!
+                  {:type :particle
+                   :particle-type :smoke
+                   :x (+ (double x) 0.5 (- (* (rand) 0.6) 0.3))
+                   :y (+ (double y) 1.0 (* (rand) 0.2))
+                   :z (+ (double z) 0.5 (- (* (rand) 0.6) 0.3))
+                   :count 1
+                   :speed 0.04
+                   :offset-x 0.04
+                   :offset-y 0.05
+                   :offset-z 0.04})))
+            nil)
 
           nil))
 

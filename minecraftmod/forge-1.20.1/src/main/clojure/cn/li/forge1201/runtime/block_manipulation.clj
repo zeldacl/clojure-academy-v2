@@ -5,6 +5,7 @@
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer ServerLevel]
            [net.minecraft.world.level.block Block]
+           [net.minecraft.world.level.block Blocks]
            [net.minecraft.core BlockPos]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.server ServerLifecycleHooks]
@@ -129,6 +130,27 @@
       (log/warn "Failed to find blocks in line:" (ex-message e))
       [])))
 
+(defn- liquid-block-impl? [world-id x y z]
+  (try
+    (when-let [^ServerLevel level (get-level-by-id world-id)]
+      (let [pos (BlockPos. (int x) (int y) (int z))
+            state (.getBlockState level pos)
+            fluid-state (.getFluidState state)]
+        (and fluid-state (not (.isEmpty fluid-state)))))
+    (catch Exception e
+      (log/warn "Failed to check liquid block:" (ex-message e))
+      false)))
+
+(defn- farmland-block-impl? [world-id x y z]
+  (try
+    (when-let [^ServerLevel level (get-level-by-id world-id)]
+      (let [pos (BlockPos. (int x) (int y) (int z))
+            state (.getBlockState level pos)]
+        (= (.getBlock state) Blocks/FARMLAND)))
+    (catch Exception e
+      (log/warn "Failed to check farmland block:" (ex-message e))
+      false)))
+
 (defn forge-block-manipulation []
   (reify bm/IBlockManipulation
     (break-block! [_ player-id world-id x y z drop?]
@@ -142,7 +164,11 @@
     (can-break-block? [_ player-id world-id x y z]
       (can-break-block-impl? player-id world-id x y z))
     (find-blocks-in-line [_ world-id x1 y1 z1 dx dy dz max-distance]
-      (find-blocks-in-line-impl world-id x1 y1 z1 dx dy dz max-distance))))
+      (find-blocks-in-line-impl world-id x1 y1 z1 dx dy dz max-distance))
+    (liquid-block? [_ world-id x y z]
+      (boolean (liquid-block-impl? world-id x y z)))
+    (farmland-block? [_ world-id x y z]
+      (boolean (farmland-block-impl? world-id x y z)))))
 
 (defn install-block-manipulation! []
   (alter-var-root #'bm/*block-manipulation*
