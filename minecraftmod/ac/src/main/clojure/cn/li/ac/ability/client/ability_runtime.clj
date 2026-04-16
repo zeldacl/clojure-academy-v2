@@ -3,7 +3,8 @@
 
   Keeps AC independent from Minecraft classes while delegating to platform runtime
   when available."
-  (:require [cn.li.ac.client.platform-bridge :as client-bridge]))
+  (:require [cn.li.ac.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.platform.ability-lifecycle :as ability-lifecycle]))
 
 (defn on-slot-key-down!
   [player-uuid key-idx]
@@ -16,3 +17,7 @@
 (defn on-slot-key-up!
   [player-uuid key-idx]
   (client-bridge/on-slot-key-up! player-uuid key-idx))
+
+(defn railgun-charge-visual-state
+  [player-uuid]
+  (ability-lifecycle/client-railgun-charge-visual-state player-uuid))

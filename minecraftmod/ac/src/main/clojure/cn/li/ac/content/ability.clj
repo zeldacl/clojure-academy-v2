@@ -212,8 +212,8 @@
   :level 3
   :controllable? true
   :ctrl-id :mag-movement
-  :cp-consume-speed 1.2
-  :overload-consume-speed 0.6
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
   :cooldown-ticks 60
   :on-key-down mag-movement/mag-movement-on-key-down
   :on-key-tick mag-movement/mag-movement-on-key-tick

@@ -85,7 +85,7 @@
   #_(try-install! 'cn.li.forge1201.runtime.saved-locations
                 'cn.li.forge1201.runtime.saved-locations/install-saved-locations!
                 "saved-locations")
-  #_(try-install! 'cn.li.forge1201.runtime.player-motion
+  (try-install! 'cn.li.forge1201.runtime.player-motion
                 'cn.li.forge1201.runtime.player-motion/install-player-motion!
                 "player-motion")
   (try-install! 'cn.li.forge1201.runtime.block-manipulation

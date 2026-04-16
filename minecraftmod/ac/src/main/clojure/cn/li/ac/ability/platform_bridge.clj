@@ -3,6 +3,8 @@
 
   This namespace keeps platform adapters decoupled from direct ac namespace imports."
   (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-lifecycle]
+            [cn.li.mcmod.ability.catalog :as catalog]
+            [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.store :as ability-store]
             [cn.li.ac.ability.network :as ability-network]
@@ -10,6 +12,7 @@
             [cn.li.ac.ability.entity-damage-runtime :as entity-damage-runtime]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.client.hud-renderer :as hud-renderer]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client-api :as client-api]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
@@ -23,6 +26,78 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private hooks-installed? (atom false))
+(defonce ^:private client-push-handlers-registered? (atom false))
+
+(defn- on-context-channel-push!
+  [{:keys [ctx-id channel payload]}]
+  (case channel
+    (:railgun/fx-shot :railgun/fx-reflect)
+    (level-effects/enqueue-level-effect! :railgun-shot payload)
+
+    :mag-movement/fx-start
+    (level-effects/enqueue-level-effect! :mag-movement {:mode :start
+                                                         :target (get payload :target)})
+
+    :mag-movement/fx-update
+    (level-effects/enqueue-level-effect! :mag-movement {:mode :update
+                                                         :target (get payload :target)})
+
+    :mag-movement/fx-end
+    (level-effects/enqueue-level-effect! :mag-movement {:mode :end})
+
+    nil)
+  (ctx/ctx-send-to-local! ctx-id channel payload))
+
+(defn- register-client-push-handlers!
+  []
+  (when (compare-and-set! client-push-handlers-registered? false true)
+    (net-client/register-push-handler!
+      catalog/MSG-SYNC-ABILITY
+      (fn [{:keys [uuid ability-data]}]
+        (when (and uuid ability-data)
+          (ps/get-or-create-player-state! uuid)
+          (ps/update-ability-data! uuid (constantly ability-data)))))
+
+    (net-client/register-push-handler!
+      catalog/MSG-SYNC-RESOURCE
+      (fn [{:keys [uuid resource-data]}]
+        (when (and uuid resource-data)
+          (ps/get-or-create-player-state! uuid)
+          (ps/update-resource-data! uuid (constantly resource-data)))))
+
+    (net-client/register-push-handler!
+      catalog/MSG-SYNC-COOLDOWN
+      (fn [{:keys [uuid cooldown-data]}]
+        (when (and uuid cooldown-data)
+          (ps/get-or-create-player-state! uuid)
+          (ps/update-cooldown-data! uuid (constantly cooldown-data)))))
+
+    (net-client/register-push-handler!
+      catalog/MSG-SYNC-PRESET
+      (fn [{:keys [uuid preset-data]}]
+        (when (and uuid preset-data)
+          (ps/get-or-create-player-state! uuid)
+          (ps/update-preset-data! uuid (constantly preset-data)))))
+
+    (net-client/register-push-handler!
+      catalog/MSG-CTX-ESTABLISH
+      (fn [{:keys [ctx-id server-id]}]
+        (ctx/transition-to-alive! ctx-id server-id nil)))
+
+    (net-client/register-push-handler!
+      catalog/MSG-CTX-TERMINATE
+      (fn [{:keys [ctx-id]}]
+        (ctx/terminate-context! ctx-id nil)))
+
+    (net-client/register-push-handler!
+      catalog/MSG-CTX-TERMINATED
+      (fn [{:keys [ctx-id]}]
+        (ctx/terminate-context! ctx-id nil)))
+
+    (net-client/register-push-handler!
+      catalog/MSG-CTX-CHANNEL
+      on-context-channel-push!)
+    (log/info "Ability client push handlers registered")))
 
 (defn install-ability-runtime-hooks!
   "Install AC handlers for platform ability lifecycle callbacks."
@@ -262,6 +337,22 @@
        :client-poll-sound-effects
        (fn []
          (client-sounds/poll-sound-effects!))
+
+       :client-register-push-handlers!
+       (fn []
+         (register-client-push-handlers!))
+
+       :client-enqueue-level-effect!
+       (fn [effect-id payload]
+         (level-effects/enqueue-level-effect! effect-id payload))
+
+       :client-build-level-effect-plan
+       (fn [camera-pos hand-center-pos tick]
+         (level-effects/build-level-effect-plan camera-pos hand-center-pos tick))
+
+       :client-tick-level-effects!
+       (fn []
+         (level-effects/tick-level-effects!))
 
        :client-tick-keys!
        (fn [key-state-fn get-player-uuid-fn]
