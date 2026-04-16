@@ -35,6 +35,12 @@
 
 (def ^:private groundshock-sound "my_mod:vecmanip.groundshock")
 
+;; Plasma Cannon: looping charge sound + charged-complete sound
+;; Original: "vecmanip.plasma_cannon" (FollowEntitySound loop) and "vecmanip.plasma_cannon_t"
+(defonce ^:private plasma-cannon-effect (atom nil))
+(def ^:private plasma-cannon-loop-sound "my_mod:vecmanip.plasma_cannon")
+(def ^:private plasma-cannon-charged-sound "my_mod:vecmanip.plasma_cannon_t")
+
 (declare tick-thunder-bolt-arcs!)
 
 
@@ -378,6 +384,88 @@
 
           nil))
 
+      :plasma-cannon
+      (let [{:keys [mode charge-ticks fully-charged? charge-pos flight-ticks
+                    state destination pos performed?]} payload]
+        (case mode
+          :start
+          ;; Original: c_begin() – spawn PlasmaBodyEffect, Tornado, start loop sound
+          (do
+            (reset! plasma-cannon-effect {:active?      true
+                                          :charge-ticks 0
+                                          :charge-pos   nil
+                                          :flight-ticks 0
+                                          :state        :charging
+                                          :destination  nil
+                                          :performed?   false})
+            ;; Start looping charge sound (original: FollowEntitySound "vecmanip.plasma_cannon")
+            (client-sounds/queue-sound-effect!
+              {:type     :sound
+               :sound-id plasma-cannon-loop-sound
+               :volume   0.5
+               :pitch    1.0}))
+
+          :update
+          (do
+            (swap! plasma-cannon-effect
+                   (fn [st]
+                     (assoc (or st {})
+                            :active?      true
+                            :charge-ticks (long (or charge-ticks 0))
+                            :flight-ticks (long (or flight-ticks 0))
+                            :state        (or state :charging)
+                            :charge-pos   (or charge-pos (:charge-pos st))
+                            :destination  (or destination (:destination st)))))
+            ;; Original: when (state == STATE_CHARGING && localTicker == chargeTime)
+            ;;   → ACSounds.playClient "vecmanip.plasma_cannon_t" volume 0.5
+            (when (boolean fully-charged?)
+              (client-sounds/queue-sound-effect!
+                {:type     :sound
+                 :sound-id plasma-cannon-charged-sound
+                 :volume   0.5
+                 :pitch    1.0})))
+
+          :perform
+          ;; Original: explode() → world explosion visual + sound handled server-side,
+          ;; client shows particle burst at impact position
+          (when (map? pos)
+            (let [tx (double (:x pos))
+                  ty (double (:y pos))
+                  tz (double (:z pos))]
+              ;; Large particle burst at explosion site
+              (client-particles/queue-particle-effect!
+                {:type          :particle
+                 :particle-type :explosion-large
+                 :x tx :y ty :z tz
+                 :count 1
+                 :speed 0.0
+                 :offset-x 0.0 :offset-y 0.0 :offset-z 0.0})
+              (dotimes [_ 12]
+                (client-particles/queue-particle-effect!
+                  {:type          :particle
+                   :particle-type :smoke-large
+                   :x (+ tx (- (* (rand) 10.0) 5.0))
+                   :y (+ ty (- (* (rand) 5.0) 2.5))
+                   :z (+ tz (- (* (rand) 10.0) 5.0))
+                   :count 1
+                   :speed (+ 0.1 (* (rand) 0.3))
+                   :offset-x 0.5 :offset-y 0.5 :offset-z 0.5}))
+              ;; Explosion sound at impact
+              (client-sounds/queue-sound-effect!
+                {:type     :sound
+                 :sound-id "minecraft:entity.generic.explode"
+                 :volume   3.0
+                 :pitch    0.8
+                 :x tx :y ty :z tz})))
+
+          :end
+          ;; Original: c_terminate() – stop loop sound
+          (do
+            (reset! plasma-cannon-effect {:active?    false
+                                          :performed? (boolean performed?)}))
+
+          nil))
+
       nil))
 
 (defn tick-level-effects! []
@@ -446,6 +534,33 @@
            (when st
              (if (:active? st)
                st
+               nil))))
+  ;; Plasma cannon: replay loop sound every 10 ticks while active
+  ;; (original: FollowEntitySound that loops automatically)
+  (swap! plasma-cannon-effect
+         (fn [st]
+           (when st
+             (if (:active? st)
+               (let [ticks (inc (long (or (:ticks st) 0)))]
+                 (when (zero? (mod ticks 10))
+                   (client-sounds/queue-sound-effect!
+                     {:type     :sound
+                      :sound-id plasma-cannon-loop-sound
+                      :volume   0.4
+                      :pitch    1.0}))
+                 ;; Emit glow/flame particles at projectile's current position during flight
+                 (let [cp (:charge-pos st)]
+                   (when (and cp (= :go (:state st)))
+                     (client-particles/queue-particle-effect!
+                       {:type          :particle
+                        :particle-type :flame
+                        :x (double (:x cp))
+                        :y (double (:y cp))
+                        :z (double (:z cp))
+                        :count 4
+                        :speed 0.2
+                        :offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
+                 (assoc st :ticks ticks))
                nil))))
   (swap! meltdowner-rays
          (fn [xs]

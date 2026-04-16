@@ -168,6 +168,27 @@
     (hand-effects/enqueue-hand-effect! :directed-shock {:mode :end
                                                          :performed? (boolean (:performed? payload))})
 
+    :plasma-cannon/fx-start
+    (level-effects/enqueue-level-effect! :plasma-cannon {:mode :start})
+
+    :plasma-cannon/fx-update
+    (level-effects/enqueue-level-effect! :plasma-cannon
+                                         {:mode         :update
+                                          :charge-ticks (long (or (:charge-ticks payload) 0))
+                                          :fully-charged? (boolean (:fully-charged? payload))
+                                          :charge-pos   (:charge-pos payload)
+                                          :flight-ticks (long (or (:flight-ticks payload) 0))
+                                          :state        (or (:state payload) :charging)
+                                          :destination  (:destination payload)})
+
+    :plasma-cannon/fx-perform
+    (level-effects/enqueue-level-effect! :plasma-cannon {:mode :perform
+                                                          :pos  (:pos payload)})
+
+    :plasma-cannon/fx-end
+    (level-effects/enqueue-level-effect! :plasma-cannon {:mode       :end
+                                                          :performed? (boolean (:performed? payload))})
+
     :location-teleport/ui-open
     (do
       (location-teleport-screen/apply-server-payload! payload)
