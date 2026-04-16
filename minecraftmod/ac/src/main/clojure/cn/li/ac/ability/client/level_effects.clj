@@ -14,6 +14,11 @@
 
 (defonce ^:private thunder-clap-effect (atom nil))
 
+(defonce ^:private meltdowner-effect (atom nil))
+(defonce ^:private meltdowner-rays (atom []))
+(def ^:private meltdowner-charge-loop-sound "my_mod:md.md_charge")
+(def ^:private meltdowner-fire-sound "my_mod:md.meltdowner")
+
 (declare tick-thunder-bolt-arcs!)
 
 
@@ -106,6 +111,66 @@
              :volume 0.6
              :pitch 1.0})))
 
+      :meltdowner
+      (let [{:keys [mode ticks charge-ratio performed? start end charge-ticks beam-length]} payload]
+        (case mode
+          :start
+          (do
+            (reset! meltdowner-effect {:active? true
+                                       :ticks 0
+                                       :charge-ratio 0.0
+                                       :performed? false})
+            (client-sounds/queue-sound-effect!
+              {:type :sound
+               :sound-id meltdowner-charge-loop-sound
+               :volume 1.0
+               :pitch 1.0}))
+
+          :update
+          (swap! meltdowner-effect
+                 (fn [st]
+                   (assoc (or st {})
+                          :active? true
+                          :ticks (long (or ticks 0))
+                          :charge-ratio (double (or charge-ratio 0.0))
+                          :performed? false)))
+
+          :end
+          (reset! meltdowner-effect {:active? false
+                                     :performed? (boolean performed?)
+                                     :ticks 0
+                                     :charge-ratio 0.0})
+
+          :perform
+          (do
+            (when (and start end)
+              (let [life (+ 16 (rand-int 8))]
+                (swap! meltdowner-rays conj {:start start
+                                             :end end
+                                             :ttl life
+                                             :max-ttl life
+                                             :beam-length (double (or beam-length 30.0))
+                                             :charge-ticks (int (or charge-ticks 20))
+                                             :is-reflect? false})))
+            (client-sounds/queue-sound-effect!
+              {:type :sound
+               :sound-id meltdowner-fire-sound
+               :volume 0.5
+               :pitch 1.0}))
+
+          :reflect
+          (when (and start end)
+            (let [life (+ 10 (rand-int 6))]
+              (swap! meltdowner-rays conj {:start start
+                                           :end end
+                                           :ttl life
+                                           :max-ttl life
+                                           :beam-length 10.0
+                                           :charge-ticks 20
+                                           :is-reflect? true})))
+
+          nil))
+
       nil))
 
 (defn tick-level-effects! []
@@ -132,6 +197,25 @@
              (if (:active? st)
                (update st :ticks (fnil inc 0))
                nil))))
+  (swap! meltdowner-effect
+         (fn [st]
+           (when st
+             (if (:active? st)
+               (let [ticks (inc (long (or (:ticks st) 0)))]
+                 (when (zero? (mod ticks 10))
+                   (client-sounds/queue-sound-effect!
+                     {:type :sound
+                      :sound-id meltdowner-charge-loop-sound
+                      :volume 0.75
+                      :pitch 1.0}))
+                 (assoc st :ticks ticks))
+               nil))))
+  (swap! meltdowner-rays
+         (fn [xs]
+           (->> xs
+                (map #(update % :ttl dec))
+                (filter #(pos? (long (:ttl %))))
+                vec)))
   (tick-thunder-bolt-arcs!))
 
 (defn tick-thunder-bolt-arcs! []
@@ -340,10 +424,60 @@
         value (- max-speed (* (/ (- max-speed min-speed) 60.0) (double ticks)))]
     (float (max min-speed value))))
 
+(defn- meltdowner-local-walk-speed [ticks]
+  (float (max 0.001 (- 0.1 (* 0.001 (double ticks))))))
+
+(defn- meltdowner-charge-ops [center ticks charge-ratio]
+  (let [base-radius (+ 0.72 (* 0.28 (double charge-ratio)))
+        pulse (+ base-radius (* 0.08 (Math/sin (* 0.23 (double ticks)))))
+        y-base (+ (double (:y center)) 0.18)
+        ring-segments 18]
+    (vec
+      (mapcat
+        (fn [idx]
+          (let [a0 (/ (* 2.0 Math/PI idx) ring-segments)
+                a1 (/ (* 2.0 Math/PI (inc idx)) ring-segments)
+                h (+ y-base (* 0.22 (Math/sin (+ (* 0.17 ticks) idx))))
+                p0 {:x (+ (:x center) (* pulse (Math/cos a0)))
+                    :y h
+                    :z (+ (:z center) (* pulse (Math/sin a0)))}
+                p1 {:x (+ (:x center) (* pulse (Math/cos a1)))
+                    :y h
+                    :z (+ (:z center) (* pulse (Math/sin a1))) }
+                ray-color {:r 170 :g 255 :b 190 :a 170}
+                link-color {:r 140 :g 240 :b 170 :a 120}]
+            [(line-op p0 p1 ray-color)
+             (line-op center p0 link-color)]))
+        (range ring-segments)))))
+
+(defn- meltdowner-ray-ops [cam-pos {:keys [start end ttl max-ttl is-reflect?]}]
+  (let [life (/ (double ttl) (double (max 1 max-ttl)))
+        right (beam-right-axis start end cam-pos)
+        width (if is-reflect?
+                (* 0.05 (+ 0.45 (* 0.55 life)))
+                (* 0.09 (+ 0.6 (* 0.4 life))))
+        core-width (* width 0.42)
+        outer-a (with-alpha {:r 161 :g 255 :b 142} (int (+ 35 (* 170 life))))
+        inner-a (with-alpha {:r 244 :g 255 :b 236} (int (+ 70 (* 170 life))))
+        r0 (v* right width)
+        r1 (v* right core-width)
+        p0 (v+ start r0)
+        p1 (v- start r0)
+        p2 (v- end r0)
+        p3 (v+ end r0)
+        c0 (v+ start r1)
+        c1 (v- start r1)
+        c2 (v- end r1)
+        c3 (v+ end r1)]
+    [(quad-op "minecraft:textures/entity/beacon_beam.png" p0 p1 p2 p3 outer-a)
+     (quad-op "minecraft:textures/entity/beacon_beam.png" c0 c1 c2 c3 inner-a)
+     (line-op start end (with-alpha {:r 192 :g 255 :b 188} (int (+ 55 (* 150 life)))))]))
+
 (defn build-level-effect-plan [camera-pos hand-center-pos tick]
   (let [beams @beam-effects
         mag-move @mag-movement-effect
         thunder-clap @thunder-clap-effect
+        meltdowner @meltdowner-effect
         player-uuid (:player-uuid hand-center-pos)
         charge-state (when player-uuid
                        (client-runtime/railgun-charge-visual-state player-uuid))
@@ -379,14 +513,38 @@
                             [])
         thunder-clap-walk-speed (when (and thunder-clap (:active? thunder-clap))
                                   (thunder-clap-local-walk-speed (:ticks thunder-clap)))
+        meltdowner-plan (if (and hand-center-pos
+                                 meltdowner
+                                 (:active? meltdowner))
+                          (let [center (dissoc hand-center-pos :player-uuid)
+                                ticks (long (or (:ticks meltdowner) 0))
+                                ratio (double (or (:charge-ratio meltdowner) 0.0))]
+                            (meltdowner-charge-ops center ticks ratio))
+                          [])
+        meltdowner-walk-speed (when (and meltdowner (:active? meltdowner))
+                                (meltdowner-local-walk-speed (:ticks meltdowner)))
+        meltdowner-ray-plan (mapcat (fn [ray]
+                                      (meltdowner-ray-ops camera-pos ray))
+                                    @meltdowner-rays)
+        local-walk-speed (let [cand (filter number? [thunder-clap-walk-speed meltdowner-walk-speed])]
+                           (when (seq cand)
+                             (float (apply min cand))))
         tb-arc-plan (mapcat (fn [arc]
                               (thunder-bolt-arc-ops camera-pos arc))
                             @thunder-bolt-arcs)]
     (when (or (seq beam-plan)
               (seq mag-plan)
               (seq charge-plan)
+              (seq meltdowner-plan)
+              (seq meltdowner-ray-plan)
               (seq tb-arc-plan)
               (seq thunder-clap-plan)
-              thunder-clap-walk-speed)
-      {:ops (vec (concat beam-plan mag-plan charge-plan thunder-clap-plan tb-arc-plan))
-       :local-walk-speed thunder-clap-walk-speed})))
+              local-walk-speed)
+      {:ops (vec (concat beam-plan
+                         mag-plan
+                         charge-plan
+                         meltdowner-plan
+                         thunder-clap-plan
+                         tb-arc-plan
+                         meltdowner-ray-plan))
+       :local-walk-speed local-walk-speed})))

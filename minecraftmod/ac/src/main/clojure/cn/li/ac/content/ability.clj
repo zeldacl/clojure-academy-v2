@@ -301,8 +301,8 @@
   :level 1
   :controllable? true
   :ctrl-id :meltdowner
-  :cp-consume-speed 1.3
-  :overload-consume-speed 1.2
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
   :cooldown-ticks 200
   :on-key-down meltdowner/meltdowner-on-key-down
   :on-key-tick meltdowner/meltdowner-on-key-tick

@@ -61,6 +61,30 @@
     :mag-movement/fx-end
     (level-effects/enqueue-level-effect! :mag-movement {:mode :end})
 
+    :meltdowner/fx-start
+    (level-effects/enqueue-level-effect! :meltdowner {:mode :start})
+
+    :meltdowner/fx-update
+    (level-effects/enqueue-level-effect! :meltdowner {:mode :update
+                                                       :ticks (long (or (:ticks payload) 0))
+                                                       :charge-ratio (double (or (:charge-ratio payload) 0.0))})
+
+    :meltdowner/fx-end
+    (level-effects/enqueue-level-effect! :meltdowner {:mode :end
+                                                       :performed? (boolean (:performed? payload))})
+
+    :meltdowner/fx-perform
+    (level-effects/enqueue-level-effect! :meltdowner {:mode :perform
+                                                       :charge-ticks (int (or (:charge-ticks payload) 20))
+                                                       :beam-length (double (or (:beam-length payload) 30.0))
+                                                       :start (:start payload)
+                                                       :end (:end payload)})
+
+    :meltdowner/fx-reflect
+    (level-effects/enqueue-level-effect! :meltdowner {:mode :reflect
+                                                       :start (:start payload)
+                                                       :end (:end payload)})
+
     nil)
   (ctx/ctx-send-to-local! ctx-id channel payload))
 
