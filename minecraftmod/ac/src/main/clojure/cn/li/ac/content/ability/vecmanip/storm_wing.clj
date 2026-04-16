@@ -61,7 +61,7 @@
       "minecraft:overworld"))
 
 (defn- apply-cooldown! [player-id exp]
-  (let [cd-ticks (int (Math/round (lerp 30.0 10.0 exp)))]
+  (let [cd-ticks (int (Math/round (double (lerp 30.0 10.0 exp))))]
     (ps/update-cooldown-data! player-id cd/set-main-cooldown :storm-wing (max 1 cd-ticks))))
 
 (defn- consume-resources! [player-id player exp]
@@ -165,7 +165,7 @@
   [{:keys [ctx-id player-id]}]
   (try
     (let [exp (get-skill-exp player-id)
-          charge-needed (int (Math/round (lerp 70.0 30.0 exp)))]
+          charge-needed (int (Math/round (double (lerp 70.0 30.0 exp))))]
       (ctx/update-context! ctx-id assoc :skill-state
                            {:skip-default-cooldown true
                             :phase :charging

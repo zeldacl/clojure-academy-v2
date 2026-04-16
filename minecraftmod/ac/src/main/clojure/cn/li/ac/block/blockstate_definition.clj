@@ -8,8 +8,7 @@
 
   Node-specific blockstate logic has been extracted to wireless-node/blockstate.clj
   to colocate it with the node block implementation."
-  (:require [clojure.string :as str]
-            [cn.li.mcmod.config :as mcmod-config]
+  (:require [cn.li.mcmod.config :as mcmod-config]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
              [cn.li.ac.block.wireless-node.blockstate :as node-blockstate]))
 
@@ -126,18 +125,21 @@
 ;; 基础blocks (简单单一model)
 ;; 从 DSL/注册元数据自动推导，避免在此处重复维护定义。
 ;; 简单block = 所有未在复杂blockstate定义中出现的block
-(def SIMPLE_BLOCKS
-  (let [;; Collect all block-keys that have complex blockstate definitions
-    complex-block-keys (set (concat
-              (keys (node-blockstate/get-all-node-definitions))
-              [:ability-interferer :imag-fusor :metal-former]))]
+(defn- simple-blocks
+  "Compute simple (single-model) blockstate definitions from current DSL metadata.
+
+  Important: this must be computed dynamically, because DSL registries are filled
+  during runtime content load (datagen and normal game init), not at namespace
+  load time."
+  []
+  (let [complex-block-keys (set (concat
+                                 (keys (node-blockstate/get-all-node-definitions))
+                                 [:ability-interferer :imag-fusor :metal-former]))]
     (into {}
           (for [block-id (registry-metadata/get-all-block-ids)
                 :let [block-key (keyword block-id)
-                      registry-name (registry-metadata/get-block-registry-name block-id)
-                      ;; A block is simple if it's NOT in any complex definition set
-                      simple-block? (not (contains? complex-block-keys block-key))]
-                :when simple-block?]
+                      registry-name (registry-metadata/get-block-registry-name block-id)]
+                :when (not (contains? complex-block-keys block-key))]
             [block-key
              (BlockStateDefinition.
               registry-name
@@ -218,8 +220,8 @@
    返回：
      BlockStateDefinition 或 nil"
   [block-key]
-    (or (get COMPLEX_BLOCKS block-key)
-      (get SIMPLE_BLOCKS block-key)
+  (or (get COMPLEX_BLOCKS block-key)
+      (get (simple-blocks) block-key)
       (node-blockstate/get-node-blockstate-definition block-key)))
 
 (defn get-all-definitions
@@ -228,7 +230,7 @@
    返回：
      map of block-key -> BlockStateDefinition"
   []
-  (merge SIMPLE_BLOCKS COMPLEX_BLOCKS (node-blockstate/get-all-node-definitions)))
+  (merge (simple-blocks) COMPLEX_BLOCKS (node-blockstate/get-all-node-definitions)))
 
 (defn get-definitions-for-platform
   "获取特定平台的block定义
