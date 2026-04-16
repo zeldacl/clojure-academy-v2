@@ -20,6 +20,7 @@
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -32,7 +33,7 @@
 (def ^:private ground-break-prob 0.3)
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- clamp01 [x]
   (max 0.0 (min 1.0 (double x))))
@@ -92,20 +93,10 @@
      (lerp 0.8 1.3 (clamp01 exp))))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :groundshock :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :groundshock))
 
 (defn- add-exp! [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                 (:ability-data state)
-                                 player-id
-                                 :groundshock
-                                 (double amount)
-                                 1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [event events]
-        (ability-evt/fire-ability-event! event)))))
+  (ability-common/add-skill-exp! player-id :groundshock (double amount) 1.0))
 
 (defn groundshock-cost-up-cp
   [{:keys [player-id]}]
@@ -116,7 +107,7 @@
   (overload-cost (clamp01 (get-skill-exp player-id))))
 
 (defn- apply-cooldown! [player-id exp]
-  (ps/update-cooldown-data! player-id cd/set-main-cooldown :groundshock (max 1 (cooldown-ticks exp))))
+  (ability-common/set-main-cooldown! player-id :groundshock (cooldown-ticks exp)))
 
 (defn- get-player-position
   "Get player position from teleportation protocol."

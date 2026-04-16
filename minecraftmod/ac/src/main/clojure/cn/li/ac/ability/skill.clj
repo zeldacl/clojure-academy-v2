@@ -27,7 +27,7 @@
       ;;
       ;; :pattern:
       ;;   :instant | :hold-charge-release | :hold-channel | :toggle
-      ;;   | :release-cast | :hold-target | :charge-window
+      ;;   | :release-cast | :charge-window
       ;; :cooldown:
       ;;   {:mode :default}  -> context-runtime applies main cooldown on key-up
       ;;   {:mode :manual}   -> skill handles cooldown itself
@@ -94,12 +94,20 @@
   [{:keys [id category-id level] :as spec}]
   {:pre [(keyword? id) (keyword? category-id) (integer? level)]}
 (let [supported-patterns #{:instant
-                            :hold-charge-release
-                            :hold-channel
-                            :toggle
-                            :release-cast
-                            :hold-target
-                            :charge-window}
+                           :hold-charge-release
+                           :hold-channel
+                           :toggle
+                           :release-cast
+                           :charge-window}
+        required-action-keys {:instant #{:perform!}
+                              :hold-charge-release #{:perform!}
+                              :hold-channel #{}
+                              :toggle #{:activate! :deactivate!}
+                              :release-cast #{:down! :tick! :up!}
+                              :charge-window #{:down! :tick! :up!}}
+        allowed-action-keys #{:perform! :down! :tick! :up! :abort! :cost-fail! :activate! :deactivate!}
+        allowed-fx-keys #{:start :update :perform :end}
+        allowed-cost-stages #{:down :tick :up}
         defaults {:controllable? true
                   :damage-scale 1.0
                   :cp-consume-speed 1.0
@@ -111,7 +119,12 @@
                   :prerequisites []
                   :conditions []
                   :developer-type (min-developer-type level)
-                  :cooldown {:mode :default}}
+                  :cooldown {:mode :default}
+                  :targeting {}
+                  :transitions {}
+                  :exp-policy {}
+                  :cooldown-policy {}
+                  :state {}}
         ;; Runtime contract is spec-first. Legacy :on-key-* callback keys are
         ;; intentionally removed and rejected so that all lifecycle behavior goes
         ;; through :pattern + :actions.
@@ -133,12 +146,45 @@
         _ (when-not (map? (:actions spec))
             (throw (ex-info "Skill :actions must be a map"
                             {:skill-id id})))
+        _ (doseq [[k _v] (:actions spec)]
+            (when-not (contains? allowed-action-keys k)
+              (throw (ex-info "Unsupported action key in :actions"
+                              {:skill-id id :action-key k}))))
+        _ (let [required (get required-action-keys (:pattern spec) #{})
+                missing  (seq (remove #(contains? (:actions spec) %) required))]
+            (when missing
+              (throw (ex-info "Missing required actions for pattern"
+                              {:skill-id id :pattern (:pattern spec) :missing missing}))))
         _ (when-not (map? (:cooldown spec))
             (throw (ex-info "Skill :cooldown is required and must be a map"
                             {:skill-id id})))
         _ (when-not (contains? #{:default :manual} (get-in spec [:cooldown :mode]))
             (throw (ex-info "Skill :cooldown :mode must be :default or :manual"
                             {:skill-id id :cooldown (:cooldown spec)})))
+        _ (doseq [k [:targeting :transitions :exp-policy :cooldown-policy :state]]
+            (when (and (contains? spec k) (not (map? (get spec k))))
+              (throw (ex-info "Skill policy fields must be maps"
+                              {:skill-id id :field k :value (get spec k)}))))
+        _ (doseq [[stage stage-spec] (:cost spec)]
+            (when-not (contains? allowed-cost-stages stage)
+              (throw (ex-info "Unsupported cost stage"
+                              {:skill-id id :stage stage})))
+            (when-not (map? stage-spec)
+              (throw (ex-info "Cost stage spec must be a map"
+                              {:skill-id id :stage stage :value stage-spec})))
+            (when-not (contains? #{nil :runtime-speed} (:mode stage-spec))
+              (throw (ex-info "Cost stage :mode must be :runtime-speed or omitted"
+                              {:skill-id id :stage stage :value (:mode stage-spec)}))))
+        _ (doseq [[fx-k fx-v] (:fx spec)]
+            (when-not (contains? allowed-fx-keys fx-k)
+              (throw (ex-info "Unsupported fx key"
+                              {:skill-id id :fx-key fx-k})))
+            (when-not (map? fx-v)
+              (throw (ex-info "FX entry must be a map"
+                              {:skill-id id :fx-key fx-k :value fx-v})))
+            (when-not (keyword? (:topic fx-v))
+              (throw (ex-info "FX entry requires keyword :topic"
+                              {:skill-id id :fx-key fx-k :value fx-v}))))
         resolve-fn-ref (fn [v]
                          (cond
                            (fn? v) v

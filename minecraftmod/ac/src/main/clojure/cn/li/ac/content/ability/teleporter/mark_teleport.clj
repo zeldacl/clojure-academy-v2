@@ -19,6 +19,7 @@
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -30,14 +31,13 @@
 (def ^:private eye-height 1.6)
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :mark-teleport :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :mark-teleport))
 
 (defn- current-cp [player-id]
   (double (or (get-in (ps/get-player-state player-id) [:resource-data :cur-cp]) 0.0)))
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- cp-per-block [exp]
   (lerp 12.0 4.0 exp))
@@ -64,16 +64,7 @@
                 (* (- z2 z1) (- z2 z1)))))
 
 (defn- add-exp! [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :mark-teleport
-                                  (double amount)
-                                  1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (ability-common/add-skill-exp! player-id :mark-teleport (double amount) 1.0))
 
 (defn- build-target-fx-payload
   [target]
@@ -243,7 +234,7 @@
                 (when success
                   (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
                   (add-exp! player-id (* 0.00018 distance))
-                  (ps/update-cooldown-data! player-id cd/set-main-cooldown :mark-teleport (cooldown-ticks exp))
+                  (ability-common/set-main-cooldown! player-id :mark-teleport (cooldown-ticks exp))
                   (log/debug "MarkTeleport: Teleported" (int distance) "blocks"))))))))
     (catch Exception e
       (log/warn "MarkTeleport key-up failed:" (ex-message e)))))

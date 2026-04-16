@@ -15,6 +15,7 @@
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -27,7 +28,7 @@
 (declare get-skill-exp)
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- clamp01 [x]
   (max 0.0 (min 1.0 (double x))))
@@ -120,16 +121,7 @@
   (int (lerp 90.0 40.0 exp)))
 
 (defn- add-exp! [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :blood-retrograde
-                                  (double amount)
-                                  1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (ability-common/add-skill-exp! player-id :blood-retrograde (double amount) 1.0))
 
 (defn- release-hit
   [player-id ctx-id stage]
@@ -255,7 +247,7 @@
       (if-not cost-ok?
         false
         (do
-          (ps/update-cooldown-data! player-id cd/set-main-cooldown :blood-retrograde (max 1 (cooldown-ticks exp)))
+          (ability-common/set-main-cooldown! player-id :blood-retrograde (cooldown-ticks exp))
           (when entity-damage/*entity-damage*
             (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
                                                 world-id
@@ -267,8 +259,7 @@
           true)))))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :blood-retrograde :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :blood-retrograde))
 
 (defn blood-retrograde-on-key-down
   "Initialize charge state and local charge slowdown."

@@ -18,6 +18,7 @@
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -29,14 +30,13 @@
 (def ^:private target-distance 40.0)
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- clamp01 [x]
   (max 0.0 (min 1.0 (double x))))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :thunder-clap :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :thunder-clap))
 
 (defn- player-world-id [player-id]
   (or (get-in (ps/get-player-state player-id) [:position :world-id])
@@ -68,16 +68,7 @@
 
 (defn- add-exp!
   [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :thunder-clap
-                                  amount
-                                  1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (ability-common/add-skill-exp! player-id :thunder-clap amount 1.0))
 
 (defn- current-eye-pos
   [player-id]
@@ -151,7 +142,7 @@
                                                     world-id uuid
                                                     applied :lightning)))))))
 
-    (ps/update-cooldown-data! player-id cd/set-main-cooldown :thunder-clap cooldown)
+    (ability-common/set-main-cooldown! player-id :thunder-clap cooldown)
     (add-exp! player-id 0.003)
     (send-fx-end! ctx-id true)
     (ctx/update-context! ctx-id update :skill-state assoc :performed? true)

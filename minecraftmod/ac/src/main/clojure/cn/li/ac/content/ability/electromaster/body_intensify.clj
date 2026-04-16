@@ -8,6 +8,7 @@
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.model.resource-data :as rdata]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -24,7 +25,7 @@
 
 (defn- lerp
   [a b t]
-  (+ a (* (- b a) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- get-probability
   [ct]
@@ -45,8 +46,7 @@
   (int (Math/floor (get-probability ct))))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :body-intensify :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :body-intensify))
 
 (defn- send-fx-end!
   [ctx-id performed?]
@@ -77,21 +77,12 @@
 
 (defn- add-success-exp!
   [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :body-intensify
-                                  0.01
-                                  1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (ability-common/add-skill-exp! player-id :body-intensify 0.01 1.0))
 
 (defn- set-body-intensify-cooldown!
   [player-id exp]
   (let [cooldown (int (Math/round (double (lerp 900.0 600.0 exp))))]
-    (ps/update-cooldown-data! player-id cd/set-main-cooldown :body-intensify (max 1 cooldown))))
+    (ability-common/set-main-cooldown! player-id :body-intensify cooldown)))
 
 (defn- apply-body-intensify-buffs!
   [player-id charge-ticks exp]

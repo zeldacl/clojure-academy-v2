@@ -15,6 +15,7 @@
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.event :as ability-evt]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -30,7 +31,7 @@
 (def ^:private PUNCH-ANIM-TICKS 6)
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- clamp01 [x]
   (max 0.0 (min 1.0 (double x))))
@@ -60,8 +61,7 @@
     (v* v (/ 1.0 len))))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :directed-blastwave :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :directed-blastwave))
 
 (defn- player-pos [player-id]
   (get (ps/get-player-state player-id)
@@ -92,16 +92,7 @@
     :else 55.0))
 
 (defn- add-exp! [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :directed-blastwave
-                                  (double amount)
-                                  1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (ability-common/add-skill-exp! player-id :directed-blastwave (double amount) 1.0))
 
 (defn directed-blastwave-cost-up-cp
   [{:keys [player-id]}]
@@ -112,7 +103,7 @@
   (overload-cost (clamp01 (get-skill-exp player-id))))
 
 (defn- apply-cooldown! [player-id exp]
-  (ps/update-cooldown-data! player-id cd/set-main-cooldown :directed-blastwave (max 1 (cooldown-ticks exp))))
+  (ability-common/set-main-cooldown! player-id :directed-blastwave (cooldown-ticks exp)))
 
 (defn- hit-position-from-trace [player-id trace]
   (let [pos (player-pos player-id)

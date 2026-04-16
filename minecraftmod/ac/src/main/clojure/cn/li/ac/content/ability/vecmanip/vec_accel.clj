@@ -20,6 +20,7 @@
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -33,14 +34,13 @@
 ;; ============================================================================
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- clamp01 [x]
   (max 0.0 (min 1.0 (double x))))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :vec-accel :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :vec-accel))
 
 (defn- calculate-speed
   "Speed = sin(lerp(0.4, 1.0, clamp(0,1, charge/MAX_CHARGE))) * MAX_VELOCITY"
@@ -65,10 +65,10 @@
   (overload-cost (get-skill-exp player-id)))
 
 (defn- apply-cooldown! [player-id exp]
-  (ps/update-cooldown-data! player-id cd/set-main-cooldown :vec-accel (max 1 (cooldown-ticks exp))))
+  (ability-common/set-main-cooldown! player-id :vec-accel (cooldown-ticks exp)))
 
 (defn- add-exp! [player-id amount]
-  (fx-common/add-skill-exp! player-id :vec-accel amount 1.0))
+  (ability-common/add-skill-exp! player-id :vec-accel amount 1.0))
 
 (defn- get-player-position [player-id]
   (or (when-let [tp (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]

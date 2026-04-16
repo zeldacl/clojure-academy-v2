@@ -607,6 +607,24 @@
 
 (defonce ^:private ability-content-installed? (atom false))
 
+(defn- normalize-skill-content
+  "Normalize every skill declaration into the new DSL contract before registration.
+  This is the single migration choke-point for all skills in this namespace."
+  [skill-map]
+  (-> skill-map
+      ;; Legacy callback keys are removed globally (non-compatible migration).
+      (dissoc :on-key-down :on-key-tick :on-key-up :on-key-abort)
+      ;; Freeze policy maps so all skills share one schema.
+      (update :cooldown #(or % {:mode :default}))
+      (update :cost #(or % {}))
+      (update :actions #(or % {}))
+      (update :fx #(or % {}))
+      (update :targeting #(or % {}))
+      (update :transitions #(or % {}))
+      (update :exp-policy #(or % {}))
+      (update :cooldown-policy #(or % {}))
+      (update :state #(or % {}))))
+
 (defn init-ability-content!
   []
   (when (compare-and-set! ability-content-installed? false true)
@@ -615,6 +633,6 @@
         (when (map? v)
           (case (:ac/content-type v)
             :category (category/register-category! (dissoc v :ac/content-type))
-            :skill (skill/register-skill! (dissoc v :ac/content-type))
+            :skill (skill/register-skill! (normalize-skill-content (dissoc v :ac/content-type)))
             nil))))
     (log/info "Ability content initialized")))

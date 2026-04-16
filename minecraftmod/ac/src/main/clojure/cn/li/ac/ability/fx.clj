@@ -23,6 +23,10 @@
   [ctx-id fx-spec k evt]
   (when-let [{:keys [topic payload]} (get fx-spec k)]
     (when (keyword? topic)
-      (let [p (or (safe-payload payload evt) {})]
-        (ctx/ctx-send-to-client! ctx-id topic (assoc p :mode k))))))
+      (let [base {:mode k
+                  :skill-id (:skill-id evt)
+                  :player-id (:player-id evt)
+                  :ctx-id ctx-id}
+            p (merge base (or (safe-payload payload evt) {}))]
+        (ctx/ctx-send-to-client! ctx-id topic p)))))
 

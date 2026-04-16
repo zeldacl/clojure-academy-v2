@@ -22,6 +22,7 @@
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]
@@ -41,11 +42,10 @@
 ;; ============================================================================
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :thunder-bolt :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :thunder-bolt))
 
 (defn- player-world-id [player-id]
   (or (get-in (ps/get-player-state player-id) [:position :world-id])
@@ -65,12 +65,12 @@
   "Set cooldown to lerp(120,50,exp) ticks."
   [player-id exp]
   (let [cd-ticks (int (Math/round (double (lerp 120.0 50.0 exp))))]
-    (ps/update-cooldown-data! player-id cd/set-main-cooldown :thunder-bolt (max 1 cd-ticks))))
+    (ability-common/set-main-cooldown! player-id :thunder-bolt cd-ticks)))
 
 (defn- add-exp!
   "Grant 0.005 exp if effective (hit something), 0.003 otherwise."
   [player-id effective?]
-  (fx-common/add-skill-exp! player-id :thunder-bolt (if effective? 0.005 0.003) 1.0))
+  (ability-common/add-skill-exp! player-id :thunder-bolt (if effective? 0.005 0.003) 1.0))
 
 ;; ============================================================================
 ;; Skill handlers

@@ -6,12 +6,6 @@
   (:require [cn.li.ac.ability.patterns :as patterns]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private cb->pattern-key
-  {:on-key-down  :on-key-down
-   :on-key-tick  :on-key-tick
-   :on-key-up    :on-key-up
-   :on-key-abort :on-key-abort})
-
 (defn can-handle?
   [spec]
   (and (keyword? (:pattern spec))
@@ -23,7 +17,7 @@
   [spec cb-key evt]
   (when (can-handle? spec)
     (when-let [hs (patterns/handlers spec)]
-      (when-let [h (get hs (get cb->pattern-key cb-key cb-key))]
+      (when-let [h (get hs cb-key)]
         (try
           (h spec (assoc evt :skill-id (:id spec)))
           true

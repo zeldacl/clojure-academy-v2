@@ -18,6 +18,7 @@
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.model.resource-data :as rd]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -29,7 +30,7 @@
 
 (defn- lerp
   [a b t]
-  (+ a (* (- b a) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- distance-3d
   [ax ay az bx by bz]
@@ -53,8 +54,7 @@
       :else id)))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :mag-movement :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :mag-movement))
 
 (def ^:private normal-metal-blocks
   #{"minecraft:rail"
@@ -176,17 +176,8 @@
 
 (defn- add-mag-movement-exp!
   [player-id traveled-distance]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [exp-gain (max 0.005 (* 0.0011 (double traveled-distance)))
-          {:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :mag-movement
-                                  exp-gain
-                                  1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (let [exp-gain (max 0.005 (* 0.0011 (double traveled-distance)))]
+    (ability-common/add-skill-exp! player-id :mag-movement exp-gain 1.0)))
 
 (defn- send-fx-start!
   [ctx-id]

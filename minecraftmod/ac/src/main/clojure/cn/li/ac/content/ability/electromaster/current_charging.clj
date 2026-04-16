@@ -15,6 +15,7 @@
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.model.resource-data :as rdata]
             [cn.li.ac.energy.operations :as energy]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.ability-interop :as interop]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
@@ -24,7 +25,7 @@
 
 (defn- lerp
   [a b t]
-  (+ a (* (- b a) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- charging-speed
   [exp]
@@ -111,21 +112,11 @@
   (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end {:is-item (boolean is-item)}))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :current-charging :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :current-charging))
 
 (defn- add-skill-exp!
   [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :current-charging
-                                  amount
-                                  1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (ability-common/add-skill-exp! player-id :current-charging amount 1.0))
 
 (defn- charge-block-target!
   [world-id hit charge]

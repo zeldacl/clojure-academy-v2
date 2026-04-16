@@ -19,6 +19,7 @@
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -40,8 +41,7 @@
   #{"minecraft:small_fireball"})
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :vec-deviation :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :vec-deviation))
 
 (defn- current-cp
   [player-id]
@@ -91,7 +91,7 @@
 
 (defn- add-exp!
   [player-id amount]
-  (fx-common/add-skill-exp! player-id :vec-deviation amount 1.0))
+  (ability-common/add-skill-exp! player-id :vec-deviation amount 1.0))
 
 (defn- send-fx-stop-entity! [ctx-id entity marked?]
   (ctx/ctx-send-to-client! ctx-id :vec-deviation/fx-stop-entity

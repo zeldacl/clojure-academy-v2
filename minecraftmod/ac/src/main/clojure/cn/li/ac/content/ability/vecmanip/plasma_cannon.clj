@@ -22,6 +22,7 @@
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -35,7 +36,7 @@
   (max 0.0 (min 1.0 (double x))))
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (clamp01 t))))
+  (ability-common/lerp a b (clamp01 t)))
 
 (defn- vlen [v]
   (Math/sqrt (+ (* (double (:x v)) (double (:x v)))
@@ -71,8 +72,7 @@
 ;; ============================================================
 
 (defn get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (clamp01 (get-in state [:ability-data :skills :plasma-cannon :exp] 0.0))))
+  (clamp01 (ability-common/get-skill-exp player-id :plasma-cannon)))
 
 (defn- get-player-position [player-id]
   (or (when-let [tp (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
@@ -87,12 +87,7 @@
       "minecraft:overworld"))
 
 (defn- add-exp! [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state) player-id
-                                  :plasma-cannon (double amount) 1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events] (ability-evt/fire-ability-event! e)))))
+  (ability-common/add-skill-exp! player-id :plasma-cannon (double amount) 1.0))
 
 ;; Cost DSL hooks (used by content spec :cost)
 (defn plasma-cannon-cost-down-overload
@@ -113,8 +108,7 @@
         rd))))
 
 (defn- apply-cooldown! [player-id exp]
-  (ps/update-cooldown-data! player-id cd/set-main-cooldown
-                             :plasma-cannon (max 1 (cooldown-ticks exp))))
+  (ability-common/set-main-cooldown! player-id :plasma-cannon (cooldown-ticks exp)))
 
 ;; ============================================================
 ;; FX messaging (server → client)

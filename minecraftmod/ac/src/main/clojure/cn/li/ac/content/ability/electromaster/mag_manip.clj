@@ -12,6 +12,7 @@
 						[cn.li.ac.ability.service.cooldown :as cd]
 						[cn.li.ac.ability.event :as ability-evt]
 						[cn.li.ac.ability.context :as ctx]
+						[cn.li.ac.content.ability.common :as ability-common]
 						[cn.li.mcmod.platform.raycast :as raycast]
 						[cn.li.mcmod.platform.entity :as entity]
 						[cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -59,7 +60,7 @@
 
 (defn- lerp
 	[a b t]
-	(+ a (* (- b a) (double t))))
+	(ability-common/lerp a b t))
 
 (defn- v+
 	[a b]
@@ -99,8 +100,7 @@
 
 (defn- get-skill-exp
 	[player-id]
-	(when-let [state (ps/get-player-state player-id)]
-		(get-in state [:ability-data :skills :mag-manip :exp] 0.0)))
+	(ability-common/get-skill-exp player-id :mag-manip))
 
 (defn- player-pos
 	[player-id]
@@ -188,7 +188,7 @@
 (defn- apply-mag-manip-cooldown!
 	[player-id exp]
 	(let [cd-ticks (int (Math/round (double (lerp 60.0 40.0 exp))))]
-		(ps/update-cooldown-data! player-id cd/set-main-cooldown :mag-manip (max 1 cd-ticks))))
+		(ability-common/set-main-cooldown! player-id :mag-manip cd-ticks)))
 
 ; Original: consumption = lerpf(140, 270, exp); overload = lerpf(35, 20, exp)
 (defn- should-pay-up-cost?
@@ -224,16 +224,7 @@
 
 (defn- add-mag-manip-exp!
 	[player-id amount]
-	(when-let [state (ps/get-player-state player-id)]
-		(let [{:keys [data events]} (learning/add-skill-exp
-																	(:ability-data state)
-																	player-id
-																	:mag-manip
-																	amount
-																	1.0)]
-			(ps/update-ability-data! player-id (constantly data))
-			(doseq [e events]
-				(ability-evt/fire-ability-event! e)))))
+	(ability-common/add-skill-exp! player-id :mag-manip amount 1.0))
 
 (defn- distance-to-segment
 	[point seg-start seg-end]

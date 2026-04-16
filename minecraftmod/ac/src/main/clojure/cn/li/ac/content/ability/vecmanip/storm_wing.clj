@@ -26,6 +26,7 @@
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -41,15 +42,14 @@
 (def ^:private ACCEL 0.16)
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+  (ability-common/lerp a b t))
 
 ;; ============================================================================
 ;; Helpers
 ;; ============================================================================
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :storm-wing :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :storm-wing))
 
 (defn- get-player-pos [player-id]
   (when teleportation/*teleportation*
@@ -57,7 +57,7 @@
 
 (defn- apply-cooldown! [player-id exp]
   (let [cd-ticks (int (Math/round (double (lerp 30.0 10.0 exp))))]
-    (ps/update-cooldown-data! player-id cd/set-main-cooldown :storm-wing (max 1 cd-ticks))))
+    (ability-common/set-main-cooldown! player-id :storm-wing cd-ticks)))
 
 (defn storm-wing-cost-tick-cp
   [{:keys [player-id]}]
@@ -74,16 +74,7 @@
                   (catch Exception _ false)))))
 
 (defn- add-exp! [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :storm-wing
-                                  0.00005
-                                  1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (ability-common/add-skill-exp! player-id :storm-wing 0.00005 1.0))
 
 (defn- break-soft-blocks! [player-id world-id px py pz]
   (when block-manip/*block-manipulation*

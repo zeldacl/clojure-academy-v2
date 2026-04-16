@@ -19,6 +19,7 @@
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.saved-locations :as saved-locations]
             [clojure.string :as str]
@@ -29,11 +30,10 @@
 (def ^:private max-location-name-length 16)
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :location-teleport :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :location-teleport))
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- can-cross-dimension? [exp]
   (> (double exp) 0.8))
@@ -60,16 +60,7 @@
   (if (>= (double distance) 200.0) 0.03 0.015))
 
 (defn- add-exp! [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :location-teleport
-                                  (double amount)
-                                  1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (ability-common/add-skill-exp! player-id :location-teleport (double amount) 1.0))
 
 (defn- consume-resource! [player-id overload cp]
   (boolean (:success? (fx-common/perform-resource! player-id overload cp false))))
@@ -218,8 +209,8 @@
                   (do
                     (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
                     (add-exp! player-id (compute-exp-gain _dist))
-                    (ps/update-cooldown-data! player-id cd/set-main-cooldown :location-teleport
-                                              (compute-cooldown exp))
+                    (ability-common/set-main-cooldown! player-id :location-teleport
+                                                       (compute-cooldown exp))
                     {:success? true
                      :name name*
                      :distance _dist

@@ -15,6 +15,7 @@
             [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.service.learning :as learning]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -26,7 +27,7 @@
 (def ^:private RAYCAST-DISTANCE 3.0)
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- clamp01 [x]
   (max 0.0 (min 1.0 (double x))))
@@ -51,8 +52,7 @@
     (v* v (/ 1.0 len))))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :directed-shock :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :directed-shock))
 
 (defn- player-pos [player-id]
   (get (ps/get-player-state player-id)
@@ -90,16 +90,7 @@
   (int (lerp 60.0 20.0 (clamp01 exp))))
 
 (defn- add-exp! [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                 (:ability-data state)
-                                 player-id
-                                 :directed-shock
-                                 (double amount)
-                                 1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [event events]
-        (ability-evt/fire-ability-event! event)))))
+  (ability-common/add-skill-exp! player-id :directed-shock (double amount) 1.0))
 
 (defn directed-shock-cost-up-cp
   [{:keys [player-id]}]
@@ -110,7 +101,7 @@
   (overload-cost (clamp01 (get-skill-exp player-id))))
 
 (defn- apply-cooldown! [player-id exp]
-  (ps/update-cooldown-data! player-id cd/set-main-cooldown :directed-shock (max 1 (cooldown-ticks exp))))
+  (ability-common/set-main-cooldown! player-id :directed-shock (cooldown-ticks exp)))
 
 (defn- send-fx-start! [ctx-id]
   (ctx/ctx-send-to-client! ctx-id :directed-shock/fx-start {:mode :start}))

@@ -10,6 +10,7 @@
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -53,8 +54,7 @@
   (scaling/lerp 15.0 11.0 (get-skill-exp player-id)))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :vec-reflection :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :vec-reflection))
 
 (defn- get-player-position [player-id]
   (when-let [teleportation (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
@@ -86,16 +86,7 @@
        first))
 
 (defn- add-exp! [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                 (:ability-data state)
-                                 player-id
-                                 :vec-reflection
-                                 amount
-                                 1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (ability-common/add-skill-exp! player-id :vec-reflection amount 1.0))
 
 (defn- send-fx-start! [ctx-id]
   (ctx/ctx-send-to-client! ctx-id :vec-reflection/fx-start {:mode :start}))

@@ -19,6 +19,7 @@
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.model.resource-data :as rdata]
             [cn.li.ac.ability.util.toggle :as toggle]
+            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -31,7 +32,7 @@
 (def ^:private max-increment 50.0)
 
 (defn- lerp [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+  (ability-common/lerp a b t))
 
 (defn- clamp01 [x]
   (max 0.0 (min 1.0 (double x))))
@@ -94,8 +95,7 @@
     [right up]))
 
 (defn- get-skill-exp [player-id]
-  (when-let [state (ps/get-player-state player-id)]
-    (get-in state [:ability-data :skills :meltdowner :exp] 0.0)))
+  (ability-common/get-skill-exp player-id :meltdowner))
 
 (defn- player-pos [player-id]
   (get (ps/get-player-state player-id) :position {:world-id "minecraft:overworld"
@@ -133,20 +133,11 @@
   [player-id exp ct]
   (let [rate (lerp 0.8 1.2 (/ (- (double ct) 20.0) 20.0))
         cd-ticks (int (* rate 20.0 (lerp 15.0 7.0 exp)))]
-    (ps/update-cooldown-data! player-id cd/set-main-cooldown :meltdowner (max 1 cd-ticks))))
+    (ability-common/set-main-cooldown! player-id :meltdowner cd-ticks)))
 
 (defn- add-meltdowner-exp!
   [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :meltdowner
-                                  amount
-                                  1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (ability-common/add-skill-exp! player-id :meltdowner amount 1.0))
 
 (defn- send-fx-start! [ctx-id]
   (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-start {:mode :start}))

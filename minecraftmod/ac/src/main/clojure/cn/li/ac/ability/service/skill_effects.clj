@@ -9,7 +9,9 @@
             [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.service.cooldown :as cd]
-            [cn.li.ac.ability.event :as evt]))
+            [cn.li.ac.ability.event :as evt]
+            [cn.li.ac.ability.config :as cfg]
+            [cn.li.ac.ability.fx :as fx]))
 
 (defn perform-resource!
   "Consume overload+cp from player's resource-data.
@@ -54,4 +56,64 @@
   "Set main cooldown for ctrl-id (or skill-id)."
   [player-id ctrl-id cooldown-ticks]
   (ps/update-cooldown-data! player-id cd/set-main-cooldown ctrl-id (max 1 (int cooldown-ticks))))
+
+(defn- resolve-val
+  [v evt]
+  (cond
+    (number? v) (double v)
+    (fn? v) (double (or (v evt) 0.0))
+    :else 0.0))
+
+(defn- runtime-scaled-cost
+  [cost-spec]
+  (let [cp-speed (double (or (:cp-speed cost-spec) 1.0))
+        overload-speed (double (or (:overload-speed cost-spec) 1.0))]
+    {:cp (* cfg/*runtime-cp-consume-per-tick* cp-speed)
+     :overload (* cfg/*runtime-overload-per-tick* overload-speed)}))
+
+(defn apply-cost!
+  "Apply stage cost for a skill spec and event.
+  Returns true when cost is paid or no cost is defined."
+  [spec stage evt]
+  (let [cost-spec (get-in spec [:cost stage])]
+    (if-not (map? cost-spec)
+      true
+      (let [computed (if (= :runtime-speed (:mode cost-spec))
+                       (runtime-scaled-cost cost-spec)
+                       cost-spec)
+            cp (resolve-val (:cp computed) evt)
+            overload (resolve-val (:overload computed) evt)
+            creative-raw (:creative? computed)
+            creative? (boolean (if (fn? creative-raw) (creative-raw evt) creative-raw))]
+        (if (and (zero? cp) (zero? overload))
+          true
+          (let [{:keys [success?]} (perform-resource! (:player-id evt) overload cp creative?)]
+            (boolean success?)))))))
+
+(defn apply-cooldown!
+  "Apply cooldown for skill according to ctrl-id and cooldown-policy."
+  [spec evt]
+  (let [mode (get-in spec [:cooldown :mode])]
+    (when (not= :manual mode)
+      (let [player-id (:player-id evt)
+            ctrl-id (or (:ctrl-id spec) (:id spec))
+            base-ticks (or (get-in spec [:cooldown-policy :ticks]) (:cooldown-ticks spec) 1)
+            ticks (int (max 1 (resolve-val base-ticks evt)))]
+        (set-main-cooldown! player-id ctrl-id ticks)
+        ticks))))
+
+(defn gain-exp!
+  "Apply exp gain from :exp-policy {:amount n :rate n} when present."
+  [spec evt]
+  (let [amount (get-in spec [:exp-policy :amount])
+        skill-id (:id spec)]
+    (when (and (some? amount) skill-id)
+      (let [rate (double (or (get-in spec [:exp-policy :rate]) 1.0))
+            value (resolve-val amount evt)]
+        (add-skill-exp! (:player-id evt) skill-id value rate)))))
+
+(defn emit-fx!
+  "Emit fx stage for a context event."
+  [spec evt stage]
+  (fx/send! (:ctx-id evt) (:fx spec) stage evt))
 
