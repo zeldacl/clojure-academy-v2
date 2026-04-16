@@ -518,7 +518,7 @@
 
 (defn- directed-blastwave-basis [dir]
   (let [n-dir (vnormalize dir)
-        up-axis (if (> (Math/abs (:y n-dir)) 0.95)
+        up-axis (if (> (Math/abs (double (:y n-dir))) 0.95)
                   {:x 1.0 :y 0.0 :z 0.0}
                   {:x 0.0 :y 1.0 :z 0.0})
         right (vnormalize (vcross n-dir up-axis))

@@ -58,7 +58,7 @@
         (do (char-typed-fn \newline) true)
         :else false))
 
-    (charTyped [ch ^int _modifiers]
+    (charTyped [ch _modifiers]
       (if char-typed-fn
         (do (char-typed-fn ch) true)
         false))

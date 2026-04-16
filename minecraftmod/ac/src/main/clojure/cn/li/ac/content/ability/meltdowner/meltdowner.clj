@@ -87,7 +87,7 @@
    :z (double z)})
 
 (defn- orthonormal-basis [dir]
-  (let [up-axis (if (> (Math/abs (:y dir)) 0.95)
+  (let [up-axis (if (> (Math/abs (double (:y dir))) 0.95)
                   {:x 1.0 :y 0.0 :z 0.0}
                   {:x 0.0 :y 1.0 :z 0.0})
         right (normalize (cross dir up-axis))

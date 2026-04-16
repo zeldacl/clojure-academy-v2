@@ -4,10 +4,11 @@
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
            [net.minecraft.client Minecraft]
+           [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource RenderType]
            [net.minecraft.client.renderer.texture OverlayTexture]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraft.world.entity Entity]
+           [net.minecraft.world.entity.player Abilities]
            [net.minecraft.world.phys Vec3]
            [net.minecraftforge.client.event RenderLevelStageEvent]
            [net.minecraftforge.common MinecraftForge]
@@ -20,15 +21,15 @@
 (def ^:private default-walk-speed 0.1)
 (defonce ^:private last-applied-walk-speed (atom nil))
 
-(defn- set-local-walk-speed! [^Entity player speed]
+(defn- set-local-walk-speed! [^LocalPlayer player speed]
   (try
-    (let [abilities (.getAbilities player)]
+    (let [^Abilities abilities (.getAbilities player)]
       (.setWalkingSpeed abilities (float speed))
       (.onUpdateAbilities player))
     (catch Exception _
       nil)))
 
-(defn- apply-local-walk-speed-from-plan! [^Entity player plan]
+(defn- apply-local-walk-speed-from-plan! [^LocalPlayer player plan]
   (let [target-speed (:local-walk-speed plan)]
     (if (number? target-speed)
       (let [spd (float target-speed)]
@@ -44,7 +45,7 @@
     (when-let [player (.player mc)]
       (str (.getUUID player)))))
 
-(defn- hand-center-pos [^Entity player]
+(defn- hand-center-pos [^LocalPlayer player]
   (let [^Vec3 look (.getLookAngle player)
         yaw-rad (Math/toRadians (double (.getYRot player)))
         right-x (Math/cos yaw-rad)
@@ -95,7 +96,7 @@
 (defn- render-level-plan! [^RenderLevelStageEvent evt]
   (when (render-stage-eligible? evt)
     (when-let [^Minecraft mc (Minecraft/getInstance)]
-      (when-let [player (.player mc)]
+      (when-let [^LocalPlayer player (.player mc)]
         (let [camera (.getMainCamera (.gameRenderer mc))
               cam-vec (.getPosition camera)
               cam-pos {:x (.-x cam-vec) :y (.-y cam-vec) :z (.-z cam-vec)}

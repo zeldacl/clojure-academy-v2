@@ -73,7 +73,7 @@
 (defn- apply-cooldown!
   "Set cooldown to lerp(120,50,exp) ticks."
   [player-id exp]
-  (let [cd-ticks (int (Math/round (lerp 120.0 50.0 exp)))]
+  (let [cd-ticks (int (Math/round (double (lerp 120.0 50.0 exp))))]
     (ps/update-cooldown-data! player-id cd/set-main-cooldown :thunder-bolt (max 1 cd-ticks))))
 
 (defn- add-exp!
