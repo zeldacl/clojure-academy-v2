@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.raycast
+(ns cn.li.forge1201.runtime.raycast
   "Forge implementation of IRaycast protocol."
   (:require [cn.li.mcmod.platform.raycast :as prc]
             [cn.li.mcmod.util.log :as log])

@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.player-motion
+(ns cn.li.forge1201.runtime.player-motion
   "Forge implementation of IPlayerMotion protocol."
   (:require [cn.li.mcmod.platform.player-motion :as pm]
             [cn.li.mcmod.util.log :as log])

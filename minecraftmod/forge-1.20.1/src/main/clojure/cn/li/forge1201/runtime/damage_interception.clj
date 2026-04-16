@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.damage-interception
+(ns cn.li.forge1201.runtime.damage-interception
   "Forge implementation of IDamageInterception protocol.
 
   Intercepts LivingHurtEvent to allow skills to modify incoming damage."

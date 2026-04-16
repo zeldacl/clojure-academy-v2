@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.entity-damage
+(ns cn.li.forge1201.runtime.entity-damage
   "Forge implementation of IEntityDamage protocol."
   (:require [cn.li.mcmod.platform.entity-damage :as ped]
             [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]

@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.item-handler
+(ns cn.li.forge1201.runtime.item-handler
   "Item use event handler for ability items (Forge layer)."
   (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log])

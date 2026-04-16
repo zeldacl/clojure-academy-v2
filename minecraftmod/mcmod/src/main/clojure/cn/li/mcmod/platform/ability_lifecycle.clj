@@ -31,9 +31,12 @@
          :process-damage-interception (fn [_ _ damage _] damage)
          :resolve-item-use-action (fn [_] nil)
          :on-ability-item-action! noop
+         :build-item-use-plan (fn [_ _ _ _] nil)
+         :max-saved-locations (fn [] 16)
          :compute-aoe-damage (fn [_ _ _ damage _] damage)
          :select-reflection-target (fn [_ _ _ _] nil)
          :compute-reflected-damage identity
+         :reflection-search-radius (fn [] 10.0)
          :client-get-skill-by-controllable (fn [_ _] nil)
          :client-new-context (fn [_ _] nil)
          :client-register-context! noop
@@ -45,6 +48,7 @@
          :client-update-resource-data! noop
          :client-update-cooldown-data! noop
          :client-update-preset-data! noop
+         :client-build-overlay-plan (fn [_ _ _ _] nil)
          :client-build-hud-render-data (fn [_ _ _ _] nil)
          :client-req-learn-skill! noop
          :client-req-level-up! noop
@@ -52,18 +56,36 @@
          :client-req-set-preset-slot! noop
          :client-req-switch-preset! noop
          :client-open-skill-tree-screen! (fn [_ _] nil)
+         :client-build-skill-tree-draw-ops (fn [_ _] [])
          :client-build-skill-tree-render-data (fn [] nil)
          :client-handle-skill-tree-hover! noop
          :client-handle-skill-tree-click! (fn [_ _] false)
          :client-close-skill-tree-screen! noop
          :client-open-preset-editor-screen! (fn [_] nil)
+         :client-build-preset-editor-draw-ops (fn [] [])
          :client-build-preset-editor-render-data (fn [] nil)
          :client-handle-preset-editor-click! (fn [_ _] false)
          :client-close-preset-editor-screen! noop
          :client-poll-particle-effects (fn [] [])
          :client-poll-sound-effects (fn [] [])
          :client-tick-keys! noop
-         :client-trigger-mode-switch! noop}))
+         :client-trigger-mode-switch! noop
+         :client-active-contexts (fn [] {})
+         :client-latest-sync (fn [_] nil)
+         :client-register-push-handlers! noop
+         :client-notify-railgun-coin-throw! noop
+         :client-enqueue-level-effect! noop
+         :client-build-level-effect-plan (fn [_ _ _] nil)
+         :client-tick-level-effects! noop
+         :client-railgun-charge-visual-state (fn [_] {:active? false :charge-ticks 0 :coin-active? false :charge-ratio 0.0})
+         :client-slot-visual-state (fn [_ _] :idle)
+         :client-body-intensify-charge-visual-state (fn [] {:active? false :charge-ticks 0 :charge-ratio 0.0})
+         :client-current-charging-visual-state (fn [] {:active? false :blending? false :is-item false :good? false :charge-ticks 0 :charge-ratio 0.0})
+         :client-on-slot-key-down! noop
+         :client-on-slot-key-tick! noop
+         :client-on-slot-key-up! noop
+         :client-abort-all! noop
+         :client-tick! noop}))
 
 (defn register-ability-runtime-hooks!
   "Register/replace ability runtime hook fns."
@@ -163,6 +185,14 @@
   [action player-uuid payload]
   ((:on-ability-item-action! @runtime-hooks) action player-uuid payload))
 
+(defn build-item-use-plan
+  [player-uuid item-id activated? side]
+  ((:build-item-use-plan @runtime-hooks) player-uuid item-id activated? side))
+
+(defn get-max-saved-locations
+  []
+  ((:max-saved-locations @runtime-hooks)))
+
 (defn compute-aoe-damage
   [origin-pos target-pos radius damage falloff?]
   ((:compute-aoe-damage @runtime-hooks) origin-pos target-pos radius damage falloff?))
@@ -174,6 +204,10 @@
 (defn compute-reflected-damage
   [current-damage]
   ((:compute-reflected-damage @runtime-hooks) current-damage))
+
+(defn get-reflection-search-radius
+  []
+  ((:reflection-search-radius @runtime-hooks)))
 
 (defn client-get-skill-by-controllable
   [cat-id ctrl-id]
@@ -219,6 +253,10 @@
   [player-uuid preset-data]
   ((:client-update-preset-data! @runtime-hooks) player-uuid preset-data))
 
+(defn client-build-overlay-plan
+  [player-uuid screen-width screen-height overlay-state]
+  ((:client-build-overlay-plan @runtime-hooks) player-uuid screen-width screen-height overlay-state))
+
 (defn client-build-hud-render-data
   [hud-model screen-width screen-height cooldown-data]
   ((:client-build-hud-render-data @runtime-hooks) hud-model screen-width screen-height cooldown-data))
@@ -247,6 +285,10 @@
   [player-uuid learn-context]
   ((:client-open-skill-tree-screen! @runtime-hooks) player-uuid learn-context))
 
+(defn client-build-skill-tree-draw-ops
+  [mouse-x mouse-y]
+  ((:client-build-skill-tree-draw-ops @runtime-hooks) mouse-x mouse-y))
+
 (defn client-build-skill-tree-render-data
   []
   ((:client-build-skill-tree-render-data @runtime-hooks)))
@@ -266,6 +308,10 @@
 (defn client-open-preset-editor-screen!
   [player-uuid]
   ((:client-open-preset-editor-screen! @runtime-hooks) player-uuid))
+
+(defn client-build-preset-editor-draw-ops
+  []
+  ((:client-build-preset-editor-draw-ops @runtime-hooks)))
 
 (defn client-build-preset-editor-render-data
   []
@@ -294,3 +340,67 @@
 (defn client-trigger-mode-switch!
   [player-uuid]
   ((:client-trigger-mode-switch! @runtime-hooks) player-uuid))
+
+(defn client-active-contexts
+  []
+  ((:client-active-contexts @runtime-hooks)))
+
+(defn client-latest-sync
+  [player-uuid]
+  ((:client-latest-sync @runtime-hooks) player-uuid))
+
+(defn client-register-push-handlers!
+  []
+  ((:client-register-push-handlers! @runtime-hooks)))
+
+(defn client-notify-railgun-coin-throw!
+  [player-uuid]
+  ((:client-notify-railgun-coin-throw! @runtime-hooks) player-uuid))
+
+(defn client-enqueue-level-effect!
+  [effect-id payload]
+  ((:client-enqueue-level-effect! @runtime-hooks) effect-id payload))
+
+(defn client-build-level-effect-plan
+  [camera-pos hand-center-pos tick]
+  ((:client-build-level-effect-plan @runtime-hooks) camera-pos hand-center-pos tick))
+
+(defn client-tick-level-effects!
+  []
+  ((:client-tick-level-effects! @runtime-hooks)))
+
+(defn client-railgun-charge-visual-state
+  [player-uuid]
+  ((:client-railgun-charge-visual-state @runtime-hooks) player-uuid))
+
+(defn client-slot-visual-state
+  [player-uuid key-idx]
+  ((:client-slot-visual-state @runtime-hooks) player-uuid key-idx))
+
+(defn client-body-intensify-charge-visual-state
+  []
+  ((:client-body-intensify-charge-visual-state @runtime-hooks)))
+
+(defn client-current-charging-visual-state
+  []
+  ((:client-current-charging-visual-state @runtime-hooks)))
+
+(defn client-on-slot-key-down!
+  [player-uuid key-idx]
+  ((:client-on-slot-key-down! @runtime-hooks) player-uuid key-idx))
+
+(defn client-on-slot-key-tick!
+  [player-uuid key-idx]
+  ((:client-on-slot-key-tick! @runtime-hooks) player-uuid key-idx))
+
+(defn client-on-slot-key-up!
+  [player-uuid key-idx]
+  ((:client-on-slot-key-up! @runtime-hooks) player-uuid key-idx))
+
+(defn client-abort-all!
+  []
+  ((:client-abort-all! @runtime-hooks)))
+
+(defn client-tick!
+  []
+  ((:client-tick! @runtime-hooks)))

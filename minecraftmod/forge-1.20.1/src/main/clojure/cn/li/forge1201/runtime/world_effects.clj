@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.world-effects
+(ns cn.li.forge1201.runtime.world-effects
   "Forge implementation of IWorldEffects protocol."
   (:require [cn.li.mcmod.platform.world-effects :as pwe]
             [cn.li.mcmod.util.log :as log])

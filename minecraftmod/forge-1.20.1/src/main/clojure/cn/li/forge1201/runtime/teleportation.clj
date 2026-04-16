@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.teleportation
+(ns cn.li.forge1201.runtime.teleportation
   "Forge implementation of ITeleportation protocol."
   (:require [cn.li.mcmod.platform.teleportation :as ptp]
             [cn.li.mcmod.util.log :as log])

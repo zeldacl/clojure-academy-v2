@@ -7,11 +7,12 @@
             [cn.li.forge1201.events :as events]
             [cn.li.forge1201.gui.init :as gui-init]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
-            [cn.li.forge1201.ability.lifecycle :as ability-lifecycle]
-            [cn.li.forge1201.ability.item-handler :as ability-item-handler]
+            [cn.li.forge1201.runtime.lifecycle :as runtime-lifecycle]
+            [cn.li.forge1201.runtime.item-handler :as runtime-item-handler]
             [cn.li.forge1201.platform-impl :as platform-impl]
             [cn.li.forge1201.config.bridge :as config-bridge]
-            ;; platform-impl 会在 runtime 的 mod-init 中按需加载（避免 AOT/checkClojure 阶段触发 Minecraft class init）
+            ;; platform-impl is loaded lazily during runtime mod-init to avoid
+            ;; triggering Minecraft class initialization during AOT/checkClojure.
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.platform.capability :as platform-cap]
@@ -56,12 +57,11 @@
 ;;                             (write
 ;;                               ([^String s]
 ;;                                (.write orig s)
-;;                                ;; 当发现反射警告包含 "flush" 时，强行打印当前调用栈
-;;                                (when (and (.contains s "Reflection warning") (.contains s "flush"))
-;;                                  (.println orig "--- 反射源追踪开始 ---")
+;;                                ;; 褰撳彂鐜板弽灏勮鍛婂寘鍚?"flush" 鏃讹紝寮鸿鎵撳嵃褰撳墠璋冪敤鏍?;;                                (when (and (.contains s "Reflection warning") (.contains s "flush"))
+;;                                  (.println orig "--- 鍙嶅皠婧愯拷韪紑濮?---")
 ;;                                  (doseq [st (.getStackTrace (Thread/currentThread))]
 ;;                                    (.println orig (str "  at " st)))
-;;                                  (.println orig "--- 反射源追踪结束 ---")))
+;;                                  (.println orig "--- 鍙嶅皠婧愯拷韪粨鏉?---")))
 ;;                               ([^String s ^Integer off ^Integer len]
 ;;                                (.write orig s off len))))))
 
@@ -87,8 +87,8 @@
 
 ;; DeferredRegister instances
 (defonce blocks-register
-  ;; AOT/checkClojure 阶段 Minecraft registries 尚未 bootstrapped。
-  ;; 延迟创建，避免触发 Bootstrap。
+  ;; During AOT/checkClojure, Minecraft registries may not be bootstrapped.
+  ;; Delay creation to avoid triggering bootstrap too early.
   (delay (bootstrap/create-blocks-register mod-id)))
 
 (defonce items-register
@@ -297,12 +297,12 @@
 (defn on-common-setup [_event]
   (log/info "FMLCommonSetupEvent - Common setup phase")
   (gui-init/init-common!)
-  (ability-lifecycle/init-common!)
+  (runtime-lifecycle/init-common!)
   ;; Initialize Forge Energy integration
   (forge-energy/init-forge-energy!)
   ;; Initialize IC2 integration (optional - no-op if IC2 not present)
   (ic2-energy/init-ic2-energy!)
-  (ability-item-handler/init!)
+  (runtime-item-handler/init!)
   ;; Register wireless IMC dispatch listeners on the Forge game event bus.
   (wireless-imc/init!)
   ;; Left-click block must be intercepted early to avoid client-side fake break effects
@@ -394,7 +394,7 @@
                      (get [_] (build-creative-tab))))
 
         ;; Populate GUI DeferredRegister before it is registered with the bus.
-        ;; Must happen here (during mod-init) — registries are locked by FMLCommonSetupEvent.
+        ;; Must happen here (during mod-init) 鈥?registries are locked by FMLCommonSetupEvent.
         (gui-registry-impl/register-menu-types!)
 
         ;; Register DeferredRegisters and lifecycle event listeners on mod event bus.
@@ -425,8 +425,7 @@
               (catch Exception e
                 (log/error "Failed to register key mapping listener" e))))
 
-          ;; Scripted BER: use @Mod.EventBusSubscriber Java class ModClientRenderSetup —
-          ;; addListener(modBus, Class, Consumer) for EntityRenderersEvent$RegisterRenderers
+          ;; Scripted BER: use @Mod.EventBusSubscriber Java class ModClientRenderSetup 鈥?          ;; addListener(modBus, Class, Consumer) for EntityRenderersEvent$RegisterRenderers
           ;; did not reliably dispatch from Clojure reify.
           (.addListener mod-bus EventPriority/NORMAL false InterModProcessEvent
                         (reify java.util.function.Consumer
@@ -467,7 +466,7 @@
 ;; (defn start-repl-safe []
 ;;   (let [cl (.getContextClassLoader (Thread/currentThread))]
 ;;     (nrepl/start-server :port 7888 :handler (nrepl/default-handler))
-;;     ;; 确保 REPL 线程能访问到 Minecraft 的类
+;;     ;; 纭繚 REPL 绾跨▼鑳借闂埌 Minecraft 鐨勭被
 ;;     (.setContextClassLoader (Thread/currentThread) cl)))
 
 ;; ============================================================================

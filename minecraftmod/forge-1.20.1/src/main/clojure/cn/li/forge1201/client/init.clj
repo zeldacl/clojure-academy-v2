@@ -10,16 +10,15 @@
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.client.render.init :as render-init]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
-            [cn.li.forge1201.client.ability-runtime :as ability-runtime]
-            [cn.li.forge1201.client.ability-input :as ability-input]
-            [cn.li.forge1201.client.ability-hud :as ability-hud]
-            [cn.li.forge1201.client.ability-hud-bridge :as ability-hud-bridge]
-            [cn.li.forge1201.client.ability-screen-bridge :as ability-screen-bridge]
+            [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
+            [cn.li.forge1201.client.key-input :as key-input]
+            [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
+            [cn.li.forge1201.client.screen-host :as screen-host]
             [cn.li.forge1201.client.terminal-screen-bridge :as terminal-screen-bridge]
             [cn.li.forge1201.client.effects.particle-bridge :as particle-bridge]
             [cn.li.forge1201.client.effects.sound-bridge :as sound-bridge]
-            [cn.li.forge1201.client.railgun-render :as railgun-render]
-            [cn.li.forge1201.client.ability-gui :as ability-gui]
+            [cn.li.forge1201.client.level-effect-renderer :as level-effect-renderer]
+            [cn.li.forge1201.client.request-bridge :as request-bridge]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
             [cn.li.forge1201.client.pose-impl :as pose-impl]
             [cn.li.forge1201.client.render-buffer-impl :as buffer-impl]
@@ -130,21 +129,24 @@
 (defn- init-ac-client-bridge!
   []
   (ac-client-bridge/install-client-bridge!
-    {:slot-key-down ability-runtime/on-slot-key-down!
-     :slot-key-tick ability-runtime/on-slot-key-tick!
-     :slot-key-up ability-runtime/on-slot-key-up!
-     :open-skill-tree-screen ability-screen-bridge/open-skill-tree-screen!
-     :open-preset-editor-screen ability-screen-bridge/open-preset-editor-screen!
+    {:open-skill-tree-screen screen-host/open-skill-tree-screen!
+     :open-preset-editor-screen screen-host/open-preset-editor-screen!
      :open-terminal-screen terminal-screen-bridge/open-terminal-screen!
-     :open-simple-gui terminal-screen-bridge/open-simple-gui!}))
+     :open-simple-gui terminal-screen-bridge/open-simple-gui!
+     :local-player-item-id runtime-bridge/local-player-item-id
+     :local-player-pos runtime-bridge/local-player-pos
+     :local-player-eye-pos runtime-bridge/local-player-eye-pos
+     :local-player-look-end runtime-bridge/local-player-look-end
+     :clear-client-activated-overlay runtime-bridge/clear-client-activated-overlay!
+     :play-intensify-local-effect runtime-bridge/play-intensify-local-effect!}))
 
 (defn register-key-mappings!
   "Register all ability KeyMapping instances to Forge input system."
   [^RegisterKeyMappingsEvent event]
   ;; Ensure mappings are created even if this event fires before client setup enqueueWork.
-  (ability-input/register-keybinds!)
-  (let [all-keys (concat (ability-input/get-skill-keys)
-                         (ability-input/get-gui-keys))]
+  (key-input/register-keybinds!)
+  (let [all-keys (concat (key-input/get-skill-keys)
+                         (key-input/get-gui-keys))]
     (doseq [^KeyMapping key all-keys]
       (.register event key))
     (log/info "Registered ability key mappings:" (count all-keys))))
@@ -164,15 +166,14 @@
   (register-renderers)
 
   ;; Ability client systems
-  (ability-input/init!)
-  (ability-runtime/init!)
-  (ability-hud/init!)
-  (ability-hud-bridge/init!)
-  (ability-screen-bridge/init!)
+  (key-input/init!)
+  (runtime-bridge/init!)
+  (overlay-renderer/init!)
+  (screen-host/init!)
   (terminal-screen-bridge/init!)
   (particle-bridge/init!)
   (sound-bridge/init!)
-  (railgun-render/init!)
-  (ability-gui/init!)
+  (level-effect-renderer/init!)
+  (request-bridge/init!)
 
   (log/info "Forge 1.20.1 client-side systems initialized"))

@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.sync
+(ns cn.li.forge1201.runtime.sync
   "Server-side sync scheduler for ability data.
 
   Current strategy:

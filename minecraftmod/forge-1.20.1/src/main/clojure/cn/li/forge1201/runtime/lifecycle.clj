@@ -1,8 +1,8 @@
-(ns cn.li.forge1201.ability.lifecycle
+(ns cn.li.forge1201.runtime.lifecycle
   "Forge player lifecycle hooks for ability system."
-  (:require [cn.li.forge1201.ability.nbt :as ability-nbt]
-            [cn.li.forge1201.ability.sync :as ability-sync]
-            [cn.li.forge1201.ability.network :as ability-network]
+  (:require [cn.li.forge1201.runtime.nbt :as ability-nbt]
+            [cn.li.forge1201.runtime.sync :as ability-sync]
+            [cn.li.forge1201.runtime.network :as ability-network]
             [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.common MinecraftForge]
@@ -64,35 +64,35 @@
   "Register all forge-side lifecycle listeners for ability runtime."
   []
   ;; Keep this minimal and enable only adapters currently relied upon by migrated skills.
-  (try-install! 'cn.li.forge1201.ability.entity-damage
-                'cn.li.forge1201.ability.entity-damage/install-entity-damage!
+  (try-install! 'cn.li.forge1201.runtime.entity-damage
+                'cn.li.forge1201.runtime.entity-damage/install-entity-damage!
                 "entity-damage")
-  (try-install! 'cn.li.forge1201.ability.raycast
-                'cn.li.forge1201.ability.raycast/install-raycast!
+  (try-install! 'cn.li.forge1201.runtime.raycast
+                'cn.li.forge1201.runtime.raycast/install-raycast!
                 "raycast")
-  (try-install! 'cn.li.forge1201.ability.interop
-                'cn.li.forge1201.ability.interop/install-ability-interop!
+  (try-install! 'cn.li.forge1201.runtime.interop
+                'cn.li.forge1201.runtime.interop/install-ability-interop!
                 "ability-interop")
-  (try-install! 'cn.li.forge1201.ability.world-effects
-                'cn.li.forge1201.ability.world-effects/install-world-effects!
+  (try-install! 'cn.li.forge1201.runtime.world-effects
+                'cn.li.forge1201.runtime.world-effects/install-world-effects!
                 "world-effects")
-  (try-install! 'cn.li.forge1201.ability.potion-effects
-                'cn.li.forge1201.ability.potion-effects/install-potion-effects!
+  (try-install! 'cn.li.forge1201.runtime.potion-effects
+                'cn.li.forge1201.runtime.potion-effects/install-potion-effects!
                 "potion-effects")
-  #_(try-install! 'cn.li.forge1201.ability.teleportation
-                'cn.li.forge1201.ability.teleportation/install-teleportation!
+  #_(try-install! 'cn.li.forge1201.runtime.teleportation
+                'cn.li.forge1201.runtime.teleportation/install-teleportation!
                 "teleportation") 
-  #_(try-install! 'cn.li.forge1201.ability.saved-locations
-                'cn.li.forge1201.ability.saved-locations/install-saved-locations!
+  #_(try-install! 'cn.li.forge1201.runtime.saved-locations
+                'cn.li.forge1201.runtime.saved-locations/install-saved-locations!
                 "saved-locations")
-  #_(try-install! 'cn.li.forge1201.ability.player-motion
-                'cn.li.forge1201.ability.player-motion/install-player-motion!
+  #_(try-install! 'cn.li.forge1201.runtime.player-motion
+                'cn.li.forge1201.runtime.player-motion/install-player-motion!
                 "player-motion")
-  (try-install! 'cn.li.forge1201.ability.block-manipulation
-                'cn.li.forge1201.ability.block-manipulation/install-block-manipulation!
+  (try-install! 'cn.li.forge1201.runtime.block-manipulation
+                'cn.li.forge1201.runtime.block-manipulation/install-block-manipulation!
                 "block-manipulation")
-  (try-install! 'cn.li.forge1201.ability.damage-interception
-                'cn.li.forge1201.ability.damage-interception/install-damage-interception!
+  (try-install! 'cn.li.forge1201.runtime.damage-interception
+                'cn.li.forge1201.runtime.damage-interception/install-damage-interception!
                 "damage-interception")
   (ability-network/init!)
   (.addListener (MinecraftForge/EVENT_BUS)

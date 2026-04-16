@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.block-manipulation
+(ns cn.li.forge1201.runtime.block-manipulation
   "Forge implementation of IBlockManipulation protocol."
   (:require [cn.li.mcmod.platform.block-manipulation :as bm]
             [cn.li.mcmod.util.log :as log])

@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.potion-effects
+(ns cn.li.forge1201.runtime.potion-effects
   "Forge implementation of IPotionEffects protocol."
   (:require [cn.li.mcmod.platform.potion-effects :as ppe]
             [cn.li.mcmod.util.log :as log])

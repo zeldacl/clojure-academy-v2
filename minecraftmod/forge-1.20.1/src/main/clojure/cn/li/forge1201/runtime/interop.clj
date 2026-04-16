@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.interop
+(ns cn.li.forge1201.runtime.interop
 	"Forge implementation of ability runtime interop bridge."
 	(:require [cn.li.mcmod.platform.ability-interop :as interop]
 						[cn.li.mcmod.util.log :as log])

@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.network
+(ns cn.li.forge1201.runtime.network
   "Forge transport wiring for ability system.
 
   Reuses the existing mcmod RPC channel used by GUI network:

@@ -1,5 +1,5 @@
-(ns cn.li.forge1201.client.ability-gui
-  "Provides screen-facing request functions for skill learn/level-up/preset edits."
+(ns cn.li.forge1201.client.request-bridge
+  "Provides screen-facing request functions for AC runtime operations."
   (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log]))
 
@@ -19,4 +19,4 @@
   (ability-runtime/client-req-switch-preset! preset-idx cb))
 
 (defn init! []
-  (log/info "Ability GUI bridge initialized"))
+  (log/info "Client request bridge initialized"))

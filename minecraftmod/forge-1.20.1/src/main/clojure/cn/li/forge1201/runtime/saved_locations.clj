@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.ability.saved-locations
+(ns cn.li.forge1201.runtime.saved-locations
   "Forge implementation of ISavedLocations protocol using NBT storage."
   (:require [cn.li.mcmod.platform.saved-locations :as psl]
             [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
