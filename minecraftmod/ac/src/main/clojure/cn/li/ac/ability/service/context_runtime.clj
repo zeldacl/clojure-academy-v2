@@ -10,6 +10,7 @@
   It keeps input state transitions strict to avoid duplicated lifecycle calls."
   (:require [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.skill :as skill]
+            [cn.li.ac.ability.skill-runtime :as skill-rt]
             [cn.li.ac.ability.event :as evt]
             [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.config :as cfg]
@@ -39,7 +40,17 @@
 
 (defn- dispatch-skill-callback! [ctx-map cb-key event-type payload]
   (when-let [spec (skill/get-skill (:skill-id ctx-map))]
-    (safe-run-callback! (get spec cb-key) (event-payload ctx-map payload)))
+    (let [evt* (event-payload ctx-map payload)
+          f (get spec cb-key)]
+      (cond
+        (fn? f)
+        (safe-run-callback! f evt*)
+
+        (skill-rt/can-handle? spec)
+        (skill-rt/dispatch! spec cb-key evt*)
+
+        :else
+        nil)))
   (evt/fire-ability-event!
    {:event/type event-type
     :event/side :server
@@ -93,6 +104,12 @@
     (and state
          (cd/in-main-cooldown? (:cooldown-data state) ctrl-id))))
 
+(defn- use-default-runtime-consume?
+  [ctx-map]
+  (let [spec (skill/get-skill (:skill-id ctx-map))]
+    (or (nil? (:cost spec))
+        (true? (get-in spec [:cost :use-runtime-consume?])))))
+
 (defn handle-key-down!
   ([ctx-id payload]
    (handle-key-down! ctx-id payload nil))
@@ -116,7 +133,8 @@
    (when-let [ctx-map (ctx/get-context ctx-id)]
      (when (and (= (:status ctx-map) ctx/STATUS-ALIVE)
                 (= (:input-state ctx-map) INPUT-ACTIVE))
-       (if (consume-runtime-resource! ctx-map)
+       (if (or (not (use-default-runtime-consume? ctx-map))
+               (consume-runtime-resource! ctx-map))
          (do
            (dispatch-skill-callback! ctx-map :on-key-tick evt/EVT-CONTEXT-KEY-TICK payload)
            true)
@@ -135,7 +153,10 @@
        (let [released-ctx (set-input-state! ctx-id INPUT-RELEASED)]
          (dispatch-skill-callback! released-ctx :on-key-up evt/EVT-CONTEXT-KEY-UP payload)
          (let [latest-ctx (ctx/get-context ctx-id)
-               skip-default-cooldown? (boolean (get-in latest-ctx [:skill-state :skip-default-cooldown]))]
+               spec (skill/get-skill (:skill-id latest-ctx))
+               skip-default-cooldown?
+               (or (boolean (get-in latest-ctx [:skill-state :skip-default-cooldown]))
+                   (= :manual (get-in spec [:cooldown :mode])))]
            (when-not skip-default-cooldown?
              (apply-main-cooldown! released-ctx)))
          (ctx/terminate-context! ctx-id terminate-fn)

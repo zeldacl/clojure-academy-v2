@@ -15,7 +15,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
@@ -43,18 +42,18 @@
   (or (get-in (ps/get-player-state player-id) [:position :world-id])
       "minecraft:overworld"))
 
-(defn- try-consume-resource!
-  [player-id overload cp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           overload cp false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
+(defn thunder-clap-cost-down-overload
+  [{:keys [player-id]}]
+  (lerp 390.0 252.0 (get-skill-exp player-id)))
+
+(defn thunder-clap-cost-tick-cp
+  [{:keys [ctx-id player-id]}]
+  (if-let [ctx-data (ctx/get-context ctx-id)]
+    (let [ticks (inc (long (or (get-in ctx-data [:skill-state :ticks]) 0)))]
+      (if (<= ticks min-ticks)
+        (lerp 18.0 25.0 (get-skill-exp player-id))
+        0.0))
+    0.0))
 
 (defn- compute-damage [exp ticks]
   (let [base (lerp 36.0 72.0 exp)
@@ -163,31 +162,28 @@
 
 (defn thunder-clap-on-key-down
   "Initialize charge state when key pressed."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
-    (let [exp (get-skill-exp player-id)
-          overload (lerp 390.0 252.0 exp)
-          started? (try-consume-resource! player-id overload 0.0)]
-      (if-not started?
-        (do
-          (log/debug "ThunderClap start failed: insufficient resource")
-          (ctx/terminate-context! ctx-id nil))
-        (let [world-id (player-world-id player-id)
-              hit-pos (resolve-hit-pos player-id world-id)]
-          (ctx/update-context! ctx-id assoc :skill-state
-                               {:ticks 0
-                                :hit-pos hit-pos
-                                :performed? false
-                                :skip-default-cooldown true})
-          (send-fx-start! ctx-id)
-          (send-fx-update! ctx-id 0 hit-pos)
-          (log/debug "ThunderClap charge started"))))
+    (if-not cost-ok?
+      (do
+        (log/debug "ThunderClap start failed: insufficient resource")
+        (ctx/terminate-context! ctx-id nil))
+      (let [world-id (player-world-id player-id)
+            hit-pos (resolve-hit-pos player-id world-id)]
+        (ctx/update-context! ctx-id assoc :skill-state
+                             {:ticks 0
+                              :hit-pos hit-pos
+                              :performed? false
+                              :skip-default-cooldown true})
+        (send-fx-start! ctx-id)
+        (send-fx-update! ctx-id 0 hit-pos)
+        (log/debug "ThunderClap charge started")))
     (catch Exception e
       (log/warn "ThunderClap key-down failed:" (ex-message e)))))
 
 (defn thunder-clap-on-key-tick
   "Update charge progress each tick."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
@@ -197,13 +193,8 @@
                 world-id (player-world-id player-id)
                 old-ticks (long (or (:ticks skill-state) 0))
                 ticks (inc old-ticks)
-                hit-pos (resolve-hit-pos player-id world-id)
-                cp-consume (lerp 18.0 25.0 exp)
-                cp-ok? (if (<= ticks min-ticks)
-                         (try-consume-resource! player-id 0.0 cp-consume)
-                         true)]
-
-            (if-not cp-ok?
+                hit-pos (resolve-hit-pos player-id world-id)]
+            (if-not cost-ok?
               (do
                 (send-fx-end! ctx-id false)
                 (ctx/terminate-context! ctx-id nil)

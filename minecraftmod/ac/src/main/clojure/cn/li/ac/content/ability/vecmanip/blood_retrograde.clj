@@ -12,7 +12,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
@@ -78,12 +77,6 @@
 (defn- world-up []
   {:x 0.0 :y 1.0 :z 0.0})
 
-(defn- current-eye-pos [player-id]
-  (let [player-pos (get (ps/get-player-state player-id) :position {:x 0.0 :y 64.0 :z 0.0})]
-    {:x (double (:x player-pos))
-     :y (+ (double (:y player-pos)) 1.62)
-     :z (double (:z player-pos))}))
-
 (defn- player-world-id [player-id]
   (or (get-in (ps/get-player-state player-id) [:position :world-id])
       "minecraft:overworld"))
@@ -138,19 +131,30 @@
       (doseq [e events]
         (ability-evt/fire-ability-event! e)))))
 
-(defn- try-consume-resource! [player-id overload cp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           (double overload)
-                                           (double cp)
-                                           false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
+(defn- release-hit
+  [player-id ctx-id stage]
+  (let [ticks (long (or (get-in (ctx/get-context ctx-id) [:skill-state :ticks]) 0))
+        should-release?
+        (case stage
+          :tick (>= (inc ticks) max-charge-ticks)
+          :up true
+          false)]
+    (when (and should-release? raycast/*raycast*)
+      (raycast/raycast-from-player raycast/*raycast* player-id target-distance true))))
+
+(defn blood-retrograde-cost-release-cp
+  [{:keys [player-id ctx-id]}]
+  (if (or (release-hit player-id ctx-id :tick)
+          (release-hit player-id ctx-id :up))
+    (cp-cost (get-skill-exp player-id))
+    0.0))
+
+(defn blood-retrograde-cost-release-overload
+  [{:keys [player-id ctx-id]}]
+  (if (or (release-hit player-id ctx-id :tick)
+          (release-hit player-id ctx-id :up))
+    (overload-cost (get-skill-exp player-id))
+    0.0))
 
 (defn- send-fx-start! [ctx-id]
   (ctx/ctx-send-to-client! ctx-id :blood-retrograde/fx-start {:mode :start}))
@@ -244,12 +248,12 @@
   (send-fx-end! ctx-id performed?)
   (ctx/terminate-context! ctx-id nil))
 
-(defn- try-perform! [player-id ctx-id hit]
+(defn- try-perform! [player-id ctx-id hit cost-ok?]
   (let [target-id (:entity-id hit)
         world-id (player-world-id player-id)
         exp (get-skill-exp player-id)]
     (when target-id
-      (if-not (try-consume-resource! player-id (overload-cost exp) (cp-cost exp))
+      (if-not cost-ok?
         false
         (do
           (ps/update-cooldown-data! player-id cd/set-main-cooldown :blood-retrograde (max 1 (cooldown-ticks exp)))
@@ -284,7 +288,7 @@
 
 (defn blood-retrograde-on-key-tick
   "Update charge progress and auto-release at max charge."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
@@ -298,7 +302,7 @@
             (when (>= ticks max-charge-ticks)
               (let [hit (when raycast/*raycast*
                           (raycast/raycast-from-player raycast/*raycast* player-id target-distance true))
-                    performed? (boolean (and hit (try-perform! player-id ctx-id hit)))]
+                    performed? (boolean (and hit (try-perform! player-id ctx-id hit cost-ok?)))]
                 (finish! ctx-id performed?)
                 (log/debug "BloodRetrograde auto-release" "ticks" ticks "performed" performed?)))))))
     (catch Exception e
@@ -306,7 +310,7 @@
 
 (defn blood-retrograde-on-key-up
   "Execute the skill on release if a valid target is found."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
@@ -314,7 +318,7 @@
         (when-not executed?
           (let [hit (when raycast/*raycast*
                       (raycast/raycast-from-player raycast/*raycast* player-id target-distance true))
-                performed? (boolean (and hit (try-perform! player-id ctx-id hit)))]
+                performed? (boolean (and hit (try-perform! player-id ctx-id hit cost-ok?)))]
             (finish! ctx-id performed?)
             (log/debug "BloodRetrograde released" "performed" performed?)))))
     (catch Exception e

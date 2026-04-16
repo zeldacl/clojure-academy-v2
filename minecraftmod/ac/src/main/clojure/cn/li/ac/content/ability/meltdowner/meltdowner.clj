@@ -14,7 +14,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
@@ -106,21 +105,18 @@
   (or (get-in (ps/get-player-state player-id) [:position :world-id])
       "minecraft:overworld"))
 
-(defn- consume-resource!
-  [player-id overload cp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           overload
-                                           cp
-                                           false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      {:success? (boolean success?)
-       :resource-data data})))
+(defn meltdowner-cost-down-overload
+  [{:keys [player-id]}]
+  (lerp 200.0 170.0 (get-skill-exp player-id)))
+
+(defn meltdowner-cost-tick-cp
+  [{:keys [player-id ctx-id]}]
+  (if-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
+    (if (boolean (:performed? skill-state))
+      0.0
+      (double (or (:cp-per-tick skill-state)
+                  (lerp 10.0 15.0 (get-skill-exp player-id)))))
+    0.0))
 
 (defn- enforce-overload-floor!
   [player-id floor-value]
@@ -378,13 +374,11 @@
 
 (defn meltdowner-on-key-down
   "Initialize Meltdowner charging."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (let [exp (get-skill-exp player-id)
-          initial-overload (lerp 200.0 170.0 exp)
-          {:keys [success? resource-data]} (consume-resource! player-id initial-overload 0.0)
-          overload-floor (double (or (:cur-overload resource-data) initial-overload))]
-      (if-not success?
+          initial-overload (lerp 200.0 170.0 exp)]
+      (if-not cost-ok?
         (do
           (send-fx-end! ctx-id false)
           (ctx/terminate-context! ctx-id nil)
@@ -393,7 +387,7 @@
           (ctx/update-context! ctx-id assoc :skill-state
                                {:skip-default-cooldown true
                                 :ticks 0
-                                :overload-floor overload-floor
+                                :overload-floor initial-overload
                                 :cp-per-tick (lerp 10.0 15.0 exp)
                                 :performed? false})
           (send-fx-start! ctx-id)
@@ -404,13 +398,12 @@
 
 (defn meltdowner-on-key-tick
   "Advance charging; consume CP and enforce overload floor."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
       (let [performed? (boolean (:performed? skill-state))]
         (when-not performed?
           (let [ticks (inc (int (or (:ticks skill-state) 0)))
-                cp-per-tick (double (or (:cp-per-tick skill-state) 10.0))
                 overload-floor (double (or (:overload-floor skill-state) 0.0))]
             (enforce-overload-floor! player-id overload-floor)
             (ctx/update-context! ctx-id assoc-in [:skill-state :ticks] ticks)
@@ -423,7 +416,7 @@
                 (ctx/terminate-context! ctx-id nil)
                 (log/debug "Meltdowner aborted: over tolerant ticks" ticks))
 
-              (not (:success? (consume-resource! player-id 0.0 cp-per-tick)))
+              (not cost-ok?)
               (do
                 (send-fx-end! ctx-id false)
                 (ctx/terminate-context! ctx-id nil)

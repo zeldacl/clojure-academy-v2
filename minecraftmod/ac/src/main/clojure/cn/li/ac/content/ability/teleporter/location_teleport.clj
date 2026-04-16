@@ -14,11 +14,11 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.model.resource-data :as rdata]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.saved-locations :as saved-locations]
             [clojure.string :as str]
@@ -72,18 +72,7 @@
         (ability-evt/fire-ability-event! e)))))
 
 (defn- consume-resource! [player-id overload cp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           overload
-                                           cp
-                                           false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
+  (boolean (:success? (fx-common/perform-resource! player-id overload cp false))))
 
 (defn- current-pos [player-id]
   (when teleportation/*teleportation*

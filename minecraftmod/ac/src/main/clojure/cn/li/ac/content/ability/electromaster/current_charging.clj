@@ -11,7 +11,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.model.resource-data :as rdata]
@@ -21,6 +20,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private max-distance 15.0)
+(declare get-skill-exp get-main-hand-item)
 
 (defn- lerp
   [a b t]
@@ -42,21 +42,20 @@
   [effective?]
   (if effective? 0.0001 0.00003))
 
-(defn- consume-resource!
-  [player-id overload cp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           overload
-                                           cp
-                                           false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      {:success? (boolean success?)
-       :resource-data data})))
+(defn current-charging-cost-down-overload
+  [{:keys [player-id]}]
+  (initial-overload (double (get-skill-exp player-id))))
+
+(defn current-charging-cost-tick-cp
+  [{:keys [player-id ctx-id]}]
+  (if-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
+    (let [is-item (boolean (:is-item skill-state))
+          stack (when is-item (get-main-hand-item player-id))
+          exp (double (or (:exp skill-state) (get-skill-exp player-id)))]
+      (if (and is-item (nil? stack))
+        0.0
+        (tick-consumption exp)))
+    0.0))
 
 (defn- enforce-overload-floor!
   [player-id floor-value]
@@ -157,13 +156,12 @@
 
 (defn current-charging-on-key-down
   "Initialize charging state when key pressed."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (let [exp (double (get-skill-exp player-id))
           is-item (boolean (get-main-hand-item player-id))
-          {:keys [success? resource-data]} (consume-resource! player-id (initial-overload exp) 0.0)
-          overload-floor (double (or (:cur-overload resource-data) (initial-overload exp)))]
-      (if-not success?
+          overload-floor (double (initial-overload exp))]
+      (if-not cost-ok?
         (do
           (send-fx-end! ctx-id is-item)
           (ctx/terminate-context! ctx-id nil)
@@ -181,14 +179,13 @@
 
 (defn current-charging-on-key-tick
   "Continue charging each tick."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
       (let [is-item (boolean (:is-item skill-state))
             exp (double (or (:exp skill-state) (get-skill-exp player-id)))
             new-charge-ticks (inc (int (or (:charge-ticks skill-state) 0)))
             overload-floor (double (or (:overload-floor skill-state) 0.0))
-            cp (tick-consumption exp)
             charge (charging-speed exp)]
         (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] new-charge-ticks)
         (enforce-overload-floor! player-id overload-floor)
@@ -197,16 +194,15 @@
           (let [stack (get-main-hand-item player-id)]
             (if-not stack
               (finish-charge! ctx-id true)
-              (let [{:keys [success?]} (consume-resource! player-id 0.0 cp)]
-                (if-not success?
-                  (finish-charge! ctx-id true)
-                  (let [good (energy/is-energy-item-supported? stack)]
-                    (when good
-                      (energy/charge-energy-to-item stack charge false))
-                    (add-skill-exp! player-id (exp-incr good))
-                    (send-fx-update! ctx-id {:is-item true
-                                             :good? (boolean good)
-                                             :charge-ticks new-charge-ticks}))))))
+              (if-not cost-ok?
+                (finish-charge! ctx-id true)
+                (let [good (energy/is-energy-item-supported? stack)]
+                  (when good
+                    (energy/charge-energy-to-item stack charge false))
+                  (add-skill-exp! player-id (exp-incr good))
+                  (send-fx-update! ctx-id {:is-item true
+                                           :good? (boolean good)
+                                           :charge-ticks new-charge-ticks})))))
 
           (let [view (get-player-view player-id)
                 world-id (or (:world-id view) "minecraft:overworld")
@@ -218,8 +214,8 @@
                 (if hit
                   (charge-block-target! world-id hit charge)
                   {:effective? false :charged 0.0 :block-pos nil})
-                {:keys [success?]} (consume-resource! player-id 0.0 cp)]
-            (if-not success?
+                ]
+            (if-not cost-ok?
               (finish-charge! ctx-id false)
               (do
                 (add-skill-exp! player-id (exp-incr effective?))

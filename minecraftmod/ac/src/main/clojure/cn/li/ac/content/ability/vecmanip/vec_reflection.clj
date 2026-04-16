@@ -3,11 +3,13 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.model.resource-data :as rdata]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.util.toggle :as toggle]
+            [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -25,6 +27,30 @@
     "minecraft:experience_bottle"})
 
 (defonce ^:private reflecting-players (atom #{}))
+(declare get-skill-exp)
+
+(defn- current-cp
+  [player-id]
+  (double (or (get-in (ps/get-player-state player-id) [:resource-data :cur-cp]) 0.0)))
+
+(defn- consume-cp!
+  [player-id cp]
+  (boolean (:success? (fx-common/perform-resource! player-id 0.0 (double cp) false))))
+
+(defn- enforce-overload-floor!
+  [player-id floor-value]
+  (ps/update-resource-data!
+    player-id
+    (fn [res-data]
+      (if (< (double (:cur-overload res-data)) (double floor-value))
+        (-> res-data
+            (rdata/set-cur-overload floor-value)
+            (assoc :overload-fine true))
+        res-data))))
+
+(defn vec-reflection-cost-tick-cp
+  [{:keys [player-id]}]
+  (scaling/lerp 15.0 11.0 (get-skill-exp player-id)))
 
 (defn- get-skill-exp [player-id]
   (when-let [state (ps/get-player-state player-id)]
@@ -127,9 +153,7 @@
             (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-visited] #{})
             (let [overload-keep (scaling/lerp 350.0 250.0 exp)]
               (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-overload-keep] overload-keep)
-              (when (ps/get-player-state player-id)
-                (ps/update-ability-data! player-id
-                                         #(update-in % [:cp-data :overload] + overload-keep))))
+              (enforce-overload-floor! player-id overload-keep))
             (send-fx-start! ctx-id)
             (log/info "VecReflection: Activated")))))
     (catch Exception e
@@ -137,75 +161,67 @@
 
 (defn vec-reflection-on-key-tick
   "Tick handler - consume resources and reflect nearby projectiles."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (when (toggle/is-toggle-active? ctx-data :vec-reflection)
         (let [exp (get-skill-exp player-id)
-              tick-consumption (scaling/lerp 15.0 11.0 exp)
               overload-keep (get-in ctx-data [:skill-state :vec-reflection-overload-keep] 0.0)]
           (toggle/update-toggle-tick! ctx-id :vec-reflection)
 
-          (when-let [state (ps/get-player-state player-id)]
-            (let [cp-data (get-in state [:ability-data :cp-data])
-                  current-overload (:overload cp-data 0.0)]
-              (when (< current-overload overload-keep)
-                (ps/update-ability-data! player-id
-                                         #(assoc-in % [:cp-data :overload] overload-keep)))))
+          (enforce-overload-floor! player-id overload-keep)
+          (when-not cost-ok?
+            (toggle/deactivate-toggle! ctx-id :vec-reflection)
+            (send-fx-end! ctx-id)
+            (log/info "VecReflection: Deactivated (insufficient CP)"))
 
-          (when-let [state (ps/get-player-state player-id)]
-            (let [cp-data (get-in state [:ability-data :cp-data])
-                  current-cp (:cp cp-data 0.0)]
-              (if (>= current-cp tick-consumption)
-                (ps/update-ability-data! player-id
-                                         #(update-in % [:cp-data :cp] - tick-consumption))
-                (do
-                  (toggle/deactivate-toggle! ctx-id :vec-reflection)
-                  (send-fx-end! ctx-id)
-                  (log/info "VecReflection: Deactivated (insufficient CP)")))))
-
-          (when-let [pos (get-player-position player-id)]
-            (when world-effects/*world-effects*
-              (let [world-id (:world-id pos)
-                    x (:x pos)
-                    y (:y pos)
-                    z (:z pos)
-                    entities (world-effects/find-entities-in-radius world-effects/*world-effects*
-                                                                    world-id x y z 4.0)
-                    visited (get-in ctx-data [:skill-state :vec-reflection-visited] #{})
-                    fresh-entities (remove (fn [entity]
-                                             (contains? visited (:uuid entity)))
-                                           entities)]
-                (doseq [entity fresh-entities]
-                  (let [entity-id (:uuid entity)
-                        difficulty (affect-difficulty entity)]
-                    (when (and entity-id
-                               (not= entity-id player-id)
-                               difficulty)
-                      (when-let [look-vec (and raycast/*raycast*
-                                               (raycast/get-player-look-vector raycast/*raycast* player-id))]
-                        (let [entity-vel (when entity-motion/*entity-motion*
-                                           (entity-motion/get-velocity entity-motion/*entity-motion*
-                                                                       world-id
-                                                                       entity-id))
-                              speed (Math/sqrt (+ (Math/pow (double (or (:x entity-vel) 0.0)) 2.0)
-                                                  (Math/pow (double (or (:y entity-vel) 0.0)) 2.0)
-                                                  (Math/pow (double (or (:z entity-vel) 0.0)) 2.0)))
-                              vel-x (* (double (:x look-vec)) speed)
-                              vel-y (* (double (:y look-vec)) speed)
-                              vel-z (* (double (:z look-vec)) speed)]
-                          (when entity-motion/*entity-motion*
-                            (entity-motion/set-velocity! entity-motion/*entity-motion*
-                                                         world-id
-                                                         entity-id vel-x vel-y vel-z))
-                          (let [reflect-cost (* difficulty (scaling/lerp 300.0 160.0 exp))]
-                            (ps/update-ability-data! player-id
-                                                     #(update-in % [:cp-data :cp] - reflect-cost)))
-                          (add-exp! player-id (* difficulty 0.0008))
-                          (send-fx-reflect-entity! ctx-id entity)
-                          (log/debug "VecReflection: Reflected entity" entity-id))))))
-                (let [visited-ids (into #{} (keep :uuid entities))]
-                  (ctx/update-context! ctx-id update-in [:skill-state :vec-reflection-visited] (fnil into #{}) visited-ids))))))))
+          (when (and cost-ok? (toggle/is-toggle-active? (or (ctx/get-context ctx-id) ctx-data) :vec-reflection))
+            (when-let [pos (get-player-position player-id)]
+              (when world-effects/*world-effects*
+                (let [world-id (:world-id pos)
+                      x (:x pos)
+                      y (:y pos)
+                      z (:z pos)
+                      entities (world-effects/find-entities-in-radius world-effects/*world-effects*
+                                                                      world-id x y z 4.0)
+                      visited (get-in ctx-data [:skill-state :vec-reflection-visited] #{})
+                      fresh-entities (remove (fn [entity]
+                                               (contains? visited (:uuid entity)))
+                                             entities)]
+                  (doseq [entity fresh-entities]
+                    (let [entity-id (:uuid entity)
+                          difficulty (affect-difficulty entity)]
+                      (when (and entity-id
+                                 (not= entity-id player-id)
+                                 difficulty)
+                        (when-let [look-vec (and raycast/*raycast*
+                                                 (raycast/get-player-look-vector raycast/*raycast* player-id))]
+                          (let [entity-vel (when entity-motion/*entity-motion*
+                                             (entity-motion/get-velocity entity-motion/*entity-motion*
+                                                                         world-id
+                                                                         entity-id))
+                                speed (Math/sqrt (+ (Math/pow (double (or (:x entity-vel) 0.0)) 2.0)
+                                                    (Math/pow (double (or (:y entity-vel) 0.0)) 2.0)
+                                                    (Math/pow (double (or (:z entity-vel) 0.0)) 2.0)))
+                                vel-x (* (double (:x look-vec)) speed)
+                                vel-y (* (double (:y look-vec)) speed)
+                                vel-z (* (double (:z look-vec)) speed)
+                                reflect-cost (* difficulty (scaling/lerp 300.0 160.0 exp))]
+                            (if-not (consume-cp! player-id reflect-cost)
+                              (do
+                                (toggle/deactivate-toggle! ctx-id :vec-reflection)
+                                (send-fx-end! ctx-id)
+                                (log/info "VecReflection: Deactivated (insufficient reflect CP)"))
+                              (do
+                                (when entity-motion/*entity-motion*
+                                  (entity-motion/set-velocity! entity-motion/*entity-motion*
+                                                               world-id
+                                                               entity-id vel-x vel-y vel-z))
+                                (add-exp! player-id (* difficulty 0.0008))
+                                (send-fx-reflect-entity! ctx-id entity)
+                                (log/debug "VecReflection: Reflected entity" entity-id))))))))
+                  (let [visited-ids (into #{} (keep :uuid entities))]
+                    (ctx/update-context! ctx-id update-in [:skill-state :vec-reflection-visited] (fnil into #{}) visited-ids)))))))))
     (catch Exception e
       (log/warn "VecReflection key-tick failed:" (ex-message e)))))
 
@@ -241,13 +257,11 @@
                   reflect-multiplier (scaling/lerp 0.6 1.2 exp)
                   reflected-damage (* original-damage reflect-multiplier)
                   consumption (* original-damage (scaling/lerp 20.0 15.0 exp))
-                  cp-data (get-in state [:ability-data :cp-data])
-                  current-cp (:cp cp-data 0.0)]
+                  current-cp (current-cp player-id)]
               (if (and (>= current-cp consumption)
                        (>= reflected-damage 1.0))
                 (do
-                  (ps/update-ability-data! player-id
-                                           #(update-in % [:cp-data :cp] - consumption))
+                  (consume-cp! player-id consumption)
                   (when (and attacker-id entity-damage/*entity-damage*)
                     (let [world-id (or (get-in state [:position :world-id])
                                        (get-in (ps/get-player-state attacker-id) [:position :world-id])
@@ -275,12 +289,12 @@
   Mirrors original passby gate: only cancels when reflection can actually perform."
   [player-id _attacker-id original-damage]
   (try
-    (if-let [state (ps/get-player-state player-id)]
+    (if (ps/get-player-state player-id)
       (let [ctx-id (active-vec-reflection-ctx-id player-id)
             exp (get-skill-exp player-id)
             consumption (* original-damage (scaling/lerp 20.0 15.0 exp))
             reflected-damage (* original-damage (scaling/lerp 0.6 1.2 exp))
-            current-cp (double (get-in state [:ability-data :cp-data :cp] 0.0))]
+            current-cp (current-cp player-id)]
         (and ctx-id
              (>= current-cp consumption)
              (>= reflected-damage 1.0)))

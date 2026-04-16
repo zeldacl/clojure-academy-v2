@@ -15,7 +15,6 @@
   (:require [clojure.string :as str]
             [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.model.resource-data :as rd]
@@ -114,40 +113,21 @@
   [{:keys [x y z]}]
   {:x (double x) :y (+ (double y) 1.62) :z (double z)})
 
-(defn- consume-overload-upfront!
-  [player-id player exp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [overload (lerp 60.0 30.0 exp)
-          creative? (boolean (and player (entity/player-creative? player)))
-          {:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           overload
-                                           0.0
-                                           creative?)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      (when success?
-        (double (:cur-overload data))))))
+(defn mag-movement-cost-down-overload
+  [{:keys [player-id]}]
+  (lerp 60.0 30.0 (get-skill-exp player-id)))
 
-(defn- consume-cp-per-tick!
-  [player-id player exp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [cp (lerp 15.0 8.0 exp)
-          creative? (boolean (and player (entity/player-creative? player)))
-          {:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           0.0
-                                           cp
-                                           creative?)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
+(defn mag-movement-cost-tick-cp
+  [{:keys [player-id ctx-id]}]
+  (if-let [ctx-data (ctx/get-context ctx-id)]
+    (if (get-in ctx-data [:skill-state :has-target])
+      (lerp 15.0 8.0 (get-skill-exp player-id))
+      0.0)
+    0.0))
+
+(defn mag-movement-cost-creative?
+  [{:keys [player]}]
+  (boolean (and player (entity/player-creative? player))))
 
 (defn- keep-overload-floor!
   [player-id overload-floor]
@@ -270,12 +250,11 @@
 
 (defn mag-movement-on-key-down
   "Initialize mag movement when key pressed."
-  [{:keys [player-id ctx-id player]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (let [exp (get-skill-exp player-id)
-          state-pos (player-pos player-id)
-          upfront-overload (consume-overload-upfront! player-id player exp)]
-      (if-not upfront-overload
+          state-pos (player-pos player-id)]
+      (if-not cost-ok?
         (do
           (ctx/update-context! ctx-id assoc :skill-state {:skip-default-cooldown true
                                                            :has-target false})
@@ -289,7 +268,7 @@
                                         {:skip-default-cooldown true
                                          :has-target true
                                          :movement-ticks 0
-                                         :overload-floor upfront-overload
+                                         :overload-floor (lerp 60.0 30.0 exp)
                                          :start-x (double (:x state-pos))
                                          :start-y (double (:y state-pos))
                                          :start-z (double (:z state-pos))
@@ -311,7 +290,7 @@
 
 (defn mag-movement-on-key-tick
   "Continue magnetic movement each tick."
-  [{:keys [player-id ctx-id player]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [ctx (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx)
@@ -325,11 +304,10 @@
               (do
                 (finish-movement! player-id ctx-id skill-state)
                 (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false))
-              (let [exp (get-skill-exp player-id)
-                    movement-ticks (inc (int (:movement-ticks updated-state)))
+              (let [movement-ticks (inc (int (:movement-ticks updated-state)))
                     _ (ctx/update-context! ctx-id assoc :skill-state (assoc updated-state :movement-ticks movement-ticks))
                     _ (keep-overload-floor! player-id (:overload-floor updated-state))]
-                (if-not (consume-cp-per-tick! player-id player exp)
+                (if-not cost-ok?
                   (do
                     (finish-movement! player-id ctx-id updated-state)
                     (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false))

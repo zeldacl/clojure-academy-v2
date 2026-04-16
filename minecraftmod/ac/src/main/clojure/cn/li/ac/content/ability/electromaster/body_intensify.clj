@@ -4,7 +4,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
@@ -53,21 +52,17 @@
   [ctx-id performed?]
   (ctx/ctx-send-to-client! ctx-id :body-intensify/fx-end {:performed? (boolean performed?)}))
 
-(defn- consume-resource!
-  [player-id overload cp creative?]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           overload
-                                           cp
-                                           creative?)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      {:success? (boolean success?)
-       :resource-data data})))
+(defn body-intensify-cost-down-overload
+  [{:keys [player-id]}]
+  (lerp 200.0 120.0 (get-skill-exp player-id)))
+
+(defn body-intensify-cost-tick-cp
+  [{:keys [ctx-id]}]
+  (if-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
+    (let [tick (inc (int (or (:tick skill-state) 0)))
+          cp-per-tick (double (or (:cp-per-tick skill-state) 20.0))]
+      (if (<= tick max-time) cp-per-tick 0.0))
+    0.0))
 
 (defn- enforce-overload-floor!
   [player-id floor-value]
@@ -130,13 +125,12 @@
 
 (defn body-intensify-on-key-down
   "Consume initial overload and enter charging state."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (let [exp (get-skill-exp player-id)
           initial-overload (lerp 200.0 120.0 exp)
-          {:keys [success? resource-data]} (consume-resource! player-id initial-overload 0.0 false)
-          overload-floor (double (or (:cur-overload resource-data) initial-overload))]
-      (if-not success?
+          overload-floor (double initial-overload)]
+      (if-not cost-ok?
         (do
           (send-fx-end! ctx-id false)
           (ctx/terminate-context! ctx-id nil)
@@ -154,11 +148,10 @@
 
 (defn body-intensify-on-key-tick
   "Consume CP while charging and stop at tolerance limit."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
       (let [tick (inc (int (or (:tick skill-state) 0)))
-            cp-per-tick (double (or (:cp-per-tick skill-state) 20.0))
             overload-floor (double (or (:overload-floor skill-state) 0.0))]
         (enforce-overload-floor! player-id overload-floor)
         (ctx/update-context! ctx-id assoc-in [:skill-state :tick] tick)
@@ -169,8 +162,7 @@
             (send-fx-end! ctx-id false)
             (ctx/terminate-context! ctx-id nil))
 
-          (and (<= tick max-time)
-            (not (:success? (consume-resource! player-id 0.0 cp-per-tick false))))
+          (and (<= tick max-time) (not cost-ok?))
           (do
             (send-fx-end! ctx-id false)
             (ctx/terminate-context! ctx-id nil)))))

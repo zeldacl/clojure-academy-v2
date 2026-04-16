@@ -9,7 +9,6 @@
 	(:require [clojure.string :as str]
 						[cn.li.ac.ability.player-state :as ps]
 						[cn.li.ac.ability.service.learning :as learning]
-						[cn.li.ac.ability.service.resource :as res]
 						[cn.li.ac.ability.service.cooldown :as cd]
 						[cn.li.ac.ability.event :as ability-evt]
 						[cn.li.ac.ability.context :as ctx]
@@ -192,23 +191,36 @@
 		(ps/update-cooldown-data! player-id cd/set-main-cooldown :mag-manip (max 1 cd-ticks))))
 
 ; Original: consumption = lerpf(140, 270, exp); overload = lerpf(35, 20, exp)
-(defn- consume-mag-manip-cost!
-	[player-id player exp]
-	(when-let [state (ps/get-player-state player-id)]
-		(let [cp (lerp 140.0 270.0 exp)
-					overload (lerp 35.0 20.0 exp)
-					creative? (boolean (and player (entity/player-creative? player)))
-					{:keys [data success? events]} (res/perform-resource
-																					 (:resource-data state)
-																					 player-id
-																					 overload
-																					 cp
-																					 creative?)]
-			(when success?
-				(ps/update-resource-data! player-id (constantly data))
-				(doseq [e events]
-					(ability-evt/fire-ability-event! e)))
-			(boolean success?))))
+(defn- should-pay-up-cost?
+	[player-id ctx-id]
+	(if-let [ctx-data (ctx/get-context ctx-id)]
+		(let [skill-state (:skill-state ctx-data)
+					held-block (get skill-state :held-block)]
+			(if-not (and (= :holding (:mode skill-state)) held-block)
+				false
+				(let [focus-pos (or (:focus skill-state) (hold-focus player-id))
+							player-now (player-pos player-id)
+							dist-sq (+ (Math/pow (- (:x player-now) (:x focus-pos)) 2.0)
+												 (Math/pow (- (:y player-now) (:y focus-pos)) 2.0)
+												 (Math/pow (- (:z player-now) (:z focus-pos)) 2.0))]
+					(< dist-sq 25.0))))
+		false))
+
+(defn mag-manip-cost-up-cp
+	[{:keys [player-id ctx-id]}]
+	(if (should-pay-up-cost? player-id ctx-id)
+		(lerp 140.0 270.0 (get-skill-exp player-id))
+		0.0))
+
+(defn mag-manip-cost-up-overload
+	[{:keys [player-id ctx-id]}]
+	(if (should-pay-up-cost? player-id ctx-id)
+		(lerp 35.0 20.0 (get-skill-exp player-id))
+		0.0))
+
+(defn mag-manip-cost-creative?
+	[{:keys [player]}]
+	(boolean (and player (entity/player-creative? player))))
 
 (defn- add-mag-manip-exp!
 	[player-id amount]
@@ -333,7 +345,7 @@
 ; Entity damage is always 10 (hardcoded in MagManipEntityBlock constructor).
 ; Exp gain on throw: 0.005F (ctx.addSkillExp(0.005F))
 (defn mag-manip-on-key-up
-	[{:keys [player-id ctx-id player]}]
+	[{:keys [player-id ctx-id cost-ok?]}]
 	(try
 		(when-let [ctx-data (ctx/get-context ctx-id)]
 			(let [skill-state (:skill-state ctx-data)
@@ -355,7 +367,7 @@
 								(restore-held-block! held-block)
 								(ctx/update-context! ctx-id assoc :skill-state
 																 (assoc skill-state :skip-default-cooldown true :fired false :mode :too-far)))
-							(if-not (consume-mag-manip-cost! player-id player exp)
+							(if-not cost-ok?
 								(do
 									(restore-held-block! held-block)
 									(ctx/update-context! ctx-id assoc :skill-state

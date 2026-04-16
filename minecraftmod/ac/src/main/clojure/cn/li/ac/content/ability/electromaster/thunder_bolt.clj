@@ -19,11 +19,9 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
-            [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]
@@ -53,22 +51,15 @@
   (or (get-in (ps/get-player-state player-id) [:position :world-id])
       "minecraft:overworld"))
 
-(defn- consume-cost!
-  "Consume overload lerp(50,27,exp) and CP lerp(280,420,exp).
-  Returns true if resources were available."
-  [player-id exp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [overload (lerp 50.0 27.0 exp)
-          cp       (lerp 280.0 420.0 exp)
-          {:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           overload cp false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
+(defn thunder-bolt-cost-down-cp
+  [{:keys [player-id]}]
+  (let [exp (get-skill-exp player-id)]
+    (lerp 280.0 420.0 exp)))
+
+(defn thunder-bolt-cost-down-overload
+  [{:keys [player-id]}]
+  (let [exp (get-skill-exp player-id)]
+    (lerp 50.0 27.0 exp)))
 
 (defn- apply-cooldown!
   "Set cooldown to lerp(120,50,exp) ticks."
@@ -79,27 +70,18 @@
 (defn- add-exp!
   "Grant 0.005 exp if effective (hit something), 0.003 otherwise."
   [player-id effective?]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [amount (if effective? 0.005 0.003)
-          {:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :thunder-bolt
-                                  amount 1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events]
-        (ability-evt/fire-ability-event! e)))))
+  (fx-common/add-skill-exp! player-id :thunder-bolt (if effective? 0.005 0.003) 1.0))
 
 ;; ============================================================================
 ;; Skill handlers
 ;; ============================================================================
 
-(defn thunder-bolt-on-key-down
-  "Execute ThunderBolt skill on key down (instant cast)."
-  [{:keys [player-id ctx-id]}]
+(defn thunder-bolt-perform!
+  "Instant cast action (invoked by :pattern :instant)."
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (let [exp          (get-skill-exp player-id)
-          consumed?    (consume-cost! player-id exp)]
+          consumed?    (boolean cost-ok?)]
       (when consumed?
         (let [world-id     (player-world-id player-id)
               damage-direct (lerp 10.0 25.0 exp)
@@ -206,20 +188,4 @@
                      "effective?" effective? "aoe-count" (count aoe-entities)))))
     (catch Exception e
       (log/warn "ThunderBolt execution failed:" (ex-message e))))
-  ;; Always terminate (instant skill)
-  (ctx/terminate-context! ctx-id nil))
-
-(defn thunder-bolt-on-key-tick
-  "ThunderBolt is instant cast, no tick behavior."
-  [_ctx]
-  nil)
-
-(defn thunder-bolt-on-key-up
-  "ThunderBolt is instant cast, no key up behavior."
-  [_ctx]
-  nil)
-
-(defn thunder-bolt-on-key-abort
-  "ThunderBolt is instant cast, no abort behavior."
-  [_ctx]
   nil)

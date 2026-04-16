@@ -4,7 +4,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
@@ -147,24 +146,6 @@
     true
     (entity/player-consume-main-hand-item! player 1)))
 
-(defn- consume-railgun-cost!
-  [player-id player exp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [cp (lerp 200.0 450.0 exp)
-          overload (lerp 180.0 120.0 exp)
-          creative? (boolean (and player (entity/player-creative? player)))
-          {:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           overload
-                                           cp
-                                           creative?)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
-
 (defn- apply-railgun-cooldown!
   [player-id exp]
   (let [cd-ticks (int (Math/round (double (lerp 300.0 160.0 exp))))]
@@ -205,6 +186,61 @@
          :progress p
          :active? (>= p coin-active-threshold)
          :perform? (>= p coin-perform-threshold)}))))
+
+(defn- peek-coin-qte-window
+  [player-id now-ms]
+  (let [coin-window (get-in (ps/get-player-state player-id) [:runtime :railgun :coin-window])]
+    (if-not coin-window
+      {:has-window? false :active? false :perform? false :progress 0.0}
+      (let [p (coin-progress coin-window now-ms)]
+        {:has-window? true
+         :progress p
+         :active? (>= p coin-active-threshold)
+         :perform? (>= p coin-perform-threshold)}))))
+
+;; ---------------------------------------------------------------------------
+;; Cost DSL hooks
+;; ---------------------------------------------------------------------------
+
+(defn railgun-cost-creative?
+  [{:keys [player]}]
+  (boolean (and player (entity/player-creative? player))))
+
+(defn railgun-cost-down-cp
+  [{:keys [player-id]}]
+  (let [qte (peek-coin-qte-window player-id (System/currentTimeMillis))]
+    (if (:perform? qte)
+      (lerp 200.0 450.0 (get-skill-exp player-id))
+      0.0)))
+
+(defn railgun-cost-down-overload
+  [{:keys [player-id]}]
+  (let [qte (peek-coin-qte-window player-id (System/currentTimeMillis))]
+    (if (:perform? qte)
+      (lerp 180.0 120.0 (get-skill-exp player-id))
+      0.0)))
+
+(defn- item-charge-ready?
+  [ctx-id player]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
+    (let [skill-state (:skill-state ctx-data)
+          mode (:mode skill-state)
+          ticks-left (max 0 (int (or (:charge-ticks skill-state) 0)))]
+      (and (= mode :item-charge)
+           (<= ticks-left 1)
+           (accepted-item-in-hand? player)))))
+
+(defn railgun-cost-tick-cp
+  [{:keys [player-id ctx-id player]}]
+  (if (item-charge-ready? ctx-id player)
+    (lerp 200.0 450.0 (get-skill-exp player-id))
+    0.0))
+
+(defn railgun-cost-tick-overload
+  [{:keys [player-id ctx-id player]}]
+  (if (item-charge-ready? ctx-id player)
+    (lerp 180.0 120.0 (get-skill-exp player-id))
+    0.0))
 
 (defn- railgun-candidates
   [origin-player-id world-id start-pos dir]
@@ -247,7 +283,7 @@
     (when-let [state (ps/get-player-state target-player-id)]
       (let [exp (get-in state [:ability-data :skills :vec-reflection :exp] 0.0)
             consumption (* incoming-damage (lerp 20.0 15.0 exp))
-            current-cp (get-in state [:ability-data :cp-data :cp] 0.0)]
+            current-cp (get-in state [:resource-data :cur-cp] 0.0)]
         (>= (double current-cp) (double consumption))))))
 
 (defn- break-beam-blocks!
@@ -397,14 +433,14 @@
   "Railgun activation logic.
   1) Coin QTE perform when coin window progress > 0.7
   2) Otherwise start 20-tick iron-item charge"
-  [{:keys [player-id ctx-id player]}]
+  [{:keys [player-id ctx-id player cost-ok?]}]
   (try
     (let [exp (get-skill-exp player-id)
           now-ms (System/currentTimeMillis)
           qte (consume-coin-qte-window! player-id now-ms)]
       (cond
         (:perform? qte)
-        (if (consume-railgun-cost! player-id player exp)
+        (if cost-ok?
           (let [{:keys [performed? reflection-hit? normal-hit-count]} (perform-main-shot! player-id ctx-id exp)]
             (when performed?
               (add-railgun-exp! player-id (if reflection-hit? 0.01 0.005))
@@ -437,7 +473,7 @@
 
 (defn railgun-on-key-tick
   "Item-charge path: countdown to automatic perform at 20 ticks."
-  [{:keys [player-id ctx-id player]}]
+  [{:keys [player-id ctx-id player cost-ok?]}]
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
@@ -448,7 +484,7 @@
               (do
                 (if (and (accepted-item-in-hand? player)
                          (consume-item-for-shot! player)
-                         (consume-railgun-cost! player-id player (get-skill-exp player-id)))
+                         cost-ok?)
                   (let [{:keys [performed? reflection-hit? normal-hit-count]} (perform-main-shot! player-id ctx-id (get-skill-exp player-id))]
                     (when performed?
                       (add-railgun-exp! player-id (if reflection-hit? 0.01 0.005))

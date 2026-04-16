@@ -19,7 +19,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
@@ -71,7 +70,7 @@
 ;; Player state helpers
 ;; ============================================================
 
-(defn- get-skill-exp [player-id]
+(defn get-skill-exp [player-id]
   (when-let [state (ps/get-player-state player-id)]
     (clamp01 (get-in state [:ability-data :skills :plasma-cannon :exp] 0.0))))
 
@@ -95,29 +94,14 @@
       (ps/update-ability-data! player-id (constantly data))
       (doseq [e events] (ability-evt/fire-ability-event! e)))))
 
-;; Consume initial overload on activation (returns true if OK)
-(defn- consume-initial-overload! [player-id exp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events success?]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           (overload-keep exp) 0.0 false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events] (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
+;; Cost DSL hooks (used by content spec :cost)
+(defn plasma-cannon-cost-down-overload
+  [{:keys [player-id]}]
+  (overload-keep (get-skill-exp player-id)))
 
-;; Consume CP per tick during charge (returns true if OK)
-(defn- consume-cp-tick! [player-id exp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events success?]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           0.0 (cp-per-tick exp) false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events] (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
+(defn plasma-cannon-cost-tick-cp
+  [{:keys [player-id]}]
+  (cp-per-tick (get-skill-exp player-id)))
 
 ;; Maintain overload floor each tick (prevent recovery below overload-keep)
 (defn- maintain-overload! [player-id min-overload]
@@ -156,7 +140,7 @@
 ;; ============================================================
 
 (defn- try-move [charge-pos destination]
-  "Advance charge-pos one block toward destination. Returns [new-pos last-pos]."
+  ;; Advance charge-pos one block toward destination. Returns [new-pos last-pos].
   (let [dx (- (double (:x destination)) (double (:x charge-pos)))
         dy (- (double (:y destination)) (double (:y charge-pos)))
         dz (- (double (:z destination)) (double (:z charge-pos)))
@@ -224,8 +208,7 @@
 ;; ============================================================
 
 (defn- resolve-destination [player-id world-id player-pos]
-  "Raycast from player eye in look direction (max 100 blocks, prefer living).
-  Returns destination position map {:x :y :z}."
+  ;; Raycast from player eye in look direction (max 100 blocks, prefer living).
   (let [eye-x (double (:x player-pos))
         eye-y (+ (double (:y player-pos)) 1.62)
         eye-z (double (:z player-pos))]
@@ -257,12 +240,11 @@
 (defn plasma-cannon-on-key-down
   "Server-side: initialize charge. Consume initial overload (500→400 by exp).
   Equivalent to s_madeAlive() in original."
-  [{:keys [ctx-id player-id]}]
+  [{:keys [ctx-id player-id cost-ok?]}]
   (try
     (let [exp (get-skill-exp player-id)
-          ct  (int (charge-time exp))
-          ok  (consume-initial-overload! player-id exp)]
-      (if-not ok
+          ct  (int (charge-time exp))]
+      (if-not cost-ok?
         (do
           (send-fx-end! ctx-id false)
           (ctx/terminate-context! ctx-id nil)
@@ -285,7 +267,7 @@
 
 (defn plasma-cannon-on-key-tick
   "Server-side tick. Handles both :charging and :go states."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
@@ -297,12 +279,10 @@
 
         (case state
           :charging
-          (let [exp          (get-skill-exp player-id)
-                charge-ticks (long (or (:charge-ticks skill-state) 0))
+          (let [charge-ticks (long (or (:charge-ticks skill-state) 0))
                 charge-time  (long (or (:charge-time skill-state) 60))
-                next-ticks   (inc charge-ticks)
-                cp-ok        (consume-cp-tick! player-id exp)]
-            (if-not cp-ok
+                next-ticks   (inc charge-ticks)]
+            (if-not cost-ok?
               ;; Out of CP: abort (original: terminate())
               (do
                 (send-fx-end! ctx-id false)

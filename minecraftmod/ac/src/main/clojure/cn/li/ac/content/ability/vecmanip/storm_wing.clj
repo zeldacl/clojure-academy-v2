@@ -23,7 +23,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
@@ -56,32 +55,23 @@
   (when teleportation/*teleportation*
     (teleportation/get-player-position teleportation/*teleportation* player-id)))
 
-(defn- get-player-world [player-id]
-  (or (get-in (ps/get-player-state player-id) [:position :world-id])
-      "minecraft:overworld"))
-
 (defn- apply-cooldown! [player-id exp]
   (let [cd-ticks (int (Math/round (double (lerp 30.0 10.0 exp))))]
     (ps/update-cooldown-data! player-id cd/set-main-cooldown :storm-wing (max 1 cd-ticks))))
 
-(defn- consume-resources! [player-id player exp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [cp-cost   (lerp 40.0 25.0 exp)
-          ol-cost   (lerp 10.0 7.0 exp)
-          creative? (boolean (when player
-                               (try ((resolve 'cn.li.mcmod.platform.entity/player-creative?) player)
-                                    (catch Exception _ false))))
-          {:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           ol-cost
-                                           cp-cost
-                                           creative?)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
+(defn storm-wing-cost-tick-cp
+  [{:keys [player-id]}]
+  (lerp 40.0 25.0 (get-skill-exp player-id)))
+
+(defn storm-wing-cost-tick-overload
+  [{:keys [player-id]}]
+  (lerp 10.0 7.0 (get-skill-exp player-id)))
+
+(defn storm-wing-cost-creative?
+  [{:keys [player]}]
+  (boolean (when player
+             (try ((resolve 'cn.li.mcmod.platform.entity/player-creative?) player)
+                  (catch Exception _ false)))))
 
 (defn- add-exp! [player-id]
   (when-let [state (ps/get-player-state player-id)]
@@ -177,7 +167,7 @@
       (log/warn "StormWing key-down failed:" (ex-message e)))))
 
 (defn storm-wing-on-key-tick
-  [{:keys [player-id ctx-id player]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)]
@@ -202,7 +192,7 @@
 
               :flying
               ;; Consume resources
-              (if (consume-resources! player-id player exp)
+              (if cost-ok?
                 (let [pos (get-player-pos player-id)]
                   (when pos
                     (let [world-id (:world-id pos)

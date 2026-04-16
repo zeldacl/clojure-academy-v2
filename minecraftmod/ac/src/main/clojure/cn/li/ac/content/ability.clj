@@ -5,25 +5,7 @@
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.skill :as skill]
             [cn.li.ac.ability.event :as ability-evt]
-            [cn.li.ac.content.ability.electromaster.thunder-bolt :as thunder-bolt]
-            [cn.li.ac.content.ability.electromaster.thunder-clap :as thunder-clap]
-            [cn.li.ac.content.ability.electromaster.body-intensify :as body-intensify]
-            [cn.li.ac.content.ability.electromaster.current-charging :as current-charging]
-            [cn.li.ac.content.ability.electromaster.mag-movement :as mag-movement]
-            [cn.li.ac.content.ability.electromaster.mag-manip :as mag-manip]
-            [cn.li.ac.content.ability.electromaster.railgun :as railgun]
-            [cn.li.ac.content.ability.meltdowner.meltdowner :as meltdowner]
-            [cn.li.ac.content.ability.teleporter.mark-teleport :as mark-teleport]
-            [cn.li.ac.content.ability.teleporter.location-teleport :as location-teleport]
-            [cn.li.ac.content.ability.vecmanip.directed-shock :as directed-shock]
-            [cn.li.ac.content.ability.vecmanip.groundshock :as groundshock]
-            [cn.li.ac.content.ability.vecmanip.vec-accel :as vec-accel]
-            [cn.li.ac.content.ability.vecmanip.vec-deviation :as vec-deviation]
-            [cn.li.ac.content.ability.vecmanip.vec-reflection :as vec-reflection]
-            [cn.li.ac.content.ability.vecmanip.directed-blastwave :as directed-blastwave]
-            [cn.li.ac.content.ability.vecmanip.storm-wing :as storm-wing]
-            [cn.li.ac.content.ability.vecmanip.blood-retrograde :as blood-retrograde]
-            [cn.li.ac.content.ability.vecmanip.plasma-cannon :as plasma-cannon]
+            [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.category :as category]
             [cn.li.mcmod.util.log :as log]))
 
@@ -50,14 +32,6 @@
   [{:keys [player-id]}]
   (add-skill-exp! player-id :arc-gen 0.003))
 
-(defn- railgun-on-key-tick
-  [{:keys [player-id]}]
-  (add-skill-exp! player-id :railgun 0.004))
-
-(defn- railgun-on-key-up
-  [{:keys [player-id]}]
-  (add-skill-exp! player-id :railgun 0.02))
-
 (defn- vec-manip-on-key-tick
   [{:keys [player-id]}]
   (add-skill-exp! player-id :vec-manip 0.0025))
@@ -83,7 +57,7 @@
   :prog-incr-rate 1.0
   :enabled true)
 
-(defcategory meltdowner
+(defcategory meltdowner-category
   :id :meltdowner
   :name-key "ability.category.meltdowner"
   :icon "textures/abilities/meltdowner/icon.png"
@@ -118,11 +92,15 @@
   :level 1
   :controllable? true
   :ctrl-id :arc-gen
-  :cp-consume-speed 0.8
-  :overload-consume-speed 0.7
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
   :cooldown-ticks 14
-  :on-key-tick arc-gen-on-key-tick
-  :on-key-up arc-gen-on-key-up)
+  :pattern :hold-channel
+  :cost {:tick {:mode :runtime-speed
+                :cp-speed 0.8
+                :overload-speed 0.7}}
+  :actions {:tick! arc-gen-on-key-tick
+            :up! arc-gen-on-key-up})
 
 (defskill thunder-bolt
   :id :thunder-bolt
@@ -137,10 +115,11 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 100
-  :on-key-down thunder-bolt/thunder-bolt-on-key-down
-  :on-key-tick thunder-bolt/thunder-bolt-on-key-tick
-  :on-key-up thunder-bolt/thunder-bolt-on-key-up
-  :on-key-abort thunder-bolt/thunder-bolt-on-key-abort
+  :pattern :instant
+  :cooldown {:mode :manual}
+  :cost {:down {:cp 'cn.li.ac.content.ability.electromaster.thunder-bolt/thunder-bolt-cost-down-cp
+                :overload 'cn.li.ac.content.ability.electromaster.thunder-bolt/thunder-bolt-cost-down-overload}}
+  :actions {:perform! 'cn.li.ac.content.ability.electromaster.thunder-bolt/thunder-bolt-perform!}
   :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
                   {:skill-id :current-charging :min-exp 0.7}])
 
@@ -157,10 +136,13 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 1
-  :on-key-down thunder-clap/thunder-clap-on-key-down
-  :on-key-tick thunder-clap/thunder-clap-on-key-tick
-  :on-key-up thunder-clap/thunder-clap-on-key-up
-  :on-key-abort thunder-clap/thunder-clap-on-key-abort
+  :pattern :multi-stage
+  :cost {:down {:overload 'cn.li.ac.content.ability.electromaster.thunder-clap/thunder-clap-cost-down-overload}
+         :tick {:cp 'cn.li.ac.content.ability.electromaster.thunder-clap/thunder-clap-cost-tick-cp}}
+  :actions {:down! 'cn.li.ac.content.ability.electromaster.thunder-clap/thunder-clap-on-key-down
+            :tick! 'cn.li.ac.content.ability.electromaster.thunder-clap/thunder-clap-on-key-tick
+            :up! 'cn.li.ac.content.ability.electromaster.thunder-clap/thunder-clap-on-key-up
+            :abort! 'cn.li.ac.content.ability.electromaster.thunder-clap/thunder-clap-on-key-abort}
   :prerequisites [{:skill-id :thunder-bolt :min-exp 1.0}])
 
 (defskill current-charging
@@ -176,10 +158,13 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 40
-  :on-key-down current-charging/current-charging-on-key-down
-  :on-key-tick current-charging/current-charging-on-key-tick
-  :on-key-up current-charging/current-charging-on-key-up
-  :on-key-abort current-charging/current-charging-on-key-abort
+  :pattern :multi-stage
+  :cost {:down {:overload 'cn.li.ac.content.ability.electromaster.current-charging/current-charging-cost-down-overload}
+         :tick {:cp 'cn.li.ac.content.ability.electromaster.current-charging/current-charging-cost-tick-cp}}
+  :actions {:down! 'cn.li.ac.content.ability.electromaster.current-charging/current-charging-on-key-down
+            :tick! 'cn.li.ac.content.ability.electromaster.current-charging/current-charging-on-key-tick
+            :up! 'cn.li.ac.content.ability.electromaster.current-charging/current-charging-on-key-up
+            :abort! 'cn.li.ac.content.ability.electromaster.current-charging/current-charging-on-key-abort}
   :prerequisites [{:skill-id :arc-gen :min-exp 0.3}])
 
 (defskill body-intensify
@@ -195,10 +180,13 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 750
-  :on-key-down body-intensify/body-intensify-on-key-down
-  :on-key-tick body-intensify/body-intensify-on-key-tick
-  :on-key-up body-intensify/body-intensify-on-key-up
-  :on-key-abort body-intensify/body-intensify-on-key-abort
+  :pattern :multi-stage
+  :cost {:down {:overload 'cn.li.ac.content.ability.electromaster.body-intensify/body-intensify-cost-down-overload}
+         :tick {:cp 'cn.li.ac.content.ability.electromaster.body-intensify/body-intensify-cost-tick-cp}}
+  :actions {:down! 'cn.li.ac.content.ability.electromaster.body-intensify/body-intensify-on-key-down
+            :tick! 'cn.li.ac.content.ability.electromaster.body-intensify/body-intensify-on-key-tick
+            :up! 'cn.li.ac.content.ability.electromaster.body-intensify/body-intensify-on-key-up
+            :abort! 'cn.li.ac.content.ability.electromaster.body-intensify/body-intensify-on-key-abort}
   :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
                   {:skill-id :current-charging :min-exp 1.0}])
 
@@ -215,10 +203,15 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 60
-  :on-key-down mag-movement/mag-movement-on-key-down
-  :on-key-tick mag-movement/mag-movement-on-key-tick
-  :on-key-up mag-movement/mag-movement-on-key-up
-  :on-key-abort mag-movement/mag-movement-on-key-abort
+  :pattern :multi-stage
+  :cost {:down {:overload 'cn.li.ac.content.ability.electromaster.mag-movement/mag-movement-cost-down-overload
+                :creative? 'cn.li.ac.content.ability.electromaster.mag-movement/mag-movement-cost-creative?}
+         :tick {:cp 'cn.li.ac.content.ability.electromaster.mag-movement/mag-movement-cost-tick-cp
+                :creative? 'cn.li.ac.content.ability.electromaster.mag-movement/mag-movement-cost-creative?}}
+  :actions {:down! 'cn.li.ac.content.ability.electromaster.mag-movement/mag-movement-on-key-down
+            :tick! 'cn.li.ac.content.ability.electromaster.mag-movement/mag-movement-on-key-tick
+            :up! 'cn.li.ac.content.ability.electromaster.mag-movement/mag-movement-on-key-up
+            :abort! 'cn.li.ac.content.ability.electromaster.mag-movement/mag-movement-on-key-abort}
   :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
                   {:skill-id :current-charging :min-exp 0.7}])
 
@@ -235,10 +228,14 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 60
-  :on-key-down mag-manip/mag-manip-on-key-down
-  :on-key-tick mag-manip/mag-manip-on-key-tick
-  :on-key-up mag-manip/mag-manip-on-key-up
-  :on-key-abort mag-manip/mag-manip-on-key-abort
+  :pattern :multi-stage
+  :cost {:up {:cp 'cn.li.ac.content.ability.electromaster.mag-manip/mag-manip-cost-up-cp
+              :overload 'cn.li.ac.content.ability.electromaster.mag-manip/mag-manip-cost-up-overload
+              :creative? 'cn.li.ac.content.ability.electromaster.mag-manip/mag-manip-cost-creative?}}
+  :actions {:down! 'cn.li.ac.content.ability.electromaster.mag-manip/mag-manip-on-key-down
+            :tick! 'cn.li.ac.content.ability.electromaster.mag-manip/mag-manip-on-key-tick
+            :up! 'cn.li.ac.content.ability.electromaster.mag-manip/mag-manip-on-key-up
+            :abort! 'cn.li.ac.content.ability.electromaster.mag-manip/mag-manip-on-key-abort}
   :prerequisites [{:skill-id :mag-movement :min-exp 0.5}])
 
 (defskill railgun
@@ -254,10 +251,18 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 1
-  :on-key-down railgun/railgun-on-key-down
-  :on-key-tick railgun/railgun-on-key-tick
-  :on-key-up railgun/railgun-on-key-up
-  :on-key-abort railgun/railgun-on-key-abort
+  :pattern :multi-stage
+  :cooldown {:mode :manual}
+  :cost {:down {:cp 'cn.li.ac.content.ability.electromaster.railgun/railgun-cost-down-cp
+                :overload 'cn.li.ac.content.ability.electromaster.railgun/railgun-cost-down-overload
+                :creative? 'cn.li.ac.content.ability.electromaster.railgun/railgun-cost-creative?}
+         :tick {:cp 'cn.li.ac.content.ability.electromaster.railgun/railgun-cost-tick-cp
+                :overload 'cn.li.ac.content.ability.electromaster.railgun/railgun-cost-tick-overload
+                :creative? 'cn.li.ac.content.ability.electromaster.railgun/railgun-cost-creative?}}
+  :actions {:down! 'cn.li.ac.content.ability.electromaster.railgun/railgun-on-key-down
+            :tick! 'cn.li.ac.content.ability.electromaster.railgun/railgun-on-key-tick
+            :up! 'cn.li.ac.content.ability.electromaster.railgun/railgun-on-key-up
+            :abort! 'cn.li.ac.content.ability.electromaster.railgun/railgun-on-key-abort}
   :prerequisites [{:skill-id :thunder-bolt :min-exp 0.3}
                   {:skill-id :mag-manip :min-exp 1.0}])
 
@@ -271,11 +276,15 @@
   :level 1
   :controllable? true
   :ctrl-id :vec-manip
-  :cp-consume-speed 0.9
-  :overload-consume-speed 0.8
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
   :cooldown-ticks 18
-  :on-key-tick vec-manip-on-key-tick
-  :on-key-up vec-manip-on-key-up)
+  :pattern :hold-channel
+  :cost {:tick {:mode :runtime-speed
+                :cp-speed 0.9
+                :overload-speed 0.8}}
+  :actions {:tick! vec-manip-on-key-tick
+            :up! vec-manip-on-key-up})
 
 (defskill storm-wind
   :id :storm-wind
@@ -286,9 +295,13 @@
   :level 2
   :controllable? true
   :ctrl-id :storm-wind
-  :cp-consume-speed 1.2
-  :overload-consume-speed 1.1
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
   :cooldown-ticks 24
+  :pattern :hold-channel
+  :cost {:tick {:mode :runtime-speed
+                :cp-speed 1.2
+                :overload-speed 1.1}}
   :prerequisites [{:skill-id :vec-manip :min-exp 0.4}])
 
 ;; Meltdowner skills
@@ -304,10 +317,13 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 200
-  :on-key-down meltdowner/meltdowner-on-key-down
-  :on-key-tick meltdowner/meltdowner-on-key-tick
-  :on-key-up meltdowner/meltdowner-on-key-up
-  :on-key-abort meltdowner/meltdowner-on-key-abort)
+  :pattern :multi-stage
+  :cost {:down {:overload 'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-cost-down-overload}
+         :tick {:cp 'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-cost-tick-cp}}
+  :actions {:down! 'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-key-down
+            :tick! 'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-key-tick
+            :up! 'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-key-up
+            :abort! 'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-key-abort})
 
 ;; Teleporter skills
 (defskill mark-teleport
@@ -322,10 +338,15 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 20
-  :on-key-down mark-teleport/mark-teleport-on-key-down
-  :on-key-tick mark-teleport/mark-teleport-on-key-tick
-  :on-key-up mark-teleport/mark-teleport-on-key-up
-  :on-key-abort mark-teleport/mark-teleport-on-key-abort)
+  :pattern :multi-stage
+  :cooldown {:mode :manual}
+  :cost {:up {:cp 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-cost-up-cp
+              :overload 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-cost-up-overload
+              :creative? 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-cost-creative?}}
+  :actions {:down! 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-on-key-down
+            :tick! 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-on-key-tick
+            :up! 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-on-key-up
+            :abort! 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-on-key-abort})
 
 (defskill location-teleport
   :id :location-teleport
@@ -339,10 +360,11 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 25
-  :on-key-down location-teleport/location-teleport-on-key-down
-  :on-key-tick location-teleport/location-teleport-on-key-tick
-  :on-key-up location-teleport/location-teleport-on-key-up
-  :on-key-abort location-teleport/location-teleport-on-key-abort
+  :pattern :multi-stage
+  :actions {:down! 'cn.li.ac.content.ability.teleporter.location-teleport/location-teleport-on-key-down
+            :tick! 'cn.li.ac.content.ability.teleporter.location-teleport/location-teleport-on-key-tick
+            :up! 'cn.li.ac.content.ability.teleporter.location-teleport/location-teleport-on-key-up
+            :abort! 'cn.li.ac.content.ability.teleporter.location-teleport/location-teleport-on-key-abort}
   :prerequisites [{:skill-id :mark-teleport :min-exp 0.5}])
 
 ;; Vector Manipulation skills
@@ -359,10 +381,14 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 60
-  :on-key-down directed-shock/directed-shock-on-key-down
-  :on-key-tick directed-shock/directed-shock-on-key-tick
-  :on-key-up directed-shock/directed-shock-on-key-up
-  :on-key-abort directed-shock/directed-shock-on-key-abort)
+  :pattern :multi-stage
+  :cooldown {:mode :manual}
+  :cost {:up {:cp 'cn.li.ac.content.ability.vecmanip.directed-shock/directed-shock-cost-up-cp
+              :overload 'cn.li.ac.content.ability.vecmanip.directed-shock/directed-shock-cost-up-overload}}
+  :actions {:down! 'cn.li.ac.content.ability.vecmanip.directed-shock/directed-shock-on-key-down
+            :tick! 'cn.li.ac.content.ability.vecmanip.directed-shock/directed-shock-on-key-tick
+            :up! 'cn.li.ac.content.ability.vecmanip.directed-shock/directed-shock-on-key-up
+            :abort! 'cn.li.ac.content.ability.vecmanip.directed-shock/directed-shock-on-key-abort})
 
 (defskill groundshock
   :id :groundshock
@@ -377,10 +403,13 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 80
-  :on-key-down groundshock/groundshock-on-key-down
-  :on-key-tick groundshock/groundshock-on-key-tick
-  :on-key-up groundshock/groundshock-on-key-up
-  :on-key-abort groundshock/groundshock-on-key-abort
+  :pattern :multi-stage
+  :cost {:up {:cp 'cn.li.ac.content.ability.vecmanip.groundshock/groundshock-cost-up-cp
+              :overload 'cn.li.ac.content.ability.vecmanip.groundshock/groundshock-cost-up-overload}}
+  :actions {:down! 'cn.li.ac.content.ability.vecmanip.groundshock/groundshock-on-key-down
+            :tick! 'cn.li.ac.content.ability.vecmanip.groundshock/groundshock-on-key-tick
+            :up! 'cn.li.ac.content.ability.vecmanip.groundshock/groundshock-on-key-up
+            :abort! 'cn.li.ac.content.ability.vecmanip.groundshock/groundshock-on-key-abort}
   :prerequisites [{:skill-id :directed-shock :min-exp 0.0}])
 
 (defskill vec-accel
@@ -396,10 +425,29 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 80
-  :on-key-down vec-accel/vec-accel-on-key-down
-  :on-key-tick vec-accel/vec-accel-on-key-tick
-  :on-key-up vec-accel/vec-accel-on-key-up
-  :on-key-abort vec-accel/vec-accel-on-key-abort
+  :pattern :hold-charge-release
+  :cooldown {:mode :manual}
+  :state {:max-charge 20}
+  :cost {:up {:cp 'cn.li.ac.content.ability.vecmanip.vec-accel/vec-accel-cost-up-cp
+              :overload 'cn.li.ac.content.ability.vecmanip.vec-accel/vec-accel-cost-up-overload}}
+  :actions {:tick! 'cn.li.ac.content.ability.vecmanip.vec-accel/vec-accel-tick!
+            :perform! 'cn.li.ac.content.ability.vecmanip.vec-accel/vec-accel-perform!
+            :abort! 'cn.li.ac.content.ability.vecmanip.vec-accel/vec-accel-abort!}
+  :fx {:start {:topic :vec-accel/fx-start
+               :payload (fn [_] {})}
+       :update {:topic :vec-accel/fx-update
+                :payload (fn [{:keys [ctx-id charge-ticks]}]
+                           (let [st (:skill-state (ctx/get-context ctx-id))]
+                             {:charge-ticks (long (max 0 (or charge-ticks 0)))
+                              :can-perform? (boolean (:can-perform? st))
+                              :look-dir (or (:look-dir st) {:x 0.0 :y 0.0 :z 1.0})
+                              :init-vel (or (:init-vel st) {:x 0.0 :y 0.0 :z 1.0})}))}
+       :perform {:topic :vec-accel/fx-perform
+                 :payload (fn [_] {})}
+       :end {:topic :vec-accel/fx-end
+             :payload (fn [{:keys [ctx-id]}]
+                        (let [st (:skill-state (ctx/get-context ctx-id))]
+                          {:performed? (boolean (:performed? st))}))}}
   :prerequisites [{:skill-id :directed-shock :min-exp 0.0}])
 
 (defskill vec-deviation
@@ -412,13 +460,18 @@
   :level 2
   :controllable? true
   :ctrl-id :vec-deviation
-  :cp-consume-speed 13.0
+  :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 0
-  :on-key-down vec-deviation/vec-deviation-on-key-down
-  :on-key-tick vec-deviation/vec-deviation-on-key-tick
-  :on-key-up vec-deviation/vec-deviation-on-key-up
-  :on-key-abort vec-deviation/vec-deviation-on-key-abort
+  :pattern :toggle
+  :cooldown {:mode :manual}
+  :cost {:tick {:cp 'cn.li.ac.content.ability.vecmanip.vec-deviation/vec-deviation-cost-tick-cp}}
+  :actions {:activate! 'cn.li.ac.content.ability.vecmanip.vec-deviation/vec-deviation-activate!
+            :deactivate! 'cn.li.ac.content.ability.vecmanip.vec-deviation/vec-deviation-deactivate!
+            :tick! 'cn.li.ac.content.ability.vecmanip.vec-deviation/vec-deviation-tick!
+            :abort! 'cn.li.ac.content.ability.vecmanip.vec-deviation/vec-deviation-abort!}
+  :fx {:start {:topic :vec-deviation/fx-start :payload (fn [_] {})}
+       :end {:topic :vec-deviation/fx-end :payload (fn [_] {})}}
   :prerequisites [{:skill-id :vec-accel :min-exp 0.4}])
 
 (defskill vec-reflection
@@ -431,13 +484,15 @@
   :level 4
   :controllable? true
   :ctrl-id :vec-reflection
-  :cp-consume-speed 15.0
+  :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 0
-  :on-key-down vec-reflection/vec-reflection-on-key-down
-  :on-key-tick vec-reflection/vec-reflection-on-key-tick
-  :on-key-up vec-reflection/vec-reflection-on-key-up
-  :on-key-abort vec-reflection/vec-reflection-on-key-abort
+  :pattern :multi-stage
+  :cost {:tick {:cp 'cn.li.ac.content.ability.vecmanip.vec-reflection/vec-reflection-cost-tick-cp}}
+  :actions {:down! 'cn.li.ac.content.ability.vecmanip.vec-reflection/vec-reflection-on-key-down
+            :tick! 'cn.li.ac.content.ability.vecmanip.vec-reflection/vec-reflection-on-key-tick
+            :up! 'cn.li.ac.content.ability.vecmanip.vec-reflection/vec-reflection-on-key-up
+            :abort! 'cn.li.ac.content.ability.vecmanip.vec-reflection/vec-reflection-on-key-abort}
   :prerequisites [{:skill-id :vec-deviation :min-exp 0.0}])
 
 (defskill directed-blastwave
@@ -453,10 +508,13 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 80
-  :on-key-down directed-blastwave/directed-blastwave-on-key-down
-  :on-key-tick directed-blastwave/directed-blastwave-on-key-tick
-  :on-key-up directed-blastwave/directed-blastwave-on-key-up
-  :on-key-abort directed-blastwave/directed-blastwave-on-key-abort
+  :pattern :multi-stage
+  :cost {:up {:cp 'cn.li.ac.content.ability.vecmanip.directed-blastwave/directed-blastwave-cost-up-cp
+              :overload 'cn.li.ac.content.ability.vecmanip.directed-blastwave/directed-blastwave-cost-up-overload}}
+  :actions {:down! 'cn.li.ac.content.ability.vecmanip.directed-blastwave/directed-blastwave-on-key-down
+            :tick! 'cn.li.ac.content.ability.vecmanip.directed-blastwave/directed-blastwave-on-key-tick
+            :up! 'cn.li.ac.content.ability.vecmanip.directed-blastwave/directed-blastwave-on-key-up
+            :abort! 'cn.li.ac.content.ability.vecmanip.directed-blastwave/directed-blastwave-on-key-abort}
   :prerequisites [{:skill-id :groundshock :min-exp 0.5}])
 
 (defskill storm-wing
@@ -472,10 +530,15 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 0
-  :on-key-down storm-wing/storm-wing-on-key-down
-  :on-key-tick storm-wing/storm-wing-on-key-tick
-  :on-key-up storm-wing/storm-wing-on-key-up
-  :on-key-abort storm-wing/storm-wing-on-key-abort
+  :pattern :multi-stage
+  :cooldown {:mode :manual}
+  :cost {:tick {:cp 'cn.li.ac.content.ability.vecmanip.storm-wing/storm-wing-cost-tick-cp
+                :overload 'cn.li.ac.content.ability.vecmanip.storm-wing/storm-wing-cost-tick-overload
+                :creative? 'cn.li.ac.content.ability.vecmanip.storm-wing/storm-wing-cost-creative?}}
+  :actions {:down! 'cn.li.ac.content.ability.vecmanip.storm-wing/storm-wing-on-key-down
+            :tick! 'cn.li.ac.content.ability.vecmanip.storm-wing/storm-wing-on-key-tick
+            :up! 'cn.li.ac.content.ability.vecmanip.storm-wing/storm-wing-on-key-up
+            :abort! 'cn.li.ac.content.ability.vecmanip.storm-wing/storm-wing-on-key-abort}
   :prerequisites [{:skill-id :vec-accel :min-exp 0.6}])
 
 (defskill blood-retrograde
@@ -491,10 +554,15 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 90
-  :on-key-down blood-retrograde/blood-retrograde-on-key-down
-  :on-key-tick blood-retrograde/blood-retrograde-on-key-tick
-  :on-key-up blood-retrograde/blood-retrograde-on-key-up
-  :on-key-abort blood-retrograde/blood-retrograde-on-key-abort
+  :pattern :multi-stage
+  :cost {:tick {:cp 'cn.li.ac.content.ability.vecmanip.blood-retrograde/blood-retrograde-cost-release-cp
+                :overload 'cn.li.ac.content.ability.vecmanip.blood-retrograde/blood-retrograde-cost-release-overload}
+         :up {:cp 'cn.li.ac.content.ability.vecmanip.blood-retrograde/blood-retrograde-cost-release-cp
+              :overload 'cn.li.ac.content.ability.vecmanip.blood-retrograde/blood-retrograde-cost-release-overload}}
+  :actions {:down! 'cn.li.ac.content.ability.vecmanip.blood-retrograde/blood-retrograde-on-key-down
+            :tick! 'cn.li.ac.content.ability.vecmanip.blood-retrograde/blood-retrograde-on-key-tick
+            :up! 'cn.li.ac.content.ability.vecmanip.blood-retrograde/blood-retrograde-on-key-up
+            :abort! 'cn.li.ac.content.ability.vecmanip.blood-retrograde/blood-retrograde-on-key-abort}
   :prerequisites [{:skill-id :directed-blastwave :min-exp 0.0}])
 
 (defskill plasma-cannon
@@ -510,10 +578,14 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks 1000
-  :on-key-down plasma-cannon/plasma-cannon-on-key-down
-  :on-key-tick plasma-cannon/plasma-cannon-on-key-tick
-  :on-key-up plasma-cannon/plasma-cannon-on-key-up
-  :on-key-abort plasma-cannon/plasma-cannon-on-key-abort
+  :pattern :multi-stage
+  :cooldown {:mode :manual}
+  :cost {:down {:overload 'cn.li.ac.content.ability.vecmanip.plasma-cannon/plasma-cannon-cost-down-overload}
+         :tick {:cp 'cn.li.ac.content.ability.vecmanip.plasma-cannon/plasma-cannon-cost-tick-cp}}
+  :actions {:down! 'cn.li.ac.content.ability.vecmanip.plasma-cannon/plasma-cannon-on-key-down
+            :tick! 'cn.li.ac.content.ability.vecmanip.plasma-cannon/plasma-cannon-on-key-tick
+            :up! 'cn.li.ac.content.ability.vecmanip.plasma-cannon/plasma-cannon-on-key-up
+            :abort! 'cn.li.ac.content.ability.vecmanip.plasma-cannon/plasma-cannon-on-key-abort}
   :prerequisites [{:skill-id :directed-blastwave :min-exp 0.7}])
 
 (defonce ^:private ability-content-installed? (atom false))

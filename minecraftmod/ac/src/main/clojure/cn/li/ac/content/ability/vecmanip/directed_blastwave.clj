@@ -12,7 +12,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.event :as ability-evt]
@@ -104,19 +103,13 @@
       (doseq [e events]
         (ability-evt/fire-ability-event! e)))))
 
-(defn- try-consume-resource! [player-id exp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           (overload-cost exp)
-                                           (cp-cost exp)
-                                           false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
+(defn directed-blastwave-cost-up-cp
+  [{:keys [player-id]}]
+  (cp-cost (clamp01 (get-skill-exp player-id))))
+
+(defn directed-blastwave-cost-up-overload
+  [{:keys [player-id]}]
+  (overload-cost (clamp01 (get-skill-exp player-id))))
 
 (defn- apply-cooldown! [player-id exp]
   (ps/update-cooldown-data! player-id cd/set-main-cooldown :directed-blastwave (max 1 (cooldown-ticks exp))))
@@ -250,7 +243,7 @@
     (catch Exception e
       (log/warn "DirectedBlastwave key-tick failed:" (ex-message e)))))
 
-(defn directed-blastwave-on-key-up [{:keys [player-id ctx-id]}]
+(defn directed-blastwave-on-key-up [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
@@ -258,7 +251,7 @@
         (if (and (> charge-ticks MIN-TICKS) (< charge-ticks MAX-ACCEPTED-TICKS))
           (let [exp (clamp01 (get-skill-exp player-id))
                 world-id (player-world-id player-id)]
-            (if-not (try-consume-resource! player-id exp)
+            (if-not cost-ok?
               (do
                 (send-fx-end! ctx-id false)
                 (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))

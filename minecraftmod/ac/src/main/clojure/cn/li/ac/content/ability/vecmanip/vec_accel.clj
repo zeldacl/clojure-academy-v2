@@ -17,11 +17,9 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
-            [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -58,32 +56,19 @@
 ;; State / resource helpers
 ;; ============================================================================
 
-(defn- try-consume-resource! [player-id exp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events success?]}
-          (res/perform-resource (:resource-data state)
-                                player-id
-                                (overload-cost exp)
-                                (cp-cost exp)
-                                false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events] (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
+(defn vec-accel-cost-up-cp
+  [{:keys [player-id]}]
+  (cp-cost (get-skill-exp player-id)))
+
+(defn vec-accel-cost-up-overload
+  [{:keys [player-id]}]
+  (overload-cost (get-skill-exp player-id)))
 
 (defn- apply-cooldown! [player-id exp]
   (ps/update-cooldown-data! player-id cd/set-main-cooldown :vec-accel (max 1 (cooldown-ticks exp))))
 
 (defn- add-exp! [player-id amount]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events]} (learning/add-skill-exp
-                                  (:ability-data state)
-                                  player-id
-                                  :vec-accel
-                                  (double amount)
-                                  1.0)]
-      (ps/update-ability-data! player-id (constantly data))
-      (doseq [e events] (ability-evt/fire-ability-event! e)))))
+  (fx-common/add-skill-exp! player-id :vec-accel amount 1.0))
 
 (defn- get-player-position [player-id]
   (or (when-let [tp (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
@@ -129,115 +114,63 @@
      :z (* cos-p hz speed)}))
 
 ;; ============================================================================
-;; FX message helpers (server → client via ctx channel)
+;; DSL actions (used by :pattern :hold-charge-release)
 ;; ============================================================================
 
-(defn- send-fx-start! [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :vec-accel/fx-start {:mode :start}))
-
-(defn- send-fx-update! [ctx-id charge-ticks can-perform? look-dir init-vel]
-  (ctx/ctx-send-to-client! ctx-id :vec-accel/fx-update
-                           {:mode        :update
-                            :charge-ticks (long (max 0 charge-ticks))
-                            :can-perform? (boolean can-perform?)
-                            :look-dir    (or look-dir {:x 0.0 :y 0.0 :z 1.0})
-                            :init-vel    (or init-vel {:x 0.0 :y 0.0 :z 1.0})}))
-
-(defn- send-fx-perform! [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :vec-accel/fx-perform {:mode :perform}))
-
-(defn- send-fx-end! [ctx-id performed?]
-  (ctx/ctx-send-to-client! ctx-id :vec-accel/fx-end
-                           {:mode :end :performed? (boolean performed?)}))
-
-;; ============================================================================
-;; Key handlers (all run server-side via context manager)
-;; ============================================================================
-
-(defn vec-accel-on-key-down
-  "Initialize charge state; notify client to start trajectory preview."
-  [{:keys [ctx-id]}]
+(defn vec-accel-tick!
+  [{:keys [player-id ctx-id charge-ticks]}]
   (try
-    (ctx/update-context! ctx-id assoc :skill-state {:charge-ticks 0 :can-perform false})
-    (send-fx-start! ctx-id)
-    (log/debug "VecAccel: Charge started")
+    (let [exp          (get-skill-exp player-id)
+          ;; Ground check: raycast OR exp >= 0.5 (original ignoreGroundChecking)
+          can-perform? (or (>= (double exp) 0.5) (check-ground-raycast player-id))
+          look-dir     (when raycast/*raycast*
+                         (raycast/get-player-look-vector raycast/*raycast* player-id))
+          init-vel     (when look-dir (compute-init-vel look-dir (long charge-ticks)))]
+      (ctx/update-context! ctx-id update :skill-state merge
+                           {:can-perform? can-perform?
+                            :look-dir look-dir
+                            :init-vel init-vel
+                            :performed? false}))
     (catch Exception e
-      (log/warn "VecAccel key-down failed:" (ex-message e)))))
+      (log/warn "VecAccel tick! failed:" (ex-message e)))))
 
-(defn vec-accel-on-key-tick
-  "Increment charge, check ground (raycast), send trajectory preview to client."
-  [{:keys [player-id ctx-id]}]
+(defn vec-accel-perform!
+  [{:keys [player-id ctx-id charge-ticks cost-ok?]}]
   (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
-      (let [skill-state  (:skill-state ctx-data)
-            charge-ticks (long (or (:charge-ticks skill-state) 0))
+    (if-not (ctx/get-context ctx-id)
+      (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false)
+      (let [ctx-data     (ctx/get-context ctx-id)
+            skill-state  (:skill-state ctx-data)
+            can-perform? (boolean (get skill-state :can-perform? false))
             exp          (get-skill-exp player-id)
-            new-charge   (min MAX-CHARGE (inc charge-ticks))
-            ;; Ground check: raycast OR exp >= 0.5 (original ignoreGroundChecking)
-            can-perform? (or (>= (double exp) 0.5) (check-ground-raycast player-id))
-            ;; Get look direction for trajectory preview
-            look-dir     (when raycast/*raycast*
-                           (raycast/get-player-look-vector raycast/*raycast* player-id))
-            init-vel     (when look-dir
-                           (compute-init-vel look-dir new-charge))]
-        (ctx/update-context! ctx-id assoc :skill-state
-                             {:charge-ticks new-charge :can-perform can-perform?})
-        (send-fx-update! ctx-id new-charge can-perform? look-dir init-vel)))
-    (catch Exception e
-      (log/warn "VecAccel key-tick failed:" (ex-message e)))))
+            charge       (long (or charge-ticks (get skill-state :charge-ticks) 0))]
+        (cond
+          (not can-perform?)
+          (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false)
 
-(defn vec-accel-on-key-up
-  "Perform the acceleration: consume resources, apply velocity, cooldown, exp, sound."
-  [{:keys [player-id ctx-id]}]
-  (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
-      (let [skill-state  (:skill-state ctx-data)
-            charge-ticks (long (or (:charge-ticks skill-state) 0))
-            can-perform? (boolean (or (:can-perform skill-state) false))
-            exp          (get-skill-exp player-id)]
-        (if-not can-perform?
-          (do
-            (send-fx-end! ctx-id false)
-            (log/debug "VecAccel: Cannot perform (not on ground, exp <50%)"))
-          (if-not (try-consume-resource! player-id exp)
-            (do
-              (send-fx-end! ctx-id false)
-              (log/debug "VecAccel: Insufficient CP/overload"))
-            (let [look-dir (when raycast/*raycast*
-                             (raycast/get-player-look-vector raycast/*raycast* player-id))]
-              (if-not look-dir
-                (do
-                  (send-fx-end! ctx-id false)
-                  (log/warn "VecAccel: Could not get look vector"))
-                (let [{:keys [x y z]} (compute-init-vel look-dir charge-ticks)]
-                  ;; Apply velocity (original: VecUtils.setMotion on client side)
-                  (when player-motion/*player-motion*
-                    (player-motion/set-velocity! player-motion/*player-motion*
-                                                 player-id x y z))
-                  ;; NOTE: original dismount check `if(getLowestRidingEntity==null)` is
-                  ;; dead code in MC 1.12 (returns self, never null) → no dismount call.
-                  ;; Reset fall damage (original: player.fallDistance = 0 on server)
-                  (when teleportation/*teleportation*
-                    (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
-                  ;; Cooldown (original: ctx.setCooldown on client after consume)
-                  (apply-cooldown! player-id exp)
-                  ;; Experience (original: ctx.addSkillExp(0.002f) on server)
-                  (add-exp! player-id 0.002)
-                  ;; Notify client: play sound + end trajectory preview
-                  (send-fx-perform! ctx-id)
-                  (send-fx-end! ctx-id true)
-                  (log/info "VecAccel: Accelerated speed"
-                            (format "%.2f" (Math/sqrt (+ (* x x) (* y y) (* z z))))
-                            "charge:" charge-ticks))))))))
-    (catch Exception e
-      (log/warn "VecAccel key-up failed:" (ex-message e)))))
+          (not cost-ok?)
+          (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false)
 
-(defn vec-accel-on-key-abort
-  "Clean up state on abort; notify client to remove trajectory preview."
+          :else
+          (let [look-dir (or (:look-dir skill-state)
+                             (when raycast/*raycast*
+                               (raycast/get-player-look-vector raycast/*raycast* player-id)))]
+            (if-not look-dir
+              (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false)
+              (let [{:keys [x y z]} (compute-init-vel look-dir charge)]
+                (when player-motion/*player-motion*
+                  (player-motion/set-velocity! player-motion/*player-motion*
+                                               player-id x y z))
+                (when teleportation/*teleportation*
+                  (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
+                (apply-cooldown! player-id exp)
+                (add-exp! player-id 0.002)
+                (ctx/update-context! ctx-id update :skill-state merge
+                                     {:performed? true
+                                      :final-vel {:x x :y y :z z}})))))))
+    (catch Exception e
+      (log/warn "VecAccel perform! failed:" (ex-message e)))))
+
+(defn vec-accel-abort!
   [{:keys [ctx-id]}]
-  (try
-    (send-fx-end! ctx-id false)
-    (ctx/update-context! ctx-id dissoc :skill-state)
-    (log/debug "VecAccel aborted")
-    (catch Exception e
-      (log/warn "VecAccel key-abort failed:" (ex-message e)))))
+  (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))

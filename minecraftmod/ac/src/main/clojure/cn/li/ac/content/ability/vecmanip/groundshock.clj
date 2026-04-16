@@ -17,7 +17,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
@@ -37,11 +36,6 @@
 
 (defn- clamp01 [x]
   (max 0.0 (min 1.0 (double x))))
-
-(defn- v+ [a b]
-  {:x (+ (double (:x a)) (double (:x b)))
-   :y (+ (double (:y a)) (double (:y b)))
-   :z (+ (double (:z a)) (double (:z b)))})
 
 (defn- v* [v scalar]
   {:x (* (double (:x v)) (double scalar))
@@ -113,19 +107,13 @@
       (doseq [event events]
         (ability-evt/fire-ability-event! event)))))
 
-(defn- try-consume-resource! [player-id exp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events success?]} (res/perform-resource
-                                          (:resource-data state)
-                                          player-id
-                                          (overload-cost exp)
-                                          (cp-cost exp)
-                                          false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [event events]
-          (ability-evt/fire-ability-event! event)))
-      (boolean success?))))
+(defn groundshock-cost-up-cp
+  [{:keys [player-id]}]
+  (cp-cost (clamp01 (get-skill-exp player-id))))
+
+(defn groundshock-cost-up-overload
+  [{:keys [player-id]}]
+  (overload-cost (clamp01 (get-skill-exp player-id))))
 
 (defn- apply-cooldown! [player-id exp]
   (ps/update-cooldown-data! player-id cd/set-main-cooldown :groundshock (max 1 (cooldown-ticks exp))))
@@ -372,7 +360,7 @@
 
 (defn groundshock-on-key-up
   "Perform the ground slam."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
@@ -383,7 +371,7 @@
         (if (and (>= charge-ticks min-charge-ticks)
                  player-motion/*player-motion*
                  (player-motion/is-on-ground? player-motion/*player-motion* player-id))
-          (if-not (try-consume-resource! player-id exp)
+          (if-not cost-ok?
             (do
               (send-fx-end! ctx-id false)
               (log/debug "Groundshock perform failed: insufficient resource"))

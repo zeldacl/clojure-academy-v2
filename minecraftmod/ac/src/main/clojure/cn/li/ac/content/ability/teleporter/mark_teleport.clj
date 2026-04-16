@@ -16,7 +16,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
@@ -75,20 +74,6 @@
       (ps/update-ability-data! player-id (constantly data))
       (doseq [e events]
         (ability-evt/fire-ability-event! e)))))
-
-(defn- consume-resource! [player-id player overload cp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data success? events]} (res/perform-resource
-                                           (:resource-data state)
-                                           player-id
-                                           (double overload)
-                                           (double cp)
-                                           (boolean (and player (entity/player-creative? player))))]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [e events]
-          (ability-evt/fire-ability-event! e)))
-      (boolean success?))))
 
 (defn- send-fx-start! [ctx-id]
   (ctx/ctx-send-to-client! ctx-id :mark-teleport/fx-start {:mode :start}))
@@ -183,6 +168,37 @@
                 :exp exp
           :cp cp})))))
 
+(defn- cached-or-resolved-target
+  [player-id ctx-id player]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
+    (let [hold-ticks (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0))]
+      (or (resolve-destination player-id player hold-ticks)
+          (when (get-in ctx-data [:skill-state :has-target])
+            (select-keys (:skill-state ctx-data)
+                         [:world-id :target-x :target-y :target-z :distance :exp]))))))
+
+(defn mark-teleport-cost-up-cp
+  [{:keys [player-id ctx-id player]}]
+  (if-let [target (cached-or-resolved-target player-id ctx-id player)]
+    (let [distance (double (:distance target))]
+      (if (>= distance minimum-valid-distance)
+        (* distance (cp-per-block (double (or (:exp target) (get-skill-exp player-id) 0.0))))
+        0.0))
+    0.0))
+
+(defn mark-teleport-cost-up-overload
+  [{:keys [player-id ctx-id player]}]
+  (if-let [target (cached-or-resolved-target player-id ctx-id player)]
+    (let [distance (double (:distance target))]
+      (if (>= distance minimum-valid-distance)
+        (overload-cost (double (or (:exp target) (get-skill-exp player-id) 0.0)))
+        0.0))
+    0.0))
+
+(defn mark-teleport-cost-creative?
+  [{:keys [player]}]
+  (boolean (and player (entity/player-creative? player))))
+
 (defn mark-teleport-on-key-down
   "Initialize hold state and client marker."
   [{:keys [ctx-id]}]
@@ -221,7 +237,7 @@
 
 (defn mark-teleport-on-key-up
   "Execute teleport when key released." 
-  [{:keys [player-id ctx-id player]}]
+  [{:keys [player-id ctx-id player cost-ok?]}]
   (try
     (when-let [ctx (ctx/get-context ctx-id)]
       (let [hold-ticks (long (or (get-in ctx [:skill-state :hold-ticks]) 0))
@@ -232,20 +248,19 @@
         (when (and target teleportation/*teleportation*)
           (let [distance (double (:distance target))
                 exp (double (or (:exp target) (get-skill-exp player-id) 0.0))]
-            (when (>= distance minimum-valid-distance)
+            (when (and cost-ok? (>= distance minimum-valid-distance))
               (send-fx-perform! ctx-id target)
-              (when (consume-resource! player-id player (overload-cost exp) (* distance (cp-per-block exp)))
-                (let [success (teleportation/teleport-player! teleportation/*teleportation*
-                                                              player-id
-                                                              (:world-id target)
-                                                              (:target-x target)
-                                                              (:target-y target)
-                                                              (:target-z target))]
-                  (when success
-                    (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
-                    (add-exp! player-id (* 0.00018 distance))
-                    (ps/update-cooldown-data! player-id cd/set-main-cooldown :mark-teleport (cooldown-ticks exp))
-                    (log/debug "MarkTeleport: Teleported" (int distance) "blocks"))))))))
+              (let [success (teleportation/teleport-player! teleportation/*teleportation*
+                                                            player-id
+                                                            (:world-id target)
+                                                            (:target-x target)
+                                                            (:target-y target)
+                                                            (:target-z target))]
+                (when success
+                  (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
+                  (add-exp! player-id (* 0.00018 distance))
+                  (ps/update-cooldown-data! player-id cd/set-main-cooldown :mark-teleport (cooldown-ticks exp))
+                  (log/debug "MarkTeleport: Teleported" (int distance) "blocks")))))))
       (send-fx-end! ctx-id))
     (catch Exception e
       (log/warn "MarkTeleport key-up failed:" (ex-message e))

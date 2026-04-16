@@ -18,9 +18,32 @@
      :exp-incr-speed      float
       :destroy-blocks?     bool
       :enabled             bool
-      :conditions          []           ; list of IDevCondition-equivalent fn maps}"
-  (:require [cn.li.ac.ability.category :as cat]
-            [cn.li.mcmod.util.log :as log]))
+      :conditions          []           ; list of IDevCondition-equivalent fn maps
+
+      ;; Runtime (new DSL, data-first)
+      ;; When :pattern is present, server-side input callbacks can be provided by
+      ;; cn.li.ac.ability.skill-runtime (pattern interpreter) instead of hand-written
+      ;; :on-key-* functions per skill.
+      ;;
+      ;; :pattern:
+      ;;   :instant | :hold-charge-release | :hold-channel | :toggle | :multi-stage
+      ;; :cooldown:
+      ;;   {:mode :default}  -> context-runtime applies main cooldown on key-up
+      ;;   {:mode :manual}   -> skill handles cooldown itself
+      ;; :cost:
+      ;;   {:tick {:cp ... :overload ...}}
+      ;;   or runtime-scaled:
+      ;;   {:tick {:mode :runtime-speed :cp-speed 1.0 :overload-speed 1.0}}
+      ;; :actions:
+      ;;   map of small functions implementing the skill-specific parts
+      ;; :fx:
+      ;;   data describing server->client context messages (start/update/perform/end)
+      :pattern             keyword | nil
+      :cooldown            map | nil
+      :cost                map | nil
+      :actions             map | nil
+      :fx                  map | nil}"
+  (:require [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Registry
@@ -69,18 +92,46 @@
   "Register a skill spec. Merges defaults before storing."
   [{:keys [id category-id level] :as spec}]
   {:pre [(keyword? id) (keyword? category-id) (integer? level)]}
-  (let [defaults {:controllable?          true
-                  :damage-scale           1.0
-                  :cp-consume-speed       1.0
+  (let [defaults {:controllable? true
+                  :damage-scale 1.0
+                  :cp-consume-speed 1.0
                   :overload-consume-speed 1.0
-                  :cooldown-ticks         nil
-                  :exp-incr-speed         1.0
-                  :destroy-blocks?        true
-                  :enabled                true
-                  :prerequisites          []
-                  :conditions             []
-                  :developer-type         (min-developer-type level)}
-        full     (merge defaults spec)]
+                  :cooldown-ticks nil
+                  :exp-incr-speed 1.0
+                  :destroy-blocks? true
+                  :enabled true
+                  :prerequisites []
+                  :conditions []
+                  :developer-type (min-developer-type level)
+                  :cooldown {:mode :default}}
+        resolve-fn-ref (fn [v]
+                         (cond
+                           (fn? v) v
+                           (var? v) (var-get v)
+                           (symbol? v)
+                           (try
+                             (var-get (requiring-resolve v))
+                             (catch Exception e
+                               (log/warn "Failed to resolve skill fn ref" id v (ex-message e))
+                               nil))
+                           :else v))
+        merged (merge defaults spec)
+        actions* (into {}
+                       (map (fn [[k v]] [k (resolve-fn-ref v)]))
+                       (or (:actions merged) {}))
+        fx* (into {}
+                  (map (fn [[k evt]]
+                         [k (if (map? evt)
+                              (update evt :payload resolve-fn-ref)
+                              evt)]))
+                  (or (:fx merged) {}))
+        full (-> merged
+                 (update :on-key-down resolve-fn-ref)
+                 (update :on-key-tick resolve-fn-ref)
+                 (update :on-key-up resolve-fn-ref)
+                 (update :on-key-abort resolve-fn-ref)
+                 (assoc :actions actions*)
+                 (assoc :fx fx*))]
     (swap! skill-registry assoc id full)
     (log/info "Registered skill" id "in category" category-id)
     full))

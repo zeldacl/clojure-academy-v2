@@ -15,7 +15,6 @@
             [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -102,19 +101,13 @@
       (doseq [event events]
         (ability-evt/fire-ability-event! event)))))
 
-(defn- try-consume-resource! [player-id exp]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [{:keys [data events success?]} (res/perform-resource
-                                          (:resource-data state)
-                                          player-id
-                                          (overload-cost exp)
-                                          (cp-cost exp)
-                                          false)]
-      (when success?
-        (ps/update-resource-data! player-id (constantly data))
-        (doseq [event events]
-          (ability-evt/fire-ability-event! event)))
-      (boolean success?))))
+(defn directed-shock-cost-up-cp
+  [{:keys [player-id]}]
+  (cp-cost (clamp01 (get-skill-exp player-id))))
+
+(defn directed-shock-cost-up-overload
+  [{:keys [player-id]}]
+  (overload-cost (clamp01 (get-skill-exp player-id))))
 
 (defn- apply-cooldown! [player-id exp]
   (ps/update-cooldown-data! player-id cd/set-main-cooldown :directed-shock (max 1 (cooldown-ticks exp))))
@@ -178,7 +171,7 @@
 
 (defn directed-shock-on-key-up
   "Perform the punch attack."
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
@@ -186,7 +179,7 @@
         (if (and (> charge-ticks MIN-TICKS)
                  (< charge-ticks MAX-ACCEPTED-TICKS))
           (let [exp (clamp01 (get-skill-exp player-id))]
-            (if-not (try-consume-resource! player-id exp)
+            (if-not cost-ok?
               (do
                 (send-fx-end! ctx-id false)
                 (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false)
