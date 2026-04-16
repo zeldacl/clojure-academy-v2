@@ -37,6 +37,19 @@
     :thunder-bolt/fx-perform
     (level-effects/enqueue-level-effect! :thunder-bolt-strike payload)
 
+    :thunder-clap/fx-start
+    (level-effects/enqueue-level-effect! :thunder-clap {:mode :start})
+
+    :thunder-clap/fx-update
+    (level-effects/enqueue-level-effect! :thunder-clap {:mode :update
+                               :ticks (long (or (:ticks payload) 0))
+                               :charge-ratio (double (or (:charge-ratio payload) 0.0))
+                               :target (get payload :target)})
+
+    :thunder-clap/fx-end
+    (level-effects/enqueue-level-effect! :thunder-clap {:mode :end
+                               :performed? (boolean (:performed? payload))})
+
     :mag-movement/fx-start
     (level-effects/enqueue-level-effect! :mag-movement {:mode :start
                                                          :target (get payload :target)})

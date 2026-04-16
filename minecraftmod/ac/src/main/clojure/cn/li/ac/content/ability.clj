@@ -154,9 +154,9 @@
   :level 1
   :controllable? true
   :ctrl-id :thunder-clap
-  :cp-consume-speed 1.0
-  :overload-consume-speed 0.9
-  :cooldown-ticks 150
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 1
   :on-key-down thunder-clap/thunder-clap-on-key-down
   :on-key-tick thunder-clap/thunder-clap-on-key-tick
   :on-key-up thunder-clap/thunder-clap-on-key-up

@@ -17,6 +17,27 @@
 (defonce ^:private tick-listener-registered? (atom false))
 (defonce ^:private render-listener-registered? (atom false))
 (def ^:private full-bright-uv2 15728880)
+(def ^:private default-walk-speed 0.1)
+(defonce ^:private last-applied-walk-speed (atom nil))
+
+(defn- set-local-walk-speed! [^Entity player speed]
+  (try
+    (let [abilities (.getAbilities player)]
+      (.setWalkingSpeed abilities (float speed))
+      (.onUpdateAbilities player))
+    (catch Exception _
+      nil)))
+
+(defn- apply-local-walk-speed-from-plan! [^Entity player plan]
+  (let [target-speed (:local-walk-speed plan)]
+    (if (number? target-speed)
+      (let [spd (float target-speed)]
+        (when (not= @last-applied-walk-speed spd)
+          (set-local-walk-speed! player spd)
+          (reset! last-applied-walk-speed spd)))
+      (when (some? @last-applied-walk-speed)
+        (set-local-walk-speed! player default-walk-speed)
+        (reset! last-applied-walk-speed nil)))))
 
 (defn- local-player-uuid []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
@@ -81,6 +102,7 @@
               hand-pos (hand-center-pos player)
               tick (.getGameTime (.level player))
               plan (ability-runtime/client-build-level-effect-plan cam-pos hand-pos tick)]
+          (apply-local-walk-speed-from-plan! player plan)
           (when (seq (:ops plan))
             (let [^PoseStack pose-stack (.getPoseStack evt)
                   ^MultiBufferSource$BufferSource buffer-source (.bufferSource (.renderBuffers mc))

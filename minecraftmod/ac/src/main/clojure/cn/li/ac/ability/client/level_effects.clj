@@ -12,6 +12,8 @@
 (def ^:private tb-main-arc-life 20)
 (def ^:private tb-aoe-arc-life 20)
 
+(defonce ^:private thunder-clap-effect (atom nil))
+
 (declare tick-thunder-bolt-arcs!)
 
 
@@ -52,6 +54,34 @@
         (reset! mag-movement-effect nil)
 
         nil))
+
+      :thunder-clap
+      (let [{:keys [mode ticks charge-ratio target performed?]} payload]
+        (case mode
+          :start
+          (reset! thunder-clap-effect {:active? true
+                                       :ticks 0
+                                       :charge-ratio 0.0
+                                       :target nil
+                                       :performed? false})
+
+          :update
+          (swap! thunder-clap-effect
+                 (fn [st]
+                   (assoc (or st {})
+                          :active? true
+                          :ticks (long (or ticks 0))
+                          :charge-ratio (double (or charge-ratio 0.0))
+                          :target target)))
+
+          :end
+          (reset! thunder-clap-effect {:active? false
+                                       :performed? (boolean performed?)
+                                       :ticks 0
+                                       :charge-ratio 0.0
+                                       :target nil})
+
+          nil))
 
       :thunder-bolt-strike
       (let [{:keys [start end aoe-points]} payload]
@@ -95,7 +125,13 @@
                     :sound-id mag-movement-loop-sound
                     :volume 0.4
                     :pitch 1.0}))
-               (assoc st :ticks ticks))))))
+               (assoc st :ticks ticks)))))
+  (swap! thunder-clap-effect
+         (fn [st]
+           (when st
+             (if (:active? st)
+               (update st :ticks (fnil inc 0))
+               nil))))
   (tick-thunder-bolt-arcs!))
 
 (defn tick-thunder-bolt-arcs! []
@@ -263,9 +299,51 @@
      (quad-op "minecraft:textures/entity/beacon_beam.png" c0 c1 c2 c3 inner-a)
      (line-op start end (with-alpha {:r 160 :g 220 :b 255} (int (+ 60 (* 140 life)))))]))
 
+(defn- thunder-clap-surround-ops [player-center ticks]
+  (let [radius (+ 0.55 (* 0.25 (Math/sin (* 0.22 (double ticks)))))
+        y (+ (double (:y player-center)) 0.2)
+        segments 20
+        color {:r 190 :g 232 :b 255 :a 170}]
+    (vec
+      (for [idx (range segments)
+            :let [a0 (/ (* 2.0 Math/PI idx) segments)
+                  a1 (/ (* 2.0 Math/PI (inc idx)) segments)
+                  p0 {:x (+ (:x player-center) (* radius (Math/cos a0)))
+                      :y y
+                      :z (+ (:z player-center) (* radius (Math/sin a0)))}
+                  p1 {:x (+ (:x player-center) (* radius (Math/cos a1)))
+                      :y y
+                      :z (+ (:z player-center) (* radius (Math/sin a1)))}]]
+        (line-op p0 p1 color)))))
+
+(defn- thunder-clap-target-mark-ops [target ticks charge-ratio]
+  (let [base-radius (+ 0.55 (* 0.35 (double charge-ratio)))
+        pulse (+ base-radius (* 0.08 (Math/sin (* 0.24 (double ticks)))))
+        y (+ (double (:y target)) 0.03)
+        segments 24
+        color {:r 204 :g 204 :b 204 :a 179}]
+    (vec
+      (for [idx (range segments)
+            :let [a0 (/ (* 2.0 Math/PI idx) segments)
+                  a1 (/ (* 2.0 Math/PI (inc idx)) segments)
+                  p0 {:x (+ (:x target) (* pulse (Math/cos a0)))
+                      :y y
+                      :z (+ (:z target) (* pulse (Math/sin a0)))}
+                  p1 {:x (+ (:x target) (* pulse (Math/cos a1)))
+                      :y y
+                      :z (+ (:z target) (* pulse (Math/sin a1)))}]]
+        (line-op p0 p1 color)))))
+
+(defn- thunder-clap-local-walk-speed [ticks]
+  (let [max-speed 0.1
+        min-speed 0.001
+        value (- max-speed (* (/ (- max-speed min-speed) 60.0) (double ticks)))]
+    (float (max min-speed value))))
+
 (defn build-level-effect-plan [camera-pos hand-center-pos tick]
   (let [beams @beam-effects
         mag-move @mag-movement-effect
+        thunder-clap @thunder-clap-effect
         player-uuid (:player-uuid hand-center-pos)
         charge-state (when player-uuid
                        (client-runtime/railgun-charge-visual-state player-uuid))
@@ -288,8 +366,27 @@
                                        (:coin-active? charge-state)
                                        tick)
                       [])
+        thunder-clap-plan (if (and hand-center-pos
+                                   thunder-clap
+                                   (:active? thunder-clap))
+                            (let [player-center (dissoc hand-center-pos :player-uuid)
+                                  ticks (long (or (:ticks thunder-clap) 0))
+                                  ratio (double (or (:charge-ratio thunder-clap) 0.0))]
+                              (concat
+                                (thunder-clap-surround-ops player-center ticks)
+                                (when (map? (:target thunder-clap))
+                                  (thunder-clap-target-mark-ops (:target thunder-clap) ticks ratio))))
+                            [])
+        thunder-clap-walk-speed (when (and thunder-clap (:active? thunder-clap))
+                                  (thunder-clap-local-walk-speed (:ticks thunder-clap)))
         tb-arc-plan (mapcat (fn [arc]
                               (thunder-bolt-arc-ops camera-pos arc))
                             @thunder-bolt-arcs)]
-    (when (or (seq beam-plan) (seq mag-plan) (seq charge-plan) (seq tb-arc-plan))
-      {:ops (vec (concat beam-plan mag-plan charge-plan tb-arc-plan))})))
+    (when (or (seq beam-plan)
+              (seq mag-plan)
+              (seq charge-plan)
+              (seq tb-arc-plan)
+              (seq thunder-clap-plan)
+              thunder-clap-walk-speed)
+      {:ops (vec (concat beam-plan mag-plan charge-plan thunder-clap-plan tb-arc-plan))
+       :local-walk-speed thunder-clap-walk-speed})))
