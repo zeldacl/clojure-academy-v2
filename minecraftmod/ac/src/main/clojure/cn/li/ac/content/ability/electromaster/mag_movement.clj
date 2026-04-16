@@ -256,8 +256,7 @@
           state-pos (player-pos player-id)]
       (if-not cost-ok?
         (do
-          (ctx/update-context! ctx-id assoc :skill-state {:skip-default-cooldown true
-                                                           :has-target false})
+          (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
           (log/debug "MagMovement: insufficient resource for activation"))
         (if-let [{:keys [target-x target-y target-z] :as target-state}
                  (resolve-target player-id exp)]
@@ -265,8 +264,7 @@
                                (player-motion/get-velocity player-motion/*player-motion* player-id))]
             (ctx/update-context! ctx-id assoc :skill-state
                                  (merge target-state
-                                        {:skip-default-cooldown true
-                                         :has-target true
+                                        {:has-target true
                                          :movement-ticks 0
                                          :overload-floor (lerp 60.0 30.0 exp)
                                          :start-x (double (:x state-pos))
@@ -282,8 +280,7 @@
                        "distance" (int (distance-3d (:x state-pos) (:y state-pos) (:z state-pos)
                                                      target-x target-y target-z))))
           (do
-            (ctx/update-context! ctx-id assoc :skill-state {:skip-default-cooldown true
-                                                             :has-target false})
+            (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
             (log/debug "MagMovement: no valid magnetic target")))))
     (catch Exception e
       (log/warn "MagMovement key-down failed:" (ex-message e)))))

@@ -258,8 +258,7 @@
                                 :sync-ticks    0
                                 :flight-ticks  0
                                 :charge-pos    nil
-                                :destination   nil
-                                :skip-default-cooldown true})
+                                :destination   nil})
           (send-fx-start! ctx-id)
           (log/debug "PlasmaCannon: Charge started, need" ct "ticks"))))
     (catch Exception e

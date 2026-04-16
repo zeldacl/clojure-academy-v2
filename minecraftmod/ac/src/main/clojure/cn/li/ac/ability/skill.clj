@@ -104,6 +104,21 @@
                   :conditions []
                   :developer-type (min-developer-type level)
                   :cooldown {:mode :default}}
+        ;; Runtime contract is spec-first. Legacy :on-key-* callback keys are
+        ;; intentionally removed and rejected so that all lifecycle behavior goes
+        ;; through :pattern + :actions.
+        _ (doseq [k [:on-key-down :on-key-tick :on-key-up :on-key-abort]]
+            (when (contains? spec k)
+              (throw (ex-info "Legacy callback keys are no longer supported for skills"
+                              {:skill-id id :legacy-key k}))))
+        _ (when (and (contains? spec :cooldown)
+                     (not (map? (:cooldown spec))))
+            (throw (ex-info "Skill :cooldown must be a map"
+                            {:skill-id id :value (:cooldown spec)})))
+        _ (when-let [p (:pattern spec)]
+            (when-not (contains? #{:instant :hold-charge-release :hold-channel :toggle :multi-stage} p)
+              (throw (ex-info "Unknown skill :pattern"
+                              {:skill-id id :pattern p}))))
         resolve-fn-ref (fn [v]
                          (cond
                            (fn? v) v
@@ -126,10 +141,6 @@
                               evt)]))
                   (or (:fx merged) {}))
         full (-> merged
-                 (update :on-key-down resolve-fn-ref)
-                 (update :on-key-tick resolve-fn-ref)
-                 (update :on-key-up resolve-fn-ref)
-                 (update :on-key-abort resolve-fn-ref)
                  (assoc :actions actions*)
                  (assoc :fx fx*))]
     (swap! skill-registry assoc id full)

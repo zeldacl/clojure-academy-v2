@@ -276,8 +276,7 @@
 									(entity/player-consume-main-hand-item! player 1))
 							focus (hold-focus player-id)]
 					(ctx/update-context! ctx-id assoc :skill-state
-												 {:skip-default-cooldown true
-													:fired false
+												 {:fired false
 													:mode :holding
 													:hold-ticks 0
 													:held-block {:block-id hand-item-id
@@ -298,8 +297,7 @@
 							(block-manip/break-block! block-manip/*block-manipulation* player-id world-id x y z false))
 						(let [focus (hold-focus player-id)]
 							(ctx/update-context! ctx-id assoc :skill-state
-													 {:skip-default-cooldown true
-														:fired false
+													 {:fired false
 														:mode :holding
 														:hold-ticks 0
 														:held-block {:block-id block-id
@@ -315,8 +313,7 @@
 														:block-id block-id})))
 					;; No target at all
 					(ctx/update-context! ctx-id assoc :skill-state
-											 {:skip-default-cooldown true
-												:fired false
+											 {:fired false
 												:mode :no-target}))))
 		(catch Exception e
 			(log/warn "MagManip key-down failed:" (ex-message e)))))
@@ -353,7 +350,7 @@
 						exp (get-skill-exp player-id)]
 				(if-not (and (= :holding (:mode skill-state)) held-block)
 					(ctx/update-context! ctx-id assoc :skill-state
-															 (assoc skill-state :skip-default-cooldown true :fired false :mode :idle))
+															 (assoc skill-state :fired false :mode :idle))
 					;; Check distance: entity (at focus position) must be within 5 blocks of player
 					(let [focus-pos (or (:focus skill-state) (hold-focus player-id))
 								player-now (player-pos player-id)
@@ -366,12 +363,12 @@
 							(do
 								(restore-held-block! held-block)
 								(ctx/update-context! ctx-id assoc :skill-state
-																 (assoc skill-state :skip-default-cooldown true :fired false :mode :too-far)))
+																 (assoc skill-state :fired false :mode :too-far)))
 							(if-not cost-ok?
 								(do
 									(restore-held-block! held-block)
 									(ctx/update-context! ctx-id assoc :skill-state
-																		 (assoc skill-state :skip-default-cooldown true :fired false :mode :no-resource)))
+																		 (assoc skill-state :fired false :mode :no-resource)))
 								(let [world-id (player-world-id player-id)
 											start focus-pos
 											dir (or (look-dir player-id) {:x 0.0 :y 0.0 :z 1.0})
@@ -427,8 +424,7 @@
 									;; Original: ctx.addSkillExp(0.005F)
 									(add-mag-manip-exp! player-id 0.005)
 									(ctx/update-context! ctx-id assoc :skill-state
-																		 {:skip-default-cooldown true
-																			:fired true
+																		 {:fired true
 																			:mode :thrown
 																			:held-block nil}))))))))
 		(catch Exception e

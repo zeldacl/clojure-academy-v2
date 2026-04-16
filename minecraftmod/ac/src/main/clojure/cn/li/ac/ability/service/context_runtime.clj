@@ -15,8 +15,7 @@
             [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.service.resource :as res]
-            [cn.li.ac.ability.service.cooldown :as cd]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.ac.ability.service.cooldown :as cd]))
 
 (def INPUT-IDLE :idle)
 (def INPUT-ACTIVE :active)
@@ -31,26 +30,11 @@
    :skill-id (:skill-id ctx-map)
    :payload payload})
 
-(defn- safe-run-callback! [f arg]
-  (when (fn? f)
-    (try
-      (f arg)
-      (catch Exception e
-        (log/warn "Context runtime callback failed" (ex-message e))))))
-
 (defn- dispatch-skill-callback! [ctx-map cb-key event-type payload]
   (when-let [spec (skill/get-skill (:skill-id ctx-map))]
-    (let [evt* (event-payload ctx-map payload)
-          f (get spec cb-key)]
-      (cond
-        (fn? f)
-        (safe-run-callback! f evt*)
-
-        (skill-rt/can-handle? spec)
-        (skill-rt/dispatch! spec cb-key evt*)
-
-        :else
-        nil)))
+    (let [evt* (event-payload ctx-map payload)]
+      (when (skill-rt/can-handle? spec)
+        (skill-rt/dispatch! spec cb-key evt*))))
   (evt/fire-ability-event!
    {:event/type event-type
     :event/side :server
@@ -152,12 +136,9 @@
                 (= (:input-state ctx-map) INPUT-ACTIVE))
        (let [released-ctx (set-input-state! ctx-id INPUT-RELEASED)]
          (dispatch-skill-callback! released-ctx :on-key-up evt/EVT-CONTEXT-KEY-UP payload)
-         (let [latest-ctx (ctx/get-context ctx-id)
-               spec (skill/get-skill (:skill-id latest-ctx))
-               skip-default-cooldown?
-               (or (boolean (get-in latest-ctx [:skill-state :skip-default-cooldown]))
-                   (= :manual (get-in spec [:cooldown :mode])))]
-           (when-not skip-default-cooldown?
+        (let [latest-ctx (ctx/get-context ctx-id)
+              spec (skill/get-skill (:skill-id latest-ctx))]
+          (when-not (= :manual (get-in spec [:cooldown :mode]))
              (apply-main-cooldown! released-ctx)))
          (ctx/terminate-context! ctx-id terminate-fn)
          true)))))

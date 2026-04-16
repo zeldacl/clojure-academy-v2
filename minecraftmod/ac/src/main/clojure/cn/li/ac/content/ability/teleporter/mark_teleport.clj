@@ -75,27 +75,13 @@
       (doseq [e events]
         (ability-evt/fire-ability-event! e)))))
 
-(defn- send-fx-start! [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :mark-teleport/fx-start {:mode :start}))
-
-(defn- send-fx-update! [ctx-id target]
-  (ctx/ctx-send-to-client! ctx-id :mark-teleport/fx-update
-                           {:mode :update
-                            :target {:x (double (:target-x target))
-                                     :y (double (:target-y target))
-                                     :z (double (:target-z target))}
-                            :distance (double (:distance target))}))
-
-(defn- send-fx-end! [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :mark-teleport/fx-end {:mode :end}))
-
-(defn- send-fx-perform! [ctx-id target]
-  (ctx/ctx-send-to-client! ctx-id :mark-teleport/fx-perform
-                           {:mode :perform
-                            :target {:x (double (:target-x target))
-                                     :y (double (:target-y target))
-                                     :z (double (:target-z target))}
-                            :distance (double (:distance target))}))
+(defn- build-target-fx-payload
+  [target]
+  (when target
+    {:target {:x (double (:target-x target))
+              :y (double (:target-y target))
+              :z (double (:target-z target))}
+     :distance (double (:distance target))}))
 
 (defn- destination-head-blocked?
   [player x y z]
@@ -177,6 +163,15 @@
             (select-keys (:skill-state ctx-data)
                          [:world-id :target-x :target-y :target-z :distance :exp]))))))
 
+(defn mark-teleport-fx-update-payload
+  [{:keys [ctx-id]}]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
+    (build-target-fx-payload (:skill-state ctx-data))))
+
+(defn mark-teleport-fx-perform-payload
+  [{:keys [ctx-id]}]
+  (mark-teleport-fx-update-payload {:ctx-id ctx-id}))
+
 (defn mark-teleport-cost-up-cp
   [{:keys [player-id ctx-id player]}]
   (if-let [target (cached-or-resolved-target player-id ctx-id player)]
@@ -203,13 +198,10 @@
   "Initialize hold state and client marker."
   [{:keys [ctx-id]}]
   (try
-    (ctx/update-context! ctx-id assoc :skill-state {:skip-default-cooldown true
-                                                    :hold-ticks 0
+    (ctx/update-context! ctx-id assoc :skill-state {:hold-ticks 0
                                                     :has-target false})
-    (send-fx-start! ctx-id)
     (catch Exception e
-      (log/warn "MarkTeleport key-down failed:" (ex-message e))
-      (send-fx-end! ctx-id))))
+      (log/warn "MarkTeleport key-down failed:" (ex-message e)))))
 
 (defn mark-teleport-on-key-tick
   "Update destination marker while key is held." 
@@ -218,22 +210,15 @@
     (when-let [ctx (ctx/get-context ctx-id)]
       (let [next-ticks (inc (long (or (get-in ctx [:skill-state :hold-ticks]) 0)))]
         (if-let [target (resolve-destination player-id player next-ticks)]
-          (do
-            (ctx/update-context! ctx-id update :skill-state merge
-                                 (assoc target
-                                        :skip-default-cooldown true
-                                        :hold-ticks next-ticks
-                                        :has-target true))
-            (send-fx-update! ctx-id target))
-          (do
-            (ctx/update-context! ctx-id update :skill-state merge
-                                 {:skip-default-cooldown true
-                                  :hold-ticks next-ticks
-                                  :has-target false})
-            (send-fx-end! ctx-id)))))
+          (ctx/update-context! ctx-id update :skill-state merge
+                               (assoc target
+                                      :hold-ticks next-ticks
+                                      :has-target true))
+          (ctx/update-context! ctx-id update :skill-state merge
+                               {:hold-ticks next-ticks
+                                :has-target false}))))
     (catch Exception e
-      (log/warn "MarkTeleport key-tick failed:" (ex-message e))
-      (send-fx-end! ctx-id))))
+      (log/warn "MarkTeleport key-tick failed:" (ex-message e)))))
 
 (defn mark-teleport-on-key-up
   "Execute teleport when key released." 
@@ -249,7 +234,6 @@
           (let [distance (double (:distance target))
                 exp (double (or (:exp target) (get-skill-exp player-id) 0.0))]
             (when (and cost-ok? (>= distance minimum-valid-distance))
-              (send-fx-perform! ctx-id target)
               (let [success (teleportation/teleport-player! teleportation/*teleportation*
                                                             player-id
                                                             (:world-id target)
@@ -260,19 +244,15 @@
                   (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
                   (add-exp! player-id (* 0.00018 distance))
                   (ps/update-cooldown-data! player-id cd/set-main-cooldown :mark-teleport (cooldown-ticks exp))
-                  (log/debug "MarkTeleport: Teleported" (int distance) "blocks")))))))
-      (send-fx-end! ctx-id))
+                  (log/debug "MarkTeleport: Teleported" (int distance) "blocks"))))))))
     (catch Exception e
-      (log/warn "MarkTeleport key-up failed:" (ex-message e))
-      (send-fx-end! ctx-id))))
+      (log/warn "MarkTeleport key-up failed:" (ex-message e)))))
 
 (defn mark-teleport-on-key-abort
   "Clean up teleport state on abort."
   [{:keys [ctx-id]}]
   (try
     (ctx/update-context! ctx-id dissoc :skill-state)
-    (send-fx-end! ctx-id)
     (log/debug "MarkTeleport aborted")
     (catch Exception e
-      (log/warn "MarkTeleport key-abort failed:" (ex-message e))
-      (send-fx-end! ctx-id))))
+      (log/warn "MarkTeleport key-abort failed:" (ex-message e)))))

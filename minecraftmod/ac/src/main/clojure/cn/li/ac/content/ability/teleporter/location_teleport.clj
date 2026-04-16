@@ -235,8 +235,6 @@
   [{:keys [player-id ctx-id]}]
   (try
     (let [payload (query-location-teleport player-id)]
-      ;; LocationTeleport cooldown is applied only after successful perform.
-      (ctx/update-context! ctx-id update :skill-state merge {:skip-default-cooldown true})
       (ctx/ctx-send-to-client! ctx-id :location-teleport/ui-open payload))
     (catch Exception e
       (log/warn "LocationTeleport key-down failed:" (ex-message e)))))

@@ -137,6 +137,7 @@
   :overload-consume-speed 0.0
   :cooldown-ticks 1
   :pattern :multi-stage
+  :cooldown {:mode :manual}
   :cost {:down {:overload 'cn.li.ac.content.ability.electromaster.thunder-clap/thunder-clap-cost-down-overload}
          :tick {:cp 'cn.li.ac.content.ability.electromaster.thunder-clap/thunder-clap-cost-tick-cp}}
   :actions {:down! 'cn.li.ac.content.ability.electromaster.thunder-clap/thunder-clap-on-key-down
@@ -181,6 +182,7 @@
   :overload-consume-speed 0.0
   :cooldown-ticks 750
   :pattern :multi-stage
+  :cooldown {:mode :manual}
   :cost {:down {:overload 'cn.li.ac.content.ability.electromaster.body-intensify/body-intensify-cost-down-overload}
          :tick {:cp 'cn.li.ac.content.ability.electromaster.body-intensify/body-intensify-cost-tick-cp}}
   :actions {:down! 'cn.li.ac.content.ability.electromaster.body-intensify/body-intensify-on-key-down
@@ -204,6 +206,7 @@
   :overload-consume-speed 0.0
   :cooldown-ticks 60
   :pattern :multi-stage
+  :cooldown {:mode :manual}
   :cost {:down {:overload 'cn.li.ac.content.ability.electromaster.mag-movement/mag-movement-cost-down-overload
                 :creative? 'cn.li.ac.content.ability.electromaster.mag-movement/mag-movement-cost-creative?}
          :tick {:cp 'cn.li.ac.content.ability.electromaster.mag-movement/mag-movement-cost-tick-cp
@@ -229,6 +232,7 @@
   :overload-consume-speed 0.0
   :cooldown-ticks 60
   :pattern :multi-stage
+  :cooldown {:mode :manual}
   :cost {:up {:cp 'cn.li.ac.content.ability.electromaster.mag-manip/mag-manip-cost-up-cp
               :overload 'cn.li.ac.content.ability.electromaster.mag-manip/mag-manip-cost-up-overload
               :creative? 'cn.li.ac.content.ability.electromaster.mag-manip/mag-manip-cost-creative?}}
@@ -318,6 +322,7 @@
   :overload-consume-speed 0.0
   :cooldown-ticks 200
   :pattern :multi-stage
+  :cooldown {:mode :manual}
   :cost {:down {:overload 'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-cost-down-overload}
          :tick {:cp 'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-cost-tick-cp}}
   :actions {:down! 'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-key-down
@@ -346,7 +351,15 @@
   :actions {:down! 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-on-key-down
             :tick! 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-on-key-tick
             :up! 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-on-key-up
-            :abort! 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-on-key-abort})
+            :abort! 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-on-key-abort}
+  :fx {:start {:topic :mark-teleport/fx-start
+               :payload (fn [_] {})}
+       :update {:topic :mark-teleport/fx-update
+                :payload 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-fx-update-payload}
+       :perform {:topic :mark-teleport/fx-perform
+                 :payload 'cn.li.ac.content.ability.teleporter.mark-teleport/mark-teleport-fx-perform-payload}
+       :end {:topic :mark-teleport/fx-end
+             :payload (fn [_] {})}})
 
 (defskill location-teleport
   :id :location-teleport
@@ -361,6 +374,7 @@
   :overload-consume-speed 0.0
   :cooldown-ticks 25
   :pattern :multi-stage
+  :cooldown {:mode :manual}
   :actions {:down! 'cn.li.ac.content.ability.teleporter.location-teleport/location-teleport-on-key-down
             :tick! 'cn.li.ac.content.ability.teleporter.location-teleport/location-teleport-on-key-tick
             :up! 'cn.li.ac.content.ability.teleporter.location-teleport/location-teleport-on-key-up
@@ -404,6 +418,7 @@
   :overload-consume-speed 0.0
   :cooldown-ticks 80
   :pattern :multi-stage
+  :cooldown {:mode :manual}
   :cost {:up {:cp 'cn.li.ac.content.ability.vecmanip.groundshock/groundshock-cost-up-cp
               :overload 'cn.li.ac.content.ability.vecmanip.groundshock/groundshock-cost-up-overload}}
   :actions {:down! 'cn.li.ac.content.ability.vecmanip.groundshock/groundshock-on-key-down
@@ -509,6 +524,7 @@
   :overload-consume-speed 0.0
   :cooldown-ticks 80
   :pattern :multi-stage
+  :cooldown {:mode :manual}
   :cost {:up {:cp 'cn.li.ac.content.ability.vecmanip.directed-blastwave/directed-blastwave-cost-up-cp
               :overload 'cn.li.ac.content.ability.vecmanip.directed-blastwave/directed-blastwave-cost-up-overload}}
   :actions {:down! 'cn.li.ac.content.ability.vecmanip.directed-blastwave/directed-blastwave-on-key-down
@@ -555,6 +571,7 @@
   :overload-consume-speed 0.0
   :cooldown-ticks 90
   :pattern :multi-stage
+  :cooldown {:mode :manual}
   :cost {:tick {:cp 'cn.li.ac.content.ability.vecmanip.blood-retrograde/blood-retrograde-cost-release-cp
                 :overload 'cn.li.ac.content.ability.vecmanip.blood-retrograde/blood-retrograde-cost-release-overload}
          :up {:cp 'cn.li.ac.content.ability.vecmanip.blood-retrograde/blood-retrograde-cost-release-cp

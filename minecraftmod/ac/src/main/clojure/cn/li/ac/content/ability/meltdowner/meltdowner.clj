@@ -385,8 +385,7 @@
           (log/debug "Meltdowner start failed: insufficient resource"))
         (do
           (ctx/update-context! ctx-id assoc :skill-state
-                               {:skip-default-cooldown true
-                                :ticks 0
+                               {:ticks 0
                                 :overload-floor initial-overload
                                 :cp-per-tick (lerp 10.0 15.0 exp)
                                 :performed? false})

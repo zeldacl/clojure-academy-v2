@@ -146,8 +146,7 @@
   (try
     (ctx/update-context! ctx-id assoc :skill-state
                          {:charge-ticks 0
-                          :performed? false
-                          :skip-default-cooldown true})
+                          :performed? false})
     (send-fx-start! ctx-id)
     (log/debug "DirectedShock charge started")
     (catch Exception e

@@ -157,8 +157,7 @@
     (let [exp (get-skill-exp player-id)
           charge-needed (int (Math/round (double (lerp 70.0 30.0 exp))))]
       (ctx/update-context! ctx-id assoc :skill-state
-                           {:skip-default-cooldown true
-                            :phase :charging
+                           {:phase :charging
                             :charge-ticks 0
                             :charge-ticks-needed charge-needed
                             :vx 0.0 :vy 0.0 :vz 0.0})

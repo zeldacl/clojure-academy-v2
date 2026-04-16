@@ -446,28 +446,26 @@
               (add-railgun-exp! player-id (if reflection-hit? 0.01 0.005))
               (apply-railgun-cooldown! player-id exp)
               (ctx/update-context! ctx-id assoc :skill-state
-                                   {:skip-default-cooldown true
-                                    :fired true
+                                   {:fired true
                                     :mode :performed
                                     :hit-count normal-hit-count}))
             (log/debug "Railgun coin-QTE perform" player-id))
-          (ctx/update-context! ctx-id assoc :skill-state {:skip-default-cooldown true :fired false :mode :coin-qte-no-resource}))
+          (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :coin-qte-no-resource}))
 
         (:has-window? qte)
         (do
-          (ctx/update-context! ctx-id assoc :skill-state {:skip-default-cooldown true :fired false :mode :coin-qte-miss})
+          (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :coin-qte-miss})
           (log/debug "Railgun coin-QTE miss" player-id (:progress qte)))
 
         (accepted-item-in-hand? player)
         (ctx/update-context! ctx-id assoc :skill-state
-                             {:skip-default-cooldown true
-                              :fired false
+                             {:fired false
                               :mode :item-charge
                               :charge-ticks item-charge-ticks
                               :hit-count 0})
 
         :else
-        (ctx/update-context! ctx-id assoc :skill-state {:skip-default-cooldown true :fired false :mode :idle-no-trigger})))
+        (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :idle-no-trigger})))
     (catch Exception e
       (log/warn "Railgun key-down failed:" (ex-message e)))))
 
@@ -490,8 +488,7 @@
                       (add-railgun-exp! player-id (if reflection-hit? 0.01 0.005))
                       (apply-railgun-cooldown! player-id (get-skill-exp player-id))
                       (ctx/update-context! ctx-id assoc :skill-state
-                                           {:skip-default-cooldown true
-                                            :fired true
+                                           {:fired true
                                             :mode :performed
                                             :hit-count normal-hit-count})))
                   (ctx/update-context! ctx-id assoc :skill-state

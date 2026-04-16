@@ -185,6 +185,8 @@
   [spec evt]
   (let [cost-ok? (apply-cost! spec :down evt)]
     (call-action! spec :down! (assoc evt :cost-ok? cost-ok?))
+    (when cost-ok?
+      (fx/send! (:ctx-id evt) (:fx spec) :start evt))
     (when-not cost-ok?
       (call-action! spec :cost-fail! (assoc evt :cost-stage :down)))))
 
@@ -192,6 +194,8 @@
   [spec evt]
   (let [cost-ok? (apply-cost! spec :tick evt)]
     (call-action! spec :tick! (assoc evt :cost-ok? cost-ok?))
+    (when cost-ok?
+      (fx/send! (:ctx-id evt) (:fx spec) :update evt))
     (when-not cost-ok?
       (call-action! spec :cost-fail! (assoc evt :cost-stage :tick)))))
 
@@ -199,12 +203,16 @@
   [spec evt]
   (let [cost-ok? (apply-cost! spec :up evt)]
     (call-action! spec :up! (assoc evt :cost-ok? cost-ok?))
+    (when cost-ok?
+      (fx/send! (:ctx-id evt) (:fx spec) :perform evt))
+    (fx/send! (:ctx-id evt) (:fx spec) :end evt)
     (when-not cost-ok?
       (call-action! spec :cost-fail! (assoc evt :cost-stage :up)))))
 
 (defn multi-stage-on-abort!
   [spec evt]
-  (call-action! spec :abort! evt))
+  (call-action! spec :abort! evt)
+  (fx/send! (:ctx-id evt) (:fx spec) :end evt))
 
 (defn handlers
   "Return pattern handler map for a spec."

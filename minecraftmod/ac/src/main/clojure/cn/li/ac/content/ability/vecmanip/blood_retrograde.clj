@@ -243,8 +243,7 @@
                          (assoc (or skill-state {})
                                 :executed? true
                                 :ended? true
-                                :performed? (boolean performed?)
-                                :skip-default-cooldown true)))
+                                :performed? (boolean performed?))))
   (send-fx-end! ctx-id performed?)
   (ctx/terminate-context! ctx-id nil))
 
@@ -278,8 +277,7 @@
     (ctx/update-context! ctx-id assoc :skill-state
                          {:ticks 0
                           :executed? false
-                          :ended? false
-                          :skip-default-cooldown true})
+                          :ended? false})
     (send-fx-start! ctx-id)
     (send-fx-update! ctx-id 0)
     (log/debug "BloodRetrograde charge started")
@@ -296,8 +294,7 @@
         (when-not executed?
           (let [ticks (inc (long (or (:ticks skill-state) 0)))]
             (ctx/update-context! ctx-id update :skill-state assoc
-                                 :ticks ticks
-                                 :skip-default-cooldown true)
+                                 :ticks ticks)
             (send-fx-update! ctx-id ticks)
             (when (>= ticks max-charge-ticks)
               (let [hit (when raycast/*raycast*

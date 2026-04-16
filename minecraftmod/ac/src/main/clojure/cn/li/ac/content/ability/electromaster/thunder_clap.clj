@@ -173,8 +173,7 @@
         (ctx/update-context! ctx-id assoc :skill-state
                              {:ticks 0
                               :hit-pos hit-pos
-                              :performed? false
-                              :skip-default-cooldown true})
+                              :performed? false})
         (send-fx-start! ctx-id)
         (send-fx-update! ctx-id 0 hit-pos)
         (log/debug "ThunderClap charge started")))

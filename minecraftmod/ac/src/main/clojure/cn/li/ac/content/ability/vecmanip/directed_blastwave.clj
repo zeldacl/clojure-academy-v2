@@ -207,8 +207,7 @@
                          {:charge-ticks 0
                           :punched? false
                           :punch-ticks 0
-                          :performed? false
-                          :skip-default-cooldown true})
+                          :performed? false})
     (send-fx-start! ctx-id)
     (send-fx-update! ctx-id 0 false)
     (log/debug "DirectedBlastwave charge started")

@@ -137,8 +137,7 @@
           (log/debug "BodyIntensify start failed: insufficient resource"))
         (do
           (ctx/update-context! ctx-id assoc :skill-state
-                               {:skip-default-cooldown true
-                                :tick 0
+                               {:tick 0
                                 :overload-floor overload-floor
                                 :cp-per-tick (lerp 20.0 15.0 exp)
                                 :exp exp})
