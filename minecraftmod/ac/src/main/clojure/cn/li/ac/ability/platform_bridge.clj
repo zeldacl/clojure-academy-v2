@@ -12,6 +12,7 @@
             [cn.li.ac.ability.entity-damage-runtime :as entity-damage-runtime]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.client.hud-renderer :as hud-renderer]
+            [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client-api :as client-api]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
@@ -138,6 +139,16 @@
     :directed-blastwave/fx-end
     (level-effects/enqueue-level-effect! :directed-blastwave {:mode :end
                                                                :performed? (boolean (:performed? payload))})
+
+    :directed-shock/fx-start
+    (hand-effects/enqueue-hand-effect! :directed-shock {:mode :start})
+
+    :directed-shock/fx-perform
+    (hand-effects/enqueue-hand-effect! :directed-shock {:mode :perform})
+
+    :directed-shock/fx-end
+    (hand-effects/enqueue-hand-effect! :directed-shock {:mode :end
+                                                         :performed? (boolean (:performed? payload))})
 
     :location-teleport/ui-open
     (do

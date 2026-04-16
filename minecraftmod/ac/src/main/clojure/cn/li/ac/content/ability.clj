@@ -352,6 +352,7 @@
   :name-key "ability.skill.vecmanip.directed_shock"
   :description-key "ability.skill.vecmanip.directed_shock.desc"
   :icon "textures/abilities/vecmanip/skills/dir_shock.png"
+  :ui-position [16 45]
   :level 1
   :controllable? false
   :ctrl-id :directed-shock
@@ -369,6 +370,7 @@
   :name-key "ability.skill.vecmanip.groundshock"
   :description-key "ability.skill.vecmanip.groundshock.desc"
   :icon "textures/abilities/vecmanip/skills/ground_shock.png"
+  :ui-position [64 85]
   :level 1
   :controllable? false
   :ctrl-id :groundshock
@@ -387,6 +389,7 @@
   :name-key "ability.skill.vecmanip.vec_accel"
   :description-key "ability.skill.vecmanip.vec_accel.desc"
   :icon "textures/abilities/vecmanip/skills/vec_accel.png"
+  :ui-position [76 40]
   :level 2
   :controllable? false
   :ctrl-id :vec-accel
@@ -405,6 +408,7 @@
   :name-key "ability.skill.vecmanip.vec_deviation"
   :description-key "ability.skill.vecmanip.vec_deviation.desc"
   :icon "textures/abilities/vecmanip/skills/vec_deviation.png"
+  :ui-position [145 53]
   :level 2
   :controllable? true
   :ctrl-id :vec-deviation
@@ -423,6 +427,7 @@
   :name-key "ability.skill.vecmanip.vec_reflection"
   :description-key "ability.skill.vecmanip.vec_reflection.desc"
   :icon "textures/abilities/vecmanip/skills/vec_reflection.png"
+  :ui-position [210 50]
   :level 4
   :controllable? true
   :ctrl-id :vec-reflection
@@ -441,6 +446,7 @@
   :name-key "ability.skill.vecmanip.directed_blastwave"
   :description-key "ability.skill.vecmanip.directed_blastwave.desc"
   :icon "textures/abilities/vecmanip/skills/dir_blast.png"
+  :ui-position [136 80]
   :level 3
   :controllable? false
   :ctrl-id :directed-blastwave
@@ -459,6 +465,7 @@
   :name-key "ability.skill.vecmanip.storm_wing"
   :description-key "ability.skill.vecmanip.storm_wing.desc"
   :icon "textures/abilities/vecmanip/skills/storm_wing.png"
+  :ui-position [130 20]
   :level 3
   :controllable? true
   :ctrl-id :storm-wing
@@ -477,6 +484,7 @@
   :name-key "ability.skill.vecmanip.blood_retrograde"
   :description-key "ability.skill.vecmanip.blood_retrograde.desc"
   :icon "textures/abilities/vecmanip/skills/blood_retro.png"
+  :ui-position [204 83]
   :level 4
   :controllable? true
   :ctrl-id :blood-retrograde
@@ -495,6 +503,7 @@
   :name-key "ability.skill.vecmanip.plasma_cannon"
   :description-key "ability.skill.vecmanip.plasma_cannon.desc"
   :icon "textures/abilities/vecmanip/skills/plasma_cannon.png"
+  :ui-position [175 14]
   :level 5
   :controllable? false
   :ctrl-id :plasma-cannon

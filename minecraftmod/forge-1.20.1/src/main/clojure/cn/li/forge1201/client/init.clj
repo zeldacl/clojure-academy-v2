@@ -17,6 +17,7 @@
             [cn.li.forge1201.client.terminal-screen-bridge :as terminal-screen-bridge]
             [cn.li.forge1201.client.effects.particle-bridge :as particle-bridge]
             [cn.li.forge1201.client.effects.sound-bridge :as sound-bridge]
+            [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.forge1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.forge1201.client.request-bridge :as request-bridge]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
@@ -174,6 +175,7 @@
   (terminal-screen-bridge/init!)
   (particle-bridge/init!)
   (sound-bridge/init!)
+  (hand-effect-renderer/init!)
   (level-effect-renderer/init!)
   (request-bridge/init!)
 
