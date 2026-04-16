@@ -45,6 +45,10 @@
 (defonce ^:private storm-wing-effect (atom nil))
 (def ^:private storm-wing-loop-sound "my_mod:vecmanip.storm_wing")
 
+;; VecAccel: trajectory preview (ParabolaEffect equivalent) + perform sound
+(defonce ^:private vec-accel-effect (atom nil))
+(def ^:private vec-accel-sound "my_mod:vecmanip.vec_accel")
+
 (declare tick-thunder-bolt-arcs!)
 
 
@@ -464,9 +468,8 @@
 
           :end
           ;; Original: c_terminate() – stop loop sound
-          (do
-            (reset! plasma-cannon-effect {:active?    false
-                                          :performed? (boolean performed?)}))
+          (reset! plasma-cannon-effect {:active?    false
+                                        :performed? (boolean performed?)})
 
           nil))
 
@@ -497,6 +500,39 @@
 
           :end
           (reset! storm-wing-effect {:active? false :ticks 0})
+
+          nil))
+
+      :vec-accel
+      (let [{:keys [mode charge-ticks can-perform? look-dir init-vel]} payload]
+        (case mode
+          :start
+          (reset! vec-accel-effect {:active?      true
+                                    :charge-ticks 0
+                                    :can-perform? false
+                                    :look-dir     {:x 0.0 :y 0.0 :z 1.0}
+                                    :init-vel     {:x 0.0 :y 0.0 :z 1.0}})
+
+          :update
+          (swap! vec-accel-effect
+                 (fn [st]
+                   (assoc (or st {:active? true})
+                          :active?      true
+                          :charge-ticks (long (or charge-ticks 0))
+                          :can-perform? (boolean can-perform?)
+                          :look-dir     (or look-dir {:x 0.0 :y 0.0 :z 1.0})
+                          :init-vel     (or init-vel {:x 0.0 :y 0.0 :z 1.0}))))
+
+          :perform
+          ;; Original: ACSounds.playClient "vecmanip.vec_accel" volume 0.35
+          (client-sounds/queue-sound-effect!
+            {:type     :sound
+             :sound-id vec-accel-sound
+             :volume   0.35
+             :pitch    1.0})
+
+          :end
+          (reset! vec-accel-effect {:active? false})
 
           nil))
 
@@ -779,6 +815,75 @@
             [(line-op p0 p1 color)
              (line-op center p0 core)]))
         (range points)))))
+
+;; ---------------------------------------------------------------------------
+;; VecAccel trajectory preview (ParabolaEffect equivalent)
+;; ---------------------------------------------------------------------------
+;; Original: renders a ribbon of quads (GL_QUADS) with h=0.02 vertical height,
+;; using glow_line texture, white if canPerform else red.
+;; Physics: speed *= 0.98 (drag), gravity = dt*1.9 per step, dt = 0.02.
+;; 100 vertices → 99 segments, alpha = 0.7*(1-idx*0.03) fades out ~idx 33.
+
+(defn- vec-accel-trajectory-ops
+  "Generate quad ops for the VecAccel trajectory preview ribbon."
+  [camera-pos effect]
+  (when (and effect (:active? effect))
+    (let [init-vel  (or (:init-vel effect) {:x 0.0 :y 0.0 :z 1.0})
+     look-dir  (or (:look-dir effect) {:x 0.0 :y 0.0 :z 1.0})
+     can-do?   (boolean (:can-perform? effect))
+     ;; Player feet ≈ camera_pos.y - 1.62 (standing eye height)
+     px        (double (:x camera-pos))
+     py        (- (double (:y camera-pos)) 1.62)
+     pz        (double (:z camera-pos))
+     lx        (double (:x look-dir))
+     ly        (double (:y look-dir))
+     lz        (double (:z look-dir))
+     horiz-len (Math/sqrt (+ (* lx lx) (* lz lz)))
+     safe-h    (max 1.0e-8 horiz-len)
+     ;; Perpendicular to look in horizontal plane: rotateYaw(90) → (lz,0,-lx)
+     ;; scaled to -0.08, then y set to 1.56 (original lookRot construction)
+     rot-x     (* (/ lz safe-h) -0.08)
+     rot-z     (* (/ (- lx) safe-h) -0.08)
+     ;; Starting offset from player feet (relative, then absolute)
+     off-x     (- rot-x (* lx 0.12))
+     off-y     (- 1.56   (* ly 0.12))     ; y=1.56, then subtract look_y*0.12
+     off-z     (- rot-z  (* lz 0.12))
+     start-pos {:x (+ px off-x) :y (+ py off-y) :z (+ pz off-z)}
+     h         0.02
+     dt        0.02]
+      ;; Simulate 100 steps; original: vertices += pos then update
+      (loop [pos   start-pos
+        vel   {:x (double (:x init-vel))
+          :y (double (:y init-vel))
+          :z (double (:z init-vel))}
+        prev  nil
+        ops   (transient [])
+        idx   0]
+   (let [;; drag then position update then gravity (original order)
+    vel2  {:x (* (double (:x vel)) 0.98)
+      :y (* (double (:y vel)) 0.98)
+      :z (* (double (:z vel)) 0.98)}
+    pos2  {:x (+ (double (:x pos)) (* (double (:x vel2)) dt))
+      :y (+ (double (:y pos)) (* (double (:y vel2)) dt))
+      :z (+ (double (:z pos)) (* (double (:z vel2)) dt))}
+    vel3  (assoc vel2 :y (- (double (:y vel2)) (* dt 1.9)))]
+     (when (and prev (< idx 99))
+       (let [raw-alpha (max 0.0 (- 0.7 (* idx 0.021))) ; 0.7*(1-idx*0.03)
+        a-int     (int (* raw-alpha 255.0))]
+    (when (> a-int 0)
+      (let [color (if can-do?
+          {:r 255 :g 255 :b 255 :a a-int}
+          {:r 255 :g  51 :b  51 :a a-int})
+       ;; Vertical ribbon: y ± h
+       p0 {:x (double (:x prev)) :y (+ (double (:y prev)) h) :z (double (:z prev))}
+       p1 {:x (double (:x pos))  :y (+ (double (:y pos))  h) :z (double (:z pos))}
+       p2 {:x (double (:x pos))  :y (- (double (:y pos))  h) :z (double (:z pos))}
+       p3 {:x (double (:x prev)) :y (- (double (:y prev)) h) :z (double (:z prev))}]
+        (conj! ops (quad-op "my_mod:textures/effects/glow_line.png"
+             p0 p1 p2 p3 color))))))
+     (if (>= idx 99)
+       (persistent! ops)
+       (recur pos2 vel3 pos ops (inc idx))))))))
 
 (defn- beam-ops [cam-pos {:keys [start end ttl max-ttl]}]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
@@ -1115,6 +1220,7 @@
     blood-retrograde @blood-retrograde-effect
   directed-blastwave @directed-blastwave-effect
         storm-wing @storm-wing-effect
+        vec-accel @vec-accel-effect
         player-uuid (:player-uuid hand-center-pos)
         charge-state (when player-uuid
                        (client-runtime/railgun-charge-visual-state player-uuid))
@@ -1168,6 +1274,9 @@
         meltdowner-ray-plan (mapcat (fn [ray]
                                       (meltdowner-ray-ops camera-pos ray))
                                     @meltdowner-rays)
+        vec-accel-plan (if (and vec-accel (:active? vec-accel))
+                         (vec-accel-trajectory-ops camera-pos vec-accel)
+                         [])
         blood-retrograde-plan (concat
                                 (mapcat (fn [splash]
                                           (blood-retrograde-splash-ops camera-pos splash))
@@ -1256,6 +1365,7 @@
               (seq charge-plan)
               (seq meltdowner-plan)
               (seq meltdowner-ray-plan)
+              (seq vec-accel-plan)
                     (seq blood-retrograde-plan)
                 (seq directed-blastwave-plan)
               (seq storm-wing-plan)
@@ -1270,6 +1380,7 @@
                          thunder-clap-plan
                          tb-arc-plan
                    meltdowner-ray-plan
+                 vec-accel-plan
                  blood-retrograde-plan
                  directed-blastwave-plan
                  storm-wing-plan))

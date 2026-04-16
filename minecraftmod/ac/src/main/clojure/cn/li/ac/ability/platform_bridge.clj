@@ -140,6 +140,24 @@
     (level-effects/enqueue-level-effect! :directed-blastwave {:mode :end
                                                                :performed? (boolean (:performed? payload))})
 
+    :vec-accel/fx-start
+    (level-effects/enqueue-level-effect! :vec-accel {:mode :start})
+
+    :vec-accel/fx-update
+    (level-effects/enqueue-level-effect! :vec-accel
+                       {:mode :update
+                        :charge-ticks (long (or (:charge-ticks payload) 0))
+                        :can-perform? (boolean (:can-perform? payload))
+                        :look-dir (:look-dir payload)
+                        :init-vel (:init-vel payload)})
+
+    :vec-accel/fx-perform
+    (level-effects/enqueue-level-effect! :vec-accel {:mode :perform})
+
+    :vec-accel/fx-end
+    (level-effects/enqueue-level-effect! :vec-accel {:mode :end
+                              :performed? (boolean (:performed? payload))})
+
     :groundshock/fx-start
     (hand-effects/enqueue-hand-effect! :groundshock {:mode :start})
 
