@@ -121,6 +121,24 @@
                                                              :splashes (:splashes payload)
                                                              :sprays (:sprays payload)})
 
+    :directed-blastwave/fx-start
+    (level-effects/enqueue-level-effect! :directed-blastwave {:mode :start})
+
+    :directed-blastwave/fx-update
+    (level-effects/enqueue-level-effect! :directed-blastwave {:mode :update
+                                                               :charge-ticks (long (or (:charge-ticks payload) 0))
+                                                               :punched? (boolean (:punched? payload))})
+
+    :directed-blastwave/fx-perform
+    (level-effects/enqueue-level-effect! :directed-blastwave {:mode :perform
+                                                               :pos (:pos payload)
+                                                               :look-dir (:look-dir payload)
+                                                               :charge-ticks (long (or (:charge-ticks payload) 0))})
+
+    :directed-blastwave/fx-end
+    (level-effects/enqueue-level-effect! :directed-blastwave {:mode :end
+                                                               :performed? (boolean (:performed? payload))})
+
     :location-teleport/ui-open
     (do
       (location-teleport-screen/apply-server-payload! payload)

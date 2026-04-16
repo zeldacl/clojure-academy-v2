@@ -88,6 +88,9 @@
   (try-install! 'cn.li.forge1201.runtime.player-motion
                 'cn.li.forge1201.runtime.player-motion/install-player-motion!
                 "player-motion")
+  (try-install! 'cn.li.forge1201.runtime.entity-motion
+                'cn.li.forge1201.runtime.entity-motion/install-entity-motion!
+                "entity-motion")
   (try-install! 'cn.li.forge1201.runtime.block-manipulation
                 'cn.li.forge1201.runtime.block-manipulation/install-block-manipulation!
                 "block-manipulation")

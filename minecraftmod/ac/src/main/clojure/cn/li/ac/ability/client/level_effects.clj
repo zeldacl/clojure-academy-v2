@@ -28,6 +28,11 @@
 (def ^:private blood-retrograde-splash-life 10)
 (def ^:private blood-retrograde-spray-life 1200)
 
+(defonce ^:private directed-blastwave-effect (atom nil))
+(defonce ^:private directed-blastwave-waves (atom []))
+(def ^:private directed-blastwave-sound "my_mod:vecmanip.directed_blast")
+(def ^:private directed-blastwave-wave-life 15)
+
 (declare tick-thunder-bolt-arcs!)
 
 
@@ -272,6 +277,66 @@
 
                nil))
 
+      :directed-blastwave
+      (let [{:keys [mode charge-ticks punched? pos look-dir performed?]} payload]
+        (case mode
+          :start
+          (reset! directed-blastwave-effect {:active? true
+                                             :charge-ticks 0
+                                             :punched? false
+                                             :performed? false})
+
+          :update
+          (swap! directed-blastwave-effect
+                 (fn [st]
+                   (assoc (or st {})
+                          :active? true
+                          :charge-ticks (long (or charge-ticks 0))
+                          :punched? (boolean punched?)
+                          :performed? false)))
+
+          :perform
+          (do
+            (when (map? pos)
+              (let [dir (let [d (or look-dir {:x 0.0 :y 0.0 :z 1.0})
+                              len (Math/sqrt (+ (* (:x d) (:x d))
+                                                (* (:y d) (:y d))
+                                                (* (:z d) (:z d))))
+                              inv (/ 1.0 (max 1.0e-6 len))]
+                          {:x (* (double (:x d)) inv)
+                           :y (* (double (:y d)) inv)
+                           :z (* (double (:z d)) inv)})
+                    rings (+ 2 (rand-int 2))]
+                (swap! directed-blastwave-waves conj
+                       {:pos {:x (double (:x pos))
+                              :y (double (:y pos))
+                              :z (double (:z pos))}
+                        :dir dir
+                        :ttl directed-blastwave-wave-life
+                        :max-ttl directed-blastwave-wave-life
+                        :rings (vec (map (fn [idx]
+                                           {:life (+ 8 (rand-int 5))
+                                            :offset (+ (* idx 1.5) (- (* (rand) 0.6) 0.3))
+                                            :size (* 1.0 (+ 0.8 (* (rand) 0.4)))
+                                            :time-offset (+ (* idx 2) (- (rand-int 3) 1))})
+                                         (range rings)))})))
+            (client-sounds/queue-sound-effect!
+              {:type :sound
+               :sound-id directed-blastwave-sound
+               :volume 0.5
+               :pitch 1.0
+               :x (double (or (:x pos) 0.0))
+               :y (double (or (:y pos) 0.0))
+               :z (double (or (:z pos) 0.0))}))
+
+          :end
+          (reset! directed-blastwave-effect {:active? false
+                                             :charge-ticks 0
+                                             :punched? false
+                                             :performed? (boolean performed?)})
+
+          nil))
+
       nil))
 
 (defn tick-level-effects! []
@@ -335,7 +400,19 @@
              (if (:active? st)
                (update st :ticks (fnil inc 0))
                nil))))
+  (swap! directed-blastwave-effect
+         (fn [st]
+           (when st
+             (if (:active? st)
+               st
+               nil))))
   (swap! meltdowner-rays
+         (fn [xs]
+           (->> xs
+                (map #(update % :ttl dec))
+                (filter #(pos? (long (:ttl %))))
+                vec)))
+  (swap! directed-blastwave-waves
          (fn [xs]
            (->> xs
                 (map #(update % :ttl dec))
@@ -419,6 +496,85 @@
     (if (> (vlen raw) 1.0e-5)
       (vnormalize raw)
       {:x 1.0 :y 0.0 :z 0.0})))
+
+(defn- directed-blastwave-alpha-curve [t]
+  (cond
+    (< t 0.0) 0.0
+    (< t 0.2) (/ t 0.2)
+    (< t 0.8) 1.0
+    (< t 1.0) (- 1.0 (/ (- t 0.8) 0.2))
+    :else 0.0))
+
+(defn- directed-blastwave-size-scale [ticks]
+  (let [x (min 1.62 (max 0.0 (/ (double ticks) 20.0)))]
+    (cond
+      (< x 0.2)
+      (+ 0.4 (* (/ x 0.2) (- 0.8 0.4)))
+
+      (<= x 1.62)
+      (+ 0.8 (* (/ (- x 0.2) (- 1.62 0.2)) (- 1.5 0.8)))
+
+      :else 1.5)))
+
+(defn- directed-blastwave-basis [dir]
+  (let [n-dir (vnormalize dir)
+        up-axis (if (> (Math/abs (:y n-dir)) 0.95)
+                  {:x 1.0 :y 0.0 :z 0.0}
+                  {:x 0.0 :y 1.0 :z 0.0})
+        right (vnormalize (vcross n-dir up-axis))
+        up (vnormalize (vcross right n-dir))]
+    [right up n-dir]))
+
+(defn- directed-blastwave-wave-ops [{:keys [pos dir ttl max-ttl rings]}]
+  (let [ticks (- (long max-ttl) (long ttl))
+        max-alpha (directed-blastwave-alpha-curve (/ (double ticks) (double (max 1 max-ttl))))
+        size-scale (directed-blastwave-size-scale ticks)
+        [right up forward] (directed-blastwave-basis dir)
+        z-offset (/ (double ticks) 40.0)]
+    (vec
+      (mapcat
+        (fn [{:keys [life offset size time-offset]}]
+          (let [local-t (/ (- (double ticks) (double time-offset)) (double (max 1 life)))
+                alpha (directed-blastwave-alpha-curve local-t)
+                real-alpha (min max-alpha alpha)]
+            (if (<= real-alpha 0.0)
+              []
+              (let [center (v+ pos (v* forward (+ (double offset) z-offset)))
+                    ring-size (* (double size) size-scale)
+                    side (v* right (* ring-size 0.5))
+                    vertical (v* up (* ring-size 0.5))
+                    p0 (v+ (v- center side) vertical)
+                    p1 (v+ (v+ center side) vertical)
+                    p2 (v- (v+ center side) vertical)
+                    p3 (v- (v- center side) vertical)
+                    alpha-i (int (max 0 (min 255 (* 255.0 real-alpha 0.7))))]
+                [(quad-op "my_mod:textures/effects/glow_circle.png"
+                          p0 p1 p2 p3
+                          {:r 255 :g 255 :b 255 :a alpha-i})]))))
+        rings))))
+
+(defn- directed-blastwave-charge-ops [center charge-ticks punched?]
+  (let [progress (min 1.0 (/ (double charge-ticks) 50.0))
+        radius (+ 0.1 (* 0.16 progress))
+        pulse (+ radius (* 0.025 (Math/sin (* 0.22 charge-ticks))))
+        points 16
+        alpha (if punched? 220 170)
+        color {:r 225 :g 245 :b 255 :a alpha}
+        core {:r 178 :g 220 :b 245 :a (int (* 0.7 alpha))}]
+    (vec
+      (mapcat
+        (fn [idx]
+          (let [a0 (/ (* 2.0 Math/PI idx) points)
+                a1 (/ (* 2.0 Math/PI (inc idx)) points)
+                p0 {:x (+ (:x center) (* pulse (Math/cos a0)))
+                    :y (:y center)
+                    :z (+ (:z center) (* pulse (Math/sin a0)))}
+                p1 {:x (+ (:x center) (* pulse (Math/cos a1)))
+                    :y (:y center)
+                    :z (+ (:z center) (* pulse (Math/sin a1)))}]
+            [(line-op p0 p1 color)
+             (line-op center p0 core)]))
+        (range points)))))
 
 (defn- beam-ops [cam-pos {:keys [start end ttl max-ttl]}]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
@@ -753,6 +909,7 @@
         thunder-clap @thunder-clap-effect
         meltdowner @meltdowner-effect
     blood-retrograde @blood-retrograde-effect
+  directed-blastwave @directed-blastwave-effect
         player-uuid (:player-uuid hand-center-pos)
         charge-state (when player-uuid
                        (client-runtime/railgun-charge-visual-state player-uuid))
@@ -811,6 +968,16 @@
                                           (blood-retrograde-splash-ops camera-pos splash))
                                         @blood-retrograde-splashes)
                                 (mapcat blood-retrograde-spray-ops @blood-retrograde-sprays))
+        directed-blastwave-plan (concat
+                                  (if (and hand-center-pos
+                                           directed-blastwave
+                                           (:active? directed-blastwave))
+                                    (directed-blastwave-charge-ops
+                                      (dissoc hand-center-pos :player-uuid)
+                                      (long (or (:charge-ticks directed-blastwave) 0))
+                                      (boolean (:punched? directed-blastwave)))
+                                    [])
+                                  (mapcat directed-blastwave-wave-ops @directed-blastwave-waves))
         blood-retrograde-walk-speed (when (and blood-retrograde (:active? blood-retrograde))
                                       (blood-retrograde-local-walk-speed (:ticks blood-retrograde)))
         local-walk-speed (let [cand (filter number? [thunder-clap-walk-speed
@@ -828,6 +995,7 @@
               (seq meltdowner-plan)
               (seq meltdowner-ray-plan)
                     (seq blood-retrograde-plan)
+                (seq directed-blastwave-plan)
               (seq tb-arc-plan)
               (seq thunder-clap-plan)
               local-walk-speed)
@@ -839,5 +1007,6 @@
                          thunder-clap-plan
                          tb-arc-plan
                    meltdowner-ray-plan
-                   blood-retrograde-plan))
+                 blood-retrograde-plan
+                 directed-blastwave-plan))
        :local-walk-speed local-walk-speed})))
