@@ -46,6 +46,10 @@
 (def MSG-REQ-SET-PRESET    "ability:req/set-preset")
 (def MSG-REQ-SWITCH-PRESET "ability:req/switch-preset")
 (def MSG-REQ-SET-ACTIVATED "ability:req/set-activated")
+(def MSG-REQ-LOCATION-TELEPORT-QUERY   "ability:req/location-teleport/query")
+(def MSG-REQ-LOCATION-TELEPORT-ADD     "ability:req/location-teleport/add")
+(def MSG-REQ-LOCATION-TELEPORT-REMOVE  "ability:req/location-teleport/remove")
+(def MSG-REQ-LOCATION-TELEPORT-PERFORM "ability:req/location-teleport/perform")
 
 ;; ============================================================================
 ;; Validation utility
@@ -58,7 +62,9 @@
     MSG-SKILL-KEY-DOWN MSG-SKILL-KEY-TICK MSG-SKILL-KEY-UP MSG-SKILL-KEY-ABORT
     MSG-SYNC-ABILITY MSG-SYNC-RESOURCE MSG-SYNC-COOLDOWN MSG-SYNC-PRESET
     MSG-REQ-LEARN-SKILL MSG-REQ-LEVEL-UP MSG-REQ-SET-PRESET MSG-REQ-SWITCH-PRESET
-    MSG-REQ-SET-ACTIVATED})
+    MSG-REQ-SET-ACTIVATED
+    MSG-REQ-LOCATION-TELEPORT-QUERY MSG-REQ-LOCATION-TELEPORT-ADD
+    MSG-REQ-LOCATION-TELEPORT-REMOVE MSG-REQ-LOCATION-TELEPORT-PERFORM})
 
 (defn valid-msg-id? [id]
   (contains? all-messages id))

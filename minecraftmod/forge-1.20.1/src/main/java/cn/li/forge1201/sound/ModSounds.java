@@ -23,6 +23,13 @@ public final class ModSounds {
     public static final RegistryObject<SoundEvent> EM_LF_LOOP = register("em.lf_loop");
     public static final RegistryObject<SoundEvent> EM_MAG_MANIP = register("em.mag_manip");
 
+    // Teleporter sounds
+    public static final RegistryObject<SoundEvent> TP_TP = register("tp.tp");
+    public static final RegistryObject<SoundEvent> TP_TP_PRE = register("tp.tp_pre");
+    public static final RegistryObject<SoundEvent> TP_TP_SHIFT = register("tp.tp_shift");
+    public static final RegistryObject<SoundEvent> TP_TP_FLASHING = register("tp.tp_flashing");
+    public static final RegistryObject<SoundEvent> TP_GUTS = register("tp.guts");
+
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUND_EVENTS.register(name,
                 () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(MyMod1201.MODID, name)));

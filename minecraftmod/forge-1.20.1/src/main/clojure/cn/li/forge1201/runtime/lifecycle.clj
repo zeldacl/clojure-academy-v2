@@ -79,10 +79,10 @@
   (try-install! 'cn.li.forge1201.runtime.potion-effects
                 'cn.li.forge1201.runtime.potion-effects/install-potion-effects!
                 "potion-effects")
-  #_(try-install! 'cn.li.forge1201.runtime.teleportation
+  (try-install! 'cn.li.forge1201.runtime.teleportation
                 'cn.li.forge1201.runtime.teleportation/install-teleportation!
-                "teleportation") 
-  #_(try-install! 'cn.li.forge1201.runtime.saved-locations
+                "teleportation")
+  (try-install! 'cn.li.forge1201.runtime.saved-locations
                 'cn.li.forge1201.runtime.saved-locations/install-saved-locations!
                 "saved-locations")
   (try-install! 'cn.li.forge1201.runtime.player-motion

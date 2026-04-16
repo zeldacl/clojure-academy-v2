@@ -30,8 +30,11 @@
                     (.fill graphics (:x op) (:y op) (+ (:x op) (:w op)) (+ (:y op) (:h op)) (:fallback-color op)))
     nil))
 
-(defn- create-host-screen [title draw-ops-fn click-fn hover-fn close-fn]
-  (proxy [Screen] [(Component/literal title)]
+(defn- create-host-screen
+  ([title draw-ops-fn click-fn hover-fn close-fn]
+   (create-host-screen title draw-ops-fn click-fn hover-fn close-fn nil))
+  ([title draw-ops-fn click-fn hover-fn close-fn char-typed-fn]
+   (proxy [Screen] [(Component/literal title)]
     (render [^GuiGraphics graphics mouse-x mouse-y _partial-tick]
       (try
         (let [^Screen screen this]
@@ -44,10 +47,20 @@
           (log/error (str "Error rendering hosted screen " title) e))))
 
     (keyPressed [^long key ^long _scancode ^long _modifiers]
-      (if (= key 256)
+      (cond
+        (= key 256)
         (let [^Minecraft mc (Minecraft/getInstance)]
           (.setScreen mc nil)
           true)
+        (and char-typed-fn (= key 259)) ;; backspace
+        (do (char-typed-fn \backspace) true)
+        (and char-typed-fn (= key 257)) ;; Enter
+        (do (char-typed-fn \newline) true)
+        :else false))
+
+    (charTyped [ch ^int _modifiers]
+      (if char-typed-fn
+        (do (char-typed-fn ch) true)
         false))
 
     (mouseClicked [mouse-x mouse-y _button]
@@ -59,7 +72,7 @@
 
     (removed []
       (when close-fn
-        (close-fn)))))
+        (close-fn))))))
 
 (defn open-skill-tree-screen!
   ([player-uuid]
@@ -87,6 +100,23 @@
                       ability-runtime/client-handle-preset-editor-click!
                       nil
                       ability-runtime/client-close-preset-editor-screen!))))))
+
+(defn open-location-teleport-screen!
+  ([player-uuid]
+   (open-location-teleport-screen! player-uuid nil))
+  ([player-uuid payload]
+   (let [result (ability-runtime/client-open-location-teleport-screen! player-uuid payload)]
+     (when (= (:command result) :open-screen)
+       (let [^Minecraft mc (Minecraft/getInstance)]
+         (.setScreen mc
+                     (create-host-screen
+                       "Location Teleport"
+                       (fn [mouse-x mouse-y]
+                         (ability-runtime/client-build-location-teleport-draw-ops mouse-x mouse-y))
+                       ability-runtime/client-handle-location-teleport-click!
+                       ability-runtime/client-handle-location-teleport-hover!
+                       ability-runtime/client-close-location-teleport-screen!
+                       ability-runtime/client-handle-location-teleport-char-typed!)))))))
 
 (defn init! []
   (log/info "Client screen host initialized"))

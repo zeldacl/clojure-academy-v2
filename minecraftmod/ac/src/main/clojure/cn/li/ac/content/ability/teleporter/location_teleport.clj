@@ -1,220 +1,268 @@
 (ns cn.li.ac.content.ability.teleporter.location-teleport
   "LocationTeleport skill - teleport to saved locations.
 
-  Mechanics:
-  - Teleport to pre-saved locations
-  - Max 16 saved locations per player
-  - Energy: 150-200 CP base + distance multiplier max(8.0, sqrt(min(800, distance)))
-  - Cross-dimension: 2x energy cost, requires 80%+ experience
-  - Overload: 240 flat
-  - Cooldown: 20-30 ticks
-  - Experience gain: 0.015-0.03 based on distance
-  - Teleports player + nearby entities (5 block radius)
-  - Dismounts riding entities
-  - GUI interface for location management (TODO: client-side implementation)
+  Original-aligned mechanics:
+  - CP consume: lerp(200,150,exp) * dim-penalty(2x cross-dim) * max(8, sqrt(min(800, distance)))
+  - Overload consume: 240
+  - Cross-dimension requires exp > 0.8
+  - Teleport nearby entities in radius 5 with relative offsets preserved
+  - Cooldown: lerp(30,20,exp)
+  - Exp gain: 0.015 (dist<200) or 0.03 (dist>=200)
+  - Location name max length: 16
+  - UI opened from key-down; actual add/remove/perform via RPC requests
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.learning :as learning]
+            [cn.li.ac.ability.service.resource :as res]
+            [cn.li.ac.ability.service.cooldown :as cd]
+            [cn.li.ac.ability.model.resource-data :as rdata]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.saved-locations :as saved-locations]
+            [clojure.string :as str]
             [cn.li.mcmod.util.log :as log]))
+
+(def ^:private overload-cost 240.0)
+(def ^:private teleport-radius 5.0)
+(def ^:private max-location-name-length 16)
 
 (defn- get-skill-exp [player-id]
   (when-let [state (ps/get-player-state player-id)]
     (get-in state [:ability-data :skills :location-teleport :exp] 0.0)))
+
+(defn- lerp [a b t]
+  (+ (double a) (* (- (double b) (double a)) (double t))))
+
+(defn- can-cross-dimension? [exp]
+  (> (double exp) 0.8))
+
+(defn- norm-name [s]
+  (let [trimmed (-> (or s "") str str/trim)]
+    (subs trimmed 0 (min max-location-name-length (count trimmed)))))
 
 (defn- calculate-distance [x1 y1 z1 x2 y2 z2]
   (Math/sqrt (+ (* (- x2 x1) (- x2 x1))
                 (* (- y2 y1) (- y2 y1))
                 (* (- z2 z1) (- z2 z1)))))
 
-(defn- calculate-energy-cost [distance cross-dimension?]
-  (let [base-cost (max 8.0 (Math/sqrt (min 800.0 distance)))
-        multiplier (if cross-dimension? 2.0 1.0)]
-    (* base-cost multiplier)))
+(defn- compute-cp-cost [exp distance cross-dimension?]
+  (let [base (lerp 200.0 150.0 exp)
+        dim-penalty (if cross-dimension? 2.0 1.0)
+        dist-mult (max 8.0 (Math/sqrt (min 800.0 (double distance))))]
+    (* base dim-penalty dist-mult)))
+
+(defn- compute-cooldown [exp]
+  (int (lerp 30.0 20.0 exp)))
+
+(defn- compute-exp-gain [distance]
+  (if (>= (double distance) 200.0) 0.03 0.015))
+
+(defn- add-exp! [player-id amount]
+  (when-let [state (ps/get-player-state player-id)]
+    (let [{:keys [data events]} (learning/add-skill-exp
+                                  (:ability-data state)
+                                  player-id
+                                  :location-teleport
+                                  (double amount)
+                                  1.0)]
+      (ps/update-ability-data! player-id (constantly data))
+      (doseq [e events]
+        (ability-evt/fire-ability-event! e)))))
+
+(defn- consume-resource! [player-id overload cp]
+  (when-let [state (ps/get-player-state player-id)]
+    (let [{:keys [data success? events]} (res/perform-resource
+                                           (:resource-data state)
+                                           player-id
+                                           overload
+                                           cp
+                                           false)]
+      (when success?
+        (ps/update-resource-data! player-id (constantly data))
+        (doseq [e events]
+          (ability-evt/fire-ability-event! e)))
+      (boolean success?))))
+
+(defn- current-pos [player-id]
+  (when teleportation/*teleportation*
+    (teleportation/get-player-position teleportation/*teleportation* player-id)))
+
+(defn- all-locations [player-id]
+  (if saved-locations/*saved-locations*
+    (vec (saved-locations/list-locations saved-locations/*saved-locations* player-id))
+    []))
+
+(defn- location-with-stats [player-id exp cur-pos loc]
+  (let [cross-dim? (not= (:world-id cur-pos) (:world-id loc))
+        dist (calculate-distance (:x cur-pos) (:y cur-pos) (:z cur-pos)
+                                 (:x loc) (:y loc) (:z loc))
+        cp (compute-cp-cost exp dist cross-dim?)
+        no-exp? (and cross-dim? (not (can-cross-dimension? exp)))
+        no-cp? (let [state (ps/get-player-state player-id)]
+                 (if state
+                   (not (rdata/can-perform? (:resource-data state) overload-cost cp false))
+                   true))]
+    (assoc loc
+           :distance dist
+           :cp-cost cp
+           :cross-dimension? cross-dim?
+           :can-perform? (and (not no-exp?) (not no-cp?))
+           :error (cond
+                    no-exp? :err-exp
+                    no-cp? :err-cp
+                    :else nil))))
+
+(defn query-location-teleport
+  "Fetch current location list and perform stats for UI.
+  Returns {:success? boolean :locations [...] :exp double :current-pos map}."
+  [player-id]
+  (try
+    (let [exp (double (or (get-skill-exp player-id) 0.0))
+          pos (current-pos player-id)
+          locations (all-locations player-id)
+          with-stats (if pos
+                       (mapv #(location-with-stats player-id exp pos %) locations)
+                       locations)]
+      {:success? true
+       :exp exp
+       :current-pos pos
+       :locations with-stats})
+    (catch Exception e
+      (log/warn "LocationTeleport query failed:" (ex-message e))
+      {:success? false :error :query-failed :locations []})))
+
+(defn save-current-location!
+  "Save player's current position with a provided name. Returns result map."
+  [player-id location-name]
+  (try
+    (let [name* (norm-name location-name)]
+      (cond
+        (str/blank? name*)
+        {:success? false :error :invalid-name}
+
+        (not saved-locations/*saved-locations*)
+        {:success? false :error :saved-locations-unavailable}
+
+        :else
+        (if-let [pos (current-pos player-id)]
+          (let [ok? (saved-locations/save-location!
+                      saved-locations/*saved-locations*
+                      player-id
+                      name*
+                      (:world-id pos)
+                      (:x pos)
+                      (:y pos)
+                      (:z pos))]
+            (if ok?
+              {:success? true :name name*}
+              {:success? false :error :save-failed}))
+          {:success? false :error :player-pos-unavailable})))
+    (catch Exception e
+      (log/warn "LocationTeleport save failed:" (ex-message e))
+      {:success? false :error :save-failed})))
+
+(defn delete-saved-location!
+  "Delete a location by name. Returns result map."
+  [player-id location-name]
+  (try
+    (let [name* (norm-name location-name)]
+      (if (or (clojure.string/blank? name*) (not saved-locations/*saved-locations*))
+        {:success? false :error :invalid-name}
+        {:success? (boolean (saved-locations/delete-location!
+                              saved-locations/*saved-locations*
+                              player-id
+                              name*))
+         :name name*}))
+    (catch Exception e
+      (log/warn "LocationTeleport delete failed:" (ex-message e))
+      {:success? false :error :delete-failed})))
+
+(defn perform-location-teleport!
+  "Perform teleport to a saved location by name.
+  Returns {:success? boolean ...} for client RPC callbacks."
+  [player-id location-name]
+  (try
+    (if (or (not teleportation/*teleportation*)
+            (not saved-locations/*saved-locations*))
+      {:success? false :error :service-unavailable}
+      (let [name* (norm-name location-name)
+            exp (double (or (get-skill-exp player-id) 0.0))
+            pos (current-pos player-id)
+            dest (when (not (str/blank? name*))
+                   (saved-locations/get-location saved-locations/*saved-locations* player-id name*))]
+        (cond
+          (str/blank? name*)
+          {:success? false :error :invalid-name}
+
+          (nil? pos)
+          {:success? false :error :player-pos-unavailable}
+
+          (nil? dest)
+          {:success? false :error :location-not-found}
+
+          :else
+          (let [cross-dim? (not= (:world-id pos) (:world-id dest))
+                _dist (calculate-distance (:x pos) (:y pos) (:z pos)
+                                          (:x dest) (:y dest) (:z dest))
+                cp (compute-cp-cost exp _dist cross-dim?)
+                can-cross? (or (not cross-dim?) (can-cross-dimension? exp))]
+            (cond
+              (not can-cross?)
+              {:success? false :error :err-exp :require-exp 0.8 :current-exp exp}
+
+              (not (consume-resource! player-id overload-cost cp))
+              {:success? false :error :err-cp :cp-cost cp}
+
+              :else
+              (let [result (teleportation/teleport-with-entities!
+                             teleportation/*teleportation*
+                             player-id
+                             (:world-id dest)
+                             (:x dest)
+                             (:y dest)
+                             (:z dest)
+                             teleport-radius)]
+                (if-not (:success result)
+                  {:success? false :error :teleport-failed}
+                  (do
+                    (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
+                    (add-exp! player-id (compute-exp-gain _dist))
+                    (ps/update-cooldown-data! player-id cd/set-main-cooldown :location-teleport
+                                              (compute-cooldown exp))
+                    {:success? true
+                     :name name*
+                     :distance _dist
+                     :teleported-count (:teleported-count result)
+                     :target {:world-id (:world-id dest)
+                              :x (:x dest) :y (:y dest) :z (:z dest)}}))))))))
+    (catch Exception e
+      (log/warn "LocationTeleport perform failed:" (ex-message e))
+      {:success? false :error :perform-failed})))
 
 (defn location-teleport-on-key-down
-  "List saved locations or initiate teleport.
-  In a full implementation, this would open a GUI.
-  For now, we'll use a simple command-based approach."
+  "Open LocationTeleport UI with current locations and perform stats."
   [{:keys [player-id ctx-id]}]
   (try
-    (let [exp (get-skill-exp player-id)]
-
-      ;; Get current player position
-      (when-let [current-pos (when teleportation/*teleportation*
-                               (teleportation/get-player-position teleportation/*teleportation* player-id))]
-
-        ;; List all saved locations
-        (when saved-locations/*saved-locations*
-          (let [locations (saved-locations/list-locations saved-locations/*saved-locations* player-id)
-                location-count (count locations)]
-
-            (if (zero? location-count)
-              (do
-                (log/info "LocationTeleport: No saved locations for player" player-id)
-                (ctx/update-context! ctx-id assoc :skill-state {:has-locations false}))
-
-              (do
-                ;; Store locations in context for selection
-                (ctx/update-context! ctx-id assoc :skill-state
-                                     {:has-locations true
-                                      :locations locations
-                                      :current-pos current-pos
-                                      :selected-index 0})
-
-                (log/info "LocationTeleport: Found" location-count "saved locations")
-                ;; TODO: Open GUI to display locations
-                ))))))
+    (let [payload (query-location-teleport player-id)]
+      ;; LocationTeleport cooldown is applied only after successful perform.
+      (ctx/update-context! ctx-id update :skill-state merge {:skip-default-cooldown true})
+      (ctx/ctx-send-to-client! ctx-id :location-teleport/ui-open payload))
     (catch Exception e
       (log/warn "LocationTeleport key-down failed:" (ex-message e)))))
 
 (defn location-teleport-on-key-tick
-  "Cycle through saved locations (temporary implementation).
-  In a full implementation, this would be handled by GUI."
-  [{:keys [player-id ctx-id]}]
-  (try
-    (when-let [ctx (ctx/get-context ctx-id)]
-      (let [skill-state (:skill-state ctx)
-            has-locations (:has-locations skill-state)]
-
-        (when has-locations
-          ;; Grant minimal experience during hold
-          (when-let [state (ps/get-player-state player-id)]
-            (let [{:keys [data events]} (learning/add-skill-exp
-                                         (:ability-data state)
-                                         player-id
-                                         :location-teleport
-                                         0.00001
-                                         1.0)]
-              (ps/update-ability-data! player-id (constantly data))
-              (doseq [e events]
-                (ability-evt/fire-ability-event! e))))
-
-          ;; TODO: Update GUI selection
-          )))
-    (catch Exception e
-      (log/warn "LocationTeleport key-tick failed:" (ex-message e)))))
+  "No-op: interaction is handled by dedicated location teleport GUI RPC actions."
+  [_]
+  nil)
 
 (defn location-teleport-on-key-up
-  "Teleport to selected location."
-  [{:keys [player-id ctx-id]}]
-  (try
-    (when-let [ctx (ctx/get-context ctx-id)]
-      (let [skill-state (:skill-state ctx)
-            has-locations (:has-locations skill-state)
-            exp (get-skill-exp player-id)]
-
-        (if-not has-locations
-          (log/debug "LocationTeleport: No saved locations")
-
-          (let [locations (:locations skill-state)
-                current-pos (:current-pos skill-state)
-                selected-location (first locations)]
-
-            (if-not selected-location
-              (log/warn "LocationTeleport: No location selected")
-
-              (let [target-world (:world-id selected-location)
-                    target-x (:x selected-location)
-                    target-y (:y selected-location)
-                    target-z (:z selected-location)
-                    location-name (:name selected-location)
-
-                    current-world (:world-id current-pos)
-                    current-x (:x current-pos)
-                    current-y (:y current-pos)
-                    current-z (:z current-pos)
-
-                    cross-dimension? (not= current-world target-world)
-                    distance (calculate-distance current-x current-y current-z
-                                                 target-x target-y target-z)]
-
-                (if (and cross-dimension? (< exp 0.8))
-                  (log/info "LocationTeleport: Cross-dimension requires 80%+ experience")
-
-                  (do
-                    ;; Keep the cost computed for future CP integration.
-                    (calculate-energy-cost distance cross-dimension?)
-                    (when teleportation/*teleportation*
-                      (let [result (teleportation/teleport-with-entities!
-                                    teleportation/*teleportation*
-                                    player-id
-                                    target-world
-                                    target-x
-                                    target-y
-                                    target-z
-                                    5.0)]
-                        (when (:success result)
-                          (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
-                          (when-let [state (ps/get-player-state player-id)]
-                            (let [exp-gain (scaling/lerp 0.015 0.03 (min 1.0 (/ distance 1000.0)))
-                                  {:keys [data events]} (learning/add-skill-exp
-                                                         (:ability-data state)
-                                                         player-id
-                                                         :location-teleport
-                                                         exp-gain
-                                                         1.0)]
-                              (ps/update-ability-data! player-id (constantly data))
-                              (doseq [e events]
-                                (ability-evt/fire-ability-event! e))))
-                          (log/info "LocationTeleport: Teleported to" location-name
-                                    "distance:" (int distance)
-                                    "entities:" (:teleported-count result)))))))))))))
-    (catch Exception e
-      (log/warn "LocationTeleport key-up failed:" (ex-message e)))))
+  "No-op: perform is handled by GUI perform request for original behavior alignment."
+  [_]
+  nil)
 
 (defn location-teleport-on-key-abort
-  "Clean up teleport state on abort."
-  [{:keys [ctx-id]}]
-  (try
-    (ctx/update-context! ctx-id dissoc :skill-state)
-    (log/debug "LocationTeleport aborted")
-    (catch Exception e
-      (log/warn "LocationTeleport key-abort failed:" (ex-message e)))))
-
-;; Helper functions for location management (can be called from GUI or commands)
-
-(defn save-current-location!
-  "Save current player position as a named location."
-  [player-id location-name]
-  (try
-    (when-let [current-pos (when teleportation/*teleportation*
-                             (teleportation/get-player-position teleportation/*teleportation* player-id))]
-      (when saved-locations/*saved-locations*
-        (let [result (saved-locations/save-location!
-                      saved-locations/*saved-locations*
-                      player-id
-                      location-name
-                      (:world-id current-pos)
-                      (:x current-pos)
-                      (:y current-pos)
-                      (:z current-pos))]
-          (if result
-            (log/info "Saved location:" location-name)
-            (log/warn "Failed to save location (limit reached or error)"))
-          result)))
-    (catch Exception e
-      (log/warn "Failed to save location:" (ex-message e))
-      false)))
-
-(defn delete-saved-location!
-  "Delete a saved location by name."
-  [player-id location-name]
-  (try
-    (when saved-locations/*saved-locations*
-      (let [result (saved-locations/delete-location!
-                    saved-locations/*saved-locations*
-                    player-id
-                    location-name)]
-        (if result
-          (log/info "Deleted location:" location-name)
-          (log/warn "Location not found:" location-name))
-        result))
-    (catch Exception e
-      (log/warn "Failed to delete location:" (ex-message e))
-      false)))
+  "No-op: UI lifecycle is client-managed and independent from key abort."
+  [_]
+  nil)

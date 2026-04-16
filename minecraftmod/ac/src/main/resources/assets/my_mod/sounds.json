@@ -31,11 +31,11 @@
   "terminal.select": {"category": "master", "sounds": [{"name": "academy:terminal/select", "stream": false}]},
   "terminal.confirm": {"category": "master", "sounds": [{"name": "academy:terminal/confirm", "stream": false}]},
 
-  "tp.tp": {"category": "master", "sounds": [{"name": "academy:tp/tp", "stream": false}]},
-  "tp.tp_pre": {"category": "master", "sounds": [{"name": "academy:tp/tp_pre", "stream": false}]},
-  "tp.guts": {"category": "master", "sounds": [{"name": "academy:tp/guts", "stream": false}]},
-  "tp.tp_shift": {"category": "master", "sounds": [{"name": "academy:tp/tp_shift", "stream": false}]},
-  "tp.tp_flashing": {"category": "master", "sounds": [{"name": "academy:tp/tp_flashing", "stream": false}]},
+  "tp.tp": {"category": "master", "sounds": [{"name": "my_mod:tp/tp", "stream": false}]},
+  "tp.tp_pre": {"category": "master", "sounds": [{"name": "my_mod:tp/tp_pre", "stream": false}]},
+  "tp.guts": {"category": "master", "sounds": [{"name": "my_mod:tp/guts", "stream": false}]},
+  "tp.tp_shift": {"category": "master", "sounds": [{"name": "my_mod:tp/tp_shift", "stream": false}]},
+  "tp.tp_flashing": {"category": "master", "sounds": [{"name": "my_mod:tp/tp_flashing", "stream": false}]},
 
   "vecmanip.blood_retro": {"category": "master", "sounds": [{"name": "academy:vecmanip/blood_retro", "stream": false}]},
   "vecmanip.directed_shock": {"category": "master", "sounds": [{"name": "academy:vecmanip/directed_shock", "stream": false}]},

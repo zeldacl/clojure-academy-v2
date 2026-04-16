@@ -36,3 +36,24 @@
   (net-client/send-to-server catalog/MSG-REQ-SWITCH-PRESET
                              {:preset-idx preset-idx}
                              callback))
+
+(defn req-location-teleport-query! [callback]
+  (net-client/send-to-server catalog/MSG-REQ-LOCATION-TELEPORT-QUERY {} callback))
+
+(defn req-location-teleport-add!
+  [location-name callback]
+  (net-client/send-to-server catalog/MSG-REQ-LOCATION-TELEPORT-ADD
+                             {:name location-name}
+                             callback))
+
+(defn req-location-teleport-remove!
+  [location-name callback]
+  (net-client/send-to-server catalog/MSG-REQ-LOCATION-TELEPORT-REMOVE
+                             {:name location-name}
+                             callback))
+
+(defn req-location-teleport-perform!
+  [location-name callback]
+  (net-client/send-to-server catalog/MSG-REQ-LOCATION-TELEPORT-PERFORM
+                             {:name location-name}
+                             callback))

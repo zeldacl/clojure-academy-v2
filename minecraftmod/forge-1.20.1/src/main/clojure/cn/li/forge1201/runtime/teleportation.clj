@@ -4,7 +4,7 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel ServerPlayer]
-           [net.minecraft.world.entity Entity]
+           [net.minecraft.world.entity Entity LivingEntity]
            [net.minecraft.world.phys Vec3 AABB]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.core BlockPos]
@@ -47,39 +47,60 @@
       (log/warn "Failed to teleport player:" (ex-message e))
       false)))
 
+(defn- entity-small-enough? [^Entity entity]
+  (< (* (.getBbWidth entity) (.getBbWidth entity) (.getBbHeight entity)) 80.0))
+
+(defn- teleport-entity-relative!
+  [^Entity entity ^ServerLevel current-level ^ServerLevel target-level tx ty tz dx dy dz]
+  (try
+    (when (.isPassenger entity)
+      (.stopRiding entity))
+    (if (= current-level target-level)
+      (do
+        (.teleportTo entity (+ tx dx) (+ ty dy) (+ tz dz))
+        true)
+      (let [migrated (.changeDimension entity target-level)]
+        (if migrated
+          (do
+            (.teleportTo ^Entity migrated (+ tx dx) (+ ty dy) (+ tz dz))
+            true)
+          false)))
+    (catch Exception e
+      (log/debug "Failed to teleport entity:" (ex-message e))
+      false)))
+
 (defn- teleport-with-entities-impl! [player-uuid world-id x y z radius]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
-      (when-let [^ServerLevel target-level (get-level world-id)]
+    (if-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
+      (if-let [^ServerLevel target-level (get-level world-id)]
         (let [current-level (.level player)
               player-pos (.position player)
               px (.x player-pos)
               py (.y player-pos)
               pz (.z player-pos)
-
-              ;; Find nearby entities
               aabb (AABB. (- px radius) (- py radius) (- pz radius)
                           (+ px radius) (+ py radius) (+ pz radius))
-              entities (.getEntities current-level nil aabb)
-
+              nearby (->> (.getEntities current-level nil aabb)
+                          (filter #(instance? LivingEntity %))
+                          (filter #(not= ^Entity % player))
+                          (filter entity-small-enough?))
               teleported-count (atom 0)]
 
-          ;; Teleport player first
+          ;; Teleport caster first, then keep nearby entities' relative offsets.
           (.teleportTo player target-level x y z (.getYRot player) (.getXRot player))
           (swap! teleported-count inc)
 
-          ;; Teleport nearby entities
-          (doseq [^Entity entity entities]
-            (when (not= entity player)
-              (try
-                (if (= current-level target-level)
-                  (.teleportTo entity x y z)
-                  (.changeDimension entity target-level))
-                (swap! teleported-count inc)
-                (catch Exception e
-                  (log/debug "Failed to teleport entity:" (ex-message e))))))
+          (doseq [^Entity entity nearby]
+            (let [epos (.position entity)
+                  dx (- (.x epos) px)
+                  dy (- (.y epos) py)
+                  dz (- (.z epos) pz)]
+              (when (teleport-entity-relative! entity current-level target-level x y z dx dy dz)
+                (swap! teleported-count inc))))
 
-          {:success true :teleported-count @teleported-count})))
+          {:success true :teleported-count @teleported-count})
+        {:success false :teleported-count 0})
+      {:success false :teleported-count 0})
     (catch Exception e
       (log/warn "Failed to teleport with entities:" (ex-message e))
       {:success false :teleported-count 0})))

@@ -16,10 +16,12 @@
             [cn.li.ac.ability.client-api :as client-api]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
+            [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.skill :as skill]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.damage-handler :as damage-handler]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
@@ -84,6 +86,11 @@
     (level-effects/enqueue-level-effect! :meltdowner {:mode :reflect
                                                        :start (:start payload)
                                                        :end (:end payload)})
+
+    :location-teleport/ui-open
+    (do
+      (location-teleport-screen/apply-server-payload! payload)
+      (client-bridge/open-location-teleport-screen! nil payload))
 
     nil)
   (ctx/ctx-send-to-local! ctx-id channel payload))
@@ -369,6 +376,30 @@
        :client-close-preset-editor-screen!
        (fn []
          (preset-editor-screen/close-screen!))
+
+       :client-open-location-teleport-screen!
+       (fn [player-uuid payload]
+         (location-teleport-screen/open-screen! player-uuid payload))
+
+       :client-build-location-teleport-draw-ops
+       (fn [mouse-x mouse-y]
+         (location-teleport-screen/build-draw-ops mouse-x mouse-y))
+
+       :client-handle-location-teleport-hover!
+       (fn [mouse-x mouse-y]
+         (location-teleport-screen/on-mouse-move mouse-x mouse-y))
+
+       :client-handle-location-teleport-click!
+       (fn [mouse-x mouse-y]
+         (location-teleport-screen/handle-screen-click! mouse-x mouse-y))
+
+       :client-handle-location-teleport-char-typed!
+       (fn [ch]
+         (location-teleport-screen/handle-char-typed! ch))
+
+       :client-close-location-teleport-screen!
+       (fn []
+         (location-teleport-screen/close-screen!))
 
        :client-poll-particle-effects
        (fn []

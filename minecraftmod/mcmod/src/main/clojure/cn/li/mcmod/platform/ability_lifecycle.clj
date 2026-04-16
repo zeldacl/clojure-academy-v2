@@ -66,6 +66,12 @@
          :client-build-preset-editor-render-data (fn [] nil)
          :client-handle-preset-editor-click! (fn [_ _] false)
          :client-close-preset-editor-screen! noop
+         :client-open-location-teleport-screen! (fn [_ _] nil)
+         :client-build-location-teleport-draw-ops (fn [_ _] [])
+         :client-handle-location-teleport-hover! noop
+         :client-handle-location-teleport-click! (fn [_ _] false)
+         :client-handle-location-teleport-char-typed! noop
+         :client-close-location-teleport-screen! noop
          :client-poll-particle-effects (fn [] [])
          :client-poll-sound-effects (fn [] [])
          :client-tick-keys! noop
@@ -324,6 +330,30 @@
 (defn client-close-preset-editor-screen!
   []
   ((:client-close-preset-editor-screen! @runtime-hooks)))
+
+(defn client-open-location-teleport-screen!
+  [player-uuid payload]
+  ((:client-open-location-teleport-screen! @runtime-hooks) player-uuid payload))
+
+(defn client-build-location-teleport-draw-ops
+  [mouse-x mouse-y]
+  ((:client-build-location-teleport-draw-ops @runtime-hooks) mouse-x mouse-y))
+
+(defn client-handle-location-teleport-hover!
+  [mouse-x mouse-y]
+  ((:client-handle-location-teleport-hover! @runtime-hooks) mouse-x mouse-y))
+
+(defn client-handle-location-teleport-click!
+  [mouse-x mouse-y]
+  ((:client-handle-location-teleport-click! @runtime-hooks) mouse-x mouse-y))
+
+(defn client-handle-location-teleport-char-typed!
+  [ch]
+  ((:client-handle-location-teleport-char-typed! @runtime-hooks) ch))
+
+(defn client-close-location-teleport-screen!
+  []
+  ((:client-close-location-teleport-screen! @runtime-hooks)))
 
 (defn client-poll-particle-effects
   []

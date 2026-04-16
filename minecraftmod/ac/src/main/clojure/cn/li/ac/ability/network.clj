@@ -24,6 +24,7 @@
             [cn.li.ac.ability.service.context-runtime :as ctx-rt]
             [cn.li.ac.ability.context           :as ctx]
             [cn.li.ac.ability.event             :as evt]
+            [cn.li.ac.content.ability.teleporter.location-teleport :as loc-tele]
             [cn.li.mcmod.util.log               :as log]))
 
   ;; ============================================================================
@@ -215,6 +216,32 @@
     [{:keys [ctx-id] :as payload} player]
     (ctx-rt/handle-key-abort! ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!))
 
+  ;; ============================================================================
+  ;; LocationTeleport GUI RPC (original LTNetDelegate-aligned)
+  ;; ============================================================================
+
+  (defn- handle-loc-tele-query
+    [_payload player]
+    (loc-tele/query-location-teleport (uuid-of player)))
+
+  (defn- handle-loc-tele-add
+    [{:keys [name]} player]
+    (let [uuid (uuid-of player)
+          result (loc-tele/save-current-location! uuid name)]
+      (merge result (loc-tele/query-location-teleport uuid))))
+
+  (defn- handle-loc-tele-remove
+    [{:keys [name]} player]
+    (let [uuid (uuid-of player)
+          result (loc-tele/delete-saved-location! uuid name)]
+      (merge result (loc-tele/query-location-teleport uuid))))
+
+  (defn- handle-loc-tele-perform
+    [{:keys [name]} player]
+    (let [uuid (uuid-of player)
+          result (loc-tele/perform-location-teleport! uuid name)]
+      (merge result (loc-tele/query-location-teleport uuid))))
+
 ;; ============================================================================
 ;; Registration
 ;; ============================================================================
@@ -233,4 +260,8 @@
   (net-srv/register-handler catalog/MSG-SKILL-KEY-TICK     handle-skill-key-tick)
   (net-srv/register-handler catalog/MSG-SKILL-KEY-UP       handle-skill-key-up)
   (net-srv/register-handler catalog/MSG-SKILL-KEY-ABORT    handle-skill-key-abort)
+  (net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-QUERY handle-loc-tele-query)
+  (net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-ADD handle-loc-tele-add)
+  (net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-REMOVE handle-loc-tele-remove)
+  (net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-PERFORM handle-loc-tele-perform)
   (log/info "Ability network handlers registered"))

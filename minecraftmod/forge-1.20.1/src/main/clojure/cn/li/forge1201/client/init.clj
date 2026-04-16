@@ -131,6 +131,7 @@
   (ac-client-bridge/install-client-bridge!
     {:open-skill-tree-screen screen-host/open-skill-tree-screen!
      :open-preset-editor-screen screen-host/open-preset-editor-screen!
+     :open-location-teleport-screen screen-host/open-location-teleport-screen!
      :open-terminal-screen terminal-screen-bridge/open-terminal-screen!
      :open-simple-gui terminal-screen-bridge/open-simple-gui!
      :local-player-item-id runtime-bridge/local-player-item-id

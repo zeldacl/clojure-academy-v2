@@ -7,6 +7,7 @@
 (defonce ^:private ^:dynamic *slot-key-up-fn* nil)
 (defonce ^:private ^:dynamic *open-skill-tree-screen-fn* nil)
 (defonce ^:private ^:dynamic *open-preset-editor-screen-fn* nil)
+(defonce ^:private ^:dynamic *open-location-teleport-screen-fn* nil)
 (defonce ^:private ^:dynamic *open-terminal-screen-fn* nil)
 (defonce ^:private ^:dynamic *open-simple-gui-fn* nil)
 
@@ -16,6 +17,7 @@
 					 slot-key-up
 					 open-skill-tree-screen
 					 open-preset-editor-screen
+					 open-location-teleport-screen
 					 open-terminal-screen
 					 open-simple-gui]}]
 	(alter-var-root #'*slot-key-down-fn* (constantly slot-key-down))
@@ -23,6 +25,7 @@
 	(alter-var-root #'*slot-key-up-fn* (constantly slot-key-up))
 	(alter-var-root #'*open-skill-tree-screen-fn* (constantly open-skill-tree-screen))
 	(alter-var-root #'*open-preset-editor-screen-fn* (constantly open-preset-editor-screen))
+	(alter-var-root #'*open-location-teleport-screen-fn* (constantly open-location-teleport-screen))
 	(alter-var-root #'*open-terminal-screen-fn* (constantly open-terminal-screen))
 	(alter-var-root #'*open-simple-gui-fn* (constantly open-simple-gui)))
 
@@ -57,6 +60,14 @@
 	(if *open-preset-editor-screen-fn*
 		(*open-preset-editor-screen-fn* player-uuid)
 		(log/debug "Client bridge preset-editor screen not available")))
+
+(defn open-location-teleport-screen!
+	([player-uuid]
+	 (open-location-teleport-screen! player-uuid nil))
+	([player-uuid payload]
+	 (if *open-location-teleport-screen-fn*
+		 (*open-location-teleport-screen-fn* player-uuid payload)
+		 (log/debug "Client bridge location-teleport screen not available"))))
 
 (defn open-terminal-screen!
 	[player]
