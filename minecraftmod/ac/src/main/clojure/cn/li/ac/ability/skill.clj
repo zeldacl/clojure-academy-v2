@@ -26,7 +26,8 @@
       ;; :on-key-* functions per skill.
       ;;
       ;; :pattern:
-      ;;   :instant | :hold-charge-release | :hold-channel | :toggle | :multi-stage
+      ;;   :instant | :hold-charge-release | :hold-channel | :toggle
+      ;;   | :release-cast | :hold-target | :charge-window
       ;; :cooldown:
       ;;   {:mode :default}  -> context-runtime applies main cooldown on key-up
       ;;   {:mode :manual}   -> skill handles cooldown itself
@@ -92,7 +93,14 @@
   "Register a skill spec. Merges defaults before storing."
   [{:keys [id category-id level] :as spec}]
   {:pre [(keyword? id) (keyword? category-id) (integer? level)]}
-  (let [defaults {:controllable? true
+(let [supported-patterns #{:instant
+                            :hold-charge-release
+                            :hold-channel
+                            :toggle
+                            :release-cast
+                            :hold-target
+                            :charge-window}
+        defaults {:controllable? true
                   :damage-scale 1.0
                   :cp-consume-speed 1.0
                   :overload-consume-speed 1.0
@@ -116,9 +124,21 @@
             (throw (ex-info "Skill :cooldown must be a map"
                             {:skill-id id :value (:cooldown spec)})))
         _ (when-let [p (:pattern spec)]
-            (when-not (contains? #{:instant :hold-charge-release :hold-channel :toggle :multi-stage} p)
+            (when-not (contains? supported-patterns p)
               (throw (ex-info "Unknown skill :pattern"
                               {:skill-id id :pattern p}))))
+        _ (when-not (keyword? (:pattern spec))
+            (throw (ex-info "Skill :pattern is required"
+                            {:skill-id id})))
+        _ (when-not (map? (:actions spec))
+            (throw (ex-info "Skill :actions must be a map"
+                            {:skill-id id})))
+        _ (when-not (map? (:cooldown spec))
+            (throw (ex-info "Skill :cooldown is required and must be a map"
+                            {:skill-id id})))
+        _ (when-not (contains? #{:default :manual} (get-in spec [:cooldown :mode]))
+            (throw (ex-info "Skill :cooldown :mode must be :default or :manual"
+                            {:skill-id id :cooldown (:cooldown spec)})))
         resolve-fn-ref (fn [v]
                          (cond
                            (fn? v) v

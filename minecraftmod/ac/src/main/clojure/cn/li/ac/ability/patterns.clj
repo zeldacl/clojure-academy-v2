@@ -181,38 +181,131 @@
   (call-action! spec :abort! evt)
   (fx/send! ctx-id (:fx spec) :end evt))
 
-(defn multi-stage-on-down!
-  [spec evt]
+(defn- init-stage-state!
+  [ctx-id]
+  (let [base {:hold-ticks 0}
+        merged (merge base (or (:skill-state (ctx/get-context ctx-id)) {}))]
+    (ctx/update-context! ctx-id assoc :skill-state merged)))
+
+(defn- next-hold-ticks!
+  [ctx-id]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
+    (let [current (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0))
+          next (inc current)]
+      (ctx/update-context! ctx-id assoc-in [:skill-state :hold-ticks] next)
+      next)))
+
+(defn release-cast-on-down!
+  [spec {:keys [ctx-id] :as evt}]
+  (init-stage-state! ctx-id)
   (let [cost-ok? (apply-cost! spec :down evt)]
     (call-action! spec :down! (assoc evt :cost-ok? cost-ok?))
     (when cost-ok?
-      (fx/send! (:ctx-id evt) (:fx spec) :start evt))
+      (fx/send! ctx-id (:fx spec) :start evt))
     (when-not cost-ok?
       (call-action! spec :cost-fail! (assoc evt :cost-stage :down)))))
 
-(defn multi-stage-on-tick!
-  [spec evt]
-  (let [cost-ok? (apply-cost! spec :tick evt)]
-    (call-action! spec :tick! (assoc evt :cost-ok? cost-ok?))
+(defn release-cast-on-tick!
+  [spec {:keys [ctx-id] :as evt}]
+  (let [hold-ticks (or (next-hold-ticks! ctx-id) 0)
+        evt* (assoc evt :hold-ticks hold-ticks)
+        cost-ok? (apply-cost! spec :tick evt*)]
+    (call-action! spec :tick! (assoc evt* :cost-ok? cost-ok?))
     (when cost-ok?
-      (fx/send! (:ctx-id evt) (:fx spec) :update evt))
+      (fx/send! ctx-id (:fx spec) :update evt*))
     (when-not cost-ok?
-      (call-action! spec :cost-fail! (assoc evt :cost-stage :tick)))))
+      (call-action! spec :cost-fail! (assoc evt* :cost-stage :tick)))))
 
-(defn multi-stage-on-up!
-  [spec evt]
-  (let [cost-ok? (apply-cost! spec :up evt)]
-    (call-action! spec :up! (assoc evt :cost-ok? cost-ok?))
+(defn release-cast-on-up!
+  [spec {:keys [ctx-id] :as evt}]
+  (let [hold-ticks (long (or (get-in (ctx/get-context ctx-id) [:skill-state :hold-ticks]) 0))
+        evt* (assoc evt :hold-ticks hold-ticks)
+        cost-ok? (apply-cost! spec :up evt*)]
+    (call-action! spec :up! (assoc evt* :cost-ok? cost-ok?))
     (when cost-ok?
-      (fx/send! (:ctx-id evt) (:fx spec) :perform evt))
-    (fx/send! (:ctx-id evt) (:fx spec) :end evt)
+      (fx/send! ctx-id (:fx spec) :perform evt*))
+    (fx/send! ctx-id (:fx spec) :end evt*)
     (when-not cost-ok?
-      (call-action! spec :cost-fail! (assoc evt :cost-stage :up)))))
+      (call-action! spec :cost-fail! (assoc evt* :cost-stage :up)))))
 
-(defn multi-stage-on-abort!
-  [spec evt]
+(defn release-cast-on-abort!
+  [spec {:keys [ctx-id] :as evt}]
   (call-action! spec :abort! evt)
-  (fx/send! (:ctx-id evt) (:fx spec) :end evt))
+  (fx/send! ctx-id (:fx spec) :end evt))
+
+(defn hold-target-on-down!
+  [spec {:keys [ctx-id] :as evt}]
+  (init-stage-state! ctx-id)
+  (let [cost-ok? (apply-cost! spec :down evt)]
+    (call-action! spec :down! (assoc evt :cost-ok? cost-ok?))
+    (when cost-ok?
+      (fx/send! ctx-id (:fx spec) :start evt))
+    (when-not cost-ok?
+      (call-action! spec :cost-fail! (assoc evt :cost-stage :down)))))
+
+(defn hold-target-on-tick!
+  [spec {:keys [ctx-id] :as evt}]
+  (let [hold-ticks (or (next-hold-ticks! ctx-id) 0)
+        evt* (assoc evt :hold-ticks hold-ticks)
+        cost-ok? (apply-cost! spec :tick evt*)]
+    (call-action! spec :tick! (assoc evt* :cost-ok? cost-ok?))
+    (when cost-ok?
+      (fx/send! ctx-id (:fx spec) :update evt*))
+    (when-not cost-ok?
+      (call-action! spec :cost-fail! (assoc evt* :cost-stage :tick)))))
+
+(defn hold-target-on-up!
+  [spec {:keys [ctx-id] :as evt}]
+  (let [hold-ticks (long (or (get-in (ctx/get-context ctx-id) [:skill-state :hold-ticks]) 0))
+        evt* (assoc evt :hold-ticks hold-ticks)
+        cost-ok? (apply-cost! spec :up evt*)]
+    (call-action! spec :up! (assoc evt* :cost-ok? cost-ok?))
+    (fx/send! ctx-id (:fx spec) :end evt*)
+    (when-not cost-ok?
+      (call-action! spec :cost-fail! (assoc evt* :cost-stage :up)))))
+
+(defn hold-target-on-abort!
+  [spec {:keys [ctx-id] :as evt}]
+  (call-action! spec :abort! evt)
+  (fx/send! ctx-id (:fx spec) :end evt))
+
+(defn charge-window-on-down!
+  [spec {:keys [ctx-id] :as evt}]
+  (init-stage-state! ctx-id)
+  (let [cost-ok? (apply-cost! spec :down evt)]
+    (call-action! spec :down! (assoc evt :cost-ok? cost-ok?))
+    (when cost-ok?
+      (fx/send! ctx-id (:fx spec) :start evt))
+    (when-not cost-ok?
+      (call-action! spec :cost-fail! (assoc evt :cost-stage :down)))))
+
+(defn charge-window-on-tick!
+  [spec {:keys [ctx-id] :as evt}]
+  (let [hold-ticks (or (next-hold-ticks! ctx-id) 0)
+        evt* (assoc evt :hold-ticks hold-ticks)
+        cost-ok? (apply-cost! spec :tick evt*)]
+    (call-action! spec :tick! (assoc evt* :cost-ok? cost-ok?))
+    (when cost-ok?
+      (fx/send! ctx-id (:fx spec) :update evt*))
+    (when-not cost-ok?
+      (call-action! spec :cost-fail! (assoc evt* :cost-stage :tick)))))
+
+(defn charge-window-on-up!
+  [spec {:keys [ctx-id] :as evt}]
+  (let [hold-ticks (long (or (get-in (ctx/get-context ctx-id) [:skill-state :hold-ticks]) 0))
+        evt* (assoc evt :hold-ticks hold-ticks)
+        cost-ok? (apply-cost! spec :up evt*)]
+    (call-action! spec :up! (assoc evt* :cost-ok? cost-ok?))
+    (when cost-ok?
+      (fx/send! ctx-id (:fx spec) :perform evt*))
+    (fx/send! ctx-id (:fx spec) :end evt*)
+    (when-not cost-ok?
+      (call-action! spec :cost-fail! (assoc evt* :cost-stage :up)))))
+
+(defn charge-window-on-abort!
+  [spec {:keys [ctx-id] :as evt}]
+  (call-action! spec :abort! evt)
+  (fx/send! ctx-id (:fx spec) :end evt))
 
 (defn handlers
   "Return pattern handler map for a spec."
@@ -243,11 +336,23 @@
      :on-key-up hold-channel-on-up!
      :on-key-abort hold-channel-on-abort!}
 
-    :multi-stage
-    {:on-key-down multi-stage-on-down!
-     :on-key-tick multi-stage-on-tick!
-     :on-key-up multi-stage-on-up!
-     :on-key-abort multi-stage-on-abort!}
+    :release-cast
+    {:on-key-down release-cast-on-down!
+     :on-key-tick release-cast-on-tick!
+     :on-key-up release-cast-on-up!
+     :on-key-abort release-cast-on-abort!}
+
+    :hold-target
+    {:on-key-down hold-target-on-down!
+     :on-key-tick hold-target-on-tick!
+     :on-key-up hold-target-on-up!
+     :on-key-abort hold-target-on-abort!}
+
+    :charge-window
+    {:on-key-down charge-window-on-down!
+     :on-key-tick charge-window-on-tick!
+     :on-key-up charge-window-on-up!
+     :on-key-abort charge-window-on-abort!}
 
     ;; default: no pattern
     nil))

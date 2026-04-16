@@ -13,8 +13,6 @@
             [cn.li.ac.ability.skill-runtime :as skill-rt]
             [cn.li.ac.ability.event :as evt]
             [cn.li.ac.ability.player-state :as ps]
-            [cn.li.ac.ability.config :as cfg]
-            [cn.li.ac.ability.service.resource :as res]
             [cn.li.ac.ability.service.cooldown :as cd]))
 
 (def INPUT-IDLE :idle)
@@ -48,35 +46,12 @@
   (ctx/update-context! ctx-id assoc :input-state state)
   (ctx/get-context ctx-id))
 
-(defn- consume-runtime-resource!
-  [ctx-map]
-  (let [uuid (:player-uuid ctx-map)
-        state (ps/get-player-state uuid)
-        spec (skill/get-skill (:skill-id ctx-map))
-      cp (* cfg/*runtime-cp-consume-per-tick*
-              (double (or (:cp-consume-speed spec) 1.0)))
-        overload (* cfg/*runtime-overload-per-tick*
-                    (double (or (:overload-consume-speed spec) 1.0)))]
-    (if-not state
-      false
-      (let [{:keys [data success? events]} (res/perform-resource
-                                            (:resource-data state)
-                                            uuid
-                                            overload
-                                            cp
-                                            false)]
-        (when success?
-          (ps/update-resource-data! uuid (constantly data))
-          (doseq [e events] (evt/fire-ability-event! e)))
-        (boolean success?)))))
-
 (defn- apply-main-cooldown!
   [ctx-map]
   (let [uuid (:player-uuid ctx-map)
         spec (skill/get-skill (:skill-id ctx-map))
         ctrl-id (or (:ctrl-id spec) (:skill-id ctx-map))
-        cooldown-ticks (max 1 (int (or (:cooldown-ticks spec)
-                 cfg/*runtime-main-cooldown-ticks*)))]
+        cooldown-ticks (max 1 (int (or (:cooldown-ticks spec) 1)))]
     (ps/update-cooldown-data! uuid cd/set-main-cooldown ctrl-id cooldown-ticks)))
 
 (defn- in-main-cooldown?
@@ -87,12 +62,6 @@
         ctrl-id (or (:ctrl-id spec) (:skill-id ctx-map))]
     (and state
          (cd/in-main-cooldown? (:cooldown-data state) ctrl-id))))
-
-(defn- use-default-runtime-consume?
-  [ctx-map]
-  (let [spec (skill/get-skill (:skill-id ctx-map))]
-    (or (nil? (:cost spec))
-        (true? (get-in spec [:cost :use-runtime-consume?])))))
 
 (defn handle-key-down!
   ([ctx-id payload]
@@ -113,19 +82,12 @@
 (defn handle-key-tick!
   ([ctx-id payload]
    (handle-key-tick! ctx-id payload nil))
-  ([ctx-id payload terminate-fn]
+  ([ctx-id payload _terminate-fn]
    (when-let [ctx-map (ctx/get-context ctx-id)]
      (when (and (= (:status ctx-map) ctx/STATUS-ALIVE)
                 (= (:input-state ctx-map) INPUT-ACTIVE))
-       (if (or (not (use-default-runtime-consume? ctx-map))
-               (consume-runtime-resource! ctx-map))
-         (do
-           (dispatch-skill-callback! ctx-map :on-key-tick evt/EVT-CONTEXT-KEY-TICK payload)
-           true)
-         (do
-           (dispatch-skill-callback! ctx-map :on-key-abort evt/EVT-CONTEXT-KEY-ABORT payload)
-           (ctx/terminate-context! ctx-id terminate-fn)
-           false))))))
+       (dispatch-skill-callback! ctx-map :on-key-tick evt/EVT-CONTEXT-KEY-TICK payload)
+       true))))
 
 (defn handle-key-up!
   ([ctx-id payload]

@@ -14,7 +14,8 @@
 
 (defn can-handle?
   [spec]
-  (keyword? (:pattern spec)))
+  (and (keyword? (:pattern spec))
+       (some? (patterns/handlers spec))))
 
 (defn dispatch!
   "Dispatch a context-runtime callback key (e.g. :on-key-down) through the
