@@ -9,7 +9,10 @@
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.sounds SoundSource SoundEvent]
-           [net.minecraft.world.entity LivingEntity]
+           [net.minecraft.world.entity Entity LivingEntity]
+           [net.minecraft.world.entity.item ItemEntity]
+           [net.minecraft.world.entity.monster Monster]
+           [net.minecraft.world.entity.projectile Projectile]
            [net.minecraft.world.phys AABB Vec3]
            [net.minecraftforge.server ServerLifecycleHooks]))
 
@@ -43,8 +46,8 @@
     (when-let [^ServerLevel level (get-level world-id)]
       (let [aabb (AABB. (- x radius) (- y radius) (- z radius)
                         (+ x radius) (+ y radius) (+ z radius))
-            entities (ForgeRuntimeBridge/getLivingEntitiesInAabb level aabb)]
-            (mapv (fn [^LivingEntity entity]
+            entities (ForgeRuntimeBridge/getEntitiesInAabb level aabb)]
+            (mapv (fn [^Entity entity]
               (let [^Vec3 pos (.position entity)]
                   {:uuid (str (.getUUID entity))
                    :x (.x pos)
@@ -52,8 +55,15 @@
                    :z (.z pos)
                    :width (double (.getBbWidth entity))
                    :height (double (.getBbHeight entity))
-                   :eye-height (double (.getEyeHeight entity))
-                   :type (str (.getDescriptionId (.getType entity)))}))
+                   :eye-height (if (instance? LivingEntity entity)
+                                 (double (.getEyeHeight ^LivingEntity entity))
+                                 (double (.getBbHeight entity)))
+                   :entity-id (ForgeRuntimeBridge/getEntityRegistryId entity)
+                   :type (str (.getDescriptionId (.getType entity)))
+                      :living? (instance? LivingEntity entity)
+                      :mob? (instance? Monster entity)
+                      :item? (instance? ItemEntity entity)
+                      :projectile? (instance? Projectile entity)}))
               entities)))
     (catch Exception e
       (log/warn "Failed to find entities:" (ex-message e))

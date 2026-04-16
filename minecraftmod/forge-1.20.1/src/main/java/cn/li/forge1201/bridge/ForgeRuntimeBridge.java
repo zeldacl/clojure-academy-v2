@@ -96,6 +96,15 @@ public final class ForgeRuntimeBridge {
         return level.getEntitiesOfClass(LivingEntity.class, aabb);
     }
 
+    public static List<Entity> getEntitiesInAabb(ServerLevel level, AABB aabb) {
+        return level.getEntitiesOfClass(Entity.class, aabb);
+    }
+
+    public static String getEntityRegistryId(Entity entity) {
+        ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
+        return key != null ? key.toString() : null;
+    }
+
     public static boolean spawnLightning(ServerLevel level, double x, double y, double z) {
         Entity lightning = EntityType.LIGHTNING_BOLT.create(level);
         if (lightning == null) {

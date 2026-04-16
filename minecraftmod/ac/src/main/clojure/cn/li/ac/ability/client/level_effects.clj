@@ -49,7 +49,12 @@
 (defonce ^:private vec-accel-effect (atom nil))
 (def ^:private vec-accel-sound "my_mod:vecmanip.vec_accel")
 
-(declare tick-thunder-bolt-arcs!)
+;; VecDeviation: sustained overlay + deflection wave + reduction sound
+(defonce ^:private vec-deviation-effect (atom nil))
+(defonce ^:private vec-deviation-waves (atom []))
+(def ^:private vec-deviation-sound "my_mod:vecmanip.vec_deviation")
+
+(declare tick-thunder-bolt-arcs! billboard-up-axis)
 
 
 (defn enqueue-level-effect! [effect-id payload]
@@ -536,6 +541,37 @@
 
           nil))
 
+      :vec-deviation
+      (let [{:keys [mode x y z marked?]} payload]
+        (case mode
+          :start
+          (reset! vec-deviation-effect {:active? true :ticks 0})
+
+          :end
+          (reset! vec-deviation-effect {:active? false :ticks 0})
+
+          :stop-entity
+          (when marked?
+            (let [life (+ 10 (rand-int 6))]
+              (swap! vec-deviation-waves conj
+                     {:x (double x)
+                      :y (double y)
+                      :z (double z)
+                      :ttl life
+                      :max-ttl life})))
+
+          :play
+          (client-sounds/queue-sound-effect!
+            {:type :sound
+             :sound-id vec-deviation-sound
+             :volume 0.5
+             :pitch 1.0
+             :x (double x)
+             :y (double y)
+             :z (double z)})
+
+          nil))
+
       nil))
 
 (defn tick-level-effects! []
@@ -646,6 +682,18 @@
                       :pitch    1.0}))
                  (assoc st :ticks ticks))
                nil))))
+  (swap! vec-deviation-effect
+         (fn [st]
+           (when st
+             (if (:active? st)
+               (update st :ticks (fnil inc 0))
+               nil))))
+  (swap! vec-deviation-waves
+         (fn [xs]
+           (->> xs
+                (map #(update % :ttl dec))
+                (filter #(pos? (long (:ttl %))))
+                vec)))
   (swap! meltdowner-rays
          (fn [xs]
            (->> xs
@@ -1018,6 +1066,49 @@
         (mark-teleport-ground-ring-ops target ticks distance)
         (mark-teleport-billboard-ops cam-pos target ticks)))))
 
+(defn- vec-deviation-ring-ops [center ticks]
+  (let [radius (+ 0.7 (* 0.08 (Math/sin (* 0.19 (double ticks)))))
+        y (+ (double (:y center)) 0.25)
+        segments 28
+        color {:r 210 :g 240 :b 255 :a 170}
+        spoke-color {:r 170 :g 210 :b 245 :a 120}
+        spoke-step (/ segments 4)]
+    (vec
+      (mapcat
+        (fn [idx]
+          (let [a0 (/ (* 2.0 Math/PI idx) segments)
+                a1 (/ (* 2.0 Math/PI (inc idx)) segments)
+                p0 {:x (+ (:x center) (* radius (Math/cos a0)))
+                    :y y
+                    :z (+ (:z center) (* radius (Math/sin a0)))}
+                p1 {:x (+ (:x center) (* radius (Math/cos a1)))
+                    :y y
+                    :z (+ (:z center) (* radius (Math/sin a1)))}
+                ring-op (line-op p0 p1 color)
+                spoke-op (when (zero? (mod idx spoke-step))
+                           (line-op center p0 spoke-color))]
+            (if spoke-op [ring-op spoke-op] [ring-op])))
+        (range segments)))))
+
+(defn- vec-deviation-wave-ops [cam-pos {:keys [x y z ttl max-ttl]}]
+  (let [life (/ (double ttl) (double (max 1 max-ttl)))
+        alpha (int (max 0 (min 255 (* 170.0 life))))
+        center {:x (double x)
+                :y (+ (double y) 0.6)
+                :z (double z)}
+        right (camera-facing-right-axis center cam-pos)
+        up (billboard-up-axis center cam-pos right)
+        half-size (+ 0.35 (* 0.65 (- 1.0 life)))
+        side (v* right half-size)
+        lift (v* up half-size)
+        p0 (v+ (v- center side) lift)
+        p1 (v+ (v+ center side) lift)
+        p2 (v- (v+ center side) lift)
+        p3 (v- (v- center side) lift)]
+    [(quad-op "my_mod:textures/effects/glow_circle.png"
+              p0 p1 p2 p3
+              {:r 190 :g 225 :b 255 :a alpha})]))
+
 (defn- thunder-bolt-arc-ops [cam-pos {:keys [start end ttl max-ttl is-aoe?]}]
   ;; Electric arc: bright white-yellow core, electric blue outer glow
   (let [life       (/ (double ttl) (double (max 1 max-ttl)))
@@ -1221,6 +1312,7 @@
   directed-blastwave @directed-blastwave-effect
         storm-wing @storm-wing-effect
         vec-accel @vec-accel-effect
+        vec-deviation @vec-deviation-effect
         player-uuid (:player-uuid hand-center-pos)
         charge-state (when player-uuid
                        (client-runtime/railgun-charge-visual-state player-uuid))
@@ -1277,6 +1369,17 @@
         vec-accel-plan (if (and vec-accel (:active? vec-accel))
                          (vec-accel-trajectory-ops camera-pos vec-accel)
                          [])
+        vec-deviation-plan (concat
+                             (if (and hand-center-pos
+                                      vec-deviation
+                                      (:active? vec-deviation))
+                               (vec-deviation-ring-ops
+                                 (dissoc hand-center-pos :player-uuid)
+                                 (long (or (:ticks vec-deviation) 0)))
+                               [])
+                             (mapcat (fn [wave]
+                                       (vec-deviation-wave-ops camera-pos wave))
+                                     @vec-deviation-waves))
         blood-retrograde-plan (concat
                                 (mapcat (fn [splash]
                                           (blood-retrograde-splash-ops camera-pos splash))
@@ -1366,6 +1469,7 @@
               (seq meltdowner-plan)
               (seq meltdowner-ray-plan)
               (seq vec-accel-plan)
+              (seq vec-deviation-plan)
                     (seq blood-retrograde-plan)
                 (seq directed-blastwave-plan)
               (seq storm-wing-plan)
@@ -1381,6 +1485,7 @@
                          tb-arc-plan
                    meltdowner-ray-plan
                  vec-accel-plan
+                 vec-deviation-plan
                  blood-retrograde-plan
                  directed-blastwave-plan
                  storm-wing-plan))

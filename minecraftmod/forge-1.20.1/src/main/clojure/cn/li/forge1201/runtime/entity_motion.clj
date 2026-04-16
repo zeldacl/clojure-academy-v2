@@ -56,6 +56,16 @@
 			(log/warn "Failed to add entity velocity:" (ex-message e))
 			false)))
 
+(defn- discard-entity-impl! [world-id entity-uuid]
+	(try
+		(when-let [^ServerLevel level (get-level world-id)]
+			(when-let [^Entity entity (get-entity-by-uuid level entity-uuid)]
+				(.discard entity)
+				true))
+		(catch Exception e
+			(log/warn "Failed to discard entity:" (ex-message e))
+			false)))
+
 (defn- get-velocity-impl [world-id entity-uuid]
 	(try
 		(when-let [^ServerLevel level (get-level world-id)]
@@ -74,6 +84,8 @@
 			(set-velocity-impl! world-id entity-uuid x y z))
 		(add-velocity! [_ world-id entity-uuid x y z]
 			(add-velocity-impl! world-id entity-uuid x y z))
+		(discard-entity! [_ world-id entity-uuid]
+			(discard-entity-impl! world-id entity-uuid))
 		(get-velocity [_ world-id entity-uuid]
 			(get-velocity-impl world-id entity-uuid))))
 

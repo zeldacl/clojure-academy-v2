@@ -15,6 +15,10 @@
 		"Add velocity delta to target entity.
 		Returns true when successful.")
 
+	(discard-entity! [this world-id entity-uuid]
+		"Discard/remove target entity from world.
+		Returns true when successful.")
+
 	(get-velocity [this world-id entity-uuid]
 		"Get target entity velocity map {:x :y :z}.
 		Returns nil when entity is not found."))

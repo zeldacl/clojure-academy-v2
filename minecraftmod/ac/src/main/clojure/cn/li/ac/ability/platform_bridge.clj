@@ -158,6 +158,25 @@
     (level-effects/enqueue-level-effect! :vec-accel {:mode :end
                               :performed? (boolean (:performed? payload))})
 
+    :vec-deviation/fx-start
+    (level-effects/enqueue-level-effect! :vec-deviation {:mode :start})
+
+    :vec-deviation/fx-end
+    (level-effects/enqueue-level-effect! :vec-deviation {:mode :end})
+
+    :vec-deviation/fx-stop-entity
+    (level-effects/enqueue-level-effect! :vec-deviation {:mode :stop-entity
+                                :x (double (or (:x payload) 0.0))
+                                :y (double (or (:y payload) 0.0))
+                                :z (double (or (:z payload) 0.0))
+                                :marked? (boolean (:marked? payload))})
+
+    :vec-deviation/fx-play
+    (level-effects/enqueue-level-effect! :vec-deviation {:mode :play
+                                :x (double (or (:x payload) 0.0))
+                                :y (double (or (:y payload) 0.0))
+                                :z (double (or (:z payload) 0.0))})
+
     :groundshock/fx-start
     (hand-effects/enqueue-hand-effect! :groundshock {:mode :start})
 

@@ -28,11 +28,11 @@
    (when damage-interception/*damage-interception*
      (let [wrapped-handler (fn [player-id attacker-id damage damage-source]
                             ;; Check if toggle skill is active by looking for active contexts
-                            (if-let [state (ps/get-player-state player-id)]
+                            (if (ps/get-player-state player-id)
                               ;; Try to find an active context with this toggle skill
                               (let [active-contexts (ctx/get-all-contexts)
                                     player-contexts (filter (fn [[_ctx-id ctx-data]]
-                                                             (= (:player-id ctx-data) player-id))
+                                                             (= (:player-uuid ctx-data) player-id))
                                                            active-contexts)
                                     has-active-toggle? (some (fn [[_ctx-id ctx-data]]
                                                               (toggle/is-toggle-active? ctx-data skill-id))
