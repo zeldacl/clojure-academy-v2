@@ -21,6 +21,13 @@
 (def ^:private meltdowner-charge-loop-sound "my_mod:md.md_charge")
 (def ^:private meltdowner-fire-sound "my_mod:md.meltdowner")
 
+(defonce ^:private blood-retrograde-effect (atom nil))
+(defonce ^:private blood-retrograde-splashes (atom []))
+(defonce ^:private blood-retrograde-sprays (atom []))
+(def ^:private blood-retrograde-sound "my_mod:vecmanip.blood_retro")
+(def ^:private blood-retrograde-splash-life 10)
+(def ^:private blood-retrograde-spray-life 1200)
+
 (declare tick-thunder-bolt-arcs!)
 
 
@@ -216,6 +223,55 @@
 
           nil))
 
+                :blood-retrograde
+                (let [{:keys [mode ticks charge-ratio performed? splashes sprays sound-pos]} payload]
+             (case mode
+               :start
+               (reset! blood-retrograde-effect {:active? true
+                       :ticks 0
+                       :charge-ratio 0.0
+                       :performed? false})
+
+               :update
+               (swap! blood-retrograde-effect
+                 (fn [st]
+                   (assoc (or st {})
+                     :active? true
+                     :ticks (long (or ticks 0))
+                     :charge-ratio (double (or charge-ratio 0.0))
+                     :performed? false)))
+
+               :perform
+               (do
+                 (swap! blood-retrograde-splashes into
+                   (map (fn [splash]
+                     (assoc splash
+                       :ttl blood-retrograde-splash-life
+                       :max-ttl blood-retrograde-splash-life))
+                   splashes))
+                 (swap! blood-retrograde-sprays into
+                   (map (fn [spray]
+                     (assoc spray
+                       :ttl blood-retrograde-spray-life
+                       :max-ttl blood-retrograde-spray-life))
+                   sprays))
+                 (client-sounds/queue-sound-effect!
+              {:type :sound
+               :sound-id blood-retrograde-sound
+               :volume 1.0
+               :pitch 1.0
+               :x (:x sound-pos)
+               :y (:y sound-pos)
+               :z (:z sound-pos)}))
+
+               :end
+               (reset! blood-retrograde-effect {:active? false
+                       :ticks 0
+                       :charge-ratio 0.0
+                       :performed? (boolean performed?)})
+
+               nil))
+
       nil))
 
 (defn tick-level-effects! []
@@ -273,7 +329,25 @@
                       :pitch 1.0}))
                  (assoc st :ticks ticks))
                nil))))
+  (swap! blood-retrograde-effect
+         (fn [st]
+           (when st
+             (if (:active? st)
+               (update st :ticks (fnil inc 0))
+               nil))))
   (swap! meltdowner-rays
+         (fn [xs]
+           (->> xs
+                (map #(update % :ttl dec))
+                (filter #(pos? (long (:ttl %))))
+                vec)))
+  (swap! blood-retrograde-splashes
+         (fn [xs]
+           (->> xs
+                (map #(update % :ttl dec))
+                (filter #(pos? (long (:ttl %))))
+                vec)))
+  (swap! blood-retrograde-sprays
          (fn [xs]
            (->> xs
                 (map #(update % :ttl dec))
@@ -594,12 +668,91 @@
      (quad-op "minecraft:textures/entity/beacon_beam.png" c0 c1 c2 c3 inner-a)
      (line-op start end (with-alpha {:r 192 :g 255 :b 188} (int (+ 55 (* 150 life)))))]))
 
+(defn- rotate-around-axis [vec axis degrees]
+  (let [axis-unit (vnormalize axis)
+        theta (Math/toRadians (double degrees))
+        cos-theta (Math/cos theta)
+        sin-theta (Math/sin theta)
+        term1 (v* vec cos-theta)
+        term2 (v* (vcross axis-unit vec) sin-theta)
+        term3 (v* axis-unit (* (+ (* (:x axis-unit) (:x vec))
+                                   (* (:y axis-unit) (:y vec))
+                                   (* (:z axis-unit) (:z vec)))
+                                (- 1.0 cos-theta)))]
+    (vnormalize (v+ (v+ term1 term2) term3))))
+
+(defn- billboard-up-axis [center cam-pos right]
+  (let [to-cam (vnormalize (v- cam-pos center))
+        raw (vcross to-cam right)]
+    (if (> (vlen raw) 1.0e-5)
+      (vnormalize raw)
+      {:x 0.0 :y 1.0 :z 0.0})))
+
+(defn- blood-retrograde-local-walk-speed [ticks]
+  (let [ratio (min 1.0 (/ (double ticks) 20.0))]
+    (float (+ 0.1 (* (- 0.007 0.1) ratio)))))
+
+(defn- blood-retrograde-splash-ops [cam-pos {:keys [x y z size ttl max-ttl]}]
+  (let [center {:x (double x) :y (double y) :z (double z)}
+        half-size (* 0.5 (double (or size 1.0)))
+        right (camera-facing-right-axis center cam-pos)
+        up (billboard-up-axis center cam-pos right)
+        side (v* right half-size)
+        lift (v* up half-size)
+        p0 (v+ (v- center side) lift)
+        p1 (v+ (v+ center side) lift)
+        p2 (v- (v+ center side) lift)
+        p3 (v- (v- center side) lift)
+        age (long (- (long (or max-ttl blood-retrograde-splash-life))
+                     (long (or ttl blood-retrograde-splash-life))))
+        frame (max 0 (min 9 age))]
+    [(quad-op (str "my_mod:textures/effects/blood_splash/" frame ".png")
+              p0 p1 p2 p3
+              {:r 213 :g 29 :b 29 :a 200})]))
+
+(defn- spray-face-basis [face]
+  (case face
+    :up    [{:x 0.0 :y 1.0 :z 0.0} {:x 1.0 :y 0.0 :z 0.0} {:x 0.0 :y 0.0 :z 1.0}]
+    :down  [{:x 0.0 :y -1.0 :z 0.0} {:x 1.0 :y 0.0 :z 0.0} {:x 0.0 :y 0.0 :z -1.0}]
+    :north [{:x 0.0 :y 0.0 :z -1.0} {:x 1.0 :y 0.0 :z 0.0} {:x 0.0 :y 1.0 :z 0.0}]
+    :south [{:x 0.0 :y 0.0 :z 1.0} {:x -1.0 :y 0.0 :z 0.0} {:x 0.0 :y 1.0 :z 0.0}]
+    :west  [{:x -1.0 :y 0.0 :z 0.0} {:x 0.0 :y 0.0 :z -1.0} {:x 0.0 :y 1.0 :z 0.0}]
+    :east  [{:x 1.0 :y 0.0 :z 0.0} {:x 0.0 :y 0.0 :z 1.0} {:x 0.0 :y 1.0 :z 0.0}]
+    [{:x 0.0 :y 1.0 :z 0.0} {:x 1.0 :y 0.0 :z 0.0} {:x 0.0 :y 0.0 :z 1.0}]))
+
+(defn- blood-retrograde-spray-ops [{:keys [x y z face size rotation offset-u offset-v texture-id ttl]}]
+  (let [[normal tangent bitangent] (spray-face-basis face)
+        center (v+
+                 {:x (+ (double x) 0.5)
+                  :y (+ (double y) 0.5)
+                  :z (+ (double z) 0.5)}
+                 (v* normal 0.51))
+        tangent' (rotate-around-axis tangent normal (double (or rotation 0.0)))
+        bitangent' (rotate-around-axis bitangent normal (double (or rotation 0.0)))
+        shifted (v+ center
+                    (v+ (v* tangent' (double (or offset-u 0.0)))
+                        (v* bitangent' (double (or offset-v 0.0)))))
+        half-size (* 0.5 (double (or size 1.0)))
+        side (v* tangent' half-size)
+        lift (v* bitangent' half-size)
+        p0 (v+ (v- shifted side) lift)
+        p1 (v+ (v+ shifted side) lift)
+        p2 (v- (v+ shifted side) lift)
+        p3 (v- (v- shifted side) lift)
+        life (if (and ttl (< ttl 60)) (/ (double ttl) 60.0) 1.0)
+        tex-folder (if (contains? #{:up :down} face) "wall" "grnd")
+        tex-index (max 0 (min 2 (long (or texture-id 0))))]
+    [(quad-op (str "my_mod:textures/effects/blood_spray/" tex-folder "/" tex-index ".png")
+              p0 p1 p2 p3
+              {:r 255 :g 255 :b 255 :a (int (+ 40 (* 180 life)))})]))
+
 (defn build-level-effect-plan [camera-pos hand-center-pos tick]
   (let [beams @beam-effects
         mag-move @mag-movement-effect
-  mark-teleport @mark-teleport-effect
+    mark-teleport @mark-teleport-effect
         thunder-clap @thunder-clap-effect
         meltdowner @meltdowner-effect
+    blood-retrograde @blood-retrograde-effect
         player-uuid (:player-uuid hand-center-pos)
         charge-state (when player-uuid
                        (client-runtime/railgun-charge-visual-state player-uuid))
@@ -653,7 +806,16 @@
         meltdowner-ray-plan (mapcat (fn [ray]
                                       (meltdowner-ray-ops camera-pos ray))
                                     @meltdowner-rays)
-        local-walk-speed (let [cand (filter number? [thunder-clap-walk-speed meltdowner-walk-speed])]
+        blood-retrograde-plan (concat
+                                (mapcat (fn [splash]
+                                          (blood-retrograde-splash-ops camera-pos splash))
+                                        @blood-retrograde-splashes)
+                                (mapcat blood-retrograde-spray-ops @blood-retrograde-sprays))
+        blood-retrograde-walk-speed (when (and blood-retrograde (:active? blood-retrograde))
+                                      (blood-retrograde-local-walk-speed (:ticks blood-retrograde)))
+        local-walk-speed (let [cand (filter number? [thunder-clap-walk-speed
+                                                     meltdowner-walk-speed
+                                                     blood-retrograde-walk-speed])]
                            (when (seq cand)
                              (float (apply min cand))))
         tb-arc-plan (mapcat (fn [arc]
@@ -665,6 +827,7 @@
               (seq charge-plan)
               (seq meltdowner-plan)
               (seq meltdowner-ray-plan)
+                    (seq blood-retrograde-plan)
               (seq tb-arc-plan)
               (seq thunder-clap-plan)
               local-walk-speed)
@@ -675,5 +838,6 @@
                          meltdowner-plan
                          thunder-clap-plan
                          tb-arc-plan
-                         meltdowner-ray-plan))
+                   meltdowner-ray-plan
+                   blood-retrograde-plan))
        :local-walk-speed local-walk-speed})))

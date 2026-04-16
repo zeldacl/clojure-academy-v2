@@ -48,6 +48,9 @@
                    :x (.x pos)
                    :y (.y pos)
                    :z (.z pos)
+                   :width (double (.getBbWidth entity))
+                   :height (double (.getBbHeight entity))
+                   :eye-height (double (.getEyeHeight entity))
                    :type (str (.getDescriptionId (.getType entity)))}))
               entities)))
     (catch Exception e

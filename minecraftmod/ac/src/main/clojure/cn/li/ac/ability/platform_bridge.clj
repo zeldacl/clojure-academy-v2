@@ -103,6 +103,24 @@
                                                        :start (:start payload)
                                                        :end (:end payload)})
 
+    :blood-retrograde/fx-start
+    (level-effects/enqueue-level-effect! :blood-retrograde {:mode :start})
+
+    :blood-retrograde/fx-update
+    (level-effects/enqueue-level-effect! :blood-retrograde {:mode :update
+                                                             :ticks (long (or (:ticks payload) 0))
+                                                             :charge-ratio (double (or (:charge-ratio payload) 0.0))})
+
+    :blood-retrograde/fx-end
+    (level-effects/enqueue-level-effect! :blood-retrograde {:mode :end
+                                                             :performed? (boolean (:performed? payload))})
+
+    :blood-retrograde/fx-perform
+    (level-effects/enqueue-level-effect! :blood-retrograde {:mode :perform
+                                                             :sound-pos (:sound-pos payload)
+                                                             :splashes (:splashes payload)
+                                                             :sprays (:sprays payload)})
+
     :location-teleport/ui-open
     (do
       (location-teleport-screen/apply-server-payload! payload)

@@ -26,7 +26,11 @@
     - world-id: string (dimension identifier)
     - x, y, z: double coordinates
     - radius: double search radius
-    Returns: seq of entity maps {:uuid string :x double :y double :z double :type string}")
+    Returns: seq of entity maps
+             {:uuid string
+              :x double :y double :z double
+              :width double :height double :eye-height double
+              :type string}")
 
   (find-blocks-in-radius [this world-id x y z radius block-predicate]
     "Find all blocks within radius matching predicate.

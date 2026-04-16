@@ -478,7 +478,7 @@
   :description-key "ability.skill.vecmanip.blood_retrograde.desc"
   :icon "textures/abilities/vecmanip/skills/blood_retro.png"
   :level 4
-  :controllable? false
+  :controllable? true
   :ctrl-id :blood-retrograde
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
@@ -487,7 +487,7 @@
   :on-key-tick blood-retrograde/blood-retrograde-on-key-tick
   :on-key-up blood-retrograde/blood-retrograde-on-key-up
   :on-key-abort blood-retrograde/blood-retrograde-on-key-abort
-  :prerequisites [{:skill-id :vec-reflection :min-exp 0.5}])
+  :prerequisites [{:skill-id :directed-blastwave :min-exp 0.0}])
 
 (defskill plasma-cannon
   :id :plasma-cannon
