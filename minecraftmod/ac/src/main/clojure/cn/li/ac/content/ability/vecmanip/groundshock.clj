@@ -16,6 +16,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
@@ -405,3 +406,26 @@
     (log/debug "Groundshock aborted")
     (catch Exception e
       (log/warn "Groundshock key-abort failed:" (ex-message e)))))
+
+(defskill! groundshock
+  :id :groundshock
+  :category-id :vecmanip
+  :name-key "ability.skill.vecmanip.groundshock"
+  :description-key "ability.skill.vecmanip.groundshock.desc"
+  :icon "textures/abilities/vecmanip/skills/ground_shock.png"
+  :ui-position [64 85]
+  :level 1
+  :controllable? false
+  :ctrl-id :groundshock
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 80
+  :pattern :release-cast
+  :cooldown {:mode :manual}
+  :cost {:up {:cp groundshock-cost-up-cp
+              :overload groundshock-cost-up-overload}}
+  :actions {:down! groundshock-on-key-down
+            :tick! groundshock-on-key-tick
+            :up! groundshock-on-key-up
+            :abort! groundshock-on-key-abort}
+  :prerequisites [{:skill-id :directed-shock :min-exp 0.0}])

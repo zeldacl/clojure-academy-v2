@@ -17,6 +17,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
@@ -174,3 +175,41 @@
 (defn vec-accel-abort!
   [{:keys [ctx-id]}]
   (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))
+
+(defskill! vec-accel
+  :id :vec-accel
+  :category-id :vecmanip
+  :name-key "ability.skill.vecmanip.vec_accel"
+  :description-key "ability.skill.vecmanip.vec_accel.desc"
+  :icon "textures/abilities/vecmanip/skills/vec_accel.png"
+  :ui-position [76 40]
+  :level 2
+  :controllable? false
+  :ctrl-id :vec-accel
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 80
+  :pattern :hold-charge-release
+  :cooldown {:mode :manual}
+  :state {:max-charge 20}
+  :cost {:up {:cp vec-accel-cost-up-cp
+              :overload vec-accel-cost-up-overload}}
+  :actions {:tick! vec-accel-tick!
+            :perform! vec-accel-perform!
+            :abort! vec-accel-abort!}
+  :fx {:start {:topic :vec-accel/fx-start
+               :payload (fn [_] {})}
+       :update {:topic :vec-accel/fx-update
+                :payload (fn [{:keys [ctx-id charge-ticks]}]
+                           (let [st (:skill-state (ctx/get-context ctx-id))]
+                             {:charge-ticks (long (max 0 (or charge-ticks 0)))
+                              :can-perform? (boolean (:can-perform? st))
+                              :look-dir (or (:look-dir st) {:x 0.0 :y 0.0 :z 1.0})
+                              :init-vel (or (:init-vel st) {:x 0.0 :y 0.0 :z 1.0})}))}
+       :perform {:topic :vec-accel/fx-perform
+                 :payload (fn [_] {})}
+       :end {:topic :vec-accel/fx-end
+             :payload (fn [{:keys [ctx-id]}]
+                        (let [st (:skill-state (ctx/get-context ctx-id))]
+                          {:performed? (boolean (:performed? st))}))}}
+  :prerequisites [{:skill-id :directed-shock :min-exp 0.0}])

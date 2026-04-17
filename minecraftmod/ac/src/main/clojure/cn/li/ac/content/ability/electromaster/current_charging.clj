@@ -10,6 +10,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
@@ -247,3 +248,25 @@
     (log/debug "CurrentCharging aborted")
     (catch Exception e
       (log/warn "CurrentCharging key-abort failed:" (ex-message e)))))
+
+(defskill! current-charging
+  :id :current-charging
+  :category-id :electromaster
+  :name-key "ability.skill.electromaster.current_charging"
+  :description-key "ability.skill.electromaster.current_charging.desc"
+  :icon "textures/abilities/electromaster/skills/charging.png"
+  :ui-position [55 18]
+  :level 2
+  :controllable? true
+  :ctrl-id :current-charging
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 40
+  :pattern :charge-window
+  :cost {:down {:overload current-charging-cost-down-overload}
+         :tick {:cp current-charging-cost-tick-cp}}
+  :actions {:down! current-charging-on-key-down
+            :tick! current-charging-on-key-tick
+            :up! current-charging-on-key-up
+            :abort! current-charging-on-key-abort}
+  :prerequisites [{:skill-id :arc-gen :min-exp 0.3}])

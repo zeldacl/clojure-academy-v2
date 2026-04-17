@@ -8,6 +8,7 @@
 	No Minecraft imports."
 	(:require [clojure.string :as str]
 						[cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
 						[cn.li.ac.ability.service.learning :as learning]
 						[cn.li.ac.ability.service.cooldown :as cd]
 						[cn.li.ac.ability.event :as ability-evt]
@@ -430,3 +431,27 @@
 			(ctx/update-context! ctx-id dissoc :skill-state))
 		(catch Exception e
 			(log/warn "MagManip key-abort failed:" (ex-message e)))))
+
+(defskill! mag-manip
+  :id :mag-manip
+  :category-id :electromaster
+  :name-key "ability.skill.electromaster.mag_manip"
+  :description-key "ability.skill.electromaster.mag_manip.desc"
+  :icon "textures/abilities/electromaster/skills/mag_manip.png"
+  :ui-position [204 33]
+  :level 3
+  :controllable? true
+  :ctrl-id :mag-manip
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 60
+  :pattern :release-cast
+  :cooldown {:mode :manual}
+  :cost {:up {:cp mag-manip-cost-up-cp
+              :overload mag-manip-cost-up-overload
+              :creative? mag-manip-cost-creative?}}
+  :actions {:down! mag-manip-on-key-down
+            :tick! mag-manip-on-key-tick
+            :up! mag-manip-on-key-up
+            :abort! mag-manip-on-key-abort}
+  :prerequisites [{:skill-id :mag-movement :min-exp 0.5}])

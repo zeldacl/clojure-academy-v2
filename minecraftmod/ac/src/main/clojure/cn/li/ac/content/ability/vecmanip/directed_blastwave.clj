@@ -11,6 +11,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.context :as ctx]
@@ -305,3 +306,26 @@
     (log/debug "DirectedBlastwave aborted")
     (catch Exception e
       (log/warn "DirectedBlastwave key-abort failed:" (ex-message e)))))
+
+(defskill! directed-blastwave
+  :id :directed-blastwave
+  :category-id :vecmanip
+  :name-key "ability.skill.vecmanip.directed_blastwave"
+  :description-key "ability.skill.vecmanip.directed_blastwave.desc"
+  :icon "textures/abilities/vecmanip/skills/dir_blast.png"
+  :ui-position [136 80]
+  :level 3
+  :controllable? false
+  :ctrl-id :directed-blastwave
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 80
+  :pattern :charge-window
+  :cooldown {:mode :manual}
+  :cost {:up {:cp directed-blastwave-cost-up-cp
+              :overload directed-blastwave-cost-up-overload}}
+  :actions {:down! directed-blastwave-on-key-down
+            :tick! directed-blastwave-on-key-tick
+            :up! directed-blastwave-on-key-up
+            :abort! directed-blastwave-on-key-abort}
+  :prerequisites [{:skill-id :groundshock :min-exp 0.5}])

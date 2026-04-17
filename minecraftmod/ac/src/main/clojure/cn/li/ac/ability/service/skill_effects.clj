@@ -105,8 +105,15 @@
 (defn gain-exp!
   "Apply exp gain from :exp-policy {:amount n :rate n} when present."
   [spec evt]
-  (let [amount (get-in spec [:exp-policy :amount])
-        skill-id (:id spec)]
+  (let [skill-id (:id spec)
+        explicit-exp (:exp spec)
+        effective? (boolean (:effective? evt))
+        amount (cond
+                 (map? explicit-exp)
+                 (if effective?
+                   (:effective explicit-exp)
+                   (:ineffective explicit-exp))
+                 :else (get-in spec [:exp-policy :amount]))]
     (when (and (some? amount) skill-id)
       (let [rate (double (or (get-in spec [:exp-policy :rate]) 1.0))
             value (resolve-val amount evt)]

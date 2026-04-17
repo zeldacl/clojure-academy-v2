@@ -14,6 +14,7 @@
   No Minecraft imports."
   (:require [clojure.string :as str]
             [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
@@ -365,3 +366,29 @@
     (log/debug "MagMovement aborted")
     (catch Exception e
       (log/warn "MagMovement key-abort failed:" (ex-message e)))))
+
+(defskill! mag-movement
+  :id :mag-movement
+  :category-id :electromaster
+  :name-key "ability.skill.electromaster.mag_movement"
+  :description-key "ability.skill.electromaster.mag_movement.desc"
+  :icon "textures/abilities/electromaster/skills/mag_movement.png"
+  :ui-position [137 35]
+  :level 3
+  :controllable? true
+  :ctrl-id :mag-movement
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 60
+  :pattern :charge-window
+  :cooldown {:mode :manual}
+  :cost {:down {:overload mag-movement-cost-down-overload
+                :creative? mag-movement-cost-creative?}
+         :tick {:cp mag-movement-cost-tick-cp
+                :creative? mag-movement-cost-creative?}}
+  :actions {:down! mag-movement-on-key-down
+            :tick! mag-movement-on-key-tick
+            :up! mag-movement-on-key-up
+            :abort! mag-movement-on-key-abort}
+  :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
+                  {:skill-id :current-charging :min-exp 0.7}])

@@ -13,6 +13,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.model.resource-data :as rdata]
@@ -244,3 +245,23 @@
   "No-op: UI lifecycle is client-managed and independent from key abort."
   [_]
   nil)
+
+(defskill! location-teleport
+  :id :location-teleport
+  :category-id :teleporter
+  :name-key "ability.skill.teleporter.location_teleport"
+  :description-key "ability.skill.teleporter.location_teleport.desc"
+  :icon "textures/abilities/teleporter/skills/location_teleport.png"
+  :level 2
+  :controllable? false
+  :ctrl-id :location-teleport
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 25
+  :pattern :release-cast
+  :cooldown {:mode :manual}
+  :actions {:down! location-teleport-on-key-down
+            :tick! location-teleport-on-key-tick
+            :up! location-teleport-on-key-up
+            :abort! location-teleport-on-key-abort}
+  :prerequisites [{:skill-id :mark-teleport :min-exp 0.5}])

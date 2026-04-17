@@ -11,6 +11,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
@@ -323,3 +324,28 @@
     (log/debug "BloodRetrograde aborted")
     (catch Exception e
       (log/warn "BloodRetrograde key-abort failed:" (ex-message e)))))
+
+(defskill! blood-retrograde
+  :id :blood-retrograde
+  :category-id :vecmanip
+  :name-key "ability.skill.vecmanip.blood_retrograde"
+  :description-key "ability.skill.vecmanip.blood_retrograde.desc"
+  :icon "textures/abilities/vecmanip/skills/blood_retro.png"
+  :ui-position [204 83]
+  :level 4
+  :controllable? true
+  :ctrl-id :blood-retrograde
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 90
+  :pattern :release-cast
+  :cooldown {:mode :manual}
+  :cost {:tick {:cp blood-retrograde-cost-release-cp
+                :overload blood-retrograde-cost-release-overload}
+         :up {:cp blood-retrograde-cost-release-cp
+              :overload blood-retrograde-cost-release-overload}}
+  :actions {:down! blood-retrograde-on-key-down
+            :tick! blood-retrograde-on-key-tick
+            :up! blood-retrograde-on-key-up
+            :abort! blood-retrograde-on-key-abort}
+  :prerequisites [{:skill-id :directed-blastwave :min-exp 0.0}])

@@ -4,6 +4,7 @@
   Each handler is called server-side by cn.li.ac.ability.skill-runtime with an
   event map (from context-runtime) and the skill spec map."
   (:require [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.effect :as effect]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.mcmod.util.log :as log]))
@@ -18,6 +19,10 @@
   (when-let [f (get-in spec [:actions k])]
     (when (fn? f)
       (f evt))))
+
+(defn- run-stage-ops!
+  [spec evt stage]
+  (effect/run-stage! spec evt stage))
 
 (defn- emit-fx!
   [spec evt stage]
@@ -37,6 +42,7 @@
     (let [cost-ok? (apply-cost! spec :down evt)
           evt* (assoc evt :cost-ok? cost-ok?)]
       (call-action! spec :perform! evt*)
+      (run-stage-ops! spec evt* :perform)
       (when cost-ok?
         (emit-fx! spec evt* :perform)
         (skill-effects/gain-exp! spec evt*)
@@ -54,6 +60,7 @@
   (let [init (merge {:charge-ticks 0}
                     (or (:state spec) {}))]
     (ctx/update-context! ctx-id assoc :skill-state init))
+  (run-stage-ops! spec evt :down)
   (emit-fx! spec evt :start))
 
 (defn hold-charge-release-on-tick!
@@ -68,6 +75,7 @@
             next (min max-charge (inc prev))]
         (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next)
         (call-action! spec :tick! (assoc evt :charge-ticks next))
+        (run-stage-ops! spec (assoc evt :charge-ticks next) :tick)
         (emit-fx! spec (assoc evt :charge-ticks next) :update)))))
 
 (defn hold-charge-release-on-up!
@@ -78,6 +86,7 @@
       (let [charge (long (or (get-in ctx [:skill-state :charge-ticks]) 0))
             evt* (assoc evt :charge-ticks charge)]
         (call-action! spec :perform! evt*)
+        (run-stage-ops! spec evt* :perform)
         (emit-fx! spec evt* :perform)
         (emit-fx! spec evt* :end)
         (skill-effects/gain-exp! spec evt*)
@@ -87,6 +96,7 @@
   [spec {:keys [ctx-id] :as evt}]
   (try
     (call-action! spec :abort! evt)
+    (run-stage-ops! spec evt :abort)
     (emit-fx! spec evt :end)
     (finally
       (ctx/update-context! ctx-id dissoc :skill-state))))
@@ -107,6 +117,7 @@
           (do
             (toggle/activate-toggle! ctx-id skill-id)
             (call-action! spec :activate! evt)
+            (run-stage-ops! spec evt :down)
             (emit-fx! spec evt :start)))))))
 
 (defn toggle-on-tick!
@@ -123,6 +134,7 @@
           (do
             (toggle/update-toggle-tick! ctx-id skill-id)
             (call-action! spec :tick! evt)
+            (run-stage-ops! spec evt :tick)
             (emit-fx! spec evt :update)))))))
 
 (defn toggle-on-up!
@@ -134,6 +146,7 @@
   (try
     (toggle/remove-toggle! ctx-id skill-id)
     (call-action! spec :abort! evt)
+    (run-stage-ops! spec evt :abort)
     (emit-fx! spec evt :end)
     (finally
       (ctx/update-context! ctx-id dissoc :skill-state))))
@@ -145,6 +158,7 @@
     (if cost-ok?
       (do
         (call-action! spec :down! evt)
+        (run-stage-ops! spec evt :down)
         (emit-fx! spec evt :start))
       (cost-fail! spec evt :down))))
 
@@ -156,17 +170,20 @@
       (ctx/terminate-context! ctx-id nil))
     (do
       (call-action! spec :tick! evt)
+      (run-stage-ops! spec evt :tick)
       (emit-fx! spec evt :update))))
 
 (defn hold-channel-on-up!
   [spec evt]
   (when (apply-cost! spec :up evt)
-    (call-action! spec :up! evt))
+    (call-action! spec :up! evt)
+    (run-stage-ops! spec evt :up))
   (emit-fx! spec evt :end))
 
 (defn hold-channel-on-abort!
   [spec evt]
   (call-action! spec :abort! evt)
+  (run-stage-ops! spec evt :abort)
   (emit-fx! spec evt :end))
 
 (defn- init-stage-state!
@@ -189,6 +206,8 @@
   (let [cost-ok? (apply-cost! spec :down evt)]
     (call-action! spec :down! (assoc evt :cost-ok? cost-ok?))
     (when cost-ok?
+      (run-stage-ops! spec (assoc evt :cost-ok? cost-ok?) :down))
+    (when cost-ok?
       (emit-fx! spec evt :start))
     (when-not cost-ok?
       (cost-fail! spec evt :down))))
@@ -199,6 +218,8 @@
         evt* (assoc evt :hold-ticks hold-ticks)
         cost-ok? (apply-cost! spec :tick evt*)]
     (call-action! spec :tick! (assoc evt* :cost-ok? cost-ok?))
+    (when cost-ok?
+      (run-stage-ops! spec (assoc evt* :cost-ok? cost-ok?) :tick))
     (when cost-ok?
       (emit-fx! spec evt* :update))
     (when-not cost-ok?
@@ -211,6 +232,7 @@
         cost-ok? (apply-cost! spec :up evt*)]
     (call-action! spec :up! (assoc evt* :cost-ok? cost-ok?))
     (when (and perform? cost-ok?)
+      (run-stage-ops! spec evt* :perform)
       (emit-fx! spec evt* :perform)
       (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] true))
     (emit-fx! spec evt* :end)

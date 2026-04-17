@@ -22,6 +22,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
@@ -280,3 +281,27 @@
   payload: {:x dx :y dy :z dz} world-space unit vector, or nil for no movement."
   [{:keys [ctx-id payload]}]
   (ctx/update-context! ctx-id assoc-in [:skill-state :move-dir] payload))
+
+(defskill! storm-wing
+  :id :storm-wing
+  :category-id :vecmanip
+  :name-key "ability.skill.vecmanip.storm_wing"
+  :description-key "ability.skill.vecmanip.storm_wing.desc"
+  :icon "textures/abilities/vecmanip/skills/storm_wing.png"
+  :ui-position [130 20]
+  :level 3
+  :controllable? true
+  :ctrl-id :storm-wing
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 0
+  :pattern :release-cast
+  :cooldown {:mode :manual}
+  :cost {:tick {:cp storm-wing-cost-tick-cp
+                :overload storm-wing-cost-tick-overload
+                :creative? storm-wing-cost-creative?}}
+  :actions {:down! storm-wing-on-key-down
+            :tick! storm-wing-on-key-tick
+            :up! storm-wing-on-key-up
+            :abort! storm-wing-on-key-abort}
+  :prerequisites [{:skill-id :vec-accel :min-exp 0.6}])

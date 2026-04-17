@@ -15,6 +15,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.util.toggle :as toggle]
@@ -224,3 +225,27 @@
     (catch Exception e
       (log/warn "VecDeviation reduce-damage failed:" (ex-message e))
       original-damage)))
+
+(defskill! vec-deviation
+  :id :vec-deviation
+  :category-id :vecmanip
+  :name-key "ability.skill.vecmanip.vec_deviation"
+  :description-key "ability.skill.vecmanip.vec_deviation.desc"
+  :icon "textures/abilities/vecmanip/skills/vec_deviation.png"
+  :ui-position [145 53]
+  :level 2
+  :controllable? true
+  :ctrl-id :vec-deviation
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 0
+  :pattern :toggle
+  :cooldown {:mode :manual}
+  :cost {:tick {:cp vec-deviation-cost-tick-cp}}
+  :actions {:activate! vec-deviation-activate!
+            :deactivate! vec-deviation-deactivate!
+            :tick! vec-deviation-tick!
+            :abort! vec-deviation-abort!}
+  :fx {:start {:topic :vec-deviation/fx-start :payload (fn [_] {})}
+       :end {:topic :vec-deviation/fx-end :payload (fn [_] {})}}
+  :prerequisites [{:skill-id :vec-accel :min-exp 0.4}])

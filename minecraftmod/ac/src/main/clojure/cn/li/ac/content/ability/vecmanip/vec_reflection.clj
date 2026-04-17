@@ -3,6 +3,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.model.resource-data :as rdata]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.event :as ability-evt]
@@ -293,3 +294,24 @@
     (catch Exception e
       (log/warn "VecReflection can-cancel-attack failed:" (ex-message e))
       false)))
+
+(defskill! vec-reflection
+  :id :vec-reflection
+  :category-id :vecmanip
+  :name-key "ability.skill.vecmanip.vec_reflection"
+  :description-key "ability.skill.vecmanip.vec_reflection.desc"
+  :icon "textures/abilities/vecmanip/skills/vec_reflection.png"
+  :ui-position [210 50]
+  :level 4
+  :controllable? true
+  :ctrl-id :vec-reflection
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 0
+  :pattern :release-cast
+  :cost {:tick {:cp vec-reflection-cost-tick-cp}}
+  :actions {:down! vec-reflection-on-key-down
+            :tick! vec-reflection-on-key-tick
+            :up! vec-reflection-on-key-up
+            :abort! vec-reflection-on-key-abort}
+  :prerequisites [{:skill-id :vec-deviation :min-exp 0.0}])

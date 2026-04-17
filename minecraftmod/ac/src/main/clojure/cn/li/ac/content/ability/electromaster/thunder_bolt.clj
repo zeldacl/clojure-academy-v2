@@ -19,6 +19,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
@@ -189,3 +190,24 @@
     (catch Exception e
       (log/warn "ThunderBolt execution failed:" (ex-message e))))
   nil)
+
+(defskill! thunder-bolt
+  :id :thunder-bolt
+  :category-id :electromaster
+  :name-key "ability.skill.electromaster.thunder_bolt"
+  :description-key "ability.skill.electromaster.thunder_bolt.desc"
+  :icon "textures/abilities/electromaster/skills/thunder_bolt.png"
+  :ui-position [86 67]
+  :level 2
+  :controllable? false
+  :ctrl-id :thunder-bolt
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 100
+  :pattern :instant
+  :cooldown {:mode :manual}
+  :cost {:down {:cp thunder-bolt-cost-down-cp
+                :overload thunder-bolt-cost-down-overload}}
+  :actions {:perform! thunder-bolt-perform!}
+  :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
+                  {:skill-id :current-charging :min-exp 0.7}])

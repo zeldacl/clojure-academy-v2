@@ -3,6 +3,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
@@ -513,3 +514,31 @@
     (log/debug "Railgun aborted")
     (catch Exception e
       (log/warn "Railgun key-abort failed:" (ex-message e)))))
+
+(defskill! railgun
+  :id :railgun
+  :category-id :electromaster
+  :name-key "ability.skill.electromaster.railgun"
+  :description-key "ability.skill.electromaster.railgun.desc"
+  :icon "textures/abilities/electromaster/skills/railgun.png"
+  :ui-position [164 59]
+  :level 3
+  :controllable? true
+  :ctrl-id :railgun
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 1
+  :pattern :charge-window
+  :cooldown {:mode :manual}
+  :cost {:down {:cp railgun-cost-down-cp
+                :overload railgun-cost-down-overload
+                :creative? railgun-cost-creative?}
+         :tick {:cp railgun-cost-tick-cp
+                :overload railgun-cost-tick-overload
+                :creative? railgun-cost-creative?}}
+  :actions {:down! railgun-on-key-down
+            :tick! railgun-on-key-tick
+            :up! railgun-on-key-up
+            :abort! railgun-on-key-abort}
+  :prerequisites [{:skill-id :thunder-bolt :min-exp 0.3}
+                  {:skill-id :mag-manip :min-exp 1.0}])

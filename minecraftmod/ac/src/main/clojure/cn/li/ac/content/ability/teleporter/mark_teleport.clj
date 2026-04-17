@@ -15,6 +15,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
@@ -247,3 +248,33 @@
     (log/debug "MarkTeleport aborted")
     (catch Exception e
       (log/warn "MarkTeleport key-abort failed:" (ex-message e)))))
+
+(defskill! mark-teleport
+  :id :mark-teleport
+  :category-id :teleporter
+  :name-key "ability.skill.teleporter.mark_teleport"
+  :description-key "ability.skill.teleporter.mark_teleport.desc"
+  :icon "textures/abilities/teleporter/skills/mark_teleport.png"
+  :level 1
+  :controllable? true
+  :ctrl-id :mark-teleport
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 20
+  :pattern :release-cast
+  :cooldown {:mode :manual}
+  :cost {:up {:cp mark-teleport-cost-up-cp
+              :overload mark-teleport-cost-up-overload
+              :creative? mark-teleport-cost-creative?}}
+  :actions {:down! mark-teleport-on-key-down
+            :tick! mark-teleport-on-key-tick
+            :up! mark-teleport-on-key-up
+            :abort! mark-teleport-on-key-abort}
+  :fx {:start {:topic :mark-teleport/fx-start
+               :payload (fn [_] {})}
+       :update {:topic :mark-teleport/fx-update
+                :payload mark-teleport-fx-update-payload}
+       :perform {:topic :mark-teleport/fx-perform
+                 :payload mark-teleport-fx-perform-payload}
+       :end {:topic :mark-teleport/fx-end
+             :payload (fn [_] {})}})

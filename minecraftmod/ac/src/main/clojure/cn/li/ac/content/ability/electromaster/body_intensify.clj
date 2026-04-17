@@ -3,6 +3,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
@@ -186,3 +187,27 @@
     (log/debug "BodyIntensify charge aborted")
     (catch Exception e
       (log/warn "BodyIntensify key-abort failed:" (ex-message e)))))
+
+(defskill! body-intensify
+  :id :body-intensify
+  :category-id :electromaster
+  :name-key "ability.skill.electromaster.body_intensify"
+  :description-key "ability.skill.electromaster.body_intensify.desc"
+  :icon "textures/abilities/electromaster/skills/body_intensify.png"
+  :ui-position [97 15]
+  :level 4
+  :controllable? true
+  :ctrl-id :body-intensify
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 750
+  :pattern :charge-window
+  :cooldown {:mode :manual}
+  :cost {:down {:overload body-intensify-cost-down-overload}
+         :tick {:cp body-intensify-cost-tick-cp}}
+  :actions {:down! body-intensify-on-key-down
+            :tick! body-intensify-on-key-tick
+            :up! body-intensify-on-key-up
+            :abort! body-intensify-on-key-abort}
+  :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
+                  {:skill-id :current-charging :min-exp 1.0}])

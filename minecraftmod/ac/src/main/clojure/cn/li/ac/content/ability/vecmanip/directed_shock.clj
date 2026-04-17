@@ -11,6 +11,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.cooldown :as cd]
@@ -236,3 +237,25 @@
     (log/debug "DirectedShock aborted")
     (catch Exception e
       (log/warn "DirectedShock key-abort failed:" (ex-message e)))))
+
+(defskill! directed-shock
+  :id :directed-shock
+  :category-id :vecmanip
+  :name-key "ability.skill.vecmanip.directed_shock"
+  :description-key "ability.skill.vecmanip.directed_shock.desc"
+  :icon "textures/abilities/vecmanip/skills/dir_shock.png"
+  :ui-position [16 45]
+  :level 1
+  :controllable? false
+  :ctrl-id :directed-shock
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 60
+  :pattern :charge-window
+  :cooldown {:mode :manual}
+  :cost {:up {:cp directed-shock-cost-up-cp
+              :overload directed-shock-cost-up-overload}}
+  :actions {:down! directed-shock-on-key-down
+            :tick! directed-shock-on-key-tick
+            :up! directed-shock-on-key-up
+            :abort! directed-shock-on-key-abort})

@@ -14,6 +14,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
@@ -239,3 +240,26 @@
     (log/debug "ThunderClap charge aborted")
     (catch Exception e
       (log/warn "ThunderClap key-abort failed:" (ex-message e)))))
+
+(defskill! thunder-clap
+  :id :thunder-clap
+  :category-id :electromaster
+  :name-key "ability.skill.electromaster.thunder_clap"
+  :description-key "ability.skill.electromaster.thunder_clap.desc"
+  :icon "textures/abilities/electromaster/skills/thunder_clap.png"
+  :ui-position [204 80]
+  :level 1
+  :controllable? true
+  :ctrl-id :thunder-clap
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 1
+  :pattern :charge-window
+  :cooldown {:mode :manual}
+  :cost {:down {:overload thunder-clap-cost-down-overload}
+         :tick {:cp thunder-clap-cost-tick-cp}}
+  :actions {:down! thunder-clap-on-key-down
+            :tick! thunder-clap-on-key-tick
+            :up! thunder-clap-on-key-up
+            :abort! thunder-clap-on-key-abort}
+  :prerequisites [{:skill-id :thunder-bolt :min-exp 1.0}])

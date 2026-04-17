@@ -124,7 +124,11 @@
                   :transitions {}
                   :exp-policy {}
                   :cooldown-policy {}
-                  :state {}}
+                  :state {}
+                  :ops {}
+                  :perform []
+                  :aim {}
+                  :exp {}}
         ;; Runtime contract is spec-first. Legacy :on-key-* callback keys are
         ;; intentionally removed and rejected so that all lifecycle behavior goes
         ;; through :pattern + :actions.
@@ -143,22 +147,36 @@
         _ (when-not (keyword? (:pattern spec))
             (throw (ex-info "Skill :pattern is required"
                             {:skill-id id})))
-        _ (when-not (map? (:actions spec))
+        _ (when (and (contains? spec :actions) (not (map? (:actions spec))))
             (throw (ex-info "Skill :actions must be a map"
                             {:skill-id id})))
+        _ (when-not (or (vector? (:perform spec)) (nil? (:perform spec)))
+            (throw (ex-info "Skill :perform must be a vector or nil"
+                            {:skill-id id :value (:perform spec)})))
+        _ (when-not (or (map? (:ops spec)) (nil? (:ops spec)))
+            (throw (ex-info "Skill :ops must be a map or nil"
+                            {:skill-id id :value (:ops spec)})))
+        _ (when-not (or (map? (:aim spec)) (nil? (:aim spec)))
+            (throw (ex-info "Skill :aim must be a map or nil"
+                            {:skill-id id :value (:aim spec)})))
+        _ (when-not (or (map? (:exp spec)) (nil? (:exp spec)))
+            (throw (ex-info "Skill :exp must be a map or nil"
+                            {:skill-id id :value (:exp spec)})))
         _ (doseq [[k _v] (:actions spec)]
             (when-not (contains? allowed-action-keys k)
               (throw (ex-info "Unsupported action key in :actions"
                               {:skill-id id :action-key k}))))
-        _ (let [required (get required-action-keys (:pattern spec) #{})
-                missing  (seq (remove #(contains? (:actions spec) %) required))]
+        _ (let [actions-preview (merge {} (:actions defaults) (:actions spec))
+                required (get required-action-keys (:pattern spec) #{})
+                missing  (seq (remove #(contains? actions-preview %) required))]
             (when missing
               (throw (ex-info "Missing required actions for pattern"
                               {:skill-id id :pattern (:pattern spec) :missing missing}))))
-        _ (when-not (map? (:cooldown spec))
+        _ (when (and (contains? spec :cooldown) (not (map? (:cooldown spec))))
             (throw (ex-info "Skill :cooldown is required and must be a map"
                             {:skill-id id})))
-        _ (when-not (contains? #{:default :manual} (get-in spec [:cooldown :mode]))
+        _ (when-not (contains? #{:default :manual}
+                               (or (get-in spec [:cooldown :mode]) :default))
             (throw (ex-info "Skill :cooldown :mode must be :default or :manual"
                             {:skill-id id :cooldown (:cooldown spec)})))
         _ (doseq [k [:targeting :transitions :exp-policy :cooldown-policy :state]]
@@ -189,17 +207,24 @@
                          (cond
                            (fn? v) v
                            (var? v) (var-get v)
-                           (symbol? v)
-                           (try
-                             (var-get (requiring-resolve v))
-                             (catch Exception e
-                               (log/warn "Failed to resolve skill fn ref" id v (ex-message e))
-                               nil))
                            :else v))
+        normalize-op (fn [op]
+                       (when-not (and (vector? op)
+                                      (= 2 (count op))
+                                      (keyword? (first op))
+                                      (map? (second op)))
+                         (throw (ex-info "Each effect op must be [keyword map]"
+                                         {:skill-id id :op op})))
+                       op)
         merged (merge defaults spec)
         actions* (into {}
                        (map (fn [[k v]] [k (resolve-fn-ref v)]))
                        (or (:actions merged) {}))
+        ops* (into {}
+                   (map (fn [[stage ops]]
+                          [stage (mapv normalize-op (or ops []))]))
+                   (or (:ops merged) {}))
+        perform* (mapv normalize-op (or (:perform merged) []))
         fx* (into {}
                   (map (fn [[k evt]]
                          [k (if (map? evt)
@@ -208,6 +233,8 @@
                   (or (:fx merged) {}))
         full (-> merged
                  (assoc :actions actions*)
+                 (assoc :ops ops*)
+                 (assoc :perform perform*)
                  (assoc :fx fx*))]
     (swap! skill-registry assoc id full)
     (log/info "Registered skill" id "in category" category-id)

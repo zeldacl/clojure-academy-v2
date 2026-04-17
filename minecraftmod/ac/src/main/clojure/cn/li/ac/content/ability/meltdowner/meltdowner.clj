@@ -13,6 +13,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.learning :as learning]
             [cn.li.ac.ability.service.cooldown :as cd]
             [cn.li.ac.ability.event :as ability-evt]
@@ -457,3 +458,24 @@
     (log/debug "Meltdowner charge aborted")
     (catch Exception e
       (log/warn "Meltdowner key-abort failed:" (ex-message e)))))
+
+(defskill! meltdowner
+  :id :meltdowner
+  :category-id :meltdowner
+  :name-key "ability.skill.meltdowner.meltdowner"
+  :description-key "ability.skill.meltdowner.meltdowner.desc"
+  :icon "textures/abilities/meltdowner/skills/meltdowner.png"
+  :level 1
+  :controllable? true
+  :ctrl-id :meltdowner
+  :cp-consume-speed 0.0
+  :overload-consume-speed 0.0
+  :cooldown-ticks 200
+  :pattern :charge-window
+  :cooldown {:mode :manual}
+  :cost {:down {:overload meltdowner-cost-down-overload}
+         :tick {:cp meltdowner-cost-tick-cp}}
+  :actions {:down! meltdowner-on-key-down
+            :tick! meltdowner-on-key-tick
+            :up! meltdowner-on-key-up
+            :abort! meltdowner-on-key-abort})
