@@ -4,12 +4,10 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.cooldown :as cd]
-            [cn.li.ac.ability.event :as ability-evt]
+            [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.content.ability.common :as ability-common]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -34,7 +32,7 @@
 
 (defn- lerp
   [a b t]
-  (ability-common/lerp a b t))
+  (bal/lerp a b t))
 
 (defn- v+
   [a b]
@@ -119,8 +117,8 @@
     (ps/mark-dirty! player-id)
     true))
 
-(defn- get-skill-exp [player-id]
-  (ability-common/get-skill-exp player-id :railgun))
+(defn- skill-exp [player-id]
+  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :railgun :exp] 0.0)))
 
 (defn- player-state-pos
   [player-id]
@@ -150,11 +148,11 @@
 (defn- apply-railgun-cooldown!
   [player-id exp]
   (let [cd-ticks (int (Math/round (double (lerp 300.0 160.0 exp))))]
-    (ability-common/set-main-cooldown! player-id :railgun cd-ticks)))
+    (skill-effects/set-main-cooldown! player-id :railgun cd-ticks)))
 
 (defn- add-railgun-exp!
   [player-id amount]
-  (ability-common/add-skill-exp! player-id :railgun amount 1.0))
+  (skill-effects/add-skill-exp! player-id :railgun amount))
 
 (defn- clear-coin-window!
   [player-id]
@@ -202,14 +200,14 @@
   [{:keys [player-id]}]
   (let [qte (peek-coin-qte-window player-id (System/currentTimeMillis))]
     (if (:perform? qte)
-      (lerp 200.0 450.0 (get-skill-exp player-id))
+      (lerp 200.0 450.0 (skill-exp player-id))
       0.0)))
 
 (defn railgun-cost-down-overload
   [{:keys [player-id]}]
   (let [qte (peek-coin-qte-window player-id (System/currentTimeMillis))]
     (if (:perform? qte)
-      (lerp 180.0 120.0 (get-skill-exp player-id))
+      (lerp 180.0 120.0 (skill-exp player-id))
       0.0)))
 
 (defn- item-charge-ready?
@@ -225,13 +223,13 @@
 (defn railgun-cost-tick-cp
   [{:keys [player-id ctx-id player]}]
   (if (item-charge-ready? ctx-id player)
-    (lerp 200.0 450.0 (get-skill-exp player-id))
+    (lerp 200.0 450.0 (skill-exp player-id))
     0.0))
 
 (defn railgun-cost-tick-overload
   [{:keys [player-id ctx-id player]}]
   (if (item-charge-ready? ctx-id player)
-    (lerp 180.0 120.0 (get-skill-exp player-id))
+    (lerp 180.0 120.0 (skill-exp player-id))
     0.0))
 
 (defn- railgun-candidates
@@ -426,8 +424,7 @@
   1) Coin QTE perform when coin window progress > 0.7
   2) Otherwise start 20-tick iron-item charge"
   [{:keys [player-id ctx-id player cost-ok?]}]
-  (try
-    (let [exp (get-skill-exp player-id)
+  (let [exp (skill-exp player-id)
           now-ms (System/currentTimeMillis)
           qte (consume-coin-qte-window! player-id now-ms)]
       (cond
@@ -458,8 +455,6 @@
 
         :else
         (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :idle-no-trigger})))
-    (catch Exception e
-      (log/warn "Railgun key-down failed:" (ex-message e)))))
 
 (defn railgun-on-key-tick
   "Item-charge path: countdown to automatic perform at 20 ticks."
@@ -475,10 +470,10 @@
                 (if (and (accepted-item-in-hand? player)
                          (consume-item-for-shot! player)
                          cost-ok?)
-                  (let [{:keys [performed? reflection-hit? normal-hit-count]} (perform-main-shot! player-id ctx-id (get-skill-exp player-id))]
+                  (let [{:keys [performed? reflection-hit? normal-hit-count]} (perform-main-shot! player-id ctx-id (skill-exp player-id))]
                     (when performed?
                       (add-railgun-exp! player-id (if reflection-hit? 0.01 0.005))
-                      (apply-railgun-cooldown! player-id (get-skill-exp player-id))
+                      (apply-railgun-cooldown! player-id (skill-exp player-id))
                       (ctx/update-context! ctx-id assoc :skill-state
                                            {:fired true
                                             :mode :performed
@@ -487,14 +482,11 @@
                                        (assoc skill-state :fired false :mode :item-charge-failed)))
                 (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] 0))
               (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] (dec ticks-left)))))))
-    (catch Exception e
-      (log/warn "Railgun key-tick failed:" (ex-message e)))))
 
 (defn railgun-on-key-up
   "Release cancels unfinished item charge. Cooldown is applied only on successful perform."
   [{:keys [ctx-id]}]
-  (try
-    (when-let [ctx (ctx/get-context ctx-id)]
+  (when-let [ctx (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx)
             mode (:mode skill-state)
             fired (boolean (:fired skill-state))]
@@ -503,17 +495,12 @@
                                (assoc skill-state :mode :item-charge-cancelled :charge-ticks 0)))
         (when fired
           (log/debug "Railgun completed"))))
-    (catch Exception e
-      (log/warn "Railgun key-up failed:" (ex-message e)))))
 
 (defn railgun-on-key-abort
   "Clean up railgun state on abort."
   [{:keys [ctx-id]}]
-  (try
-    (ctx/update-context! ctx-id dissoc :skill-state)
-    (log/debug "Railgun aborted")
-    (catch Exception e
-      (log/warn "Railgun key-abort failed:" (ex-message e)))))
+  (ctx/update-context! ctx-id dissoc :skill-state)
+  (log/debug "Railgun aborted")))
 
 (defskill! railgun
   :id :railgun
@@ -542,3 +529,4 @@
             :abort! railgun-on-key-abort}
   :prerequisites [{:skill-id :thunder-bolt :min-exp 0.3}
                   {:skill-id :mag-manip :min-exp 1.0}])
+

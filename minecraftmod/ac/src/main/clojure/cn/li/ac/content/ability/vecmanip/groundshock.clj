@@ -17,11 +17,9 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.cooldown :as cd]
-            [cn.li.ac.ability.event :as ability-evt]
+            [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.content.ability.common :as ability-common]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -34,10 +32,10 @@
 (def ^:private ground-break-prob 0.3)
 
 (defn- lerp [a b t]
-  (ability-common/lerp a b t))
+  (bal/lerp a b t))
 
 (defn- clamp01 [x]
-  (max 0.0 (min 1.0 (double x))))
+  (bal/clamp01 x))
 
 (defn- v* [v scalar]
   {:x (* (double (:x v)) (double scalar))
@@ -93,22 +91,22 @@
   (* (+ 0.6 (* (rand) 0.3))
      (lerp 0.8 1.3 (clamp01 exp))))
 
-(defn- get-skill-exp [player-id]
-  (ability-common/get-skill-exp player-id :groundshock))
+(defn- skill-exp [player-id]
+  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :groundshock :exp] 0.0)))
 
 (defn- add-exp! [player-id amount]
-  (ability-common/add-skill-exp! player-id :groundshock (double amount) 1.0))
+  (skill-effects/add-skill-exp! player-id :groundshock amount))
 
 (defn groundshock-cost-up-cp
   [{:keys [player-id]}]
-  (cp-cost (clamp01 (get-skill-exp player-id))))
+  (cp-cost (clamp01 (skill-exp player-id))))
 
 (defn groundshock-cost-up-overload
   [{:keys [player-id]}]
-  (overload-cost (clamp01 (get-skill-exp player-id))))
+  (overload-cost (clamp01 (skill-exp player-id))))
 
 (defn- apply-cooldown! [player-id exp]
-  (ability-common/set-main-cooldown! player-id :groundshock (cooldown-ticks exp)))
+  (skill-effects/set-main-cooldown! player-id :groundshock (cooldown-ticks exp)))
 
 (defn- get-player-position
   "Get player position from teleportation protocol."
@@ -356,7 +354,7 @@
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
             charge-ticks (long (or (:charge-ticks skill-state) 0))
-            exp (clamp01 (get-skill-exp player-id))]
+            exp (clamp01 (skill-exp player-id))]
 
         ;; Check if charge is valid (5+ ticks) and player is on ground
         (if (and (>= charge-ticks min-charge-ticks)

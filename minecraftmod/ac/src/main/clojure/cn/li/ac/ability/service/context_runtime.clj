@@ -21,12 +21,18 @@
 (def INPUT-ABORTED :aborted)
 
 (defn- event-payload [ctx-map payload]
-  {:ctx-id (:id ctx-map)
-   :server-id (:server-id ctx-map)
-   :player-id (:player-uuid ctx-map)
-  :player (:player payload)
-   :skill-id (:skill-id ctx-map)
-   :payload payload})
+  (let [player-id (:player-uuid ctx-map)
+        skill-id  (:skill-id ctx-map)
+        exp       (double (or (get-in (ps/get-player-state player-id)
+                                      [:ability-data :skills skill-id :exp])
+                              0.0))]
+    {:ctx-id    (:id ctx-map)
+     :server-id (:server-id ctx-map)
+     :player-id player-id
+     :player    (:player payload)
+     :skill-id  skill-id
+     :exp       exp
+     :payload   payload}))
 
 (defn- dispatch-skill-callback! [ctx-map cb-key event-type payload]
   (when-let [spec (skill/get-skill (:skill-id ctx-map))]

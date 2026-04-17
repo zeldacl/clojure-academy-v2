@@ -1,4 +1,4 @@
-(ns cn.li.ac.content.ability.electromaster.mag-manip
+﻿(ns cn.li.ac.content.ability.electromaster.mag-manip
 	"MagManip skill port for Electromaster.
 
 	This implementation keeps the original gameplay intent in the current
@@ -9,13 +9,9 @@
 	(:require [clojure.string :as str]
 						[cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-						[cn.li.ac.ability.service.learning :as learning]
-						[cn.li.ac.ability.service.cooldown :as cd]
-						[cn.li.ac.ability.event :as ability-evt]
-						[cn.li.ac.ability.context :as ctx]
-						[cn.li.ac.content.ability.common :as ability-common]
-						[cn.li.mcmod.platform.raycast :as raycast]
-						[cn.li.mcmod.platform.entity :as entity]
+					[cn.li.ac.ability.balance :as bal]
+					[cn.li.ac.ability.context :as ctx]
+					[cn.li.ac.ability.service.skill-effects :as skill-effects]
 						[cn.li.mcmod.platform.entity-damage :as entity-damage]
 						[cn.li.mcmod.platform.world-effects :as world-effects]
 						[cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -61,9 +57,9 @@
 
 (defn- lerp
 	[a b t]
-	(ability-common/lerp a b t))
+	(bal/lerp a b t))
 
-(defn- v+
+(dbal
 	[a b]
 	{:x (+ (double (:x a)) (double (:x b)))
 	 :y (+ (double (:y a)) (double (:y b)))
@@ -99,12 +95,10 @@
 (defn- floor-int [value]
 	(int (Math/floor (double value))))
 
-(defn- get-skill-exp
-	[player-id]
-	(ability-common/get-skill-exp player-id :mag-manip))
-
-(defn- player-pos
-	[player-id]
+(defn- skill-exp [player-id]
+	(double (get-in (ps/get-player-state player-id) [:ability-data :skills :mag-manip :exp] 0.0)))
+skill-exp [player-id]
+	(double (get-in (ps/get-player-state player-id) [:ability-data :skills :mag-manip :exp] 0.0)
 	(get (ps/get-player-state player-id)
 			 :position
 			 {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}))
@@ -188,11 +182,11 @@
 ; Original: (int) MathUtils.lerpf(60, 40, ctx.getSkillExp())
 (defn- apply-mag-manip-cooldown!
 	[player-id exp]
-	(let [cd-ticks (int (Math/round (double (lerp 60.0 40.0 exp))))]
-		(ability-common/set-main-cooldown! player-id :mag-manip cd-ticks)))
+	(skill-effects/set-main-cooldown! player-id :mag-manip
+		(int (Math/round (double (bal/lerp 60.0 40.0 exp))))))
 
-; Original: consumption = lerpf(140, 270, exp); overload = lerpf(35, 20, exp)
-(defn- should-pay-up-cost?
+; skill-effects/set-main-cooldown! player-id :mag-manip
+		(int (Math/round (double (bal/lerp 60.0 40.0 exp)))
 	[player-id ctx-id]
 	(if-let [ctx-data (ctx/get-context ctx-id)]
 		(let [skill-state (:skill-state ctx-data)
@@ -210,13 +204,13 @@
 (defn mag-manip-cost-up-cp
 	[{:keys [player-id ctx-id]}]
 	(if (should-pay-up-cost? player-id ctx-id)
-		(lerp 140.0 270.0 (get-skill-exp player-id))
+		(lerp 140.0 270.0 (skill-exp player-id))
 		0.0))
 
 (defn mag-manip-cost-up-overload
 	[{:keys [player-id ctx-id]}]
 	(if (should-pay-up-cost? player-id ctx-id)
-		(lerp 35.0 20.0 (get-skill-exp player-id))
+		(lerp 35.0 20.0 (skill-exp player-id))
 		0.0))
 
 (defn mag-manip-cost-creative?
@@ -225,10 +219,10 @@
 
 (defn- add-mag-manip-exp!
 	[player-id amount]
-	(ability-common/add-skill-exp! player-id :mag-manip amount 1.0))
+	(skill-effects/add-skill-exp! player-id :mag-manip amount))
 
 (defn- distance-to-segment
-	[point seg-start seg-end]
+	[skill-effects/add-skill-exp! player-id :mag-manip amount
 	(let [ab (v- seg-end seg-start)
 				ap (v- point seg-start)
 				denom (max 1.0e-6 (dot ab ab))
@@ -252,8 +246,7 @@
 ; 3) if neither found, terminate context.
 (defn mag-manip-on-key-down
 	[{:keys [player-id ctx-id player]}]
-	(try
-		(let [exp (get-skill-exp player-id)
+	(let [exp (skill-exp player-id)
 					world-id (player-world-id player-id)
 					;; First check: does player hold a metal block in main hand?
 					hand-item-id (when player
@@ -306,16 +299,13 @@
 					;; No target at all
 					(ctx/update-context! ctx-id assoc :skill-state
 											 {:fired false
-												:mode :no-target}))))
-		(catch Exception e
-			(log/warn "MagManip key-down failed:" (ex-message e)))))
+												:mode :no-target})))))
 
 ; Original s_tick: just calls updateMoveTo() every tick.
 ; We track hold-ticks, update focus, and send FX to client every 2 ticks.
 (defn mag-manip-on-key-tick
 	[{:keys [player-id ctx-id]}]
-	(try
-		(when-let [ctx-data (ctx/get-context ctx-id)]
+	(when-let [ctx-data (ctx/get-context ctx-id)]
 			(let [skill-state (:skill-state ctx-data)]
 				(when (= :holding (:mode skill-state))
 					(let [ticks (inc (int (or (:hold-ticks skill-state) 0)))
@@ -326,20 +316,17 @@
 							(ctx/ctx-send-to-client! ctx-id :mag-manip/fx-hold
 														 {:mode :hold-loop
 															:focus focus
-															:block-id (get-in skill-state [:held-block :block-id])}))))))
-		(catch Exception e
-			(log/warn "MagManip key-tick failed:" (ex-message e)))))
+															:block-id (get-in skill-state [:held-block :block-id])})))))))
 
 ; Original s_perform: check distsq < 25, then ctx.consume, then throw with speed.
 ; Entity damage is always 10 (hardcoded in MagManipEntityBlock constructor).
 ; Exp gain on throw: 0.005F (ctx.addSkillExp(0.005F))
 (defn mag-manip-on-key-up
 	[{:keys [player-id ctx-id cost-ok?]}]
-	(try
-		(when-let [ctx-data (ctx/get-context ctx-id)]
+	(when-let [ctx-data (ctx/get-context ctx-id)]
 			(let [skill-state (:skill-state ctx-data)
 						held-block (get skill-state :held-block)
-						exp (get-skill-exp player-id)]
+					exp (skill-exp player-id)]
 				(if-not (and (= :holding (:mode skill-state)) held-block)
 					(ctx/update-context! ctx-id assoc :skill-state
 															 (assoc skill-state :fired false :mode :idle))
@@ -349,7 +336,7 @@
 								dist-sq (+ (Math/pow (- (:x player-now) (:x focus-pos)) 2.0)
 													 (Math/pow (- (:y player-now) (:y focus-pos)) 2.0)
 													 (Math/pow (- (:z player-now) (:z focus-pos)) 2.0))
-								too-far? (>= dist-sq 25.0)]
+					exp (skill-exp player-id)]
 						(if too-far?
 							;; Out of range: restore block, no cost, no throw
 							(do
@@ -418,19 +405,14 @@
 									(ctx/update-context! ctx-id assoc :skill-state
 																		 {:fired true
 																			:mode :thrown
-																			:held-block nil}))))))))
-		(catch Exception e
-			(log/warn "MagManip key-up failed:" (ex-message e)))))
+																			:held-block nil})))))))))
 
 (defn mag-manip-on-key-abort
 	[{:keys [ctx-id]}]
-	(try
-		(when-let [ctx-data (ctx/get-context ctx-id)]
+	(when-let [ctx-data (ctx/get-context ctx-id)]
 			(when-let [held (get-in ctx-data [:skill-state :held-block])]
 				(restore-held-block! held))
-			(ctx/update-context! ctx-id dissoc :skill-state))
-		(catch Exception e
-			(log/warn "MagManip key-abort failed:" (ex-message e)))))
+			(ctx/update-context! ctx-id dissoc :skill-state)))
 
 (defskill! mag-manip
   :id :mag-manip
@@ -455,3 +437,6 @@
             :up! mag-manip-on-key-up
             :abort! mag-manip-on-key-abort}
   :prerequisites [{:skill-id :mag-movement :min-exp 0.5}])
+
+
+

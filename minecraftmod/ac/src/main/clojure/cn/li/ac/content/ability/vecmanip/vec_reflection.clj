@@ -5,13 +5,11 @@
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.model.resource-data :as rdata]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
-            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -29,7 +27,9 @@
     "minecraft:experience_bottle"})
 
 (defonce ^:private reflecting-players (atom #{}))
-(declare get-skill-exp)
+
+(defn- skill-exp [player-id]
+  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :vec-reflection :exp] 0.0)))
 
 (defn- current-cp
   [player-id]
@@ -52,10 +52,7 @@
 
 (defn vec-reflection-cost-tick-cp
   [{:keys [player-id]}]
-  (scaling/lerp 15.0 11.0 (get-skill-exp player-id)))
-
-(defn- get-skill-exp [player-id]
-  (ability-common/get-skill-exp player-id :vec-reflection))
+  (scaling/lerp 15.0 11.0 (skill-exp player-id)))
 
 (defn- get-player-position [player-id]
   (when-let [teleportation (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
@@ -87,7 +84,7 @@
        first))
 
 (defn- add-exp! [player-id amount]
-  (ability-common/add-skill-exp! player-id :vec-reflection amount 1.0))
+  (fx-common/add-skill-exp! player-id :vec-reflection amount))
 
 (defn- send-fx-start! [ctx-id]
   (ctx/ctx-send-to-client! ctx-id :vec-reflection/fx-start {:mode :start}))

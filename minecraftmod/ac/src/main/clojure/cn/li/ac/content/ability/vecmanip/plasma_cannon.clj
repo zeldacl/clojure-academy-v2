@@ -19,11 +19,9 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.cooldown :as cd]
-            [cn.li.ac.ability.event :as ability-evt]
+            [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.content.ability.common :as ability-common]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -33,11 +31,8 @@
 ;; Scaling helpers (all values from original PlasmaCannon.scala)
 ;; ============================================================
 
-(defn- clamp01 [x]
-  (max 0.0 (min 1.0 (double x))))
-
 (defn- lerp [a b t]
-  (ability-common/lerp a b (clamp01 t)))
+  (bal/lerp a b (bal/clamp01 t)))
 
 (defn- vlen [v]
   (Math/sqrt (+ (* (double (:x v)) (double (:x v)))
@@ -73,7 +68,7 @@
 ;; ============================================================
 
 (defn get-skill-exp [player-id]
-  (clamp01 (ability-common/get-skill-exp player-id :plasma-cannon)))
+  (bal/clamp01 (double (get-in (ps/get-player-state player-id) [:ability-data :skills :plasma-cannon :exp] 0.0))))
 
 (defn- get-player-position [player-id]
   (or (when-let [tp (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
@@ -88,7 +83,7 @@
       "minecraft:overworld"))
 
 (defn- add-exp! [player-id amount]
-  (ability-common/add-skill-exp! player-id :plasma-cannon (double amount) 1.0))
+  (skill-effects/add-skill-exp! player-id :plasma-cannon amount))
 
 ;; Cost DSL hooks (used by content spec :cost)
 (defn plasma-cannon-cost-down-overload
@@ -109,7 +104,7 @@
         rd))))
 
 (defn- apply-cooldown! [player-id exp]
-  (ability-common/set-main-cooldown! player-id :plasma-cannon (cooldown-ticks exp)))
+  (skill-effects/set-main-cooldown! player-id :plasma-cannon (cooldown-ticks exp)))
 
 ;; ============================================================
 ;; FX messaging (server → client)

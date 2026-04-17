@@ -14,13 +14,10 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.cooldown :as cd]
+            [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.model.resource-data :as rdata]
-            [cn.li.ac.ability.event :as ability-evt]
             [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.service.skill-effects :as fx-common]
-            [cn.li.ac.content.ability.common :as ability-common]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.saved-locations :as saved-locations]
             [clojure.string :as str]
@@ -30,11 +27,8 @@
 (def ^:private teleport-radius 5.0)
 (def ^:private max-location-name-length 16)
 
-(defn- get-skill-exp [player-id]
-  (ability-common/get-skill-exp player-id :location-teleport))
-
-(defn- lerp [a b t]
-  (ability-common/lerp a b t))
+(defn- skill-exp [player-id]
+  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :location-teleport :exp] 0.0)))
 
 (defn- can-cross-dimension? [exp]
   (> (double exp) 0.8))
@@ -49,22 +43,22 @@
                 (* (- z2 z1) (- z2 z1)))))
 
 (defn- compute-cp-cost [exp distance cross-dimension?]
-  (let [base (lerp 200.0 150.0 exp)
+  (let [base (bal/lerp 200.0 150.0 exp)
         dim-penalty (if cross-dimension? 2.0 1.0)
         dist-mult (max 8.0 (Math/sqrt (min 800.0 (double distance))))]
     (* base dim-penalty dist-mult)))
 
 (defn- compute-cooldown [exp]
-  (int (lerp 30.0 20.0 exp)))
+  (int (bal/lerp 30.0 20.0 exp)))
 
 (defn- compute-exp-gain [distance]
   (if (>= (double distance) 200.0) 0.03 0.015))
 
 (defn- add-exp! [player-id amount]
-  (ability-common/add-skill-exp! player-id :location-teleport (double amount) 1.0))
+  (skill-effects/add-skill-exp! player-id :location-teleport (double amount)))
 
 (defn- consume-resource! [player-id overload cp]
-  (boolean (:success? (fx-common/perform-resource! player-id overload cp false))))
+  (boolean (:success? (skill-effects/perform-resource! player-id overload cp false))))
 
 (defn- current-pos [player-id]
   (when teleportation/*teleportation*
@@ -169,7 +163,7 @@
             (not saved-locations/*saved-locations*))
       {:success? false :error :service-unavailable}
       (let [name* (norm-name location-name)
-            exp (double (or (get-skill-exp player-id) 0.0))
+            exp (double (or (skill-exp player-id) 0.0))
             pos (current-pos player-id)
             dest (when (not (str/blank? name*))
                    (saved-locations/get-location saved-locations/*saved-locations* player-id name*))]
@@ -210,7 +204,7 @@
                   (do
                     (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
                     (add-exp! player-id (compute-exp-gain _dist))
-                    (ability-common/set-main-cooldown! player-id :location-teleport
+                    (skill-effects/set-main-cooldown! player-id :location-teleport
                                                        (compute-cooldown exp))
                     {:success? true
                      :name name*

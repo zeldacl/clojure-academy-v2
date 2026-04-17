@@ -1,213 +1,50 @@
-(ns cn.li.ac.content.ability.electromaster.thunder-bolt
+﻿(ns cn.li.ac.content.ability.electromaster.thunder-bolt
   "ThunderBolt skill - instant targeted lightning strike with AOE damage.
 
-  Aligned to original AcademyCraft ThunderBolt.scala behavior:
-  - Instant cast (on key down)
-  - Consumes overload lerp(50,27) and CP lerp(280,420) by exp
-  - Raycast combined (entity+block) at range 20; end point:
-      no hit  -> eye_pos + look_dir * 20
-      entity  -> hitVec + (0, eye_height, 0)
-      block   -> hitVec
-  - Spawn lightning bolt at end point
-  - Direct damage lerp(10,25) to primary target (entity hit)
-  - AOE damage lerp(6,15) to living entities within radius 8 of end point
-  - 80% chance Slowness IV (amplifier 3) 40 ticks on primary target when exp > 0.2
-  - Original also re-applies Slowness IV 20 ticks to primary target per AOE entity
-  - Exp: +0.005 if effective, +0.003 if not
-  - Cooldown: lerp(120,50) ticks
-  - Sends :thunder-bolt/fx-perform to client for arc + sound effects
-
-  No Minecraft imports."
-  (:require [cn.li.ac.ability.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.cooldown :as cd]
-            [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.service.skill-effects :as fx-common]
-            [cn.li.ac.content.ability.common :as ability-common]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.util.log :as log]))
-
-;; ============================================================================
-;; Constants (matching original ThunderBolt.scala)
-;; ============================================================================
-
-(def ^:private range-max 20.0)
-(def ^:private aoe-range 8.0)
-(def ^:private eye-height 1.62)
-
-;; ============================================================================
-;; Private helpers
-;; ============================================================================
-
-(defn- lerp [a b t]
-  (ability-common/lerp a b t))
-
-(defn- get-skill-exp [player-id]
-  (ability-common/get-skill-exp player-id :thunder-bolt))
-
-(defn- player-world-id [player-id]
-  (or (get-in (ps/get-player-state player-id) [:position :world-id])
-      "minecraft:overworld"))
-
-(defn thunder-bolt-cost-down-cp
-  [{:keys [player-id]}]
-  (let [exp (get-skill-exp player-id)]
-    (lerp 280.0 420.0 exp)))
-
-(defn thunder-bolt-cost-down-overload
-  [{:keys [player-id]}]
-  (let [exp (get-skill-exp player-id)]
-    (lerp 50.0 27.0 exp)))
-
-(defn- apply-cooldown!
-  "Set cooldown to lerp(120,50,exp) ticks."
-  [player-id exp]
-  (let [cd-ticks (int (Math/round (double (lerp 120.0 50.0 exp))))]
-    (ability-common/set-main-cooldown! player-id :thunder-bolt cd-ticks)))
-
-(defn- add-exp!
-  "Grant 0.005 exp if effective (hit something), 0.003 otherwise."
-  [player-id effective?]
-  (ability-common/add-skill-exp! player-id :thunder-bolt (if effective? 0.005 0.003) 1.0))
-
-;; ============================================================================
-;; Skill handlers
-;; ============================================================================
-
-(defn thunder-bolt-perform!
-  "Instant cast action (invoked by :pattern :instant)."
-  [{:keys [player-id ctx-id cost-ok?]}]
-  (try
-    (let [exp          (get-skill-exp player-id)
-          consumed?    (boolean cost-ok?)]
-      (when consumed?
-        (let [world-id     (player-world-id player-id)
-              damage-direct (lerp 10.0 25.0 exp)
-              damage-aoe    (lerp 6.0 15.0 exp)
-
-              ;; Player eye position
-              player-state  (ps/get-player-state player-id)
-              player-pos    (get player-state :position {:x 0.0 :y 64.0 :z 0.0})
-              eye-x         (double (:x player-pos))
-              eye-y         (+ (double (:y player-pos)) eye-height)
-              eye-z         (double (:z player-pos))
-
-              ;; Look direction (keys are :x :y :z)
-              look-vec      (when raycast/*raycast*
-                              (raycast/get-player-look-vector raycast/*raycast* player-id))
-              dx            (double (or (:x look-vec) 0.0))
-              dy            (double (or (:y look-vec) 0.0))
-              dz            (double (or (:z look-vec) 1.0))
-
-              ;; Raycast combined: prefer entity, fall back to block
-              hit           (when (and raycast/*raycast* look-vec)
-                              (raycast/raycast-combined raycast/*raycast*
-                                                        world-id
-                                                        eye-x eye-y eye-z
-                                                        dx dy dz
-                                                        range-max))
-
-              ;; End point of the strike (AOE center)
-              [end-x end-y end-z]
-              (if-not hit
-                [(+ eye-x (* dx range-max))
-                 (+ eye-y (* dy range-max))
-                 (+ eye-z (* dz range-max))]
-                (let [hx (double (get hit :x 0.0))
-                      hy (double (get hit :y 0.0))
-                      hz (double (get hit :z 0.0))]
-                  (if (= (:hit-type hit) :entity)
-                    [hx (+ hy eye-height) hz]
-                    [hx hy hz])))
-
-              hit-entity?   (= (:hit-type hit) :entity)
-              target-uuid   (when hit-entity? (:uuid hit))
-
-              ;; Find all living entities in AOE radius (excluding caster and primary target)
-              nearby        (when world-effects/*world-effects*
-                              (world-effects/find-entities-in-radius
-                                world-effects/*world-effects*
-                                world-id end-x end-y end-z aoe-range))
-              aoe-entities  (vec (filter (fn [{:keys [uuid]}]
-                                           (and (not= uuid player-id)
-                                                (not= uuid target-uuid)))
-                                         nearby))
-
-              effective?    (or hit-entity? (seq aoe-entities))]
-
-          ;; Spawn lightning at strike point
-          (when world-effects/*world-effects*
-            (world-effects/spawn-lightning! world-effects/*world-effects*
-                                            world-id end-x end-y end-z))
-
-          ;; Direct damage to primary target
-          (when (and hit-entity? entity-damage/*entity-damage*)
-            (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
-                                                world-id target-uuid
-                                                damage-direct :lightning))
-
-          ;; Slowness IV (amplifier 3), 40 ticks on primary target at exp > 0.2 with 80% chance
-          (when (and hit-entity?
-                     (> (double exp) 0.2)
-                     (< (rand) 0.8)
-                     potion-effects/*potion-effects*)
-            (potion-effects/apply-potion-effect! potion-effects/*potion-effects*
-                                                 target-uuid :slowness 40 3))
-
-          ;; AOE damage + re-apply slowness to primary target per original behavior
-          (doseq [{:keys [uuid]} aoe-entities]
-            (when entity-damage/*entity-damage*
-              (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
-                                                  world-id uuid
-                                                  damage-aoe :lightning))
-            ;; Original applies slowness to ad.target (not the AOE entity) inside this loop
-            (when (and target-uuid
-                       (> (double exp) 0.2)
-                       (< (rand) 0.8)
-                       potion-effects/*potion-effects*)
-              (potion-effects/apply-potion-effect! potion-effects/*potion-effects*
-                                                   target-uuid :slowness 20 3)))
-
-          ;; Send client effect: 3 main arcs + AOE arcs + sound
-          (ctx/ctx-send-to-client! ctx-id :thunder-bolt/fx-perform
-                                   {:start     {:x eye-x :y eye-y :z eye-z}
-                                    :end       {:x end-x :y end-y :z end-z}
-                                    :aoe-points (mapv (fn [{:keys [x y z]}]
-                                                        {:x (double x)
-                                                         :y (+ (double y) eye-height)
-                                                         :z (double z)})
-                                                      aoe-entities)})
-
-          ;; Exp and cooldown
-          (add-exp! player-id effective?)
-          (apply-cooldown! player-id exp)
-
-          (log/debug "ThunderBolt executed at" end-x end-y end-z
-                     "effective?" effective? "aoe-count" (count aoe-entities)))))
-    (catch Exception e
-      (log/warn "ThunderBolt execution failed:" (ex-message e))))
-  nil)
+  Pattern: :instant
+  Cost: CP lerp(280,420), overload lerp(50,27) by exp
+  Cooldown: lerp(120,50) ticks by exp
+  Exp: +0.005 effective / +0.003 ineffective"
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.ability.balance :refer [by-exp]]
+            [cn.li.ac.ability.effect.geom]
+            [cn.li.ac.ability.effect.damage]
+            [cn.li.ac.ability.effect.world]
+            [cn.li.ac.ability.effect.potion]
+            [cn.li.ac.ability.effect.fx]))
 
 (defskill! thunder-bolt
-  :id :thunder-bolt
+  :id          :thunder-bolt
   :category-id :electromaster
-  :name-key "ability.skill.electromaster.thunder_bolt"
+  :name-key    "ability.skill.electromaster.thunder_bolt"
   :description-key "ability.skill.electromaster.thunder_bolt.desc"
-  :icon "textures/abilities/electromaster/skills/thunder_bolt.png"
+  :icon        "textures/abilities/electromaster/skills/thunder_bolt.png"
   :ui-position [86 67]
-  :level 2
+  :level       2
   :controllable? false
-  :ctrl-id :thunder-bolt
-  :cp-consume-speed 0.0
-  :overload-consume-speed 0.0
-  :cooldown-ticks 100
-  :pattern :instant
-  :cooldown {:mode :manual}
-  :cost {:down {:cp thunder-bolt-cost-down-cp
-                :overload thunder-bolt-cost-down-overload}}
-  :actions {:perform! thunder-bolt-perform!}
-  :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
+  :ctrl-id     :thunder-bolt
+  :pattern     :instant
+  :cost        {:down {:cp       (by-exp 280.0 420.0)
+                       :overload (by-exp 50.0  27.0)}}
+  :cooldown-ticks (by-exp 120 50)
+  :exp         {:effective 0.005 :ineffective 0.003}
+  :perform     [[:aim-raycast  {:range 20}]
+                [:spawn-lightning {:at :hit}]
+                [:damage-direct  {:target     :hit
+                                  :amount     (by-exp 10.0 25.0)
+                                  :damage-type :lightning}]
+                [:damage-aoe     {:center     :hit
+                                  :radius     8.0
+                                  :amount     (by-exp 6.0 15.0)
+                                  :damage-type :lightning}]
+                [:potion-roll    {:target     :hit
+                                  :chance     0.8
+                                  :effect-id  :slowness
+                                  :ticks      40
+                                  :amplifier  3}]
+                [:fx             {:topic   :thunder-bolt/fx-perform
+                                  :payload (fn [evt]
+                                             {:start (:eye-pos evt)
+                                              :end   (:hit evt)})}]]
+  :prerequisites [{:skill-id :arc-gen         :min-exp 1.0}
                   {:skill-id :current-charging :min-exp 0.7}])

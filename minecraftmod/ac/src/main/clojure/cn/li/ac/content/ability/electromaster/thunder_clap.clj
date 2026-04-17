@@ -1,25 +1,18 @@
-(ns cn.li.ac.content.ability.electromaster.thunder-clap
-  "ThunderClap skill - channeled AOE lightning strike.
+﻿(ns cn.li.ac.content.ability.electromaster.thunder-clap
+  "ThunderClap - channeled AOE lightning strike.
 
-  1:1 behavior aligned to original AcademyCraft ThunderClap:
-  - Fixed charge window: 40..60 ticks
-  - Start: consume overload lerp(390,252)
-  - Tick: consume CP lerp(18,25) while ticks <= 40
-  - Auto-cast at 60 ticks; release-cast when ticks >= 40
-  - Targeting distance 40
-  - Damage: lerp(36,72,exp) * lerp(1.0,1.2,(ticks-40)/60)
-  - AOE radius: lerp(15,30,exp) with distance falloff
-  - Cooldown: ticks * lerp(10,6,exp)
-  - EXP gain on success: 0.003
-
-  No Minecraft imports."
+  Pattern: :charge-window (40..60 ticks)
+  Start overload: lerp(390,252)
+  Tick CP: lerp(18,25) while ticks <= 40
+  Damage: lerp(36,72,exp) * lerp(1.0,1.2,extra-ratio)
+  AOE radius: lerp(15,30,exp) with distance falloff
+  Cooldown: ticks * lerp(10,6,exp)
+  Exp: 0.003 per use"
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.cooldown :as cd]
-            [cn.li.ac.ability.event :as ability-evt]
+            [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.content.ability.common :as ability-common]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -30,236 +23,121 @@
 (def ^:private eye-height 1.62)
 (def ^:private target-distance 40.0)
 
-(defn- lerp [a b t]
-  (ability-common/lerp a b t))
-
-(defn- clamp01 [x]
-  (max 0.0 (min 1.0 (double x))))
-
-(defn- get-skill-exp [player-id]
-  (ability-common/get-skill-exp player-id :thunder-clap))
-
 (defn- player-world-id [player-id]
   (or (get-in (ps/get-player-state player-id) [:position :world-id])
       "minecraft:overworld"))
 
-(defn thunder-clap-cost-down-overload
-  [{:keys [player-id]}]
-  (lerp 390.0 252.0 (get-skill-exp player-id)))
+(defn- skill-exp [player-id]
+  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :thunder-clap :exp] 0.0)))
 
-(defn thunder-clap-cost-tick-cp
-  [{:keys [ctx-id player-id]}]
-  (if-let [ctx-data (ctx/get-context ctx-id)]
-    (let [ticks (inc (long (or (get-in ctx-data [:skill-state :ticks]) 0)))]
-      (if (<= ticks min-ticks)
-        (lerp 18.0 25.0 (get-skill-exp player-id))
-        0.0))
-    0.0))
-
-(defn- compute-damage [exp ticks]
-  (let [base (lerp 36.0 72.0 exp)
-        mult (lerp 1.0 1.2 (/ (- (double ticks) 40.0) 60.0))]
-    (* base mult)))
-
-(defn- compute-aoe-range [exp]
-  (lerp 15.0 30.0 exp))
-
-(defn- compute-cooldown [exp ticks]
-  (int (* (double ticks) (lerp 10.0 6.0 exp))))
-
-(defn- add-exp!
-  [player-id amount]
-  (ability-common/add-skill-exp! player-id :thunder-clap amount 1.0))
-
-(defn- current-eye-pos
-  [player-id]
-  (let [player-state (ps/get-player-state player-id)
-        player-pos (get player-state :position {:x 0.0 :y 64.0 :z 0.0})]
-    {:x (double (:x player-pos))
-     :y (+ (double (:y player-pos)) eye-height)
-     :z (double (:z player-pos))}))
-
-(defn- resolve-hit-pos
-  [player-id world-id]
-  (let [eye (current-eye-pos player-id)
-        look (when raycast/*raycast*
-               (raycast/get-player-look-vector raycast/*raycast* player-id))
-        dx (double (or (:x look) 0.0))
-        dy (double (or (:y look) 0.0))
-        dz (double (or (:z look) 1.0))
-        hit (when (and raycast/*raycast* look)
-              (raycast/raycast-combined raycast/*raycast*
-                                        world-id
-                                        (:x eye) (:y eye) (:z eye)
-                                        dx dy dz
-                                        target-distance))
-        dist (double (or (:distance hit) target-distance))
-        ray-x (+ (:x eye) (* dx dist))
-        ray-y (+ (:y eye) (* dy dist))
-        ray-z (+ (:z eye) (* dz dist))]
+(defn- resolve-hit-pos [player-id world-id]
+  (let [pstate (ps/get-player-state player-id)
+        pos    (get pstate :position {:x 0.0 :y 64.0 :z 0.0})
+        ex     (double (:x pos))
+        ey     (+ (double (:y pos)) eye-height)
+        ez     (double (:z pos))
+        look   (when raycast/*raycast* (raycast/get-player-look-vector raycast/*raycast* player-id))
+        dx     (double (or (:x look) 0.0))
+        dy     (double (or (:y look) 0.0))
+        dz     (double (or (:z look) 1.0))
+        hit    (when (and raycast/*raycast* look)
+                 (raycast/raycast-combined raycast/*raycast* world-id ex ey ez dx dy dz target-distance))
+        dist   (double (or (:distance hit) target-distance))]
     (if (= (:hit-type hit) :entity)
-      {:x ray-x :y (+ ray-y eye-height) :z ray-z}
-      {:x ray-x :y ray-y :z ray-z})))
+      {:x (+ ex (* dx dist)) :y (+ ey (* dy dist) eye-height) :z (+ ez (* dz dist))}
+      {:x (+ ex (* dx dist)) :y (+ ey (* dy dist))             :z (+ ez (* dz dist))})))
 
-(defn- send-fx-start! [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-start {:mode :start}))
-
-(defn- send-fx-update! [ctx-id ticks hit-pos]
-  (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-update
-                           {:ticks ticks
-                            :charge-ratio (clamp01 (/ (double ticks) (double max-ticks)))
-                            :target hit-pos}))
-
-(defn- send-fx-end! [ctx-id performed?]
-  (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-end {:performed? (boolean performed?)}))
-
-(defn- execute-thunder-clap!
-  [{:keys [player-id ctx-id ticks hit-pos exp]}]
-  (let [world-id (player-world-id player-id)
-        aoe-range (compute-aoe-range exp)
-        damage-max (compute-damage exp ticks)
-        cooldown (max 1 (compute-cooldown exp ticks))
-      {:keys [x y z]} hit-pos
-      center-x (double x)
-      center-y (double y)
-      center-z (double z)]
-
+(defn- execute-thunder-clap! [player-id ctx-id ticks hit-pos exp]
+  (let [world-id  (player-world-id player-id)
+        aoe-range (bal/lerp 15.0 30.0 exp)
+        base-dmg  (bal/lerp 36.0 72.0 exp)
+        mult      (bal/lerp 1.0 1.2 (/ (- (double ticks) 40.0) 60.0))
+        dmg-max   (* base-dmg mult)
+        cooldown  (max 1 (int (* (double ticks) (bal/lerp 10.0 6.0 exp))))
+        {:keys [x y z]} hit-pos
+        cx (double x) cy (double y) cz (double z)]
     (when world-effects/*world-effects*
       (world-effects/spawn-lightning! world-effects/*world-effects* world-id x y z)
-
-      ;; Match original attackRange behavior: radial falloff and exclude caster.
       (when entity-damage/*entity-damage*
-          (doseq [{:keys [uuid x y z]}
+        (doseq [{:keys [uuid x y z]}
                 (world-effects/find-entities-in-radius world-effects/*world-effects* world-id x y z aoe-range)]
           (when (not= uuid player-id)
-          (let [dx (- (double x) center-x)
-            dy (- (double y) center-y)
-            dz (- (double z) center-z)
-                  dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
-                  factor (- 1.0 (clamp01 (/ dist (max 1.0e-6 aoe-range))))
-                  applied (* damage-max factor)]
+            (let [dx (- (double x) cx) dy (- (double y) cy) dz (- (double z) cz)
+                  dist   (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+                  factor (- 1.0 (bal/clamp01 (/ dist (max 1.0e-6 aoe-range))))
+                  applied (* dmg-max factor)]
               (when (> applied 0.0)
                 (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
-                                                    world-id uuid
-                                                    applied :lightning)))))))
-
-    (ability-common/set-main-cooldown! player-id :thunder-clap cooldown)
-    (add-exp! player-id 0.003)
-    (send-fx-end! ctx-id true)
+                                                    world-id uuid applied :lightning)))))))
+    (skill-effects/set-main-cooldown! player-id :thunder-clap cooldown)
+    (skill-effects/add-skill-exp! player-id :thunder-clap 0.003)
+    (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-end {:performed? true})
     (ctx/update-context! ctx-id update :skill-state assoc :performed? true)
-    (log/debug "ThunderClap executed at" x y z
-               "ticks" ticks
-               "damage-max" (int damage-max)
-               "aoe-range" (format "%.2f" aoe-range))))
-
-(defn thunder-clap-on-key-down
-  "Initialize charge state when key pressed."
-  [{:keys [player-id ctx-id cost-ok?]}]
-  (try
-    (if-not cost-ok?
-      (do
-        (log/debug "ThunderClap start failed: insufficient resource")
-        (ctx/terminate-context! ctx-id nil))
-      (let [world-id (player-world-id player-id)
-            hit-pos (resolve-hit-pos player-id world-id)]
-        (ctx/update-context! ctx-id assoc :skill-state
-                             {:ticks 0
-                              :hit-pos hit-pos
-                              :performed? false})
-        (send-fx-start! ctx-id)
-        (send-fx-update! ctx-id 0 hit-pos)
-        (log/debug "ThunderClap charge started")))
-    (catch Exception e
-      (log/warn "ThunderClap key-down failed:" (ex-message e)))))
-
-(defn thunder-clap-on-key-tick
-  "Update charge progress each tick."
-  [{:keys [player-id ctx-id cost-ok?]}]
-  (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
-      (let [skill-state (:skill-state ctx-data)
-            performed? (:performed? skill-state false)]
-        (when-not performed?
-          (let [exp (get-skill-exp player-id)
-                world-id (player-world-id player-id)
-                old-ticks (long (or (:ticks skill-state) 0))
-                ticks (inc old-ticks)
-                hit-pos (resolve-hit-pos player-id world-id)]
-            (if-not cost-ok?
-              (do
-                (send-fx-end! ctx-id false)
-                (ctx/terminate-context! ctx-id nil)
-                (log/debug "ThunderClap aborted: insufficient CP at tick" ticks))
-              (do
-                (ctx/update-context! ctx-id update :skill-state assoc
-                                     :ticks ticks
-                                     :hit-pos hit-pos)
-                (send-fx-update! ctx-id ticks hit-pos)
-
-                (when (>= ticks max-ticks)
-                  (execute-thunder-clap! {:player-id player-id
-                                          :ctx-id ctx-id
-                                          :ticks ticks
-                                          :hit-pos hit-pos
-                                          :exp exp})
-                  (ctx/terminate-context! ctx-id nil))))))))
-    (catch Exception e
-      (log/warn "ThunderClap key-tick failed:" (ex-message e)))))
-
-(defn thunder-clap-on-key-up
-  "Execute ThunderClap when key released."
-  [{:keys [player-id ctx-id]}]
-  (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
-      (let [skill-state (:skill-state ctx-data)
-            ticks (long (or (:ticks skill-state) 0))
-            performed? (:performed? skill-state false)]
-        (when-not performed?
-          (if (< ticks min-ticks)
-            (do
-              (send-fx-end! ctx-id false)
-              (log/debug "ThunderClap: insufficient charge, ticks" ticks))
-            (let [exp (get-skill-exp player-id)
-                  world-id (player-world-id player-id)
-                  hit-pos (or (:hit-pos skill-state)
-                              (resolve-hit-pos player-id world-id))]
-              (execute-thunder-clap! {:player-id player-id
-                                      :ctx-id ctx-id
-                                      :ticks ticks
-                                      :hit-pos hit-pos
-                                      :exp exp}))))))
-    (catch Exception e
-      (log/warn "ThunderClap key-up failed:" (ex-message e)))))
-
-(defn thunder-clap-on-key-abort
-  "Clean up charge state on abort."
-  [{:keys [ctx-id]}]
-  (try
-    (send-fx-end! ctx-id false)
-    (ctx/update-context! ctx-id dissoc :skill-state)
-    (log/debug "ThunderClap charge aborted")
-    (catch Exception e
-      (log/warn "ThunderClap key-abort failed:" (ex-message e)))))
+    (log/debug "ThunderClap executed ticks" ticks "dmg-max" (int dmg-max) "aoe" (format "%.1f" aoe-range))))
 
 (defskill! thunder-clap
-  :id :thunder-clap
+  :id          :thunder-clap
   :category-id :electromaster
-  :name-key "ability.skill.electromaster.thunder_clap"
+  :name-key    "ability.skill.electromaster.thunder_clap"
   :description-key "ability.skill.electromaster.thunder_clap.desc"
-  :icon "textures/abilities/electromaster/skills/thunder_clap.png"
+  :icon        "textures/abilities/electromaster/skills/thunder_clap.png"
   :ui-position [204 80]
-  :level 1
+  :level       1
   :controllable? true
-  :ctrl-id :thunder-clap
-  :cp-consume-speed 0.0
-  :overload-consume-speed 0.0
-  :cooldown-ticks 1
-  :pattern :charge-window
-  :cooldown {:mode :manual}
-  :cost {:down {:overload thunder-clap-cost-down-overload}
-         :tick {:cp thunder-clap-cost-tick-cp}}
-  :actions {:down! thunder-clap-on-key-down
-            :tick! thunder-clap-on-key-tick
-            :up! thunder-clap-on-key-up
-            :abort! thunder-clap-on-key-abort}
+  :ctrl-id     :thunder-clap
+  :pattern     :charge-window
+  :cooldown    {:mode :manual}
+  :cost        {:down {:overload (fn [{:keys [exp]}] (bal/lerp 390.0 252.0 (bal/clamp01 exp)))}
+                :tick {:cp       (fn [{:keys [exp ctx-id]}]
+                                   (if-let [ctx-data (ctx/get-context ctx-id)]
+                                     (let [ticks (inc (long (or (get-in ctx-data [:skill-state :ticks]) 0)))]
+                                       (if (<= ticks min-ticks)
+                                         (bal/lerp 18.0 25.0 (bal/clamp01 exp))
+                                         0.0))
+                                     0.0))}}
+  :actions
+  {:down!  (fn [{:keys [player-id ctx-id cost-ok?]}]
+             (if-not cost-ok?
+               (ctx/terminate-context! ctx-id nil)
+               (let [world-id (player-world-id player-id)
+                     hit-pos  (resolve-hit-pos player-id world-id)]
+                 (ctx/update-context! ctx-id assoc :skill-state
+                                      {:ticks 0 :hit-pos hit-pos :performed? false})
+                 (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-start {:mode :start})
+                 (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-update
+                                          {:ticks 0 :charge-ratio 0.0 :target hit-pos}))))
+   :tick!  (fn [{:keys [player-id ctx-id cost-ok? exp]}]
+             (when-let [ctx-data (ctx/get-context ctx-id)]
+               (let [ss         (:skill-state ctx-data)
+                     performed? (get ss :performed? false)]
+                 (when-not performed?
+                   (if-not cost-ok?
+                     (do (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-end {:performed? false})
+                         (ctx/terminate-context! ctx-id nil))
+                     (let [world-id (player-world-id player-id)
+                           ticks    (inc (long (or (:ticks ss) 0)))
+                           hit-pos  (resolve-hit-pos player-id world-id)]
+                       (ctx/update-context! ctx-id update :skill-state assoc
+                                            :ticks ticks :hit-pos hit-pos)
+                       (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-update
+                                                {:ticks ticks
+                                                 :charge-ratio (bal/clamp01 (/ ticks (double max-ticks)))
+                                                 :target hit-pos})
+                       (when (>= ticks max-ticks)
+                         (execute-thunder-clap! player-id ctx-id ticks hit-pos (bal/clamp01 exp))
+                         (ctx/terminate-context! ctx-id nil))))))))
+   :up!    (fn [{:keys [player-id ctx-id exp]}]
+             (when-let [ctx-data (ctx/get-context ctx-id)]
+               (let [ss         (:skill-state ctx-data)
+                     ticks      (long (or (:ticks ss) 0))
+                     performed? (get ss :performed? false)]
+                 (when-not performed?
+                   (if (< ticks min-ticks)
+                     (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-end {:performed? false})
+                     (let [world-id (player-world-id player-id)
+                           hit-pos  (or (:hit-pos ss) (resolve-hit-pos player-id world-id))]
+                       (execute-thunder-clap! player-id ctx-id ticks hit-pos (bal/clamp01 exp))))))))
+   :abort! (fn [{:keys [ctx-id]}]
+             (ctx/ctx-send-to-client! ctx-id :thunder-clap/fx-end {:performed? false})
+             (ctx/update-context! ctx-id dissoc :skill-state))}
   :prerequisites [{:skill-id :thunder-bolt :min-exp 1.0}])

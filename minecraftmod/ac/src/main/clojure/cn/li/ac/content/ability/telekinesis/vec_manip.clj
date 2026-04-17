@@ -1,14 +1,6 @@
 (ns cn.li.ac.content.ability.telekinesis.vec-manip
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.content.ability.common :as ability-common]))
-
-(defn vec-manip-on-key-tick
-  [{:keys [player-id]}]
-  (ability-common/add-skill-exp! player-id :vec-manip 0.0025))
-
-(defn vec-manip-on-key-up
-  [{:keys [player-id]}]
-  (ability-common/add-skill-exp! player-id :vec-manip 0.01))
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]))
 
 (defskill! vec-manip
   :id :vec-manip
@@ -26,5 +18,7 @@
   :cost {:tick {:mode :runtime-speed
                 :cp-speed 0.9
                 :overload-speed 0.8}}
-  :actions {:tick! vec-manip-on-key-tick
-            :up! vec-manip-on-key-up})
+  :actions {:tick! (fn [{:keys [player-id]}]
+                     (skill-effects/add-skill-exp! player-id :vec-manip 0.0025))
+            :up!   (fn [{:keys [player-id]}]
+                     (skill-effects/add-skill-exp! player-id :vec-manip 0.01))})

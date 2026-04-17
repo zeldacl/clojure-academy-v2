@@ -14,13 +14,11 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.cooldown :as cd]
-            [cn.li.ac.ability.event :as ability-evt]
+            [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.model.resource-data :as rdata]
             [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.content.ability.common :as ability-common]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -33,10 +31,10 @@
 (def ^:private max-increment 50.0)
 
 (defn- lerp [a b t]
-  (ability-common/lerp a b t))
+  (bal/lerp a b t))
 
 (defn- clamp01 [x]
-  (max 0.0 (min 1.0 (double x))))
+  (bal/clamp01 x))
 
 (defn- v+ [a b]
   {:x (+ (double (:x a)) (double (:x b)))
@@ -95,8 +93,8 @@
         up (normalize (cross right dir))]
     [right up]))
 
-(defn- get-skill-exp [player-id]
-  (ability-common/get-skill-exp player-id :meltdowner))
+(defn- skill-exp [player-id]
+  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :meltdowner :exp] 0.0)))
 
 (defn- player-pos [player-id]
   (get (ps/get-player-state player-id) :position {:world-id "minecraft:overworld"
@@ -108,7 +106,7 @@
 
 (defn meltdowner-cost-down-overload
   [{:keys [player-id]}]
-  (lerp 200.0 170.0 (get-skill-exp player-id)))
+  (lerp 200.0 170.0 (skill-exp player-id)))
 
 (defn meltdowner-cost-tick-cp
   [{:keys [player-id ctx-id]}]
@@ -116,7 +114,7 @@
     (if (boolean (:performed? skill-state))
       0.0
       (double (or (:cp-per-tick skill-state)
-                  (lerp 10.0 15.0 (get-skill-exp player-id)))))
+                  (lerp 10.0 15.0 (skill-exp player-id)))))
     0.0))
 
 (defn- enforce-overload-floor!
@@ -134,11 +132,11 @@
   [player-id exp ct]
   (let [rate (lerp 0.8 1.2 (/ (- (double ct) 20.0) 20.0))
         cd-ticks (int (* rate 20.0 (lerp 15.0 7.0 exp)))]
-    (ability-common/set-main-cooldown! player-id :meltdowner cd-ticks)))
+    (skill-effects/set-main-cooldown! player-id :meltdowner cd-ticks)))
 
 (defn- add-meltdowner-exp!
   [player-id amount]
-  (ability-common/add-skill-exp! player-id :meltdowner amount 1.0))
+  (skill-effects/add-skill-exp! player-id :meltdowner amount))
 
 (defn- send-fx-start! [ctx-id]
   (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-start {:mode :start}))
@@ -367,8 +365,7 @@
 (defn meltdowner-on-key-down
   "Initialize Meltdowner charging."
   [{:keys [player-id ctx-id cost-ok?]}]
-  (try
-    (let [exp (get-skill-exp player-id)
+  (let [exp (skill-exp player-id)
           initial-overload (lerp 200.0 170.0 exp)]
       (if-not cost-ok?
         (do
@@ -384,14 +381,11 @@
           (send-fx-start! ctx-id)
           (send-fx-update! ctx-id 0)
           (log/debug "Meltdowner charge started"))))
-    (catch Exception e
-      (log/warn "Meltdowner key-down failed:" (ex-message e)))))
 
 (defn meltdowner-on-key-tick
   "Advance charging; consume CP and enforce overload floor."
   [{:keys [player-id ctx-id cost-ok?]}]
-  (try
-    (when-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
+  (when-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
       (let [performed? (boolean (:performed? skill-state))]
         (when-not performed?
           (let [ticks (inc (int (or (:ticks skill-state) 0)))
@@ -415,17 +409,14 @@
 
               (zero? (mod ticks 20))
               (log/debug "Meltdowner charging:" (int (* 100.0 (clamp01 (/ ticks ticks-max)))) "%"))))))
-    (catch Exception e
-      (log/warn "Meltdowner key-tick failed:" (ex-message e)))))
 
 (defn meltdowner-on-key-up
   "Perform Meltdowner on release if minimum charge reached."
   [{:keys [player-id ctx-id]}]
-  (try
-    (when-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
+  (when-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
       (let [ticks (int (or (:ticks skill-state) 0))
             performed? (boolean (:performed? skill-state))
-            exp (get-skill-exp player-id)]
+            exp (skill-exp player-id)]
         (when-not performed?
           (if (< ticks ticks-min)
             (do
@@ -446,18 +437,13 @@
                 (do
                   (send-fx-end! ctx-id false)
                   (log/debug "Meltdowner perform failed"))))))))
-    (catch Exception e
-      (log/warn "Meltdowner key-up failed:" (ex-message e)))))
 
 (defn meltdowner-on-key-abort
   "Clean up charge state on abort."
   [{:keys [ctx-id]}]
-  (try
-    (send-fx-end! ctx-id false)
-    (ctx/update-context! ctx-id dissoc :skill-state)
-    (log/debug "Meltdowner charge aborted")
-    (catch Exception e
-      (log/warn "Meltdowner key-abort failed:" (ex-message e)))))
+  (send-fx-end! ctx-id false)
+  (ctx/update-context! ctx-id dissoc :skill-state)
+  (log/debug "Meltdowner charge aborted")))
 
 (defskill! meltdowner
   :id :meltdowner

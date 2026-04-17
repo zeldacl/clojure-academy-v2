@@ -1,4 +1,4 @@
-(ns cn.li.ac.content.ability.vecmanip.storm-wing
+﻿(ns cn.li.ac.content.ability.vecmanip.storm-wing
   "StormWing - Level 3 Vector Manipulation skill.
 
   Toggle flight ability with directional control.
@@ -9,7 +9,7 @@
     or hover when no direction (float up 0.078/tick, or 0.1 near ground)
   - Speed: (if exp<0.45 0.7 1.2) * lerp(2,3,exp)
   - Acceleration: 0.16 per tick toward target velocity
-  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in range±10 each tick
+  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in range卤10 each tick
   - Max exp (=1.0): on transition to flight, knockback nearby entities (range 3, strength 2.0)
   - On terminate: set cooldown lerp(30,10,exp) ticks
 
@@ -23,11 +23,9 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.service.cooldown :as cd]
-            [cn.li.ac.ability.event :as ability-evt]
+            [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.content.ability.common :as ability-common]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -43,14 +41,14 @@
 (def ^:private ACCEL 0.16)
 
 (defn- lerp [a b t]
-  (ability-common/lerp a b t))
+  (bal/lerp a b t))
 
 ;; ============================================================================
 ;; Helpers
 ;; ============================================================================
 
-(defn- get-skill-exp [player-id]
-  (ability-common/get-skill-exp player-id :storm-wing))
+(defn- skill-exp [player-id]
+  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :storm-wing :exp] 0.0)))
 
 (defn- get-player-pos [player-id]
   (when teleportation/*teleportation*
@@ -58,15 +56,15 @@
 
 (defn- apply-cooldown! [player-id exp]
   (let [cd-ticks (int (Math/round (double (lerp 30.0 10.0 exp))))]
-    (ability-common/set-main-cooldown! player-id :storm-wing cd-ticks)))
+    (skill-effects/set-main-cooldown! player-id :storm-wing cd-ticks)))
 
 (defn storm-wing-cost-tick-cp
   [{:keys [player-id]}]
-  (lerp 40.0 25.0 (get-skill-exp player-id)))
+  (lerp 40.0 25.0 (skill-exp player-id)))
 
 (defn storm-wing-cost-tick-overload
   [{:keys [player-id]}]
-  (lerp 10.0 7.0 (get-skill-exp player-id)))
+  (lerp 10.0 7.0 (skill-exp player-id)))
 
 (defn storm-wing-cost-creative?
   [{:keys [player]}]
@@ -75,7 +73,7 @@
                   (catch Exception _ false)))))
 
 (defn- add-exp! [player-id]
-  (ability-common/add-skill-exp! player-id :storm-wing 0.00005 1.0))
+  (skill-effects/add-skill-exp! player-id :storm-wing 0.00005))
 
 (defn- break-soft-blocks! [player-id world-id px py pz]
   (when block-manip/*block-manipulation*
@@ -146,7 +144,7 @@
 (defn storm-wing-on-key-down
   [{:keys [ctx-id player-id]}]
   (try
-    (let [exp (get-skill-exp player-id)
+    (let [exp (skill-exp player-id)
           charge-needed (int (Math/round (double (lerp 70.0 30.0 exp))))]
       (ctx/update-context! ctx-id assoc :skill-state
                            {:phase :charging
@@ -164,7 +162,7 @@
       (let [skill-state (:skill-state ctx-data)]
         (when skill-state
           (let [phase (:phase skill-state)
-                exp   (get-skill-exp player-id)]
+                exp   (skill-exp player-id)]
             (case phase
               :charging
               (let [ct     (long (:charge-ticks skill-state 0))
@@ -259,7 +257,7 @@
 (defn storm-wing-on-key-up
   [{:keys [player-id ctx-id]}]
   (try
-    (let [exp (get-skill-exp player-id)]
+    (let [exp (skill-exp player-id)]
       (apply-cooldown! player-id exp)
       (send-fx-end! ctx-id)
       (ctx/update-context! ctx-id dissoc :skill-state))
@@ -269,7 +267,7 @@
 (defn storm-wing-on-key-abort
   [{:keys [player-id ctx-id]}]
   (try
-    (let [exp (get-skill-exp player-id)]
+    (let [exp (skill-exp player-id)]
       (apply-cooldown! player-id exp)
       (send-fx-end! ctx-id)
       (ctx/update-context! ctx-id dissoc :skill-state))
@@ -305,3 +303,4 @@
             :up! storm-wing-on-key-up
             :abort! storm-wing-on-key-abort}
   :prerequisites [{:skill-id :vec-accel :min-exp 0.6}])
+

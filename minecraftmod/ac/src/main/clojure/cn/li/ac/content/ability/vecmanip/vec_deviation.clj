@@ -20,7 +20,6 @@
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
-            [cn.li.ac.content.ability.common :as ability-common]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -41,8 +40,8 @@
 (def ^:private small-fireball-ids
   #{"minecraft:small_fireball"})
 
-(defn- get-skill-exp [player-id]
-  (ability-common/get-skill-exp player-id :vec-deviation))
+(defn- skill-exp [player-id]
+  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :vec-deviation :exp] 0.0)))
 
 (defn- current-cp
   [player-id]
@@ -54,7 +53,7 @@
 
 (defn vec-deviation-cost-tick-cp
   [{:keys [player-id]}]
-  (scaling/lerp 13.0 5.0 (get-skill-exp player-id)))
+  (scaling/lerp 13.0 5.0 (skill-exp player-id)))
 
 (defn- get-player-position
   "Get player position from teleportation protocol."
@@ -92,7 +91,7 @@
 
 (defn- add-exp!
   [player-id amount]
-  (ability-common/add-skill-exp! player-id :vec-deviation amount 1.0))
+  (fx-common/add-skill-exp! player-id :vec-deviation amount))
 
 (defn- send-fx-stop-entity! [ctx-id entity marked?]
   (ctx/ctx-send-to-client! ctx-id :vec-deviation/fx-stop-entity

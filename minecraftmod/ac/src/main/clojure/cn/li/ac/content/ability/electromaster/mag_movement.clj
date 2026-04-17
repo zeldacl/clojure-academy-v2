@@ -15,11 +15,10 @@
   (:require [clojure.string :as str]
             [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.event :as ability-evt]
+            [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
             [cn.li.ac.ability.model.resource-data :as rd]
-            [cn.li.ac.content.ability.common :as ability-common]
+            [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -28,10 +27,6 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private accel 0.08)
-
-(defn- lerp
-  [a b t]
-  (ability-common/lerp a b t))
 
 (defn- distance-3d
   [ax ay az bx by bz]
@@ -54,8 +49,8 @@
       (str "minecraft:" (subs id (count "entity.minecraft.")))
       :else id)))
 
-(defn- get-skill-exp [player-id]
-  (ability-common/get-skill-exp player-id :mag-movement))
+(defn- skill-exp [player-id]
+  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :mag-movement :exp] 0.0)))
 
 (def ^:private normal-metal-blocks
   #{"minecraft:rail"
@@ -116,13 +111,13 @@
 
 (defn mag-movement-cost-down-overload
   [{:keys [player-id]}]
-  (lerp 60.0 30.0 (get-skill-exp player-id)))
+  (bal/lerp 60.0 30.0 (skill-exp player-id)))
 
 (defn mag-movement-cost-tick-cp
   [{:keys [player-id ctx-id]}]
   (if-let [ctx-data (ctx/get-context ctx-id)]
     (if (get-in ctx-data [:skill-state :has-target])
-      (lerp 15.0 8.0 (get-skill-exp player-id))
+      (bal/lerp 15.0 8.0 (skill-exp player-id))
       0.0)
     0.0))
 
@@ -177,8 +172,8 @@
 
 (defn- add-mag-movement-exp!
   [player-id traveled-distance]
-  (let [exp-gain (max 0.005 (* 0.0011 (double traveled-distance)))]
-    (ability-common/add-skill-exp! player-id :mag-movement exp-gain 1.0)))
+  (skill-effects/add-skill-exp! player-id :mag-movement
+                                (max 0.005 (* 0.0011 (double traveled-distance)))))
 
 (defn- send-fx-start!
   [ctx-id]
@@ -243,40 +238,34 @@
 (defn mag-movement-on-key-down
   "Initialize mag movement when key pressed."
   [{:keys [player-id ctx-id cost-ok?]}]
-  (try
-    (let [exp (get-skill-exp player-id)
-          state-pos (player-pos player-id)]
-      (if-not cost-ok?
-        (do
-          (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
+  (let [exp        (skill-exp player-id)
+        state-pos  (player-pos player-id)]
+    (if-not cost-ok?
+      (do (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
           (log/debug "MagMovement: insufficient resource for activation"))
-        (if-let [{:keys [target-x target-y target-z] :as target-state}
-                 (resolve-target player-id exp)]
-          (let [velocity-now (when player-motion/*player-motion*
-                               (player-motion/get-velocity player-motion/*player-motion* player-id))]
-            (ctx/update-context! ctx-id assoc :skill-state
-                                 (merge target-state
-                                        {:has-target true
-                                         :movement-ticks 0
-                                         :overload-floor (lerp 60.0 30.0 exp)
-                                         :start-x (double (:x state-pos))
-                                         :start-y (double (:y state-pos))
-                                         :start-z (double (:z state-pos))
-                                         :motion-x (double (or (:x velocity-now) 0.0))
-                                         :motion-y (double (or (:y velocity-now) 0.0))
-                                         :motion-z (double (or (:z velocity-now) 0.0))}))
-            (send-fx-start! ctx-id)
-            (send-fx-update! ctx-id target-x target-y target-z)
-            (log/debug "MagMovement started"
-                       (:target-kind target-state)
-                       "distance" (int (distance-3d (:x state-pos) (:y state-pos) (:z state-pos)
-                                                     target-x target-y target-z))))
-          (do
-            (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
+      (if-let [{:keys [target-x target-y target-z] :as target-state}
+               (resolve-target player-id exp)]
+        (let [velocity-now (when player-motion/*player-motion*
+                             (player-motion/get-velocity player-motion/*player-motion* player-id))]
+          (ctx/update-context! ctx-id assoc :skill-state
+                               (merge target-state
+                                      {:has-target true
+                                       :movement-ticks 0
+                                       :overload-floor (bal/lerp 60.0 30.0 exp)
+                                       :start-x (double (:x state-pos))
+                                       :start-y (double (:y state-pos))
+                                       :start-z (double (:z state-pos))
+                                       :motion-x (double (or (:x velocity-now) 0.0))
+                                       :motion-y (double (or (:y velocity-now) 0.0))
+                                       :motion-z (double (or (:z velocity-now) 0.0))}))
+          (send-fx-start! ctx-id)
+          (send-fx-update! ctx-id target-x target-y target-z)
+          (log/debug "MagMovement started"
+                     (:target-kind target-state)
+                     "distance" (int (distance-3d (:x state-pos) (:y state-pos) (:z state-pos)
+                                                   target-x target-y target-z))))
+        (do (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
             (log/debug "MagMovement: no valid magnetic target")))))
-    (catch Exception e
-      (log/warn "MagMovement key-down failed:" (ex-message e)))))
-
 (defn mag-movement-on-key-tick
   "Continue magnetic movement each tick."
   [{:keys [player-id ctx-id cost-ok?]}]
@@ -337,37 +326,26 @@
                     (ctx/update-context! ctx-id assoc-in [:skill-state :motion-z] next-z)
                     (send-fx-update! ctx-id tx ty tz)
                     (when (zero? (mod movement-ticks 10))
-                      (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds"))))))))))
-    (catch Exception e
-      (log/warn "MagMovement key-tick failed:" (ex-message e)))))
+                      (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))
 
 (defn mag-movement-on-key-up
   "Complete magnetic movement when key released."
   [{:keys [player-id ctx-id]}]
-  (try
-    (when-let [ctx (ctx/get-context ctx-id)]
-      (let [skill-state (:skill-state ctx)
-            has-target (:has-target skill-state)]
-
-        (when has-target
-          (finish-movement! player-id ctx-id skill-state)
-          (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false)
-          (log/debug "MagMovement completed: ticks" (:movement-ticks skill-state)))))
-    (catch Exception e
-      (log/warn "MagMovement key-up failed:" (ex-message e)))))
+  (when-let [ctx (ctx/get-context ctx-id)]
+    (let [skill-state (:skill-state ctx)
+          has-target  (:has-target skill-state)]
+      (when has-target
+        (finish-movement! player-id ctx-id skill-state)
+        (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false)
+        (log/debug "MagMovement completed: ticks" (:movement-ticks skill-state)))))
 
 (defn mag-movement-on-key-abort
   "Clean up movement state on abort."
   [{:keys [player-id ctx-id]}]
-  (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
-      (finish-movement! player-id ctx-id (:skill-state ctx-data)))
-    (ctx/update-context! ctx-id dissoc :skill-state)
-    (log/debug "MagMovement aborted")
-    (catch Exception e
-      (log/warn "MagMovement key-abort failed:" (ex-message e)))))
-
-(defskill! mag-movement
+  (when-let [ctx-data (ctx/get-context ctx-id)]
+    (finish-movement! player-id ctx-id (:skill-state ctx-data)))
+  (ctx/update-context! ctx-id dissoc :skill-state)
+  (log/debug "MagMovement aborted"))(defskill! mag-movement
   :id :mag-movement
   :category-id :electromaster
   :name-key "ability.skill.electromaster.mag_movement"
