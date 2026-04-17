@@ -9,48 +9,25 @@
   - Visual: Arc with wiggle animation
   - Audio: Looping ambient sound
   - Resets fall damage on completion
-  - Grants experience based on distance traveled
-
-  No Minecraft imports."
+  - Grants experience based on distance traveled"
   (:require [clojure.string :as str]
-            [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.balance :as bal]
+            [cn.li.ac.ability.balance :as bal :refer [by-exp]]
             [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.model.resource-data :as rd]
+            [cn.li.ac.ability.effect :as effect]
+            [cn.li.ac.ability.effect.geom :as geom]
+            [cn.li.ac.ability.effect.motion]
+            [cn.li.ac.ability.effect.state]
+            [cn.li.ac.ability.effect.fx]
+            [cn.li.ac.ability.player-state :as ps]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.player-motion :as player-motion]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private accel 0.08)
-
-(defn- distance-3d
-  [ax ay az bx by bz]
-  (let [dx (- (double ax) (double bx))
-        dy (- (double ay) (double by))
-        dz (- (double az) (double bz))]
-    (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
-
-(defn- normalize-id
-  [raw-id]
-  (let [id (some-> raw-id str str/lower-case)]
-    (cond
-      (nil? id) nil
-      (str/includes? id ":") id
-      (str/starts-with? id "block.minecraft.")
-      (str "minecraft:" (subs id (count "block.minecraft.")))
-      (str/starts-with? id "item.minecraft.")
-      (str "minecraft:" (subs id (count "item.minecraft.")))
-      (str/starts-with? id "entity.minecraft.")
-      (str "minecraft:" (subs id (count "entity.minecraft.")))
-      :else id)))
-
-(defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :mag-movement :exp] 0.0)))
 
 (def ^:private normal-metal-blocks
   #{"minecraft:rail"
@@ -81,59 +58,37 @@
     "my_mod:entity_mag_hook"
     "ac:entity_mag_hook"})
 
+(defn- normalize-id
+  [raw-id]
+  (let [id (some-> raw-id str str/lower-case)]
+    (cond
+      (nil? id) nil
+      (str/includes? id ":") id
+      (str/starts-with? id "block.minecraft.")
+      (str "minecraft:" (subs id (count "block.minecraft.")))
+      (str/starts-with? id "item.minecraft.")
+      (str "minecraft:" (subs id (count "item.minecraft.")))
+      (str/starts-with? id "entity.minecraft.")
+      (str "minecraft:" (subs id (count "entity.minecraft.")))
+      :else id)))
+
 (defn- is-metal-block? [block-id exp]
-  (let [id (normalize-id block-id)
+  (let [id      (normalize-id block-id)
         normal? (contains? normal-metal-blocks id)
-        weak? (contains? weak-metal-blocks id)
-        metal? (or normal? weak?)]
-    ;; Keep original behavior: both checks effectively require "metal" only.
+        weak?   (contains? weak-metal-blocks id)
+        metal?  (or normal? weak?)]
     (and (if (< (double exp) 0.6) metal? true)
          (or weak? metal?))))
 
-(defn- is-metal-entity?
-  [entity-type]
+(defn- is-metal-entity? [entity-type]
   (contains? metallic-entity-types (normalize-id entity-type)))
 
-(defn- player-pos
-  [player-id]
+(defn- player-pos [player-id]
   (get (ps/get-player-state player-id)
        :position
        {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}))
 
-(defn- player-world-id
-  [player-id]
-  (or (get-in (ps/get-player-state player-id) [:position :world-id])
-      "minecraft:overworld"))
-
-(defn- eye-pos
-  [{:keys [x y z]}]
-  {:x (double x) :y (+ (double y) 1.62) :z (double z)})
-
-(defn mag-movement-cost-down-overload
-  [{:keys [player-id]}]
-  (bal/lerp 60.0 30.0 (skill-exp player-id)))
-
-(defn mag-movement-cost-tick-cp
-  [{:keys [player-id ctx-id]}]
-  (if-let [ctx-data (ctx/get-context ctx-id)]
-    (if (get-in ctx-data [:skill-state :has-target])
-      (bal/lerp 15.0 8.0 (skill-exp player-id))
-      0.0)
-    0.0))
-
-(defn mag-movement-cost-creative?
-  [{:keys [player]}]
-  (boolean (and player (entity/player-creative? player))))
-
-(defn- keep-overload-floor!
-  [player-id overload-floor]
-  (when-let [state (ps/get-player-state player-id)]
-    (let [cur (double (get-in state [:resource-data :cur-overload] 0.0))]
-      (when (< cur (double overload-floor))
-        (ps/update-resource-data! player-id rd/set-cur-overload overload-floor)))))
-
-(defn- try-adjust
-  [from to]
+(defn- try-adjust [from to]
   (let [d (- (double to) (double from))]
     (if (< (Math/abs d) accel)
       (double to)
@@ -148,225 +103,207 @@
     (let [candidates (world-effects/find-entities-in-radius
                        world-effects/*world-effects*
                        (or target-world-id "minecraft:overworld")
-                       (double target-x)
-                       (double target-y)
-                       (double target-z)
+                       (double target-x) (double target-y) (double target-z)
                        4.0)
-          matched (some (fn [ent]
-                          (when (= (:uuid ent) target-entity-uuid)
-                            ent))
-                        candidates)]
+          matched (some #(when (= (:uuid %) target-entity-uuid) %) candidates)]
       (when matched
         (assoc skill-state
                :target-x (double (:x matched))
                :target-y (+ (double (:y matched)) 1.0)
                :target-z (double (:z matched)))))))
 
-(defn- get-traveled-distance
-  [player-id skill-state]
-  (let [{:keys [x y z]} (player-pos player-id)]
-    (distance-3d x y z
-                 (double (:start-x skill-state))
-                 (double (:start-y skill-state))
-                 (double (:start-z skill-state)))))
-
-(defn- add-mag-movement-exp!
-  [player-id traveled-distance]
-  (skill-effects/add-skill-exp! player-id :mag-movement
-                                (max 0.005 (* 0.0011 (double traveled-distance)))))
-
-(defn- send-fx-start!
-  [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :mag-movement/fx-start {:mode :start}))
-
-(defn- send-fx-update!
-  [ctx-id x y z]
-  (ctx/ctx-send-to-client! ctx-id :mag-movement/fx-update
-                           {:mode :update
-                            :target {:x (double x) :y (double y) :z (double z)}}))
-
-(defn- send-fx-end!
-  [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :mag-movement/fx-end {:mode :end}))
-
-(defn- finish-movement!
-  [player-id ctx-id skill-state]
-  (when skill-state
-    (add-mag-movement-exp! player-id (get-traveled-distance player-id skill-state))
-    (when teleportation/*teleportation*
-      (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
-    (send-fx-end! ctx-id)))
-
-(defn- resolve-target
-  [player-id exp]
-  (when-let [look-vec (when raycast/*raycast*
-                        (raycast/get-player-look-vector raycast/*raycast* player-id))]
-    (let [{:keys [x y z]} (eye-pos (player-pos player-id))
-          world-id (player-world-id player-id)
-          hit (raycast/raycast-combined raycast/*raycast*
-                                        world-id
-                                        x y z
-                                        (double (:x look-vec))
-                                        (double (:y look-vec))
-                                        (double (:z look-vec))
-                                        25.0)
-          hit-type (:hit-type hit)]
-      (case hit-type
+(defn- resolve-target [player-id exp]
+  (when-let [look (when raycast/*raycast*
+                    (raycast/get-player-look-vector raycast/*raycast* player-id))]
+    (let [eye      (geom/eye-pos player-id)
+          world-id (geom/world-id-of player-id)
+          hit      (raycast/raycast-combined raycast/*raycast*
+                                             world-id
+                                             (:x eye) (:y eye) (:z eye)
+                                             (double (:x look))
+                                             (double (:y look))
+                                             (double (:z look))
+                                             25.0)]
+      (case (:hit-type hit)
         :block
         (let [block-id (normalize-id (:block-id hit))]
           (when (is-metal-block? block-id exp)
-            {:target-kind :block
+            {:target-kind     :block
              :target-world-id world-id
-             :target-x (+ 0.5 (double (:x hit)))
-             :target-y (+ 0.5 (double (:y hit)))
-             :target-z (+ 0.5 (double (:z hit)))
+             :target-x        (+ 0.5 (double (:x hit)))
+             :target-y        (+ 0.5 (double (:y hit)))
+             :target-z        (+ 0.5 (double (:z hit)))
              :target-block-id block-id}))
-
         :entity
         (let [entity-type (normalize-id (:type hit))]
           (when (is-metal-entity? entity-type)
-            {:target-kind :entity
-             :target-world-id world-id
+            {:target-kind        :entity
+             :target-world-id    world-id
              :target-entity-uuid (:uuid hit)
              :target-entity-type entity-type
-             :target-x (double (:x hit))
-             :target-y (+ (double (:y hit)) 1.0)
-             :target-z (double (:z hit))}))
-
+             :target-x           (double (:x hit))
+             :target-y           (+ (double (:y hit)) 1.0)
+             :target-z           (double (:z hit))}))
         nil))))
 
-(defn mag-movement-on-key-down
-  "Initialize mag movement when key pressed."
-  [{:keys [player-id ctx-id cost-ok?]}]
-  (let [exp        (skill-exp player-id)
-        state-pos  (player-pos player-id)]
-    (if-not cost-ok?
-      (do (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
-          (log/debug "MagMovement: insufficient resource for activation"))
+;; ---------------------------------------------------------------------------
+;; Cost fn (tick CP is conditional on having a target)
+;; ---------------------------------------------------------------------------
+
+(defn- tick-cp-cost [{:keys [ctx-id exp]}]
+  (if-let [ctx (ctx/get-context ctx-id)]
+    (if (get-in ctx [:skill-state :has-target])
+      (bal/lerp 15.0 8.0 (double (or exp 0.0)))
+      0.0)
+    0.0))
+
+;; ---------------------------------------------------------------------------
+;; Actions
+;; ---------------------------------------------------------------------------
+
+(defn- finish-movement! [player-id skill-state evt]
+  (when skill-state
+    (let [{:keys [x y z]} (player-pos player-id)
+          traveled        (geom/vdist {:x x :y y :z z}
+                                      {:x (:start-x skill-state)
+                                       :y (:start-y skill-state)
+                                       :z (:start-z skill-state)})]
+      (skill-effects/add-skill-exp! player-id :mag-movement
+                                    (max 0.005 (* 0.0011 traveled))))
+    (effect/run-op! evt [:reset-fall-damage nil])
+    (effect/run-op! evt [:fx {:topic :mag-movement/fx-end
+                              :payload {:mode :end}}])))
+
+(defn- on-down! [{:keys [player-id ctx-id cost-ok? exp] :as evt}]
+  (if-not cost-ok?
+    (do (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
+        (log/debug "MagMovement: insufficient resource for activation"))
+    (let [state-pos (player-pos player-id)]
       (if-let [{:keys [target-x target-y target-z] :as target-state}
-               (resolve-target player-id exp)]
+               (resolve-target player-id (double (or exp 0.0)))]
         (let [velocity-now (when player-motion/*player-motion*
                              (player-motion/get-velocity player-motion/*player-motion* player-id))]
           (ctx/update-context! ctx-id assoc :skill-state
                                (merge target-state
                                       {:has-target true
                                        :movement-ticks 0
-                                       :overload-floor (bal/lerp 60.0 30.0 exp)
-                                       :start-x (double (:x state-pos))
-                                       :start-y (double (:y state-pos))
-                                       :start-z (double (:z state-pos))
-                                       :motion-x (double (or (:x velocity-now) 0.0))
-                                       :motion-y (double (or (:y velocity-now) 0.0))
-                                       :motion-z (double (or (:z velocity-now) 0.0))}))
-          (send-fx-start! ctx-id)
-          (send-fx-update! ctx-id target-x target-y target-z)
-          (log/debug "MagMovement started"
-                     (:target-kind target-state)
-                     "distance" (int (distance-3d (:x state-pos) (:y state-pos) (:z state-pos)
-                                                   target-x target-y target-z))))
+                                       :overload-floor (bal/lerp 60.0 30.0 (double (or exp 0.0)))
+                                       :start-x        (double (:x state-pos))
+                                       :start-y        (double (:y state-pos))
+                                       :start-z        (double (:z state-pos))
+                                       :motion-x       (double (or (:x velocity-now) 0.0))
+                                       :motion-y       (double (or (:y velocity-now) 0.0))
+                                       :motion-z       (double (or (:z velocity-now) 0.0))}))
+          (effect/run-op! evt [:fx {:topic :mag-movement/fx-start
+                                    :payload {:mode :start}}])
+          (effect/run-op! evt [:fx {:topic   :mag-movement/fx-update
+                                    :payload {:mode   :update
+                                              :target {:x (double target-x)
+                                                       :y (double target-y)
+                                                       :z (double target-z)}}}])
+          (log/debug "MagMovement started" (:target-kind target-state)))
         (do (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
             (log/debug "MagMovement: no valid magnetic target"))))))
-(defn mag-movement-on-key-tick
-  "Continue magnetic movement each tick."
-  [{:keys [player-id ctx-id cost-ok?]}]
-  (try
-    (when-let [ctx (ctx/get-context ctx-id)]
-      (let [skill-state (:skill-state ctx)
-            has-target (:has-target skill-state)]
 
-        (when has-target
-          (let [updated-state (if (= :entity (:target-kind skill-state))
-                                (update-entity-target skill-state)
-                                skill-state)]
-            (if-not updated-state
-              (do
-                (finish-movement! player-id ctx-id skill-state)
-                (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false))
-              (let [movement-ticks (inc (int (:movement-ticks updated-state)))
-                    _ (ctx/update-context! ctx-id assoc :skill-state (assoc updated-state :movement-ticks movement-ticks))
-                    _ (keep-overload-floor! player-id (:overload-floor updated-state))]
-                (if-not cost-ok?
-                  (do
-                    (finish-movement! player-id ctx-id updated-state)
-                    (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false))
-                  (let [p (player-pos player-id)
-                        tx (double (:target-x updated-state))
-                        ty (double (:target-y updated-state))
-                        tz (double (:target-z updated-state))
-                        dx (- tx (double (:x p)))
-                        dy (- ty (double (:y p)))
-                        dz (- tz (double (:z p)))
-                        dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
-                        scale (if (> dist 1.0e-6) dist 1.0)
-                        desired-x (/ dx scale)
-                        desired-y (/ dy scale)
-                        desired-z (/ dz scale)
-                        player-vel (when player-motion/*player-motion*
-                                     (player-motion/get-velocity player-motion/*player-motion* player-id))
-                        cur-vx (double (or (:x player-vel) 0.0))
-                        cur-vy (double (or (:y player-vel) 0.0))
-                        cur-vz (double (or (:z player-vel) 0.0))
-                        mx (double (:motion-x updated-state))
-                        my (double (:motion-y updated-state))
-                        mz (double (:motion-z updated-state))
-                        speed-sq-last (+ (* cur-vx cur-vx) (* cur-vy cur-vy) (* cur-vz cur-vz))
-                        speed-sq-m (+ (* mx mx) (* my my) (* mz mz))
-                        [base-x base-y base-z] (if (> (Math/abs (- speed-sq-m speed-sq-last)) 0.5)
-                                                 [cur-vx cur-vy cur-vz]
-                                                 [mx my mz])
-                        next-x (try-adjust base-x desired-x)
-                        next-y (try-adjust base-y desired-y)
-                        next-z (try-adjust base-z desired-z)]
-                    (when player-motion/*player-motion*
-                      (player-motion/set-velocity! player-motion/*player-motion*
-                                                   player-id
-                                                   next-x next-y next-z))
-                    (ctx/update-context! ctx-id assoc-in [:skill-state :motion-x] next-x)
-                    (ctx/update-context! ctx-id assoc-in [:skill-state :motion-y] next-y)
-                    (ctx/update-context! ctx-id assoc-in [:skill-state :motion-z] next-z)
-                    (send-fx-update! ctx-id tx ty tz)
-                    (when (zero? (mod movement-ticks 10))
-                      (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))
-
-(defn mag-movement-on-key-up
-  "Complete magnetic movement when key released."
-  [{:keys [player-id ctx-id]}]
+(defn- on-tick! [{:keys [player-id ctx-id cost-ok?] :as evt}]
   (when-let [ctx (ctx/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           has-target  (:has-target skill-state)]
       (when has-target
-        (finish-movement! player-id ctx-id skill-state)
+        (let [updated-state (if (= :entity (:target-kind skill-state))
+                              (update-entity-target skill-state)
+                              skill-state)]
+          (if-not updated-state
+            (do (finish-movement! player-id skill-state evt)
+                (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false))
+            (let [movement-ticks (inc (int (:movement-ticks updated-state)))]
+              (ctx/update-context! ctx-id assoc :skill-state
+                                   (assoc updated-state :movement-ticks movement-ticks))
+              (effect/run-op! evt [:overload-floor {:floor (:overload-floor updated-state)}])
+              (if-not cost-ok?
+                (do (finish-movement! player-id updated-state evt)
+                    (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false))
+                (let [p         (player-pos player-id)
+                      tx        (double (:target-x updated-state))
+                      ty        (double (:target-y updated-state))
+                      tz        (double (:target-z updated-state))
+                      dx        (- tx (double (:x p)))
+                      dy        (- ty (double (:y p)))
+                      dz        (- tz (double (:z p)))
+                      dist      (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+                      scale     (if (> dist 1.0e-6) dist 1.0)
+                      desired-x (/ dx scale)
+                      desired-y (/ dy scale)
+                      desired-z (/ dz scale)
+                      player-vel (when player-motion/*player-motion*
+                                   (player-motion/get-velocity player-motion/*player-motion* player-id))
+                      cur-vx    (double (or (:x player-vel) 0.0))
+                      cur-vy    (double (or (:y player-vel) 0.0))
+                      cur-vz    (double (or (:z player-vel) 0.0))
+                      mx        (double (:motion-x updated-state))
+                      my        (double (:motion-y updated-state))
+                      mz        (double (:motion-z updated-state))
+                      speed-sq-last (+ (* cur-vx cur-vx) (* cur-vy cur-vy) (* cur-vz cur-vz))
+                      speed-sq-m    (+ (* mx mx) (* my my) (* mz mz))
+                      [base-x base-y base-z] (if (> (Math/abs (- speed-sq-m speed-sq-last)) 0.5)
+                                               [cur-vx cur-vy cur-vz]
+                                               [mx my mz])
+                      next-x    (try-adjust base-x desired-x)
+                      next-y    (try-adjust base-y desired-y)
+                      next-z    (try-adjust base-z desired-z)]
+                  (when player-motion/*player-motion*
+                    (player-motion/set-velocity! player-motion/*player-motion*
+                                                 player-id next-x next-y next-z))
+                  (ctx/update-context! ctx-id assoc-in [:skill-state :motion-x] next-x)
+                  (ctx/update-context! ctx-id assoc-in [:skill-state :motion-y] next-y)
+                  (ctx/update-context! ctx-id assoc-in [:skill-state :motion-z] next-z)
+                  (effect/run-op! evt [:fx {:topic   :mag-movement/fx-update
+                                            :payload {:mode   :update
+                                                      :target {:x tx :y ty :z tz}}}])
+                  (when (zero? (mod movement-ticks 10))
+                    (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))
+
+(defn- on-up! [{:keys [player-id ctx-id] :as evt}]
+  (when-let [ctx (ctx/get-context ctx-id)]
+    (let [skill-state (:skill-state ctx)
+          has-target  (:has-target skill-state)]
+      (when has-target
+        (finish-movement! player-id skill-state evt)
         (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false)
         (log/debug "MagMovement completed: ticks" (:movement-ticks skill-state))))))
 
-(defn mag-movement-on-key-abort
-  "Clean up movement state on abort."
-  [{:keys [player-id ctx-id]}]
-  (when-let [ctx-data (ctx/get-context ctx-id)]
-    (finish-movement! player-id ctx-id (:skill-state ctx-data)))
+(defn- on-abort! [{:keys [player-id ctx-id] :as evt}]
+  (when-let [ctx (ctx/get-context ctx-id)]
+    (finish-movement! player-id (:skill-state ctx) evt))
   (ctx/update-context! ctx-id dissoc :skill-state)
-  (log/debug "MagMovement aborted"))(defskill! mag-movement
-  :id :mag-movement
-  :category-id :electromaster
-  :name-key "ability.skill.electromaster.mag_movement"
+  (log/debug "MagMovement aborted"))
+
+
+
+(defskill! mag-movement
+  :id              :mag-movement
+  :category-id     :electromaster
+  :name-key        "ability.skill.electromaster.mag_movement"
   :description-key "ability.skill.electromaster.mag_movement.desc"
-  :icon "textures/abilities/electromaster/skills/mag_movement.png"
-  :ui-position [137 35]
-  :level 3
-  :controllable? true
-  :ctrl-id :mag-movement
+  :icon            "textures/abilities/electromaster/skills/mag_movement.png"
+  :ui-position     [137 35]
+  :level           3
+  :controllable?   true
+  :ctrl-id         :mag-movement
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks 60
-  :pattern :charge-window
-  :cooldown {:mode :manual}
-  :cost {:down {:overload mag-movement-cost-down-overload
-                :creative? mag-movement-cost-creative?}
-         :tick {:cp mag-movement-cost-tick-cp
-                :creative? mag-movement-cost-creative?}}
-  :actions {:down! mag-movement-on-key-down
-            :tick! mag-movement-on-key-tick
-            :up! mag-movement-on-key-up
-            :abort! mag-movement-on-key-abort}
-  :prerequisites [{:skill-id :arc-gen :min-exp 1.0}
+  :cooldown-ticks  60
+  :pattern         :charge-window
+  :cooldown        {:mode :manual}
+  :cost {:down {:overload   (by-exp 60.0 30.0)
+                :creative?  (fn [{:keys [player]}]
+                              (boolean (and player (entity/player-creative? player))))}
+         :tick {:cp         tick-cp-cost
+                :creative?  (fn [{:keys [player]}]
+                              (boolean (and player (entity/player-creative? player))))}}
+  :actions {:down!  on-down!
+            :tick!  on-tick!
+            :up!    on-up!
+            :abort! on-abort!}
+  :prerequisites [{:skill-id :arc-gen         :min-exp 1.0}
                   {:skill-id :current-charging :min-exp 0.7}])
