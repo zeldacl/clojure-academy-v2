@@ -4,7 +4,7 @@
 
 (defskill! vec-manip
   :id :vec-manip
-  :category-id :telekinesis
+  :category-id :vecmanip
   :name-key "ability.skill.telekinesis.vec_manip"
   :description-key "ability.skill.telekinesis.vec_manip.desc"
   :icon "textures/abilities/electromaster/skills/mag_manip.png"

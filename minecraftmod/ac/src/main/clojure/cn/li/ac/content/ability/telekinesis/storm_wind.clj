@@ -3,7 +3,7 @@
 
 (defskill! storm-wind
   :id :storm-wind
-  :category-id :telekinesis
+  :category-id :vecmanip
   :name-key "ability.skill.telekinesis.storm_wind"
   :description-key "ability.skill.telekinesis.storm_wind.desc"
   :icon "textures/abilities/vecmanip/skills/storm_wing.png"

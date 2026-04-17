@@ -16,12 +16,17 @@
 
 (effect/defop :add-entity-velocity
   [evt {:keys [target x y z]}]
-  (let [_target target
-        _x x
-        _y y
-        _z z]
-    ;; Placeholder op: keep stable while finalizing IEntityMotion protocol.
-    nil)
+  (when entity-motion/*entity-motion*
+    (let [uuid (or (when (map? target) (:uuid target))
+                   (get evt target)
+                   target)]
+      (when (string? uuid)
+        (entity-motion/add-velocity! entity-motion/*entity-motion*
+                                     (:world-id evt)
+                                     uuid
+                                     (double (or x 0.0))
+                                     (double (or y 0.0))
+                                     (double (or z 0.0))))))
   evt)
 
 (effect/defop :reset-fall-damage

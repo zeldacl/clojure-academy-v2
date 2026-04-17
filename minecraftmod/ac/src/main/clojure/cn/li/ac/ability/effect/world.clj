@@ -12,12 +12,12 @@
   evt)
 
 (effect/defop :create-explosion
-  [evt {:keys [at radius damage destroy-blocks?]}]
-  ;; Placeholder op: actual explosion dispatch is platform-specific and can be
-  ;; bound here later once a stable protocol signature is finalized.
-  (let [_coords (or (when (map? at) at) (get evt at))
-        _radius radius
-        _damage damage
-        _destroy? destroy-blocks?]
-    nil)
+  [evt {:keys [at radius fire?]}]
+  (when world-effects/*world-effects*
+    (let [{:keys [x y z]} (or (when (map? at) at) (get evt at))]
+      (world-effects/create-explosion! world-effects/*world-effects*
+                                       (:world-id evt)
+                                       (double x) (double y) (double z)
+                                       (double (or radius 4.0))
+                                       (boolean fire?))))
   evt)
