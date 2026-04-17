@@ -1,6 +1,8 @@
 (ns cn.li.ac.ability.effect.state
   (:require [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.effect :as effect]))
+            [cn.li.ac.ability.effect :as effect]
+            [cn.li.ac.ability.player-state :as ps]
+            [cn.li.ac.ability.model.resource-data :as rdata]))
 
 (effect/defop :assoc-state
   [evt {:keys [k v]}]
@@ -20,3 +22,17 @@
   [evt _]
   (ctx/terminate-context! (:ctx-id evt) nil)
   evt)
+
+(effect/defop :overload-floor
+  "Enforce a minimum overload value for the player.
+  If the player's current overload is below :floor, it is raised to :floor.
+  :floor may be a number or a fn of evt."
+  [evt {:keys [floor]}]
+  (let [floor-val (double (if (fn? floor) (floor evt) (or floor 0.0)))]
+    (ps/update-resource-data!
+     (:player-id evt)
+     (fn [res-data]
+       (if (< (double (get res-data :cur-overload 0.0)) floor-val)
+         (-> res-data (rdata/set-cur-overload floor-val) (assoc :overload-fine true))
+         res-data)))
+    evt))
