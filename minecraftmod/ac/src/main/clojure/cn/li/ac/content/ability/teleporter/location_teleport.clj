@@ -94,7 +94,7 @@
   Returns {:success? boolean :locations [...] :exp double :current-pos map}."
   [player-id]
   (try
-    (let [exp (double (or (get-skill-exp player-id) 0.0))
+    (let [exp (double (or (skill-exp player-id) 0.0))
           pos (current-pos player-id)
           locations (all-locations player-id)
           with-stats (if pos

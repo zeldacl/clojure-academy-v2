@@ -45,7 +45,7 @@
   (int (bal/lerp 30.0 0.0 exp)))
 
 (defn- max-distance [exp cp ticks creative?]
-  (let [max-range (lerp 25.0 60.0 exp)
+  (let [max-range (bal/lerp 25.0 60.0 exp)
         cp-limit (if creative?
                    max-range
                    (if (pos? (cp-per-block exp))

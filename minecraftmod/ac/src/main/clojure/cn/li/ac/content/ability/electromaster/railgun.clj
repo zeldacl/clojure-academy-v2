@@ -454,7 +454,7 @@
                               :hit-count 0})
 
         :else
-        (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :idle-no-trigger})))
+        (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :idle-no-trigger}))))
 
 (defn railgun-on-key-tick
   "Item-charge path: countdown to automatic perform at 20 ticks."
@@ -481,7 +481,7 @@
                   (ctx/update-context! ctx-id assoc :skill-state
                                        (assoc skill-state :fired false :mode :item-charge-failed)))
                 (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] 0))
-              (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] (dec ticks-left)))))))
+              (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] (dec ticks-left))))))))))
 
 (defn railgun-on-key-up
   "Release cancels unfinished item charge. Cooldown is applied only on successful perform."
@@ -494,13 +494,13 @@
           (ctx/update-context! ctx-id assoc :skill-state
                                (assoc skill-state :mode :item-charge-cancelled :charge-ticks 0)))
         (when fired
-          (log/debug "Railgun completed"))))
+          (log/debug "Railgun completed")))))
 
 (defn railgun-on-key-abort
   "Clean up railgun state on abort."
   [{:keys [ctx-id]}]
   (ctx/update-context! ctx-id dissoc :skill-state)
-  (log/debug "Railgun aborted")))
+  (log/debug "Railgun aborted"))
 
 (defskill! railgun
   :id :railgun

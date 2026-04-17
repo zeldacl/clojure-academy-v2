@@ -129,7 +129,7 @@
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [is-active? (toggle/is-toggle-active? ctx-data :vec-reflection)
-            exp (get-skill-exp player-id)]
+            exp (skill-exp player-id)]
         (if is-active?
           (do
             (toggle/remove-toggle! ctx-id :vec-reflection)
@@ -154,7 +154,7 @@
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (when (toggle/is-toggle-active? ctx-data :vec-reflection)
-        (let [exp (get-skill-exp player-id)
+        (let [exp (skill-exp player-id)
               overload-keep (get-in ctx-data [:skill-state :vec-reflection-overload-keep] 0.0)]
           (toggle/update-toggle-tick! ctx-id :vec-reflection)
 
@@ -242,7 +242,7 @@
         (swap! reflecting-players conj player-id)
         (try
           (if-let [state (ps/get-player-state player-id)]
-            (let [exp (get-skill-exp player-id)
+            (let [exp (skill-exp player-id)
                   reflect-multiplier (scaling/lerp 0.6 1.2 exp)
                   reflected-damage (* original-damage reflect-multiplier)
                   consumption (* original-damage (scaling/lerp 20.0 15.0 exp))
@@ -280,7 +280,7 @@
   (try
     (if (ps/get-player-state player-id)
       (let [ctx-id (active-vec-reflection-ctx-id player-id)
-            exp (get-skill-exp player-id)
+            exp (skill-exp player-id)
             consumption (* original-damage (scaling/lerp 20.0 15.0 exp))
             reflected-damage (* original-damage (scaling/lerp 0.6 1.2 exp))
             current-cp (current-cp player-id)]

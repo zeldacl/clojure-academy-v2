@@ -380,7 +380,7 @@
                                 :performed? false})
           (send-fx-start! ctx-id)
           (send-fx-update! ctx-id 0)
-          (log/debug "Meltdowner charge started"))))
+          (log/debug "Meltdowner charge started")))))
 
 (defn meltdowner-on-key-tick
   "Advance charging; consume CP and enforce overload floor."
@@ -436,14 +436,14 @@
                   (log/debug "Meltdowner performed: ct" ct "hits" hit-count))
                 (do
                   (send-fx-end! ctx-id false)
-                  (log/debug "Meltdowner perform failed"))))))))
+                  (log/debug "Meltdowner perform failed")))))))))
 
 (defn meltdowner-on-key-abort
   "Clean up charge state on abort."
   [{:keys [ctx-id]}]
   (send-fx-end! ctx-id false)
   (ctx/update-context! ctx-id dissoc :skill-state)
-  (log/debug "Meltdowner charge aborted")))
+  (log/debug "Meltdowner charge aborted"))
 
 (defskill! meltdowner
   :id :meltdowner

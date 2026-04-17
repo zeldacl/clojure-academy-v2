@@ -12,9 +12,11 @@
 					[cn.li.ac.ability.balance :as bal]
 					[cn.li.ac.ability.context :as ctx]
 					[cn.li.ac.ability.service.skill-effects :as skill-effects]
+						[cn.li.mcmod.platform.entity :as entity]
 						[cn.li.mcmod.platform.entity-damage :as entity-damage]
 						[cn.li.mcmod.platform.world-effects :as world-effects]
 						[cn.li.mcmod.platform.block-manipulation :as block-manip]
+						[cn.li.mcmod.platform.raycast :as raycast]
 						[cn.li.mcmod.util.log :as log]))
 
 ; Original: traceLiving(player, 10, ...) = 10 blocks
@@ -59,7 +61,7 @@
 	[a b t]
 	(bal/lerp a b t))
 
-(dbal
+(defn- v+
 	[a b]
 	{:x (+ (double (:x a)) (double (:x b)))
 	 :y (+ (double (:y a)) (double (:y b)))
@@ -97,8 +99,8 @@
 
 (defn- skill-exp [player-id]
 	(double (get-in (ps/get-player-state player-id) [:ability-data :skills :mag-manip :exp] 0.0)))
-skill-exp [player-id]
-	(double (get-in (ps/get-player-state player-id) [:ability-data :skills :mag-manip :exp] 0.0)
+
+(defn- player-pos [player-id]
 	(get (ps/get-player-state player-id)
 			 :position
 			 {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}))
@@ -185,8 +187,7 @@ skill-exp [player-id]
 	(skill-effects/set-main-cooldown! player-id :mag-manip
 		(int (Math/round (double (bal/lerp 60.0 40.0 exp))))))
 
-; skill-effects/set-main-cooldown! player-id :mag-manip
-		(int (Math/round (double (bal/lerp 60.0 40.0 exp)))
+(defn- should-pay-up-cost?
 	[player-id ctx-id]
 	(if-let [ctx-data (ctx/get-context ctx-id)]
 		(let [skill-state (:skill-state ctx-data)
@@ -222,7 +223,7 @@ skill-exp [player-id]
 	(skill-effects/add-skill-exp! player-id :mag-manip amount))
 
 (defn- distance-to-segment
-	[skill-effects/add-skill-exp! player-id :mag-manip amount
+	[point seg-start seg-end]
 	(let [ab (v- seg-end seg-start)
 				ap (v- point seg-start)
 				denom (max 1.0e-6 (dot ab ab))
@@ -336,7 +337,7 @@ skill-exp [player-id]
 								dist-sq (+ (Math/pow (- (:x player-now) (:x focus-pos)) 2.0)
 													 (Math/pow (- (:y player-now) (:y focus-pos)) 2.0)
 													 (Math/pow (- (:z player-now) (:z focus-pos)) 2.0))
-					exp (skill-exp player-id)]
+								too-far? (>= dist-sq 25.0)]
 						(if too-far?
 							;; Out of range: restore block, no cost, no throw
 							(do

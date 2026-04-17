@@ -128,7 +128,7 @@
   [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (when-let [ctx-data (ctx/get-context ctx-id)]
-      (let [exp (get-skill-exp player-id)
+      (let [exp (skill-exp player-id)
             active? (toggle/is-toggle-active? ctx-data :vec-deviation)]
         (when (and active? (not cost-ok?))
           (toggle/deactivate-toggle! ctx-id :vec-deviation)
@@ -205,7 +205,7 @@
     (if (ps/get-player-state player-id)
       (if (> (double original-damage) 9999.0)
         original-damage
-        (let [exp (get-skill-exp player-id)
+        (let [exp (skill-exp player-id)
               reduction-rate (scaling/lerp 0.4 0.9 exp)
               max-consumption (scaling/lerp 15.0 12.0 exp)
               current-cp (current-cp player-id)

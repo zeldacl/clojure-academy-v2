@@ -265,7 +265,7 @@
                      "distance" (int (distance-3d (:x state-pos) (:y state-pos) (:z state-pos)
                                                    target-x target-y target-z))))
         (do (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
-            (log/debug "MagMovement: no valid magnetic target")))))
+            (log/debug "MagMovement: no valid magnetic target"))))))
 (defn mag-movement-on-key-tick
   "Continue magnetic movement each tick."
   [{:keys [player-id ctx-id cost-ok?]}]
@@ -326,7 +326,7 @@
                     (ctx/update-context! ctx-id assoc-in [:skill-state :motion-z] next-z)
                     (send-fx-update! ctx-id tx ty tz)
                     (when (zero? (mod movement-ticks 10))
-                      (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))
+                      (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))
 
 (defn mag-movement-on-key-up
   "Complete magnetic movement when key released."
@@ -337,7 +337,7 @@
       (when has-target
         (finish-movement! player-id ctx-id skill-state)
         (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false)
-        (log/debug "MagMovement completed: ticks" (:movement-ticks skill-state)))))
+        (log/debug "MagMovement completed: ticks" (:movement-ticks skill-state))))))
 
 (defn mag-movement-on-key-abort
   "Clean up movement state on abort."
