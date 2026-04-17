@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.content.ability.electromaster.mag-manip
+(ns cn.li.ac.content.ability.electromaster.mag-manip
 	"MagManip skill port for Electromaster.
 
 	This implementation keeps the original gameplay intent in the current

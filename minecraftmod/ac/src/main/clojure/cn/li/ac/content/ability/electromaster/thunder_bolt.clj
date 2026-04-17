@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.content.ability.electromaster.thunder-bolt
+(ns cn.li.ac.content.ability.electromaster.thunder-bolt
   "ThunderBolt skill - instant targeted lightning strike with AOE damage.
 
   Pattern: :instant

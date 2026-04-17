@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.content.ability.vecmanip.vec-accel
+(ns cn.li.ac.content.ability.vecmanip.vec-accel
   "VecAccel - dash/acceleration in look direction.
 
   Pattern: :hold-charge-release (max 20 ticks)

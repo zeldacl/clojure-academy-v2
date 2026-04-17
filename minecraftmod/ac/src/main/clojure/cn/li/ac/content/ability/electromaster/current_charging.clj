@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.content.ability.electromaster.current-charging
+(ns cn.li.ac.content.ability.electromaster.current-charging
   "CurrentCharging - channel energy into blocks or held item.
 
   Pattern: :charge-window

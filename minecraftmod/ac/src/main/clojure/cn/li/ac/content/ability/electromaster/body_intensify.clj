@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.content.ability.electromaster.body-intensify
+(ns cn.li.ac.content.ability.electromaster.body-intensify
   "BodyIntensify skill - hold to charge randomised potions.
 
   Pattern: :charge-window (min 10, max 40, tolerant 100)

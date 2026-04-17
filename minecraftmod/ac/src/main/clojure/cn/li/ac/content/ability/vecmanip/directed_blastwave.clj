@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.content.ability.vecmanip.directed-blastwave
+(ns cn.li.ac.content.ability.vecmanip.directed-blastwave
   "DirectedBlastwave - AOE blast with block breaking.
 
   Pattern: :charge-window (valid 6-50, abort 200)

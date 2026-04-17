@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.content.ability.vecmanip.storm-wing
+(ns cn.li.ac.content.ability.vecmanip.storm-wing
   "StormWing - Level 3 Vector Manipulation skill.
 
   Toggle flight ability with directional control.

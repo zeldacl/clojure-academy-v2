@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.content.ability.teleporter.mark-teleport
+(ns cn.li.ac.content.ability.teleporter.mark-teleport
   "MarkTeleport skill - teleport to look direction target.
 
   Original-aligned mechanics:

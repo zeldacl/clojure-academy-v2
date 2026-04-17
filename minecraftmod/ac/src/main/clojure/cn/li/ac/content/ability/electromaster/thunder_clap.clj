@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.content.ability.electromaster.thunder-clap
+(ns cn.li.ac.content.ability.electromaster.thunder-clap
   "ThunderClap - channeled AOE lightning strike.
 
   Pattern: :charge-window (40..60 ticks)

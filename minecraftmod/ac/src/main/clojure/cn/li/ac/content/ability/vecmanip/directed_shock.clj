@@ -1,4 +1,4 @@
-﻿(ns cn.li.ac.content.ability.vecmanip.directed-shock
+(ns cn.li.ac.content.ability.vecmanip.directed-shock
   "DirectedShock - melee punch with charge window.
 
   Pattern: :charge-window (valid window 6-50 ticks, abort at 200)
