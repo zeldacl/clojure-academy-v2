@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.telekinesis.vec-manip
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]))
+            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]))
 
 (defskill! vec-manip
   :id :vec-manip

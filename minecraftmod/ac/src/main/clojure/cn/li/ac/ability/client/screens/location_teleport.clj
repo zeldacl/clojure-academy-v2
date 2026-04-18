@@ -6,7 +6,7 @@
     - Each row (h=28): location name, cp cost, [Teleport] [Remove] buttons
     - Last row: [Add current location] with text input
   - Right info panel (x=220, y=10, w=90, h=220): hover info (dim, coords, cp)"
-  (:require [cn.li.ac.ability.client-api :as api]
+  (:require [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.effects.sounds :as sounds]
             [clojure.string :as str]))
 

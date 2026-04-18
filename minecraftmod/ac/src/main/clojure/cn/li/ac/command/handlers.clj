@@ -19,8 +19,8 @@
     {:action :maxout-progression :player player-obj}
     {:action :enable-cheats :player player-obj}
     {:action :disable-cheats :player player-obj}"
-  (:require [cn.li.ac.ability.category :as cat]
-            [cn.li.ac.ability.skill :as skill]
+  (:require [cn.li.ac.ability.registry.category :as cat]
+            [cn.li.ac.ability.registry.skill :as skill]
             [clojure.string :as str]))
 
 ;; ============================================================================

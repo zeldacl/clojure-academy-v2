@@ -12,14 +12,17 @@
   - UI opened from key-down; actual add/remove/perform via RPC requests
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.player-state :as ps]
+  (:require [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.balance :as bal]
-            [cn.li.ac.ability.model.resource-data :as rdata]
-            [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.model.resource :as rdata]
+            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.saved-locations :as saved-locations]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.network.server :as net-srv]
+            [cn.li.mcmod.ability.catalog :as catalog]
             [clojure.string :as str]
             [cn.li.mcmod.util.log :as log]))
 
@@ -259,3 +262,32 @@
             :up! location-teleport-on-key-up
             :abort! location-teleport-on-key-abort}
   :prerequisites [{:skill-id :mark-teleport :min-exp 0.5}])
+
+;; ============================================================================
+;; Network handler self-registration (LocationTeleport GUI RPC)
+;; ============================================================================
+
+(defn- uuid-of [player]
+  (str (entity/player-get-uuid player)))
+
+(net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-QUERY
+  (fn [_payload player]
+    (query-location-teleport (uuid-of player))))
+
+(net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-ADD
+  (fn [{:keys [name]} player]
+    (let [uuid (uuid-of player)
+          result (save-current-location! uuid name)]
+      (merge result (query-location-teleport uuid)))))
+
+(net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-REMOVE
+  (fn [{:keys [name]} player]
+    (let [uuid (uuid-of player)
+          result (delete-saved-location! uuid name)]
+      (merge result (query-location-teleport uuid)))))
+
+(net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-PERFORM
+  (fn [{:keys [name]} player]
+    (let [uuid (uuid-of player)
+          result (perform-location-teleport! uuid name)]
+      (merge result (query-location-teleport uuid)))))

@@ -5,29 +5,30 @@
   (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-lifecycle]
             [cn.li.mcmod.ability.catalog :as catalog]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.ac.ability.player-state :as ps]
-            [cn.li.ac.ability.model.preset-data :as preset-data]
-            [cn.li.ac.ability.store :as ability-store]
-            [cn.li.ac.ability.network :as ability-network]
-            [cn.li.ac.ability.damage-runtime :as damage-runtime]
-            [cn.li.ac.ability.entity-damage-runtime :as entity-damage-runtime]
-            [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.model.preset :as preset-data]
+            [cn.li.ac.ability.state.store :as ability-store]
+            [cn.li.ac.ability.server.network :as ability-network]
+            [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
+            [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
+            [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.ability.client.hud-renderer :as hud-renderer]
+            [cn.li.ac.ability.client.hud :as hud-renderer]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client-api :as client-api]
+            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.api :as client-api]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.skill :as skill]
+            [cn.li.ac.ability.registry.skill :as skill]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.ability.item-actions :as item-actions]
+            [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.client.platform-bridge :as client-bridge]
-            [cn.li.ac.ability.service.context-mgr :as ctx-mgr]
-            [cn.li.ac.ability.damage-handler :as damage-handler]
-            [cn.li.ac.content.ability.electromaster.railgun :as railgun]
+            [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private hooks-installed? (atom false))
@@ -101,240 +102,12 @@
 
 (defn- on-context-channel-push!
   [{:keys [ctx-id channel payload]}]
-  (case channel
-    (:railgun/fx-shot :railgun/fx-reflect)
-    (level-effects/enqueue-level-effect! :railgun-shot payload)
-
-    :thunder-bolt/fx-perform
-    (level-effects/enqueue-level-effect! :thunder-bolt-strike payload)
-
-    :thunder-clap/fx-start
-    (level-effects/enqueue-level-effect! :thunder-clap {:mode :start})
-
-    :thunder-clap/fx-update
-    (level-effects/enqueue-level-effect! :thunder-clap {:mode :update
-                               :ticks (long (or (:ticks payload) 0))
-                               :charge-ratio (double (or (:charge-ratio payload) 0.0))
-                               :target (get payload :target)})
-
-    :thunder-clap/fx-end
-    (level-effects/enqueue-level-effect! :thunder-clap {:mode :end
-                               :performed? (boolean (:performed? payload))})
-
-    :mag-movement/fx-start
-    (level-effects/enqueue-level-effect! :mag-movement {:mode :start
-                                                         :target (get payload :target)})
-
-    :mag-movement/fx-update
-    (level-effects/enqueue-level-effect! :mag-movement {:mode :update
-                                                         :target (get payload :target)})
-
-    :mag-movement/fx-end
-    (level-effects/enqueue-level-effect! :mag-movement {:mode :end})
-
-    :mark-teleport/fx-start
-    (level-effects/enqueue-level-effect! :mark-teleport {:mode :start})
-
-    :mark-teleport/fx-update
-    (level-effects/enqueue-level-effect! :mark-teleport {:mode :update
-                               :target (:target payload)
-                               :distance (double (or (:distance payload) 0.0))})
-
-    :mark-teleport/fx-end
-    (level-effects/enqueue-level-effect! :mark-teleport {:mode :end})
-
-    :mark-teleport/fx-perform
-    (level-effects/enqueue-level-effect! :mark-teleport {:mode :perform
-                               :target (:target payload)
-                               :distance (double (or (:distance payload) 0.0))})
-
-    :meltdowner/fx-start
-    (level-effects/enqueue-level-effect! :meltdowner {:mode :start})
-
-    :meltdowner/fx-update
-    (level-effects/enqueue-level-effect! :meltdowner {:mode :update
-                                                       :ticks (long (or (:ticks payload) 0))
-                                                       :charge-ratio (double (or (:charge-ratio payload) 0.0))})
-
-    :meltdowner/fx-end
-    (level-effects/enqueue-level-effect! :meltdowner {:mode :end
-                                                       :performed? (boolean (:performed? payload))})
-
-    :meltdowner/fx-perform
-    (level-effects/enqueue-level-effect! :meltdowner {:mode :perform
-                                                       :charge-ticks (int (or (:charge-ticks payload) 20))
-                                                       :beam-length (double (or (:beam-length payload) 30.0))
-                                                       :start (:start payload)
-                                                       :end (:end payload)})
-
-    :meltdowner/fx-reflect
-    (level-effects/enqueue-level-effect! :meltdowner {:mode :reflect
-                                                       :start (:start payload)
-                                                       :end (:end payload)})
-
-    :blood-retrograde/fx-start
-    (level-effects/enqueue-level-effect! :blood-retrograde {:mode :start})
-
-    :blood-retrograde/fx-update
-    (level-effects/enqueue-level-effect! :blood-retrograde {:mode :update
-                                                             :ticks (long (or (:ticks payload) 0))
-                                                             :charge-ratio (double (or (:charge-ratio payload) 0.0))})
-
-    :blood-retrograde/fx-end
-    (level-effects/enqueue-level-effect! :blood-retrograde {:mode :end
-                                                             :performed? (boolean (:performed? payload))})
-
-    :blood-retrograde/fx-perform
-    (level-effects/enqueue-level-effect! :blood-retrograde {:mode :perform
-                                                             :sound-pos (:sound-pos payload)
-                                                             :splashes (:splashes payload)
-                                                             :sprays (:sprays payload)})
-
-    :directed-blastwave/fx-start
-    (level-effects/enqueue-level-effect! :directed-blastwave {:mode :start})
-
-    :directed-blastwave/fx-update
-    (level-effects/enqueue-level-effect! :directed-blastwave {:mode :update
-                                                               :charge-ticks (long (or (:charge-ticks payload) 0))
-                                                               :punched? (boolean (:punched? payload))})
-
-    :directed-blastwave/fx-perform
-    (level-effects/enqueue-level-effect! :directed-blastwave {:mode :perform
-                                                               :pos (:pos payload)
-                                                               :look-dir (:look-dir payload)
-                                                               :charge-ticks (long (or (:charge-ticks payload) 0))})
-
-    :directed-blastwave/fx-end
-    (level-effects/enqueue-level-effect! :directed-blastwave {:mode :end
-                                                               :performed? (boolean (:performed? payload))})
-
-    :vec-accel/fx-start
-    (level-effects/enqueue-level-effect! :vec-accel {:mode :start})
-
-    :vec-accel/fx-update
-    (level-effects/enqueue-level-effect! :vec-accel
-                       {:mode :update
-                        :charge-ticks (long (or (:charge-ticks payload) 0))
-                        :can-perform? (boolean (:can-perform? payload))
-                        :look-dir (:look-dir payload)
-                        :init-vel (:init-vel payload)})
-
-    :vec-accel/fx-perform
-    (level-effects/enqueue-level-effect! :vec-accel {:mode :perform})
-
-    :vec-accel/fx-end
-    (level-effects/enqueue-level-effect! :vec-accel {:mode :end
-                              :performed? (boolean (:performed? payload))})
-
-    :vec-deviation/fx-start
-    (level-effects/enqueue-level-effect! :vec-deviation {:mode :start})
-
-    :vec-deviation/fx-end
-    (level-effects/enqueue-level-effect! :vec-deviation {:mode :end})
-
-    :vec-deviation/fx-stop-entity
-    (level-effects/enqueue-level-effect! :vec-deviation {:mode :stop-entity
-                                :x (double (or (:x payload) 0.0))
-                                :y (double (or (:y payload) 0.0))
-                                :z (double (or (:z payload) 0.0))
-                                :marked? (boolean (:marked? payload))})
-
-    :vec-deviation/fx-play
-    (level-effects/enqueue-level-effect! :vec-deviation {:mode :play
-                                :x (double (or (:x payload) 0.0))
-                                :y (double (or (:y payload) 0.0))
-                                :z (double (or (:z payload) 0.0))})
-
-    :vec-reflection/fx-start
-    (level-effects/enqueue-level-effect! :vec-reflection {:mode :start})
-
-    :vec-reflection/fx-end
-    (level-effects/enqueue-level-effect! :vec-reflection {:mode :end})
-
-    :vec-reflection/fx-reflect-entity
-    (level-effects/enqueue-level-effect! :vec-reflection {:mode :reflect-entity
-                   :x (double (or (:x payload) 0.0))
-                   :y (double (or (:y payload) 0.0))
-                   :z (double (or (:z payload) 0.0))})
-
-    :vec-reflection/fx-play
-    (level-effects/enqueue-level-effect! :vec-reflection {:mode :play
-                   :x (double (or (:x payload) 0.0))
-                   :y (double (or (:y payload) 0.0))
-                   :z (double (or (:z payload) 0.0))})
-
-    :groundshock/fx-start
-    (hand-effects/enqueue-hand-effect! :groundshock {:mode :start})
-
-    :groundshock/fx-update
-    (hand-effects/enqueue-hand-effect! :groundshock {:mode :update
-                                                      :charge-ticks (long (or (:charge-ticks payload) 0))})
-
-    :groundshock/fx-perform
-    (do
-      (hand-effects/enqueue-hand-effect! :groundshock {:mode :perform})
-      (level-effects/enqueue-level-effect! :groundshock {:mode :perform
-                                                         :affected-blocks (:affected-blocks payload)
-                                                         :broken-blocks (:broken-blocks payload)}))
-
-    :groundshock/fx-end
-    (hand-effects/enqueue-hand-effect! :groundshock {:mode :end
-                                                      :performed? (boolean (:performed? payload))})
-
-    :directed-shock/fx-start
-    (hand-effects/enqueue-hand-effect! :directed-shock {:mode :start})
-
-    :directed-shock/fx-perform
-    (hand-effects/enqueue-hand-effect! :directed-shock {:mode :perform})
-
-    :directed-shock/fx-end
-    (hand-effects/enqueue-hand-effect! :directed-shock {:mode :end
-                                                         :performed? (boolean (:performed? payload))})
-
-    :plasma-cannon/fx-start
-    (level-effects/enqueue-level-effect! :plasma-cannon {:mode :start})
-
-    :plasma-cannon/fx-update
-    (level-effects/enqueue-level-effect! :plasma-cannon
-                                         {:mode         :update
-                                          :charge-ticks (long (or (:charge-ticks payload) 0))
-                                          :fully-charged? (boolean (:fully-charged? payload))
-                                          :charge-pos   (:charge-pos payload)
-                                          :flight-ticks (long (or (:flight-ticks payload) 0))
-                                          :state        (or (:state payload) :charging)
-                                          :destination  (:destination payload)})
-
-    :plasma-cannon/fx-perform
-    (level-effects/enqueue-level-effect! :plasma-cannon {:mode :perform
-                                                          :pos  (:pos payload)})
-
-    :plasma-cannon/fx-end
-    (level-effects/enqueue-level-effect! :plasma-cannon {:mode       :end
-                                                          :performed? (boolean (:performed? payload))})
-
-    :storm-wing/fx-start
-    (level-effects/enqueue-level-effect! :storm-wing {:mode :start
-                                                       :charge-ticks (long (or (:charge-ticks payload) 70))})
-
-    :storm-wing/fx-update
-    (level-effects/enqueue-level-effect! :storm-wing {:mode :update
-                                                       :phase (or (:phase payload) :charging)
-                                                       :charge-ticks (long (or (:charge-ticks payload) 0))
-                                                       :charge-ratio (double (or (:charge-ratio payload) 0.0))})
-
-    :storm-wing/fx-end
-    (level-effects/enqueue-level-effect! :storm-wing {:mode :end})
-
-    :storm-wing/move-dir
-    ;; Client sends WASD-derived movement direction; route to server-side context
-    nil
-
-    :location-teleport/ui-open
-    (do
-      (location-teleport-screen/apply-server-payload! payload)
-      (client-bridge/open-location-teleport-screen! nil payload))
-
-    nil)
+  ;; Delegate to FX registry — content _fx.clj files self-register their channels
+  (fx-registry/dispatch-fx-channel! ctx-id channel payload)
+  ;; location-teleport UI open is not an FX channel; handle inline
+  (when (= channel :location-teleport/ui-open)
+    (location-teleport-screen/apply-server-payload! payload)
+    (client-bridge/open-location-teleport-screen! nil payload))
   (ctx/ctx-send-to-local! ctx-id channel payload))
 
 (defn- register-client-push-handlers!
@@ -485,27 +258,16 @@
          (damage-runtime/process-damage! player-id attacker-id damage damage-source))
 
        :should-cancel-attack-interception?
-       (fn [player-id attacker-id damage _damage-source]
-         (if-let [vec-reflection-ns (find-ns 'cn.li.ac.content.ability.vecmanip.vec-reflection)]
-           (if-let [precheck-fn (ns-resolve vec-reflection-ns 'can-cancel-attack?)]
-             (boolean (precheck-fn player-id attacker-id damage))
-             false)
-           false))
+       (fn [player-id attacker-id damage damage-source]
+         (damage-handler/should-cancel-attack? player-id attacker-id damage damage-source))
 
        :resolve-item-use-action
        (fn [item-id]
-         (cond
-           (= item-id "ac:app_skill_tree") :open-skill-tree
-           (or (= item-id "my_mod:coin")
-               (= item-id "ac:coin")) :railgun-coin-throw
-           :else nil))
+         (item-actions/resolve-item-action item-id))
 
        :on-ability-item-action!
        (fn [action player-uuid payload]
-         (case action
-           :railgun-coin-throw
-           (railgun/register-coin-throw! player-uuid payload)
-           nil))
+         (item-actions/on-item-action! action player-uuid payload))
 
        :compute-aoe-damage
        (fn [origin-pos target-pos radius damage falloff?]
@@ -686,10 +448,6 @@
 
        :client-trigger-mode-switch!
        (fn [player-uuid]
-         (client-keybinds/trigger-mode-switch! player-uuid))
-
-       :init-damage-handlers!
-       (fn []
-         (damage-handler/init-damage-handlers!))})
+         (client-keybinds/trigger-mode-switch! player-uuid))})
     (log/info "AC ability runtime hooks installed"))
   nil)

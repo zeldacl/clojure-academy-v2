@@ -6,7 +6,7 @@
          :update  {:topic kw :payload (fn [evt] map)}
          :perform {:topic kw :payload (fn [evt] map)}
          :end     {:topic kw :payload (fn [evt] map)}}"
-  (:require [cn.li.ac.ability.context :as ctx]
+  (:require [cn.li.ac.ability.state.context :as ctx]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- safe-payload [payload-fn evt]

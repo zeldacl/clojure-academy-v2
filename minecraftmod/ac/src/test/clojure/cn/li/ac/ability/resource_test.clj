@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.resource-test
-  (:require [cn.li.ac.ability.model.resource-data :as rd]
-            [cn.li.ac.ability.service.resource :as res]))
+  (:require [cn.li.ac.ability.model.resource :as rd]
+            [cn.li.ac.ability.server.service.resource :as res]))
 
 (defn test-consume-and-recover
   []

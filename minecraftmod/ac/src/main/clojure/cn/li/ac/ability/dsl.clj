@@ -16,8 +16,8 @@
 
   Both macros resolve to register-category! / register-skill! calls wrapped
   in a defonce-guarded init so reloading is safe."
-  (:require [cn.li.ac.ability.category :as cat]
-            [cn.li.ac.ability.skill :as sk]))
+  (:require [cn.li.ac.ability.registry.category :as cat]
+            [cn.li.ac.ability.registry.skill :as sk]))
 
 ;; ============================================================================
 ;; defcategory

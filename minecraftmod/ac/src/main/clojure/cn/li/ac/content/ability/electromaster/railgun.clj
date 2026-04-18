@@ -5,15 +5,16 @@
   coin-QTE / item-charge logic; :beam op (effect.beam) for the actual shot.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.player-state :as ps]
+  (:require [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.balance :as bal]
-            [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.effect :as effect]
-            [cn.li.ac.ability.effect.geom :as geom]
-            [cn.li.ac.ability.effect.beam]
+            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.server.effect.core :as effect]
+            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.server.effect.beam]
             [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -333,4 +334,13 @@
                     :abort! railgun-on-key-abort}
   :prerequisites   [{:skill-id :thunder-bolt :min-exp 0.3}
                     {:skill-id :mag-manip    :min-exp 1.0}])
+
+;; ============================================================================
+;; Self-register item actions at load time
+;; ============================================================================
+
+(item-actions/register-item-action! "ac:coin" :railgun-coin-throw)
+(item-actions/register-item-action! "my_mod:coin" :railgun-coin-throw)
+
+(item-actions/register-action-handler! :railgun-coin-throw register-coin-throw!)
 

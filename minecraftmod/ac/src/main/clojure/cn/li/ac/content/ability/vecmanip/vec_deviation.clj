@@ -14,12 +14,13 @@
   - No overload cost
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.player-state :as ps]
+  (:require [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.ability.service.skill-effects :as fx-common]
+            [cn.li.ac.ability.server.service.skill-effects :as fx-common]
+            [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -248,3 +249,15 @@
   :fx {:start {:topic :vec-deviation/fx-start :payload (fn [_] {})}
        :end {:topic :vec-deviation/fx-end :payload (fn [_] {})}}
   :prerequisites [{:skill-id :vec-accel :min-exp 0.4}])
+
+;; ============================================================================
+;; Self-register damage handler at load time
+;; ============================================================================
+
+(damage-handler/register-toggle-damage-handler!
+  :vec-deviation-damage
+  :vec-deviation
+  (fn [player-id _attacker-id damage _damage-source]
+    (let [reduced-damage (reduce-damage player-id damage)]
+      [reduced-damage {:handler :vec-deviation}]))
+  50)

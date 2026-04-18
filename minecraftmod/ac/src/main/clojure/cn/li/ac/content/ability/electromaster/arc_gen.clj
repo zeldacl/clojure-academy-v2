@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.arc-gen
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]))
+            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]))
 
 (defskill! arc-gen
   :id :arc-gen

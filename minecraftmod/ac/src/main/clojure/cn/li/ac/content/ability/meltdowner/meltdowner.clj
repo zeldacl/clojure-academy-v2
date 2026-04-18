@@ -15,16 +15,16 @@
   - EXP gain: timeRate(ct) * 0.002
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.player-state :as ps]
+  (:require [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.balance :as bal]
-            [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.effect :as effect]
-            [cn.li.ac.ability.effect.geom :as geom]
-            [cn.li.ac.ability.effect.beam]
+            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.server.effect.core :as effect]
+            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.ability.server.effect.beam]
             [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.model.resource-data :as rdata]
+            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))

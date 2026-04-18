@@ -1,8 +1,8 @@
 (ns cn.li.ac.ability.client.keybinds
   "Key binding state tracking and event handling (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.client.ability-runtime :as runtime]
-            [cn.li.ac.ability.client-api :as api]
-            [cn.li.ac.ability.player-state :as ps]
+  (:require [cn.li.ac.ability.client.runtime :as runtime]
+            [cn.li.ac.ability.client.api :as api]
+            [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]))
 

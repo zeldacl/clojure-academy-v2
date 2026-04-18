@@ -6,12 +6,12 @@
   Cooldown: lerp(120,50) ticks by exp
   Exp: +0.005 effective / +0.003 ineffective"
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.balance :refer [by-exp]]
-            [cn.li.ac.ability.effect.geom]
-            [cn.li.ac.ability.effect.damage]
-            [cn.li.ac.ability.effect.world]
-            [cn.li.ac.ability.effect.potion]
-            [cn.li.ac.ability.effect.fx]))
+            [cn.li.ac.ability.util.balance :refer [by-exp]]
+            [cn.li.ac.ability.server.effect.geom]
+            [cn.li.ac.ability.server.effect.damage]
+            [cn.li.ac.ability.server.effect.world]
+            [cn.li.ac.ability.server.effect.potion]
+            [cn.li.ac.ability.server.effect.fx]))
 
 (defskill! thunder-bolt
   :id          :thunder-bolt

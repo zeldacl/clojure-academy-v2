@@ -1,12 +1,12 @@
 (ns cn.li.ac.ability.context-runtime-test
   (:require [cn.li.ac.content.ability]
-            [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.player-state :as ps]
-            [cn.li.ac.ability.model.ability-data :as ad]
-            [cn.li.ac.ability.model.resource-data :as rd]
-            [cn.li.ac.ability.model.cooldown-data :as cd]
-            [cn.li.ac.ability.service.context-runtime :as rt]
-            [cn.li.ac.ability.service.cooldown :as cd-svc]))
+            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.model.ability :as ad]
+            [cn.li.ac.ability.model.resource :as rd]
+            [cn.li.ac.ability.model.cooldown :as cd]
+            [cn.li.ac.ability.server.service.context-runtime :as rt]
+            [cn.li.ac.ability.server.service.cooldown :as cd-svc]))
 
 (defn- seed-player-state!
   [uuid]

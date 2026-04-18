@@ -4,7 +4,8 @@
   Categories are declared here.
   Skills are self-registered by requiring each skill namespace."
   (:require [cn.li.ac.ability.dsl :refer [defcategory]]
-            [cn.li.ac.ability.category :as category]
+            [cn.li.ac.ability.registry.category :as category]
+            [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.content.ability.electromaster.body-intensify]
             [cn.li.ac.content.ability.electromaster.current-charging]
             [cn.li.ac.content.ability.electromaster.mag-manip]
@@ -75,4 +76,6 @@
   (when (compare-and-set! ability-content-installed? false true)
     (doseq [cat [electromaster telekinesis meltdowner-category teleporter vecmanip]]
       (category/register-category! (dissoc cat :ac/content-type)))
+    ;; Register generic item actions (not skill-specific)
+    (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)
     (log/info "Ability content initialized")))

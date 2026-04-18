@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.client.effects.particles
   "Particle effect commands for ability system (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.event :as evt]))
+  (:require [cn.li.ac.ability.registry.event :as evt]))
 
 ;; Particle effect command structure
 ;; {:type :particle

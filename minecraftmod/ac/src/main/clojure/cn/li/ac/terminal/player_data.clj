@@ -3,7 +3,7 @@
 
   Extends the existing player-state atom with terminal installation tracking
   and app management. Reuses the existing dirty tracking and sync mechanisms."
-  (:require [cn.li.ac.ability.player-state :as ps]
+  (:require [cn.li.ac.ability.state.player :as ps]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================

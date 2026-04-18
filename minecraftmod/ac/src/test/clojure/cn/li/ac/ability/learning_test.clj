@@ -1,8 +1,8 @@
 (ns cn.li.ac.ability.learning-test
-  (:require [cn.li.ac.ability.model.ability-data :as ad]
-            [cn.li.ac.ability.service.learning :as lrn]
+  (:require [cn.li.ac.ability.model.ability :as ad]
+            [cn.li.ac.ability.server.service.learning :as lrn]
             [cn.li.ac.content.ability]
-            [cn.li.ac.ability.skill :as skill]))
+            [cn.li.ac.ability.registry.skill :as skill]))
 
 (defn test-learn-and-level-up
   []

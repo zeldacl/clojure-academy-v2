@@ -1,9 +1,9 @@
 (ns cn.li.ac.ability.client.screens.preset-editor
   "Preset editor screen logic (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.client-api :as api]
-            [cn.li.ac.ability.skill :as skill]
-            [cn.li.ac.ability.model.ability-data :as adata]
-            [cn.li.ac.ability.player-state :as ps]))
+  (:require [cn.li.ac.ability.client.api :as api]
+            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.ac.ability.state.player :as ps]))
 
 ;; Editor state
 (defonce ^:private editor-state

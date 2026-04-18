@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.cooldown-test
-  (:require [cn.li.ac.ability.model.cooldown-data :as cd]))
+  (:require [cn.li.ac.ability.model.cooldown :as cd]))
 
 (defn test-cooldown-max-and-tick
   []

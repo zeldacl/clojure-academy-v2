@@ -5,11 +5,11 @@
   Cost on up: CP lerp(120,80), overload lerp(30,15) by exp
   Cooldown: lerp(80,50) ticks (manual)
   Exp: +0.002 per use"
-  (:require [cn.li.ac.ability.player-state :as ps]
+  (:require [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.balance :as bal]
-            [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]

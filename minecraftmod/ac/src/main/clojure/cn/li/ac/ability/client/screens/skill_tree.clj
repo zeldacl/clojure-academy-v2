@@ -1,10 +1,10 @@
 (ns cn.li.ac.ability.client.screens.skill-tree
   "Skill tree screen logic (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.client-api :as api]
-            [cn.li.ac.ability.skill :as skill]
-            [cn.li.ac.ability.service.learning :as learning]
-            [cn.li.ac.ability.model.ability-data :as adata]
-            [cn.li.ac.ability.player-state :as ps]))
+  (:require [cn.li.ac.ability.client.api :as api]
+            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.server.service.learning :as learning]
+            [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.ac.ability.state.player :as ps]))
 
 ;; Screen state (no Minecraft imports)
 (defonce ^:private screen-state

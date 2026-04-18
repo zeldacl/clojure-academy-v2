@@ -2,14 +2,15 @@
   "VecReflection skill - advanced reflection (toggle).
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.player-state :as ps]
+  (:require [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.model.resource-data :as rdata]
-            [cn.li.ac.ability.context :as ctx]
-            [cn.li.ac.ability.balance :as bal]
+            [cn.li.ac.ability.model.resource :as rdata]
+            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.ability.service.skill-effects :as fx-common]
+            [cn.li.ac.ability.server.service.skill-effects :as fx-common]
+            [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -312,3 +313,19 @@
             :up! vec-reflection-on-key-up
             :abort! vec-reflection-on-key-abort}
   :prerequisites [{:skill-id :vec-deviation :min-exp 0.0}])
+
+;; ============================================================================
+;; Self-register damage handler + attack cancel check at load time
+;; ============================================================================
+
+(damage-handler/register-toggle-damage-handler!
+  :vec-reflection-damage
+  :vec-reflection
+  (fn [player-id attacker-id damage _damage-source]
+    (let [[_performed reduced-damage] (reflect-damage player-id attacker-id damage)]
+      [reduced-damage {:handler :vec-reflection}]))
+  60)
+
+(damage-handler/register-attack-cancel-check!
+  :vec-reflection
+  can-cancel-attack?)

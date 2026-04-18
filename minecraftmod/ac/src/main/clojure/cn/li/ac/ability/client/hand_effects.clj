@@ -1,160 +1,120 @@
 (ns cn.li.ac.ability.client.hand-effects
-  "Pure client-side hand effect state for first-person ability animations."
-  (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
+  "Registry-based hand effect infrastructure for first-person hand animations.
 
-(def ^:private directed-shock-sound "my_mod:vecmanip.directed_shock")
-(def ^:private prepare-duration-ms 150.0)
-(def ^:private punch-duration-ms 300.0)
-(def ^:private groundshock-perform-step 3.4)
-(def ^:private groundshock-perform-ticks 4)
+  Skills register their hand-effect handlers via `register-hand-effect!` at
+  load time.  The infrastructure dispatches enqueue / tick / transform calls
+  without any skill-specific knowledge."
+  (:require [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private directed-shock-effect (atom nil))
-(defonce ^:private groundshock-effect (atom nil))
-(defonce ^:private camera-pitch-deltas (atom []))
+;; ---------------------------------------------------------------------------
+;; Camera pitch delta accumulator (shared across all hand effects)
+;; ---------------------------------------------------------------------------
 
-(defn- now-ms []
-  (System/currentTimeMillis))
+(defonce camera-pitch-deltas (atom []))
 
-(defn- enqueue-camera-pitch-delta! [delta]
-  (swap! camera-pitch-deltas conj (double delta)))
+(defn add-camera-pitch-delta!
+  "Queue a camera pitch delta (float degrees) to be consumed by the platform
+  renderer on the next frame."
+  [delta]
+  (swap! camera-pitch-deltas conj (float delta)))
 
-(defn consume-camera-pitch-deltas! []
+(defn drain-camera-pitch-deltas!
+  "Atomically drain and return all queued camera pitch deltas."
+  []
   (let [deltas @camera-pitch-deltas]
     (reset! camera-pitch-deltas [])
     deltas))
 
-(defn- clamp01 [x]
-  (max 0.0 (min 1.0 (double x))))
+;; ---------------------------------------------------------------------------
+;; Utility functions (shared by skill hand-effect impls)
+;; ---------------------------------------------------------------------------
 
-(defn- smoothstep [t]
-  (let [x (clamp01 t)]
-    (* x x (- 3.0 (* 2.0 x)))))
+(defn smoothstep
+  "Hermite interpolation: 0 at edge0, 1 at edge1."
+  ^double [^double edge0 ^double edge1 ^double x]
+  (let [t (max 0.0 (min 1.0 (/ (- x edge0) (- edge1 edge0))))]
+    (* t t (- 3.0 (* 2.0 t)))))
 
-(defn- sample-curve [points t]
-  (let [pairs (partition 2 1 points)
-        x (clamp01 t)]
-    (cond
-      (<= x (ffirst points)) (double (second (first points)))
-      (>= x (first (last points))) (double (second (last points)))
-      :else
-      (let [[[x0 y0] [x1 y1]] (or (some (fn [[[ax _ :as p0] [bx _ :as p1]]]
-                                           (when (and (<= ax x) (<= x bx))
-                                             [p0 p1]))
-                                         pairs)
-                                      [(first points) (last points)])
-            local-t (if (= x0 x1) 1.0 (/ (- x x0) (- x1 x0)))
-            eased (smoothstep local-t)]
-        (+ (double y0) (* (- (double y1) (double y0)) eased))))))
+(defn sample-curve
+  "Piecewise-linear interpolation on a sorted seq of [x y] control points."
+  ^double [curve ^double t]
+  (cond
+    (<= t (ffirst curve)) (second (first curve))
+    (>= t (first (last curve))) (second (last curve))
+    :else
+    (let [[a b] (first (filter (fn [[[x0 _] [x1 _]]]
+                                 (and (<= x0 t) (< t x1)))
+                               (partition 2 1 curve)))]
+      (if (and a b)
+        (let [[x0 y0] a
+              [x1 y1] b
+              frac (/ (- t x0) (- x1 x0))]
+          (+ y0 (* frac (- y1 y0))))
+        (second (last curve))))))
 
-(defn- prepare-transform [progress]
-  {:tx (sample-curve [[0.0 0.0] [1.0 -0.02]] progress)
-   :ty (sample-curve [[0.0 0.0] [0.5 0.2] [1.0 0.4]] progress)
-   :tz (sample-curve [[0.0 0.0] [1.0 -0.05]] progress)
-   :rot-x (sample-curve [[0.0 0.0] [1.0 -20.0]] progress)
-   :rot-y 0.0
-   :rot-z 0.0})
+(defn clamp01 ^double [^double v] (max 0.0 (min 1.0 v)))
 
-(defn- punch-transform [progress]
-  {:tx (sample-curve [[0.0 -0.04] [0.5 -0.04] [1.0 0.0]] progress)
-   :ty (sample-curve [[0.0 0.8] [0.5 0.75] [1.0 0.0]] progress)
-   :tz (sample-curve [[0.0 0.0] [0.3 -0.4] [1.0 0.0]] progress)
-   :rot-x (sample-curve [[0.0 -40.0] [0.5 -45.0] [1.0 0.0]] progress)
-   :rot-y (sample-curve [[0.0 0.0] [0.3 10.0] [1.0 0.0]] progress)
-   :rot-z 0.0})
+;; ---------------------------------------------------------------------------
+;; Registry
+;; ---------------------------------------------------------------------------
 
-(defn enqueue-hand-effect! [effect-id payload]
-  (case effect-id
-    :directed-shock
-    (let [{:keys [mode performed?]} payload]
-      (case mode
-        :start
-        (reset! directed-shock-effect {:stage :prepare
-                                       :started-at (now-ms)})
+;; effect-id → {:enqueue-fn    (fn [payload])
+;;              :tick-fn        (fn [])
+;;              :transform-fn   (fn []) → transform-map or nil  (optional)}
+(defonce ^:private effect-registry (atom {}))
+(defonce ^:private effect-order (atom []))
 
-        :perform
-        (do
-          (reset! directed-shock-effect {:stage :punch
-                                         :started-at (now-ms)})
-          (client-sounds/queue-sound-effect!
-            {:type :sound
-             :sound-id directed-shock-sound
-             :volume 0.5
-             :pitch 1.0}))
+(defn register-hand-effect!
+  "Register a hand effect handler.  `effect-id` is a keyword.
 
-        :end
-        (when-not performed?
-          (reset! directed-shock-effect nil))
+  `handler-map` keys:
+    :enqueue-fn   (fn [payload]) — process incoming FX data
+    :tick-fn      (fn []) — advance animation state each game tick
+    :transform-fn (fn []) → {:translate [x y z] :rotate [x y z] :scale [x y z]} or nil
+                   (optional)"
+  [effect-id handler-map]
+  {:pre [(keyword? effect-id) (map? handler-map)
+         (fn? (:enqueue-fn handler-map))
+         (fn? (:tick-fn handler-map))]}
+  (when-not (get @effect-registry effect-id)
+    (swap! effect-order conj effect-id))
+  (swap! effect-registry assoc effect-id handler-map)
+  (log/debug "Registered hand effect:" effect-id)
+  nil)
 
-        nil))
+;; ---------------------------------------------------------------------------
+;; Dispatch
+;; ---------------------------------------------------------------------------
 
-    :groundshock
-    (let [{:keys [mode charge-ticks performed?]} payload]
-      (case mode
-        :start
-        (reset! groundshock-effect {:charge-ticks 0
-                                    :perform-ticks 0
-                                    :active? true})
+(defn enqueue-hand-effect!
+  "Dispatch an incoming FX payload to the registered hand-effect handler."
+  [effect-id payload]
+  (if-let [{:keys [enqueue-fn]} (get @effect-registry effect-id)]
+    (enqueue-fn payload)
+    (log/warn "No hand effect registered for" effect-id)))
 
-        :update
-        (swap! groundshock-effect
-               (fn [state]
-                 (let [prev (long (or (:charge-ticks state) 0))
-                       next (long (max 0 (or charge-ticks 0)))]
-                   (doseq [tick (range (inc prev) (inc next))]
-                     (let [pitch-factor (cond
-                                          (< tick 4) (/ tick 4.0)
-                                          (<= tick 20) 1.0
-                                          (<= tick 25) (- 1.0 (/ (- tick 20) 5.0))
-                                          :else 0.0)]
-                       (enqueue-camera-pitch-delta! (* -0.2 pitch-factor))))
-                   {:charge-ticks next
-                    :perform-ticks (long (or (:perform-ticks state) 0))
-                    :active? true})))
+(defn tick-hand-effects!
+  "Tick all registered hand effects."
+  []
+  (doseq [eid @effect-order]
+    (when-let [{:keys [tick-fn]} (get @effect-registry eid)]
+      (tick-fn))))
 
-        :perform
-        (swap! groundshock-effect
-               (fn [state]
-                 {:charge-ticks (long (or (:charge-ticks state) 0))
-                  :perform-ticks groundshock-perform-ticks
-                  :active? false}))
+(defn current-hand-transform
+  "Merge transforms from all registered hand effects.
+  Returns the first non-nil transform (priority = registration order)."
+  []
+  (some (fn [eid]
+          (when-let [{:keys [transform-fn]} (get @effect-registry eid)]
+            (when transform-fn
+              (transform-fn))))
+        @effect-order))
 
-        :end
-        (when-not performed?
-          (reset! groundshock-effect nil))
+;; ---------------------------------------------------------------------------
+;; Introspection
+;; ---------------------------------------------------------------------------
 
-        nil))
-
-    nil))
-
-(defn current-directed-shock-transform []
-  (when-let [{:keys [stage started-at]} @directed-shock-effect]
-    (let [elapsed (- (now-ms) (long started-at))]
-      (case stage
-        :prepare
-        (prepare-transform (min 1.0 (/ elapsed prepare-duration-ms)))
-
-        :punch
-        (let [progress (/ elapsed punch-duration-ms)]
-          (if (>= progress 1.0)
-            (do
-              (reset! directed-shock-effect nil)
-              nil)
-            (punch-transform progress)))
-
-        nil))))
-
-(defn tick-hand-effects! []
-  (when-let [{:keys [stage started-at]} @directed-shock-effect]
-    (when (and (= stage :punch)
-               (>= (- (now-ms) (long started-at)) punch-duration-ms))
-      (reset! directed-shock-effect nil)))
-  (swap! groundshock-effect
-         (fn [state]
-           (when state
-             (let [remaining (long (or (:perform-ticks state) 0))]
-               (when (pos? remaining)
-                 (enqueue-camera-pitch-delta! groundshock-perform-step))
-               (if (> remaining 1)
-                 (assoc state :perform-ticks (dec remaining))
-                 (when (or (:active? state) (pos? remaining))
-                   (assoc state :perform-ticks 0))))))))
+(defn registered-effects
+  "Return the set of currently-registered hand effect ids."
+  []
+  (set (keys @effect-registry)))
