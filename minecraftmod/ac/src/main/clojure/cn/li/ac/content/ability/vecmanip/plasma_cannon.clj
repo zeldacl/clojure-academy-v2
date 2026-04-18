@@ -21,6 +21,7 @@
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.effect.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -31,37 +32,18 @@
 ;; Scaling helpers (all values from original PlasmaCannon.scala)
 ;; ============================================================
 
-(defn- lerp [a b t]
-  (bal/lerp a b (bal/clamp01 t)))
-
-(defn- vlen [v]
-  (Math/sqrt (+ (* (double (:x v)) (double (:x v)))
-                (* (double (:y v)) (double (:y v)))
-                (* (double (:z v)) (double (:z v))))))
-
-(defn- vnormalize [v]
-  (let [len (max 1.0e-7 (vlen v))]
-    {:x (/ (double (:x v)) len)
-     :y (/ (double (:y v)) len)
-     :z (/ (double (:z v)) len)}))
-
-(defn- vdist [a b]
-  (Math/sqrt (+ (Math/pow (- (double (:x a)) (double (:x b))) 2)
-                (Math/pow (- (double (:y a)) (double (:y b))) 2)
-                (Math/pow (- (double (:z a)) (double (:z b))) 2))))
-
 ;; lerpf(60, 30, exp) — charge time
-(defn- charge-time [exp] (lerp 60.0 30.0 exp))
+(defn- charge-time [exp] (bal/lerp 60.0 30.0 (bal/clamp01 exp)))
 ;; lerpf(18, 25, exp) — CP per tick during charge (scales UP)
-(defn- cp-per-tick [exp] (lerp 18.0 25.0 exp))
+(defn- cp-per-tick [exp] (bal/lerp 18.0 25.0 (bal/clamp01 exp)))
 ;; lerpf(500, 400, exp) — overload to maintain
-(defn- overload-keep [exp] (lerp 500.0 400.0 exp))
+(defn- overload-keep [exp] (bal/lerp 500.0 400.0 (bal/clamp01 exp)))
 ;; lerpf(80, 150, exp) — damage per entity in 10-block radius
-(defn- damage-amount [exp] (lerp 80.0 150.0 exp))
+(defn- damage-amount [exp] (bal/lerp 80.0 150.0 (bal/clamp01 exp)))
 ;; lerpf(12, 15, exp) — explosion radius
-(defn- explosion-radius [exp] (lerp 12.0 15.0 exp))
+(defn- explosion-radius [exp] (bal/lerp 12.0 15.0 (bal/clamp01 exp)))
 ;; lerpf(1000, 600, exp) — cooldown ticks
-(defn- cooldown-ticks [exp] (int (lerp 1000.0 600.0 exp)))
+(defn- cooldown-ticks [exp] (int (bal/lerp 1000.0 600.0 (bal/clamp01 exp))))
 
 ;; ============================================================
 ;; Player state helpers
@@ -135,10 +117,10 @@
         dy (- (double (:y destination)) (double (:y charge-pos)))
         dz (- (double (:z destination)) (double (:z charge-pos)))
         raw {:x dx :y dy :z dz}
-        len (vlen raw)]
+        len (geom/vlen raw)]
     (if (< len 1.0e-6)
       [charge-pos charge-pos]
-      (let [step (vnormalize raw)]          ; 1 block/tick
+      (let [step (geom/vnorm raw)]          ; 1 block/tick
         [{:x (+ (double (:x charge-pos)) (:x step))
           :y (+ (double (:y charge-pos)) (:y step))
           :z (+ (double (:z charge-pos)) (:z step))}
@@ -150,9 +132,9 @@
     (let [dx (- (double (:x new-pos)) (double (:x last-pos)))
           dy (- (double (:y new-pos)) (double (:y last-pos)))
           dz (- (double (:z new-pos)) (double (:z last-pos)))
-          dist (vlen {:x dx :y dy :z dz})]
+          dist (geom/vlen {:x dx :y dy :z dz})]
       (when (> dist 1.0e-6)
-        (let [dir (vnormalize {:x dx :y dy :z dz})
+        (let [dir (geom/vnorm {:x dx :y dy :z dz})
               hit (raycast/raycast-blocks raycast/*raycast*
                                          world-id
                                          (double (:x last-pos))
@@ -294,7 +276,7 @@
                 next-flight  (inc flight-ticks)]
             (when (and charge-pos destination)
               (let [[new-pos last-pos] (try-move charge-pos destination)
-                    dist-to-dest       (vdist new-pos destination)
+                    dist-to-dest       (geom/vdist new-pos destination)
                     hit-block?         (block-hit? world-id last-pos new-pos)
                     should-explode?    (or hit-block?
                                           (< dist-to-dest 1.5)

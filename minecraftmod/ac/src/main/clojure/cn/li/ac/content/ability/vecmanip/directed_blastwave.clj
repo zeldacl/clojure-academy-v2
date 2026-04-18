@@ -9,6 +9,7 @@
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.effect.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -24,38 +25,14 @@
 (def ^:private AOE-RADIUS 3.0)
 (def ^:private PUNCH-ANIM-TICKS 6)
 
-(defn- v+ [a b] {:x (+ (double (:x a)) (double (:x b)))
-                 :y (+ (double (:y a)) (double (:y b)))
-                 :z (+ (double (:z a)) (double (:z b)))})
-(defn- v- [a b] {:x (- (double (:x a)) (double (:x b)))
-                 :y (- (double (:y a)) (double (:y b)))
-                 :z (- (double (:z a)) (double (:z b)))})
-(defn- v* [v s] {:x (* (double (:x v)) (double s))
-                 :y (* (double (:y v)) (double s))
-                 :z (* (double (:z v)) (double s))})
-(defn- vlen [v] (Math/sqrt (+ (* (:x v) (:x v)) (* (:y v) (:y v)) (* (:z v) (:z v)))))
-(defn- normalize [v] (let [l (max 1.0e-6 (vlen v))] (v* v (/ 1.0 l))))
-
-(defn- player-pos [player-id]
-  (get (ps/get-player-state player-id)
-       :position {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}))
-
-(defn- player-world-id [player-id]
-  (or (get-in (ps/get-player-state player-id) [:position :world-id])
-      "minecraft:overworld"))
-
-(defn- eye-pos [pos]
-  {:x (double (:x pos)) :y (+ (double (:y pos)) 1.62) :z (double (:z pos))})
-
 (defn- hit-pos-from-trace [player-id trace]
-  (let [pos  (player-pos player-id)
-        eye  (eye-pos pos)
+  (let [eye  (geom/eye-pos player-id)
         look (or (when raycast/*raycast*
                    (raycast/get-player-look-vector raycast/*raycast* player-id))
                  {:x 0.0 :y 0.0 :z 1.0})]
     (cond
       (nil? trace)
-      (v+ eye (v* (normalize look) RAYCAST-DISTANCE))
+      (geom/v+ eye (geom/v* (geom/vnorm look) RAYCAST-DISTANCE))
       (= :block (:hit-type trace))
       {:x (Math/floor (double (or (:x trace) 0.0)))
        :y (Math/floor (double (or (:y trace) 0.0)))
@@ -69,14 +46,14 @@
        :y (double (or (:y trace) 0.0))
        :z (double (or (:z trace) 0.0))})))
 
-(defn- knockback-impulse [caster-pos entity]
-  (let [player-head (eye-pos caster-pos)
+(defn- knockback-impulse [player-id entity]
+  (let [player-head (geom/eye-pos player-id)
         target-head {:x (double (or (:x entity) 0.0))
                      :y (+ (double (or (:y entity) 0.0)) (double (or (:eye-height entity) 1.62)))
                      :z (double (or (:z entity) 0.0))}
-        d0 (normalize (v- player-head target-head))
-        d1 (normalize {:x (:x d0) :y (- (:y d0) 0.4) :z (:z d0)})]
-    (v* d1 -1.2)))
+        d0 (geom/vnorm (geom/v- player-head target-head))
+        d1 (geom/vnorm {:x (:x d0) :y (- (:y d0) 0.4) :z (:z d0)})]
+    (geom/v* d1 -1.2)))
 
 (defn- break-hardness [exp]
   (cond (< (double exp) 0.25) 2.9
@@ -170,7 +147,7 @@
                    (if-not cost-ok?
                      (do (send-fx-end! ctx-id false)
                          (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))
-                     (let [world-id   (player-world-id player-id)
+                     (let [world-id   (geom/world-id-of player-id)
                            trace      (when raycast/*raycast*
                                         (raycast/raycast-from-player raycast/*raycast*
                                                                      player-id RAYCAST-DISTANCE true))
@@ -185,13 +162,12 @@
                                              (remove #(= (:uuid %) player-id))
                                              vec)
                                         [])
-                           caster-pos (player-pos player-id)
                            damage     (bal/lerp 10.0 25.0 exp*)]
                        (doseq [entity entities]
                          (when entity-damage/*entity-damage*
                            (entity-damage/apply-direct-damage!
                             entity-damage/*entity-damage* world-id (:uuid entity) damage :generic))
-                         (let [impulse (knockback-impulse caster-pos entity)]
+                         (let [impulse (knockback-impulse player-id entity)]
                            (when entity-motion/*entity-motion*
                              (entity-motion/add-velocity!
                               entity-motion/*entity-motion* world-id (:uuid entity)

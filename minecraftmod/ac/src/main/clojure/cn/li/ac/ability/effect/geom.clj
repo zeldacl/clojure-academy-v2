@@ -87,6 +87,18 @@
   [value]
   (int (Math/floor (double value))))
 
+(defn rotate-around-axis
+  "Rotate vec around axis by degrees."
+  [v axis degrees]
+  (let [axis-unit (vnorm axis)
+        theta     (Math/toRadians (double degrees))
+        cos-t     (Math/cos theta)
+        sin-t     (Math/sin theta)
+        term1     (v* v cos-t)
+        term2     (v* (vcross axis-unit v) sin-t)
+        term3     (v* axis-unit (* (vdot axis-unit v) (- 1.0 cos-t)))]
+    (vnorm (v+ (v+ term1 term2) term3))))
+
 ;; ---------------------------------------------------------------------------
 ;; Effect ops
 ;; ---------------------------------------------------------------------------

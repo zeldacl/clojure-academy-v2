@@ -9,6 +9,7 @@
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.effect.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
@@ -20,36 +21,16 @@
 (def ^:private MAX-TOLERANT-TICKS 200)
 (def ^:private RAYCAST-DISTANCE 3.0)
 
-(defn- v- [a b] {:x (- (double (:x a)) (double (:x b)))
-                 :y (- (double (:y a)) (double (:y b)))
-                 :z (- (double (:z a)) (double (:z b)))})
-(defn- v* [v s] {:x (* (double (:x v)) (double s))
-                 :y (* (double (:y v)) (double s))
-                 :z (* (double (:z v)) (double s))})
-(defn- vlen [v] (Math/sqrt (+ (* (:x v) (:x v)) (* (:y v) (:y v)) (* (:z v) (:z v)))))
-(defn- normalize [v] (let [l (max 1.0e-6 (vlen v))] (v* v (/ 1.0 l))))
-
-(defn- player-pos [player-id]
-  (get (ps/get-player-state player-id)
-       :position {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}))
-
-(defn- player-world-id [player-id]
-  (or (get-in (ps/get-player-state player-id) [:position :world-id])
-      "minecraft:overworld"))
-
-(defn- eye-pos [pos]
-  {:x (double (:x pos)) :y (+ (double (:y pos)) 1.62) :z (double (:z pos))})
-
 (defn- hit-impulse [caster-pos hit-pos]
-  (-> (v- hit-pos caster-pos) normalize (v* 0.24)))
+  (-> (geom/v- hit-pos caster-pos) geom/vnorm (geom/v* 0.24)))
 
-(defn- knockback-velocity [caster-pos hit-pos]
-  (let [player-head (eye-pos caster-pos)
+(defn- knockback-velocity [player-id hit-pos]
+  (let [player-head (geom/eye-pos player-id)
         target-head {:x (:x hit-pos)
                      :y (+ (:y hit-pos) (double (or (:eye-height hit-pos) 1.62)))
                      :z (:z hit-pos)}
-        d0 (normalize (v- player-head target-head))
-        d1 (normalize {:x (:x d0) :y (- (:y d0) 0.6) :z (:z d0)})]
+        d0 (geom/vnorm (geom/v- player-head target-head))
+        d1 (geom/vnorm {:x (:x d0) :y (- (:y d0) 0.6) :z (:z d0)})]
     {:x (* (:x d1) -0.7) :y (* (:y d1) -0.7) :z (* (:z d1) -0.7)}))
 
 (defn- send-fx-start! [ctx-id]
@@ -92,8 +73,8 @@
                   (if-not cost-ok?
                     (do (send-fx-end! ctx-id false)
                         (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))
-                    (let [world-id   (player-world-id player-id)
-                          caster-pos (player-pos player-id)
+                    (let [world-id   (geom/world-id-of player-id)
+                          eye        (geom/eye-pos player-id)
                           trace      (when raycast/*raycast*
                                        (raycast/raycast-from-player raycast/*raycast*
                                                                     player-id
@@ -108,9 +89,9 @@
                                         :z (double (or (:z trace) 0.0))
                                         :eye-height (double (or (:eye-height trace) 1.62))}
                               damage   (bal/lerp 7.0 15.0 exp*)
-                              impulse  (hit-impulse caster-pos hit-pos)
+                              impulse  (hit-impulse eye hit-pos)
                               knockback (when (>= exp* 0.25)
-                                          (knockback-velocity caster-pos hit-pos))]
+                                          (knockback-velocity player-id hit-pos))]
                           (when entity-damage/*entity-damage*
                             (entity-damage/apply-direct-damage!
                              entity-damage/*entity-damage* world-id target-id damage :generic))

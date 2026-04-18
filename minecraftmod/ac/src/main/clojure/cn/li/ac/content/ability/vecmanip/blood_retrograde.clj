@@ -14,6 +14,7 @@
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.effect.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -27,59 +28,12 @@
 (defn- skill-exp [player-id]
   (double (get-in (ps/get-player-state player-id) [:ability-data :skills :blood-retrograde :exp] 0.0)))
 
-(defn- v+ [a b]
-  {:x (+ (double (:x a)) (double (:x b)))
-   :y (+ (double (:y a)) (double (:y b)))
-   :z (+ (double (:z a)) (double (:z b)))})
-
-(defn- v- [a b]
-  {:x (- (double (:x a)) (double (:x b)))
-   :y (- (double (:y a)) (double (:y b)))
-   :z (- (double (:z a)) (double (:z b)))})
-
-(defn- v* [a scalar]
-  {:x (* (double (:x a)) (double scalar))
-   :y (* (double (:y a)) (double scalar))
-   :z (* (double (:z a)) (double scalar))})
-
-(defn- dot [a b]
-  (+ (* (:x a) (:x b))
-     (* (:y a) (:y b))
-     (* (:z a) (:z b))))
-
-(defn- vlen [a]
-  (Math/sqrt (dot a a)))
-
-(defn- normalize [a]
-  (let [len (max 1.0e-6 (vlen a))]
-    (v* a (/ 1.0 len))))
-
-(defn- cross [a b]
-  {:x (- (* (:y a) (:z b)) (* (:z a) (:y b)))
-   :y (- (* (:z a) (:x b)) (* (:x a) (:z b)))
-   :z (- (* (:x a) (:y b)) (* (:y a) (:x b)))})
-
-(defn- rotate-around-axis [vec axis degrees]
-  (let [axis-unit (normalize axis)
-        theta (Math/toRadians (double degrees))
-        cos-theta (Math/cos theta)
-        sin-theta (Math/sin theta)
-        term1 (v* vec cos-theta)
-        term2 (v* (cross axis-unit vec) sin-theta)
-        term3 (v* axis-unit (* (dot axis-unit vec) (- 1.0 cos-theta)))]
-    (normalize (v+ (v+ term1 term2) term3))))
-
-(defn- world-up []
-  {:x 0.0 :y 1.0 :z 0.0})
-
-(defn- player-world-id [player-id]
-  (or (get-in (ps/get-player-state player-id) [:position :world-id])
-      "minecraft:overworld"))
+(def ^:private world-up {:x 0.0 :y 1.0 :z 0.0})
 
 (defn- get-player-look [player-id]
   (or (when raycast/*raycast*
         (some-> (raycast/get-player-look-vector raycast/*raycast* player-id)
-                normalize))
+                geom/vnorm))
       {:x 0.0 :y 0.0 :z 1.0}))
 
 (defn- get-target-info [world-id target-id fallback-hit]
@@ -160,13 +114,13 @@
     (->> spray-angles
          (mapcat (fn [pitch-deg]
                    (let [yaw-jitter (- (* (rand) 40.0) 20.0)
-                         yaw-turned (rotate-around-axis base-look (world-up) yaw-jitter)
-                         right-axis (let [raw (cross yaw-turned (world-up))]
-                                      (if (> (vlen raw) 1.0e-5)
-                                        (normalize raw)
+                         yaw-turned (geom/rotate-around-axis base-look world-up yaw-jitter)
+                         right-axis (let [raw (geom/vcross yaw-turned world-up)]
+                                      (if (> (geom/vlen raw) 1.0e-5)
+                                        (geom/vnorm raw)
                                         {:x 1.0 :y 0.0 :z 0.0}))
-                         dir (rotate-around-axis yaw-turned right-axis pitch-deg)
-                         start (v- head-pos (v* dir 0.5))
+                         dir (geom/rotate-around-axis yaw-turned right-axis pitch-deg)
+                         start (geom/v- head-pos (geom/v* dir 0.5))
                          hit (when raycast/*raycast*
                                (raycast/raycast-blocks raycast/*raycast*
                                                       world-id
@@ -198,11 +152,11 @@
                     (let [dv {:x (* (- (* (rand) 2.0) 1.0) width)
                               :y (* (rand) height)
                               :z (* (- (* (rand) 2.0) 1.0) width)}
-                          pos (v+ (v+ {:x (:x target-info)
-                                       :y (:y target-info)
-                                       :z (:z target-info)}
-                                     dv)
-                                  (v* look-dir 0.2))]
+                          pos (geom/v+ (geom/v+ {:x (:x target-info)
+                                                  :y (:y target-info)
+                                                  :z (:z target-info)}
+                                                dv)
+                                       (geom/v* look-dir 0.2))]
                       {:x (:x pos)
                        :y (:y pos)
                        :z (:z pos)
@@ -231,7 +185,7 @@
 
 (defn- try-perform! [player-id ctx-id hit cost-ok?]
   (let [target-id (:entity-id hit)
-        world-id (player-world-id player-id)
+        world-id (geom/world-id-of player-id)
         exp (skill-exp player-id)]
     (when target-id
       (if-not cost-ok?

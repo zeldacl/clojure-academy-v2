@@ -19,6 +19,7 @@
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.balance :as bal]
             [cn.li.ac.ability.context :as ctx]
+            [cn.li.ac.ability.effect.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.player-motion :as player-motion]
@@ -31,35 +32,15 @@
 (def ^:private min-charge-ticks 5)
 (def ^:private ground-break-prob 0.3)
 
-(defn- lerp [a b t]
-  (bal/lerp a b t))
-
-(defn- clamp01 [x]
-  (bal/clamp01 x))
-
-(defn- v* [v scalar]
-  {:x (* (double (:x v)) (double scalar))
-   :y (* (double (:y v)) (double scalar))
-   :z (* (double (:z v)) (double scalar))})
-
-(defn- vlen [v]
-  (Math/sqrt (+ (* (:x v) (:x v))
-                (* (:y v) (:y v))
-                (* (:z v) (:z v)))))
-
-(defn- normalize [v]
-  (let [length (max 1.0e-6 (vlen v))]
-    (v* v (/ 1.0 length))))
-
 (defn- horizontal-look [player-id]
   (when-let [look-vec (and raycast/*raycast*
                            (raycast/get-player-look-vector raycast/*raycast* player-id))]
     (let [flat {:x (double (:x look-vec))
                 :y 0.0
                 :z (double (:z look-vec))}
-          length (vlen flat)]
+          length (geom/vlen flat)]
       (when (> length 1.0e-6)
-        (normalize flat)))))
+        (geom/vnorm flat)))))
 
 (defn- perpendicular [flat-dir]
   {:x (- (double (:z flat-dir)))
@@ -67,29 +48,29 @@
    :z (double (:x flat-dir))})
 
 (defn- cp-cost [exp]
-  (lerp 80.0 150.0 (clamp01 exp)))
+  (bal/lerp 80.0 150.0 (bal/clamp01 exp)))
 
 (defn- overload-cost [exp]
-  (lerp 15.0 10.0 (clamp01 exp)))
+  (bal/lerp 15.0 10.0 (bal/clamp01 exp)))
 
 (defn- init-energy [exp]
-  (lerp 60.0 120.0 (clamp01 exp)))
+  (bal/lerp 60.0 120.0 (bal/clamp01 exp)))
 
 (defn- max-iterations [exp]
-  (int (lerp 10.0 25.0 (clamp01 exp))))
+  (int (bal/lerp 10.0 25.0 (bal/clamp01 exp))))
 
 (defn- damage-value [exp]
-  (lerp 4.0 6.0 (clamp01 exp)))
+  (bal/lerp 4.0 6.0 (bal/clamp01 exp)))
 
 (defn- drop-rate [exp]
-  (lerp 0.3 1.0 (clamp01 exp)))
+  (bal/lerp 0.3 1.0 (bal/clamp01 exp)))
 
 (defn- cooldown-ticks [exp]
-  (int (lerp 80.0 40.0 (clamp01 exp))))
+  (int (bal/lerp 80.0 40.0 (bal/clamp01 exp))))
 
 (defn- launch-y-speed [exp]
   (* (+ 0.6 (* (rand) 0.3))
-     (lerp 0.8 1.3 (clamp01 exp))))
+     (bal/lerp 0.8 1.3 (bal/clamp01 exp))))
 
 (defn- skill-exp [player-id]
   (double (get-in (ps/get-player-state player-id) [:ability-data :skills :groundshock :exp] 0.0)))
@@ -99,11 +80,11 @@
 
 (defn groundshock-cost-up-cp
   [{:keys [player-id]}]
-  (cp-cost (clamp01 (skill-exp player-id))))
+  (cp-cost (bal/clamp01 (skill-exp player-id))))
 
 (defn groundshock-cost-up-overload
   [{:keys [player-id]}]
-  (overload-cost (clamp01 (skill-exp player-id))))
+  (overload-cost (bal/clamp01 (skill-exp player-id))))
 
 (defn- apply-cooldown! [player-id exp]
   (skill-effects/set-main-cooldown! player-id :groundshock (cooldown-ticks exp)))
@@ -245,9 +226,9 @@
 (defn- propagation-positions [perp]
   [[{:x 0.0 :y 0.0 :z 0.0} 1.0]
    [perp 0.7]
-   [(v* perp -1.0) 0.7]
-   [(v* perp 2.0) 0.3]
-   [(v* perp -2.0) 0.3]])
+   [(geom/v* perp -1.0) 0.7]
+   [(geom/v* perp 2.0) 0.3]
+   [(geom/v* perp -2.0) 0.3]])
 
 (defn- finalize-affected-blocks [world-id positions]
   (mapv (fn [[x y z]]
@@ -333,7 +314,7 @@
 
 (defn- break-mastery-ring!
   [player-id world-id player-pos exp broken-blocks*]
-  (when (and (= 1.0 (clamp01 exp))
+  (when (and (= 1.0 (bal/clamp01 exp))
              block-manip/*block-manipulation*)
     (let [energy* (atom Double/MAX_VALUE)
           x0 (int (double (:x player-pos)))
@@ -354,7 +335,7 @@
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
             charge-ticks (long (or (:charge-ticks skill-state) 0))
-            exp (clamp01 (skill-exp player-id))]
+            exp (bal/clamp01 (skill-exp player-id))]
 
         ;; Check if charge is valid (5+ ticks) and player is on ground
         (if (and (>= charge-ticks min-charge-ticks)

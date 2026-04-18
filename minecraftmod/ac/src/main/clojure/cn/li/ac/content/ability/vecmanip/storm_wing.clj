@@ -40,9 +40,6 @@
 
 (def ^:private ACCEL 0.16)
 
-(defn- lerp [a b t]
-  (bal/lerp a b t))
-
 ;; ============================================================================
 ;; Helpers
 ;; ============================================================================
@@ -55,16 +52,16 @@
     (teleportation/get-player-position teleportation/*teleportation* player-id)))
 
 (defn- apply-cooldown! [player-id exp]
-  (let [cd-ticks (int (Math/round (double (lerp 30.0 10.0 exp))))]
+  (let [cd-ticks (int (Math/round (double (bal/lerp 30.0 10.0 exp))))]
     (skill-effects/set-main-cooldown! player-id :storm-wing cd-ticks)))
 
 (defn storm-wing-cost-tick-cp
   [{:keys [player-id]}]
-  (lerp 40.0 25.0 (skill-exp player-id)))
+  (bal/lerp 40.0 25.0 (skill-exp player-id)))
 
 (defn storm-wing-cost-tick-overload
   [{:keys [player-id]}]
-  (lerp 10.0 7.0 (skill-exp player-id)))
+  (bal/lerp 10.0 7.0 (skill-exp player-id)))
 
 (defn storm-wing-cost-creative?
   [{:keys [player]}]
@@ -145,7 +142,7 @@
   [{:keys [ctx-id player-id]}]
   (try
     (let [exp (skill-exp player-id)
-          charge-needed (int (Math/round (double (lerp 70.0 30.0 exp))))]
+          charge-needed (int (Math/round (double (bal/lerp 70.0 30.0 exp))))]
       (ctx/update-context! ctx-id assoc :skill-state
                            {:phase :charging
                             :charge-ticks 0
@@ -188,7 +185,7 @@
                           px (double (:x pos))
                           py (double (:y pos))
                           pz (double (:z pos))
-                          speed (* (if (< exp 0.45) 0.7 1.2) (lerp 2.0 3.0 exp))
+                          speed (* (if (< exp 0.45) 0.7 1.2) (bal/lerp 2.0 3.0 exp))
                           ;; Get current move direction from context (set by client)
                           dir (:move-dir skill-state)
                           cur-vx (double (:vx skill-state 0.0))
