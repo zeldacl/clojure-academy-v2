@@ -23,26 +23,59 @@
                   (evt/make-deactivate-event uuid))]})))
 
 ;; ============================================================================
+;; Max-value recalculation (fires CalcEvents for passive skill modifiers)
+;; ============================================================================
+
+(defn recalc-max-for-level
+  "Recalc max-cp/max-overload with CalcEvent modifiers.
+  Fires CALC-MAX-CP and CALC-MAX-OVERLOAD so passive skills can adjust."
+  [res-data level]
+  (let [base     (rdata/recalc-max-values res-data level)
+        max-cp   (evt/fire-calc-event! evt/CALC-MAX-CP (:max-cp base) {})
+        max-ol   (evt/fire-calc-event! evt/CALC-MAX-OVERLOAD (:max-overload base) {})]
+    (assoc base
+           :max-cp       max-cp
+           :max-overload max-ol
+           :cur-cp       (min (:cur-cp base) max-cp)
+           :cur-overload (min (:cur-overload base) max-ol))))
+
+;; ============================================================================
 ;; Consumption
 ;; ============================================================================
 
 (defn perform-resource
   "Attempt to consume (overload, cp). Returns {:data updated :success? bool :events [...]}.
   
-  creative? – when true, skip CP check (creative mode bypass)."
-  [res-data uuid overload cp creative?]
+  creative? – when true, skip CP check (creative mode bypass).
+  level    – player's ability level (for growth caps)."
+  [res-data uuid overload cp creative? level]
   (if-not (rdata/can-perform? res-data overload cp creative?)
     {:data res-data :success? false :events []}
-    (let [;; Apply CP consumption
-          data1          (if (and (pos? cp) (not creative?))
-                           (rdata/consume-cp res-data cp cfg/*cp-recover-cooldown*)
+    (let [;; Fire CALC-SKILL-PERFORM to let passive skills modify cp/overload
+          effective-cp  (evt/fire-calc-event! evt/CALC-SKILL-PERFORM cp
+                                              {:field :cp :uuid uuid})
+          effective-ol  (evt/fire-calc-event! evt/CALC-SKILL-PERFORM overload
+                                              {:field :overload :uuid uuid})
+          ;; Apply CP consumption
+          data1          (if (and (pos? effective-cp) (not creative?))
+                           (rdata/consume-cp res-data effective-cp cfg/*cp-recover-cooldown*)
                            res-data)
           ;; Apply overload
-          [data2 hit-cap?] (if (pos? overload)
-                              (rdata/add-overload data1 overload)
+          [data2 hit-cap?] (if (pos? effective-ol)
+                              (rdata/add-overload data1 effective-ol cfg/*overload-recover-cooldown*)
                               [data1 false])
+          ;; Growth: add-max-cp grows by consumed CP × rate
+          data3          (if (and (pos? effective-cp) (not creative?))
+                           (rdata/grow-max-cp data2 effective-cp cfg/*maxcp-incr-rate* level)
+                           data2)
+          ;; Growth: add-max-overload grows by overload × rate
+          data4          (if (pos? effective-ol)
+                           (rdata/grow-max-overload data3 effective-ol cfg/*maxo-incr-rate* level)
+                           data3)
+          ;; Recalc max after growth
+          data5          (recalc-max-for-level data4 level)
           events         (when hit-cap? [(evt/make-overload-event uuid)])]
-      {:data     data2
+      {:data     data5
        :success? true
        :events   (or events [])})))
 
@@ -60,7 +93,7 @@
                                               cfg/*overload-recover-speed* {})]
     {:data (-> res-data
                (rdata/tick-cp-recovery cp-speed)
-               (rdata/tick-overload-recovery ov-speed cfg/*overload-recover-cooldown*))
+               (rdata/tick-overload-recovery ov-speed))
      :events []}))
 
 ;; ============================================================================

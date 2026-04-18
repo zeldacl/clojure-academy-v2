@@ -267,6 +267,14 @@
   (filter #(and (= (:category-id %) cat-id) (:controllable? %))
           (vals @skill-registry)))
 
+(defn get-controllable-skills-at-level
+  "Returns controllable skills for a category at exactly the given level."
+  [cat-id level]
+  (filter #(and (= (:category-id %) cat-id)
+                (:controllable? %)
+                (= (:level %) level))
+          (vals @skill-registry)))
+
 (defn can-control?
   "True when the skill is enabled and controllable."
   [skill-id]

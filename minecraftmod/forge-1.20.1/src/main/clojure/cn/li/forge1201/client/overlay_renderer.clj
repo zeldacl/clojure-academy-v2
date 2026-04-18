@@ -52,24 +52,54 @@
           (bit-shift-left (int (or g 255)) 8)
           (int (or b 255))))
 
-(defn- render-bar! [^GuiGraphics graphics {:keys [x y width height percent bg-texture fg-texture]}]
+(defn- rgb-vec->argb
+  "Convert [r g b] (0-255) to ARGB int with alpha."
+  [[r g b] alpha]
+  (bit-or (bit-shift-left (int (* 255 (double alpha))) 24)
+          (bit-shift-left (int r) 16)
+          (bit-shift-left (int g) 8)
+          (int b)))
+
+(defn- render-bar! [^GuiGraphics graphics {:keys [x y width height percent bg-texture fg-texture bar-color hint-percent]}]
   (let [filled-width (int (* (double percent) width))
         bg-path (normalize-texture-path bg-texture)
         fg-path (normalize-texture-path fg-texture)]
     (when-let [bg-loc (and bg-path (ResourceLocation/tryParse bg-path))]
       (.blit graphics bg-loc (int x) (int y) 0 0 (int width) (int height) (int width) (int height)))
+    ;; Consumption hint ghost line
+    (when (and hint-percent (pos? hint-percent) (< hint-percent percent))
+      (let [hint-x (int (+ x (* (double hint-percent) width)))]
+        (.fill graphics hint-x (int y) (+ hint-x 1) (int (+ y height))
+               (unchecked-int 0x80FF4444))))
     (when (and fg-path (pos? filled-width))
-      (when-let [fg-loc (ResourceLocation/tryParse fg-path)]
-        (.enableScissor graphics (int x) (int y) (int (+ x filled-width)) (int (+ y height)))
-        (.blit graphics fg-loc (int x) (int y) 0 0 (int width) (int height) (int width) (int height))
-        (.disableScissor graphics)))))
+      ;; Apply bar-color tint if provided
+      (if bar-color
+        (let [color-int (rgb-vec->argb bar-color 1.0)]
+          (.enableScissor graphics (int x) (int y) (int (+ x filled-width)) (int (+ y height)))
+          (.fill graphics (int x) (int y) (int (+ x filled-width)) (int (+ y height)) (unchecked-int color-int))
+          (.disableScissor graphics))
+        (when-let [fg-loc (ResourceLocation/tryParse fg-path)]
+          (.enableScissor graphics (int x) (int y) (int (+ x filled-width)) (int (+ y height)))
+          (.blit graphics fg-loc (int x) (int y) 0 0 (int width) (int height) (int width) (int height))
+          (.disableScissor graphics))))))
 
-(defn- render-skill-slot! [^GuiGraphics graphics {:keys [x y key-label skill-icon skill-name in-cooldown cooldown-seconds visual-state]}]
-  (.fill graphics x y (+ x 20) (+ y 20)
-         (case visual-state
-           :charge -1442500609
-           :active -1602223873
-           -2147483648))
+(defn- render-skill-slot! [^GuiGraphics graphics {:keys [x y key-label skill-icon skill-name in-cooldown cooldown-seconds visual-state alpha glow-color sin-effect?]}]
+  (let [effective-alpha (double (or alpha 1.0))
+        bg-color (case visual-state
+                   :charge (rgb-vec->argb (or glow-color [255 173 55]) (* 0.4 effective-alpha))
+                   :active (rgb-vec->argb (or glow-color [70 179 255]) (* 0.4 effective-alpha))
+                   (unchecked-int (rgb-vec->argb [0 0 0] (* 0.5 effective-alpha))))]
+    (.fill graphics x y (+ x 20) (+ y 20) (unchecked-int bg-color))
+    ;; Glow border for active/charge states
+    (when (and glow-color (not= visual-state :idle))
+      (let [border-alpha (if sin-effect?
+                           (* 0.6 effective-alpha (+ 0.5 (* 0.5 (Math/sin (* (/ (System/currentTimeMillis) 300.0) Math/PI)))))
+                           (* 0.6 effective-alpha))
+            border-color (rgb-vec->argb glow-color border-alpha)]
+        (.fill graphics (dec x) (dec y) (+ x 21) y (unchecked-int border-color))       ;; top
+        (.fill graphics (dec x) (+ y 20) (+ x 21) (+ y 21) (unchecked-int border-color)) ;; bottom
+        (.fill graphics (dec x) y x (+ y 20) (unchecked-int border-color))               ;; left
+        (.fill graphics (+ x 20) y (+ x 21) (+ y 20) (unchecked-int border-color)))))   ;; right
   (draw-string! graphics (str key-label) (+ x 2) (+ y 2) 0xFFFFFF)
   (when skill-icon
     (when-let [icon-loc (ResourceLocation/tryParse (normalize-texture-path skill-icon))]
@@ -104,13 +134,45 @@
             ry (+ cy (int (Math/round (* radius (Math/sin a)))))]
         (.fill graphics (dec rx) (dec ry) (inc rx) (inc ry) ring-color)))))
 
+(defn- render-preset-indicator!
+  "Render preset indicator: 4 small squares, glow on current, with fade."
+  [^GuiGraphics graphics {:keys [x y current total fade]}]
+  (let [square-size 8
+        gap 3
+        total-width (+ (* total square-size) (* (dec total) gap))
+        start-x (- x (int (/ total-width 2)))
+        alpha-byte (int (* 255 (double (or fade 1.0))))]
+    (doseq [i (range total)]
+      (let [sx (+ start-x (* i (+ square-size gap)))
+            active? (= i current)
+            color (if active?
+                    (bit-or (bit-shift-left alpha-byte 24) 0x00FFAA00)
+                    (bit-or (bit-shift-left (int (* alpha-byte 0.5)) 24) 0x00666666))]
+        (.fill graphics sx y (+ sx square-size) (+ y square-size) (unchecked-int color))
+        (when active?
+          ;; Glow border
+          (let [glow (bit-or (bit-shift-left alpha-byte 24) 0x00FFD700)]
+            (.fill graphics (dec sx) (dec y) (+ sx square-size 1) y (unchecked-int glow))
+            (.fill graphics (dec sx) (+ y square-size) (+ sx square-size 1) (+ y square-size 1) (unchecked-int glow))
+            (.fill graphics (dec sx) y sx (+ y square-size) (unchecked-int glow))
+            (.fill graphics (+ sx square-size) y (+ sx square-size 1) (+ y square-size) (unchecked-int glow))))))))
+
 (defn- render-element! [^GuiGraphics graphics element screen-width screen-height]
   (case (:kind element)
     :bar (render-bar! graphics element)
     :activation-indicator (when (:activated element)
-                            (draw-string! graphics "*" (:x element) (:y element) 0x00FF00))
+                            (draw-string! graphics "*" (:x element) (:y element) 0x00FF00)
+                            ;; Render activate hint text if present
+                            (when-let [hint (:hint element)]
+                              (draw-string! graphics (str hint) (+ (:x element) 12) (:y element) 0xCCCCCC)))
     :skill-slot (render-skill-slot! graphics element)
     :vec-reflection-crosshair (render-vec-reflection-crosshair! graphics element)
+    :preset-indicator (render-preset-indicator! graphics element)
+    :overload-pulse (let [intensity (double (or (:intensity element) 0.0))
+                          alpha (int (* 40 intensity))]
+                      (when (pos? alpha)
+                        (.fill graphics 0 0 (int screen-width) (int screen-height)
+                               (unchecked-int (bit-or (bit-shift-left alpha 24) 0x00FF2200)))))
     :text (draw-string! graphics (str (:text element)) (:x element) (:y element)
                         (if (map? (:color element)) (argb (:color element)) (:color element)))
     :fill (.fill graphics (:x element) (:y element) (+ (:x element) (:w element)) (+ (:y element) (:h element))

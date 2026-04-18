@@ -7,8 +7,10 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.model.preset :as preset-data]
+            [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.state.store :as ability-store]
             [cn.li.ac.ability.server.network :as ability-network]
+            [cn.li.ac.ability.server.service.resource :as svc-res]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.state.context :as ctx]
@@ -24,7 +26,9 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.ability.client.delegate-state :as delegate-state]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.client.platform-bridge :as client-bridge]
@@ -59,7 +63,7 @@
        :activated activated})))
 
 (defn- hud-render-data->overlay-elements
-  [hud-render-data]
+  [hud-render-data screen-width screen-height]
   (let [cp-bar (some-> (:cp-bar hud-render-data)
                        (assoc :kind :bar)
                        (dissoc :type))
@@ -73,8 +77,20 @@
                             (-> slot
                                 (assoc :kind :skill-slot)
                                 (dissoc :type)))
-                          (or (:skill-slots hud-render-data) []))]
-    (vec (concat (keep identity [cp-bar overload-bar activation-indicator])
+                          (or (:skill-slots hud-render-data) []))
+        preset-indicator (some-> (:preset-indicator hud-render-data)
+                                 (assoc :kind :preset-indicator
+                                        :x (int (/ screen-width 2))
+                                        :y (- screen-height 60))
+                                 (dissoc :type))
+        ;; Overload pulse when overload bar > 80%
+        overload-pulse (when-let [ol-bar (:overload-bar hud-render-data)]
+                         (let [pct (double (or (:percent ol-bar) 0.0))]
+                           (when (> pct 0.8)
+                             {:kind :overload-pulse
+                              :intensity (* (- pct 0.8) 5.0)})))]
+    (vec (concat (keep identity [cp-bar overload-bar activation-indicator
+                                 preset-indicator overload-pulse])
                  skill-slots))))
 
 (defn- build-client-overlay-plan
@@ -85,8 +101,14 @@
                                      (boolean (get-in player-state [:resource-data :activated] false)))}
         hud-model (build-hud-model-from-state player-state activated-override)
         cooldown-data (:cooldown-data player-state)
-        hud-render-data (hud-renderer/build-hud-render-data hud-model screen-width screen-height cooldown-data)
-        base-elements (hud-render-data->overlay-elements hud-render-data)
+        activate-hint (client-keybinds/get-activate-hint player-uuid)
+        preset-state (client-keybinds/get-preset-switch-state)
+        hud-render-data (hud-renderer/build-hud-render-data
+                         hud-model screen-width screen-height cooldown-data
+                         :player-uuid player-uuid
+                         :activate-hint activate-hint
+                         :preset-state preset-state)
+        base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
         reflection-active? (vec-reflection-active? player-uuid)
         now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))
         phase (double (/ (mod now-ms 1200) 1200.0))
@@ -161,11 +183,54 @@
       on-context-channel-push!)
     (log/info "Ability client push handlers registered")))
 
+(defonce ^:private lifecycle-subscriptions-registered? (atom false))
+
+(defn- register-lifecycle-subscriptions!
+  "Subscribe to domain events for resource recalculation and state reactions."
+  []
+  (when (compare-and-set! lifecycle-subscriptions-registered? false true)
+    ;; On level change: reset add-max growth, recalc max values
+    (evt/subscribe-ability-event!
+     evt/EVT-LEVEL-CHANGE
+     (fn [{:keys [uuid new-level]}]
+       (when (and uuid new-level)
+         (ps/update-resource-data! uuid
+                                   (fn [rd]
+                                     (-> rd
+                                         (rdata/reset-add-max)
+                                         (rdata/recalc-max-values new-level)))))))
+
+    ;; On skill learn: recalc max values (new controllable may affect formulas)
+    (evt/subscribe-ability-event!
+     evt/EVT-SKILL-LEARN
+     (fn [{:keys [uuid]}]
+       (when uuid
+         (when-let [state (ps/get-player-state uuid)]
+           (let [level (get-in state [:ability-data :level] 1)]
+             (ps/update-resource-data! uuid
+                                       (fn [rd]
+                                         (svc-res/recalc-max-for-level rd level))))))))
+
+    ;; On category change: deactivate ability and recalc
+    (evt/subscribe-ability-event!
+     evt/EVT-CATEGORY-CHANGE
+     (fn [{:keys [uuid]}]
+       (when uuid
+         (ps/update-resource-data! uuid rdata/set-activated false)
+         (when-let [state (ps/get-player-state uuid)]
+           (let [level (get-in state [:ability-data :level] 1)]
+             (ps/update-resource-data! uuid
+                                       (fn [rd]
+                                         (svc-res/recalc-max-for-level rd level))))))))
+
+    (log/info "Ability lifecycle event subscriptions registered")))
+
 (defn install-ability-runtime-hooks!
   "Install AC handlers for platform ability lifecycle callbacks."
   []
   (when (compare-and-set! hooks-installed? false true)
     (ability-store/install-store!)
+    (register-lifecycle-subscriptions!)
     (ability-lifecycle/register-ability-runtime-hooks!
       {:on-player-login!
        (fn [player-uuid]
@@ -333,6 +398,12 @@
        (fn [hud-model screen-width screen-height cooldown-data]
          (hud-renderer/build-hud-render-data hud-model screen-width screen-height cooldown-data))
 
+       :client-slot-visual-state
+       (fn [player-uuid key-idx]
+         (let [active-ctxs (ctx/get-all-contexts-for-player player-uuid)
+               skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
+           (:state (delegate-state/delegate-state-for-slot active-ctxs skill-id))))
+
        :client-build-overlay-plan
        (fn [player-uuid screen-width screen-height overlay-state]
          (build-client-overlay-plan player-uuid screen-width screen-height overlay-state))
@@ -448,6 +519,10 @@
 
        :client-trigger-mode-switch!
        (fn [player-uuid]
-         (client-keybinds/trigger-mode-switch! player-uuid))})
+         (client-keybinds/trigger-mode-switch! player-uuid))
+
+       :client-trigger-preset-switch!
+       (fn [player-uuid]
+         (client-keybinds/switch-preset! player-uuid))})
     (log/info "AC ability runtime hooks installed"))
   nil)

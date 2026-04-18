@@ -10,8 +10,10 @@
             [cn.li.ac.ability.model.resource  :as rd]
             [cn.li.ac.ability.model.cooldown  :as cd]
             [cn.li.ac.ability.model.preset    :as pd]
+            [cn.li.ac.ability.model.develop   :as dev]
             [cn.li.ac.ability.server.service.resource     :as svc-res]
             [cn.li.ac.ability.server.service.cooldown     :as svc-cd]
+            [cn.li.ac.ability.server.service.develop      :as svc-dev]
             [cn.li.ac.ability.registry.event                :as evt]
             [cn.li.mcmod.util.log                  :as log]))
 
@@ -53,6 +55,7 @@
    :resource-data (rd/new-resource-data)
    :cooldown-data (cd/new-cooldown-data)
    :preset-data   (pd/new-preset-data)
+   :develop-data  (dev/new-develop-data)
    :terminal-data {:terminal-installed? false
                    :installed-apps #{}}
    :dirty?        false})
@@ -82,6 +85,9 @@
 (defn get-preset-data [uuid-str]
   (:preset-data (get-player-state uuid-str)))
 
+(defn get-develop-data [uuid-str]
+  (:develop-data (get-player-state uuid-str)))
+
 (defn update-ability-data! [uuid-str f & args]
   (apply update-player-state! uuid-str update :ability-data f args)
   (mark-dirty! uuid-str))
@@ -98,27 +104,49 @@
   (apply update-player-state! uuid-str update :preset-data f args)
   (mark-dirty! uuid-str))
 
+(defn update-develop-data! [uuid-str f & args]
+  (apply update-player-state! uuid-str update :develop-data f args)
+  (mark-dirty! uuid-str))
+
 ;; ============================================================================
 ;; Server tick
 ;; ============================================================================
 
 (defn server-tick-player!
   "Called every server tick for each online player.
-  Ticks resource recovery, cooldowns, and fires domain events.
+  Ticks resource recovery, cooldowns, development, and fires domain events.
   Returns a map of events emitted (for sync layer to broadcast)."
   [uuid-str sync-fn]
   (when-let [state (get-player-state uuid-str)]
-    (let [{:keys [resource-data cooldown-data]} state
+    (let [{:keys [resource-data cooldown-data develop-data]} state
           ;; Resource tick — may emit events
           {:keys [data events]} (svc-res/server-tick resource-data)
-          new-cd (svc-cd/tick-cooldowns cooldown-data)]
+          new-cd (svc-cd/tick-cooldowns cooldown-data)
+          ;; Develop tick
+          dev-result (when (and develop-data (dev/developing? develop-data))
+                       (svc-dev/tick-develop develop-data))
+          new-dev    (if dev-result (:develop-data dev-result) develop-data)
+          ;; If development completed, apply result
+          completion (when (and dev-result (:completed? dev-result))
+                      (svc-dev/apply-completion
+                       new-dev
+                       (:ability-data state)
+                       data
+                       uuid-str))
+          final-ability  (if completion (:ability-data completion) (:ability-data state))
+          final-resource (if completion (:resource-data completion) data)
+          final-dev      (if completion (:develop-data completion) new-dev)
+          all-events     (into (vec events)
+                               (when completion (:events completion)))]
       (swap! player-states update uuid-str
              assoc
-             :resource-data data
-             :cooldown-data new-cd)
+             :ability-data  final-ability
+             :resource-data final-resource
+             :cooldown-data new-cd
+             :develop-data  (or final-dev (dev/new-develop-data)))
       ;; Fire domain events
-      (doseq [e events] (evt/fire-ability-event! e))
+      (doseq [e all-events] (evt/fire-ability-event! e))
       ;; If sync-fn provided (injected by forge layer), call when dirty
-      (when (and sync-fn (seq events))
+      (when (and sync-fn (seq all-events))
         (mark-dirty! uuid-str))
-      {:events events})))
+      {:events all-events})))

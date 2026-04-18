@@ -5,7 +5,7 @@
 (defn test-consume-and-recover
   []
   (let [r0 (assoc (rd/new-resource-data) :activated true)
-        {:keys [data success?]} (res/perform-resource r0 "u" 10.0 20.0 false)
+        {:keys [data success?]} (res/perform-resource r0 "u" 10.0 20.0 false 1)
         {:keys [data]} (res/server-tick data)]
     (assert success? "resource perform should succeed")
     (assert (<= (:cur-cp data) (:max-cp data)) "cp should be bounded")))

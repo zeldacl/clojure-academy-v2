@@ -77,6 +77,7 @@
          :client-poll-sound-effects (fn [] [])
          :client-tick-keys! noop
          :client-trigger-mode-switch! noop
+         :client-trigger-preset-switch! noop
          :client-active-contexts (fn [] {})
          :client-latest-sync (fn [_] nil)
          :client-register-push-handlers! noop
@@ -375,6 +376,10 @@
 (defn client-trigger-mode-switch!
   [player-uuid]
   ((:client-trigger-mode-switch! @runtime-hooks) player-uuid))
+
+(defn client-trigger-preset-switch!
+  [player-uuid]
+  ((:client-trigger-preset-switch! @runtime-hooks) player-uuid))
 
 (defn client-active-contexts
   []

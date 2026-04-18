@@ -14,40 +14,63 @@
 
 (def ^:dynamic *init-cp*
   "Initial max CP per ability level (float[5])."
-  [100.0 150.0 220.0 320.0 450.0])
+  [1800.0 2800.0 4000.0 5800.0 8000.0])
 
 (def ^:dynamic *init-overload*
   "Initial max overload per ability level (float[5])."
-  [100.0 150.0 220.0 320.0 450.0])
+  [100.0 150.0 240.0 350.0 500.0])
 
 (def ^:dynamic *add-cp*
-  "Bonus CP added on top of init-cp per level."
-  [0.0 0.0 0.0 0.0 0.0])
+  "Max growth ceiling for CP on top of init-cp per level."
+  [900.0 1000.0 1500.0 1700.0 12000.0])
 
 (def ^:dynamic *add-overload*
-  "Bonus overload per level."
-  [0.0 0.0 0.0 0.0 0.0])
+  "Max growth ceiling for overload on top of init-overload per level."
+  [40.0 70.0 80.0 100.0 500.0])
 
 ;; ============================================================================
 ;; Recovery configuration
 ;; ============================================================================
 
 (def ^:dynamic *cp-recover-speed*
-  "Base CP recover fraction per tick (multiplied by maxCP).
-  Formula: delta = *cp-recover-speed* × maxCP"
-  0.0003)
+  "Multiplier for CP recovery formula.
+  Formula: delta = speed × 0.0003 × maxCP × lerp(1, 2, curCP/maxCP)"
+  1.0)
 
 (def ^:dynamic *overload-recover-speed*
-  "Base overload recovery amount per tick."
-  0.002)
+  "Multiplier for overload recovery formula.
+  Formula: delta = speed × max(0.002×maxOL, 0.007×maxOL×lerp(1, 0.5, curOL/maxOL/2))"
+  1.0)
 
 (def ^:dynamic *cp-recover-cooldown*
   "Ticks to wait after CP use before recovery starts."
-  100)
+  15)
 
 (def ^:dynamic *overload-recover-cooldown*
   "Ticks to wait after overload peak before recovery starts."
-  60)
+  32)
+
+;; ============================================================================
+;; Growth rates (max-cp / max-overload grow on perform)
+;; ============================================================================
+
+(def ^:dynamic *maxcp-incr-rate*
+  "Fraction of consumed CP that is added to add-max-cp on each perform.
+  Original: 0.0025"
+  0.0025)
+
+(def ^:dynamic *maxo-incr-rate*
+  "Fraction of overload that is added to add-max-overload on each perform.
+  Original: 0.0058"
+  0.0058)
+
+;; ============================================================================
+;; Damage scaling
+;; ============================================================================
+
+(def ^:dynamic *damage-scale*
+  "Global damage multiplier applied to all ability skill damage."
+  1.0)
 
 ;; ============================================================================
 ;; Context runtime defaults (used when skill spec omits per-skill values)

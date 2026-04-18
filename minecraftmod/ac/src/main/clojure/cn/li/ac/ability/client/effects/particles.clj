@@ -109,8 +109,12 @@
     (queue-particle-effect! (make-level-up-particles player-pos))))
 
 (defn init!
-  "Initialize particle effect system."
+  "Initialize particle effect system. Wire event listeners."
   []
-  ;; Register event listeners
-  ;; Note: Event system integration would happen here
+  (evt/subscribe-ability-event!
+   evt/EVT-ABILITY-ACTIVATE
+   (fn [event] (on-skill-activation event)))
+  (evt/subscribe-ability-event!
+   evt/EVT-LEVEL-CHANGE
+   (fn [event] (on-level-up event)))
   nil)

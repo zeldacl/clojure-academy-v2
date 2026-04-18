@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.effects.sounds
-  "Sound effect commands for ability system (AC layer - no Minecraft imports).")
+  "Sound effect commands for ability system (AC layer - no Minecraft imports)."
+  (:require [cn.li.ac.ability.registry.event :as evt]))
 
 ;; Sound effect command structure
 ;; {:type :sound
@@ -92,8 +93,15 @@
   (queue-sound-effect! (make-skill-learn-sound)))
 
 (defn init!
-  "Initialize sound effect system."
+  "Initialize sound effect system. Wire event listeners."
   []
-  ;; Register event listeners
-  ;; Note: Event system integration would happen here
+  (evt/subscribe-ability-event!
+   evt/EVT-ABILITY-ACTIVATE
+   (fn [event] (on-skill-activation event)))
+  (evt/subscribe-ability-event!
+   evt/EVT-LEVEL-CHANGE
+   (fn [_event] (on-level-up _event)))
+  (evt/subscribe-ability-event!
+   evt/EVT-SKILL-LEARN
+   (fn [_event] (on-skill-learn _event)))
   nil)

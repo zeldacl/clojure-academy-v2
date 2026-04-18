@@ -87,12 +87,21 @@
 
 (defn level-up-threshold
   "Number of exp points needed to advance to next level.
-  Formula: controllable-skill-count × category-prog-rate × global-prog-rate"
-  [cat-id]
-  (let [ctrl-count  (count (skill/get-controllable-skills-for-category cat-id))
+  Counts controllable skills at the current level with mastery multiplier.
+  When all skills at the level are mastered (exp >= 1.0), threshold is halved."
+  [cat-id ability-data]
+  (let [level       (:level ability-data)
+        skills      (skill/get-controllable-skills-at-level cat-id level)
+        skill-count (count skills)
+        all-mastered? (and (pos? skill-count)
+                          (every? #(>= (adata/get-skill-exp ability-data (:id %)) 1.0)
+                                  skills))
         cat-rate    (cat/get-prog-incr-rate cat-id)
-        global-rate cfg/*prog-incr-rate*]
-    (* ctrl-count cat-rate global-rate)))
+        global-rate cfg/*prog-incr-rate*
+        base        (* skill-count 1.333 cat-rate global-rate)]
+    (if all-mastered?
+      (* base 0.5)
+      base)))
 
 (defn can-level-up?
   [ability-data]
@@ -101,7 +110,7 @@
     (and (< level 5)
          (some? cat)
          (>= (:level-progress ability-data)
-             (level-up-threshold cat)))))
+             (level-up-threshold cat ability-data)))))
 
 (defn add-skill-exp
   "Add exp to a skill. Also accumulates level progress.

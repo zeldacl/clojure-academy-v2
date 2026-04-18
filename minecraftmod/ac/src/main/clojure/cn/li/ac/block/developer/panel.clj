@@ -118,7 +118,7 @@
                              (default-ability-icon-path))
               lvl (long (:level ad 1))
               thresh (when (and cat-id (not (>= lvl 5)))
-                       (learning/level-up-threshold cat-id))
+                       (learning/level-up-threshold cat-id ad))
               level-prog (double (:level-progress ad 0.0))
               cat-prog01 (if (and thresh (pos? thresh))
                            (clamp01 (/ level-prog thresh))

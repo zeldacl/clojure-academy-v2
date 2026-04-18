@@ -92,6 +92,7 @@
 
 ;; -- Calc (modifiable) --
 (def CALC-SKILL-ATTACK       :calc/skill-attack)
+(def CALC-SKILL-PERFORM      :calc/skill-perform)
 (def CALC-MAX-CP             :calc/max-cp)
 (def CALC-MAX-OVERLOAD       :calc/max-overload)
 (def CALC-CP-RECOVER-SPEED   :calc/cp-recover-speed)

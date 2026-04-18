@@ -13,6 +13,15 @@
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.fx :as fx]))
 
+
+(defn scale-damage
+  "Apply global and per-skill damage scaling to a raw damage value.
+  spec is the skill spec map (with :damage-scale key, default 1.0)."
+  [spec raw-damage]
+  (* (double raw-damage)
+     (double cfg/*damage-scale*)
+     (double (or (:damage-scale spec) 1.0))))
+
 (defn perform-resource!
   "Consume overload+cp from player's resource-data.
   Returns {:success? bool, :events events, :data new-resource-data}."
@@ -20,12 +29,14 @@
    (perform-resource! player-id overload cp false))
   ([player-id overload cp creative?]
    (if-let [state (ps/get-player-state player-id)]
-     (let [{:keys [data success? events]} (res/perform-resource
+     (let [level (or (get-in state [:ability-data :level]) 1)
+           {:keys [data success? events]} (res/perform-resource
                                           (:resource-data state)
                                           player-id
                                           (double overload)
                                           (double cp)
-                                          (boolean creative?))]
+                                          (boolean creative?)
+                                          level)]
        (when success?
          (ps/update-resource-data! player-id (constantly data))
          (doseq [e events] (evt/fire-ability-event! e)))
@@ -73,6 +84,7 @@
 
 (defn apply-cost!
   "Apply stage cost for a skill spec and event.
+  Scales cp/overload by the skill's per-skill speed multipliers.
   Returns true when cost is paid or no cost is defined."
   [spec stage evt]
   (let [cost-spec (get-in spec [:cost stage])]
@@ -81,8 +93,13 @@
       (let [computed (if (= :runtime-speed (:mode cost-spec))
                        (runtime-scaled-cost cost-spec)
                        cost-spec)
-            cp (resolve-val (:cp computed) evt)
-            overload (resolve-val (:overload computed) evt)
+            cp-raw (resolve-val (:cp computed) evt)
+            overload-raw (resolve-val (:overload computed) evt)
+            ;; Apply per-skill speed multipliers from skill spec
+            cp-speed (double (or (:cp-consume-speed spec) 1.0))
+            ol-speed (double (or (:overload-consume-speed spec) 1.0))
+            cp (* cp-raw cp-speed)
+            overload (* overload-raw ol-speed)
             creative-raw (:creative? computed)
             creative? (boolean (if (fn? creative-raw) (creative-raw evt) creative-raw))]
         (if (and (zero? cp) (zero? overload))
@@ -103,7 +120,8 @@
         ticks))))
 
 (defn gain-exp!
-  "Apply exp gain from :exp-policy {:amount n :rate n} when present."
+  "Apply exp gain from :exp-policy {:amount n :rate n} when present.
+  Multiplies rate by the skill's :exp-incr-speed."
   [spec evt]
   (let [skill-id (:id spec)
         explicit-exp (:exp spec)
@@ -115,7 +133,9 @@
                    (:ineffective explicit-exp))
                  :else (get-in spec [:exp-policy :amount]))]
     (when (and (some? amount) skill-id)
-      (let [rate (double (or (get-in spec [:exp-policy :rate]) 1.0))
+      (let [base-rate (double (or (get-in spec [:exp-policy :rate]) 1.0))
+            skill-rate (double (or (:exp-incr-speed spec) 1.0))
+            rate (* base-rate skill-rate)
             value (resolve-val amount evt)]
         (add-skill-exp! (:player-id evt) skill-id value rate)))))
 
