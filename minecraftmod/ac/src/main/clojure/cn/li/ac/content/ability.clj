@@ -14,7 +14,6 @@
             [cn.li.ac.content.ability.electromaster.thunder-clap]
             [cn.li.ac.content.ability.meltdowner.meltdowner]
             [cn.li.ac.content.ability.electromaster.arc-gen]
-            [cn.li.ac.content.ability.telekinesis.storm-wind]
             [cn.li.ac.content.ability.telekinesis.vec-manip]
             [cn.li.ac.content.ability.teleporter.location-teleport]
             [cn.li.ac.content.ability.teleporter.mark-teleport]
