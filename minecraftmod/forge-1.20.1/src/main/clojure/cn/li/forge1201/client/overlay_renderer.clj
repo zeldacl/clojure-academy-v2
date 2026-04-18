@@ -72,9 +72,9 @@
         (.fill graphics hint-x (int y) (+ hint-x 1) (int (+ y height))
                (unchecked-int 0x80FF4444))))
     (when (and fg-path (pos? filled-width))
-      ;; Apply bar-color tint if provided
+      ;; Apply bar-color tint if provided (bar-color is a {:r :g :b :a} map)
       (if bar-color
-        (let [color-int (rgb-vec->argb bar-color 1.0)]
+        (let [color-int (argb bar-color)]
           (.enableScissor graphics (int x) (int y) (int (+ x filled-width)) (int (+ y height)))
           (.fill graphics (int x) (int y) (int (+ x filled-width)) (int (+ y height)) (unchecked-int color-int))
           (.disableScissor graphics))
