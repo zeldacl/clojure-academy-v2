@@ -13,6 +13,7 @@
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.mcmod.fluid.dsl :as fdsl]
             [cn.li.mcmod.item.dsl :as idsl]))
 
 ;; Block Registration Metadata
@@ -330,6 +331,46 @@
   [block-id]
   (let [block-spec (get-block-spec block-id)]
     (not= false (get-in block-spec [:rendering :has-item-form?]))))
+
+;; Fluid Registration Metadata
+;; ============================================================
+
+(defn get-all-fluid-ids
+  "Returns a sequence of all registered fluid IDs from the fluid DSL."
+  []
+  (fdsl/list-fluids))
+
+(defn get-fluid-spec
+  "Retrieves the full fluid specification from the fluid DSL."
+  [fluid-id]
+  (fdsl/get-fluid fluid-id))
+
+(defn get-fluid-registry-name
+  "Returns Minecraft registry name for a fluid ID."
+  [fluid-id]
+  (or (some-> (get-fluid-spec fluid-id) :registry-name)
+      (str/replace (str fluid-id) #"-" "_")))
+
+(defn get-fluid-block-id
+  "Returns associated block-id for a fluid."
+  [fluid-id]
+  (some-> (get-fluid-spec fluid-id) :block :block-id))
+
+(defn get-fluid-id-for-block
+  "Returns fluid-id associated with block-id, or nil."
+  [block-id]
+  (some (fn [fluid-id]
+          (when (= (str block-id) (get-fluid-block-id fluid-id))
+            fluid-id))
+        (get-all-fluid-ids)))
+
+(defn fluid-block?
+  "Returns true when a block-id is produced by the fluid DSL."
+  [block-id]
+  (boolean
+    (some (fn [fluid-id]
+            (= (str block-id) (get-fluid-block-id fluid-id)))
+          (get-all-fluid-ids))))
 
 ;; Creative Tab Metadata
 ;; ============================================================

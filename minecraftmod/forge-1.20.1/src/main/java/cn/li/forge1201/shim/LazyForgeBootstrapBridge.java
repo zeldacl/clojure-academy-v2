@@ -1,12 +1,18 @@
 package cn.li.forge1201.shim;
 
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.material.FlowingFluid;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraftforge.fluids.FluidType;
+import net.minecraftforge.fluids.ForgeFlowingFluid;
 
 import java.util.List;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public final class LazyForgeBootstrapBridge {
     private LazyForgeBootstrapBridge() {
@@ -40,6 +46,14 @@ public final class LazyForgeBootstrapBridge {
         return ForgeBootstrapHelper.createMenusRegister(modId);
     }
 
+    public static Object createFluidTypesRegister(String modId) {
+        return ForgeBootstrapHelper.createFluidTypesRegister(modId);
+    }
+
+    public static Object createFluidsRegister(String modId) {
+        return ForgeBootstrapHelper.createFluidsRegister(modId);
+    }
+
     public static Object createCarrierScriptedDynamicBlock(String blockId, String tileId, List<Property<?>> properties, Object blockProperties) {
         return ForgeBootstrapHelper.createCarrierScriptedDynamicBlock(blockId, tileId, properties, (BlockBehaviour.Properties) blockProperties);
     }
@@ -54,6 +68,72 @@ public final class LazyForgeBootstrapBridge {
 
     public static Object createPlainBlock(Object blockProperties) {
         return ForgeBootstrapHelper.createPlainBlock((BlockBehaviour.Properties) blockProperties);
+    }
+
+    public static Object createFluidType(int luminosity,
+                                         int density,
+                                         int viscosity,
+                                         int temperature,
+                                         boolean canHydrate,
+                                         boolean supportsBoating,
+                                         String stillTexture,
+                                         String flowingTexture,
+                                         String overlayTexture,
+                                         int tintColor) {
+        return ForgeBootstrapHelper.createFluidType(
+            luminosity,
+            density,
+            viscosity,
+            temperature,
+            canHydrate,
+            supportsBoating,
+            stillTexture,
+            flowingTexture,
+            overlayTexture,
+            tintColor
+        );
+    }
+
+    public static Object createFlowingFluidProperties(
+        Supplier<FluidType> fluidTypeSupplier,
+        Supplier<? extends FlowingFluid> sourceSupplier,
+        Supplier<? extends FlowingFluid> flowingSupplier,
+        Supplier<? extends net.minecraft.world.item.Item> bucketSupplier,
+        Supplier<? extends LiquidBlock> blockSupplier,
+        int slopeFindDistance,
+        int levelDecreasePerBlock,
+        int tickRate,
+        float explosionResistance,
+        boolean canConvertToSource
+    ) {
+        return ForgeBootstrapHelper.createFlowingFluidProperties(
+            fluidTypeSupplier,
+            sourceSupplier,
+            flowingSupplier,
+            bucketSupplier,
+            blockSupplier,
+            slopeFindDistance,
+            levelDecreasePerBlock,
+            tickRate,
+            explosionResistance,
+            canConvertToSource
+        );
+    }
+
+    public static Object createSourceFluid(Object properties) {
+        return ForgeBootstrapHelper.createSourceFluid((ForgeFlowingFluid.Properties) properties);
+    }
+
+    public static Object createFlowingFluid(Object properties) {
+        return ForgeBootstrapHelper.createFlowingFluid((ForgeFlowingFluid.Properties) properties);
+    }
+
+    public static Object createLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier) {
+        return ForgeBootstrapHelper.createLiquidBlock(fluidSupplier);
+    }
+
+    public static Object createFluidBucket(Supplier<? extends Fluid> fluidSupplier) {
+        return ForgeBootstrapHelper.createFluidBucket(fluidSupplier);
     }
 
     public static Object createScriptedBlockEntityType(String tileId, List<Block> blocks, Function<Block, String> blockIdResolver) {

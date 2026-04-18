@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.ores
-  "Generic ore blocks"
+  "Ore blocks and shared misc material blocks."
   (:require [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid]))
@@ -69,5 +69,19 @@
                     :sounds :stone}
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "crystal_ore")}
+                     :flat-item-icon? true}}))
+    (bdsl/register-block!
+      (bdsl/create-block-spec
+        "machine-frame"
+        {:registry-name "machine_frame"
+         :physical {:material :stone
+                    :hardness 3.0
+                    :resistance 6.0
+                    :requires-tool true
+                    :harvest-tool :pickaxe
+                    :harvest-level 1
+                    :sounds :stone}
+         :rendering {:model-parent "minecraft:block/cube_all"
+                     :textures {:all (modid/asset-path "block" "machine_frame")}
                      :flat-item-icon? true}}))
     (log/info "Initialized ore blocks")))

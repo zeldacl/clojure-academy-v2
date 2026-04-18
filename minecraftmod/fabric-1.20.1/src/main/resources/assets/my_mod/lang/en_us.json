@@ -2,5 +2,8 @@
   "itemGroup.my_mod.items": "My Mod Items",
   "ac.cat_engine.unlink": "Cat Engine unlinked",
   "ac.cat_engine.notfound": "No wireless node found nearby",
-  "ac.cat_engine.linked": "Cat Engine linked to %s"
+  "ac.cat_engine.linked": "Cat Engine linked to %s",
+  "block.my_mod.machine_frame": "Machine Frame",
+  "block.my_mod.imag_phase": "Imaginary Phase",
+  "item.my_mod.imag_phase_bucket": "Imaginary Phase Bucket"
 }

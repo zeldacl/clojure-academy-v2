@@ -65,6 +65,18 @@
     (catch Exception e
       (log/error "Failed to register block renderers" (.printStackTrace e)))))
 
+(defn- register-fluid-render-layers!
+  []
+  (when-let [get-fluid-source (requiring-resolve 'cn.li.forge1201.mod/get-registered-fluid-source)]
+    (when-let [get-fluid-flowing (requiring-resolve 'cn.li.forge1201.mod/get-registered-fluid-flowing)]
+      (doseq [fluid-id (registry-metadata/get-all-fluid-ids)]
+        (let [fluid-spec (registry-metadata/get-fluid-spec fluid-id)
+              translucent? (true? (get-in fluid-spec [:rendering :is-translucent]))]
+          (when translucent?
+            (when-let [source (get-fluid-source fluid-id)]
+              (when-let [flowing (get-fluid-flowing fluid-id)]
+                (ForgeClientHelper/setFluidRenderLayerTranslucent source flowing)))))))))
+
 (defn- init-render-bindings!
   "Bind client-side rendering functions to mcmod's dynamic vars.
 
@@ -166,6 +178,7 @@
 
   ;; Then register renderers
   (register-renderers)
+  (register-fluid-render-layers!)
 
   ;; Ability client systems
   (key-input/init!)

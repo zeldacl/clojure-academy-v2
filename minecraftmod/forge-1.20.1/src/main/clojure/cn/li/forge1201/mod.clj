@@ -25,6 +25,7 @@
              [cn.li.forge1201.integration.forge-energy :as forge-energy]
              [cn.li.forge1201.integration.ic2-energy :as ic2-energy])
   (:import [net.minecraft.world.level.block Block]
+           [net.minecraft.world.level.material Fluid FlowingFluid]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
            [cn.li.forge1201.entity ModEntities]
@@ -32,6 +33,7 @@
            [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab Items]
            [net.minecraft.world.level ItemLike]
            [net.minecraft.network.chat Component]
+           [net.minecraftforge.fluids FluidType ForgeFlowingFluid]
            [net.minecraftforge.registries DeferredRegister RegistryObject]
            [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
            [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
@@ -101,10 +103,19 @@
 (defonce block-entities-register
   (delay (bootstrap/create-block-entity-types-register mod-id)))
 
+(defonce fluid-types-register
+  (delay (bootstrap/create-fluid-types-register mod-id)))
+
+(defonce fluids-register
+  (delay (bootstrap/create-fluids-register mod-id)))
+
 ;; Storage for registered blocks and items (populated during initialization)
 (defonce registered-blocks (atom {}))
 (defonce registered-items (atom {}))
 (defonce registered-block-entities (atom {}))
+(defonce registered-fluid-types (atom {}))
+(defonce registered-fluids-source (atom {}))
+(defonce registered-fluids-flowing (atom {}))
 
 (defn- has-block-state-properties?
   "Check if a block needs dynamic block state properties (via metadata).
@@ -119,6 +130,7 @@
   []
   (doseq [block-id (registry-metadata/get-all-block-ids)]
     (let [registry-name (registry-metadata/get-block-registry-name block-id)
+          fluid-id (registry-metadata/get-fluid-id-for-block block-id)
           needs-dynamic-properties? (has-block-state-properties? block-id)
           has-be? (registry-metadata/has-block-entity? block-id)
           tile-id (when has-be?
@@ -128,6 +140,12 @@
                                       (get [_]
                                         (let [get-props (requiring-resolve 'cn.li.forge1201.blockstate-properties/get-all-properties)]
                                           (cond
+                                            fluid-id
+                                            (when-let [fluid-source-ro (get @registered-fluids-source fluid-id)]
+                                              (bootstrap/create-liquid-block
+                                                (reify java.util.function.Supplier
+                                                  (get [_]
+                                                    (.get ^RegistryObject fluid-source-ro)))))
                                             (and needs-dynamic-properties? has-be?)
                                             (let [props (get-props block-id)]
                                               (bootstrap/create-carrier-scripted-dynamic-block block-id tile-id props @carrier-properties))
@@ -139,6 +157,96 @@
                                             :else
                                             (bootstrap/create-plain-block @base-properties))))))]
       (swap! registered-blocks assoc block-id registered-obj))))
+
+(defn register-all-fluids!
+  "Register all fluids declared in the fluid DSL."
+  []
+  (doseq [fluid-id (registry-metadata/get-all-fluid-ids)]
+    (let [fluid-spec (registry-metadata/get-fluid-spec fluid-id)
+          physical (:physical fluid-spec)
+          rendering (:rendering fluid-spec)
+          behavior (:behavior fluid-spec)
+          block-spec (:block fluid-spec)
+          registry-name (registry-metadata/get-fluid-registry-name fluid-id)
+          flowing-name (str registry-name "_flowing")
+          fluid-type-ro
+          (.register ^DeferredRegister (force fluid-types-register) registry-name
+                     (reify java.util.function.Supplier
+                       (get [_]
+                         (bootstrap/create-fluid-type
+                           (:luminosity physical)
+                           (:density physical)
+                           (:viscosity physical)
+                           (:temperature physical)
+                           false
+                           (:supports-boat physical)
+                           (:still-texture rendering)
+                           (:flowing-texture rendering)
+                           (:overlay-texture rendering)
+                           (:tint-color rendering)))))
+          source-holder (atom nil)
+          flowing-holder (atom nil)
+          bucket-holder (atom nil)
+          source-ro (.register ^DeferredRegister (force fluids-register) registry-name
+                               (reify java.util.function.Supplier
+                                 (get [_]
+                                   (bootstrap/create-source-fluid
+                                     (bootstrap/create-flowing-fluid-properties
+                                       (reify java.util.function.Supplier
+                                         (get [_] (.get ^RegistryObject fluid-type-ro)))
+                                       (reify java.util.function.Supplier
+                                         (get [_] (.get ^RegistryObject @source-holder)))
+                                       (reify java.util.function.Supplier
+                                         (get [_] (.get ^RegistryObject @flowing-holder)))
+                                       (when (:has-bucket? block-spec)
+                                         (reify java.util.function.Supplier
+                                           (get [_] (.get ^RegistryObject @bucket-holder))))
+                                       (when-let [block-id (:block-id block-spec)]
+                                         (reify java.util.function.Supplier
+                                           (get [_]
+                                             (.get ^RegistryObject (get @registered-blocks block-id)))))
+                                       (:slope-find-distance behavior)
+                                       (:level-decrease-per-block behavior)
+                                       (:tick-rate behavior)
+                                       (:explosion-resistance behavior)
+                                       (:can-convert-to-source physical))))))
+          flowing-ro (.register ^DeferredRegister (force fluids-register) flowing-name
+                                (reify java.util.function.Supplier
+                                  (get [_]
+                                    (bootstrap/create-flowing-fluid
+                                      (bootstrap/create-flowing-fluid-properties
+                                        (reify java.util.function.Supplier
+                                          (get [_] (.get ^RegistryObject fluid-type-ro)))
+                                        (reify java.util.function.Supplier
+                                          (get [_] (.get ^RegistryObject @source-holder)))
+                                        (reify java.util.function.Supplier
+                                          (get [_] (.get ^RegistryObject @flowing-holder)))
+                                        (when (:has-bucket? block-spec)
+                                          (reify java.util.function.Supplier
+                                            (get [_] (.get ^RegistryObject @bucket-holder))))
+                                        (when-let [block-id (:block-id block-spec)]
+                                          (reify java.util.function.Supplier
+                                            (get [_]
+                                              (.get ^RegistryObject (get @registered-blocks block-id)))))
+                                        (:slope-find-distance behavior)
+                                        (:level-decrease-per-block behavior)
+                                        (:tick-rate behavior)
+                                        (:explosion-resistance behavior)
+                                        (:can-convert-to-source physical))))))]
+      (reset! source-holder source-ro)
+      (reset! flowing-holder flowing-ro)
+      (swap! registered-fluid-types assoc fluid-id fluid-type-ro)
+      (swap! registered-fluids-source assoc fluid-id source-ro)
+      (swap! registered-fluids-flowing assoc fluid-id flowing-ro)
+      (when (:has-bucket? block-spec)
+        (let [bucket-ro (.register ^DeferredRegister (force items-register) (:bucket-registry-name block-spec)
+                                   (reify java.util.function.Supplier
+                                     (get [_]
+                                       (bootstrap/create-fluid-bucket
+                                         (reify java.util.function.Supplier
+                                           (get [_] (.get ^RegistryObject source-ro)))))))]
+          (reset! bucket-holder bucket-ro)
+          (swap! registered-items assoc (:bucket-item-id block-spec) bucket-ro))))))
 
 (defn register-scripted-tile-hooks!
   "Register metadata-driven scripted tile hooks from Tile DSL (or legacy block DSL).
@@ -217,7 +325,8 @@
   
   ;; Register BlockItems for all blocks
   (doseq [block-id (registry-metadata/get-all-block-ids)]
-    (when (registry-metadata/should-create-block-item? block-id)
+    (when (and (registry-metadata/should-create-block-item? block-id)
+               (not (registry-metadata/fluid-block? block-id)))
       (let [registry-name (registry-metadata/get-block-registry-name block-id)
             block-registered (get @registered-blocks block-id)
             registered-obj (.register ^DeferredRegister (force items-register) registry-name
@@ -264,6 +373,16 @@
     RegistryObject - The registered block item, or nil if not found"
   [block-id]
   (when-let [registered-obj (get @registered-items (str block-id "-item"))]
+    (.get ^RegistryObject registered-obj)))
+
+(defn get-registered-fluid-source
+  [fluid-id]
+  (when-let [registered-obj (get @registered-fluids-source fluid-id)]
+    (.get ^RegistryObject registered-obj)))
+
+(defn get-registered-fluid-flowing
+  [fluid-id]
+  (when-let [registered-obj (get @registered-fluids-flowing fluid-id)]
     (.get ^RegistryObject registered-obj)))
 
 (defn- build-creative-tab
@@ -383,6 +502,7 @@
         ;; Register all blocks and items using metadata-driven approach
         ;; DSL systems are automatically initialized when namespaces load
         (register-scripted-tile-hooks!)
+        (register-all-fluids!)
         (register-all-blocks!)
         (register-block-entities!)
         (register-all-items!)
@@ -402,6 +522,8 @@
           (config-bridge/register-all! mod-bus)
           (ModEntities/register mod-bus)
           (ModSounds/register mod-bus)
+          (.register ^DeferredRegister (force fluid-types-register) mod-bus)
+          (.register ^DeferredRegister (force fluids-register) mod-bus)
           (.register ^DeferredRegister (force blocks-register) mod-bus)
           (.register ^DeferredRegister (force items-register) mod-bus)
           (.register ^DeferredRegister (force block-entities-register) mod-bus)

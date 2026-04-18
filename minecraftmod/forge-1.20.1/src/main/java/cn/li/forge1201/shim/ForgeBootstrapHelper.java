@@ -7,20 +7,27 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.level.material.FlowingFluid;
+import net.minecraft.world.level.material.Fluid;
+import net.minecraftforge.fluids.FluidType;
+import net.minecraftforge.fluids.ForgeFlowingFluid;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
 import java.util.function.Function;
 import java.util.List;
+import java.util.function.Supplier;
 
 public final class ForgeBootstrapHelper {
     private ForgeBootstrapHelper() {
@@ -44,6 +51,14 @@ public final class ForgeBootstrapHelper {
 
     public static DeferredRegister<MenuType<?>> createMenusRegister(String modId) {
         return DeferredRegister.create(Registries.MENU, modId);
+    }
+
+    public static DeferredRegister<FluidType> createFluidTypesRegister(String modId) {
+        return DeferredRegister.create(ForgeRegistries.Keys.FLUID_TYPES, modId);
+    }
+
+    public static DeferredRegister<Fluid> createFluidsRegister(String modId) {
+        return DeferredRegister.create(ForgeRegistries.FLUIDS, modId);
     }
 
     public static BlockBehaviour.Properties createStoneProperties() {
@@ -78,6 +93,82 @@ public final class ForgeBootstrapHelper {
 
     public static Block createPlainBlock(BlockBehaviour.Properties blockProperties) {
         return new Block(blockProperties);
+    }
+
+    public static FluidType createFluidType(int luminosity,
+                                            int density,
+                                            int viscosity,
+                                            int temperature,
+                                            boolean canHydrate,
+                                            boolean supportsBoating,
+                                            String stillTexture,
+                                            String flowingTexture,
+                                            String overlayTexture,
+                                            int tintColor) {
+        FluidType.Properties props = FluidType.Properties.create()
+            .lightLevel(luminosity)
+            .density(density)
+            .viscosity(viscosity)
+            .temperature(temperature)
+            .canHydrate(canHydrate)
+            .supportsBoating(supportsBoating);
+        return new ForgeFlowingFluidType(
+            props,
+            new ResourceLocation(stillTexture),
+            new ResourceLocation(flowingTexture),
+            overlayTexture == null ? null : new ResourceLocation(overlayTexture),
+            tintColor
+        );
+    }
+
+    public static ForgeFlowingFluid.Properties createFlowingFluidProperties(
+        Supplier<FluidType> fluidTypeSupplier,
+        Supplier<? extends FlowingFluid> sourceSupplier,
+        Supplier<? extends FlowingFluid> flowingSupplier,
+        Supplier<? extends Item> bucketSupplier,
+        Supplier<? extends LiquidBlock> blockSupplier,
+        int slopeFindDistance,
+        int levelDecreasePerBlock,
+        int tickRate,
+        float explosionResistance,
+        boolean canConvertToSource
+    ) {
+        ForgeFlowingFluid.Properties properties =
+            new ForgeFlowingFluid.Properties(fluidTypeSupplier, sourceSupplier, flowingSupplier)
+                .slopeFindDistance(slopeFindDistance)
+                .levelDecreasePerBlock(levelDecreasePerBlock)
+                .tickRate(tickRate)
+                .explosionResistance(explosionResistance);
+        if (bucketSupplier != null) {
+            properties = properties.bucket(bucketSupplier);
+        }
+        if (blockSupplier != null) {
+            properties = properties.block(blockSupplier);
+        }
+        // Forge 1.20.1 API does not expose a configurable canConvertToSource setter.
+        // Keep parameter for cross-platform metadata parity; behavior follows default.
+        return properties;
+    }
+
+    public static Fluid createSourceFluid(ForgeFlowingFluid.Properties properties) {
+        return new ForgeFlowingFluid.Source(properties);
+    }
+
+    public static Fluid createFlowingFluid(ForgeFlowingFluid.Properties properties) {
+        return new ForgeFlowingFluid.Flowing(properties);
+    }
+
+    public static Block createLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier) {
+        return new LiquidBlock(fluidSupplier, BlockBehaviour.Properties.copy(Blocks.WATER));
+    }
+
+    public static Item createFluidBucket(Supplier<? extends Fluid> fluidSupplier) {
+        return new net.minecraft.world.item.BucketItem(
+            fluidSupplier,
+            new Item.Properties()
+                .stacksTo(1)
+                .craftRemainder(Items.BUCKET)
+        );
     }
 
     @SuppressWarnings("unchecked")
