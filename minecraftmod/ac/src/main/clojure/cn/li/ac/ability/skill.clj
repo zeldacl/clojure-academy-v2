@@ -103,8 +103,8 @@
                               :hold-charge-release #{:perform!}
                               :hold-channel #{}
                               :toggle #{:activate! :deactivate!}
-                              :release-cast #{:down! :tick! :up!}
-                              :charge-window #{:down! :tick! :up!}}
+                              :release-cast #{}
+                              :charge-window #{}}
         allowed-action-keys #{:perform! :down! :tick! :up! :abort! :cost-fail! :activate! :deactivate!}
         allowed-fx-keys #{:start :update :perform :end}
         allowed-cost-stages #{:down :tick :up}
@@ -166,9 +166,20 @@
             (when-not (contains? allowed-action-keys k)
               (throw (ex-info "Unsupported action key in :actions"
                               {:skill-id id :action-key k}))))
+        ;; Check required actions for pattern, but allow ops vectors as alternatives.
+        ;; run-stage! routes :perform → :perform vector, :down → :on-down, etc.
         _ (let [actions-preview (merge {} (:actions defaults) (:actions spec))
+                has-ops-for?   (fn [action-key]
+                                 (case action-key
+                                   :perform! (seq (:perform spec))
+                                   :down!    (or (seq (:on-down spec))  (seq (get-in spec [:ops :down])))
+                                   :tick!    (or (seq (:on-tick spec))  (seq (get-in spec [:ops :tick])))
+                                   :up!      (or (seq (:on-up spec))   (seq (get-in spec [:ops :up])))
+                                   false))
                 required (get required-action-keys (:pattern spec) #{})
-                missing  (seq (remove #(contains? actions-preview %) required))]
+                missing  (seq (remove #(or (contains? actions-preview %)
+                                           (has-ops-for? %))
+                                      required))]
             (when missing
               (throw (ex-info "Missing required actions for pattern"
                               {:skill-id id :pattern (:pattern spec) :missing missing}))))

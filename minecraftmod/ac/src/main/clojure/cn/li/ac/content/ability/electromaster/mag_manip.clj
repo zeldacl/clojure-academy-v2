@@ -1,4 +1,4 @@
-ns cn.li.ac.content.ability.electromaster.mag-manip
+(ns cn.li.ac.content.ability.electromaster.mag-manip
   "MagManip skill - grab a magnetizable block, hold it, throw it on key release.
 
   Pattern: :release-cast
@@ -309,7 +309,7 @@ ns cn.li.ac.content.ability.electromaster.mag-manip
                 (ctx/update-context! ctx-id assoc :skill-state
                                      {:fired true
                                       :mode :thrown
-                                      :held-block nil}))))))))
+                                      :held-block nil})))))))))
 
 (defn- on-abort [{:keys [ctx-id]}]
   (when-let [ctx-data (ctx/get-context ctx-id)]

@@ -231,7 +231,7 @@
           (when performed?
             (skill-effects/add-skill-exp! player-id :railgun (if reflection-hit? 0.01 0.005))
             (skill-effects/set-main-cooldown! player-id :railgun
-                                              (int (Math/round (bal/lerp 300.0 160.0 exp))))
+                                              (int (Math/round (double (bal/lerp 300.0 160.0 exp)))))
             (ctx/update-context! ctx-id assoc :skill-state
                                  {:fired       true
                                   :mode        :performed
@@ -273,7 +273,7 @@
                     (when performed?
                       (skill-effects/add-skill-exp! player-id :railgun (if reflection-hit? 0.01 0.005))
                       (skill-effects/set-main-cooldown! player-id :railgun
-                                                        (int (Math/round (bal/lerp 300.0 160.0 exp))))
+                                                        (int (Math/round (double (bal/lerp 300.0 160.0 exp)))))
                       (ctx/update-context! ctx-id assoc :skill-state
                                            {:fired     true
                                             :mode      :performed

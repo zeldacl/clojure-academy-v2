@@ -9,8 +9,12 @@
   op-kw)
 
 (defmacro defop
-  [op-kw arglist & body]
-  `(register-op! ~op-kw (fn ~arglist ~@body)))
+  "Define an effect op. Accepts an optional docstring between the keyword and arglist."
+  [op-kw & forms]
+  (let [[_docstring arglist & body] (if (string? (first forms))
+                                      forms
+                                      (cons nil forms))]
+    `(register-op! ~op-kw (fn ~arglist ~@body))))
 
 (defn- resolve-param-value
   [evt value]

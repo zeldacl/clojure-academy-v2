@@ -95,7 +95,7 @@
                             (block-manip/break-block! block-manip/*block-manipulation*
                                                       player-id world-id nx ny nz false))))
                       (recur (+ travel 1.0) (- remaining (double hardness))))
-                    (recur (+ travel 1.0) 0.0))))))))))))
+                    (recur (+ travel 1.0) 0.0)))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; :beam effect op
