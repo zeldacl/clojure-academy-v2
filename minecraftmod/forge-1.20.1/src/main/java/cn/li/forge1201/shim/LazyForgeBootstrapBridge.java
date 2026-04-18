@@ -136,6 +136,46 @@ public final class LazyForgeBootstrapBridge {
         return ForgeBootstrapHelper.createFluidBucket(fluidSupplier);
     }
 
+    public static Object createEntityType(String fullId,
+                                          Class<?> entityClass,
+                                          String category,
+                                          float width,
+                                          float height,
+                                          int clientTrackingRange,
+                                          int updateInterval,
+                                          boolean fireImmune) {
+        return ForgeBootstrapHelper.createEntityType(
+            fullId,
+            entityClass,
+            category,
+            width,
+            height,
+            clientTrackingRange,
+            updateInterval,
+            fireImmune
+        );
+    }
+
+    public static Object createEntityTypeByKind(String fullId,
+                                                String entityKind,
+                                                String category,
+                                                float width,
+                                                float height,
+                                                int clientTrackingRange,
+                                                int updateInterval,
+                                                boolean fireImmune) {
+        return ForgeBootstrapHelper.createEntityTypeByKind(
+            fullId,
+            entityKind,
+            category,
+            width,
+            height,
+            clientTrackingRange,
+            updateInterval,
+            fireImmune
+        );
+    }
+
     public static Object createScriptedBlockEntityType(String tileId, List<Block> blocks, Function<Block, String> blockIdResolver) {
         return ForgeBootstrapHelper.createScriptedBlockEntityType(tileId, blocks, blockIdResolver);
     }

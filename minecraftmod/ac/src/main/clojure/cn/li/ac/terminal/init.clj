@@ -22,6 +22,7 @@
                       cn.li.ac.terminal.apps.settings/init-settings-app!
                       cn.li.ac.terminal.apps.tutorial/init-tutorial-app!
                       cn.li.ac.terminal.apps.freq-transmitter/init-freq-transmitter-app!
+                      cn.li.ac.terminal.apps.media-player/init-media-player-app!
                       cn.li.ac.terminal.apps.about/init-about-app!]]
       (when-let [init-fn (requiring-resolve init-sym)]
         (init-fn)))

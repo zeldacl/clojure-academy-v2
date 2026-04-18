@@ -11,7 +11,8 @@
     (idsl/register-item!
       (idsl/create-item-spec
         "windgen_fan"
-        {:max-stack-size 64
+        {:max-stack-size 1
+         :durability 100
          :creative-tab :misc
          :properties {:tooltip ["Wind generator rotor"
                                 "Install into Wind Generator Main"]

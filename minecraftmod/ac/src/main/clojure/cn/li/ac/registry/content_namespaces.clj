@@ -34,6 +34,14 @@
 (def item-init-fns
   '[cn.li.ac.content.items.all/init-items!])
 
+(def entity-namespaces
+  "Entity content namespaces.
+  These define entities using entity DSL."
+  '[cn.li.ac.content.entities.all])
+
+(def entity-init-fns
+  '[cn.li.ac.content.entities.all/init-entities!])
+
 (def ability-namespaces
   "Ability content namespaces.
   These define categories and skills via ability DSL."
@@ -51,7 +59,7 @@
   "Load all content namespaces to trigger DSL macro side effects and hook registration."
   []
   (log/warn "[CONTENT_TRACE] load-all begin")
-  (doseq [ns-sym (concat block-namespaces item-namespaces ability-namespaces system-namespaces)]
+  (doseq [ns-sym (concat block-namespaces item-namespaces entity-namespaces ability-namespaces system-namespaces)]
     (try
       (log/warn "[CONTENT_TRACE] require begin" ns-sym)
       (require ns-sym)
@@ -76,6 +84,15 @@
         (log/warn "[CONTENT_TRACE] item-init ok" init-sym))
       (catch Throwable t
         (log/error "[CONTENT_TRACE] item-init fail" init-sym (ex-message t))
+        (throw t))))
+  (doseq [init-sym entity-init-fns]
+    (try
+      (log/warn "[CONTENT_TRACE] entity-init begin" init-sym)
+      (when-let [init-fn (requiring-resolve init-sym)]
+        (init-fn)
+        (log/warn "[CONTENT_TRACE] entity-init ok" init-sym))
+      (catch Throwable t
+        (log/error "[CONTENT_TRACE] entity-init fail" init-sym (ex-message t))
         (throw t))))
   (doseq [init-sym ability-init-fns]
     (try

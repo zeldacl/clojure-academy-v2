@@ -1,10 +1,13 @@
 (ns cn.li.ac.content.items.all
   "Content entrypoint for AC item declarations."
   (:require [cn.li.ac.item.components :as components]
+            [cn.li.ac.item.app-installers :as app-installers]
             [cn.li.ac.item.constraint-plate :as constraint-plate]
+            [cn.li.ac.item.energy-items :as energy-items]
             [cn.li.ac.item.legacy-materials :as legacy-materials]
             [cn.li.ac.item.mat-core :as mat-core]
             [cn.li.ac.item.media :as media]
+            [cn.li.ac.item.special-items :as special-items]
             [cn.li.ac.item.windgen-fan :as windgen-fan]))
 
 (defonce ^:private items-installed? (atom false))
@@ -14,7 +17,10 @@
   (when (compare-and-set! items-installed? false true)
     (legacy-materials/init-legacy-materials!)
     (components/init-components!)
+    (app-installers/init-app-installers!)
     (constraint-plate/init-constraint-plate!)
+    (energy-items/init-energy-items!)
     (mat-core/init-mat-cores!)
     (media/init-media!)
+    (special-items/init-special-items!)
     (windgen-fan/init-windgen-fan!)))

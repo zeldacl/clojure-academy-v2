@@ -2,10 +2,15 @@ package cn.li.forge1201.shim;
 
 import cn.li.forge1201.block.DynamicStateBlock;
 import cn.li.forge1201.block.ScriptedBlock;
+import cn.li.forge1201.entity.ScriptedEffectEntity;
+import cn.li.forge1201.entity.ScriptedProjectileEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.BlockGetter;
@@ -25,6 +30,7 @@ import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
+import java.lang.reflect.Constructor;
 import java.util.function.Function;
 import java.util.List;
 import java.util.function.Supplier;
@@ -168,6 +174,76 @@ public final class ForgeBootstrapHelper {
             new Item.Properties()
                 .stacksTo(1)
                 .craftRemainder(Items.BUCKET)
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    public static EntityType<?> createEntityType(String fullId,
+                                                 Class<?> entityClass,
+                                                 String category,
+                                                 float width,
+                                                 float height,
+                                                 int clientTrackingRange,
+                                                 int updateInterval,
+                                                 boolean fireImmune) {
+        Class<? extends Entity> typedClass = (Class<? extends Entity>) entityClass;
+        Constructor<? extends Entity> ctor;
+        try {
+            ctor = typedClass.getConstructor(EntityType.class, net.minecraft.world.level.Level.class);
+        } catch (NoSuchMethodException e) {
+            throw new IllegalStateException("Entity class must have constructor (EntityType, Level): " + typedClass.getName(), e);
+        }
+        EntityType.EntityFactory<Entity> factory = (type, level) -> {
+            try {
+                return ctor.newInstance(type, level);
+            } catch (Exception e) {
+                throw new IllegalStateException("Failed to instantiate entity: " + typedClass.getName(), e);
+            }
+        };
+        MobCategory mobCategory = switch (String.valueOf(category)) {
+            case "monster" -> MobCategory.MONSTER;
+            case "creature" -> MobCategory.CREATURE;
+            case "ambient" -> MobCategory.AMBIENT;
+            case "water_creature" -> MobCategory.WATER_CREATURE;
+            case "water_ambient" -> MobCategory.WATER_AMBIENT;
+            case "misc" -> MobCategory.MISC;
+            default -> MobCategory.MISC;
+        };
+        EntityType.Builder<Entity> builder = EntityType.Builder.of(factory, mobCategory)
+            .sized(width, height)
+            .clientTrackingRange(clientTrackingRange)
+            .updateInterval(updateInterval);
+        if (fireImmune) {
+            builder = builder.fireImmune();
+        }
+        return builder.build(fullId);
+    }
+
+    public static EntityType<?> createEntityTypeByKind(String fullId,
+                                                       String entityKind,
+                                                       String category,
+                                                       float width,
+                                                       float height,
+                                                       int clientTrackingRange,
+                                                       int updateInterval,
+                                                       boolean fireImmune) {
+        Class<?> entityClass = switch (String.valueOf(entityKind)) {
+            case "scripted-projectile" -> ScriptedProjectileEntity.class;
+            case "scripted-effect" -> ScriptedEffectEntity.class;
+            default -> null;
+        };
+        if (entityClass == null) {
+            throw new IllegalStateException("Unknown entity kind: " + entityKind);
+        }
+        return createEntityType(
+            fullId,
+            entityClass,
+            category,
+            width,
+            height,
+            clientTrackingRange,
+            updateInterval,
+            fireImmune
         );
     }
 

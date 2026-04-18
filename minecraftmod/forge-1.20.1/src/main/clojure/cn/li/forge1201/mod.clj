@@ -9,6 +9,7 @@
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
             [cn.li.forge1201.runtime.lifecycle :as runtime-lifecycle]
             [cn.li.forge1201.runtime.item-handler :as runtime-item-handler]
+            [cn.li.forge1201.entity.effect-hooks :as effect-hooks]
             [cn.li.forge1201.platform-impl :as platform-impl]
             [cn.li.forge1201.config.bridge :as config-bridge]
             ;; platform-impl is loaded lazily during runtime mod-init to avoid
@@ -16,6 +17,7 @@
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.platform.capability :as platform-cap]
+            [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.config :as modid]
@@ -28,9 +30,10 @@
            [net.minecraft.world.level.material Fluid FlowingFluid]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
+           [cn.li.forge1201.item NbtBarItem]
            [cn.li.forge1201.entity ModEntities]
            [cn.li.forge1201.sound ModSounds]
-           [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab Items]
+           [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab Items Rarity]
            [net.minecraft.world.level ItemLike]
            [net.minecraft.network.chat Component]
            [net.minecraftforge.fluids FluidType ForgeFlowingFluid]
@@ -112,10 +115,71 @@
 ;; Storage for registered blocks and items (populated during initialization)
 (defonce registered-blocks (atom {}))
 (defonce registered-items (atom {}))
+(defonce registered-entities (atom {}))
 (defonce registered-block-entities (atom {}))
 (defonce registered-fluid-types (atom {}))
 (defonce registered-fluids-source (atom {}))
 (defonce registered-fluids-flowing (atom {}))
+
+(defn- rarity->forge-rarity
+  ^Rarity
+  [rarity-kw]
+  (case rarity-kw
+    :uncommon Rarity/UNCOMMON
+    :rare Rarity/RARE
+    :epic Rarity/EPIC
+    Rarity/COMMON))
+
+(defn- apply-item-properties
+  ^Item$Properties
+  [^Item$Properties base item-spec]
+  (let [max-stack-size (:max-stack-size item-spec)
+        durability (:durability item-spec)
+        rarity (:rarity item-spec)]
+    (cond-> base
+      (some? max-stack-size) (.stacksTo (int max-stack-size))
+      (some? durability) (.durability (int durability))
+      (some? rarity) (.rarity (rarity->forge-rarity rarity)))))
+
+(defn- create-standalone-item
+  ^Item
+  [item-spec]
+  (let [props (apply-item-properties (Item$Properties.) item-spec)
+        energy-item? (true? (get-in item-spec [:properties :energy-item?]))
+        current-key (str (or (get-in item-spec [:properties :bar-current-key]) "energy"))
+        max-key (str (or (get-in item-spec [:properties :bar-max-key]) "maxEnergy"))
+        default-max (double (or (get-in item-spec [:properties :energy-capacity]) 1.0))
+        bar-color (int (or (get-in item-spec [:properties :energy-bar-color]) 0x00E5FF))]
+    (if energy-item?
+      (NbtBarItem. props current-key max-key default-max bar-color)
+      (Item. props))))
+
+(defn- register-scripted-projectile-spec!
+  [registry-name entity-spec]
+  (let [projectile (get-in entity-spec [:properties :projectile])
+        hooks (:hooks projectile)]
+    (ModEntities/registerScriptedProjectileSpec
+      (str registry-name)
+      (str (or (:default-item-id projectile) ""))
+      (double (or (:gravity projectile) 0.05))
+      (double (or (:damage projectile) 0.0))
+      (double (or (:pickup-distance-sqr projectile) 2.25))
+      (not (false? (:drop-item-on-discard? projectile)))
+      (name (or (:on-hit-block hooks) :none))
+      (name (or (:on-hit-entity hooks) :none))
+      (name (or (:on-anchored-tick hooks) :none))
+      (name (or (:on-anchored-hurt hooks) :none))))
+  nil)
+
+(defn- register-scripted-effect-spec!
+  [registry-name entity-spec]
+  (let [effect (get-in entity-spec [:properties :effect])]
+    (ModEntities/registerScriptedEffectSpec
+      (str registry-name)
+      (int (or (:life-ticks effect) 15))
+      (not (false? (:follow-owner? effect)))
+      (name (or (:hook effect) :none))))
+  nil)
 
 (defn- has-block-state-properties?
   "Check if a block needs dynamic block state properties (via metadata).
@@ -300,6 +364,41 @@
                         be-type)))))]
           (swap! registered-block-entities assoc tile-id registered-obj))))))
 
+(defn register-all-entities!
+  "Register all entities declared in entity DSL."
+  []
+  (doseq [entity-id (edsl/list-entities)]
+    (let [entity-spec (edsl/get-entity entity-id)
+          registry-name (edsl/get-entity-registry-name entity-id)
+          entity-kind (:entity-kind entity-spec)]
+      (if (nil? entity-kind)
+        (log/error "Skipping entity registration: missing :entity-kind" {:entity-id entity-id})
+        (let [_ (case entity-kind
+                  :scripted-projectile (register-scripted-projectile-spec! registry-name entity-spec)
+                  :scripted-effect (register-scripted-effect-spec! registry-name entity-spec)
+                  nil)
+              registered-obj
+              (ModEntities/register
+                registry-name
+                (reify java.util.function.Supplier
+                  (get [_]
+                    (bootstrap/create-entity-type-by-kind
+                      (str mod-id ":" registry-name)
+                      (name entity-kind)
+                      (name (or (:category entity-spec) :misc))
+                      (:width entity-spec)
+                      (:height entity-spec)
+                      (:client-tracking-range entity-spec)
+                      (:update-interval entity-spec)
+                      (:fire-immune? entity-spec)))))]
+          (swap! registered-entities assoc entity-id registered-obj))))))
+
+(defn get-registered-entity-type
+  "Get a registered EntityType by entity-id."
+  [entity-id]
+  (when-let [registered-obj (get @registered-entities entity-id)]
+    (.get ^RegistryObject registered-obj)))
+
 (defn get-registered-block-entity-type
   "Get a registered BlockEntityType by tile-id or block-id."
   [tile-or-block-id]
@@ -317,10 +416,11 @@
   ;; Register standalone items
   (doseq [item-id (registry-metadata/get-all-item-ids)]
     (let [registry-name (registry-metadata/get-item-registry-name item-id)
+          item-spec (registry-metadata/get-item-spec item-id)
           registered-obj (.register ^DeferredRegister (force items-register) registry-name
                           (reify java.util.function.Supplier
                             (get [_]
-                              (Item. (Item$Properties.)))))]
+                              (create-standalone-item item-spec))))]
       (swap! registered-items assoc item-id registered-obj)))
   
   ;; Register BlockItems for all blocks
@@ -400,12 +500,13 @@
       (.displayItems (reify net.minecraft.world.item.CreativeModeTab$DisplayItemsGenerator
                        (accept [_ _params output]
                          (doseq [entry (registry-metadata/get-all-creative-tab-entries)]
-                           (let [item-id (:id entry)
-                                 item-obj (if (= (:type entry) :block-item)
-                                            (get-registered-block-item item-id)
-                                            (get-registered-item item-id))]
-                             (when item-obj
-                               (.accept output (net.minecraft.world.item.ItemStack. ^ItemLike item-obj))))))))
+                           (when (some? (:tab entry))
+                             (let [item-id (:id entry)
+                                   item-obj (if (= (:type entry) :block-item)
+                                              (get-registered-block-item item-id)
+                                              (get-registered-item item-id))]
+                               (when item-obj
+                                 (.accept output (net.minecraft.world.item.ItemStack. ^ItemLike item-obj)))))))))
       (.build)))
 
 ;; ============================================================================
@@ -502,8 +603,10 @@
         ;; Register all blocks and items using metadata-driven approach
         ;; DSL systems are automatically initialized when namespaces load
         (register-scripted-tile-hooks!)
+        (effect-hooks/register-all-effect-hooks!)
         (register-all-fluids!)
         (register-all-blocks!)
+        (register-all-entities!)
         (register-block-entities!)
         (register-all-items!)
 

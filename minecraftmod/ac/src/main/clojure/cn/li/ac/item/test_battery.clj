@@ -4,7 +4,7 @@
   A simple battery item for testing the wireless energy system.
   Implements ImagEnergyItem protocol."
   (:require [cn.li.ac.energy.imag-energy-item :as energy-item]
-            [cn.li.mcmod.item.dsl :as item-dsl]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
@@ -15,8 +15,8 @@
 
 (defrecord TestBattery [max-energy bandwidth]
   energy-item/ImagEnergyItem
-  (get-max-energy [this] max-energy)
-  (get-bandwidth [this] bandwidth))
+  (get-max-energy [_this] max-energy)
+  (get-bandwidth [_this] bandwidth))
 
 ;; ============================================================================
 ;; Battery Definitions
@@ -24,9 +24,8 @@
 
 (def battery-configs
   ^{:doc "Battery configurations: name -> [max-energy bandwidth]"}
-  {:basic    [10000.0  100.0]   ; Basic battery: 10k energy, 100/tick
-   :advanced [50000.0  500.0]   ; Advanced battery: 50k energy, 500/tick
-   :ultimate [250000.0 2500.0]}) ; Ultimate battery: 250k energy, 2500/tick
+  {:energy-unit        [10000.0 20.0]
+   :developer-portable [100000.0 100.0]})
 
 (defn create-battery
   "Create a battery with specified configuration"
@@ -49,21 +48,31 @@
 ;; Battery Helper Functions
 ;; ============================================================================
 
+(defn- get-battery-type
+  [item-stack]
+  (when item-stack
+    (let [item-obj (item/item-get-item item-stack)
+          registry-id (some-> item-obj item/item-get-registry-name str)
+          expected-energy-id (str modid/*mod-id* ":energy_unit")
+          expected-portable-id (str modid/*mod-id* ":developer_portable")
+          nbt-data (item/item-get-tag-compound item-stack)
+          nbt-type (when nbt-data (nbt/nbt-get-string nbt-data "batteryType"))]
+      (or (when (seq nbt-type) (keyword nbt-type))
+          (cond
+            (= registry-id expected-energy-id) :energy-unit
+            (= registry-id expected-portable-id) :developer-portable
+            :else nil)))))
+
 (defn get-battery-config
   "Get battery configuration from ItemStack"
   [item-stack]
-  (when item-stack
-    (let [item (item/item-get-item item-stack)
-          nbt (item/item-get-tag-compound item-stack)
-          battery-type (when nbt (nbt/nbt-get-string nbt "batteryType"))]
-      (when battery-type
-        (create-battery (keyword battery-type))))))
+  (when-let [battery-type (get-battery-type item-stack)]
+    (create-battery battery-type)))
 
 (defn is-battery?
   "Check if ItemStack is a battery"
   [item-stack]
-  ;; All battery items currently disabled (missing textures)
-  false)
+  (boolean (get-battery-config item-stack)))
 
 (defn get-battery-energy
   "Get current energy from battery ItemStack"
@@ -75,21 +84,19 @@
         0.0))))
 
 (defn set-battery-energy!
-  "Set energy in battery ItemStack and update durability bar"
+  "Set energy in battery ItemStack."
   [item-stack energy]
   (when (is-battery? item-stack)
     (let [config (get-battery-config item-stack)
           max-energy (energy-item/get-max-energy config)
           clamped-energy (min max-energy (max 0.0 energy))
+          bandwidth (energy-item/get-bandwidth config)
+          battery-type (name (get-battery-type item-stack))
           tag (item/item-get-or-create-tag item-stack)]
-      ;; Set energy in NBT
       (nbt/nbt-set-double! tag "energy" clamped-energy)
-      
-      ;; Update durability bar (inverse: empty = full damage)
-      (let [max-damage (item/item-get-max-damage item-stack)
-            damage-percent (- 1.0 (/ clamped-energy max-energy))
-            damage (int (* damage-percent max-damage))]
-        (item/item-set-damage! item-stack damage)))))
+      (nbt/nbt-set-double! tag "maxEnergy" max-energy)
+      (nbt/nbt-set-double! tag "bandwidth" bandwidth)
+      (nbt/nbt-set-string! tag "batteryType" battery-type))))
 
 (defn charge-battery!
   "Charge energy into battery
@@ -147,11 +154,4 @@
     (energy-item/get-bandwidth config)))
 
 (defn init-test-batteries! []
-  (log/info "Test batteries initialized: basic, advanced, ultimate"))
-
-;; Export for use in energy/operations.clj
-(def ^:export is-battery? is-battery?)
-(def ^:export get-battery-energy get-battery-energy)
-(def ^:export set-battery-energy! set-battery-energy!)
-(def ^:export charge-battery! charge-battery!)
-(def ^:export pull-from-battery! pull-from-battery!)
+  (log/info "Energy item adapters initialized: energy-unit, developer-portable"))

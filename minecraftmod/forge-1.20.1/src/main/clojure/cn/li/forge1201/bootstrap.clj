@@ -96,6 +96,32 @@
   [fluid-supplier]
   (LazyForgeBootstrapBridge/createFluidBucket fluid-supplier))
 
+(defn create-entity-type
+  [^String full-id ^Class entity-class ^String category width height
+   client-tracking-range update-interval fire-immune?]
+  (LazyForgeBootstrapBridge/createEntityType
+    full-id
+    entity-class
+    category
+    (float width)
+    (float height)
+    (int client-tracking-range)
+    (int update-interval)
+    (boolean fire-immune?)))
+
+(defn create-entity-type-by-kind
+  [^String full-id ^String entity-kind ^String category width height
+   client-tracking-range update-interval fire-immune?]
+  (LazyForgeBootstrapBridge/createEntityTypeByKind
+    full-id
+    entity-kind
+    category
+    (float width)
+    (float height)
+    (int client-tracking-range)
+    (int update-interval)
+    (boolean fire-immune?)))
+
 (defn create-scripted-block-entity-type
   [^String tile-id blocks block-id-resolver]
   (LazyForgeBootstrapBridge/createScriptedBlockEntityType tile-id blocks block-id-resolver))

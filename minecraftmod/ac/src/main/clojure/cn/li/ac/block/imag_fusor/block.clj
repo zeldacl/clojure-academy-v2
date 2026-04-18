@@ -13,6 +13,7 @@
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.item :as pitem]
+            [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.block.imag-fusor.config :as fusor-config]
@@ -132,10 +133,16 @@
   [stack]
   (when (and (not (stack-empty? stack))
              (= (stack-id stack) fusor-config/matter-unit-item-id))
-    (case (int (try (pitem/item-get-damage stack) (catch Exception _ -1)))
-      0 :none
-      1 :phase-liquid
-      nil)))
+    (let [tag (try (pitem/item-get-tag-compound stack) (catch Exception _ nil))
+          tag-kind (when tag (try (nbt/nbt-get-string tag "matterKind") (catch Exception _ nil)))]
+      (or (case (some-> tag-kind str)
+            "none" :none
+            "phase-liquid" :phase-liquid
+            nil)
+          (case (int (try (pitem/item-get-damage stack) (catch Exception _ -1)))
+            0 :none
+            1 :phase-liquid
+            nil)))))
 
 (defn- phase-liquid-unit?
   [stack]
@@ -149,6 +156,10 @@
   [count]
   (let [stack (pitem/create-item-stack-by-id fusor-config/matter-unit-item-id (int count))]
     (when stack
+      (try
+        (let [tag (pitem/item-get-or-create-tag stack)]
+          (nbt/nbt-set-string! tag "matterKind" "none"))
+        (catch Exception _ nil))
       (try
         (pitem/item-set-damage! stack fusor-config/matter-unit-none-meta)
         (catch Exception _ nil))

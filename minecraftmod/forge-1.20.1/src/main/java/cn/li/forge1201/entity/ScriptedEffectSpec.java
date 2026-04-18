@@ -1,0 +1,25 @@
+package cn.li.forge1201.entity;
+
+public final class ScriptedEffectSpec {
+    private final int lifeTicks;
+    private final boolean followOwner;
+    private final String effectHook;
+
+    public ScriptedEffectSpec(int lifeTicks, boolean followOwner, String effectHook) {
+        this.lifeTicks = Math.max(1, lifeTicks);
+        this.followOwner = followOwner;
+        this.effectHook = effectHook == null ? "" : effectHook;
+    }
+
+    public int getLifeTicks() {
+        return lifeTicks;
+    }
+
+    public boolean isFollowOwner() {
+        return followOwner;
+    }
+
+    public String getEffectHook() {
+        return effectHook;
+    }
+}

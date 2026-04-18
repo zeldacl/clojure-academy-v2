@@ -5,6 +5,10 @@ import clojure.lang.IFn;
 import cn.li.forge1201.MyMod1201;
 import cn.li.forge1201.client.effect.IntensifyEffectRenderer;
 import cn.li.forge1201.entity.ModEntities;
+import cn.li.forge1201.entity.ScriptedEffectEntity;
+import cn.li.forge1201.entity.ScriptedProjectileEntity;
+import net.minecraft.client.renderer.entity.ThrownItemRenderer;
+import net.minecraft.world.entity.EntityType;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -23,7 +27,16 @@ public final class ModClientRenderSetup {
 
     @SubscribeEvent
     public static void onRegisterBlockEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        event.registerEntityRenderer(ModEntities.INTENSIFY_EFFECT.get(), IntensifyEffectRenderer::new);
+        EntityType<ScriptedEffectEntity> intensify = ModEntities.getEntityType("intensify_effect", ScriptedEffectEntity.class);
+        if (intensify != null) {
+            event.registerEntityRenderer(intensify, IntensifyEffectRenderer::new);
+        }
+
+        EntityType<ScriptedProjectileEntity> magHook =
+                ModEntities.getEntityType("entity_mag_hook", ScriptedProjectileEntity.class);
+        if (magHook != null) {
+            event.registerEntityRenderer(magHook, ThrownItemRenderer::new);
+        }
 
         // RegisterRenderers can run before FMLClientSetup / resolve-client-fn loads this NS.
         IFn require = Clojure.var("clojure.core", "require");

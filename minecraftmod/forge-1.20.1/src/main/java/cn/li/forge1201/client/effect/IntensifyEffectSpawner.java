@@ -1,6 +1,6 @@
 package cn.li.forge1201.client.effect;
 
-import cn.li.forge1201.entity.effect.IntensifyEffectEntity;
+import cn.li.forge1201.entity.ScriptedEffectEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -17,7 +17,7 @@ public final class IntensifyEffectSpawner {
             return false;
         }
 
-        IntensifyEffectEntity effect = IntensifyEffectEntity.create(level, player);
+        ScriptedEffectEntity effect = ScriptedEffectEntity.create(level, player, "intensify_effect");
         return level.addFreshEntity(effect);
     }
 }

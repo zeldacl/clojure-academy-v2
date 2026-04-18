@@ -1,5 +1,6 @@
 package cn.li.forge1201.bridge;
 
+import cn.li.forge1201.entity.ModEntities;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
@@ -18,12 +19,17 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -180,6 +186,117 @@ public final class ForgeRuntimeBridge {
         return key != null ? key.getNamespace() + ":" + key.getPath() : null;
     }
 
+    public static int countPlayerItemById(Object playerObj, String itemId) {
+        if (!(playerObj instanceof Player player) || itemId == null || itemId.isEmpty()) {
+            return 0;
+        }
+        Item item = getItemById(itemId);
+        if (item == null) {
+            return 0;
+        }
+        int total = 0;
+        Inventory inventory = player.getInventory();
+        for (ItemStack stack : inventory.items) {
+            if (!stack.isEmpty() && stack.getItem() == item) {
+                total += stack.getCount();
+            }
+        }
+        for (ItemStack stack : inventory.offhand) {
+            if (!stack.isEmpty() && stack.getItem() == item) {
+                total += stack.getCount();
+            }
+        }
+        return total;
+    }
+
+    public static boolean consumePlayerItemById(Object playerObj, String itemId, int amount) {
+        if (!(playerObj instanceof Player player) || itemId == null || itemId.isEmpty() || amount <= 0) {
+            return false;
+        }
+        Item item = getItemById(itemId);
+        if (item == null) {
+            return false;
+        }
+        int remaining = amount;
+        Inventory inventory = player.getInventory();
+        for (ItemStack stack : inventory.items) {
+            if (remaining <= 0) {
+                break;
+            }
+            if (!stack.isEmpty() && stack.getItem() == item) {
+                int take = Math.min(remaining, stack.getCount());
+                stack.shrink(take);
+                remaining -= take;
+            }
+        }
+        for (ItemStack stack : inventory.offhand) {
+            if (remaining <= 0) {
+                break;
+            }
+            if (!stack.isEmpty() && stack.getItem() == item) {
+                int take = Math.min(remaining, stack.getCount());
+                stack.shrink(take);
+                remaining -= take;
+            }
+        }
+        return remaining <= 0;
+    }
+
+    public static boolean givePlayerItemStack(Object playerObj, Object stackObj) {
+        if (!(playerObj instanceof Player player) || !(stackObj instanceof ItemStack stack) || stack.isEmpty()) {
+            return false;
+        }
+        ItemStack copy = stack.copy();
+        if (!player.getInventory().add(copy)) {
+            player.drop(copy, false);
+        }
+        return true;
+    }
+
+    public static boolean spawnEntityByIdFromPlayer(Object playerObj, String entityId, float speed) {
+        if (!(playerObj instanceof Player player) || entityId == null || entityId.isEmpty()) {
+            return false;
+        }
+        Level level = player.level();
+        if (level.isClientSide) {
+            return true;
+        }
+        EntityType<?> type;
+        try {
+            type = BuiltInRegistries.ENTITY_TYPE.get(new ResourceLocation(entityId));
+        } catch (Exception ignored) {
+            return false;
+        }
+        if (type == null) {
+            return false;
+        }
+        Entity entity = type.create(level);
+        if (entity == null) {
+            return false;
+        }
+        entity.moveTo(player.getX(), player.getEyeY() - 0.1D, player.getZ(), player.getYRot(), player.getXRot());
+        Vec3 look = player.getLookAngle().normalize().scale(speed);
+        entity.setDeltaMovement(look);
+        if (entity instanceof Projectile projectile) {
+            projectile.setOwner(player);
+        }
+        return level.addFreshEntity(entity);
+    }
+
+    public static Object playerRaytraceBlock(Object playerObj, double reach, boolean sourceOnly) {
+        if (!(playerObj instanceof Player player)) {
+            return null;
+        }
+        Vec3 eye = player.getEyePosition();
+        Vec3 end = eye.add(player.getViewVector(1.0F).scale(reach));
+        ClipContext.Fluid fluid = sourceOnly ? ClipContext.Fluid.SOURCE_ONLY : ClipContext.Fluid.NONE;
+        HitResult hit = player.level().clip(new ClipContext(eye, end, ClipContext.Block.OUTLINE, fluid, player));
+        if (hit.getType() != HitResult.Type.BLOCK) {
+            return null;
+        }
+        return (BlockHitResult) hit;
+    }
+
     // ---- Factory methods ----
 
     public static Object itemStackOf(Object nbt) {
@@ -202,6 +319,10 @@ public final class ForgeRuntimeBridge {
 
     public static int getMenuContainerId(Object menu) {
         return ((AbstractContainerMenu) menu).containerId;
+    }
+
+    public static boolean registerScriptedEffectHookClass(String hookId, String className) {
+        return ModEntities.registerScriptedEffectHookClass(hookId, className);
     }
 
     // ---- MobEffects lookup (avoids Class/forName on MobEffects registry class) ----

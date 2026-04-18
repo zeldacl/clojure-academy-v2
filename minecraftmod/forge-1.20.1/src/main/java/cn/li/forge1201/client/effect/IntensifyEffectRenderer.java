@@ -2,7 +2,7 @@ package cn.li.forge1201.client.effect;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import cn.li.forge1201.entity.effect.IntensifyEffectEntity;
+import cn.li.forge1201.entity.ScriptedEffectEntity;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
@@ -10,13 +10,13 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import org.joml.Matrix4f;
 
-public final class IntensifyEffectRenderer extends EntityRenderer<IntensifyEffectEntity> {
+public final class IntensifyEffectRenderer extends EntityRenderer<ScriptedEffectEntity> {
     public IntensifyEffectRenderer(EntityRendererProvider.Context context) {
         super(context);
     }
 
     @Override
-    public void render(IntensifyEffectEntity entity, float entityYaw, float partialTick,
+    public void render(ScriptedEffectEntity entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
 
@@ -31,7 +31,7 @@ public final class IntensifyEffectRenderer extends EntityRenderer<IntensifyEffec
         float entityFade = 1.0F - Math.min(1.0F, (entity.getAgeTicks() + partialTick) / 15.0F);
         float time = entity.getAgeTicks() + partialTick;
 
-        for (IntensifyEffectEntity.ArcData arc : entity.getActiveArcs()) {
+        for (ScriptedEffectEntity.ArcData arc : entity.getActiveArcs()) {
             float arcFade = Math.max(0.0F, Math.min(1.0F, arc.lifeTicks / 3.0F));
             float flicker = 0.72F + (0.28F * Math.abs((float) Math.sin((time * 2.4F) + arc.flickerSeed)));
             float alpha = Math.max(0.08F, 0.9F * arcFade * entityFade * flicker);
@@ -82,7 +82,7 @@ public final class IntensifyEffectRenderer extends EntityRenderer<IntensifyEffec
     }
 
     @Override
-    public ResourceLocation getTextureLocation(IntensifyEffectEntity entity) {
+    public ResourceLocation getTextureLocation(ScriptedEffectEntity entity) {
         return null;
     }
 }

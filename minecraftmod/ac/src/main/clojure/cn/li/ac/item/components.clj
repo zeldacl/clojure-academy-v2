@@ -27,7 +27,14 @@
         {:max-stack-size 64
          :creative-tab :misc
          :properties {:tooltip ["教程物品"]
-                      :model-texture "tutorial"}}))
+                      :model-texture "tutorial"}
+         :on-right-click (fn [event-data]
+                           (let [{:keys [player side]} event-data]
+                             (when (= side :client)
+                               (when-let [open-fn (requiring-resolve
+                                                   'cn.li.ac.terminal.apps.tutorial/open-tutorial-gui)]
+                                 (open-fn player)))
+                             {:consume? true}))}))
     (idsl/register-item!
       (idsl/create-item-spec
         "terminal_installer"
@@ -37,10 +44,12 @@
                                 "用于在方块上安装无线通信终端"]
                       :model-texture "terminal_installer"}
          :on-right-click (fn [event-data]
-                           (let [{:keys [player]} event-data]
-                             (when-let [open-fn (requiring-resolve
-                                                 'cn.li.ac.terminal.terminal-gui/open-terminal)]
-                               (open-fn player))))}))
+                           (let [{:keys [player side]} event-data]
+                             (when (= side :client)
+                               (when-let [open-fn (requiring-resolve
+                                                   'cn.li.ac.terminal.terminal-gui/open-terminal)]
+                                 (open-fn player)))
+                             {:consume? true}))}))
     (idsl/register-item!
       (idsl/create-item-spec
         "silbarn"
@@ -89,5 +98,45 @@
          :properties {:tooltip ["能力硬币"
                                 "电磁炮 QTE 投掷触发物"]
                       :model-texture "needle"}}))
+    (idsl/register-item!
+      (idsl/create-item-spec
+        "brain_component"
+        {:max-stack-size 64
+         :creative-tab :misc
+         :properties {:tooltip ["脑波组件"
+                                "用于高级能力设备"]
+                      :model-texture "brain_component"}}))
+    (idsl/register-item!
+      (idsl/create-item-spec
+        "energy_convert_component"
+        {:max-stack-size 64
+         :creative-tab :misc
+         :properties {:tooltip ["能量转换组件"
+                                "用于能量转换设备"]
+                      :model-texture "energy_convert_component"}}))
+    (idsl/register-item!
+      (idsl/create-item-spec
+        "info_component"
+        {:max-stack-size 64
+         :creative-tab :misc
+         :properties {:tooltip ["信息组件"
+                                "用于终端和信息处理设备"]
+                      :model-texture "info_component"}}))
+    (idsl/register-item!
+      (idsl/create-item-spec
+        "magnetic_coil"
+        {:max-stack-size 64
+         :creative-tab :misc
+         :properties {:tooltip ["磁力线圈"
+                                "用于超电磁炮技能"]
+                      :model-texture "magnetic_coil"}}))
+    (idsl/register-item!
+      (idsl/create-item-spec
+        "logo"
+        {:max-stack-size 64
+         :creative-tab nil
+         :properties {:tooltip ["AcademyCraft"]
+                      :model-texture "logo"}}))
     (log/info "Component items initialized: wafer, tutorial, terminal-installer, silbarn,"
-              "reso-crystal, resonance-component, reinforced-iron-plate, needle, coin")))
+              "reso-crystal, resonance-component, reinforced-iron-plate, needle, coin,"
+              "brain-component, energy-convert-component, info-component, magnetic-coil, logo")))

@@ -1,114 +1,51 @@
-package cn.li.forge1201.entity.effect;
+package cn.li.forge1201.entity.effect.hooks;
 
-import cn.li.forge1201.entity.ModEntities;
+import cn.li.forge1201.entity.ScriptedEffectEntity;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
+import net.minecraft.util.RandomSource;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.UUID;
 
-public class IntensifyEffectEntity extends Entity {
-    private static final int LIFE_TICKS = 15;
+public final class IntensifyArcsEffectHook implements ScriptedEffectHook {
     private static final int ARC_LIFE_TICKS = 3;
 
     // Original-like tier sequence from 1.12 EntityIntensifyEffect#initEvents.
     private static final double[] TIER_HEIGHTS = {2.0D, 1.8D, 1.5D, 1.0D, 0.5D, 0.0D, -0.1D};
     private static final int[] TIER_DELAYS = {0, 1, 3, 4, 6, 7, 8};
 
-    private UUID ownerUuid;
-    private int age;
-    private final List<ArcData> activeArcs = new ArrayList<>();
-
-    public IntensifyEffectEntity(EntityType<? extends IntensifyEffectEntity> entityType, Level level) {
-        super(entityType, level);
-        this.noPhysics = true;
-    }
-
-    public static IntensifyEffectEntity create(Level level, Player owner) {
-        IntensifyEffectEntity entity = new IntensifyEffectEntity(ModEntities.INTENSIFY_EFFECT.get(), level);
-        entity.ownerUuid = owner.getUUID();
-        entity.setPos(owner.getX(), owner.getY() + 1.0, owner.getZ());
-        return entity;
-    }
-
     @Override
-    protected void defineSynchedData() {
+    public void onClientTick(ScriptedEffectEntity entity, ClientLevel level) {
+        spawnTieredArcs(entity);
+        spawnArcParticles(entity, level);
+        tickArcLifetimes(entity);
     }
 
-    @Override
-    protected void readAdditionalSaveData(CompoundTag tag) {
-        if (tag.hasUUID("owner")) {
-            ownerUuid = tag.getUUID("owner");
-        }
-        age = tag.getInt("age");
-        activeArcs.clear();
-    }
-
-    @Override
-    protected void addAdditionalSaveData(CompoundTag tag) {
-        if (ownerUuid != null) {
-            tag.putUUID("owner", ownerUuid);
-        }
-        tag.putInt("age", age);
-    }
-
-    @Override
-    public void tick() {
-        super.tick();
-
-        Player owner = ownerUuid == null ? null : level().getPlayerByUUID(ownerUuid);
-        if (owner != null) {
-            setPos(owner.getX(), owner.getY() + 1.0, owner.getZ());
-        }
-
-        if (level().isClientSide() && level() instanceof ClientLevel clientLevel) {
-            spawnTieredArcs();
-            spawnArcParticles(clientLevel);
-            tickArcLifetimes();
-        }
-
-        age++;
-        if (age >= LIFE_TICKS) {
-            discard();
-        }
-    }
-
-    public int getAgeTicks() {
-        return age;
-    }
-
-    public List<ArcData> getActiveArcs() {
-        return Collections.unmodifiableList(activeArcs);
-    }
-
-    private void spawnTieredArcs() {
+    private void spawnTieredArcs(ScriptedEffectEntity entity) {
+        int age = entity.getAgeTicks();
         for (int i = 0; i < TIER_DELAYS.length; i++) {
             if (age == TIER_DELAYS[i]) {
-                spawnTierAtHeight(TIER_HEIGHTS[i]);
+                spawnTierAtHeight(entity, TIER_HEIGHTS[i]);
             }
         }
     }
 
-    private void spawnTierAtHeight(double height) {
+    private void spawnTierAtHeight(ScriptedEffectEntity entity, double height) {
+        RandomSource random = entity.getEffectRandom();
+        List<ScriptedEffectEntity.ArcData> arcs = entity.mutableActiveArcs();
         int batch = 3 + random.nextInt(2);
         while (batch-- > 0) {
             double radius = 0.5D + random.nextDouble() * 0.1D;
             double theta = random.nextDouble() * Math.PI * 2.0D;
             double ox = radius * Math.sin(theta);
             double oz = radius * Math.cos(theta);
-            activeArcs.add(createArcData(ox, height, oz));
+            arcs.add(createArcData(entity, ox, height, oz));
         }
     }
 
-    private ArcData createArcData(double ox, double oy, double oz) {
+    private ScriptedEffectEntity.ArcData createArcData(ScriptedEffectEntity entity, double ox, double oy, double oz) {
+        RandomSource random = entity.getEffectRandom();
         float phase = random.nextFloat() * ((float) Math.PI * 2.0F);
         float flickerSeed = random.nextFloat() * 13.0F;
 
@@ -163,13 +100,13 @@ public class IntensifyEffectEntity extends Entity {
             strands[1 + b] = branch;
         }
 
-        return new ArcData(strands, ARC_LIFE_TICKS, phase, flickerSeed);
+        return new ScriptedEffectEntity.ArcData(strands, ARC_LIFE_TICKS, phase, flickerSeed);
     }
 
-    private void tickArcLifetimes() {
-        Iterator<ArcData> it = activeArcs.iterator();
+    private void tickArcLifetimes(ScriptedEffectEntity entity) {
+        Iterator<ScriptedEffectEntity.ArcData> it = entity.mutableActiveArcs().iterator();
         while (it.hasNext()) {
-            ArcData arc = it.next();
+            ScriptedEffectEntity.ArcData arc = it.next();
             arc.lifeTicks--;
             if (arc.lifeTicks <= 0) {
                 it.remove();
@@ -177,12 +114,12 @@ public class IntensifyEffectEntity extends Entity {
         }
     }
 
-    private void spawnArcParticles(ClientLevel level) {
-        for (ArcData arc : activeArcs) {
+    private void spawnArcParticles(ScriptedEffectEntity entity, ClientLevel level) {
+        for (ScriptedEffectEntity.ArcData arc : entity.mutableActiveArcs()) {
             float[] p0 = arc.strands[0][0];
-            double px = getX() + p0[0];
-            double py = getY() + p0[1];
-            double pz = getZ() + p0[2];
+            double px = entity.getX() + p0[0];
+            double py = entity.getY() + p0[1];
+            double pz = entity.getZ() + p0[2];
             level.addParticle(ParticleTypes.ELECTRIC_SPARK, px, py, pz, 0.0, 0.0, 0.0);
 
             // Brief sparks at branch tips improve SubArc fork readability.
@@ -190,23 +127,9 @@ public class IntensifyEffectEntity extends Entity {
                 float[][] branch = arc.strands[i];
                 float[] tip = branch[branch.length - 1];
                 level.addParticle(ParticleTypes.ELECTRIC_SPARK,
-                        getX() + tip[0], getY() + tip[1], getZ() + tip[2],
+                        entity.getX() + tip[0], entity.getY() + tip[1], entity.getZ() + tip[2],
                         0.0, 0.0, 0.0);
             }
-        }
-    }
-
-    public static final class ArcData {
-        public final float[][][] strands;
-        public int lifeTicks;
-        public final float phase;
-        public final float flickerSeed;
-
-        private ArcData(float[][][] strands, int lifeTicks, float phase, float flickerSeed) {
-            this.strands = strands;
-            this.lifeTicks = lifeTicks;
-            this.phase = phase;
-            this.flickerSeed = flickerSeed;
         }
     }
 }

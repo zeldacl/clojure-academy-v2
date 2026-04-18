@@ -34,6 +34,22 @@
   (player-consume-main-hand-item! [player amount]
     "Consume amount from main-hand item unless creative. Returns true when consumed/allowed")
 
+  (player-count-item-by-id [player item-id]
+    "Count all items with registry id `item-id` in player's inventory. Returns int.")
+
+  (player-consume-item-by-id! [player item-id amount]
+    "Consume `amount` items with registry id `item-id` from player's inventory. Returns boolean.")
+
+  (player-give-item-stack! [player item-stack]
+    "Insert `item-stack` into player's inventory, dropping overflow in world. Returns boolean.")
+
+  (player-spawn-entity-by-id! [player entity-id speed]
+    "Spawn an entity by registry id (`namespace:path`) from player's viewpoint. Returns boolean.")
+
+  (player-raytrace-block [player reach fluid-source-only?]
+    "Raytrace block hit from player view.
+    Returns nil or map {:hit-pos {:x :y :z} :place-pos {:x :y :z} :block-id string}.")
+
   (player-get-container-menu [player]
     "Return the player's open container/menu")
 

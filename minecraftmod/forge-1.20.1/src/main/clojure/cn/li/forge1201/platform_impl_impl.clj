@@ -17,8 +17,12 @@
   (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.world InteractionHand]
            [net.minecraft.resources ResourceLocation]
+           [net.minecraft.core BlockPos]
            [net.minecraft.world.entity Entity]
            [net.minecraft.world.entity.player Player]
+           [net.minecraft.world.level Level]
+           [net.minecraft.world.level.block.state BlockState]
+           [net.minecraft.world.phys BlockHitResult]
            [net.minecraft.world.item Item ItemStack]))
 
 
@@ -121,6 +125,23 @@
                                                                  (do
                                                                    (.shrink stack n)
                                                                    true))))))
+                       :player-count-item-by-id (fn [^Player this item-id]
+                                                  (ForgeRuntimeBridge/countPlayerItemById this (str item-id)))
+                       :player-consume-item-by-id! (fn [^Player this item-id amount]
+                                                     (ForgeRuntimeBridge/consumePlayerItemById this (str item-id) (int (or amount 0))))
+                       :player-give-item-stack! (fn [^Player this item-stack]
+                                                  (ForgeRuntimeBridge/givePlayerItemStack this item-stack))
+                       :player-spawn-entity-by-id! (fn [^Player this entity-id speed]
+                                                     (ForgeRuntimeBridge/spawnEntityByIdFromPlayer this (str entity-id) (float (or speed 1.0))))
+                       :player-raytrace-block (fn [^Player this reach fluid-source-only?]
+                                                (when-let [^BlockHitResult hit (ForgeRuntimeBridge/playerRaytraceBlock this (double (or reach 5.0)) (boolean fluid-source-only?))]
+                                                  (let [^BlockPos hit-pos (.getBlockPos hit)
+                                                        ^BlockPos place-pos (.relative hit-pos (.getDirection hit))
+                                                        ^Level level (ForgeRuntimeBridge/getEntityLevel this)
+                                                        ^BlockState hit-state (.getBlockState level hit-pos)]
+                                                    {:hit-pos {:x (.getX hit-pos) :y (.getY hit-pos) :z (.getZ hit-pos)}
+                                                     :place-pos {:x (.getX place-pos) :y (.getY place-pos) :z (.getZ place-pos)}
+                                                     :block-id (ForgeRuntimeBridge/getBlockKey (.getBlock hit-state))})))
                        :player-get-container-menu (fn [^Player this]
                                                     (ForgeRuntimeBridge/getPlayerContainerMenu this))}]
       (extend entity-cls entity/IEntityOps
