@@ -42,7 +42,19 @@
                  "command.academy.aim.maxout.success" "Maxed out progression"
                  "command.academy.aim.cheats_on.success" "Enabled cheat mode"
                  "command.academy.aim.cheats_off.success" "Disabled cheat mode"
-                 "command.academy.aim.help" "Available commands: cat, catlist, reset, learn, unlearn, learn_all, learned, skills, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"}
+                 "command.academy.aim.help" "Available commands: cat, catlist, reset, learn, unlearn, learn_all, learned, skills, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"
+                 "ability.skill.generic.brain_course" "Brain Course"
+                 "ability.skill.generic.brain_course.desc" "Passive: Increases max CP by 1000."
+                 "ability.skill.generic.brain_course_advanced" "Advanced Brain Course"
+                 "ability.skill.generic.brain_course_advanced.desc" "Passive: Increases max CP by 1500 and max overload by 100."
+                 "ability.skill.generic.mind_course" "Mind Course"
+                 "ability.skill.generic.mind_course.desc" "Passive: Increases CP recovery speed by 20%."
+                 "ability.skill.meltdowner.rad_intensify" "Radiation Intensify"
+                 "ability.skill.meltdowner.rad_intensify.desc" "Passive: Marks targets hit by meltdowner attacks and amplifies damage for a short duration."
+                 "ability.skill.teleporter.dim_folding_theorem" "Dim Folding Theorem"
+                 "ability.skill.teleporter.dim_folding_theorem.desc" "Passive: Improves teleporter critical strike chance."
+                 "ability.skill.teleporter.space_fluct" "Space Fluctuation"
+                 "ability.skill.teleporter.space_fluct.desc" "Passive: Unlocks higher teleporter critical strike tiers."}
    "zh_cn.json" {"itemGroup.my_mod.items" "My Mod Items"
                  ;; 命令翻译
                  "command.academy.acach.success" "已授予进度 %s 给 %s"
@@ -71,7 +83,19 @@
                  "command.academy.aim.maxout.success" "已最大化进度"
                  "command.academy.aim.cheats_on.success" "已启用作弊模式"
                  "command.academy.aim.cheats_off.success" "已禁用作弊模式"
-                 "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, skills, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"}})
+                 "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, skills, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"
+                 "ability.skill.generic.brain_course" "脑域课程"
+                 "ability.skill.generic.brain_course.desc" "被动：最大CP增加1000。"
+                 "ability.skill.generic.brain_course_advanced" "高级脑域课程"
+                 "ability.skill.generic.brain_course_advanced.desc" "被动：最大CP增加1500，最大过载增加100。"
+                 "ability.skill.generic.mind_course" "意念课程"
+                 "ability.skill.generic.mind_course.desc" "被动：CP恢复速度提升20%。"
+                 "ability.skill.meltdowner.rad_intensify" "辐射强化"
+                 "ability.skill.meltdowner.rad_intensify.desc" "被动：命中目标后短时间标记并提高其受到的伤害。"
+                 "ability.skill.teleporter.dim_folding_theorem" "维度折叠理论"
+                 "ability.skill.teleporter.dim_folding_theorem.desc" "被动：提升瞬移系暴击触发概率。"
+                 "ability.skill.teleporter.space_fluct" "空间波动"
+                 "ability.skill.teleporter.space_fluct.desc" "被动：解锁更高阶的瞬移暴击效果。"}})
 
 (defn create
   [^PackOutput pack-output _exfile-helper]

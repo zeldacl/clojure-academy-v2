@@ -120,7 +120,7 @@
   (when-let [state (get-player-state uuid-str)]
     (let [{:keys [resource-data cooldown-data develop-data]} state
           ;; Resource tick — may emit events
-          {:keys [data events]} (svc-res/server-tick resource-data)
+          {:keys [data events]} (svc-res/server-tick resource-data uuid-str)
           new-cd (svc-cd/tick-cooldowns cooldown-data)
           ;; Develop tick
           dev-result (when (and develop-data (dev/developing? develop-data))

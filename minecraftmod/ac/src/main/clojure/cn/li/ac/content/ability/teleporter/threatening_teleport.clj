@@ -89,7 +89,7 @@
             (let [behind (position-behind-entity entity-pos player-pos)]
               (when (helper/teleport-to! player-id world-id
                                          (:x behind) (:y behind) (:z behind))
-                (helper/deal-magic-damage! world-id t-uuid damage)
+                (helper/deal-magic-damage! player-id world-id t-uuid damage)
                 (skill-effects/add-skill-exp! player-id :threatening-teleport 0.003)
                 (let [cd (int (bal/lerp 35.0 20.0 exp))]
                   (skill-effects/set-main-cooldown! player-id :threatening-teleport cd))
@@ -113,7 +113,7 @@
   :description-key "ability.skill.teleporter.threatening_teleport.desc"
   :icon           "textures/abilities/teleporter/skills/threatening_teleport.png"
   :ui-position    [120 120]
-  :level          2
+  :level          1
   :controllable?  true
   :ctrl-id        :threatening-teleport
   :cp-consume-speed 0.0
@@ -132,4 +132,4 @@
                    :abort! threatening-tp-abort!}
   :fx             {:start {:topic :threatening-tp/fx-start :payload (fn [_] {})}
                    :end   {:topic :threatening-tp/fx-end   :payload (fn [_] {})}}
-  :prerequisites  [{:skill-id :mark-teleport :min-exp 0.5}])
+  :prerequisites  [])

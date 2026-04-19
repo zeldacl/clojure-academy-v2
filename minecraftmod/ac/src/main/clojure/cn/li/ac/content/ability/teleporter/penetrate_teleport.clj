@@ -125,7 +125,7 @@
   :description-key "ability.skill.teleporter.penetrate_teleport.desc"
   :icon           "textures/abilities/teleporter/skills/penetrate_teleport.png"
   :ui-position    [60 160]
-  :level          3
+  :level          2
   :controllable?  true
   :ctrl-id        :penetrate-teleport
   :cp-consume-speed 0.0
@@ -144,4 +144,4 @@
                    :abort! penetrate-tp-abort!}
   :fx             {:start {:topic :penetrate-tp/fx-start :payload (fn [_] {})}
                    :end   {:topic :penetrate-tp/fx-end   :payload (fn [_] {})}}
-  :prerequisites  [{:skill-id :mark-teleport :min-exp 0.8}])
+  :prerequisites  [{:skill-id :threatening-teleport :min-exp 0.5}])

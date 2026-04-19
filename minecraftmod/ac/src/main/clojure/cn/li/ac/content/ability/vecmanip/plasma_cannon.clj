@@ -383,4 +383,4 @@
             :tick! plasma-cannon-on-key-tick
             :up! plasma-cannon-on-key-up
             :abort! plasma-cannon-on-key-abort}
-  :prerequisites [{:skill-id :directed-blastwave :min-exp 0.7}])
+  :prerequisites [{:skill-id :storm-wing :min-exp 0.0}])

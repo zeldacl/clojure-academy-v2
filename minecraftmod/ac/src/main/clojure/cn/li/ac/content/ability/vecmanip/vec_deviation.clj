@@ -248,7 +248,7 @@
             :abort! vec-deviation-abort!}
   :fx {:start {:topic :vec-deviation/fx-start :payload (fn [_] {})}
        :end {:topic :vec-deviation/fx-end :payload (fn [_] {})}}
-  :prerequisites [{:skill-id :vec-accel :min-exp 0.4}])
+  :prerequisites [{:skill-id :vec-accel :min-exp 0.0}])
 
 ;; ============================================================================
 ;; Self-register damage handler at load time

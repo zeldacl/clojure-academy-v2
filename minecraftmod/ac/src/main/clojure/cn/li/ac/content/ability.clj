@@ -24,8 +24,11 @@
             [cn.li.ac.content.ability.meltdowner.ray-barrage]
             [cn.li.ac.content.ability.meltdowner.jet-engine]
             [cn.li.ac.content.ability.meltdowner.electron-missile]
+            [cn.li.ac.content.ability.meltdowner.rad-intensify]
             [cn.li.ac.content.ability.electromaster.arc-gen]
-            [cn.li.ac.content.ability.telekinesis.vec-manip]
+            [cn.li.ac.content.ability.generic.brain-course]
+            [cn.li.ac.content.ability.generic.brain-course-advanced]
+            [cn.li.ac.content.ability.generic.mind-course]
             [cn.li.ac.content.ability.teleporter.location-teleport]
             [cn.li.ac.content.ability.teleporter.mark-teleport]
             [cn.li.ac.content.ability.teleporter.threatening-teleport]
@@ -33,6 +36,8 @@
             [cn.li.ac.content.ability.teleporter.flesh-ripping]
             [cn.li.ac.content.ability.teleporter.shift-teleport]
             [cn.li.ac.content.ability.teleporter.flashing]
+            [cn.li.ac.content.ability.teleporter.dim-folding-theorem]
+            [cn.li.ac.content.ability.teleporter.space-fluct]
             [cn.li.ac.content.ability.vecmanip.blood-retrograde]
             [cn.li.ac.content.ability.vecmanip.directed-blastwave]
             [cn.li.ac.content.ability.vecmanip.directed-shock]
@@ -49,14 +54,6 @@
   :name-key "ability.category.electromaster"
   :icon "textures/abilities/electromaster/icon.png"
   :color [0.27 0.69 1.0 1.0]
-  :prog-incr-rate 1.0
-  :enabled true)
-
-(defcategory telekinesis
-  :id :telekinesis
-  :name-key "ability.category.telekinesis"
-  :icon "textures/abilities/generic/skills/mind_course.png"
-  :color [0.92 0.73 0.27 1.0]
   :prog-incr-rate 1.0
   :enabled true)
 
@@ -89,7 +86,7 @@
 (defn init-ability-content!
   []
   (when (compare-and-set! ability-content-installed? false true)
-    (doseq [cat [electromaster telekinesis meltdowner-category teleporter vecmanip]]
+    (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
       (category/register-category! (dissoc cat :ac/content-type)))
     ;; Register generic item actions (not skill-specific)
     (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)

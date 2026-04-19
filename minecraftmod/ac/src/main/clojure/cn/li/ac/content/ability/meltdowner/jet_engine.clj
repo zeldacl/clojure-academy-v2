@@ -17,6 +17,7 @@
             [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -96,6 +97,7 @@
                                     world-id sx sy sz 1.5))]
                 (doseq [e near-entities]
                   (when (not= (str (:uuid e)) (str player-id))
+                    (md-damage/mark-target! player-id (:uuid e))
                     (entity-damage/apply-direct-damage!
                       entity-damage/*entity-damage*
                       world-id (:uuid e) damage :magic)))))))
@@ -121,7 +123,7 @@
   :description-key "ability.skill.meltdowner.jet_engine.desc"
   :icon           "textures/abilities/meltdowner/skills/jet_engine.png"
   :ui-position    [120 240]
-  :level          3
+  :level          4
   :controllable?  true
   :ctrl-id        :jet-engine
   :cp-consume-speed 0.0
@@ -141,4 +143,4 @@
                                (skill-effects/set-main-cooldown! player-id :jet-engine cd)))
                    :abort! jet-engine-abort!}
   :fx             {:start  {:topic :jet-engine/fx-start  :payload (fn [_] {})}}
-  :prerequisites  [{:skill-id :meltdowner :min-exp 0.3}])
+  :prerequisites  [{:skill-id :meltdowner :min-exp 1.0}])

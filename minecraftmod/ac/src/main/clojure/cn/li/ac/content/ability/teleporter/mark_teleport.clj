@@ -234,7 +234,7 @@
   :name-key "ability.skill.teleporter.mark_teleport"
   :description-key "ability.skill.teleporter.mark_teleport.desc"
   :icon "textures/abilities/teleporter/skills/mark_teleport.png"
-  :level 1
+  :level 2
   :controllable? true
   :ctrl-id :mark-teleport
   :cp-consume-speed 0.0
@@ -256,4 +256,5 @@
        :perform {:topic :mark-teleport/fx-perform
                  :payload mark-teleport-fx-perform-payload}
        :end {:topic :mark-teleport/fx-end
-             :payload (fn [_] {})}})
+             :payload (fn [_] {})}}
+  :prerequisites [{:skill-id :threatening-teleport :min-exp 0.4}])

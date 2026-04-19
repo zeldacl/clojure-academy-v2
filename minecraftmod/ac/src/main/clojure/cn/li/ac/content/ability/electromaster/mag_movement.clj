@@ -305,5 +305,5 @@
             :tick!  on-tick!
             :up!    on-up!
             :abort! on-abort!}
-  :prerequisites [{:skill-id :arc-gen         :min-exp 1.0}
+  :prerequisites [{:skill-id :arc-gen         :min-exp 0.0}
                   {:skill-id :current-charging :min-exp 0.7}])

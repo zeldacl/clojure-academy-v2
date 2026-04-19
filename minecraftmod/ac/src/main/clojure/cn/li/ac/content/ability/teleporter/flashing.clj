@@ -81,7 +81,7 @@
       (let [state (ps/get-player-state player-id)
             cur-cp (double (or (get-in state [:resource-data :cur-cp]) 0.0))]
         (when (<= cur-cp 0.0)
-          (ctx/terminate-context! ctx-id))))
+          (ctx/terminate-context! ctx-id nil))))
     (catch Exception e
       (log/warn "Flashing tick! failed:" (ex-message e)))))
 
@@ -104,7 +104,7 @@
   :description-key "ability.skill.teleporter.flashing.desc"
   :icon           "textures/abilities/teleporter/skills/flashing.png"
   :ui-position    [120 160]
-  :level          4
+  :level          5
   :controllable?  true
   :ctrl-id        :flashing
   :cp-consume-speed 0.0
@@ -119,5 +119,4 @@
                    :abort!      flashing-abort!}
   :fx             {:start {:topic :flashing/fx-start :payload (fn [_] {})}
                    :end   {:topic :flashing/fx-end   :payload (fn [_] {})}}
-  :prerequisites  [{:skill-id :penetrate-teleport :min-exp 0.8}
-                   {:skill-id :shift-teleport      :min-exp 0.8}])
+  :prerequisites  [{:skill-id :shift-teleport :min-exp 0.8}])

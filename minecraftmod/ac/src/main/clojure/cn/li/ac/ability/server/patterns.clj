@@ -320,6 +320,12 @@
      :on-key-up charge-window-on-up!
      :on-key-abort charge-window-on-abort!}
 
+    :passive
+    {:on-key-down (fn [_s _e] nil)
+     :on-key-tick (fn [_s _e] nil)
+     :on-key-up (fn [_s _e] nil)
+     :on-key-abort (fn [_s _e] nil)}
+
     ;; default: no pattern
     nil))
 

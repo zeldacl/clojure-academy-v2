@@ -21,6 +21,7 @@
             [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -79,7 +80,7 @@
       ;; Anti-AFK
       (when (>= (long hold-ticks) 600)
         (log/debug "ElectronMissile: max hold reached")
-        (ctx/terminate-context! ctx-id))
+        (ctx/terminate-context! ctx-id nil))
       ;; Fire a ball on interval
       (when (zero? (mod new-ticker fire-interval))
         (try
@@ -88,6 +89,7 @@
             (when target
               (let [damage (bal/lerp 4.0 9.0 exp)]
                 (when entity-damage/*entity-damage*
+                  (md-damage/mark-target! player-id (:uuid target))
                   (entity-damage/apply-direct-damage!
                     entity-damage/*entity-damage*
                     world-id (:uuid target) damage :magic))
@@ -137,5 +139,4 @@
                    :up!    electron-missile-up!
                    :abort! electron-missile-abort!}
   :fx             {:start  {:topic :electron-missile/fx-start :payload (fn [_] {})}}
-  :prerequisites  [{:skill-id :scatter-bomb :min-exp 0.5}
-                   {:skill-id :ray-barrage   :min-exp 0.5}])
+  :prerequisites  [{:skill-id :jet-engine :min-exp 0.3}])

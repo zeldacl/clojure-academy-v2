@@ -249,7 +249,7 @@
   :name-key "ability.skill.teleporter.location_teleport"
   :description-key "ability.skill.teleporter.location_teleport.desc"
   :icon "textures/abilities/teleporter/skills/location_teleport.png"
-  :level 2
+  :level 3
   :controllable? false
   :ctrl-id :location-teleport
   :cp-consume-speed 0.0
@@ -261,7 +261,8 @@
             :tick! location-teleport-on-key-tick
             :up! location-teleport-on-key-up
             :abort! location-teleport-on-key-abort}
-  :prerequisites [{:skill-id :mark-teleport :min-exp 0.5}])
+  :prerequisites [{:skill-id :penetrate-teleport :min-exp 0.8}
+                  {:skill-id :mark-teleport :min-exp 0.8}])
 
 ;; ============================================================================
 ;; Network handler self-registration (LocationTeleport GUI RPC)

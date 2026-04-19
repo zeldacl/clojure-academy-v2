@@ -19,6 +19,7 @@
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]
@@ -97,6 +98,7 @@
                          (not= (:uuid entity) player-id)
                          (in-front-cone? pos look-vec entity))
                 (when entity-damage/*entity-damage*
+                  (md-damage/mark-target! player-id (:uuid entity))
                   (entity-damage/apply-direct-damage!
                     entity-damage/*entity-damage*
                     world-id (:uuid entity)

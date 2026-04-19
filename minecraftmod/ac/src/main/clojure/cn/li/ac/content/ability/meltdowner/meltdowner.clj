@@ -24,6 +24,7 @@
             [cn.li.ac.ability.server.effect.beam]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -107,6 +108,7 @@
                                              (:dx look-vec) (:dy look-vec) (:dz look-vec)
                                              10.0))]
           (when (and (= (:hit-type hit) :entity) entity-damage/*entity-damage*)
+            (md-damage/mark-target! reflector-player-id (:uuid hit))
             (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
                                                world-id (:uuid hit)
                                                (* 0.5 (bal/lerp 20.0 50.0 caster-exp))
@@ -203,7 +205,7 @@
   :description-key "ability.skill.meltdowner.meltdowner.desc"
   :icon            "textures/abilities/meltdowner/skills/meltdowner.png"
   :ui-position     [128 80]
-  :level           4
+  :level           3
   :controllable?   true
   :ctrl-id         :meltdowner
   :cp-consume-speed 0.0
@@ -235,5 +237,5 @@
                                     (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end
                                                              {:performed? false}))
                                   (ctx/terminate-context! ctx-id nil))}
-  :prerequisites   [{:skill-id :arc-gen :min-exp 1.0}
-                    {:skill-id :railgun :min-exp 0.5}])
+  :prerequisites   [{:skill-id :scatter-bomb :min-exp 0.8}
+                    {:skill-id :light-shield :min-exp 0.8}])

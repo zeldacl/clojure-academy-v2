@@ -299,5 +299,5 @@
             :tick! storm-wing-on-key-tick
             :up! storm-wing-on-key-up
             :abort! storm-wing-on-key-abort}
-  :prerequisites [{:skill-id :vec-accel :min-exp 0.6}])
+  :prerequisites [{:skill-id :vec-accel :min-exp 0.0}])
 

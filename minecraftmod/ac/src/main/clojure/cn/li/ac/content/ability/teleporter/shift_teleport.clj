@@ -96,7 +96,7 @@
   :description-key "ability.skill.teleporter.shift_teleport.desc"
   :icon           "textures/abilities/teleporter/skills/shift_teleport.png"
   :ui-position    [60 120]
-  :level          2
+  :level          4
   :controllable?  true
   :ctrl-id        :shift-teleport
   :cp-consume-speed 0.0
@@ -115,4 +115,4 @@
                    :abort! shift-tp-abort!}
   :fx             {:start {:topic :shift-tp/fx-start :payload (fn [_] {})}
                    :end   {:topic :shift-tp/fx-end   :payload (fn [_] {})}}
-  :prerequisites  [{:skill-id :mark-teleport :min-exp 0.3}])
+  :prerequisites  [{:skill-id :location-teleport :min-exp 0.5}])

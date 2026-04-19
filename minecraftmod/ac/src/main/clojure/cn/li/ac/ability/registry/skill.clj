@@ -27,7 +27,7 @@
       ;;
       ;; :pattern:
       ;;   :instant | :hold-charge-release | :hold-channel | :toggle
-      ;;   | :release-cast | :charge-window
+      ;;   | :release-cast | :charge-window | :passive
       ;; :cooldown:
       ;;   {:mode :default}  -> context-runtime applies main cooldown on key-up
       ;;   {:mode :manual}   -> skill handles cooldown itself
@@ -98,13 +98,15 @@
                            :hold-channel
                            :toggle
                            :release-cast
-                           :charge-window}
+                           :charge-window
+                           :passive}
         required-action-keys {:instant #{:perform!}
                               :hold-charge-release #{:perform!}
                               :hold-channel #{}
                               :toggle #{:activate! :deactivate!}
                               :release-cast #{}
-                              :charge-window #{}}
+                              :charge-window #{}
+                              :passive #{}}
         allowed-action-keys #{:perform! :down! :tick! :up! :abort! :cost-fail! :activate! :deactivate!}
         allowed-fx-keys #{:start :update :perform :end}
         allowed-cost-stages #{:down :tick :up}

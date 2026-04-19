@@ -115,5 +115,4 @@
   :cooldown-ticks (fn [{:keys [player-id]}]
                     (int (bal/lerp 200.0 100.0 (skill-exp player-id))))
   :actions        {:perform! mine-detect-perform!}
-  :prerequisites  [{:skill-id :arc-gen    :min-exp 0.8}
-                   {:skill-id :thunder-clap :min-exp 0.5}])
+  :prerequisites  [{:skill-id :mag-manip :min-exp 1.0}])

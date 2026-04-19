@@ -98,4 +98,4 @@
   :cooldown-ticks (fn [{:keys [player-id]}]
                     (int (bal/lerp 20.0 10.0 (skill-exp player-id))))
   :actions        {:perform! electron-bomb-perform!}
-  :prerequisites  [{:skill-id :meltdowner :min-exp 0.3}])
+  :prerequisites  [])

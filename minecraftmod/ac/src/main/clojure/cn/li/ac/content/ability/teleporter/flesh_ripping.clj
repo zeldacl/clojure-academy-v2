@@ -43,7 +43,7 @@
       (if hit
         (let [world-id (geom/world-id-of player-id)
               e-uuid   (:entity-uuid hit)]
-          (helper/deal-magic-damage! world-id e-uuid damage)
+          (helper/deal-magic-damage! player-id world-id e-uuid damage)
           ;; Apply nausea with 30% chance
           (when (and (< (rand) 0.30) potion/*potion-effects*)
             (potion/apply-potion-effect!
@@ -94,4 +94,5 @@
                    :abort! flesh-ripping-abort!}
   :fx             {:start {:topic :flesh-ripping/fx-start :payload (fn [_] {})}
                    :end   {:topic :flesh-ripping/fx-end   :payload (fn [_] {})}}
-  :prerequisites  [{:skill-id :threatening-teleport :min-exp 0.5}])
+  :prerequisites  [{:skill-id :mark-teleport :min-exp 0.5}
+                   {:skill-id :penetrate-teleport :min-exp 0.5}])

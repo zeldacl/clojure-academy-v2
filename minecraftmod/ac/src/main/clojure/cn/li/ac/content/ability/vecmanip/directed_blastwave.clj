@@ -187,4 +187,4 @@
    :abort! (fn [{:keys [ctx-id]}]
              (send-fx-end! ctx-id false)
              (ctx/update-context! ctx-id dissoc :skill-state))}
-  :prerequisites [{:skill-id :groundshock :min-exp 0.5}])
+  :prerequisites [{:skill-id :groundshock :min-exp 0.0}])

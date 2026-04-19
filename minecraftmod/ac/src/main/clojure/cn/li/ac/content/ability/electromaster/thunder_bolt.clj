@@ -46,5 +46,5 @@
                                   :payload (fn [evt]
                                              {:start (:eye-pos evt)
                                               :end   (:hit evt)})}]]
-  :prerequisites [{:skill-id :arc-gen         :min-exp 1.0}
+  :prerequisites [{:skill-id :arc-gen         :min-exp 0.0}
                   {:skill-id :current-charging :min-exp 0.7}])

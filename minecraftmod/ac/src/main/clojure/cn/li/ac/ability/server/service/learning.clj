@@ -28,6 +28,25 @@
   (when-let [s (skill/get-skill skill-id)]
     (skill/developer-type-gte? developer-type (:developer-type s))))
 
+(defn- has-learned-skill-of-level?
+  [ability-data target-level]
+  (boolean
+    (some (fn [sid]
+            (= target-level (:level (skill/get-skill sid))))
+          (:learned-skills ability-data))))
+
+(defn- evaluate-condition
+  [condition ability-data]
+  (case (:type condition)
+    :any-skill-level
+    (let [required-level (int (or (:level condition) 0))
+          pass? (has-learned-skill-of-level? ability-data required-level)]
+      {:pass? pass?
+       :failure (when-not pass?
+                  {:type :any-skill-level
+                   :required-level required-level})})
+    {:pass? true :failure nil}))
+
 (defn check-all-conditions
   "Run all conditions for skill-id against current state.
   
@@ -42,24 +61,22 @@
   (let [s (skill/get-skill skill-id)]
     (when-not s
       (throw (ex-info "Unknown skill" {:skill-id skill-id})))
-    (let [failures (cond-> []
-                     ;; Level condition
-                     (not (check-level-condition player-level (:level s)))
-                     (conj {:type :level :required (:level s) :actual player-level})
-
-                     ;; Developer type
-                     (not (skill/developer-type-gte? developer-type (:developer-type s)))
-                     (conj {:type :developer-type
-                            :required (:developer-type s)
-                            :actual developer-type})
-
-                     ;; Prerequisites
-                     :always
-                     (into (keep (fn [{:keys [skill-id min-exp]}]
-                                   (when-not (check-dep-condition ability-data skill-id min-exp)
-                                     {:type :prerequisite :skill-id skill-id :required min-exp
-                                      :actual (adata/get-skill-exp ability-data skill-id)}))
-                                 (:prerequisites s))))]
+    (let [base-failures (cond-> []
+                          (not (check-level-condition player-level (:level s)))
+                          (conj {:type :level :required (:level s) :actual player-level})
+                          (not (skill/developer-type-gte? developer-type (:developer-type s)))
+                          (conj {:type :developer-type
+                                 :required (:developer-type s)
+                                 :actual developer-type}))
+          prereq-failures (keep (fn [{:keys [skill-id min-exp]}]
+                                  (when-not (check-dep-condition ability-data skill-id min-exp)
+                                    {:type :prerequisite :skill-id skill-id :required min-exp
+                                     :actual (adata/get-skill-exp ability-data skill-id)}))
+                                (:prerequisites s))
+          extra-failures (keep (fn [condition]
+                                 (:failure (evaluate-condition condition ability-data)))
+                               (:conditions s))
+          failures (vec (concat base-failures prereq-failures extra-failures))]
       {:pass? (empty? failures)
        :failures failures})))
 

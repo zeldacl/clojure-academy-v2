@@ -29,10 +29,11 @@
 (defn recalc-max-for-level
   "Recalc max-cp/max-overload with CalcEvent modifiers.
   Fires CALC-MAX-CP and CALC-MAX-OVERLOAD so passive skills can adjust."
-  [res-data level]
+  [res-data level uuid]
   (let [base     (rdata/recalc-max-values res-data level)
-        max-cp   (evt/fire-calc-event! evt/CALC-MAX-CP (:max-cp base) {})
-        max-ol   (evt/fire-calc-event! evt/CALC-MAX-OVERLOAD (:max-overload base) {})]
+        calc-extra {:uuid uuid}
+        max-cp   (evt/fire-calc-event! evt/CALC-MAX-CP (:max-cp base) calc-extra)
+        max-ol   (evt/fire-calc-event! evt/CALC-MAX-OVERLOAD (:max-overload base) calc-extra)]
     (assoc base
            :max-cp       max-cp
            :max-overload max-ol
@@ -73,7 +74,7 @@
                            (rdata/grow-max-overload data3 effective-ol cfg/*maxo-incr-rate* level)
                            data3)
           ;; Recalc max after growth
-          data5          (recalc-max-for-level data4 level)
+          data5          (recalc-max-for-level data4 level uuid)
           events         (when hit-cap? [(evt/make-overload-event uuid)])]
       {:data     data5
        :success? true
@@ -86,11 +87,11 @@
 (defn server-tick
   "Advance one server tick: recover CP and overload.
   Returns updated ResourceData map (pure, no events for tick)."
-  [res-data]
+  [res-data uuid]
   (let [cp-speed       (evt/fire-calc-event! evt/CALC-CP-RECOVER-SPEED
-                                              cfg/*cp-recover-speed* {})
+                                              cfg/*cp-recover-speed* {:uuid uuid})
         ov-speed       (evt/fire-calc-event! evt/CALC-OVERLOAD-RECOVER-SPEED
-                                              cfg/*overload-recover-speed* {})]
+                                              cfg/*overload-recover-speed* {:uuid uuid})]
     {:data (-> res-data
                (rdata/tick-cp-recovery cp-speed)
                (rdata/tick-overload-recovery ov-speed))

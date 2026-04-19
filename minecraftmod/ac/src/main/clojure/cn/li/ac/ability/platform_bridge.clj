@@ -209,7 +209,7 @@
            (let [level (get-in state [:ability-data :level] 1)]
              (ps/update-resource-data! uuid
                                        (fn [rd]
-                                         (svc-res/recalc-max-for-level rd level))))))))
+                                         (svc-res/recalc-max-for-level rd level uuid))))))))
 
     ;; On category change: deactivate ability and recalc
     (evt/subscribe-ability-event!
@@ -221,7 +221,7 @@
            (let [level (get-in state [:ability-data :level] 1)]
              (ps/update-resource-data! uuid
                                        (fn [rd]
-                                         (svc-res/recalc-max-for-level rd level))))))))
+                                         (svc-res/recalc-max-for-level rd level uuid))))))))
 
     (log/info "Ability lifecycle event subscriptions registered")))
 
