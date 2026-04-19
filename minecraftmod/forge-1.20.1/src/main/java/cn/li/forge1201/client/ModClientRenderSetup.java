@@ -4,13 +4,18 @@ import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.forge1201.MyMod1201;
 import cn.li.forge1201.client.effect.IntensifyEffectRenderer;
+import cn.li.forge1201.client.render.MatterUnitItemDecorator;
 import cn.li.forge1201.entity.ModEntities;
 import cn.li.forge1201.entity.ScriptedEffectEntity;
 import cn.li.forge1201.entity.ScriptedProjectileEntity;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.entity.EntityType;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
+import net.minecraftforge.client.event.RegisterItemDecorationsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -43,5 +48,13 @@ public final class ModClientRenderSetup {
         require.invoke(Clojure.read("cn.li.forge1201.client.init"));
         IFn fn = Clojure.var("cn.li.forge1201.client.init", "register-scripted-block-entity-renderers!");
         fn.invoke(event);
+    }
+
+    @SubscribeEvent
+    public static void onRegisterItemDecorations(RegisterItemDecorationsEvent event) {
+        Item matterUnit = BuiltInRegistries.ITEM.get(new ResourceLocation(MyMod1201.MODID, "matter_unit"));
+        if (matterUnit != null) {
+            event.register(matterUnit, MatterUnitItemDecorator.INSTANCE);
+        }
     }
 }

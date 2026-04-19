@@ -3,6 +3,7 @@
   (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
+           [cn.li.forge1201.client.render ModRenderTypes ModShaders]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource RenderType]
@@ -39,11 +40,6 @@
       (when (some? @last-applied-walk-speed)
         (set-local-walk-speed! player default-walk-speed)
         (reset! last-applied-walk-speed nil)))))
-
-(defn- local-player-uuid []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    (when-let [player (.player mc)]
-      (str (.getUUID player)))))
 
 (defn- hand-center-pos [^LocalPlayer player]
   (let [^Vec3 look (.getLookAngle player)
@@ -93,6 +89,89 @@
   (emit-quad-vertex! vc mat p3 u0 v1 color)
   (emit-quad-vertex! vc mat p0 u0 v0 color))
 
+(defn- v+
+  [a b]
+  {:x (+ (:x a) (:x b))
+   :y (+ (:y a) (:y b))
+   :z (+ (:z a) (:z b))})
+
+(defn- v-
+  [a b]
+  {:x (- (:x a) (:x b))
+   :y (- (:y a) (:y b))
+   :z (- (:z a) (:z b))})
+
+(defn- v*
+  [a s]
+  {:x (* (:x a) s)
+   :y (* (:y a) s)
+   :z (* (:z a) s)})
+
+(defn- cross
+  [a b]
+  {:x (- (* (:y a) (:z b)) (* (:z a) (:y b)))
+   :y (- (* (:z a) (:x b)) (* (:x a) (:z b)))
+   :z (- (* (:x a) (:y b)) (* (:y a) (:x b)))})
+
+(defn- normalize
+  [v]
+  (let [len (Math/sqrt (+ (* (:x v) (:x v))
+                          (* (:y v) (:y v))
+                          (* (:z v) (:z v))))]
+    (if (< len 1.0e-6)
+      {:x 0.0 :y 1.0 :z 0.0}
+      (v* v (/ 1.0 len)))))
+
+(defn- emit-plasma-vertex! [^VertexConsumer vc mat p]
+  (-> vc
+      (.vertex mat (float (:x p)) (float (:y p)) (float (:z p)))
+      (.endVertex)))
+
+(defn- set-plasma-uniforms!
+  [cam-pos {:keys [alpha balls]}]
+  (when-let [shader (ModShaders/getPlasmaBodyShader)]
+    (let [balls-vec (vec (take 16 (or balls [])))
+          ball-count (count balls-vec)]
+      (when-let [uniform (.getUniform shader "ballCount")]
+        (.set uniform (int ball-count)))
+      (when-let [uniform (.getUniform shader "alpha")]
+        (.set uniform (float (double (or alpha 0.0)))))
+      (doseq [idx (range 16)]
+        (when-let [uniform (.getUniform shader (str "balls[" idx "]"))]
+          (let [{:keys [x y z size]} (or (nth balls-vec idx nil) {})
+                cx (float (- (double (or x 0.0)) (double (:x cam-pos))))
+                cy (float (- (double (or y 0.0)) (double (:y cam-pos))))
+                cz (float (- (double (or z 0.0)) (double (:z cam-pos))))
+                cw (float (double (or size 0.0)))]
+            (.set uniform cx cy cz cw)))))))
+
+(defn- emit-plasma-quad!
+  [^VertexConsumer vc mat cam-pos {:keys [center radius]}]
+  (let [center (or center cam-pos)
+        to-cam (normalize (v- cam-pos center))
+        world-up {:x 0.0 :y 1.0 :z 0.0}
+        right (let [r (cross world-up to-cam)]
+                (if (< (+ (Math/abs (double (:x r)))
+                          (Math/abs (double (:y r)))
+                          (Math/abs (double (:z r))))
+                       1.0e-6)
+                  {:x 1.0 :y 0.0 :z 0.0}
+                  (normalize r)))
+        up (normalize (cross to-cam right))
+        half-size (double (or radius 1.2))
+        side (v* right half-size)
+        lift (v* up half-size)
+        p0 (v+ (v- center side) lift)
+        p1 (v+ (v+ center side) lift)
+        p2 (v- (v+ center side) lift)
+        p3 (v- (v- center side) lift)]
+    (emit-plasma-vertex! vc mat p0)
+    (emit-plasma-vertex! vc mat p1)
+    (emit-plasma-vertex! vc mat p2)
+    (emit-plasma-vertex! vc mat p2)
+    (emit-plasma-vertex! vc mat p3)
+    (emit-plasma-vertex! vc mat p0)))
+
 (defn- render-level-plan! [^RenderLevelStageEvent evt]
   (when (render-stage-eligible? evt)
     (when-let [^Minecraft mc (Minecraft/getInstance)]
@@ -108,7 +187,8 @@
             (let [^PoseStack pose-stack (.getPoseStack evt)
                   ^MultiBufferSource$BufferSource buffer-source (.bufferSource (.renderBuffers mc))
                   line-ops (filter #(= (:kind %) :line) (:ops plan))
-                  quad-ops (filter #(= (:kind %) :quad) (:ops plan))]
+                  quad-ops (filter #(= (:kind %) :quad) (:ops plan))
+                  plasma-ops (filter #(= (:kind %) :plasma-body) (:ops plan))]
               (.pushPose pose-stack)
               (.translate pose-stack (double (- (:x cam-pos))) (double (- (:y cam-pos))) (double (- (:z cam-pos))))
               (let [mat (.pose (.last pose-stack))]
@@ -121,6 +201,13 @@
                     (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
                       (doseq [op ops]
                         (emit-quad! quad-vc mat op)))))
+                (when (seq plasma-ops)
+                  (doseq [op plasma-ops]
+                    (set-plasma-uniforms! cam-pos op)
+                    (let [rtype (ModRenderTypes/plasmaBody)
+                          ^VertexConsumer plasma-vc (.getBuffer buffer-source rtype)]
+                      (emit-plasma-quad! plasma-vc mat cam-pos op)
+                      (.endBatch buffer-source rtype))))
                 (.popPose pose-stack)
                 (.endBatch buffer-source)))))))))
 

@@ -16,7 +16,6 @@
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.client.hud :as hud-renderer]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.api :as client-api]
@@ -37,6 +36,8 @@
 
 (defonce ^:private hooks-installed? (atom false))
 (defonce ^:private client-push-handlers-registered? (atom false))
+(defonce ^:private vm-wave-circles (atom []))
+(defonce ^:private vm-wave-last-spawn-ms (atom 0))
 
 (defn- vec-reflection-active?
   [player-uuid]
@@ -45,6 +46,80 @@
             (and (= (:player-uuid ctx-data) player-uuid)
                  (toggle/is-toggle-active? ctx-data :vec-reflection)))
           (ctx/get-all-contexts))))
+
+(defn- vec-deviation-active?
+  [player-uuid]
+  (boolean
+    (some (fn [[_ctx-id ctx-data]]
+            (and (= (:player-uuid ctx-data) player-uuid)
+                 (toggle/is-toggle-active? ctx-data :vec-deviation)))
+          (ctx/get-all-contexts))))
+
+(defn- ease-in-out
+  [t]
+  (if (< t 0.5)
+    (* 2.0 t t)
+    (- 1.0 (* 2.0 (- 1.0 t) (- 1.0 t)))))
+
+(defn- spawn-vm-wave-circle
+  [screen-width screen-height now-ms]
+  (let [cx (/ (double screen-width) 2.0)
+        cy (/ (double screen-height) 2.0)
+        offset-r (+ 8.0 (* (rand) 42.0))
+        angle (* (rand) 2.0 Math/PI)
+        life-ms (+ 520 (rand-int 260))
+        start-size (+ 8.0 (* (rand) 6.0))
+        end-size (+ 36.0 (* (rand) 32.0))]
+    {:x (+ cx (* offset-r (Math/cos angle)))
+     :y (+ cy (* offset-r (Math/sin angle)))
+     :born-ms now-ms
+     :life-ms life-ms
+     :start-size start-size
+     :end-size end-size
+     :seed (rand)}))
+
+(defn- update-vm-wave-circles!
+  [active? screen-width screen-height now-ms]
+  (swap! vm-wave-circles
+         (fn [circles]
+           (let [alive (->> circles
+                            (filter (fn [{:keys [born-ms life-ms]}]
+                                      (< (- now-ms (long born-ms)) (long life-ms))))
+                            vec)
+                 needs-spawn? (and active?
+                                   (>= (- now-ms (long @vm-wave-last-spawn-ms)) 90))
+                 spawned (if needs-spawn?
+                           (conj alive (spawn-vm-wave-circle screen-width screen-height now-ms))
+                           alive)]
+             (when needs-spawn?
+               (reset! vm-wave-last-spawn-ms now-ms))
+             (if active?
+               spawned
+               ;; no longer active: keep fading remnants briefly
+               (if (seq spawned) spawned []))))))
+
+(defn- vm-wave-elements
+  [now-ms]
+  (->> @vm-wave-circles
+       (map (fn [{:keys [x y born-ms life-ms start-size end-size seed]}]
+              (let [elapsed (double (max 0 (- now-ms (long born-ms))))
+                    life (double (max 1 life-ms))
+                    t (min 1.0 (/ elapsed life))
+                    s (+ start-size (* (- end-size start-size) t))
+                    fade-in (min 1.0 (/ t 0.2))
+                    fade-out (if (> t 0.6) (/ (- 1.0 t) 0.4) 1.0)
+                    pulse (+ 0.85 (* 0.15 (Math/sin (+ (* t 12.0) (* seed Math/PI)))))
+                    alpha (* 0.72 (ease-in-out t) fade-in fade-out pulse)
+                    hs (/ s 2.0)]
+                {:kind :blit-texture
+                 :texture "my_mod:textures/effects/glow_circle.png"
+                 :x (int (- x hs))
+                 :y (int (- y hs))
+                 :w (int s)
+                 :h (int s)
+                 :alpha (double (max 0.0 (min 1.0 alpha)))})))
+       (filter #(pos? (:alpha %)))
+       vec))
 
 (defn- build-hud-model-from-state
   [player-state activated-override]
@@ -107,20 +182,25 @@
                          hud-model screen-width screen-height cooldown-data
                          :player-uuid player-uuid
                          :activate-hint activate-hint
-                         :preset-state preset-state)
+                         :preset-state preset-state
+                         :now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis))))
         base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
         reflection-active? (vec-reflection-active? player-uuid)
+        deviation-active? (vec-deviation-active? player-uuid)
+        vm-wave-active? (or reflection-active? deviation-active?)
         now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))
         phase (double (/ (mod now-ms 1200) 1200.0))
+        _ (update-vm-wave-circles! vm-wave-active? screen-width screen-height now-ms)
+        vm-wave (vm-wave-elements now-ms)
         crosshair (when reflection-active?
                     {:kind :vec-reflection-crosshair
                      :x (int (/ screen-width 2))
                      :y (int (/ screen-height 2))
                      :phase phase
                      :intensity 1.0})]
-    {:elements (if crosshair
-                 (conj base-elements crosshair)
-                 base-elements)}))
+    {:elements (vec (concat base-elements
+                            vm-wave
+                            (keep identity [crosshair])))}))
 
 (defn- on-context-channel-push!
   [{:keys [ctx-id channel payload]}]
@@ -435,6 +515,10 @@
        :client-build-skill-tree-render-data
        (fn []
          (skill-tree-screen/build-screen-render-data))
+
+       :client-build-skill-tree-draw-ops
+       (fn [mouse-x mouse-y]
+         (skill-tree-screen/build-draw-ops mouse-x mouse-y))
 
        :client-handle-skill-tree-hover!
        (fn [mouse-x mouse-y]

@@ -4,7 +4,8 @@
             [cn.li.forge1201.client.overlay-state :as overlay-state]
             [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraftforge.client.event RenderGuiOverlayEvent$Post]
+  (:import [com.mojang.blaze3d.systems RenderSystem]
+           [net.minecraftforge.client.event RenderGuiOverlayEvent$Post]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.gui GuiGraphics Font]
@@ -60,10 +61,14 @@
           (bit-shift-left (int g) 8)
           (int b)))
 
-(defn- render-bar! [^GuiGraphics graphics {:keys [x y width height percent bg-texture fg-texture bar-color hint-percent]}]
+(defn- render-bar!
+  [^GuiGraphics graphics {:keys [x y width height percent bg-texture fg-texture bar-color hint-percent icon-cutout scroll-offset]}]
   (let [filled-width (int (* (double percent) width))
         bg-path (normalize-texture-path bg-texture)
-        fg-path (normalize-texture-path fg-texture)]
+        fg-path (normalize-texture-path fg-texture)
+        cutout-start (when icon-cutout (+ (int x) (int (:x-offset icon-cutout 0))))
+        cutout-width (when icon-cutout (int (:w icon-cutout 0)))
+        cutout-end (when icon-cutout (+ cutout-start cutout-width))]
     (when-let [bg-loc (and bg-path (ResourceLocation/tryParse bg-path))]
       (.blit graphics bg-loc (int x) (int y) 0 0 (int width) (int height) (int width) (int height)))
     ;; Consumption hint ghost line
@@ -71,17 +76,27 @@
       (let [hint-x (int (+ x (* (double hint-percent) width)))]
         (.fill graphics hint-x (int y) (+ hint-x 1) (int (+ y height))
                (unchecked-int 0x80FF4444))))
-    (when (and fg-path (pos? filled-width))
-      ;; Apply bar-color tint if provided (bar-color is a {:r :g :b :a} map)
-      (if bar-color
-        (let [color-int (argb bar-color)]
-          (.enableScissor graphics (int x) (int y) (int (+ x filled-width)) (int (+ y height)))
-          (.fill graphics (int x) (int y) (int (+ x filled-width)) (int (+ y height)) (unchecked-int color-int))
-          (.disableScissor graphics))
-        (when-let [fg-loc (ResourceLocation/tryParse fg-path)]
-          (.enableScissor graphics (int x) (int y) (int (+ x filled-width)) (int (+ y height)))
-          (.blit graphics fg-loc (int x) (int y) 0 0 (int width) (int height) (int width) (int height))
-          (.disableScissor graphics))))))
+    (letfn [(draw-segment! [seg-start seg-end]
+              (when (< seg-start seg-end)
+                (if bar-color
+                  (let [color-int (argb bar-color)]
+                    (.enableScissor graphics (int seg-start) (int y) (int seg-end) (int (+ y height)))
+                    (.fill graphics (int seg-start) (int y) (int seg-end) (int (+ y height)) (unchecked-int color-int))
+                    (.disableScissor graphics))
+                  (when-let [fg-loc (and fg-path (ResourceLocation/tryParse fg-path))]
+                    (let [uoff (float (* (double (or scroll-offset 0.0)) width))]
+                      (.enableScissor graphics (int seg-start) (int y) (int seg-end) (int (+ y height)))
+                      (.blit graphics fg-loc (int x) (int y) uoff 0.0 (int width) (int height) (float width) (float height))
+                      (.disableScissor graphics))))))]
+      (when (and fg-path (pos? filled-width))
+        (let [bar-start (int x)
+              bar-end (int (+ x filled-width))]
+          (if (and cutout-start cutout-width (pos? cutout-width))
+            (do
+              (draw-segment! bar-start (min bar-end cutout-start))
+              (draw-segment! (max bar-start cutout-end) bar-end))
+            (draw-segment! bar-start bar-end)))))
+    ))
 
 (defn- render-skill-slot! [^GuiGraphics graphics {:keys [x y key-label skill-icon skill-name in-cooldown cooldown-seconds visual-state alpha glow-color sin-effect?]}]
   (let [effective-alpha (double (or alpha 1.0))
@@ -157,6 +172,19 @@
             (.fill graphics (dec sx) y sx (+ y square-size) (unchecked-int glow))
             (.fill graphics (+ sx square-size) y (+ sx square-size 1) (+ y square-size) (unchecked-int glow))))))))
 
+(defn- render-blit-texture!
+  [^GuiGraphics graphics {:keys [texture x y w h alpha u v tex-w tex-h]}]
+  (when (and texture (pos? (int (or w 0))) (pos? (int (or h 0))))
+    (when-let [loc (ResourceLocation/tryParse (normalize-texture-path texture))]
+      (let [a (float (double (or alpha 1.0)))
+            u (float (double (or u 0.0)))
+            v (float (double (or v 0.0)))
+            tw (float (double (or tex-w w)))
+            th (float (double (or tex-h h)))]
+        (RenderSystem/setShaderColor 1.0 1.0 1.0 a)
+        (.blit graphics loc (int x) (int y) u v (int w) (int h) tw th)
+        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
+
 (defn- render-element! [^GuiGraphics graphics element screen-width screen-height]
   (case (:kind element)
     :bar (render-bar! graphics element)
@@ -168,6 +196,7 @@
     :skill-slot (render-skill-slot! graphics element)
     :vec-reflection-crosshair (render-vec-reflection-crosshair! graphics element)
     :preset-indicator (render-preset-indicator! graphics element)
+    :blit-texture (render-blit-texture! graphics element)
     :overload-pulse (let [intensity (double (or (:intensity element) 0.0))
                           alpha (int (* 40 intensity))]
                       (when (pos? alpha)

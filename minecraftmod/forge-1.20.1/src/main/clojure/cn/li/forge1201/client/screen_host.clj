@@ -28,6 +28,25 @@
     :icon-or-fill (if-let [loc (some-> (:texture op) normalize-texture-path ResourceLocation/tryParse)]
                     (.blit graphics loc (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))
                     (.fill graphics (:x op) (:y op) (+ (:x op) (:w op)) (+ (:y op) (:h op)) (:fallback-color op)))
+    :skill-progress-ring
+    (let [segments (max 1 (int (or (:segments op) 24)))
+          filled (int (max 0 (min segments (or (:filled-segments op) 0))))
+          x (double (:x op))
+          y (double (:y op))
+          size (double (or (:size op) 20))
+          cx (+ x (/ size 2.0))
+          cy (+ y (/ size 2.0))
+          radius (- (/ size 2.0) 1.0)
+          base-color 0x99484848
+          fill-color 0xFF8FD3FF]
+      (doseq [idx (range segments)]
+        (let [theta (* (/ (* 2.0 Math/PI) segments) idx)
+              px (+ cx (* radius (Math/cos theta)))
+              py (+ cy (* radius (Math/sin theta)))
+              color (if (< idx filled) fill-color base-color)]
+          (.fill graphics (int (Math/floor px)) (int (Math/floor py))
+                 (int (Math/ceil (+ px 1.0))) (int (Math/ceil (+ py 1.0)))
+                 (unchecked-int color)))))
     nil))
 
 (defn- create-host-screen

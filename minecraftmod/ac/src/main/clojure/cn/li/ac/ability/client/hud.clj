@@ -41,19 +41,23 @@
      :percent (double percent)
      :bar-color {:r r :g g :b b :a 255}
      :hint-percent (when hint-percent (max 0.0 (double hint-percent)))
+     ;; Reserve a small right-side icon region to mimic the old cpbar_cp mask.
+     :icon-cutout {:x-offset 84 :w 16}
      :bg-texture "my_mod:textures/guis/cpbar/back_normal.png"
      :fg-texture "my_mod:textures/guis/cpbar/cp.png"}))
 
 (defn build-overload-bar-render-data
   "Build overload bar render data."
-  [model]
+  [model now-ms]
   (let [{:keys [cur max fine]} (:overload model)
-        percent (if (and max (pos? max)) (/ cur max) 0.0)]
+        percent (if (and max (pos? max)) (/ cur max) 0.0)
+        scroll-offset (double (mod (/ (double (or now-ms 0)) 2000.0) 1.0))]
     {:type :overload-bar
      :x 10 :y 25
      :width 100 :height 10
      :percent (double percent)
      :overloaded (not fine)
+     :scroll-offset scroll-offset
      :bg-texture (if fine
                    "my_mod:textures/guis/cpbar/back_normal.png"
                    "my_mod:textures/guis/cpbar/back_overload.png")
@@ -105,10 +109,10 @@
 (defn build-hud-render-data
   "Main function to build complete HUD render data. Called by forge layer."
   [hud-model screen-width screen-height cooldown-data
-   & {:keys [player-uuid activate-hint preset-state]}]
+   & {:keys [player-uuid activate-hint preset-state now-ms]}]
   (when hud-model
     {:cp-bar (build-cp-bar-render-data hud-model)
-     :overload-bar (build-overload-bar-render-data hud-model)
+     :overload-bar (build-overload-bar-render-data hud-model now-ms)
      :skill-slots (build-skill-slot-render-data hud-model screen-width screen-height
                                                  cooldown-data player-uuid)
      :activation-indicator (build-activation-indicator-data hud-model activate-hint)

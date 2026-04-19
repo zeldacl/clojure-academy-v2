@@ -24,6 +24,20 @@
 (def ^:private imag-phase-block-id "my_mod:imag_phase")
 (def ^:private mag-hook-entity-id "my_mod:entity_mag_hook")
 
+(defn matter-unit-overlay-data
+  "Render metadata for client item overlay/decorator.
+   Pure data function to keep game-logic decisions in AC."
+  [damage now-ms]
+  (let [phase-liquid? (= 1 (int (or damage 0)))
+        scroll-offset (double (mod (/ (double (or now-ms 0)) 1800.0) 1.0))]
+    {:enabled? true
+     :phase-liquid? phase-liquid?
+     :alpha (if phase-liquid? 0.88 0.0)
+     :scroll-offset scroll-offset
+     :base-texture "my_mod:textures/item/matter_unit.png"
+     :liquid-texture "my_mod:textures/item/matter_unit_phase_liquid.png"
+     :mask-texture "my_mod:textures/item/matter_unit_overlay.png"}))
+
 (defn- apply-induction-factor!
   [{:keys [player item-id side]}]
   (when (= side :server)
