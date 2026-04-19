@@ -77,7 +77,7 @@
                     (recur (inc i) true wall-start-i))
                   ;; Still in air before wall
                   :else
-                  (recur (inc i) false nil)))))))))
+                  (recur (inc i) false nil))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Actions
