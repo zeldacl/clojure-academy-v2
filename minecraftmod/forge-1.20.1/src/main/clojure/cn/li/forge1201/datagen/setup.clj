@@ -9,9 +9,10 @@
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.forge1201.datagen.blockstate-provider :as bsp]
             [cn.li.forge1201.datagen.item-model-provider :as imp]
-            [cn.li.forge1201.datagen.lang-provider :as lang])
+            [cn.li.forge1201.datagen.lang-provider :as lang]
+            [cn.li.forge1201.datagen.recipe-provider :as rp])
   (:import [net.minecraftforge.data.event GatherDataEvent]
-           [net.minecraft.data DataProvider DataProvider$Factory DataGenerator]))
+           [net.minecraft.data DataProvider$Factory DataGenerator]))
 
 (defn- ensure-ac-content-loaded!
   "Datagen runs outside normal mod init. We need AC's DSL registries populated
@@ -76,5 +77,9 @@
     ;; Register Language provider
     (println (str "[" modid/*mod-id* "] Registering Lang DataGenerator..."))
     (add-provider! generator lang/create exfile-helper)
+
+    ;; Register Recipe provider
+    (println (str "[" modid/*mod-id* "] Registering Recipe DataGenerator..."))
+    (add-provider! generator rp/create exfile-helper)
     
     (println (str "[" modid/*mod-id* "] DataGenerator setup complete!"))))
