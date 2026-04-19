@@ -23,6 +23,7 @@
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
             [cn.li.forge1201.client.pose-impl :as pose-impl]
             [cn.li.forge1201.client.render-buffer-impl :as buffer-impl]
+            [cn.li.forge1201.client.energy-item-model-properties :as energy-item-model-properties]
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.buffer :as buffer])
   (:import [cn.li.forge1201.shim ForgeClientHelper]
@@ -191,5 +192,7 @@
   (hand-effect-renderer/init!)
   (level-effect-renderer/init!)
   (request-bridge/init!)
+
+  (energy-item-model-properties/register!)
 
   (log/info "Forge 1.20.1 client-side systems initialized"))

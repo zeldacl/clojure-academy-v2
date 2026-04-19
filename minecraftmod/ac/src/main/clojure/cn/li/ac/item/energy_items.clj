@@ -26,7 +26,9 @@
          :properties {:tooltip ["储能单元"
                                 "容量: 10000 IF"
                                 "带宽: 20 IF/t"]
-                      :model-texture "energy_unit"
+                      :item-model-energy-levels {:texture-empty "energy_unit_empty"
+                                                 :texture-half "energy_unit_half"
+                                                 :texture-full "energy_unit_full"}
                       :energy-item? true
                       :energy-capacity 10000.0
                       :energy-bandwidth 20.0
@@ -39,7 +41,11 @@
          :properties {:tooltip ["便携式能力开发仪"
                                 "容量: 100000 IF"
                                 "迁移阶段占位实现"]
-                      :model-texture "developer_portable"
+                      ;; Same layout as AcademyCraft item models: empty base + overrides
+                      ;; on <modid>:energy for half/full (see forge datagen + client register!).
+                      :item-model-energy-levels {:texture-empty "developer_portable_empty"
+                                                 :texture-half "developer_portable_half"
+                                                 :texture-full "developer_portable_full"}
                       :energy-item? true
                       :energy-capacity 100000.0
                       :energy-bandwidth 100.0
