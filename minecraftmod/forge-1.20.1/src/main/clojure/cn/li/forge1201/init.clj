@@ -5,7 +5,9 @@
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.content :as content]
             [cn.li.forge1201.wireless-imc :as wireless-imc]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.forge1201.achievement.bridge :as achievement-bridge]
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.forge1201.trigger ModTriggers]))
 
 (defn set-version!
   "Set the forge version for multimethod dispatch"
@@ -32,7 +34,10 @@
         ;; Bind platform-neutral event bridge to Forge IMC dispatcher.
         (alter-var-root #'platform-events/*fire-event-fn*
                         (constantly wireless-imc/dispatch-event!))
+        ;; Register custom advancement triggers.
+        (ModTriggers/init)
         ;; Ensure shared content init is registered (without Forge referencing
         ;; the shared content namespace directly).
         (content/ensure-content-init-registered!)
-        (lifecycle/run-content-init!)))))
+        (lifecycle/run-content-init!)
+        (achievement-bridge/init!)))))

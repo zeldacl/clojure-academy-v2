@@ -146,7 +146,7 @@
             benergy  (double (or block-energy 0.0))
             candidates (beam-candidates player-id world-id eye dir md qr r)
             step-result
-            (fn [{:keys [stop? reflection-distance reflection-hit? normal-hit-count] :as acc}
+            (fn [{:keys [stop? reflection-distance reflection-hit? normal-hit-count hit-uuids] :as acc}
                  {:keys [uuid x y z radial-dist]}]
               (if stop?
                 (reduced acc)
@@ -156,7 +156,8 @@
                     (reduced {:stop?               true
                               :reflection-distance dist
                               :reflection-hit?     hit?
-                              :normal-hit-count    normal-hit-count}))
+                              :normal-hit-count    normal-hit-count
+                              :hit-uuids           hit-uuids}))
                   (do
                     (when (and (pos? dmg) entity-damage/*entity-damage*)
                       (let [radial (double radial-dist)
@@ -168,10 +169,11 @@
                     {:stop?               false
                      :reflection-distance reflection-distance
                      :reflection-hit?     reflection-hit?
-                     :normal-hit-count    (inc (long (or normal-hit-count 0)))}))))
+                     :normal-hit-count    (inc (long (or normal-hit-count 0)))
+                     :hit-uuids           (conj (vec (or hit-uuids [])) (str uuid))}))))
             result       (reduce step-result
                                  {:stop? false :reflection-distance nil
-                                  :reflection-hit? false :normal-hit-count 0}
+                                  :reflection-hit? false :normal-hit-count 0 :hit-uuids []}
                                  candidates)
             block-dist   (min md (double (or (:reflection-distance result) md)))
             visual-dist  (min vd (double (or (:reflection-distance result) vd)))
@@ -187,4 +189,5 @@
         (assoc evt :beam-result {:performed?       true
                                  :reflection-hit?  (:reflection-hit? result)
                                  :normal-hit-count (:normal-hit-count result)
+                                 :hit-uuids        (:hit-uuids result)
                                  :visual-distance  visual-dist})))))

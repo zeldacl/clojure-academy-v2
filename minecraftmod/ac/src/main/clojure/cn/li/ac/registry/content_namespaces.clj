@@ -47,6 +47,11 @@
   These define categories and skills via ability DSL."
   '[cn.li.ac.content.ability])
 
+(def achievement-namespaces
+  "Achievement metadata and dispatcher namespaces."
+  '[cn.li.ac.achievement.data
+    cn.li.ac.achievement.dispatcher])
+
 (def system-namespaces
   "System feature namespaces (terminal, etc).
   These provide game systems and frameworks."
@@ -55,11 +60,14 @@
 (def ability-init-fns
   '[cn.li.ac.content.ability/init-ability-content!])
 
+(def achievement-init-fns
+  '[cn.li.ac.achievement.dispatcher/init-dispatcher!])
+
 (defn load-all!
   "Load all content namespaces to trigger DSL macro side effects and hook registration."
   []
   (log/warn "[CONTENT_TRACE] load-all begin")
-  (doseq [ns-sym (concat block-namespaces item-namespaces entity-namespaces ability-namespaces system-namespaces)]
+  (doseq [ns-sym (concat block-namespaces item-namespaces entity-namespaces ability-namespaces achievement-namespaces system-namespaces)]
     (try
       (log/warn "[CONTENT_TRACE] require begin" ns-sym)
       (require ns-sym)
@@ -102,6 +110,15 @@
         (log/warn "[CONTENT_TRACE] ability-init ok" init-sym))
       (catch Throwable t
         (log/error "[CONTENT_TRACE] ability-init fail" init-sym (ex-message t))
+        (throw t))))
+  (doseq [init-sym achievement-init-fns]
+    (try
+      (log/warn "[CONTENT_TRACE] achievement-init begin" init-sym)
+      (when-let [init-fn (requiring-resolve init-sym)]
+        (init-fn)
+        (log/warn "[CONTENT_TRACE] achievement-init ok" init-sym))
+      (catch Throwable t
+        (log/error "[CONTENT_TRACE] achievement-init fail" init-sym (ex-message t))
         (throw t))))
   ;; Initialize terminal system after all content is loaded
   (log/warn "[CONTENT_TRACE] terminal-init begin")

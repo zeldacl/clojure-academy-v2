@@ -49,6 +49,13 @@
   [ctx]
   (or (:target-player ctx) (:player ctx)))
 
+(defn- resolve-advancement-id
+  [advancement-str]
+  (let [raw (str advancement-str)]
+    (if (str/includes? raw ":")
+      raw
+      (str "my_mod:achievements/" (str/replace raw "." "/")))))
+
 ;; ============================================================================
 ;; /acach Command Handler
 ;; ============================================================================
@@ -65,7 +72,7 @@
     (if-not advancement-id
       (error-message "command.academy.acach.missing_advancement")
       {:action :grant-advancement
-       :advancement-id advancement-id
+       :advancement-id (resolve-advancement-id advancement-id)
        :player target-player})))
 
 ;; ============================================================================

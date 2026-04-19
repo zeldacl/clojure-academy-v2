@@ -1,7 +1,8 @@
 (ns cn.li.forge1201.datagen.lang-provider
   "Language file data generator - generates translation files from metadata"
   (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.registry.metadata :as registry-metadata])
+            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.ac.achievement.registry :as ach-reg])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [java.nio.file Path]
            [java.util.concurrent CompletableFuture]
@@ -13,7 +14,7 @@
 
 ;; TODO: Load translation data from ac metadata system instead of hardcoding
 ;; For now, keep minimal translations for creative tab and commands
-(def ^:private lang-data
+(def ^:private base-lang-data
   {"en_us.json" {"itemGroup.my_mod.items" "My Mod Items"
                  ;; Command translations
                  "command.academy.acach.success" "Granted advancement %s to %s"
@@ -97,6 +98,40 @@
                  "ability.skill.teleporter.space_fluct" "空间波动"
                  "ability.skill.teleporter.space_fluct.desc" "被动：解锁更高阶的瞬移暴击效果。"}})
 
+(defn- tab-translations
+  []
+  {"en_us" {"advancement.my_mod.tab.default" "AcademyCraft"
+            "advancement.my_mod.tab.default.description" "Core progression."
+            "advancement.my_mod.tab.electromaster" "Electromaster"
+            "advancement.my_mod.tab.electromaster.description" "Electromaster advancement path."
+            "advancement.my_mod.tab.meltdowner" "Meltdowner"
+            "advancement.my_mod.tab.meltdowner.description" "Meltdowner advancement path."
+            "advancement.my_mod.tab.teleporter" "Teleporter"
+            "advancement.my_mod.tab.teleporter.description" "Teleporter advancement path."
+            "advancement.my_mod.tab.vecmanip" "Vector Manipulator"
+            "advancement.my_mod.tab.vecmanip.description" "Vector manipulation advancement path."}
+   "zh_cn" {"advancement.my_mod.tab.default" "AcademyCraft"
+            "advancement.my_mod.tab.default.description" "核心进度。"
+            "advancement.my_mod.tab.electromaster" "电击使"
+            "advancement.my_mod.tab.electromaster.description" "电击使成就线路。"
+            "advancement.my_mod.tab.meltdowner" "熔毁使"
+            "advancement.my_mod.tab.meltdowner.description" "熔毁使成就线路。"
+            "advancement.my_mod.tab.teleporter" "空间使"
+            "advancement.my_mod.tab.teleporter.description" "空间使成就线路。"
+            "advancement.my_mod.tab.vecmanip" "矢量操控"
+            "advancement.my_mod.tab.vecmanip.description" "矢量操控成就线路。"}})
+
+(defn- merged-lang-data
+  []
+  (let [{:keys [en_us zh_cn]} (ach-reg/translation-maps)
+        tabs (tab-translations)]
+    {"en_us.json" (merge (get base-lang-data "en_us.json")
+                         (get tabs "en_us")
+                         en_us)
+     "zh_cn.json" (merge (get base-lang-data "zh_cn.json")
+                         (get tabs "zh_cn")
+                         zh_cn)}))
+
 (defn create
   [^PackOutput pack-output _exfile-helper]
   (let [out-root (.getOutputFolder pack-output)
@@ -105,7 +140,7 @@
       (^CompletableFuture run [_ ^CachedOutput cached]
         (let [results (atom [])]
           ;; 遍历数据，直接在这里调用，避免跨函数编译问题
-          (doseq [[file-name data] lang-data]
+          (doseq [[file-name data] (merged-lang-data)]
             (let [target-path (.resolve base ^String file-name)
                   ;; 手动将 Map 转为 JsonElement，确保类型匹配
                   json-tree   (.toJsonTree gson data)]

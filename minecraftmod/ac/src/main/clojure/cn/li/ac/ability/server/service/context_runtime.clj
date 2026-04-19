@@ -104,6 +104,8 @@
                 (= (:input-state ctx-map) INPUT-ACTIVE))
        (let [released-ctx (set-input-state! ctx-id INPUT-RELEASED)]
          (dispatch-skill-callback! released-ctx :on-key-up evt/EVT-CONTEXT-KEY-UP payload)
+         (evt/fire-ability-event!
+           (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))
         (let [latest-ctx (ctx/get-context ctx-id)
               spec (skill/get-skill (:skill-id latest-ctx))]
           (when-not (= :manual (get-in spec [:cooldown :mode]))

@@ -8,6 +8,7 @@
   (:require [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -183,6 +184,14 @@
                                :fx-topic        :railgun/fx-shot}])]
         (or (:beam-result result) {:performed? false})))))
 
+(defn- creeper-hit?
+  [world-id hit-uuids]
+  (boolean
+    (some (fn [entity-uuid]
+            (= "minecraft:creeper"
+               (entity/entity-get-type-id* world-id entity-uuid)))
+          hit-uuids)))
+
 ;; ---------------------------------------------------------------------------
 ;; Cost hooks (private – passed as fns in defskill!)
 ;; ---------------------------------------------------------------------------
@@ -228,9 +237,12 @@
     (cond
       (:perform? qte)
       (if cost-ok?
-        (let [{:keys [performed? reflection-hit? normal-hit-count]} (perform-main-shot! player-id ctx-id exp)]
+        (let [{:keys [performed? reflection-hit? normal-hit-count hit-uuids]} (perform-main-shot! player-id ctx-id exp)]
           (when performed?
             (skill-effects/add-skill-exp! player-id :railgun (if reflection-hit? 0.01 0.005))
+            (when (and (pos? (long (or normal-hit-count 0)))
+                       (creeper-hit? (geom/world-id-of player-id) hit-uuids))
+              (ach-dispatcher/trigger-custom-event! player-id "electromaster.attack_creeper"))
             (skill-effects/set-main-cooldown! player-id :railgun
                                               (int (Math/round (double (bal/lerp 300.0 160.0 exp)))))
             (ctx/update-context! ctx-id assoc :skill-state
@@ -269,10 +281,13 @@
                          (consume-item-for-shot! player)
                          cost-ok?)
                   (let [exp (skill-exp player-id)
-                        {:keys [performed? reflection-hit? normal-hit-count]}
+                        {:keys [performed? reflection-hit? normal-hit-count hit-uuids]}
                         (perform-main-shot! player-id ctx-id exp)]
                     (when performed?
                       (skill-effects/add-skill-exp! player-id :railgun (if reflection-hit? 0.01 0.005))
+                      (when (and (pos? (long (or normal-hit-count 0)))
+                                 (creeper-hit? (geom/world-id-of player-id) hit-uuids))
+                        (ach-dispatcher/trigger-custom-event! player-id "electromaster.attack_creeper"))
                       (skill-effects/set-main-cooldown! player-id :railgun
                                                         (int (Math/round (double (bal/lerp 300.0 160.0 exp)))))
                       (ctx/update-context! ctx-id assoc :skill-state
@@ -306,6 +321,8 @@
 ;; ---------------------------------------------------------------------------
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
+
+(declare railgun)
 
 (defskill! railgun
   :id              :railgun

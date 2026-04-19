@@ -8,6 +8,7 @@
   (:require [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -72,6 +73,9 @@
     (let [scaled (* base-damage (nth crit-rates crit-level 1.0))]
       (skill-effects/add-skill-exp! player-id :dim-folding-theorem (* 0.005 (inc crit-level)))
       (skill-effects/add-skill-exp! player-id :space-fluct 0.0001)
+      (ach-dispatcher/trigger-custom-event! player-id "teleporter.critical_attack")
+      (when (= crit-level 2)
+        (ach-dispatcher/trigger-custom-event! player-id "teleporter.mastery"))
       {:damage scaled :crit-level crit-level})
     {:damage base-damage :crit-level nil}))
 

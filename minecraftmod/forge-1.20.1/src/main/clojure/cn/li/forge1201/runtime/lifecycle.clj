@@ -91,6 +91,9 @@
   (try-install! 'cn.li.forge1201.runtime.entity-motion
                 'cn.li.forge1201.runtime.entity-motion/install-entity-motion!
                 "entity-motion")
+  (try-install! 'cn.li.forge1201.runtime.entity-query
+                'cn.li.forge1201.runtime.entity-query/install-entity-query!
+                "entity-query")
   (try-install! 'cn.li.forge1201.runtime.block-manipulation
                 'cn.li.forge1201.runtime.block-manipulation/install-block-manipulation!
                 "block-manipulation")

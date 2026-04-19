@@ -15,6 +15,7 @@
   (:require [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -207,6 +208,8 @@
                   (do
                     (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
                     (add-exp! player-id (compute-exp-gain _dist))
+                    (when cross-dim?
+                      (ach-dispatcher/trigger-custom-event! player-id "teleporter.ignore_barrier"))
                     (skill-effects/set-main-cooldown! player-id :location-teleport
                                                        (compute-cooldown exp))
                     {:success? true

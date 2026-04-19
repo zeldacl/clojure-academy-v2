@@ -10,6 +10,7 @@
             [cn.li.forge1201.datagen.blockstate-provider :as bsp]
             [cn.li.forge1201.datagen.item-model-provider :as imp]
             [cn.li.forge1201.datagen.lang-provider :as lang]
+            [cn.li.forge1201.datagen.advancement-provider :as adv]
             [cn.li.forge1201.datagen.recipe-provider :as rp])
   (:import [net.minecraftforge.data.event GatherDataEvent]
            [net.minecraft.data DataProvider$Factory DataGenerator]))
@@ -81,5 +82,9 @@
     ;; Register Recipe provider
     (println (str "[" modid/*mod-id* "] Registering Recipe DataGenerator..."))
     (add-provider! generator rp/create exfile-helper)
+
+    ;; Register Advancement provider
+    (println (str "[" modid/*mod-id* "] Registering Advancement DataGenerator..."))
+    (add-provider! generator adv/create exfile-helper)
     
     (println (str "[" modid/*mod-id* "] DataGenerator setup complete!"))))

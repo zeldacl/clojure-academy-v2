@@ -15,6 +15,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
@@ -103,6 +104,7 @@
         (let [world-id (geom/world-id-of player-id)]
           (when (helper/teleport-to! player-id world-id (:x dest) (:y dest) (:z dest))
             (skill-effects/add-skill-exp! player-id :penetrate-teleport 0.003)
+            (ach-dispatcher/trigger-custom-event! player-id "teleporter.ignore_barrier")
             (let [cd (int (bal/lerp 40.0 25.0 exp))]
               (skill-effects/set-main-cooldown! player-id :penetrate-teleport cd))
             (ctx/ctx-send-to-client! ctx-id :penetrate-tp/fx-perform dest)))

@@ -74,10 +74,12 @@
 
 ;; -- Learning --
 (def EVT-SKILL-LEARN         :ability/skill-learn)
+(def EVT-SKILL-PERFORM       :ability/skill-perform)
 (def EVT-SKILL-EXP-ADDED     :ability/skill-exp-added)
 (def EVT-SKILL-EXP-CHANGED   :ability/skill-exp-changed)
 (def EVT-LEVEL-CHANGE        :ability/level-change)
 (def EVT-CATEGORY-CHANGE     :ability/category-change)
+(def EVT-ACHIEVEMENT-TRIGGER :ability/achievement-trigger)
 
 ;; -- Resource --
 (def EVT-OVERLOAD            :ability/overload)
@@ -125,3 +127,13 @@
 (defn make-preset-switch-event [uuid old-idx new-idx]
   {:event/type EVT-PRESET-SWITCH :event/side :both
    :uuid uuid :old-preset old-idx :new-preset new-idx})
+
+(defn make-skill-perform-event
+  [uuid skill-id]
+  {:event/type EVT-SKILL-PERFORM :event/side :server
+   :uuid uuid :skill-id skill-id})
+
+(defn make-achievement-trigger-event
+  [uuid achievement-id]
+  {:event/type EVT-ACHIEVEMENT-TRIGGER :event/side :server
+   :uuid uuid :achievement-id achievement-id})

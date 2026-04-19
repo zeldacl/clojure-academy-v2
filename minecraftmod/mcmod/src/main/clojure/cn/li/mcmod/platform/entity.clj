@@ -58,3 +58,15 @@
 
   (menu-get-container-id [menu]
     "Return the containerId (window id) from an AbstractContainerMenu"))
+
+(defonce ^{:dynamic true
+           :doc "Optional platform resolver: (fn [world-id entity-uuid] -> string|nil).
+
+  Returns canonical entity type id such as \"minecraft:creeper\"."}
+  *entity-get-type-id-fn*
+  nil)
+
+(defn entity-get-type-id*
+  [world-id entity-uuid]
+  (when-let [f *entity-get-type-id-fn*]
+    (some-> (f world-id entity-uuid) str)))
