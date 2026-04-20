@@ -4,9 +4,12 @@
             [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.metadata :as event-metadata]
+            [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle])
-  (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock
+  (:import [cn.li.forge1201.loot LootInjectionHelper]
+           [net.minecraftforge.event LootTableLoadEvent]
+           [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock
             PlayerInteractEvent$LeftClickBlock]
        [net.minecraft.world InteractionHand InteractionResult]
        [net.minecraft.world.entity.player Player]
@@ -248,4 +251,23 @@
         (world-lifecycle/dispatch-world-unload level)))
     (catch Throwable t
       (log/error "Error handling world unload event:" (.getMessage t))
+      (.printStackTrace t))))
+
+(defn handle-loot-table-load
+  "Inject DSL-defined loot entries into target loot tables at load time."
+  [^LootTableLoadEvent evt]
+  (try
+    (let [table-id (str (.getName evt))
+          injections (registry-metadata/get-loot-injections-for-table table-id)]
+      (when (seq injections)
+        (doseq [spec injections]
+          (LootInjectionHelper/addItemInjection
+            evt
+            (:item-id spec)
+            (int (or (:weight spec) 1))
+            (int (or (:quality spec) 0))
+            (float (or (:min-count spec) 1.0))
+            (float (or (:max-count spec) 1.0))))))
+    (catch Throwable t
+      (log/error "Error handling loot table load event:" (.getMessage t))
       (.printStackTrace t))))

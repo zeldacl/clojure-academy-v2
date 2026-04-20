@@ -24,6 +24,9 @@ import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.level.material.FlowingFluid;
 import net.minecraft.world.level.material.Fluid;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.core.particles.ParticleType;
 import net.minecraftforge.fluids.FluidType;
 import net.minecraftforge.fluids.ForgeFlowingFluid;
 import net.minecraftforge.registries.DeferredRegister;
@@ -65,6 +68,18 @@ public final class ForgeBootstrapHelper {
 
     public static DeferredRegister<Fluid> createFluidsRegister(String modId) {
         return DeferredRegister.create(ForgeRegistries.FLUIDS, modId);
+    }
+
+    public static DeferredRegister<SoundEvent> createSoundsRegister(String modId) {
+        return DeferredRegister.create(ForgeRegistries.SOUND_EVENTS, modId);
+    }
+
+    public static DeferredRegister<MobEffect> createEffectsRegister(String modId) {
+        return DeferredRegister.create(ForgeRegistries.MOB_EFFECTS, modId);
+    }
+
+    public static DeferredRegister<ParticleType<?>> createParticleTypesRegister(String modId) {
+        return DeferredRegister.create(ForgeRegistries.PARTICLE_TYPES, modId);
     }
 
     public static BlockBehaviour.Properties createStoneProperties() {

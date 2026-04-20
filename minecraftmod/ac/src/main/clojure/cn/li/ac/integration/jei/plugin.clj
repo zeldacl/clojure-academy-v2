@@ -18,7 +18,7 @@
   "Get all JEI recipe categories for AcademyCraft machines.
 
   Returns a sequence of category metadata maps, each containing:
-  - :id - Category ID (e.g., 'academycraft:imag_fusor')
+  - :id - Category ID (e.g., '<modid>:imag_fusor')
   - :title-key - Translation key for category title
   - :block-id - Block ID that performs these recipes
   - :background - Background texture info

@@ -54,6 +54,18 @@ public final class LazyForgeBootstrapBridge {
         return ForgeBootstrapHelper.createFluidsRegister(modId);
     }
 
+    public static Object createSoundsRegister(String modId) {
+        return ForgeBootstrapHelper.createSoundsRegister(modId);
+    }
+
+    public static Object createEffectsRegister(String modId) {
+        return ForgeBootstrapHelper.createEffectsRegister(modId);
+    }
+
+    public static Object createParticleTypesRegister(String modId) {
+        return ForgeBootstrapHelper.createParticleTypesRegister(modId);
+    }
+
     public static Object createCarrierScriptedDynamicBlock(String blockId, String tileId, List<Property<?>> properties, Object blockProperties) {
         return ForgeBootstrapHelper.createCarrierScriptedDynamicBlock(blockId, tileId, properties, (BlockBehaviour.Properties) blockProperties);
     }

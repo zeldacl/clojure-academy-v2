@@ -1,8 +1,12 @@
 (ns cn.li.forge1201.runtime.potion-effects
   "Forge implementation of IPotionEffects protocol."
   (:require [cn.li.mcmod.platform.potion-effects :as ppe]
+            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]
+           [net.minecraft.core.registries BuiltInRegistries]
+           [net.minecraft.resources ResourceLocation]
            [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.effect MobEffect MobEffectInstance]
@@ -58,10 +62,21 @@
      :darkness            (ForgeRuntimeBridge/getMobEffect "DARKNESS")}))
 
 (defn- get-mob-effect [effect-type]
-  (let [effect (get @mob-effects-cache effect-type)]
-    (when-not effect
-      (log/warn "Unknown potion effect type:" effect-type))
-    effect))
+  (let [vanilla-effect (get @mob-effects-cache effect-type)]
+    (if vanilla-effect
+      vanilla-effect
+      (let [effect-id (name effect-type)
+            known-custom? (some #(= effect-id (str %)) (registry-metadata/get-all-effect-ids))]
+        (if-not known-custom?
+          (do
+            (log/warn "Unknown potion effect type:" effect-type)
+            nil)
+          (let [registry-name (registry-metadata/get-effect-registry-name effect-id)
+                rl (ResourceLocation. modid/*mod-id* registry-name)
+                effect (.get BuiltInRegistries/MOB_EFFECT rl)]
+            (when-not effect
+              (log/warn "Custom effect not found in MOB_EFFECT registry:" rl))
+            effect))))))
 
 (defn- apply-potion-effect-impl! [player-uuid effect-type duration amplifier]
   (try

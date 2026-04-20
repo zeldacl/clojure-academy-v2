@@ -14,6 +14,10 @@
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.mcmod.fluid.dsl :as fdsl]
+            [cn.li.mcmod.effect.dsl :as edsl]
+            [cn.li.mcmod.particle.dsl :as pdsl]
+            [cn.li.mcmod.loot.dsl :as ldsl]
+            [cn.li.mcmod.sound.dsl :as sdsl]
             [cn.li.mcmod.item.dsl :as idsl]))
 
 ;; Block Registration Metadata
@@ -313,6 +317,98 @@
     Map - Item specification with all properties"
   [item-id]
   (idsl/get-item item-id))
+
+;; Effect Registration Metadata
+;; ============================================================
+
+(defn get-all-effect-ids
+  "Returns all registered custom effect IDs from the effect DSL."
+  []
+  (edsl/list-effects))
+
+(defn get-effect-spec
+  "Retrieves full effect specification from the DSL."
+  [effect-id]
+  (edsl/get-effect effect-id))
+
+(defn get-effect-registry-name
+  "Returns the Minecraft registry name for an effect ID."
+  [effect-id]
+  (or (:registry-name (get-effect-spec effect-id))
+      (str/replace (str effect-id) #"-" "_")))
+
+;; Particle Registration Metadata
+;; ============================================================
+
+(defn get-all-particle-ids
+  "Returns all registered particle IDs from particle DSL."
+  []
+  (pdsl/list-particles))
+
+(defn get-particle-spec
+  "Retrieves full particle specification from DSL."
+  [particle-id]
+  (pdsl/get-particle particle-id))
+
+(defn get-particle-registry-name
+  "Returns the Minecraft registry name for a particle ID."
+  [particle-id]
+  (or (:registry-name (get-particle-spec particle-id))
+      (str/replace (str particle-id) #"-" "_")))
+
+;; Sound Registration Metadata
+;; ============================================================
+
+(defn get-all-sound-ids
+  "Returns a sequence of all registered sound IDs from the sound DSL."
+  []
+  (sdsl/list-sounds))
+
+(defn get-sound-registry-name
+  "Returns the Minecraft registry name for a sound ID.
+
+  Uses explicit :registry-name override when provided.
+
+  Args:
+    sound-id: String - DSL sound identifier
+
+  Returns:
+    String - Registry name"
+  [sound-id]
+  (let [sound-spec (sdsl/get-sound sound-id)
+        explicit-name (:registry-name sound-spec)]
+    (if (and (string? explicit-name) (not (str/blank? explicit-name)))
+      explicit-name
+      sound-id)))
+
+(defn get-sound-spec
+  "Retrieves the full sound specification from the DSL.
+
+  Args:
+    sound-id: String - DSL sound identifier
+
+  Returns:
+    Map - Sound specification with all properties"
+  [sound-id]
+  (sdsl/get-sound sound-id))
+
+;; Loot Injection Metadata
+;; ============================================================
+
+(defn get-all-loot-injection-ids
+  "Returns all registered loot injection IDs from the loot DSL."
+  []
+  (ldsl/list-loot-injections))
+
+(defn get-loot-injection-spec
+  "Returns loot injection specification by injection ID."
+  [injection-id]
+  (ldsl/get-loot-injection injection-id))
+
+(defn get-loot-injections-for-table
+  "Returns all loot injection specs matching target loot table ID."
+  [target-table]
+  (ldsl/get-loot-injections-for-table target-table))
 
 ;; BlockItem Registration Metadata
 ;; ============================================================

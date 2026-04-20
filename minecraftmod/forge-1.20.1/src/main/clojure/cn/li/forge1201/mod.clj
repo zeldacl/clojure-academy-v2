@@ -29,10 +29,15 @@
   (:import [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.material Fluid FlowingFluid]
            [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
+           [net.minecraft.resources ResourceLocation]
+           [net.minecraft.core.particles SimpleParticleType]
            [cn.li.forge1201.block.entity ScriptedBlockEntity]
-           [cn.li.forge1201.item NbtBarItem]
+           [cn.li.forge1201.effect ScriptedMobEffect]
+           [cn.li.forge1201.item NbtBarItem ScriptedItem]
            [cn.li.forge1201.entity ModEntities]
-           [cn.li.forge1201.sound ModSounds]
+           [net.minecraft.sounds SoundEvent]
+           [net.minecraft.world.effect MobEffectCategory]
+           [net.minecraft.world.food FoodProperties$Builder]
            [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab Items Rarity]
            [net.minecraft.world.level ItemLike]
            [net.minecraft.network.chat Component]
@@ -112,6 +117,15 @@
 (defonce fluids-register
   (delay (bootstrap/create-fluids-register mod-id)))
 
+(defonce sounds-register
+  (delay (bootstrap/create-sounds-register mod-id)))
+
+(defonce effects-register
+  (delay (bootstrap/create-effects-register mod-id)))
+
+(defonce particle-types-register
+  (delay (bootstrap/create-particle-types-register mod-id)))
+
 ;; Storage for registered blocks and items (populated during initialization)
 (defonce registered-blocks (atom {}))
 (defonce registered-items (atom {}))
@@ -120,6 +134,9 @@
 (defonce registered-fluid-types (atom {}))
 (defonce registered-fluids-source (atom {}))
 (defonce registered-fluids-flowing (atom {}))
+(defonce registered-sounds (atom {}))
+(defonce registered-effects (atom {}))
+(defonce registered-particles (atom {}))
 
 (defn- rarity->forge-rarity
   ^Rarity
@@ -135,24 +152,39 @@
   [^Item$Properties base item-spec]
   (let [max-stack-size (:max-stack-size item-spec)
         durability (:durability item-spec)
-        rarity (:rarity item-spec)]
+        rarity (:rarity item-spec)
+        food-props (:food-properties item-spec)
+        forge-food (when food-props
+                     (let [^FoodProperties$Builder b (FoodProperties$Builder.)
+                           _ (.nutrition b (int (or (:nutrition food-props) 0)))
+                           _ (.saturationMod b (float (or (:saturation food-props) 0.0)))]
+                       (when (:meat food-props)
+                         (.meat b))
+                       (when (:fast-to-eat food-props)
+                         (.fast b))
+                       (when (:always-edible food-props)
+                         (.alwaysEat b))
+                       (.build b)))]
     (cond-> base
       (some? max-stack-size) (.stacksTo (int max-stack-size))
       (some? durability) (.durability (int durability))
-      (some? rarity) (.rarity (rarity->forge-rarity rarity)))))
+      (some? rarity) (.rarity (rarity->forge-rarity rarity))
+      (some? forge-food) (.food forge-food))))
 
 (defn- create-standalone-item
   ^Item
   [item-spec]
   (let [props (apply-item-properties (Item$Properties.) item-spec)
         energy-item? (true? (get-in item-spec [:properties :energy-item?]))
+        enchantability (int (or (:enchantability item-spec) 0))
+        tooltip-lines (mapv str (or (get-in item-spec [:properties :tooltip]) []))
         current-key (str (or (get-in item-spec [:properties :bar-current-key]) "energy"))
         max-key (str (or (get-in item-spec [:properties :bar-max-key]) "maxEnergy"))
         default-max (double (or (get-in item-spec [:properties :energy-capacity]) 1.0))
         bar-color (int (or (get-in item-spec [:properties :energy-bar-color]) 0x00E5FF))]
     (if energy-item?
       (NbtBarItem. props current-key max-key default-max bar-color)
-      (Item. props))))
+      (ScriptedItem. props enchantability tooltip-lines))))
 
 (defn- register-scripted-projectile-spec!
   [registry-name entity-spec]
@@ -393,6 +425,55 @@
                       (:fire-immune? entity-spec)))))]
           (swap! registered-entities assoc entity-id registered-obj))))))
 
+(defn register-all-sounds!
+  "Register all sounds defined in DSL using metadata-driven approach."
+  []
+  (doseq [sound-id (registry-metadata/get-all-sound-ids)]
+    (let [registry-name (registry-metadata/get-sound-registry-name sound-id)
+          registered-obj (.register ^DeferredRegister (force sounds-register) registry-name
+                                    (reify java.util.function.Supplier
+                                      (get [_]
+                                        (SoundEvent/createVariableRangeEvent
+                                          (ResourceLocation. mod-id registry-name)))))]
+      (swap! registered-sounds assoc sound-id registered-obj))))
+
+(defn- effect-category->forge
+  ^MobEffectCategory
+  [category-kw]
+  (case category-kw
+    :beneficial MobEffectCategory/BENEFICIAL
+    :neutral MobEffectCategory/NEUTRAL
+    MobEffectCategory/HARMFUL))
+
+(defn register-all-effects!
+  "Register all custom effects defined in DSL metadata."
+  []
+  (doseq [effect-id (registry-metadata/get-all-effect-ids)]
+    (let [effect-spec (registry-metadata/get-effect-spec effect-id)
+          registry-name (registry-metadata/get-effect-registry-name effect-id)
+          category (effect-category->forge (:category effect-spec))
+          color (int (or (:color effect-spec) 0xAA0000))
+          tick-interval (int (or (:tick-interval effect-spec) 20))
+          damage-per-tick (float (or (:damage-per-tick effect-spec) 0.0))
+          registered-obj (.register ^DeferredRegister (force effects-register) registry-name
+                                    (reify java.util.function.Supplier
+                                      (get [_]
+                                        (ScriptedMobEffect. category color tick-interval damage-per-tick))))]
+      (swap! registered-effects assoc effect-id registered-obj))))
+
+(defn register-all-particles!
+  "Register all custom particle types declared in DSL."
+  []
+  (doseq [particle-id (registry-metadata/get-all-particle-ids)]
+    (let [particle-spec (registry-metadata/get-particle-spec particle-id)
+          registry-name (registry-metadata/get-particle-registry-name particle-id)
+          always-show? (boolean (:always-show? particle-spec))
+          registered-obj (.register ^DeferredRegister (force particle-types-register) registry-name
+                                    (reify java.util.function.Supplier
+                                      (get [_]
+                                        (SimpleParticleType. always-show?))))]
+      (swap! registered-particles assoc particle-id registered-obj))))
+
 (defn get-registered-entity-type
   "Get a registered EntityType by entity-id."
   [entity-id]
@@ -545,7 +626,13 @@
                 EventPriority/NORMAL false net.minecraftforge.event.level.BlockEvent$BreakEvent
                 (reify java.util.function.Consumer
                   (accept [_ evt]
-                    (events/handle-block-break-event evt)))))
+                    (events/handle-block-break-event evt))))
+  ;; Loot table load events for data-driven loot injections.
+  (.addListener (MinecraftForge/EVENT_BUS)
+                EventPriority/NORMAL false net.minecraftforge.event.LootTableLoadEvent
+                (reify java.util.function.Consumer
+                  (accept [_ evt]
+                    (events/handle-loot-table-load evt)))))
 
 ;; Helper: Client setup phase (called from event handler)
 (defn on-client-setup [^FMLClientSetupEvent event]
@@ -607,6 +694,9 @@
         (register-all-fluids!)
         (register-all-blocks!)
         (register-all-entities!)
+        (register-all-sounds!)
+        (register-all-effects!)
+        (register-all-particles!)
         (register-block-entities!)
         (register-all-items!)
 
@@ -624,7 +714,9 @@
         (let [^IEventBus mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
           (config-bridge/register-all! mod-bus)
           (ModEntities/register mod-bus)
-          (ModSounds/register mod-bus)
+          (.register ^DeferredRegister (force sounds-register) mod-bus)
+          (.register ^DeferredRegister (force effects-register) mod-bus)
+          (.register ^DeferredRegister (force particle-types-register) mod-bus)
           (.register ^DeferredRegister (force fluid-types-register) mod-bus)
           (.register ^DeferredRegister (force fluids-register) mod-bus)
           (.register ^DeferredRegister (force blocks-register) mod-bus)

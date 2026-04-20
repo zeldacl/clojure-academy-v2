@@ -6,11 +6,13 @@
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickItem]
+           [net.minecraftforge.event.entity.living LivingEntityUseItemEvent$Finish]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.world InteractionResult]
            [net.minecraft.world InteractionHand]
+           [net.minecraft.world.entity.player Player]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.resources ResourceLocation]))
 
@@ -50,6 +52,35 @@
         (.setCancellationResult event InteractionResult/CONSUME)
         (.setCanceled event true)))))
 
+(defn- dispatch-dsl-item-use!
+  [player item-id hand stack side]
+  (when-let [item-spec (resolve-dsl-item-spec item-id)]
+    (idsl/handle-use item-spec {:player player
+                                :item-id item-id
+                                :item-spec item-spec
+                                :item-stack stack
+                                :hand hand
+                                :side side})))
+
+(defn- on-item-finish-using
+  "Handle finish using item event (e.g. food/charge complete)."
+  [^LivingEntityUseItemEvent$Finish event]
+  (try
+    (let [entity (.getEntity event)]
+      (when (instance? Player entity)
+        (let [^Player player entity
+              stack (.getItem event)
+              item-id (get-item-id stack)
+              side (if (.isClientSide (.level player)) :client :server)]
+          (when-let [item-spec (resolve-dsl-item-spec item-id)]
+            (idsl/handle-finish-using item-spec {:player player
+                                                 :item-id item-id
+                                                 :item-spec item-spec
+                                                 :item-stack stack
+                                                 :side side})))))
+    (catch Exception e
+      (log/error "Error handling item finish-using event" e))))
+
 (defn- on-item-use
   "Handle item right-click event."
   [^PlayerInteractEvent$RightClickItem event]
@@ -64,6 +95,8 @@
               item-id (get-item-id stack)
               side (if (.isClientSide (.level player)) :client :server)
               plan (ability-runtime/build-item-use-plan player-uuid item-id ability-activated? side)]
+
+              (dispatch-dsl-item-use! player item-id hand stack side)
 
           (when plan
             (doseq [action (:client-actions plan)]
@@ -111,4 +144,10 @@
                 PlayerInteractEvent$RightClickItem
                 (reify java.util.function.Consumer
                   (accept [_ evt] (on-item-use evt))))
+  (.addListener (MinecraftForge/EVENT_BUS)
+                EventPriority/NORMAL
+                false
+                LivingEntityUseItemEvent$Finish
+                (reify java.util.function.Consumer
+                  (accept [_ evt] (on-item-finish-using evt))))
   (log/info "Ability item handler initialized"))

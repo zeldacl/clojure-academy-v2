@@ -29,10 +29,12 @@
 (def item-namespaces
   "All item definition namespaces.
   These define items using defitem DSL."
-  '[cn.li.ac.content.items.all])
+  '[cn.li.ac.content.items.all
+    cn.li.ac.content.sounds])
 
 (def item-init-fns
-  '[cn.li.ac.content.items.all/init-items!])
+  '[cn.li.ac.content.items.all/init-items!
+    cn.li.ac.content.sounds/init-sounds!])
 
 (def entity-namespaces
   "Entity content namespaces.
@@ -45,7 +47,10 @@
 (def ability-namespaces
   "Ability content namespaces.
   These define categories and skills via ability DSL."
-  '[cn.li.ac.content.ability])
+  '[cn.li.ac.content.ability
+    cn.li.ac.content.effects
+    cn.li.ac.content.particles
+    cn.li.ac.content.loot])
 
 (def achievement-namespaces
   "Achievement metadata and dispatcher namespaces."
@@ -58,7 +63,10 @@
   '[cn.li.ac.terminal.init])
 
 (def ability-init-fns
-  '[cn.li.ac.content.ability/init-ability-content!])
+  '[cn.li.ac.content.ability/init-ability-content!
+    cn.li.ac.content.effects/init-effects!
+    cn.li.ac.content.particles/init-particles!
+    cn.li.ac.content.loot/init-loot!])
 
 (def achievement-init-fns
   '[cn.li.ac.achievement.dispatcher/init-dispatcher!])

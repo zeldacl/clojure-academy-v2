@@ -38,6 +38,18 @@
   [^String mod-id]
   (LazyForgeBootstrapBridge/createFluidsRegister mod-id))
 
+(defn create-sounds-register
+  [^String mod-id]
+  (LazyForgeBootstrapBridge/createSoundsRegister mod-id))
+
+(defn create-effects-register
+  [^String mod-id]
+  (LazyForgeBootstrapBridge/createEffectsRegister mod-id))
+
+(defn create-particle-types-register
+  [^String mod-id]
+  (LazyForgeBootstrapBridge/createParticleTypesRegister mod-id))
+
 (defn create-carrier-scripted-dynamic-block
   [^String block-id ^String tile-id properties block-properties]
   (LazyForgeBootstrapBridge/createCarrierScriptedDynamicBlock block-id tile-id properties block-properties))

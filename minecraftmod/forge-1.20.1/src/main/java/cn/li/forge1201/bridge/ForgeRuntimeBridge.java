@@ -3,6 +3,7 @@ package cn.li.forge1201.bridge;
 import cn.li.forge1201.entity.ModEntities;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -80,6 +81,19 @@ public final class ForgeRuntimeBridge {
     }
 
     public static ParticleOptions getParticleType(String particleType) {
+        if (particleType != null && !particleType.isEmpty()) {
+            try {
+                ResourceLocation id = particleType.contains(":")
+                    ? new ResourceLocation(particleType)
+                    : new ResourceLocation("my_mod", particleType.replace('-', '_'));
+                ParticleType<?> dynamicType = BuiltInRegistries.PARTICLE_TYPE.get(id);
+                if (dynamicType instanceof ParticleOptions options) {
+                    return options;
+                }
+            } catch (Exception ignored) {
+                // Fall back to predefined aliases below.
+            }
+        }
         return switch (particleType) {
             case "electric-spark" -> ParticleTypes.ELECTRIC_SPARK;
             case "portal" -> ParticleTypes.PORTAL;

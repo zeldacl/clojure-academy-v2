@@ -4,11 +4,12 @@
   This namespace defines platform-neutral recipe category metadata
   that will be used by the platform-specific JEI implementation."
   (:require [cn.li.ac.block.imag-fusor.recipes :as fusor-recipes]
-            [cn.li.ac.block.metal-former.recipes :as former-recipes]))
+            [cn.li.ac.block.metal-former.recipes :as former-recipes]
+            [cn.li.ac.config.modid :as modid]))
 
 ;; Recipe category IDs
-(def imag-fusor-category-id "academycraft:imag_fusor")
-(def metal-former-category-id "academycraft:metal_former")
+(def imag-fusor-category-id (str modid/MOD-ID ":imag_fusor"))
+(def metal-former-category-id (str modid/MOD-ID ":metal_former"))
 
 ;; Slot positions for recipe display
 (defn- slot-pos [x y]
@@ -24,7 +25,7 @@
 (def imag-fusor-category
   {:id imag-fusor-category-id
    :title-key "tile.ac_imag_fusor.name"
-   :block-id "ac:imag_fusor"
+  :block-id (str modid/MOD-ID ":imag_fusor")
    :background {:texture "academy:textures/guis/nei_fusor.png"
                 :u 0 :v 0
                 :width 120 :height 80}
@@ -37,7 +38,7 @@
 (def metal-former-category
   {:id metal-former-category-id
    :title-key "tile.ac_metal_former.name"
-   :block-id "ac:metal_former"
+  :block-id (str modid/MOD-ID ":metal_former")
    :background {:texture "academy:textures/guis/nei_metalformer.png"
                 :u 0 :v 0
                 :width 94 :height 57}

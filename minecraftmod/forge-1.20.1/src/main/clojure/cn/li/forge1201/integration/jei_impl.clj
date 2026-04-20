@@ -8,6 +8,7 @@
   will not be loaded."
   (:require [cn.li.mcmod.platform.integration-runtime :as integration-runtime]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.config :as mod-config]
             [clojure.string :as str])
   (:import [mezz.jei.api IModPlugin]
            [mezz.jei.api.registration IRecipeCategoryRegistration
@@ -156,7 +157,7 @@
   []
   (reify IModPlugin
     (getPluginUid [_]
-      (ResourceLocation. "academycraft" "jei_plugin"))
+      (ResourceLocation. mod-config/*mod-id* "jei_plugin"))
 
     (registerCategories [_ registration]
       (log/info "Registering JEI categories for AcademyCraft...")
