@@ -3,7 +3,7 @@
   Supports two key schemes:
     :original     — LMB, RMB, R, F  (requires control-override when active)
     :alternative  — Z, X, C, B      (no conflict with vanilla)"
-  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.forge1201.client.overlay-state :as overlay-state]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mcmod.util.log :as log])
@@ -54,9 +54,9 @@
           (overlay-renderer/on-mode-switch-key-state! false)
           (when (and (not screen-open?) short-press?)
             (when-let [uuid (get-player-uuid)]
-              (let [cur-activated (boolean (get-in (ability-runtime/get-player-state uuid) [:resource-data :activated]))]
+              (let [cur-activated (boolean (get-in (power-runtime/get-player-state uuid) [:resource-data :activated]))]
                 (overlay-state/set-client-activated! (not cur-activated))
-                (ability-runtime/client-trigger-mode-switch! uuid)))))
+                (power-runtime/client-trigger-mode-switch! uuid)))))
         :else nil))))
 
 (defn- consume-click-count [^KeyMapping key]
@@ -103,11 +103,11 @@
              {:skill-tree (create-key-mapping "key.ac.open_skill_tree" GLFW/GLFW_KEY_GRAVE_ACCENT category)
               :preset-editor (create-key-mapping "key.ac.open_preset_editor" GLFW/GLFW_KEY_G category)
               :mode-switch (create-key-mapping "key.ac.mode_switch" GLFW/GLFW_KEY_V category)}
-             ;; Preset switch key: C if original scheme (skills don't use C), N if alternative
+             ;; Preset switch key: C if original scheme (slot keys don't use C), N if alternative
              (if (= scheme :original)
                {:preset-switch (create-key-mapping "key.ac.preset_switch" GLFW/GLFW_KEY_C category)}
                {:preset-switch (create-key-mapping "key.ac.preset_switch" GLFW/GLFW_KEY_N category)})))
-    (log/info "Client key bindings created" {:scheme scheme :skill-count (count @skill-keys)})))
+    (log/info "Client key bindings created" {:scheme scheme :slot-count (count @skill-keys)})))
 
 (defn get-skill-keys [] @skill-keys)
 (defn get-gui-keys [] (vals @gui-keys))
@@ -118,7 +118,7 @@
       (str (.getUUID player)))))
 
 (defn- suppress-vanilla-keys!
-  "When using :original key scheme and ability active, consume vanilla attack/use clicks."
+  "When using :original key scheme and runtime mode active, consume vanilla attack/use clicks."
   []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
     (let [^Options opts (.options mc)]
@@ -161,9 +161,9 @@
     (when-let [^KeyMapping preset-key (get @gui-keys :preset-switch)]
       (when (.consumeClick preset-key)
         (when-let [uuid (get-player-uuid)]
-          (ability-runtime/client-trigger-preset-switch! uuid))))
+          (power-runtime/client-trigger-preset-switch! uuid))))
     ;; Tick skill keys
-    (ability-runtime/client-tick-keys!
+    (power-runtime/client-tick-keys!
       (fn [key-id]
         (case (first key-id)
           :skill (let [idx (second key-id)]

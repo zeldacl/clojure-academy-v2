@@ -22,6 +22,12 @@
             [cn.li.ac.terminal.platform-bridge :as terminal-platform-bridge]
             [cn.li.ac.energy.legacy-item-api-bridge :as legacy-item-api-bridge]
             [cn.li.ac.wireless.legacy-api-bridge :as legacy-api-bridge]
+            [cn.li.ac.wireless.gui.sync.handler :as network-handler-helpers]
+            [cn.li.ac.achievement.registry :as achievement-registry]
+            [cn.li.ac.recipe.crafting-recipes :as crafting-recipes]
+            [cn.li.ac.item.special-items :as special-items]
+            [cn.li.mcmod.block.network-handler-bridge :as network-handler-bridge]
+            [cn.li.mcmod.datagen.metadata :as datagen-metadata]
             [cn.li.ac.config.registry :as config-registry]
             ;; Auto-registration system
             [cn.li.ac.registry.content-namespaces :as content-ns]
@@ -143,12 +149,24 @@
   (block-platform-bridge/install-blockstate-hooks!)
   ;; Bind AC command initialization into the platform-neutral bridge.
   (command-platform-bridge/install-command-hooks!)
+  ;; Bind helper fns used by schema-generated network handlers.
+  (network-handler-bridge/register-helper-fns!
+    {:get-world network-handler-helpers/get-world
+     :get-tile-at network-handler-helpers/get-tile-at})
   ;; Bind AC optional integration hooks into the platform-neutral bridge.
   (integration-platform-bridge/install-integration-hooks!)
   ;; Bind AC energy integration config into the platform-neutral bridge.
   (energy-platform-bridge/install-energy-integration-hooks!)
   ;; Bind AC terminal GUI builders into the platform-neutral bridge.
   (terminal-platform-bridge/install-terminal-ui-hooks!)
+  ;; Register datagen metadata into platform-neutral registry.
+  (datagen-metadata/register-achievement-data!
+    {:tabs (achievement-registry/all-tabs)
+     :all-achievements (achievement-registry/all-achievements)
+     :translation-maps (achievement-registry/translation-maps)})
+  (datagen-metadata/register-recipes! (crafting-recipes/get-all-recipes))
+  ;; Register item overlay providers for platform decorators.
+  (datagen-metadata/register-item-overlay-fn! :matter-unit special-items/matter-unit-overlay-data)
   ;; Register distributed AC config descriptors/defaults into the shared registry.
   (config-registry/init-configs!))
 
@@ -172,6 +190,7 @@
 
 ;; Phase1.4/Phase2: register content init hook for platform adapters.
 (lifecycle/register-content-init! #'init)
+(lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
 
 ;; Register client-side initialization callback
 (defn- init-client-renderers

@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.events
   "Forge 1.20.1 event handlers"
   (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
-            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+            [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
@@ -91,17 +91,17 @@
       ;; Forge fires on both sides and both hands. Main hand only.
       (when (= hand InteractionHand/MAIN_HAND)
         (let [player-uuid (str (.getUUID player))
-              ability-activated? (boolean (get-in (ability-runtime/get-player-state player-uuid)
+              runtime-activated? (boolean (get-in (power-runtime/get-player-state player-uuid)
                                                   [:resource-data :activated]))]
-          (when ability-activated?
-            ;; Original behavior alignment: in ability mode, block interaction is blocked.
+          (when runtime-activated?
+            ;; Original behavior alignment: in runtime mode, block interaction is blocked.
             (.setUseItem evt Event$Result/DENY)
             (.setUseBlock evt Event$Result/DENY)
             (when-not (.isClientSide level)
               (.setCancellationResult evt InteractionResult/FAIL)
               (.setCanceled evt true)))
 
-          (when-not ability-activated?
+          (when-not runtime-activated?
             (let [block-state (.getBlockState level pos)
                   item-stack (.getItemInHand player hand)
                   ret (handle-right-click
@@ -133,19 +133,18 @@
 
 (defn handle-left-click-block-event
   "Handle left-click block event directly from Forge event object.
-   We cancel early in ability mode so client doesn't show fake break effects
+  We cancel early in runtime mode so client doesn't show fake break effects
    when server-side breaking is disallowed."
   [^PlayerInteractEvent$LeftClickBlock evt]
   (try
-    (let [^Level level (.getLevel evt)
-          player (.getEntity evt)
+    (let [player (.getEntity evt)
           hand (.getHand evt)]
       ;; Main hand only; mirror right-click filtering.
       (when (= hand InteractionHand/MAIN_HAND)
         (let [player-uuid (str (.getUUID player))
-              ability-activated? (boolean (get-in (ability-runtime/get-player-state player-uuid)
+              runtime-activated? (boolean (get-in (power-runtime/get-player-state player-uuid)
                                                   [:resource-data :activated]))]
-          (when ability-activated?
+          (when runtime-activated?
             ;; Deny vanilla interaction path on both sides to suppress visual-only break feedback.
             (.setUseItem evt Event$Result/DENY)
             (.setUseBlock evt Event$Result/DENY)
@@ -180,7 +179,7 @@
       (when (and level pos)
         (if (and entity
                  (instance? Player entity)
-                 (boolean (get-in (ability-runtime/get-player-state (str (.getUUID ^Player entity)))
+                 (boolean (get-in (power-runtime/get-player-state (str (.getUUID ^Player entity)))
                                   [:resource-data :activated])))
           (.setCanceled evt true)
           (let [ret (handle-block-place
@@ -206,7 +205,7 @@
           player (.getPlayer evt)
           block-state (.getBlockState level pos)
           block-id (event-metadata/identify-block-from-full-name (str (.getBlock block-state)))]
-      (if (boolean (get-in (ability-runtime/get-player-state (str (.getUUID player)))
+      (if (boolean (get-in (power-runtime/get-player-state (str (.getUUID player)))
                            [:resource-data :activated]))
         (.setCanceled evt true)
         (when block-id

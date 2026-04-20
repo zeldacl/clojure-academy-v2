@@ -1,9 +1,9 @@
 (ns cn.li.forge1201.runtime.damage-interception
   "Forge implementation of IDamageInterception protocol.
 
-  Intercepts LivingHurtEvent to allow skills to modify incoming damage."
+  Intercepts LivingHurtEvent to allow runtime effects to modify incoming damage."
   (:require [cn.li.mcmod.platform.damage-interception :as pdi]
-            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+            [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
@@ -24,7 +24,7 @@
               damage-source (.getSource event)
               attacker (.getEntity damage-source)
               attacker-id (when attacker (str (.getUUID attacker)))
-              cancel? (ability-runtime/should-cancel-attack-interception?
+              cancel? (power-runtime/should-cancel-attack-interception?
                         player-id attacker-id original-damage damage-source)]
           (when cancel?
             (.setCanceled event true)
@@ -44,7 +44,7 @@
               damage-source (.getSource event)
               attacker (.getEntity damage-source)
               attacker-id (when attacker (str (.getUUID attacker)))
-              next-damage (ability-runtime/process-damage-interception
+              next-damage (power-runtime/process-damage-interception
                             player-id attacker-id original-damage damage-source)]
           (when (not= next-damage original-damage)
             (.setAmount event (float next-damage))
@@ -55,11 +55,11 @@
 (defn forge-damage-interception []
   (reify pdi/IDamageInterception
     (register-damage-handler! [_ handler-id handler-fn priority]
-      (ability-runtime/register-damage-handler! handler-id handler-fn priority))
+      (power-runtime/register-damage-handler! handler-id handler-fn priority))
     (unregister-damage-handler! [_ handler-id]
-      (ability-runtime/unregister-damage-handler! handler-id))
+      (power-runtime/unregister-damage-handler! handler-id))
     (get-active-handlers [_]
-      (ability-runtime/get-active-damage-handlers))))
+      (power-runtime/get-active-damage-handlers))))
 
 (defn install-damage-interception! []
   ;; Install protocol implementation

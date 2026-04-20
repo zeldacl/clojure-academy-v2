@@ -27,7 +27,7 @@
 (defn register-config-descriptors!
 	"Register all descriptors for a config domain.
 
-	`domain` is a keyword such as `:cn.li.ac/wireless`.
+	`domain` is a keyword such as `:gameplay/topology`.
 	`descriptors` is a seq of pure maps describing config entries."
 	[domain descriptors]
 	(when-not (keyword? domain)

@@ -1,6 +1,6 @@
 package cn.li.forge1201.platform.spi;
 
-import cn.li.acapi.platform.spi.PlatformBootstrap;
+import cn.li.mcmod.platform.spi.PlatformBootstrap;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 

@@ -1,11 +1,11 @@
 (ns cn.li.mcmod.events.world-lifecycle
   "Platform-neutral world lifecycle event handlers registry.
 
-  This allows ac code to register world load/unload handlers without
-  forge/fabric code knowing about specific business logic (e.g., wireless networks).
+  This allows content code to register world load/unload handlers without
+  forge/fabric code knowing about specific business logic.
 
   Platform code (forge/fabric) calls dispatch-world-load/unload.
-  Business code (ac) registers handlers via register-world-lifecycle-handler!")
+  Content code registers handlers via register-world-lifecycle-handler!")
 
 ;; ============================================================================
 ;; Handler Registry
@@ -16,7 +16,7 @@
 (defonce ^:private world-save-handlers (atom []))
 
 ;; ============================================================================
-;; Registration API (called by ac code)
+;; Registration API (called by content code)
 ;; ============================================================================
 
 (defn register-world-lifecycle-handler!
@@ -30,9 +30,9 @@
 
   Example:
     (register-world-lifecycle-handler!
-      {:on-load   ac.wireless.world-data/on-world-load
-       :on-unload ac.wireless.world-data/on-world-unload
-       :on-save   ac.wireless.world-data/on-world-save})"
+      {:on-load   my.content.world-data/on-world-load
+       :on-unload my.content.world-data/on-world-unload
+       :on-save   my.content.world-data/on-world-save})"
   [handler-map]
   (when-let [on-load (:on-load handler-map)]
     (swap! world-load-handlers conj on-load))

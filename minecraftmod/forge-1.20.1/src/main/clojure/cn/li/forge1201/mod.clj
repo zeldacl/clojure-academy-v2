@@ -20,10 +20,11 @@
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.i18n :as i18n]
              [cn.li.mcmod.util.log :as log]
-             [cn.li.forge1201.wireless-imc :as wireless-imc]
+             [cn.li.forge1201.event-imc :as event-imc]
              [cn.li.forge1201.integration.forge-energy :as forge-energy]
              [cn.li.forge1201.integration.ic2-energy :as ic2-energy])
   (:import [net.minecraft.world.level.block Block]
@@ -50,8 +51,7 @@
            [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
           [net.minecraftforge.common.capabilities RegisterCapabilitiesEvent]
           [net.minecraftforge.fml.event.lifecycle InterModProcessEvent]
-      [net.minecraftforge.fml InterModComms$IMCMessage]
-          [cn.li.acapi.wireless WirelessImc])
+          [net.minecraftforge.fml InterModComms$IMCMessage])
   (:gen-class
    :name com.example.my_mod1201.MyMod1201Clj
    :prefix "mod-"
@@ -604,10 +604,10 @@
   ;; Initialize IC2 integration (optional - no-op if IC2 not present)
   (ic2-energy/init-ic2-energy!)
   (runtime-item-handler/init!)
-  ;; Register wireless IMC dispatch listeners on the Forge game event bus.
-  (wireless-imc/init!)
+  ;; Register runtime IMC dispatch listeners on the Forge game event bus.
+  (event-imc/init!)
   ;; Left-click block must be intercepted early to avoid client-side fake break effects
-  ;; when ability mode blocks real breaking.
+  ;; when runtime mode blocks real breaking.
   (.addListener (MinecraftForge/EVENT_BUS)
                 EventPriority/NORMAL false net.minecraftforge.event.entity.player.PlayerInteractEvent$LeftClickBlock
                 (reify java.util.function.Consumer
@@ -677,10 +677,9 @@
         (platform-impl/init-platform!)
         ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources.
         (init/init-from-java)
-        ;; Runtime content load is delay-backed in ac.core and explicitly activated here.
-        (when-let [activate-content! (requiring-resolve 'cn.li.ac.core/activate-runtime-content!)]
-          (log/info "[BOOTSTRAP_TRACE] activating runtime content")
-          (activate-content!))
+        ;; Runtime content load is registered via lifecycle hooks by shared content.
+        (log/info "[BOOTSTRAP_TRACE] activating runtime content")
+        (lifecycle/run-runtime-content-activation!)
 
         ;; Initialize BlockState properties from Clojure metadata
         ;; Must happen before block registration so Property objects are ready
@@ -753,10 +752,10 @@
                                 (try
                                   (let [handler (.get (.getMessageSupplier msg))]
                                     (condp = (.getMethod msg)
-                                      WirelessImc/REGISTER_NETWORK_HANDLER
-                                      (wireless-imc/register-network-handler! handler)
-                                      WirelessImc/REGISTER_NODE_HANDLER
-                                      (wireless-imc/register-node-handler! handler)
+                                      event-imc/register-topology-network-handler-key
+                                      (event-imc/register-network-handler! handler)
+                                      event-imc/register-topology-node-handler-key
+                                      (event-imc/register-node-handler! handler)
                                       nil))
                                   (catch Exception e
                                     (log/debug "IMC registration failed from"

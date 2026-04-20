@@ -11,11 +11,11 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Named capability registry that replaces the old anonymous-slot pool.
  *
- * <p>Wireless capabilities are bound to stable key strings registered at platform init.
- * Non-wireless capabilities (e.g. "wireless-energy") receive a single anonymous
+ * <p>Topology capabilities are bound to stable key strings registered at platform init.
+ * Non-topology capabilities (e.g. "topology-energy") receive a single anonymous
  * {@link CapabilityToken} created on first use.
  *
- * <p>All four named wireless capabilities are registered at platform init via
+ * <p>All named topology capabilities are registered at platform init via
  * {@link #register(String, Capability)} before any block entity resolves them.
  */
 public final class NamedCapabilityRegistry {
@@ -45,7 +45,7 @@ public final class NamedCapabilityRegistry {
 
     /**
      * Get (or lazily create) a capability for a key.
-     * For well-known wireless keys this returns the pre-registered named constant.
+    * For well-known topology keys this returns the pre-registered named constant.
      * For other keys a single anonymous-token capability is created once and cached.
      */
     @SuppressWarnings("unchecked")

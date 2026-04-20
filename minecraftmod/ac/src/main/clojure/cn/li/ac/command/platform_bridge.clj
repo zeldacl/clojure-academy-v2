@@ -1,7 +1,9 @@
 (ns cn.li.ac.command.platform-bridge
 	"AC command bindings for the platform-neutral command bridge."
 	(:require [cn.li.mcmod.platform.command-runtime :as command-runtime]
+						[cn.li.mcmod.command.metadata :as command-metadata]
 						[cn.li.ac.command.commands :as commands]
+						[cn.li.ac.command.dsl :as command-dsl]
 						[cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private hooks-installed? (atom false))
@@ -11,5 +13,6 @@
 	(when (compare-and-set! hooks-installed? false true)
 		(command-runtime/register-command-hooks!
 			{:init-commands! commands/init-commands!})
+		(command-metadata/register-command-registry! @command-dsl/command-registry)
 		(log/info "AC command hooks installed"))
 	nil)

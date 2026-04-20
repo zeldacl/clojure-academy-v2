@@ -243,7 +243,7 @@
 ;; ============================================================
 
 (defn get-all-gui-ids
-  "Return all registered wireless/platform GUI ids (ints)."
+  "Return all registered platform GUI ids (ints)."
   []
   (gui-dsl/get-all-gui-ids))
 

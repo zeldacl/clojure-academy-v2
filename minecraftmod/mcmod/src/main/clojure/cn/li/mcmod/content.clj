@@ -1,20 +1,15 @@
 (ns cn.li.mcmod.content
-  "Helpers for triggering shared game content initialization without
-   requiring Forge/Fabric modules to reference `cn.li.ac.*` directly."
-  )
+  "Helpers for triggering shared game content initialization via content SPI."
+  (:import [cn.li.mcmod.content.spi ContentInitBootstraps]))
 
 (defn ensure-content-init-registered!
-  "Best-effort load of the shared content module.
+  "Best-effort registration of shared content through ServiceLoader SPI.
 
-   ac/core is responsible for calling:
-   - (mcmod.lifecycle/register-content-init! #'init)
-
-   This function just makes sure that happens before platforms call
-   `mcmod.lifecycle/run-content-init!`."
+  Content modules provide a ContentInitBootstrap implementation that registers
+  lifecycle hooks into mcmod when discovered."
   []
   (try
-    ;; Trigger namespace load so it can register lifecycle init.
-    (requiring-resolve 'cn.li.ac.core/init)
+    (ContentInitBootstraps/register "ac")
     (catch Throwable _ nil))
   nil)
 

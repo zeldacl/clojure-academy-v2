@@ -1,13 +1,13 @@
 (ns cn.li.forge1201.runtime.sync
-  "Server-side sync scheduler for ability data.
+  "Server-side sync scheduler for runtime data.
 
   Current strategy:
   - mark-player-dirty! is called by lifecycle/tick or request handlers
   - tick-sync! flushes at fixed interval and logs sync payload size
 
-  Transport integration now uses ability-network/send-sync-to-client!.
+  Transport integration now uses runtime-network/send-sync-to-client!.
   This namespace keeps the dirty-set and flush cadence centralized."
-  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private dirty-players (atom #{}))
@@ -18,10 +18,10 @@
   (swap! dirty-players conj uuid))
 
 (defn mark-all-dirty! []
-  (reset! dirty-players (set (ability-runtime/list-player-uuids))))
+  (reset! dirty-players (set (power-runtime/list-player-uuids))))
 
 (defn- build-sync-payload [uuid]
-  (ability-runtime/build-sync-payload uuid))
+  (power-runtime/build-sync-payload uuid))
 
 (defn tick-sync!
   "Flush dirty player snapshots periodically.
@@ -33,5 +33,5 @@
         (when-let [payload (build-sync-payload uuid)]
           (when send-fn
             (send-fn uuid payload))
-          (ability-runtime/mark-player-clean! uuid)))
+          (power-runtime/mark-player-clean! uuid)))
       (reset! dirty-players #{}))))

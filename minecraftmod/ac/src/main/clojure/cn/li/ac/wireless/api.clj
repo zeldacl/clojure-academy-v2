@@ -15,14 +15,7 @@
             [cn.li.mcmod.platform.events :as platform-events]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix IWirelessGenerator IWirelessReceiver WirelessCapabilityKeys]
-           [cn.li.acapi.wireless.event
-            WirelessNetworkEvent$GeneratorLinked
-            WirelessNetworkEvent$NetworkCreated
-            WirelessNetworkEvent$NetworkDestroyed
-            WirelessNetworkEvent$NodeConnected
-            WirelessNetworkEvent$NodeDisconnected
-            WirelessNetworkEvent$ReceiverLinked]))
+  (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix IWirelessGenerator IWirelessReceiver WirelessCapabilityKeys]))
 
 ;; ============================================================================
 ;; Network Queries
@@ -200,7 +193,10 @@
     (when created?
       (when-let [matrix-cap (get-cap matrix-tile WirelessCapabilityKeys/MATRIX)]
         (platform-events/fire-event!
-          (WirelessNetworkEvent$NetworkCreated. ^IWirelessMatrix matrix-cap ssid))))
+          {:kind :topology/network
+           :action :created
+           :ssid ssid
+           :matrix ^IWirelessMatrix matrix-cap})))
     created?))
 
 (defn destroy-network!
@@ -214,7 +210,10 @@
       (when destroyed?
         (when-let [matrix-cap (get-cap matrix-tile WirelessCapabilityKeys/MATRIX)]
           (platform-events/fire-event!
-            (WirelessNetworkEvent$NetworkDestroyed. ^IWirelessMatrix matrix-cap ssid))))
+            {:kind :topology/network
+             :action :destroyed
+             :ssid ssid
+             :matrix ^IWirelessMatrix matrix-cap})))
       destroyed?)))
 
 (defn link-node-to-network!
@@ -236,7 +235,10 @@
         (when-let [matrix-cap (get-cap matrix-tile WirelessCapabilityKeys/MATRIX)]
           (when-let [node-cap (get-cap node-tile WirelessCapabilityKeys/NODE)]
             (platform-events/fire-event!
-              (WirelessNetworkEvent$NodeConnected. ^IWirelessMatrix matrix-cap ^IWirelessNode node-cap)))))
+              {:kind :topology/node
+               :action :connected
+               :matrix ^IWirelessMatrix matrix-cap
+               :node ^IWirelessNode node-cap}))))
       linked?)))
 
 (defn unlink-node-from-network!
@@ -252,7 +254,10 @@
         (when-let [node-cap (get-cap node-tile WirelessCapabilityKeys/NODE)]
           (when-let [matrix-cap (some-> matrix-tile (get-cap WirelessCapabilityKeys/MATRIX))]
             (platform-events/fire-event!
-              (WirelessNetworkEvent$NodeDisconnected. ^IWirelessMatrix matrix-cap ^IWirelessNode node-cap)))))
+              {:kind :topology/node
+               :action :disconnected
+               :matrix ^IWirelessMatrix matrix-cap
+               :node ^IWirelessNode node-cap}))))
       removed?)))
 
 (defn link-generator-to-node!
@@ -278,9 +283,10 @@
         (when linked?
           (when-let [gen-cap (get-cap gen-tile WirelessCapabilityKeys/GENERATOR)]
             (platform-events/fire-event!
-              (WirelessNetworkEvent$GeneratorLinked.
-                ^IWirelessNode node-cap
-                ^IWirelessGenerator gen-cap))))
+              {:kind :topology/node
+               :action :generator-linked
+               :node ^IWirelessNode node-cap
+               :generator ^IWirelessGenerator gen-cap})))
         linked?))))
 
 (defn unlink-generator-from-node!
@@ -313,9 +319,10 @@
         (when linked?
           (when-let [rec-cap (get-cap rec-tile WirelessCapabilityKeys/RECEIVER)]
             (platform-events/fire-event!
-              (WirelessNetworkEvent$ReceiverLinked.
-                ^IWirelessNode node-cap
-                ^IWirelessReceiver rec-cap))))
+              {:kind :topology/node
+               :action :receiver-linked
+               :node ^IWirelessNode node-cap
+               :receiver ^IWirelessReceiver rec-cap})))
         linked?))))
 
 (defn unlink-receiver-from-node!

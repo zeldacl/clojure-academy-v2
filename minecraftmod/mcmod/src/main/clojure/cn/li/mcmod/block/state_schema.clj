@@ -14,6 +14,7 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.be :as pbe]
             [cn.li.mcmod.nbt.dsl :as nbt-dsl]
+            [cn.li.mcmod.block.network-handler-bridge :as network-handler-bridge]
             [cn.li.mcmod.block.inventory-helpers :as inv-helpers]))
 
 (def ^:private nbt-writers
@@ -253,10 +254,8 @@
                 payload-key (:gui-payload-key field field-key)]]
       [msg-key
        (fn [payload player]
-         (let [get-world (requiring-resolve 'cn.li.ac.wireless.gui.network-handler-helpers/get-world)
-               get-tile-at (requiring-resolve 'cn.li.ac.wireless.gui.network-handler-helpers/get-tile-at)
-               world (get-world player)
-               tile (get-tile-at world payload)
+         (let [world (network-handler-bridge/get-world player)
+               tile (network-handler-bridge/get-tile-at world payload)
                new-value (get payload payload-key)]
            (if (and tile new-value)
              (do

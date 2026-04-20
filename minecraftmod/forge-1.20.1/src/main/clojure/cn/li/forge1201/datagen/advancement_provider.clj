@@ -3,7 +3,7 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.config :as modid]
             [cn.li.forge1201.datagen.resource-location :as rl]
-            [cn.li.ac.achievement.registry :as ach-reg])
+            [cn.li.mcmod.datagen.metadata :as datagen-metadata])
   (:import [com.google.gson Gson GsonBuilder JsonElement]
            [java.nio.file Path]
            [java.util HashSet]
@@ -129,8 +129,8 @@
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
         (let [known (known-item-ids)
-              tabs (ach-reg/all-tabs)
-              all-achievements (ach-reg/all-achievements)
+              tabs (datagen-metadata/get-achievement-tabs)
+              all-achievements (datagen-metadata/get-achievements)
               writes (atom [])]
           (doseq [tab tabs]
             (let [root-rel (root-path (:id tab))

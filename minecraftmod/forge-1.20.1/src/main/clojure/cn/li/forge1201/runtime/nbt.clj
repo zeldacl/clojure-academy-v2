@@ -1,5 +1,5 @@
 (ns cn.li.forge1201.runtime.nbt
-  "NBT bridge for per-player ability state.
+  "NBT bridge for per-player runtime state.
 
   Keeps persistence format simple: the whole state map is stored as an EDN
   string under one key in the player's persistent data tag.
@@ -7,7 +7,7 @@
   This is intentionally platform-layer code (forge module) because it touches
   CompoundTag/ServerPlayer APIs."
   (:require [clojure.edn :as edn]
-            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+            [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server.level ServerPlayer]
            [net.minecraft.nbt CompoundTag]))
@@ -23,38 +23,38 @@
   (try
     (edn/read-string s)
     (catch Exception e
-      (log/warn "Failed to decode ability NBT EDN:" (ex-message e))
+      (log/warn "Failed to decode runtime NBT EDN:" (ex-message e))
       nil)))
 
 (defn load-player-state!
-  "Load ability state from persistent NBT into in-memory player-state atom."
+  "Load runtime state from persistent NBT into in-memory player-state atom."
   [^ServerPlayer player]
   (let [uuid (str (.getUUID player))
         tag  (player-tag player)]
     (if (.contains tag ability-state-key)
       (if-let [m (safe-read-edn (.getString tag ability-state-key))]
-        (ability-runtime/set-player-state! uuid (assoc m :dirty? false))
-        (ability-runtime/get-or-create-player-state! uuid))
-      (ability-runtime/get-or-create-player-state! uuid))))
+        (power-runtime/set-player-state! uuid (assoc m :dirty? false))
+        (power-runtime/get-or-create-player-state! uuid))
+      (power-runtime/get-or-create-player-state! uuid))))
 
 (defn save-player-state!
-  "Save in-memory ability state to player persistent NBT."
+  "Save in-memory runtime state to player persistent NBT."
   [^ServerPlayer player]
   (let [uuid  (str (.getUUID player))
-        state (ability-runtime/get-or-create-player-state! uuid)
+        state (power-runtime/get-or-create-player-state! uuid)
         tag   (player-tag player)]
     (.putString tag ability-state-key (pr-str (dissoc state :dirty?)))
-    (ability-runtime/mark-player-clean! uuid)
+    (power-runtime/mark-player-clean! uuid)
     true))
 
 (defn clone-player-state!
-  "Copy ability state from original player into new cloned player entity.
+  "Copy runtime state from original player into new cloned player entity.
   Called for PlayerEvent.Clone."
   [^ServerPlayer old-player ^ServerPlayer new-player]
   (let [old-uuid (str (.getUUID old-player))
         new-uuid (str (.getUUID new-player))
-        state    (or (ability-runtime/get-player-state old-uuid)
+        state    (or (power-runtime/get-player-state old-uuid)
                      (load-player-state! old-player)
-                     (ability-runtime/fresh-player-state))]
-    (ability-runtime/set-player-state! new-uuid (assoc state :dirty? true))
+                     (power-runtime/fresh-player-state))]
+    (power-runtime/set-player-state! new-uuid (assoc state :dirty? true))
     (save-player-state! new-player)))

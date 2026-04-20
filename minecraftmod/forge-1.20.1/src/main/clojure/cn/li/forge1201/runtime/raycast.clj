@@ -2,7 +2,7 @@
   "Forge implementation of IRaycast protocol."
   (:require [cn.li.mcmod.platform.raycast :as prc]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.forge1201.ability RaycastBridge]))
+  (:import [cn.li.forge1201.runtime RaycastBridge]))
 
 
 (defn- normalize-bridge-map

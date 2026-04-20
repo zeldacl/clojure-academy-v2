@@ -5,7 +5,7 @@
   Real protocol extensions are installed lazily through Java ServiceLoader
   providers when init-platform! is called."
   (:require [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.acapi.platform.spi PlatformBootstraps]))
+  (:import [cn.li.mcmod.platform.spi PlatformBootstraps]))
 
 
 (defn init-platform!

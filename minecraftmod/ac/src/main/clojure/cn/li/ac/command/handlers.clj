@@ -9,10 +9,10 @@
     {:action :send-message :message string :translate? bool}
     {:action :grant-advancement :advancement-id string :player player-obj}
     {:action :switch-category :category-id keyword :player player-obj}
-    {:action :learn-skill :skill-id keyword :player player-obj}
-    {:action :unlearn-skill :skill-id keyword :player player-obj}
+    {:action :learn-node :node-id keyword :player player-obj}
+    {:action :unlearn-node :node-id keyword :player player-obj}
     {:action :set-level :level int :player player-obj}
-    {:action :set-skill-exp :skill-id keyword :exp float :player player-obj}
+    {:action :set-node-exp :node-id keyword :exp float :player player-obj}
     {:action :restore-cp :player player-obj}
     {:action :clear-cooldowns :player player-obj}
     {:action :reset-abilities :player player-obj}
@@ -112,7 +112,7 @@
      :player target-player}))
 
 (defn handle-aim-learn
-  "Learn a skill.
+  "Learn a node.
 
   Context args:
     :skill - skill ID string"
@@ -121,13 +121,13 @@
         skill-id (keyword skill-str)
         target-player (get-target-player ctx)]
     (if-not (skill/get-skill skill-id)
-      (error-message "command.academy.aim.learn.not_found" skill-str)
-      {:action :learn-skill
-       :skill-id skill-id
+      (error-message "command.academy.aim.node.learn.not_found" skill-str)
+      {:action :learn-node
+       :node-id skill-id
        :player target-player})))
 
 (defn handle-aim-unlearn
-  "Unlearn a skill.
+  "Unlearn a node.
 
   Context args:
     :skill - skill ID string"
@@ -136,30 +136,30 @@
         skill-id (keyword skill-str)
         target-player (get-target-player ctx)]
     (if-not (skill/get-skill skill-id)
-      (error-message "command.academy.aim.unlearn.not_found" skill-str)
-      {:action :unlearn-skill
-       :skill-id skill-id
+      (error-message "command.academy.aim.node.unlearn.not_found" skill-str)
+      {:action :unlearn-node
+       :node-id skill-id
        :player target-player})))
 
 (defn handle-aim-learn-all
-  "Learn all skills in current category."
+  "Learn all nodes in current category."
   [ctx]
   (let [target-player (get-target-player ctx)]
-    {:action :learn-all-skills
+    {:action :learn-all-nodes
      :player target-player}))
 
 (defn handle-aim-learned
-  "List all learned skills."
+  "List all learned nodes."
   [ctx]
   (let [target-player (get-target-player ctx)]
-    {:action :list-learned-skills
+    {:action :list-learned-nodes
      :player target-player}))
 
 (defn handle-aim-skills
-  "List all available skills in current category."
+  "List all available nodes in current category."
   [ctx]
   (let [target-player (get-target-player ctx)]
-    {:action :list-available-skills
+    {:action :list-available-nodes
      :player target-player}))
 
 (defn handle-aim-level
@@ -177,7 +177,7 @@
        :player target-player})))
 
 (defn handle-aim-exp
-  "Set skill experience.
+  "Set node experience.
 
   Context args:
     :skill - skill ID string
@@ -189,14 +189,14 @@
         target-player (get-target-player ctx)]
     (cond
       (not (skill/get-skill skill-id))
-      (error-message "command.academy.aim.exp.not_found" skill-str)
+      (error-message "command.academy.aim.node.exp.not_found" skill-str)
 
       (not (and (number? exp) (>= exp 0.0) (<= exp 1.0)))
-      (error-message "command.academy.aim.exp.invalid" exp)
+      (error-message "command.academy.aim.node.exp.invalid" exp)
 
       :else
-      {:action :set-skill-exp
-       :skill-id skill-id
+      {:action :set-node-exp
+       :node-id skill-id
        :exp (float exp)
        :player target-player})))
 

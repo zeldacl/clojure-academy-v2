@@ -3,7 +3,6 @@ plugins {
     id "dev.clojurephant.clojure"
 }
 dependencies {
-    api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation "org.clojure:clojure:1.12.4"
     api("org.slf4j:slf4j-api:1.7.25")
 }

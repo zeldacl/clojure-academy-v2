@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.runtime.item-handler
-  "Item use event handler for ability items (Forge layer)."
-  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+  "Item use event handler for runtime-driven items (Forge layer)."
+  (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [clojure.string :as str]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.item.dsl :as idsl]
@@ -89,12 +90,12 @@
       (when (= hand InteractionHand/MAIN_HAND)
         (let [player (.getEntity event)
               player-uuid (str (.getUUID player))
-              ability-activated? (boolean (get-in (ability-runtime/get-player-state player-uuid)
+              ability-activated? (boolean (get-in (power-runtime/get-player-state player-uuid)
                                                   [:resource-data :activated]))
               stack (.getItemStack event)
               item-id (get-item-id stack)
               side (if (.isClientSide (.level player)) :client :server)
-              plan (ability-runtime/build-item-use-plan player-uuid item-id ability-activated? side)]
+              plan (power-runtime/build-item-use-plan player-uuid item-id ability-activated? side)]
 
               (dispatch-dsl-item-use! player item-id hand stack side)
 
@@ -102,12 +103,10 @@
             (doseq [action (:client-actions plan)]
               (case (:kind action)
                 :notify-local-effect
-                (when-let [client-fn (resolve 'cn.li.forge1201.client.runtime-bridge/notify-railgun-coin-throw-client!)]
-                  (@client-fn player-uuid))
+                (power-runtime/client-notify-charge-coin-throw! player-uuid)
 
                 :open-screen
-                (when-let [open-fn (resolve 'cn.li.forge1201.client.screen-host/open-skill-tree-screen!)]
-                  (@open-fn (.getUUID player)))
+                (client-bridge/open-skill-tree-screen! (.getUUID player))
 
                 nil))
 
@@ -123,7 +122,7 @@
                       (.setItemInHand player hand ItemStack/EMPTY))))
 
                 :domain-action
-                (ability-runtime/on-ability-item-action! (:action action) player-uuid (:payload action))
+                (power-runtime/on-runtime-item-action! (:action action) player-uuid (:payload action))
 
                 nil))
 
@@ -150,4 +149,4 @@
                 LivingEntityUseItemEvent$Finish
                 (reify java.util.function.Consumer
                   (accept [_ evt] (on-item-finish-using evt))))
-  (log/info "Ability item handler initialized"))
+  (log/info "Runtime item handler initialized"))

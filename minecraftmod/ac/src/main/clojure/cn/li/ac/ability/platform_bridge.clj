@@ -2,7 +2,7 @@
   "AC ability runtime bindings for platform lifecycle hooks.
 
   This namespace keeps platform adapters decoupled from direct ac namespace imports."
-  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-lifecycle]
+  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.ability.catalog :as catalog]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.ability.state.player :as ps]
@@ -28,6 +28,7 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.client.delegate-state :as delegate-state]
+            [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.client.platform-bridge :as client-bridge]
@@ -306,12 +307,12 @@
     (log/info "Ability lifecycle event subscriptions registered")))
 
 (defn install-ability-runtime-hooks!
-  "Install AC handlers for platform ability lifecycle callbacks."
+  "Install AC handlers for platform power runtime callbacks."
   []
   (when (compare-and-set! hooks-installed? false true)
     (ability-store/install-store!)
     (register-lifecycle-subscriptions!)
-    (ability-lifecycle/register-ability-runtime-hooks!
+    (power-runtime/register-power-runtime-hooks!
       {:on-player-login!
        (fn [player-uuid]
          ;; Ensure in-memory state exists even when persistent payload is empty.
@@ -373,6 +374,10 @@
        (fn []
          (ability-network/register-handlers!))
 
+       :subscribe-achievement-trigger!
+       (fn [handler]
+         (evt/subscribe-ability-event! evt/EVT-ACHIEVEMENT-TRIGGER handler))
+
        :register-context-route-fns!
        (fn [fns-map]
          (ctx/register-route-fns! fns-map))
@@ -410,7 +415,7 @@
        (fn [item-id]
          (item-actions/resolve-item-action item-id))
 
-       :on-ability-item-action!
+       :on-runtime-item-action!
        (fn [action player-uuid payload]
          (item-actions/on-item-action! action player-uuid payload))
 
@@ -607,6 +612,18 @@
 
        :client-trigger-preset-switch!
        (fn [player-uuid]
-         (client-keybinds/switch-preset! player-uuid))})
+         (client-keybinds/switch-preset! player-uuid))
+
+       :client-tick-hand-effects!
+       (fn []
+         (hand-effects/tick-hand-effects!))
+
+       :client-drain-camera-pitch-deltas!
+       (fn []
+         (hand-effects/drain-camera-pitch-deltas!))
+
+       :client-current-hand-transform
+       (fn []
+         (hand-effects/current-hand-transform))})
     (log/info "AC ability runtime hooks installed"))
   nil)

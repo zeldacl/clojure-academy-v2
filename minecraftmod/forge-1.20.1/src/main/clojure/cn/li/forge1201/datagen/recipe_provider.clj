@@ -2,7 +2,8 @@
   "Forge 1.20.1 recipe datagen provider."
   (:require [clojure.string :as str]
             [cn.li.forge1201.datagen.resource-location :as rl]
-            [cn.li.mcmod.config :as modid])
+            [cn.li.mcmod.config :as modid]
+            [cn.li.mcmod.datagen.metadata :as datagen-metadata])
   (:import [java.util.function Consumer]
            [net.minecraft.advancements CriterionTriggerInstance]
            [net.minecraft.advancements.critereon InventoryChangeTrigger$TriggerInstance]
@@ -19,9 +20,7 @@
 
 (defn- load-recipes
   []
-  (if-let [get-all-recipes (requiring-resolve 'cn.li.ac.recipe.crafting-recipes/get-all-recipes)]
-    (vec (get-all-recipes))
-    []))
+  (vec (datagen-metadata/get-recipes)))
 
 (defn- resolve-item
   ^ItemLike [item-id]

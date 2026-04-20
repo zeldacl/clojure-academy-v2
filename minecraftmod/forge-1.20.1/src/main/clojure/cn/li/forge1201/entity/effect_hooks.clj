@@ -6,6 +6,9 @@
 
 (defonce ^:private effect-hooks-installed? (atom false))
 
+(def ^:private default-hook-classes
+  {"intensify-arcs" "cn.li.forge1201.entity.effect.hooks.IntensifyArcsEffectHook"})
+
 (defn- collect-effect-hook-entries
   []
   (->> (edsl/list-entities)
@@ -13,7 +16,8 @@
                (let [entity-spec  (edsl/get-entity entity-id)
                      effect-props (get-in entity-spec [:properties :effect])
                      hook-id      (some-> (:hook effect-props) name)
-                     hook-class   (some-> (:hook-class effect-props) str)]
+                     hook-class   (or (some-> (:hook-class effect-props) str)
+                                      (get default-hook-classes hook-id))]
                  (when (= :scripted-effect (:entity-kind entity-spec))
                    (cond
                      (or (nil? effect-props) (empty? effect-props))
@@ -25,7 +29,7 @@
                                {:entity-id entity-id})
 
                      (or (nil? hook-class) (empty? hook-class))
-                     (log/warn "scripted-effect is missing :effect/:hook-class"
+                     (log/warn "scripted-effect hook has no registered platform hook class"
                                {:entity-id entity-id})
 
                      :else

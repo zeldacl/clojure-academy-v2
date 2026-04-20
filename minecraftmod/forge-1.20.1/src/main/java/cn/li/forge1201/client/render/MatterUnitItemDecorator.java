@@ -27,14 +27,14 @@ public final class MatterUnitItemDecorator implements IItemDecorator {
 
     private MatterUnitItemDecorator() {
         this.requireFn = Clojure.var("clojure.core", "require");
-        this.requireFn.invoke(Clojure.read("cn.li.ac.item.special-items"));
-        this.overlayDataFn = Clojure.var("cn.li.ac.item.special-items", "matter-unit-overlay-data");
+        this.requireFn.invoke(Clojure.read("cn.li.mcmod.datagen.metadata"));
+        this.overlayDataFn = Clojure.var("cn.li.mcmod.datagen.metadata", "invoke-item-overlay-fn");
     }
 
     @Override
     public boolean render(GuiGraphics guiGraphics, Font font, ItemStack stack, int xOffset, int yOffset) {
         try {
-            Object result = overlayDataFn.invoke(stack.getDamageValue(), System.currentTimeMillis());
+            Object result = overlayDataFn.invoke(Keyword.intern("matter-unit"), stack.getDamageValue(), System.currentTimeMillis());
             if (!(result instanceof IPersistentMap data)) {
                 return false;
             }

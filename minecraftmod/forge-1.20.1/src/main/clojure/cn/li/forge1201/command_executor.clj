@@ -35,28 +35,28 @@
     (catch Exception e
       (log/error "Failed to send feedback:" (ex-message e)))))
 
-(defn get-player-ability-data
-  "Get ability data for a player (placeholder - needs platform implementation).
+(defn get-player-runtime-data
+  "Get runtime data for a player (placeholder - needs platform implementation).
 
   Args:
     ^ServerPlayer _player: Server player
 
   Returns:
-    AbilityData map or nil"
+    RuntimeData map or nil"
   [^ServerPlayer _player]
-  ;; TODO: Implement via platform capability system
-  (log/warn "get-player-ability-data not yet implemented")
+  ;; TODO: Implement via platform runtime backend
+  (log/warn "get-player-runtime-data not yet implemented")
   nil)
 
-(defn set-player-ability-data!
-  "Set ability data for a player (placeholder - needs platform implementation).
+(defn set-player-runtime-data!
+  "Set runtime data for a player (placeholder - needs platform implementation).
 
   Args:
     ^ServerPlayer _player: Server player
-    _ability-data: AbilityData map"
-  [^ServerPlayer _player _ability-data]
-  ;; TODO: Implement via platform capability system
-  (log/warn "set-player-ability-data! not yet implemented"))
+    _runtime-data: RuntimeData map"
+  [^ServerPlayer _player _runtime-data]
+  ;; TODO: Implement via platform runtime backend
+  (log/warn "set-player-runtime-data! not yet implemented"))
 
 ;; ============================================================================
 ;; Action Implementations
@@ -103,56 +103,56 @@
   (let [source (:source context)
         category-id (:category-id action-map)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
+    ;; TODO: Implement via runtime system
     (log/info "Switching category for player" (.getName (.getGameProfile player)) "to" category-id)
     (send-feedback source "command.academy.aim.cat.success" true [(name category-id)] false)
     {:success? true}))
 
-(defmethod cmd-actions/execute-action-impl :learn-skill
+(defmethod cmd-actions/execute-action-impl :learn-node
   [action-map context]
   (let [source (:source context)
-        skill-id (:skill-id action-map)
+    node-id (:node-id action-map)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
-    (log/info "Learning skill" skill-id "for player" (.getName (.getGameProfile player)))
-    (send-feedback source "command.academy.aim.learn.success" true [(name skill-id)] false)
+    ;; TODO: Implement via runtime system
+  (log/info "Learning node" node-id "for player" (.getName (.getGameProfile player)))
+  (send-feedback source "command.academy.aim.node.learn.success" true [(name node-id)] false)
     {:success? true}))
 
-(defmethod cmd-actions/execute-action-impl :unlearn-skill
+(defmethod cmd-actions/execute-action-impl :unlearn-node
   [action-map context]
   (let [source (:source context)
-        skill-id (:skill-id action-map)
+    node-id (:node-id action-map)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
-    (log/info "Unlearning skill" skill-id "for player" (.getName (.getGameProfile player)))
-    (send-feedback source "command.academy.aim.unlearn.success" true [(name skill-id)] false)
+    ;; TODO: Implement via runtime system
+  (log/info "Unlearning node" node-id "for player" (.getName (.getGameProfile player)))
+  (send-feedback source "command.academy.aim.node.unlearn.success" true [(name node-id)] false)
     {:success? true}))
 
-(defmethod cmd-actions/execute-action-impl :learn-all-skills
+(defmethod cmd-actions/execute-action-impl :learn-all-nodes
   [action-map context]
   (let [source (:source context)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
-    (log/info "Learning all skills for player" (.getName (.getGameProfile player)))
-    (send-feedback source "command.academy.aim.learn_all.success" true [] false)
+    ;; TODO: Implement via runtime system
+  (log/info "Learning all nodes for player" (.getName (.getGameProfile player)))
+  (send-feedback source "command.academy.aim.node.learn_all.success" true [] false)
     {:success? true}))
 
-(defmethod cmd-actions/execute-action-impl :list-learned-skills
+(defmethod cmd-actions/execute-action-impl :list-learned-nodes
   [action-map context]
   (let [source (:source context)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
-    (log/info "Listing learned skills for player" (.getName (.getGameProfile player)))
-    (send-feedback source "command.academy.aim.learned.list" true ["(not yet implemented)"] false)
+    ;; TODO: Implement via runtime system
+  (log/info "Listing learned nodes for player" (.getName (.getGameProfile player)))
+  (send-feedback source "command.academy.aim.node.learned.list" true ["(not yet implemented)"] false)
     {:success? true}))
 
-(defmethod cmd-actions/execute-action-impl :list-available-skills
+(defmethod cmd-actions/execute-action-impl :list-available-nodes
   [action-map context]
   (let [source (:source context)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
-    (log/info "Listing available skills for player" (.getName (.getGameProfile player)))
-    (send-feedback source "command.academy.aim.skills.list" true ["(not yet implemented)"] false)
+    ;; TODO: Implement via runtime system
+  (log/info "Listing available nodes for player" (.getName (.getGameProfile player)))
+  (send-feedback source "command.academy.aim.node.list" true ["(not yet implemented)"] false)
     {:success? true}))
 
 (defmethod cmd-actions/execute-action-impl :set-level
@@ -160,27 +160,27 @@
   (let [source (:source context)
         level (:level action-map)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
+    ;; TODO: Implement via runtime system
     (log/info "Setting level" level "for player" (.getName (.getGameProfile player)))
     (send-feedback source "command.academy.aim.level.success" true [(str level)] false)
     {:success? true}))
 
-(defmethod cmd-actions/execute-action-impl :set-skill-exp
+(defmethod cmd-actions/execute-action-impl :set-node-exp
   [action-map context]
   (let [source (:source context)
-        skill-id (:skill-id action-map)
+    node-id (:node-id action-map)
         exp (:exp action-map)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
-    (log/info "Setting skill exp" skill-id "to" exp "for player" (.getName (.getGameProfile player)))
-    (send-feedback source "command.academy.aim.exp.success" true [(name skill-id) (str exp)] false)
+    ;; TODO: Implement via runtime system
+  (log/info "Setting node exp" node-id "to" exp "for player" (.getName (.getGameProfile player)))
+  (send-feedback source "command.academy.aim.node.exp.success" true [(name node-id) (str exp)] false)
     {:success? true}))
 
 (defmethod cmd-actions/execute-action-impl :restore-cp
   [action-map context]
   (let [source (:source context)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
+    ;; TODO: Implement via runtime system
     (log/info "Restoring CP for player" (.getName (.getGameProfile player)))
     (send-feedback source "command.academy.aim.fullcp.success" true [] false)
     {:success? true}))
@@ -189,7 +189,7 @@
   [action-map context]
   (let [source (:source context)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
+    ;; TODO: Implement via runtime system
     (log/info "Clearing cooldowns for player" (.getName (.getGameProfile player)))
     (send-feedback source "command.academy.aim.cd_clear.success" true [] false)
     {:success? true}))
@@ -198,7 +198,7 @@
   [action-map context]
   (let [source (:source context)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
+    ;; TODO: Implement via runtime system
     (log/info "Resetting abilities for player" (.getName (.getGameProfile player)))
     (send-feedback source "command.academy.aim.reset.success" true [] false)
     {:success? true}))
@@ -207,7 +207,7 @@
   [action-map context]
   (let [source (:source context)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
+    ;; TODO: Implement via runtime system
     (log/info "Maxing out progression for player" (.getName (.getGameProfile player)))
     (send-feedback source "command.academy.aim.maxout.success" true [] false)
     {:success? true}))
@@ -216,7 +216,7 @@
   [action-map context]
   (let [source (:source context)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
+    ;; TODO: Implement via runtime system
     (log/info "Enabling cheats for player" (.getName (.getGameProfile player)))
     (send-feedback source "command.academy.aim.cheats_on.success" true [] false)
     {:success? true}))
@@ -225,7 +225,7 @@
   [action-map context]
   (let [source (:source context)
         ^ServerPlayer player (:player action-map)]
-    ;; TODO: Implement via ability system
+    ;; TODO: Implement via runtime system
     (log/info "Disabling cheats for player" (.getName (.getGameProfile player)))
     (send-feedback source "command.academy.aim.cheats_off.success" true [] false)
     {:success? true}))

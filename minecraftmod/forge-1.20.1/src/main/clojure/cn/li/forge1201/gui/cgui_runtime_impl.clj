@@ -180,7 +180,7 @@
   "Update root widget with the current screen/container size.
 
    - For layouts that already have an explicit size (XML/TechUI pages), we *do not*
-     overwrite the widget's logical width/height, otherwise textures from page_wireless.xml
+     overwrite the widget's logical width/height, otherwise textures from fixed-size pages
      等会被强行拉伸。
    - We always record the latest screen size into root metadata so alignment logic
      can choose to center the root if needed."

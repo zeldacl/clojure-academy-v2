@@ -1,14 +1,14 @@
 (ns cn.li.forge1201.runtime.network
-  "Forge transport wiring for ability system.
+  "Forge transport wiring for runtime system.
 
   Reuses the existing mcmod RPC channel used by GUI network:
-  - server-side handlers are registered in ac/ability/network.clj
+  - server-side handlers are registered by content runtime network handlers
   - client-side requests use mcmod.network.client/send-to-server
 
   Here we provide helper send-fns for context manager and sync service."
-  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.mcmod.ability.catalog :as catalog]
+            [cn.li.mcmod.runtime.catalog :as runtime-catalog]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.network ClojureNetwork]
            [net.minecraftforge.server ServerLifecycleHooks]
@@ -16,7 +16,7 @@
            [net.minecraft.server.level ServerPlayer]))
 
 (defn send-to-server!
-  "Client helper for ability requests."
+  "Client helper for runtime requests."
   [msg-id payload]
   (net-client/send-to-server msg-id payload))
 
@@ -36,10 +36,10 @@
 (defn send-sync-to-client!
   [uuid payload]
   (when-let [^ServerPlayer player (find-player-by-uuid uuid)]
-    (send-push-to-client! player catalog/MSG-SYNC-ABILITY {:uuid uuid :ability-data (:ability-data payload)})
-    (send-push-to-client! player catalog/MSG-SYNC-RESOURCE {:uuid uuid :resource-data (:resource-data payload)})
-    (send-push-to-client! player catalog/MSG-SYNC-COOLDOWN {:uuid uuid :cooldown-data (:cooldown-data payload)})
-    (send-push-to-client! player catalog/MSG-SYNC-PRESET {:uuid uuid :preset-data (:preset-data payload)})))
+    (send-push-to-client! player runtime-catalog/MSG-SYNC-RUNTIME {:uuid uuid :ability-data (:ability-data payload)})
+    (send-push-to-client! player runtime-catalog/MSG-SYNC-RESOURCE {:uuid uuid :resource-data (:resource-data payload)})
+    (send-push-to-client! player runtime-catalog/MSG-SYNC-COOLDOWN {:uuid uuid :cooldown-data (:cooldown-data payload)})
+    (send-push-to-client! player runtime-catalog/MSG-SYNC-PRESET {:uuid uuid :preset-data (:preset-data payload)})))
 
 (defn- send-to-client!
   [uuid msg-id payload]
@@ -48,14 +48,14 @@
 
 (defn- send-context-channel-to-server!
   [ctx-id channel payload]
-  (send-to-server! catalog/MSG-CTX-CHANNEL
+  (send-to-server! runtime-catalog/MSG-CTX-CHANNEL
                    {:ctx-id ctx-id :channel channel :payload payload}))
 
 (defn- send-context-channel-to-client!
   [ctx-id channel payload]
-  (when-let [player-uuid (ability-runtime/get-context-player-uuid ctx-id)]
+  (when-let [player-uuid (power-runtime/get-context-player-uuid ctx-id)]
     (send-to-client! player-uuid
-                     catalog/MSG-CTX-CHANNEL
+                     runtime-catalog/MSG-CTX-CHANNEL
                      {:ctx-id ctx-id :channel channel :payload payload})))
 
 (defn- send-context-channel-to-except-local!
@@ -64,12 +64,12 @@
   nil)
 
 (defn init!
-  "Initialize ability network stack: register server handlers and injected send fns."
+  "Initialize runtime network stack: register server handlers and injected send fns."
   []
-  (ability-runtime/register-network-handlers!)
-  (ability-runtime/register-context-route-fns! {:to-server send-context-channel-to-server!
+  (power-runtime/register-network-handlers!)
+  (power-runtime/register-context-route-fns! {:to-server send-context-channel-to-server!
                                                 :to-client send-context-channel-to-client!
                                                 :to-except-local send-context-channel-to-except-local!})
-  (ability-runtime/register-context-send-fns! {:to-server send-to-server!
+  (power-runtime/register-context-send-fns! {:to-server send-to-server!
                                                :to-client send-to-client!})
-  (log/info "Forge ability network initialized"))
+  (log/info "Forge runtime network initialized"))

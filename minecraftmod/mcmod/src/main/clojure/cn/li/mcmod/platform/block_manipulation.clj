@@ -28,7 +28,7 @@
     Returns boolean.")
 
   (find-blocks-in-line [this world-id x1 y1 z1 dx dy dz max-distance]
-    "Find blocks along a line (for Groundshock propagation).
+    "Find blocks along a line for chained world effects.
     Returns vector of {:x :y :z :block-id :hardness} maps.")
 
   (liquid-block? [this world-id x y z]

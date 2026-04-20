@@ -1,5 +1,5 @@
 (ns cn.li.mcmod.client.render.obj-tesr-common
-  "Shared OBJ + solid-buffer conventions for multiblock TESR (e.g. wireless-matrix, developer).
+  "Shared OBJ + solid-buffer conventions for multiblock TESR (e.g. matrix, developer).
 
   Keeps Y lift, bottom-plane skip binding, and `render-part-consumer` usage aligned across blocks."
   (:require [cn.li.mcmod.client.obj :as obj]

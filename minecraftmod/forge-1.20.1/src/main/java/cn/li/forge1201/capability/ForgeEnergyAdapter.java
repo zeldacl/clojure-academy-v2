@@ -1,6 +1,6 @@
 package cn.li.forge1201.capability;
 
-import cn.li.acapi.energy.IEnergyCapable;
+import cn.li.mcmod.energy.IEnergyCapable;
 import net.minecraftforge.energy.IEnergyStorage;
 
 /**

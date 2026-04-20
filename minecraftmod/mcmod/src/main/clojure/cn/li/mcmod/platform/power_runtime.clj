@@ -1,5 +1,5 @@
-(ns cn.li.mcmod.platform.ability-lifecycle
-  "Platform-neutral bridge for ability runtime lifecycle hooks.
+(ns cn.li.mcmod.platform.power-runtime
+  "Platform-neutral bridge for power runtime lifecycle hooks.
 
   forge/fabric adapters invoke these functions from platform events.
   ac registers concrete handlers during core initialization.")
@@ -22,6 +22,7 @@
          :get-or-create-player-state! (fn [_] nil)
          :fresh-player-state (fn [] nil)
          :register-network-handlers! noop
+         :subscribe-achievement-trigger! (fn [_] nil)
          :register-context-route-fns! noop
          :register-context-send-fns! noop
          :get-context-player-uuid (fn [_] nil)
@@ -31,7 +32,7 @@
          :process-damage-interception (fn [_ _ damage _] damage)
          :should-cancel-attack-interception? (fn [_ _ _ _] false)
          :resolve-item-use-action (fn [_] nil)
-         :on-ability-item-action! noop
+         :on-runtime-item-action! noop
          :build-item-use-plan (fn [_ _ _ _] nil)
          :max-saved-locations (fn [] 16)
          :compute-aoe-damage (fn [_ _ _ damage _] damage)
@@ -93,10 +94,13 @@
          :client-on-slot-key-tick! noop
          :client-on-slot-key-up! noop
          :client-abort-all! noop
-         :client-tick! noop}))
+         :client-tick! noop
+         :client-tick-hand-effects! noop
+         :client-drain-camera-pitch-deltas! (fn [] [])
+         :client-current-hand-transform (fn [] nil)}))
 
-(defn register-ability-runtime-hooks!
-  "Register/replace ability runtime hook fns."
+(defn register-power-runtime-hooks!
+  "Register/replace power runtime hook fns."
   [hooks]
   (swap! runtime-hooks merge hooks)
   nil)
@@ -157,6 +161,10 @@
   []
   ((:register-network-handlers! @runtime-hooks)))
 
+(defn subscribe-achievement-trigger!
+  [handler]
+  ((:subscribe-achievement-trigger! @runtime-hooks) handler))
+
 (defn register-context-route-fns!
   [fns-map]
   ((:register-context-route-fns! @runtime-hooks) fns-map))
@@ -193,9 +201,9 @@
   [item-id]
   ((:resolve-item-use-action @runtime-hooks) item-id))
 
-(defn on-ability-item-action!
+(defn on-runtime-item-action!
   [action player-uuid payload]
-  ((:on-ability-item-action! @runtime-hooks) action player-uuid payload))
+  ((:on-runtime-item-action! @runtime-hooks) action player-uuid payload))
 
 (defn build-item-use-plan
   [player-uuid item-id activated? side]
@@ -337,29 +345,71 @@
   []
   ((:client-close-preset-editor-screen! @runtime-hooks)))
 
+(defn client-open-saved-position-screen!
+  [player-uuid payload]
+  (let [hooks @runtime-hooks
+        f (or (:client-open-saved-position-screen! hooks)
+              (:client-open-location-teleport-screen! hooks))]
+    (f player-uuid payload)))
+
+(defn client-build-saved-position-draw-ops
+  [mouse-x mouse-y]
+  (let [hooks @runtime-hooks
+        f (or (:client-build-saved-position-draw-ops hooks)
+              (:client-build-location-teleport-draw-ops hooks))]
+    (f mouse-x mouse-y)))
+
+(defn client-handle-saved-position-hover!
+  [mouse-x mouse-y]
+  (let [hooks @runtime-hooks
+        f (or (:client-handle-saved-position-hover! hooks)
+              (:client-handle-location-teleport-hover! hooks))]
+    (f mouse-x mouse-y)))
+
+(defn client-handle-saved-position-click!
+  [mouse-x mouse-y]
+  (let [hooks @runtime-hooks
+        f (or (:client-handle-saved-position-click! hooks)
+              (:client-handle-location-teleport-click! hooks))]
+    (f mouse-x mouse-y)))
+
+(defn client-handle-saved-position-char-typed!
+  [ch]
+  (let [hooks @runtime-hooks
+        f (or (:client-handle-saved-position-char-typed! hooks)
+              (:client-handle-location-teleport-char-typed! hooks))]
+    (f ch)))
+
+(defn client-close-saved-position-screen!
+  []
+  (let [hooks @runtime-hooks
+        f (or (:client-close-saved-position-screen! hooks)
+              (:client-close-location-teleport-screen! hooks))]
+    (f)))
+
 (defn client-open-location-teleport-screen!
   [player-uuid payload]
-  ((:client-open-location-teleport-screen! @runtime-hooks) player-uuid payload))
+  (client-open-saved-position-screen! player-uuid payload))
 
 (defn client-build-location-teleport-draw-ops
   [mouse-x mouse-y]
-  ((:client-build-location-teleport-draw-ops @runtime-hooks) mouse-x mouse-y))
+  (client-build-saved-position-draw-ops mouse-x mouse-y))
 
 (defn client-handle-location-teleport-hover!
   [mouse-x mouse-y]
-  ((:client-handle-location-teleport-hover! @runtime-hooks) mouse-x mouse-y))
+  (client-handle-saved-position-hover! mouse-x mouse-y))
 
 (defn client-handle-location-teleport-click!
   [mouse-x mouse-y]
-  ((:client-handle-location-teleport-click! @runtime-hooks) mouse-x mouse-y))
+  (client-handle-saved-position-click! mouse-x mouse-y))
 
 (defn client-handle-location-teleport-char-typed!
   [ch]
-  ((:client-handle-location-teleport-char-typed! @runtime-hooks) ch))
+  (client-handle-saved-position-char-typed! ch))
 
 (defn client-close-location-teleport-screen!
   []
-  ((:client-close-location-teleport-screen! @runtime-hooks)))
+  (client-close-saved-position-screen!))
 
 (defn client-poll-particle-effects
   []
@@ -393,9 +443,16 @@
   []
   ((:client-register-push-handlers! @runtime-hooks)))
 
+(defn client-notify-charge-coin-throw!
+  [player-uuid]
+  (let [hooks @runtime-hooks
+        f (or (:client-notify-charge-coin-throw! hooks)
+              (:client-notify-railgun-coin-throw! hooks))]
+    (f player-uuid)))
+
 (defn client-notify-railgun-coin-throw!
   [player-uuid]
-  ((:client-notify-railgun-coin-throw! @runtime-hooks) player-uuid))
+  (client-notify-charge-coin-throw! player-uuid))
 
 (defn client-enqueue-level-effect!
   [effect-id payload]
@@ -409,9 +466,16 @@
   []
   ((:client-tick-level-effects! @runtime-hooks)))
 
+(defn client-charge-coin-visual-state
+  [player-uuid]
+  (let [hooks @runtime-hooks
+        f (or (:client-charge-coin-visual-state hooks)
+              (:client-railgun-charge-visual-state hooks))]
+    (f player-uuid)))
+
 (defn client-railgun-charge-visual-state
   [player-uuid]
-  ((:client-railgun-charge-visual-state @runtime-hooks) player-uuid))
+  (client-charge-coin-visual-state player-uuid))
 
 (defn client-slot-visual-state
   [player-uuid key-idx]
@@ -444,3 +508,15 @@
 (defn client-tick!
   []
   ((:client-tick! @runtime-hooks)))
+
+(defn client-tick-hand-effects!
+  []
+  ((:client-tick-hand-effects! @runtime-hooks)))
+
+(defn client-drain-camera-pitch-deltas!
+  []
+  ((:client-drain-camera-pitch-deltas! @runtime-hooks)))
+
+(defn client-current-hand-transform
+  []
+  ((:client-current-hand-transform @runtime-hooks)))

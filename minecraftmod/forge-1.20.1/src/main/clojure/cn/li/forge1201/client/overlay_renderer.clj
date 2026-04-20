@@ -2,7 +2,7 @@
   "CLIENT-ONLY overlay executor. AC provides the overlay plan; Forge only draws it."
   (:require [clojure.string :as str]
             [cn.li.forge1201.client.overlay-state :as overlay-state]
-            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+            [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.systems RenderSystem]
            [net.minecraftforge.client.event RenderGuiOverlayEvent$Post]
@@ -223,7 +223,7 @@
             window (.getWindow mc)
             screen-width (.getGuiScaledWidth window)
             screen-height (.getGuiScaledHeight window)
-            overlay-plan (ability-runtime/client-build-overlay-plan
+            overlay-plan (power-runtime/client-build-overlay-plan
                            player-uuid
                            screen-width
                            screen-height

@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.client.screen-host
   "CLIENT-ONLY generic screen host. AC provides draw ops and interaction handlers."
-  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.client.gui.screens Screen]
@@ -97,45 +97,45 @@
   ([player-uuid]
    (open-skill-tree-screen! player-uuid nil))
   ([player-uuid learn-context]
-   (let [result (ability-runtime/client-open-skill-tree-screen! player-uuid learn-context)]
+   (let [result (power-runtime/client-open-skill-tree-screen! player-uuid learn-context)]
      (when (= (:command result) :open-screen)
        (let [^Minecraft mc (Minecraft/getInstance)]
          (.setScreen mc
                      (create-host-screen
-                       "Skill Tree"
-                       (fn [mouse-x mouse-y] (ability-runtime/client-build-skill-tree-draw-ops mouse-x mouse-y))
-                       ability-runtime/client-handle-skill-tree-click!
-                       ability-runtime/client-handle-skill-tree-hover!
-                       ability-runtime/client-close-skill-tree-screen!)))))))
+                       "Node Tree"
+                       (fn [mouse-x mouse-y] (power-runtime/client-build-skill-tree-draw-ops mouse-x mouse-y))
+                       power-runtime/client-handle-skill-tree-click!
+                       power-runtime/client-handle-skill-tree-hover!
+                       power-runtime/client-close-skill-tree-screen!)))))))
 
 (defn open-preset-editor-screen! [player-uuid]
-  (let [result (ability-runtime/client-open-preset-editor-screen! player-uuid)]
+  (let [result (power-runtime/client-open-preset-editor-screen! player-uuid)]
     (when (= (:command result) :open-screen)
       (let [^Minecraft mc (Minecraft/getInstance)]
         (.setScreen mc
                     (create-host-screen
                       "Preset Editor"
-                      (fn [_ _] (ability-runtime/client-build-preset-editor-draw-ops))
-                      ability-runtime/client-handle-preset-editor-click!
+                      (fn [_ _] (power-runtime/client-build-preset-editor-draw-ops))
+                      power-runtime/client-handle-preset-editor-click!
                       nil
-                      ability-runtime/client-close-preset-editor-screen!))))))
+                      power-runtime/client-close-preset-editor-screen!))))))
 
 (defn open-location-teleport-screen!
   ([player-uuid]
    (open-location-teleport-screen! player-uuid nil))
   ([player-uuid payload]
-   (let [result (ability-runtime/client-open-location-teleport-screen! player-uuid payload)]
+   (let [result (power-runtime/client-open-saved-position-screen! player-uuid payload)]
      (when (= (:command result) :open-screen)
        (let [^Minecraft mc (Minecraft/getInstance)]
          (.setScreen mc
                      (create-host-screen
                        "Location Teleport"
                        (fn [mouse-x mouse-y]
-                         (ability-runtime/client-build-location-teleport-draw-ops mouse-x mouse-y))
-                       ability-runtime/client-handle-location-teleport-click!
-                       ability-runtime/client-handle-location-teleport-hover!
-                       ability-runtime/client-close-location-teleport-screen!
-                       ability-runtime/client-handle-location-teleport-char-typed!)))))))
+                         (power-runtime/client-build-saved-position-draw-ops mouse-x mouse-y))
+                       power-runtime/client-handle-saved-position-click!
+                       power-runtime/client-handle-saved-position-hover!
+                       power-runtime/client-close-saved-position-screen!
+                       power-runtime/client-handle-saved-position-char-typed!)))))))
 
 (defn init! []
   (log/info "Client screen host initialized"))

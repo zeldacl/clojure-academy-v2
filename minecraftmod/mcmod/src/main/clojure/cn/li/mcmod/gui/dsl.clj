@@ -444,15 +444,15 @@ Structure:
   for all standard GUI functions from a specified namespace.
 
   Example:
-  (defgui-with-lazy-fns wireless-node
+  (defgui-with-lazy-fns machine-panel
     :gui-id 0
-    :namespace 'cn.li.ac.block.wireless-node.gui
-    :display-name \"Wireless Node\"
-    :registry-name \"wireless_node\"
-    :gui-type :node
-    :screen-factory-fn-kw :create-node-screen
+    :namespace 'example.content.machine.gui
+    :display-name \"Machine Panel\"
+    :registry-name \"machine_panel\"
+    :gui-type :machine
+    :screen-factory-fn-kw :create-machine-screen
     :slot-layout {...}
-    :payload-sync-fn 'apply-node-sync-payload!)
+    :payload-sync-fn 'apply-machine-sync-payload!)
 
   This will automatically create lazy wrappers for:
   - create-container, create-screen, tick!

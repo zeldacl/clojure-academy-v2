@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.runtime.interop
-	"Forge implementation of ability runtime interop bridge."
-	(:require [cn.li.mcmod.platform.ability-interop :as interop]
+	"Forge implementation of runtime interop bridge."
+	(:require [cn.li.mcmod.platform.runtime-interop :as runtime-interop]
+						[cn.li.mcmod.platform.ability-interop :as legacy-interop]
 						[cn.li.mcmod.util.log :as log])
 	(:import [net.minecraft.server MinecraftServer]
 					 [net.minecraft.server.level ServerPlayer ServerLevel]
@@ -51,8 +52,8 @@
 	(when-let [^ServerLevel level (get-level-by-id world-id)]
 		(.getBlockEntity level (BlockPos. (int x) (int y) (int z)))))
 
-(defn forge-ability-interop []
-	(reify interop/IAbilityInterop
+(defn forge-runtime-interop []
+	(reify runtime-interop/IRuntimeInterop
 		(get-player-view [_ player-uuid]
 			(player-view-impl player-uuid))
 		(get-player-main-hand-item [_ player-uuid]
@@ -60,6 +61,9 @@
 		(get-block-entity-at [_ world-id x y z]
 			(block-entity-at-impl world-id x y z))))
 
-(defn install-ability-interop! []
-	(alter-var-root #'interop/*ability-interop* (constantly (forge-ability-interop)))
-	(log/info "Forge ability interop installed"))
+(defn install-runtime-interop! []
+	(let [impl (forge-runtime-interop)]
+		(alter-var-root #'runtime-interop/*runtime-interop* (constantly impl))
+		;; Backward compatibility for older AC call sites still reading legacy var.
+		(alter-var-root #'legacy-interop/*ability-interop* (constantly impl)))
+	(log/info "Forge runtime interop installed"))

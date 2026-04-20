@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.client.level-effect-renderer
   "CLIENT-ONLY level effect executor. AC owns the effect state and render plan."
-  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
            [cn.li.forge1201.client.render ModRenderTypes ModShaders]
@@ -181,7 +181,7 @@
               cam-pos {:x (.-x cam-vec) :y (.-y cam-vec) :z (.-z cam-vec)}
               hand-pos (hand-center-pos player)
               tick (.getGameTime (.level player))
-              plan (ability-runtime/client-build-level-effect-plan cam-pos hand-pos tick)]
+              plan (power-runtime/client-build-level-effect-plan cam-pos hand-pos tick)]
           (apply-local-walk-speed-from-plan! player plan)
           (when (seq (:ops plan))
             (let [^PoseStack pose-stack (.getPoseStack evt)
@@ -213,7 +213,7 @@
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
   (when (= TickEvent$Phase/END (.phase evt))
-    (ability-runtime/client-tick-level-effects!)))
+    (power-runtime/client-tick-level-effects!)))
 
 (defn- on-render-level-stage [^RenderLevelStageEvent evt]
   (try

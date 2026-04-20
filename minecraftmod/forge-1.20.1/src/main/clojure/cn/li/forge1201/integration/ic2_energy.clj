@@ -7,7 +7,7 @@
   IC2 integration is completely optional - if IC2 is not present, this module
   will not be loaded and no errors will occur."
   (:require [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.acapi.energy IEnergyCapable]))
+  (:import [cn.li.mcmod.energy IEnergyCapable]))
 
 
 (defonce ^:private resolved-vars
@@ -159,7 +159,7 @@
 (defn- get-ic2-capability
   "Get IC2 energy capability for a block entity.
 
-  This is called by the capability system when IC2 queries for energy
+  This is called by the capability bridge when IC2 queries for energy
   capabilities on our energy converter blocks.
 
   Args:
@@ -197,7 +197,7 @@
   (if (ic2-available?)
     (try
       ;; Register IC2 energy capabilities
-      ;; Note: IC2 uses event-based registration, not Forge's capability system
+      ;; Note: IC2 uses event-based registration, not Forge's capability bridge
       ;; We'll need to handle EnergyTileLoadEvent/UnloadEvent in the tile entity
 
       (log/info "IC2 integration available - EU conversion enabled")

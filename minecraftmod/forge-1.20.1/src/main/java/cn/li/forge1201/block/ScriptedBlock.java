@@ -54,7 +54,7 @@ public class ScriptedBlock extends BaseEntityBlock {
         "wind-gen-main-part",
         "wind-gen-pillar",
 
-        // Wireless matrix multiblock
+        // Matrix multiblock
         "wireless-matrix",
         "wireless-matrix-part",
 

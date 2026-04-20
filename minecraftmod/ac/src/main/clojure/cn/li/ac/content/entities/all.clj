@@ -37,5 +37,4 @@
          :update-interval 1
          :properties {:effect {:life-ticks 15
                                :follow-owner? true
-                               :hook :intensify-arcs
-                               :hook-class "cn.li.forge1201.entity.effect.hooks.IntensifyArcsEffectHook"}}}))))
+                               :hook :intensify-arcs}}}))))

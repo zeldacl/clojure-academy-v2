@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.client.effects.particle-bridge
   "CLIENT-ONLY particle effect bridge (Forge layer)."
-  (:require [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.core BlockPos]
@@ -53,7 +53,7 @@
   "Poll and spawn queued particle effects. Called every client tick."
   []
   (try
-    (doseq [particle-cmd (ability-runtime/client-poll-particle-effects)]
+    (doseq [particle-cmd (power-runtime/client-poll-particle-effects)]
       (spawn-particle-effect particle-cmd))
     (catch Exception e
       (log/error "Error in particle tick" e))))

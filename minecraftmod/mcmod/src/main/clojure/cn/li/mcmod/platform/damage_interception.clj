@@ -1,13 +1,13 @@
 (ns cn.li.mcmod.platform.damage-interception
   "Protocol for intercepting and modifying damage events.
 
-  This allows skills to react to incoming damage and modify it.
+  This allows runtime effects to react to incoming damage and modify it.
   Platform (forge) implements this protocol and registers event handlers.
 
   No Minecraft imports.")
 
 (defprotocol IDamageInterception
-  "Damage event interception for skill reactions."
+  "Damage event interception for runtime reactions."
 
   (register-damage-handler! [this handler-id handler-fn priority]
     "Register a damage handler function.

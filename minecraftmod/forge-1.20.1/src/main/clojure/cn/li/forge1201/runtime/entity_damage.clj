@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.runtime.entity-damage
   "Forge implementation of IEntityDamage protocol."
   (:require [cn.li.mcmod.platform.entity-damage :as ped]
-            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+            [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [cn.li.forge1201.bridge ForgeRuntimeBridge]
@@ -80,7 +80,7 @@
               damaged (atom [])]
           (doseq [^LivingEntity entity entities]
             (let [target-pos (entity-pos-map entity)
-                  actual-damage (ability-runtime/compute-aoe-damage
+                  actual-damage (power-runtime/compute-aoe-damage
                                   origin-pos target-pos radius damage falloff?)]
               (when (> actual-damage 0.0)
                 (.hurt entity dmg-source (float actual-damage))
@@ -99,7 +99,7 @@
                     (+ (:y current-pos) max-radius)
                     (+ (:z current-pos) max-radius))
         candidates (mapv candidate-map (ForgeRuntimeBridge/getLivingEntitiesInAabb level aabb))
-        target-uuid (ability-runtime/select-reflection-target
+        target-uuid (power-runtime/select-reflection-target
                       (str (.getUUID current-entity))
                       current-pos
                       candidates
@@ -115,7 +115,7 @@
           (when (ForgeRuntimeBridge/isLivingEntity ^Entity entity)
             (let [^LivingEntity living entity
                   ^DamageSource dmg-source (get-damage-source level source-type)
-                  search-radius (double (ability-runtime/get-reflection-search-radius))
+                  search-radius (double (power-runtime/get-reflection-search-radius))
                   hit-entities (atom [(str (.getUUID living))])]
               (.hurt living dmg-source (float damage))
               (loop [^LivingEntity current-entity living
@@ -123,7 +123,7 @@
                      reflection-num reflection-count]
                 (when (< reflection-num max-reflections)
                   (when-let [^LivingEntity next-entity (find-reflection-target level current-entity search-radius)]
-                    (let [reflected-damage (ability-runtime/compute-reflected-damage current-damage)]
+                    (let [reflected-damage (power-runtime/compute-reflected-damage current-damage)]
                       (.hurt next-entity dmg-source (float reflected-damage))
                       (swap! hit-entities conj (str (.getUUID next-entity)))
                       (recur next-entity reflected-damage (inc reflection-num))))))

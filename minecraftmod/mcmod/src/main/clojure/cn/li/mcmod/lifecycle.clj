@@ -19,6 +19,25 @@
   (when-let [f @content-init-fn]
     (f)))
 
+(defonce runtime-content-activation-fn
+  ;; Atom storing the runtime content activation function.
+  (atom nil))
+
+(defn register-runtime-content-activation!
+  "Register runtime content activation function (fn [] ...).
+
+  Content modules should register their runtime-loader activation through this
+  hook so platform adapters do not reference content namespaces directly."
+  [activate-fn]
+  (reset! runtime-content-activation-fn activate-fn)
+  nil)
+
+(defn run-runtime-content-activation!
+  "Run registered runtime content activation function, if present."
+  []
+  (when-let [f @runtime-content-activation-fn]
+    (f)))
+
 (defonce client-init-fns
   ;; Vector of client init functions to run during client setup.
   (atom []))

@@ -5,7 +5,7 @@
    It provides:
    - screen-factory indirection via a registration atom
    - a unified GUI API by delegating remaining functions to the existing
-     wireless implementation (lazily, to avoid hard compile-time dependencies)."
+    gameplay implementation (lazily, to avoid hard compile-time dependencies)."
   (:require [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.util.log :as log]

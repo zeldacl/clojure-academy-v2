@@ -4,7 +4,7 @@
             [cn.li.mcmod.platform.energy-integration :as energy-integration]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.acapi.energy IEnergyCapable]
+  (:import [cn.li.mcmod.energy IEnergyCapable]
            [cn.li.forge1201.capability ForgeEnergyAdapter]
            [net.minecraftforge.energy IEnergyStorage]))
 

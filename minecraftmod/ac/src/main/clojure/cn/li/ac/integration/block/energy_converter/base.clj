@@ -3,7 +3,7 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.ac.integration.block.energy-converter.config :as ec-config]
             [cn.li.ac.integration.block.energy-converter.schema :as ec-schema])
-  (:import [cn.li.acapi.energy IEnergyCapable]))
+  (:import [cn.li.mcmod.energy IEnergyCapable]))
 
 (defn get-energy
   [be]

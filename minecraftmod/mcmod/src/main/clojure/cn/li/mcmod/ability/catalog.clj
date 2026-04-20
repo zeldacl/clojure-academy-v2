@@ -1,55 +1,52 @@
 (ns cn.li.mcmod.ability.catalog
-  "All network message IDs used by the ability system are defined here.
-  Use these constants everywhere; never hard-code message-ID strings.
+  "Compatibility shim for legacy ability catalog.
 
-  Convention:  ability:<domain>/<action>
-
-  This namespace belongs to mcmod (shared layer) so both ac and forge can
-  reference it without creating cross-layer imports."
-  (:require [cn.li.mcmod.util.log :as log]))
+  Canonical runtime message IDs now live in cn.li.mcmod.runtime.catalog.
+  Keep this namespace for backwards compatibility with existing AC code."
+  (:require [cn.li.mcmod.runtime.catalog :as runtime-catalog]))
 
 ;; ============================================================================
 ;; Context Session Messages (client ↔ server handshake)
 ;; ============================================================================
 
-(def MSG-CTX-BEGIN-LINK   "ability:ctx/begin-link")
-(def MSG-CTX-ESTABLISH    "ability:ctx/establish")
-(def MSG-CTX-KEEPALIVE    "ability:ctx/keepalive")
-(def MSG-CTX-TERMINATE    "ability:ctx/terminate")
-(def MSG-CTX-TERMINATED   "ability:ctx/terminated")
-(def MSG-CTX-CHANNEL      "ability:ctx/channel")
+(def MSG-CTX-BEGIN-LINK   runtime-catalog/MSG-CTX-BEGIN-LINK)
+(def MSG-CTX-ESTABLISH    runtime-catalog/MSG-CTX-ESTABLISH)
+(def MSG-CTX-KEEPALIVE    runtime-catalog/MSG-CTX-KEEPALIVE)
+(def MSG-CTX-TERMINATE    runtime-catalog/MSG-CTX-TERMINATE)
+(def MSG-CTX-TERMINATED   runtime-catalog/MSG-CTX-TERMINATED)
+(def MSG-CTX-CHANNEL      runtime-catalog/MSG-CTX-CHANNEL)
 
 ;; ============================================================================
 ;; Skill Execution Messages (routed through context channel)
 ;; ============================================================================
 
-(def MSG-SKILL-KEY-DOWN   "ability:skill/key-down")
-(def MSG-SKILL-KEY-TICK   "ability:skill/key-tick")
-(def MSG-SKILL-KEY-UP     "ability:skill/key-up")
-(def MSG-SKILL-KEY-ABORT  "ability:skill/key-abort")
+(def MSG-SKILL-KEY-DOWN   runtime-catalog/MSG-SLOT-KEY-DOWN)
+(def MSG-SKILL-KEY-TICK   runtime-catalog/MSG-SLOT-KEY-TICK)
+(def MSG-SKILL-KEY-UP     runtime-catalog/MSG-SLOT-KEY-UP)
+(def MSG-SKILL-KEY-ABORT  runtime-catalog/MSG-SLOT-KEY-ABORT)
 
 ;; ============================================================================
 ;; Player State Sync (server → client)
 ;; ============================================================================
 
-(def MSG-SYNC-ABILITY     "ability:sync/ability-data")
-(def MSG-SYNC-RESOURCE    "ability:sync/resource-data")
-(def MSG-SYNC-COOLDOWN    "ability:sync/cooldown-data")
-(def MSG-SYNC-PRESET      "ability:sync/preset-data")
+(def MSG-SYNC-ABILITY     runtime-catalog/MSG-SYNC-RUNTIME)
+(def MSG-SYNC-RESOURCE    runtime-catalog/MSG-SYNC-RESOURCE)
+(def MSG-SYNC-COOLDOWN    runtime-catalog/MSG-SYNC-COOLDOWN)
+(def MSG-SYNC-PRESET      runtime-catalog/MSG-SYNC-PRESET)
 
 ;; ============================================================================
 ;; Player Action Requests (client → server)
 ;; ============================================================================
 
-(def MSG-REQ-LEARN-SKILL   "ability:req/learn-skill")
-(def MSG-REQ-LEVEL-UP      "ability:req/level-up")
-(def MSG-REQ-SET-PRESET    "ability:req/set-preset")
-(def MSG-REQ-SWITCH-PRESET "ability:req/switch-preset")
-(def MSG-REQ-SET-ACTIVATED "ability:req/set-activated")
-(def MSG-REQ-LOCATION-TELEPORT-QUERY   "ability:req/location-teleport/query")
-(def MSG-REQ-LOCATION-TELEPORT-ADD     "ability:req/location-teleport/add")
-(def MSG-REQ-LOCATION-TELEPORT-REMOVE  "ability:req/location-teleport/remove")
-(def MSG-REQ-LOCATION-TELEPORT-PERFORM "ability:req/location-teleport/perform")
+(def MSG-REQ-LEARN-SKILL   runtime-catalog/MSG-REQ-LEARN-NODE)
+(def MSG-REQ-LEVEL-UP      runtime-catalog/MSG-REQ-LEVEL-UP)
+(def MSG-REQ-SET-PRESET    runtime-catalog/MSG-REQ-SET-PRESET)
+(def MSG-REQ-SWITCH-PRESET runtime-catalog/MSG-REQ-SWITCH-PRESET)
+(def MSG-REQ-SET-ACTIVATED runtime-catalog/MSG-REQ-SET-ACTIVATED)
+(def MSG-REQ-LOCATION-TELEPORT-QUERY   runtime-catalog/MSG-REQ-SAVED-POS-QUERY)
+(def MSG-REQ-LOCATION-TELEPORT-ADD     runtime-catalog/MSG-REQ-SAVED-POS-ADD)
+(def MSG-REQ-LOCATION-TELEPORT-REMOVE  runtime-catalog/MSG-REQ-SAVED-POS-REMOVE)
+(def MSG-REQ-LOCATION-TELEPORT-PERFORM runtime-catalog/MSG-REQ-SAVED-POS-PERFORM)
 
 ;; ============================================================================
 ;; Validation utility
@@ -57,14 +54,7 @@
 
 (def all-messages
   "All registered message IDs."
-  #{MSG-CTX-BEGIN-LINK MSG-CTX-ESTABLISH MSG-CTX-KEEPALIVE MSG-CTX-TERMINATE MSG-CTX-TERMINATED
-    MSG-CTX-CHANNEL
-    MSG-SKILL-KEY-DOWN MSG-SKILL-KEY-TICK MSG-SKILL-KEY-UP MSG-SKILL-KEY-ABORT
-    MSG-SYNC-ABILITY MSG-SYNC-RESOURCE MSG-SYNC-COOLDOWN MSG-SYNC-PRESET
-    MSG-REQ-LEARN-SKILL MSG-REQ-LEVEL-UP MSG-REQ-SET-PRESET MSG-REQ-SWITCH-PRESET
-    MSG-REQ-SET-ACTIVATED
-    MSG-REQ-LOCATION-TELEPORT-QUERY MSG-REQ-LOCATION-TELEPORT-ADD
-    MSG-REQ-LOCATION-TELEPORT-REMOVE MSG-REQ-LOCATION-TELEPORT-PERFORM})
+  runtime-catalog/all-messages)
 
 (defn valid-msg-id? [id]
-  (contains? all-messages id))
+  (runtime-catalog/valid-msg-id? id))

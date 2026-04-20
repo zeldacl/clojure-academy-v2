@@ -4,7 +4,7 @@
   This namespace must be loaded via side-checked requiring-resolve from the
   platform layer. It contains client-only initialization code including
   renderer registration and texture binding."
-  (:require [cn.li.ac.client.platform-bridge :as ac-client-bridge]
+  (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
@@ -142,7 +142,7 @@
 
 (defn- init-ac-client-bridge!
   []
-  (ac-client-bridge/install-client-bridge!
+  (client-bridge/install-client-bridge!
     {:open-skill-tree-screen screen-host/open-skill-tree-screen!
      :open-preset-editor-screen screen-host/open-preset-editor-screen!
      :open-location-teleport-screen screen-host/open-location-teleport-screen!
@@ -156,7 +156,7 @@
      :play-intensify-local-effect runtime-bridge/play-intensify-local-effect!}))
 
 (defn register-key-mappings!
-  "Register all ability KeyMapping instances to Forge input system."
+  "Register all runtime KeyMapping instances to Forge input system."
   [^RegisterKeyMappingsEvent event]
   ;; Ensure mappings are created even if this event fires before client setup enqueueWork.
   (key-input/register-keybinds!)
@@ -164,7 +164,7 @@
                          (key-input/get-gui-keys))]
     (doseq [^KeyMapping key all-keys]
       (.register event key))
-    (log/info "Registered ability key mappings:" (count all-keys))))
+    (log/info "Registered runtime key mappings:" (count all-keys))))
 
 (defn init-client
   "Initialize client-side systems for Forge 1.20.1.
@@ -181,7 +181,7 @@
   (register-renderers)
   (register-fluid-render-layers!)
 
-  ;; Ability client systems
+  ;; Runtime client systems
   (key-input/init!)
   (runtime-bridge/init!)
   (overlay-renderer/init!)

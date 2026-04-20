@@ -8,14 +8,14 @@
   Action types:
     :send-message - Send a message to the command source
     :grant-advancement - Grant an advancement to a player
-    :switch-category - Switch player's ability category
-    :learn-skill - Learn a skill
-    :unlearn-skill - Unlearn a skill
-    :learn-all-skills - Learn all skills in current category
-    :list-learned-skills - List learned skills
-    :list-available-skills - List available skills
-    :set-level - Set player ability level
-    :set-skill-exp - Set skill experience
+    :switch-category - Switch player's runtime category
+    :learn-node - Learn a node
+    :unlearn-node - Unlearn a node
+    :learn-all-nodes - Learn all nodes in current category
+    :list-learned-nodes - List learned nodes
+    :list-available-nodes - List available nodes
+    :set-level - Set player runtime level
+    :set-node-exp - Set node experience
     :restore-cp - Restore CP to full
     :clear-cooldowns - Clear all cooldowns
     :reset-abilities - Reset all abilities
@@ -48,13 +48,13 @@
   #{:send-message
     :grant-advancement
     :switch-category
-    :learn-skill
-    :unlearn-skill
-    :learn-all-skills
-    :list-learned-skills
-    :list-available-skills
+    :learn-node
+    :unlearn-node
+    :learn-all-nodes
+    :list-learned-nodes
+    :list-available-nodes
     :set-level
-    :set-skill-exp
+    :set-node-exp
     :restore-cp
     :clear-cooldowns
     :reset-abilities

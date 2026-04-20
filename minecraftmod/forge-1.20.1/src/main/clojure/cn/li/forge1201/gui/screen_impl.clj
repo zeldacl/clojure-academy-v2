@@ -2,7 +2,7 @@
   "Forge 1.20.1 Client-side Screen Implementation
 
   Platform-agnostic design: Reads GUI metadata and loops through all GUIs
-  to register. Uses CGUI runtime to render and handle input for wireless GUIs.
+  to register. Uses CGUI runtime to render and handle input for scripted GUIs.
   Tabbed GUIs: when tab index != 0, slot highlight is not drawn (inv-window only)."
     (:require [cn.li.mcmod.gui.adapter :as gui]
               [cn.li.forge1201.gui.cgui-runtime :as cgui-rt]

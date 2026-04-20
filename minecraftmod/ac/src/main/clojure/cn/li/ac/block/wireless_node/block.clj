@@ -38,7 +38,7 @@
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.util.log            :as log])
   (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix WirelessCapabilityKeys]
-           [cn.li.acapi.energy IEnergyCapable]))
+           [cn.li.mcmod.energy IEnergyCapable]))
 
 ;; ============================================================================
 ;; Message ID Helper

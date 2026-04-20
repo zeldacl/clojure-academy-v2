@@ -1,26 +1,30 @@
 (ns cn.li.mcmod.platform.ability-interop
-	"Platform-neutral helpers for ability runtime interop.
+	"Compatibility shim for legacy ability interop namespace.
 
-	This bridge exposes a minimal set of server-side queries that ability logic
-	needs for runtime interactions (player view, held item, block entity lookup)
-	without importing Minecraft classes in AC layer.")
-
-(defprotocol IAbilityInterop
-	(get-player-view [this player-uuid]
-		"Return player's current view data map, or nil when unavailable.
-
-		Expected keys:
-		- :world-id string
-		- :x/:y/:z doubles (eye position)
-		- :look-x/:look-y/:look-z doubles (normalized look direction)")
-
-	(get-player-main-hand-item [this player-uuid]
-		"Return player's main-hand ItemStack object, or nil when empty/unavailable.")
-
-	(get-block-entity-at [this world-id x y z]
-		"Return block entity object at world-id/x/y/z, or nil when unavailable."))
+	Canonical protocol now lives in cn.li.mcmod.platform.runtime-interop."
+	(:require [cn.li.mcmod.platform.runtime-interop :as runtime-interop]))
 
 (def ^:dynamic *ability-interop*
-	"Bound by platform (forge/fabric) to a reified IAbilityInterop implementation.
-	nil until platform init runs."
+	"Legacy dynamic var kept for compatibility.
+
+	Platform should bind runtime-interop/*runtime-interop* as canonical value;
+	this var may still be set for older callers."
 	nil)
+
+(defn get-player-view
+	[interop player-uuid]
+	(let [impl (or interop runtime-interop/*runtime-interop* *ability-interop*)]
+		(when impl
+			(runtime-interop/get-player-view impl player-uuid))))
+
+(defn get-player-main-hand-item
+	[interop player-uuid]
+	(let [impl (or interop runtime-interop/*runtime-interop* *ability-interop*)]
+		(when impl
+			(runtime-interop/get-player-main-hand-item impl player-uuid))))
+
+(defn get-block-entity-at
+	[interop world-id x y z]
+	(let [impl (or interop runtime-interop/*runtime-interop* *ability-interop*)]
+		(when impl
+			(runtime-interop/get-block-entity-at impl world-id x y z))))

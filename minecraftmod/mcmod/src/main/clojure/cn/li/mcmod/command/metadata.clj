@@ -7,22 +7,22 @@
 
   Architecture:
   - Platform code queries this module for what to register
-  - This module queries command DSL for available commands
-  - Game content lives in ac; platform code stays generic"
+  - Game content registers command registry into this module
+  - Platform code stays generic"
   (:require [cn.li.mcmod.util.log :as log]))
 
-;; Forward declaration - will be resolved at runtime when ac namespace loads
-(declare get-command-registry)
+(defonce ^:private command-registry
+  (atom {}))
+
+(defn register-command-registry!
+  "Register/replace the full command registry map provided by game content."
+  [registry]
+  (reset! command-registry (or registry {}))
+  nil)
 
 (defn- resolve-command-registry
-  "Lazily resolve the command registry from ac namespace"
   []
-  (when-let [registry-var (requiring-resolve 'cn.li.ac.command.dsl/command-registry)]
-    (let [registry @registry-var]
-      (cond
-        (map? registry) registry
-        (instance? clojure.lang.IDeref registry) @registry
-        :else nil))))
+  @command-registry)
 
 ;; ============================================================================
 ;; Command Registration Metadata

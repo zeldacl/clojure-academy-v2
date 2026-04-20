@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.runtime.saved-locations
   "Forge implementation of ISavedLocations protocol using NBT storage."
   (:require [cn.li.mcmod.platform.saved-locations :as psl]
-            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+            [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]
@@ -49,7 +49,7 @@
     (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
       (let [locations-tag (get-locations-tag player)
             current-count (.size (.getAllKeys locations-tag))
-            max-locations (long (ability-runtime/get-max-saved-locations))]
+            max-locations (long (power-runtime/get-max-saved-locations))]
 
         ;; Check if we're at the limit and this is a new location
         (if (and (>= current-count max-locations)

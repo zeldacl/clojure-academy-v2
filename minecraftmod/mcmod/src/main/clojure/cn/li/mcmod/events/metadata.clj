@@ -9,7 +9,8 @@
   - Game logic (block definitions) registers event handlers here
   - Platform code queries this module to dispatch events
   - Adding new blocks with events requires zero platform code changes"
-  (:require [cn.li.mcmod.block.dsl :as bdsl]
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.util.log :as log]))
 
 ;; Event Handler Registry
@@ -87,7 +88,7 @@
     Sequence of block ID strings"
   [event-type]
   (->> @block-event-handlers
-       (filter (fn [[block-id handlers]]
+      (filter (fn [[_ handlers]]
                  (contains? handlers event-type)))
        (map first)))
 
@@ -110,7 +111,7 @@
     String - DSL block identifier (e.g., \"wireless-node-advanced\"), or nil if not found"
   [registry-name]
   (when registry-name
-    (let [potential-id (clojure.string/replace registry-name #"_" "-")]
+    (let [potential-id (str/replace registry-name #"_" "-")]
       (or (when (bdsl/get-block potential-id) potential-id)
           (some (fn [block-id]
                   (when-let [spec (bdsl/get-block block-id)]
@@ -138,14 +139,14 @@
                           ;; Format: "Block{my_mod:demo_block}"
                           (.contains block-name "{")
                           (-> block-name
-                              (clojure.string/split #"[{}]")
+                      (str/split #"[{}]")
                               second
-                              (clojure.string/split #":")
+                      (str/split #":")
                               last)
                           
                           ;; Format: "my_mod:demo_block"
                           (.contains block-name ":")
-                          (last (clojure.string/split block-name #":"))
+                    (last (str/split block-name #":"))
                           
                           ;; Format: "demo_block"
                           :else block-name)]
@@ -195,16 +196,16 @@
   (sync-handlers-from-dsl!))
 
 ;; ============================================================
-;; Player Event Handlers (Ability System)
+;; Player Event Handlers (Runtime System)
 ;; ============================================================
 
 (defonce player-event-handlers
-  ^{:doc "Registry of player lifecycle and ability event handlers.
+  ^{:doc "Registry of player lifecycle and runtime event handlers.
   Structure: {event-type-keyword -> handler-fn}
   event-type-keyword examples:
     :player/logged-in  :player/logged-out  :player/respawn  :player/clone
     :player/tick       :player/death
-    :ability/tick      (server tick for ability resource recovery)"}
+    :ability/tick      (server tick for runtime resource recovery)"}
   (atom {}))
 
 (defn register-player-event-handler!

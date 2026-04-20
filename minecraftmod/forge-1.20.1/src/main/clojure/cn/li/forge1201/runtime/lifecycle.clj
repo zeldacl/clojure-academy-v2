@@ -1,9 +1,9 @@
 (ns cn.li.forge1201.runtime.lifecycle
-  "Forge player lifecycle hooks for ability system."
-  (:require [cn.li.forge1201.runtime.nbt :as ability-nbt]
-            [cn.li.forge1201.runtime.sync :as ability-sync]
-            [cn.li.forge1201.runtime.network :as ability-network]
-            [cn.li.mcmod.platform.ability-lifecycle :as ability-runtime]
+  "Forge player lifecycle hooks for runtime system."
+  (:require [cn.li.forge1201.runtime.nbt :as runtime-nbt]
+            [cn.li.forge1201.runtime.sync :as runtime-sync]
+            [cn.li.forge1201.runtime.network :as runtime-network]
+            [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
@@ -20,36 +20,36 @@
 
 (defn- on-player-login [^PlayerEvent$PlayerLoggedInEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
-    (ability-nbt/load-player-state! p)
-    (ability-runtime/on-player-login! (str (.getUUID p)))
-    (ability-sync/mark-player-dirty! (str (.getUUID p)))))
+    (runtime-nbt/load-player-state! p)
+    (power-runtime/on-player-login! (str (.getUUID p)))
+    (runtime-sync/mark-player-dirty! (str (.getUUID p)))))
 
 (defn- on-player-logout [^PlayerEvent$PlayerLoggedOutEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
-    (ability-nbt/save-player-state! p)
-    (ability-runtime/on-player-logout! (str (.getUUID p)))))
+    (runtime-nbt/save-player-state! p)
+    (power-runtime/on-player-logout! (str (.getUUID p)))))
 
 (defn- on-player-clone [^PlayerEvent$Clone evt]
   (when (not (.isWasDeath evt))
     (when-let [^ServerPlayer oldp (server-player (.getOriginal evt))]
       (when-let [^ServerPlayer newp (server-player (.getEntity evt))]
-        (ability-nbt/clone-player-state! oldp newp)
-        (ability-runtime/on-player-clone! (str (.getUUID oldp))
+        (runtime-nbt/clone-player-state! oldp newp)
+        (power-runtime/on-player-clone! (str (.getUUID oldp))
                                           (str (.getUUID newp)))))))
 
 (defn- on-player-death [^LivingDeathEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
-    (ability-runtime/on-player-death! (str (.getUUID p)))
-    (ability-nbt/save-player-state! p)))
+    (power-runtime/on-player-death! (str (.getUUID p)))
+    (runtime-nbt/save-player-state! p)))
 
 (defn- on-player-tick [^TickEvent$PlayerTickEvent evt]
   (when (and (= TickEvent$Phase/END (.phase evt))
              (server-player (.player evt)))
     (let [^ServerPlayer p (.player evt)
           uuid (str (.getUUID p))]
-      (ability-runtime/on-player-tick! uuid)
-      (ability-sync/mark-player-dirty! uuid)
-      (ability-sync/tick-sync! ability-network/send-sync-to-client!))))
+      (power-runtime/on-player-tick! uuid)
+      (runtime-sync/mark-player-dirty! uuid)
+      (runtime-sync/tick-sync! runtime-network/send-sync-to-client!))))
 
 (defn- try-install! [ns-sym fn-sym label]
   (try
@@ -61,9 +61,9 @@
       (log/warn "Failed to install" label ":" (ex-message e)))))
 
 (defn init-common!
-  "Register all forge-side lifecycle listeners for ability runtime."
+  "Register all forge-side lifecycle listeners for runtime bridge."
   []
-  ;; Keep this minimal and enable only adapters currently relied upon by migrated skills.
+  ;; Keep this minimal and enable only adapters currently relied upon by migrated runtime features.
   (try-install! 'cn.li.forge1201.runtime.entity-damage
                 'cn.li.forge1201.runtime.entity-damage/install-entity-damage!
                 "entity-damage")
@@ -71,8 +71,8 @@
                 'cn.li.forge1201.runtime.raycast/install-raycast!
                 "raycast")
   (try-install! 'cn.li.forge1201.runtime.interop
-                'cn.li.forge1201.runtime.interop/install-ability-interop!
-                "ability-interop")
+                'cn.li.forge1201.runtime.interop/install-runtime-interop!
+                "runtime-interop")
   (try-install! 'cn.li.forge1201.runtime.world-effects
                 'cn.li.forge1201.runtime.world-effects/install-world-effects!
                 "world-effects")
@@ -100,7 +100,7 @@
   (try-install! 'cn.li.forge1201.runtime.damage-interception
                 'cn.li.forge1201.runtime.damage-interception/install-damage-interception!
                 "damage-interception")
-  (ability-network/init!)
+  (runtime-network/init!)
   (.addListener (MinecraftForge/EVENT_BUS)
                 EventPriority/NORMAL false PlayerEvent$PlayerLoggedInEvent
                 (reify java.util.function.Consumer
@@ -123,6 +123,6 @@
                   (accept [_ evt] (on-player-tick evt))))
 
   ;; Initialize damage handlers after all protocols are installed
-  (ability-runtime/init-damage-handlers!)
+  (power-runtime/init-damage-handlers!)
 
-  (log/info "Forge ability lifecycle initialized"))
+  (log/info "Forge runtime lifecycle initialized"))

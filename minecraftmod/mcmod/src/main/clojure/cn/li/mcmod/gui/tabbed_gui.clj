@@ -61,7 +61,7 @@
       (slots-active? container))))
 
 (defn page-id->index
-  "Map page id (e.g. \"inv\", \"wireless\") to 0-based tab index from pages sequence.
+  "Map page id (e.g. \"inv\", \"panel\") to 0-based tab index from pages sequence.
    pages: seq of {:id string :window widget}"
   [pages id]
   (let [idx (first (keep-indexed (fn [i p] (when (= (:id p) id) i)) pages))]
@@ -75,7 +75,7 @@
 
 (defn switch-tab!
   "Client: show the page whose `:id` is `page-id`, hide others, and `reset!` TechUI `:current`.
-  Use with the map from `cn.li.ac.gui.tech-ui-common/create-tech-ui` after `attach-tab-sync!` so
+  Use with the map from your screen builder after `attach-tab-sync!` so
   server `:tab-index` and slot gating stay in sync."
   [tech-ui pages page-id]
   (when-let [cur (:current tech-ui)]
