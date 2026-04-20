@@ -53,12 +53,12 @@
   [player-id level]
   (let [dim-exp (passive-exp player-id :dim-folding-theorem)
         space-exp (passive-exp player-id :space-fluct)]
-    (case level
-      0 (+ (try-lerp 0.1 0.2 dim-exp)
-           (try-lerp 0.18 0.25 space-exp))
-      1 (try-lerp 0.10 0.15 space-exp)
-      2 (try-lerp 0.01 0.03 space-exp)
-      0.0)))
+    (cond
+      (= level 0) (+ (try-lerp 0.1 0.2 dim-exp)
+                     (try-lerp 0.18 0.25 space-exp))
+      (= level 1) (try-lerp 0.10 0.15 space-exp)
+      (= level 2) (try-lerp 0.01 0.03 space-exp)
+      :else 0.0)))
 
 (defn- roll-crit-level
   [player-id]

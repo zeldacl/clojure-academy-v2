@@ -5,6 +5,8 @@
   (:import [java.util UUID]
            [net.minecraft.core.registries BuiltInRegistries Registries]
            [net.minecraft.resources ResourceKey ResourceLocation]
+           [net.minecraft.server.level ServerLevel]
+           [net.minecraft.world.entity Entity]
            [net.minecraftforge.server ServerLifecycleHooks]))
 
 (defn- resolve-level
@@ -23,8 +25,8 @@
 (defn- entity-type-id
   [world-id entity-uuid]
   (try
-    (when-let [level (resolve-level world-id)]
-      (let [entity (.getEntity level (UUID/fromString (str entity-uuid)))]
+    (when-let [^ServerLevel level (resolve-level world-id)]
+      (let [^Entity entity (.getEntity level (UUID/fromString (str entity-uuid)))]
         (when entity
           (str (.getKey BuiltInRegistries/ENTITY_TYPE (.getType entity))))))
     (catch Exception _
