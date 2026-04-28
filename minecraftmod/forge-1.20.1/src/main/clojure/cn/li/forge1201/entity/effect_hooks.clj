@@ -7,7 +7,12 @@
 (defonce ^:private effect-hooks-installed? (atom false))
 
 (def ^:private default-hook-classes
-  {"intensify-arcs" "cn.li.forge1201.entity.effect.hooks.IntensifyArcsEffectHook"})
+  {"intensify-arcs" "cn.li.forge1201.entity.effect.hooks.IntensifyArcsEffectHook"
+  "diamond-shield" "cn.li.forge1201.entity.effect.hooks.OwnerOffsetEffectHook"
+  "md-shield" "cn.li.forge1201.entity.effect.hooks.OwnerOffsetEffectHook"
+  "surround-arc" "cn.li.forge1201.entity.effect.hooks.OwnerOffsetEffectHook"
+   "ripple-mark" "cn.li.forge1201.entity.effect.hooks.NoopEffectHook"
+   "blood-splash" "cn.li.forge1201.entity.effect.hooks.NoopEffectHook"})
 
 (defn- collect-effect-hook-entries
   []

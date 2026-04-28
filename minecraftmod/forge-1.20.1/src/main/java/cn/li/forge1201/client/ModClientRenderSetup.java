@@ -3,11 +3,28 @@ package cn.li.forge1201.client;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.forge1201.MyMod1201;
+import cn.li.forge1201.client.effect.BloodSplashRenderer;
+import cn.li.forge1201.client.effect.DiamondShieldRenderer;
 import cn.li.forge1201.client.effect.IntensifyEffectRenderer;
+import cn.li.forge1201.client.effect.MdShieldRenderer;
+import cn.li.forge1201.client.effect.RippleMarkRenderer;
+import cn.li.forge1201.client.effect.ScriptedBlockBodyRenderer;
+import cn.li.forge1201.client.effect.ScriptedEffectBillboardRenderer;
+import cn.li.forge1201.client.effect.ScriptedMarkerBillboardRenderer;
+import cn.li.forge1201.client.effect.ScriptedRayCompositeRenderer;
+import cn.li.forge1201.client.effect.SurroundArcRenderer;
+import cn.li.forge1201.client.effect.TpMarkingRenderer;
+import cn.li.forge1201.client.effect.WireMarkerRenderer;
 import cn.li.forge1201.client.render.MatterUnitItemDecorator;
+import cn.li.forge1201.entity.ScriptedBlockBodyEntity;
+import cn.li.forge1201.entity.ScriptedBlockBodySpec;
 import cn.li.forge1201.entity.ModEntities;
+import cn.li.forge1201.entity.ScriptedMarkerEntity;
+import cn.li.forge1201.entity.ScriptedMarkerSpec;
 import cn.li.forge1201.entity.ScriptedEffectEntity;
 import cn.li.forge1201.entity.ScriptedProjectileEntity;
+import cn.li.forge1201.entity.ScriptedRayEntity;
+import cn.li.forge1201.entity.ScriptedRaySpec;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -37,10 +54,77 @@ public final class ModClientRenderSetup {
             event.registerEntityRenderer(intensify, IntensifyEffectRenderer::new);
         }
 
+        for (String registryName : ModEntities.getScriptedEffectRegistryNames()) {
+            if ("intensify_effect".equals(registryName)) {
+                continue;
+            }
+            EntityType<ScriptedEffectEntity> effectType = ModEntities.getEntityType(registryName, ScriptedEffectEntity.class);
+            if (effectType == null) {
+                continue;
+            }
+            String rendererId = "effect-billboard";
+            if (ModEntities.getScriptedEffectSpec(registryName) != null) {
+                rendererId = ModEntities.getScriptedEffectSpec(registryName).getRendererId();
+            }
+            if ("effect-billboard".equals(rendererId)) {
+                event.registerEntityRenderer(effectType, ScriptedEffectBillboardRenderer::new);
+            } else if ("diamond-shield".equals(rendererId)) {
+                event.registerEntityRenderer(effectType, DiamondShieldRenderer::new);
+            } else if ("md-shield".equals(rendererId)) {
+                event.registerEntityRenderer(effectType, MdShieldRenderer::new);
+            } else if ("surround-arc".equals(rendererId)) {
+                event.registerEntityRenderer(effectType, SurroundArcRenderer::new);
+            } else if ("ripple-mark".equals(rendererId)) {
+                event.registerEntityRenderer(effectType, RippleMarkRenderer::new);
+            } else if ("blood-splash".equals(rendererId)) {
+                event.registerEntityRenderer(effectType, BloodSplashRenderer::new);
+            }
+        }
+
         EntityType<ScriptedProjectileEntity> magHook =
                 ModEntities.getEntityType("entity_mag_hook", ScriptedProjectileEntity.class);
         if (magHook != null) {
             event.registerEntityRenderer(magHook, ThrownItemRenderer::new);
+        }
+
+        for (String registryName : ModEntities.getScriptedRayRegistryNames()) {
+            EntityType<ScriptedRayEntity> rayType = ModEntities.getEntityType(registryName, ScriptedRayEntity.class);
+            if (rayType == null) {
+                continue;
+            }
+            ScriptedRaySpec raySpec = ModEntities.getScriptedRaySpec(registryName);
+            String rendererId = raySpec == null ? "ray-composite" : raySpec.getRendererId();
+            if ("ray-composite".equals(rendererId)) {
+                event.registerEntityRenderer(rayType, ScriptedRayCompositeRenderer::new);
+            }
+        }
+
+        for (String registryName : ModEntities.getScriptedMarkerRegistryNames()) {
+            EntityType<ScriptedMarkerEntity> markerType = ModEntities.getEntityType(registryName, ScriptedMarkerEntity.class);
+            if (markerType == null) {
+                continue;
+            }
+            ScriptedMarkerSpec markerSpec = ModEntities.getScriptedMarkerSpec(registryName);
+            String rendererId = markerSpec == null ? "marker-billboard" : markerSpec.getRendererId();
+            if ("marker-billboard".equals(rendererId)) {
+                event.registerEntityRenderer(markerType, ScriptedMarkerBillboardRenderer::new);
+            } else if ("tp-marking".equals(rendererId)) {
+                event.registerEntityRenderer(markerType, TpMarkingRenderer::new);
+            } else if ("wire-marker".equals(rendererId)) {
+                event.registerEntityRenderer(markerType, WireMarkerRenderer::new);
+            }
+        }
+
+        for (String registryName : ModEntities.getScriptedBlockBodyRegistryNames()) {
+            EntityType<ScriptedBlockBodyEntity> blockBodyType = ModEntities.getEntityType(registryName, ScriptedBlockBodyEntity.class);
+            if (blockBodyType == null) {
+                continue;
+            }
+            ScriptedBlockBodySpec spec = ModEntities.getScriptedBlockBodySpec(registryName);
+            String rendererId = spec == null ? "block-body" : spec.getRendererId();
+            if ("block-body".equals(rendererId)) {
+                event.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
+            }
         }
 
         // RegisterRenderers can run before FMLClientSetup / resolve-client-fn loads this NS.

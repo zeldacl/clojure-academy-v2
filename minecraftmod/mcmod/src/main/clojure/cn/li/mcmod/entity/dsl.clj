@@ -16,6 +16,12 @@
 (def ^:private default-height 0.6)
 (def ^:private default-client-tracking-range 64)
 (def ^:private default-update-interval 1)
+(def ^:private supported-entity-kinds
+  #{:scripted-projectile
+    :scripted-effect
+    :scripted-ray
+    :scripted-marker
+    :scripted-block-body})
 
 (defn create-entity-spec
   [entity-id options]
@@ -38,12 +44,31 @@
     (throw (ex-info "Entity :id must be a string" {:spec entity-spec})))
   (when-not (keyword? (:entity-kind entity-spec))
     (throw (ex-info "Entity :entity-kind must be a keyword" {:spec entity-spec})))
+  (when-not (contains? supported-entity-kinds (:entity-kind entity-spec))
+    (throw (ex-info "Entity :entity-kind is not supported"
+                    {:id (:id entity-spec)
+                     :entity-kind (:entity-kind entity-spec)
+                     :supported supported-entity-kinds})))
   (when (or (<= (double (:width entity-spec)) 0.0)
             (<= (double (:height entity-spec)) 0.0))
     (throw (ex-info "Entity size must be positive"
                     {:id (:id entity-spec)
                      :width (:width entity-spec)
                      :height (:height entity-spec)})))
+  (let [properties (:properties entity-spec)
+        kind (:entity-kind entity-spec)
+        required-key (case kind
+                       :scripted-projectile :projectile
+                       :scripted-effect :effect
+                       :scripted-ray :ray
+                       :scripted-marker :marker
+                       :scripted-block-body :block-body
+                       nil)]
+    (when (and required-key (not (map? (get properties required-key))))
+      (throw (ex-info "Entity :properties is missing required kind payload"
+                      {:id (:id entity-spec)
+                       :entity-kind kind
+                       :required required-key}))))
   true)
 
 (defn register-entity!

@@ -339,6 +339,14 @@ public final class ForgeRuntimeBridge {
         return ModEntities.registerScriptedEffectHookClass(hookId, className);
     }
 
+    public static boolean registerScriptedRayHookClass(String hookId, String className) {
+        return ModEntities.registerScriptedRayHookClass(hookId, className);
+    }
+
+    public static boolean registerScriptedMarkerHookClass(String hookId, String className) {
+        return ModEntities.registerScriptedMarkerHookClass(hookId, className);
+    }
+
     // ---- MobEffects lookup (avoids Class/forName on MobEffects registry class) ----
 
     public static MobEffect getMobEffect(String fieldName) {

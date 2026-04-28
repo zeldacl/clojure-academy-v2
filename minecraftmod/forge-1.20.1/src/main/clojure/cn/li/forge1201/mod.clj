@@ -10,6 +10,8 @@
             [cn.li.forge1201.runtime.lifecycle :as runtime-lifecycle]
             [cn.li.forge1201.runtime.item-handler :as runtime-item-handler]
             [cn.li.forge1201.entity.effect-hooks :as effect-hooks]
+            [cn.li.forge1201.entity.ray-hooks :as ray-hooks]
+            [cn.li.forge1201.entity.marker-hooks :as marker-hooks]
             [cn.li.forge1201.platform-impl :as platform-impl]
             [cn.li.forge1201.config.bridge :as config-bridge]
             [cn.li.forge1201.config.gameplay-init :as gameplay-init]
@@ -211,7 +213,52 @@
       (str registry-name)
       (int (or (:life-ticks effect) 15))
       (not (false? (:follow-owner? effect)))
+      (str (or (:renderer-id effect) "effect-billboard"))
       (name (or (:hook effect) :none))))
+  nil)
+
+(defn- register-scripted-ray-spec!
+  [registry-name entity-spec]
+  (let [ray (get-in entity-spec [:properties :ray])]
+    (ModEntities/registerScriptedRaySpec
+      (str registry-name)
+      (int (or (:life-ticks ray) 30))
+      (double (or (:length ray) 15.0))
+      (double (or (:blend-in-ms ray) 100.0))
+      (double (or (:blend-out-ms ray) 300.0))
+      (double (or (:inner-width ray) 0.03))
+      (double (or (:outer-width ray) 0.045))
+      (double (or (:glow-width ray) 0.3))
+      (int (or (:start-color ray) 0x78DCFF))
+      (int (or (:end-color ray) 0x32AAFF))
+      (str (or (:renderer-id ray) "ray-composite"))
+      (name (or (:hook ray) :none))))
+  nil)
+
+(defn- register-scripted-marker-spec!
+  [registry-name entity-spec]
+  (let [marker (get-in entity-spec [:properties :marker])]
+    (ModEntities/registerScriptedMarkerSpec
+      (str registry-name)
+      (int (or (:life-ticks marker) 40))
+      (not (false? (:follow-target? marker)))
+      (not (false? (:ignore-depth? marker)))
+      (not (false? (:available? marker)))
+      (str (or (:renderer-id marker) "marker-billboard"))
+      (name (or (:hook marker) :none))))
+  nil)
+
+(defn- register-scripted-block-body-spec!
+  [registry-name entity-spec]
+  (let [block-body (get-in entity-spec [:properties :block-body])]
+    (ModEntities/registerScriptedBlockBodySpec
+      (str registry-name)
+      (str (or (:default-block-id block-body) "minecraft:stone"))
+      (double (or (:gravity block-body) 0.05))
+      (double (or (:damage block-body) 0.0))
+      (not (false? (:place-when-collide? block-body)))
+      (str (or (:renderer-id block-body) "block-body"))
+      (name (or (:hook block-body) :none))))
   nil)
 
 (defn- has-block-state-properties?
@@ -409,6 +456,9 @@
         (let [_ (case entity-kind
                   :scripted-projectile (register-scripted-projectile-spec! registry-name entity-spec)
                   :scripted-effect (register-scripted-effect-spec! registry-name entity-spec)
+              :scripted-ray (register-scripted-ray-spec! registry-name entity-spec)
+              :scripted-marker (register-scripted-marker-spec! registry-name entity-spec)
+              :scripted-block-body (register-scripted-block-body-spec! registry-name entity-spec)
                   nil)
               registered-obj
               (ModEntities/register
@@ -693,6 +743,8 @@
         ;; DSL systems are automatically initialized when namespaces load
         (register-scripted-tile-hooks!)
         (effect-hooks/register-all-effect-hooks!)
+        (ray-hooks/register-all-ray-hooks!)
+        (marker-hooks/register-all-marker-hooks!)
         (register-all-fluids!)
         (register-all-blocks!)
         (register-all-entities!)

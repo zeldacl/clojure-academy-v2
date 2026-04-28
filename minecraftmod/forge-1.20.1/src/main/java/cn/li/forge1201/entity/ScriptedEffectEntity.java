@@ -79,7 +79,18 @@ public class ScriptedEffectEntity extends Entity {
         }
 
         age++;
-        int lifeTicks = spec == null ? 15 : spec.getLifeTicks();
+        int lifeTicks;
+        if (spec != null) {
+            lifeTicks = spec.getLifeTicks();
+        } else if (this instanceof ScriptedRayEntity rayEntity) {
+            ScriptedRaySpec raySpec = rayEntity.getRaySpec();
+            lifeTicks = raySpec == null ? 15 : raySpec.getLifeTicks();
+        } else if (this instanceof ScriptedMarkerEntity markerEntity) {
+            ScriptedMarkerSpec markerSpec = markerEntity.getMarkerSpec();
+            lifeTicks = markerSpec == null ? 15 : markerSpec.getLifeTicks();
+        } else {
+            lifeTicks = 15;
+        }
         if (age >= lifeTicks) {
             discard();
         }
@@ -99,6 +110,10 @@ public class ScriptedEffectEntity extends Entity {
 
     public RandomSource getEffectRandom() {
         return this.random;
+    }
+
+    public Player getOwnerPlayer() {
+        return ownerUuid == null ? null : level().getPlayerByUUID(ownerUuid);
     }
 
     public static final class ArcData {
