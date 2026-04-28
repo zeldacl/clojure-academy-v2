@@ -37,4 +37,27 @@
          :update-interval 1
          :properties {:effect {:life-ticks 15
                                :follow-owner? true
-                               :hook :intensify-arcs}}}))))
+                               :hook :intensify-arcs}}}))
+
+    ;; EntityCoinThrowing - for Railgun skill
+    ;; Note: This is a simplified implementation using scripted-projectile
+    ;; The original has special behavior (follows player XZ, returns to inventory)
+    ;; which may require custom Java implementation for full fidelity
+    (edsl/register-entity!
+      (edsl/create-entity-spec
+        "entity_coin_throwing"
+        {:entity-kind :scripted-projectile
+         :category :misc
+         :width 0.2
+         :height 0.2
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:projectile {:default-item-id "my_mod:coin"
+                                   :gravity 0.06
+                                   :damage 0.0
+                                   :pickup-distance-sqr 0.0  ; No pickup
+                                   :drop-item-on-discard? false  ; Returns to inventory via skill logic
+                                   :hooks {:on-hit-block :pass-through
+                                           :on-hit-entity :pass-through
+                                           :on-anchored-tick :none
+                                           :on-anchored-hurt :none}}}}))))

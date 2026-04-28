@@ -1,0 +1,6 @@
+{
+  "type": "forge:add_features",
+  "biomes": "#minecraft:is_overworld",
+  "features": "my_mod:imaginary_ore",
+  "step": "underground_ores"
+}

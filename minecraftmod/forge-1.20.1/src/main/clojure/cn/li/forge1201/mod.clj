@@ -12,6 +12,7 @@
             [cn.li.forge1201.entity.effect-hooks :as effect-hooks]
             [cn.li.forge1201.platform-impl :as platform-impl]
             [cn.li.forge1201.config.bridge :as config-bridge]
+            [cn.li.forge1201.config.gameplay-init :as gameplay-init]
             ;; platform-impl is loaded lazily during runtime mod-init to avoid
             ;; triggering Minecraft class initialization during AOT/checkClojure.
             [cn.li.mcmod.block.dsl :as bdsl]
@@ -599,6 +600,8 @@
   (log/info "FMLCommonSetupEvent - Common setup phase")
   (gui-init/init-common!)
   (runtime-lifecycle/init-common!)
+  ;; Bind gameplay config bridge
+  (gameplay-init/bind-gameplay-config!)
   ;; Initialize Forge Energy integration
   (forge-energy/init-forge-energy!)
   ;; Initialize IC2 integration (optional - no-op if IC2 not present)
@@ -711,6 +714,13 @@
 
         ;; Register DeferredRegisters and lifecycle event listeners on mod event bus.
         (let [^IEventBus mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
+          ;; Register gameplay config
+          (try
+            (let [config-class (Class/forName "cn.li.forge1201.config.GameplayConfig")]
+              (.invoke (.getMethod config-class "register" (make-array Class 0)) nil (make-array Object 0)))
+            (catch Exception e
+              (log/warn "Failed to register gameplay config" e)))
+
           (config-bridge/register-all! mod-bus)
           (ModEntities/register mod-bus)
           (.register ^DeferredRegister (force sounds-register) mod-bus)
