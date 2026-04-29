@@ -39,6 +39,7 @@
          :select-reflection-target (fn [_ _ _ _] nil)
          :compute-reflected-damage identity
          :reflection-search-radius (fn [] 10.0)
+         :get-skills-for-category (fn [_cat-id] [])
          :client-get-skill-by-controllable (fn [_ _] nil)
          :client-new-context (fn [_ _] nil)
          :client-register-context! noop
@@ -228,6 +229,12 @@
 (defn get-reflection-search-radius
   []
   ((:reflection-search-radius @runtime-hooks)))
+
+(defn get-skills-for-category
+  "Returns all skill specs registered for the given category-id keyword.
+  Returns [] if no skills registered or hook not installed."
+  [cat-id]
+  ((:get-skills-for-category @runtime-hooks) cat-id))
 
 (defn client-get-skill-by-controllable
   [cat-id ctrl-id]

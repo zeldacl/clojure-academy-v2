@@ -7,6 +7,8 @@ import cn.li.forge1201.client.effect.BloodSplashRenderer;
 import cn.li.forge1201.client.effect.DiamondShieldRenderer;
 import cn.li.forge1201.client.effect.IntensifyEffectRenderer;
 import cn.li.forge1201.client.effect.MdShieldRenderer;
+import cn.li.forge1201.client.effect.MdBallRenderer;
+import cn.li.forge1201.client.effect.GenericArcRenderer;
 import cn.li.forge1201.client.effect.RippleMarkRenderer;
 import cn.li.forge1201.client.effect.ScriptedBlockBodyRenderer;
 import cn.li.forge1201.client.effect.ScriptedEffectBillboardRenderer;
@@ -74,10 +76,14 @@ public final class ModClientRenderSetup {
                 event.registerEntityRenderer(effectType, MdShieldRenderer::new);
             } else if ("surround-arc".equals(rendererId)) {
                 event.registerEntityRenderer(effectType, SurroundArcRenderer::new);
+            } else if ("arc-generic".equals(rendererId)) {
+                event.registerEntityRenderer(effectType, GenericArcRenderer::new);
             } else if ("ripple-mark".equals(rendererId)) {
                 event.registerEntityRenderer(effectType, RippleMarkRenderer::new);
             } else if ("blood-splash".equals(rendererId)) {
                 event.registerEntityRenderer(effectType, BloodSplashRenderer::new);
+            } else if ("md-ball".equals(rendererId)) {
+                event.registerEntityRenderer(effectType, MdBallRenderer::new);
             }
         }
 

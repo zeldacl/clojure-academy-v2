@@ -17,13 +17,15 @@
             [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.model.resource :as rdata]
-            [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
-            [cn.li.ac.ability.server.effect.beam]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
+
+(def ^:private mdball-entity-id "my_mod:entity_md_ball")
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
@@ -83,12 +85,11 @@
       (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-start {}))))
 
 (defn scatter-bomb-tick!
-  [{:keys [player-id ctx-id hold-ticks]}]
+  [{:keys [player-id ctx-id hold-ticks player]}]
   (let [ticks (long (or hold-ticks 0))
         ctx-data (ctx/get-context ctx-id)]
     (when ctx-data
-      (let [exp (skill-exp player-id)
-            balls (int (or (get-in ctx-data [:skill-state :balls]) 0))
+      (let [balls (int (or (get-in ctx-data [:skill-state :balls]) 0))
             floor (double (or (get-in ctx-data [:skill-state :overload-floor]) 0.0))]
         ;; Enforce overload floor
         (enforce-overload-floor! player-id floor)
@@ -107,13 +108,15 @@
                    (zero? (mod (- ticks ball-spawn-start-tick) ball-spawn-interval)))
           (let [new-balls (inc balls)]
             (ctx/update-context! ctx-id assoc-in [:skill-state :balls] new-balls)
+            (when player
+              (entity/player-spawn-entity-by-id! player mdball-entity-id 0.0))
             (let [eye (geom/eye-pos player-id)]
               (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-ball
                                        {:x (:x eye) :y (:y eye) :z (:z eye)
                                         :count new-balls}))))))))
 
 (defn scatter-bomb-up!
-  [{:keys [player-id ctx-id hold-ticks]}]
+  [{:keys [player-id ctx-id]}]
   (let [ctx-data (ctx/get-context ctx-id)
         balls (int (or (get-in ctx-data [:skill-state :balls]) 0))
         exp (skill-exp player-id)]
@@ -124,25 +127,18 @@
                        (raycast/get-player-look-vector raycast/*raycast* player-id))
             damage   (bal/lerp 4.0 9.0 exp)]
         (when look-vec
-          ;; Each ball fires in a random cone direction
-          (dotimes [_i balls]
+          ;; Each ball settles with a slight delay to preserve projectile cadence.
+          (let [base-delay (delayed-projectiles/mdball-near-expire-delay)]
+          (dotimes [i balls]
             (let [dir (random-cone-dir look-vec)]
-              (effect/run-op!
-                {:player-id  player-id
-                 :ctx-id     ctx-id
-                 :world-id   world-id
-                 :eye-pos    eye
-                 :look-dir   {:x (:x dir) :y (:y dir) :z (:z dir)}}
-                [:beam {:radius          0.3
-                        :query-radius    20.0
-                        :step            0.8
-                        :max-distance    25.0
-                        :visual-distance 23.0
-                        :damage          damage
-                        :damage-type     :magic
-                        :break-blocks?   false
-                        :block-energy    0.0
-                        :fx-topic        :scatter-bomb/fx-beam}])))
+              (delayed-projectiles/schedule-scatter-bomb-beam!
+                {:player-id   player-id
+                 :ctx-id      ctx-id
+                 :world-id    world-id
+                 :eye         eye
+                 :look-dir    {:x (:x dir) :y (:y dir) :z (:z dir)}
+                 :damage      damage
+                 :delay-ticks (+ base-delay i)}))))
           ;; Gain exp and set cooldown
           (skill-effects/add-skill-exp! player-id :scatter-bomb (* 0.002 balls))
           (skill-effects/set-main-cooldown!

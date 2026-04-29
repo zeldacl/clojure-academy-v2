@@ -28,6 +28,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private accel 0.08)
+(def ^:private arc-entity-id "my_mod:entity_arc")
 
 (def ^:private normal-metal-blocks
   #{"minecraft:rail"
@@ -196,6 +197,8 @@
                                        :motion-z       (double (or (:z velocity-now) 0.0))}))
           (effect/run-op! evt [:fx {:topic :mag-movement/fx-start
                                     :payload {:mode :start}}])
+          (when-let [player (:player evt)]
+            (entity/player-spawn-entity-by-id! player arc-entity-id 0.0))
           (effect/run-op! evt [:fx {:topic   :mag-movement/fx-update
                                     :payload {:mode   :update
                                               :target {:x (double target-x)
@@ -257,6 +260,9 @@
                   (ctx/update-context! ctx-id assoc-in [:skill-state :motion-x] next-x)
                   (ctx/update-context! ctx-id assoc-in [:skill-state :motion-y] next-y)
                   (ctx/update-context! ctx-id assoc-in [:skill-state :motion-z] next-z)
+                  (when (and (:player evt)
+                             (zero? (mod movement-ticks 6)))
+                    (entity/player-spawn-entity-by-id! (:player evt) arc-entity-id 0.0))
                   (effect/run-op! evt [:fx {:topic   :mag-movement/fx-update
                                             :payload {:mode   :update
                                                       :target {:x tx :y ty :z tz}}}])

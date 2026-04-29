@@ -28,7 +28,9 @@
                        :overload (by-exp 50.0  27.0)}}
   :cooldown-ticks (by-exp 120 50)
   :exp         {:effective 0.005 :ineffective 0.003}
-  :perform     [[:aim-raycast  {:range 20}]
+  :perform     [[:spawn-entity-from-player {:entity-id "my_mod:entity_arc"
+                                            :speed 0.0}]
+                [:aim-raycast  {:range 20}]
                 [:spawn-lightning {:at :hit}]
                 [:damage-direct  {:target     :hit
                                   :amount     (by-exp 10.0 25.0)

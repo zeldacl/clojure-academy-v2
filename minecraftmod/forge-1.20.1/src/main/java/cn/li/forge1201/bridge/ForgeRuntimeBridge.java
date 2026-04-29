@@ -1,6 +1,7 @@
 package cn.li.forge1201.bridge;
 
 import cn.li.forge1201.entity.ModEntities;
+import cn.li.forge1201.entity.ScriptedEffectEntity;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleType;
@@ -293,6 +294,10 @@ public final class ForgeRuntimeBridge {
         entity.setDeltaMovement(look);
         if (entity instanceof Projectile projectile) {
             projectile.setOwner(player);
+        }
+        if (entity instanceof ScriptedEffectEntity scriptedEffect) {
+            scriptedEffect.setOwnerPlayer(player);
+            scriptedEffect.setPos(player.getX(), player.getY() + 1.0D, player.getZ());
         }
         return level.addFreshEntity(entity);
     }

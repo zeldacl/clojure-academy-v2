@@ -360,4 +360,6 @@
 (item-actions/register-item-action! "my_mod:coin" :railgun-coin-throw)
 
 (item-actions/register-action-handler! :railgun-coin-throw register-coin-throw!)
+(item-actions/register-item-entity-spawn! "ac:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
+(item-actions/register-item-entity-spawn! "my_mod:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
 

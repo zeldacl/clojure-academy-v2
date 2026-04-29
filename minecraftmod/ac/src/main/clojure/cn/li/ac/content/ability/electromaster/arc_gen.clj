@@ -22,10 +22,13 @@
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.util.log :as log]))
+
+(def ^:private arc-entity-id "my_mod:entity_arc")
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
@@ -67,7 +70,7 @@
 ;; Action
 ;; ---------------------------------------------------------------------------
 
-(defn- perform-arc-gen! [{:keys [player-id ctx-id]}]
+(defn- perform-arc-gen! [{:keys [player-id ctx-id player]}]
   (try
     (let [exp           (skill-exp player-id)
           damage        (bal/lerp 5.0 9.0 exp)
@@ -80,6 +83,8 @@
           look-vec      (when raycast/*raycast*
                           (raycast/get-player-look-vector raycast/*raycast* player-id))]
       (when look-vec
+        (when player
+          (entity/player-spawn-entity-by-id! player arc-entity-id 0.0))
         (let [hit-result (when raycast/*raycast*
                            (raycast/raycast-combined raycast/*raycast*
                                                      world-id

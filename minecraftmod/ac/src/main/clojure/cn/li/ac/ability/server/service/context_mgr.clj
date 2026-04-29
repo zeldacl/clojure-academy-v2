@@ -103,6 +103,18 @@
   [ctx-id]
   (send-terminated! ctx-id))
 
+(defn push-channel-to-player!
+  "Push a context channel payload to a player's client.
+
+  This is used by delayed server-side tasks where the original context may
+  already be terminated, but client FX still needs to be dispatched."
+  [player-uuid ctx-id channel payload]
+  (send-to-client! player-uuid
+                   catalog/MSG-CTX-CHANNEL
+                   {:ctx-id ctx-id
+                    :channel channel
+                    :payload payload}))
+
 ;; ============================================================================
 ;; Server tick
 ;; ============================================================================

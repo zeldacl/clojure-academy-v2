@@ -74,14 +74,14 @@
                  "command.academy.aim.cheats_off.success" "已禁用作弊模式"
                  "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"}})
 
+;; Base translations for creative tab and commands; skill/item names come from datagen-metadata.
 (defn- merged-lang-data
   []
-  (let [{:keys [en_us zh_cn]} (datagen-metadata/get-translation-maps)
-  ]
+  (let [{:keys [en_us zh_cn]} (datagen-metadata/get-translation-maps)]
     {"en_us.json" (merge (get base-lang-data "en_us.json")
-                         en_us)
+                          en_us)
      "zh_cn.json" (merge (get base-lang-data "zh_cn.json")
-                         zh_cn)}))
+                          zh_cn)}))
 
 (defn create
   [^PackOutput pack-output _exfile-helper]

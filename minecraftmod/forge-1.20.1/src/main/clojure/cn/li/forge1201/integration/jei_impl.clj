@@ -46,6 +46,8 @@
   "Create a JEI recipe category from AC category metadata."
   [^IGuiHelper gui-helper category-meta]
   (let [{:keys [id title-key background input-slots output-slots]} category-meta
+        icon-item-stack (when-let [bid (:block-id category-meta)]
+                          (parse-item-id bid))
         bg-texture (ResourceLocation. (:texture background))
         bg-drawable (.createDrawable gui-helper bg-texture
                                      (int (:u background))
@@ -61,15 +63,13 @@
           java.util.Map))
 
       (getTitle [_]
-        ;; TODO: Translate title-key
-        (net.minecraft.network.chat.Component/literal title-key))
+        (net.minecraft.network.chat.Component/translatable title-key))
 
       (getBackground [_]
         bg-drawable)
 
       (getIcon [_]
-        ;; TODO: Get block icon from registry
-        nil)
+        icon-item-stack)
 
       (^void setRecipe [_ ^IRecipeLayoutBuilder builder recipe-map ^IFocusGroup _focuses]
         ;; recipe-map is the formatted recipe from categories/format-recipe-for-jei
@@ -178,3 +178,4 @@
   The actual plugin registration happens via @JEIPlugin annotation."
   []
   (log/info "JEI integration initialized (plugin will be auto-discovered)"))
+

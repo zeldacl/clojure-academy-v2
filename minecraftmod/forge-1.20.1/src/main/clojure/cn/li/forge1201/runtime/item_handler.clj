@@ -1,11 +1,12 @@
 (ns cn.li.forge1201.runtime.item-handler
   "Item use event handler for runtime-driven items (Forge layer)."
-  (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.platform.power-runtime :as power-runtime]
-            [clojure.string :as str]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.mcmod.item.dsl :as idsl]
-            [cn.li.mcmod.util.log :as log])
+    (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
+              [cn.li.mcmod.platform.power-runtime :as power-runtime]
+              [cn.li.mcmod.platform.entity :as entity]
+              [clojure.string :as str]
+              [cn.li.mcmod.registry.metadata :as registry-metadata]
+              [cn.li.mcmod.item.dsl :as idsl]
+              [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickItem]
            [net.minecraftforge.event.entity.living LivingEntityUseItemEvent$Finish]
            [net.minecraftforge.common MinecraftForge]
@@ -17,11 +18,9 @@
            [net.minecraft.world.item ItemStack]
            [net.minecraft.resources ResourceLocation]))
 
-
 (defn- get-item-id
-  "Get item registry ID from ItemStack."
   [^ItemStack stack]
-  (when-not (.isEmpty stack)
+  (when stack
     (try
       (let [item (.getItem stack)
             ^ResourceLocation registry-name (.getKey BuiltInRegistries/ITEM item)]
@@ -123,6 +122,12 @@
 
                 :domain-action
                 (power-runtime/on-runtime-item-action! (:action action) player-uuid (:payload action))
+
+                :spawn-scripted-effect
+                (when-not (.isClientSide (.level player))
+                  (entity/player-spawn-entity-by-id! player
+                                                     (str (:entity-id action))
+                                                     (double (or (:speed action) 0.0))))
 
                 nil))
 

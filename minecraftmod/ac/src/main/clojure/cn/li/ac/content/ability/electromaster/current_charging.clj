@@ -11,11 +11,13 @@
             [cn.li.ac.ability.server.effect.state]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.energy.operations :as energy]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.ability-interop :as interop]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private max-distance 15.0)
+(def ^:private arc-entity-id "my_mod:entity_arc")
 
 (defn- main-hand-item [player-id]
   (when interop/*ability-interop*
@@ -82,7 +84,7 @@
                                           {:is-item is-item :exp exp
                                            :overload-floor overload-floor :charge-ticks 0})
                      (ctx/ctx-send-to-client! ctx-id :current-charging/fx-start {:is-item is-item})))))
-   :tick!  (fn [{:keys [player-id ctx-id cost-ok?]}]
+   :tick!  (fn [{:keys [player-id ctx-id cost-ok? player]}]
              (when-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
                (let [is-item        (boolean (:is-item skill-state))
                      exp            (double (or (:exp skill-state) 0.0))
@@ -115,6 +117,11 @@
                            (ctx/terminate-context! ctx-id nil))
                        (do (skill-effects/add-skill-exp! player-id :current-charging
                                                          (if effective? 0.0001 0.00003))
+                         (when (and player
+                              (not is-item)
+                              effective?
+                              (zero? (mod (long (or charge-ticks 0)) 6)))
+                         (entity/player-spawn-entity-by-id! player arc-entity-id 0.0))
                            (ctx/ctx-send-to-client! ctx-id :current-charging/fx-update
                                                     {:is-item false :good? (boolean effective?)
                                                      :charged (double charged)

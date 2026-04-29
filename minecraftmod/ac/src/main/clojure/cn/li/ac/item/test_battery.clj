@@ -38,11 +38,7 @@
 ;; ============================================================================
 ;; Battery Items using Item DSL
 ;; ============================================================================
-;; TODO: Battery items disabled - missing texture resources
-;; Re-enable when textures are available:
-;; - basic_battery.png
-;; - advanced_battery.png  
-;; - ultimate_battery.png
+;; Item registration lives in cn.li.ac.item.energy-items.
 
 ;; ============================================================================
 ;; Battery Helper Functions

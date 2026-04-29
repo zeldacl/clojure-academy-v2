@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.apps.media-player
   "Media Player app - browse AcademyCraft media tracks."
   (:require [cn.li.ac.terminal.app-registry :as reg]
+            [cn.li.ac.terminal.apps.media-backend :as media-backend]
             [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.components :as comp]
@@ -14,18 +15,12 @@
         _ (comp/add-component! bg (comp/draw-texture (modid/asset-path "textures" "guis/data_terminal/app_back.png")))
         title (cgui/create-widget :pos [0 20] :size [450 30])
         _ (comp/add-component! title (comp/text-box :text "Media Player" :color 0xFFFFFFFF :scale 1.5))
-        content-lines ["AcademyCraft Media Library"
-                       ""
-                       "Available tracks:"
-                       "- Sisters' Noise"
-                       "- Only My Railgun"
-                       "- Level5 Judgelight"
-                       ""
-                       "Media disks can be obtained as items."
-                       "Use this app to browse and manage tracks."
-                       ""
-                       "Playback integration is under migration"
-                       "for Minecraft 1.20 architecture."]
+        content-lines (into ["AcademyCraft Media Library"
+                             ""
+                             "Media disks can be obtained as items."
+                             "Use this app to browse and manage tracks."
+                             ""]
+                            (media-backend/status-lines))
         content-widgets (map-indexed
                          (fn [idx line]
                            (let [w (cgui/create-widget :pos [30 (+ 70 (* idx 15))] :size [390 15])]
@@ -41,6 +36,8 @@
 (defn open-media-player-gui
   [player]
   (log/info "Opening media player for player:" player)
+  ;; Keep old app behavior of audible confirmation while backend controls are migrating.
+  (media-backend/play-current!)
   (let [gui (create-media-player-gui player)]
     (client-bridge/open-simple-gui! gui "Media Player")))
 

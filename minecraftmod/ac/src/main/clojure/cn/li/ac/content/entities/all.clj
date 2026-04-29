@@ -40,27 +40,18 @@
                                :hook :intensify-arcs}}}))
 
     ;; EntityCoinThrowing - for Railgun skill
-    ;; Note: This is a simplified implementation using scripted-projectile
-    ;; The original has special behavior (follows player XZ, returns to inventory)
-    ;; which may require custom Java implementation for full fidelity
     (edsl/register-entity!
       (edsl/create-entity-spec
         "entity_coin_throwing"
-        {:entity-kind :scripted-projectile
+        {:entity-kind :scripted-effect
          :category :misc
          :width 0.2
          :height 0.2
          :client-tracking-range 64
          :update-interval 1
-         :properties {:projectile {:default-item-id "my_mod:coin"
-                                   :gravity 0.06
-                                   :damage 0.0
-                                   :pickup-distance-sqr 0.0  ; No pickup
-                                   :drop-item-on-discard? false  ; Returns to inventory via skill logic
-                                   :hooks {:on-hit-block :pass-through
-                                           :on-hit-entity :pass-through
-                                           :on-anchored-tick :none
-                                           :on-anchored-hurt :none}}}}))
+         :properties {:effect {:life-ticks 120
+                               :follow-owner? false
+                               :hook :coin-throwing}}}))
 
     ;; Ray family (Forge adapter shells + renderer-id dispatch).
     (edsl/register-entity!
@@ -309,6 +300,20 @@
 
     (edsl/register-entity!
       (edsl/create-entity-spec
+        "entity_arc"
+        {:entity-kind :scripted-effect
+         :category :misc
+         :width 0.8
+         :height 0.8
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:effect {:life-ticks 20
+                               :follow-owner? true
+                               :renderer-id "arc-generic"
+                               :hook :generic-arc}}}))
+
+    (edsl/register-entity!
+      (edsl/create-entity-spec
         "entity_ripple_mark"
         {:entity-kind :scripted-effect
          :category :misc
@@ -334,6 +339,20 @@
                                :follow-owner? false
                                :renderer-id "blood-splash"
                                :hook :blood-splash}}}))
+
+    (edsl/register-entity!
+      (edsl/create-entity-spec
+        "entity_md_ball"
+        {:entity-kind :scripted-effect
+         :category :misc
+         :width 0.6
+         :height 0.6
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:effect {:life-ticks 50
+                               :follow-owner? false
+                               :renderer-id "md-ball"
+                               :hook :md-ball}}}))
 
     ;; Block-body family.
     (edsl/register-entity!

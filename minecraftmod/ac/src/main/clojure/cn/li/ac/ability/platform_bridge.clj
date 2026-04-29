@@ -11,6 +11,7 @@
             [cn.li.ac.ability.state.store :as ability-store]
             [cn.li.ac.ability.server.network :as ability-network]
             [cn.li.ac.ability.server.service.resource :as svc-res]
+            [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.state.context :as ctx]
@@ -331,10 +332,15 @@
        (fn [player-uuid]
          (ctx-mgr/abort-player-contexts! player-uuid))
 
+       :get-skills-for-category
+       (fn [cat-id]
+         (vec (skill/get-skills-for-category cat-id)))
+
        :on-player-tick!
        (fn [player-uuid]
          (ps/get-or-create-player-state! player-uuid)
          (ps/server-tick-player! player-uuid nil)
+         (delayed-projectiles/tick-player! player-uuid)
          (ctx-mgr/tick-context-manager!))
 
        :list-player-uuids
@@ -418,6 +424,19 @@
        :on-runtime-item-action!
        (fn [action player-uuid payload]
          (item-actions/on-item-action! action player-uuid payload))
+
+       :build-item-use-plan
+       (fn [_player-uuid item-id _activated? _side]
+         (when-let [action (item-actions/resolve-item-action item-id)]
+           (let [entity-spawn (item-actions/get-item-entity-spawn item-id)
+                 server-actions (cond-> [{:kind :consume-item :count 1 :unless-instabuild? true}
+                                        {:kind :domain-action :action action :payload {}}]
+                                  entity-spawn (conj {:kind :spawn-scripted-effect
+                                                      :entity-id (:entity-id entity-spawn)
+                                                      :speed (double (or (:speed entity-spawn) 0.0))}))]
+             {:server-actions server-actions
+              :client-actions [{:kind :notify-local-effect}]
+              :consume? true})))
 
        :compute-aoe-damage
        (fn [origin-pos target-pos radius damage falloff?]

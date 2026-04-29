@@ -6,7 +6,8 @@
 
   IC2 integration is completely optional - if IC2 is not present, this module
   will not be loaded and no errors will occur."
-  (:require [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.energy-integration :as energy-integration])
   (:import [cn.li.mcmod.energy IEnergyCapable]))
 
 
@@ -48,8 +49,8 @@
 (defn eu-conversion-rate
   "Get the EU conversion rate from config or default."
   []
-  ;; TODO: Add config option for EU conversion rate
-  default-eu-conversion-rate)
+  (double (or (energy-integration/ic2-energy-conversion-rate)
+              default-eu-conversion-rate)))
 
 (defn if-to-eu
   "Convert IF (Imaginary Energy) to EU (Energy Units).

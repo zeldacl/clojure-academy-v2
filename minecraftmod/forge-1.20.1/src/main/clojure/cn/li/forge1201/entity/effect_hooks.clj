@@ -11,8 +11,11 @@
   "diamond-shield" "cn.li.forge1201.entity.effect.hooks.OwnerOffsetEffectHook"
   "md-shield" "cn.li.forge1201.entity.effect.hooks.OwnerOffsetEffectHook"
   "surround-arc" "cn.li.forge1201.entity.effect.hooks.OwnerOffsetEffectHook"
+  "generic-arc" "cn.li.forge1201.entity.effect.hooks.GenericArcEffectHook"
+  "md-ball" "cn.li.forge1201.entity.effect.hooks.MdBallEffectHook"
    "ripple-mark" "cn.li.forge1201.entity.effect.hooks.NoopEffectHook"
-   "blood-splash" "cn.li.forge1201.entity.effect.hooks.NoopEffectHook"})
+  "blood-splash" "cn.li.forge1201.entity.effect.hooks.NoopEffectHook"
+  "coin-throwing" "cn.li.forge1201.entity.effect.hooks.CoinThrowingEffectHook"})
 
 (defn- collect-effect-hook-entries
   []

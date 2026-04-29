@@ -116,6 +116,10 @@ public class ScriptedEffectEntity extends Entity {
         return ownerUuid == null ? null : level().getPlayerByUUID(ownerUuid);
     }
 
+    public void setOwnerPlayer(Player owner) {
+        ownerUuid = owner == null ? null : owner.getUUID();
+    }
+
     public static final class ArcData {
         public final float[][][] strands;
         public int lifeTicks;

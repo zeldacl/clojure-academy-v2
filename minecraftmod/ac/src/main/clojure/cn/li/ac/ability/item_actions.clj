@@ -49,3 +49,23 @@
       (catch Exception e
         (log/warn "Item action handler" action "failed:" (ex-message e))
         nil))))
+
+  ;; ============================================================================
+  ;; Item → entity-spawn spec
+  ;; ============================================================================
+
+  (defonce ^:private item-entity-spawns
+    ;; item-id (String) → {:entity-id String :speed double}
+    (atom {}))
+
+  (defn register-item-entity-spawn!
+    "Register a scripted-effect entity to spawn when `item-id` is used.
+    `entity-spec` is a map with :entity-id (String) and optional :speed (double)."
+    [item-id entity-spec]
+    (swap! item-entity-spawns assoc item-id entity-spec)
+    nil)
+
+  (defn get-item-entity-spawn
+    "Return the entity-spawn spec for `item-id`, or nil."
+    [item-id]
+    (get @item-entity-spawns item-id))

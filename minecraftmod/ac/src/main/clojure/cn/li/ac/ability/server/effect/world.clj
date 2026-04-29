@@ -1,6 +1,15 @@
 (ns cn.li.ac.ability.server.effect.world
   (:require [cn.li.ac.ability.server.effect.core :as effect]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
+
+(effect/defop :spawn-entity-from-player
+  [evt {:keys [entity-id speed]}]
+  (when-let [player (:player evt)]
+    (entity/player-spawn-entity-by-id! player
+                                       (str entity-id)
+                                       (double (or speed 0.0))))
+  evt)
 
 (effect/defop :spawn-lightning
   [evt {:keys [at]}]
