@@ -295,6 +295,14 @@ loom {
             server()
             configName = "Forge Server 1.20.1"
             runDir = "run"
+            property 'forge.enabledGameTestNamespaces', mod_id
+        }
+        gameTestServer {
+            server()
+            configName = "Forge GameTest Server 1.20.1"
+            runDir = "run-gametest"
+            property 'forge.enabledGameTestNamespaces', mod_id
+            programArgs '--safeMode'
         }
         // 补全 DataGen 配置
         data {

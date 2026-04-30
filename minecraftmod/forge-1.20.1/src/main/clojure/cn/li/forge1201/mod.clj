@@ -89,7 +89,8 @@
 
 (defn- clojurephant-compilation?
   []
-  (boolean (System/getProperty "clojure.server.clojurephant")))
+  (and (boolean *compile-files*)
+       (boolean (System/getProperty "clojure.server.clojurephant"))))
 
 
 ;; Lazy block properties - only accessed during registration, not during namespace load
@@ -743,9 +744,11 @@
         ;; Register all blocks and items using metadata-driven approach
         ;; DSL systems are automatically initialized when namespaces load
         (register-scripted-tile-hooks!)
-        (effect-hooks/register-all-effect-hooks!)
-        (ray-hooks/register-all-ray-hooks!)
-        (marker-hooks/register-all-marker-hooks!)
+        ;; Client-only visual hook strategies must not be loaded on dedicated server.
+        (when (side/client-side?)
+          (effect-hooks/register-all-effect-hooks!)
+          (ray-hooks/register-all-ray-hooks!)
+          (marker-hooks/register-all-marker-hooks!))
         (register-all-fluids!)
         (register-all-blocks!)
         (register-all-entities!)

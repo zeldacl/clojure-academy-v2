@@ -69,6 +69,11 @@
     (and state
          (cd/in-main-cooldown? (:cooldown-data state) ctrl-id))))
 
+(defn should-apply-main-cooldown?
+  "Pure policy helper: only skip cooldown when skill cooldown mode is explicit :manual."
+  [skill-spec]
+  (not= :manual (get-in skill-spec [:cooldown :mode])))
+
 (defn handle-key-down!
   ([ctx-id payload]
    (handle-key-down! ctx-id payload nil))
@@ -107,8 +112,8 @@
          (evt/fire-ability-event!
            (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))
         (let [latest-ctx (ctx/get-context ctx-id)
-              spec (skill/get-skill (:skill-id latest-ctx))]
-          (when-not (= :manual (get-in spec [:cooldown :mode]))
+            spec (skill/get-skill (:skill-id latest-ctx))]
+          (when (should-apply-main-cooldown? spec)
              (apply-main-cooldown! released-ctx)))
          (ctx/terminate-context! ctx-id terminate-fn)
          true)))))

@@ -1,6 +1,7 @@
 package cn.li.forge1201.worldgen;
 
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.feature.Feature;
@@ -16,7 +17,7 @@ import net.minecraftforge.registries.RegistryObject;
 public class ModFeatures {
 
     public static final DeferredRegister<Feature<?>> FEATURES =
-        DeferredRegister.create(ForgeRegistries.FEATURES, "my_mod");
+        DeferredRegister.create(Registries.FEATURE, "my_mod");
 
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> PHASE_LIQUID_POOL =
         FEATURES.register("phase_liquid_pool", () -> {

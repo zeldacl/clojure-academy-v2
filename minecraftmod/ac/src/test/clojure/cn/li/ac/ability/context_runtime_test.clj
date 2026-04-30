@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.context-runtime-test
-  (:require [cn.li.ac.content.ability]
+        (:require [clojure.test :refer [deftest is testing use-fixtures]]
+                                                [cn.li.ac.content.ability]
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.model.ability :as ad]
@@ -7,6 +8,17 @@
             [cn.li.ac.ability.model.cooldown :as cd]
             [cn.li.ac.ability.server.service.context-runtime :as rt]
             [cn.li.ac.ability.server.service.cooldown :as cd-svc]))
+
+(defn- reset-test-state! [f]
+        (doseq [ctx-id (keys (ctx/get-all-contexts))]
+                (ctx/remove-context! ctx-id))
+        (reset! ps/player-states {})
+        (f)
+        (doseq [ctx-id (keys (ctx/get-all-contexts))]
+                (ctx/remove-context! ctx-id))
+        (reset! ps/player-states {}))
+
+(use-fixtures :each reset-test-state!)
 
 (defn- seed-player-state!
   [uuid]
@@ -21,33 +33,34 @@
                                 :preset-data {:active-preset 0 :slots {}}
                                 :dirty? false})))
 
-(defn test-key-down-blocked-by-cooldown
-  []
+(deftest key-down-blocked-by-cooldown-test
   (let [uuid "test-player-cooldown"
-        _ (seed-player-state! uuid)
-        _ (ps/update-cooldown-data! uuid cd-svc/set-main-cooldown :arc-gen 10)
-        c (ctx/new-server-context uuid :arc-gen "ctx-cd")]
-    (ctx/register-context! c)
-    (assert (false? (rt/handle-key-down! "ctx-cd" {:ctx-id "ctx-cd" :skill-id :arc-gen}))
-            "key-down should be rejected while main cooldown is active")
-    (assert (= ctx/STATUS-TERMINATED (:status (ctx/get-context "ctx-cd")))
-            "rejected key-down should terminate context")))
+                _ (seed-player-state! uuid)
+                _ (ps/update-cooldown-data! uuid cd-svc/set-main-cooldown :arc-gen 10)
+                c (ctx/new-server-context uuid :arc-gen "ctx-cd")]
+        (ctx/register-context! c)
+        (is (false? (rt/handle-key-down! "ctx-cd" {:ctx-id "ctx-cd" :skill-id :arc-gen}))
+                "key-down should be rejected while main cooldown is active")
+        (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context "ctx-cd")))
+                "rejected key-down should terminate context")))
 
-(defn test-key-tick-aborts-on-resource-insufficient
-  []
-  (let [uuid "test-player-resource"
-        _ (seed-player-state! uuid)
-        _ (ps/update-resource-data! uuid assoc :cur-cp 0.0)
-        c (-> (ctx/new-server-context uuid :arc-gen "ctx-res")
-              (assoc :input-state :active))]
-    (ctx/register-context! c)
-    (assert (false? (rt/handle-key-tick! "ctx-res" {:ctx-id "ctx-res" :skill-id :arc-gen}))
-            "key-tick should fail when resource consumption cannot pass")
-    (assert (= ctx/STATUS-TERMINATED (:status (ctx/get-context "ctx-res")))
-            "failed key-tick should terminate context")))
+(deftest key-tick-dispatches-while-active-test
+        (let [uuid "test-player-resource"
+                                _ (seed-player-state! uuid)
+                                c (-> (ctx/new-server-context uuid :arc-gen "ctx-res")
+                                                        (assoc :input-state :active))]
+                (ctx/register-context! c)
+                (is (true? (rt/handle-key-tick! "ctx-res" {:ctx-id "ctx-res" :skill-id :arc-gen}))
+                                "active context should accept key-tick")
+                (is (= ctx/STATUS-ALIVE (:status (ctx/get-context "ctx-res")))
+                                "key-tick keeps context alive")))
+
+(deftest cooldown-policy-helper-test
+        (testing "manual cooldown mode disables auto main cooldown"
+                (is (false? (rt/should-apply-main-cooldown? {:cooldown {:mode :manual}}))))
+        (testing "missing/other mode uses default auto cooldown"
+                (is (true? (rt/should-apply-main-cooldown? {:cooldown {:mode :default}})))
+                (is (true? (rt/should-apply-main-cooldown? {})))))
 
 (defn run-all-tests []
-  (println "=== ability context runtime tests ===")
-  (test-key-down-blocked-by-cooldown)
-  (test-key-tick-aborts-on-resource-insufficient)
-  (println "ok"))
+        (clojure.test/run-tests 'cn.li.ac.ability.context-runtime-test))

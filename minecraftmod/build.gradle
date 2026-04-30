@@ -56,6 +56,89 @@ subprojects {
     }
 }
 
+tasks.register('unitTestCompile') {
+    group = 'verification'
+    description = 'Compile unit test namespaces for platform-neutral modules.'
+    dependsOn ':mcmod:compileTestClojure', ':ac:compileTestClojure'
+}
+
+tasks.register('verifyForgeBaseline') {
+    group = 'verification'
+    description = 'Compile baseline Clojure sources for ac, mcmod, and forge-1.20.1.'
+    dependsOn ':ac:compileClojure', ':mcmod:compileClojure', ':forge-1.20.1:compileClojure'
+}
+
+def registerForgeGameTestTask = {
+    def forgeProject = project(':forge-1.20.1')
+    def candidates = [
+        'runGameTestServer',
+        'runGametestServer',
+        'gameTestServer',
+        'runGameTests',
+        'runGametests'
+    ]
+    def gameTestTasks = forgeProject.tasks.matching { candidates.contains(it.name) }
+
+    tasks.register('runForgeGameTests') {
+        group = 'verification'
+        description = 'Run Forge GameTest server when an appropriate run task exists.'
+        dependsOn 'unitTestCompile', ':forge-1.20.1:compileClojure', gameTestTasks
+
+        onlyIf {
+            if (gameTestTasks.isEmpty()) {
+                logger.lifecycle('[runForgeGameTests] skipped. No Forge GameTest task found. Checked: {}', candidates.join(', '))
+                return false
+            }
+            logger.lifecycle('[runForgeGameTests] using task(s): {}', gameTestTasks.collect { it.path }.join(', '))
+            return true
+        }
+    }
+}
+
+registerForgeGameTestTask()
+
+tasks.register('validateForgeGameTestLog') {
+    group = 'verification'
+    description = 'Fail verification when Forge GameTest run log contains known fatal startup/runtime errors.'
+    dependsOn 'runForgeGameTests'
+
+    doLast {
+        def logFile = file('forge-1.20.1/run-gametest/logs/latest.log')
+        if (!logFile.exists()) {
+            throw new GradleException("Forge GameTest log not found: ${logFile}")
+        }
+
+        def logText = logFile.getText('UTF-8')
+        def requiredMarkers = [
+            'Done (',
+            'Enabled Gametest Namespaces:'
+        ]
+        def fatalPatterns = [
+            'Failed to load Clojure mod implementation',
+            'RuntimeDistCleaner',
+            'Failed to load registries due to above errors',
+            'Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/feature]',
+            'Failed to parse my_mod:worldgen/configured_feature/phase_liquid_pool.json'
+        ]
+
+        def missingMarkers = requiredMarkers.findAll { !logText.contains(it) }
+        if (!missingMarkers.isEmpty()) {
+            throw new GradleException("Forge GameTest log is missing expected startup markers: ${missingMarkers}")
+        }
+
+        def matchedFatalPatterns = fatalPatterns.findAll { logText.contains(it) }
+        if (!matchedFatalPatterns.isEmpty()) {
+            throw new GradleException("Forge GameTest log contains fatal errors: ${matchedFatalPatterns}")
+        }
+    }
+}
+
+tasks.register('verifyForgeTesting') {
+    group = 'verification'
+    description = 'Run unit test compilation and Forge GameTest verification for current scope.'
+    dependsOn 'verifyForgeBaseline', 'unitTestCompile', 'runForgeGameTests', 'validateForgeGameTestLog'
+}
+
 
 
 
