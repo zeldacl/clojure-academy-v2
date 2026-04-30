@@ -17,8 +17,8 @@
 
 | 文件 | 用途 |
 |------|------|
-| `ARCHITECTURE.md` | 分层与元数据驱动基线 |
-| `CLIENT_SERVER_SEPARATION.md` | 客户端隔离规则 |
+| `minecraftmod/docs/98-archive/ARCHITECTURE.md` | 历史架构说明（归档；现行见 `minecraftmod/docs/02-architecture/Runtime_And_DSL_CN.md`） |
+| `minecraftmod/docs/02-architecture/CLIENT_SERVER_SEPARATION.md` | 客户端隔离规则 |
 | `mcmod/.../platform/capability.clj` | 协议与能力挂接模式 |
 | `mcmod/.../events/metadata.clj` | 事件元数据注册 |
 | `mcmod/.../events/dispatcher.clj` | 事件分发入口 |

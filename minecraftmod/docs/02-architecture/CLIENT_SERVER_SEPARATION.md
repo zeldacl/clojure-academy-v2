@@ -36,8 +36,8 @@
 
 ## Key Principles
 
-1. **Dependency chain**: platform → mcmod → ac (one-way only)
-2. **Client isolation**: `net.minecraft.client.*` only in platform CLIENT sublayer
+1. **Dependency chain**: **`ac`** 与 **`forge-1.20.1`** 互不直接依赖；二者均依赖 **`mcmod`**（及需要时的 **`api`**）。Forge 适配层通过 `mcmod` 生命周期与元数据拉起 `ac`，而非在命名空间上 `require` `cn.li.ac.*`。详见 [Runtime_And_DSL_CN.md](Runtime_And_DSL_CN.md)。
+2. **Client isolation**: `net.minecraft.client.*` only in platform (`forge-1.20.1`) CLIENT sublayer
 3. **Side detection**: All client code loaded via `side/resolve-client-fn`
 4. **Runtime separation**: Single JAR works on both client and dedicated server
 

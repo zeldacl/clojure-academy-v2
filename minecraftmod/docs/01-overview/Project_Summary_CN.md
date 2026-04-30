@@ -73,6 +73,8 @@ flowchart LR
 
 ## 三、构建与运行
 
+命令表、产物路径与 Fabric 可选说明见 **`GETTING_STARTED.md`**。摘要：
+
 - **构建**：`.\gradlew.bat build`（在包含 `settings.gradle` 的 `minecraftmod` 目录执行）。
 - **运行客户端**：`.\gradlew.bat :forge-1.20.1:runClient`。
 - **Clojure 快速编译**：`.\gradlew.bat :ac:compileClojure` 或 `:mcmod:compileClojure`。
@@ -83,9 +85,16 @@ flowchart LR
 
 ## 四、文档索引
 
+- **构建速查**：[GETTING_STARTED.md](GETTING_STARTED.md)
+- **工程布局与命名空间**：[PROJECT_LAYOUT.md](PROJECT_LAYOUT.md)
 - **运行时与 DSL 总览**：`02-architecture/Runtime_And_DSL_CN.md`
 - 架构与 BlockState：`02-architecture/BlockState_Architecture.md`
+- 客户端/服务端分离：`02-architecture/CLIENT_SERVER_SEPARATION.md`
 - 平台与 Fabric：`02-architecture/Platform_And_Fabric.md`
 - DataGenerator：`04-datagen/DataGenerator.md`
 - Wireless / GUI：`05-wireless/`、`06-gui/`
 - DSL：`03-dsl/`
+- 能力矩阵：`07-ability/ABILITY_FEATURE_MATRIX.md`
+- 测试范围：`testing/IMPLEMENTATION_SCOPE.md`
+- Agent 工具约定：`dev/AGENT_AND_TOOLING.md`
+- **历史归档（非现行权威）**：`98-archive/README.md`

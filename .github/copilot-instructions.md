@@ -516,11 +516,13 @@ Use inline `def` to capture intermediate values during REPL development:
 - `{platform}/src/main/clojure/my_mod/{forge1201|fabric1201}/registry.clj` — Platform registry
 - `{platform}/src/main/clojure/my_mod/{forge1201|fabric1201}/events.clj` — Platform events
 
-### Documentation
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Architecture overview
-- [BUILD.md](BUILD.md) — Build instructions
-- [docs/03-dsl/](docs/03-dsl/) — DSL guides (Chinese)
-- [docs/02-architecture/](docs/02-architecture/) — Architecture deep-dives
+### Documentation (under `minecraftmod/docs/`)
+- [minecraftmod/docs/README.md](minecraftmod/docs/README.md) — Documentation index
+- [minecraftmod/docs/01-overview/GETTING_STARTED.md](minecraftmod/docs/01-overview/GETTING_STARTED.md) — Build and run commands
+- [minecraftmod/docs/02-architecture/Runtime_And_DSL_CN.md](minecraftmod/docs/02-architecture/Runtime_And_DSL_CN.md) — Current runtime and DSL overview
+- [minecraftmod/docs/98-archive/ARCHITECTURE.md](minecraftmod/docs/98-archive/ARCHITECTURE.md) — Legacy architecture snapshot (archived)
+- [minecraftmod/docs/03-dsl/](minecraftmod/docs/03-dsl/) — DSL guides
+- [minecraftmod/docs/02-architecture/](minecraftmod/docs/02-architecture/) — Architecture deep-dives
 
 ## Adding New Features
 

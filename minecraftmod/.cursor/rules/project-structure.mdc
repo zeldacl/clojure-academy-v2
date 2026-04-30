@@ -5,32 +5,38 @@ alwaysApply: true
 
 # Project structure
 
+Human-readable mirror: [docs/01-overview/PROJECT_LAYOUT.md](../../docs/01-overview/PROJECT_LAYOUT.md) (keep in sync when layout changes).
+
 - **Top-level layout**
-  - `minecraftmod/` is the Gradle root for this mod (`settings.gradle` includes all subprojects).
-  - **mcmod** — platform-neutral foundation: DSLs, abstractions, and shared utilities (no Forge/Fabric or Minecraft runtime deps).
-  - **ac** — platform-neutral game logic and content; depends on `mcmod`.
-  - **forge-1.20.1** and **fabric-1.20.1** — loader-specific adapters, entrypoints, and resources.
+  - `minecraftmod/` is the Gradle root for this mod (`settings.gradle` includes subprojects).
+  - **`api`** — outward-facing Java API (interop surfaces); no Clojure game logic.
+  - **`mcmod`** — platform-neutral foundation: protocols, DSLs, metadata, utilities (no Forge/Fabric or `net.minecraft.*`).
+  - **`ac`** — platform-neutral game content and domain logic; depends on `mcmod` only (plus `api` where needed).
+  - **`forge-1.20.1`** — Forge adapter: `@Mod`, registration, Java bridges, implements `mcmod` protocols.
+  - **`fabric-1.20.1`** — optional Fabric adapter; may be omitted from root `settings.gradle` (default `include` commented).
 
 - **mcmod (foundation)**
-  - Code lives under `mcmod/src/main/clojure/my_mod/...` with `my-mod.*` namespaces.
-  - Domain folders: `block` (dsl, tile_dsl, tile_logic), `client` (obj, render), `events`, `gui` (api, cgui, container, core, dsl, network, etc.), `inventory`, `item` (dsl), `nbt` (dsl), `network`, `platform` (item, nbt, position, resource, world), `registry`, `util`.
-  - Stays platform-neutral: no direct Forge/Fabric or Minecraft API imports; only Clojure and data libs.
+  - Clojure under `mcmod/src/main/clojure/cn/li/mcmod/...` with namespaces **`cn.li.mcmod.*`**.
+  - Domain areas include: `block` (dsl, tile_dsl, tile_logic), `client` (obj, render), `events`, `gui` (api, cgui, container, core, dsl, network, …), `inventory`, `item` (dsl), `nbt` (dsl), `network`, `platform`, `registry`, `util`, etc.
+  - No direct Forge/Fabric/Minecraft API imports; Clojure + data libs only.
   - No `src/main/resources` in this module (per `build.gradle`).
 
 - **ac (game content)**
-  - Code under `ac/src/main/clojure/my_mod/...` with `my-mod.*` namespaces.
-  - Domain folders: `block`, `client/render`, `config`, `energy`, `gui`, `item`, `registry`, `wireless` (network, gui, world data, etc.).
-  - Depends on `mcmod`; keeps logic platform-neutral and uses metadata/DSLs from mcmod.
-  - Shared assets and data go under `ac/src/main/resources` (e.g. `assets/my_mod/`, `data/my_mod/`).
+  - Clojure under `ac/src/main/clojure/cn/li/ac/...` with namespaces **`cn.li.ac.*`**.
+  - Domains: `block`, `client/render`, `config`, `energy`, `gui`, `item`, `registry`, `wireless`, etc.
+  - Depends on `mcmod`; uses mcmod DSLs/metadata; **must not** import Forge/Fabric/`net.minecraft.*`.
+  - Shared assets: `ac/src/main/resources` (e.g. `assets/my_mod/`, `data/my_mod/`).
 
-- **Platform modules (forge-1.20.1, fabric-1.20.1)**
-  - `src/main/java` — Java entrypoints and any Java-only integration for the loader.
-  - `src/main/clojure/my_mod/forge1201` and `src/main/clojure/my_mod/fabric1201` — adapter namespaces that:
-    - Translate loader events into calls into `my-mod.*` (mcmod and ac).
-    - Read metadata/DSL from ac/mcmod instead of hardcoding registry names or content IDs.
-  - Loader-specific assets and metadata (e.g. `mods.toml`, `fabric.mod.json`, loader-specific lang/models) live in each module’s `src/main/resources`.
+- **Platform modules (`forge-1.20.1`, optional `fabric-1.20.1`)**
+  - `src/main/java` — loader entrypoints and Java-only glue.
+  - Clojure adapters: `forge-1.20.1/src/main/clojure/cn/li/forge1201/...` → **`cn.li.forge1201.*`** (and similarly `cn.li.fabric1201.*` when Fabric is enabled).
+  - Translate loader events into `mcmod` / lifecycle hooks; read metadata from `mcmod`/`ac` instead of hardcoding registry IDs.
+  - Loader-specific resources: `mods.toml`, `fabric.mod.json`, loader-specific assets under each module’s `src/main/resources`.
+
+- **Dependency red line**
+  - **`ac` and `forge-1.20.1` must not reference each other** (no `cn.li.ac` requires from forge; no `cn.li.forge1201` from ac). Both depend on **`mcmod`** (and **`api`** where applicable).
 
 - **Adding new content**
-  - Add or extend DSL/metadata in **mcmod** for new abstractions (blocks, items, GUIs, etc.).
-  - Implement game content in **ac** (new blocks, items, GUIs, energy, wireless, etc.) using mcmod’s DSLs.
-  - Touch **forge** or **fabric** only when a feature needs loader-specific glue; then add or extend metadata in ac/mcmod and keep adapter code minimal in the platform module.
+  - Extend DSL/metadata in **`mcmod`** when introducing new abstractions.
+  - Implement gameplay in **`ac`** using `defblock` / `defitem` / etc.
+  - Touch **`forge-1.20.1`** (or Fabric) only for loader-specific wiring; keep adapters thin.
