@@ -1,5 +1,7 @@
 # GUI DSL 使用与实现
 
+> 状态标签：**现行**（规范文档）
+
 本文档合并自 GUI DSL 使用指南与实现总结。**默认构建为 Forge 1.20.1**；Fabric 子工程存在但未纳入根 `settings.gradle`。能量相关使用 **`cn.li.ac.energy.operations`**。
 
 **架构**：`defgui` 元数据在 **`cn.li.mcmod.gui.dsl`**；具体 Wireless 等 GUI 在 **`ac`**；**`cn.li.ac.core/init`** 在加载 **`content-ns/load-all!`** 之后注册 screen factory。模块边界与启动顺序见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。

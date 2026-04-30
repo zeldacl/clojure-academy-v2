@@ -1,5 +1,7 @@
 # Wireless GUI 状态与缺陷报告
 
+> 状态标签：**现行**（运维排障参考）
+
 本文档合并自：Matrix & Wireless 完整性检查报告（V1/V2）、Wireless Matrix GUI 完整性分析、Wireless Node GUI 修复报告。路径与命名空间以当前项目为准（`my_mod`、`assets/my_mod/guis/`、`my_mod:textures/guis/` 等）。
 
 ---

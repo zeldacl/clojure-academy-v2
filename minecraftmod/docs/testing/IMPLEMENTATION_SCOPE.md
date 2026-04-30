@@ -24,7 +24,32 @@ Refactors are allowed when existing structure blocks reliable tests, but each re
 - `gradlew unitTestCompile`
 - `gradlew verifyForgeBaseline`
 - `gradlew runForgeGameTests`
+- `gradlew validateForgeGameTestLog`
 - `gradlew verifyForgeTesting`
+
+## Recommended Execution Order
+1. `gradlew unitTestCompile`
+2. `gradlew verifyForgeBaseline`
+3. `gradlew verifyForgeTesting`
+4. Split run when debugging:
+   - `gradlew runForgeGameTests`
+   - `gradlew validateForgeGameTestLog`
+
+## Failure Triage
+- **Compile failure (`compileClojure` / `checkClojure`)**
+  - First narrow with namespace flags:
+    - `-PcompileNsOnly=ns.a,ns.b`
+    - `-PcheckNsOnly=ns.a,ns.b`
+    - `-PcheckNsFile=<path>`
+  - Then use:
+    - `:forge-1.20.1:bisectCompileClojure`
+    - `:forge-1.20.1:bisectCheckClojure`
+- **GameTest startup failure (before any tests execute)**
+  - Treat as runtime bootstrap/data issue, not test harness issue.
+  - Prioritize datapack/registry consistency checks.
+- **GameTest log validation failure**
+  - Use `validateForgeGameTestLog` output to classify fatal errors vs assertion failures.
+  - Fix environment/bootstrap errors first, then test-level failures.
 
 ## Current Runtime Blocker
 - Forge GameTest task is wired and executable, but runtime world bootstrap currently fails before tests run because datapack registry contains an invalid configured feature reference:

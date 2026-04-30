@@ -1,5 +1,7 @@
 # Wireless Matrix GUI
 
+> 状态标签：**现行**（维护入口）
+
 本文档合并自：原始实现分析、移植实现报告、迁移总结。资源路径以 **`ac/src/main/resources/assets/my_mod/guis/`**、`my_mod:guis/` 为准；与 Node GUI 共用 `cn.li.mcmod.gui` 下 XML 解析器与 DSL。
 
 ---

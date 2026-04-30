@@ -1,5 +1,7 @@
 # Wireless Node GUI
 
+> 状态标签：**现行**（维护入口）
+
 本文档合并自：原始实现分析、移植实现报告、迁移总结。当前项目资源路径以 `ac/src/main/resources/assets/my_mod/guis/`、`my_mod:guis/rework/` 为准；能量相关逻辑见 **`cn.li.ac.energy.operations`**。
 
 ---

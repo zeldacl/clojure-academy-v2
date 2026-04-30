@@ -1,5 +1,7 @@
 # CGUI Document Migration - Regression Test Report
 
+> 状态标签：**历史**（一次性迁移回归报告）
+
 **Date**: March 1, 2026  
 **Status**: ✅ PASSED  
 **Tester**: Automated Regression Verification  

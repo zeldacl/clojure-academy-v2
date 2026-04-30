@@ -1,5 +1,7 @@
 # Demo Mod 使用说明
 
+> 状态标签：**历史**（演示文档，非主线规范）
+
 **说明**：默认构建为 **Forge 1.20.1**。Fabric 代码在 `fabric-1.20.1/`，但根 `settings.gradle` 默认不 include 该子工程。下文若出现已删除的 `cn.li.mcmod.gui.core` / `cn.li.core` 等命名空间，请以当前仓库中的 **`cn.li.ac.core`**、`cn.li.mcmod.gui.*`、`cn.li.forge1201.*` 为准。
 
 ## 功能概述

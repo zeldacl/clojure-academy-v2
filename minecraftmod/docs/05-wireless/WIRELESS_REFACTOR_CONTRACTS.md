@@ -1,5 +1,7 @@
 # Wireless Refactor Contracts
 
+> 状态标签：**现行**（重构约束）
+
 This document defines the temporary contracts used during the domain migration.
 
 ## 1. Domain Handler Contract

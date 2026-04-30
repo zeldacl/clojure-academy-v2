@@ -8,11 +8,19 @@
 |------|------|
 | **`api`** | 对外 Java API（如互操作用的接口包），无 Clojure 游戏逻辑 |
 | **`mcmod`** | 平台无关：协议、DSL、`registry.metadata`、事件/GUI/NBT 等元数据；**禁止** `net.minecraft.*` 与 Loader API |
-| **`ac`** | 游戏内容与域逻辑；**禁止**直接引用 Forge/Fabric/Minecraft；通过 `mcmod` 与约定边界交互 |
-| **`forge-1.20.1`** | Forge 入口、注册、桥接 Java、实现 `mcmod` 协议；**禁止**依赖 `cn.li.ac.*` 命名空间 |
+| **`ac`** | 游戏内容与域逻辑；**禁止**直接引用 Forge/Fabric/Minecraft API；通过 `mcmod` 与约定边界交互 |
+| **`forge-1.20.1`** | Forge 入口、注册、桥接 Java、实现 `mcmod` 协议；允许通过受控运行时桥接使用 `ac` 能力 |
 | **`fabric-1.20.1`** | 可选 Fabric 适配；默认可能未在 `settings.gradle` 中 `include` |
 
-**红线**：`ac` 与 `forge-1.20.1` **不得相互引用**。
+## 依赖红线（以“静态耦合”约束为主）
+
+- **禁止** `ac` 对 `forge-1.20.1` 建立静态依赖（命名空间/类依赖）。
+- **禁止**在 `mcmod` 与 `ac` 中引入平台 API（`net.minecraft.*` / Forge/Fabric）。
+- **允许** `forge-1.20.1` 对 `ac` 进行受控运行时桥接（动态入口），用于装配与平台绑定。
+- 运行时桥接必须：
+  1. 有明确入口函数；
+  2. 在文档中可追踪；
+  3. 不把跨层实现细节固化为稳定 API。
 
 ## 源码路径与 Clojure 命名空间
 
