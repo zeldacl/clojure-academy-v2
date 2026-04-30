@@ -1,3 +1,4 @@
 {
-  "type": "my_mod:phase_liquid_pool"
+  "type": "my_mod:phase_liquid_pool",
+  "config": {}
 }

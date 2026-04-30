@@ -39,6 +39,7 @@
            [cn.li.forge1201.effect ScriptedMobEffect]
            [cn.li.forge1201.item NbtBarItem ScriptedItem]
            [cn.li.forge1201.entity ModEntities]
+           [cn.li.forge1201.worldgen ModFeatures]
            [net.minecraft.sounds SoundEvent]
            [net.minecraft.world.effect MobEffectCategory]
            [net.minecraft.world.food FoodProperties$Builder]
@@ -775,6 +776,7 @@
 
           (config-bridge/register-all! mod-bus)
           (ModEntities/register mod-bus)
+          (ModFeatures/register mod-bus)
           (.register ^DeferredRegister (force sounds-register) mod-bus)
           (.register ^DeferredRegister (force effects-register) mod-bus)
           (.register ^DeferredRegister (force particle-types-register) mod-bus)

@@ -1,7 +1,7 @@
 package cn.li.forge1201.worldgen;
 
-import net.minecraft.core.registries.Registries;
-import net.minecraft.world.level.block.Block;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
@@ -18,31 +18,17 @@ public class ModFeatures {
     public static final DeferredRegister<Feature<?>> FEATURES =
         DeferredRegister.create(ForgeRegistries.FEATURES, "my_mod");
 
-    private static BlockState phaseLiquidBlockState = null;
-
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> PHASE_LIQUID_POOL =
         FEATURES.register("phase_liquid_pool", () -> {
-            if (phaseLiquidBlockState == null) {
-                throw new IllegalStateException("Phase liquid block state not set! Call setPhaseLiquidBlock first.");
-            }
-            return new PhaseLiquidPoolFeature(NoneFeatureConfiguration.CODEC, phaseLiquidBlockState);
+            // Look up the imag_phase block from the registry at feature registration time.
+            // Block registries fire before feature registries so this is safe.
+            net.minecraft.world.level.block.Block block =
+                ForgeRegistries.BLOCKS.getValue(new ResourceLocation("my_mod", "imag_phase"));
+            BlockState blockState = (block != null && block != Blocks.AIR)
+                ? block.defaultBlockState()
+                : Blocks.WATER.defaultBlockState();
+            return new PhaseLiquidPoolFeature(NoneFeatureConfiguration.CODEC, blockState);
         });
-
-    /**
-     * Set the phase liquid block state to use for pool generation.
-     * Must be called before feature registration.
-     */
-    public static void setPhaseLiquidBlock(BlockState blockState) {
-        phaseLiquidBlockState = blockState;
-    }
-
-    /**
-     * Set the phase liquid block to use for pool generation.
-     * Must be called before feature registration.
-     */
-    public static void setPhaseLiquidBlock(Block block) {
-        setPhaseLiquidBlock(block.defaultBlockState());
-    }
 
     public static void register(IEventBus modEventBus) {
         FEATURES.register(modEventBus);
