@@ -86,3 +86,8 @@
       (is (= 2.0 (:cp-speed data)))
       (is (= 3.0 (:ol-speed data)))
       (is (empty? events)))))
+
+(deftest set-activated-public-boundary-no-stub-test
+  (let [base (rdata/new-resource-data)
+        {:keys [data]} (res/set-activated base "u-public" true)]
+    (is (true? (:activated data)))))

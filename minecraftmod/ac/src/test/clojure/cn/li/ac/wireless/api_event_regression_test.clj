@@ -1,56 +1,18 @@
 (ns cn.li.ac.wireless.api-event-regression-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.api :as wapi]
             [cn.li.ac.wireless.data.world :as wd]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.events :as platform-events])
   (:import [cn.li.acapi.wireless
-            IWirelessMatrix
-            IWirelessNode
-            IWirelessGenerator
-            IWirelessReceiver
             WirelessCapabilityKeys]))
-
-(defn- fake-matrix []
-  (reify IWirelessMatrix
-    (getMatrixCapacity [_] 64)
-    (getMatrixBandwidth [_] 128.0)
-    (getMatrixRange [_] 16.0)
-    (getSsid [_] "ssid-a")
-    (getPassword [_] "pw")
-    (getPlacerName [_] "tester")))
-
-(defn- fake-node [password]
-  (reify IWirelessNode
-    (getEnergy [_] 0.0)
-    (setEnergy [_ _] nil)
-    (getMaxEnergy [_] 1000.0)
-    (getBandwidth [_] 100.0)
-    (getCapacity [_] 8)
-    (getRange [_] 10.0)
-    (getNodeName [_] "node-a")
-    (getPassword [_] password)
-    (getBlockPos [_] nil)))
-
-(defn- fake-generator []
-  (reify IWirelessGenerator
-    (getEnergy [_] 0.0)
-    (setEnergy [_ _] nil)
-    (getProvidedEnergy [_ _] 0.0)
-    (getGeneratorBandwidth [_] 100.0)))
-
-(defn- fake-receiver []
-  (reify IWirelessReceiver
-    (getRequiredEnergy [_] 0.0)
-    (injectEnergy [_ _] 0.0)
-    (pullEnergy [_ _] 0.0)
-    (getReceiverBandwidth [_] 100.0)))
 
 (deftest create-network-fires-topology-map-when-created
   (testing "create-network! posts map event when create succeeds"
     (let [events (atom [])
-          matrix (fake-matrix)]
+          matrix (stubs/fake-matrix)]
       (with-redefs [platform-be/be-get-world-safe (fn [_] :world)
                     wd/get-world-data (fn [_] :world-data)
                     vb/create-vmatrix (fn [_] :matrix-vb)
@@ -74,14 +36,14 @@
                   wd/get-world-data (fn [_] :world-data)
                   vb/create-vmatrix (fn [_] :matrix-vb)
                   wd/create-network-impl! (fn [_ _ _ _] false)
-                  platform-be/get-capability (fn [_ _] (fake-matrix))
+                  platform-be/get-capability (fn [_ _] (stubs/fake-matrix))
                   platform-events/fire-event! (fn [evt] (swap! events conj evt))]
       (is (false? (wapi/create-network! :matrix-tile "ssid-a" "pw")))
       (is (empty? @events)))))
 
 (deftest destroy-network-fires-when-destroyed
   (let [events (atom [])
-        matrix (fake-matrix)
+        matrix (stubs/fake-matrix)
         net {:ssid "ssid-z"}]
     (with-redefs [wapi/get-wireless-net-by-matrix (fn [_] net)
                   platform-be/be-get-world-safe (fn [_] :world)
@@ -107,8 +69,8 @@
 (deftest link-node-fires-connected-map
   (testing "link-node-to-network! posts topology map when link succeeds"
     (let [events (atom [])
-          matrix (fake-matrix)
-          node (fake-node "pw")]
+          matrix (stubs/fake-matrix)
+          node (stubs/fake-node "pw")]
       (with-redefs [wapi/get-wireless-net-by-matrix (fn [_] {:ssid "ssid-a"})
                     platform-be/be-get-world-safe (fn [_] :world)
                     wd/get-world-data (fn [_] :world-data)
@@ -133,8 +95,8 @@
 (deftest link-generator-fires-generator-linked-map
   (testing "link-generator-to-node! posts map when auth and link succeed"
     (let [events (atom [])
-          node (fake-node "pw")
-          gen (fake-generator)]
+          node (stubs/fake-node "pw")
+          gen (stubs/fake-generator)]
       (with-redefs [platform-be/be-get-world-safe (fn [_] :world)
                     wd/get-world-data (fn [_] :world-data)
                     vb/create-vnode-conn (fn [_] :node-conn-vb)
@@ -159,8 +121,8 @@
 (deftest link-receiver-fires-receiver-linked-map
   (testing "link-receiver-to-node! posts map when auth and link succeed"
     (let [events (atom [])
-          node (fake-node "pw")
-          rec (fake-receiver)]
+          node (stubs/fake-node "pw")
+          rec (stubs/fake-receiver)]
       (with-redefs [platform-be/be-get-world-safe (fn [_] :world)
                     wd/get-world-data (fn [_] :world-data)
                     vb/create-vnode-conn (fn [_] :node-conn-vb)

@@ -42,6 +42,28 @@
 3. **上下文控制**：按任务最小化上下文，避免无关内容污染判断。
 4. **搜索排除**：忽略 `build/`、`.gradle/`、历史归档目录等噪音路径。
 
+## 测试约定（ac / mcmod）
+
+- 测试文件统一命名：`*_test.clj`；测试命名空间统一 `*-test`。
+- `ac` 测试入口使用 `cn.li.ac.test-runner` 自动发现测试，不再手工维护列表。
+- 支持按命名空间过滤执行：`-Dac.test.only=cn.li.ac.foo-test,cn.li.ac.bar-test`。
+- 共享测试工具放在 `ac/src/test/clojure/cn/li/ac/test/support/**`，避免重复造 stub。
+- 优先断言公开边界和业务不变量；仅在平台桥接边界使用 `with-redefs`。
+- 新增或重构测试时，禁止直接依赖私有实现细节（例如私有 helper 的调用序）。
+
+### 覆盖率与 ratchet（ac）
+
+- 生成报告：`.\gradlew.bat :ac:coverageAcClojureTests`（HTML/文本在 `ac/build/reports/coverage/`）。
+- **Soft ratchet**：CI 用 `scripts/ac_coverage_ratchet.sh` 读取 `ac/build/reports/coverage/coverage.txt` 中 `ALL FILES` 的 **% Lines**，要求不低于 `ac/coverage-baseline.txt` 中的基线减去 **0.5** 个百分点。
+- 有意提升整体行覆盖后，将 `ac/coverage-baseline.txt` 更新为新百分比（可四舍五入一位小数），随 PR 提交。
+
+### 单测优先域 vs 交给集成（粗略）
+
+| 优先单测 | 低 ROI / 交给 GameTest 或手测 |
+|----------|------------------------------|
+| 纯函数 util、模型、registry、effect.core、wireless 数据层（可 stub 平台） | `*.block` / `*.gui` / `*.render` / `*-fx` / `client.*` / `*.platform-bridge` |
+| 带注入的 pipeline（`with-redefs` 动态 var） | 纯 GUI 布局、粒子/音效注册胶水 |
+
 ## 代码与运行时规则
 
 - **侧分离**：客户端代码放 `client` 侧；共享逻辑不得引用 `net.minecraft.client.*`。

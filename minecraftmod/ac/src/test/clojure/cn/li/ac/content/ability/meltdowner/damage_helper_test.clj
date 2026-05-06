@@ -21,6 +21,8 @@
           victim (str (random-uuid))
           ad (-> (ad/new-ability-data) (ad/learn-skill :rad-intensify))]
       (try
+        ;; runtime tests clear damage handlers; reinstall Meltdowner handler
+        (dh/ensure-damage-handler!)
         (ps/set-player-state! attacker {:ability-data ad})
         (with-redefs [rad/rate (fn [_sid] 1.75)]
           (dh/mark-target! attacker victim)

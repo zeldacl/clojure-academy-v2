@@ -1,6 +1,8 @@
 (ns cn.li.ac.ability.context-runtime-test
-        (:require [clojure.test :refer [deftest is testing use-fixtures]]
-                                                [cn.li.ac.content.ability]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.content.ability]
+            [cn.li.ac.test.support.contexts :as test-contexts]
+            [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.model.ability :as ad]
@@ -10,13 +12,8 @@
             [cn.li.ac.ability.server.service.cooldown :as cd-svc]))
 
 (defn- reset-test-state! [f]
-        (doseq [ctx-id (keys (ctx/get-all-contexts))]
-                (ctx/remove-context! ctx-id))
-        (reset! ps/player-states {})
-        (f)
-        (doseq [ctx-id (keys (ctx/get-all-contexts))]
-                (ctx/remove-context! ctx-id))
-        (reset! ps/player-states {}))
+  (test-contexts/clean-contexts-fixture
+   #(test-player/clean-player-states-fixture f)))
 
 (use-fixtures :each reset-test-state!)
 
@@ -35,32 +32,29 @@
 
 (deftest key-down-blocked-by-cooldown-test
   (let [uuid "test-player-cooldown"
-                _ (seed-player-state! uuid)
-                _ (ps/update-cooldown-data! uuid cd-svc/set-main-cooldown :arc-gen 10)
-                c (ctx/new-server-context uuid :arc-gen "ctx-cd")]
-        (ctx/register-context! c)
-        (is (false? (rt/handle-key-down! "ctx-cd" {:ctx-id "ctx-cd" :skill-id :arc-gen}))
-                "key-down should be rejected while main cooldown is active")
-        (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context "ctx-cd")))
-                "rejected key-down should terminate context")))
+        _ (seed-player-state! uuid)
+        _ (ps/update-cooldown-data! uuid cd-svc/set-main-cooldown :arc-gen 10)
+        c (ctx/new-server-context uuid :arc-gen "ctx-cd")]
+    (ctx/register-context! c)
+    (is (false? (rt/handle-key-down! "ctx-cd" {:ctx-id "ctx-cd" :skill-id :arc-gen}))
+        "key-down should be rejected while main cooldown is active")
+    (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context "ctx-cd")))
+        "rejected key-down should terminate context")))
 
 (deftest key-tick-dispatches-while-active-test
-        (let [uuid "test-player-resource"
-                                _ (seed-player-state! uuid)
-                                c (-> (ctx/new-server-context uuid :arc-gen "ctx-res")
-                                                        (assoc :input-state :active))]
-                (ctx/register-context! c)
-                (is (true? (rt/handle-key-tick! "ctx-res" {:ctx-id "ctx-res" :skill-id :arc-gen}))
-                                "active context should accept key-tick")
-                (is (= ctx/STATUS-ALIVE (:status (ctx/get-context "ctx-res")))
-                                "key-tick keeps context alive")))
+  (let [uuid "test-player-resource"
+        _ (seed-player-state! uuid)
+        c (-> (ctx/new-server-context uuid :arc-gen "ctx-res")
+              (assoc :input-state :active))]
+    (ctx/register-context! c)
+    (is (true? (rt/handle-key-tick! "ctx-res" {:ctx-id "ctx-res" :skill-id :arc-gen}))
+        "active context should accept key-tick")
+    (is (= ctx/STATUS-ALIVE (:status (ctx/get-context "ctx-res")))
+        "key-tick keeps context alive")))
 
 (deftest cooldown-policy-helper-test
-        (testing "manual cooldown mode disables auto main cooldown"
-                (is (false? (rt/should-apply-main-cooldown? {:cooldown {:mode :manual}}))))
-        (testing "missing/other mode uses default auto cooldown"
-                (is (true? (rt/should-apply-main-cooldown? {:cooldown {:mode :default}})))
-                (is (true? (rt/should-apply-main-cooldown? {})))))
-
-(defn run-all-tests []
-        (clojure.test/run-tests 'cn.li.ac.ability.context-runtime-test))
+  (testing "manual cooldown mode disables auto main cooldown"
+    (is (false? (rt/should-apply-main-cooldown? {:cooldown {:mode :manual}}))))
+  (testing "missing/other mode uses default auto cooldown"
+    (is (true? (rt/should-apply-main-cooldown? {:cooldown {:mode :default}})))
+    (is (true? (rt/should-apply-main-cooldown? {})))))

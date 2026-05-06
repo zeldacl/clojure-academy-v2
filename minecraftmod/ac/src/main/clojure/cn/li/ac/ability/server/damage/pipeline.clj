@@ -49,10 +49,10 @@
   (when-not *attack-fn*
     (log/warn "attack: no platform attack-fn registered"))
   (let [final-damage (evt/fire-calc-event!
-                       {:type       evt/CALC-SKILL-ATTACK
-                        :player-id  attacker-uuid
-                        :skill-id   skill-id
-                        :value      base-damage})]
+                       evt/CALC-SKILL-ATTACK
+                       base-damage
+                       {:player-id attacker-uuid
+                        :skill-id  skill-id})]
     (when *attack-fn*
       (*attack-fn* attacker-uuid target-entity final-damage))
     final-damage))

@@ -2,12 +2,19 @@ plugins {
     id 'java-library' // 必须是 java-library，不能只是 java
     id "dev.clojurephant.clojure"
 }
+
+configurations {
+    cloverageRuntime
+}
+
 dependencies {
     implementation "org.clojure:clojure:1.12.4"
     api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation project(':mcmod')
     compileOnly 'net.minecraftforge:eventbus:6.0.5'
     testCompileOnly 'net.minecraftforge:eventbus:6.0.5'
+    testImplementation "org.clojure:test.check:1.1.1"
+    cloverageRuntime "cloverage:cloverage:1.2.4"
 }
 
 tasks.matching { it.name == 'checkClojure' }.configureEach {
@@ -30,6 +37,20 @@ tasks.register('runAcClojureTests', JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'clojure.main'
     args '-m', 'cn.li.ac.test-runner'
+}
+
+tasks.register('coverageAcClojureTests', JavaExec) {
+    group = 'verification'
+    description = 'Run ac clojure tests with cloverage coverage report.'
+    dependsOn compileTestClojure, compileClojure, classes
+    classpath = sourceSets.test.runtimeClasspath + configurations.cloverageRuntime
+    mainClass = 'clojure.main'
+    args '-m', 'cloverage.coverage',
+            '--src-ns-path', 'src/main/clojure',
+            '--test-ns-path', 'src/test/clojure',
+            '--ns-regex', 'cn\\.li\\.ac\\..*',
+            '--test-ns-regex', 'cn\\.li\\.ac\\..*-test',
+            '--output', "${project.buildDir}/reports/coverage"
 }
 
 

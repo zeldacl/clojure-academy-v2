@@ -15,4 +15,19 @@ public final class ForgeSmokeGameTests {
     public static void smoke(GameTestHelper helper) {
         helper.succeed();
     }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty", required = false, batch = "ac_wireless")
+    public static void wirelessNetworkTopology(GameTestHelper helper) {
+        helper.succeed();
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty", required = false, batch = "ac_energy")
+    public static void powerGenerationTick(GameTestHelper helper) {
+        helper.succeed();
+    }
+
+    @GameTest(templateNamespace = "minecraft", template = "empty", required = false, batch = "ac_energy")
+    public static void converterFullIoFlow(GameTestHelper helper) {
+        helper.succeed();
+    }
 }

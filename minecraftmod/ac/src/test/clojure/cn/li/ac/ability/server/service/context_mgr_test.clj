@@ -1,5 +1,7 @@
 (ns cn.li.ac.ability.server.service.context-mgr-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.test.support.contexts :as test-contexts]
+            [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.server.service.context-mgr :as cm]
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.state.player :as ps]
@@ -8,15 +10,12 @@
             [cn.li.mcmod.ability.catalog :as catalog]))
 
 (defn- reset-fixture [f]
-  (doseq [id (keys (ctx/get-all-contexts))]
-    (ctx/remove-context! id))
-  (reset! ps/player-states {})
-  (cm/register-send-fns! {:to-client nil :to-server nil})
-  (f)
-  (doseq [id (keys (ctx/get-all-contexts))]
-    (ctx/remove-context! id))
-  (reset! ps/player-states {})
-  (cm/register-send-fns! {:to-client nil :to-server nil}))
+  (test-contexts/clean-contexts-fixture
+   #(test-player/clean-player-states-fixture
+     (fn []
+       (cm/register-send-fns! {:to-client nil :to-server nil})
+       (f)
+       (cm/register-send-fns! {:to-client nil :to-server nil})))))
 
 (use-fixtures :each reset-fixture)
 

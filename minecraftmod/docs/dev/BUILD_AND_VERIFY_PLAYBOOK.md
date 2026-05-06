@@ -26,6 +26,8 @@
 ## 验证任务说明
 
 - `unitTestCompile`：单元测试相关编译健康检查。
+- `runAcUnitTests`：执行 `ac` 的 `clojure.test`（自动发现 `*_test.clj`）。
+- `coverageAcClojureTests`：输出 `ac` 的 cloverage 覆盖率报告到 `ac/build/reports/coverage/`。
 - `verifyForgeBaseline`：Forge 侧基线检查。
 - `runForgeGameTests`：启动 GameTest 运行。
 - `validateForgeGameTestLog`：校验 GameTest 日志中的失败/致命信息。
@@ -61,6 +63,12 @@
 - 快速编译子模块：
   - `.\gradlew.bat :ac:compileClojure`
   - `.\gradlew.bat :mcmod:compileClojure`
+- 跑单/部分 ac 测试：
+  - `.\gradlew.bat :ac:runAcClojureTests -Dac.test.only=cn.li.ac.foo-test`
+- 生成覆盖率：
+  - `.\gradlew.bat :ac:coverageAcClojureTests`
+- 本地校验覆盖率不低于基线（与 CI 一致，Linux/macOS）：
+  - `bash scripts/ac_coverage_ratchet.sh ac/coverage-baseline.txt ac/build/reports/coverage/coverage.txt`
 
 ## 范围说明
 

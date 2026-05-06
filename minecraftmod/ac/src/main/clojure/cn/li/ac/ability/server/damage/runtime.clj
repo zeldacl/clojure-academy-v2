@@ -46,13 +46,17 @@
         (let [[handler-id handler-fn] (first remaining-handlers)
               next-damage (try
                             (let [result (handler-fn player-id attacker-id current-damage damage-source)]
-                              (if (vector? result)
+                              (cond
+                                (vector? result)
                                 (let [[new-damage _metadata] result]
                                   (if (number? new-damage)
                                     (double new-damage)
                                     (do
                                       (log/warn "Handler" handler-id "returned invalid damage:" new-damage)
                                       current-damage)))
+                                (number? result)
+                                (double result)
+                                :else
                                 (do
                                   (log/warn "Handler" handler-id "returned invalid result:" result)
                                   current-damage)))

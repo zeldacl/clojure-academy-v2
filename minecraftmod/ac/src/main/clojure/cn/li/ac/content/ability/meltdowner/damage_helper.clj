@@ -7,7 +7,6 @@
 
 (def ^:private mark-duration-ms 3000)
 (defonce ^:private marks (atom {}))
-(defonce ^:private handler-registered? (atom false))
 
 (defn- now-ms []
   (System/currentTimeMillis))
@@ -43,11 +42,11 @@
     [(double damage) nil]))
 
 (defn ensure-damage-handler!
+  "Idempotent: (re-)install Meltdowner mark handler after test fixtures clear handlers."
   []
-  (when (compare-and-set! handler-registered? false true)
-    (damage-runtime/register-damage-handler!
-      :meltdowner/rad-intensify
-      damage-handler
-      90)))
+  (damage-runtime/register-damage-handler!
+    :meltdowner/rad-intensify
+    damage-handler
+    90))
 
 (ensure-damage-handler!)

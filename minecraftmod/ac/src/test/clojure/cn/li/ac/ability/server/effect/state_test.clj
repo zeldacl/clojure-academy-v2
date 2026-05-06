@@ -1,0 +1,34 @@
+(ns cn.li.ac.ability.server.effect.state-test
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.test.support.contexts :as test-contexts]
+            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.ac.ability.server.effect.core :as effect]
+            [cn.li.ac.ability.server.effect.state]
+            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.state.player :as ps]))
+
+(use-fixtures :each
+  (fn [f]
+    (test-contexts/clean-contexts-fixture
+     #(ps-fix/clean-player-states-fixture f))))
+
+(deftest assoc-state-op-test
+  (let [c (ctx/new-server-context "p" :sk "ctx-st")]
+    (ctx/register-context! c)
+    (effect/run-op! {:ctx-id "ctx-st" :player-id "p"}
+                    [:assoc-state {:k :foo :v 42}])
+    (is (= 42 (get-in (ctx/get-context "ctx-st") [:skill-state :foo])))))
+
+(deftest charge-tick-op-test
+  (let [c (ctx/new-server-context "p" :sk "ctx-ch")]
+    (ctx/register-context! c)
+    (let [out (effect/run-op! {:ctx-id "ctx-ch" :player-id "p"}
+                              [:charge-tick {:k :ticks :max 5}])]
+      (is (= 1 (:ticks out)))
+      (is (= 1 (get-in (ctx/get-context "ctx-ch") [:skill-state :ticks]))))))
+
+(deftest overload-floor-op-test
+  (ps/get-or-create-player-state! "of-p")
+  (effect/run-op! {:player-id "of-p"}
+                  [:overload-floor {:floor 10.0}])
+  (is (<= 10.0 (get-in (ps/get-player-state "of-p") [:resource-data :cur-overload]))))

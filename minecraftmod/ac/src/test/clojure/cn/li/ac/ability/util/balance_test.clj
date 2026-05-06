@@ -1,5 +1,8 @@
 (ns cn.li.ac.ability.util.balance-test
   (:require [clojure.test :refer [deftest is testing]]
+            [clojure.test.check.clojure-test :refer [defspec]]
+            [clojure.test.check.generators :as gen]
+            [clojure.test.check.properties :as prop]
             [cn.li.ac.ability.util.balance :as bal]))
 
 (deftest lerp-test
@@ -30,3 +33,9 @@
     (is (= 0.5 (bal/falloff-linear 2.5 5.0))))
   (testing "avoids division by zero on tiny radius"
     (is (>= (bal/falloff-linear 0.0 1.0e-9) 0.0))))
+
+(defspec clamp01-range-property-test
+  100
+  (prop/for-all [v (gen/double* {:infinite? false :NaN? false})]
+    (let [out (bal/clamp01 v)]
+      (and (<= 0.0 out) (<= out 1.0)))))

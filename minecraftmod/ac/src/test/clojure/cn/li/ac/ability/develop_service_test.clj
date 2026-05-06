@@ -97,3 +97,9 @@
     (let [unknown-dev (-> (dev/new-develop-data)
                           (assoc :state :done :action-type :unknown-action))]
       (is (= [] (:events (develop/apply-completion unknown-dev ability-data resource-data "u2")))))))
+
+(deftest tick-develop-public-boundary-test
+  (let [started (develop/start-level-up (dev/new-develop-data) :normal 1)
+        {:keys [develop-data completed?]} (develop/tick-develop (:develop-data started))]
+    (is (false? completed?))
+    (is (= :developing (:state develop-data)))))

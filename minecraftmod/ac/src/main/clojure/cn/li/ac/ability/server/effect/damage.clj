@@ -7,7 +7,8 @@
 (effect/defop :damage-direct
   [evt {:keys [target amount damage-type]}]
   (when-let [uuid (or (when (map? target) (:uuid target))
-                      (get evt target))]
+                      (when (keyword? target) (get evt target))
+                      (when (string? target) target))]
     (when entity-damage/*entity-damage*
       (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
                                           (:world-id evt)

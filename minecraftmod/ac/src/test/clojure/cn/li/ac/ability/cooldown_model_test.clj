@@ -1,5 +1,8 @@
 (ns cn.li.ac.ability.cooldown-model-test
   (:require [clojure.test :refer [deftest is testing]]
+            [clojure.test.check.clojure-test :refer [defspec]]
+            [clojure.test.check.generators :as gen]
+            [clojure.test.check.properties :as prop]
             [cn.li.ac.ability.model.cooldown :as cooldown]))
 
 (deftest cooldown-core-edge-test
@@ -22,3 +25,11 @@
     (is (= {[:a :main] 5} (cooldown/tick-cooldowns {[:a :main] 6 :bad 1})))
     (let [decoded (cooldown/vec->cooldown-data [["a" "main" 1]])]
       (is (= {[:a :main] 1} decoded)))))
+
+(defspec tick-cooldowns-monotonic-property-test
+  80
+  (prop/for-all [ticks (gen/choose 1 200)]
+    (let [d0 {[:k :main] ticks}
+          d1 (cooldown/tick-cooldowns d0)]
+      (<= (cooldown/get-remaining d1 :k :main)
+          (cooldown/get-remaining d0 :k :main)))))

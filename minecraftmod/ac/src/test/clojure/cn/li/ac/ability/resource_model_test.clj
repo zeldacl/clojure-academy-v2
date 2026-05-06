@@ -1,5 +1,8 @@
 (ns cn.li.ac.ability.resource-model-test
   (:require [clojure.test :refer [deftest is testing]]
+            [clojure.test.check.clojure-test :refer [defspec]]
+            [clojure.test.check.generators :as gen]
+            [clojure.test.check.properties :as prop]
             [cn.li.ac.ability.model.resource :as resource]
             [cn.li.ac.ability.config :as cfg]))
 
@@ -49,3 +52,10 @@
     (is (true? (resource/can-perform? (assoc d :cur-cp 0.0) 0 2.0 true)))
     (is (= 0.0 (:cur-cp (resource/set-cur-cp {} -10))))
     (is (= 0 (:until-recover (resource/set-until-recover {} -1))))))
+
+(defspec consume-cp-never-negative-property-test
+  100
+  (prop/for-all [cur (gen/double* {:min 0.0 :max 10000.0 :infinite? false :NaN? false})
+                 used (gen/double* {:min 0.0 :max 10000.0 :infinite? false :NaN? false})]
+    (let [d (resource/consume-cp {:cur-cp cur} used 0)]
+      (>= (:cur-cp d) 0.0))))
