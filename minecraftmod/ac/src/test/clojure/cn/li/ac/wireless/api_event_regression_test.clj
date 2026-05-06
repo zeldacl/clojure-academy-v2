@@ -10,12 +10,7 @@
             IWirelessNode
             IWirelessGenerator
             IWirelessReceiver
-            WirelessCapabilityKeys]
-           [cn.li.acapi.wireless.event
-            WirelessNetworkEvent$NetworkCreated
-            WirelessNetworkEvent$NodeConnected
-            WirelessNetworkEvent$GeneratorLinked
-            WirelessNetworkEvent$ReceiverLinked]))
+            WirelessCapabilityKeys]))
 
 (defn- fake-matrix []
   (reify IWirelessMatrix
@@ -52,8 +47,8 @@
     (pullEnergy [_ _] 0.0)
     (getReceiverBandwidth [_] 100.0)))
 
-(deftest create-network-fires-network-created-event
-  (testing "create-network! posts NetworkCreated when create succeeds"
+(deftest create-network-fires-topology-map-when-created
+  (testing "create-network! posts map event when create succeeds"
     (let [events (atom [])
           matrix (fake-matrix)]
       (with-redefs [platform-be/be-get-world-safe (fn [_] :world)
@@ -67,12 +62,50 @@
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
         (is (true? (wapi/create-network! :matrix-tile "ssid-a" "pw")))
         (is (= 1 (count @events)))
-        (is (instance? WirelessNetworkEvent$NetworkCreated (first @events)))
-        (is (= "ssid-a" (.getSsid ^WirelessNetworkEvent$NetworkCreated (first @events))))
-        (is (= matrix (.getMatrix ^WirelessNetworkEvent$NetworkCreated (first @events))))))))
+        (let [e (first @events)]
+          (is (= :topology/network (:kind e)))
+          (is (= :created (:action e)))
+          (is (= "ssid-a" (:ssid e)))
+          (is (= matrix (:matrix e))))))))
 
-(deftest link-node-fires-node-connected-event
-  (testing "link-node-to-network! posts NodeConnected when link succeeds"
+(deftest create-network-no-event-when-not-created
+  (let [events (atom [])]
+    (with-redefs [platform-be/be-get-world-safe (fn [_] :world)
+                  wd/get-world-data (fn [_] :world-data)
+                  vb/create-vmatrix (fn [_] :matrix-vb)
+                  wd/create-network-impl! (fn [_ _ _ _] false)
+                  platform-be/get-capability (fn [_ _] (fake-matrix))
+                  platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+      (is (false? (wapi/create-network! :matrix-tile "ssid-a" "pw")))
+      (is (empty? @events)))))
+
+(deftest destroy-network-fires-when-destroyed
+  (let [events (atom [])
+        matrix (fake-matrix)
+        net {:ssid "ssid-z"}]
+    (with-redefs [wapi/get-wireless-net-by-matrix (fn [_] net)
+                  platform-be/be-get-world-safe (fn [_] :world)
+                  wd/get-world-data (fn [_] :world-data)
+                  wd/destroy-network-impl! (fn [_ _] true)
+                  platform-be/get-capability (fn [tile cap-key]
+                                               (when (and (= tile :mt)
+                                                          (= cap-key WirelessCapabilityKeys/MATRIX))
+                                                 matrix))
+                  platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+      (is (true? (wapi/destroy-network! :mt)))
+      (is (= 1 (count @events)))
+      (let [e (first @events)]
+        (is (= :destroyed (:action e)))
+        (is (= "ssid-z" (:ssid e)))))))
+
+(deftest is-node-linked-uses-network-lookup
+  (with-redefs [wapi/get-wireless-net-by-node (fn [_] {:ssid "x"})]
+    (is (true? (wapi/is-node-linked? :tile))))
+  (with-redefs [wapi/get-wireless-net-by-node (fn [_] nil)]
+    (is (false? (wapi/is-node-linked? :tile)))))
+
+(deftest link-node-fires-connected-map
+  (testing "link-node-to-network! posts topology map when link succeeds"
     (let [events (atom [])
           matrix (fake-matrix)
           node (fake-node "pw")]
@@ -91,11 +124,14 @@
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
         (is (true? (wapi/link-node-to-network! :node-tile :matrix-tile "pw")))
         (is (= 1 (count @events)))
-        (is (instance? WirelessNetworkEvent$NodeConnected (first @events)))
-        (is (= node (.getNode ^WirelessNetworkEvent$NodeConnected (first @events))))))))
+        (let [e (first @events)]
+          (is (= :topology/node (:kind e)))
+          (is (= :connected (:action e)))
+          (is (= matrix (:matrix e)))
+          (is (= node (:node e))))))))
 
-(deftest link-generator-fires-generator-linked-event
-  (testing "link-generator-to-node! posts GeneratorLinked when auth and link succeed"
+(deftest link-generator-fires-generator-linked-map
+  (testing "link-generator-to-node! posts map when auth and link succeed"
     (let [events (atom [])
           node (fake-node "pw")
           gen (fake-generator)]
@@ -115,11 +151,13 @@
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
         (is (true? (wapi/link-generator-to-node! :gen-tile :node-tile "pw" true)))
         (is (= 1 (count @events)))
-        (is (instance? WirelessNetworkEvent$GeneratorLinked (first @events)))
-        (is (= node (.getNode ^WirelessNetworkEvent$GeneratorLinked (first @events))))))))
+        (let [e (first @events)]
+          (is (= :generator-linked (:action e)))
+          (is (= node (:node e)))
+          (is (= gen (:generator e))))))))
 
-(deftest link-receiver-fires-receiver-linked-event
-  (testing "link-receiver-to-node! posts ReceiverLinked when auth and link succeed"
+(deftest link-receiver-fires-receiver-linked-map
+  (testing "link-receiver-to-node! posts map when auth and link succeed"
     (let [events (atom [])
           node (fake-node "pw")
           rec (fake-receiver)]
@@ -139,5 +177,7 @@
                     platform-events/fire-event! (fn [evt] (swap! events conj evt))]
         (is (true? (wapi/link-receiver-to-node! :rec-tile :node-tile "pw" true)))
         (is (= 1 (count @events)))
-        (is (instance? WirelessNetworkEvent$ReceiverLinked (first @events)))
-        (is (= node (.getNode ^WirelessNetworkEvent$ReceiverLinked (first @events))))))))
+        (let [e (first @events)]
+          (is (= :receiver-linked (:action e)))
+          (is (= node (:node e)))
+          (is (= rec (:receiver e))))))))

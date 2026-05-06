@@ -1,4 +1,4 @@
-(ns cn.li.wireless.gui.messages-dsl-test
+(ns cn.li.ac.wireless.gui.messages-dsl-test
   "Tests for wireless GUI message DSL and catalog integration."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.gui.message.dsl :as msg-dsl]
@@ -69,7 +69,7 @@
       (is (= "wireless_node_get_status" (wireless-msgs/msg :node :get-status)))
       (is (= "wireless_matrix_init" (wireless-msgs/msg :matrix :init)))
       (is (= {:domain :node :action :get-status}
-             (wireless-msgs/find-by-msg-id "wireless_node_get_status"))))))
-
-(defn run-all-tests []
-  (clojure.test/run-tests 'cn.li.wireless.gui.messages-dsl-test))
+             (wireless-msgs/find-by-msg-id "wireless_node_get_status")))
+    )
+  )
+)

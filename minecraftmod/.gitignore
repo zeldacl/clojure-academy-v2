@@ -33,6 +33,7 @@ forge*changelog.txt
 
 importcode/*
 run-data
+run-gametest
 minecraftmod/forge-1.20.1/src/generated
 gradle
 .gradle

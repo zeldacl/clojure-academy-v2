@@ -1,5 +1,5 @@
-(ns cn.li.block.wireless-node-test
-  "Unit tests for wireless node pure logic in block namespace."
+(ns cn.li.ac.block.wireless-node-test
+  "Unit tests for wireless node pure logic (mirrors cn.li.ac.block.wireless-node.block)."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.block.wireless-node.block :as wnode]
             [cn.li.ac.block.wireless-node.config :as node-config]))
@@ -36,6 +36,3 @@
       (is (= 2 (wnode/energy->blockstate-level (/ max-energy 2.0) state)))
       (is (= 4 (wnode/energy->blockstate-level max-energy state)))
       (is (= 4 (wnode/energy->blockstate-level (* max-energy 2.0) state))))))
-
-(defn run-all-tests []
-  (clojure.test/run-tests 'cn.li.block.wireless-node-test))

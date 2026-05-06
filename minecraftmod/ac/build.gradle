@@ -23,4 +23,13 @@ tasks.matching { it.name == 'checkClojure' }.configureEach {
     }
 }
 
+tasks.register('runAcClojureTests', JavaExec) {
+    group = 'verification'
+    description = 'Run clojure.test suites for ac via cn.li.ac.test-runner.'
+    dependsOn compileTestClojure, compileClojure, classes
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'clojure.main'
+    args '-m', 'cn.li.ac.test-runner'
+}
+
 

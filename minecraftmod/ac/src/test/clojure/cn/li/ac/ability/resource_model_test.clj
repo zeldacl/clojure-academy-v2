@@ -1,0 +1,51 @@
+(ns cn.li.ac.ability.resource-model-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.model.resource :as resource]
+            [cn.li.ac.ability.config :as cfg]))
+
+(deftest resource-core-and-edge-test
+  (with-redefs [cfg/max-cp-for-level (fn [level] (* 100.0 level))
+                cfg/max-overload-for-level (fn [level] (* 10.0 level))
+                cfg/*add-cp* [0 50 60 70 80 90]
+                cfg/*add-overload* [0 10 20 30 40 50]]
+    (let [d0 (resource/new-resource-data)]
+      (is (= 100.0 (:max-cp d0)))
+      (is (= 10.0 (:max-overload d0)))
+      (is (false? (resource/can-use-ability? d0)))
+      (let [d1 (-> d0
+                   (resource/set-activated true)
+                   (resource/add-interference :jammer))
+            d2 (resource/remove-interference d1 :jammer)]
+        (is (false? (resource/can-use-ability? d1)))
+        (is (true? (resource/can-use-ability? d2))))
+      (let [d3 (resource/consume-cp (assoc d0 :cur-cp 20.0) 7.0 15)]
+        (is (= 13.0 (:cur-cp d3)))
+        (is (= 15 (:until-recover d3))))
+      (let [[d4 overloaded?] (resource/add-overload (assoc d0 :max-overload 30.0) 50.0 20)]
+        (is (true? overloaded?))
+        (is (= 30.0 (:cur-overload d4)))
+        (is (false? (:overload-fine d4)))
+        (is (= 20 (:until-overload-recover d4))))
+      (let [d5 (resource/tick-cp-recovery (assoc d0 :cur-cp 50.0 :max-cp 100.0 :until-recover 0) 1.0)]
+        (is (> (:cur-cp d5) 50.0)))
+      (let [d6 (resource/tick-overload-recovery
+                {:cur-overload 5.0 :max-overload 10.0 :overload-fine true :until-overload-recover 0}
+                1.0)]
+        (is (< (:cur-overload d6) 5.0)))
+      (let [d7 (resource/recalc-max-values
+                {:cur-cp 999.0 :cur-overload 99.0 :add-max-cp 10.0 :add-max-overload 2.0}
+                2)]
+        (is (= 210.0 (:max-cp d7)))
+        (is (= 22.0 (:max-overload d7)))
+        (is (= 210.0 (:cur-cp d7)))
+        (is (= 22.0 (:cur-overload d7))))
+      (is (= 50.0 (:add-max-cp (resource/grow-max-cp {:add-max-cp 0.0} 10000 1.0 2))))
+      (is (= 10.0 (:add-max-overload (resource/grow-max-overload {:add-max-overload 0.0} 9999 1.0 2)))))))
+
+(deftest resource-contract-test
+  (let [d {:activated true :overload-fine true :interferences #{}}]
+    (is (true? (resource/can-perform? (assoc d :cur-cp 5.0) 0 2.0 false)))
+    (is (false? (resource/can-perform? (assoc d :cur-cp 1.0) 0 2.0 false)))
+    (is (true? (resource/can-perform? (assoc d :cur-cp 0.0) 0 2.0 true)))
+    (is (= 0.0 (:cur-cp (resource/set-cur-cp {} -10))))
+    (is (= 0 (:until-recover (resource/set-until-recover {} -1))))))

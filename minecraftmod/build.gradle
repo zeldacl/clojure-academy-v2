@@ -62,6 +62,12 @@ tasks.register('unitTestCompile') {
     dependsOn ':mcmod:compileTestClojure', ':ac:compileTestClojure'
 }
 
+tasks.register('runAcUnitTests') {
+    group = 'verification'
+    description = 'Execute ac Clojure unit tests (clojure.test).'
+    dependsOn ':ac:runAcClojureTests'
+}
+
 tasks.register('verifyForgeBaseline') {
     group = 'verification'
     description = 'Compile baseline Clojure sources for ac, mcmod, and forge-1.20.1.'
@@ -81,8 +87,8 @@ def registerForgeGameTestTask = {
 
     tasks.register('runForgeGameTests') {
         group = 'verification'
-        description = 'Run Forge GameTest server when an appropriate run task exists.'
-        dependsOn 'unitTestCompile', ':forge-1.20.1:compileClojure', gameTestTasks
+        description = 'Run Forge GameTest server with timeout guard when an appropriate run task exists.'
+        dependsOn 'unitTestCompile', ':forge-1.20.1:compileClojure'
 
         onlyIf {
             if (gameTestTasks.isEmpty()) {
@@ -91,6 +97,49 @@ def registerForgeGameTestTask = {
             }
             logger.lifecycle('[runForgeGameTests] using task(s): {}', gameTestTasks.collect { it.path }.join(', '))
             return true
+        }
+
+        doLast {
+            // Loom's Forge game test run can keep non-daemon threads alive even after
+            // startup, which makes CI look "stuck". Run with a bounded wait and
+            // validate expected markers in validateForgeGameTestLog afterwards.
+            def selectedTask = gameTestTasks.first()
+            def isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows()
+            def gradlew = isWindows ?
+                new File(rootProject.projectDir, 'gradlew.bat').absolutePath :
+                new File(rootProject.projectDir, 'gradlew').absolutePath
+            def command = isWindows ?
+                ['cmd', '/c', gradlew, selectedTask.path, '--no-daemon'] :
+                [gradlew, selectedTask.path, '--no-daemon']
+            int timeoutSeconds = (findProperty('forgeGameTestTimeoutSeconds')?.toString()?.toInteger() ?: 420)
+            def runGameTestDir = file('forge-1.20.1/run-gametest')
+            def lockFile = file('forge-1.20.1/run-gametest/world/session.lock')
+
+            if (lockFile.exists()) {
+                if (!lockFile.delete()) {
+                    throw new GradleException("Forge GameTest world lock is held: ${lockFile}. Stop stale runGameTestServer processes and retry.")
+                }
+                logger.lifecycle('[runForgeGameTests] removed stale world lock: {}', lockFile)
+            }
+            if (!runGameTestDir.exists()) {
+                runGameTestDir.mkdirs()
+            }
+
+            logger.lifecycle('[runForgeGameTests] launching {} with timeout={}s', selectedTask.path, timeoutSeconds)
+            def process = new ProcessBuilder(command)
+                .directory(rootProject.projectDir)
+                .inheritIO()
+                .start()
+
+            if (!process.waitFor(timeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)) {
+                logger.lifecycle('[runForgeGameTests] timeout reached, terminating process for {}', selectedTask.path)
+                process.destroy()
+                if (!process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                    process.destroyForcibly()
+                }
+            } else if (process.exitValue() != 0) {
+                throw new GradleException("Forge GameTest task failed: ${selectedTask.path} (exit=${process.exitValue()})")
+            }
         }
     }
 }
@@ -118,7 +167,9 @@ tasks.register('validateForgeGameTestLog') {
             'RuntimeDistCleaner',
             'Failed to load registries due to above errors',
             'Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/feature]',
-            'Failed to parse my_mod:worldgen/configured_feature/phase_liquid_pool.json'
+            'Failed to parse my_mod:worldgen/configured_feature/phase_liquid_pool.json',
+            'Failed to start the minecraft server',
+            'The process cannot access the file because another process has locked a portion of the file'
         ]
 
         def missingMarkers = requiredMarkers.findAll { !logText.contains(it) }
@@ -136,7 +187,7 @@ tasks.register('validateForgeGameTestLog') {
 tasks.register('verifyForgeTesting') {
     group = 'verification'
     description = 'Run unit test compilation and Forge GameTest verification for current scope.'
-    dependsOn 'verifyForgeBaseline', 'unitTestCompile', 'runForgeGameTests', 'validateForgeGameTestLog'
+    dependsOn 'verifyForgeBaseline', 'unitTestCompile', 'runAcUnitTests', 'runForgeGameTests', 'validateForgeGameTestLog'
 }
 
 

@@ -15,6 +15,7 @@
 - **快速编译**：`.\gradlew.bat :ac:compileClojure`、`.\gradlew.bat :mcmod:compileClojure`、`.\gradlew.bat :forge-1.20.1:compileClojure`
 - **测试与验证入口**：
   - `.\gradlew.bat unitTestCompile`
+  - `.\gradlew.bat runAcUnitTests`（执行 `ac` 的 `clojure.test`，入口为 `:ac:runAcClojureTests` / `cn.li.ac.test-runner`）
   - `.\gradlew.bat verifyForgeBaseline`
   - `.\gradlew.bat runForgeGameTests`
   - `.\gradlew.bat validateForgeGameTestLog`
