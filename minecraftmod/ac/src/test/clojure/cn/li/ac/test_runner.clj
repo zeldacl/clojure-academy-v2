@@ -7,11 +7,11 @@
   '[cn.li.ac.ability.ability-model-test
     cn.li.ac.ability.context-runtime-test
     cn.li.ac.ability.cooldown-model-test
-    cn.li.ac.ability.cooldown-test
     cn.li.ac.ability.develop-model-test
     cn.li.ac.ability.develop-service-test
     cn.li.ac.ability.learning-service-test
     cn.li.ac.ability.learning-test
+    cn.li.ac.ability.item-actions-test
     cn.li.ac.ability.preset-model-test
     cn.li.ac.ability.resource-model-test
     cn.li.ac.ability.resource-test
@@ -26,6 +26,8 @@
     cn.li.ac.gui.cgui-regression-verify
     cn.li.ac.gui.slot-validators-test
     cn.li.ac.item.test-battery-test
+    cn.li.ac.recipe.crafting-recipes-test
+    cn.li.ac.terminal.player-data-test
     cn.li.ac.wireless.api-event-regression-test
     cn.li.ac.wireless.data.network-config-test
     cn.li.ac.wireless.gui.messages-dsl-test
