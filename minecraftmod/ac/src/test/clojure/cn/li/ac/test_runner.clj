@@ -15,12 +15,15 @@
     cn.li.ac.ability.preset-model-test
     cn.li.ac.ability.resource-model-test
     cn.li.ac.ability.resource-test
+    cn.li.ac.ability.util.balance-test
     cn.li.ac.ability.server.service.context-mgr-test
     cn.li.ac.block.wireless-node-test
+    cn.li.ac.achievement.dispatcher-test
     cn.li.ac.command.dsl-test
     cn.li.ac.command.handlers-test
     cn.li.ac.config.gameplay-test
     cn.li.ac.config.registry-test
+    cn.li.ac.content.ability.meltdowner.damage-helper-test
     cn.li.ac.content.ability.teleporter.tp-skill-helper-test
     cn.li.ac.energy.operations-test
     cn.li.ac.gui.cgui-regression-verify

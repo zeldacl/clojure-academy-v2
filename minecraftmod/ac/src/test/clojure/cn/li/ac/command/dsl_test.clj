@@ -56,3 +56,21 @@
     (is (= nil (dsl/find-subcommand spec ["not-found"])))
     (is (= nil (dsl/get-executor spec ["not-found"])))
     (is (= nil (dsl/get-arguments spec ["not-found"])))))
+
+(deftest nested-subcommand-path-test
+  (let [spec (dsl/create-command-spec
+              "root"
+              {:permission-level 0
+               :subcommands
+               {:admin {:permission-level 2
+                       :description "admin branch"
+                       :subcommands
+                       {:grant {:permission-level 5
+                                :executor-fn (fn [_] :granted)
+                                :description "grant op"}}}}})
+        leaf (dsl/find-subcommand spec ["admin" "grant"])]
+    (is (= "grant" (:name leaf)))
+    (is (= :granted ((dsl/get-executor spec ["admin" "grant"]) {})))
+    (is (= 5 (dsl/get-permission-level spec ["admin" "grant"])))
+    (is (= nil (dsl/find-subcommand spec ["admin" "missing"])))
+    (is (= nil (dsl/get-executor spec ["admin" "missing"])))))
