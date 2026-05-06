@@ -12,4 +12,3 @@
       (is (= "T(my_mod.ability.level_up)"
              (i18n/translate "my_mod.ability.level_up"))))))
 
-(clojure.test/run-tests 'cn.li.mcmod.i18n-test)

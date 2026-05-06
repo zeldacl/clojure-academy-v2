@@ -27,7 +27,10 @@
 
 - `unitTestCompile`：单元测试相关编译健康检查。
 - `runAcUnitTests`：执行 `ac` 的 `clojure.test`（自动发现 `*_test.clj`）。
+- `runMcmodUnitTests`：执行 `mcmod` 的 `clojure.test`（自动发现 `*_test.clj`）。
 - `coverageAcClojureTests`：输出 `ac` 的 cloverage 覆盖率报告到 `ac/build/reports/coverage/`。
+- `coverageMcmodClojureTests`：输出 `mcmod` 的 cloverage 覆盖率报告到 `mcmod/build/reports/coverage/`。
+  - **Cloverage 排除命名空间**（见 `mcmod/build.gradle` 中 `--ns-exclude-regex`）：`cn.li.mcmod.client.obj`（体量极大的客户端胶水，单测 ROI 低）、`cn.li.mcmod.platform.position`（与 Cloverage 插桩后的 `IBlockPos` 协议身份冲突，测试里 `defrecord` 桩位需依赖未插桩协议）。总行覆盖率 ratchet 针对的是**已插桩**代码；排除上述命名空间后，百分比更接近「可纯 JVM 回归的核心逻辑」，不等于放弃客户端或坐标抽象的质量——后者由 Forge 侧与集成测试兜底。
 - `verifyForgeBaseline`：Forge 侧基线检查。
 - `runForgeGameTests`：启动 GameTest 运行。
 - `validateForgeGameTestLog`：校验 GameTest 日志中的失败/致命信息。
@@ -68,7 +71,8 @@
 - 生成覆盖率：
   - `.\gradlew.bat :ac:coverageAcClojureTests`
 - 本地校验覆盖率不低于基线（与 CI 一致，Linux/macOS）：
-  - `bash scripts/ac_coverage_ratchet.sh ac/coverage-baseline.txt ac/build/reports/coverage/coverage.txt`
+  - `bash scripts/ac_coverage_ratchet.sh ac/coverage-baseline.txt ac/build/reports/coverage/index.html`
+  - `bash scripts/mcmod_coverage_ratchet.sh mcmod/coverage-baseline.txt mcmod/build/reports/coverage/index.html`
 
 ## 范围说明
 

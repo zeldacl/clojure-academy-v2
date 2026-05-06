@@ -7,6 +7,16 @@
   Platform code (forge/fabric) calls dispatch-world-load/unload.
   Content code registers handlers via register-world-lifecycle-handler!")
 
+(defn- report-handler-error!
+  "Log a handler failure to `*err*` (wraps a bare `Writer` in `PrintWriter` for tests)."
+  [phase ^Throwable t]
+  (let [err *err*
+        ^java.io.PrintWriter pw (if (instance? java.io.PrintWriter err)
+                                    err
+                                    (java.io.PrintWriter. err true))]
+    (.println pw (str "Error in world " (name phase) " handler: " (ex-message t)))
+    (.printStackTrace t pw)))
+
 ;; ============================================================================
 ;; Handler Registry
 ;; ============================================================================
@@ -59,8 +69,7 @@
     (try
       (handler world saved-data)
       (catch Throwable t
-        (println "Error in world load handler:" (ex-message t))
-        (.printStackTrace t)))))
+        (report-handler-error! :load t)))))
 
 (defn dispatch-world-unload
   "Dispatch world unload event to all registered handlers.
@@ -74,8 +83,7 @@
     (try
       (handler world)
       (catch Throwable t
-        (println "Error in world unload handler:" (ex-message t))
-        (.printStackTrace t)))))
+        (report-handler-error! :unload t)))))
 
 (defn dispatch-world-save
   "Dispatch world save event to all registered handlers.
@@ -94,8 +102,7 @@
           (conj acc data)
           acc)
         (catch Throwable t
-          (println "Error in world save handler:" (ex-message t))
-          (.printStackTrace t)
+          (report-handler-error! :save t)
           acc)))
     []
     @world-save-handlers))

@@ -68,6 +68,12 @@ tasks.register('runAcUnitTests') {
     dependsOn ':ac:runAcClojureTests'
 }
 
+tasks.register('runMcmodUnitTests') {
+    group = 'verification'
+    description = 'Execute mcmod Clojure unit tests (clojure.test).'
+    dependsOn ':mcmod:runMcmodClojureTests'
+}
+
 tasks.register('verifyForgeBaseline') {
     group = 'verification'
     description = 'Compile baseline Clojure sources for ac, mcmod, and forge-1.20.1.'
@@ -187,7 +193,7 @@ tasks.register('validateForgeGameTestLog') {
 tasks.register('verifyForgeTesting') {
     group = 'verification'
     description = 'Run unit test compilation and Forge GameTest verification for current scope.'
-    dependsOn 'verifyForgeBaseline', 'unitTestCompile', 'runAcUnitTests', 'runForgeGameTests', 'validateForgeGameTestLog'
+    dependsOn 'verifyForgeBaseline', 'unitTestCompile', 'runAcUnitTests', 'runMcmodUnitTests', 'runForgeGameTests', 'validateForgeGameTestLog'
 }
 
 

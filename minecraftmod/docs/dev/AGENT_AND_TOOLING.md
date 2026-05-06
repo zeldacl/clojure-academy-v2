@@ -16,6 +16,7 @@
 - **测试与验证入口**：
   - `.\gradlew.bat unitTestCompile`
   - `.\gradlew.bat runAcUnitTests`（执行 `ac` 的 `clojure.test`，入口为 `:ac:runAcClojureTests` / `cn.li.ac.test-runner`）
+  - `.\gradlew.bat runMcmodUnitTests`（执行 `mcmod` 的 `clojure.test`，入口为 `:mcmod:runMcmodClojureTests` / `cn.li.mcmod.test-runner`；可选 `-Dmcmod.test.only=cn.li.mcmod.foo-test,cn.li.mcmod.bar-test`）
   - `.\gradlew.bat verifyForgeBaseline`
   - `.\gradlew.bat runForgeGameTests`
   - `.\gradlew.bat validateForgeGameTestLog`
@@ -53,9 +54,16 @@
 
 ### 覆盖率与 ratchet（ac）
 
-- 生成报告：`.\gradlew.bat :ac:coverageAcClojureTests`（HTML/文本在 `ac/build/reports/coverage/`）。
-- **Soft ratchet**：CI 用 `scripts/ac_coverage_ratchet.sh` 读取 `ac/build/reports/coverage/coverage.txt` 中 `ALL FILES` 的 **% Lines**，要求不低于 `ac/coverage-baseline.txt` 中的基线减去 **0.5** 个百分点。
+- 生成报告：`.\gradlew.bat :ac:coverageAcClojureTests`（HTML 在 `ac/build/reports/coverage/index.html`）。
+- **Soft ratchet**：CI 用 `scripts/ac_coverage_ratchet.sh` 从 `ac/build/reports/coverage/index.html` 的 **Totals** 行解析 **% Lines**，要求不低于 `ac/coverage-baseline.txt` 中的基线减去 **0.5** 个百分点。
 - 有意提升整体行覆盖后，将 `ac/coverage-baseline.txt` 更新为新百分比（可四舍五入一位小数），随 PR 提交。
+
+### 覆盖率与 ratchet（mcmod）
+
+- 生成报告：`.\gradlew.bat :mcmod:coverageMcmodClojureTests`（HTML 在 `mcmod/build/reports/coverage/index.html`）。
+- **Soft ratchet**：CI 用 `scripts/mcmod_coverage_ratchet.sh` 从 `index.html` 的 **Totals** 行解析 **% Lines**，要求不低于 `mcmod/coverage-baseline.txt` 中的基线减去 **0.5** 个百分点。
+- 提升基线后更新 `mcmod/coverage-baseline.txt`（建议一位小数），随 PR 提交。
+- `coverageMcmodClojureTests` 通过 `--ns-exclude-regex` 排除 `cn.li.mcmod.client.obj` 与 `cn.li.mcmod.platform.position`（前者体量与单测 ROI，后者避免 Cloverage 与 `IBlockPos` 测试桩的协议冲突）；详见 [BUILD_AND_VERIFY_PLAYBOOK.md](BUILD_AND_VERIFY_PLAYBOOK.md)。
 
 ### 单测优先域 vs 交给集成（粗略）
 

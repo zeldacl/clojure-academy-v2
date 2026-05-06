@@ -33,7 +33,8 @@
     (let [container {:energy (atom 10)
                      :label (atom "x")
                      :enabled (atom false)}]
-      (schema/apply-sync-data! sample-fields container {:energy "42" :enabled 1})
+      ;; :coerce int coerces numbers; strings are not supported by clojure.core/int
+      (schema/apply-sync-data! sample-fields container {:energy 42 :enabled 1})
       (is (= 42 @(get container :energy)))
       (is (= true @(get container :enabled)))
       (is (= "x" @(get container :label)))

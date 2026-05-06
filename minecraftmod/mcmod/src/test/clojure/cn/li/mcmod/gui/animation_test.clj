@@ -50,4 +50,3 @@
       (update-fn)
       (is (= 2 @calls)))))
 
-(clojure.test/run-tests 'cn.li.mcmod.gui.animation-test)

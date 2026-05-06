@@ -12,4 +12,3 @@
     (dotimes [_ 5]
       (is (nil? (content/ensure-content-init-registered!))))))
 
-(clojure.test/run-tests 'cn.li.mcmod.content-test)

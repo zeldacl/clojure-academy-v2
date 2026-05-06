@@ -1,7 +1,9 @@
 (ns cn.li.mcmod.block.dsl-test
   "Unit tests for Block DSL"
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [cn.li.mcmod.block.dsl :as bdsl]))
+            [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]))
 
 (defn- reset-block-registry! [f]
   (reset! bdsl/block-registry {})
@@ -71,3 +73,84 @@
       (is (= [{:x 0 :y 0 :z 0}
               {:x 1 :y 0 :z 1}]
              normalized)))))
+
+(defrecord BlockPosStub [x y z]
+  pos/IBlockPos
+  (pos-x [_] x)
+  (pos-y [_] y)
+  (pos-z [_] z))
+
+(deftest get-multi-block-master-pos-test
+  (is (= {:x 4 :y 8 :z 2}
+         (bdsl/get-multi-block-master-pos {:x 5 :y 10 :z 3}
+                                          {:relative-x 1 :relative-y 2 :relative-z 1}))))
+
+(deftest all-multi-block-positions-with-factory-test
+  (binding [pos/*position-factory* (fn [x y z] (->BlockPosStub x y z))]
+    (let [spec (bdsl/create-block-spec "mb"
+                                       (bdsl/multi-block-preset {:width 2 :height 1 :depth 1}))
+          master (pos/create-block-pos 10 20 30)
+          ps (bdsl/all-multi-block-positions master spec)]
+      (is (= 2 (count ps)))
+      (is (every? #(satisfies? pos/IBlockPos %) ps))
+      (is (= #{[10 20 30] [11 20 30]}
+             (set (map (fn [p] [(pos/pos-x p) (pos/pos-y p) (pos/pos-z p)]) ps)))))))
+
+(deftest can-place-multi-block-binding-test
+  (testing "all footprint cells empty"
+    (binding [pos/*position-factory* (fn [x y z] (->BlockPosStub x y z))
+              world/*world-get-block-state-fn* (constantly nil)]
+      (let [spec (bdsl/create-block-spec "empty-mb"
+                                         (bdsl/multi-block-preset {:width 1 :height 1 :depth 1}))]
+        (is (true? (bdsl/can-place-multi-block? :fake-world (pos/create-block-pos 0 0 0) spec))))))
+  (testing "blocked cell fails placement"
+    (binding [pos/*position-factory* (fn [x y z] (->BlockPosStub x y z))
+              world/*world-get-block-state-fn*
+              (fn [_w p]
+                (when (= [1 0 0] [(pos/pos-x p) (pos/pos-y p) (pos/pos-z p)])
+                  :blocked))]
+      (let [spec (bdsl/create-block-spec "blocked-mb"
+                                         (bdsl/multi-block-preset {:width 2 :height 1 :depth 1}))]
+        (is (false? (bdsl/can-place-multi-block? :fake-world (pos/create-block-pos 0 0 0) spec)))))))
+
+(deftest preset-and-merge-helpers-test
+  (is (= 2 (:harvest-level (bdsl/ore-preset 2))))
+  (is (= :wood (:material (bdsl/wood-preset))))
+  (is (= 3 (:harvest-level (bdsl/metal-preset 3))))
+  (is (= :glass (:material (bdsl/glass-preset))))
+  (is (= 15 (:light-level (bdsl/light-block-preset 15))))
+  (is (true? (:multi-block? (bdsl/multi-block-preset {:width 2 :height 1 :depth 1}))))
+  (is (vector? (:multi-block-positions (bdsl/irregular-multi-block-preset [{:x 1 :y 0 :z 0} {:x 0 :y 0 :z 0}]))))
+  (is (pos? (count (bdsl/create-l-shape 2 2))))
+  (is (pos? (count (bdsl/create-t-shape 3 2))))
+  (is (pos? (count (bdsl/create-cross-shape 1))))
+  (is (pos? (count (bdsl/create-pyramid-shape 3 2))))
+  (is (pos? (count (bdsl/create-hollow-cube 2))))
+  (is (= :stone (:material (bdsl/merge-presets (bdsl/wood-preset) {:material :stone})))))
+
+(deftest interaction-handlers-test
+  ;; Handler fns are read from top-level keys on the spec map (see block/dsl handle-*).
+  (let [spec (-> (bdsl/create-block-spec "evt"
+                                         {:material :stone
+                                          :multi-block? true
+                                          :multi-block-size {:width 1 :height 1 :depth 1}
+                                          :events {:on-multi-block-break (fn [e] [:mb e])}})
+                 (assoc :on-right-click (fn [e] [:right e])
+                        :on-break (fn [e] [:break e])
+                        :on-place (fn [e] [:place e])))]
+    (is (= [:right :x] (bdsl/handle-right-click spec :x)))
+    (is (= [:break :y] (bdsl/handle-break spec :y)))
+    (is (= [:place :z] (bdsl/handle-place spec :z)))
+    (let [r (bdsl/handle-multi-block-break spec {:pos :p})]
+      (is (true? (:should-break-all r)))
+      ;; `calculate-multi-block-positions` uses `for` for regular shapes → lazy seq, not vec.
+      (is (sequential? (:positions r)))
+      (is (pos? (count (:positions r)))))))
+
+(deftest get-block-properties-test
+  (let [spec (bdsl/create-block-spec "props"
+                                     (merge (bdsl/metal-preset 2)
+                                            {:light-level 9}))]
+    (is (= :metal (:material (bdsl/get-block-properties spec))))
+    (is (= 9 (:light-level (bdsl/get-block-properties spec))))
+    (is (true? (:requires-tool (bdsl/get-block-properties spec))))))

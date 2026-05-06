@@ -2,9 +2,41 @@ plugins {
     id "java-library"
     id "dev.clojurephant.clojure"
 }
+
+configurations {
+    cloverageRuntime
+}
+
 dependencies {
     implementation "org.clojure:clojure:1.12.4"
     api("org.slf4j:slf4j-api:1.7.25")
+    testImplementation "org.clojure:test.check:1.1.1"
+    cloverageRuntime "cloverage:cloverage:1.2.4"
 }
 
+tasks.register('runMcmodClojureTests', JavaExec) {
+    group = 'verification'
+    description = 'Run clojure.test suites for mcmod via cn.li.mcmod.test-runner.'
+    dependsOn compileTestClojure, compileClojure, classes
+    workingDir = project.projectDir
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'clojure.main'
+    args '-m', 'cn.li.mcmod.test-runner'
+}
 
+tasks.register('coverageMcmodClojureTests', JavaExec) {
+    group = 'verification'
+    description = 'Run mcmod clojure tests with cloverage coverage report.'
+    dependsOn compileTestClojure, compileClojure, classes
+    workingDir = project.projectDir
+    classpath = sourceSets.test.runtimeClasspath + configurations.cloverageRuntime
+    mainClass = 'clojure.main'
+    args '-m', 'cloverage.coverage',
+            '--src-ns-path', 'src/main/clojure',
+            '--test-ns-path', 'src/test/clojure',
+            '--ns-regex', 'cn\\.li\\.mcmod\\..*',
+            '--test-ns-regex', 'cn\\.li\\.mcmod\\..*-test',
+            // Exclude client.obj (huge glue) and platform.position (IBlockPos must stay non-instrumented for test stubs).
+            '--ns-exclude-regex', 'cn\\.li\\.mcmod\\.(client\\.obj|platform\\.position)',
+            '--output', "${project.buildDir}/reports/coverage"
+}

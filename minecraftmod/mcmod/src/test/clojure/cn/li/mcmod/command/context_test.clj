@@ -58,4 +58,3 @@
       (is (nil? (ctx/get-metadata context :k2)))
       (is (nil? (ctx/get-metadata context "k1"))))))
 
-(clojure.test/run-tests 'cn.li.mcmod.command.context-test)

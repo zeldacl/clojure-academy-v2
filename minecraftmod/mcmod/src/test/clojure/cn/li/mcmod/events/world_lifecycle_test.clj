@@ -29,20 +29,21 @@
 
 (deftest dispatch-swallows-handler-exceptions-test
   (clear-handlers!)
-  (let [seen (atom [])]
-    (lifecycle/register-world-lifecycle-handler!
-      {:on-load (fn [_ _] (throw (ex-info "boom-load" {})))
-       :on-unload (fn [_] (throw (ex-info "boom-unload" {})))
-       :on-save (fn [_] (throw (ex-info "boom-save" {})))})
-    (lifecycle/register-world-lifecycle-handler!
-      {:on-load (fn [_ _] (swap! seen conj :load-ok))
-       :on-unload (fn [_] (swap! seen conj :unload-ok))
-       :on-save (fn [_] (swap! seen conj :save-ok) {:ok true})})
-    (testing "load/unload continue after faulty handlers"
-      (is (nil? (lifecycle/dispatch-world-load :w nil)))
-      (is (nil? (lifecycle/dispatch-world-unload :w))))
-    (testing "save keeps collecting successful handlers"
-      (is (= [{:ok true}] (lifecycle/dispatch-world-save :w))))
-    (is (= [:load-ok :unload-ok :save-ok] @seen))))
+  ;; Swallowed handler errors go to *err*; sink them so cloverage/CI stay quiet.
+  (binding [*err* (java.io.PrintWriter. (java.io.StringWriter.) true)]
+    (let [seen (atom [])]
+      (lifecycle/register-world-lifecycle-handler!
+        {:on-load (fn [_ _] (throw (ex-info "boom-load" {})))
+         :on-unload (fn [_] (throw (ex-info "boom-unload" {})))
+         :on-save (fn [_] (throw (ex-info "boom-save" {})))})
+      (lifecycle/register-world-lifecycle-handler!
+        {:on-load (fn [_ _] (swap! seen conj :load-ok))
+         :on-unload (fn [_] (swap! seen conj :unload-ok))
+         :on-save (fn [_] (swap! seen conj :save-ok) {:ok true})})
+      (testing "load/unload continue after faulty handlers"
+        (is (nil? (lifecycle/dispatch-world-load :w nil)))
+        (is (nil? (lifecycle/dispatch-world-unload :w))))
+      (testing "save keeps collecting successful handlers"
+        (is (= [{:ok true}] (lifecycle/dispatch-world-save :w))))
+      (is (= [:load-ok :unload-ok :save-ok] @seen)))))
 
-(clojure.test/run-tests 'cn.li.mcmod.events.world-lifecycle-test)

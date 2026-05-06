@@ -80,4 +80,3 @@
     (registry/ensure-default-values! :order {:x 7 :y 7})
     (is (= {:x 100 :y 2} (registry/get-config-values :order)))))
 
-(clojure.test/run-tests 'cn.li.mcmod.config.registry-test)

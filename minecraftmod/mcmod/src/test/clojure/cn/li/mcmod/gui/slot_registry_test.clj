@@ -26,4 +26,3 @@
       (is (= :output (registry/get-slot-type-for-index :machine 1)))
       (is (nil? (registry/get-slot-type-for-index :machine 9))))))
 
-(clojure.test/run-tests 'cn.li.mcmod.gui.slot-registry-test)

@@ -54,4 +54,3 @@
         (is (= :be2 (helpers/update-be-field! :be2 :v 9)))
         (is (= [:be2 {:v 9}] @saved))))))
 
-(clojure.test/run-tests 'cn.li.mcmod.block.inventory-helpers-test)

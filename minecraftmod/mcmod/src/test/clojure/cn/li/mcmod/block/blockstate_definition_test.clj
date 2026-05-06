@@ -48,4 +48,3 @@
       (finally
         (reset! hooks-atom original-hooks)))))
 
-(clojure.test/run-tests 'cn.li.mcmod.block.blockstate-definition-test)

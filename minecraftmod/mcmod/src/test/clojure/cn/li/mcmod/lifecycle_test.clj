@@ -67,5 +67,3 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"client-fail"
                           (lifecycle/run-client-init!)))
     (is (= [:first] @calls))))
-
-(clojure.test/run-tests 'cn.li.mcmod.lifecycle-test)

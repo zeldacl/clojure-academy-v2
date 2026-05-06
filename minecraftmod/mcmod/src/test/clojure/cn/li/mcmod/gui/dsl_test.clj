@@ -129,11 +129,3 @@
     (is (= "Input1+Input2" (get @test-slots 2)))
     (is (nil? (get @test-slots 0)))
     (is (nil? (get @test-slots 1))))))
-
-;; Run all tests
-(defn run-all-tests []
-  (clojure.test/run-tests 'cn.li.mcmod.gui.dsl-test))
-
-;; Auto-run tests when namespace is loaded
-(defn init-tests! []
-  :ready)
