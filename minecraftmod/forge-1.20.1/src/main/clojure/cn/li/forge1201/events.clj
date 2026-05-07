@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.events
   "Forge 1.20.1 event handlers"
   (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
+            [cn.li.mcmod.events.interaction-result :as interaction-result]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.metadata :as event-metadata]
@@ -18,17 +19,6 @@
            [net.minecraftforge.eventbus.api Event$Result]
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
             BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
-
-  (defn- gui-open-result?
-    [ret]
-    (and (map? ret)
-      (contains? ret :gui-id)
-      (contains? ret :player)
-      (contains? ret :world)
-      (contains? ret :pos)))
-
-(defn- consume-result? [ret]
-  (and (map? ret) (true? (:consume? ret))))
 
 (defn- feedback-component
   [{:keys [type key args text]}]
@@ -115,8 +105,7 @@
                          :item-stack item-stack
                          :world level
                          :block (.getBlock block-state)})]
-              (when (or (gui-open-result? ret)
-                        (consume-result? ret))
+                    (when (interaction-result/interaction-consumed? ret)
                 (if (.isClientSide level)
                   ;; Client: deny Item#useOn / onItemUseFirst only so BlockItem does not show a
                   ;; placement ghost; do not cancel the whole event (can block server handling).

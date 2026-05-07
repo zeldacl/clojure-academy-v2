@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 默认根工程交付线：`forge-1.20.1`
-- `fabric-1.20.1`：目录存在，但默认不纳入根构建
+- 默认根工程交付线：`forge-1.20.1`（主线）
+- `fabric-1.20.1`：已纳入根构建，当前维护级别为 **minimal maintenance**（至少 compile 级）
 - `neoforge-*`：尚未正式接入
 
 ## 验证层级
@@ -65,7 +65,7 @@
 | 平台模块 | Compile | runClient | runServer | Datagen | 集成验证 |
 |----------|---------|-----------|-----------|---------|----------|
 | `forge-1.20.1` | 必须 | 必须 | 必须 | 必须 | 推荐/现行 |
-| `fabric-1.20.1` | 至少 compile | 推荐 | 推荐 | 推荐 | 可选（视状态） |
+| `fabric-1.20.1` | 必须（compile 基线） | 推荐 | 推荐 | 推荐 | 可选（minimal maintenance） |
 | `neoforge-*` | 必须 | 必须 | 必须 | 必须 | 推荐 |
 
 ## 推荐执行顺序
@@ -103,7 +103,7 @@
 - `:forge-1.20.1:runClient`
 - `runForgeGameTests`
 
-### Fabric（若启用）
+### Fabric（当前已纳入根构建）
 
 - `:fabric-1.20.1:compileJava`
 - `:fabric-1.20.1:compileClojure`
@@ -154,7 +154,7 @@
 
 ## 推荐后续动作
 
-1. 为 `fabric-1.20.1` 明确选择：进入 compile 基线，或明确标注 experimental。
+1. 持续保持 `fabric-1.20.1` compile 基线可用（`verifyFabricBaseline` / `verifyCurrentPlatforms`）。
 2. 新增 `neoforge-*` 时，从第一天起就接入 compile 与 smoke 验证。
 3. 把边界扫描脚本或 Gradle 任务纳入统一 `check` / `verification` 体系。
 

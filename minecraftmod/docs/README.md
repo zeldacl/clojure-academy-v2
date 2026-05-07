@@ -4,8 +4,10 @@
 
 ## 当前构建（以仓库为准）
 
-- **根 `settings.gradle` 包含**：`api`、`mcmod`、`ac`、`forge-1.20.1`。
-- **`fabric-1.20.1`**：目录中保留 Fabric 适配代码，但 **`include 'fabric-1.20.1'` 在根 `settings.gradle` 中默认注释**，不参与根工程构建；需 Fabric 时请取消注释并单独验证。
+- **根 `settings.gradle` 包含**：`api`、`mcmod`、`ac`、`forge-1.20.1`、`fabric-1.20.1`。
+- **`fabric-1.20.1` 维护策略**：当前为 **minimal maintenance**（最小维护）。
+	- 必须保持 compile 级可用与边界门禁通过。
+	- 不承诺与 Forge 的完全功能对齐；差异以平台文档和代码现状为准。
 - **命名空间**：Clojure 以 `cn.li.mcmod.*`（协议与 DSL）、`cn.li.ac.*`（内容与无线等业务）、`cn.li.forge1201.*`（Forge 适配）为主；资源与 mod id 仍以 `gradle.properties` 的 `mod_id`（如 `my_mod`）、`assets/my_mod/` 为准。
 - **能量逻辑**：`cn.li.ac.energy.operations`（非 `cn.li.energy.operations`）。
 
@@ -37,7 +39,7 @@
 - **客户端/服务端代码分离**：[CLIENT_SERVER_SEPARATION.md](02-architecture/CLIENT_SERVER_SEPARATION.md)
 - **多 Loader / 多版本扩展设计**：[platform-expansion/README.md](02-architecture/platform-expansion/README.md)
 - **BlockState 与 DataProvider**：[BlockState_Architecture.md](02-architecture/BlockState_Architecture.md)、[DataGenerator.md](04-datagen/DataGenerator.md)
-- **平台与 Fabric（可选子工程）**：[Platform_And_Fabric.md](02-architecture/Platform_And_Fabric.md)
+- **平台与 Fabric（现状与维护级别）**：[Platform_And_Fabric.md](02-architecture/Platform_And_Fabric.md)
 - **多 Loader 验证矩阵**：[testing/MULTI_LOADER_VERIFICATION.md](testing/MULTI_LOADER_VERIFICATION.md)
 - **Wireless Node/Matrix GUI**：[Node_GUI.md](05-wireless/Node_GUI.md)、[Matrix_GUI.md](05-wireless/Matrix_GUI.md)、[Wireless_GUI_Status.md](05-wireless/Wireless_GUI_Status.md)
 - **GUI DSL 与架构**：[GUI_DSL.md](06-gui/GUI_DSL.md)、[GUI_Architecture_Refactoring.md](06-gui/GUI_Architecture_Refactoring.md)

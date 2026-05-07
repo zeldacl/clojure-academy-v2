@@ -116,24 +116,10 @@ plugins {
     id "com.github.johnrengelman.shadow"
 }
 
-// 物理注入 ac 和 mcmod 的源码与资源 (保持不变)
-sourceSets {
-    main {
-        clojure {
-            srcDirs += ["${project(':ac').projectDir}/src/main/clojure",
-                        "${project(':mcmod').projectDir}/src/main/clojure"]
-        }
-        java {
-            srcDirs += ["${project(':api').projectDir}/src/main/java",
-                        "${project(':mcmod').projectDir}/src/main/java",
-                        "${project(':ac').projectDir}/src/main/java"]
-        }
-        resources {
-            srcDirs += ["${project(':ac').projectDir}/src/main/resources",
-                        "${project(':mcmod').projectDir}/src/main/resources"]
-        }
-    }
-}
+apply from: rootProject.file('gradle/platform_build_helpers.gradle')
+
+// 物理注入 ac 和 mcmod 的源码与资源
+configureInjectedPlatformSources(includeAcJava: true)
 
 loom {
     // 移除 forge {} 块，Fabric 不需要
@@ -176,20 +162,11 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:0.92.0+1.20.1" // Fabric API
     
     // Shared sources are injected physically via sourceSets above.
-    implementation "org.clojure:clojure:1.12.4"
-    implementation "org.clojure:spec.alpha:0.3.218"
-    implementation "org.clojure:core.specs.alpha:0.2.62"
 }
 
-shadowJar {
-    configurations = [project.configurations.runtimeClasspath]
-    archiveClassifier = 'shadow'
-    dependencies {
-        include(dependency('org.clojure:clojure'))
-        include(dependency('org.clojure:spec.alpha'))
-        include(dependency('org.clojure:core.specs.alpha'))
-    }
-}
+addSharedClojureRuntimeDeps(null)
+
+configureSharedClojureShadowJar()
 
 // 配置重映射，Architectury Loom 会自动处理 Fabric 的重映射
 remapJar {

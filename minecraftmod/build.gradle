@@ -74,10 +74,133 @@ tasks.register('runMcmodUnitTests') {
     dependsOn ':mcmod:runMcmodClojureTests'
 }
 
+tasks.register('verifyArchitectureBoundaries') {
+    group = 'verification'
+    description = 'Verify architecture boundaries: ac/mcmod must not reference Minecraft or loader APIs.'
+
+    doLast {
+        def sourceIncludes = [
+            '**/*.clj',
+            '**/*.cljc',
+            '**/*.cljs',
+            '**/*.java',
+            '**/*.kt',
+            '**/*.kts',
+            '**/*.groovy'
+        ]
+
+        def violations = []
+
+        def isSkippableLine = { String line ->
+            def trimmed = line.trim()
+            return trimmed.isEmpty() ||
+                trimmed.startsWith(';') ||
+                trimmed.startsWith('//') ||
+                trimmed.startsWith('/*') ||
+                trimmed.startsWith('*/') ||
+                trimmed.startsWith('*') ||
+                trimmed.startsWith('#') ||
+                trimmed.startsWith('"') ||
+                trimmed.startsWith('\'') ||
+                trimmed.startsWith('`')
+        }
+
+            def isLikelyCodeLine = { String line ->
+                def trimmed = line.trim()
+                if (trimmed.isEmpty()) {
+                    return false
+                }
+                def first = trimmed.charAt(0)
+                return trimmed.startsWith('import ') ||
+                trimmed.startsWith('package ') ||
+                trimmed.startsWith('(ns ') ||
+                trimmed.startsWith('(:require') ||
+                trimmed.startsWith('(:import') ||
+                    trimmed.endsWith(';') ||
+                    ['(', '[', '{', ':', '^', '@'].contains(String.valueOf(first))
+            }
+
+        def checkPattern = { String ruleName, FileTree tree, def pattern, Closure<Boolean> shouldCheckLine ->
+            tree.files.each { File file ->
+                def rel = project.rootDir.toPath().relativize(file.toPath()).toString().replace('\\', '/')
+                file.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                    if (shouldCheckLine(line) && pattern.matcher(line).find()) {
+                        violations << [
+                            rule   : ruleName,
+                            file   : rel,
+                            lineNo : idx + 1,
+                            text   : line.trim()
+                        ]
+                    }
+                }
+            }
+        }
+
+        def acSource = fileTree('ac/src') {
+            include sourceIncludes
+            exclude '**/build/**', '**/.gradle/**'
+        }
+        def mcmodSource = fileTree('mcmod/src') {
+            include sourceIncludes
+            exclude '**/build/**', '**/.gradle/**'
+        }
+
+        checkPattern(
+            'AC_MCMOD_NO_MINECRAFT_OR_FORGE',
+            acSource + mcmodSource,
+            ~/(net\.minecraft(?!\.client)|net\.minecraftforge)/,
+            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+        )
+
+        checkPattern(
+            'AC_NO_PLATFORM_NS_DEPENDENCY',
+            acSource,
+            ~/(cn\.li\.(forge|fabric)\d*)/,
+            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+        )
+
+        checkPattern(
+            'NON_CLIENT_NO_MC_CLIENT_IMPORT',
+            acSource + mcmodSource,
+            ~/net\.minecraft\.client/,
+            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+        )
+
+        def nonClientViolations = violations.findAll {
+            it.rule == 'NON_CLIENT_NO_MC_CLIENT_IMPORT' &&
+                !(it.file.contains('/client/') || it.file.contains('\\client\\'))
+        }
+        violations.removeAll { it.rule == 'NON_CLIENT_NO_MC_CLIENT_IMPORT' }
+        violations.addAll(nonClientViolations)
+
+        if (!violations.isEmpty()) {
+            logger.error('Architecture boundary violations found ({}):', violations.size())
+            violations.each { v ->
+                logger.error('  [{}] {}:{} -> {}', v.rule, v.file, v.lineNo, v.text)
+            }
+            throw new GradleException('verifyArchitectureBoundaries failed. See violations above.')
+        }
+
+        logger.lifecycle('[verifyArchitectureBoundaries] passed. No boundary violations detected.')
+    }
+}
+
 tasks.register('verifyForgeBaseline') {
     group = 'verification'
     description = 'Compile baseline Clojure sources for ac, mcmod, and forge-1.20.1.'
-    dependsOn ':ac:compileClojure', ':mcmod:compileClojure', ':forge-1.20.1:compileClojure'
+    dependsOn 'verifyArchitectureBoundaries', ':ac:compileClojure', ':mcmod:compileClojure', ':forge-1.20.1:compileClojure'
+}
+
+tasks.register('verifyFabricBaseline') {
+    group = 'verification'
+    description = 'Compile baseline sources for fabric-1.20.1 (minimal-maintenance gate).'
+    dependsOn 'verifyArchitectureBoundaries', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure'
+}
+
+tasks.register('verifyCurrentPlatforms') {
+    group = 'verification'
+    description = 'Run compile-level verification matrix for current maintained platforms (Forge + Fabric).'
+    dependsOn 'verifyForgeBaseline', 'verifyFabricBaseline'
 }
 
 def registerForgeGameTestTask = {
@@ -171,9 +294,9 @@ tasks.register('validateForgeGameTestLog') {
         def batchReport = file('build/reports/forge-gametest-batch-report.txt')
 
         def logText = logFile.getText('UTF-8')
-        def requiredMarkers = [
-            'Starting minecraft server version',
-            'Loading properties'
+        def requiredMarkerGroups = [
+            ['Starting minecraft server version', 'Started game test server'],
+            ['Loading properties', 'Preparing start region for dimension']
         ]
         def fatalPatterns = [
             'Failed to load Clojure mod implementation',
@@ -185,9 +308,12 @@ tasks.register('validateForgeGameTestLog') {
             'The process cannot access the file because another process has locked a portion of the file'
         ]
 
-        def missingMarkers = requiredMarkers.findAll { !logText.contains(it) }
-        if (!missingMarkers.isEmpty()) {
-            throw new GradleException("Forge GameTest log is missing expected startup markers: ${missingMarkers}")
+        def missingMarkerGroups = requiredMarkerGroups.findAll { group ->
+            !group.any { marker -> logText.contains(marker) }
+        }
+        if (!missingMarkerGroups.isEmpty()) {
+            def display = missingMarkerGroups.collect { it.join(' | ') }
+            throw new GradleException("Forge GameTest log is missing expected startup marker groups: ${display}")
         }
 
         def matchedFatalPatterns = fatalPatterns.findAll { logText.contains(it) }
@@ -247,7 +373,7 @@ tasks.register('validateForgeGameTestLog') {
 tasks.register('verifyForgeTesting') {
     group = 'verification'
     description = 'Run unit test compilation and Forge GameTest verification for current scope.'
-    dependsOn 'verifyForgeBaseline', 'unitTestCompile', 'runAcUnitTests', 'runMcmodUnitTests', 'runForgeGameTests', 'validateForgeGameTestLog'
+    dependsOn 'verifyArchitectureBoundaries', 'verifyForgeBaseline', 'unitTestCompile', 'runAcUnitTests', 'runMcmodUnitTests', 'runForgeGameTests', 'validateForgeGameTestLog'
 }
 
 

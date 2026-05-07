@@ -1,6 +1,6 @@
 # Tile DSL（`deftile` / `deftile-kind`）使用指南
 
-本项目的 BlockEntity（旧称 tile entity）注册采用 **元数据驱动**：Tile DSL 与元数据在 **`mcmod`** 声明，具体方块内容在 **`ac`**；Forge 适配层遍历元数据并注册，避免在平台层硬编码内容列表。（Fabric 子工程默认未加入根构建。）
+本项目的 BlockEntity（旧称 tile entity）注册采用 **元数据驱动**：Tile DSL 与元数据在 **`mcmod`** 声明，具体方块内容在 **`ac`**；Forge 适配层遍历元数据并注册，避免在平台层硬编码内容列表。（Fabric 子工程当前已纳入根构建，按 minimal maintenance 维护。）
 
 与 **`defblock`**、Forge **`register-block-entities!`** 的衔接见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。
 

@@ -11,11 +11,20 @@
 ## 快速日常流程
 
 1. 快速编译：
-   - `.\gradlew.bat :forge-1.20.1:compileClojure`
-2. 基线验证：
-   - `.\gradlew.bat verifyForgeBaseline`
-3. 全量测试验证：
-   - `.\gradlew.bat verifyForgeTesting`
+  - `.\gradlew.bat :forge-1.20.1:compileClojure`
+2. 架构边界检查：
+  - `.\gradlew.bat verifyArchitectureBoundaries`
+3. 基线验证：
+  - `.\gradlew.bat verifyCurrentPlatforms`
+4. Forge 主线测试验证：
+  - `.\gradlew.bat verifyForgeTesting`
+
+## 当前平台验证基线（推荐回归顺序）
+
+1. `verifyArchitectureBoundaries`
+2. `verifyCurrentPlatforms`
+3. `runAcUnitTests runMcmodUnitTests`
+4. `verifyForgeTesting`
 
 ## 运行与数据生成
 
@@ -32,6 +41,9 @@
 - `coverageMcmodClojureTests`：输出 `mcmod` 的 cloverage 覆盖率报告到 `mcmod/build/reports/coverage/`。
   - **Cloverage 排除命名空间**（见 `mcmod/build.gradle` 中 `--ns-exclude-regex`）：`cn.li.mcmod.client.obj`（体量极大的客户端胶水，单测 ROI 低）、`cn.li.mcmod.platform.position`（与 Cloverage 插桩后的 `IBlockPos` 协议身份冲突，测试里 `defrecord` 桩位需依赖未插桩协议）。总行覆盖率 ratchet 针对的是**已插桩**代码；排除上述命名空间后，百分比更接近「可纯 JVM 回归的核心逻辑」，不等于放弃客户端或坐标抽象的质量——后者由 Forge 侧与集成测试兜底。
 - `verifyForgeBaseline`：Forge 侧基线检查。
+- `verifyFabricBaseline`：Fabric compile 基线检查（minimal maintenance）。
+- `verifyCurrentPlatforms`：当前纳入平台（Forge+Fabric）矩阵基线。
+- `verifyArchitectureBoundaries`：跨层依赖边界扫描（阻止核心层误依赖平台/Minecraft 类）。
 - `runForgeGameTests`：启动 GameTest 运行。
 - `validateForgeGameTestLog`：校验 GameTest 日志中的失败/致命信息。
 - `verifyForgeTesting`：聚合测试验证入口。
@@ -76,5 +88,5 @@
 
 ## 范围说明
 
-- 本手册以默认根工程（未 include Fabric）为准。
-- 启用 Fabric 后需建立独立验证基线，不与 Forge 基线混用。
+- 本手册以当前根工程（已 include Fabric）为准。
+- 当前验证建议：`verifyForgeBaseline`（主线）+ `verifyFabricBaseline`（minimal maintenance）+ `verifyCurrentPlatforms`（矩阵入口）。

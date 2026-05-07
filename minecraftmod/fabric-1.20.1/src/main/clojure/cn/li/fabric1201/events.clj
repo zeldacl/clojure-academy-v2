@@ -2,25 +2,12 @@
   "Fabric 1.20.1 event handlers"
   (:require [cn.li.ac.core :as core]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.events.interaction-result :as interaction-result]
             [cn.li.mcmod.events.metadata :as event-metadata]
-            [cn.li.fabric1201.gui.registry-impl :as gui-registry-impl]
-            [cn.li.ac.wireless.data.world :as wd])
-  (:import [net.fabricmc.fabric.api.event.player UseBlockCallback]
-           [net.fabricmc.fabric.api.event.player PlayerBlockBreakEvents]
+            [cn.li.fabric1201.gui.registry-impl :as gui-registry-impl])
+  (:import
            [net.minecraft.network.chat Component]
-           [net.minecraft.world InteractionResult]
-           [net.fabricmc.fabric.api.event.lifecycle.v1 ServerWorldEvents]))
-
-(defn- gui-open-result?
-  [ret]
-  (and (map? ret)
-       (contains? ret :gui-id)
-       (contains? ret :player)
-       (contains? ret :world)
-       (contains? ret :pos)))
-
-(defn- consume-result? [ret]
-  (and (map? ret) (true? (:consume? ret))))
+           [net.minecraft.world InteractionResult]))
 
 (defn- feedback-component
   [{:keys [type key args text]}]
@@ -50,7 +37,7 @@
       (log/info "Block has registered handler, dispatching...")
       (let [ret (core/on-block-right-click (assoc event-data :block-id block-id))]
         (emit-feedback! event-data ret)
-        (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
+        (when (interaction-result/gui-open-result? ret)
           (try
             (let [{:keys [gui-id player world pos]} ret
                   tile-entity (.getBlockEntity world pos)]
@@ -78,8 +65,7 @@
                  :item-stack item-stack
                  :world world
                  :block (.getBlock block-state)})]
-      (if (or (gui-open-result? ret)
-              (consume-result? ret))
+      (if (interaction-result/interaction-consumed? ret)
         InteractionResult/CONSUME
         InteractionResult/PASS))
     (catch Throwable t

@@ -10,6 +10,19 @@
 - `fabric-1.20.1/build.gradle` 也存在与其相似的共享源码注入模式。
 - 新增平台或版本时，容易复制 build 文件并手工修改，导致逻辑漂移。
 
+## 当前仓库重复项映射（Forge/Fabric）
+
+| 重复主题 | Forge (`forge-1.20.1/build.gradle`) | Fabric (`fabric-1.20.1/build.gradle`) | 处理决策 |
+|---|---|---|---|
+| 注入共享源码 sourceSets | `sourceSets.main.{clojure,java,resources}` 注入 `ac/mcmod/api` | 同结构注入 `ac/mcmod/api` | **已抽取**到 `gradle/platform_build_helpers.gradle` 的 `configureInjectedPlatformSources` |
+| Clojure 核心依赖（implementation） | `org.clojure:*` 三件套 | `org.clojure:*` 三件套 | **已抽取**到 `addSharedClojureRuntimeDeps` |
+| Shadow 打包规则 | `shadowJar` 包含 Clojure 运行时 | 相同规则 | **已抽取**到 `configureSharedClojureShadowJar` |
+| remap 输入策略 | `remapJar.inputFile = jar.archiveFile` | `remapJar.inputFile = shadowJar.archiveFile` | **保留差异**（loader 行为不同） |
+| 运行时额外库配置 | `forgeRuntimeLibrary` 需显式声明 | Fabric 无该配置 | **保留差异**（仅 Forge） |
+| AOT 输出合并/LVT 清理 | `stripClojureLVT` + `copyClojureClassesToJavaOutput` + run/check 依赖 | 当前未采用同套链路 | **暂不抽取**（先验证 Fabric 是否需要） |
+
+> 注：本轮只做“低风险共性提取”，不改变 loader-specific 行为。
+
 ## 建议分阶段实施
 
 ### Phase 1 — 文档化现有规则

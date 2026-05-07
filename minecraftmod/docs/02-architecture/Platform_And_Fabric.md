@@ -1,6 +1,6 @@
 # 平台实现与 Fabric 说明
 
-本文档合并自平台实现指南与 Fabric 相关说明。**日常开发与默认构建以 Forge 1.20.1 为主**；`fabric-1.20.1` 子目录保留适配代码，但根 `settings.gradle` 中 **`include 'fabric-1.20.1'` 默认注释**，根工程不会编译 Fabric 模块，除非手动恢复。
+本文档合并自平台实现指南与 Fabric 相关说明。**日常开发与默认构建以 Forge 1.20.1 为主**；`fabric-1.20.1` 已纳入根 `settings.gradle`，并以 **minimal maintenance** 级别参与 compile 基线验证。
 
 ---
 
@@ -27,9 +27,12 @@ forge-1.20.1/
 
 - **资源**：`forge-1.20.1/src/main/resources/META-INF/mods.toml` 等；游戏资源也可在 `ac/src/main/resources/assets/<mod_id>/` 维护。
 
-### Fabric 子工程（可选，默认未加入根构建）
+### Fabric 子工程（当前已纳入根构建）
 
-仓库中存在 `fabric-1.20.1/`，内含 `fabric.mod.json`、Java 入口与 Clojure 适配。**启用前**请在根 `settings.gradle` 取消 `include 'fabric-1.20.1'` 的注释，并解决与当前 `mcmod`/`ac` 分支的同步问题。
+仓库中 `fabric-1.20.1/` 内含 `fabric.mod.json`、Java 入口与 Clojure 适配。当前策略：
+
+- 至少保持 compile 级可用（`verifyFabricBaseline`）。
+- 与 Forge 不承诺完全功能对齐；能力差异按当前实现与测试矩阵维护。
 
 ---
 

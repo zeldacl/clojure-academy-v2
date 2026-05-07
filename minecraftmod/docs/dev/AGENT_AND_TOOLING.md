@@ -5,7 +5,8 @@
 ## 构建与开发基线（Windows 使用 `.\gradlew.bat`）
 
 - **工作目录**：始终在包含根 `settings.gradle` 的 `minecraftmod` 目录执行命令。
-- **默认构建平台**：根工程默认包含 `api`、`mcmod`、`ac`、`forge-1.20.1`；`fabric-1.20.1` 默认未 include。
+- **默认构建平台**：根工程默认包含 `api`、`mcmod`、`ac`、`forge-1.20.1`、`fabric-1.20.1`。
+- **Fabric 维护级别**：`minimal maintenance`（至少保证 compile 与边界门禁，不承诺与 Forge 完全功能对齐）。
 - **Java 版本**：Java 17。
 - **LSP 刷新**：修改 Java 后执行 `.\gradlew.bat :<subproject>:classes`。
 
@@ -14,10 +15,13 @@
 - **本地运行**：`.\gradlew.bat :forge-1.20.1:runClient` / `:forge-1.20.1:runServer` / `:forge-1.20.1:runData`
 - **快速编译**：`.\gradlew.bat :ac:compileClojure`、`.\gradlew.bat :mcmod:compileClojure`、`.\gradlew.bat :forge-1.20.1:compileClojure`
 - **测试与验证入口**：
+  - `.\gradlew.bat verifyArchitectureBoundaries`
   - `.\gradlew.bat unitTestCompile`
   - `.\gradlew.bat runAcUnitTests`（执行 `ac` 的 `clojure.test`，入口为 `:ac:runAcClojureTests` / `cn.li.ac.test-runner`）
   - `.\gradlew.bat runMcmodUnitTests`（执行 `mcmod` 的 `clojure.test`，入口为 `:mcmod:runMcmodClojureTests` / `cn.li.mcmod.test-runner`；可选 `-Dmcmod.test.only=cn.li.mcmod.foo-test,cn.li.mcmod.bar-test`）
   - `.\gradlew.bat verifyForgeBaseline`
+  - `.\gradlew.bat verifyFabricBaseline`
+  - `.\gradlew.bat verifyCurrentPlatforms`
   - `.\gradlew.bat runForgeGameTests`
   - `.\gradlew.bat validateForgeGameTestLog`
   - `.\gradlew.bat verifyForgeTesting`
@@ -81,6 +85,7 @@
 
 ## 结构性校验（快速自检）
 
+- 推荐优先执行：`.\gradlew.bat verifyArchitectureBoundaries`（自动汇总并定位违规文件/行号）。
 - `rg "cn\.li\.forge|cn\.li\.fabric" ac/src/` 应为空。
 - `rg "net\.minecraft|net\.minecraftforge" ac/src/ mcmod/src/` 应为空（允许注释或字符串需人工甄别）。
 - `rg "net\.minecraft\.client" ac/src/ mcmod/src/` 在非 client 目录应无泄漏。

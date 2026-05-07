@@ -252,28 +252,14 @@ plugins {
     id "com.github.johnrengelman.shadow"
 }
 
+apply from: rootProject.file('gradle/platform_build_helpers.gradle')
+
 // tasks.matching { it.name == 'checkClojure' }.configureEach {
 //     enabled = false
 // }
 
 // 物理注入 ac 和 mcmod 的源码与资源
-sourceSets {
-    main {
-        clojure {
-            srcDirs += ["${project(':ac').projectDir}/src/main/clojure",
-                        "${project(':mcmod').projectDir}/src/main/clojure"]
-        }
-        java {
-            srcDirs += ["${project(':api').projectDir}/src/main/java",
-            "${project(':mcmod').projectDir}/src/main/java",
-            "${project(':api').projectDir}/src/main/java"]
-        }
-        resources {
-            srcDirs += ["${project(':ac').projectDir}/src/main/resources",
-                        "${project(':mcmod').projectDir}/src/main/resources"]
-        }
-    }
-}
+configureInjectedPlatformSources(includeAcJava: false)
 
 loom {
     // 现代 Loom 1.7+ 的 Forge 专用配置块
@@ -342,16 +328,6 @@ dependencies {
 //     implementation project(':mcmod')
 //         compileOnly project(':ac')
 //     compileOnly project(':mcmod')
-    implementation "org.clojure:clojure:1.12.4"
-    implementation "org.clojure:spec.alpha:0.3.218"
-    implementation "org.clojure:core.specs.alpha:0.2.62"
-
-    // Forge dev/runtime classloader does not automatically expose regular
-    // implementation deps to transformed mod classes.
-    forgeRuntimeLibrary "org.clojure:clojure:1.12.4"
-    forgeRuntimeLibrary "org.clojure:spec.alpha:0.3.218"
-    forgeRuntimeLibrary "org.clojure:core.specs.alpha:0.2.62"
-
     compileOnly('com.blamejared.crafttweaker:CraftTweaker-common-1.20.1:14.0.60')
 
     // compile against the JEI API but do not include it at runtime
@@ -361,16 +337,11 @@ dependencies {
     modRuntimeOnly("mezz.jei:jei-${mc_version}-forge:${jei_version}")
 }
 
+// Shared Clojure runtime deps for compile + Forge transformed runtime classpath.
+addSharedClojureRuntimeDeps('forgeRuntimeLibrary')
+
 // 配置 ShadowJar 把 Clojure 运行环境打入
-shadowJar {
-    configurations = [project.configurations.runtimeClasspath]
-    archiveClassifier = 'shadow'
-    dependencies {
-        include(dependency('org.clojure:clojure'))
-        include(dependency('org.clojure:spec.alpha'))
-        include(dependency('org.clojure:core.specs.alpha'))
-    }
-}
+configureSharedClojureShadowJar()
 
 // 配置重映射，处理 Clojure 的混淆名
 remapJar {

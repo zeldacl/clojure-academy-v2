@@ -1,0 +1,1 @@
+(ns cn.li.mcmod.events.interaction-result)
