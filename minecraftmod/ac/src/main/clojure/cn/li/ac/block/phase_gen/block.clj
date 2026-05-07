@@ -4,6 +4,7 @@
   Architecture:
   All persistent state lives in ScriptedBlockEntity.customState as Clojure maps."
   (:require [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.block.state-schema :as state-schema]
@@ -256,11 +257,11 @@
   (net-server/register-handler (msg :get-status) handle-get-status)
   (log/info "Phase Generator network handlers registered"))
 
-(defonce ^:private phase-gen-installed? (atom false))
+(defonce-guard phase-gen-installed?)
 
 (defn init-phase-gen!
   []
-  (when (compare-and-set! phase-gen-installed? false true)
+  (with-init-guard phase-gen-installed?
     (msg-registry/register-block-messages! :phase-gen [:get-status])
     (tdsl/register-tile!
       (tdsl/create-tile-spec

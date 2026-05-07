@@ -41,7 +41,8 @@
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.gui.animation :as anim]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.position :as pos])
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
 ;; ============================================================================
@@ -484,12 +485,12 @@
   (create-node-gui container player))
 
 (declare node-container?)
-(defonce ^:private wireless-node-gui-installed? (atom false))
+(defonce-guard wireless-node-gui-installed?)
 
 (defn init!
   "Initialize Node GUI module"
   []
-  (when (compare-and-set! wireless-node-gui-installed? false true)
+  (with-init-guard wireless-node-gui-installed?
     (ensure-wireless-node-slot-schema!)
     (gui-dsl/register-gui!
       (gui-dsl/create-gui-spec

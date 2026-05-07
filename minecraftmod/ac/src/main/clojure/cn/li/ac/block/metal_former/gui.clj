@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.metal-former.gui
   "CLIENT-ONLY: Metal Former GUI"
   (:require [clojure.string :as str]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
@@ -173,11 +174,11 @@
        (contains? container :mode)
        (contains? container :energy)))
 
-(defonce ^:private metal-former-gui-installed? (atom false))
+(defonce-guard metal-former-gui-installed?)
 
 (defn init-metal-former-gui!
   []
-  (when (compare-and-set! metal-former-gui-installed? false true)
+  (with-init-guard metal-former-gui-installed?
     (slot-schema/register-slot-schema!
       {:schema-id former-slot-schema-id
        :slots [{:id :input :type :input :x 13 :y 49}

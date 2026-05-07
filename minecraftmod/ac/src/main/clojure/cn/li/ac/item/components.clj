@@ -3,16 +3,17 @@
   
   These items are used to construct matrix cores, nodes, and other wireless components."
   (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private components-installed? (atom false))
+(defonce-guard components-installed?)
 
 ;; ============================================================================
 ;; Initialization
 ;; ============================================================================
 
 (defn init-components! []
-  (when (compare-and-set! components-installed? false true)
+  (with-init-guard components-installed?
     (idsl/register-item!
       (idsl/create-item-spec
         "wafer"

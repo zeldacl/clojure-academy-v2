@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.apps.about
   "About app - Credits and information."
   (:require [cn.li.ac.terminal.app-registry :as reg]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.components :as comp]
@@ -77,9 +78,9 @@
    :gui-fn 'cn.li.ac.terminal.apps.about/open-about-gui
    :category :help})
 
-(defonce ^:private about-app-installed? (atom false))
+(defonce-guard about-app-installed?)
 
 (defn init-about-app!
   []
-  (when (compare-and-set! about-app-installed? false true)
+  (with-init-guard about-app-installed?
     (reg/register-app! about-app)))

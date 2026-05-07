@@ -3,16 +3,17 @@
 
   Required for Matrix to function (need 3 plates)."
   (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.item :as item]
             [clojure.string :as str]))
 
 (def ^:private constraint-plate-id "constraint_plate")
 
-(defonce ^:private constraint-plate-installed? (atom false))
+(defonce-guard constraint-plate-installed?)
 
 (defn init-constraint-plate! []
-  (when (compare-and-set! constraint-plate-installed? false true)
+  (with-init-guard constraint-plate-installed?
     (idsl/register-item!
       (idsl/create-item-spec
         constraint-plate-id

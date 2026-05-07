@@ -7,6 +7,7 @@
   - InfoArea histogram: Energy + IF(liquid) columns
   - Slot rules: liquid in / liquid out / energy output."
   (:require [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
@@ -176,11 +177,11 @@
        (contains? container :energy)
        (contains? container :liquid-amount)))
 
-(defonce ^:private phase-gui-installed? (atom false))
+(defonce-guard phase-gui-installed?)
 
 (defn init-phase-gen-gui!
   []
-  (when (compare-and-set! phase-gui-installed? false true)
+  (with-init-guard phase-gui-installed?
     ;; Original coordinates from ContainerPhaseGen:
     ;; liquid-in(45,12), liquid-out(112,51), output-energy(42,80)
     (slot-schema/register-slot-schema!

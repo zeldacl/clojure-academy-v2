@@ -4,6 +4,7 @@
   Architecture:
   All persistent state lives in ScriptedBlockEntity.customState as Clojure maps."
   (:require [clojure.string :as str]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
@@ -309,11 +310,11 @@
 ;; Runtime Installation (Scheme A)
 ;; ============================================================================
 
-(defonce ^:private metal-former-installed? (atom false))
+(defonce-guard metal-former-installed?)
 
 (defn init-metal-former!
   []
-  (when (compare-and-set! metal-former-installed? false true)
+  (with-init-guard metal-former-installed?
     (msg-registry/register-block-messages! :metal-former [:get-status :alternate])
     (tdsl/register-tile!
       (tdsl/create-tile-spec

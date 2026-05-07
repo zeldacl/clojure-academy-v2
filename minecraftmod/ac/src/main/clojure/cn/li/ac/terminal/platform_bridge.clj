@@ -2,13 +2,14 @@
   "AC terminal bindings for the platform-neutral terminal UI bridge."
   (:require [cn.li.mcmod.platform.terminal-ui :as terminal-ui]
             [cn.li.ac.terminal.terminal-gui :as terminal-gui]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private hooks-installed? (atom false))
+(defonce-guard hooks-installed?)
 
 (defn install-terminal-ui-hooks!
   []
-  (when (compare-and-set! hooks-installed? false true)
+  (with-init-guard hooks-installed?
     (terminal-ui/register-terminal-ui-hooks!
       {:create-terminal-gui
        (fn [player]

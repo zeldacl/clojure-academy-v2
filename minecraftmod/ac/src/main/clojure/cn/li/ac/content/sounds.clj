@@ -1,13 +1,14 @@
 (ns cn.li.ac.content.sounds
 	"Sound event declarations for AC content."
 	(:require [cn.li.mcmod.sound.dsl :as sdsl]
+						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.mcmod.util.log :as log]))
 
-(defonce sounds-initialized? (atom false))
+(defonce-guard sounds-initialized?)
 
 (defn init-sounds!
 	[]
-	(when (compare-and-set! sounds-initialized? false true)
+	(with-init-guard sounds-initialized?
 		;; Electromaster sounds
 		(sdsl/defsound {:id "em.arc_strong"})
 		(sdsl/defsound {:id "em.railgun"})

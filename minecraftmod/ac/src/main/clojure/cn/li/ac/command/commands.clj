@@ -1,6 +1,6 @@
-(ns cn.li.ac.command.commands)
-
-(require '[cn.li.ac.command.dsl :as cmd])
+(ns cn.li.ac.command.commands
+  (:require [cn.li.ac.command.dsl :as cmd]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (defn- resolve-handler [handler-name]
   (or (requiring-resolve (symbol (str "cn.li.ac.command.handlers/" handler-name)))
@@ -75,11 +75,11 @@
 (defn- build-aimp-subcommands []
   (build-common-aim-subcommands))
 
-(defonce ^:private commands-installed? (atom false))
+(defonce-guard commands-installed?)
 
 (defn init-commands!
   []
-  (when (compare-and-set! commands-installed? false true)
+  (with-init-guard commands-installed?
     (cmd/register-command!
       (cmd/create-command-spec
         "acach"

@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.apps.settings
   "Settings app - Configure game settings."
   (:require [cn.li.ac.terminal.app-registry :as reg]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.components :as comp]
@@ -84,9 +85,9 @@
    :gui-fn 'cn.li.ac.terminal.apps.settings/open-settings-gui
    :category :system})
 
-(defonce ^:private settings-app-installed? (atom false))
+(defonce-guard settings-app-installed?)
 
 (defn init-settings-app!
   []
-  (when (compare-and-set! settings-app-installed? false true)
+  (with-init-guard settings-app-installed?
     (reg/register-app! settings-app)))

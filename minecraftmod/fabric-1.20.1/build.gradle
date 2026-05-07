@@ -1,115 +1,3 @@
-// plugins {
-//   id 'java'
-//   // id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
-//   id 'fabric-loom' version '1.6-SNAPSHOT'
-//   id 'dev.clojurephant.clojure' version '0.9.1'
-// }
-
-// group = rootProject.findProperty('mod_group')
-// version = "${rootProject.findProperty('mod_version')}-fabric-1.20.1"
-
-// base {
-// 	archivesName = project.archives_base_name
-// }
-
-// java {
-//   // toolchain { languageVersion = JavaLanguageVersion.of(17) }
-//   // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-// 	// if it is present.
-// 	// If you remove this line, sources will not be generated.
-// 	withSourcesJar()
-
-// 	sourceCompatibility = JavaVersion.VERSION_21
-// 	targetCompatibility = JavaVersion.VERSION_21
-// }
-
-// loom {
-//   // Configure Fabric Loom settings
-//   splitEnvironmentSourceSets()
-
-// 	mods {
-// 		"modid" {
-// 			sourceSet sourceSets.main
-// 			sourceSet sourceSets.client
-// 		}
-// 	}
-// }
-
-
-// fabricApi {
-//     configureDataGeneration()
-// }
-
-// clojure {
-//   builds {
-//     main {
-//       aotNamespaces.add('my-mod')
-//       // Allow reflection for Minecraft classes that may not be available at compile time
-//       reflection = 'skip'
-//     }
-//   }
-// }
-
-// repositories {
-//   mavenCentral()
-//   maven { url 'https://maven.fabricmc.net/' }
-// }
-
-// dependencies {
-//   // Fabric dependencies
-//   // minecraft "com.mojang:minecraft:${project.minecraft_version}"
-//   // mappings loom.officialMojangMappings()
-//   // modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-//   // modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-//   // To change the versions see the gradle.properties file
-// 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-//   // minecraft "com.mojang:minecraft:1.20.1"
-// 	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-// 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-// 	// Fabric API. This is technically optional, but you probably want it anyway.
-// 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-  
-//   // ac (and mcmod via ac) on classpath; ac provides resources
-//   implementation project(':ac')
-
-//   // Clojure
-//   implementation "org.clojure:clojure:${rootProject.findProperty('clojure_version')}"
-//   include "org.clojure:clojure:${rootProject.findProperty('clojure_version')}"
-//   include "org.clojure:spec.alpha:0.3.218"
-//   include "org.clojure:core.specs.alpha:0.2.62"
-// }
-
-// // Fabric compiles only its own Clojure; ac/mcmod from implementation project(':ac')
-// sourceSets {
-//   main {
-//     java { srcDirs += ["src/main/java"] }
-//     clojure { srcDirs += ["src/main/clojure"] }
-//     resources { srcDirs += ["src/main/resources", project(':ac').file('src/main/resources')] }
-//   }
-// }
-
-// tasks.withType(JavaCompile).configureEach {
-//   options.encoding = 'UTF-8'
-//   it.options.release = 21
-// }
-
-// processResources {
-//   inputs.property "version", project.version
-  
-//   filesMatching("fabric.mod.json") {
-// 		expand "version": inputs.properties.version
-// 	}
-// }
-
-// jar {
-// 	inputs.property "archivesName", project.base.archivesName
-
-// 	from("LICENSE") {
-// 		rename { "${it}_${inputs.properties.archivesName}"}
-// 	}
-// }
-
 plugins {
     id "dev.architectury.loom"
     id "dev.clojurephant.clojure"
@@ -118,12 +6,11 @@ plugins {
 
 apply from: rootProject.file('gradle/platform_build_helpers.gradle')
 
-// 物理注入 ac 和 mcmod 的源码与资源
+// 物理注入 ac �?mcmod 的源码与资源
 configureInjectedPlatformSources(includeAcJava: true)
 
 loom {
-    // 移除 forge {} 块，Fabric 不需要
-    
+    // 移除 forge {} 块，Fabric 不需�?    
     runs {
         client {
             client()
@@ -135,17 +22,16 @@ loom {
             configName = "Fabric Server 1.20.1"
             runDir = "run"
         }
-        // Fabric 的 DataGen 配置方式不同
+        // Fabric �?DataGen 配置方式不同
         datagen {
             server()
             configName = "Fabric DataGen 1.20.1"
             runDir = "run-data"
-            // Fabric Loom 自动处理输出路径，通常不需要像 Forge 那样手动传 programArgs
+            // Fabric Loom 自动处理输出路径，通常不需要像 Forge 那样手动�?programArgs
         }
     }
 }
 
-// 资源集处理
 def generatedResources = file("src/generated/resources")
 sourceSets { 
     main { 
@@ -168,7 +54,7 @@ addSharedClojureRuntimeDeps(null)
 
 configureSharedClojureShadowJar()
 
-// 配置重映射，Architectury Loom 会自动处理 Fabric 的重映射
+// 配置重映射，Architectury Loom 会自动处�?Fabric 的重映射
 remapJar {
     inputFile = shadowJar.archiveFile
     dependsOn shadowJar

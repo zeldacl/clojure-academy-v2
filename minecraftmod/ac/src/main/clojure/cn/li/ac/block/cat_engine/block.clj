@@ -7,6 +7,7 @@
   - Server-side energy buffer regenerated each tick
   - Client-side custom renderer handles visual rotor animation"
   (:require [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.block.state-schema :as state-schema]
@@ -210,7 +211,7 @@
 ;; ============================================================================
 
 
-(defonce ^:private cat-engine-installed? (atom false))
+(defonce-guard cat-engine-installed?)
 
 ;; ============================================================================
 ;; Initialization
@@ -218,7 +219,7 @@
 
 (defn init-cat-engine!
   []
-  (when (compare-and-set! cat-engine-installed? false true)
+  (with-init-guard cat-engine-installed?
     (tdsl/register-tile!
       (tdsl/create-tile-spec
         "cat-engine"

@@ -8,13 +8,14 @@
             [cn.li.ac.item.mat-core :as mat-core]
             [cn.li.ac.item.media :as media]
             [cn.li.ac.item.special-items :as special-items]
-            [cn.li.ac.item.windgen-fan :as windgen-fan]))
+            [cn.li.ac.item.windgen-fan :as windgen-fan]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
-(defonce ^:private items-installed? (atom false))
+(defonce-guard items-installed?)
 
 (defn init-items!
   []
-  (when (compare-and-set! items-installed? false true)
+  (with-init-guard items-installed?
     (legacy-materials/init-legacy-materials!)
     (components/init-components!)
     (app-installers/init-app-installers!)

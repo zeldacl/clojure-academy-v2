@@ -1,5 +1,6 @@
 (ns cn.li.ac.integration.block.energy-converter.gui
 	(:require [cn.li.ac.gui.platform-adapter :as gui]
+	          [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.ac.gui.tech-ui-common :as tech-ui]
 						[cn.li.ac.wireless.gui.container.common :as common]
 						[cn.li.ac.wireless.gui.tab :as wireless-tab]
@@ -125,11 +126,11 @@
 			 (contains? container :tile-entity)
 			 (contains? container :energy)))
 
-(defonce ^:private converter-gui-installed? (atom false))
+(defonce-guard converter-gui-installed?)
 
 (defn register-converter-guis!
 	[]
-	(when (compare-and-set! converter-gui-installed? false true)
+	(with-init-guard converter-gui-installed?
 		(slot-schema/register-slot-schema!
 			{:schema-id converter-slot-schema-id
 			 :slots []})

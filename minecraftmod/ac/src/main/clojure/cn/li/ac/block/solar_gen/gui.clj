@@ -12,6 +12,7 @@
   Uses existing XML page: assets/my_mod/guis/rework/page_solar.xml
   and composes it into TechUI tabs (inv + wireless) with InfoArea."
   (:require [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -205,11 +206,11 @@
        (contains? container :energy)
        (contains? container :status)))
 
-(defonce ^:private solar-gui-installed? (atom false))
+(defonce-guard solar-gui-installed?)
 
 (defn init-solar-gui!
   []
-  (when (compare-and-set! solar-gui-installed? false true)
+  (with-init-guard solar-gui-installed?
     (slot-schema/register-slot-schema!
       {:schema-id solar-gen-id
        :slots [{:id :energy :type :energy :x 42 :y 81}]})

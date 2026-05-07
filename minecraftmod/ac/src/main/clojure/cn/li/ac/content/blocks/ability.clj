@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.blocks.ability
   "Content entrypoint for ability system blocks"
-  (:require [cn.li.ac.wireless.shared.message-registry :as msg-reg]))
+  (:require [cn.li.ac.wireless.shared.message-registry :as msg-reg]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (defn- load-ability-blocks! []
   (doseq [ns-sym '[cn.li.ac.block.developer.block
@@ -17,11 +18,11 @@
     (when-let [init-fn (requiring-resolve init-sym)]
       (init-fn))))
 
-(defonce ^:private ability-blocks-installed? (atom false))
+(defonce-guard ability-blocks-installed?)
 
 (defn init-ability-blocks!
   []
-  (when (compare-and-set! ability-blocks-installed? false true)
+  (with-init-guard ability-blocks-installed?
     (load-ability-blocks!)
     (init-ability-block-definitions!)
     (msg-reg/register-all!)))

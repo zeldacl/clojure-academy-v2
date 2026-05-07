@@ -185,17 +185,25 @@ tasks.register('verifyArchitectureBoundaries') {
     }
 }
 
-tasks.register('verifyForgeBaseline') {
-    group = 'verification'
-    description = 'Compile baseline Clojure sources for ac, mcmod, and forge-1.20.1.'
-    dependsOn 'verifyArchitectureBoundaries', ':ac:compileClojure', ':mcmod:compileClojure', ':forge-1.20.1:compileClojure'
+def registerBaselineVerificationTask = { String taskName, String description, List<String> dependencies ->
+    tasks.register(taskName) {
+        group = 'verification'
+        this.description = description
+        dependsOn(dependencies)
+    }
 }
 
-tasks.register('verifyFabricBaseline') {
-    group = 'verification'
-    description = 'Compile baseline sources for fabric-1.20.1 (minimal-maintenance gate).'
-    dependsOn 'verifyArchitectureBoundaries', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure'
-}
+registerBaselineVerificationTask(
+    'verifyForgeBaseline',
+    'Compile baseline Clojure sources for ac, mcmod, and forge-1.20.1.',
+    ['verifyArchitectureBoundaries', ':ac:compileClojure', ':mcmod:compileClojure', ':forge-1.20.1:compileClojure']
+)
+
+registerBaselineVerificationTask(
+    'verifyFabricBaseline',
+    'Compile baseline sources for fabric-1.20.1 (minimal-maintenance gate).',
+    ['verifyArchitectureBoundaries', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure']
+)
 
 tasks.register('verifyCurrentPlatforms') {
     group = 'verification'

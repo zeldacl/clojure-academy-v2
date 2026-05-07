@@ -35,6 +35,7 @@
             [cn.li.ac.wireless.data.network       :as wireless-net]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.registry.hooks         :as hooks]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.util.log            :as log])
   (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix WirelessCapabilityKeys]
@@ -117,11 +118,11 @@
       (assoc node-default-state :node-type (parse-node-type block-id))))
 
 (def ^:private node-slot-schema-id :wireless-node)
-(defonce ^:private node-slot-schema-installed? (atom false))
+(defonce-guard node-slot-schema-installed?)
 
-(defn ensure-node-slot-schema!
+(defn- ensure-node-slot-schema!
   []
-  (when (compare-and-set! node-slot-schema-installed? false true)
+  (with-init-guard node-slot-schema-installed?
     (slot-schema/register-slot-schema!
       {:schema-id node-slot-schema-id
        :slots [{:id :input :type :energy :x 42 :y 10}
@@ -514,10 +515,10 @@
    (bdsl/get-block "wireless-node-standard")
    (bdsl/get-block "wireless-node-advanced")])
 
-(defonce ^:private wireless-node-installed? (atom false))
+(defonce-guard wireless-node-installed?)
 
 (defn init-wireless-nodes! []
-  (when (compare-and-set! wireless-node-installed? false true)
+  (with-init-guard wireless-node-installed?
     (ensure-node-slot-schema!)
     (msg-registry/register-block-messages!
       :node

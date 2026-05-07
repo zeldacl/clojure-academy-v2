@@ -2,72 +2,21 @@
   "Client-side rendering primitives for ability visual effects.
 
   Provides vector math, render-op constructors, and camera-basis helpers
-  that are shared across all skill effect renderers.")
+  that are shared across all skill effect renderers."
+  (:require [cn.li.ac.util.math.vec3 :as vec3]))
 
 ;; ---------------------------------------------------------------------------
 ;; Vector math
 ;; ---------------------------------------------------------------------------
 
-(defn v+
-  "Element-wise addition of two 3D vectors (maps with :x :y :z)."
-  [a b]
-  {:x (+ (double (:x a)) (double (:x b)))
-   :y (+ (double (:y a)) (double (:y b)))
-   :z (+ (double (:z a)) (double (:z b)))})
-
-(defn v-
-  "Element-wise subtraction: a - b."
-  [a b]
-  {:x (- (double (:x a)) (double (:x b)))
-   :y (- (double (:y a)) (double (:y b)))
-   :z (- (double (:z a)) (double (:z b)))})
-
-(defn v*
-  "Scalar multiplication of a 3D vector."
-  [a scalar]
-  {:x (* (double (:x a)) (double scalar))
-   :y (* (double (:y a)) (double scalar))
-   :z (* (double (:z a)) (double scalar))})
-
-(defn vlen
-  "Euclidean length of a 3D vector."
-  ^double [v]
-  (Math/sqrt (+ (* (double (:x v)) (double (:x v)))
-                (* (double (:y v)) (double (:y v)))
-                (* (double (:z v)) (double (:z v))))))
-
-(defn vnormalize
-  "Unit vector in the direction of v.  Returns {:x 1 :y 0 :z 0} for zero-length."
-  [v]
-  (let [len (max 1.0e-6 (vlen v))]
-    (v* v (/ 1.0 len))))
-
-(defn vcross
-  "Cross product a × b."
-  [a b]
-  {:x (- (* (double (:y a)) (double (:z b))) (* (double (:z a)) (double (:y b))))
-   :y (- (* (double (:z a)) (double (:x b))) (* (double (:x a)) (double (:z b))))
-   :z (- (* (double (:x a)) (double (:y b))) (* (double (:y a)) (double (:x b))))})
-
-(defn vdot
-  "Dot product of two 3D vectors."
-  ^double [a b]
-  (+ (* (double (:x a)) (double (:x b)))
-     (* (double (:y a)) (double (:y b)))
-     (* (double (:z a)) (double (:z b)))))
-
-(defn rotate-around-axis
-  "Rodrigues' rotation: rotate `v` around `axis` by `degrees`."
-  [v axis degrees]
-  (let [axis-unit (vnormalize axis)
-        theta (Math/toRadians (double degrees))
-        cos-theta (Math/cos theta)
-        sin-theta (Math/sin theta)
-        term1 (v* v cos-theta)
-        term2 (v* (vcross axis-unit v) sin-theta)
-        term3 (v* axis-unit (* (vdot axis-unit v)
-                               (- 1.0 cos-theta)))]
-    (vnormalize (v+ (v+ term1 term2) term3))))
+(def v+ vec3/v+)
+(def v- vec3/v-)
+(def v* vec3/v*)
+(def vlen vec3/vlen)
+(def vnormalize vec3/vnorm)
+(def vcross vec3/vcross)
+(def vdot vec3/vdot)
+(def rotate-around-axis vec3/rotate-around-axis)
 
 ;; ---------------------------------------------------------------------------
 ;; Color helpers

@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.blocks.crafting
   "Content entrypoint for crafting/processing blocks"
-  (:require [cn.li.ac.wireless.shared.message-registry :as msg-reg]))
+  (:require [cn.li.ac.wireless.shared.message-registry :as msg-reg]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (defn- load-crafting-blocks! []
   (doseq [init-sym '[cn.li.ac.block.imag-fusor.block/init-imag-fusor!
@@ -12,10 +13,10 @@
     (when-let [gui-init-fn (requiring-resolve gui-init-sym)]
       (gui-init-fn))))
 
-(defonce ^:private crafting-blocks-installed? (atom false))
+(defonce-guard crafting-blocks-installed?)
 
 (defn init-crafting-blocks!
   []
-  (when (compare-and-set! crafting-blocks-installed? false true)
+  (with-init-guard crafting-blocks-installed?
     (load-crafting-blocks!)
     (msg-reg/register-all!)))

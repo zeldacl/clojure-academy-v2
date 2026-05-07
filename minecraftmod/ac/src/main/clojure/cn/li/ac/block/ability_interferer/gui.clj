@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.ability-interferer.gui
   "CLIENT-ONLY: Ability Interferer GUI"
   (:require [clojure.string :as str]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
@@ -254,11 +255,11 @@
        (contains? container :tile-entity)
        (contains? container :energy)))
 
-(defonce ^:private ability-interferer-gui-installed? (atom false))
+(defonce-guard ability-interferer-gui-installed?)
 
 (defn init-ability-interferer-gui!
   []
-  (when (compare-and-set! ability-interferer-gui-installed? false true)
+  (with-init-guard ability-interferer-gui-installed?
     (slot-schema/register-slot-schema!
       {:schema-id interferer-slot-schema-id
        :slots [{:id :battery :type :energy :x 139 :y 25}]})

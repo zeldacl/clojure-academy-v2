@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.imag-fusor.gui
   "CLIENT-ONLY: Imaginary Fusor GUI"
   (:require [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -141,11 +142,11 @@
        (contains? container :energy)
        (contains? container :work-progress)))
 
-(defonce ^:private imag-fusor-gui-installed? (atom false))
+(defonce-guard imag-fusor-gui-installed?)
 
 (defn init-imag-fusor-gui!
   []
-  (when (compare-and-set! imag-fusor-gui-installed? false true)
+  (with-init-guard imag-fusor-gui-installed?
     (slot-schema/register-slot-schema!
       {:schema-id fusor-slot-schema-id
        :slots [{:id :input :type :input :x 13 :y 49}

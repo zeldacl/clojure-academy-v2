@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.blocks.generators
   "Content entrypoint for energy generator blocks"
-  (:require [cn.li.ac.wireless.shared.message-registry :as msg-reg]))
+  (:require [cn.li.ac.wireless.shared.message-registry :as msg-reg]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (defn- load-generator-blocks! []
   (doseq [ns-sym '[cn.li.ac.block.solar-gen.block
@@ -23,11 +24,11 @@
     (when-let [init-fn (requiring-resolve init-sym)]
       (init-fn))))
 
-(defonce ^:private generator-blocks-installed? (atom false))
+(defonce-guard generator-blocks-installed?)
 
 (defn init-generator-blocks!
   []
-  (when (compare-and-set! generator-blocks-installed? false true)
+  (with-init-guard generator-blocks-installed?
     (load-generator-blocks!)
     (init-generator-block-definitions!)
     (msg-reg/register-all!)))

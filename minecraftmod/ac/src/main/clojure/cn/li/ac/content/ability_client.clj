@@ -33,14 +33,15 @@
             [cn.li.ac.content.ability.vecmanip.storm-wing-fx]
             [cn.li.ac.content.ability.vecmanip.vec-accel-fx]
             [cn.li.ac.content.ability.vecmanip.vec-deviation-fx]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.content.ability.vecmanip.vec-reflection-fx]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private fx-initialized? (atom false))
+(defonce-guard fx-initialized?)
 
 (defn init-client-fx!
   "Ensure all client FX registrations have been loaded.
   Safe to call multiple times."
   []
-  (when (compare-and-set! fx-initialized? false true)
+  (with-init-guard fx-initialized?
     (log/info "Ability client FX content initialized")))

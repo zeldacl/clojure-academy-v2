@@ -26,6 +26,7 @@
   - Initialization form for owner to create network"
   
   (:require [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
@@ -59,11 +60,11 @@
 
 (def wireless-matrix-id :wireless-matrix)
 
-(defonce ^:private wireless-matrix-slot-schema-installed? (atom false))
+(defonce-guard wireless-matrix-slot-schema-installed?)
 
 (defn- ensure-wireless-matrix-slot-schema!
   []
-  (when (compare-and-set! wireless-matrix-slot-schema-installed? false true)
+  (with-init-guard wireless-matrix-slot-schema-installed?
     (slot-schema/register-slot-schema!
       {:schema-id wireless-matrix-id
        :slots [{:id :plate-a :type :plate :x 78 :y 11}
@@ -580,11 +581,11 @@
        (contains? container :plate-count)
        (contains? container :core-level)))
 
-(defonce ^:private wireless-matrix-gui-installed? (atom false))
+(defonce-guard wireless-matrix-gui-installed?)
 
 (defn init-wireless-matrix-gui!
   []
-  (when (compare-and-set! wireless-matrix-gui-installed? false true)
+  (with-init-guard wireless-matrix-gui-installed?
     (ensure-wireless-matrix-slot-schema!)
     (gui-dsl/register-gui!
       (gui-dsl/create-gui-spec

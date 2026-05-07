@@ -11,6 +11,7 @@
   All persistent state lives in ScriptedBlockEntity.customState as a Clojure
   persistent map. The schema defines all fields and their serialization."
   (:require [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.block.state-schema :as schema]
@@ -89,11 +90,11 @@
 ;; Slot indexes are lazily resolved from the slot schema.
 ;; `delay` avoids schema access during namespace load.
 (def ^:private matrix-slot-schema-id :wireless-matrix)
-(defonce ^:private matrix-slot-schema-installed? (atom false))
+(defonce-guard matrix-slot-schema-installed?)
 
 (defn ensure-matrix-slot-schema!
   []
-  (when (compare-and-set! matrix-slot-schema-installed? false true)
+  (with-init-guard matrix-slot-schema-installed?
     (slot-schema/register-slot-schema!
       {:schema-id matrix-slot-schema-id
        :slots [{:id :plate-a :type :plate :x 78 :y 11}
@@ -616,11 +617,11 @@
 ;; Part 10: Runtime Installation (Scheme A)
 ;; ============================================================================
 
-(defonce ^:private wireless-matrix-installed? (atom false))
+(defonce-guard wireless-matrix-installed?)
 
 (defn init-wireless-matrix!
   []
-  (when (compare-and-set! wireless-matrix-installed? false true)
+  (with-init-guard wireless-matrix-installed?
     (ensure-matrix-slot-schema!)
     (msg-registry/register-block-messages!
       :matrix

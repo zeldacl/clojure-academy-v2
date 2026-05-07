@@ -2,13 +2,14 @@
 	"AC blockstate datagen bindings for mcmod blockstate bridge."
 	(:require [cn.li.mcmod.block.blockstate-definition :as mcmod-blockstate]
 						[cn.li.ac.block.blockstate-definition :as ac-blockstate]
+						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private hooks-installed? (atom false))
+(defonce-guard hooks-installed?)
 
 (defn install-blockstate-hooks!
 	[]
-	(when (compare-and-set! hooks-installed? false true)
+	(with-init-guard hooks-installed?
 		(mcmod-blockstate/register-blockstate-hooks!
 			{:get-all-definitions ac-blockstate/get-all-definitions
 			 :get-block-state-definition ac-blockstate/get-block-state-definition

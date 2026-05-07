@@ -10,6 +10,7 @@
   All persistent state lives in ScriptedBlockEntity.customState as a Clojure
   persistent map."
   (:require [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
@@ -200,12 +201,12 @@
 ;; Part 7: Registration
 ;; ============================================================================
 
-(defonce ^:private solar-gen-installed? (atom false))
+(defonce-guard solar-gen-installed?)
 
 ;; Helper functions
 (defn init-solar-gen!
   []
-  (when (compare-and-set! solar-gen-installed? false true)
+  (with-init-guard solar-gen-installed?
     (msg-registry/register-block-messages! :generator [:get-status :list-nodes :connect :disconnect])
     (tdsl/register-tile!
       (tdsl/create-tile-spec

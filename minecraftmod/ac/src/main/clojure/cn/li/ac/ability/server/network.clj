@@ -68,7 +68,7 @@
   ;; Skill learning
   ;; ============================================================================
 
-  (defn- handle-req-learn-skill
+  (defn- handle-learn-skill-request
     [payload player]
     (let [{:keys [skill-id pos-x pos-y pos-z]} payload
           uuid (uuid-of player)
@@ -123,7 +123,7 @@
   ;; Level up
   ;; ============================================================================
 
-  (defn- handle-req-level-up
+  (defn- handle-level-up-request
     [_payload player]
     (let [uuid  (uuid-of player)
           state (get-state uuid)
@@ -137,7 +137,7 @@
   ;; Preset management
   ;; ============================================================================
 
-  (defn- handle-req-set-preset
+  (defn- handle-set-preset-request
     [{:keys [preset-idx key-idx cat-id ctrl-id]} player]
     (let [uuid (uuid-of player)]
       (ps/update-preset-data! uuid
@@ -145,7 +145,7 @@
                               preset-idx key-idx
                               (when (and cat-id ctrl-id) [cat-id ctrl-id]))))
 
-  (defn- handle-req-switch-preset
+  (defn- handle-switch-preset-request
     [{:keys [preset-idx]} player]
     (let [uuid (uuid-of player)]
       (ps/update-preset-data! uuid preset-data/set-active-preset preset-idx)
@@ -157,7 +157,7 @@
   ;; Activation toggle
   ;; ============================================================================
 
-  (defn- handle-req-set-activated
+  (defn- handle-set-activated-request
     [{:keys [activated]} player]
     (let [uuid  (uuid-of player)
           state (get-state uuid)
@@ -178,23 +178,23 @@
   ;; Context lifecycle
   ;; ============================================================================
 
-  (defn- handle-ctx-begin-link
+  (defn- handle-begin-link-context
     [{:keys [ctx-id skill-id]} player]
     (ctx-mgr/establish-context! (uuid-of player) ctx-id skill-id))
 
-  (defn- handle-ctx-keepalive
+  (defn- handle-keepalive-context
     [{:keys [ctx-id]} _player]
     (ctx/update-keepalive! ctx-id))
 
-  (defn- handle-ctx-terminate
+  (defn- handle-terminate-context
     [{:keys [ctx-id]} _player]
     (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
 
-  (defn- handle-ctx-channel
+  (defn- handle-channel-context
     [{:keys [ctx-id channel payload]} _player]
     (ctx/ctx-send-to-local! ctx-id channel payload))
 
-  (defn- handle-skill-key-down
+  (defn- handle-key-down-skill
     [{:keys [ctx-id] :as payload} player]
     (let [payload* (assoc payload :player player)
           ctx0 (ctx/get-context ctx-id)
@@ -203,15 +203,15 @@
                 (ctx-mgr/establish-context! (uuid-of player) ctx-id skill-id)))]
       (ctx-rt/handle-key-down! ctx-id payload* ctx-mgr/send-terminated-context!)))
 
-  (defn- handle-skill-key-tick
+  (defn- handle-key-tick-skill
     [{:keys [ctx-id] :as payload} player]
     (ctx-rt/handle-key-tick! ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!))
 
-  (defn- handle-skill-key-up
+  (defn- handle-key-up-skill
     [{:keys [ctx-id] :as payload} player]
     (ctx-rt/handle-key-up! ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!))
 
-  (defn- handle-skill-key-abort
+  (defn- handle-key-abort-skill
     [{:keys [ctx-id] :as payload} player]
     (ctx-rt/handle-key-abort! ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!))
 
@@ -221,17 +221,17 @@
   ;; ============================================================================
 
 (defn register-handlers! []
-  (net-srv/register-handler catalog/MSG-REQ-LEARN-SKILL    handle-req-learn-skill)
-  (net-srv/register-handler catalog/MSG-REQ-LEVEL-UP       handle-req-level-up)
-  (net-srv/register-handler catalog/MSG-REQ-SET-PRESET     handle-req-set-preset)
-  (net-srv/register-handler catalog/MSG-REQ-SWITCH-PRESET  handle-req-switch-preset)
-  (net-srv/register-handler catalog/MSG-REQ-SET-ACTIVATED  handle-req-set-activated)
-  (net-srv/register-handler catalog/MSG-CTX-BEGIN-LINK     handle-ctx-begin-link)
-  (net-srv/register-handler catalog/MSG-CTX-KEEPALIVE      handle-ctx-keepalive)
-  (net-srv/register-handler catalog/MSG-CTX-TERMINATE      handle-ctx-terminate)
-  (net-srv/register-handler catalog/MSG-CTX-CHANNEL        handle-ctx-channel)
-  (net-srv/register-handler catalog/MSG-SKILL-KEY-DOWN     handle-skill-key-down)
-  (net-srv/register-handler catalog/MSG-SKILL-KEY-TICK     handle-skill-key-tick)
-  (net-srv/register-handler catalog/MSG-SKILL-KEY-UP       handle-skill-key-up)
-  (net-srv/register-handler catalog/MSG-SKILL-KEY-ABORT    handle-skill-key-abort)
+  (net-srv/register-handler catalog/MSG-REQ-LEARN-SKILL    handle-learn-skill-request)
+  (net-srv/register-handler catalog/MSG-REQ-LEVEL-UP       handle-level-up-request)
+  (net-srv/register-handler catalog/MSG-REQ-SET-PRESET     handle-set-preset-request)
+  (net-srv/register-handler catalog/MSG-REQ-SWITCH-PRESET  handle-switch-preset-request)
+  (net-srv/register-handler catalog/MSG-REQ-SET-ACTIVATED  handle-set-activated-request)
+  (net-srv/register-handler catalog/MSG-CTX-BEGIN-LINK     handle-begin-link-context)
+  (net-srv/register-handler catalog/MSG-CTX-KEEPALIVE      handle-keepalive-context)
+  (net-srv/register-handler catalog/MSG-CTX-TERMINATE      handle-terminate-context)
+  (net-srv/register-handler catalog/MSG-CTX-CHANNEL        handle-channel-context)
+  (net-srv/register-handler catalog/MSG-SKILL-KEY-DOWN     handle-key-down-skill)
+  (net-srv/register-handler catalog/MSG-SKILL-KEY-TICK     handle-key-tick-skill)
+  (net-srv/register-handler catalog/MSG-SKILL-KEY-UP       handle-key-up-skill)
+  (net-srv/register-handler catalog/MSG-SKILL-KEY-ABORT    handle-key-abort-skill)
   (log/info "Ability network handlers registered"))

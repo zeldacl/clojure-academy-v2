@@ -3,16 +3,17 @@
   
   Media items store information/music that can be transmitted through wireless network."
   (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private media-installed? (atom false))
+(defonce-guard media-installed?)
 
 ;; ============================================================================
 ;; Initialization
 ;; ============================================================================
 
 (defn init-media! []
-  (when (compare-and-set! media-installed? false true)
+  (with-init-guard media-installed?
     (idsl/register-item!
       (idsl/create-item-spec
         "media_0"

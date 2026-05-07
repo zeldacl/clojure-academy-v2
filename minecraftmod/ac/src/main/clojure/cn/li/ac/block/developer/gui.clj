@@ -4,6 +4,7 @@
   Loaded with content init; uses `unified-developer-schema` for container atoms/sync.
   GUI close clears tile session (`TileDeveloper` unuse / onGuiClosed)."
   (:require [clojure.string :as str]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
@@ -178,11 +179,11 @@
        (contains? container :tile-entity)
        (= :developer (:container-type container))))
 
-(defonce ^:private developer-gui-installed? (atom false))
+(defonce-guard developer-gui-installed?)
 
 (defn init-developer-gui!
   []
-  (when (compare-and-set! developer-gui-installed? false true)
+  (with-init-guard developer-gui-installed?
     (slot-schema/register-slot-schema!
       {:schema-id developer-gui-id
        ;; AcademyCraft 1.0.7: `TileDeveloper` inv size 2; `ContainerNode`-style slots on `ui_phasegen`.

@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.apps.freq-transmitter
   "Frequency Transmitter app - Manage wireless frequencies."
   (:require [cn.li.ac.terminal.app-registry :as reg]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.components :as comp]
@@ -87,9 +88,9 @@
    :gui-fn 'cn.li.ac.terminal.apps.freq-transmitter/open-freq-transmitter-gui
    :category :wireless})
 
-(defonce ^:private freq-transmitter-installed? (atom false))
+(defonce-guard freq-transmitter-installed?)
 
 (defn init-freq-transmitter-app!
   []
-  (when (compare-and-set! freq-transmitter-installed? false true)
+  (with-init-guard freq-transmitter-installed?
     (reg/register-app! freq-transmitter-app)))

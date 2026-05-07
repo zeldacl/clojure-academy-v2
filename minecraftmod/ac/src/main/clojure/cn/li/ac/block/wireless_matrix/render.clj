@@ -12,6 +12,7 @@
   Platform-agnostic rendering logic. Platform-specific TESR classes
   should be defined in forge/fabric modules using gen-class."
   (:require [cn.li.mcmod.client.resources :as res]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.client.obj :as obj]
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
@@ -107,13 +108,13 @@
     ;; Multiblock part tiles share the same BlockEntity type and renderer dispatch.
     (tesr-api/register-scripted-tile-renderer! "wireless-matrix-part" renderer)))
 
-(defonce ^:private matrix-renderer-installed? (atom false))
+(defonce-guard matrix-renderer-installed?)
 
 (defn init!
   "Entry for `ac.registry.hooks/load-all-client-renderers!` (matches solar-gen pattern)."
   []
   (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-    (when (compare-and-set! matrix-renderer-installed? false true)
+    (with-init-guard matrix-renderer-installed?
       (register-fn register!))))
 
 ;; ============================================================================

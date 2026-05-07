@@ -19,6 +19,7 @@
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.util.math.vec3 :as vec3]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.saved-locations :as saved-locations]
             [cn.li.mcmod.platform.entity :as entity]
@@ -40,11 +41,6 @@
 (defn- norm-name [s]
   (let [trimmed (-> (or s "") str str/trim)]
     (subs trimmed 0 (min max-location-name-length (count trimmed)))))
-
-(defn- calculate-distance [x1 y1 z1 x2 y2 z2]
-  (Math/sqrt (+ (* (- x2 x1) (- x2 x1))
-                (* (- y2 y1) (- y2 y1))
-                (* (- z2 z1) (- z2 z1)))))
 
 (defn- compute-cp-cost [exp distance cross-dimension?]
   (let [base (bal/lerp 200.0 150.0 exp)
@@ -75,8 +71,8 @@
 
 (defn- location-with-stats [player-id exp cur-pos loc]
   (let [cross-dim? (not= (:world-id cur-pos) (:world-id loc))
-        dist (calculate-distance (:x cur-pos) (:y cur-pos) (:z cur-pos)
-                                 (:x loc) (:y loc) (:z loc))
+        dist (vec3/euclidean-distance (:x cur-pos) (:y cur-pos) (:z cur-pos)
+                    (:x loc) (:y loc) (:z loc))
         cp (compute-cp-cost exp dist cross-dim?)
         no-exp? (and cross-dim? (not (can-cross-dimension? exp)))
         no-cp? (let [state (ps/get-player-state player-id)]
@@ -183,8 +179,8 @@
 
           :else
           (let [cross-dim? (not= (:world-id pos) (:world-id dest))
-                _dist (calculate-distance (:x pos) (:y pos) (:z pos)
-                                          (:x dest) (:y dest) (:z dest))
+                _dist (vec3/euclidean-distance (:x pos) (:y pos) (:z pos)
+                                               (:x dest) (:y dest) (:z dest))
                 cp (compute-cp-cost exp _dist cross-dim?)
                 can-cross? (or (not cross-dim?) (can-cross-dimension? exp))]
             (cond

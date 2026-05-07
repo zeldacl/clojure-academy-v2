@@ -6,6 +6,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defcategory]]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.item-actions :as item-actions]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.content.ability.electromaster.body-intensify]
             [cn.li.ac.content.ability.electromaster.current-charging]
             [cn.li.ac.content.ability.electromaster.mag-manip]
@@ -81,11 +82,11 @@
   :prog-incr-rate 1.0
   :enabled true)
 
-(defonce ^:private ability-content-installed? (atom false))
+(defonce-guard ability-content-installed?)
 
 (defn init-ability-content!
   []
-  (when (compare-and-set! ability-content-installed? false true)
+  (with-init-guard ability-content-installed?
     (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
       (category/register-category! (dissoc cat :ac/content-type)))
     ;; Register generic item actions (not skill-specific)

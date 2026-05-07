@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wind-gen.gui
   "CLIENT-ONLY: Wind Generator GUI (main + base)."
   (:require [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -105,11 +106,11 @@
 
 (defn- base-container? [container] (= (:container-type container) :wind-gen-base))
 
-(defonce ^:private wind-gui-installed? (atom false))
+(defonce-guard wind-gui-installed?)
 
 (defn init-wind-gen-gui!
   []
-  (when (compare-and-set! wind-gui-installed? false true)
+  (with-init-guard wind-gui-installed?
     (slot-schema/register-slot-schema! {:schema-id main-schema-id :slots [{:id :fan :type :standard :x 78 :y 9}]})
     (slot-schema/register-slot-schema! {:schema-id base-schema-id :slots [{:id :energy :type :energy :x 42 :y 80}]})
 

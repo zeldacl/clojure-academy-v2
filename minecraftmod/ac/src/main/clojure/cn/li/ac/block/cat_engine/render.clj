@@ -4,6 +4,7 @@
   Renders a floating rotating quad using the cat_engine block texture.
   Behavior mirrors legacy AcademyCraft TESR animation speed driven by :this-tick-gen."
   (:require [cn.li.mcmod.client.resources :as res]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.buffer :as rb]
             [cn.li.mcmod.client.render.pose :as pose]
@@ -86,11 +87,11 @@
           (catch Exception e
             (log/error "Error in cat-engine renderer:" (ex-message e))))))))
 
-(defonce ^:private cat-renderer-installed? (atom false))
+(defonce-guard cat-renderer-installed?)
 
 (defn init!
   []
   (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-    (when (compare-and-set! cat-renderer-installed? false true)
+    (with-init-guard cat-renderer-installed?
       (register-fn register!)
       (log/info "Registered cat-engine renderer"))))

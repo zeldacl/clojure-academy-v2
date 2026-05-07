@@ -6,8 +6,7 @@
   - Damage 1: Tier 2 (Improved)
   - Damage 2: Tier 3 (Advanced)
   - Damage 3: Tier 4 (Ultimate)"
-  (:require [cn.li.mcmod.item.dsl :as idsl]
-            [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.mcmod.item.dsl :as idsl]            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.item :as item]
             [clojure.string :as str]))
 
@@ -44,7 +43,7 @@
 
 (def ^:private core-item-ids ["mat_core_0" "mat_core_1" "mat_core_2"])
 
-(defonce ^:private mat-cores-installed? (atom false))
+(defonce-guard mat-cores-installed?)
 
 ;; Tier 4 disabled - missing mat_core_3.png texture
 ;; (idsl/defitem mat-core-tier-4 ...)
@@ -94,7 +93,7 @@
     0))
 
 (defn init-mat-cores! []
-  (when (compare-and-set! mat-cores-installed? false true)
+  (with-init-guard mat-cores-installed?
     (idsl/register-item!
       (idsl/create-item-spec
         "mat_core_0"

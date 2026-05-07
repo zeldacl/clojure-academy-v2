@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.imag-phase.block
   "Imaginary phase fluid block port for 1.20."
   (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.block.phase-gen.config :as phase-config]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.fluid.dsl :as fdsl]
@@ -8,7 +9,7 @@
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private imag-phase-installed? (atom false))
+(defonce-guard imag-phase-installed?)
 
 (defn- stack-empty?
   [stack]
@@ -45,7 +46,7 @@
 
 (defn init-imag-phase!
   []
-  (when (compare-and-set! imag-phase-installed? false true)
+  (with-init-guard imag-phase-installed?
     (fdsl/register-fluid!
       (fdsl/create-fluid-spec
         "imag-phase"

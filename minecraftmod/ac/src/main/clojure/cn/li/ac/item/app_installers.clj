@@ -1,12 +1,13 @@
 (ns cn.li.ac.item.app-installers
   "Terminal app installer items migrated from original AcademyCraft."
   (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.ac.terminal.player-data :as term-data]
             [cn.li.ac.terminal.app-registry :as app-reg]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private app-installers-installed? (atom false))
+(defonce-guard app-installers-installed?)
 
 (defn- install-app-for-player!
   [player app-id]
@@ -38,7 +39,7 @@
 
 (defn init-app-installers!
   []
-  (when (compare-and-set! app-installers-installed? false true)
+  (with-init-guard app-installers-installed?
     (idsl/register-item!
       (idsl/create-item-spec
         "app_freq_transmitter"

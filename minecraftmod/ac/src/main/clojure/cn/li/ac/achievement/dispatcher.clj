@@ -4,9 +4,10 @@
             [cn.li.ac.achievement.trigger :as ach-trigger]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private installed? (atom false))
+(defonce-guard installed?)
 
 (defn- player-category
   [uuid]
@@ -24,7 +25,7 @@
 
 (defn init-dispatcher!
   []
-  (when (compare-and-set! installed? false true)
+  (with-init-guard installed?
     (evt/subscribe-ability-event!
       evt/EVT-LEVEL-CHANGE
       (fn [{:keys [uuid new-level]}]

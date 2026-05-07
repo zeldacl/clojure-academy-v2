@@ -34,10 +34,11 @@
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private hooks-installed? (atom false))
-(defonce ^:private client-push-handlers-registered? (atom false))
+(defonce-guard hooks-installed?)
+(defonce-guard client-push-handlers-registered?)
 (defonce ^:private vm-wave-circles (atom []))
 (defonce ^:private vm-wave-last-spawn-ms (atom 0))
 
@@ -216,7 +217,7 @@
 
 (defn- register-client-push-handlers!
   []
-  (when (compare-and-set! client-push-handlers-registered? false true)
+  (with-init-guard client-push-handlers-registered?
     (net-client/register-push-handler!
       catalog/MSG-SYNC-ABILITY
       (fn [{:keys [uuid ability-data]}]
@@ -265,12 +266,12 @@
       on-context-channel-push!)
     (log/info "Ability client push handlers registered")))
 
-(defonce ^:private lifecycle-subscriptions-registered? (atom false))
+(defonce-guard lifecycle-subscriptions-registered?)
 
 (defn- register-lifecycle-subscriptions!
   "Subscribe to domain events for resource recalculation and state reactions."
   []
-  (when (compare-and-set! lifecycle-subscriptions-registered? false true)
+  (with-init-guard lifecycle-subscriptions-registered?
     ;; On level change: reset add-max growth, recalc max values
     (evt/subscribe-ability-event!
      evt/EVT-LEVEL-CHANGE
@@ -310,7 +311,7 @@
 (defn install-ability-runtime-hooks!
   "Install AC handlers for platform power runtime callbacks."
   []
-  (when (compare-and-set! hooks-installed? false true)
+  (with-init-guard hooks-installed?
     (ability-store/install-store!)
     (register-lifecycle-subscriptions!)
     (power-runtime/register-power-runtime-hooks!

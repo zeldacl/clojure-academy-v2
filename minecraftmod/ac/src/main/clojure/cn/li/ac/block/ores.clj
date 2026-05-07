@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.ores
   "Ore blocks and shared misc material blocks."
   (:require [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid]))
 
@@ -9,11 +10,11 @@
 ;; ============================================================================
 
 ;; Avoid top-level registration side effects during namespace load.
-(defonce ^:private ores-installed? (atom false))
+(defonce-guard ores-installed?)
 
 (defn init-ores!
   []
-  (when (compare-and-set! ores-installed? false true)
+  (with-init-guard ores-installed?
     (bdsl/register-block!
       (bdsl/create-block-spec
         "constrained-ore"

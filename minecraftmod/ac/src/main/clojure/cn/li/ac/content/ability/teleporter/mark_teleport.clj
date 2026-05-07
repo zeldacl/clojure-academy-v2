@@ -19,6 +19,7 @@
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.util.math.vec3 :as vec3]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -53,11 +54,6 @@
                      max-range))]
     (min (* 2.0 (inc (long ticks)))
          (min max-range cp-limit))))
-
-(defn- calculate-distance [x1 y1 z1 x2 y2 z2]
-  (Math/sqrt (+ (* (- x2 x1) (- x2 x1))
-                (* (- y2 y1) (- y2 y1))
-                (* (- z2 z1) (- z2 z1)))))
 
 (defn- add-exp! [player-id amount]
   (skill-effects/add-skill-exp! player-id :mark-teleport (double amount)))
@@ -132,8 +128,8 @@
                    {:target-x (+ (double x) (* (double (:x look-vec)) dist))
                     :target-y (+ start-y (* (double (:y look-vec)) dist))
                     :target-z (+ (double z) (* (double (:z look-vec)) dist))})
-            distance (calculate-distance (double x) (double y) (double z)
-                                         (:target-x dest) (:target-y dest) (:target-z dest))]
+            distance (vec3/euclidean-distance (double x) (double y) (double z)
+                                              (:target-x dest) (:target-y dest) (:target-z dest))]
         (merge dest
                {:world-id world-id
                 :distance distance

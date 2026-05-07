@@ -1,12 +1,13 @@
 (ns cn.li.ac.content.entities.all
   "Content entrypoint for AC entity declarations."
-  (:require [cn.li.mcmod.entity.dsl :as edsl]))
+  (:require [cn.li.mcmod.entity.dsl :as edsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
-(defonce ^:private entities-installed? (atom false))
+(defonce-guard entities-installed?)
 
 (defn init-entities!
   []
-  (when (compare-and-set! entities-installed? false true)
+  (with-init-guard entities-installed?
     ;; Keep existing registry IDs stable for world/network compatibility.
     (edsl/register-entity!
       (edsl/create-entity-spec

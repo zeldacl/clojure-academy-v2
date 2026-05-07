@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wind-gen.render
 	"CLIENT-ONLY: Wind Generator block entity renderers."
 	(:require [cn.li.mcmod.client.resources :as res]
+	          [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.mcmod.client.obj :as obj]
 						[cn.li.mcmod.client.render.tesr-api :as tesr-api]
 						[cn.li.mcmod.client.render.multiblock-helper :as mb-helper]
@@ -115,11 +116,11 @@
 		(tesr-api/register-scripted-tile-renderer! "wind-gen-main-part" main-renderer)
 		(tesr-api/register-scripted-tile-renderer! "wind-gen-pillar" pillar-renderer)))
 
-(defonce ^:private wind-renderer-installed? (atom false))
+(defonce-guard wind-renderer-installed?)
 
 (defn init!
 	[]
 	(when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-		(when (compare-and-set! wind-renderer-installed? false true)
+		(with-init-guard wind-renderer-installed?
 			(register-fn register!)
 			(log/info "Registered wind generator renderers"))))

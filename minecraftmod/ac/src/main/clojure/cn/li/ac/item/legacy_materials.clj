@@ -1,9 +1,10 @@
 (ns cn.li.ac.item.legacy-materials
 	"Legacy AcademyCraft material items restored for the chip/crystal progression."
 	(:require [cn.li.mcmod.item.dsl :as idsl]
+	          [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private legacy-materials-installed? (atom false))
+(defonce-guard legacy-materials-installed?)
 
 (def ^:private legacy-material-specs
 	[{:id "imag_silicon_ingot"
@@ -40,7 +41,7 @@
 
 (defn init-legacy-materials!
 	[]
-	(when (compare-and-set! legacy-materials-installed? false true)
+	(with-init-guard legacy-materials-installed?
 		(doseq [{:keys [id display-name tooltip]} legacy-material-specs]
 			(idsl/register-item!
 				(idsl/create-item-spec

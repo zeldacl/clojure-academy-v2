@@ -2,7 +2,8 @@
   "Content entrypoint for miscellaneous blocks"
   (:require [cn.li.ac.wireless.shared.message-registry :as msg-reg]
             [cn.li.ac.block.ores :as ores]
-            [cn.li.ac.block.imag-phase.block :as imag-phase]))
+            [cn.li.ac.block.imag-phase.block :as imag-phase]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (defn- load-misc-blocks! []
   (doseq [ns-sym '[cn.li.ac.block.ores
@@ -11,10 +12,10 @@
   (ores/init-ores!)
   (imag-phase/init-imag-phase!))
 
-(defonce ^:private misc-blocks-installed? (atom false))
+(defonce-guard misc-blocks-installed?)
 
 (defn init-misc-blocks!
   []
-  (when (compare-and-set! misc-blocks-installed? false true)
+  (with-init-guard misc-blocks-installed?
     (load-misc-blocks!)
     (msg-reg/register-all!)))

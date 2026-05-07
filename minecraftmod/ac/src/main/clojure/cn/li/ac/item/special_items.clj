@@ -9,9 +9,10 @@
             [cn.li.mcmod.platform.world :as world]
             [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private special-items-installed? (atom false))
+(defonce-guard special-items-installed?)
 
 (def ^:private induction-factor->category
   {"induction_factor_electromaster" :electromaster
@@ -155,7 +156,7 @@
 
 (defn init-special-items!
   []
-  (when (compare-and-set! special-items-installed? false true)
+  (with-init-guard special-items-installed?
     ;; MC 1.20 does not support metadata subtypes, so induction factors are split.
     (idsl/register-item!
       (idsl/create-item-spec

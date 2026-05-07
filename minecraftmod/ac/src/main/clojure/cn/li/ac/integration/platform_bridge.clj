@@ -4,13 +4,14 @@
 						[cn.li.ac.integration.jei.plugin :as jei-plugin]
 						[cn.li.ac.integration.crafttweaker.recipes :as ct-recipes]
 						[cn.li.ac.integration.crafttweaker.bridge :as ct-bridge]
+						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private hooks-installed? (atom false))
+(defonce-guard hooks-installed?)
 
 (defn install-integration-hooks!
 	[]
-	(when (compare-and-set! hooks-installed? false true)
+	(with-init-guard hooks-installed?
 		(integration-runtime/register-integration-hooks!
 			{:jei-get-all-categories jei-plugin/get-all-categories
 			 :jei-get-recipes jei-plugin/get-recipes

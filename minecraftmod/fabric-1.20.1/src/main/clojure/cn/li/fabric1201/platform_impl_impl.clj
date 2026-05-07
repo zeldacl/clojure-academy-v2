@@ -15,7 +15,7 @@
 (defonce ^:private initialized? (atom false))
 
 (defn- class-noinit [^String class-name]
-  (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
+  (Class/forName class-name false (.getClassLoader (class *ns*))))
 
 (defn- ctor [^Class cls & args]
   (clojure.lang.Reflector/invokeConstructor cls (to-array args)))

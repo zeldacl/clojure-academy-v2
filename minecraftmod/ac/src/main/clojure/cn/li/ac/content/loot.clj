@@ -1,13 +1,14 @@
 (ns cn.li.ac.content.loot
   "Data-driven loot injection declarations."
   (:require [cn.li.mcmod.loot.dsl :as ldsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce loot-initialized? (atom false))
+(defonce-guard loot-initialized?)
 
 (defn init-loot!
   []
-  (when (compare-and-set! loot-initialized? false true)
+  (with-init-guard loot-initialized?
     ;; Example: inject custom item into common dungeon chests.
     ;; Missing target item IDs are skipped safely at runtime in Forge helper.
     (ldsl/defloot {:id "dungeon_skill_book"

@@ -28,6 +28,7 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.registry.hooks :as hooks]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid])
   (:import [cn.li.acapi.wireless IWirelessNode IWirelessReceiver]))
@@ -339,11 +340,11 @@
    [0 0 1] [0 1 1] [0 2 1]
    [0 0 2] [0 1 2] [0 2 2]])
 
-(defonce ^:private developer-installed? (atom false))
+(defonce-guard developer-installed?)
 
 (defn init-developer!
   []
-  (when (compare-and-set! developer-installed? false true)
+  (with-init-guard developer-installed?
     (msg-registry/register-block-messages!
       :developer
       [:get-status :start-development :stop-development :list-nodes :connect :disconnect])

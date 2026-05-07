@@ -1,10 +1,11 @@
 (ns cn.li.ac.item.energy-items
   "Energy-backed item declarations migrated from original AcademyCraft."
   (:require [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.item.test-battery :as test-battery]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private energy-items-installed? (atom false))
+(defonce-guard energy-items-installed?)
 
 (defn- open-portable-developer!
   [{:keys [player side]}]
@@ -16,7 +17,7 @@
 
 (defn init-energy-items!
   []
-  (when (compare-and-set! energy-items-installed? false true)
+  (with-init-guard energy-items-installed?
     (test-battery/init-test-batteries!)
     (idsl/register-item!
       (idsl/create-item-spec

@@ -26,6 +26,7 @@
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.registry.hooks :as hooks]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid]
             [clojure.string :as str]
@@ -415,11 +416,11 @@
 ;; Runtime Installation (Scheme A)
 ;; ============================================================================
 
-(defonce ^:private ability-interferer-installed? (atom false))
+(defonce-guard ability-interferer-installed?)
 
 (defn init-ability-interferer!
   []
-  (when (compare-and-set! ability-interferer-installed? false true)
+  (with-init-guard ability-interferer-installed?
     (msg-registry/register-block-messages! :ability-interferer
       [:get-status :change-range :toggle-enabled :set-whitelist :add-to-whitelist :remove-from-whitelist])
     (tdsl/register-tile!

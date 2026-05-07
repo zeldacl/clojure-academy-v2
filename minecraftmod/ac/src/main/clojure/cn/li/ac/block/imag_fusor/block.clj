@@ -22,7 +22,8 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.ac.registry.hooks :as hooks]))
+            [cn.li.ac.registry.hooks :as hooks]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (defn- log-info
   [& xs]
@@ -452,11 +453,11 @@
 ;; Runtime Installation (Scheme A)
 ;; ============================================================================
 
-(defonce ^:private imag-fusor-installed? (atom false))
+(defonce-guard imag-fusor-installed?)
 
 (defn init-imag-fusor!
   []
-  (when (compare-and-set! imag-fusor-installed? false true)
+  (with-init-guard imag-fusor-installed?
     (msg-registry/register-block-messages! :imag-fusor [:get-status])
     (tdsl/register-tile!
       (tdsl/create-tile-spec
@@ -485,5 +486,5 @@
            :block-state {:block-state-properties fusor-block-state-properties}
          :events {:on-right-click open-fusor-gui!}}))
     (hooks/register-network-handler! register-network-handlers!)
-          (log-info "Initialized Imaginary Fusor block")))
+    (log-info "Initialized Imaginary Fusor block")))
 

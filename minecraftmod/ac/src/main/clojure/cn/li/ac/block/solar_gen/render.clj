@@ -10,6 +10,7 @@
   - Scale by 0.014
   - Render solar.obj with models/solar texture"
   (:require [cn.li.mcmod.client.resources :as res]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.client.obj :as obj]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.client.render.buffer :as rb]
@@ -52,11 +53,11 @@
             (log/error "Error in solar renderer:"(ex-message e))
             (.printStackTrace e)))))))
 
-(defonce ^:private solar-renderer-installed? (atom false))
+(defonce-guard solar-renderer-installed?)
 
 (defn init!
   []
   (when-let [register-fn (requiring-resolve 'cn.li.mcmod.client.render.init/register-renderer-init-fn!)]
-    (when (compare-and-set! solar-renderer-installed? false true)
+    (with-init-guard solar-renderer-installed?
       (register-fn register!)
       (log/info "Registered solar renderer for block-id" "solar-gen"))))

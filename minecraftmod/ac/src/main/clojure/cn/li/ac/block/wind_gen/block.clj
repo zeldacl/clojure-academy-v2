@@ -18,6 +18,7 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.registry.hooks :as hooks]
+            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid])
   (:import [cn.li.acapi.wireless IWirelessGenerator]))
@@ -365,10 +366,10 @@
   (net-server/register-handler (msg :get-status-base) handle-get-status-base)
   (log/info "Wind Generator network handlers registered"))
 
-(defonce ^:private wind-gen-installed? (atom false))
+(defonce-guard wind-gen-installed?)
 
 (defn init-wind-gen! []
-  (when (compare-and-set! wind-gen-installed? false true)
+  (with-init-guard wind-gen-installed?
     (msg-registry/register-block-messages! :wind-gen [:get-status-main :get-status-base])
 
     (tdsl/register-tile!

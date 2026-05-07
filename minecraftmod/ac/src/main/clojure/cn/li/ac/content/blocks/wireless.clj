@@ -6,7 +6,8 @@
     The wireless system (cn.li.ac.wireless.*) has no compile-time dependency on
     these namespaces; blocks interact with the wireless system purely through
     the acapi Java interfaces."
-    (:require [cn.li.ac.wireless.shared.message-registry :as msg-reg]))
+    (:require [cn.li.ac.wireless.shared.message-registry :as msg-reg]
+              [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
 
 (defn- load-wireless-blocks! []
   (doseq [ns-sym '[cn.li.ac.block.wireless-matrix.block
@@ -27,11 +28,11 @@
         (when-let [init-fn (requiring-resolve init-sym)]
             (init-fn))))
 
-(defonce ^:private wireless-blocks-installed? (atom false))
+(defonce-guard wireless-blocks-installed?)
 
 (defn init-wireless-blocks!
     []
-    (when (compare-and-set! wireless-blocks-installed? false true)
+    (with-init-guard wireless-blocks-installed?
         (load-wireless-blocks!)
         (init-wireless-block-definitions!)
         (msg-reg/register-all!)))
