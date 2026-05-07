@@ -64,7 +64,6 @@ public class ScriptedBlockEntity extends BlockEntity {
         return saveWithoutMetadata();
     }
 
-    @Override
     public void handleUpdateTag(CompoundTag tag) {
         load(tag);
     }
@@ -74,7 +73,6 @@ public class ScriptedBlockEntity extends BlockEntity {
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
-    @Override
     public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt) {
         CompoundTag tag = pkt.getTag();
         if (tag != null) {

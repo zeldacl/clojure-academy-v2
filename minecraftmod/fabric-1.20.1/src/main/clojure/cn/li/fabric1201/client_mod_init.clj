@@ -2,9 +2,8 @@
   "Fabric 1.20.1 client-side mod entry point - handles ClientModInitializer interface"
   (:require [cn.li.fabric1201.client.init :as client-init]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.fabricmc.api ClientModInitializer])
   (:gen-class
-   :name com.example.my_mod1201.MyModFabricClient
+  :name cn.li.fabric1201.FabricClientModInitBridge
    :implements [net.fabricmc.api.ClientModInitializer]
    :prefix "client-"))
 
@@ -13,7 +12,7 @@
   
   Called when Fabric client is being initialized.
   Loads the client initialization module and invokes setup code."
-  [this]
+  [_]
   (try
     (log/info "Initializing Fabric 1.20.1 client...")
     (client-init/init-client)

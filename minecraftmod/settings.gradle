@@ -23,7 +23,7 @@ include 'api'
 include 'mcmod'
 include 'ac'
 include 'forge-1.20.1'
-// include 'fabric-1.20.1'
+include 'fabric-1.20.1'
 
 // 可选：全局配置foojay插件（指定JDK下载源等）
 // foojay {

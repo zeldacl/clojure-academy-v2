@@ -15,8 +15,6 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-import javax.annotation.Nullable;
-
 public class ScriptedEntityBlock extends BaseEntityBlock {
 
     private final String blockId;
@@ -76,23 +74,16 @@ public class ScriptedEntityBlock extends BaseEntityBlock {
     }
 
     @Override
-    public boolean isViewBlocking(BlockState state, BlockGetter level, BlockPos pos) {
-        return false;
-    }
-
-    @Override
     public boolean skipRendering(BlockState state, BlockState adjacentBlockState, Direction side) {
         return false;
     }
 
-    @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(tileId);
         return type != null ? new ScriptedBlockEntity(type, pos, state, tileId, blockId) : null;
     }
 
-    @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         if (level.isClientSide) return null;

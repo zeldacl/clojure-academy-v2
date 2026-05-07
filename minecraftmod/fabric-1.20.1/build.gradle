@@ -124,7 +124,8 @@ sourceSets {
                         "${project(':mcmod').projectDir}/src/main/clojure"]
         }
         java {
-            srcDirs += ["${project(':mcmod').projectDir}/src/main/java",
+            srcDirs += ["${project(':api').projectDir}/src/main/java",
+                        "${project(':mcmod').projectDir}/src/main/java",
                         "${project(':ac').projectDir}/src/main/java"]
         }
         resources {
@@ -174,10 +175,10 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:0.15.11" // 建议版本
     modImplementation "net.fabricmc.fabric-api:fabric-api:0.92.0+1.20.1" // Fabric API
     
-    // 编译依赖项
-    implementation project(':ac')
-    implementation project(':mcmod')
+    // Shared sources are injected physically via sourceSets above.
     implementation "org.clojure:clojure:1.12.4"
+    implementation "org.clojure:spec.alpha:0.3.218"
+    implementation "org.clojure:core.specs.alpha:0.2.62"
 }
 
 shadowJar {
@@ -185,6 +186,8 @@ shadowJar {
     archiveClassifier = 'shadow'
     dependencies {
         include(dependency('org.clojure:clojure'))
+        include(dependency('org.clojure:spec.alpha'))
+        include(dependency('org.clojure:core.specs.alpha'))
     }
 }
 

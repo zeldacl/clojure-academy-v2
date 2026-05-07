@@ -14,13 +14,13 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "com.example.my_mod1201.MyModFabric"
+      "cn.li.fabric1201.MyModFabric"
     ],
     "client": [
-      "com.example.my_mod1201.MyModFabricClient"
+      "cn.li.fabric1201.MyModFabricClient"
     ],
     "fabric-datagen": [
-      "com.example.fabric1201.datagen.DataGeneratorSetup"
+      "cn.li.fabric1201.datagen.DataGeneratorSetup"
     ]
   },
   "mixins": [],
