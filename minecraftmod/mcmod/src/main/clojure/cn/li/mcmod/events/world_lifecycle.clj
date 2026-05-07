@@ -10,10 +10,10 @@
 (defn- report-handler-error!
   "Log a handler failure to `*err*` (wraps a bare `Writer` in `PrintWriter` for tests)."
   [phase ^Throwable t]
-  (let [err *err*
+  (let [^java.io.Writer err *err*
         ^java.io.PrintWriter pw (if (instance? java.io.PrintWriter err)
-                                    err
-                                    (java.io.PrintWriter. err true))]
+                                    ^java.io.PrintWriter err
+                                    (java.io.PrintWriter. err))]
     (.println pw (str "Error in world " (name phase) " handler: " (ex-message t)))
     (.printStackTrace t pw)))
 

@@ -297,12 +297,14 @@ loom {
             runDir = "run"
             property 'forge.enabledGameTestNamespaces', mod_id
         }
-        gameTestServer {
+        gametestServer {
             server()
             configName = "Forge GameTest Server 1.20.1"
             runDir = "run-gametest"
+            property 'forge.enableGameTest', 'true'
             property 'forge.enabledGameTestNamespaces', mod_id
-            programArgs '--safeMode'
+            // Use an ephemeral port in GameTest runs to avoid local server conflicts.
+            programArgs '--safeMode', '--port', '0'
         }
         // 补全 DataGen 配置
         data {
@@ -498,6 +500,15 @@ tasks.named('compileClojure').configure {
 
 tasks.matching { it.name in ['runClient', 'runServer', 'runData'] }.configureEach {
     dependsOn tasks.named('copyClojureClassesToJavaOutput')
+}
+
+tasks.matching { it.name == 'runGametestServer' }.configureEach {
+    dependsOn tasks.named('copyClojureClassesToJavaOutput')
+    // Force DLI to read `gametestserverArgs` from launch.cfg instead of `serverArgs`.
+    jvmArgs '-Dfabric.dli.env=gametestserver'
+    doFirst {
+        logger.lifecycle('[runGametestServer] args(before)={}', args)
+    }
 }
 
 tasks.matching { it.name == 'checkClojure' }.configureEach {

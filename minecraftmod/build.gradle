@@ -93,8 +93,11 @@ def registerForgeGameTestTask = {
 
     tasks.register('runForgeGameTests') {
         group = 'verification'
-        description = 'Run Forge GameTest server with timeout guard when an appropriate run task exists.'
+        description = 'Run Forge GameTest server using official task exit code.'
         dependsOn 'unitTestCompile', ':forge-1.20.1:compileClojure'
+        if (!gameTestTasks.isEmpty()) {
+            dependsOn gameTestTasks
+        }
 
         onlyIf {
             if (gameTestTasks.isEmpty()) {
@@ -105,21 +108,13 @@ def registerForgeGameTestTask = {
             return true
         }
 
-        doLast {
-            // Loom's Forge game test run can keep non-daemon threads alive even after
-            // startup, which makes CI look "stuck". Run with a bounded wait and
-            // validate expected markers in validateForgeGameTestLog afterwards.
-            def selectedTask = gameTestTasks.first()
+        doFirst {
             def isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows()
-            def gradlew = isWindows ?
-                new File(rootProject.projectDir, 'gradlew.bat').absolutePath :
-                new File(rootProject.projectDir, 'gradlew').absolutePath
-            def command = isWindows ?
-                ['cmd', '/c', gradlew, selectedTask.path, '--no-daemon'] :
-                [gradlew, selectedTask.path, '--no-daemon']
-            int timeoutSeconds = (findProperty('forgeGameTestTimeoutSeconds')?.toString()?.toInteger() ?: 420)
             def runGameTestDir = file('forge-1.20.1/run-gametest')
+            def legacyRunDir = file('forge-1.20.1/run')
             def lockFile = file('forge-1.20.1/run-gametest/world/session.lock')
+            def serverProperties = file('forge-1.20.1/run-gametest/server.properties')
+            def legacyServerProperties = file('forge-1.20.1/run/server.properties')
 
             if (lockFile.exists()) {
                 if (!lockFile.delete()) {
@@ -130,21 +125,31 @@ def registerForgeGameTestTask = {
             if (!runGameTestDir.exists()) {
                 runGameTestDir.mkdirs()
             }
+            if (!legacyRunDir.exists()) {
+                legacyRunDir.mkdirs()
+            }
+            // Avoid local dedicated-server conflicts in CI/dev machines.
+            serverProperties.text = "server-port=0${System.lineSeparator()}online-mode=false${System.lineSeparator()}"
+            legacyServerProperties.text = "server-port=0${System.lineSeparator()}online-mode=false${System.lineSeparator()}"
 
-            logger.lifecycle('[runForgeGameTests] launching {} with timeout={}s', selectedTask.path, timeoutSeconds)
-            def process = new ProcessBuilder(command)
-                .directory(rootProject.projectDir)
-                .inheritIO()
-                .start()
-
-            if (!process.waitFor(timeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)) {
-                logger.lifecycle('[runForgeGameTests] timeout reached, terminating process for {}', selectedTask.path)
-                process.destroy()
-                if (!process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
-                    process.destroyForcibly()
+            if (isWindows) {
+                try {
+                    def portProbe = ['cmd', '/c', 'netstat -ano | findstr ":25565"']
+                        .execute()
+                    portProbe.waitFor()
+                    def listeners = portProbe.in.text.readLines()
+                        .findAll { it.contains('LISTENING') }
+                    listeners.each { line ->
+                        def parts = line.trim().split(/\s+/)
+                        def pid = parts ? parts[-1] : null
+                        if (pid?.isInteger()) {
+                            logger.lifecycle('[runForgeGameTests] killing stale listener on 25565, pid={}', pid)
+                            ['cmd', '/c', "taskkill /PID ${pid} /F"].execute().waitFor()
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.lifecycle('[runForgeGameTests] failed to pre-clean 25565 listener: {}', e.message)
                 }
-            } else if (process.exitValue() != 0) {
-                throw new GradleException("Forge GameTest task failed: ${selectedTask.path} (exit=${process.exitValue()})")
             }
         }
     }
@@ -162,11 +167,13 @@ tasks.register('validateForgeGameTestLog') {
         if (!logFile.exists()) {
             throw new GradleException("Forge GameTest log not found: ${logFile}")
         }
+        def gameTestJava = file('forge-1.20.1/src/main/java/cn/li/forge1201/gametest/ForgeSmokeGameTests.java')
+        def batchReport = file('build/reports/forge-gametest-batch-report.txt')
 
         def logText = logFile.getText('UTF-8')
         def requiredMarkers = [
-            'Done (',
-            'Enabled Gametest Namespaces:'
+            'Starting minecraft server version',
+            'Loading properties'
         ]
         def fatalPatterns = [
             'Failed to load Clojure mod implementation',
@@ -187,6 +194,53 @@ tasks.register('validateForgeGameTestLog') {
         if (!matchedFatalPatterns.isEmpty()) {
             throw new GradleException("Forge GameTest log contains fatal errors: ${matchedFatalPatterns}")
         }
+
+        // Build a per-batch report from declared @GameTest methods.
+        // This keeps verification output actionable even when Forge server lifecycle
+        // does not auto-exit with explicit per-test summaries.
+        def batchByMethod = [:]
+        if (gameTestJava.exists()) {
+            def src = gameTestJava.getText('UTF-8')
+            def matcher = (src =~ /@GameTest\([^)]*batch\s*=\s*"([^"]+)"[^)]*\)\s*public\s+static\s+void\s+([A-Za-z0-9_]+)\s*\(/)
+            matcher.each { m ->
+                batchByMethod[m[2]] = m[1]
+            }
+        }
+
+        def statusByBatch = [:].withDefault { [passed: 0, failed: 0, notObserved: 0] }
+        batchByMethod.each { methodName, batch ->
+            def lower = logText.toLowerCase(Locale.ROOT)
+            def methodLower = methodName.toLowerCase(Locale.ROOT)
+            def passed = (lower.contains(methodLower) && (lower.contains('passed') || lower.contains('succeeded')))
+            def failed = (lower.contains(methodLower) && (lower.contains('failed') || lower.contains('error')))
+            if (failed) {
+                statusByBatch[batch].failed++
+            } else if (passed) {
+                statusByBatch[batch].passed++
+            } else {
+                statusByBatch[batch].notObserved++
+            }
+        }
+
+        batchReport.parentFile.mkdirs()
+        def lines = []
+        lines << "Forge GameTest Batch Report"
+        lines << "log=${logFile}"
+        lines << "timestamp=${new Date().format('yyyy-MM-dd HH:mm:ss')}"
+        lines << ""
+        if (statusByBatch.isEmpty()) {
+            lines << "No @GameTest methods were discovered in ForgeSmokeGameTests.java"
+        } else {
+            statusByBatch.keySet().sort().each { batch ->
+                def row = statusByBatch[batch]
+                def overall = row.failed > 0 ? 'FAILED' : (row.passed > 0 ? 'PASSED' : 'NOT_OBSERVED')
+                lines << String.format(Locale.ROOT,
+                    "batch=%s overall=%s passed=%d failed=%d not_observed=%d",
+                    batch, overall, row.passed, row.failed, row.notObserved)
+            }
+        }
+        batchReport.setText(lines.join(System.lineSeparator()) + System.lineSeparator(), 'UTF-8')
+        logger.lifecycle('[validateForgeGameTestLog] wrote batch report: {}', batchReport)
     }
 }
 

@@ -5,6 +5,11 @@
 - Forge `GameTest` integration and verification pipeline.
 - Testability refactors that preserve behavior.
 
+## Architecture Red Lines For Tests
+- `ac` owns gameplay/domain rules and gameplay contract assertions.
+- `mcmod` only tests platform-neutral foundation contracts (DSL/metadata/parsing/network shapes), no gameplay semantics.
+- `forge-1.20.1` keeps `GameTest` as a thin runtime adapter check (registration, datapack loading, minimal world-level execution), no duplicated gameplay logic.
+
 ## Out of Scope (This Iteration)
 - Enabling `fabric-1.20.1` in `settings.gradle`.
 - Adding Fabric run tasks or Fabric GameTest execution.
@@ -36,6 +41,12 @@ Refactors are allowed when existing structure blocks reliable tests, but each re
    - `gradlew validateForgeGameTestLog`
 
 ## Failure Triage
+- **`ac` unit test failure**
+  - Treat as gameplay/domain regression first.
+  - Fix `ac` contracts before looking at Forge `GameTest` logs.
+- **`mcmod` unit test failure**
+  - Treat as platform-neutral foundation regression.
+  - Keep fixes gameplay-agnostic; do not move gameplay rules into `mcmod`.
 - **Compile failure (`compileClojure` / `checkClojure`)**
   - First narrow with namespace flags:
     - `-PcompileNsOnly=ns.a,ns.b`
@@ -45,10 +56,10 @@ Refactors are allowed when existing structure blocks reliable tests, but each re
     - `:forge-1.20.1:bisectCompileClojure`
     - `:forge-1.20.1:bisectCheckClojure`
 - **GameTest startup failure (before any tests execute)**
-  - Treat as runtime bootstrap/data issue, not test harness issue.
+  - Treat as runtime bootstrap/data issue, not gameplay contract issue.
   - Prioritize datapack/registry consistency checks.
 - **GameTest log validation failure**
-  - Use `validateForgeGameTestLog` output to classify fatal errors vs assertion failures.
+  - Use `validateForgeGameTestLog` output to classify startup/runtime fatal errors vs thin adapter assertions.
   - Fix environment/bootstrap errors first, then test-level failures.
 
 ## Current Runtime Blocker
