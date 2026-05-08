@@ -144,6 +144,10 @@ tasks.register('verifyArchitectureBoundaries') {
             include sourceIncludes
             exclude '**/build/**', '**/.gradle/**'
         }
+        def mc1201Source = fileTree('mc-1.20.1/src') {
+            include sourceIncludes
+            exclude '**/build/**', '**/.gradle/**'
+        }
 
         checkPattern(
             'AC_MCMOD_NO_MINECRAFT_OR_FORGE',
@@ -163,6 +167,13 @@ tasks.register('verifyArchitectureBoundaries') {
             'NON_CLIENT_NO_MC_CLIENT_IMPORT',
             acSource + mcmodSource,
             ~/net\.minecraft\.client/,
+            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+        )
+
+        checkPattern(
+            'MC1201_NO_LOADER_IMPORT',
+            mc1201Source,
+            ~/(net\.minecraftforge|net\.fabricmc|net\.neoforged|cn\.li\.(forge|fabric|neoforge))/,
             { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
         )
 

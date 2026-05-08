@@ -1,175 +1,72 @@
 
+
 (ns cn.li.forge1201.platform-impl-impl
   "Bridge-invoked platform initializer.
 
-  Keeps business logic free of hardcoded Minecraft types except minimal `^Type` hints on
-  `extend` lambdas so checkClojure stays reflection-clean (types are Forge 1.20.1 remapped)."
+  Uses shared mc1201 installer with a Forge-specific adapter implementation."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.platform.nbt :as nbt]
-            [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.item :as item]
-            [cn.li.mcmod.platform.resource :as resource]
-            [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.platform.be :as be]
+            [cn.li.mc1201.installer :as shared-installer]
+            [cn.li.mc1201.platform-adapter :as pa]
             [cn.li.forge1201.platform-bindings :as bindings]
             [cn.li.forge1201.side :as side])
   (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]
-           [net.minecraft.world InteractionHand]
-           [net.minecraft.resources ResourceLocation]
            [net.minecraft.core BlockPos]
-           [net.minecraft.world.entity Entity]
-           [net.minecraft.world.entity.player Player]
            [net.minecraft.world.level Level]
            [net.minecraft.world.level.block.state BlockState]
-           [net.minecraft.world.phys BlockHitResult]
-           [net.minecraft.world.item Item ItemStack]))
+           [net.minecraft.world.phys BlockHitResult]))
 
 
 (defonce ^:private initialized? (atom false))
-(defonce ^:private entity-ops-installed? (atom false))
-(defonce ^:private item-ops-installed? (atom false))
-(defonce ^:private block-state-ops-installed? (atom false))
 
-(defn- install-item-ops!
-  []
-  (when (compare-and-set! item-ops-installed? false true)
-    (let [item-stack-cls (ForgeRuntimeBridge/getItemStackClass)
-          item-cls (ForgeRuntimeBridge/getItemClass)]
-      (extend item-stack-cls item/IItemStack
-              {:item-is-empty? (fn [^ItemStack this]
-                                 (.isEmpty this))
-               :item-get-count (fn [^ItemStack this]
-                                 (.getCount this))
-               :item-get-max-stack-size (fn [^ItemStack this]
-                                          (.getMaxStackSize this))
-               :item-is-equal? (fn [^ItemStack this ^ItemStack other]
-                                 (ItemStack/matches this other))
-               :item-save-to-nbt (fn [^ItemStack this nbt]
-                                   (.save this nbt))
-               :item-get-or-create-tag (fn [^ItemStack this]
-                                         (.getOrCreateTag this))
-               :item-get-max-damage (fn [^ItemStack this]
-                                      (.getMaxDamage this))
-               :item-set-damage! (fn [^ItemStack this damage]
-                                   (.setDamageValue this (int damage)))
-               :item-get-damage (fn [^ItemStack this]
-                                  (.getDamageValue this))
-               :item-get-item (fn [^ItemStack this]
-                                (.getItem this))
-               :item-get-tag-compound (fn [^ItemStack this]
-                                        (.getTag this))
-               :item-split (fn [^ItemStack this amount]
-                             (.split this (int amount)))})
-      (extend item-cls item/IItem
-              {:item-get-description-id (fn [^Item this]
-                                          (.getDescriptionId this))
-               :item-get-registry-name (fn [^Item this]
-                 (ForgeRuntimeBridge/getItemKeyString this))}))))
+(defn- resolve-local-player-class []
+  (when (side/client-side?)
+    (-> (Class/forName "cn.li.forge1201.bridge.ClientPlatformBridge")
+        (.getMethod "getLocalPlayerClass" (into-array Class []))
+        (.invoke nil (object-array [])))))
 
-(defn- install-block-state-ops!
-  "Extend IBlockStateOps onto BlockState at runtime (after MC bootstrap).
+(defn- raytrace-block-map [player reach fluid-source-only?]
+  (when-let [^BlockHitResult hit (ForgeRuntimeBridge/playerRaytraceBlock player (double (or reach 5.0)) (boolean fluid-source-only?))]
+    (let [^BlockPos hit-pos (.getBlockPos hit)
+          ^BlockPos place-pos (.relative hit-pos (.getDirection hit))
+          ^Level level (ForgeRuntimeBridge/getEntityLevel player)
+          ^BlockState hit-state (.getBlockState level hit-pos)]
+      {:hit-pos {:x (.getX hit-pos) :y (.getY hit-pos) :z (.getZ hit-pos)}
+       :place-pos {:x (.getX place-pos) :y (.getY place-pos) :z (.getZ place-pos)}
+       :block-id (ForgeRuntimeBridge/getBlockKey (.getBlock hit-state))})))
 
-  Do not use extend-type BlockState in platform-bindings: CheckClojure loads that
-  namespace and would initialize BlockState before bootstrap."
-  []
-  (when (compare-and-set! block-state-ops-installed? false true)
-    (let [block-state-cls (ForgeRuntimeBridge/getBlockStateClass)]
-      (extend block-state-cls world/IBlockStateOps
-              {:block-state-is-air (fn [s] (ForgeRuntimeBridge/blockStateIsAir s))
-               :block-state-get-block (fn [s] (ForgeRuntimeBridge/blockStateGetBlock s))
-               :block-state-get-state-definition (fn [s] (ForgeRuntimeBridge/blockStateGetStateDefinition s))
-               :block-state-get-property (fn [_s state-def prop-name]
-                                           (ForgeRuntimeBridge/blockStateGetProperty state-def prop-name))
-               :block-state-set-property (fn [s prop value]
-                                           (ForgeRuntimeBridge/blockStateSetProperty s prop value))}))))
+(def ^:private forge-adapter
+  (reify pa/PlatformAdapter
+    (entity-class [_] (ForgeRuntimeBridge/getEntityClass))
+    (player-class [_] (ForgeRuntimeBridge/getPlayerClass))
+    (server-player-class [_] (ForgeRuntimeBridge/getServerPlayerClass))
+    (local-player-class [_] (resolve-local-player-class))
+    (inventory-class [_] (ForgeRuntimeBridge/getInventoryClass))
+    (menu-class [_] (ForgeRuntimeBridge/getAbstractContainerMenuClass))
+    (item-stack-class [_] (ForgeRuntimeBridge/getItemStackClass))
+    (item-class [_] (ForgeRuntimeBridge/getItemClass))
+    (block-state-class [_] (ForgeRuntimeBridge/getBlockStateClass))
+    (level-class [_] (Class/forName "net.minecraft.world.level.Level"))
+    (scripted-be-class [_] nil)
 
-(defn- install-entity-ops!
-  []
-  (when (compare-and-set! entity-ops-installed? false true)
-    (let [entity-cls (ForgeRuntimeBridge/getEntityClass)
-          player-cls (ForgeRuntimeBridge/getPlayerClass)
-          inventory-cls (ForgeRuntimeBridge/getInventoryClass)
-          menu-cls (ForgeRuntimeBridge/getAbstractContainerMenuClass)
-          server-player-cls (ForgeRuntimeBridge/getServerPlayerClass)
-          player-impl {:entity-distance-to-sqr (fn [^Entity this x y z]
-                                                 (.distanceToSqr this (double x) (double y) (double z)))
-                       :player-get-level (fn [^Player this]
-                                           (ForgeRuntimeBridge/getEntityLevel this))
-                       :player-creative? (fn [^Player this]
-                                           (.isCreative this))
-                       :player-spectator? (fn [^Player this]
-                                            (.isSpectator this))
-                       :player-get-name (fn [^Player this]
-                                          (str (.getName this)))
-                       :player-get-uuid (fn [^Player this]
-                                          (.getUUID this))
-                       :player-get-main-hand-item-id (fn [^Player this]
-                                                       (let [^ItemStack stack (.getItemInHand this InteractionHand/MAIN_HAND)]
-                                                         (when (and stack (not (.isEmpty stack)))
-                                                           (ForgeRuntimeBridge/getItemKeyString (.getItem stack)))))
-                       :player-get-main-hand-item-count (fn [^Player this]
-                                                          (let [^ItemStack stack (.getItemInHand this InteractionHand/MAIN_HAND)]
-                                                            (if (and stack (not (.isEmpty stack)))
-                                                              (.getCount stack)
-                                                              0)))
-                       :player-consume-main-hand-item! (fn [^Player this amount]
-                                                         (let [n (int (max 0 (or amount 0)))]
-                                                           (cond
-                                                             (zero? n) true
-                                                             (.isCreative this) true
-                                                             :else
-                                                             (let [^ItemStack stack (.getItemInHand this InteractionHand/MAIN_HAND)]
-                                                               (if (or (nil? stack) (.isEmpty stack) (< (.getCount stack) n))
-                                                                 false
-                                                                 (do
-                                                                   (.shrink stack n)
-                                                                   true))))))
-                       :player-count-item-by-id (fn [^Player this item-id]
-                                                  (ForgeRuntimeBridge/countPlayerItemById this (str item-id)))
-                       :player-consume-item-by-id! (fn [^Player this item-id amount]
-                                                     (ForgeRuntimeBridge/consumePlayerItemById this (str item-id) (int (or amount 0))))
-                       :player-give-item-stack! (fn [^Player this item-stack]
-                                                  (ForgeRuntimeBridge/givePlayerItemStack this item-stack))
-                       :player-spawn-entity-by-id! (fn [^Player this entity-id speed]
-                                                     (ForgeRuntimeBridge/spawnEntityByIdFromPlayer this (str entity-id) (float (or speed 1.0))))
-                       :player-raytrace-block (fn [^Player this reach fluid-source-only?]
-                                                (when-let [^BlockHitResult hit (ForgeRuntimeBridge/playerRaytraceBlock this (double (or reach 5.0)) (boolean fluid-source-only?))]
-                                                  (let [^BlockPos hit-pos (.getBlockPos hit)
-                                                        ^BlockPos place-pos (.relative hit-pos (.getDirection hit))
-                                                        ^Level level (ForgeRuntimeBridge/getEntityLevel this)
-                                                        ^BlockState hit-state (.getBlockState level hit-pos)]
-                                                    {:hit-pos {:x (.getX hit-pos) :y (.getY hit-pos) :z (.getZ hit-pos)}
-                                                     :place-pos {:x (.getX place-pos) :y (.getY place-pos) :z (.getZ place-pos)}
-                                                     :block-id (ForgeRuntimeBridge/getBlockKey (.getBlock hit-state))})))
-                       :player-get-container-menu (fn [^Player this]
-                                                    (ForgeRuntimeBridge/getPlayerContainerMenu this))}]
-      (extend entity-cls entity/IEntityOps
-        {:entity-distance-to-sqr (fn [^Entity this x y z]
-           (.distanceToSqr this (double x) (double y) (double z)))})
-      (extend player-cls entity/IEntityOps player-impl)
-      ;; Concrete classes are extended explicitly because some transformed runtime
-      ;; classes do not reliably inherit protocol maps from Player in dev environment.
-      (extend server-player-cls entity/IEntityOps player-impl)
-      ;; LocalPlayer is client-only; ClientPlatformBridge is @OnlyIn(Dist.CLIENT).
-      ;; Access it via our own (non-remapped) class name at runtime, client-side only.
-      (when (side/client-side?)
-        (let [local-player-cls (-> (Class/forName "cn.li.forge1201.bridge.ClientPlatformBridge")
-                                   (.getMethod "getLocalPlayerClass" (into-array Class []))
-                                   (.invoke nil (object-array [])))]
-          (extend local-player-cls entity/IEntityOps player-impl)))
-      (extend inventory-cls entity/IEntityOps
-        {:inventory-get-player (fn [this]
-               (ForgeRuntimeBridge/getInventoryPlayer this))})
-      (extend menu-cls entity/IEntityOps
-        {:menu-get-container-id (fn [this]
-          (ForgeRuntimeBridge/getMenuContainerId this))})))) 
+    (item-registry-name [_ item] (ForgeRuntimeBridge/getItemKeyString item))
+    (block-registry-name [_ block] (ForgeRuntimeBridge/getBlockKey block))
 
-(defn- install-resource-factory!
-  []
-  (alter-var-root #'resource/*resource-factory*
-                  (constantly (fn [namespace path]
-                                (ResourceLocation. (str namespace) (str path))))))
+    (player-level [_ player] (ForgeRuntimeBridge/getEntityLevel player))
+    (player-container-menu [_ player] (ForgeRuntimeBridge/getPlayerContainerMenu player))
+    (inventory-owner [_ inventory] (ForgeRuntimeBridge/getInventoryPlayer inventory))
+    (menu-container-id [_ menu] (ForgeRuntimeBridge/getMenuContainerId menu))
+
+    (count-player-item-by-id [_ player item-id] (ForgeRuntimeBridge/countPlayerItemById player (str item-id)))
+    (consume-player-item-by-id! [_ player item-id amount] (ForgeRuntimeBridge/consumePlayerItemById player (str item-id) (int (or amount 0))))
+    (give-player-item-stack! [_ player stack] (ForgeRuntimeBridge/givePlayerItemStack player stack))
+    (spawn-entity-by-id! [_ player entity-id speed] (ForgeRuntimeBridge/spawnEntityByIdFromPlayer player (str entity-id) (float (or speed 1.0))))
+    (raytrace-block [_ player reach fluid-source-only?] (raytrace-block-map player reach fluid-source-only?))
+
+    (item-stack-of [_ nbt] (ForgeRuntimeBridge/itemStackOf nbt))
+    (create-item-stack-by-id [_ item-id count] (ForgeRuntimeBridge/createItemStackById (str item-id) (int count)))
+    (item-stack-empty? [_ stack] (ForgeRuntimeBridge/isItemStackEmpty stack))
+
+    (world-place-block-by-id [_ level block-id pos flags] (bindings/world-place-block-by-id level block-id pos flags))))
 
 (defn init-platform!
   "Initialize Forge 1.20.1 platform implementations.
@@ -178,44 +75,35 @@
   stable entrypoint for Java SPI provider invocation."
   []
   (when (compare-and-set! initialized? false true)
-    ;; Install entity protocol implementations with runtime class lookup only,
-    ;; avoiding compile-time MC class loading during checkClojure.
-    (install-entity-ops!)
-    (install-item-ops!)
-    (install-block-state-ops!)
-    (install-resource-factory!)
-    (alter-var-root #'nbt/*nbt-factory*
-      (constantly {:create-compound bindings/create-nbt-compound
-                   :create-list bindings/create-nbt-list}))
-    (alter-var-root #'item/*item-factory*
-      (constantly (fn [nbt]
-                    (ForgeRuntimeBridge/itemStackOf nbt))))
-    (alter-var-root #'item/*item-stack-resolver*
-      (constantly (fn [item-id count]
-                    (let [stack (ForgeRuntimeBridge/createItemStackById (str item-id) (int count))]
-                      (when-not (ForgeRuntimeBridge/isItemStackEmpty stack)
-                        stack)))))
-    (alter-var-root #'nbt/*nbt-has-key-fn* (constantly bindings/nbt-has-key?))
-    (alter-var-root #'pos/*position-factory* (constantly bindings/create-block-pos))
-    (alter-var-root #'pos/*pos-above-fn* (constantly bindings/pos-above))
-    (alter-var-root #'world/*world-get-tile-entity-fn* (constantly bindings/world-get-tile-entity))
-    (alter-var-root #'world/*world-get-block-state-fn* (constantly bindings/world-get-block-state))
-    (alter-var-root #'world/*world-set-block-fn* (constantly bindings/world-set-block))
-    (alter-var-root #'world/*world-remove-block-fn* (constantly bindings/world-remove-block))
-    (alter-var-root #'world/*world-break-block-fn* (constantly bindings/world-break-block))
-    (alter-var-root #'world/*world-place-block-by-id-fn* (constantly bindings/world-place-block-by-id))
-    (alter-var-root #'world/*world-is-chunk-loaded-fn* (constantly bindings/world-is-chunk-loaded?))
-    (alter-var-root #'world/*world-get-day-time-fn* (constantly bindings/world-get-day-time))
-    (alter-var-root #'world/*world-get-dimension-id-fn* (constantly bindings/world-get-dimension-id))
-    (alter-var-root #'world/*world-get-players-fn* (constantly bindings/world-get-players))
-    (alter-var-root #'world/*world-is-raining-fn* (constantly bindings/world-is-raining))
-    (alter-var-root #'world/*world-is-client-side-fn* (constantly bindings/world-is-client-side))
-    (alter-var-root #'world/*world-can-see-sky-fn* (constantly bindings/world-can-see-sky))
-    (alter-var-root #'be/*be-get-level-fn* (constantly bindings/be-get-level))
-    (alter-var-root #'be/*be-get-world-fn* (constantly bindings/be-get-world))
-    (alter-var-root #'be/*be-get-custom-state-fn* (constantly bindings/be-get-custom-state))
-    (alter-var-root #'be/*be-set-custom-state-fn* (constantly bindings/be-set-custom-state!))
-    (alter-var-root #'be/*be-get-block-id-fn* (constantly bindings/be-get-block-id))
-    (alter-var-root #'be/*be-set-changed-fn* (constantly bindings/be-set-changed!))
+    (shared-installer/install-foundation!)
+    (shared-installer/install-entity-protocols-only! forge-adapter)
+    (shared-installer/install-item-protocols-only! forge-adapter)
+    (shared-installer/install-block-state-protocol-only! forge-adapter)
+    (shared-installer/install-resource-factory-only!)
+    (shared-installer/install-item-factories-only!
+      (fn [nbt] (pa/item-stack-of forge-adapter nbt))
+      (fn [item-id count] (pa/create-item-stack-by-id forge-adapter item-id count))
+      (fn [stack] (pa/item-stack-empty? forge-adapter stack)))
+    (shared-installer/install-world-fns-only!
+      {:world-get-tile-entity bindings/world-get-tile-entity
+       :world-get-block-state bindings/world-get-block-state
+       :world-set-block bindings/world-set-block
+       :world-remove-block bindings/world-remove-block
+       :world-break-block bindings/world-break-block
+       :world-place-block-by-id bindings/world-place-block-by-id
+       :world-is-chunk-loaded? bindings/world-is-chunk-loaded?
+       :world-get-day-time bindings/world-get-day-time
+       :world-get-dimension-id bindings/world-get-dimension-id
+       :world-get-players bindings/world-get-players
+       :world-is-raining bindings/world-is-raining
+       :world-is-client-side bindings/world-is-client-side
+       :world-can-see-sky bindings/world-can-see-sky})
+    (shared-installer/install-be-fns-only!
+      {:be-get-level bindings/be-get-level
+       :be-get-world bindings/be-get-world
+       :be-get-custom-state bindings/be-get-custom-state
+       :be-set-custom-state! bindings/be-set-custom-state!
+       :be-get-block-id bindings/be-get-block-id
+       :be-set-changed! bindings/be-set-changed!})
     (log/info "platform-impl-impl initialized via SPI entrypoint"))
   nil)
