@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.gui.init
   "Forge 1.20.1 GUI System Initialization"
-  (:require [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.mc1201.gui.init-orchestrator :as gui-orchestrator]
+            [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.util.log :as log]))
 
 (defn init-common!
@@ -8,11 +9,11 @@
   MenuType registration is handled earlier via DeferredRegister in mod-init;
   only non-registry setup belongs here."
   []
-  (log/info "=== Initializing Forge 1.20.1 GUI System (Common) ===")
+  (gui-orchestrator/phase-start! "Forge 1.20.1" "Common")
   (if-let [network-init! (requiring-resolve 'cn.li.forge1201.gui.network/init!)]
     (network-init!)
     (log/warn "Forge GUI network init fn not available"))
-  (log/info "=== Forge 1.20.1 GUI System (Common) Initialized ==="))
+  (gui-orchestrator/phase-done! "Forge 1.20.1" "Common"))
 
 ;; ============================================================================
 ;; Client-Only Initialization
@@ -23,14 +24,14 @@
   
   Should be called during FMLClientSetupEvent"
   []
-  (log/info "=== Initializing Forge 1.20.1 GUI System (Client) ===")
+  (gui-orchestrator/phase-start! "Forge 1.20.1" "Client")
   
   ;; Register screen factories
   (if-let [init-screen! (requiring-resolve 'cn.li.forge1201.gui.screen-impl/init-client!)]
     (init-screen!)
     (log/warn "Forge GUI screen impl not available on current side"))
   
-  (log/info "=== Forge 1.20.1 GUI System (Client) Initialized ==="))
+  (gui-orchestrator/phase-done! "Forge 1.20.1" "Client"))
 
 ;; ============================================================================
 ;; Server-Only Initialization
@@ -41,12 +42,12 @@
   
   Should be called during FMLDedicatedServerSetupEvent"
   []
-  (log/info "=== Initializing Forge 1.20.1 GUI System (Server) ===")
+  (gui-orchestrator/phase-start! "Forge 1.20.1" "Server")
   
   ;; Server-specific initialization (if needed)
   ;; Currently all server logic is in common
   
-  (log/info "=== Forge 1.20.1 GUI System (Server) Initialized ==="))
+  (gui-orchestrator/phase-done! "Forge 1.20.1" "Server"))
 
 ;; ============================================================================
 ;; Verification
@@ -59,8 +60,6 @@
   
   Returns: boolean (true if all checks pass)"
   []
-  (log/info "Verifying GUI system initialization...")
-  
   (let [;; Dynamically check all GUI IDs from metadata
       get-menu-type (requiring-resolve 'cn.li.forge1201.gui.registry-impl/get-menu-type)
         checks (into {}
@@ -68,15 +67,7 @@
                       (let [check-key (keyword (str "gui-" gui-id "-menu-type"))
               menu-type (when get-menu-type (get-menu-type gui-id))]
                         [check-key (some? menu-type)])))]
-    
-    (doseq [[check-name result] checks]
-      (log/info "  " check-name ":" (if result "✓" "✗")))
-    
-    (let [all-passed? (every? true? (vals checks))]
-      (if all-passed?
-        (log/info "All GUI system checks passed!")
-        (log/error "Some GUI system checks failed!"))
-      all-passed?)))
+    (gui-orchestrator/verify-checks! "Verifying GUI system initialization..." checks)))
 
 ;; ============================================================================
 ;; Error Recovery
@@ -85,32 +76,14 @@
 (defn safe-init-common!
   "Initialize common GUI system with error handling"
   []
-  (try
-    (init-common!)
-    true
-    (catch Exception e
-      (log/error "Failed to initialize common GUI system:" (.getMessage e))
-      (.printStackTrace e)
-      false)))
+  (gui-orchestrator/safe-init! "Failed to initialize common GUI system:" init-common!))
 
 (defn safe-init-client!
   "Initialize client GUI system with error handling"
   []
-  (try
-    (init-client!)
-    true
-    (catch Exception e
-      (log/error "Failed to initialize client GUI system:" (.getMessage e))
-      (.printStackTrace e)
-      false)))
+  (gui-orchestrator/safe-init! "Failed to initialize client GUI system:" init-client!))
 
 (defn safe-init-server!
   "Initialize server GUI system with error handling"
   []
-  (try
-    (init-server!)
-    true
-    (catch Exception e
-      (log/error "Failed to initialize server GUI system:" (.getMessage e))
-      (.printStackTrace e)
-      false)))
+  (gui-orchestrator/safe-init! "Failed to initialize server GUI system:" init-server!))

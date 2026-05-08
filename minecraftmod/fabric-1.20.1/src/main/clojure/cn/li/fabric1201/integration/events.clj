@@ -4,27 +4,9 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.interaction-result :as interaction-result]
             [cn.li.mcmod.events.metadata :as event-metadata]
+            [cn.li.mc1201.integration.event-feedback :as event-feedback]
             [cn.li.fabric1201.gui.registry-impl :as gui-registry-impl])
-  (:import
-           [net.minecraft.network.chat Component]
-           [net.minecraft.world InteractionResult]))
-
-(defn- feedback-component
-  [{:keys [type key args text]}]
-  (case type
-    :translatable (Component/translatable (str key) (into-array Object (map str (or args []))))
-    :literal (Component/literal (str text))
-    nil))
-
-(defn- emit-feedback!
-  [event-data ret]
-  (let [world (:world event-data)
-        player (:player event-data)
-        messages (when (map? ret) (:messages ret))]
-    (when (and world player (not (.isClientSide world)) (seq messages))
-      (doseq [m messages]
-        (when-let [c (feedback-component m)]
-          (.sendSystemMessage player c))))))
+  (:import [net.minecraft.world InteractionResult]))
 
 (defn handle-right-click
   "Handle right-click block event from event data map"
@@ -36,7 +18,7 @@
     (when (and block-id (event-metadata/has-event-handler? block-id :on-right-click))
       (log/info "Block has registered handler, dispatching...")
       (let [ret (core/on-block-right-click (assoc event-data :block-id block-id))]
-        (emit-feedback! event-data ret)
+        (event-feedback/emit-feedback! event-data ret)
         (when (interaction-result/gui-open-result? ret)
           (try
             (let [{:keys [gui-id player world pos]} ret

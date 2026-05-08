@@ -7,7 +7,7 @@
   (:require [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.forge1201.gui CMenuBridge]
+  (:import [cn.li.mc1201.gui CMenuBridge]
            [net.minecraft.world.inventory Slot AbstractContainerMenu]
            [net.minecraft.world.entity.player Inventory]
            [net.minecraft.world.item ItemStack]))

@@ -1,5 +1,6 @@
 package cn.li.forge1201.entity;
 
+import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;

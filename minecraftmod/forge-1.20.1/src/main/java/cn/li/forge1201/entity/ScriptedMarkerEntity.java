@@ -1,6 +1,7 @@
 package cn.li.forge1201.entity;
 
 import cn.li.forge1201.entity.marker.hooks.ScriptedMarkerHooks;
+import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;

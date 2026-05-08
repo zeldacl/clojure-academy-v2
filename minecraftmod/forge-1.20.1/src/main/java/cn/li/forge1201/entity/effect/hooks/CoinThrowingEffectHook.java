@@ -1,7 +1,7 @@
 package cn.li.forge1201.entity.effect.hooks;
 
 import cn.li.forge1201.entity.ScriptedEffectEntity;
-import cn.li.forge1201.entity.ScriptedEffectSpec;
+import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.player.Player;
 

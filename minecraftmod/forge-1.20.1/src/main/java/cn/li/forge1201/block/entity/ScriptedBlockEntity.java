@@ -3,17 +3,13 @@ package cn.li.forge1201.block.entity;
 import clojure.lang.RT;
 import clojure.lang.Var;
 import cn.li.forge1201.capability.NamedCapabilityRegistry;
+import cn.li.mc1201.block.entity.AbstractScriptedBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.nbt.Tag;
 import net.minecraft.world.WorldlyContainer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.common.capabilities.Capability;
@@ -26,30 +22,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Generic block entity driven by Clojure tile-logic (tick + NBT + capabilities).
+ * Forge scripted block entity with capability and container support.
  *
- * <p>State model (post Design-3):
- * <ul>
- *   <li>{@code customState} – the Clojure persistent map that is the single source of truth.
- *       read-nbt-fn returns it; write-nbt-fn receives it; tick receives/returns it.</li>
- *   <li>Legacy Java fields ({@code energy}, {@code status}, …) are kept for backward compat
- *       but are no longer the primary store.</li>
- * </ul>
- *
- * <p>Capability dispatch:
- * <ul>
- *   <li>{@link CapabilitySlots} maps logical string keys → anonymous Capability tokens.</li>
- *   <li>{@code tile-logic/get-capability} is called to obtain the handler for each key.</li>
- * </ul>
- *
- * <p>Container: every ScriptedBlockEntity implements {@link WorldlyContainer}. When
- * no container is registered in tile-logic the default (0 slots / always valid) is used.
+ * <p>Core scripted state/NBT/tick behavior is implemented in
+ * {@link AbstractScriptedBlockEntity}.</p>
  */
-public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer {
-
-    // -------------------------------------------------------------------------
-    // Static registry
-    // -------------------------------------------------------------------------
+public class ScriptedBlockEntity extends AbstractScriptedBlockEntity implements WorldlyContainer {
 
     private static final Map<String, BlockEntityType<ScriptedBlockEntity>> TYPES = new HashMap<>();
 
@@ -62,215 +40,19 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
         return TYPES.get(tileId);
     }
 
-    // -------------------------------------------------------------------------
-    // Instance fields
-    // -------------------------------------------------------------------------
-
-    private final String tileId;
-    private final String blockId;
-
-    /** Primary state: Clojure persistent map. Null until first NBT load or tick. */
-    private Object customState = null;
-
-    // Legacy fields kept for backward compatibility
-    private double energy = 0.0;
-    private double maxEnergy = 1000.0;
-    private String status = "STOPPED";
-    private ItemStack battery = ItemStack.EMPTY;
-    private final Map<String, Object> scriptedState = new HashMap<>();
-
     /** Cache of active LazyOptionals so invalidateCaps() can properly invalidate them. */
     private final Map<String, LazyOptional<Object>> capCache = new ConcurrentHashMap<>();
 
-    // -------------------------------------------------------------------------
-    // Constructor
-    // -------------------------------------------------------------------------
-
     public ScriptedBlockEntity(BlockEntityType<ScriptedBlockEntity> type,
-                               BlockPos pos, BlockState state,
-                               String tileId, String blockId) {
-        super(type, pos, state);
-        this.tileId = tileId;
-        this.blockId = blockId;
+                               BlockPos pos,
+                               BlockState state,
+                               String tileId,
+                               String blockId) {
+        super(type, pos, state, tileId, blockId);
     }
 
-    // -------------------------------------------------------------------------
-    // Identity
-    // -------------------------------------------------------------------------
-
-    public String getTileId()  { return tileId;  }
-    public String getBlockId() { return blockId; }
-
-    // -------------------------------------------------------------------------
-    // customState (Design-3 primary store)
-    // -------------------------------------------------------------------------
-
-    @Nullable
-    public Object getCustomState() { return customState; }
-
-    public void setCustomState(Object state) {
-        if (java.util.Objects.equals(this.customState, state)) return;
-        this.customState = state;
-        setChanged();
-        if (level != null && !level.isClientSide) {
-            BlockState blockState = getBlockState();
-            level.sendBlockUpdated(worldPosition, blockState, blockState, 3);
-        }
-    }
-
-    @Override
-    public CompoundTag getUpdateTag() {
-        return saveWithoutMetadata();
-    }
-
-    @Override
-    public void handleUpdateTag(CompoundTag tag) {
-        load(tag);
-    }
-
-    @Override
-    public ClientboundBlockEntityDataPacket getUpdatePacket() {
-        return ClientboundBlockEntityDataPacket.create(this);
-    }
-
-    @Override
-    public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt) {
-        CompoundTag tag = pkt.getTag();
-        if (tag != null) {
-            handleUpdateTag(tag);
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Legacy field accessors
-    // -------------------------------------------------------------------------
-
-    public double getEnergy()                { return energy; }
-    public void   setEnergy(double v)        { if (this.energy != v) { this.energy = v; setChanged(); } }
-
-    public double getMaxEnergy()             { return maxEnergy; }
-    public void   setMaxEnergy(double v)     { if (this.maxEnergy != v) { this.maxEnergy = v; setChanged(); } }
-
-    public String getStatusName()            { return status; }
-    public void   setStatus(String s)        { String newStatus = s != null ? s : "STOPPED"; if (!newStatus.equals(this.status)) { this.status = newStatus; setChanged(); } }
-
-    public ItemStack getBatteryStack()       { return battery; }
-    public void setBatteryStack(ItemStack s) {
-        ItemStack newBattery = (s == null || s.isEmpty()) ? ItemStack.EMPTY : s;
-        if (!ItemStack.matches(this.battery, newBattery)) {
-            this.battery = newBattery;
-            setChanged();
-        }
-    }
-
-    public void setScriptData(String key, Object value) {
-        if (key == null || key.isBlank()) return;
-        if (value == null) scriptedState.remove(key);
-        else               scriptedState.put(key, value);
-        setChanged();
-    }
-
-    @Nullable
-    public Object getScriptData(String key) { return scriptedState.get(key); }
-
-    public Map<String, Object> getScriptDataSnapshot() { return new HashMap<>(scriptedState); }
-
-    // -------------------------------------------------------------------------
-    // NBT persistence
-    // -------------------------------------------------------------------------
-
-    private void writeScriptData(CompoundTag tag) {
-        if (scriptedState.isEmpty()) return;
-        CompoundTag d = new CompoundTag();
-        for (Map.Entry<String, Object> e : scriptedState.entrySet()) {
-            Object v = e.getValue();
-            if (v instanceof Number n)   d.putDouble(e.getKey(), n.doubleValue());
-            else if (v instanceof Boolean b) d.putBoolean(e.getKey(), b);
-            else if (v instanceof String s)  d.putString(e.getKey(), s);
-        }
-        if (!d.isEmpty()) tag.put("ScriptedData", d);
-    }
-
-    private void readScriptData(CompoundTag tag) {
-        scriptedState.clear();
-        if (!tag.contains("ScriptedData")) return;
-        CompoundTag d = tag.getCompound("ScriptedData");
-        for (String key : d.getAllKeys()) {
-            if      (d.contains(key, Tag.TAG_STRING)) scriptedState.put(key, d.getString(key));
-            else if (d.contains(key, Tag.TAG_BYTE))   scriptedState.put(key, d.getBoolean(key));
-            else if (d.contains(key, Tag.TAG_DOUBLE) || d.contains(key, Tag.TAG_FLOAT)
-                  || d.contains(key, Tag.TAG_INT)    || d.contains(key, Tag.TAG_LONG)
-                  || d.contains(key, Tag.TAG_SHORT))  scriptedState.put(key, d.getDouble(key));
-        }
-    }
-
-    /** Apply flat data map returned from legacy read-nbt-fn to Java fields. */
-    public void setFromData(Object data) {
-        if (data == null) return;
-        if (data instanceof Map<?, ?> m) {
-            for (Map.Entry<?, ?> e : m.entrySet()) {
-                String key = String.valueOf(e.getKey());
-                Object v   = e.getValue();
-                switch (key) {
-                    case "energy"      -> { if (v instanceof Number n) this.energy = n.doubleValue(); }
-                    case "battery"     -> this.battery = (v instanceof ItemStack s) ? s : ItemStack.EMPTY;
-                    case "max-energy"  -> { if (v instanceof Number n) this.maxEnergy = n.doubleValue(); }
-                    case "status"      -> { if (v != null) this.status = String.valueOf(v); }
-                    default            -> setScriptData(key, v);
-                }
-            }
-            return;
-        }
-        // Clojure persistent map path
-        Object e = RT.get(data, "energy");     if (e instanceof Number n) this.energy = n.doubleValue();
-        Object b = RT.get(data, "battery");    this.battery = (b instanceof ItemStack s) ? s : ItemStack.EMPTY;
-        Object m = RT.get(data, "max-energy"); if (m instanceof Number n) this.maxEnergy = n.doubleValue();
-        Object s = RT.get(data, "status");     if (s != null) this.status = String.valueOf(s);
-    }
-
-    @Override
-    public void load(CompoundTag tag) {
-        super.load(tag);
-        try {
-            Var readNbt = RT.var("cn.li.mcmod.block.tile-logic", "read-nbt");
-            Object data = readNbt.invoke(tileId, tag);
-            if (data != null) {
-                customState = data;
-                // Also sync legacy Java fields so older code paths still work
-                setFromData(data);
-            }
-            readScriptData(tag);
-        } catch (Exception ex) {
-            // Graceful fallback for partial class-loading during startup
-            if (tag.contains("Energy"))  this.energy  = tag.getDouble("Energy");
-            if (tag.contains("Battery")) this.battery = ItemStack.of(tag.getCompound("Battery"));
-            readScriptData(tag);
-        }
-    }
-
-    @Override
-    protected void saveAdditional(CompoundTag tag) {
-        super.saveAdditional(tag);
-        try {
-            Var writeNbt = RT.var("cn.li.mcmod.block.tile-logic", "write-nbt");
-            writeNbt.invoke(tileId, this, tag);
-            writeScriptData(tag);
-        } catch (Exception ex) {
-            // Graceful fallback
-            tag.putDouble("Energy", energy);
-            if (battery != null && !battery.isEmpty()) tag.put("Battery", battery.save(new CompoundTag()));
-            writeScriptData(tag);
-        }
-    }
-
-    public static void serverTick(Level level, BlockPos pos, BlockState state, ScriptedBlockEntity be) {
-        if (level == null || level.isClientSide) return;
-        try {
-            Var invokeTick = RT.var("cn.li.mcmod.block.tile-logic", "invoke-tick");
-            invokeTick.invoke(be.tileId, level, pos, state, be);
-        } catch (Exception ex) {
-            // Silent; log via Clojure if needed
-        }
+    public static void serverTick(Level level, BlockPos pos, BlockState state, ScriptedBlockEntity blockEntity) {
+        invokeServerTick(level, pos, state, blockEntity);
     }
 
     // -------------------------------------------------------------------------
@@ -288,11 +70,11 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
             }
             try {
                 Var getCapFn = RT.var("cn.li.mcmod.block.tile-logic", "get-capability");
-                Object handler = getCapFn.invoke(tileId, key, this, side);
+                Object handler = getCapFn.invoke(getTileId(), key, this, side);
                 if (handler != null) {
-                    LazyOptional<Object> lo = LazyOptional.of(() -> handler);
-                    capCache.put(key, lo);
-                    return lo.cast();
+                    LazyOptional<Object> lazyOptional = LazyOptional.of(() -> handler);
+                    capCache.put(key, lazyOptional);
+                    return lazyOptional.cast();
                 }
             } catch (Exception ex) {
                 // fallthrough to super
@@ -325,7 +107,7 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
         try {
             Var v = RT.var("cn.li.mcmod.block.tile-logic", fn);
             Object[] args = new Object[1 + extraArgs.length];
-            args[0] = tileId;
+            args[0] = getTileId();
             System.arraycopy(extraArgs, 0, args, 1, extraArgs.length);
             return v.applyTo(clojure.lang.RT.seq(args));
         } catch (Exception ex) {
@@ -343,7 +125,9 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
     public boolean isEmpty() {
         int size = getContainerSize();
         for (int i = 0; i < size; i++) {
-            if (!getItem(i).isEmpty()) return false;
+            if (!getItem(i).isEmpty()) {
+                return false;
+            }
         }
         return true;
     }
@@ -387,12 +171,13 @@ public class ScriptedBlockEntity extends BlockEntity implements WorldlyContainer
         setChanged();
     }
 
-    // WorldlyContainer
     @Nonnull
     @Override
     public int[] getSlotsForFace(@Nonnull Direction side) {
         Object r = containerOp("container-slots-for-face", this, side);
-        if (r instanceof int[] arr) return arr;
+        if (r instanceof int[] arr) {
+            return arr;
+        }
         return EMPTY_INT_ARRAY;
     }
 

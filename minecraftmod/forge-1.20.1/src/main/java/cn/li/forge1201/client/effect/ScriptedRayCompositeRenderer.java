@@ -4,7 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import cn.li.forge1201.entity.ScriptedRayEntity;
-import cn.li.forge1201.entity.ScriptedRaySpec;
+import cn.li.mc1201.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;

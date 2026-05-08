@@ -1,7 +1,6 @@
 package cn.li.fabric1201.datagen;
 
-import clojure.lang.RT;
-import clojure.lang.Var;
+import cn.li.mc1201.clj.ClojureInterop;
 import net.fabricmc.fabric.api.datagen.v1.DataGeneratorEntrypoint;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator;
 
@@ -14,8 +13,9 @@ public class DataGeneratorSetup implements DataGeneratorEntrypoint {
         fabricDataGenerator.createPack();
 
         try {
-            Var var = RT.var("cn.li.fabric1201.datagen.setup", "register-data-generators!");
-            var.invoke(fabricDataGenerator, null);
+            String ns = "cn.li.fabric1201.datagen.setup";
+            ClojureInterop.requireNamespace(ns);
+            ClojureInterop.invoke(ns, "register-data-generators!", fabricDataGenerator, null);
         } catch (Exception e) {
             System.err.println("[my_mod] Error invoking Clojure DataGenerator setup: " + e);
             e.printStackTrace();

@@ -1,5 +1,6 @@
 package cn.li.forge1201.entity;
 
+import cn.li.mc1201.entity.spec.ScriptedProjectileSpec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;

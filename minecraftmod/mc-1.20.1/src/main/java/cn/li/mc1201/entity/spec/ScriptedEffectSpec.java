@@ -1,4 +1,4 @@
-package cn.li.forge1201.entity;
+package cn.li.mc1201.entity.spec;
 
 import java.util.Collections;
 import java.util.List;

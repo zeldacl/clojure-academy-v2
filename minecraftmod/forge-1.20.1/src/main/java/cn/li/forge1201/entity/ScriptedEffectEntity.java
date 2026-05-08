@@ -1,6 +1,9 @@
 package cn.li.forge1201.entity;
 
 import cn.li.forge1201.entity.effect.hooks.ScriptedEffectHooks;
+import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
+import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
+import cn.li.mc1201.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.RandomSource;

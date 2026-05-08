@@ -11,11 +11,10 @@
             [cn.li.forge1201.gui.slots :as slots]
             [cn.li.mc1201.gui.container-adapter :as ca]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.forge1201.gui CMenuBridge]
+  (:import [cn.li.mc1201.gui CMenuBridge]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.inventory AbstractContainerMenu DataSlot Slot]
-           [net.minecraft.world.item ItemStack]
-           [net.minecraft.world Container]))
+           [net.minecraft.world.item ItemStack]))
 
 (def tab-data-slot-index 0)
 

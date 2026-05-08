@@ -1,4 +1,4 @@
-package cn.li.forge1201.entity;
+package cn.li.mc1201.entity.spec;
 
 import java.util.Collections;
 import java.util.List;
@@ -29,21 +29,21 @@ public final class ScriptedRaySpec {
                            int endColor,
                            String rendererId,
                            String hookId) {
-                this(lifeTicks,
-                    length,
-                    blendInMs,
-                    blendOutMs,
-                    innerWidth,
-                    outerWidth,
-                    glowWidth,
-                    startColor,
-                    endColor,
-                    rendererId,
-                    hookId,
-                    Collections.emptyMap());
-                }
+        this(lifeTicks,
+            length,
+            blendInMs,
+            blendOutMs,
+            innerWidth,
+            outerWidth,
+            glowWidth,
+            startColor,
+            endColor,
+            rendererId,
+            hookId,
+            Collections.emptyMap());
+    }
 
-                public ScriptedRaySpec(int lifeTicks,
+    public ScriptedRaySpec(int lifeTicks,
                            double length,
                            double blendInMs,
                            double blendOutMs,

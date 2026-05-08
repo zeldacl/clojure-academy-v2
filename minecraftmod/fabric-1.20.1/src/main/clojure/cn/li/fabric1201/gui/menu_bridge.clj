@@ -7,7 +7,7 @@
             [cn.li.fabric1201.gui.slots :as slots]
             [cn.li.mc1201.gui.container-adapter :as ca]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.fabric1201.gui CMenuBridge]
+  (:import [cn.li.mc1201.gui CMenuBridge]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.inventory AbstractContainerMenu Slot]
            [net.minecraft.world.item ItemStack]

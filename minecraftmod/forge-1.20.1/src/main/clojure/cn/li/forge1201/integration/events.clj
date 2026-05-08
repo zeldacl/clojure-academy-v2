@@ -4,6 +4,7 @@
             [cn.li.mcmod.events.interaction-result :as interaction-result]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.mc1201.integration.event-feedback :as event-feedback]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
@@ -14,28 +15,10 @@
             PlayerInteractEvent$LeftClickBlock]
        [net.minecraft.world InteractionHand InteractionResult]
        [net.minecraft.world.entity.player Player]
-       [net.minecraft.network.chat Component]
          [net.minecraft.world.level Level]
            [net.minecraftforge.eventbus.api Event$Result]
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
             BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
-
-(defn- feedback-component
-  [{:keys [type key args text]}]
-  (case type
-    :translatable (Component/translatable (str key) (into-array Object (map str (or args []))))
-    :literal (Component/literal (str text))
-    nil))
-
-(defn- emit-feedback!
-  [event-data ret]
-  (let [^Level world (:world event-data)
-        ^Player player (:player event-data)
-        messages (when (map? ret) (:messages ret))]
-    (when (and world player (not (.isClientSide world)) (seq messages))
-      (doseq [m messages]
-        (when-let [c (feedback-component m)]
-          (.sendSystemMessage player c))))))
 
 (defn handle-right-click
   "Handle right-click block event from event data map"
@@ -54,7 +37,7 @@
           (log/info "[RIGHT-CLICK] Block has registered handler, dispatching to dispatcher...")
           (let [ret (dispatcher/on-block-right-click (assoc event-data :block-id block-id))]
             (log/info "[RIGHT-CLICK] Dispatcher returned:" ret)
-            (emit-feedback! event-data ret)
+            (event-feedback/emit-feedback! event-data ret)
             (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
               (try
                 (let [{:keys [gui-id player world pos]} ret

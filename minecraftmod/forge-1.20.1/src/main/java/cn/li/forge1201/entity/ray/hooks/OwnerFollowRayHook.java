@@ -1,7 +1,7 @@
 package cn.li.forge1201.entity.ray.hooks;
 
-import cn.li.forge1201.entity.ScriptedRaySpec;
 import cn.li.forge1201.entity.ScriptedRayEntity;
+import cn.li.mc1201.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.player.Player;
 

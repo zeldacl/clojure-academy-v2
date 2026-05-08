@@ -1,4 +1,4 @@
-package cn.li.fabric1201.gui;
+package cn.li.mc1201.gui;
 
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -8,8 +8,8 @@ import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
 
 /**
- * Fabric-side bridge menu class exposing protected AbstractContainerMenu APIs
- * as public methods for Clojure proxy implementations.
+ * Shared menu bridge exposing protected AbstractContainerMenu APIs as public
+ * methods for Clojure proxy implementations.
  */
 public abstract class CMenuBridge extends AbstractContainerMenu {
     protected CMenuBridge(MenuType<?> menuType, int containerId) {

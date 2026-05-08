@@ -1,12 +1,11 @@
 package cn.li.fabric1201.block;
 
 import cn.li.fabric1201.block.entity.ScriptedBlockEntity;
+import cn.li.mc1201.block.ScriptedCarrierBlockBase;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
@@ -18,12 +17,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ScriptedDynamicEntityBlock extends BaseEntityBlock {
+public class ScriptedDynamicEntityBlock extends ScriptedCarrierBlockBase {
     private static final Map<String, List<Property<?>>> BLOCK_PROPERTIES = new HashMap<>();
     private static final ThreadLocal<InitContext> INIT_CONTEXT = new ThreadLocal<>();
-
-    private final String blockId;
-    private final String tileId;
 
     private static final class InitContext {
         final String blockId;
@@ -56,9 +52,7 @@ public class ScriptedDynamicEntityBlock extends BaseEntityBlock {
     }
 
     public ScriptedDynamicEntityBlock(String blockId, String tileId, Properties props) {
-        super(props);
-        this.blockId = blockId;
-        this.tileId = tileId;
+        super(blockId, tileId, props);
     }
 
     @Override
@@ -82,18 +76,15 @@ public class ScriptedDynamicEntityBlock extends BaseEntityBlock {
     }
 
     @Override
-    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+    protected BlockEntity createScriptedBlockEntity(BlockPos pos, BlockState state) {
         BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(tileId);
         return type != null ? new ScriptedBlockEntity(type, pos, state, tileId, blockId) : null;
     }
 
     @Override
-    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        if (level.isClientSide) return null;
-        return (lvl, pos, st, be) -> {
-            if (be instanceof ScriptedBlockEntity scripted) {
-                ScriptedBlockEntity.serverTick(lvl, pos, st, scripted);
-            }
-        };
+    protected void serverTickScripted(Level level, BlockPos pos, BlockState state, BlockEntity blockEntity) {
+        if (blockEntity instanceof ScriptedBlockEntity scripted) {
+            ScriptedBlockEntity.serverTick(level, pos, state, scripted);
+        }
     }
 }
