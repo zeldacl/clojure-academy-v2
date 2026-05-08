@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.bootstrap
+(ns cn.li.forge1201.integration.bootstrap
   "Shared bootstrap helper utilities for Forge 1.20.1"
   (:import [cn.li.forge1201.shim LazyForgeBootstrapBridge]))
 

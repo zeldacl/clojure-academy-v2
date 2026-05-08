@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.events
+(ns cn.li.forge1201.integration.events
   "Forge 1.20.1 event handlers"
   (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
             [cn.li.mcmod.events.interaction-result :as interaction-result]

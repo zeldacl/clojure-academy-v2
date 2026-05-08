@@ -1,4 +1,4 @@
-(ns cn.li.fabric1201.platform-impl
+(ns cn.li.fabric1201.platform.bootstrap-entry
   "Facade for Fabric platform protocol installation.
 
   Mirrors Forge 1.20.1 bootstrap style.

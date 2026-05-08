@@ -1,19 +1,29 @@
 (ns cn.li.fabric1201.blockstate-properties
   "Fabric 1.20.1 adapter: create Minecraft BlockState Property objects from ac definitions."
-  (:require [cn.li.mcmod.block.blockstate-properties :as shared]
-            [cn.li.ac.block.blockstate-property-definitions :as defs]
+  (:require [cn.li.mc1201.block.blockstate-properties :as shared]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.world.level.block.state.properties IntegerProperty BooleanProperty]))
+  (:import [net.minecraft.world.level.block.state.properties IntegerProperty BooleanProperty BlockStateProperties]))
 
-(defonce property-registry (shared/create-property-registry))
+(defonce property-registry (shared/create-adapter-registry))
+
+(defn- create-integer-property [property-name min-value max-value]
+  (IntegerProperty/create property-name (int min-value) (int max-value)))
+
+(defn- create-boolean-property [property-name]
+  (BooleanProperty/create property-name))
+
+(defn- create-horizontal-facing-property
+  [_property-name]
+  BlockStateProperties/HORIZONTAL_FACING)
 
 (defn register-block-properties!
   [block-id block-state-properties]
   (shared/register-block-properties!
     property-registry block-id block-state-properties
-    #(IntegerProperty/create %1 %2 %3)
-    #(BooleanProperty/create %)))
+    create-integer-property
+    create-boolean-property
+    create-horizontal-facing-property))
 
 (defn get-property [block-id property-key]
   (shared/get-property property-registry block-id property-key))
@@ -22,7 +32,11 @@
   (shared/get-all-properties property-registry block-id))
 
 (defn init-all-properties! []
-  (log/info "Initializing BlockState properties (Fabric adapter)...")
-  (doseq [block-id (registry-metadata/get-all-block-ids)]
-    (when-let [props (defs/get-all-property-definitions block-id)]
-      (register-block-properties! block-id props))))
+  (shared/init-all-properties!
+   "Fabric adapter"
+   property-registry
+   registry-metadata/get-block-state-properties
+   create-integer-property
+   create-boolean-property
+   create-horizontal-facing-property)
+  (log/info "Fabric BlockState properties initialized"))

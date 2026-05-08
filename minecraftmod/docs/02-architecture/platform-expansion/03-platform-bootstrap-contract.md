@@ -50,8 +50,8 @@
 
 1. 一个 Loader 识别的 Java 入口。
 2. 一个能被共享层识别的 `platformId`。
-3. 一个平台初始化门面（通常为 `platform-impl/init-platform!`）。
-4. 一个真正安装平台桥接的实现（通常为 `platform-impl-impl` 或等价 namespace）。
+3. 一个平台初始化门面（通常为 `platform/bootstrap-entry:init-platform!`）。
+4. 一个真正安装平台桥接的实现（通常为 `platform/spi-bootstrap` 或等价 namespace）。
 5. registry 平台实现。
 6. network 平台实现。
 7. GUI / menu / screen 平台桥接。

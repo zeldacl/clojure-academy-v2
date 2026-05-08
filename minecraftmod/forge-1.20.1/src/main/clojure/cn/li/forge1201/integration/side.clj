@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.side
+(ns cn.li.forge1201.integration.side
   "Runtime side detection for Forge 1.20.1.
 
   Provides functions to detect whether code is running on physical client

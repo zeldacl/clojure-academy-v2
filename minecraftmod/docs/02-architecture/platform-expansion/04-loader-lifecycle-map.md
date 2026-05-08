@@ -26,9 +26,9 @@
 
 1. `forge-1.20.1/src/main/java/cn/li/forge1201/MyMod1201.java`
 2. `forge-1.20.1/src/main/clojure/cn/li/forge1201/mod.clj`
-3. `forge-1.20.1/src/main/clojure/cn/li/forge1201/platform_impl.clj`
+3. `forge-1.20.1/src/main/clojure/cn/li/forge1201/platform/bootstrap_entry.clj`
 4. `forge-1.20.1/src/main/java/cn/li/forge1201/platform/spi/Forge1201PlatformBootstrap.java`
-5. `forge-1.20.1/src/main/clojure/cn/li/forge1201/platform_impl_impl.clj`（或等价真实安装层）
+5. `forge-1.20.1/src/main/clojure/cn/li/forge1201/platform/spi_bootstrap.clj`
 6. `forge-1.20.1/src/main/clojure/cn/li/forge1201/registry.clj` / `events.clj` / `gui/*` / `config/*`
 
 ### Client
@@ -59,7 +59,7 @@
 
 1. NeoForge 发现 `MyModNeoForge`。
 2. Java 入口 `require` `cn.li.neoforge1201.mod`。
-3. `mod-init` 首先调用 `platform-impl/init-platform!`。
+3. `mod-init` 首先调用 `platform-bootstrap/init-platform!`。
 4. 通过 SPI 安装平台桥接实现。
 5. 再启动共享内容初始化、registry、config、events。
 
@@ -67,9 +67,9 @@
 
 1. `src/main/java/cn/li/neoforge1201/MyModNeoForge.java`
 2. `src/main/clojure/cn/li/neoforge1201/mod.clj`
-3. `src/main/clojure/cn/li/neoforge1201/platform_impl.clj`
+3. `src/main/clojure/cn/li/neoforge1201/platform/bootstrap_entry.clj`
 4. `src/main/java/cn/li/neoforge1201/platform/spi/NeoForge1201PlatformBootstrap.java`
-5. `src/main/clojure/cn/li/neoforge1201/platform_impl_impl.clj`
+5. `src/main/clojure/cn/li/neoforge1201/platform/spi_bootstrap.clj`
 6. `src/main/clojure/cn/li/neoforge1201/registry.clj`
 7. `src/main/clojure/cn/li/neoforge1201/events.clj`
 8. `src/main/clojure/cn/li/neoforge1201/gui/init.clj`
@@ -103,7 +103,7 @@
 
 1. `fabric.mod.json` `entrypoints.main` 指向 Java `ModInitializer`。
 2. Java 入口 `require` `cn.li.fabric1201.mod`。
-3. `mod-init` 先执行 `platform-impl/init-platform!`。
+3. `mod-init` 先执行 `platform-bootstrap/init-platform!`。
 4. 再执行共享初始化、registry、events、GUI common/server init、config load。
 
 #### 对应文件顺序
@@ -111,7 +111,7 @@
 1. `fabric.mod.json`
 2. `src/main/java/cn/li/fabric1201/MyModFabric.java`（目标规范）
 3. `src/main/clojure/cn/li/fabric1201/mod.clj`
-4. `src/main/clojure/cn/li/fabric1201/platform_impl.clj`
+4. `src/main/clojure/cn/li/fabric1201/platform/bootstrap_entry.clj`
 5. `src/main/clojure/cn/li/fabric1201/registry.clj` / `events.clj` / `gui/init.clj`
 
 ### Client
@@ -138,7 +138,7 @@
 ## 可直接执行的实施顺序
 
 1. 先确定模块目录名、平台 ID、Java 包、Clojure namespace。
-2. 再写主入口链（Java main → `mod.clj` → `platform-impl/init-platform!`）。
+2. 再写主入口链（Java main → `mod.clj` → `platform-bootstrap/init-platform!`）。
 3. 再写 client 入口链。
 4. 再写 datagen 入口链。
 5. 最后把 registry、events、GUI、config、network 的具体桥接填满。

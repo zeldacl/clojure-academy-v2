@@ -66,8 +66,8 @@
 - [ ] 创建资源文件：`META-INF/neoforge.mods.toml`。
 - [ ] 创建 ServiceLoader 文件：`META-INF/services/cn.li.mcmod.platform.spi.PlatformBootstrap`。
 - [ ] 创建 Clojure 主入口：`cn.li.neoforge<version>.mod`。
-- [ ] 创建平台门面：`cn.li.neoforge<version>.platform-impl`。
-- [ ] 创建真实平台安装层：`cn.li.neoforge<version>.platform-impl-impl`。
+- [ ] 创建平台门面：`cn.li.neoforge<version>.platform.bootstrap-entry`。
+- [ ] 创建真实平台安装层：`cn.li.neoforge<version>.platform.spi-bootstrap`。
 - [ ] 实现 `registry.clj`、`events.clj`、`gui/init.clj`、`gui/network.clj`、`client/init.clj`、`config/bridge.clj`、`datagen/setup.clj`。
 - [ ] 接入 `runClient` / `runServer` / `runData`。
 - [ ] 至少通过 compile + smoke + datagen 验证。
@@ -79,7 +79,7 @@
 - [ ] 将 Java 包统一到 `cn.li.fabric<version>`，移除 `com.example.*` 作为正式入口。
 - [ ] 将 Clojure namespace 统一到 `cn.li.fabric<version>.*`，逐步淘汰历史 `my_mod.fabric*` 入口。
 - [ ] 校正 `fabric.mod.json` 中的 `main` / `client` / `fabric-datagen` entrypoints。
-- [ ] 确认 `mod.clj` 中初始化顺序为：`platform-impl/init-platform!` → 共享初始化 → registry / GUI / events / config。
+- [ ] 确认 `mod.clj` 中初始化顺序为：`platform-bootstrap/init-platform!` → 共享初始化 → registry / GUI / events / config。
 - [ ] 确认 `ClientModInitializer` 只负责 client-only init。
 - [ ] 确认 datagen Java 入口只负责桥接到 `datagen/setup.clj`。
 - [ ] 至少通过 compile + datagen；若标记为正式支持，再补 smoke 验证。
@@ -118,7 +118,8 @@
 - Loader 入口 Java 类
 - 平台 bootstrap SPI 实现（若沿用 ServiceLoader）
 - `mod.clj`
-- `platform_impl.clj`
+- `platform/bootstrap_entry.clj`
+- `platform/spi_bootstrap.clj`
 - `registry.clj`
 - `events.clj`
 - `gui/init.clj`
@@ -142,7 +143,7 @@
 主初始化链建议固定为：
 
 1. Java 入口加载主 Clojure namespace。
-2. `mod-init` 首先执行 `platform-impl/init-platform!`。
+2. `mod-init` 首先执行 `platform-bootstrap/init-platform!`。
 3. 安装平台对象协议、工厂函数与共享运行时桥接。
 4. 再执行共享层初始化：`init-from-java` / `core/init`。
 5. 最后完成 registry、config、events、GUI common/server init。
@@ -150,8 +151,8 @@
 ### 建议按文件落地
 
 1. 先写 Java 入口，只保留 `require` + 调用主函数。
-2. 再写 `platform_impl.clj`，先确保 `platformId` 可以触发平台 bootstrap。
-3. 再写 `platform_impl_impl.clj`，先安装最基础的 NBT / position / item / world 桥接。
+2. 再写 `platform/bootstrap_entry.clj`，先确保 `platformId` 可以触发平台 bootstrap。
+3. 再写 `platform/spi_bootstrap.clj`，先安装最基础的 NBT / position / item / world 桥接。
 4. 然后写 `mod.clj`，把初始化顺序串起来。
 5. 再补 `registry.clj`、`events.clj`、`gui/*`、`client/init.clj`、`datagen/setup.clj`。
 6. 最后才接入配置、集成、优化与额外平台特性。
@@ -206,6 +207,6 @@ Forge / NeoForge 推荐额外纳入：
 
 - [ ] 模块目录、平台 ID、Java 包、Clojure namespace 全部一致。
 - [ ] Loader 描述文件中的入口类可被实际找到。
-- [ ] `platform-impl/init-platform!` 在主初始化链中位于共享初始化之前。
+- [ ] `platform-bootstrap/init-platform!` 在主初始化链中位于共享初始化之前。
 - [ ] network / GUI / datagen 至少都有占位实现，而不是只留 TODO。
 - [ ] `docs/README.md`、验证矩阵、平台扩展文档已同步。

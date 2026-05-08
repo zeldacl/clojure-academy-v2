@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.event-imc
+(ns cn.li.forge1201.integration.imc-dispatch
 	"IMC support for runtime payload streams.
 
 	External mods register handlers during InterModEnqueueEvent by sending IMC
@@ -71,14 +71,14 @@
 
 (defn- dispatch-network! [action ssid matrix]
 	(let [payload {:kind :topology/network
-								 :action action
-								 :ssid ssid
-								 :matrix matrix}
+							 :action action
+							 :ssid ssid
+							 :matrix matrix}
 				bad (keep (fn [h]
-										(when (= ::remove-handler
-														 (invoke-safe #(invoke-network-handler! h payload)))
-											h))
-									@network-handlers)]
+									(when (= ::remove-handler
+												 (invoke-safe #(invoke-network-handler! h payload)))
+										h))
+								@network-handlers)]
 		(when (seq bad)
 			(swap! network-handlers #(remove (set bad) %)))))
 
@@ -93,13 +93,13 @@
 
 (defn- dispatch-node! [action node]
 	(let [payload {:kind :topology/node
-								 :action action
-								 :node node}
+							 :action action
+							 :node node}
 				bad (keep (fn [h]
-										(when (= ::remove-handler
-														 (invoke-safe #(invoke-node-handler! h payload)))
-											h))
-									@node-handlers)]
+									(when (= ::remove-handler
+												 (invoke-safe #(invoke-node-handler! h payload)))
+										h))
+								@node-handlers)]
 		(when (seq bad)
 			(swap! node-handlers #(remove (set bad) %)))))
 

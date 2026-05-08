@@ -23,8 +23,9 @@
 ├── src/main/clojure/cn/li/<loaderVersion>/
 │   ├── mod.clj
 │   ├── init.clj
-│   ├── platform_impl.clj
-│   ├── platform_impl_impl.clj       # 若采用门面 + 真实安装分层
+│   ├── platform/
+│   │   ├── bootstrap_entry.clj
+│   │   └── spi_bootstrap.clj       # 若采用门面 + 真实安装分层
 │   ├── registry.clj
 │   ├── events.clj
 │   ├── side.clj                     # Forge / NeoForge 推荐
@@ -52,8 +53,8 @@
 | `platform/spi/<PlatformBootstrapImpl>.java` | 若沿用 SPI 则必须 | ServiceLoader 发现与平台安装入口 | Java SPI、Clojure runtime | 直接承载平台业务初始化 |
 | `mod.clj` | 必须 | 平台主初始化排序与总装配 | 平台桥接、共享层入口 | 在 namespace load 时做过重副作用 |
 | `init.clj` | 推荐 | Java/Clojure 之间的轻量桥接 | 共享初始化函数 | 与 `mod.clj` 职责混杂 |
-| `platform_impl.clj` | 必须 | 平台初始化门面 | SPI、日志 | 直接写所有平台对象扩展 |
-| `platform_impl_impl.clj` | 推荐/常用 | 安装平台对象协议与工厂函数 | Minecraft/Loader API | 暴露为共享层 API |
+| `platform/bootstrap_entry.clj` | 必须 | 平台初始化门面 | SPI、日志 | 直接写所有平台对象扩展 |
+| `platform/spi_bootstrap.clj` | 推荐/常用 | 安装平台对象协议与工厂函数 | Minecraft/Loader API | 暴露为共享层 API |
 | `registry.clj` | 必须 | metadata → 平台 registry API | 平台注册 API、共享元数据 | 写业务定义 |
 | `events.clj` | 必须 | 平台事件接线 | Loader 事件 API | 在共享层复制事件分发 |
 | `side.clj` | Forge/NeoForge 推荐 | 物理侧识别与 client-only 解析 | Loader side API | 承载具体渲染业务 |
@@ -84,14 +85,14 @@
 - 作为平台主初始化入口。
 - 排序并触发平台初始化、共享内容初始化、registry、config、events、GUI common/server init。
 
-### `platform_impl.clj`
+### `platform/bootstrap_entry.clj`
 
 职责：
 
 - 作为平台初始化门面。
 - 负责按 `platformId` 触发平台 bootstrap。
 
-### `platform_impl_impl.clj`
+### `platform/spi_bootstrap.clj`
 
 职责：
 
@@ -128,8 +129,8 @@
 1. `build.gradle`
 2. `<MainEntry>.java`
 3. `platform/spi/<PlatformBootstrapImpl>.java`
-4. `platform_impl.clj`
-5. `platform_impl_impl.clj`
+4. `platform/bootstrap_entry.clj`
+5. `platform/spi_bootstrap.clj`
 6. `mod.clj`
 7. `registry.clj`
 8. `events.clj`
@@ -146,14 +147,14 @@
 - `src/main/java/cn/li/neoforge1201/MyModNeoForge.java`
 - `src/main/java/cn/li/neoforge1201/platform/spi/NeoForge1201PlatformBootstrap.java`
 - `src/main/clojure/cn/li/neoforge1201/mod.clj`
-- `src/main/clojure/cn/li/neoforge1201/platform_impl.clj`
-- `src/main/clojure/cn/li/neoforge1201/platform_impl_impl.clj`
+- `src/main/clojure/cn/li/neoforge1201/platform/bootstrap_entry.clj`
+- `src/main/clojure/cn/li/neoforge1201/platform/spi_bootstrap.clj`
 
 ### 推荐首批可运行目标
 
 - Java 入口能加载 `mod.clj`
-- `mod.clj` 能调用 `platform-impl/init-platform!`
-- `platform-impl/init-platform!` 能通过 SPI 找到 `NeoForge1201PlatformBootstrap`
+- `mod.clj` 能调用 `platform-bootstrap/init-platform!`
+- `platform-bootstrap/init-platform!` 能通过 SPI 找到 `NeoForge1201PlatformBootstrap`
 - `compileJava`、`compileClojure`、`runData` 可以先打通
 
 ## Fabric 规范化建议实例

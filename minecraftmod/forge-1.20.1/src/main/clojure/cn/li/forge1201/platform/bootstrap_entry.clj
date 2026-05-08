@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.platform-impl
+(ns cn.li.forge1201.platform.bootstrap-entry
   "Facade for Forge platform protocol installation.
 
   This namespace remains side-effect free during checkClojure loading.
@@ -6,7 +6,6 @@
   providers when init-platform! is called."
   (:require [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.platform.spi PlatformBootstraps]))
-
 
 (defn init-platform!
   "Initialize Forge 1.20.1 platform implementations."

@@ -1,14 +1,13 @@
 
-
-(ns cn.li.forge1201.platform-impl-impl
+(ns cn.li.forge1201.platform.spi-bootstrap
   "Bridge-invoked platform initializer.
 
   Uses shared mc1201 installer with a Forge-specific adapter implementation."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.installer :as shared-installer]
             [cn.li.mc1201.platform-adapter :as pa]
-            [cn.li.forge1201.platform-bindings :as bindings]
-            [cn.li.forge1201.side :as side])
+             [cn.li.forge1201.platform.bindings :as bindings]
+             [cn.li.forge1201.integration.side :as side])
   (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
@@ -105,5 +104,5 @@
        :be-set-custom-state! bindings/be-set-custom-state!
        :be-get-block-id bindings/be-get-block-id
        :be-set-changed! bindings/be-set-changed!})
-    (log/info "platform-impl-impl initialized via SPI entrypoint"))
+    (log/info "forge platform SPI bootstrap initialized via ServiceLoader entrypoint"))
   nil)

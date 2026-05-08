@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.platform-bindings
+(ns cn.li.forge1201.platform.bindings
 	"Forge-specific static function bindings for core platform hooks.
 
 	These functions use direct typed calls so Loom remapping remains valid in packaged jars."
@@ -109,4 +109,3 @@
 (defn be-set-changed!
 	[^ScriptedBlockEntity be]
 	(.setChanged be))
-

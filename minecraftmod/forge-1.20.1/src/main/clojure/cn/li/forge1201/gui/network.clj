@@ -14,24 +14,23 @@
   (:require [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]
-            [clojure.edn :as edn])
+            [cn.li.mc1201.runtime.edn-state :as es])
   (:import [cn.li.forge1201.network ClojureNetwork]
            [net.minecraft.server.level ServerPlayer]
            [clojure.lang IFn]))
 
 ;; ---------------------------------------------------------------------------
-;; EDN serialization helpers
+;; EDN serialization helpers (delegates to shared mc1201 edn-state)
 ;; ---------------------------------------------------------------------------
 
 (defn- serialize ^bytes [data]
-  (.getBytes (pr-str data) "UTF-8"))
+  (.getBytes (es/encode-edn data) "UTF-8"))
 
 (defn- deserialize [^bytes bs]
-  (try
-    (edn/read-string (String. bs "UTF-8"))
-    (catch Exception e
-      (log/error "Failed to deserialize network payload:" (.getMessage e))
-      {})))
+  (let [result (es/decode-edn-safe
+                (String. bs "UTF-8")
+                #(log/error "Failed to deserialize network payload:" (ex-message %)))]
+    (or result {})))
 
 ;; ---------------------------------------------------------------------------
 ;; Platform multimethod implementation

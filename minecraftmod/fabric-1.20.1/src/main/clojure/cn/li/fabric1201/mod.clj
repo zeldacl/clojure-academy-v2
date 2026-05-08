@@ -5,9 +5,9 @@
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.fabric1201.init :as init]
             [cn.li.ac.core :as core]
-            [cn.li.fabric1201.platform-impl :as platform-impl]
+            [cn.li.fabric1201.platform.bootstrap-entry :as platform-bootstrap]
             [cn.li.fabric1201.blockstate-properties :as bsp]
-            [cn.li.fabric1201.events :as events]
+            [cn.li.fabric1201.integration.events :as events]
             [cn.li.fabric1201.gui.init :as gui-init]
             [cn.li.fabric1201.config.bridge :as config-bridge]
             [cn.li.mcmod.util.log :as log]))
@@ -22,7 +22,7 @@
   "Main mod initialization called from Java ModInitializer."
   []
   (log/info "Initializing MyMod (Fabric 1.20.1) from Clojure...")
-  (platform-impl/init-platform!)
+  (platform-bootstrap/init-platform!)
   (init/init-from-java)
   (core/init)
   (config-bridge/load-all!)

@@ -1,10 +1,10 @@
 (ns cn.li.forge1201.mod
   "Forge 1.20.1 main mod class - generated with gen-class"
-  (:require [cn.li.forge1201.bootstrap :as bootstrap]
+  (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
             [cn.li.forge1201.init :as init]
-            [cn.li.forge1201.side :as side]
-            [cn.li.forge1201.registry :as registry]
-            [cn.li.forge1201.events :as events]
+            [cn.li.forge1201.integration.side :as side]
+            [cn.li.forge1201.registry.forge-dispatch :as registry]
+            [cn.li.forge1201.integration.events :as events]
             [cn.li.forge1201.gui.init :as gui-init]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
             [cn.li.forge1201.runtime.lifecycle :as runtime-lifecycle]
@@ -12,10 +12,10 @@
             [cn.li.forge1201.entity.effect-hooks :as effect-hooks]
             [cn.li.forge1201.entity.ray-hooks :as ray-hooks]
             [cn.li.forge1201.entity.marker-hooks :as marker-hooks]
-            [cn.li.forge1201.platform-impl :as platform-impl]
+            [cn.li.forge1201.platform.bootstrap-entry :as platform-bootstrap]
             [cn.li.forge1201.config.bridge :as config-bridge]
             [cn.li.forge1201.config.gameplay-init :as gameplay-init]
-            ;; platform-impl is loaded lazily during runtime mod-init to avoid
+            ;; platform bootstrap is loaded lazily during runtime mod-init to avoid
             ;; triggering Minecraft class initialization during AOT/checkClojure.
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
@@ -27,7 +27,7 @@
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.i18n :as i18n]
              [cn.li.mcmod.util.log :as log]
-             [cn.li.forge1201.event-imc :as event-imc]
+             [cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
              [cn.li.forge1201.integration.forge-energy :as forge-energy]
              [cn.li.forge1201.integration.ic2-energy :as ic2-energy])
   (:import [net.minecraft.world.level.block Block]
@@ -680,7 +680,7 @@
   (ic2-energy/init-ic2-energy!)
   (runtime-item-handler/init!)
   ;; Register runtime IMC dispatch listeners on the Forge game event bus.
-  (event-imc/init!)
+  (imc-dispatch/init!)
   ;; Left-click block must be intercepted early to avoid client-side fake break effects
   ;; when runtime mode blocks real breaking.
   (.addListener (MinecraftForge/EVENT_BUS)
@@ -749,7 +749,7 @@
         (log/info "[BOOTSTRAP_TRACE] mod-init runtime path begin")
         ;; CRITICAL: Initialize platform abstractions FIRST
         ;; This must happen before any core code runs that uses NBT/BlockPos/World
-        (platform-impl/init-platform!)
+        (platform-bootstrap/init-platform!)
         ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources.
         (init/init-from-java)
         ;; Runtime content load is registered via lifecycle hooks by shared content.
@@ -839,10 +839,10 @@
                                 (try
                                   (let [handler (.get (.getMessageSupplier msg))]
                                     (condp = (.getMethod msg)
-                                      event-imc/register-topology-network-handler-key
-                                      (event-imc/register-network-handler! handler)
-                                      event-imc/register-topology-node-handler-key
-                                      (event-imc/register-node-handler! handler)
+                                      imc-dispatch/register-topology-network-handler-key
+                                      (imc-dispatch/register-network-handler! handler)
+                                      imc-dispatch/register-topology-node-handler-key
+                                      (imc-dispatch/register-node-handler! handler)
                                       nil))
                                   (catch Exception e
                                     (log/debug "IMC registration failed from"

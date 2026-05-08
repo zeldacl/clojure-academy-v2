@@ -19,9 +19,9 @@ public final class Fabric1201PlatformBootstrap implements PlatformBootstrap {
     @Override
     public void initialize() {
         IFn require = Clojure.var("clojure.core", "require");
-        require.invoke(Clojure.read("cn.li.fabric1201.platform-impl-impl"));
+        require.invoke(Clojure.read("cn.li.fabric1201.platform.spi-bootstrap"));
 
-        IFn init = Clojure.var("cn.li.fabric1201.platform-impl-impl", "init-platform!");
+        IFn init = Clojure.var("cn.li.fabric1201.platform.spi-bootstrap", "init-platform!");
         init.invoke();
     }
 }

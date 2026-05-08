@@ -8,7 +8,7 @@
             [cn.li.mcmod.platform.item :as platform-item]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.content :as content]
-            [cn.li.forge1201.event-imc :as event-imc]
+            [cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
             [cn.li.forge1201.achievement.bridge :as achievement-bridge]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.trigger ModTriggers]))
@@ -50,7 +50,7 @@
         (set-version!)
         ;; Bind platform-neutral event bridge to Forge IMC dispatcher.
         (alter-var-root #'platform-events/*fire-event-fn*
-            (constantly event-imc/dispatch-event!))
+          (constantly imc-dispatch/dispatch-event!))
         ;; Register custom advancement triggers.
         (ModTriggers/init)
         ;; Ensure shared content init is registered (without Forge referencing

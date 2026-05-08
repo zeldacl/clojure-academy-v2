@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.registry
+(ns cn.li.forge1201.registry.forge-dispatch
   "Forge 1.20.1 registry implementations using DeferredRegister"
   (:require [cn.li.mcmod.registry.platform :as reg]
             [cn.li.mcmod.util.log :as log]))

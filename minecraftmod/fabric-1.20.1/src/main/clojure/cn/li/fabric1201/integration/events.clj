@@ -1,4 +1,4 @@
-(ns cn.li.fabric1201.events
+(ns cn.li.fabric1201.integration.events
   "Fabric 1.20.1 event handlers"
   (:require [cn.li.ac.core :as core]
             [cn.li.mcmod.util.log :as log]

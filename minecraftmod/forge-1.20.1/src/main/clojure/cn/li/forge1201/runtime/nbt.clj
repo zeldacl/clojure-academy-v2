@@ -6,8 +6,8 @@
 
   This is intentionally platform-layer code (forge module) because it touches
   CompoundTag/ServerPlayer APIs."
-  (:require [clojure.edn :as edn]
-            [cn.li.mcmod.platform.power-runtime :as power-runtime]
+  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
+            [cn.li.mc1201.runtime.edn-state :as es]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server.level ServerPlayer]
            [net.minecraft.nbt CompoundTag]))
@@ -19,20 +19,15 @@
   ^CompoundTag [^ServerPlayer player]
   (.getPersistentData player))
 
-(defn- safe-read-edn [s]
-  (try
-    (edn/read-string s)
-    (catch Exception e
-      (log/warn "Failed to decode runtime NBT EDN:" (ex-message e))
-      nil)))
-
 (defn load-player-state!
   "Load runtime state from persistent NBT into in-memory player-state atom."
   [^ServerPlayer player]
   (let [uuid (str (.getUUID player))
         tag  (player-tag player)]
     (if (.contains tag ability-state-key)
-      (if-let [m (safe-read-edn (.getString tag ability-state-key))]
+      (if-let [m (es/decode-edn-safe
+                  (.getString tag ability-state-key)
+                  #(log/warn "Failed to decode runtime NBT EDN:" (ex-message %)))]
         (power-runtime/set-player-state! uuid (assoc m :dirty? false))
         (power-runtime/get-or-create-player-state! uuid))
       (power-runtime/get-or-create-player-state! uuid))))
@@ -43,7 +38,7 @@
   (let [uuid  (str (.getUUID player))
         state (power-runtime/get-or-create-player-state! uuid)
         tag   (player-tag player)]
-    (.putString tag ability-state-key (pr-str (dissoc state :dirty?)))
+    (.putString tag ability-state-key (es/encode-edn (dissoc state :dirty?)))
     (power-runtime/mark-player-clean! uuid)
     true))
 

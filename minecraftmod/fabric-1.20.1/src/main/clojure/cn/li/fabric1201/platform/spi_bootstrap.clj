@@ -1,4 +1,4 @@
-(ns cn.li.fabric1201.platform-impl-impl
+(ns cn.li.fabric1201.platform.spi-bootstrap
   "Bridge-invoked Fabric platform initializer.
 
   Loaded via Java ServiceLoader provider at runtime.
@@ -90,43 +90,41 @@
 (defn- raytrace-block-map [player reach fluid-source-only?]
   (let [r (double (or reach 5.0))]
     (try
-      ;; Forge-equivalent path: Level#clip(ClipContext)
       (let [eye (ru/inst player "getEyePosition")
-        view (ru/inst player "getViewVector" (float 1.0))
-        end (ru/inst eye "add" (ru/inst view "scale" r))
-        clip-ctx-cls (ru/class-noinit "net.minecraft.world.level.ClipContext")
-        block-mode-cls (ru/class-noinit "net.minecraft.world.level.ClipContext$Block")
-        fluid-mode-cls (ru/class-noinit "net.minecraft.world.level.ClipContext$Fluid")
-        hit-type-cls (ru/class-noinit "net.minecraft.world.phys.HitResult$Type")
+            view (ru/inst player "getViewVector" (float 1.0))
+            end (ru/inst eye "add" (ru/inst view "scale" r))
+            clip-ctx-cls (ru/class-noinit "net.minecraft.world.level.ClipContext")
+            block-mode-cls (ru/class-noinit "net.minecraft.world.level.ClipContext$Block")
+            fluid-mode-cls (ru/class-noinit "net.minecraft.world.level.ClipContext$Fluid")
+            hit-type-cls (ru/class-noinit "net.minecraft.world.phys.HitResult$Type")
             block-outline (.get (.getField block-mode-cls "OUTLINE") nil)
             fluid-mode (.get (.getField fluid-mode-cls (if (boolean fluid-source-only?) "SOURCE_ONLY" "NONE")) nil)
             block-type (.get (.getField hit-type-cls "BLOCK") nil)
-        ctx (ru/ctor clip-ctx-cls eye end block-outline fluid-mode player)
+            ctx (ru/ctor clip-ctx-cls eye end block-outline fluid-mode player)
             lvl (player-level player)
-        hit (ru/inst lvl "clip" ctx)]
+            hit (ru/inst lvl "clip" ctx)]
         (when (and hit (= (ru/inst hit "getType") block-type))
           (let [hit-pos (ru/inst hit "getBlockPos")
-            dir (ru/inst hit "getDirection")
-            place-pos (ru/inst hit-pos "relative" dir)
-            hit-state (ru/inst lvl "getBlockState" hit-pos)
-            block-id (block-key-string (ru/inst hit-state "getBlock"))]
-        {:hit-pos {:x (ru/inst hit-pos "getX") :y (ru/inst hit-pos "getY") :z (ru/inst hit-pos "getZ")}
-         :place-pos {:x (ru/inst place-pos "getX") :y (ru/inst place-pos "getY") :z (ru/inst place-pos "getZ")}
-             :block-id block-id})))
-      (catch Throwable _
-        ;; Fallback path: Player#pick
-        (try
-          (let [hit (ru/inst player "pick" r 0.0 (boolean fluid-source-only?))
-            block-hit-result-cls (ru/class-noinit "net.minecraft.world.phys.BlockHitResult")]
-            (when (and hit (instance? block-hit-result-cls hit))
-          (let [hit-pos (ru/inst hit "getBlockPos")
-            dir (ru/inst hit "getDirection")
-            place-pos (ru/inst hit-pos "relative" dir)
-                    lvl (player-level player)
-            hit-state (ru/inst lvl "getBlockState" hit-pos)
-            block-id (block-key-string (ru/inst hit-state "getBlock"))]
+                dir (ru/inst hit "getDirection")
+                place-pos (ru/inst hit-pos "relative" dir)
+                hit-state (ru/inst lvl "getBlockState" hit-pos)
+                block-id (block-key-string (ru/inst hit-state "getBlock"))]
             {:hit-pos {:x (ru/inst hit-pos "getX") :y (ru/inst hit-pos "getY") :z (ru/inst hit-pos "getZ")}
              :place-pos {:x (ru/inst place-pos "getX") :y (ru/inst place-pos "getY") :z (ru/inst place-pos "getZ")}
+             :block-id block-id})))
+      (catch Throwable _
+        (try
+          (let [hit (ru/inst player "pick" r 0.0 (boolean fluid-source-only?))
+                block-hit-result-cls (ru/class-noinit "net.minecraft.world.phys.BlockHitResult")]
+            (when (and hit (instance? block-hit-result-cls hit))
+              (let [hit-pos (ru/inst hit "getBlockPos")
+                    dir (ru/inst hit "getDirection")
+                    place-pos (ru/inst hit-pos "relative" dir)
+                    lvl (player-level player)
+                    hit-state (ru/inst lvl "getBlockState" hit-pos)
+                    block-id (block-key-string (ru/inst hit-state "getBlock"))]
+                {:hit-pos {:x (ru/inst hit-pos "getX") :y (ru/inst hit-pos "getY") :z (ru/inst hit-pos "getZ")}
+                 :place-pos {:x (ru/inst place-pos "getX") :y (ru/inst place-pos "getY") :z (ru/inst place-pos "getZ")}
                  :block-id block-id})))
           (catch Throwable _ nil))))))
 
@@ -160,7 +158,7 @@
       (let [level (player-level player)]
         (if (world-client-side? level)
           true
-              (let [builtins-cls (ru/class-noinit "net.minecraft.core.registries.BuiltInRegistries")
+          (let [builtins-cls (ru/class-noinit "net.minecraft.core.registries.BuiltInRegistries")
                 entity-registry (.get (.getField builtins-cls "ENTITY_TYPE") nil)
                 type (ru/inst entity-registry "get" (ru/make-rl entity-id))]
             (if (nil? type)
@@ -187,6 +185,7 @@
                       (catch Throwable _ nil))
                     (boolean (ru/inst level "addFreshEntity" entity)))))))))
       (catch Throwable _ false))))
+
 (defn- install-be-ops! []
   (let [scripted-be-cls (ru/class-noinit "cn.li.fabric1201.block.entity.ScriptedBlockEntity")]
     (extend scripted-be-cls be/IBlockEntity
@@ -201,12 +200,13 @@
             {:position-get-block-pos (fn [this] (ru/inst this "getBlockPos"))
              :position-get-pos (fn [this] (ru/inst this "getBlockPos"))})
 
-    (alter-var-root #'be/*be-get-level-fn* (constantly (fn [x] (ru/inst x "getLevel"))))
-    (alter-var-root #'be/*be-get-world-fn* (constantly (fn [x] (ru/inst x "getLevel"))))
-    (alter-var-root #'be/*be-get-custom-state-fn* (constantly (fn [x] (ru/inst x "getCustomState"))))
-    (alter-var-root #'be/*be-set-custom-state-fn* (constantly (fn [x s] (ru/inst x "setCustomState" s))))
-    (alter-var-root #'be/*be-get-block-id-fn* (constantly (fn [x] (ru/inst x "getBlockId"))))
-    (alter-var-root #'be/*be-set-changed-fn* (constantly (fn [x] (ru/inst x "setChanged"))))))
+    (installer/install-be-fns-only!
+      {:be-get-level     (fn [x] (ru/inst x "getLevel"))
+       :be-get-world     (fn [x] (ru/inst x "getLevel"))
+       :be-get-custom-state  (fn [x] (ru/inst x "getCustomState"))
+       :be-set-custom-state! (fn [x s] (ru/inst x "setCustomState" s))
+       :be-get-block-id  (fn [x] (ru/inst x "getBlockId"))
+       :be-set-changed!  (fn [x] (ru/inst x "setChanged"))})))
 
 (def ^:private fabric-adapter
   (reify pa/PlatformAdapter
@@ -271,5 +271,5 @@
   (when (compare-and-set! initialized? false true)
     (installer/install-platform-core! fabric-adapter)
     (install-be-ops!)
-    (log/info "platform-impl-impl initialized via SPI entrypoint"))
+    (log/info "fabric platform SPI bootstrap initialized via ServiceLoader entrypoint"))
   nil)

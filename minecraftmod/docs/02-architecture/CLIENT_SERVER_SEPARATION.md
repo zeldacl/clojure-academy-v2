@@ -12,7 +12,7 @@
 - **Created**: `forge-1.20.1/client/render_buffer_impl.clj` - Wraps `RenderType` and `MultiBufferSource`
 
 ### 3. Platform Layer Updates
-- **Modified**: `forge-1.20.1/platform_impl.clj` - Removed `net.minecraft.client.*` imports, delegates to client modules
+- **Modified**: `forge-1.20.1/platform/bootstrap_entry.clj` / `platform/spi_bootstrap.clj` - platform bootstrap responsibilities are now split into SPI entry facade + real installer layer
 - **Modified**: `forge-1.20.1/mod.clj` - Added side detection, removed direct client class usage
 
 ### 4. Java Annotations

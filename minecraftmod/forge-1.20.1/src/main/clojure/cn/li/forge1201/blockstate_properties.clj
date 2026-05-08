@@ -1,11 +1,11 @@
 (ns cn.li.forge1201.blockstate-properties
   "Forge 1.20.1 adapter: create Minecraft BlockState Property objects from ac definitions."
-  (:require [cn.li.mcmod.block.blockstate-properties :as shared]
+  (:require [cn.li.mc1201.block.blockstate-properties :as shared]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.level.block.state.properties IntegerProperty BooleanProperty BlockStateProperties]))
 
-(defonce property-registry (shared/create-property-registry))
+(defonce property-registry (shared/create-adapter-registry))
 
 (defn- create-integer-property [property-name min-value max-value]
   (IntegerProperty/create property-name (int min-value) (int max-value)))
@@ -32,7 +32,11 @@
   (shared/get-all-properties property-registry block-id))
 
 (defn init-all-properties! []
-  (log/info "Initializing BlockState properties (Forge adapter)...")
-  (doseq [block-id (registry-metadata/get-all-block-ids)]
-    (when-let [props (registry-metadata/get-block-state-properties block-id)]
-      (register-block-properties! block-id props))))
+  (shared/init-all-properties!
+   "Forge adapter"
+   property-registry
+   registry-metadata/get-block-state-properties
+   create-integer-property
+   create-boolean-property
+   create-horizontal-facing-property)
+  (log/info "Forge BlockState properties initialized"))
