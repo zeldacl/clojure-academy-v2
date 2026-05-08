@@ -211,30 +211,50 @@
 (defn- register-scripted-effect-spec!
   [registry-name entity-spec]
   (let [effect (get-in entity-spec [:properties :effect])]
-    (ModEntities/registerScriptedEffectSpec
-      (str registry-name)
-      (int (or (:life-ticks effect) 15))
-      (not (false? (:follow-owner? effect)))
-      (str (or (:renderer-id effect) "effect-billboard"))
-      (name (or (:hook effect) :none))))
+    (letfn [(normalize-hook-params [params]
+              (into {}
+                    (map (fn [[k v]]
+                           [(cond
+                              (keyword? k) (name k)
+                              (string? k) k
+                              :else (str k))
+                            v]))
+                    (or params {})))]
+      (ModEntities/registerScriptedEffectSpec
+        (str registry-name)
+        (int (or (:life-ticks effect) 15))
+        (not (false? (:follow-owner? effect)))
+        (str (or (:renderer-id effect) "effect-billboard"))
+        (name (or (:hook effect) :none))
+        (normalize-hook-params (:hook-params effect)))))
   nil)
 
 (defn- register-scripted-ray-spec!
   [registry-name entity-spec]
   (let [ray (get-in entity-spec [:properties :ray])]
-    (ModEntities/registerScriptedRaySpec
-      (str registry-name)
-      (int (or (:life-ticks ray) 30))
-      (double (or (:length ray) 15.0))
-      (double (or (:blend-in-ms ray) 100.0))
-      (double (or (:blend-out-ms ray) 300.0))
-      (double (or (:inner-width ray) 0.03))
-      (double (or (:outer-width ray) 0.045))
-      (double (or (:glow-width ray) 0.3))
-      (int (or (:start-color ray) 0x78DCFF))
-      (int (or (:end-color ray) 0x32AAFF))
-      (str (or (:renderer-id ray) "ray-composite"))
-      (name (or (:hook ray) :none))))
+    (letfn [(normalize-hook-params [params]
+              (into {}
+                    (map (fn [[k v]]
+                           [(cond
+                              (keyword? k) (name k)
+                              (string? k) k
+                              :else (str k))
+                            v]))
+                    (or params {})))]
+      (ModEntities/registerScriptedRaySpec
+        (str registry-name)
+        (int (or (:life-ticks ray) 30))
+        (double (or (:length ray) 15.0))
+        (double (or (:blend-in-ms ray) 100.0))
+        (double (or (:blend-out-ms ray) 300.0))
+        (double (or (:inner-width ray) 0.03))
+        (double (or (:outer-width ray) 0.045))
+        (double (or (:glow-width ray) 0.3))
+        (int (or (:start-color ray) 0x78DCFF))
+        (int (or (:end-color ray) 0x32AAFF))
+        (str (or (:renderer-id ray) "ray-composite"))
+        (name (or (:hook ray) :none))
+        (normalize-hook-params (:hook-params ray)))))
   nil)
 
 (defn- register-scripted-marker-spec!

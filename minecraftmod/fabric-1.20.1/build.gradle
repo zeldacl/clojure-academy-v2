@@ -73,3 +73,8 @@ tasks.named('compileClojure').configure {
     dependsOn 'compileJava'
 }
 
+tasks.matching { it.name == 'checkClojure' }.configureEach {
+    reflection = project.hasProperty('fabricStrictReflection') ? 'fail' : 'warn'
+    dependsOn tasks.named('compileClojure')
+}
+

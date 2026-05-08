@@ -202,13 +202,188 @@ registerBaselineVerificationTask(
 registerBaselineVerificationTask(
     'verifyFabricBaseline',
     'Compile baseline sources for fabric-1.20.1 (minimal-maintenance gate).',
-    ['verifyArchitectureBoundaries', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure']
+    ['verifyArchitectureBoundaries', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure', ':fabric-1.20.1:checkClojure']
 )
+
+def extractMapBody = { String text, String mapName ->
+    def matcher = (text =~ /(?s)def\s+\^:private\s+${mapName}\s*\{(.*?)\}/)
+    matcher.find() ? matcher.group(1) : null
+}
+
+def extractKeywordSet = { String mapBody ->
+    if (mapBody == null) {
+        return [] as Set
+    }
+    def matcher = (mapBody =~ /:([a-zA-Z0-9\-]+)/)
+    def out = [] as Set
+    matcher.each { out << it[1] }
+    out
+}
+
+tasks.register('verifyForgeHookCoverage') {
+    group = 'verification'
+    description = 'Verify Forge hook implementation keys cover shared hook catalog declarations.'
+
+    doLast {
+        def hookCatalog = file('mcmod/src/main/clojure/cn/li/mcmod/entity/hook_catalog.clj')
+        def forgeEffectHooks = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/entity/effect_hooks.clj')
+        def forgeRayHooks = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/entity/ray_hooks.clj')
+
+        [hookCatalog, forgeEffectHooks, forgeRayHooks].each { f ->
+            if (!f.exists()) {
+                throw new GradleException("Required hook coverage file not found: ${f}")
+            }
+        }
+
+        def catalogText = hookCatalog.getText('UTF-8')
+        def forgeEffectText = forgeEffectHooks.getText('UTF-8')
+        def forgeRayText = forgeRayHooks.getText('UTF-8')
+
+        def effectCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'effect-hook->impl-key'))
+        def rayCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'ray-hook->impl-key'))
+        def forgeEffectImpls = extractKeywordSet(extractMapBody(forgeEffectText, 'impl-key->hook-class'))
+        def forgeRayImpls = extractKeywordSet(extractMapBody(forgeRayText, 'impl-key->hook-class'))
+
+        def missingEffect = (effectCatalogImpls - forgeEffectImpls)
+        def missingRay = (rayCatalogImpls - forgeRayImpls)
+
+        if (!missingEffect.isEmpty() || !missingRay.isEmpty()) {
+            throw new GradleException("Forge hook coverage missing impl keys. effect=${missingEffect} ray=${missingRay}")
+        }
+
+        logger.lifecycle('[verifyForgeHookCoverage] passed. effect={} ray={}', effectCatalogImpls.size(), rayCatalogImpls.size())
+    }
+}
+
+tasks.register('verifyFabricHookManifest') {
+    group = 'verification'
+    description = 'Verify Fabric unsupported hook manifest explicitly tracks shared hook catalog declarations.'
+
+    doLast {
+        def hookCatalog = file('mcmod/src/main/clojure/cn/li/mcmod/entity/hook_catalog.clj')
+        def manifestFile = file('docs/dev/fabric-hook-support.properties')
+
+        [hookCatalog, manifestFile].each { f ->
+            if (!f.exists()) {
+                throw new GradleException("Required Fabric hook manifest file not found: ${f}")
+            }
+        }
+
+        def catalogText = hookCatalog.getText('UTF-8')
+        def effectCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'effect-hook->impl-key'))
+        def rayCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'ray-hook->impl-key'))
+
+        def props = new Properties()
+        manifestFile.withInputStream { props.load(it) }
+
+        def unsupportedEffects = ((props.getProperty('unsupported.effect.impl.keys') ?: '')
+            .split(',')
+            .collect { it.trim() }
+            .findAll { !it.isEmpty() }) as Set
+        def unsupportedRays = ((props.getProperty('unsupported.ray.impl.keys') ?: '')
+            .split(',')
+            .collect { it.trim() }
+            .findAll { !it.isEmpty() }) as Set
+
+        def missingEffectDecl = (effectCatalogImpls - unsupportedEffects)
+        def missingRayDecl = (rayCatalogImpls - unsupportedRays)
+
+        if (!missingEffectDecl.isEmpty() || !missingRayDecl.isEmpty()) {
+            throw new GradleException("Fabric hook manifest missing impl keys. effect=${missingEffectDecl} ray=${missingRayDecl}")
+        }
+
+        logger.lifecycle('[verifyFabricHookManifest] passed. declared unsupported effect={} ray={}', unsupportedEffects.size(), unsupportedRays.size())
+    }
+}
+
+tasks.register('verifyPlatformHookCoverage') {
+    group = 'verification'
+    description = 'Verify hook coverage/contracts between shared catalog and platform layers.'
+    dependsOn 'verifyForgeHookCoverage', 'verifyFabricHookManifest'
+}
+
+tasks.register('verifyPlatformNoBusinessHookIds') {
+    group = 'verification'
+    description = 'Verify platform hook adapters do not hardcode business hook-id literals.'
+
+    doLast {
+        def contentFile = file('ac/src/main/clojure/cn/li/ac/content/entities/all.clj')
+        def forgeEffectHooks = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/entity/effect_hooks.clj')
+        def forgeRayHooks = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/entity/ray_hooks.clj')
+
+        [contentFile, forgeEffectHooks, forgeRayHooks].each { f ->
+            if (!f.exists()) {
+                throw new GradleException("Required platform no-business-id check file not found: ${f}")
+            }
+        }
+
+        def hookIdMatcher = (contentFile.getText('UTF-8') =~ /:hook\s+:([a-zA-Z0-9\-]+)/)
+        def businessHookIds = [] as Set
+        hookIdMatcher.each { businessHookIds << it[1] }
+
+        def forgeEffectText = forgeEffectHooks.getText('UTF-8')
+        def forgeRayText = forgeRayHooks.getText('UTF-8')
+        def mergedForgeText = forgeEffectText + "\n" + forgeRayText
+
+        def leakedHookIds = businessHookIds.findAll { hookId ->
+            mergedForgeText.contains("\"${hookId}\"")
+        } as Set
+
+        if (!leakedHookIds.isEmpty()) {
+            throw new GradleException("Platform hook adapter contains leaked business hook-id literals: ${leakedHookIds}")
+        }
+
+        logger.lifecycle('[verifyPlatformNoBusinessHookIds] passed. scanned business hook ids={}', businessHookIds.size())
+    }
+}
+
+tasks.register('runFabricSmoke') {
+    group = 'verification'
+    description = 'Run minimal Fabric smoke scenario via datagen entrypoint.'
+    dependsOn 'verifyFabricBaseline', ':fabric-1.20.1:runDatagen'
+}
+
+tasks.register('validateFabricSmokeLog') {
+    group = 'verification'
+    description = 'Fail verification when Fabric smoke run log contains known fatal startup/runtime errors.'
+    dependsOn 'runFabricSmoke'
+
+    doLast {
+        def logFile = file('fabric-1.20.1/run-data/logs/latest.log')
+        if (!logFile.exists()) {
+            throw new GradleException("Fabric smoke log not found: ${logFile}")
+        }
+
+        def logText = logFile.getText('UTF-8')
+        def fatalPatterns = [
+            'Failed to load Clojure mod implementation',
+            'Exception in thread',
+            'Caused by:',
+            'RuntimeException',
+            'FATAL',
+            'Could not execute entrypoint',
+            'Failed to run data generator'
+        ]
+
+        def matchedFatalPatterns = fatalPatterns.findAll { logText.contains(it) }
+        if (!matchedFatalPatterns.isEmpty()) {
+            throw new GradleException("Fabric smoke log contains fatal errors: ${matchedFatalPatterns}")
+        }
+
+        logger.lifecycle('[validateFabricSmokeLog] passed: {}', logFile)
+    }
+}
+
+tasks.register('verifyFabricSmoke') {
+    group = 'verification'
+    description = 'Run Fabric smoke verification (datagen + log validation).'
+    dependsOn 'runFabricSmoke', 'validateFabricSmokeLog'
+}
 
 tasks.register('verifyCurrentPlatforms') {
     group = 'verification'
     description = 'Run compile-level verification matrix for current maintained platforms (Forge + Fabric).'
-    dependsOn 'verifyForgeBaseline', 'verifyFabricBaseline'
+    dependsOn 'verifyForgeBaseline', 'verifyFabricBaseline', 'verifyFabricSmoke', 'verifyPlatformHookCoverage', 'verifyPlatformNoBusinessHookIds'
 }
 
 def registerForgeGameTestTask = {

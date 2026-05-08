@@ -1,6 +1,7 @@
 package cn.li.forge1201.entity.effect.hooks;
 
 import cn.li.forge1201.entity.ScriptedEffectEntity;
+import cn.li.forge1201.entity.ScriptedEffectSpec;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.player.Player;
 
@@ -18,8 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *   - Entity discards when coin falls below owner.getY() on the way down
  */
 public final class CoinThrowingEffectHook implements ScriptedEffectHook {
-    private static final double GRAVITY = 0.06D;
-    private static final double INIT_VEL = 0.92D;
+    private static final double DEFAULT_GRAVITY = 0.06D;
+    private static final double DEFAULT_INIT_VEL = 0.92D;
 
     private final Map<UUID, CoinState> states = new ConcurrentHashMap<>();
 
@@ -37,10 +38,14 @@ public final class CoinThrowingEffectHook implements ScriptedEffectHook {
             return;
         }
 
-        CoinState state = states.computeIfAbsent(entity.getUUID(),
-                k -> new CoinState(entity.getY(), INIT_VEL));
+        ScriptedEffectSpec spec = entity.getEffectSpec();
+        double gravity = spec == null ? DEFAULT_GRAVITY : spec.getDoubleParam("gravity", DEFAULT_GRAVITY);
+        double initVel = spec == null ? DEFAULT_INIT_VEL : spec.getDoubleParam("init-vel", DEFAULT_INIT_VEL);
 
-        state.velY -= GRAVITY;
+        CoinState state = states.computeIfAbsent(entity.getUUID(),
+            k -> new CoinState(entity.getY(), initVel));
+
+        state.velY -= gravity;
         state.currentY += state.velY;
 
         entity.setPos(owner.getX(), state.currentY, owner.getZ());

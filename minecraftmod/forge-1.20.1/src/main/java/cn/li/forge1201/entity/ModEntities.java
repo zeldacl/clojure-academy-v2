@@ -100,7 +100,7 @@ public final class ModEntities {
                                                   int lifeTicks,
                                                   boolean followOwner,
                                                   String effectHook) {
-        registerScriptedEffectSpec(registryName, lifeTicks, followOwner, "effect-billboard", effectHook);
+        registerScriptedEffectSpec(registryName, lifeTicks, followOwner, "effect-billboard", effectHook, Collections.emptyMap());
         }
 
         public static void registerScriptedEffectSpec(String registryName,
@@ -108,9 +108,18 @@ public final class ModEntities {
                               boolean followOwner,
                               String rendererId,
                               String effectHook) {
+        registerScriptedEffectSpec(registryName, lifeTicks, followOwner, rendererId, effectHook, Collections.emptyMap());
+    }
+
+    public static void registerScriptedEffectSpec(String registryName,
+                              int lifeTicks,
+                              boolean followOwner,
+                              String rendererId,
+                              String effectHook,
+                              Map<String, Object> hookParams) {
         SCRIPTED_EFFECT_SPECS.put(
                 registryName,
-            new ScriptedEffectSpec(lifeTicks, followOwner, rendererId, effectHook)
+            new ScriptedEffectSpec(lifeTicks, followOwner, rendererId, effectHook, hookParams)
         );
     }
 
@@ -144,7 +153,8 @@ public final class ModEntities {
                                int startColor,
                                int endColor,
                                                String rendererId,
-                                               String hookId) {
+                                               String hookId,
+                                               Map<String, Object> hookParams) {
         SCRIPTED_RAY_SPECS.put(
                 registryName,
             new ScriptedRaySpec(
@@ -158,7 +168,8 @@ public final class ModEntities {
                 startColor,
                 endColor,
                 rendererId,
-                hookId)
+                hookId,
+                hookParams)
         );
     }
 

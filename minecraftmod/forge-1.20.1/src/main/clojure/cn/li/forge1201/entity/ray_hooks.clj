@@ -1,20 +1,21 @@
 (ns cn.li.forge1201.entity.ray-hooks
 	"Forge-side registration for scripted ray hook strategies."
 	(:require [cn.li.mcmod.util.log :as log]
-						[cn.li.mcmod.entity.dsl :as edsl])
+						[cn.li.mcmod.entity.dsl :as edsl]
+						[cn.li.mcmod.entity.hook-catalog :as hook-catalog])
 	(:import [cn.li.forge1201.bridge ForgeRuntimeBridge]))
 
 (defonce ^:private ray-hooks-installed? (atom false))
 
-(def ^:private default-hook-classes
-	{"mine-ray-basic" "cn.li.forge1201.entity.ray.hooks.OwnerFollowRayHook"
-	 "mine-ray-expert" "cn.li.forge1201.entity.ray.hooks.OwnerFollowRayHook"
-	 "mine-ray-luck" "cn.li.forge1201.entity.ray.hooks.OwnerFollowRayHook"
-	 "md-ray" "cn.li.forge1201.entity.ray.hooks.OwnerFollowRayHook"
-	 "md-ray-small" "cn.li.forge1201.entity.ray.hooks.OwnerFollowRayHook"
-	 "md-ray-barrage" "cn.li.forge1201.entity.ray.hooks.OwnerFollowRayHook"
-	 "barrage-ray-pre" "cn.li.forge1201.entity.ray.hooks.OwnerFollowRayHook"
-	 "railgun-fx" "cn.li.forge1201.entity.ray.hooks.OwnerFollowRayHook"})
+(def ^:private impl-key->hook-class
+	{:owner-follow "cn.li.forge1201.entity.ray.hooks.OwnerFollowRayHook"})
+
+(defn- normalize-impl-key
+	[impl-key]
+	(cond
+		(keyword? impl-key) impl-key
+		(string? impl-key) (keyword impl-key)
+		:else nil))
 
 (defn- collect-ray-hook-entries
 	[]
@@ -23,8 +24,10 @@
 							 (let [entity-spec (edsl/get-entity entity-id)
 										 ray-props (get-in entity-spec [:properties :ray])
 										 hook-id (some-> (:hook ray-props) name)
+										 impl-key (or (some-> (:hook-impl-key ray-props) normalize-impl-key)
+																	 (hook-catalog/ray-impl-key hook-id))
 										 hook-class (or (some-> (:hook-class ray-props) str)
-																		(get default-hook-classes hook-id))]
+																		(get impl-key->hook-class impl-key))]
 								 (when (= :scripted-ray (:entity-kind entity-spec))
 									 (cond
 										 (or (nil? ray-props) (empty? ray-props))
@@ -35,11 +38,12 @@
 
 										 (or (nil? hook-class) (empty? hook-class))
 										 (log/warn "scripted-ray hook has no registered platform hook class"
-															 {:entity-id entity-id :hook-id hook-id})
+																	 {:entity-id entity-id :hook-id hook-id :hook-impl-key impl-key})
 
 										 :else
 										 {:entity-id entity-id
 											:hook-id hook-id
+											:hook-impl-key impl-key
 											:hook-class hook-class})))))
 			 distinct))
 

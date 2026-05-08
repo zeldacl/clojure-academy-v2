@@ -38,7 +38,42 @@
          :update-interval 1
          :properties {:effect {:life-ticks 15
                                :follow-owner? true
-                               :hook :intensify-arcs}}}))
+                               :hook :intensify-arcs
+                               :hook-params {:arc-life-ticks 3
+                                             :tier-batch-base 3
+                                             :tier-batch-random 2
+                                             :tier-radius-base 0.5
+                                             :tier-radius-random 0.1
+                                             :tier-theta-max 6.283185307179586
+                                             :tier-heights [2.0 1.8 1.5 1.0 0.5 0.0 -0.1]
+                                             :tier-delays [0 1 3 4 6 7 8]
+                                             :branch-count-base 1
+                                             :branch-count-random 2
+                                             :branch-points-base 3
+                                             :branch-points-random 2
+                                             :side-amp-base 0.06
+                                             :side-amp-random 0.05
+                                             :rise-base 0.26
+                                             :rise-random 0.1
+                                             :rebound-base 0.12
+                                             :rebound-random 0.07
+                                             :branch-theta-base 0.55
+                                             :branch-theta-random 0.4
+                                             :branch-len-base 0.12
+                                             :branch-len-random 0.09
+                                             :branch-wobble-amp 0.025
+                                             :arc-damp-factor 0.65
+                                             :arc-wobble-freq 6.8
+                                             :arc-pull-factor 0.22
+                                             :branch-wobble-phase-mul 0.7
+                                             :branch-wobble-time-mul 5.2
+                                             :branch-vel-y 0.05
+                                             :branch-accel-y 0.03
+                                             :phase-max 6.283185307179586
+                                             :flicker-seed-scale 13.0
+                                             :main-points 7
+                                             :branch-attach-start 2
+                                             :branch-attach-random-span-sub 3}}}}))
 
     ;; EntityCoinThrowing - for Railgun skill
     (edsl/register-entity!
@@ -52,7 +87,9 @@
          :update-interval 1
          :properties {:effect {:life-ticks 120
                                :follow-owner? false
-                               :hook :coin-throwing}}}))
+                               :hook :coin-throwing
+                               :hook-params {:gravity 0.06
+                                             :init-vel 0.92}}}}))
 
     ;; Ray family (Forge adapter shells + renderer-id dispatch).
     (edsl/register-entity!
@@ -74,7 +111,8 @@
                             :start-color 0xD8F8D8
                             :end-color 0x6AF26A
                             :renderer-id "ray-composite"
-                            :hook :md-ray}}}))
+                            :hook :md-ray
+                            :hook-params {:eye-offset-y 0.1}}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -95,7 +133,8 @@
                             :start-color 0xD8F8D8
                             :end-color 0x6AF26A
                             :renderer-id "ray-composite"
-                            :hook :mine-ray-basic}}}))
+                            :hook :mine-ray-basic
+                            :hook-params {:eye-offset-y 0.1}}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -116,7 +155,8 @@
                             :start-color 0xD8F8D8
                             :end-color 0x6AF26A
                             :renderer-id "ray-composite"
-                            :hook :mine-ray-expert}}}))
+                            :hook :mine-ray-expert
+                            :hook-params {:eye-offset-y 0.1}}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -137,7 +177,8 @@
                             :start-color 0xF1E5F7
                             :end-color 0xCDA6E8
                             :renderer-id "ray-composite"
-                            :hook :mine-ray-luck}}}))
+                            :hook :mine-ray-luck
+                            :hook-params {:eye-offset-y 0.1}}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -158,7 +199,8 @@
                             :start-color 0xD8F8D8
                             :end-color 0x6AF26A
                             :renderer-id "ray-composite"
-                            :hook :md-ray-small}}}))
+                            :hook :md-ray-small
+                            :hook-params {:eye-offset-y 0.1}}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -179,7 +221,8 @@
                             :start-color 0xD8F8D8
                             :end-color 0x6AF26A
                             :renderer-id "ray-composite"
-                            :hook :md-ray-barrage}}}))
+                            :hook :md-ray-barrage
+                            :hook-params {:eye-offset-y 0.1}}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -200,7 +243,8 @@
                             :start-color 0xD8F8D8
                             :end-color 0x6AF26A
                             :renderer-id "ray-composite"
-                            :hook :barrage-ray-pre}}}))
+                            :hook :barrage-ray-pre
+                            :hook-params {:eye-offset-y 0.1}}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -221,7 +265,8 @@
                             :start-color 0xF1F0DE
                             :end-color 0xECAA5D
                             :renderer-id "ray-composite"
-                            :hook :railgun-fx}}}))
+                            :hook :railgun-fx
+                            :hook-params {:eye-offset-y 0.1}}}}))
 
     ;; Marker/UI family.
     (edsl/register-entity!
@@ -269,7 +314,9 @@
          :properties {:effect {:life-ticks 120
                                :follow-owner? true
                                :renderer-id "diamond-shield"
-                               :hook :diamond-shield}}}))
+                               :hook :diamond-shield
+                               :hook-params {:forward 1.0
+                                             :vertical 1.1}}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -283,7 +330,9 @@
          :properties {:effect {:life-ticks 120
                                :follow-owner? true
                                :renderer-id "md-shield"
-                               :hook :md-shield}}}))
+                               :hook :md-shield
+                               :hook-params {:forward 1.0
+                                             :vertical 1.1}}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -297,7 +346,9 @@
          :properties {:effect {:life-ticks 100
                                :follow-owner? true
                                :renderer-id "surround-arc"
-                               :hook :surround-arc}}}))
+                               :hook :surround-arc
+                               :hook-params {:forward 1.0
+                                             :vertical 1.1}}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -311,7 +362,9 @@
          :properties {:effect {:life-ticks 20
                                :follow-owner? true
                                :renderer-id "arc-generic"
-                               :hook :generic-arc}}}))
+                               :hook :generic-arc
+                               :hook-params {:forward 0.8
+                                             :vertical 1.0}}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -353,7 +406,17 @@
          :properties {:effect {:life-ticks 50
                                :follow-owner? false
                                :renderer-id "md-ball"
-                               :hook :md-ball}}}))
+                               :hook :md-ball
+                               :hook-params {:range-from 0.8
+                                             :range-to 1.3
+                                             :y-from -1.2
+                                             :y-to 0.2
+                                             :wobble-xz 0.03
+                                             :wobble-y 0.04
+                                             :phase-step 0.18
+                                             :wobble-y-freq 1.4
+                                             :wobble-y-phase-shift 0.8975979010256552
+                                             :theta-spread-factor 0.45}}}}))
 
     ;; Block-body family.
     (edsl/register-entity!

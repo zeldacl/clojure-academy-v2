@@ -21,6 +21,11 @@
   - `.\gradlew.bat runMcmodUnitTests`（执行 `mcmod` 的 `clojure.test`，入口为 `:mcmod:runMcmodClojureTests` / `cn.li.mcmod.test-runner`；可选 `-Dmcmod.test.only=cn.li.mcmod.foo-test,cn.li.mcmod.bar-test`）
   - `.\gradlew.bat verifyForgeBaseline`
   - `.\gradlew.bat verifyFabricBaseline`
+  - `.\gradlew.bat verifyFabricSmoke`
+  - `.\gradlew.bat verifyForgeHookCoverage`
+  - `.\gradlew.bat verifyFabricHookManifest`
+  - `.\gradlew.bat verifyPlatformHookCoverage`
+  - `.\gradlew.bat verifyPlatformNoBusinessHookIds`
   - `.\gradlew.bat verifyCurrentPlatforms`
   - `.\gradlew.bat runForgeGameTests`
   - `.\gradlew.bat validateForgeGameTestLog`
@@ -38,6 +43,8 @@
 - **边界规则（更新）**：
   - 禁止 `ac` 对 `cn.li.forge1201.*` 建立静态编译依赖。
   - `forge-1.20.1` 可通过受控桥接调用 `ac` 能力（例如动态 require / ns-resolve），但不得把 `ac` 实现细节固化为跨层 API。
+  - 平台层只允许保留“实现适配键 -> 平台实现类/函数”映射；禁止直接硬编码业务内容 ID（技能/实体/玩法名）。
+  - 业务 hook-id 到实现键的映射必须位于共享层（`mcmod`），平台层不得承载业务语义。
   - 所有跨层调用都应通过清晰入口函数与文档记录，避免隐式耦合蔓延。
 
 ## 开发工具实践
@@ -89,3 +96,19 @@
 - `rg "cn\.li\.forge|cn\.li\.fabric" ac/src/` 应为空。
 - `rg "net\.minecraft|net\.minecraftforge" ac/src/ mcmod/src/` 应为空（允许注释或字符串需人工甄别）。
 - `rg "net\.minecraft\.client" ac/src/ mcmod/src/` 在非 client 目录应无泄漏。
+
+## Hook 覆盖契约（平台一致性）
+
+- 共享 hook catalog：`mcmod/src/main/clojure/cn/li/mcmod/entity/hook_catalog.clj`
+- Fabric 缺口清单：`docs/dev/fabric-hook-support.properties`
+- 执行：`.\gradlew.bat verifyPlatformHookCoverage`
+- 规则：
+  - Forge 必须覆盖共享 catalog 声明的实现键。
+  - Fabric 若暂未实现，必须在缺口清单显式声明；新增实现键时清单必须同步更新。
+
+## 平台层去业务化回归守卫
+
+- 执行：`.\gradlew.bat verifyPlatformNoBusinessHookIds`
+- 规则：
+  - 平台 hook 适配文件不得出现来自业务实体定义中的 hook-id 字面量。
+  - 若任务失败，需把业务 hook-id -> impl-key 映射迁回共享层（`mcmod`）。

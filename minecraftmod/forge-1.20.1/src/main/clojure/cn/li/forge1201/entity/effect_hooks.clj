@@ -1,21 +1,26 @@
 (ns cn.li.forge1201.entity.effect-hooks
   "Forge-side registration for scripted effect hook strategies."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.entity.dsl :as edsl])
+            [cn.li.mcmod.entity.dsl :as edsl]
+            [cn.li.mcmod.entity.hook-catalog :as hook-catalog])
   (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]))
 
 (defonce ^:private effect-hooks-installed? (atom false))
 
-(def ^:private default-hook-classes
-  {"intensify-arcs" "cn.li.forge1201.entity.effect.hooks.IntensifyArcsEffectHook"
-  "diamond-shield" "cn.li.forge1201.entity.effect.hooks.OwnerOffsetEffectHook"
-  "md-shield" "cn.li.forge1201.entity.effect.hooks.OwnerOffsetEffectHook"
-  "surround-arc" "cn.li.forge1201.entity.effect.hooks.OwnerOffsetEffectHook"
-  "generic-arc" "cn.li.forge1201.entity.effect.hooks.GenericArcEffectHook"
-  "md-ball" "cn.li.forge1201.entity.effect.hooks.MdBallEffectHook"
-   "ripple-mark" "cn.li.forge1201.entity.effect.hooks.NoopEffectHook"
-  "blood-splash" "cn.li.forge1201.entity.effect.hooks.NoopEffectHook"
-  "coin-throwing" "cn.li.forge1201.entity.effect.hooks.CoinThrowingEffectHook"})
+(def ^:private impl-key->hook-class
+  {:intensify-arcs "cn.li.forge1201.entity.effect.hooks.IntensifyArcsEffectHook"
+   :owner-offset "cn.li.forge1201.entity.effect.hooks.OwnerOffsetEffectHook"
+   :generic-arc "cn.li.forge1201.entity.effect.hooks.GenericArcEffectHook"
+   :md-ball "cn.li.forge1201.entity.effect.hooks.MdBallEffectHook"
+   :noop "cn.li.forge1201.entity.effect.hooks.NoopEffectHook"
+   :coin-throwing "cn.li.forge1201.entity.effect.hooks.CoinThrowingEffectHook"})
+
+(defn- normalize-impl-key
+  [impl-key]
+  (cond
+    (keyword? impl-key) impl-key
+    (string? impl-key) (keyword impl-key)
+    :else nil))
 
 (defn- collect-effect-hook-entries
   []
@@ -24,8 +29,10 @@
                (let [entity-spec  (edsl/get-entity entity-id)
                      effect-props (get-in entity-spec [:properties :effect])
                      hook-id      (some-> (:hook effect-props) name)
+                     impl-key     (or (some-> (:hook-impl-key effect-props) normalize-impl-key)
+                                      (hook-catalog/effect-impl-key hook-id))
                      hook-class   (or (some-> (:hook-class effect-props) str)
-                                      (get default-hook-classes hook-id))]
+                                      (get impl-key->hook-class impl-key))]
                  (when (= :scripted-effect (:entity-kind entity-spec))
                    (cond
                      (or (nil? effect-props) (empty? effect-props))
@@ -38,11 +45,14 @@
 
                      (or (nil? hook-class) (empty? hook-class))
                      (log/warn "scripted-effect hook has no registered platform hook class"
-                               {:entity-id entity-id})
+                               {:entity-id entity-id
+                                :hook-id hook-id
+                                :hook-impl-key impl-key})
 
                      :else
                      {:entity-id  entity-id
                       :hook-id    hook-id
+                      :hook-impl-key impl-key
                       :hook-class hook-class})))))
        distinct))
 

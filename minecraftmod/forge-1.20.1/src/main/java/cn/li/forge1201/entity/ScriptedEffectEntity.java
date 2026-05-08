@@ -38,6 +38,10 @@ public class ScriptedEffectEntity extends Entity {
         return ModEntities.getScriptedEffectSpec(this.getType());
     }
 
+    public ScriptedEffectSpec getEffectSpec() {
+        return getSpec();
+    }
+
     private static String normalizeHook(String hookName) {
         return hookName == null ? "" : hookName;
     }
