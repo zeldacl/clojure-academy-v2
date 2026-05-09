@@ -1,5 +1,6 @@
 package cn.li.forge1201.entity;
 
+import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -95,7 +96,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     }
 
     public ScriptedBlockBodySpec getBlockBodySpec() {
-        return ModEntities.getScriptedBlockBodySpec(this.getType());
+        return ScriptedEntitySpecAccess.getScriptedBlockBodySpec(this.getType());
     }
 
     @Override

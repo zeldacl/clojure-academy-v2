@@ -1,5 +1,6 @@
 package cn.li.forge1201.entity;
 
+import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.entity.spec.ScriptedProjectileSpec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -36,7 +37,7 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
     }
 
     private ScriptedProjectileSpec getSpec() {
-        return ModEntities.getScriptedProjectileSpec(this.getType());
+        return ScriptedEntitySpecAccess.getScriptedProjectileSpec(this.getType());
     }
 
     private static String normalizeHook(String hookName) {

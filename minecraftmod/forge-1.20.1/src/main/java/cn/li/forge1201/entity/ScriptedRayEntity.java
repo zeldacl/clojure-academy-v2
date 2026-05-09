@@ -1,6 +1,7 @@
 package cn.li.forge1201.entity;
 
 import cn.li.forge1201.entity.ray.hooks.ScriptedRayHooks;
+import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.EntityType;
@@ -12,7 +13,7 @@ public class ScriptedRayEntity extends ScriptedEffectEntity {
     }
 
     public ScriptedRaySpec getRaySpec() {
-        return ModEntities.getScriptedRaySpec(this.getType());
+        return ScriptedEntitySpecAccess.getScriptedRaySpec(this.getType());
     }
 
     @Override

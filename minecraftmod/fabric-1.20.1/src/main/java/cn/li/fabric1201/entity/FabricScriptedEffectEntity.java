@@ -1,6 +1,8 @@
-package cn.li.forge1201.entity;
+package cn.li.fabric1201.entity;
 
-import cn.li.forge1201.entity.effect.hooks.ScriptedEffectHooks;
+import cn.li.fabric1201.entity.effect.hooks.FabricScriptedEffectHooks;
+import cn.li.fabric1201.entity.marker.hooks.FabricScriptedMarkerHooks;
+import cn.li.fabric1201.entity.ray.hooks.FabricScriptedRayHooks;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
 import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
@@ -18,19 +20,19 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
-public class ScriptedEffectEntity extends Entity {
+public class FabricScriptedEffectEntity extends Entity {
     private UUID ownerUuid;
     private int age;
     private final List<ArcData> activeArcs = new ArrayList<>();
 
-    public ScriptedEffectEntity(EntityType<? extends ScriptedEffectEntity> entityType, Level level) {
+    public FabricScriptedEffectEntity(EntityType<? extends FabricScriptedEffectEntity> entityType, Level level) {
         super(entityType, level);
         this.noPhysics = true;
     }
 
-    public static ScriptedEffectEntity create(Level level, Player owner, String entityRegistryName) {
-        ScriptedEffectEntity entity = new ScriptedEffectEntity(
-            ScriptedEntitySpecAccess.requireEntityType(entityRegistryName, ScriptedEffectEntity.class),
+    public static FabricScriptedEffectEntity create(Level level, Player owner, String entityRegistryName) {
+        FabricScriptedEffectEntity entity = new FabricScriptedEffectEntity(
+            ScriptedEntitySpecAccess.requireEntityType(entityRegistryName, FabricScriptedEffectEntity.class),
                 level
         );
         entity.ownerUuid = owner.getUUID();
@@ -83,17 +85,27 @@ public class ScriptedEffectEntity extends Entity {
         }
 
         if (level().isClientSide() && level() instanceof ClientLevel clientLevel) {
-            ScriptedEffectHooks.resolve(effectHook).onClientTick(this, clientLevel);
+            if (this instanceof FabricScriptedRayEntity rayEntity) {
+                ScriptedRaySpec raySpec = rayEntity.getRaySpec();
+                String rayHook = normalizeHook(raySpec == null ? null : raySpec.getHookId());
+                FabricScriptedRayHooks.resolve(rayHook).onClientTick(rayEntity, clientLevel);
+            } else if (this instanceof FabricScriptedMarkerEntity markerEntity) {
+                ScriptedMarkerSpec markerSpec = markerEntity.getMarkerSpec();
+                String markerHook = normalizeHook(markerSpec == null ? null : markerSpec.getHookId());
+                FabricScriptedMarkerHooks.resolve(markerHook).onClientTick(markerEntity, clientLevel);
+            } else {
+                FabricScriptedEffectHooks.resolve(effectHook).onClientTick(this, clientLevel);
+            }
         }
 
         age++;
         int lifeTicks;
         if (spec != null) {
             lifeTicks = spec.getLifeTicks();
-        } else if (this instanceof ScriptedRayEntity rayEntity) {
+        } else if (this instanceof FabricScriptedRayEntity rayEntity) {
             ScriptedRaySpec raySpec = rayEntity.getRaySpec();
             lifeTicks = raySpec == null ? 15 : raySpec.getLifeTicks();
-        } else if (this instanceof ScriptedMarkerEntity markerEntity) {
+        } else if (this instanceof FabricScriptedMarkerEntity markerEntity) {
             ScriptedMarkerSpec markerSpec = markerEntity.getMarkerSpec();
             lifeTicks = markerSpec == null ? 15 : markerSpec.getLifeTicks();
         } else {

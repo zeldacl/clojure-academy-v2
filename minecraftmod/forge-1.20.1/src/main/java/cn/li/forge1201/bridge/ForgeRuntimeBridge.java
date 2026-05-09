@@ -1,7 +1,7 @@
 package cn.li.forge1201.bridge;
 
-import cn.li.forge1201.entity.ModEntities;
 import cn.li.forge1201.entity.ScriptedEffectEntity;
+import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleType;
@@ -341,15 +341,15 @@ public final class ForgeRuntimeBridge {
     }
 
     public static boolean registerScriptedEffectHookClass(String hookId, String className) {
-        return ModEntities.registerScriptedEffectHookClass(hookId, className);
+        return ScriptedEntitySpecAccess.registerScriptedEffectHookClass(hookId, className);
     }
 
     public static boolean registerScriptedRayHookClass(String hookId, String className) {
-        return ModEntities.registerScriptedRayHookClass(hookId, className);
+        return ScriptedEntitySpecAccess.registerScriptedRayHookClass(hookId, className);
     }
 
     public static boolean registerScriptedMarkerHookClass(String hookId, String className) {
-        return ModEntities.registerScriptedMarkerHookClass(hookId, className);
+        return ScriptedEntitySpecAccess.registerScriptedMarkerHookClass(hookId, className);
     }
 
     // ---- MobEffects lookup (avoids Class/forName on MobEffects registry class) ----

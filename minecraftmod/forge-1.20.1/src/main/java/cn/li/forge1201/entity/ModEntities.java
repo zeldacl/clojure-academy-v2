@@ -3,6 +3,7 @@ package cn.li.forge1201.entity;
 import cn.li.forge1201.MyMod1201;
 import cn.li.forge1201.entity.effect.hooks.ScriptedEffectHooks;
 import cn.li.forge1201.entity.ray.hooks.ScriptedRayHooks;
+import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
 import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
@@ -25,6 +26,60 @@ import java.util.function.Supplier;
 
 public final class ModEntities {
     private ModEntities() {
+    }
+
+    static {
+        ScriptedEntitySpecAccess.install(new ScriptedEntitySpecAccess.Accessor() {
+            @Override
+            public <T extends Entity> EntityType<T> requireEntityType(String registryName, Class<T> expectedClass) {
+                return ModEntities.requireEntityType(registryName, expectedClass);
+            }
+
+            @Override
+            public Class<? extends Entity> resolveEntityClassByKind(String entityKind) {
+                return ModEntities.resolveEntityClassByKind(entityKind);
+            }
+
+            @Override
+            public ScriptedEffectSpec getScriptedEffectSpec(EntityType<?> entityType) {
+                return ModEntities.getScriptedEffectSpec(entityType);
+            }
+
+            @Override
+            public ScriptedRaySpec getScriptedRaySpec(EntityType<?> entityType) {
+                return ModEntities.getScriptedRaySpec(entityType);
+            }
+
+            @Override
+            public ScriptedMarkerSpec getScriptedMarkerSpec(EntityType<?> entityType) {
+                return ModEntities.getScriptedMarkerSpec(entityType);
+            }
+
+            @Override
+            public ScriptedProjectileSpec getScriptedProjectileSpec(EntityType<?> entityType) {
+                return ModEntities.getScriptedProjectileSpec(entityType);
+            }
+
+            @Override
+            public ScriptedBlockBodySpec getScriptedBlockBodySpec(EntityType<?> entityType) {
+                return ModEntities.getScriptedBlockBodySpec(entityType);
+            }
+
+            @Override
+            public boolean registerScriptedEffectHookClass(String hookId, String className) {
+                return ScriptedEffectHooks.registerByClassName(hookId, className);
+            }
+
+            @Override
+            public boolean registerScriptedRayHookClass(String hookId, String className) {
+                return ScriptedRayHooks.registerByClassName(hookId, className);
+            }
+
+            @Override
+            public boolean registerScriptedMarkerHookClass(String hookId, String className) {
+                return cn.li.forge1201.entity.marker.hooks.ScriptedMarkerHooks.registerByClassName(hookId, className);
+            }
+        });
     }
 
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
@@ -58,6 +113,17 @@ public final class ModEntities {
             throw new IllegalStateException("Entity type is not registered: " + registryName);
         }
         return type;
+    }
+
+    public static Class<? extends Entity> resolveEntityClassByKind(String entityKind) {
+        return switch (String.valueOf(entityKind)) {
+            case "scripted-projectile" -> ScriptedProjectileEntity.class;
+            case "scripted-effect" -> ScriptedEffectEntity.class;
+            case "scripted-ray" -> ScriptedRayEntity.class;
+            case "scripted-marker" -> ScriptedMarkerEntity.class;
+            case "scripted-block-body" -> ScriptedBlockBodyEntity.class;
+            default -> null;
+        };
     }
 
     public static void registerScriptedProjectileSpec(String registryName,

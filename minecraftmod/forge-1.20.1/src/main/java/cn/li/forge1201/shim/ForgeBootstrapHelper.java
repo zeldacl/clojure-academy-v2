@@ -2,11 +2,7 @@ package cn.li.forge1201.shim;
 
 import cn.li.forge1201.block.DynamicStateBlock;
 import cn.li.forge1201.block.ScriptedBlock;
-import cn.li.forge1201.entity.ScriptedBlockBodyEntity;
-import cn.li.forge1201.entity.ScriptedEffectEntity;
-import cn.li.forge1201.entity.ScriptedMarkerEntity;
-import cn.li.forge1201.entity.ScriptedProjectileEntity;
-import cn.li.forge1201.entity.ScriptedRayEntity;
+import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -245,14 +241,7 @@ public final class ForgeBootstrapHelper {
                                                        int clientTrackingRange,
                                                        int updateInterval,
                                                        boolean fireImmune) {
-        Class<?> entityClass = switch (String.valueOf(entityKind)) {
-            case "scripted-projectile" -> ScriptedProjectileEntity.class;
-            case "scripted-effect" -> ScriptedEffectEntity.class;
-            case "scripted-ray" -> ScriptedRayEntity.class;
-            case "scripted-marker" -> ScriptedMarkerEntity.class;
-            case "scripted-block-body" -> ScriptedBlockBodyEntity.class;
-            default -> null;
-        };
+        Class<?> entityClass = ScriptedEntitySpecAccess.resolveEntityClassByKind(entityKind);
         if (entityClass == null) {
             throw new IllegalStateException("Unknown entity kind: " + entityKind);
         }

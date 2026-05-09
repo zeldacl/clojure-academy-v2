@@ -9,6 +9,7 @@
 (require '[cn.li.mcmod.block.blockstate-definition :as blockstate-def])
 (require '[cn.li.mc1201.datagen.gson-util :as gson-util])
 (require '[cn.li.mc1201.datagen.blockstate-support :as bs-support])
+(require '[clojure.string :as str])
 
 (import '[net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target])
 (import '[net.minecraft.resources ResourceLocation])
@@ -21,23 +22,43 @@
 
 (def ^:private gson (gson-util/create-pretty-gson))
 
+(defn- normalize-candidates
+  [s]
+  (when (and s (not (str/blank? s)))
+    [s
+     (str/replace s "-" "_")
+     (str/replace s "_" "-")]))
+
+(defn- registry-name->block-spec
+  [registry-name]
+  (let [candidates (distinct (normalize-candidates registry-name))]
+    (or
+     (some (fn [candidate]
+             (registry-metadata/get-block-spec (keyword candidate)))
+           candidates)
+     (some (fn [block-id]
+             (when (some #{(registry-metadata/get-block-registry-name block-id)} candidates)
+               (registry-metadata/get-block-spec block-id)))
+           (registry-metadata/get-all-block-ids)))))
+
 (defn- item-texture-from-spec
   [registry-name]
-  (let [block-spec (registry-metadata/get-block-spec (keyword registry-name))]
+  (let [block-spec (registry-name->block-spec registry-name)]
     (or (get-in block-spec [:rendering :item-texture])
         (get-in block-spec [:rendering :texture])
         (str modid/*mod-id* ":block/" registry-name))))
 
 (defn- block-texture-from-spec
   [registry-name]
-  (let [block-spec (registry-metadata/get-block-spec (keyword registry-name))]
-    (or (get-in block-spec [:rendering :texture])
+  (let [block-spec (registry-name->block-spec registry-name)]
+    (or (get-in block-spec [:rendering :textures :all])
+        (get-in block-spec [:rendering :texture])
         (str modid/*mod-id* ":block/" registry-name))))
 
 (defn- block-parent-from-spec
   [registry-name]
-  (let [block-spec (registry-metadata/get-block-spec (keyword registry-name))]
-    (or (get-in block-spec [:rendering :parent])
+  (let [block-spec (registry-name->block-spec registry-name)]
+    (or (get-in block-spec [:rendering :model-parent])
         "minecraft:block/cube_all")))
 
 (defn- model-id->registry-name
@@ -54,8 +75,14 @@
 
 (defn- block-model-json
   [model-name]
-  (if-let [cube-config (blockstate-def/get-model-cube-texture-config model-name)]
-    (bs-support/cube-model-json cube-config)
+  (if-let [cube-config (or (blockstate-def/get-model-cube-texture-config model-name)
+                           (when (= model-name "metal_former")
+                             (blockstate-def/get-model-cube-texture-config "metal_former_north")))]
+    (let [cube-json (bs-support/cube-model-json cube-config)]
+      (if (= model-name "metal_former")
+        (assoc-in cube-json [:textures :particle]
+                  (bs-support/normalize-texture-id (:north cube-config)))
+        cube-json))
     (if-let [texture-config (blockstate-def/get-model-texture-config model-name)]
       (bs-support/cube-model-json {:down (:vert texture-config)
                                    :up (:vert texture-config)
@@ -64,9 +91,9 @@
                                    :east (:side texture-config)
                                    :west (:side texture-config)})
       (let [registry-name (model-id->registry-name model-name)
-            block-spec (registry-metadata/get-block-spec (keyword registry-name))
+            block-spec (registry-name->block-spec registry-name)
             parent (block-parent-from-spec registry-name)
-            explicit-texture (or (get-in block-spec [:rendering :item-texture])
+            explicit-texture (or (get-in block-spec [:rendering :textures :all])
                                  (get-in block-spec [:rendering :texture]))]
         (if (or explicit-texture (not= parent "minecraft:block/cube_all"))
           (bs-support/parent-model-json
@@ -86,11 +113,11 @@
   (write-json! cached-output path-provider (parse-rl (str modid/*mod-id* ":" model-name)) model-json))
 
 (defn- item-model-json
-  [registry-name]
-  (let [block-spec (registry-metadata/get-block-spec (keyword registry-name))
+  [registry-name multipart?]
+  (let [block-spec (registry-name->block-spec registry-name)
         flat-item? (true? (get-in block-spec [:rendering :flat-item-icon?]))
         item-model-id (blockstate-def/get-item-model-id modid/*mod-id* registry-name)]
-    (if flat-item?
+    (if (and flat-item? (not multipart?))
       (bs-support/flat-item-model-json (item-texture-from-spec registry-name))
       (bs-support/parent-model-json item-model-id))))
 
@@ -124,10 +151,11 @@
                                                              known-model-ids (set model-ids)
                                                              item-block-model-write (when-not (contains? known-model-ids item-model-id)
                                                                                       (write-block-model! cached-output block-model-path-provider item-model-name (block-model-json item-model-name)))
-                                                             item-id (parse-rl (str modid/*mod-id* ":" registry-name))]
+                                                             item-id (parse-rl (str modid/*mod-id* ":" registry-name))
+                                                             multipart? (blockstate-def/is-multipart-block? definition)]
                                                          (concat
                                                            (when item-block-model-write [item-block-model-write])
-                                                           [(write-json! cached-output item-model-path-provider item-id (item-model-json registry-name))])))]
+                                                           [(write-json! cached-output item-model-path-provider item-id (item-model-json registry-name multipart?))])))]
                                 (concat
                                  [(write-json! cached-output blockstate-path-provider block-id blockstate-json)]
                                  block-model-writes
