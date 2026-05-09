@@ -397,6 +397,105 @@ tasks.register('verifyCurrentPlatforms') {
     dependsOn 'verifyForgeBaseline', 'verifyFabricBaseline', 'verifyFabricSmoke', 'verifyPlatformHookCoverage', 'verifyPlatformNoBusinessHookIds'
 }
 
+def collectRelativeFiles = { File rootDir, String relativeDir, Set<String> excludedRelPaths ->
+    def base = new File(rootDir, relativeDir)
+    if (!base.exists()) {
+        return [] as List<String>
+    }
+    fileTree(base).files
+        .findAll { it.isFile() }
+        .collect { File f ->
+            rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+        }
+        .findAll { !excludedRelPaths.contains(it) }
+        .sort()
+}
+
+def compareFileContents = { File forgeRoot, File fabricRoot, String relPath ->
+    def forgeFile = new File(forgeRoot, relPath)
+    def fabricFile = new File(fabricRoot, relPath)
+
+    if (relPath.endsWith('.json')) {
+        def slurper = new groovy.json.JsonSlurper()
+        def canonicalize
+        canonicalize = { value, String currentPath = null ->
+            if (value instanceof Map) {
+                def normalized = value.collectEntries { k, v ->
+                    def key = k.toString()
+                    def nextPath = currentPath ? "${currentPath}.${key}" : key
+                    [(key): canonicalize(v, nextPath)]
+                }
+
+                if (relPath.startsWith('data/my_mod/recipes/')) {
+                    normalized.remove('category')
+                    normalized.remove('show_notification')
+                }
+
+                if (normalized.containsKey('parent') && normalized.parent instanceof String) {
+                    normalized.parent = normalized.parent.replaceFirst(/^minecraft:/, '')
+                }
+
+                return new TreeMap(normalized)
+            }
+            if (value instanceof List) {
+                return value.collect { canonicalize(it, currentPath) }
+            }
+            return value
+        }
+
+        def forgeJson = canonicalize(slurper.parseText(forgeFile.getText('UTF-8')))
+        def fabricJson = canonicalize(slurper.parseText(fabricFile.getText('UTF-8')))
+        return forgeJson == fabricJson
+    }
+
+    def forgeText = forgeFile.getText('UTF-8').replace('\r\n', '\n')
+    def fabricText = fabricFile.getText('UTF-8').replace('\r\n', '\n')
+    forgeText == fabricText
+}
+
+tasks.register('verifyForgeFabricDatagenParity') {
+    group = 'verification'
+    description = 'Compare aligned Forge/Fabric generated resources for shared datagen outputs (recipes, blockstates, item/block models, and lang).'
+
+    doLast {
+        def forgeRoot = file('forge-1.20.1/src/generated/resources')
+        def fabricRoot = file('fabric-1.20.1/src/generated/resources')
+
+        def sections = [
+            'data/my_mod/recipes'               : [] as Set<String>,
+            'assets/my_mod/blockstates'         : [] as Set<String>,
+            'assets/my_mod/models/block'        : [] as Set<String>,
+            'assets/my_mod/models/item'         : [] as Set<String>,
+            'assets/my_mod/lang'                : [] as Set<String>,
+        ]
+
+        def mismatches = [] as List<String>
+
+        sections.each { relativeDir, excluded ->
+            def forgeFiles = collectRelativeFiles(forgeRoot, relativeDir, excluded as Set<String>)
+            def fabricFiles = collectRelativeFiles(fabricRoot, relativeDir, excluded as Set<String>)
+
+            def onlyForge = (forgeFiles - fabricFiles)
+            def onlyFabric = (fabricFiles - forgeFiles)
+            if (!onlyForge.isEmpty() || !onlyFabric.isEmpty()) {
+                mismatches << "${relativeDir}: file-set mismatch forgeOnly=${onlyForge} fabricOnly=${onlyFabric}"
+                return
+            }
+
+            def changed = forgeFiles.findAll { rel -> !compareFileContents(forgeRoot, fabricRoot, rel) }
+            if (!changed.isEmpty()) {
+                mismatches << "${relativeDir}: content mismatch files=${changed}"
+            }
+        }
+
+        if (!mismatches.isEmpty()) {
+            throw new GradleException("Forge/Fabric datagen parity check failed:\n - ${mismatches.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyForgeFabricDatagenParity] passed. sections={}', sections.keySet().size())
+    }
+}
+
 def registerForgeGameTestTask = {
     def forgeProject = project(':forge-1.20.1')
     def candidates = [

@@ -2,21 +2,13 @@
   "Fabric 1.20.1 provider bridge.
 
   Uses reify factories and delegates menu construction to menu-bridge."
-  (:require [cn.li.ac.gui.platform-adapter :as gui]
+  (:require [cn.li.mc1201.gui.provider-common :as provider-common]
+            [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.mcmod.util.log :as log]
             [cn.li.fabric1201.gui.menu-bridge :as menu-bridge])
   (:import [net.minecraft.world MenuProvider]
            [net.fabricmc.fabric.api.screenhandler.v1 ExtendedScreenHandlerFactory]
            [net.minecraft.network.chat Component]))
-
-(defn- tile->pos [tile-entity player]
-  (cond
-    (nil? tile-entity) (.blockPosition player)
-    (map? tile-entity) (or (:pos tile-entity) (.blockPosition player))
-    :else (try
-            (clojure.lang.Reflector/invokeInstanceMethod tile-entity "getBlockPos" (object-array []))
-            (catch Exception _
-              (.blockPosition player)))))
 
 (defn create-menu-provider [gui-id tile-entity]
   (reify MenuProvider
@@ -25,7 +17,7 @@
     (createMenu [_ sync-id _player-inventory player]
       (let [handler (gui/get-gui-handler)
             world (.level player)
-            pos (tile->pos tile-entity player)]
+        pos (provider-common/tile->pos tile-entity player)]
         (log/info "Creating menu for GUI" gui-id)
         (let [clj-container (.get-server-container handler gui-id player world pos)]
           (when-not clj-container
@@ -44,7 +36,7 @@
     (createMenu [_ sync-id _player-inventory player]
       (let [handler (gui/get-gui-handler)
             world (.level player)
-            pos (tile->pos tile-entity player)
+        pos (provider-common/tile->pos tile-entity player)
             clj-container (.get-server-container handler gui-id player world pos)]
         (when-not clj-container
           (throw (ex-info "Failed to create Clojure container" {:gui-id gui-id})))
@@ -57,7 +49,7 @@
     (writeScreenOpeningData [_ player buf]
       (.writeInt buf gui-id)
       (if tile-entity
-        (let [pos (tile->pos tile-entity player)]
+        (let [pos (provider-common/tile->pos tile-entity player)]
           (.writeBoolean buf true)
           (.writeBlockPos buf pos))
         (.writeBoolean buf false)))))

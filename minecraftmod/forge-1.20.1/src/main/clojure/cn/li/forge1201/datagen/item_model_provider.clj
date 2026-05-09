@@ -13,7 +13,8 @@
    `energy-item-model-properties`)."
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.item.dsl :as item-dsl]
-            [cn.li.forge1201.datagen.resource-location :as rl]
+            [cn.li.mc1201.datagen.resource-location :as rl]
+            [cn.li.mc1201.datagen.item-model-patterns :as item-model-patterns]
             [clojure.string :as str])
   (:import [net.minecraft.data PackOutput]
            [net.minecraft.resources ResourceLocation]
@@ -24,32 +25,26 @@
   [texture-name]
   (ResourceLocation. modid/*mod-id* (str "item/" texture-name)))
 
-(defn- registry-model-basename
-  ^String [item-id]
-  (str/replace (str item-id) #"-" "_"))
-
 (defn- register-energy-tier-models!
   [^ItemModelProvider this-provider ^ExistingFileHelper exfile-helper
    item-id {:keys [texture-empty texture-half texture-full]}]
-  (let [base (registry-model-basename item-id)
-        empty-t (or texture-empty (str base "_empty"))
-        half-t (or texture-half (str base "_half"))
-        full-t (or texture-full (str base "_full"))
-        half-model (str base "_half")
-        full-model (str base "_full")
+  (let [{:keys [base empty-texture half-texture full-texture half-model full-model]}
+        (item-model-patterns/energy-tier-model-spec item-id {:texture-empty texture-empty
+                                                             :texture-half texture-half
+                                                             :texture-full texture-full})
         mod-s modid/*mod-id*
         energy-rl (ResourceLocation. mod-s "energy")
         gen-parent (.mcLoc this-provider "item/generated")
         half-rl (ResourceLocation. mod-s (str "item/" half-model))
         full-rl (ResourceLocation. mod-s (str "item/" full-model))]
     (doto (.withExistingParent this-provider half-model gen-parent)
-      (.texture "layer0" ^ResourceLocation (texture-rl half-t)))
+      (.texture "layer0" ^ResourceLocation (texture-rl half-texture)))
     (doto (.withExistingParent this-provider full-model gen-parent)
-      (.texture "layer0" ^ResourceLocation (texture-rl full-t)))
+      (.texture "layer0" ^ResourceLocation (texture-rl full-texture)))
     (let [^ItemModelBuilder main-b (.withExistingParent this-provider base gen-parent)
           half-mf (ModelFile$ExistingModelFile. half-rl exfile-helper)
           full-mf (ModelFile$ExistingModelFile. full-rl exfile-helper)]
-      (.texture main-b "layer0" ^ResourceLocation (texture-rl empty-t))
+      (.texture main-b "layer0" ^ResourceLocation (texture-rl empty-texture))
       ;; Full threshold first so energy=1 resolves to full, not half (first-match wins).
       (-> (.override main-b)
           (.predicate energy-rl 1.0)
@@ -67,15 +62,12 @@
     (registerModels []
       (let [this-provider ^ItemModelProvider this
             all-item-names (item-dsl/list-items)
-            energy-tier-items (filter #(get-in (item-dsl/get-item %) [:properties :item-model-energy-levels])
+            energy-tier-items (filter #(item-model-patterns/energy-tier-item? (item-dsl/get-item %))
                                       all-item-names)
             items-with-simple-model (keep (fn [item-name]
                                             (let [item-spec (item-dsl/get-item item-name)]
-                                              (when (and (not (get-in item-spec [:properties :item-model-energy-levels]))
-                                                         (get-in item-spec [:properties :model-texture]))
-                                                {:item-name (str item-name)
-                                                 :model-texture (get-in item-spec [:properties :model-texture])
-                                                 :model-parent (get-in item-spec [:properties :model-parent] "item/generated")})))
+                                              (when-not (item-model-patterns/energy-tier-item? item-spec)
+                                                (item-model-patterns/simple-model-spec item-name item-spec))))
                                           all-item-names)]
         (doseq [item-name energy-tier-items]
           (register-energy-tier-models!

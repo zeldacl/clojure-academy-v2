@@ -5,6 +5,7 @@
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.integration.event-feedback :as event-feedback]
+            [cn.li.mc1201.integration.event-handlers :as event-handlers]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
@@ -20,38 +21,28 @@
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
             BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
 
+(defn- is-gui-result?
+  "Forge predicate to detect GUI opening results"
+  [ret]
+  (and (map? ret) (contains? ret :gui-id) (contains? ret :player) 
+       (contains? ret :world) (contains? ret :pos)))
+
+(defn- open-gui-for-result
+  "Forge GUI opener from event result"
+  [gui-id player world _pos tile-entity]
+  (when (and tile-entity (not (.isClientSide ^Level world)))
+    (log/info "[RIGHT-CLICK] Opening GUI on server side...")
+    (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))
+
 (defn handle-right-click
   "Handle right-click block event from event data map"
   [event-data]
-  (let [{:keys [x y z block]} event-data
-        block-name (str block)
-        ;; Identify block ID from Minecraft block name
-        block-id (event-metadata/identify-block-from-full-name block-name)]
-    (log/info "[RIGHT-CLICK] Event at (" x "," y "," z ") block:" block-name)
-    (log/info "[RIGHT-CLICK] Identified block-id:" block-id)
-    
-    ;; Check if this block has a registered right-click handler
-    (if block-id
-      (if (event-metadata/has-event-handler? block-id :on-right-click)
-        (do
-          (log/info "[RIGHT-CLICK] Block has registered handler, dispatching to dispatcher...")
-          (let [ret (dispatcher/on-block-right-click (assoc event-data :block-id block-id))]
-            (log/info "[RIGHT-CLICK] Dispatcher returned:" ret)
-            (event-feedback/emit-feedback! event-data ret)
-            (when (and (map? ret) (contains? ret :gui-id) (contains? ret :player) (contains? ret :world) (contains? ret :pos))
-              (try
-                (let [{:keys [gui-id player world pos]} ret
-                      tile-entity (.getBlockEntity ^Level world pos)]
-                  (log/info "[RIGHT-CLICK] GUI result received: gui-id=" gui-id "pos=" pos "tile-entity=" (if tile-entity "present" "nil"))
-                  (when (and tile-entity (not (.isClientSide ^Level world)))
-                    (log/info "[RIGHT-CLICK] Opening GUI on server side...")
-                    (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))
-                (catch Exception e
-                  (log/error "[RIGHT-CLICK] Failed to open GUI:" (.getMessage e))
-                  (log/error "[RIGHT-CLICK] Exception:" e))))
-            ret))
-        (log/info "[RIGHT-CLICK] Block has no registered :on-right-click handler"))
-      (log/info "[RIGHT-CLICK] Could not identify block-id from:" block-name))))
+  (event-handlers/handle-block-right-click
+    event-data
+    dispatcher/on-block-right-click
+    is-gui-result?
+    open-gui-for-result
+    "[RIGHT-CLICK]"))
 
 (defn handle-right-click-event
   "Handle right-click block event directly from Forge event object"

@@ -10,13 +10,11 @@
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
             [cn.li.forge1201.gui.slots :as slots]
             [cn.li.mc1201.gui.container-adapter :as ca]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mc1201.gui.menu-bridge-common :as menu-common])
   (:import [cn.li.mc1201.gui CMenuBridge]
            [net.minecraft.server.level ServerPlayer]
-           [net.minecraft.world.inventory AbstractContainerMenu DataSlot Slot]
+           [net.minecraft.world.inventory DataSlot]
            [net.minecraft.world.item ItemStack]))
-
-(def tab-data-slot-index 0)
 
 (defn- create-tab-data-slot
   "Create a standalone DataSlot and sync from container's :tab-index.
@@ -86,24 +84,22 @@
             (gui/safe-validate clj-container player))
 
           (removed [player]
-            (let [cid (gui/get-menu-container-id this)]
-              (when cid
-                (tabbed/clear-tab-index-by-container-id! cid)
-                (gui/unregister-container-by-id! cid)))
-            (gui/unregister-menu-container! this)
-            (gui/safe-close! clj-container)
-            (gui/unregister-active-container! clj-container)
-            (gui/unregister-player-container! player)
-            (log/info "Menu closed for player" (str player)))
+            (menu-common/remove-menu!
+              this
+              clj-container
+              player
+              {:on-container-id tabbed/clear-tab-index-by-container-id!
+               :log-message "Menu closed for player"}))
 
           (broadcastChanges []
-            (when (and (tabbed/tabbed-container? clj-container) (:tab-index clj-container))
-              (reset! tab-idx-ref (int @(:tab-index clj-container))))
-            (sync-tab-slot-from-container! tab-slot clj-container)
-            (sync-data-slots-from-container! clj-container)
-            (let [^CMenuBridge s this]
-              (.callSuperBroadcastChanges s))
-            (gui/safe-sync! clj-container))
+            (menu-common/broadcast-and-sync!
+              this
+              clj-container
+              (fn []
+                (when (and (tabbed/tabbed-container? clj-container) (:tab-index clj-container))
+                  (reset! tab-idx-ref (int @(:tab-index clj-container))))
+                (sync-tab-slot-from-container! tab-slot clj-container)
+                (sync-data-slots-from-container! clj-container))))
 
           ;; clicked() runs only on the server when it receives click packets.
           (clicked [slot-index button click-type player]
@@ -116,19 +112,9 @@
             (if (and (tabbed/tabbed-container? clj-container)
                      (not (tabbed/slots-active-for-menu? this clj-container)))
               ItemStack/EMPTY
-              (try
-                (let [^Slot slot (.getSlot ^AbstractContainerMenu this slot-index)]
-                  (if (and slot (.hasItem slot))
-                    (let [^ItemStack stack (.getItem slot)]
-                      (gui/execute-quick-move-forge this clj-container slot-index slot stack))
-                    ItemStack/EMPTY))
-                (catch Exception e
-                  (log/error "Error in quickMoveStack:" (.getMessage e))
-                  ItemStack/EMPTY))))
+              (menu-common/quick-move-stack this clj-container slot-index "Error in quickMoveStack:")))
 
           (canTakeItemForPickAll [stack slot] true)
           (canDragTo [slot] true))]
     (setup-menu-slots! menu clj-container tab-slot)
-    (gui/register-menu-container! menu clj-container)
-    (gui/register-container-by-id! window-id clj-container)
-    menu))
+    (menu-common/finalize-menu-registration! menu window-id clj-container)))

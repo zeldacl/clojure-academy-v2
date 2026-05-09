@@ -2,28 +2,14 @@
   "Forge 1.20.1 provider bridge.
 
   Uses reify MenuProvider and delegates menu creation to menu-bridge."
-  (:require [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.mc1201.gui.provider-common :as provider-common]
+            [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.forge1201.gui.menu-bridge :as menu-bridge])
   (:import [net.minecraft.world MenuProvider]
            [net.minecraft.network.chat Component]
-           [net.minecraft.world.entity.player Player]
-           [net.minecraft.world.level.block.entity BlockEntity]))
-
-(defn- tile->pos
-  [tile-entity ^Player player]
-  (cond
-    (nil? tile-entity)
-    (.blockPosition player)
-
-    (map? tile-entity)
-    (or (:pos tile-entity) (.blockPosition player))
-
-    :else
-    (try
-      (.getBlockPos ^BlockEntity tile-entity)
-      (catch Exception _ (.blockPosition player)))))
+           [net.minecraft.world.entity.player Player]))
 
 (defn create-menu-provider
   "Create a MenuProvider for opening GUI.
@@ -45,7 +31,7 @@
       (try
         (let [handler (gui/get-gui-handler)
               world (.level player)
-              pos (tile->pos tile-entity player)]
+            pos (provider-common/tile->pos tile-entity player)]
           (log/info "[MENU-PROVIDER] Handler obtained for GUI" gui-id)
           (log/info "[MENU-PROVIDER] Creating server-side container...")
           (let [clj-container (gui-handler/get-server-container handler gui-id player world pos)]

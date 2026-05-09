@@ -5,16 +5,85 @@
 
    Fabric uses different event system than Forge, so this module
    provides utilities to be called during data generation phase."
-  (:require [cn.li.ac.config.modid :as modid]))
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.content :as mc-content]
+            [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.fabric1201.datagen.lang-provider :as lang-provider]
+            [cn.li.fabric1201.datagen.blockstate-provider :as blockstate-provider]
+            [cn.li.fabric1201.datagen.item-model-provider :as item-model-provider]
+            [cn.li.fabric1201.datagen.advancement-provider :as advancement-provider]
+            [cn.li.fabric1201.datagen.recipe-provider :as recipe-provider]))
+
+(defn- ensure-ac-content-loaded!
+  "Datagen runs outside normal mod init in some entry paths.
+   Ensure gameplay metadata (recipes/translations/etc.) is populated."
+  []
+  (try
+    (mc-content/ensure-content-init-registered!)
+    (lifecycle/run-content-init!)
+    (lifecycle/run-runtime-content-activation!)
+    (catch Throwable t
+      (println (str "[" modid/MOD-ID "] WARNING: failed to load gameplay content for fabric datagen: "
+                    (ex-message t))))))
 
 (defn register-data-generators!
   "Register all data generators for Fabric
 
    Call this during data generation phase."
-  [_generator _exfile-helper]
-  (println (str "[" modid/MOD-ID "] Fabric DataGenerator setup is currently no-op (providers are platform-specific).")))
+  [generator _exfile-helper]
+  (ensure-ac-content-loaded!)
+  (let [pack (.createPack ^net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator generator)
+        lang-factory (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+                       (create [_ output]
+                         (lang-provider/create-provider output "en_us")))
+        zh-lang-factory (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+                          (create [_ output]
+                            (lang-provider/create-provider output "zh_cn")))
+        blockstate-factory (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+                             (create [_ output]
+                               (blockstate-provider/create-provider output)))
+        item-model-factory (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+                             (create [_ output]
+                               (item-model-provider/create-provider output)))
+        advancement-factory (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+                              (create [_ output]
+                                (advancement-provider/create-provider output)))
+        recipe-factory (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+                         (create [_ output]
+                           (recipe-provider/create-provider output)))]
+    (.addProvider pack lang-factory)
+    (.addProvider pack zh-lang-factory)
+    (.addProvider pack blockstate-factory)
+    (.addProvider pack item-model-factory)
+    (.addProvider pack advancement-factory)
+    (.addProvider pack recipe-factory)
+    (println (str "[" modid/MOD-ID "] Fabric DataGenerator setup registered lang+blockstate+item-model+advancement+recipe providers."))))
 
 (defn create-providers
   "Create all provider instances (for manual registration)"
-  [_generator _exfile-helper]
-  [])
+  [generator _exfile-helper]
+  (let [pack (.createPack ^net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator generator)]
+    [(.addProvider pack
+       (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+         (create [_ output]
+           (lang-provider/create-provider output "en_us"))))
+     (.addProvider pack
+       (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+         (create [_ output]
+           (lang-provider/create-provider output "zh_cn"))))
+     (.addProvider pack
+       (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+         (create [_ output]
+           (blockstate-provider/create-provider output))))
+     (.addProvider pack
+       (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+         (create [_ output]
+           (item-model-provider/create-provider output))))
+     (.addProvider pack
+       (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+         (create [_ output]
+           (advancement-provider/create-provider output))))
+     (.addProvider pack
+       (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
+         (create [_ output]
+           (recipe-provider/create-provider output))))]))

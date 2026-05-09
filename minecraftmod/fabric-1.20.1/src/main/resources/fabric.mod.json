@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "id": "my_mod",
-  "version": "${version}",
-  "name": "My Mod (Fabric)",
+  "version": "${mod_version}",
+  "name": "${mod_name} (Fabric)",
   "description": "A multi-loader Minecraft mod written in Clojure",
-  "authors": ["YourName"],
+  "authors": ["${mod_authors}"],
   "contact": {
     "homepage": "https://example.com/",
     "sources": "https://github.com/example/my_mod"

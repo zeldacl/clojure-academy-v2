@@ -1,6 +1,7 @@
 (ns cn.li.fabric1201.gui.init
   "Fabric 1.20.1 GUI System Initialization"
   (:require [cn.li.mc1201.gui.init-orchestrator :as gui-orchestrator]
+            [cn.li.mc1201.gui.init-checks :as init-checks]
             [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.fabric1201.gui.registry-impl :as registry-impl]
             [cn.li.fabric1201.gui.network :as network]
@@ -25,11 +26,11 @@
   (gui-orchestrator/phase-done! "Fabric 1.20.1" "Client"))
 
 (defn verify-initialization []
-  (let [gui-checks (into {}
-                        (for [gui-id (gui/get-all-gui-ids)]
-                          (let [check-key (keyword (str "gui-" gui-id "-handler-type"))
-                                handler-type (registry-impl/get-handler-type gui-id)]
-                            [check-key (some? handler-type)])))
+  (let [gui-checks (init-checks/build-gui-checks
+                     (gui/get-all-gui-ids)
+                     "gui-"
+                     (fn [gui-id]
+                       (some? (registry-impl/get-handler-type gui-id))))
         checks gui-checks]
     (gui-orchestrator/verify-checks! "Verifying Fabric GUI system initialization..." checks)))
 

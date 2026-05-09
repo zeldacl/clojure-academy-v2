@@ -1,6 +1,7 @@
 package cn.li.forge1201.client.render;
 
 import cn.li.forge1201.MyMod1201;
+import cn.li.mc1201.client.render.ModRenderTypes;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
@@ -21,7 +22,10 @@ public final class ModShaders {
     public static void onRegisterShaders(RegisterShadersEvent event) throws IOException {
         event.registerShader(
                 new ShaderInstance(event.getResourceProvider(), new ResourceLocation(MyMod1201.MODID, "plasma_body"), ModRenderTypes.PLASMA_BODY_FORMAT),
-                shader -> plasmaBodyShader = shader
+                shader -> {
+                    plasmaBodyShader = shader;
+                    ModRenderTypes.setPlasmaBodyShader(shader);
+                }
         );
     }
 

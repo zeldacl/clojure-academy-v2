@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.gui.init
   "Forge 1.20.1 GUI System Initialization"
   (:require [cn.li.mc1201.gui.init-orchestrator :as gui-orchestrator]
+            [cn.li.mc1201.gui.init-checks :as init-checks]
             [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.util.log :as log]))
 
@@ -60,13 +61,13 @@
   
   Returns: boolean (true if all checks pass)"
   []
-  (let [;; Dynamically check all GUI IDs from metadata
-      get-menu-type (requiring-resolve 'cn.li.forge1201.gui.registry-impl/get-menu-type)
-        checks (into {}
-                    (for [gui-id (gui/get-all-gui-ids)]
-                      (let [check-key (keyword (str "gui-" gui-id "-menu-type"))
-              menu-type (when get-menu-type (get-menu-type gui-id))]
-                        [check-key (some? menu-type)])))]
+  (let [get-menu-type (requiring-resolve 'cn.li.forge1201.gui.registry-impl/get-menu-type)
+        checks (init-checks/build-gui-checks
+                 (gui/get-all-gui-ids)
+                 "gui-"
+                 (fn [gui-id]
+                   (let [menu-type (when get-menu-type (get-menu-type gui-id))]
+                     (some? menu-type))))]
     (gui-orchestrator/verify-checks! "Verifying GUI system initialization..." checks)))
 
 ;; ============================================================================

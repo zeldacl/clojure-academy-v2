@@ -8,6 +8,7 @@
             [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.forge1201.gui.bridge :as bridge]
+            [cn.li.mc1201.gui.registry-common :as registry-common]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.network NetworkHooks IContainerFactory]
@@ -16,7 +17,6 @@
            [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world MenuProvider]
-           [net.minecraft.world.inventory MenuType]
            [net.minecraft.world.entity.player Inventory]
            [net.minecraft.world.level Level]
            [net.minecraft.core BlockPos]
@@ -68,18 +68,20 @@
         (let [handler (gui/get-gui-handler)
               ^ServerPlayer player (.player ^Inventory player-inventory)
               ^Level world (.level player)
-              ^BlockPos pos (.readBlockPos ^FriendlyByteBuf buf)
-              clj-container (gui-handler/get-server-container handler gui-id player world pos)]
-          (if clj-container
-            (do
+              ^BlockPos pos (.readBlockPos ^FriendlyByteBuf buf)]
+          (registry-common/create-wrapped-container
+            (fn []
+              (gui-handler/get-server-container handler gui-id player world pos))
+            (fn [wid menu-type clj-container]
               ;; Store for screen_factory.clj which needs to read it back.
               ;; (The proxy no longer has a getClojureContainer() method since
               ;; we replaced gen-class with proxy.)
               (gui/set-client-container! clj-container)
-              (bridge/wrap-clojure-container window-id (get-menu-type gui-id) clj-container))
-            (do
-              (log/error "Failed to create container for GUI" gui-id)
-              nil)))))))
+              (bridge/wrap-clojure-container wid menu-type clj-container))
+            get-menu-type
+            gui-id
+            window-id
+            "Failed to create container for GUI"))))))
 
 (defn register-menu-types!
   "Populate menu-register DeferredRegister with all GUI menu types.

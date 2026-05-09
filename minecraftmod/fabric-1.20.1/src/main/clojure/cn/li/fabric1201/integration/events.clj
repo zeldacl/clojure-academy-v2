@@ -5,29 +5,30 @@
             [cn.li.mcmod.events.interaction-result :as interaction-result]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mc1201.integration.event-feedback :as event-feedback]
+            [cn.li.mc1201.integration.event-handlers :as event-handlers]
             [cn.li.fabric1201.gui.registry-impl :as gui-registry-impl])
   (:import [net.minecraft.world InteractionResult]))
+
+(defn- is-gui-result?
+  "Fabric predicate to detect GUI opening results"
+  [ret]
+  (interaction-result/gui-open-result? ret))
+
+(defn- open-gui-for-result
+  "Fabric GUI opener from event result"
+  [gui-id player world _pos tile-entity]
+  (when (and tile-entity (not (.isClientSide world)))
+    (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))
 
 (defn handle-right-click
   "Handle right-click block event from event data map"
   [event-data]
-  (let [{:keys [x y z block]} event-data
-        block-name (str block)
-        block-id (event-metadata/identify-block-from-full-name block-name)]
-    (log/info "Fabric 1.20.1 Right-click event at (" x "," y "," z ") block:" block-name)
-    (when (and block-id (event-metadata/has-event-handler? block-id :on-right-click))
-      (log/info "Block has registered handler, dispatching...")
-      (let [ret (core/on-block-right-click (assoc event-data :block-id block-id))]
-        (event-feedback/emit-feedback! event-data ret)
-        (when (interaction-result/gui-open-result? ret)
-          (try
-            (let [{:keys [gui-id player world pos]} ret
-                  tile-entity (.getBlockEntity world pos)]
-              (when (and tile-entity (not (.isClientSide world)))
-                (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))
-            (catch Exception e
-              (log/error "Failed to open GUI from right-click handler:" (.getMessage e)))))
-        ret))))
+  (event-handlers/handle-block-right-click
+    event-data
+    core/on-block-right-click
+    is-gui-result?
+    open-gui-for-result
+    ""))
 
 (defn handle-use-block
   "Handle Fabric UseBlockCallback event"

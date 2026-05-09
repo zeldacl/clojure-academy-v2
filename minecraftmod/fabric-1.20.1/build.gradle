@@ -27,7 +27,9 @@ loom {
             server()
             configName = "Fabric DataGen 1.20.1"
             runDir = "run-data"
-            // Fabric Loom 自动处理输出路径，通常不需要像 Forge 那样手动�?programArgs
+            vmArg "-Dfabric-api.datagen"
+            vmArg "-Dfabric-api.datagen.output-dir=${file('src/generated/resources').absolutePath}"
+            vmArg "-Dfabric-api.datagen.modid=${mod_id}"
         }
     }
 }
@@ -71,6 +73,22 @@ clojure {
 
 tasks.named('compileClojure').configure {
     dependsOn 'compileJava'
+}
+
+tasks.named('processResources').configure {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    var replaceProperties = [
+        mod_id         : mod_id,
+        mod_name       : mod_name,
+        mod_version    : mod_version,
+        mod_authors    : mod_authors,
+        mod_description: mod_description,
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['fabric.mod.json']) {
+        expand replaceProperties + [project: project]
+    }
 }
 
 tasks.matching { it.name == 'checkClojure' }.configureEach {

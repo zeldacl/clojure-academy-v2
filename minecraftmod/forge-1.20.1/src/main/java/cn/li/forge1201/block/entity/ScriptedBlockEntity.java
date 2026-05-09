@@ -4,6 +4,7 @@ import clojure.lang.RT;
 import clojure.lang.Var;
 import cn.li.forge1201.capability.NamedCapabilityRegistry;
 import cn.li.mc1201.block.entity.AbstractScriptedBlockEntity;
+import cn.li.mc1201.block.entity.BlockEntityRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.WorldlyContainer;
@@ -17,7 +18,6 @@ import net.minecraftforge.common.util.LazyOptional;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,15 +29,19 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ScriptedBlockEntity extends AbstractScriptedBlockEntity implements WorldlyContainer {
 
-    private static final Map<String, BlockEntityType<ScriptedBlockEntity>> TYPES = new HashMap<>();
-
+    /**
+     * Register this entity type via the shared registry.
+     */
     public static void registerType(String tileId, BlockEntityType<ScriptedBlockEntity> type) {
-        TYPES.put(tileId, type);
+        BlockEntityRegistry.registerType(tileId, type);
     }
 
+    /**
+     * Retrieve a registered entity type via the shared registry.
+     */
     @Nullable
     public static BlockEntityType<ScriptedBlockEntity> getType(String tileId) {
-        return TYPES.get(tileId);
+        return (BlockEntityType<ScriptedBlockEntity>) BlockEntityRegistry.getType(tileId);
     }
 
     /** Cache of active LazyOptionals so invalidateCaps() can properly invalidate them. */

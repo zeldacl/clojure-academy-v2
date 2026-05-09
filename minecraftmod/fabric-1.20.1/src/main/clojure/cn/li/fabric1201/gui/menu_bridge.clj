@@ -6,12 +6,9 @@
   (:require [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.fabric1201.gui.slots :as slots]
             [cn.li.mc1201.gui.container-adapter :as ca]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mc1201.gui.menu-bridge-common :as menu-common])
   (:import [cn.li.mc1201.gui CMenuBridge]
-           [net.minecraft.server.level ServerPlayer]
-           [net.minecraft.world.inventory AbstractContainerMenu Slot]
-           [net.minecraft.world.item ItemStack]
-           [net.minecraft.world Container]))
+           [net.minecraft.server.level ServerPlayer]))
 
 (defn- setup-menu-slots!
   [^CMenuBridge menu clj-container]
@@ -30,40 +27,24 @@
                  (boolean (gui/safe-validate clj-container player)))
 
                (removed [player]
-                 (let [cid (gui/get-menu-container-id this)]
-                   (when cid
-                     (gui/unregister-container-by-id! cid)))
-                 (gui/unregister-menu-container! this)
-                 (gui/safe-close! clj-container)
-                 (gui/unregister-active-container! clj-container)
-                 (gui/unregister-player-container! player)
-                 (let [^CMenuBridge s this]
-                   (.callSuperRemoved s player))
-                 (log/info "Fabric menu closed for player" (str player)))
+                 (menu-common/remove-menu!
+                   this
+                   clj-container
+                   player
+                   {:call-super-removed? true
+                    :log-message "Fabric menu closed for player"}))
 
                (broadcastChanges []
-                 (let [^CMenuBridge s this]
-                   (.callSuperBroadcastChanges s))
-                 (gui/safe-sync! clj-container))
+                 (menu-common/broadcast-and-sync! this clj-container nil))
 
                (clicked [slot-index button click-type player]
                  (let [^CMenuBridge s this]
                    (.callSuperClicked s slot-index button click-type player)))
 
                (quickMoveStack [player slot-index]
-                 (try
-                   (let [^Slot slot (.getSlot ^AbstractContainerMenu this slot-index)]
-                     (if (and slot (.hasItem slot))
-                       (let [^ItemStack stack (.getItem slot)]
-                         (gui/execute-quick-move-forge this clj-container slot-index slot stack))
-                       ItemStack/EMPTY))
-                   (catch Exception e
-                     (log/error "Error in Fabric quickMoveStack:" (.getMessage e))
-                     ItemStack/EMPTY))))]
+                 (menu-common/quick-move-stack this clj-container slot-index "Error in Fabric quickMoveStack:")))]
     (setup-menu-slots! menu clj-container)
-    (gui/register-menu-container! menu clj-container)
-    (gui/register-container-by-id! window-id clj-container)
-    menu))
+    (menu-common/finalize-menu-registration! menu window-id clj-container)))
 
 (defn create-screen-handler-bridge [window-id menu-type clj-container]
   (create-menu-bridge window-id menu-type clj-container))

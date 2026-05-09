@@ -4,7 +4,8 @@
   Keeps public API stable while delegating concrete bridge logic to:
   - cn.li.forge1201.gui.menu-bridge
   - cn.li.forge1201.gui.provider-bridge"
-  (:require [cn.li.forge1201.gui.menu-bridge :as menu-bridge]
+  (:require [cn.li.mc1201.gui.bridge :as shared-bridge]
+            [cn.li.forge1201.gui.menu-bridge :as menu-bridge]
             [cn.li.forge1201.gui.provider-bridge :as provider-bridge]))
 
 ;; ============================================================================
@@ -20,17 +21,17 @@
   
   Returns: MenuProvider instance"
   [gui-id tile-entity]
-  (provider-bridge/create-menu-provider gui-id tile-entity))
+  (shared-bridge/create-menu-provider provider-bridge/create-menu-provider gui-id tile-entity))
 
 (defn create-extended-menu-provider
   "Create an extended menu provider (Forge uses the same provider type)."
   [gui-id tile-entity]
-  (provider-bridge/create-extended-menu-provider gui-id tile-entity))
+  (shared-bridge/create-extended-menu-provider provider-bridge/create-extended-menu-provider gui-id tile-entity))
 
 (defn create-extended-factory
   "Backward-compatible alias."
   [gui-id tile-entity]
-  (create-extended-menu-provider gui-id tile-entity))
+  (shared-bridge/create-extended-factory provider-bridge/create-extended-menu-provider gui-id tile-entity))
 
 (defn wrap-clojure-container
   "Wrap a Clojure container in Java AbstractContainerMenu
@@ -42,4 +43,4 @@
   
   Returns: AbstractContainerMenu instance"
   [window-id menu-type clj-container]
-  (menu-bridge/create-menu-bridge window-id menu-type clj-container))
+  (shared-bridge/wrap-clojure-container menu-bridge/create-menu-bridge window-id menu-type clj-container))

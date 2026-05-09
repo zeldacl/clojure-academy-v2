@@ -2,9 +2,11 @@
   "Generate advancement JSON from AC achievement metadata."
   (:require [clojure.string :as str]
             [cn.li.mcmod.config :as modid]
-            [cn.li.forge1201.datagen.resource-location :as rl]
+            [cn.li.mc1201.datagen.resource-location :as rl]
+            [cn.li.mc1201.datagen.gson-util :as gson-util]
+            [cn.li.mc1201.datagen.item-registry :as item-registry]
             [cn.li.mcmod.datagen.metadata :as datagen-metadata])
-  (:import [com.google.gson Gson GsonBuilder JsonElement]
+  (:import [com.google.gson Gson JsonElement]
            [java.nio.file Path]
            [java.util HashSet]
            [java.util.concurrent CompletableFuture]
@@ -13,7 +15,7 @@
            [net.minecraft.resources ResourceLocation]))
 
 (def ^:private ^Gson gson
-  (-> (GsonBuilder.) (.setPrettyPrinting) (.disableHtmlEscaping) (.create)))
+  (gson-util/create-pretty-gson))
 
 (defn- item-predicate
   [item-id]
@@ -52,39 +54,15 @@
   [id]
   (str "my_mod:achievements/" (normalize-id id)))
 
-(defn- known-item-ids
+(defn- make-known-item-ids
+  "Build known items set using shared helper"
   []
-  (let [known (HashSet.)]
-    (doseq [item-id ((requiring-resolve 'cn.li.mcmod.registry.metadata/get-all-item-ids))]
-      (let [registry-name ((requiring-resolve 'cn.li.mcmod.registry.metadata/get-item-registry-name) item-id)]
-        (.add known (str "my_mod:" registry-name))))
-    (doseq [block-id ((requiring-resolve 'cn.li.mcmod.registry.metadata/get-all-block-ids))]
-      (let [registry-name ((requiring-resolve 'cn.li.mcmod.registry.metadata/get-block-registry-name) block-id)]
-        (.add known (str "my_mod:" registry-name))))
-    known))
-
-(defn- item-exists?
-  [^String id known]
-  (or (.contains ^HashSet known id)
-      (let [^ResourceLocation rl* (rl/parse-resource-location id)
-            item (.get BuiltInRegistries/ITEM rl*)]
-        (not= "minecraft:air" (str (.getKey BuiltInRegistries/ITEM item))))))
-
-(defn- safe-item-id
-  [id known]
-  (let [sid (str id)]
-    (if (item-exists? sid known)
-      sid
-      "minecraft:book")))
-
-(defn- with-safe-items
-  [criteria known]
-  (mapv
-    (fn [entry]
-      (if (= :inventory-changed (:type entry))
-        (update entry :items (fn [xs] (mapv #(safe-item-id % known) xs)))
-        entry))
-    criteria))
+  (item-registry/known-item-ids
+    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-all-item-ids)
+    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-item-registry-name)
+    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-all-block-ids)
+    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-block-registry-name)
+    "my_mod"))
 
 (defn- root-json
   [{:keys [id background]}]
@@ -102,7 +80,7 @@
 (defn- ach-json
   [ach root-rl known]
   (let [id (:id ach)
-        criteria (with-safe-items (:criteria ach) known)
+        criteria (item-registry/with-safe-items (:criteria ach) known rl/parse-resource-location)
         criteria-map (into {}
                            (map-indexed
                              (fn [idx c]
@@ -113,7 +91,7 @@
                     (ach-id parent)
                     root-rl)]
     {"parent" parent-rl
-     "display" {"icon" {"item" (safe-item-id (:icon ach) known)}
+     "display" {"icon" {"item" (item-registry/safe-item-id (:icon ach) known rl/parse-resource-location)}
                 "title" {"translate" (str "advancement.my_mod." id)}
                 "description" {"translate" (str "advancement.my_mod." id ".description")}
                 "frame" (name (or (:frame ach) :task))
@@ -128,7 +106,7 @@
   (let [out-root (.getOutputFolder pack-output)]
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
-        (let [known (known-item-ids)
+        (let [known (make-known-item-ids)
               tabs (datagen-metadata/get-achievement-tabs)
               all-achievements (datagen-metadata/get-achievements)
               writes (atom [])]

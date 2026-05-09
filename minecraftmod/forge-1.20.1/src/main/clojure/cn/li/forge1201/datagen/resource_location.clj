@@ -1,13 +1,8 @@
 (ns cn.li.forge1201.datagen.resource-location
-  (:require [clojure.string :as str])
-  (:import [net.minecraft.resources ResourceLocation]))
+  "Compatibility wrapper for shared datagen resource-location helpers."
+  (:require [cn.li.mc1201.datagen.resource-location :as shared]))
 
 (defn parse-resource-location
-  ([s] (parse-resource-location s nil))
+  ([s] (shared/parse-resource-location s))
   ([s default-namespace]
-   (let [value (str s)]
-     (if (str/includes? value ":")
-       (let [[namespace path] (str/split value #":" 2)]
-         (ResourceLocation. namespace path))
-       (when default-namespace
-         (ResourceLocation. default-namespace value))))))
+   (shared/parse-resource-location s default-namespace)))

@@ -1,19 +1,18 @@
 (ns cn.li.forge1201.datagen.recipe-provider
   "Forge 1.20.1 recipe datagen provider."
   (:require [clojure.string :as str]
-            [cn.li.forge1201.datagen.resource-location :as rl]
+            [cn.li.mc1201.datagen.resource-location :as rl]
+            [cn.li.mc1201.datagen.metadata-resolver :as metadata-resolver]
+            [cn.li.mc1201.datagen.recipe-patterns :as recipe-patterns]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.datagen.metadata :as datagen-metadata])
   (:import [java.util.function Consumer]
            [net.minecraft.advancements CriterionTriggerInstance]
            [net.minecraft.advancements.critereon InventoryChangeTrigger$TriggerInstance]
-           [net.minecraft.core.registries BuiltInRegistries Registries]
            [net.minecraft.data PackOutput]
            [net.minecraft.data.recipes RecipeCategory RecipeProvider
             ShapedRecipeBuilder ShapelessRecipeBuilder SimpleCookingRecipeBuilder]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraft.tags TagKey]
-           [net.minecraft.world.item Item Items]
            [net.minecraft.world.item.crafting Ingredient]
            [net.minecraft.world.level ItemLike]
            [net.minecraftforge.common.data ExistingFileHelper]))
@@ -22,115 +21,64 @@
   []
   (vec (datagen-metadata/get-recipes)))
 
-(defn- resolve-item
-  ^ItemLike [item-id]
-  (let [^ResourceLocation item-rl (rl/parse-resource-location item-id)
-        ^Item item (.get BuiltInRegistries/ITEM item-rl)]
-    (when (or (nil? item) (= item Items/AIR))
-      (throw (ex-info "Unknown item id in recipe metadata" {:item-id item-id})))
-    item))
-
-(defn- resolve-tag
-  ^TagKey [tag-id]
-  (let [^ResourceLocation tag-rl (rl/parse-resource-location tag-id)]
-    (TagKey/create Registries/ITEM tag-rl)))
-
-(defn- ingredient-from-spec
-  ^Ingredient [spec]
-  (cond
-    (:item spec)
-    (let [^"[Lnet.minecraft.world.level.ItemLike;" item-array
-          (into-array ItemLike [(resolve-item (:item spec))])]
-      (Ingredient/of item-array))
-
-    (:tag spec)
-    (Ingredient/of ^TagKey (resolve-tag (:tag spec)))
-
-    :else
-    (throw (ex-info "Invalid ingredient spec" {:spec spec}))))
-
 (defn- define-key!
   [^ShapedRecipeBuilder builder k spec]
   (let [ch (if (char? k) k (first (str k)))
         ^Character key-char (Character/valueOf (char ch))
-        ingredient (ingredient-from-spec spec)]
+        ingredient (metadata-resolver/ingredient-from-spec spec rl/parse-resource-location)]
     (.define builder key-char ingredient)))
 
-(defn- first-item-id
-  [recipe]
-  (or (some :item (vals (:key recipe)))
-      (some :item (:ingredients recipe))
-      (get-in recipe [:ingredient :item])
-      (get-in recipe [:result :item])))
-
-(defn- unlock-name
-  [item-id]
-  (let [path (or (second (str/split (str item-id) #":" 2))
-                 (str item-id))]
-    (str "has_" (str/replace path #"[^\w/.-]" "_"))))
-
 (defn- criterion-for-item
+  "Create Forge criterion trigger for item unlock."
   ^CriterionTriggerInstance
   [item-id]
-  (let [^ItemLike item (resolve-item item-id)]
+  (let [^ItemLike item (metadata-resolver/resolve-item item-id rl/parse-resource-location)]
     (InventoryChangeTrigger$TriggerInstance/hasItems
       ^"[Lnet.minecraft.world.level.ItemLike;"
       (into-array ItemLike [item]))))
 
-(defn- add-unlock-shaped!
-  [^ShapedRecipeBuilder builder recipe]
-  (when-let [item-id (first-item-id recipe)]
-    (.unlockedBy builder
-      ^String (unlock-name item-id)
-      ^CriterionTriggerInstance (criterion-for-item item-id)))
-  builder)
-
-(defn- add-unlock-shapeless!
-  [^ShapelessRecipeBuilder builder recipe]
-  (when-let [item-id (first-item-id recipe)]
-    (.unlockedBy builder
-      ^String (unlock-name item-id)
-      ^CriterionTriggerInstance (criterion-for-item item-id)))
-  builder)
-
-(defn- add-unlock-smelting!
-  [^SimpleCookingRecipeBuilder builder recipe]
-  (when-let [item-id (first-item-id recipe)]
-    (.unlockedBy builder
-      ^String (unlock-name item-id)
-      ^CriterionTriggerInstance (criterion-for-item item-id)))
+(defn- add-unlock-to-builder!
+  "Apply criterion unlock to recipe builder if unlock item found."
+  [^Object builder recipe]
+  (when-let [unlock-item-id (recipe-patterns/first-item-id recipe)]
+    (let [{:keys [unlock-name criterion-instance]}
+          (recipe-patterns/criterion-metadata unlock-item-id criterion-for-item)]
+      (.unlockedBy builder ^String unlock-name ^CriterionTriggerInstance criterion-instance)))
   builder)
 
 (defn- emit-shaped!
   [^Consumer writer recipe]
-  (let [result-item (resolve-item (get-in recipe [:result :item]))
-        result-count (int (or (get-in recipe [:result :count]) 1))
+  (let [metadata (recipe-patterns/shaped-recipe-metadata recipe)
+        result-item (metadata-resolver/resolve-item (get-in metadata [:result :item]) rl/parse-resource-location)
+        result-count (:count (:result metadata))
         ^ShapedRecipeBuilder builder
         (ShapedRecipeBuilder/shaped RecipeCategory/MISC result-item result-count)]
-    (doseq [^String row (:pattern recipe)]
+    (doseq [^String row (:pattern metadata)]
       (.pattern builder row))
-    (doseq [[k spec] (:key recipe)]
+    (doseq [[k spec] (:key metadata)]
       (define-key! builder k spec))
-    (add-unlock-shaped! builder recipe)
+    (add-unlock-to-builder! builder recipe)
     (.save builder writer (ResourceLocation. modid/*mod-id* (str (:id recipe))))))
 
 (defn- emit-shapeless!
   [^Consumer writer recipe]
-  (let [result-item (resolve-item (get-in recipe [:result :item]))
-        result-count (int (or (get-in recipe [:result :count]) 1))
+  (let [metadata (recipe-patterns/shapeless-recipe-metadata recipe)
+        result-item (metadata-resolver/resolve-item (get-in metadata [:result :item]) rl/parse-resource-location)
+        result-count (:count (:result metadata))
         ^ShapelessRecipeBuilder builder
         (ShapelessRecipeBuilder/shapeless RecipeCategory/MISC result-item result-count)]
-    (doseq [ingredient-spec (:ingredients recipe)]
-      (.requires builder ^Ingredient (ingredient-from-spec ingredient-spec)))
-    (add-unlock-shapeless! builder recipe)
+    (doseq [ingredient-spec (:ingredients metadata)]
+      (.requires builder ^Ingredient (metadata-resolver/ingredient-from-spec ingredient-spec rl/parse-resource-location)))
+    (add-unlock-to-builder! builder recipe)
     (.save builder writer (ResourceLocation. modid/*mod-id* (str (:id recipe))))))
 
 (defn- emit-smelting!
   [^Consumer writer recipe]
-  (let [result-item (resolve-item (get-in recipe [:result :item]))
-        ingredient (ingredient-from-spec (:ingredient recipe))
-        experience (float (or (:experience recipe) 0.0))
-        cooking-time (int (or (:cooking-time recipe) 200))
+  (let [metadata (recipe-patterns/cooking-recipe-metadata recipe)
+        result-item (metadata-resolver/resolve-item (get-in metadata [:result :item]) rl/parse-resource-location)
+        ingredient (metadata-resolver/ingredient-from-spec (:ingredient metadata) rl/parse-resource-location)
+        experience (:experience metadata)
+        cooking-time (:cooking-time metadata)
         ^SimpleCookingRecipeBuilder builder
         (SimpleCookingRecipeBuilder/smelting
           ingredient
@@ -138,7 +86,7 @@
           result-item
           experience
           cooking-time)]
-    (add-unlock-smelting! builder recipe)
+    (add-unlock-to-builder! builder recipe)
     (.save builder writer (ResourceLocation. modid/*mod-id* (str (:id recipe))))))
 
 (defn create

@@ -1,6 +1,6 @@
 package cn.li.forge1201.datagen;
 
-import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mc1201.datagen.DataGeneratorInterop;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.data.event.GatherDataEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -19,16 +19,12 @@ public class DataGeneratorSetup {
     
     @SubscribeEvent
     public static void onGatherData(GatherDataEvent event) {
-        // Delegate to Clojure implementation via Clojure runtime
-        try {
-            System.out.println("[my_mod] DataGeneratorSetup.onGatherData invoked");
-            String ns = "cn.li.forge1201.datagen.event-handler";
-            ClojureInterop.requireNamespace(ns);
-            ClojureInterop.invoke(ns, "static-gather-data", event);
-        } catch (Exception e) {
-            System.err.println("[my_mod] Error invoking Clojure DataGenerator handler: " + e);
-            e.printStackTrace();
-        }
+        System.out.println("[my_mod] DataGeneratorSetup.onGatherData invoked");
+        DataGeneratorInterop.invoke(
+                "[my_mod] Error invoking Clojure DataGenerator handler: ",
+                "cn.li.forge1201.datagen.event-handler",
+                "static-gather-data",
+                event);
     }
 }
 

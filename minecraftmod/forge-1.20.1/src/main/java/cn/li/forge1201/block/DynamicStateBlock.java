@@ -8,76 +8,32 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.core.Direction;
+import cn.li.mc1201.block.AbstractDynamicStateBlock;
 
 import javax.annotation.Nullable;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Block with dynamic BlockState properties, no BlockEntity.
- * Replaces NodeDynamicBlock (renamed).
+ * Forge 1.20.1 Block with dynamic BlockState properties, no BlockEntity.
+ * Extends shared AbstractDynamicStateBlock for property registration logic.
  */
-public class DynamicStateBlock extends Block {
-
-    private static final Map<String, List<Property<?>>> blockProperties = new HashMap<>();
-    private static final ThreadLocal<InitContext> initContext = new ThreadLocal<>();
-
-    private static final class InitContext {
-        final String blockId;
-        final List<Property<?>> properties;
-
-        InitContext(String blockId, List<Property<?>> properties) {
-            this.blockId = blockId;
-            this.properties = properties;
-        }
-    }
+public class DynamicStateBlock extends AbstractDynamicStateBlock {
 
     public static DynamicStateBlock create(String blockId,
                                           List<Property<?>> properties,
                                           BlockBehaviour.Properties behaviourProperties) {
-        initContext.set(new InitContext(blockId, properties != null ? properties : Collections.emptyList()));
+        INIT_CONTEXT.set(new InitContext(blockId, properties != null ? properties : Collections.emptyList()));
         try {
             return new DynamicStateBlock(behaviourProperties);
         } finally {
-            initContext.remove();
+            INIT_CONTEXT.remove();
         }
     }
-
-    private String blockId;
 
     public DynamicStateBlock(BlockBehaviour.Properties properties) {
         super(properties);
-        InitContext ctx = initContext.get();
-        if (ctx != null) {
-            this.blockId = ctx.blockId;
-            blockProperties.put(ctx.blockId, ctx.properties);
-        }
-    }
-
-    public String getBlockId() {
-        return blockId;
-    }
-
-    @Override
-    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        super.createBlockStateDefinition(builder);
-        InitContext ctx = initContext.get();
-        List<Property<?>> properties;
-        if (ctx != null) {
-            properties = ctx.properties;
-            if (ctx.blockId != null) {
-                this.blockId = ctx.blockId;
-                blockProperties.put(ctx.blockId, ctx.properties);
-            }
-        } else {
-            properties = blockProperties.getOrDefault(this.blockId, Collections.emptyList());
-        }
-        if (properties != null && !properties.isEmpty()) {
-            builder.add(properties.toArray(new Property<?>[0]));
-        }
     }
 
     private BlockState withHorizontalFacing(BlockState state, @Nullable BlockPlaceContext context) {

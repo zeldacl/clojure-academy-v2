@@ -3,7 +3,7 @@
 
   Mirrors Forge behavior with request/response RPC plus server push.
   Transport format is EDN maps written into FriendlyByteBuf UTF strings."
-  (:require [cn.li.mc1201.runtime.edn-state :as es]
+  (:require [cn.li.mc1201.gui.network-packet-base :as packet-base]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
@@ -38,14 +38,12 @@
 
 (defn- serialize-map
   [m]
-  (es/encode-edn (or m {})))
+  (packet-base/encode-payload m))
 
 (defn- deserialize-map
   [^String s]
-  (let [result (es/decode-edn-safe
-                (or s "{}")
-                #(log/error "Failed to deserialize Fabric network payload:" (ex-message %)))]
-    (if (map? result) result {})))
+  (packet-base/decode-payload s
+                              #(log/error "Failed to deserialize Fabric network payload:" (ex-message %))))
 
 (defn- make-buf
   [payload]

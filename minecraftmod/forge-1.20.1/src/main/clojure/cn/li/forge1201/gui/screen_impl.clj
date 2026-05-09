@@ -4,14 +4,14 @@
   Platform-agnostic design: Reads GUI metadata and loops through all GUIs
   to register. Uses CGUI runtime to render and handle input for scripted GUIs.
   Tabbed GUIs: when tab index != 0, slot highlight is not drawn (inv-window only)."
-    (:require [cn.li.mcmod.gui.adapter :as gui]
+    (:require [cn.li.mc1201.gui.screen-registry :as screen-registry]
+              [cn.li.mcmod.gui.adapter :as gui]
               [cn.li.forge1201.gui.cgui-runtime :as cgui-rt]
               [cn.li.mcmod.util.log :as log])
     (:import [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client.gui.screens Screen]
           [cn.li.forge1201.shim ForgeClientHelper ForgeClientHelper$ScreenFactory]
            [cn.li.forge1201.gui CGuiContainerScreen]
-           [net.minecraft.world.inventory Slot ClickType]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.client.event ScreenEvent$BackgroundRendered]))
 
@@ -99,14 +99,9 @@
         (let [^CGuiContainerScreen s this]
           (reset! left (.getGuiLeft s))
           (reset! top (.getGuiTop s)))
-        (let [left-val @left
-              top-val @top
-              ^CGuiContainerScreen s this
-              right (+ left-val (.getXSize s))
-              bottom (+ top-val (.getYSize s))]
-                  ;(.fill gg left-val top-val right bottom (unchecked-int 0xC0101010))
-                  ;(.fill gg left-val top-val right bottom (unchecked-int 0xD0101010))
-          )
+        ;; Optional background fill kept disabled intentionally.
+        ;; (.fill gg left top right bottom (unchecked-int 0xC0101010))
+        ;; (.fill gg left top right bottom (unchecked-int 0xD0101010))
         (when root
           (try
             (cgui-rt/render-tree! gg root @left @top)
@@ -178,6 +173,42 @@
 ;; Screen Factory Registration (Forge 1.20.1)
 ;; ============================================================================
 
+(defn- register-one-screen!
+  [gui-id menu-type factory-fn-kw]
+  (log/info "[SCREEN-INIT] Registering GUI ID:" gui-id "menu-type:" menu-type "factory-fn-kw:" factory-fn-kw)
+  (when menu-type
+    (ForgeClientHelper/registerMenuScreen
+     menu-type
+     (reify ForgeClientHelper$ScreenFactory
+       (create [_ menu player-inventory title]
+         (log/info "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
+         (let [factory-fn (when factory-fn-kw
+                            (try
+                              (gui/get-screen-factory-fn factory-fn-kw)
+                              (catch Exception e
+                                (log/error "[SCREEN-FACTORY] Screen factory not registered for" factory-fn-kw ":" (.getMessage e))
+                                nil)))]
+           (if factory-fn
+             (try
+               (log/info "[SCREEN-FACTORY] Invoking factory-fn")
+               (let [screen-data (factory-fn menu player-inventory title)]
+                 (log/info "[SCREEN-FACTORY] factory-fn returned, type:" (type screen-data) "cgui-screen?" (cgui-screen-container? screen-data))
+                 (if (cgui-screen-container? screen-data)
+                   (do
+                     (log/info "Created CGui screen for GUI ID" gui-id)
+                     (create-cgui-container-screen menu player-inventory title screen-data))
+                   (do
+                     (log/warn "Screen factory did not return :cgui-screen-container for GUI ID" gui-id)
+                     (fallback-container-screen menu player-inventory title))))
+               (catch Throwable e
+                 (log/error "[SCREEN-FACTORY] Error creating CGui screen for GUI ID" gui-id ":" (.getMessage e))
+                 (log/error "[SCREEN-FACTORY] Exception:" e)
+                 (fallback-container-screen menu player-inventory title)))
+             (do
+               (log/error "[SCREEN-FACTORY] Missing factory function, using fallback screen. gui-id=" gui-id "factory-fn-kw=" factory-fn-kw)
+               (fallback-container-screen menu player-inventory title))))))))
+  (log/info "Registered screen for GUI ID" gui-id))
+
 (defn register-screens!
   "Register screen factories with Forge.
 
@@ -189,43 +220,12 @@
   []
   (log/info "Registering GUI screens for Forge 1.20.1")
   (try
-    (let [platform :forge-1.20.1]
-      (doseq [gui-id (gui/get-all-gui-ids)]
-        (let [menu-type     (gui/get-menu-type platform gui-id)
-              factory-fn-kw (gui/get-screen-factory-fn-kw gui-id)]
-          (log/info "[SCREEN-INIT] Registering GUI ID:" gui-id "menu-type:" menu-type "factory-fn-kw:" factory-fn-kw)
-          (when menu-type
-            (ForgeClientHelper/registerMenuScreen
-             menu-type
-             (reify ForgeClientHelper$ScreenFactory
-               (create [_ menu player-inventory title]
-                 (log/info "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
-                 (let [factory-fn (when factory-fn-kw
-                                    (try
-                                      (gui/get-screen-factory-fn factory-fn-kw)
-                                      (catch Exception e
-                                        (log/error "[SCREEN-FACTORY] Screen factory not registered for" factory-fn-kw ":" (.getMessage e))
-                                        nil)))]
-                   (if factory-fn
-                   (try
-                     (log/info "[SCREEN-FACTORY] Invoking factory-fn")
-                     (let [screen-data (factory-fn menu player-inventory title)]
-                       (log/info "[SCREEN-FACTORY] factory-fn returned, type:" (type screen-data) "cgui-screen?" (cgui-screen-container? screen-data))
-                       (if (cgui-screen-container? screen-data)
-                         (do
-                           (log/info "Created CGui screen for GUI ID" gui-id)
-                           (create-cgui-container-screen menu player-inventory title screen-data))
-                         (do
-                           (log/warn "Screen factory did not return :cgui-screen-container for GUI ID" gui-id)
-                           (fallback-container-screen menu player-inventory title))))
-                     (catch Throwable e
-                       (log/error "[SCREEN-FACTORY] Error creating CGui screen for GUI ID" gui-id ":" (.getMessage e))
-                       (log/error "[SCREEN-FACTORY] Exception:" e)
-                       (fallback-container-screen menu player-inventory title)))
-                     (do
-                       (log/error "[SCREEN-FACTORY] Missing factory function, using fallback screen. gui-id=" gui-id "factory-fn-kw=" factory-fn-kw)
-                       (fallback-container-screen menu player-inventory title))))))))
-          (log/info "Registered screen for GUI ID" gui-id))))
+    (screen-registry/register-all-screens!
+      :forge-1.20.1
+      gui/get-all-gui-ids
+      gui/get-menu-type
+      gui/get-screen-factory-fn-kw
+      register-one-screen!)
     (log/info "Screen factories registered successfully")
     (catch Exception e
       (log/error "Failed to register screen factories:" (.getMessage e))

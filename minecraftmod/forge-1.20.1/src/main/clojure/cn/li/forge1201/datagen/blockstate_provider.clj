@@ -9,7 +9,7 @@
   (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.block.blockstate-definition :as blockstate-def]
-            [cn.li.forge1201.datagen.resource-location :as rl]
+            [cn.li.mc1201.datagen.resource-location :as rl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [clojure.java.io :as io]
