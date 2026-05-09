@@ -1,46 +1,26 @@
 package cn.li.forge1201.entity.effect.hooks;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import cn.li.mc1201.entity.hook.AbstractHookRegistry;
 
+/**
+ * Forge-specific registry for effect entity hooks.
+ * Extends the shared AbstractHookRegistry with Forge hook types.
+ * Maintains static API for backward compatibility.
+ */
 public final class ScriptedEffectHooks {
-    private static final ScriptedEffectHook NOOP = (entity, level) -> {
-    };
-    private static final Map<String, ScriptedEffectHook> HOOKS = new ConcurrentHashMap<>();
-
-    private ScriptedEffectHooks() {
-    }
+    private static final Class<?> REGISTRY_CLASS = ScriptedEffectHooks.class;
+    private static final Class<? extends ScriptedEffectHook> HOOK_INTERFACE = ScriptedEffectHook.class;
 
     public static void register(String hookId, ScriptedEffectHook hook) {
-        if (hookId == null || hookId.isEmpty() || hook == null) {
-            return;
-        }
-        HOOKS.put(hookId, hook);
+        AbstractHookRegistry.register(REGISTRY_CLASS, hookId, hook);
     }
 
     public static ScriptedEffectHook resolve(String hookId) {
-        if (hookId == null || hookId.isEmpty()) {
-            return NOOP;
-        }
-        return HOOKS.getOrDefault(hookId, NOOP);
+        ScriptedEffectHook hook = AbstractHookRegistry.resolve(REGISTRY_CLASS, hookId);
+        return hook != null ? hook : (entity, level) -> {};
     }
 
     public static boolean registerByClassName(String hookId, String className) {
-        if (hookId == null || hookId.isEmpty() || className == null || className.isEmpty()) {
-            return false;
-        }
-        try {
-            Class<?> rawClass = Class.forName(className);
-            if (!ScriptedEffectHook.class.isAssignableFrom(rawClass)) {
-                return false;
-            }
-            @SuppressWarnings("unchecked")
-            Class<? extends ScriptedEffectHook> hookClass = (Class<? extends ScriptedEffectHook>) rawClass;
-            ScriptedEffectHook hook = hookClass.getDeclaredConstructor().newInstance();
-            register(hookId, hook);
-            return true;
-        } catch (Exception ignored) {
-            return false;
-        }
+        return AbstractHookRegistry.registerByClassName(REGISTRY_CLASS, HOOK_INTERFACE, hookId, className);
     }
 }

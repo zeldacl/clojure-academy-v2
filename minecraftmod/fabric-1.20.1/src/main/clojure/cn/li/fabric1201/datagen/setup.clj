@@ -6,32 +6,21 @@
    Fabric uses different event system than Forge, so this module
    provides utilities to be called during data generation phase."
   (:require [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.content :as mc-content]
-            [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.mc1201.datagen.setup-common :as setup-common]
             [cn.li.fabric1201.datagen.lang-provider :as lang-provider]
             [cn.li.fabric1201.datagen.blockstate-provider :as blockstate-provider]
             [cn.li.fabric1201.datagen.item-model-provider :as item-model-provider]
             [cn.li.fabric1201.datagen.advancement-provider :as advancement-provider]
             [cn.li.fabric1201.datagen.recipe-provider :as recipe-provider]))
 
-(defn- ensure-ac-content-loaded!
-  "Datagen runs outside normal mod init in some entry paths.
-   Ensure gameplay metadata (recipes/translations/etc.) is populated."
-  []
-  (try
-    (mc-content/ensure-content-init-registered!)
-    (lifecycle/run-content-init!)
-    (lifecycle/run-runtime-content-activation!)
-    (catch Throwable t
-      (println (str "[" modid/MOD-ID "] WARNING: failed to load gameplay content for fabric datagen: "
-                    (ex-message t))))))
+
 
 (defn register-data-generators!
   "Register all data generators for Fabric
 
    Call this during data generation phase."
   [generator _exfile-helper]
-  (ensure-ac-content-loaded!)
+  (setup-common/ensure-ac-content-loaded!)
   (let [pack (.createPack ^net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator generator)
         lang-factory (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
                        (create [_ output]

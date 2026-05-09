@@ -1,6 +1,7 @@
 package cn.li.forge1201.block;
 
 import cn.li.forge1201.block.entity.ScriptedBlockEntity;
+import cn.li.mc1201.block.DynamicBlockPropertyRegistry;
 import cn.li.mc1201.block.ScriptedCarrierBlockBase;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
@@ -22,11 +23,8 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import javax.annotation.Nullable;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -35,7 +33,6 @@ import java.util.Set;
  */
 public class ScriptedBlock extends ScriptedCarrierBlockBase {
 
-    private static final Map<String, List<Property<?>>> BLOCK_PROPERTIES = new HashMap<>();
     /**
      * Blocks that should be rendered by BER only (no static block model pass).
      * Matches original AcademyCraft PhaseGen behavior (invisible block model + TESR/BER).
@@ -63,29 +60,15 @@ public class ScriptedBlock extends ScriptedCarrierBlockBase {
         "developer-advanced",
         "developer-advanced-part"
     );
-    private static final ThreadLocal<InitContext> INIT_CONTEXT = new ThreadLocal<>();
-
-    private static final class InitContext {
-        final String blockId;
-        final String tileId;
-        final List<Property<?>> properties;
-
-        InitContext(String blockId, String tileId, List<Property<?>> properties) {
-            this.blockId = blockId;
-            this.tileId = tileId;
-            this.properties = properties;
-        }
-    }
-
     public static ScriptedBlock create(String blockId, String tileId,
                                       List<Property<?>> properties,
                                       BlockBehaviour.Properties behaviourProperties) {
-        INIT_CONTEXT.set(new InitContext(blockId, tileId, properties != null ? properties : Collections.emptyList()));
-        try {
-            return new ScriptedBlock(blockId, tileId, behaviourProperties);
-        } finally {
-            INIT_CONTEXT.remove();
-        }
+        return DynamicBlockPropertyRegistry.withInitContext(
+            ScriptedBlock.class,
+            blockId,
+            properties,
+            () -> new ScriptedBlock(blockId, tileId, behaviourProperties)
+        );
     }
 
     public static ScriptedBlock create(String blockId, List<Property<?>> properties,
@@ -93,34 +76,18 @@ public class ScriptedBlock extends ScriptedCarrierBlockBase {
         return create(blockId, blockId, properties, behaviourProperties);
     }
 
-    private final boolean hasDynamicProps;
-
     public ScriptedBlock(String blockId, Properties props) {
         this(blockId, blockId, props);
     }
 
     public ScriptedBlock(String blockId, String tileId, Properties props) {
         super(blockId, tileId, props);
-        InitContext ctx = INIT_CONTEXT.get();
-        if (ctx != null) {
-            this.hasDynamicProps = ctx.properties != null && !ctx.properties.isEmpty();
-        } else {
-            List<Property<?>> blockProps = BLOCK_PROPERTIES.getOrDefault(blockId, Collections.emptyList());
-            this.hasDynamicProps = blockProps != null && !blockProps.isEmpty();
-        }
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState> builder) {
         super.createBlockStateDefinition(builder);
-        InitContext ctx = INIT_CONTEXT.get();
-        List<Property<?>> properties = Collections.emptyList();
-        if (ctx != null) {
-            properties = ctx.properties != null ? ctx.properties : Collections.emptyList();
-            BLOCK_PROPERTIES.put(ctx.blockId, properties);
-        } else if (blockId != null) {
-            properties = BLOCK_PROPERTIES.getOrDefault(blockId, Collections.emptyList());
-        }
+        List<Property<?>> properties = DynamicBlockPropertyRegistry.resolveForDefinition(ScriptedBlock.class, blockId);
         if (properties != null && !properties.isEmpty()) {
             builder.add(properties.toArray(new Property<?>[0]));
         }

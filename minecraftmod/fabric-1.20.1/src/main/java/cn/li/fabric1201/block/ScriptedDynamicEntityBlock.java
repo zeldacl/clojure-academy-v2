@@ -1,6 +1,7 @@
 package cn.li.fabric1201.block;
 
 import cn.li.fabric1201.block.entity.ScriptedBlockEntity;
+import cn.li.mc1201.block.DynamicBlockPropertyRegistry;
 import cn.li.mc1201.block.ScriptedCarrierBlockBase;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -12,37 +13,19 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.Property;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class ScriptedDynamicEntityBlock extends ScriptedCarrierBlockBase {
-    private static final Map<String, List<Property<?>>> BLOCK_PROPERTIES = new HashMap<>();
-    private static final ThreadLocal<InitContext> INIT_CONTEXT = new ThreadLocal<>();
-
-    private static final class InitContext {
-        final String blockId;
-        final String tileId;
-        final List<Property<?>> properties;
-
-        InitContext(String blockId, String tileId, List<Property<?>> properties) {
-            this.blockId = blockId;
-            this.tileId = tileId;
-            this.properties = properties;
-        }
-    }
-
     public static ScriptedDynamicEntityBlock create(String blockId,
                                                     String tileId,
                                                     List<Property<?>> properties,
                                                     BlockBehaviour.Properties behaviourProperties) {
-        INIT_CONTEXT.set(new InitContext(blockId, tileId, properties));
-        try {
-            return new ScriptedDynamicEntityBlock(blockId, tileId, behaviourProperties);
-        } finally {
-            INIT_CONTEXT.remove();
-        }
+        return DynamicBlockPropertyRegistry.withInitContext(
+            ScriptedDynamicEntityBlock.class,
+            blockId,
+            properties,
+            () -> new ScriptedDynamicEntityBlock(blockId, tileId, behaviourProperties)
+        );
     }
 
     public static ScriptedDynamicEntityBlock create(String blockId,
@@ -57,14 +40,7 @@ public class ScriptedDynamicEntityBlock extends ScriptedCarrierBlockBase {
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState> builder) {
-        InitContext ctx = INIT_CONTEXT.get();
-        List<Property<?>> properties = Collections.emptyList();
-        if (ctx != null) {
-            properties = ctx.properties;
-            BLOCK_PROPERTIES.put(ctx.blockId, ctx.properties);
-        } else if (blockId != null) {
-            properties = BLOCK_PROPERTIES.getOrDefault(blockId, Collections.emptyList());
-        }
+        List<Property<?>> properties = DynamicBlockPropertyRegistry.resolveForDefinition(ScriptedDynamicEntityBlock.class, blockId);
         if (properties != null && !properties.isEmpty()) {
             builder.add(properties.toArray(new Property<?>[0]));
         }

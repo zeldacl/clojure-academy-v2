@@ -4,7 +4,7 @@
 
   Uses shared mc1201 installer with a Forge-specific adapter implementation."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1201.installer :as shared-installer]
+            [cn.li.mc1201.bootstrap.platform-init :as platform-init]
             [cn.li.mc1201.platform-adapter :as pa]
              [cn.li.forge1201.platform.bindings :as bindings]
              [cn.li.forge1201.integration.side :as side])
@@ -74,16 +74,8 @@
   stable entrypoint for Java SPI provider invocation."
   []
   (when (compare-and-set! initialized? false true)
-    (shared-installer/install-foundation!)
-    (shared-installer/install-entity-protocols-only! forge-adapter)
-    (shared-installer/install-item-protocols-only! forge-adapter)
-    (shared-installer/install-block-state-protocol-only! forge-adapter)
-    (shared-installer/install-resource-factory-only!)
-    (shared-installer/install-item-factories-only!
-      (fn [nbt] (pa/item-stack-of forge-adapter nbt))
-      (fn [item-id count] (pa/create-item-stack-by-id forge-adapter item-id count))
-      (fn [stack] (pa/item-stack-empty? forge-adapter stack)))
-    (shared-installer/install-world-fns-only!
+    (platform-init/install-platform-foundation+hooks!
+      forge-adapter
       {:world-get-tile-entity bindings/world-get-tile-entity
        :world-get-block-state bindings/world-get-block-state
        :world-set-block bindings/world-set-block
@@ -96,8 +88,7 @@
        :world-get-players bindings/world-get-players
        :world-is-raining bindings/world-is-raining
        :world-is-client-side bindings/world-is-client-side
-       :world-can-see-sky bindings/world-can-see-sky})
-    (shared-installer/install-be-fns-only!
+       :world-can-see-sky bindings/world-can-see-sky}
       {:be-get-level bindings/be-get-level
        :be-get-world bindings/be-get-world
        :be-get-custom-state bindings/be-get-custom-state

@@ -5,8 +5,7 @@
    Triggered during setup phase when running:
      ./gradlew :forge-1.20.1:runData"
   (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.content :as mc-content]
-            [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.mc1201.datagen.setup-common :as setup-common]
             [cn.li.forge1201.datagen.blockstate-provider :as bsp]
             [cn.li.forge1201.datagen.item-model-provider :as imp]
             [cn.li.forge1201.datagen.lang-provider :as lang]
@@ -15,23 +14,7 @@
   (:import [net.minecraftforge.data.event GatherDataEvent]
            [net.minecraft.data DataProvider$Factory DataGenerator]))
 
-(defn- ensure-ac-content-loaded!
-  "Datagen runs outside normal mod init. We need gameplay DSL registries populated
-  (blocks/items/gui metadata) and gameplay blockstate hooks installed, but Forge must
-  not depend on content namespaces at compile time.
 
-  This function uses mcmod indirection to:
-  - load the content bootstrap provider so it can register lifecycle init
-  - run content init (installs hooks, binds mod-id, etc.)
-  - activate runtime content (loads all DSL namespaces; fills registry metadata)"
-  []
-  (try
-    (mc-content/ensure-content-init-registered!)
-    (lifecycle/run-content-init!)
-    (lifecycle/run-runtime-content-activation!)
-    (catch Throwable t
-      (println (str "[" modid/*mod-id* "] WARNING: failed to load gameplay content for datagen: "
-                    (ex-message t))))))
 
 (defn- add-provider!
   "Registers a DataProvider via Factory, correctly using Minecraft 1.20.1 API.
@@ -64,7 +47,7 @@
   (let [generator (.getGenerator event)
         exfile-helper (.getExistingFileHelper event)]
     ;; Ensure AC content registries are loaded before providers query metadata.
-    (ensure-ac-content-loaded!)
+    (setup-common/ensure-ac-content-loaded!)
     
     ;; Register BlockState provider
     (println (str "[" modid/*mod-id* "] Registering BlockState DataGenerator..."))

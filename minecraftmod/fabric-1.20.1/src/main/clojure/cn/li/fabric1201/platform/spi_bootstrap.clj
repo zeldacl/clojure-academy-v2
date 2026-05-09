@@ -7,6 +7,7 @@
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as be]
             [cn.li.mc1201.platform-adapter :as pa]
+            [cn.li.mc1201.bootstrap.platform-init :as platform-init]
             [cn.li.mc1201.installer :as installer]
             [cn.li.mc1201.reflect-util :as ru]))
 
@@ -269,7 +270,7 @@
   "Initialize Fabric 1.20.1 platform implementations via SPI entrypoint."
   []
   (when (compare-and-set! initialized? false true)
-    (installer/install-platform-core! fabric-adapter)
+    (platform-init/install-platform-core! fabric-adapter)
     (install-be-ops!)
     (log/info "fabric platform SPI bootstrap initialized via ServiceLoader entrypoint"))
   nil)

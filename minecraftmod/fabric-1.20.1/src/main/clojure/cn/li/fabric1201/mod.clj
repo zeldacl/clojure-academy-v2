@@ -8,6 +8,8 @@
             [cn.li.fabric1201.platform.bootstrap-entry :as platform-bootstrap]
             [cn.li.fabric1201.blockstate-properties :as bsp]
             [cn.li.fabric1201.integration.events :as events]
+            [cn.li.fabric1201.runtime.damage-interception :as runtime-damage-interception]
+            [cn.li.fabric1201.runtime.item-handler :as runtime-item-handler]
             [cn.li.fabric1201.gui.init :as gui-init]
             [cn.li.fabric1201.config.bridge :as config-bridge]
             [cn.li.mcmod.util.log :as log]
@@ -149,6 +151,8 @@
   (config-bridge/load-all!)
   (bsp/init-all-properties!)
   (register-all-entities!)
+  (runtime-damage-interception/install-damage-interception!)
+  (runtime-item-handler/init!)
   (gui-init/init-common!)
   (gui-init/init-server!)
   (events/register-events)

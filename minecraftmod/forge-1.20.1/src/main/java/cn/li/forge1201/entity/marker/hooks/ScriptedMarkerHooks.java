@@ -1,46 +1,26 @@
 package cn.li.forge1201.entity.marker.hooks;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import cn.li.mc1201.entity.hook.AbstractHookRegistry;
 
+/**
+ * Forge-specific registry for marker entity hooks.
+ * Extends the shared AbstractHookRegistry with Forge hook types.
+ * Maintains static API for backward compatibility.
+ */
 public final class ScriptedMarkerHooks {
-    private static final ScriptedMarkerHook NOOP = (entity, level) -> {
-    };
-    private static final Map<String, ScriptedMarkerHook> HOOKS = new ConcurrentHashMap<>();
-
-    private ScriptedMarkerHooks() {
-    }
+    private static final Class<?> REGISTRY_CLASS = ScriptedMarkerHooks.class;
+    private static final Class<? extends ScriptedMarkerHook> HOOK_INTERFACE = ScriptedMarkerHook.class;
 
     public static void register(String hookId, ScriptedMarkerHook hook) {
-        if (hookId == null || hookId.isEmpty() || hook == null) {
-            return;
-        }
-        HOOKS.put(hookId, hook);
+        AbstractHookRegistry.register(REGISTRY_CLASS, hookId, hook);
     }
 
     public static ScriptedMarkerHook resolve(String hookId) {
-        if (hookId == null || hookId.isEmpty()) {
-            return NOOP;
-        }
-        return HOOKS.getOrDefault(hookId, NOOP);
+        ScriptedMarkerHook hook = AbstractHookRegistry.resolve(REGISTRY_CLASS, hookId);
+        return hook != null ? hook : (entity, level) -> {};
     }
 
     public static boolean registerByClassName(String hookId, String className) {
-        if (hookId == null || hookId.isEmpty() || className == null || className.isEmpty()) {
-            return false;
-        }
-        try {
-            Class<?> rawClass = Class.forName(className);
-            if (!ScriptedMarkerHook.class.isAssignableFrom(rawClass)) {
-                return false;
-            }
-            @SuppressWarnings("unchecked")
-            Class<? extends ScriptedMarkerHook> hookClass = (Class<? extends ScriptedMarkerHook>) rawClass;
-            ScriptedMarkerHook hook = hookClass.getDeclaredConstructor().newInstance();
-            register(hookId, hook);
-            return true;
-        } catch (Exception ignored) {
-            return false;
-        }
+        return AbstractHookRegistry.registerByClassName(REGISTRY_CLASS, HOOK_INTERFACE, hookId, className);
     }
 }
