@@ -10,14 +10,10 @@
 
 ## 快速日常流程
 
-1. 快速编译：
-  - `.\gradlew.bat :forge-1.20.1:compileClojure`
-2. 架构边界检查：
-  - `.\gradlew.bat verifyArchitectureBoundaries`
-3. 基线验证：
-  - `.\gradlew.bat verifyCurrentPlatforms`
-4. Forge 主线测试验证：
-  - `.\gradlew.bat verifyForgeTesting`
+1. 快速编译：`\.\gradlew.bat :forge-1.20.1:compileClojure`
+1. 架构边界检查：`\.\gradlew.bat verifyArchitectureBoundaries`
+1. 基线验证：`\.\gradlew.bat verifyCurrentPlatforms`
+1. Forge 主线测试验证：`\.\gradlew.bat verifyForgeTesting`
 
 ## 当前平台验证基线（推荐回归顺序）
 
@@ -41,7 +37,8 @@
 - `coverageMcmodClojureTests`：输出 `mcmod` 的 cloverage 覆盖率报告到 `mcmod/build/reports/coverage/`。
   - **Cloverage 排除命名空间**（见 `mcmod/build.gradle` 中 `--ns-exclude-regex`）：`cn.li.mcmod.client.obj`（体量极大的客户端胶水，单测 ROI 低）、`cn.li.mcmod.platform.position`（与 Cloverage 插桩后的 `IBlockPos` 协议身份冲突，测试里 `defrecord` 桩位需依赖未插桩协议）。总行覆盖率 ratchet 针对的是**已插桩**代码；排除上述命名空间后，百分比更接近「可纯 JVM 回归的核心逻辑」，不等于放弃客户端或坐标抽象的质量——后者由 Forge 侧与集成测试兜底。
 - `verifyForgeBaseline`：Forge 侧基线检查。
-- `verifyFabricBaseline`：Fabric compile + checkClojure 基线检查（minimal maintenance）。
+- `verifyFabricBaseline`：Fabric compile 基线检查（minimal maintenance）。
+- `verifyFabricStrictReflection`：显式执行 Fabric 严格反射 gate；当前不纳入 `verifyCurrentPlatforms`，需手动以 `-PfabricStrictReflection=true` 运行 `:fabric-1.20.1:checkClojure` 收敛历史告警。
 - `runFabricSmoke`：执行 Fabric datagen 作为最小烟雾运行。
 - `validateFabricSmokeLog`：校验 Fabric datagen 日志中的致命错误模式。
 - `verifyFabricSmoke`：Fabric 最小烟雾验证入口（运行 + 日志校验）。

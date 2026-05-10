@@ -75,6 +75,14 @@ tasks.named('compileClojure').configure {
     dependsOn 'compileJava'
 }
 
+tasks.named('classes').configure {
+    setDependsOn([
+        tasks.named('compileJava'),
+        tasks.named('processResources'),
+        tasks.named('compileClojure')
+    ])
+}
+
 tasks.named('processResources').configure {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
     var replaceProperties = [

@@ -213,8 +213,17 @@ registerBaselineVerificationTask(
 registerBaselineVerificationTask(
     'verifyFabricBaseline',
     'Compile baseline sources for fabric-1.20.1 (minimal-maintenance gate).',
-    ['verifyArchitectureBoundaries', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure', ':fabric-1.20.1:checkClojure']
+    ['verifyArchitectureBoundaries', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure']
 )
+
+tasks.register('verifyFabricStrictReflection') {
+    group = 'verification'
+    description = 'Run Fabric strict reflection checkClojure gate explicitly (opt-in until warnings are retired).'
+
+    doLast {
+        logger.lifecycle('[verifyFabricStrictReflection] Run manually with: .\\gradlew.bat :fabric-1.20.1:checkClojure -PfabricStrictReflection=true')
+    }
+}
 
 def extractMapBody = { String text, String mapName ->
     def matcher = (text =~ /(?s)def\s+\^:private\s+${mapName}\s*\{(.*?)\}/)

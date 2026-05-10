@@ -1,7 +1,9 @@
 package cn.li.forge1201.shim;
 
-import cn.li.forge1201.block.DynamicStateBlock;
-import cn.li.forge1201.block.ScriptedBlock;
+import cn.li.forge1201.block.entity.ScriptedBlockEntity;
+import cn.li.mc1201.block.SharedDynamicStateBlock;
+import cn.li.mc1201.block.SharedScriptedBlock;
+import cn.li.mc1201.block.ScriptedRenderShapes;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -16,6 +18,7 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
@@ -39,6 +42,10 @@ import java.util.function.Supplier;
 
 public final class ForgeBootstrapHelper {
     private ForgeBootstrapHelper() {
+    }
+
+    private static RenderShape resolveRenderShape(String blockId) {
+        return ScriptedRenderShapes.resolveDefault(blockId);
     }
 
     public static DeferredRegister<Block> createBlocksRegister(String modId) {
@@ -100,15 +107,44 @@ public final class ForgeBootstrapHelper {
     }
 
     public static Block createCarrierScriptedDynamicBlock(String blockId, String tileId, List<Property<?>> properties, BlockBehaviour.Properties blockProperties) {
-        return ScriptedBlock.create(blockId, tileId, new ArrayList<>(properties), blockProperties);
+        return SharedScriptedBlock.create(
+            blockId,
+            tileId,
+            new ArrayList<>(properties),
+            blockProperties,
+            (resolvedTileId, resolvedBlockId, pos, state) -> {
+                BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
+                return type != null ? new ScriptedBlockEntity(type, pos, state, resolvedTileId, resolvedBlockId) : null;
+            },
+            (level, pos, state, blockEntity) -> {
+                if (blockEntity instanceof ScriptedBlockEntity scripted) {
+                    ScriptedBlockEntity.serverTick(level, pos, state, scripted);
+                }
+            },
+            (resolvedBlockId, state) -> resolveRenderShape(resolvedBlockId)
+        );
     }
 
     public static Block createDynamicStateBlock(String blockId, List<Property<?>> properties, BlockBehaviour.Properties blockProperties) {
-        return DynamicStateBlock.create(blockId, new ArrayList<>(properties), blockProperties);
+        return SharedDynamicStateBlock.create(blockId, new ArrayList<>(properties), blockProperties);
     }
 
     public static Block createCarrierScriptedBlock(String blockId, String tileId, BlockBehaviour.Properties blockProperties) {
-        return new ScriptedBlock(blockId, tileId, blockProperties);
+        return new SharedScriptedBlock(
+            blockId,
+            tileId,
+            blockProperties,
+            (resolvedTileId, resolvedBlockId, pos, state) -> {
+                BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
+                return type != null ? new ScriptedBlockEntity(type, pos, state, resolvedTileId, resolvedBlockId) : null;
+            },
+            (level, pos, state, blockEntity) -> {
+                if (blockEntity instanceof ScriptedBlockEntity scripted) {
+                    ScriptedBlockEntity.serverTick(level, pos, state, scripted);
+                }
+            },
+            (resolvedBlockId, state) -> resolveRenderShape(resolvedBlockId)
+        );
     }
 
     public static Block createPlainBlock(BlockBehaviour.Properties blockProperties) {
