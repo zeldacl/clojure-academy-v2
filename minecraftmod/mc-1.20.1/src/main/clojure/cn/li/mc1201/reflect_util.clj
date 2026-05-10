@@ -14,7 +14,8 @@
 
 (defn static
   [^Class cls method-name & args]
-  (clojure.lang.Reflector/invokeStaticMethod cls method-name (to-array args)))
+  (let [^String method-name (str method-name)]
+    (clojure.lang.Reflector/invokeStaticMethod cls method-name (to-array args))))
 
 (defn field
   [target field-name]

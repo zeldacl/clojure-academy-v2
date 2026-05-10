@@ -1,7 +1,6 @@
 (ns cn.li.forge1201.datagen.recipe-provider
   "Forge 1.20.1 recipe datagen provider."
-  (:require [clojure.string :as str]
-            [cn.li.mc1201.datagen.resource-location :as rl]
+  (:require [cn.li.mc1201.datagen.resource-location :as rl]
             [cn.li.mc1201.datagen.metadata-resolver :as metadata-resolver]
             [cn.li.mc1201.datagen.recipe-patterns :as recipe-patterns]
             [cn.li.mcmod.config :as modid]
@@ -10,7 +9,7 @@
            [net.minecraft.advancements CriterionTriggerInstance]
            [net.minecraft.advancements.critereon InventoryChangeTrigger$TriggerInstance]
            [net.minecraft.data PackOutput]
-           [net.minecraft.data.recipes RecipeCategory RecipeProvider
+           [net.minecraft.data.recipes RecipeBuilder RecipeCategory RecipeProvider
             ShapedRecipeBuilder ShapelessRecipeBuilder SimpleCookingRecipeBuilder]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world.item.crafting Ingredient]
@@ -39,7 +38,7 @@
 
 (defn- add-unlock-to-builder!
   "Apply criterion unlock to recipe builder if unlock item found."
-  [^Object builder recipe]
+  [^RecipeBuilder builder recipe]
   (when-let [unlock-item-id (recipe-patterns/first-item-id recipe)]
     (let [{:keys [unlock-name criterion-instance]}
           (recipe-patterns/criterion-metadata unlock-item-id criterion-for-item)]

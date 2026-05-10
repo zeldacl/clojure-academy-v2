@@ -14,8 +14,7 @@
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.item.dsl :as item-dsl]
             [cn.li.mc1201.datagen.resource-location :as rl]
-            [cn.li.mc1201.datagen.item-model-patterns :as item-model-patterns]
-            [clojure.string :as str])
+            [cn.li.mc1201.datagen.item-model-patterns :as item-model-patterns])
   (:import [net.minecraft.data PackOutput]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.common.data ExistingFileHelper]
@@ -32,15 +31,18 @@
         (item-model-patterns/energy-tier-model-spec item-id {:texture-empty texture-empty
                                                              :texture-half texture-half
                                                              :texture-full texture-full})
+        ^String base (str base)
+        ^String half-model (str half-model)
+        ^String full-model (str full-model)
         mod-s modid/*mod-id*
         energy-rl (ResourceLocation. mod-s "energy")
         gen-parent (.mcLoc this-provider "item/generated")
         half-rl (ResourceLocation. mod-s (str "item/" half-model))
         full-rl (ResourceLocation. mod-s (str "item/" full-model))]
-    (doto (.withExistingParent this-provider half-model gen-parent)
-      (.texture "layer0" ^ResourceLocation (texture-rl half-texture)))
-    (doto (.withExistingParent this-provider full-model gen-parent)
-      (.texture "layer0" ^ResourceLocation (texture-rl full-texture)))
+    (let [^ItemModelBuilder half-b (.withExistingParent this-provider half-model gen-parent)
+          ^ItemModelBuilder full-b (.withExistingParent this-provider full-model gen-parent)]
+      (.texture half-b "layer0" ^ResourceLocation (texture-rl half-texture))
+      (.texture full-b "layer0" ^ResourceLocation (texture-rl full-texture)))
     (let [^ItemModelBuilder main-b (.withExistingParent this-provider base gen-parent)
           half-mf (ModelFile$ExistingModelFile. half-rl exfile-helper)
           full-mf (ModelFile$ExistingModelFile. full-rl exfile-helper)]

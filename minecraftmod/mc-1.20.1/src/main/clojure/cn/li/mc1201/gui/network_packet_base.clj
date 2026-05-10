@@ -40,7 +40,8 @@
 
 (defn encode-payload-bytes
   [payload]
-  (.getBytes (encode-payload payload) "UTF-8"))
+  (let [^String encoded (str (encode-payload payload))]
+    (.getBytes encoded "UTF-8")))
 
 (defn decode-payload-bytes
   [^bytes bs on-error]

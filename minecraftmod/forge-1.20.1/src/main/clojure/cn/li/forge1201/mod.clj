@@ -92,6 +92,12 @@
   (and (boolean *compile-files*)
        (boolean (System/getProperty "clojure.server.clojurephant"))))
 
+(defn- datagen-run?
+  []
+  (let [cmd (System/getProperty "sun.java.command" "")]
+    (or (.contains cmd "forgedata")
+        (.contains cmd "runData"))))
+
 
 ;; Lazy block properties - only accessed during registration, not during namespace load
 (defonce base-properties
@@ -764,11 +770,6 @@
         ;; Register all blocks and items using metadata-driven approach
         ;; DSL systems are automatically initialized when namespaces load
         (register-scripted-tile-hooks!)
-        ;; Client-only visual hook strategies must not be loaded on dedicated server.
-        (when (side/client-side?)
-          (effect-hooks/register-all-effect-hooks!)
-          (ray-hooks/register-all-ray-hooks!)
-          (marker-hooks/register-all-marker-hooks!))
         (register-all-fluids!)
         (register-all-blocks!)
         (register-all-entities!)
@@ -798,7 +799,12 @@
               (log/warn "Failed to register gameplay config" e)))
 
           (config-bridge/register-all! mod-bus)
-          (ModEntities/register mod-bus)
+            (ModEntities/register mod-bus)
+            ;; Client-only visual hook strategies must not be loaded during datagen.
+            (when (and (side/client-side?) (not (datagen-run?)))
+              (effect-hooks/register-all-effect-hooks!)
+              (ray-hooks/register-all-ray-hooks!)
+              (marker-hooks/register-all-marker-hooks!))
           (ModFeatures/register mod-bus)
           (.register ^DeferredRegister (force sounds-register) mod-bus)
           (.register ^DeferredRegister (force effects-register) mod-bus)

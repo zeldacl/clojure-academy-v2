@@ -68,6 +68,7 @@
 ;; in the generated form (which Clojure refuses to compile).
 (def ^:dynamic *datagen-simple-count* nil)
 (def ^:dynamic *datagen-multipart-count* nil)
+(def ^:dynamic *datagen-simple-fallback-count* nil)
 
 ;; Also used to avoid embedding Java objects (PackOutput / ExistingFileHelper)
 ;; into the `eval`ed form. Clojure refuses to compile those as literals.
@@ -282,49 +283,58 @@
   (let [registry-name (:registry-name definition)
       ^Block block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
-    (when (bootstrap/air-block? block (bootstrap/get-air-block))
-      (throw (ex-info "Simple block not resolvable for datagen"
-                      {:block-key block-key :registry-name registry-name})))
-    (let [model-id (first (:models (first (:parts definition))))
-          ^ModelFile model-file (ensure-block-model! provider model-id)
-          block-spec (registry-name->block-spec registry-name)]
-      (.simpleBlock provider block model-file)
-      (when (registry-metadata/should-create-block-item? block-id)
-        ;; Query metadata instead of hardcoded set
-        (if (get-in block-spec [:rendering :flat-item-icon?])
-          (let [texture-rl (texture-from-spec block-spec registry-name)]
-            (write-flat-item-model! provider registry-name texture-rl))
-          (.simpleBlockItem provider block model-file))))))
+    (if (bootstrap/air-block? block (bootstrap/get-air-block))
+      (do
+        (log/warn "Simple block not resolvable for datagen"
+                  {:block-key block-key :registry-name registry-name})
+        (when *datagen-simple-fallback-count*
+          (swap! *datagen-simple-fallback-count* inc))
+        nil)
+      (let [model-id (first (:models (first (:parts definition))))
+            ^ModelFile model-file (ensure-block-model! provider model-id)
+            block-spec (registry-name->block-spec registry-name)]
+        (.simpleBlock provider block model-file)
+        (when (registry-metadata/should-create-block-item? block-id)
+          ;; Query metadata instead of hardcoded set
+          (if (get-in block-spec [:rendering :flat-item-icon?])
+            (let [texture-rl (texture-from-spec block-spec registry-name)]
+              (write-flat-item-model! provider registry-name texture-rl))
+            (.simpleBlockItem provider block model-file)))))))
 
 (defn build-multipart-block!
   [^BlockStateProvider provider block-key definition]
   (let [registry-name (:registry-name definition)
       ^Block block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
-    (when (bootstrap/air-block? block (bootstrap/get-air-block))
-      (throw (ex-info "Multipart block not resolvable for datagen"
-                      {:block-key block-key :registry-name registry-name})))
-    (let [builder (.getMultipartBuilder provider block)]
-      (doseq [part (:parts definition)]
-        (let [model-id (first (:models part))
-              model-file (ensure-block-model! provider model-id)
-              part-builder (-> (.part builder)
-                               (.modelFile model-file)
-                               (.addModel))]
-          (if-let [condition (:condition part)]
-            (-> part-builder
-                (apply-node-condition! block-key condition)
-              (end-part-builder!))
-            (end-part-builder! part-builder))))
-      ;; For node blocks, use _base variant for item model
-      (when (registry-metadata/should-create-block-item? block-id)
-        (let [item-model-id (blockstate-def/get-item-model-id modid/*mod-id* registry-name)]
-          (.simpleBlockItem provider block (ensure-block-model! provider item-model-id)))))))
+    (if (bootstrap/air-block? block (bootstrap/get-air-block))
+      (do
+        (log/warn "Multipart block not resolvable for datagen"
+                  {:block-key block-key :registry-name registry-name})
+        (when *datagen-simple-fallback-count*
+          (swap! *datagen-simple-fallback-count* inc))
+        nil)
+      (let [builder (.getMultipartBuilder provider block)]
+        (doseq [part (:parts definition)]
+          (let [model-id (first (:models part))
+                model-file (ensure-block-model! provider model-id)
+                part-builder (-> (.part builder)
+                                 (.modelFile model-file)
+                                 (.addModel))]
+            (if-let [condition (:condition part)]
+              (-> part-builder
+                  (apply-node-condition! block-key condition)
+                  (end-part-builder!))
+              (end-part-builder! part-builder))))
+        ;; For node blocks, use _base variant for item model
+        (when (registry-metadata/should-create-block-item? block-id)
+          (let [item-model-id (blockstate-def/get-item-model-id modid/*mod-id* registry-name)]
+            (.simpleBlockItem provider block (ensure-block-model! provider item-model-id))))))))
 
 (defn- generate-with-forge-builder!
   [^CachedOutput cache ^PackOutput pack-output ^ExistingFileHelper exfile-helper all-defs]
   (let [simple-count (atom 0)
         multipart-count (atom 0)
+        simple-fallback-count (atom 0)
         ;; Defer `proxy` macroexpansion to runtime to avoid Minecraft registry
         ;; bootstrap during AOT/checkClojure/compileClojure.
         ;;
@@ -344,13 +354,15 @@
                        ~'this block-key# definition#)
                       (swap! *datagen-multipart-count* inc))
                     (do
-                      (cn.li.forge1201.datagen.blockstate-provider/build-simple-block!
-                       ~'this block-key# definition#)
-                      (swap! *datagen-simple-count* inc))))))))]
+                      (when (some? (cn.li.forge1201.datagen.blockstate-provider/build-simple-block!
+                                     ~'this block-key# definition#))
+                        (swap! *datagen-simple-count* inc)))))))))]
     {:future (binding [*datagen-simple-count* simple-count
-                       *datagen-multipart-count* multipart-count]
+                       *datagen-multipart-count* multipart-count
+                       *datagen-simple-fallback-count* simple-fallback-count]
                (.run provider cache))
      :simple @simple-count
+     :simple-fallback @simple-fallback-count
      :multipart @multipart-count}))
 
 (defn create
@@ -362,12 +374,12 @@
       (when-let [init-all-properties! (requiring-resolve 'cn.li.forge1201.blockstate-properties/init-all-properties!)]
         (init-all-properties!))
       (let [all-defs (blockstate-def/get-all-definitions)
-            {:keys [future simple multipart]} (generate-with-forge-builder!
+            {:keys [future simple simple-fallback multipart]} (generate-with-forge-builder!
                                                cache pack-output exfile-helper all-defs)
             written-count (+ simple multipart)]
         (println (str "[blockstate-provider] summary: defs=" (count all-defs)
                       ", simple=" simple
-                      ", simple-fallback=0"
+                      ", simple-fallback=" simple-fallback
                       ", multipart=" multipart
                       ", written=" written-count))
         (CompletableFuture/allOf ^"[Ljava.util.concurrent.CompletableFuture;"

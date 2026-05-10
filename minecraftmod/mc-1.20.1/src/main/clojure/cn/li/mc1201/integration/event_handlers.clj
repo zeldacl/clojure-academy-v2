@@ -38,7 +38,9 @@
               (try
                 (let [{:keys [gui-id player world pos]} ret]
                   (when (and gui-id player world pos)
-                    (let [tile-entity (.getBlockEntity world pos)]
+                    (let [^net.minecraft.world.level.Level world world
+                          ^net.minecraft.core.BlockPos pos pos
+                          tile-entity (.getBlockEntity world pos)]
                       (when tile-entity
                         (log/info (str log-prefix " GUI result received: gui-id=" gui-id))
                         (gui-opener-fn gui-id player world pos tile-entity)))))

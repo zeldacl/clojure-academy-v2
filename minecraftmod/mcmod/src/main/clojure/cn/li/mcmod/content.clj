@@ -10,6 +10,8 @@
   []
   (try
     (ContentInitBootstraps/register "ac")
-    (catch Throwable _ nil))
+    (catch Throwable t
+      (println "[my_mod] WARNING: ContentInitBootstraps/register(ac) failed:" (ex-message t))
+      nil))
   nil)
 

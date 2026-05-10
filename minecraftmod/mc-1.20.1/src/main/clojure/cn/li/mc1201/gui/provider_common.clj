@@ -1,8 +1,9 @@
 (ns cn.li.mc1201.gui.provider-common
-  "Shared helper functions for GUI provider bridges.")
+  "Shared helper functions for GUI provider bridges."
+  (:import [net.minecraft.world.entity.player Player]))
 
 (defn tile->pos
-  [tile-entity player]
+  [tile-entity ^Player player]
   (cond
     (nil? tile-entity)
     (.blockPosition player)
