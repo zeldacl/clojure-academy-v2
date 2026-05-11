@@ -14,7 +14,7 @@
             [cn.li.mc1201.entity.marker-hooks :as marker-hooks]
             [cn.li.forge1201.platform.bootstrap-entry :as platform-bootstrap]
             [cn.li.forge1201.config.bridge :as config-bridge]
-            [cn.li.forge1201.config.gameplay-init :as gameplay-init]
+            [cn.li.mc1201.config.gameplay-init :as shared-gameplay-init]
             ;; platform bootstrap is loaded lazily during runtime mod-init to avoid
             ;; triggering Minecraft class initialization during AOT/checkClojure.
             [cn.li.mcmod.block.dsl :as bdsl]
@@ -679,7 +679,8 @@
   (gui-init/init-common!)
   (runtime-lifecycle/init-common!)
   ;; Bind gameplay config bridge
-  (gameplay-init/bind-gameplay-config!)
+  (shared-gameplay-init/bind-gameplay-config!
+    (shared-gameplay-init/build-config-bridge 'cn.li.forge1201.config.gameplay-bridge))
   ;; Initialize Forge Energy integration
   (forge-energy/init-forge-energy!)
   ;; Initialize IC2 integration (optional - no-op if IC2 not present)

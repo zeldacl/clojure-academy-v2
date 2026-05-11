@@ -242,36 +242,37 @@ def extractKeywordSet = { String mapBody ->
 
 tasks.register('verifyForgeHookCoverage') {
     group = 'verification'
-    description = 'Verify Forge hook implementation keys cover shared hook catalog declarations.'
+    description = 'Verify hook implementation keys cover shared hook catalog declarations (Phase C: mc1201 is shared source).'
 
     doLast {
         def hookCatalog = file('mcmod/src/main/clojure/cn/li/mcmod/entity/hook_catalog.clj')
-        def forgeEffectHooks = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/entity/effect_hooks.clj')
-        def forgeRayHooks = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/entity/ray_hooks.clj')
+        // Phase C: Hooks moved from Forge to shared mc1201 layer (Phase A deleted forge1201 wrappers)
+        def sharedEffectHooks = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/entity/effect_hooks.clj')
+        def sharedRayHooks = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/entity/ray_hooks.clj')
 
-        [hookCatalog, forgeEffectHooks, forgeRayHooks].each { f ->
+        [hookCatalog, sharedEffectHooks, sharedRayHooks].each { f ->
             if (!f.exists()) {
                 throw new GradleException("Required hook coverage file not found: ${f}")
             }
         }
 
         def catalogText = hookCatalog.getText('UTF-8')
-        def forgeEffectText = forgeEffectHooks.getText('UTF-8')
-        def forgeRayText = forgeRayHooks.getText('UTF-8')
+        def sharedEffectText = sharedEffectHooks.getText('UTF-8')
+        def sharedRayText = sharedRayHooks.getText('UTF-8')
 
         def effectCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'effect-hook->impl-key'))
         def rayCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'ray-hook->impl-key'))
-        def forgeEffectImpls = extractKeywordSet(extractMapBody(forgeEffectText, 'impl-key->hook-class'))
-        def forgeRayImpls = extractKeywordSet(extractMapBody(forgeRayText, 'impl-key->hook-class'))
+        def sharedEffectImpls = extractKeywordSet(extractMapBody(sharedEffectText, 'impl-key->hook-class'))
+        def sharedRayImpls = extractKeywordSet(extractMapBody(sharedRayText, 'impl-key->hook-class'))
 
-        def missingEffect = (effectCatalogImpls - forgeEffectImpls)
-        def missingRay = (rayCatalogImpls - forgeRayImpls)
+        def missingEffect = (effectCatalogImpls - sharedEffectImpls)
+        def missingRay = (rayCatalogImpls - sharedRayImpls)
 
         if (!missingEffect.isEmpty() || !missingRay.isEmpty()) {
-            throw new GradleException("Forge hook coverage missing impl keys. effect=${missingEffect} ray=${missingRay}")
+            throw new GradleException("Hook coverage missing impl keys in mc1201 (Phase C shared layer). effect=${missingEffect} ray=${missingRay}")
         }
 
-        logger.lifecycle('[verifyForgeHookCoverage] passed. effect={} ray={}', effectCatalogImpls.size(), rayCatalogImpls.size())
+        logger.lifecycle('[verifyForgeHookCoverage] passed (mc1201 shared). effect={} ray={}', effectCatalogImpls.size(), rayCatalogImpls.size())
     }
 }
 
@@ -336,36 +337,42 @@ tasks.register('verifyPlatformHookCoverage') {
 
 tasks.register('verifyPlatformNoBusinessHookIds') {
     group = 'verification'
-    description = 'Verify platform hook adapters do not hardcode business hook-id literals.'
+    description = 'Verify platform hook adapters do not hardcode business hook-id literals (Phase C: mc1201 is shared).'
 
     doLast {
         def contentFile = file('ac/src/main/clojure/cn/li/ac/content/entities/all.clj')
-        def forgeEffectHooks = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/entity/effect_hooks.clj')
-        def forgeRayHooks = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/entity/ray_hooks.clj')
-
-        [contentFile, forgeEffectHooks, forgeRayHooks].each { f ->
-            if (!f.exists()) {
-                throw new GradleException("Required platform no-business-id check file not found: ${f}")
-            }
+        // Phase C: Forge/Fabric platform hooks have been removed; mc1201 shared layer handles mapping
+        // This verifier now ensures no remaining platform adapter files hardcode business IDs
+        
+        if (!contentFile.exists()) {
+            throw new GradleException("Required platform no-business-id check file not found: ${contentFile}")
         }
 
         def hookIdMatcher = (contentFile.getText('UTF-8') =~ /:hook\s+:([a-zA-Z0-9\-]+)/)
         def businessHookIds = [] as Set
         hookIdMatcher.each { businessHookIds << it[1] }
 
-        def forgeEffectText = forgeEffectHooks.getText('UTF-8')
-        def forgeRayText = forgeRayHooks.getText('UTF-8')
-        def mergedForgeText = forgeEffectText + "\n" + forgeRayText
-
-        def leakedHookIds = businessHookIds.findAll { hookId ->
-            mergedForgeText.contains("\"${hookId}\"")
-        } as Set
-
-        if (!leakedHookIds.isEmpty()) {
-            throw new GradleException("Platform hook adapter contains leaked business hook-id literals: ${leakedHookIds}")
+        // Collect remaining platform adapter files (non-entity layer, which handles event binding)
+        def forgeIntegrationEvents = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/events.clj')
+        def fabricIntegrationEvents = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/integration/events.clj')
+        
+        def platformAdapterFiles = [forgeIntegrationEvents, fabricIntegrationEvents].findAll { it.exists() }
+        
+        def leakedHookIds = [] as Set
+        platformAdapterFiles.each { adapterFile ->
+            def adapterText = adapterFile.getText('UTF-8')
+            businessHookIds.each { hookId ->
+                if (adapterText.contains("\"${hookId}\"")) {
+                    leakedHookIds << hookId
+                }
+            }
         }
 
-        logger.lifecycle('[verifyPlatformNoBusinessHookIds] passed. scanned business hook ids={}', businessHookIds.size())
+        if (!leakedHookIds.isEmpty()) {
+            throw new GradleException("Platform adapter contains leaked business hook-id literals: ${leakedHookIds}")
+        }
+
+        logger.lifecycle('[verifyPlatformNoBusinessHookIds] passed (Phase C mc1201 shared). scanned business hook ids={}', businessHookIds.size())
     }
 }
 

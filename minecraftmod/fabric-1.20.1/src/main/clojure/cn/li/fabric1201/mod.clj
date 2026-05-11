@@ -27,6 +27,7 @@
                         [cn.li.fabric1201.runtime.block-manipulation :as runtime-block-manipulation]
             [cn.li.fabric1201.gui.init :as gui-init]
             [cn.li.fabric1201.config.bridge :as config-bridge]
+            [cn.li.mc1201.config.gameplay-init :as shared-gameplay-init]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
@@ -264,6 +265,8 @@
   (init/init-from-java)
   (core/init)
   (config-bridge/load-all!)
+  (shared-gameplay-init/bind-gameplay-config!
+    (shared-gameplay-init/build-config-bridge 'cn.li.fabric1201.config.gameplay-bridge))
   (bsp/init-all-properties!)
   (register-scripted-tile-hooks!)
   (register-all-blocks!)

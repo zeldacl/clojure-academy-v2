@@ -1,0 +1,58 @@
+ext.configureInjectedPlatformSources = { Map opts = [:] ->
+    def includeAcJava = (opts.get('includeAcJava', false) as boolean)
+
+    sourceSets {
+        main {
+            clojure {
+                srcDirs += [
+                    "${rootProject.projectDir}/mc-1.20.1/src/main/clojure",
+                    "${project(':ac').projectDir}/src/main/clojure",
+                    "${project(':mcmod').projectDir}/src/main/clojure"
+                ]
+            }
+            java {
+                def sharedJavaDirs = [
+                    "${project(':api').projectDir}/src/main/java",
+                    "${project(':mcmod').projectDir}/src/main/java",
+                    "${rootProject.projectDir}/mc-1.20.1/src/main/java"
+                ]
+                if (includeAcJava) {
+                    sharedJavaDirs += ["${project(':ac').projectDir}/src/main/java"]
+                }
+                srcDirs += sharedJavaDirs
+            }
+            resources {
+                srcDirs += [
+                    "${project(':ac').projectDir}/src/main/resources",
+                    "${project(':mcmod').projectDir}/src/main/resources"
+                ]
+            }
+        }
+    }
+}
+
+ext.addSharedClojureRuntimeDeps = { String runtimeConfigName = null ->
+    dependencies {
+        implementation "org.clojure:clojure:1.12.4"
+        implementation "org.clojure:spec.alpha:0.3.218"
+        implementation "org.clojure:core.specs.alpha:0.2.62"
+
+        if (runtimeConfigName) {
+            add(runtimeConfigName, "org.clojure:clojure:1.12.4")
+            add(runtimeConfigName, "org.clojure:spec.alpha:0.3.218")
+            add(runtimeConfigName, "org.clojure:core.specs.alpha:0.2.62")
+        }
+    }
+}
+
+ext.configureSharedClojureShadowJar = {
+    shadowJar {
+        configurations = [project.configurations.runtimeClasspath]
+        archiveClassifier = 'shadow'
+        dependencies {
+            include(dependency('org.clojure:clojure'))
+            include(dependency('org.clojure:spec.alpha'))
+            include(dependency('org.clojure:core.specs.alpha'))
+        }
+    }
+}
