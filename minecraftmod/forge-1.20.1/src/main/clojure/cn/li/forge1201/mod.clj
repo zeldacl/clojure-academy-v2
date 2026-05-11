@@ -1,88 +1,75 @@
 (ns cn.li.forge1201.mod
-  "Forge 1.20.1 main mod class - generated with gen-class"
-  (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
-            [cn.li.forge1201.init :as init]
-            [cn.li.forge1201.integration.side :as side]
-            [cn.li.forge1201.registry.forge-dispatch :as registry]
-            [cn.li.forge1201.registry.state :as registry-state]
-            [cn.li.forge1201.integration.events :as events]
-            [cn.li.forge1201.gui.init :as gui-init]
-            [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
-            [cn.li.forge1201.runtime.lifecycle :as runtime-lifecycle]
-            [cn.li.forge1201.runtime.item-handler :as runtime-item-handler]
-            [cn.li.mc1201.entity.effect-hooks :as effect-hooks]
-            [cn.li.mc1201.entity.ray-hooks :as ray-hooks]
-            [cn.li.mc1201.entity.marker-hooks :as marker-hooks]
-            [cn.li.forge1201.platform.bootstrap-entry :as platform-bootstrap]
-            [cn.li.forge1201.config.bridge :as config-bridge]
-            [cn.li.mc1201.config.gameplay-init :as shared-gameplay-init]
-            ;; platform bootstrap is loaded lazily during runtime mod-init to avoid
-            ;; triggering Minecraft class initialization during AOT/checkClojure.
-            [cn.li.mcmod.block.dsl :as bdsl]
-            [cn.li.mcmod.block.tile-logic :as tile-logic]
-            [cn.li.mcmod.platform.capability :as platform-cap]
-            [cn.li.mcmod.entity.dsl :as edsl]
-            [cn.li.mcmod.item.dsl :as idsl]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.mcmod.lifecycle :as lifecycle]
-            [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.i18n :as i18n]
-             [cn.li.mcmod.util.log :as log]
-             [cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
-             [cn.li.forge1201.integration.forge-energy :as forge-energy]
-             [cn.li.forge1201.integration.ic2-energy :as ic2-energy])
-  (:import [net.minecraft.world.level.block Block]
-           [net.minecraft.world.level.material Fluid FlowingFluid]
-           [net.minecraft.world.level.block.state BlockBehaviour BlockBehaviour$Properties]
-           [net.minecraft.resources ResourceLocation]
-           [net.minecraft.core.particles SimpleParticleType]
-           [cn.li.forge1201.block.entity ScriptedBlockEntity]
-           [cn.li.forge1201.effect ScriptedMobEffect]
-           [cn.li.forge1201.item NbtBarItem ScriptedItem]
-           [cn.li.forge1201.entity ModEntities]
-           [cn.li.forge1201.worldgen ModFeatures]
-           [net.minecraft.sounds SoundEvent]
-           [net.minecraft.world.effect MobEffectCategory]
-           [net.minecraft.world.food FoodProperties$Builder]
-           [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab Items Rarity]
-           [net.minecraft.world.level ItemLike]
-           [net.minecraft.network.chat Component]
-           [net.minecraftforge.fluids FluidType ForgeFlowingFluid]
-           [net.minecraftforge.registries DeferredRegister RegistryObject]
-           [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
-           [net.minecraftforge.fml.event.lifecycle FMLCommonSetupEvent FMLClientSetupEvent]
-       [net.minecraftforge.eventbus.api EventPriority IEventBus]
-           [net.minecraftforge.common MinecraftForge]
-           [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock]
-          [net.minecraftforge.common.capabilities RegisterCapabilitiesEvent]
-          [net.minecraftforge.fml.event.lifecycle InterModProcessEvent]
-          [net.minecraftforge.fml InterModComms$IMCMessage])
-  (:gen-class
-   :name com.example.my_mod1201.MyMod1201Clj
-   :prefix "mod-"
-   :init init
-   :state state
-   :constructors {[] []}
-   :methods [[onRightClickBlock [net.minecraftforge.event.entity.player.PlayerInteractEvent$RightClickBlock] void]
-             [commonSetup [net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent] void]
-             [clientSetup [net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent] void]]))
-
-;; (alter-var-root #'*err* (fn [orig]
-;;                           (proxy [java.io.PrintWriter] [orig]
-;;                             (write
-;;                               ([^String s]
-;;                                (.write orig s)
-;;                                ;; 褰撳彂鐜板弽灏勮鍛婂寘鍚?"flush" 鏃讹紝寮鸿鎵撳嵃褰撳墠璋冪敤鏍?;;                                (when (and (.contains s "Reflection warning") (.contains s "flush"))
-;;                                  (.println orig "--- 鍙嶅皠婧愯拷韪紑濮?---")
-;;                                  (doseq [st (.getStackTrace (Thread/currentThread))]
-;;                                    (.println orig (str "  at " st)))
-;;                                  (.println orig "--- 鍙嶅皠婧愯拷韪粨鏉?---")))
-;;                               ([^String s ^Integer off ^Integer len]
-;;                                (.write orig s off len))))))
-
-
-;; Mod ID constant
+    "Forge 1.20.1 main mod class - generated with gen-class"
+    (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
+              [cn.li.forge1201.init :as init]
+              [cn.li.forge1201.integration.side :as side]
+              [cn.li.forge1201.registry.state :as registry-state]
+              [cn.li.forge1201.integration.events :as events]
+              [cn.li.forge1201.gui.init :as gui-init]
+              [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
+              [cn.li.forge1201.runtime.lifecycle :as runtime-lifecycle]
+              [cn.li.forge1201.runtime.item-handler :as runtime-item-handler]
+              [cn.li.mc1201.entity.effect-hooks :as effect-hooks]
+              [cn.li.mc1201.entity.ray-hooks :as ray-hooks]
+              [cn.li.mc1201.entity.marker-hooks :as marker-hooks]
+              [cn.li.forge1201.config.bridge :as config-bridge]
+              [cn.li.mc1201.config.gameplay-init :as shared-gameplay-init]
+              [cn.li.mcmod.block.tile-logic :as tile-logic]
+              [cn.li.mcmod.platform.capability :as platform-cap]
+              [cn.li.mcmod.entity.dsl :as edsl]
+              [cn.li.mcmod.registry.metadata :as registry-metadata]
+              [cn.li.mcmod.lifecycle :as lifecycle]
+              [cn.li.mcmod.config :as modid]
+              [cn.li.mcmod.util.log :as log]
+              [cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
+              [cn.li.forge1201.integration.forge-energy :as forge-energy]
+              [cn.li.forge1201.integration.ic2-energy :as ic2-energy])
+    (:import [net.minecraft.core.particles SimpleParticleType]
+             [net.minecraft.network.chat Component]
+             [net.minecraft.resources ResourceLocation]
+             [net.minecraft.sounds SoundEvent]
+             [net.minecraft.world.effect MobEffectCategory]
+             [net.minecraft.world.food FoodProperties$Builder]
+             [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab Items Rarity]
+             [net.minecraft.world.level ItemLike]
+             [net.minecraftforge.common MinecraftForge]
+             [net.minecraftforge.common.capabilities RegisterCapabilitiesEvent]
+             [net.minecraftforge.eventbus.api EventPriority IEventBus]
+             [net.minecraftforge.fml InterModComms$IMCMessage]
+             [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent FMLCommonSetupEvent InterModProcessEvent]
+             [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
+             [net.minecraftforge.registries DeferredRegister RegistryObject]
+             [cn.li.forge1201.effect ScriptedMobEffect]
+             [cn.li.forge1201.item NbtBarItem ScriptedItem]
+             [cn.li.forge1201.entity ModEntities]
+             [cn.li.forge1201.worldgen ModFeatures]
+             [cn.li.mcmod.platform.spi PlatformBootstraps])
+    (:gen-class
+     :name com.example.my_mod1201.MyMod1201Clj
+     :prefix "mod-"
+     :init init
+     :state state
+     :constructors {[] []}
+     :methods [[onRightClickBlock [net.minecraftforge.event.entity.player.PlayerInteractEvent$RightClickBlock] void]
+               [commonSetup [net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent] void]
+               [clientSetup [net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent] void]]))
+ 
 (def mod-id modid/*mod-id*)
+
+(def base-properties
+  (delay (bootstrap/create-stone-properties)))
+
+(def carrier-properties
+  (delay (bootstrap/carrier-block-properties @base-properties)))
+
+(def blocks-register
+  (delay (bootstrap/create-blocks-register mod-id)))
+
+(def items-register
+  (delay (bootstrap/create-items-register mod-id)))
+
+(def creative-tabs-register
+  (delay (bootstrap/create-creative-tabs-register mod-id)))
 
 (defn- aot-compilation?
   []
@@ -90,34 +77,13 @@
 
 (defn- clojurephant-compilation?
   []
-  (and (boolean *compile-files*)
-       (boolean (System/getProperty "clojure.server.clojurephant"))))
+  (boolean (System/getProperty "clojure.server.clojurephant")))
 
 (defn- datagen-run?
   []
-  (let [cmd (System/getProperty "sun.java.command" "")]
-    (or (.contains cmd "forgedata")
-        (.contains cmd "runData"))))
-
-
-;; Lazy block properties - only accessed during registration, not during namespace load
-(defonce base-properties
-  (delay (bootstrap/create-stone-properties)))
-
-(defonce carrier-properties
-  (delay (bootstrap/carrier-block-properties @base-properties)))
-
-;; DeferredRegister instances
-(defonce blocks-register
-  ;; During AOT/checkClojure, Minecraft registries may not be bootstrapped.
-  ;; Delay creation to avoid triggering bootstrap too early.
-  (delay (bootstrap/create-blocks-register mod-id)))
-
-(defonce items-register
-  (delay (bootstrap/create-items-register mod-id)))
-
-(defonce creative-tabs-register
-  (delay (bootstrap/create-creative-tabs-register mod-id)))
+  (or (= "true" (System/getProperty "ac.datagen"))
+      (= "true" (System/getProperty "forge.datagen"))
+      (= "true" (System/getProperty "fabric.datagen"))))
 
 ;; BlockEntity types
 (defonce block-entities-register
@@ -747,7 +713,10 @@
         (log/info "[BOOTSTRAP_TRACE] mod-init runtime path begin")
         ;; CRITICAL: Initialize platform abstractions FIRST
         ;; This must happen before any core code runs that uses NBT/BlockPos/World
-        (platform-bootstrap/init-platform!)
+        (when-not (PlatformBootstraps/initialize "forge-1.20.1")
+          (log/error "No platform bootstrap provider found for forge-1.20.1")
+          (throw (ex-info "Forge platform bootstrap provider missing"
+                          {:platform "forge-1.20.1"})))
         ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources.
         (init/init-from-java)
         ;; Runtime content load is registered via lifecycle hooks by shared content.

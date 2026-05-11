@@ -6,15 +6,15 @@
    - 本文件: 使用Forge/Minecraft API和定义生成JSON（平台特定）
    
    优势：定义层复用，易于支持新的Forge版本"
-  (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
-            [cn.li.mcmod.config :as modid]
+  (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.block.blockstate-definition :as blockstate-def]
             [cn.li.mc1201.datagen.resource-location :as rl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [clojure.java.io :as io]
             [clojure.string :as str])
-  (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
+  (:import [cn.li.forge1201.shim LazyForgeBootstrapBridge]
+           [net.minecraft.data DataProvider CachedOutput PackOutput]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.core Direction]
            [net.minecraft.world.level.block Block]
@@ -85,7 +85,7 @@
         candidates (distinct (concat (normalize-candidates registry-name)
                                      (normalize-candidates key-name)))]
     (some (fn [candidate]
-          (bootstrap/find-block modid/*mod-id* candidate))
+      (LazyForgeBootstrapBridge/findBlock modid/*mod-id* candidate))
           candidates)))
 
 (defn- resolve-registered-block
@@ -283,7 +283,7 @@
   (let [registry-name (:registry-name definition)
       ^Block block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
-    (if (bootstrap/air-block? block (bootstrap/get-air-block))
+    (if (LazyForgeBootstrapBridge/isAirBlock block (LazyForgeBootstrapBridge/getAirBlock))
       (do
         (log/warn "Simple block not resolvable for datagen"
                   {:block-key block-key :registry-name registry-name})
@@ -306,7 +306,7 @@
   (let [registry-name (:registry-name definition)
       ^Block block (resolve-registered-block block-key registry-name)
         block-id (if (keyword? block-key) (name block-key) block-key)]
-    (if (bootstrap/air-block? block (bootstrap/get-air-block))
+    (if (LazyForgeBootstrapBridge/isAirBlock block (LazyForgeBootstrapBridge/getAirBlock))
       (do
         (log/warn "Multipart block not resolvable for datagen"
                   {:block-key block-key :registry-name registry-name})
