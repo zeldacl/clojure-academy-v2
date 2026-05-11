@@ -77,7 +77,7 @@
 	(try
 		(let [dsl-id (str block-id)
 					registry-name (or (registry-metadata/get-block-registry-name dsl-id) dsl-id)
-					get-registered-block (requiring-resolve 'cn.li.forge1201.mod/get-registered-block)
+					get-registered-block (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block)
 					^Block blk (or (get-registered-block dsl-id)
 											(get-registered-block registry-name))]
 			(when blk

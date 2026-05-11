@@ -40,6 +40,7 @@
 - **`mcmod`**：平台无关协议、DSL、元数据与基础运行时；禁止引入 `net.minecraft.*` 与 Loader API。
 - **`ac`**：业务内容层（能力、无线、GUI 业务逻辑等）；禁止直接引用 Forge/Fabric/Minecraft API。
 - **`forge-1.20.1`**：Loader 入口与平台适配；可使用 Minecraft/Forge API。
+- **Datagen shared core**：配方/语言等平台无关生成逻辑优先放在 `mc-1.20.1/src/main/clojure/cn/li/mc1201/datagen/*_core.clj`，Forge/Fabric provider 仅保留 PackOutput/Loader API 适配壳。
 - **边界规则（更新）**：
   - 禁止 `ac` 对 `cn.li.forge1201.*` 建立静态编译依赖。
   - `forge-1.20.1` 可通过受控桥接调用 `ac` 能力（例如动态 require / ns-resolve），但不得把 `ac` 实现细节固化为跨层 API。

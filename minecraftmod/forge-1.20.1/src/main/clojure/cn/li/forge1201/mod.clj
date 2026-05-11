@@ -4,6 +4,7 @@
             [cn.li.forge1201.init :as init]
             [cn.li.forge1201.integration.side :as side]
             [cn.li.forge1201.registry.forge-dispatch :as registry]
+            [cn.li.forge1201.registry.state :as registry-state]
             [cn.li.forge1201.integration.events :as events]
             [cn.li.forge1201.gui.init :as gui-init]
             [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
@@ -138,16 +139,16 @@
   (delay (bootstrap/create-particle-types-register mod-id)))
 
 ;; Storage for registered blocks and items (populated during initialization)
-(defonce registered-blocks (atom {}))
-(defonce registered-items (atom {}))
-(defonce registered-entities (atom {}))
-(defonce registered-block-entities (atom {}))
-(defonce registered-fluid-types (atom {}))
-(defonce registered-fluids-source (atom {}))
-(defonce registered-fluids-flowing (atom {}))
-(defonce registered-sounds (atom {}))
-(defonce registered-effects (atom {}))
-(defonce registered-particles (atom {}))
+(def registered-blocks registry-state/registered-blocks)
+(def registered-items registry-state/registered-items)
+(def registered-entities registry-state/registered-entities)
+(def registered-block-entities registry-state/registered-block-entities)
+(def registered-fluid-types registry-state/registered-fluid-types)
+(def registered-fluids-source registry-state/registered-fluids-source)
+(def registered-fluids-flowing registry-state/registered-fluids-flowing)
+(def registered-sounds registry-state/registered-sounds)
+(def registered-effects registry-state/registered-effects)
+(def registered-particles registry-state/registered-particles)
 
 (defn- rarity->forge-rarity
   ^Rarity
@@ -556,17 +557,12 @@
 (defn get-registered-entity-type
   "Get a registered EntityType by entity-id."
   [entity-id]
-  (when-let [registered-obj (get @registered-entities entity-id)]
-    (.get ^RegistryObject registered-obj)))
+  (registry-state/get-registered-entity-type entity-id))
 
 (defn get-registered-block-entity-type
   "Get a registered BlockEntityType by tile-id or block-id."
   [tile-or-block-id]
-  (let [tile-id (or (when (contains? @registered-block-entities tile-or-block-id)
-                      tile-or-block-id)
-                    (registry-metadata/get-block-tile-id tile-or-block-id))]
-    (when-let [registered-obj (and tile-id (get @registered-block-entities tile-id))]
-      (.get ^RegistryObject registered-obj))))
+  (registry-state/get-registered-block-entity-type tile-or-block-id))
 
 ;; Dynamic item registration using metadata
 (defn register-all-items!
@@ -608,8 +604,7 @@
   Returns:
     RegistryObject - The registered block, or nil if not found"
   [block-id]
-  (when-let [registered-obj (get @registered-blocks block-id)]
-    (.get ^RegistryObject registered-obj)))
+  (registry-state/get-registered-block block-id))
 
 (defn get-registered-item
   "Get a registered item by its DSL ID.
@@ -620,8 +615,7 @@
   Returns:
     RegistryObject - The registered item, or nil if not found"
   [item-id]
-  (when-let [registered-obj (get @registered-items item-id)]
-    (.get ^RegistryObject registered-obj)))
+  (registry-state/get-registered-item item-id))
 
 (defn get-registered-block-item
   "Get a registered block item by its block ID.
@@ -632,18 +626,15 @@
   Returns:
     RegistryObject - The registered block item, or nil if not found"
   [block-id]
-  (when-let [registered-obj (get @registered-items (str block-id "-item"))]
-    (.get ^RegistryObject registered-obj)))
+  (registry-state/get-registered-block-item block-id))
 
 (defn get-registered-fluid-source
   [fluid-id]
-  (when-let [registered-obj (get @registered-fluids-source fluid-id)]
-    (.get ^RegistryObject registered-obj)))
+  (registry-state/get-registered-fluid-source fluid-id))
 
 (defn get-registered-fluid-flowing
   [fluid-id]
-  (when-let [registered-obj (get @registered-fluids-flowing fluid-id)]
-    (.get ^RegistryObject registered-obj)))
+  (registry-state/get-registered-fluid-flowing fluid-id))
 
 (defn- build-creative-tab
   "Build the mod creative tab. displayItems callback runs lazily (when tab is opened),

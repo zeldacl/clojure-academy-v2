@@ -4,7 +4,6 @@
             [cn.li.mc1201.runtime.entity-damage-core :as core]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.platform.entity-damage :as ped]
-            [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- get-server []
@@ -47,19 +46,18 @@
   (try
     (when-let [level (resolve-level world-id)]
       (let [origin-pos {:x x :y y :z z}
-        aabb (make-aabb (- x radius) (- y radius) (- z radius)
-                (+ x radius) (+ y radius) (+ z radius))
-        entities (.getEntitiesOfClass level @living-entity-class aabb)
-          dmg-source (core/resolve-damage-source level source-type)
-            damaged (atom [])]
-        (doseq [entity entities]
-          (let [target-pos (core/entity-pos-map entity)
-                actual-damage (core/compute-aoe-damage
-                                origin-pos target-pos radius damage falloff?)]
-            (when (> actual-damage 0.0)
-              (.hurt entity dmg-source (float actual-damage))
-              (swap! damaged conj (str (.getUUID entity))))))
-        @damaged))
+            aabb (make-aabb (- x radius) (- y radius) (- z radius)
+                            (+ x radius) (+ y radius) (+ z radius))
+            entities (.getEntitiesOfClass level @living-entity-class aabb)
+            dmg-source (core/resolve-damage-source level source-type)]
+        (core/apply-aoe-damage-flow!
+          entities
+          origin-pos
+          radius
+          damage
+          falloff?
+          (fn [entity actual-damage]
+            (.hurt entity dmg-source (float actual-damage))))))
     (catch Exception e
       (log/warn "[fabric] Failed to apply AOE damage:" (ex-message e))
       [])))
@@ -89,19 +87,17 @@
         (when (living-entity? entity)
           (let [living entity
                 dmg-source (core/resolve-damage-source level source-type)
-                search-radius (double (power-runtime/get-reflection-search-radius))
-                hit-entities (atom [(str (.getUUID living))])]
-            (.hurt living dmg-source (float damage))
-            (loop [current-entity living
-                   current-damage damage
-                   reflection-num reflection-count]
-              (when (< reflection-num max-reflections)
-                (when-let [next-entity (find-reflection-target level current-entity search-radius)]
-                  (let [reflected-damage (core/compute-reflected-damage current-damage)]
-                    (.hurt next-entity dmg-source (float reflected-damage))
-                    (swap! hit-entities conj (str (.getUUID next-entity)))
-                    (recur next-entity reflected-damage (inc reflection-num))))))
-            @hit-entities))))
+                search-radius (core/reflection-search-radius)]
+            (core/apply-reflection-damage-flow!
+              living
+              damage
+              reflection-count
+              max-reflections
+              search-radius
+              (fn [current-entity radius]
+                (find-reflection-target level current-entity radius))
+              (fn [target damage-value]
+                (.hurt target dmg-source (float damage-value))))))))
     (catch Exception e
       (log/warn "[fabric] Failed to apply reflection damage:" (ex-message e))
       [])))

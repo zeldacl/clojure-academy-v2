@@ -4,8 +4,7 @@
   Emits translation entries from shared mc1201 datagen language data."
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mc1201.datagen.gson-util :as gson-util]
-            [cn.li.mc1201.datagen.lang-data :as lang-data]
-            [cn.li.mcmod.datagen.metadata :as datagen-metadata])
+            [cn.li.mc1201.datagen.lang-provider-core :as lang-core])
   (:import [com.google.gson JsonElement]
            [java.util.concurrent CompletableFuture]
            [net.minecraft.data CachedOutput DataProvider PackOutput$PathProvider PackOutput$Target]
@@ -13,9 +12,7 @@
 
 (defn- language-map
   [lang-code]
-  (get (lang-data/merged-lang-data datagen-metadata/get-translation-maps)
-       (str lang-code ".json")
-       {}))
+  (lang-core/language-map lang-code))
 
 (defn create-provider
   [output

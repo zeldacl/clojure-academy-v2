@@ -49,7 +49,7 @@
 (defn- resolve-from-registered-map
   [block-key registry-name]
   (let [registered-blocks-var (try
-                                (requiring-resolve 'cn.li.forge1201.mod/registered-blocks)
+                                (requiring-resolve 'cn.li.forge1201.registry.state/registered-blocks)
                                 (catch Throwable _ nil))
         registered-blocks-map (when registered-blocks-var
                                 @(var-get registered-blocks-var))

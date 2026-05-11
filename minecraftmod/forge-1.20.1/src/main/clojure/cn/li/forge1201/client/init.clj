@@ -68,8 +68,8 @@
 
 (defn- register-fluid-render-layers!
   []
-  (when-let [get-fluid-source (requiring-resolve 'cn.li.forge1201.mod/get-registered-fluid-source)]
-    (when-let [get-fluid-flowing (requiring-resolve 'cn.li.forge1201.mod/get-registered-fluid-flowing)]
+  (when-let [get-fluid-source (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-fluid-source)]
+    (when-let [get-fluid-flowing (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-fluid-flowing)]
       (doseq [fluid-id (registry-metadata/get-all-fluid-ids)]
         (let [fluid-spec (registry-metadata/get-fluid-spec fluid-id)
               translucent? (true? (get-in fluid-spec [:rendering :is-translucent]))]
@@ -130,7 +130,7 @@
   (doseq [tile-id (registry-metadata/get-all-tile-ids)]
     (let [block-ids (or (seq (registry-metadata/get-tile-block-ids tile-id)) [tile-id])]
       (when (some tesr-api/get-scripted-tile-renderer block-ids)
-        (when-let [get-be-type (requiring-resolve 'cn.li.forge1201.mod/get-registered-block-entity-type)]
+        (when-let [get-be-type (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block-entity-type)]
           (when-let [be-type (get-be-type tile-id)]
             (.registerBlockEntityRenderer
               evt

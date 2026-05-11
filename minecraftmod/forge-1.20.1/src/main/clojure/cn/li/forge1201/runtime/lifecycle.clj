@@ -55,46 +55,50 @@
     (catch Exception e
       (log/warn "Failed to install" label ":" (ex-message e)))))
 
+(def ^:private runtime-install-plan
+  [[ 'cn.li.forge1201.runtime.entity-damage
+    'cn.li.forge1201.runtime.entity-damage/install-entity-damage!
+    "entity-damage"]
+  [ 'cn.li.forge1201.runtime.raycast
+    'cn.li.forge1201.runtime.raycast/install-raycast!
+    "raycast"]
+  [ 'cn.li.forge1201.runtime.interop
+    'cn.li.forge1201.runtime.interop/install-runtime-interop!
+    "runtime-interop"]
+  [ 'cn.li.forge1201.runtime.world-effects
+    'cn.li.forge1201.runtime.world-effects/install-world-effects!
+    "world-effects"]
+  [ 'cn.li.forge1201.runtime.potion-effects
+    'cn.li.forge1201.runtime.potion-effects/install-potion-effects!
+    "potion-effects"]
+  [ 'cn.li.forge1201.runtime.teleportation
+    'cn.li.forge1201.runtime.teleportation/install-teleportation!
+    "teleportation"]
+  [ 'cn.li.forge1201.runtime.saved-locations
+    'cn.li.forge1201.runtime.saved-locations/install-saved-locations!
+    "saved-locations"]
+  [ 'cn.li.forge1201.runtime.player-motion
+    'cn.li.forge1201.runtime.player-motion/install-player-motion!
+    "player-motion"]
+  [ 'cn.li.forge1201.runtime.entity-motion
+    'cn.li.forge1201.runtime.entity-motion/install-entity-motion!
+    "entity-motion"]
+  [ 'cn.li.forge1201.runtime.entity-query
+    'cn.li.forge1201.runtime.entity-query/install-entity-query!
+    "entity-query"]
+  [ 'cn.li.forge1201.runtime.block-manipulation
+    'cn.li.forge1201.runtime.block-manipulation/install-block-manipulation!
+    "block-manipulation"]
+  [ 'cn.li.forge1201.runtime.damage-interception
+    'cn.li.forge1201.runtime.damage-interception/install-damage-interception!
+    "damage-interception"]])
+
 (defn init-common!
   "Register all forge-side lifecycle listeners for runtime bridge."
   []
   ;; Keep this minimal and enable only adapters currently relied upon by migrated runtime features.
-  (try-install! 'cn.li.forge1201.runtime.entity-damage
-                'cn.li.forge1201.runtime.entity-damage/install-entity-damage!
-                "entity-damage")
-  (try-install! 'cn.li.forge1201.runtime.raycast
-                'cn.li.forge1201.runtime.raycast/install-raycast!
-                "raycast")
-  (try-install! 'cn.li.forge1201.runtime.interop
-                'cn.li.forge1201.runtime.interop/install-runtime-interop!
-                "runtime-interop")
-  (try-install! 'cn.li.forge1201.runtime.world-effects
-                'cn.li.forge1201.runtime.world-effects/install-world-effects!
-                "world-effects")
-  (try-install! 'cn.li.forge1201.runtime.potion-effects
-                'cn.li.forge1201.runtime.potion-effects/install-potion-effects!
-                "potion-effects")
-  (try-install! 'cn.li.forge1201.runtime.teleportation
-                'cn.li.forge1201.runtime.teleportation/install-teleportation!
-                "teleportation")
-  (try-install! 'cn.li.forge1201.runtime.saved-locations
-                'cn.li.forge1201.runtime.saved-locations/install-saved-locations!
-                "saved-locations")
-  (try-install! 'cn.li.forge1201.runtime.player-motion
-                'cn.li.forge1201.runtime.player-motion/install-player-motion!
-                "player-motion")
-  (try-install! 'cn.li.forge1201.runtime.entity-motion
-                'cn.li.forge1201.runtime.entity-motion/install-entity-motion!
-                "entity-motion")
-  (try-install! 'cn.li.forge1201.runtime.entity-query
-                'cn.li.forge1201.runtime.entity-query/install-entity-query!
-                "entity-query")
-  (try-install! 'cn.li.forge1201.runtime.block-manipulation
-                'cn.li.forge1201.runtime.block-manipulation/install-block-manipulation!
-                "block-manipulation")
-  (try-install! 'cn.li.forge1201.runtime.damage-interception
-                'cn.li.forge1201.runtime.damage-interception/install-damage-interception!
-                "damage-interception")
+  (doseq [[ns-sym fn-sym label] runtime-install-plan]
+    (try-install! ns-sym fn-sym label))
   (runtime-network/init!)
   (.addListener (MinecraftForge/EVENT_BUS)
                 EventPriority/NORMAL false PlayerEvent$PlayerLoggedInEvent

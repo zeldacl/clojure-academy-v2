@@ -1,13 +1,12 @@
 (ns cn.li.forge1201.datagen.lang-provider
   "Language file data generator - generates translation files from metadata"
   (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mc1201.datagen.lang-data :as lang-data]
-            [cn.li.mc1201.datagen.gson-util :as gson-util]
-            [cn.li.mcmod.datagen.metadata :as datagen-metadata])
+            [cn.li.mc1201.datagen.lang-provider-core :as lang-core]
+            [cn.li.mc1201.datagen.gson-util :as gson-util])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [java.nio.file Path]
            [java.util.concurrent CompletableFuture]
-           [com.google.gson Gson JsonElement]))
+           [com.google.gson Gson]))
 
 ;; Gson instance for JSON serialization
 (def ^:private ^Gson gson
@@ -20,7 +19,7 @@
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
         (let [results (atom [])]
-          (doseq [[file-name data] (lang-data/merged-lang-data datagen-metadata/get-translation-maps)]
+          (doseq [[file-name data] (lang-core/merged-language-data)]
             (let [target-path (.resolve base ^String file-name)
                   json-tree   (.toJsonTree gson data)]
               (swap! results conj (DataProvider/saveStable cached json-tree target-path))))
