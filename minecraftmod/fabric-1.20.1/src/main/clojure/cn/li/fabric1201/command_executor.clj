@@ -1,13 +1,14 @@
-(ns cn.li.forge1201.command-executor
-  "Command action executor - platform-specific Forge implementation delegating to shared core.
+(ns cn.li.fabric1201.command-executor
+  "Command action executor - platform-specific Fabric implementation delegating to shared core.
 
   This namespace adapts platform-specific operations (Minecraft component sending,
-  advancement granting) and delegates all business logic to mc-1.20.1/command/executor_core."
+  advancement granting) and delegates all business logic to mc-1.20.1/command/executor_core.
+  Uses Fabric's ServerPlayer and Component APIs."
   (:require [cn.li.mc1201.command.executor-core :as executor-core]
             [cn.li.mcmod.command.actions :as cmd-actions]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.i18n :as i18n]
-            [cn.li.forge1201.runtime.sync :as runtime-sync])
+            [cn.li.fabric1201.runtime.sync :as runtime-sync])
   (:import [net.minecraft.commands CommandSourceStack]
            [net.minecraft.network.chat Component]
            [net.minecraft.server.level ServerPlayer]
@@ -15,11 +16,13 @@
            [net.minecraft.resources ResourceLocation]))
 
 ;; ============================================================================
-;; Platform Adapters (Forge-Specific Operations)
+;; Platform Adapters (Fabric-Specific Operations)
 ;; ============================================================================
 
 (defn- send-feedback-impl
-  "Platform implementation: send feedback using MC Component API."
+  "Platform implementation: send feedback using MC Component API.
+  
+  Note: Fabric uses the same net.minecraft.network.chat.Component API as Forge."
   [^CommandSourceStack source message translate? args _error?]
   (try
     (let [text (if translate?
@@ -31,7 +34,10 @@
       (log/error "Failed to send feedback:" (ex-message e)))))
 
 (defn- grant-advancement-impl
-  "Platform implementation: grant advancement using MC Advancement API."
+  "Platform implementation: grant advancement using MC Advancement API.
+  
+  Note: Fabric uses ServerPlayer (not ServerPlayer like Forge) and the same
+  Advancement/AdvancementProgress APIs."
   [^ServerPlayer player advancement-id ^CommandSourceStack source]
   (try
     (let [server (.getServer player)
