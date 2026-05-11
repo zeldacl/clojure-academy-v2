@@ -7,7 +7,7 @@
             [cn.li.ac.core :as core]
             [cn.li.fabric1201.platform.bootstrap-entry :as platform-bootstrap]
             [cn.li.fabric1201.registry.fabric-dispatch :as fabric-dispatch]
-            [cn.li.fabric1201.blockstate-properties :as bsp]
+            [cn.li.mc1201.block.blockstate-properties :as bsp]
             [cn.li.fabric1201.integration.events :as events]
             [cn.li.fabric1201.runtime.damage-interception :as runtime-damage-interception]
             [cn.li.fabric1201.runtime.item-handler :as runtime-item-handler]
@@ -19,8 +19,8 @@
             [cn.li.fabric1201.runtime.world-effects :as runtime-world-effects]
             [cn.li.fabric1201.runtime.teleportation :as runtime-teleportation]
             [cn.li.fabric1201.runtime.saved-locations :as runtime-saved-locations]
-            [cn.li.fabric1201.runtime.nbt :as runtime-nbt]
-                        [cn.li.fabric1201.runtime.sync :as runtime-sync]
+            [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
+                        [cn.li.mc1201.runtime.sync-core :as runtime-sync]
                         [cn.li.fabric1201.runtime.network :as runtime-network]
                         [cn.li.fabric1201.runtime.potion-effects :as runtime-potion-effects]
                         [cn.li.fabric1201.runtime.interop :as runtime-interop]
@@ -73,7 +73,7 @@
 
 (defn register-all-blocks!
   []
-  (let [get-props (requiring-resolve 'cn.li.fabric1201.blockstate-properties/get-all-properties)]
+  (let [get-props (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/get-all-properties)]
     (doseq [block-id (registry-metadata/get-all-block-ids)]
       (let [registry-name (registry-metadata/get-block-registry-name block-id)
             fluid-id (registry-metadata/get-fluid-id-for-block block-id)

@@ -267,8 +267,8 @@
   "Apply block state condition for a block.
   Gets Property objects dynamically from blockstate-properties module."
   [part-builder block-id condition]
-  (let [block-id-str (if (keyword? block-id) (name block-id) block-id)
-        get-property (requiring-resolve 'cn.li.forge1201.blockstate-properties/get-property)]
+    (let [block-id-str (if (keyword? block-id) (name block-id) block-id)
+      get-property (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/get-property)]
     (doseq [[property-key raw-value] condition]
       (if-let [property (get-property block-id-str property-key)]
       ;; Use the dynamically retrieved property object
@@ -371,7 +371,7 @@
   (reify DataProvider
     (run [_this cache]
       ;; Datagen runs outside normal mod init order; ensure Property registry is seeded.
-      (when-let [init-all-properties! (requiring-resolve 'cn.li.forge1201.blockstate-properties/init-all-properties!)]
+      (when-let [init-all-properties! (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/init-all-properties!)]
         (init-all-properties!))
       (let [all-defs (blockstate-def/get-all-definitions)
             {:keys [future simple simple-fallback multipart]} (generate-with-forge-builder!

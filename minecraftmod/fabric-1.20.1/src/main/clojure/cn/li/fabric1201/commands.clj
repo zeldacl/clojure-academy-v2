@@ -8,95 +8,15 @@
             [cn.li.mcmod.command.context :as cmd-ctx]
             [cn.li.mcmod.command.actions :as cmd-actions]
             [cn.li.mcmod.platform.command-runtime :as command-runtime]
+            [cn.li.mc1201.command.brigadier-util :as brig-util]
             [cn.li.fabric1201.command-executor]  ; Load action implementations
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.brigadier CommandDispatcher]
            [com.mojang.brigadier.builder ArgumentBuilder]
            [com.mojang.brigadier.builder LiteralArgumentBuilder RequiredArgumentBuilder]
-           [com.mojang.brigadier.arguments StringArgumentType IntegerArgumentType FloatArgumentType BoolArgumentType]
            [com.mojang.brigadier.context CommandContext]
            [net.minecraft.commands CommandSourceStack]
-           [net.minecraft.commands.arguments EntityArgument]
            [net.minecraft.server.level ServerPlayer]))
-
-(defn- entity-arg-player-type []
-  (EntityArgument/player))
-
-(defn- entity-arg-get-player [^CommandContext brigadier-ctx arg-name]
-  (EntityArgument/getPlayer brigadier-ctx arg-name))
-
-;; ============================================================================
-;; Argument Type Mapping
-;; ============================================================================
-
-(defn map-argument-type
-  "Map DSL argument type to Brigadier ArgumentType.
-
-  Args:
-    arg-spec: ArgumentSpec record
-
-  Returns:
-    Brigadier ArgumentType instance"
-  [arg-spec]
-  (case (:type arg-spec)
-    :player (entity-arg-player-type)
-    :string (StringArgumentType/string)
-    :word (StringArgumentType/word)
-    :greedy-string (StringArgumentType/greedyString)
-    :integer (IntegerArgumentType/integer)
-    :float (FloatArgumentType/floatArg)
-    :boolean (BoolArgumentType/bool)
-    :enum (StringArgumentType/word)  ; Enums are strings with suggestions
-    (StringArgumentType/string)))    ; Default to string
-
-;; ============================================================================
-;; Argument Extraction
-;; ============================================================================
-
-(defn extract-argument-value
-  "Extract argument value from Brigadier CommandContext.
-
-  Args:
-    ^CommandContext brigadier-ctx: Brigadier command context
-    arg-name: String - Argument name
-    arg-type: Keyword - DSL argument type
-
-  Returns:
-    Extracted value"
-  [^CommandContext brigadier-ctx arg-name arg-type]
-  (try
-    (case arg-type
-      :player (entity-arg-get-player brigadier-ctx arg-name)
-      :string (StringArgumentType/getString brigadier-ctx arg-name)
-      :word (StringArgumentType/getString brigadier-ctx arg-name)
-      :greedy-string (StringArgumentType/getString brigadier-ctx arg-name)
-      :integer (IntegerArgumentType/getInteger brigadier-ctx arg-name)
-      :float (FloatArgumentType/getFloat brigadier-ctx arg-name)
-      :boolean (BoolArgumentType/getBool brigadier-ctx arg-name)
-      :enum (StringArgumentType/getString brigadier-ctx arg-name)
-      (StringArgumentType/getString brigadier-ctx arg-name))
-    (catch Exception e
-      (log/warn "Failed to extract argument" arg-name ":" (ex-message e))
-      nil)))
-
-(defn extract-all-arguments
-  "Extract all arguments from Brigadier context.
-
-  Args:
-    ^CommandContext brigadier-ctx: Brigadier command context
-    arg-specs: Vector of ArgumentSpec records
-
-  Returns:
-    Map of argument-name -> value"
-  [^CommandContext brigadier-ctx arg-specs]
-  (into {}
-        (keep (fn [arg-spec]
-                (let [arg-name (name (:name arg-spec))
-                      arg-type (:type arg-spec)
-                      value (extract-argument-value brigadier-ctx arg-name arg-type)]
-                  (when value
-                    [(keyword arg-name) value])))
-              arg-specs)))
 
 ;; ============================================================================
 ;; Command Execution
@@ -119,7 +39,7 @@
           ^ServerPlayer player (try (.getPlayerOrException source)
                    (catch Exception _ nil))
           world (when player (.level player))
-          arguments (extract-all-arguments brigadier-ctx arg-specs)
+          arguments (brig-util/extract-all-arguments brigadier-ctx arg-specs)
           ctx (cmd-ctx/create-context
                 {:player player
                  :world world
@@ -157,7 +77,7 @@
     (^int run [_ ^CommandContext ctx]
       (let [target-player (when target-player-arg
                             (try
-                              (entity-arg-get-player ctx target-player-arg)
+                              (brig-util/entity-arg-get-player ctx target-player-arg)
                               (catch Exception _ nil)))]
         (int (execute-command executor-fn ctx arg-specs target-player))))))
 
@@ -174,7 +94,7 @@
     RequiredArgumentBuilder"
   [arg-spec executor-fn all-arg-specs target-player-arg]
   (let [arg-name (name (:name arg-spec))
-        arg-type (map-argument-type arg-spec)
+        arg-type (brig-util/map-argument-type arg-spec)
         builder (RequiredArgumentBuilder/argument arg-name arg-type)]
     (when executor-fn
       (.executes builder (build-executor executor-fn all-arg-specs target-player-arg)))

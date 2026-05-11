@@ -55,6 +55,22 @@
       (log/warn "Failed to break block:" (ex-message e))
       false)))
 
+(defn can-break-block?
+  "Check whether a player may break a block at [x y z] in world-id.
+
+  Uses the same shared server/player/level/position resolution as break-block!,
+  while delegating the final permission decision to the platform-supplied
+  break-guard-fn."
+  [^MinecraftServer server player-uuid world-id x y z break-guard-fn]
+  (try
+    (when-let [^ServerLevel level (get-level-by-id server world-id)]
+      (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+        (let [pos (BlockPos. (int x) (int y) (int z))]
+          (boolean (break-guard-fn level pos player)))))
+    (catch Exception e
+      (log/warn "Failed to check can-break-block:" (ex-message e))
+      false)))
+
 (defn set-block!
   [^MinecraftServer server world-id x y z block-id]
   (try

@@ -2,12 +2,16 @@
   "Command action executor core - platform-agnostic business logic for command actions.
 
   This namespace provides implementations for all command actions using callbacks
-  for platform-specific operations (feedback sending, advancement granting, etc).
+  for platform-specific operations (feedback sending, etc). Vanilla Minecraft
+  advancement APIs are also handled here because they are loader-agnostic.
   Both Forge and Fabric delegate to this core after setting up platform context."
   (:require [cn.li.mcmod.command.actions :as cmd-actions]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]
-            [clojure.string :as str]))
+            [clojure.string :as str])
+  (:import [net.minecraft.advancements Advancement AdvancementProgress]
+           [net.minecraft.resources ResourceLocation]
+           [net.minecraft.server.level ServerPlayer]))
 
 ;; ============================================================================
 ;; Default Configuration
@@ -125,20 +129,51 @@
     (send-feedback-fn message translate? args error?)
     {:success? true}))
 
+(defn grant-advancement!
+  "Grant a vanilla Minecraft advancement to a player.
+
+  Args:
+    player: ServerPlayer
+    advancement-id: String resource location
+    send-feedback-fn: (fn [message translate? args error?]) -> nil
+
+  Returns:
+    {:success? bool :message optional-string}"
+  [^ServerPlayer player advancement-id send-feedback-fn]
+  (try
+    (let [server (.getServer player)
+          advancement-manager (.getAdvancements server)
+          resource-loc (ResourceLocation. advancement-id)
+          ^Advancement advancement (.getAdvancement advancement-manager resource-loc)]
+      (if-not advancement
+        (do
+          (send-feedback-fn "command.academy.acach.not_found" true [advancement-id] true)
+          {:success? false :message "Advancement not found"})
+        (let [player-advancements (.getAdvancements player)
+              ^AdvancementProgress progress (.getOrStartProgress player-advancements advancement)]
+          (doseq [criterion (.getRemainingCriteria progress)]
+            (.award player-advancements advancement criterion))
+          (send-feedback-fn "command.academy.acach.success" true
+                            [advancement-id (.getName (.getGameProfile player))] false)
+          {:success? true})))
+    (catch Exception e
+      (log/error "Failed to grant advancement:" (ex-message e))
+      (send-feedback-fn (str "Error: " (ex-message e)) false [] true)
+      {:success? false :message (ex-message e)})))
+
 (defn execute-grant-advancement-action
-  "Execute :grant-advancement action - platform delegates to MC API.
+  "Execute :grant-advancement action.
   
   Args:
     action-map: Action data containing :advancement-id, :player (platform obj)
     send-feedback-fn: Platform callback
-    grant-fn: Platform callback (player advancement-id) -> {:success? bool}
   
   Returns:
     {:success? bool}"
-  [action-map send-feedback-fn grant-fn]
+  [action-map send-feedback-fn]
   (let [advancement-id (:advancement-id action-map)
         player (:player action-map)]
-    (grant-fn player advancement-id send-feedback-fn)))
+    (grant-advancement! player advancement-id send-feedback-fn)))
 
 (defn execute-switch-category-action
   "Execute :switch-category action.

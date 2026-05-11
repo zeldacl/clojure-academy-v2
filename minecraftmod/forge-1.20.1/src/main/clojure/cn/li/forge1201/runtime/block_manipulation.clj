@@ -21,19 +21,6 @@
     (ForgeRuntimeBridge/postEvent event)
     (not (.isCanceled event))))
 
-(defn- can-break-block-impl? [player-uuid world-id x y z]
-  (try
-    (when-let [^ServerLevel level (bmc/get-level-by-id (get-server) world-id)]
-      (when-let [^ServerPlayer player (bmc/get-player-by-uuid (get-server) player-uuid)]
-        (let [pos (BlockPos. (int x) (int y) (int z))
-              state (.getBlockState level pos)
-              event (BlockEvent$BreakEvent. level pos state player)]
-          (ForgeRuntimeBridge/postEvent event)
-          (not (.isCanceled event)))))
-    (catch Exception e
-      (log/warn "Failed to check can-break-block:" (ex-message e))
-      false)))
-
 (defn forge-block-manipulation []
   (reify bm/IBlockManipulation
     (break-block! [_ player-id world-id x y z drop?]
@@ -45,7 +32,7 @@
     (get-block-hardness [_ world-id x y z]
       (bmc/get-block-hardness (get-server) world-id x y z))
     (can-break-block? [_ player-id world-id x y z]
-      (can-break-block-impl? player-id world-id x y z))
+      (boolean (bmc/can-break-block? (get-server) player-id world-id x y z forge-break-guard)))
     (find-blocks-in-line [_ world-id x1 y1 z1 dx dy dz max-distance]
       (bmc/find-blocks-in-line (get-server) world-id x1 y1 z1 dx dy dz max-distance))
     (liquid-block? [_ world-id x y z]

@@ -8,12 +8,10 @@
             [cn.li.mcmod.command.actions :as cmd-actions]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.i18n :as i18n]
-            [cn.li.fabric1201.runtime.sync :as runtime-sync])
+            [cn.li.mc1201.runtime.sync-core :as runtime-sync])
   (:import [net.minecraft.commands CommandSourceStack]
            [net.minecraft.network.chat Component]
-           [net.minecraft.server.level ServerPlayer]
-           [net.minecraft.advancements Advancement AdvancementProgress]
-           [net.minecraft.resources ResourceLocation]))
+           [net.minecraft.server.level ServerPlayer]))
 
 ;; ============================================================================
 ;; Platform Adapters (Fabric-Specific Operations)
@@ -33,54 +31,23 @@
     (catch Exception e
       (log/error "Failed to send feedback:" (ex-message e)))))
 
-(defn- grant-advancement-impl
-  "Platform implementation: grant advancement using MC Advancement API.
-  
-  Note: Fabric uses ServerPlayer (not ServerPlayer like Forge) and the same
-  Advancement/AdvancementProgress APIs."
-  [^ServerPlayer player advancement-id ^CommandSourceStack source]
-  (try
-    (let [server (.getServer player)
-          advancement-manager (.getAdvancements server)
-          resource-loc (ResourceLocation. advancement-id)
-          ^Advancement advancement (.getAdvancement advancement-manager resource-loc)]
-      (if-not advancement
-        (do
-          (send-feedback-impl source "command.academy.acach.not_found" true [advancement-id] true)
-          {:success? false :message "Advancement not found"})
-        (let [player-advancements (.getAdvancements player)
-              ^AdvancementProgress progress (.getOrStartProgress player-advancements advancement)]
-          (doseq [criterion (.getRemainingCriteria progress)]
-            (.award player-advancements advancement criterion))
-          (send-feedback-impl source "command.academy.acach.success" true
-                         [advancement-id (.getName (.getGameProfile player))] false)
-          {:success? true})))
-    (catch Exception e
-      (log/error "Failed to grant advancement:" (ex-message e))
-      (send-feedback-impl source (str "Error: " (ex-message e)) false [] true)
-      {:success? false :message (ex-message e)})))
-
 ;; ============================================================================
 ;; Action Implementations (Delegating to executor-core with platform callbacks)
 ;; ============================================================================
 
 (defmethod cmd-actions/execute-action-impl :send-message
   [action-map context]
-  (let [^ServerPlayer player (:player action-map)
-        ^CommandSourceStack source (:source context)
+  (let [^CommandSourceStack source (:source context)
         send-feedback-fn (fn [msg trans? args err?]
                            (send-feedback-impl source msg trans? args err?))]
     (executor-core/execute-send-message-action action-map send-feedback-fn)))
 
 (defmethod cmd-actions/execute-action-impl :grant-advancement
   [action-map context]
-  (let [^ServerPlayer player (:player action-map)
-        ^CommandSourceStack source (:source context)
+  (let [^CommandSourceStack source (:source context)
         send-feedback-fn (fn [msg trans? args err?]
-                           (send-feedback-impl source msg trans? args err?))
-        grant-fn (fn [p adv-id _send-fb-fn]
-                   (grant-advancement-impl p adv-id source))]
-    (executor-core/execute-grant-advancement-action action-map send-feedback-fn grant-fn)))
+                           (send-feedback-impl source msg trans? args err?))]
+    (executor-core/execute-grant-advancement-action action-map send-feedback-fn)))
 
 (defmethod cmd-actions/execute-action-impl :switch-category
   [action-map context]

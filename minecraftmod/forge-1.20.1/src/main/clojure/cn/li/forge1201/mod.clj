@@ -310,7 +310,7 @@
           registered-obj (.register ^DeferredRegister (force blocks-register) registry-name
                                     (reify java.util.function.Supplier
                                       (get [_]
-                                        (let [get-props (requiring-resolve 'cn.li.forge1201.blockstate-properties/get-all-properties)]
+                                        (let [get-props (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/get-all-properties)]
                                           (cond
                                             fluid-id
                                             (when-let [fluid-source-ro (get @registered-fluids-source fluid-id)]
@@ -764,7 +764,7 @@
 
         ;; Initialize BlockState properties from Clojure metadata
         ;; Must happen before block registration so Property objects are ready
-        (when-let [init-props! (requiring-resolve 'cn.li.forge1201.blockstate-properties/init-all-properties!)]
+        (when-let [init-props! (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/init-all-properties!)]
           (init-props!))
 
         ;; Register all blocks and items using metadata-driven approach

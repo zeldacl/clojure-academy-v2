@@ -1,8 +1,8 @@
 (ns cn.li.forge1201.runtime.lifecycle
   "Forge player lifecycle hooks for runtime system."
-  (:require [cn.li.forge1201.runtime.nbt :as runtime-nbt]
+  (:require [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
             [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core]
-            [cn.li.forge1201.runtime.sync :as runtime-sync]
+            [cn.li.mc1201.runtime.sync-core :as runtime-sync]
             [cn.li.forge1201.runtime.network :as runtime-network]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
