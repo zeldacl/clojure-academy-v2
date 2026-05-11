@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.client.request-bridge
+(ns cn.li.mc1201.client.request.bridge
   "Provides screen-facing request functions for runtime operations."
   (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]))

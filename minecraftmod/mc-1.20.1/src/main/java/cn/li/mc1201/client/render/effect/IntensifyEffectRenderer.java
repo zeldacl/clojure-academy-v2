@@ -1,26 +1,27 @@
-package cn.li.forge1201.client.effect;
+package cn.li.mc1201.client.render.effect;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import cn.li.forge1201.entity.ScriptedEffectEntity;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import org.joml.Matrix4f;
 
-public final class IntensifyEffectRenderer extends EntityRenderer<ScriptedEffectEntity> {
+public final class IntensifyEffectRenderer<T extends Entity> extends EntityRenderer<T> {
     public IntensifyEffectRenderer(EntityRendererProvider.Context context) {
         super(context);
     }
 
     @Override
-    public void render(ScriptedEffectEntity entity, float entityYaw, float partialTick,
+    public void render(T entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
 
-        if (entity.getActiveArcs().isEmpty()) {
+        var arcs = ScriptedRenderAccess.getActiveArcs(entity);
+        if (arcs.isEmpty()) {
             return;
         }
 
@@ -28,10 +29,10 @@ public final class IntensifyEffectRenderer extends EntityRenderer<ScriptedEffect
         VertexConsumer consumer = bufferSource.getBuffer(RenderType.lines());
         Matrix4f pose = poseStack.last().pose();
 
-        float entityFade = 1.0F - Math.min(1.0F, (entity.getAgeTicks() + partialTick) / 15.0F);
-        float time = entity.getAgeTicks() + partialTick;
+        float entityFade = 1.0F - Math.min(1.0F, (ScriptedRenderAccess.getAgeTicks(entity) + partialTick) / 15.0F);
+        float time = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
 
-        for (ScriptedEffectEntity.ArcData arc : entity.getActiveArcs()) {
+        for (ScriptedRenderAccess.ArcDataView arc : arcs) {
             float arcFade = Math.max(0.0F, Math.min(1.0F, arc.lifeTicks / 3.0F));
             float flicker = 0.72F + (0.28F * Math.abs((float) Math.sin((time * 2.4F) + arc.flickerSeed)));
             float alpha = Math.max(0.08F, 0.9F * arcFade * entityFade * flicker);
@@ -82,7 +83,7 @@ public final class IntensifyEffectRenderer extends EntityRenderer<ScriptedEffect
     }
 
     @Override
-    public ResourceLocation getTextureLocation(ScriptedEffectEntity entity) {
+    public ResourceLocation getTextureLocation(T entity) {
         return null;
     }
 }

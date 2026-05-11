@@ -5,7 +5,7 @@
     :alternative  — Z, X, C, B      (no conflict with vanilla)"
   (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mc1201.client.input.mode-switch :as mode-switch]
-            [cn.li.forge1201.client.overlay-state :as overlay-state]
+            [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client KeyMapping Minecraft Options]

@@ -1,8 +1,7 @@
-package cn.li.forge1201.client.effect;
+package cn.li.mc1201.client.render.effect;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import cn.li.forge1201.entity.ScriptedBlockBodyEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -12,35 +11,34 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import org.joml.Matrix4f;
 
-public final class ScriptedBlockBodyRenderer extends EntityRenderer<ScriptedBlockBodyEntity> {
+public final class ScriptedBlockBodyRenderer<T extends Entity> extends EntityRenderer<T> {
     public ScriptedBlockBodyRenderer(EntityRendererProvider.Context context) {
         super(context);
     }
 
     @Override
-    public void render(ScriptedBlockBodyEntity entity, float entityYaw, float partialTick,
+    public void render(T entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
 
-        String blockId = entity.getSyncedBlockId();
+        String blockId = ScriptedRenderAccess.getSyncedBlockId(entity);
         BlockState blockState = resolveBlockState(blockId);
 
         poseStack.pushPose();
-        // Center the block model (block models are 0-1, center them at entity origin)
         poseStack.translate(-0.5, 0.0, -0.5);
 
         if (blockState != null) {
             BlockRenderDispatcher blockRenderer = Minecraft.getInstance().getBlockRenderer();
             blockRenderer.renderSingleBlock(blockState, poseStack, bufferSource, packedLight, OverlayTexture.NO_OVERLAY);
         } else {
-            // Fallback: draw a wire box if block can't be resolved
             float w = Math.max(0.2F, entity.getBbWidth() * 0.5F);
             float h = Math.max(0.2F, entity.getBbHeight());
-            poseStack.translate(0.5, 0.0, 0.5); // undo the translate for the box
+            poseStack.translate(0.5, 0.0, 0.5);
             Matrix4f mat = poseStack.last().pose();
             VertexConsumer vc = bufferSource.getBuffer(RenderType.lines());
             drawBoxLines(vc, mat, -w, 0.0F, -w, w, h, w, 210);
@@ -89,7 +87,7 @@ public final class ScriptedBlockBodyRenderer extends EntityRenderer<ScriptedBloc
     }
 
     @Override
-    public ResourceLocation getTextureLocation(ScriptedBlockBodyEntity entity) {
+    public ResourceLocation getTextureLocation(T entity) {
         return null;
     }
 }

@@ -1,34 +1,34 @@
-package cn.li.forge1201.client.effect;
+package cn.li.mc1201.client.render.effect;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
-import cn.li.forge1201.entity.ScriptedRayEntity;
 import cn.li.mc1201.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import org.joml.Matrix4f;
 
-public final class ScriptedRayCompositeRenderer extends EntityRenderer<ScriptedRayEntity> {
+public final class ScriptedRayCompositeRenderer<T extends Entity> extends EntityRenderer<T> {
     public ScriptedRayCompositeRenderer(EntityRendererProvider.Context context) {
         super(context);
     }
 
     @Override
-    public void render(ScriptedRayEntity entity, float entityYaw, float partialTick,
+    public void render(T entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
 
-        ScriptedRaySpec spec = entity.getRaySpec();
+        ScriptedRaySpec spec = ScriptedRenderAccess.getRaySpec(entity);
         if (spec == null) {
             return;
         }
 
         float length = (float) Math.max(0.1D, spec.getLength());
-        float age = entity.getAgeTicks() + partialTick;
+        float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
         float life = Math.max(1.0F, spec.getLifeTicks());
         float blendInTicks = (float) Math.max(1.0D, spec.getBlendInMs() / 50.0D);
         float blendOutTicks = (float) Math.max(1.0D, spec.getBlendOutMs() / 50.0D);
@@ -86,7 +86,7 @@ public final class ScriptedRayCompositeRenderer extends EntityRenderer<ScriptedR
     }
 
     @Override
-    public ResourceLocation getTextureLocation(ScriptedRayEntity entity) {
+    public ResourceLocation getTextureLocation(T entity) {
         return null;
     }
 }

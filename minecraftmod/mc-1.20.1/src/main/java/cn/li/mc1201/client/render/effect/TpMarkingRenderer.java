@@ -1,29 +1,29 @@
-package cn.li.forge1201.client.effect;
+package cn.li.mc1201.client.render.effect;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
-import cn.li.forge1201.entity.ScriptedMarkerEntity;
 import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import org.joml.Matrix4f;
 
-public final class TpMarkingRenderer extends EntityRenderer<ScriptedMarkerEntity> {
+public final class TpMarkingRenderer<T extends Entity> extends EntityRenderer<T> {
     public TpMarkingRenderer(EntityRendererProvider.Context context) {
         super(context);
     }
 
     @Override
-    public void render(ScriptedMarkerEntity entity, float entityYaw, float partialTick,
+    public void render(T entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
 
-        ScriptedMarkerSpec spec = entity.getMarkerSpec();
+        ScriptedMarkerSpec spec = ScriptedRenderAccess.getMarkerSpec(entity);
         boolean ignoreDepth = spec != null && spec.isIgnoreDepth();
         boolean available = spec == null || spec.isAvailable();
         int g1 = available ? 255 : 50;
@@ -31,7 +31,7 @@ public final class TpMarkingRenderer extends EntityRenderer<ScriptedMarkerEntity
         int g2 = available ? 220 : 90;
         int b2 = available ? 220 : 90;
 
-        float age = entity.getAgeTicks() + partialTick;
+        float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
         float pulse = 0.65F + 0.1F * (float) Math.sin(age * 0.4F);
         float spin = age * 8.0F;
 
@@ -72,7 +72,7 @@ public final class TpMarkingRenderer extends EntityRenderer<ScriptedMarkerEntity
     }
 
     @Override
-    public ResourceLocation getTextureLocation(ScriptedMarkerEntity entity) {
+    public ResourceLocation getTextureLocation(T entity) {
         return null;
     }
 }

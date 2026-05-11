@@ -1,4 +1,4 @@
-(ns cn.li.forge1201.client.screen-host
+(ns cn.li.mc1201.client.screen.host
   "CLIENT-ONLY generic screen host. AC provides draw ops and interaction handlers."
   (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]
@@ -71,9 +71,9 @@
         (let [^Minecraft mc (Minecraft/getInstance)]
           (.setScreen mc nil)
           true)
-        (and char-typed-fn (= key 259)) ;; backspace
+        (and char-typed-fn (= key 259))
         (do (char-typed-fn \backspace) true)
-        (and char-typed-fn (= key 257)) ;; Enter
+        (and char-typed-fn (= key 257))
         (do (char-typed-fn \newline) true)
         :else false))
 

@@ -15,7 +15,8 @@
             [cn.li.fabric1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.fabric1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.fabric1201.mod :as mod])
-  (:import [cn.li.fabric1201.shim FabricClientHelper]
+  (:import [cn.li.fabric1201.client FabricClientRenderSetup]
+           [cn.li.fabric1201.shim FabricClientHelper]
            [cn.li.fabric1201.shim FabricClientHelper$RendererFactory]
            [cn.li.fabric1201.client.render BlockEntityRendererImpl]
            [net.minecraft.client Minecraft]))
@@ -85,6 +86,7 @@
   (init-render-bindings!)
   (i18n/install-client-i18n!)
   (register-renderers)
+  (FabricClientRenderSetup/registerEntityRenderers)
   (register-scripted-block-entity-renderers!)
   (overlay-renderer/init!)
   (hand-effect-renderer/init!)

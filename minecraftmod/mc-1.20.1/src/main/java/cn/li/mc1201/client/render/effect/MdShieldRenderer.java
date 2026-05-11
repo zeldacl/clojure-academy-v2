@@ -1,19 +1,19 @@
-package cn.li.forge1201.client.effect;
+package cn.li.mc1201.client.render.effect;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
-import cn.li.forge1201.entity.ScriptedEffectEntity;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
-public final class MdShieldRenderer extends EntityRenderer<ScriptedEffectEntity> {
+public final class MdShieldRenderer<T extends Entity> extends EntityRenderer<T> {
     private static final ResourceLocation TEXTURE = new ResourceLocation("my_mod", "textures/effects/mdshield.png");
     private static final float BASE_SIZE = 1.8F;
 
@@ -22,23 +22,19 @@ public final class MdShieldRenderer extends EntityRenderer<ScriptedEffectEntity>
     }
 
     @Override
-    public void render(ScriptedEffectEntity entity, float entityYaw, float partialTick,
+    public void render(T entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
 
-        float age = entity.getAgeTicks() + partialTick;
-
-        // Scale lerp: 0.2 → 1.0 over 15 ticks (matching original EntityMdShield)
+        float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
         float scaleFactor = lerp(0.2F, 1.0F, Math.min(age / 15.0F, 1.0F));
         float size = BASE_SIZE * scaleFactor * 0.5F;
 
-        // Alpha lerp: 0 → 1.0 over 6 ticks
         float alpha = Math.min(age / 6.0F, 1.0F);
         if (alpha <= 0.0F) {
             return;
         }
 
-        // Rotation: ~9°/tick
         float rotation = age * 9.0F;
 
         poseStack.pushPose();
@@ -78,7 +74,7 @@ public final class MdShieldRenderer extends EntityRenderer<ScriptedEffectEntity>
     }
 
     @Override
-    public ResourceLocation getTextureLocation(ScriptedEffectEntity entity) {
+    public ResourceLocation getTextureLocation(T entity) {
         return TEXTURE;
     }
 }

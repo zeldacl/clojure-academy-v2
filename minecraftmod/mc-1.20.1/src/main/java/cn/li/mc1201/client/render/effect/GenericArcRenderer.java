@@ -1,20 +1,17 @@
-package cn.li.forge1201.client.effect;
+package cn.li.mc1201.client.render.effect;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import cn.li.forge1201.entity.ScriptedEffectEntity;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
 import org.joml.Matrix4f;
 
-/**
- * Generic forward arc renderer with deterministic wiggle and fade profile.
- */
-public final class GenericArcRenderer extends EntityRenderer<ScriptedEffectEntity> {
+public final class GenericArcRenderer<T extends Entity> extends EntityRenderer<T> {
     private static final float DEFAULT_LENGTH = 20.0F;
     private static final float SHOW_WIGGLE = 0.2F;
     private static final float HIDE_WIGGLE = 0.2F;
@@ -26,12 +23,12 @@ public final class GenericArcRenderer extends EntityRenderer<ScriptedEffectEntit
     }
 
     @Override
-    public void render(ScriptedEffectEntity entity, float entityYaw, float partialTick,
+    public void render(T entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
 
         float life = 20.0F;
-        float age = entity.getAgeTicks() + partialTick;
+        float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
         float progress = Mth.clamp(age / life, 0.0F, 1.0F);
 
         float showFactor = Mth.clamp(progress / 0.2F, 0.0F, 1.0F);
@@ -81,7 +78,7 @@ public final class GenericArcRenderer extends EntityRenderer<ScriptedEffectEntit
     }
 
     @Override
-    public ResourceLocation getTextureLocation(ScriptedEffectEntity entity) {
+    public ResourceLocation getTextureLocation(T entity) {
         return null;
     }
 }

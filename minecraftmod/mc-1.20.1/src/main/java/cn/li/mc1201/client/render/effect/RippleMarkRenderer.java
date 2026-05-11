@@ -1,26 +1,26 @@
-package cn.li.forge1201.client.effect;
+package cn.li.mc1201.client.render.effect;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import cn.li.forge1201.entity.ScriptedEffectEntity;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import org.joml.Matrix4f;
 
-public final class RippleMarkRenderer extends EntityRenderer<ScriptedEffectEntity> {
+public final class RippleMarkRenderer<T extends Entity> extends EntityRenderer<T> {
     public RippleMarkRenderer(EntityRendererProvider.Context context) {
         super(context);
     }
 
     @Override
-    public void render(ScriptedEffectEntity entity, float entityYaw, float partialTick,
+    public void render(T entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
 
-        float age = entity.getAgeTicks() + partialTick;
+        float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
         poseStack.pushPose();
         Matrix4f mat = poseStack.last().pose();
         VertexConsumer vc = bufferSource.getBuffer(RenderType.lines());
@@ -49,7 +49,7 @@ public final class RippleMarkRenderer extends EntityRenderer<ScriptedEffectEntit
     }
 
     @Override
-    public ResourceLocation getTextureLocation(ScriptedEffectEntity entity) {
+    public ResourceLocation getTextureLocation(T entity) {
         return null;
     }
 }

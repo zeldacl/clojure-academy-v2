@@ -3,7 +3,7 @@
   (:require [cn.li.mc1201.client.effects.particle :as particle]
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.forge1201.client.key-input :as key-input]
-            [cn.li.forge1201.client.overlay-state :as overlay-state]
+            [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.client.effect IntensifyEffectSpawner]
