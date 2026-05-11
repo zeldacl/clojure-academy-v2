@@ -1,6 +1,5 @@
 (ns cn.li.ac.wireless.data.network-config
-	(:require [cn.li.ac.config.common :as config-common]
-						[cn.li.mcmod.config.registry :as config-reg]))
+	(:require [cn.li.mcmod.config.registry :as config-reg]))
 
 (def descriptors
 	[{:key :network-update-interval-ticks
@@ -25,7 +24,7 @@
 
 (defn- cfg []
 	(merge default-values
-				 (config-reg/get-config-values config-common/wireless-domain)))
+					 (config-reg/get-config-values :cn.li.ac/wireless)))
 
 (defn update-interval-ticks []
 	(:network-update-interval-ticks (cfg)))

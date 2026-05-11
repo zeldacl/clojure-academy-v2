@@ -68,3 +68,15 @@
 (defn get-init-overload [level] (call1 :get-init-overload level))
 (defn get-add-overload [level] (call1 :get-add-overload level))
 (defn get-damage-scale [] (call0 :get-damage-scale))
+
+(defn bind-gameplay-config!
+  [provider-map]
+  (try
+    (require 'cn.li.ac.config.gameplay)
+    (install-provider! provider-map)
+    (let [config-var (ns-resolve 'cn.li.ac.config.gameplay '*config-bridge*)]
+      (when config-var
+        (alter-var-root config-var (constantly provider-map))
+        (log/info "Shared gameplay config bridge bound successfully" {:keys (count provider-map)})))
+    (catch Exception e
+      (log/error "Failed to bind shared gameplay config bridge" e))))

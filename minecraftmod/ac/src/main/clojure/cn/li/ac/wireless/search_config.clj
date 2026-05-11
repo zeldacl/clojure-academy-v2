@@ -1,6 +1,5 @@
 (ns cn.li.ac.wireless.search-config
-  (:require [cn.li.ac.config.common :as config-common]
-            [cn.li.mcmod.config.registry :as config-reg]))
+  (:require [cn.li.mcmod.config.registry :as config-reg]))
 
 (def descriptors
   [{:key :search-node-range
@@ -25,7 +24,7 @@
 
 (defn- cfg []
   (merge default-values
-         (config-reg/get-config-values config-common/wireless-domain)))
+         (config-reg/get-config-values :cn.li.ac/wireless)))
 
 (defn node-search-range []
   (:search-node-range (cfg)))

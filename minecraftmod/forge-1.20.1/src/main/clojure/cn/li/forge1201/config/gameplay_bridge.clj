@@ -121,3 +121,28 @@
 
 (defn get-damage-scale []
   (.get GameplayConfig/DAMAGE_SCALE))
+
+(defn provider-map
+  []
+  {:analysis-enabled? analysis-enabled?
+   :attack-player? attack-player?
+   :destroy-blocks? destroy-blocks?
+   :gen-ores? gen-ores?
+   :gen-phase-liquid? gen-phase-liquid?
+   :heads-or-tails? heads-or-tails?
+   :get-normal-metal-blocks get-normal-metal-blocks
+   :get-weak-metal-blocks get-weak-metal-blocks
+   :get-metal-entities get-metal-entities
+   :is-normal-metal-block? is-normal-metal-block?
+   :is-weak-metal-block? is-weak-metal-block?
+   :is-metal-block? is-metal-block?
+   :is-metal-entity? is-metal-entity?
+   :get-cp-recover-cooldown get-cp-recover-cooldown
+   :get-cp-recover-speed get-cp-recover-speed
+   :get-overload-recover-cooldown get-overload-recover-cooldown
+   :get-overload-recover-speed get-overload-recover-speed
+   :get-init-cp get-init-cp
+   :get-add-cp get-add-cp
+   :get-init-overload get-init-overload
+   :get-add-overload get-add-overload
+   :get-damage-scale get-damage-scale})

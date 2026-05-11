@@ -7,7 +7,7 @@
             [cn.li.mcmod.gui.adapter :as gui-adapter]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.ac.gui.platform-adapter :as platform-gui]
-            [cn.li.ac.wireless.shared.screen-factory :as screen-factory]
+            [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
             [cn.li.ac.gui.slot-validators :as slot-validators]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.events.metadata :as event-metadata]

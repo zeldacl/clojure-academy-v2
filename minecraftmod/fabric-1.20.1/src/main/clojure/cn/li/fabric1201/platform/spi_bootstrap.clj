@@ -8,7 +8,7 @@
             [cn.li.mcmod.platform.be :as be]
             [cn.li.mc1201.platform-adapter :as pa]
             [cn.li.mc1201.bootstrap.platform-init :as platform-init]
-            [cn.li.mc1201.installer :as installer]
+            [cn.li.mc1201.bootstrap.installer-core :as core]
             [cn.li.mc1201.runtime.bootstrap-interop-core :as bootstrap-core]
             [cn.li.mc1201.reflect-util :as ru]))
 
@@ -28,7 +28,7 @@
             {:position-get-block-pos (fn [this] (ru/inst this "getBlockPos"))
              :position-get-pos (fn [this] (ru/inst this "getBlockPos"))})
 
-    (installer/install-be-fns-only!
+    (core/install-be-fns-only!
       {:be-get-level     (fn [x] (ru/inst x "getLevel"))
        :be-get-world     (fn [x] (ru/inst x "getLevel"))
        :be-get-custom-state  (fn [x] (ru/inst x "getCustomState"))

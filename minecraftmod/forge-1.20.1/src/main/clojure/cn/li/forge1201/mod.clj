@@ -2,28 +2,19 @@
     "Forge 1.20.1 main mod class - generated with gen-class"
     (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
               [cn.li.forge1201.init :as init]
+              [cn.li.forge1201.setup.common :as setup-common]
+              [cn.li.forge1201.setup.mod-bus :as setup-mod-bus]
               [cn.li.forge1201.integration.side :as side]
               [cn.li.forge1201.registry.state :as registry-state]
               [cn.li.forge1201.integration.events :as events]
               [cn.li.forge1201.gui.init :as gui-init]
               [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
-              [cn.li.forge1201.runtime.lifecycle :as runtime-lifecycle]
-              [cn.li.forge1201.runtime.item-handler :as runtime-item-handler]
-              [cn.li.mc1201.entity.effect-hooks :as effect-hooks]
-              [cn.li.mc1201.entity.ray-hooks :as ray-hooks]
-              [cn.li.mc1201.entity.marker-hooks :as marker-hooks]
-              [cn.li.forge1201.config.bridge :as config-bridge]
-              [cn.li.mc1201.config.gameplay-init :as shared-gameplay-init]
               [cn.li.mcmod.block.tile-logic :as tile-logic]
-              [cn.li.mcmod.platform.capability :as platform-cap]
               [cn.li.mcmod.entity.dsl :as edsl]
               [cn.li.mcmod.registry.metadata :as registry-metadata]
               [cn.li.mcmod.lifecycle :as lifecycle]
               [cn.li.mcmod.config :as modid]
-              [cn.li.mcmod.util.log :as log]
-              [cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
-              [cn.li.forge1201.integration.forge-energy :as forge-energy]
-              [cn.li.forge1201.integration.ic2-energy :as ic2-energy])
+              [cn.li.mcmod.util.log :as log])
     (:import [net.minecraft.core.particles SimpleParticleType]
              [net.minecraft.network.chat Component]
              [net.minecraft.resources ResourceLocation]
@@ -32,17 +23,11 @@
              [net.minecraft.world.food FoodProperties$Builder]
              [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab Items Rarity]
              [net.minecraft.world.level ItemLike]
-             [net.minecraftforge.common MinecraftForge]
-             [net.minecraftforge.common.capabilities RegisterCapabilitiesEvent]
-             [net.minecraftforge.eventbus.api EventPriority IEventBus]
-             [net.minecraftforge.fml InterModComms$IMCMessage]
-             [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent FMLCommonSetupEvent InterModProcessEvent]
-             [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
+             [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent]
              [net.minecraftforge.registries DeferredRegister RegistryObject]
              [cn.li.forge1201.effect ScriptedMobEffect]
              [cn.li.forge1201.item NbtBarItem ScriptedItem]
              [cn.li.forge1201.entity ModEntities]
-             [cn.li.forge1201.worldgen ModFeatures]
              [cn.li.mcmod.platform.spi PlatformBootstraps])
     (:gen-class
      :name com.example.my_mod1201.MyMod1201Clj
@@ -633,45 +618,7 @@
 ;; Helper: Common setup phase (subscribed to FMLCommonSetupEvent in mod-init)
 (defn on-common-setup [_event]
   (log/info "FMLCommonSetupEvent - Common setup phase")
-  (gui-init/init-common!)
-  (runtime-lifecycle/init-common!)
-  ;; Bind gameplay config bridge
-  (shared-gameplay-init/bind-gameplay-config!
-    (shared-gameplay-init/build-config-bridge 'cn.li.forge1201.config.gameplay-bridge))
-  ;; Initialize Forge Energy integration
-  (forge-energy/init-forge-energy!)
-  ;; Initialize IC2 integration (optional - no-op if IC2 not present)
-  (ic2-energy/init-ic2-energy!)
-  (runtime-item-handler/init!)
-  ;; Register runtime IMC dispatch listeners on the Forge game event bus.
-  (imc-dispatch/init!)
-  ;; Left-click block must be intercepted early to avoid client-side fake break effects
-  ;; when runtime mode blocks real breaking.
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false net.minecraftforge.event.entity.player.PlayerInteractEvent$LeftClickBlock
-                (reify java.util.function.Consumer
-                  (accept [_ evt]
-                    (events/handle-left-click-block-event evt))))
-  ;; Right-click block is handled by Java ForgeEventHandler (@SubscribeEvent).
-  ;; Do not register it again here, otherwise one click is processed twice.
-  ;; Block place events for multi-block overlap checks and :on-place handlers
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false net.minecraftforge.event.level.BlockEvent$EntityPlaceEvent
-                (reify java.util.function.Consumer
-                  (accept [_ evt]
-                    (events/handle-block-place-event evt))))
-  ;; Block break events for controller/part routed break logic
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false net.minecraftforge.event.level.BlockEvent$BreakEvent
-                (reify java.util.function.Consumer
-                  (accept [_ evt]
-                    (events/handle-block-break-event evt))))
-  ;; Loot table load events for data-driven loot injections.
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false net.minecraftforge.event.LootTableLoadEvent
-                (reify java.util.function.Consumer
-                  (accept [_ evt]
-                    (events/handle-loot-table-load evt)))))
+  (setup-common/run-common-setup!))
 
 ;; Helper: Client setup phase (called from event handler)
 (defn on-client-setup [^FMLClientSetupEvent event]
@@ -750,78 +697,20 @@
         ;; Must happen here (during mod-init) 鈥?registries are locked by FMLCommonSetupEvent.
         (gui-registry-impl/register-menu-types!)
 
-        ;; Register DeferredRegisters and lifecycle event listeners on mod event bus.
-        (let [^IEventBus mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
-          ;; Register gameplay config
-          (try
-            (let [config-class (Class/forName "cn.li.forge1201.config.GameplayConfig")]
-              (.invoke (.getMethod config-class "register" (make-array Class 0)) nil (make-array Object 0)))
-            (catch Exception e
-              (log/warn "Failed to register gameplay config" e)))
-
-          (config-bridge/register-all! mod-bus)
-            (ModEntities/register mod-bus)
-            ;; Client-only visual hook strategies must not be loaded during datagen.
-            (when (and (side/client-side?) (not (datagen-run?)))
-              (effect-hooks/register-all-effect-hooks!)
-              (ray-hooks/register-all-ray-hooks!)
-              (marker-hooks/register-all-marker-hooks!))
-          (ModFeatures/register mod-bus)
-          (.register ^DeferredRegister (force sounds-register) mod-bus)
-          (.register ^DeferredRegister (force effects-register) mod-bus)
-          (.register ^DeferredRegister (force particle-types-register) mod-bus)
-          (.register ^DeferredRegister (force fluid-types-register) mod-bus)
-          (.register ^DeferredRegister (force fluids-register) mod-bus)
-          (.register ^DeferredRegister (force blocks-register) mod-bus)
-          (.register ^DeferredRegister (force items-register) mod-bus)
-          (.register ^DeferredRegister (force block-entities-register) mod-bus)
-          (.register ^DeferredRegister (force creative-tabs-register) mod-bus)
-          (.register ^DeferredRegister (force gui-registry-impl/menu-register) mod-bus)
-          (.addListener mod-bus EventPriority/NORMAL false FMLCommonSetupEvent
-                        (reify java.util.function.Consumer
-                          (accept [_ event] (on-common-setup event))))
-          (.addListener mod-bus EventPriority/NORMAL false FMLClientSetupEvent
-                        (reify java.util.function.Consumer
-                          (accept [_ event] (on-client-setup event))))
-
-          (when (side/client-side?)
-            (try
-              (let [rk-class (Class/forName "net.minecraftforge.client.event.RegisterKeyMappingsEvent")]
-                (.addListener mod-bus EventPriority/NORMAL false rk-class
-                              (reify java.util.function.Consumer
-                                (accept [_ event]
-                                  (when-let [register-keys! (side/resolve-client-fn 'cn.li.forge1201.client.init 'register-key-mappings!)]
-                                    (register-keys! event))))))
-              (catch Exception e
-                (log/error "Failed to register key mapping listener" e))))
-
-          ;; Scripted BER: use @Mod.EventBusSubscriber Java class ModClientRenderSetup 鈥?          ;; addListener(modBus, Class, Consumer) for EntityRenderersEvent$RegisterRenderers
-          ;; did not reliably dispatch from Clojure reify.
-          (.addListener mod-bus EventPriority/NORMAL false InterModProcessEvent
-                        (reify java.util.function.Consumer
-                          (accept [_ event]
-                            (let [^InterModProcessEvent event event
-                                  ^java.util.stream.Stream imc-stream (.getIMCStream event)]
-                              (doseq [^InterModComms$IMCMessage msg (iterator-seq (.iterator imc-stream))]
-                                (try
-                                  (let [handler (.get (.getMessageSupplier msg))]
-                                    (condp = (.getMethod msg)
-                                      imc-dispatch/register-topology-network-handler-key
-                                      (imc-dispatch/register-network-handler! handler)
-                                      imc-dispatch/register-topology-node-handler-key
-                                      (imc-dispatch/register-node-handler! handler)
-                                      nil))
-                                  (catch Exception e
-                                    (log/debug "IMC registration failed from"
-                                               (.getSenderModId msg) ":" (ex-message e)))))))))
-          (.addListener mod-bus EventPriority/NORMAL false RegisterCapabilitiesEvent
-                        (reify java.util.function.Consumer
-                          (accept [_ event]
-                            (let [^RegisterCapabilitiesEvent event event]
-                              (doseq [^Class java-type (distinct (keep (fn [[_key {:keys [java-type]}]]
-                                                                        java-type)
-                                                                      @platform-cap/capability-type-registry))]
-                                (.register event java-type)))))))
+        (setup-mod-bus/register-mod-bus!
+          {:datagen-run? (datagen-run?)
+           :on-common-setup on-common-setup
+           :on-client-setup on-client-setup
+           :sounds-register (force sounds-register)
+           :effects-register (force effects-register)
+           :particle-types-register (force particle-types-register)
+           :fluid-types-register (force fluid-types-register)
+           :fluids-register (force fluids-register)
+           :blocks-register (force blocks-register)
+           :items-register (force items-register)
+           :block-entities-register (force block-entities-register)
+           :creative-tabs-register (force creative-tabs-register)
+           :gui-menu-register (force gui-registry-impl/menu-register)})
 
         (log/info "[BOOTSTRAP_TRACE] mod-init runtime path end")
         [[] nil]
