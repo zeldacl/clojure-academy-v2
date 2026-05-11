@@ -1,8 +1,10 @@
-(ns cn.li.forge1201.command-executor
-  "Command action executor - platform-specific Forge implementation delegating to shared core.
+(ns cn.li.mc1201.command.action-impls
+  "Shared command action defmethod implementations.
 
-  This namespace adapts platform-specific operations (Minecraft component sending,
-  advancement granting) and delegates all business logic to mc-1.20.1/command/executor_core."
+  These implementations only depend on vanilla Minecraft APIs + shared runtime
+  state helpers, so they are loader-agnostic and should live in mc1201.
+  Forge/Fabric command registration just requires this namespace to install the
+  multimethod implementations."
   (:require [cn.li.mc1201.command.executor-core :as executor-core]
             [cn.li.mcmod.command.actions :as cmd-actions]
             [cn.li.mcmod.util.log :as log]
@@ -12,12 +14,8 @@
            [net.minecraft.network.chat Component]
            [net.minecraft.server.level ServerPlayer]))
 
-;; ============================================================================
-;; Platform Adapters (Forge-Specific Operations)
-;; ============================================================================
-
 (defn- send-feedback-impl
-  "Platform implementation: send feedback using MC Component API."
+  "Shared MC feedback implementation via Component API."
   [^CommandSourceStack source message translate? args _error?]
   (try
     (let [text (if translate?
@@ -27,10 +25,6 @@
       (.sendSuccess source component false))
     (catch Exception e
       (log/error "Failed to send feedback:" (ex-message e)))))
-
-;; ============================================================================
-;; Action Implementations (Delegating to executor-core with platform callbacks)
-;; ============================================================================
 
 (defmethod cmd-actions/execute-action-impl :send-message
   [action-map context]
@@ -137,6 +131,3 @@
                         (runtime-sync/mark-player-dirty! uuid))
         action-map' (assoc action-map :player-uuid player-uuid)]
     (executor-core/execute-set-node-exp-action action-map' send-feedback-fn mark-dirty-fn)))
-
-;; TODO: Continue with remaining action implementations
-;; (defmethod cmd-actions/execute-action-impl :... [action-map context] ...)
