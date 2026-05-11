@@ -1,69 +1,27 @@
 (ns cn.li.forge1201.runtime.interop
-	"Forge implementation of runtime interop bridge."
-	(:require [cn.li.mcmod.platform.runtime-interop :as runtime-interop]
-						[cn.li.mcmod.platform.ability-interop :as legacy-interop]
-						[cn.li.mcmod.util.log :as log])
-	(:import [net.minecraft.server MinecraftServer]
-					 [net.minecraft.server.level ServerPlayer ServerLevel]
-					 [net.minecraft.resources ResourceLocation]
-					 [net.minecraft.core BlockPos]
-					 [net.minecraftforge.server ServerLifecycleHooks]
-					 [java.util UUID]))
+  "Forge thin adapter for runtime interop bridge.
+  Delegates all MC logic to mc1201 interop-core."
+  (:require [cn.li.mcmod.platform.runtime-interop :as runtime-interop]
+            [cn.li.mcmod.platform.ability-interop :as legacy-interop]
+            [cn.li.mc1201.runtime.interop-core :as ic]
+            [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraftforge.server ServerLifecycleHooks]))
 
-(defn- get-server ^MinecraftServer []
-	(ServerLifecycleHooks/getCurrentServer))
-
-(defn- get-player-by-uuid ^ServerPlayer [uuid-str]
-	(try
-		(when-let [^MinecraftServer server (get-server)]
-			(let [uuid (UUID/fromString (str uuid-str))]
-				(.getPlayer (.getPlayerList server) uuid)))
-		(catch Exception _
-			nil)))
-
-(defn- get-level-by-id ^ServerLevel [world-id]
-	(try
-		(when-let [^MinecraftServer server (get-server)]
-			(let [res-loc (ResourceLocation. (str world-id))]
-				(.getLevel server res-loc)))
-		(catch Exception _
-			nil)))
-
-(defn- player-view-impl [player-uuid]
-	(when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
-		(let [eye (.getEyePosition player)
-					look (.getLookAngle player)
-					world-id (some-> (.dimension (.level player)) .location str)]
-			{:world-id (or world-id "minecraft:overworld")
-			 :x (.x eye)
-			 :y (.y eye)
-			 :z (.z eye)
-			 :look-x (.x look)
-			 :look-y (.y look)
-			 :look-z (.z look)})))
-
-(defn- player-main-hand-item-impl [player-uuid]
-	(when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
-		(let [stack (.getMainHandItem player)]
-			(when (and stack (not (.isEmpty stack)))
-				stack))))
-
-(defn- block-entity-at-impl [world-id x y z]
-	(when-let [^ServerLevel level (get-level-by-id world-id)]
-		(.getBlockEntity level (BlockPos. (int x) (int y) (int z)))))
+(defn- get-server []
+  (ServerLifecycleHooks/getCurrentServer))
 
 (defn forge-runtime-interop []
-	(reify runtime-interop/IRuntimeInterop
-		(get-player-view [_ player-uuid]
-			(player-view-impl player-uuid))
-		(get-player-main-hand-item [_ player-uuid]
-			(player-main-hand-item-impl player-uuid))
-		(get-block-entity-at [_ world-id x y z]
-			(block-entity-at-impl world-id x y z))))
+  (reify runtime-interop/IRuntimeInterop
+    (get-player-view [_ player-uuid]
+      (ic/get-player-view (get-server) player-uuid))
+    (get-player-main-hand-item [_ player-uuid]
+      (ic/get-player-main-hand-item (get-server) player-uuid))
+    (get-block-entity-at [_ world-id x y z]
+      (ic/get-block-entity-at (get-server) world-id x y z))))
 
 (defn install-runtime-interop! []
-	(let [impl (forge-runtime-interop)]
-		(alter-var-root #'runtime-interop/*runtime-interop* (constantly impl))
-		;; Backward compatibility for older AC call sites still reading legacy var.
-		(alter-var-root #'legacy-interop/*ability-interop* (constantly impl)))
-	(log/info "Forge runtime interop installed"))
+  (let [impl (forge-runtime-interop)]
+    (alter-var-root #'runtime-interop/*runtime-interop* (constantly impl))
+    ;; Backward compatibility for older AC call sites still reading legacy var.
+    (alter-var-root #'legacy-interop/*ability-interop* (constantly impl)))
+  (log/info "Forge runtime interop installed"))

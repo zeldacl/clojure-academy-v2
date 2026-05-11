@@ -11,15 +11,30 @@
             [cn.li.fabric1201.integration.events :as events]
             [cn.li.fabric1201.runtime.damage-interception :as runtime-damage-interception]
             [cn.li.fabric1201.runtime.item-handler :as runtime-item-handler]
+            [cn.li.fabric1201.runtime.player-motion :as runtime-player-motion]
+            [cn.li.fabric1201.runtime.entity-damage :as runtime-entity-damage]
+            [cn.li.fabric1201.runtime.entity-motion :as runtime-entity-motion]
+            [cn.li.fabric1201.runtime.entity-query :as runtime-entity-query]
+            [cn.li.fabric1201.runtime.raycast :as runtime-raycast]
+            [cn.li.fabric1201.runtime.world-effects :as runtime-world-effects]
+            [cn.li.fabric1201.runtime.teleportation :as runtime-teleportation]
+            [cn.li.fabric1201.runtime.saved-locations :as runtime-saved-locations]
+            [cn.li.fabric1201.runtime.nbt :as runtime-nbt]
+                        [cn.li.fabric1201.runtime.sync :as runtime-sync]
+                        [cn.li.fabric1201.runtime.network :as runtime-network]
+                        [cn.li.fabric1201.runtime.potion-effects :as runtime-potion-effects]
+                        [cn.li.fabric1201.runtime.interop :as runtime-interop]
+                        [cn.li.fabric1201.runtime.block-manipulation :as runtime-block-manipulation]
             [cn.li.fabric1201.gui.init :as gui-init]
             [cn.li.fabric1201.config.bridge :as config-bridge]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.entity.dsl :as edsl]
-            [cn.li.fabric1201.entity.effect-hooks :as effect-hooks]
-            [cn.li.fabric1201.entity.ray-hooks :as ray-hooks]
-            [cn.li.fabric1201.entity.marker-hooks :as marker-hooks])
+            [cn.li.mc1201.entity.effect-hooks :as effect-hooks]
+            [cn.li.mc1201.entity.ray-hooks :as ray-hooks]
+            [cn.li.mc1201.entity.marker-hooks :as marker-hooks])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
            [cn.li.mc1201.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]
@@ -260,6 +275,19 @@
   (marker-hooks/register-all-marker-hooks!)
   (runtime-damage-interception/install-damage-interception!)
   (runtime-item-handler/init!)
+  (runtime-player-motion/install-player-motion!)
+  (runtime-entity-damage/install-entity-damage!)
+  (runtime-entity-motion/install-entity-motion!)
+  (runtime-entity-query/install-entity-query!)
+  (runtime-raycast/install-raycast!)
+  (runtime-world-effects/install-world-effects!)
+  (runtime-teleportation/install-teleportation!)
+  (runtime-saved-locations/install-saved-locations!)
+  (runtime-potion-effects/install-potion-effects!)
+  (runtime-interop/install-runtime-interop!)
+  (runtime-block-manipulation/install-block-manipulation!)
+  (runtime-network/init!)
+  (power-runtime/init-damage-handlers!)
   (gui-init/init-common!)
   (gui-init/init-server!)
   (events/register-events)

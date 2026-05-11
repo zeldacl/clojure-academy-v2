@@ -6,6 +6,10 @@
             [cn.li.mcmod.events.interaction-result :as interaction-result]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
+            [cn.li.fabric1201.runtime.nbt :as runtime-nbt]
+            [cn.li.fabric1201.runtime.sync :as runtime-sync]
+            [cn.li.fabric1201.runtime.network :as runtime-network]
+            [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core]
             [cn.li.mc1201.integration.event-feedback :as event-feedback]
             [cn.li.mc1201.integration.event-handlers :as event-handlers]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
@@ -164,7 +168,8 @@
   "Handle Fabric server player join event."
   [^ServerPlayer player]
   (try
-    (power-runtime/on-player-login! (str (.getUUID player)))
+    (lifecycle-core/on-player-login! player {:load-player-state! runtime-nbt/load-player-state!
+                                             :mark-player-dirty! runtime-sync/mark-player-dirty!})
     (catch Throwable t
       (log/error "Error handling player login event:" (.getMessage t))
       (.printStackTrace t))))
@@ -173,7 +178,7 @@
   "Handle Fabric server player disconnect event."
   [^ServerPlayer player]
   (try
-    (power-runtime/on-player-logout! (str (.getUUID player)))
+    (lifecycle-core/on-player-logout! player {:save-player-state! runtime-nbt/save-player-state!})
     (catch Throwable t
       (log/error "Error handling player logout event:" (.getMessage t))
       (.printStackTrace t))))
@@ -182,9 +187,7 @@
   "Handle Fabric player copy event. Mirrors Forge non-death clone behavior."
   [^ServerPlayer old-player ^ServerPlayer new-player alive]
   (try
-    (when alive
-      (power-runtime/on-player-clone! (str (.getUUID old-player))
-                                      (str (.getUUID new-player))))
+    (lifecycle-core/on-player-clone! old-player new-player alive {:clone-player-state! runtime-nbt/clone-player-state!})
     (catch Throwable t
       (log/error "Error handling player clone event:" (.getMessage t))
       (.printStackTrace t))))
@@ -194,7 +197,8 @@
   [entity]
   (try
     (when (instance? ServerPlayer entity)
-      (power-runtime/on-player-death! (str (.getUUID ^ServerPlayer entity))))
+      (let [^ServerPlayer p entity]
+        (lifecycle-core/on-player-death! p {:save-player-state! runtime-nbt/save-player-state!})))
     (catch Throwable t
       (log/error "Error handling player death event:" (.getMessage t))
       (.printStackTrace t))))
@@ -204,7 +208,9 @@
   [server]
   (try
     (doseq [^ServerPlayer player (.getPlayers (.getPlayerList server))]
-      (power-runtime/on-player-tick! (str (.getUUID player))))
+      (lifecycle-core/on-player-tick! player {:mark-player-dirty! runtime-sync/mark-player-dirty!
+                                              :tick-sync! runtime-sync/tick-sync!
+                                              :send-sync-fn runtime-network/send-sync-to-client!}))
     (catch Throwable t
       (log/error "Error handling player tick event:" (.getMessage t))
       (.printStackTrace t))))

@@ -5,6 +5,7 @@ import cn.li.mc1201.block.SharedDynamicStateBlock;
 import cn.li.mc1201.block.SharedScriptedBlock;
 import cn.li.mc1201.block.ScriptedRenderShapes;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
+import cn.li.mc1201.runtime.BlockRegistryShared;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -318,14 +319,14 @@ public final class ForgeBootstrapHelper {
     }
 
     public static boolean isAirBlock(Block block, Block airBlock) {
-        return block == null || block == airBlock;
+        return BlockRegistryShared.isAirBlock(block, airBlock);
     }
 
     public static Block getAirBlock() {
-        return Blocks.AIR;
+        return BlockRegistryShared.getAirBlock();
     }
 
     public static Block findBlock(String namespace, String path) {
-        return ForgeRegistries.BLOCKS.getValue(new ResourceLocation(namespace, path));
+        return BlockRegistryShared.findBlock(namespace, path);
     }
 }

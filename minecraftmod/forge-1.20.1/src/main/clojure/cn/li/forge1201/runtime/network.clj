@@ -6,13 +6,13 @@
   - client-side requests use mcmod.network.client/send-to-server
 
   Here we provide helper send-fns for context manager and sync service."
-  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
+  (:require [cn.li.mc1201.runtime.network-core :as network-core]
+            [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.runtime.catalog :as runtime-catalog]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.network ClojureNetwork]
            [net.minecraftforge.server ServerLifecycleHooks]
-           [java.util UUID]
            [net.minecraft.server.level ServerPlayer]))
 
 (defn send-to-server!
@@ -29,9 +29,7 @@
 
 (defn- find-player-by-uuid
   [uuid-str]
-  (when-let [server (ServerLifecycleHooks/getCurrentServer)]
-    (when-let [player-list (.getPlayerList server)]
-      (.getPlayer player-list (UUID/fromString uuid-str)))))
+  (query-core/get-player-by-uuid (ServerLifecycleHooks/getCurrentServer) uuid-str))
 
 (defn send-sync-to-client!
   [uuid payload]
@@ -46,30 +44,9 @@
   (when-let [^ServerPlayer player (find-player-by-uuid uuid)]
     (send-push-to-client! player msg-id payload)))
 
-(defn- send-context-channel-to-server!
-  [ctx-id channel payload]
-  (send-to-server! runtime-catalog/MSG-CTX-CHANNEL
-                   {:ctx-id ctx-id :channel channel :payload payload}))
-
-(defn- send-context-channel-to-client!
-  [ctx-id channel payload]
-  (when-let [player-uuid (power-runtime/get-context-player-uuid ctx-id)]
-    (send-to-client! player-uuid
-                     runtime-catalog/MSG-CTX-CHANNEL
-                     {:ctx-id ctx-id :channel channel :payload payload})))
-
-(defn- send-context-channel-to-except-local!
-  [_ctx-id _channel _payload]
-  ;; Nearby broadcast exclusion is pending platform player-query integration.
-  nil)
-
 (defn init!
   "Initialize runtime network stack: register server handlers and injected send fns."
   []
-  (power-runtime/register-network-handlers!)
-  (power-runtime/register-context-route-fns! {:to-server send-context-channel-to-server!
-                                                :to-client send-context-channel-to-client!
-                                                :to-except-local send-context-channel-to-except-local!})
-  (power-runtime/register-context-send-fns! {:to-server send-to-server!
-                                               :to-client send-to-client!})
+  (network-core/init-runtime-network! {:send-to-server-fn send-to-server!
+                                       :send-to-client-fn send-to-client!})
   (log/info "Forge runtime network initialized"))

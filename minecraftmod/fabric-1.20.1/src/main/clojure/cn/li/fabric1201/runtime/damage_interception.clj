@@ -4,8 +4,7 @@
   Uses ServerLivingEntityEvents/ALLOW_DAMAGE for pre-check cancellation parity.
   Fabric 1.20.1 API does not expose a mutable hurt-amount event equivalent to
   Forge LivingHurtEvent, so damage amount rewriting is not applied here."
-  (:require [cn.li.mcmod.platform.damage-interception :as pdi]
-            [cn.li.mcmod.platform.power-runtime :as power-runtime]
+  (:require [cn.li.mc1201.runtime.damage-interception-core :as core]
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.entity.event.v1 ServerLivingEntityEvents$AllowDamage]
            [net.minecraft.server.level ServerPlayer]))
@@ -23,32 +22,20 @@
             original-damage (double amount)
             attacker (.getEntity damage-source)
             attacker-id (when attacker (str (.getUUID attacker)))
-            cancel? (power-runtime/should-cancel-attack-interception?
-                      player-id attacker-id original-damage damage-source)]
-        (if cancel?
-          false
-          true))
+            allow? (core/should-allow-attack?
+                     player-id attacker-id original-damage damage-source)]
+        (boolean allow?))
       true)
     (catch Exception e
       (log/warn "Fabric damage interception precheck failed:" (ex-message e))
       true)))
 
-(defn fabric-damage-interception []
-  (reify pdi/IDamageInterception
-    (register-damage-handler! [_ handler-id handler-fn priority]
-      (power-runtime/register-damage-handler! handler-id handler-fn priority))
-    (unregister-damage-handler! [_ handler-id]
-      (power-runtime/unregister-damage-handler! handler-id))
-    (get-active-handlers [_]
-      (power-runtime/get-active-damage-handlers))))
-
 (defn install-damage-interception! []
   (if-not (compare-and-set! installed? false true)
     (log/info "Fabric damage interception already installed, skipping")
     (do
-      ;; Install protocol implementation
-      (alter-var-root #'pdi/*damage-interception*
-                      (constantly (fabric-damage-interception)))
+      ;; Install shared protocol implementation
+      (core/install-damage-interception!)
 
       ;; Register ALLOW_DAMAGE listener (pre-check cancel path).
       (.register net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents/ALLOW_DAMAGE

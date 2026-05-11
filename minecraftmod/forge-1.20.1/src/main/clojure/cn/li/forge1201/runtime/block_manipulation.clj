@@ -1,174 +1,57 @@
 (ns cn.li.forge1201.runtime.block-manipulation
-  "Forge implementation of IBlockManipulation protocol."
+  "Forge thin adapter for IBlockManipulation protocol.
+  Loader-agnostic ops delegate to mc1201 block-manipulation-core.
+  Break/can-break use Forge BlockEvent$BreakEvent inline."
   (:require [cn.li.mcmod.platform.block-manipulation :as bm]
+            [cn.li.mc1201.runtime.block-manipulation-core :as bmc]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.server MinecraftServer]
-           [net.minecraft.server.level ServerPlayer ServerLevel]
-           [net.minecraft.world.level.block Block]
-           [net.minecraft.world.level.block Blocks]
+  (:import [net.minecraft.server.level ServerLevel ServerPlayer]
            [net.minecraft.core BlockPos]
-           [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.server ServerLifecycleHooks]
            [net.minecraftforge.event.level BlockEvent$BreakEvent]
-           [cn.li.forge1201.bridge ForgeRuntimeBridge]
-           [java.util UUID]))
+           [cn.li.forge1201.bridge ForgeRuntimeBridge]))
 
-
-(defn- get-server ^MinecraftServer []
+(defn- get-server []
   (ServerLifecycleHooks/getCurrentServer))
 
-(defn- get-player-by-uuid [uuid-str]
-  (try
-    (when-let [^MinecraftServer server (get-server)]
-      (let [uuid (UUID/fromString uuid-str)]
-        (.getPlayer (.getPlayerList server) uuid)))
-    (catch Exception e
-      (log/warn "Failed to get player by UUID:" uuid-str (ex-message e))
-      nil)))
-
-(defn- get-level-by-id [world-id]
-  (try
-    (when-let [^MinecraftServer server (get-server)]
-      (let [res-loc (ResourceLocation. world-id)]
-        (.getLevel server res-loc)))
-    (catch Exception e
-      (log/warn "Failed to get level:" world-id (ex-message e))
-      nil)))
-
-(defn- break-block-impl! [player-uuid world-id x y z drop?]
-  (try
-    (when-let [^ServerLevel level (get-level-by-id world-id)]
-      (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
-        (let [pos (BlockPos. (int x) (int y) (int z))
-              state (.getBlockState level pos)
-              event (BlockEvent$BreakEvent. level pos state player)]
-
-          ;; Fire break event to check permissions
-          (ForgeRuntimeBridge/postEvent event)
-
-          (when-not (.isCanceled event)
-            (when drop?
-              (Block/dropResources state level pos))
-            (.removeBlock level pos false)
-            true))))
-    (catch Exception e
-      (log/warn "Failed to break block:" (ex-message e))
-      false)))
-
-(defn- set-block-impl! [world-id x y z block-id]
-  (try
-    (when-let [^ServerLevel level (get-level-by-id world-id)]
-      (let [pos (BlockPos. (int x) (int y) (int z))
-            res-loc (ResourceLocation. block-id)
-            ^Block block (ForgeRuntimeBridge/getBlockById (str res-loc))]
-        (when block
-          (.setBlock level pos (.defaultBlockState block) 3)
-          true)))
-    (catch Exception e
-      (log/warn "Failed to set block:" (ex-message e))
-      false)))
-
-(defn- get-block-impl [world-id x y z]
-  (try
-    (when-let [^ServerLevel level (get-level-by-id world-id)]
-      (let [pos (BlockPos. (int x) (int y) (int z))
-            state (.getBlockState level pos)
-            block (.getBlock state)]
-        (when-not (.isAir state)
-          (str (ForgeRuntimeBridge/getBlockKey block)))))
-    (catch Exception e
-      (log/warn "Failed to get block:" (ex-message e))
-      nil)))
-
-(defn- get-block-hardness-impl [world-id x y z]
-  (try
-    (when-let [^ServerLevel level (get-level-by-id world-id)]
-      (let [pos (BlockPos. (int x) (int y) (int z))
-            state (.getBlockState level pos)]
-        (.getDestroySpeed state level pos)))
-    (catch Exception e
-      (log/warn "Failed to get block hardness:" (ex-message e))
-      nil)))
+;; Forge-specific break guard: fires BlockEvent$BreakEvent
+(defn- forge-break-guard [^ServerLevel level ^BlockPos pos ^ServerPlayer player]
+  (let [state (.getBlockState level pos)
+        event (BlockEvent$BreakEvent. level pos state player)]
+    (ForgeRuntimeBridge/postEvent event)
+    (not (.isCanceled event))))
 
 (defn- can-break-block-impl? [player-uuid world-id x y z]
   (try
-    (when-let [^ServerLevel level (get-level-by-id world-id)]
-      (when-let [^ServerPlayer player (get-player-by-uuid player-uuid)]
+    (when-let [^ServerLevel level (bmc/get-level-by-id (get-server) world-id)]
+      (when-let [^ServerPlayer player (bmc/get-player-by-uuid (get-server) player-uuid)]
         (let [pos (BlockPos. (int x) (int y) (int z))
               state (.getBlockState level pos)
               event (BlockEvent$BreakEvent. level pos state player)]
-          ;; Fire break event to check permissions
           (ForgeRuntimeBridge/postEvent event)
           (not (.isCanceled event)))))
     (catch Exception e
       (log/warn "Failed to check can-break-block:" (ex-message e))
       false)))
 
-(defn- find-blocks-in-line-impl [world-id x1 y1 z1 dx dy dz max-distance]
-  (try
-    (when-let [^ServerLevel level (get-level-by-id world-id)]
-      (let [step-size 0.5
-            steps (int (/ max-distance step-size))
-            results (atom [])]
-        (doseq [i (range steps)]
-          (let [t (* i step-size)
-                x (+ x1 (* dx t))
-                y (+ y1 (* dy t))
-                z (+ z1 (* dz t))
-                pos (BlockPos. (int x) (int y) (int z))
-                state (.getBlockState level pos)
-                block (.getBlock state)]
-            (when-not (.isAir state)
-              (swap! results conj
-                     {:x (int x)
-                      :y (int y)
-                      :z (int z)
-                      :block-id (str (ForgeRuntimeBridge/getBlockKey block))
-                      :hardness (.getDestroySpeed state level pos)}))))
-        @results))
-    (catch Exception e
-      (log/warn "Failed to find blocks in line:" (ex-message e))
-      [])))
-
-(defn- liquid-block-impl? [world-id x y z]
-  (try
-    (when-let [^ServerLevel level (get-level-by-id world-id)]
-      (let [pos (BlockPos. (int x) (int y) (int z))
-            state (.getBlockState level pos)
-            fluid-state (.getFluidState state)]
-        (and fluid-state (not (.isEmpty fluid-state)))))
-    (catch Exception e
-      (log/warn "Failed to check liquid block:" (ex-message e))
-      false)))
-
-(defn- farmland-block-impl? [world-id x y z]
-  (try
-    (when-let [^ServerLevel level (get-level-by-id world-id)]
-      (let [pos (BlockPos. (int x) (int y) (int z))
-            state (.getBlockState level pos)]
-        (= (.getBlock state) Blocks/FARMLAND)))
-    (catch Exception e
-      (log/warn "Failed to check farmland block:" (ex-message e))
-      false)))
-
 (defn forge-block-manipulation []
   (reify bm/IBlockManipulation
     (break-block! [_ player-id world-id x y z drop?]
-      (break-block-impl! player-id world-id x y z drop?))
+      (bmc/break-block! (get-server) player-id world-id x y z drop? forge-break-guard))
     (set-block! [_ world-id x y z block-id]
-      (set-block-impl! world-id x y z block-id))
+      (bmc/set-block! (get-server) world-id x y z block-id))
     (get-block [_ world-id x y z]
-      (get-block-impl world-id x y z))
+      (bmc/get-block (get-server) world-id x y z))
     (get-block-hardness [_ world-id x y z]
-      (get-block-hardness-impl world-id x y z))
+      (bmc/get-block-hardness (get-server) world-id x y z))
     (can-break-block? [_ player-id world-id x y z]
       (can-break-block-impl? player-id world-id x y z))
     (find-blocks-in-line [_ world-id x1 y1 z1 dx dy dz max-distance]
-      (find-blocks-in-line-impl world-id x1 y1 z1 dx dy dz max-distance))
+      (bmc/find-blocks-in-line (get-server) world-id x1 y1 z1 dx dy dz max-distance))
     (liquid-block? [_ world-id x y z]
-      (boolean (liquid-block-impl? world-id x y z)))
+      (boolean (bmc/liquid-block? (get-server) world-id x y z)))
     (farmland-block? [_ world-id x y z]
-      (boolean (farmland-block-impl? world-id x y z)))))
+      (boolean (bmc/farmland-block? (get-server) world-id x y z)))))
 
 (defn install-block-manipulation! []
   (alter-var-root #'bm/*block-manipulation*

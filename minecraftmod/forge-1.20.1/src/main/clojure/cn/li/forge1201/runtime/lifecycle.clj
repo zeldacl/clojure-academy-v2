@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.runtime.lifecycle
   "Forge player lifecycle hooks for runtime system."
   (:require [cn.li.forge1201.runtime.nbt :as runtime-nbt]
+            [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core]
             [cn.li.forge1201.runtime.sync :as runtime-sync]
             [cn.li.forge1201.runtime.network :as runtime-network]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
@@ -20,36 +21,30 @@
 
 (defn- on-player-login [^PlayerEvent$PlayerLoggedInEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
-    (runtime-nbt/load-player-state! p)
-    (power-runtime/on-player-login! (str (.getUUID p)))
-    (runtime-sync/mark-player-dirty! (str (.getUUID p)))))
+    (lifecycle-core/on-player-login! p {:load-player-state! runtime-nbt/load-player-state!
+                                        :mark-player-dirty! runtime-sync/mark-player-dirty!})))
 
 (defn- on-player-logout [^PlayerEvent$PlayerLoggedOutEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
-    (runtime-nbt/save-player-state! p)
-    (power-runtime/on-player-logout! (str (.getUUID p)))))
+    (lifecycle-core/on-player-logout! p {:save-player-state! runtime-nbt/save-player-state!})))
 
 (defn- on-player-clone [^PlayerEvent$Clone evt]
   (when (not (.isWasDeath evt))
     (when-let [^ServerPlayer oldp (server-player (.getOriginal evt))]
       (when-let [^ServerPlayer newp (server-player (.getEntity evt))]
-        (runtime-nbt/clone-player-state! oldp newp)
-        (power-runtime/on-player-clone! (str (.getUUID oldp))
-                                          (str (.getUUID newp)))))))
+        (lifecycle-core/on-player-clone! oldp newp true {:clone-player-state! runtime-nbt/clone-player-state!})))))
 
 (defn- on-player-death [^LivingDeathEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
-    (power-runtime/on-player-death! (str (.getUUID p)))
-    (runtime-nbt/save-player-state! p)))
+    (lifecycle-core/on-player-death! p {:save-player-state! runtime-nbt/save-player-state!})))
 
 (defn- on-player-tick [^TickEvent$PlayerTickEvent evt]
   (when (and (= TickEvent$Phase/END (.phase evt))
              (server-player (.player evt)))
-    (let [^ServerPlayer p (.player evt)
-          uuid (str (.getUUID p))]
-      (power-runtime/on-player-tick! uuid)
-      (runtime-sync/mark-player-dirty! uuid)
-      (runtime-sync/tick-sync! runtime-network/send-sync-to-client!))))
+    (let [^ServerPlayer p (.player evt)]
+      (lifecycle-core/on-player-tick! p {:mark-player-dirty! runtime-sync/mark-player-dirty!
+                                         :tick-sync! runtime-sync/tick-sync!
+                                         :send-sync-fn runtime-network/send-sync-to-client!}))))
 
 (defn- try-install! [ns-sym fn-sym label]
   (try

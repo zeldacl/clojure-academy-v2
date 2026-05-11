@@ -2,8 +2,7 @@
   "Forge implementation of IDamageInterception protocol.
 
   Intercepts LivingHurtEvent to allow runtime effects to modify incoming damage."
-  (:require [cn.li.mcmod.platform.damage-interception :as pdi]
-            [cn.li.mcmod.platform.power-runtime :as power-runtime]
+  (:require [cn.li.mc1201.runtime.damage-interception-core :as core]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
@@ -24,9 +23,9 @@
               damage-source (.getSource event)
               attacker (.getEntity damage-source)
               attacker-id (when attacker (str (.getUUID attacker)))
-              cancel? (power-runtime/should-cancel-attack-interception?
-                        player-id attacker-id original-damage damage-source)]
-          (when cancel?
+              allow? (core/should-allow-attack?
+                       player-id attacker-id original-damage damage-source)]
+          (when-not allow?
             (.setCanceled event true)
             (log/debug "Attack pre-canceled:" player-id "damage:" original-damage)))))
     (catch Exception e
@@ -44,7 +43,7 @@
               damage-source (.getSource event)
               attacker (.getEntity damage-source)
               attacker-id (when attacker (str (.getUUID attacker)))
-              next-damage (power-runtime/process-damage-interception
+              next-damage (core/process-damage
                             player-id attacker-id original-damage damage-source)]
           (when (not= next-damage original-damage)
             (.setAmount event (float next-damage))
@@ -52,19 +51,9 @@
     (catch Exception e
       (log/warn "Damage interception failed:" (ex-message e)))))
 
-(defn forge-damage-interception []
-  (reify pdi/IDamageInterception
-    (register-damage-handler! [_ handler-id handler-fn priority]
-      (power-runtime/register-damage-handler! handler-id handler-fn priority))
-    (unregister-damage-handler! [_ handler-id]
-      (power-runtime/unregister-damage-handler! handler-id))
-    (get-active-handlers [_]
-      (power-runtime/get-active-damage-handlers))))
-
 (defn install-damage-interception! []
-  ;; Install protocol implementation
-  (alter-var-root #'pdi/*damage-interception*
-                  (constantly (forge-damage-interception)))
+  ;; Install shared protocol implementation
+  (core/install-damage-interception!)
 
   ;; Register event listener
   (.addListener (MinecraftForge/EVENT_BUS)

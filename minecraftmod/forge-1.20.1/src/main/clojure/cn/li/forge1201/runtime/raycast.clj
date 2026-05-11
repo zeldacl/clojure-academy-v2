@@ -5,19 +5,18 @@
             [cn.li.mc1201.runtime.raycast-normalize :as rn])
   (:import [cn.li.forge1201.runtime RaycastBridge]))
 
-
-(defn- raycast-blocks-impl [_world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
+(defn- raycast-blocks-impl [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
   (try
     (rn/normalize-bridge-map
-      (RaycastBridge/raycastBlocks _world-id start-x start-y start-z dir-x dir-y dir-z max-distance))
+      (RaycastBridge/raycastBlocks world-id start-x start-y start-z dir-x dir-y dir-z max-distance))
     (catch Exception e
       (log/warn "Failed to raycast blocks:" (ex-message e))
       nil)))
 
-(defn- raycast-entities-impl [_world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
+(defn- raycast-entities-impl [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
   (try
     (rn/normalize-bridge-map
-      (RaycastBridge/raycastEntities _world-id start-x start-y start-z dir-x dir-y dir-z max-distance))
+      (RaycastBridge/raycastEntities world-id start-x start-y start-z dir-x dir-y dir-z max-distance))
     (catch Exception e
       (log/warn "Failed to raycast entities:" (ex-message e))
       nil)))

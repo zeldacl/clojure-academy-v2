@@ -1,35 +1,16 @@
 (ns cn.li.forge1201.runtime.entity-query
   "Forge-side entity query adapters for platform-neutral API."
-  (:require [cn.li.mcmod.platform.entity :as pentity]
+  (:require [cn.li.mc1201.runtime.entity-query-core :as core]
+            [cn.li.mcmod.platform.entity :as pentity]
             [cn.li.mcmod.util.log :as log])
-  (:import [java.util UUID]
-           [net.minecraft.core.registries BuiltInRegistries Registries]
-           [net.minecraft.resources ResourceKey ResourceLocation]
-           [net.minecraft.server.level ServerLevel]
-           [net.minecraft.world.entity Entity]
-           [net.minecraftforge.server ServerLifecycleHooks]))
-
-(defn- resolve-level
-  [world-id]
-  (let [server (ServerLifecycleHooks/getCurrentServer)]
-    (when server
-      (if (or (nil? world-id) (= "" (str world-id)))
-        (.overworld server)
-        (try
-          (let [rid (ResourceLocation. (str world-id))
-                key (ResourceKey/create Registries/DIMENSION rid)]
-            (or (.getLevel server key) (.overworld server)))
-          (catch Exception _
-            (.overworld server)))))))
+  (:import [net.minecraftforge.server ServerLifecycleHooks]))
 
 (defn- entity-type-id
   [world-id entity-uuid]
   (try
-    (when-let [^ServerLevel level (resolve-level world-id)]
-      (let [^Entity entity (.getEntity level (UUID/fromString (str entity-uuid)))]
-        (when entity
-          (str (.getKey BuiltInRegistries/ENTITY_TYPE (.getType entity))))))
-    (catch Exception _
+    (core/entity-type-id (ServerLifecycleHooks/getCurrentServer) world-id entity-uuid)
+    (catch Exception e
+      (log/warn "Failed to query entity type id:" world-id entity-uuid (ex-message e))
       nil)))
 
 (defn install-entity-query!
