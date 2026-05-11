@@ -4,6 +4,7 @@
     :original     — LMB, RMB, R, F  (requires control-override when active)
     :alternative  — Z, X, C, B      (no conflict with vanilla)"
   (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
+            [cn.li.mc1201.client.input.mode-switch :as mode-switch]
             [cn.li.forge1201.client.overlay-state :as overlay-state]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mcmod.util.log :as log])
@@ -17,7 +18,7 @@
 (defonce ^:private skill-keys (atom []))
 (defonce ^:private gui-keys (atom {}))
 (defonce ^:private mode-switch-state (atom {:was-down false :down-at-ns nil :pending-clicks 0}))
-(defonce ^:private raw-v-state (atom {:down-at-ns nil}))
+(defonce ^:private raw-v-state (atom (mode-switch/initial-state)))
 (defonce ^:private raw-v-listener-registered? (atom false))
 
 ;; Key scheme: :original (LMB/RMB/R/F) or :alternative (Z/X/C/B)
@@ -25,8 +26,6 @@
 
 ;; Track whether vanilla keys are currently overridden
 (defonce ^:private override-active? (atom false))
-
-(def ^:private mode-switch-short-press-threshold-ns (* 300 1000 1000))
 
 (declare get-player-uuid)
 
@@ -39,25 +38,19 @@
         action (.getAction event)
         now (System/nanoTime)]
     (when (= key GLFW/GLFW_KEY_V)
-      (cond
-        (= action GLFW/GLFW_PRESS)
-        (do
-          (swap! raw-v-state assoc :down-at-ns now)
-          (overlay-renderer/on-mode-switch-key-state! true))
-
-        (= action GLFW/GLFW_RELEASE)
-        (let [down-at (:down-at-ns @raw-v-state)
-              held-ns (if down-at (- now down-at) Long/MAX_VALUE)
-              short-press? (< held-ns mode-switch-short-press-threshold-ns)
-              screen-open? (boolean (current-screen-open?))]
-          (swap! raw-v-state assoc :down-at-ns nil)
-          (overlay-renderer/on-mode-switch-key-state! false)
-          (when (and (not screen-open?) short-press?)
-            (when-let [uuid (get-player-uuid)]
-              (let [cur-activated (boolean (get-in (power-runtime/get-player-state uuid) [:resource-data :activated]))]
-                (overlay-state/set-client-activated! (not cur-activated))
-                (power-runtime/client-trigger-mode-switch! uuid)))))
-        :else nil))))
+      (mode-switch/handle-button-state!
+       raw-v-state
+       (= action GLFW/GLFW_PRESS)
+       {:now-ns now
+        :screen-open? (current-screen-open?)
+        :on-down #(overlay-renderer/on-mode-switch-key-state! true)
+        :on-up #(overlay-renderer/on-mode-switch-key-state! false)
+        :on-short-up
+        (fn []
+          (when-let [uuid (get-player-uuid)]
+            (let [cur-activated (boolean (get-in (power-runtime/get-player-state uuid) [:resource-data :activated]))]
+              (overlay-state/set-client-activated! (not cur-activated))
+              (power-runtime/client-trigger-mode-switch! uuid))))}))))
 
 (defn- consume-click-count [^KeyMapping key]
   (loop [n 0]

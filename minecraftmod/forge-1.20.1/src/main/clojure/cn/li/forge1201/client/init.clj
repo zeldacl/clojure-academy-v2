@@ -10,19 +10,19 @@
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.client.render.init :as render-init]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
+            [cn.li.mc1201.client.effects.particle :as particle]
+            [cn.li.mc1201.client.effects.sound :as sound]
+            [cn.li.mc1201.client.render.pose :as pose-impl]
+            [cn.li.mc1201.client.render.buffer :as buffer-impl]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.forge1201.client.key-input :as key-input]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.forge1201.client.screen-host :as screen-host]
             [cn.li.forge1201.client.terminal-screen-bridge :as terminal-screen-bridge]
-            [cn.li.forge1201.client.effects.particle-bridge :as particle-bridge]
-            [cn.li.forge1201.client.effects.sound-bridge :as sound-bridge]
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.forge1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.forge1201.client.request-bridge :as request-bridge]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
-            [cn.li.forge1201.client.pose-impl :as pose-impl]
-            [cn.li.forge1201.client.render-buffer-impl :as buffer-impl]
             [cn.li.forge1201.client.energy-item-model-properties :as energy-item-model-properties]
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.buffer :as buffer])
@@ -187,8 +187,8 @@
   (overlay-renderer/init!)
   (screen-host/init!)
   (terminal-screen-bridge/init!)
-  (particle-bridge/init!)
-  (sound-bridge/init!)
+  (particle/init!)
+  (sound/init!)
   (hand-effect-renderer/init!)
   (level-effect-renderer/init!)
   (request-bridge/init!)

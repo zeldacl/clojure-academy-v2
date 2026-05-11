@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.client.hand-effect-renderer
   "CLIENT-ONLY first-person hand effect renderer for runtime animations." 
-  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
+  (:require [cn.li.mc1201.client.effects.hand :as hand]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.shim ForgeClientHelper]
            [net.minecraft.client Minecraft]
@@ -14,15 +14,14 @@
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
   (when (= TickEvent$Phase/END (.phase evt))
-    (power-runtime/client-tick-hand-effects!)
+    (hand/tick-hand-effects!)
     (when-let [mc (Minecraft/getInstance)]
       (when-let [player (.player mc)]
-        (doseq [delta (power-runtime/client-drain-camera-pitch-deltas!)]
-          (.setXRot player (+ (.getXRot player) (float delta))))))))
+        (hand/apply-camera-pitch-deltas! player)))))
 
 (defn- on-render-hand [^RenderHandEvent evt]
   (try
-    (when-let [{:keys [tx ty tz rot-x rot-y rot-z]} (power-runtime/client-current-hand-transform)]
+    (when-let [{:keys [tx ty tz rot-x rot-y rot-z]} (hand/current-hand-transform)]
       (when (ForgeClientHelper/renderTransformedMainHand
               evt
               (float tx)

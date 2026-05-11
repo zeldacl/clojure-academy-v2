@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.client.runtime-bridge
   "CLIENT-ONLY Forge adapter for runtime hooks."
-  (:require [cn.li.forge1201.client.effects.particle-bridge :as particle-bridge]
-            [cn.li.forge1201.client.effects.sound-bridge :as sound-bridge]
+  (:require [cn.li.mc1201.client.effects.particle :as particle]
+            [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.forge1201.client.key-input :as key-input]
             [cn.li.forge1201.client.overlay-state :as overlay-state]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
@@ -89,8 +89,8 @@
 
 (defn tick-client! []
   (key-input/tick-input!)
-  (particle-bridge/tick-particles!)
-  (sound-bridge/tick-sounds!)
+  (particle/tick-particles!)
+  (sound/tick-sounds!)
   (power-runtime/client-tick!))
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
