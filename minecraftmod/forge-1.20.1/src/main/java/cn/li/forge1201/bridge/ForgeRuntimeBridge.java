@@ -1,6 +1,6 @@
 package cn.li.forge1201.bridge;
 
-import cn.li.forge1201.entity.ScriptedEffectEntity;
+import cn.li.mc1201.entity.ScriptedEffectEntity;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.particles.ParticleOptions;

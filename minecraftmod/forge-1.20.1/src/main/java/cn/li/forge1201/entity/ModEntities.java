@@ -1,8 +1,14 @@
 package cn.li.forge1201.entity;
 
 import cn.li.forge1201.MyMod1201;
-import cn.li.forge1201.entity.effect.hooks.ScriptedEffectHooks;
-import cn.li.forge1201.entity.ray.hooks.ScriptedRayHooks;
+import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
+import cn.li.mc1201.entity.ScriptedEffectEntity;
+import cn.li.mc1201.entity.ScriptedMarkerEntity;
+import cn.li.mc1201.entity.ScriptedProjectileEntity;
+import cn.li.mc1201.entity.ScriptedRayEntity;
+import cn.li.mc1201.entity.hook.effect.ScriptedEffectHooks;
+import cn.li.mc1201.entity.hook.marker.ScriptedMarkerHooks;
+import cn.li.mc1201.entity.hook.ray.ScriptedRayHooks;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
@@ -77,7 +83,7 @@ public final class ModEntities {
 
             @Override
             public boolean registerScriptedMarkerHookClass(String hookId, String className) {
-                return cn.li.forge1201.entity.marker.hooks.ScriptedMarkerHooks.registerByClassName(hookId, className);
+                return ScriptedMarkerHooks.registerByClassName(hookId, className);
             }
         });
     }
@@ -336,7 +342,7 @@ public final class ModEntities {
     }
 
     public static boolean registerScriptedMarkerHookClass(String hookId, String className) {
-        return cn.li.forge1201.entity.marker.hooks.ScriptedMarkerHooks.registerByClassName(hookId, className);
+        return ScriptedMarkerHooks.registerByClassName(hookId, className);
     }
 
     public static void register(IEventBus modBus) {

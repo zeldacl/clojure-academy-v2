@@ -16,7 +16,10 @@
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.entity.dsl :as edsl])
+            [cn.li.mcmod.entity.dsl :as edsl]
+            [cn.li.fabric1201.entity.effect-hooks :as effect-hooks]
+            [cn.li.fabric1201.entity.ray-hooks :as ray-hooks]
+            [cn.li.fabric1201.entity.marker-hooks :as marker-hooks])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
            [cn.li.mc1201.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]
@@ -252,6 +255,9 @@
   (register-block-entities!)
   (register-all-items!)
   (register-all-entities!)
+  (effect-hooks/register-all-effect-hooks!)
+  (ray-hooks/register-all-ray-hooks!)
+  (marker-hooks/register-all-marker-hooks!)
   (runtime-damage-interception/install-damage-interception!)
   (runtime-item-handler/init!)
   (gui-init/init-common!)

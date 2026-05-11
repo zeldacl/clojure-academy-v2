@@ -1,8 +1,13 @@
 package cn.li.fabric1201.entity;
 
-import cn.li.fabric1201.entity.effect.hooks.FabricScriptedEffectHooks;
-import cn.li.fabric1201.entity.marker.hooks.FabricScriptedMarkerHooks;
-import cn.li.fabric1201.entity.ray.hooks.FabricScriptedRayHooks;
+import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
+import cn.li.mc1201.entity.ScriptedEffectEntity;
+import cn.li.mc1201.entity.ScriptedMarkerEntity;
+import cn.li.mc1201.entity.ScriptedProjectileEntity;
+import cn.li.mc1201.entity.ScriptedRayEntity;
+import cn.li.mc1201.entity.hook.effect.ScriptedEffectHooks;
+import cn.li.mc1201.entity.hook.marker.ScriptedMarkerHooks;
+import cn.li.mc1201.entity.hook.ray.ScriptedRayHooks;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
@@ -52,11 +57,11 @@ public final class FabricScriptedEntityAccess {
                     return null;
                 }
                 return switch (entityKind) {
-                    case "scripted-projectile" -> FabricScriptedProjectileEntity.class;
-                    case "scripted-effect" -> FabricScriptedEffectEntity.class;
-                    case "scripted-ray" -> FabricScriptedRayEntity.class;
-                    case "scripted-marker" -> FabricScriptedMarkerEntity.class;
-                    case "scripted-block-body" -> FabricScriptedBlockBodyEntity.class;
+                    case "scripted-projectile" -> ScriptedProjectileEntity.class;
+                    case "scripted-effect" -> ScriptedEffectEntity.class;
+                    case "scripted-ray" -> ScriptedRayEntity.class;
+                    case "scripted-marker" -> ScriptedMarkerEntity.class;
+                    case "scripted-block-body" -> ScriptedBlockBodyEntity.class;
                     default -> null;
                 };
             }
@@ -88,17 +93,17 @@ public final class FabricScriptedEntityAccess {
 
             @Override
             public boolean registerScriptedEffectHookClass(String hookId, String className) {
-                return FabricScriptedEffectHooks.registerByClassName(hookId, className);
+                return ScriptedEffectHooks.registerByClassName(hookId, className);
             }
 
             @Override
             public boolean registerScriptedRayHookClass(String hookId, String className) {
-                return FabricScriptedRayHooks.registerByClassName(hookId, className);
+                return ScriptedRayHooks.registerByClassName(hookId, className);
             }
 
             @Override
             public boolean registerScriptedMarkerHookClass(String hookId, String className) {
-                return FabricScriptedMarkerHooks.registerByClassName(hookId, className);
+                return ScriptedMarkerHooks.registerByClassName(hookId, className);
             }
         });
     }

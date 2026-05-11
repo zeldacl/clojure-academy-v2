@@ -1,9 +1,9 @@
-(ns cn.li.forge1201.entity.effect-hooks
-  "Forge-side registration for scripted effect hook strategies."
+(ns cn.li.fabric1201.entity.effect-hooks
+  "Fabric-side registration for scripted effect hook strategies."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.entity.hook-catalog :as hook-catalog])
-  (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]))
+  (:import [cn.li.mc1201.entity ScriptedEntitySpecAccess]))
 
 (defonce ^:private effect-hooks-installed? (atom false))
 
@@ -78,7 +78,7 @@
   (when (compare-and-set! effect-hooks-installed? false true)
     (doseq [[hook-id class-name] (-> (collect-effect-hook-entries)
                                      (resolve-hook-conflicts))]
-      (if (ForgeRuntimeBridge/registerScriptedEffectHookClass hook-id class-name)
+      (if (ScriptedEntitySpecAccess/registerScriptedEffectHookClass hook-id class-name)
         (log/info "Registered scripted effect hook" {:hook-id hook-id :class class-name})
         (log/error "Failed to register scripted effect hook" {:hook-id hook-id :class class-name}))))
   nil)

@@ -1,6 +1,6 @@
 package cn.li.forge1201.client.effect;
 
-import cn.li.forge1201.entity.ScriptedEffectEntity;
+import cn.li.mc1201.entity.ScriptedEffectEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;

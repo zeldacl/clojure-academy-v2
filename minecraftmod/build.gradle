@@ -304,15 +304,27 @@ tasks.register('verifyFabricHookManifest') {
             .split(',')
             .collect { it.trim() }
             .findAll { !it.isEmpty() }) as Set
+        def supportedEffects = ((props.getProperty('supported.effect.impl.keys') ?: '')
+            .split(',')
+            .collect { it.trim() }
+            .findAll { !it.isEmpty() }) as Set
+        def supportedRays = ((props.getProperty('supported.ray.impl.keys') ?: '')
+            .split(',')
+            .collect { it.trim() }
+            .findAll { !it.isEmpty() }) as Set
 
-        def missingEffectDecl = (effectCatalogImpls - unsupportedEffects)
-        def missingRayDecl = (rayCatalogImpls - unsupportedRays)
+        def declaredEffects = unsupportedEffects + supportedEffects
+        def declaredRays = unsupportedRays + supportedRays
+
+        def missingEffectDecl = (effectCatalogImpls - declaredEffects)
+        def missingRayDecl = (rayCatalogImpls - declaredRays)
 
         if (!missingEffectDecl.isEmpty() || !missingRayDecl.isEmpty()) {
             throw new GradleException("Fabric hook manifest missing impl keys. effect=${missingEffectDecl} ray=${missingRayDecl}")
         }
 
-        logger.lifecycle('[verifyFabricHookManifest] passed. declared unsupported effect={} ray={}', unsupportedEffects.size(), unsupportedRays.size())
+        logger.lifecycle('[verifyFabricHookManifest] passed. supported effect={} ray={}, unsupported effect={} ray={}',
+            supportedEffects.size(), supportedRays.size(), unsupportedEffects.size(), unsupportedRays.size())
     }
 }
 

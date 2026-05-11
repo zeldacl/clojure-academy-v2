@@ -6,6 +6,12 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 
+import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
+import cn.li.mc1201.entity.ScriptedEffectEntity;
+import cn.li.mc1201.entity.ScriptedMarkerEntity;
+import cn.li.mc1201.entity.ScriptedProjectileEntity;
+import cn.li.mc1201.entity.ScriptedRayEntity;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -24,8 +30,8 @@ public final class FabricEntities {
 
     public static void registerEntities() {
         // Register projectile entity
-        EntityType<FabricScriptedProjectileEntity> projectileType = EntityType.Builder.of(
-                FabricScriptedProjectileEntity::new,
+        EntityType<ScriptedProjectileEntity> projectileType = EntityType.Builder.of(
+                ScriptedProjectileEntity::new,
                 MobCategory.MISC
         )
                 .sized(0.5f, 0.5f)
@@ -33,8 +39,8 @@ public final class FabricEntities {
         registerEntityType("scripted-projectile", projectileType);
 
         // Register effect entity
-        EntityType<FabricScriptedEffectEntity> effectType = EntityType.Builder.of(
-                FabricScriptedEffectEntity::new,
+        EntityType<ScriptedEffectEntity> effectType = EntityType.Builder.of(
+                ScriptedEffectEntity::new,
                 MobCategory.MISC
         )
                 .sized(0.5f, 0.5f)
@@ -44,8 +50,8 @@ public final class FabricEntities {
         registerEntityType("scripted-effect", effectType);
 
         // Register ray entity
-        EntityType<FabricScriptedRayEntity> rayType = EntityType.Builder.of(
-                FabricScriptedRayEntity::new,
+        EntityType<ScriptedRayEntity> rayType = EntityType.Builder.of(
+                ScriptedRayEntity::new,
                 MobCategory.MISC
         )
                 .sized(0.5f, 0.5f)
@@ -55,8 +61,8 @@ public final class FabricEntities {
         registerEntityType("scripted-ray", rayType);
 
         // Register marker entity
-        EntityType<FabricScriptedMarkerEntity> markerType = EntityType.Builder.of(
-                FabricScriptedMarkerEntity::new,
+        EntityType<ScriptedMarkerEntity> markerType = EntityType.Builder.of(
+                ScriptedMarkerEntity::new,
                 MobCategory.MISC
         )
                 .sized(0.1f, 0.1f)
@@ -66,8 +72,8 @@ public final class FabricEntities {
         registerEntityType("scripted-marker", markerType);
 
         // Register block-body entity
-        EntityType<FabricScriptedBlockBodyEntity> blockBodyType = EntityType.Builder.of(
-                FabricScriptedBlockBodyEntity::new,
+        EntityType<ScriptedBlockBodyEntity> blockBodyType = EntityType.Builder.of(
+                ScriptedBlockBodyEntity::new,
                 MobCategory.MISC
         )
                 .sized(1.0f, 1.0f)
@@ -75,7 +81,7 @@ public final class FabricEntities {
         registerEntityType("scripted-block-body", blockBodyType);
     }
 
-    private static <E extends net.minecraft.world.entity.Entity> void registerEntityType(
+        private static <E extends net.minecraft.world.entity.Entity> void registerEntityType(
             String id, EntityType<E> entityType) {
         ResourceLocation location = new ResourceLocation(MOD_ID, id);
         @SuppressWarnings("unchecked")

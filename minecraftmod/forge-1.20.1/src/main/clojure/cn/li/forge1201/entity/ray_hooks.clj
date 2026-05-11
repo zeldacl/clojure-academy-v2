@@ -8,7 +8,7 @@
 (defonce ^:private ray-hooks-installed? (atom false))
 
 (def ^:private impl-key->hook-class
-	{:owner-follow "cn.li.forge1201.entity.ray.hooks.OwnerFollowRayHook"})
+	{:owner-follow "cn.li.mc1201.entity.hook.ray.OwnerFollowRayHook"})
 
 (defn- normalize-impl-key
 	[impl-key]
