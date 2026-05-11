@@ -1,5 +1,5 @@
-(ns cn.li.forge1201.gui.cgui-runtime-impl
-  "CLIENT-ONLY: Forge 1.20.1 CGUI runtime for GUI rendering and event dispatch.
+(ns cn.li.mc1201.gui.cgui-runtime-impl
+  "CLIENT-ONLY: shared 1.20.1 CGUI runtime for GUI rendering and event dispatch.
 
   This namespace contains client-side GUI rendering code and must only be loaded
   when a GUI screen is opened (client-only operation). It drives rendering and
@@ -11,7 +11,7 @@
     [cn.li.mcmod.platform.resource :as res]
     [cn.li.mcmod.config :as modid]
     [cn.li.mcmod.util.log :as log]
-    [cn.li.forge1201.gui.cgui-runtime :as runtime])
+    [cn.li.mc1201.gui.cgui-runtime :as runtime])
   (:import
     (net.minecraft.client Minecraft)
     (net.minecraft.client.gui GuiGraphics Font)
@@ -20,76 +20,76 @@
     (com.mojang.blaze3d.vertex PoseStack)
     (com.mojang.blaze3d.systems RenderSystem)
     (javax.imageio ImageIO)
-    (cn.li.forge1201.client ClientProxy GuiGraphicsHelper)
+    (cn.li.mc1201.client MinecraftClientAccess GuiGraphicsHelper)
     (java.lang.reflect Field)
     (org.lwjgl.opengl GL11)))
 
-  (defonce ^:private texture-size-cache (atom {}))
+(defonce ^:private texture-size-cache (atom {}))
 
-  (defn- resource-location->asset-path
-    [resource-location]
-    (when resource-location
-      (let [[ns path] (str/split (str resource-location) #":" 2)]
-        (when (and ns path)
-          (str "assets/" ns "/" path)))))
+(defn- resource-location->asset-path
+  [resource-location]
+  (when resource-location
+    (let [[ns path] (str/split (str resource-location) #":" 2)]
+      (when (and ns path)
+        (str "assets/" ns "/" path)))))
 
-  (defn- get-texture-size-from-resource
-    [resource-location]
-    (when-let [asset-path (resource-location->asset-path resource-location)]
-      (when-let [resource (or (io/resource asset-path)
-                              (io/resource asset-path (.getClassLoader (class get-texture-size-from-resource))))]
-        (with-open [stream (io/input-stream resource)]
-          (when-let [image (ImageIO/read stream)]
-            [(.getWidth image) (.getHeight image)])))))
+(defn- get-texture-size-from-resource
+  [resource-location]
+  (when-let [asset-path (resource-location->asset-path resource-location)]
+    (when-let [resource (or (io/resource asset-path)
+                            (io/resource asset-path (.getClassLoader (class get-texture-size-from-resource))))]
+      (with-open [stream (io/input-stream resource)]
+        (when-let [image (ImageIO/read stream)]
+          [(.getWidth image) (.getHeight image)])))))
 
-  (defn- get-texture-size
-    "Try to obtain the pixel size [width height] for the given `resource-location`.
-     Caches results by resource-location string. Returns [w h] or nil if unknown.
-     Uses best-effort reflective calls against Minecraft's TextureManager / texture
-     objects so it is tolerant to different runtime implementations." 
-    [resource-location]
-    (when resource-location
-      (let [k (str resource-location)
-            cached (@texture-size-cache k)]
-        (if cached
-          cached
-              (let [^Minecraft mc (ClientProxy/getMinecraft)
-                ^TextureManager tm (try (.getTextureManager mc) (catch Exception _ nil))
-                tex (try (when tm (.getTexture tm resource-location)) (catch Exception _ nil))
-                ;; try multiple ways to obtain width/height
-                size (try
-                       (or
-                         ;; preferred: read the actual PNG from mod resources
-                         (get-texture-size-from-resource resource-location)
-                         ;; as a last resort: try accessing fields reflectively
-                         (when tex
-                           (try
-                             (let [cls (class tex)
-                                   ^Field wf (try (.getDeclaredField cls "width") (catch Exception _ nil))
-                                   ^Field hf (try (.getDeclaredField cls "height") (catch Exception _ nil))]
-                               (when (and wf hf)
-                                 (.setAccessible wf true)
-                                 (.setAccessible hf true)
-                                 (let [w (.getInt wf tex)
-                                       h (.getInt hf tex)]
-                                   (when (and (number? w) (number? h)) [(int w) (int h)]))))
+(defn- get-texture-size
+  "Try to obtain the pixel size [width height] for the given `resource-location`.
+   Caches results by resource-location string. Returns [w h] or nil if unknown.
+   Uses best-effort reflective calls against Minecraft's TextureManager / texture
+   objects so it is tolerant to different runtime implementations."
+  [resource-location]
+  (when resource-location
+    (let [k (str resource-location)
+          cached (@texture-size-cache k)]
+      (if cached
+        cached
+        (let [^Minecraft mc (MinecraftClientAccess/getMinecraft)
+              ^TextureManager tm (try (.getTextureManager mc) (catch Exception _ nil))
+              tex (try (when tm (.getTexture tm resource-location)) (catch Exception _ nil))
+              ;; try multiple ways to obtain width/height
+              size (try
+                     (or
+                       ;; preferred: read the actual PNG from mod resources
+                       (get-texture-size-from-resource resource-location)
+                       ;; as a last resort: try accessing fields reflectively
+                       (when tex
+                         (try
+                           (let [cls (class tex)
+                                 ^Field wf (try (.getDeclaredField cls "width") (catch Exception _ nil))
+                                 ^Field hf (try (.getDeclaredField cls "height") (catch Exception _ nil))]
+                             (when (and wf hf)
+                               (.setAccessible wf true)
+                               (.setAccessible hf true)
+                               (let [w (.getInt wf tex)
+                                     h (.getInt hf tex)]
+                                 (when (and (number? w) (number? h)) [(int w) (int h)]))))
                            (catch Exception _ nil))))
-                       (catch Exception _ nil))]
-            (when size (swap! texture-size-cache assoc k size))
-            size)))))
+                     (catch Exception _ nil))]
+          (when size (swap! texture-size-cache assoc k size))
+          size)))))
 
-        (defn- apply-depth-mode!
-          "Configure RenderSystem depth test/mask according to `mode` and `write-depth`.
-           Uses RenderSystem to change state; GL11 constants are passed as args where needed.
-           There is no RenderSystem-provided enum for depth funcs, so GL11 constants are used here
-           but centralized in one helper to make future changes easier."
-          [mode write-depth]
-          (RenderSystem/depthMask write-depth)
-          (case mode
-            :equals (do (RenderSystem/enableDepthTest) (RenderSystem/depthFunc GL11/GL_EQUAL))
-            :always (do (RenderSystem/enableDepthTest) (RenderSystem/depthFunc GL11/GL_ALWAYS))
-            ;; default: none
-            (RenderSystem/disableDepthTest)))
+(defn- apply-depth-mode!
+  "Configure RenderSystem depth test/mask according to `mode` and `write-depth`.
+   Uses RenderSystem to change state; GL11 constants are passed as args where needed.
+   There is no RenderSystem-provided enum for depth funcs, so GL11 constants are used here
+   but centralized in one helper to make future changes easier."
+  [mode write-depth]
+  (RenderSystem/depthMask write-depth)
+  (case mode
+    :equals (do (RenderSystem/enableDepthTest) (RenderSystem/depthFunc GL11/GL_EQUAL))
+    :always (do (RenderSystem/enableDepthTest) (RenderSystem/depthFunc GL11/GL_ALWAYS))
+    ;; default: none
+    (RenderSystem/disableDepthTest)))
 
 (defn- round-int
   [value]
@@ -109,19 +109,19 @@
     (nil? v) nil
     (instance? ResourceLocation v) v
     (string? v) (if (re-find #":" v)
-                   (let [[ns path] (str/split v #":" 2)]
-                     (res/invoke-resource-location ns path))
-                   ;; If the string is an absolute assets path like "assets/ns/..",
-                   ;; extract namespace and path and resolve explicitly.
-                   (cond
-                     (str/starts-with? v "assets/")
-                     (let [after (subs v (count "assets/"))
-                           parts (str/split after #"/" 2)
-                           ns (first parts)
-                           path (second parts)]
-                       (if (and ns path)
-                         (res/invoke-resource-location ns path)
-                         (res/invoke-resource-location nil v)))
+                  (let [[ns path] (str/split v #":" 2)]
+                    (res/invoke-resource-location ns path))
+                  ;; If the string is an absolute assets path like "assets/ns/..",
+                  ;; extract namespace and path and resolve explicitly.
+                  (cond
+                    (str/starts-with? v "assets/")
+                    (let [after (subs v (count "assets/"))
+                          parts (str/split after #"/" 2)
+                          ns (first parts)
+                          path (second parts)]
+                      (if (and ns path)
+                        (res/invoke-resource-location ns path)
+                        (res/invoke-resource-location nil v)))
 
                     ;; No namespace: resolve explicitly with current MOD-ID
                     :else
@@ -133,7 +133,7 @@
    Only visible widgets. Each node is [widget absolute-pos cumulative-scale].
    This version accumulates parent scale so children are rendered with parent's scale multiplied.
    Additionally applies :transform-meta alignment and pivot when computing absolute positions so
-   child widgets inherit the adjusted coordinates." 
+   child widgets inherit the adjusted coordinates."
   [root abs-pos parent-scale parent-size]
   (when (and root (cgui/visible? root))
     (let [pos (cgui/get-pos root)
@@ -174,7 +174,7 @@
       (cons [root next-pos cum-scale]
             (mapcat #(collect-widgets-z-ordered % next-pos cum-scale next-parent-size) children)))))
 
-    (def ^:private DRAG-TIME-TOL-MS 100)
+(def ^:private DRAG-TIME-TOL-MS 100)
 
 (defn resize-root!
   "Update root widget with the current screen/container size.
@@ -235,8 +235,8 @@
                (int u-px) (int v-px)
                (int safe-src-w) (int safe-src-h))))
     (.popPose ps)))
-  
- (defn render-widget!
+
+(defn render-widget!
   "Render a single widget at the given absolute position and scale using GuiGraphics.
    Draws :drawtexture, :textbox, :progressbar, :outline, :tint as applicable."
   [^GuiGraphics gg root [abs-x abs-y] scale left top]
@@ -246,8 +246,8 @@
         [w h] size
         x (int (+ left abs-x))
         y (int (+ top abs-y))
-      w-int (round-int (* (double w) scale))
-      h-int (round-int (* (double h) scale))
+        w-int (round-int (* (double w) scale))
+        h-int (round-int (* (double h) scale))
         components @(:components root)]
     (doseq [c components]
       (let [kind (component-kind c)
@@ -282,10 +282,10 @@
                       cell-h (max 1 (int (Math/floor (/ tex-h 3.0))))]
                   (doseq [i (range 3)
                           j (range 3)]
-                      (let [x0 (round-int (nth xs i))
-                        y0 (round-int (nth ys j))
-                        x1 (round-int (nth xs (inc i)))
-                        y1 (round-int (nth ys (inc j)))
+                    (let [x0 (round-int (nth xs i))
+                          y0 (round-int (nth ys j))
+                          x1 (round-int (nth xs (inc i)))
+                          y1 (round-int (nth ys (inc j)))
                           tw (max 1 (- x1 x0))
                           th (max 1 (- y1 y0))
                           u (* i cell-w)
@@ -295,14 +295,14 @@
                 ;; line overlays (1.12 HudUtils.rect on lineTex)
                 (when line-tex
                   (let [mrg 3.2
-                    top-x (round-int (- x mrg))
-                    top-y (round-int (- y 8.6))
-                    top-w (round-int (+ w-int (* mrg 2.0)))
-                    top-h (round-int 12.0)
-                    bot-x (round-int (- x mrg))
-                    bot-y (round-int (+ y h-int -2.0))
-                    bot-w (round-int (+ w-int (* mrg 2.0)))
-                    bot-h (round-int 8.0)
+                        top-x (round-int (- x mrg))
+                        top-y (round-int (- y 8.6))
+                        top-w (round-int (+ w-int (* mrg 2.0)))
+                        top-h (round-int 12.0)
+                        bot-x (round-int (- x mrg))
+                        bot-y (round-int (+ y h-int -2.0))
+                        bot-w (round-int (+ w-int (* mrg 2.0)))
+                        bot-h (round-int 8.0)
                         line-size (get-texture-size line-tex)
                         lw (max 1 (int (or (first line-size) 1)))
                         lh (max 1 (int (or (second line-size) 1)))]
@@ -311,34 +311,34 @@
 
                 (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
                 (catch Exception e
-                  (log/debug "CGUI blendquad render error:" (.getMessage e)))))) 
+                  (log/debug "CGUI blendquad render error:" (.getMessage e))))))
 
           (kind-matches? kind :drawtexture)
           (let [tex-loc (ensure-resource-location (:texture state))]
             (if tex-loc
               (let [uv (:uv state)
-                tex-size (get-texture-size tex-loc)
-                tex-w (when (and tex-size (number? (first tex-size)))
-                  (int (first tex-size)))
-                tex-h (when (and tex-size (number? (second tex-size)))
-                  (int (second tex-size)))
-                has-uv? (and (sequential? uv) (>= (count uv) 4))
-                [u v uw uh] (if has-uv?
-                  uv
-                  [0 0 (or tex-w w-int) (or tex-h h-int)])
+                    tex-size (get-texture-size tex-loc)
+                    tex-w (when (and tex-size (number? (first tex-size)))
+                            (int (first tex-size)))
+                    tex-h (when (and tex-size (number? (second tex-size)))
+                            (int (second tex-size)))
+                    has-uv? (and (sequential? uv) (>= (count uv) 4))
+                    [u v uw uh] (if has-uv?
+                                  uv
+                                  [0 0 (or tex-w w-int) (or tex-h h-int)])
                     fractional? (and (number? u) (number? v) (number? uw) (number? uh)
-                                      (<= (double u) 1.0) (<= (double v) 1.0)
-                                      (<= (double uw) 1.0) (<= (double uh) 1.0))
+                                     (<= (double u) 1.0) (<= (double v) 1.0)
+                                     (<= (double uw) 1.0) (<= (double uh) 1.0))
                     basis-w (if (and tex-size (number? (first tex-size))) (first tex-size) w-int)
                     basis-h (if (and tex-size (number? (second tex-size))) (second tex-size) h-int)
                     u-px (if fractional? (round-int (* (double u) (double basis-w))) (int u))
                     v-px (if fractional? (round-int (* (double v) (double basis-h))) (int v))
-                src-w (if fractional?
-                  (round-int (* (double uw) (double basis-w)))
-                  (int uw))
-                src-h (if fractional?
-                  (round-int (* (double uh) (double basis-h)))
-                  (int uh))
+                    src-w (if fractional?
+                            (round-int (* (double uw) (double basis-w)))
+                            (int uw))
+                    src-h (if fractional?
+                            (round-int (* (double uh) (double basis-h)))
+                            (int uh))
                     ;; Full atlas dimensions for UV normalization.
                     ;; When no sub-region UV is used src == atlas; prefer the
                     ;; actual PNG size so the UV fraction covers the full region.
@@ -392,19 +392,19 @@
                        (apply str (repeat (count raw-text) \*))
                        raw-text)
                 color (unchecked-int (or (:color state) 0xFFFFFF))
-                ^Font font  (ClientProxy/getFont)]
+                ^Font font  (MinecraftClientAccess/getFont)]
             (when (seq text)
               (.drawString gg font ^String text x y color))
             ;; caret rendering for editable textboxes when focused
             (when (and (:editable? state)
-                       (some-> @(:metadata root) :focused?) )
+                       (some-> @(:metadata root) :focused?))
               (try
-                (let [font (ClientProxy/getFont)
+                (let [font (MinecraftClientAccess/getFont)
                       ;; compute caret x at end of text for now
                       caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
                       caret-x (+ x (int (.width font ^String text)))]
                   (when caret-visible?
-                  (.drawString gg font "|" caret-x y color)))
+                    (.drawString gg font "|" caret-x y color)))
                 (catch Exception _ nil))))
 
           (kind-matches? kind :progressbar)
@@ -434,8 +434,6 @@
 
           :else
           nil)))))
-
-          
 
 (defn render-tree!
   "Render the entire widget tree rooted at root. left and top are the container screen's
@@ -480,19 +478,11 @@
                   x1 (+ x0 w)
                   y1 (+ y0 h)
                   inside (and (>= mx-rel x0) (< mx-rel x1) (>= my-rel y0) (< my-rel y1))]
-              ;; (if inside
-              ;;   (let [children (cgui/get-widgets node)
-              ;;         child-stack (reduce (fn [acc child]
-              ;;                              (conj acc [child x0 y0]))
-              ;;                            rest-stack (reverse children))]
-              ;;     (recur child-stack node))
-              ;;   (recur rest-stack best)) 
               (recur (reduce (fn [acc child]
                                (conj acc [child x0 y0]))
                              rest-stack
                              (reverse (cgui/get-widgets node)))
-                     (if inside node best)) ; 即使 parent 不包含，也继续检查 children
-              )))))))
+                     (if inside node best)))))))))
 
 (defn frame-tick!
   "Emit :frame events to all widgets in the tree (depth-first). event map can include

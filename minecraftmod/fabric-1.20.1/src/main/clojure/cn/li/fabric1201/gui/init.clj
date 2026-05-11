@@ -2,7 +2,7 @@
   "Fabric 1.20.1 GUI System Initialization"
   (:require [cn.li.mc1201.gui.init-orchestrator :as gui-orchestrator]
             [cn.li.mc1201.gui.init-checks :as init-checks]
-            [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.fabric1201.gui.registry-impl :as registry-impl]
             [cn.li.fabric1201.gui.network :as network]
             [cn.li.mcmod.util.log :as log]))

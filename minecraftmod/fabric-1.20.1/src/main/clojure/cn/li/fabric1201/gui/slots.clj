@@ -1,6 +1,6 @@
 (ns cn.li.fabric1201.gui.slots
   "Fabric 1.20.1 GUI slot helpers, backed by shared mc1201 slot logic."
-  (:require [cn.li.ac.gui.platform-adapter :as gui]
+  (:require [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mc1201.gui.slots-common :as slots-common])
   (:import [cn.li.mc1201.gui CMenuBridge]
            [net.minecraft.world.inventory Slot AbstractContainerMenu]

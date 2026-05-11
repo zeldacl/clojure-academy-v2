@@ -14,14 +14,8 @@
 (defn create-extended-menu-provider [gui-id tile-entity]
   (shared-bridge/create-extended-menu-provider provider-bridge/create-extended-menu-provider gui-id tile-entity))
 
-(defn create-screen-handler-factory [gui-id tile-entity]
-  (shared-bridge/create-screen-handler-factory provider-bridge/create-menu-provider gui-id tile-entity))
-
 (defn create-extended-screen-handler-factory [gui-id tile-entity]
   (shared-bridge/create-extended-screen-handler-factory provider-bridge/create-extended-menu-provider gui-id tile-entity))
-
-(defn create-extended-factory [gui-id tile-entity]
-  (shared-bridge/create-extended-factory provider-bridge/create-extended-menu-provider gui-id tile-entity))
 
 (defn wrap-clojure-container [sync-id handler-type clj-container]
   (shared-bridge/wrap-clojure-container menu-bridge/create-menu-bridge sync-id handler-type clj-container))

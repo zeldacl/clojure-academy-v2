@@ -6,12 +6,12 @@
   Tabbed GUIs: when tab index != 0, slot highlight is not drawn (inv-window only)."
     (:require [cn.li.mc1201.gui.screen-registry :as screen-registry]
               [cn.li.mcmod.gui.adapter :as gui]
-              [cn.li.forge1201.gui.cgui-runtime :as cgui-rt]
+              [cn.li.mc1201.gui.cgui-runtime :as cgui-rt]
               [cn.li.mcmod.util.log :as log])
     (:import [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client.gui.screens Screen]
           [cn.li.forge1201.shim ForgeClientHelper ForgeClientHelper$ScreenFactory]
-           [cn.li.forge1201.gui CGuiContainerScreen]
+          [cn.li.mc1201.gui CGuiContainerScreen]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.client.event ScreenEvent$BackgroundRendered]))
 

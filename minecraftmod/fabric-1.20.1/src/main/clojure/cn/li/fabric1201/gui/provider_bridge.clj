@@ -3,7 +3,7 @@
 
   Uses reify factories and delegates menu construction to menu-bridge."
   (:require [cn.li.mc1201.gui.provider-common :as provider-common]
-            [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.util.log :as log]
             [cn.li.fabric1201.gui.menu-bridge :as menu-bridge])
   (:import [net.minecraft.world MenuProvider]
@@ -53,9 +53,6 @@
           (.writeBoolean buf true)
           (.writeBlockPos buf pos))
         (.writeBoolean buf false)))))
-
-(defn create-screen-handler-factory [gui-id tile-entity]
-  (create-menu-provider gui-id tile-entity))
 
 (defn create-extended-screen-handler-factory [gui-id tile-entity]
   (create-extended-menu-provider gui-id tile-entity))

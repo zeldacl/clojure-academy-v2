@@ -1,22 +1,19 @@
-package cn.li.forge1201.gui;
+package cn.li.mc1201.gui;
 
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.network.chat.Component;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
- * CLIENT-ONLY: Small helper subclass that exposes public methods to adjust protected
- * imageWidth/imageHeight fields from Clojure code safely.
+ * Shared client-only helper subclass exposing selected protected screen APIs for Clojure proxy usage.
  *
- * This class must only be loaded on the client side.
+ * <p>This class intentionally avoids loader-specific annotations so it can live in the shared mc1201
+ * module. Callers must ensure this type is only instantiated from client execution paths.</p>
  */
-@OnlyIn(Dist.CLIENT)
 public abstract class CGuiContainerScreen<T extends AbstractContainerMenu> extends AbstractContainerScreen<T> {
     public CGuiContainerScreen(T menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);

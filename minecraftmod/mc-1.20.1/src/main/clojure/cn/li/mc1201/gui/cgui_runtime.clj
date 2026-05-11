@@ -1,14 +1,13 @@
-(ns cn.li.forge1201.gui.cgui-runtime
+(ns cn.li.mc1201.gui.cgui-runtime
   "Client runtime facade for CGUI.
 
   This namespace is safe to load during checkClojure. The heavy client implementation
-  lives in cn.li.forge1201.gui.cgui-runtime-impl and is loaded lazily on first use."
-  (:require [cn.li.mcmod.util.log :as log]))
+  lives in cn.li.mc1201.gui.cgui-runtime-impl and is loaded lazily on first use.")
 
 (defonce ^:private runtime-impl (atom nil))
 (defonce ^:private runtime-loader
   (delay
-    (require 'cn.li.forge1201.gui.cgui-runtime-impl)
+    (require 'cn.li.mc1201.gui.cgui-runtime-impl)
     true))
 
 (defn register-impl!

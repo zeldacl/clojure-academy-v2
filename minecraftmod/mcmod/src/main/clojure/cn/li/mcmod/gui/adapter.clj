@@ -7,8 +7,6 @@
    - a unified GUI API by delegating remaining functions to the existing
     gameplay implementation (lazily, to avoid hard compile-time dependencies)."
   (:require [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.handler :as gui-handler]))
 
 (defonce ^:private resolved-vars
@@ -101,6 +99,14 @@
 (defn get-all-gui-ids
   []
   (registry-metadata/get-all-gui-ids))
+
+(defn get-display-name
+  [gui-id]
+  (some-> (registry-metadata/get-gui-spec gui-id) :display-name))
+
+(defn get-gui-type
+  [gui-id]
+  (some-> (registry-metadata/get-gui-spec gui-id) :gui-type))
 
 (defn get-registry-name
   [gui-id]
