@@ -39,12 +39,38 @@
 
 - **`mcmod`**：平台无关协议、DSL、元数据与基础运行时；禁止引入 `net.minecraft.*` 与 Loader API。
 - **`ac`**：业务内容层（能力、无线、GUI 业务逻辑等）；禁止直接引用 Forge/Fabric/Minecraft API。
-- **`forge-1.20.1`**：Loader 入口与平台适配；可使用 Minecraft/Forge API。
+- **`mc-1.20.1`**：共享 Minecraft 逻辑层；允许依赖 `net.minecraft.*`，但禁止依赖 Forge/Fabric Loader API。
+  - **内部结构**（Phase C 后）：
+    - `runtime/*_core.clj`：19+ 个运行时核心模块（实体、生命周期、网络、NBT 等）
+    - `integration/event_handlers.clj`：共享事件处理业务逻辑
+    - `integration/event_helpers_core.clj`：共享事件辅助函数（runtime 检查、数据构建）
+    - `client/overlay/renderer.clj`：共享 overlay 渲染核心
+    - `gui/registry_common.clj`：共享 GUI 容器创建逻辑
+    - `datagen/*_common.clj`：共享 datagen provider 实现
+- **`forge-1.20.1`**：Forge 事件绑定与 Loader 入口层（Phase C 后仅包含）；仅保留直接引用 Forge 的代码和事件注册胶水。
+  - **结构规范**：
+    - `mod/` 与 `mod.clj`：Loader 入口与初始化
+    - `registry/`：Loader API 入口（DeferredRegister 等）
+    - `client/`：Forge 事件绑定（`RenderGuiOverlayEvent` 等），仅做事件解包 → 调用 mc1201
+    - `integration/events.clj`：Forge 事件处理（事件对象解包、回写结果），业务逻辑委托到 mc1201
+    - `datagen/setup.clj`：Datagen 入口（Forge GatherDataEvent）
+    - 不得包含与 Loader 无关的 Minecraft-only 逻辑
+- **`fabric-1.20.1`**：Fabric 事件绑定与 Loader 入口层（Phase C 后仅包含）；Fabric 启动期 `class-noinit` / 反射外壳与事件 API 绑定属于平台语义。
+  - **结构规范**（同 Forge）：
+    - `mod/` 与 `mod.clj`：Loader 入口
+    - `registry/`：Fabric API 入口（ScreenHandlerRegistry 等）
+    - `client/`：Fabric 事件绑定（`HudRenderCallback` 等），仅做事件解包 → 调用 mc1201
+    - `integration/events.clj`：Fabric 事件处理（事件对象解包、回写结果），业务逻辑委托到 mc1201
+    - `datagen/setup.clj`：Datagen 入口（Fabric DataGeneratorEntrypoint）
+    - `class-noinit` / `launch-ready` / 启动期反射属于平台语义，保留于此
 - **边界规则（更新）**：
   - 禁止 `ac` 对 `cn.li.forge1201.*` 建立静态编译依赖。
+  - `forge-1.20.1` / `fabric-1.20.1` 中凡是“只依赖 Minecraft、与 Loader 无关”的逻辑，应优先迁入 `mc-1.20.1`；平台层不得长期保留纯代理 wrapper 或双端镜像实现。
   - `forge-1.20.1` 可通过受控桥接调用 `ac` 能力（例如动态 require / ns-resolve），但不得把 `ac` 实现细节固化为跨层 API。
   - 平台层只允许保留“实现适配键 -> 平台实现类/函数”映射；禁止直接硬编码业务内容 ID（技能/实体/玩法名）。
   - 业务 hook-id 到实现键的映射必须位于共享层（`mcmod`），平台层不得承载业务语义。
+  - Fabric 启动期的 `class-noinit`、ServiceLoader 外壳与事件 API 绑定属于平台语义，允许留在 `fabric-1.20.1`；但其内部对已解析 Minecraft 对象的操作逻辑应尽量迁入 `mc-1.20.1`。
+  - Forge `ServerLifecycleHooks` 按需取 server 与 Fabric `server-context` 捕获 server 目前视为平台差异，不在本轮强行统一；shared core 应接收显式 server 或回调，不直接耦合 Loader 生命周期源。
   - 所有跨层调用都应通过清晰入口函数与文档记录，避免隐式耦合蔓延。
 
 ## 开发工具实践
