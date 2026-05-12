@@ -4,7 +4,7 @@
   This bridge is intentionally generic:
   - input: {uuid achievement-id}
   - output: ModCustomTrigger.trigger(ServerPlayer, String)"
-  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
+  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.trigger ModTriggers]
            [java.util UUID]

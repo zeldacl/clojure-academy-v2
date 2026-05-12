@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.client.effects.level-renderer
   "Shared client level-effect rendering core (Minecraft 1.20.1)."
-  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime])
+  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource RenderType]

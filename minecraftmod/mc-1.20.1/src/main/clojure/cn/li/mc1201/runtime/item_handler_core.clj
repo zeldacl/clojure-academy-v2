@@ -3,7 +3,7 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.power-runtime :as power-runtime]
+            [cn.li.mcmod.runtime.hooks-core :as power-runtime]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core.registries BuiltInRegistries]

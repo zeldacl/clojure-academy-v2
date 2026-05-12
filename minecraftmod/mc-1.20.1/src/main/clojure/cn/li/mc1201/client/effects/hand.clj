@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.client.effects.hand
   "Shared client hand-effect helpers for Minecraft 1.20.1."
-  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime])
+  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime])
   (:import [net.minecraft.client.player LocalPlayer]))
 
 (defn tick-hand-effects!

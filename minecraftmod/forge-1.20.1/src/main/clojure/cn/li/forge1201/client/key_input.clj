@@ -3,7 +3,7 @@
   Supports two key schemes:
     :original     — LMB, RMB, R, F  (requires control-override when active)
     :alternative  — Z, X, C, B      (no conflict with vanilla)"
-  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
+  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime]
             [cn.li.mc1201.client.input.mode-switch :as mode-switch]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]

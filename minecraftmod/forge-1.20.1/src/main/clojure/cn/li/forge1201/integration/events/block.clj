@@ -3,6 +3,7 @@
   (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.forge1201.integration.events.event-apply :as event-apply]
             [cn.li.forge1201.integration.events.bridge :as bridge])
   (:import [net.minecraft.world.entity.player Player]
            [net.minecraftforge.event.level BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
@@ -27,7 +28,7 @@
         (if (and entity
                  (instance? Player entity)
                  (bridge/runtime-activated? (str (.getUUID ^Player entity))))
-          (.setCanceled evt true)
+          (event-apply/cancel-event! evt)
           (let [ret (handle-block-place
                       {:x (.getX pos)
                        :y (.getY pos)
@@ -37,7 +38,7 @@
                        :world level
                        :block (.getBlock placed-state)})]
             (when (and (map? ret) (:cancel-place? ret))
-              (.setCanceled evt true))))))
+              (event-apply/cancel-event! evt))))))
     (catch Throwable t
       (log/info "Error handling block place event:" (.getMessage t))
       (.printStackTrace t))))
@@ -51,7 +52,7 @@
           block-state (.getBlockState level pos)
           block-id (event-metadata/identify-block-from-full-name (str (.getBlock block-state)))]
       (if (bridge/runtime-activated? (str (.getUUID player)))
-        (.setCanceled evt true)
+        (event-apply/cancel-event! evt)
         (when block-id
           (let [ret (dispatcher/on-block-break
                       {:x (.getX pos)
@@ -63,7 +64,7 @@
                        :block (.getBlock block-state)
                        :block-id block-id})]
             (when (and (map? ret) (:cancel-break? ret))
-              (.setCanceled evt true))))))
+              (event-apply/cancel-event! evt))))))
     (catch Throwable t
       (log/info "Error handling block break event:" (.getMessage t))
       (.printStackTrace t))))

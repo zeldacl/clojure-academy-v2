@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.client.screen.host
   "CLIENT-ONLY generic screen host. AC provides draw ops and interaction handlers."
-  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
+  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.client.gui.screens Screen]

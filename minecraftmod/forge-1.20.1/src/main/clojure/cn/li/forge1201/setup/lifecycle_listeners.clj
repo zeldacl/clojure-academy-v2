@@ -1,25 +1,19 @@
 (ns cn.li.forge1201.setup.lifecycle-listeners
   "Lifecycle and client listener registration for Forge mod event bus." 
   (:require [cn.li.forge1201.integration.side :as side]
+            [cn.li.forge1201.setup.consumer-support :as consumer-support]
             [cn.li.mc1201.entity.effect-hooks :as effect-hooks]
             [cn.li.mc1201.entity.ray-hooks :as ray-hooks]
             [cn.li.mc1201.entity.marker-hooks :as marker-hooks]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraftforge.eventbus.api EventPriority IEventBus]
+  (:import [net.minecraftforge.eventbus.api IEventBus]
            [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent FMLCommonSetupEvent]))
 
-(def ^:private event-priority EventPriority/NORMAL)
 (def ^:private key-mappings-class-name "net.minecraftforge.client.event.RegisterKeyMappingsEvent")
-
-(defn- consumer
-  [f]
-  (reify java.util.function.Consumer
-    (accept [_ event]
-      (f event))))
 
 (defn- add-listener!
   [^IEventBus mod-bus ^Class listener-class f]
-  (.addListener mod-bus event-priority false listener-class (consumer f)))
+  (consumer-support/add-normal-listener! mod-bus listener-class f))
 
 (defn register-common-lifecycle-listeners!
   [^IEventBus mod-bus on-common-setup on-client-setup]

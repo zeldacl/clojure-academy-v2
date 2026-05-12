@@ -2,7 +2,7 @@
   "AC ability runtime bindings for platform lifecycle hooks.
 
   This namespace keeps platform adapters decoupled from direct ac namespace imports."
-  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]
+  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime]
             [cn.li.mcmod.ability.catalog :as catalog]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.ability.state.player :as ps]

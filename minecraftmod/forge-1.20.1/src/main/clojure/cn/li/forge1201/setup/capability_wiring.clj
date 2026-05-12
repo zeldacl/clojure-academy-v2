@@ -1,20 +1,13 @@
 (ns cn.li.forge1201.setup.capability-wiring
   "Forge capability registration listener wiring." 
-  (:require [cn.li.mcmod.platform.capability :as platform-cap])
+  (:require [cn.li.forge1201.setup.consumer-support :as consumer-support]
+            [cn.li.mcmod.platform.capability :as platform-cap])
   (:import [net.minecraftforge.common.capabilities RegisterCapabilitiesEvent]
-           [net.minecraftforge.eventbus.api EventPriority IEventBus]))
-
-(def ^:private event-priority EventPriority/NORMAL)
-
-(defn- consumer
-  [f]
-  (reify java.util.function.Consumer
-    (accept [_ event]
-      (f event))))
+           [net.minecraftforge.eventbus.api IEventBus]))
 
 (defn- add-listener!
   [^IEventBus mod-bus ^Class listener-class f]
-  (.addListener mod-bus event-priority false listener-class (consumer f)))
+  (consumer-support/add-normal-listener! mod-bus listener-class f))
 
 (defn register-capability-listener!
   [^IEventBus mod-bus]

@@ -24,40 +24,71 @@
 		(catch Exception e
 			(log/warn "Failed to register gameplay config" e))))
 
-(defn register-mod-bus!
-	[{:keys [datagen-run?
-				 on-common-setup
-				 on-client-setup
-				 sounds-register
-				 effects-register
-				 particle-types-register
-				 fluid-types-register
-				 fluids-register
-				 blocks-register
-				 items-register
-				 block-entities-register
-				 creative-tabs-register
-				 gui-menu-register]}]
-	(let [^IEventBus mod-bus (.getModEventBus (FMLJavaModLoadingContext/get))]
-		(register-gameplay-config!)
-		(config-bridge/register-all! mod-bus)
-		(ModEntities/register mod-bus)
-		(when (and (side/client-side?) (not datagen-run?))
-			(lifecycle-listeners/register-client-hooks!))
-		(ModFeatures/register mod-bus)
-		(deferred-registries/register-deferred-registries! mod-bus [sounds-register
-																				 effects-register
-																				 particle-types-register
-																				 fluid-types-register
-																				 fluids-register
-																				 blocks-register
-																				 items-register
-																				 block-entities-register
-																				 creative-tabs-register
-																				 gui-menu-register])
-		(lifecycle-listeners/register-common-lifecycle-listeners! mod-bus on-common-setup on-client-setup)
-		(when (side/client-side?)
-			(lifecycle-listeners/register-client-key-mappings! mod-bus))
-		(setup-imc-dispatcher/register-imc-listener! mod-bus)
-		(capability-wiring/register-capability-listener! mod-bus)
+(defn- resolve-mod-bus
+	[]
+	(.getModEventBus (FMLJavaModLoadingContext/get)))
+
+(defn register-config-phase!
+	[^IEventBus mod-bus _opts]
+	(register-gameplay-config!)
+	(config-bridge/register-all! mod-bus)
+	nil)
+
+(defn register-registry-phase!
+	[^IEventBus mod-bus {:keys [datagen-run?
+												 sounds-register
+												 effects-register
+												 particle-types-register
+												 fluid-types-register
+												 fluids-register
+												 blocks-register
+												 items-register
+												 block-entities-register
+												 creative-tabs-register
+												 gui-menu-register]}]
+	(ModEntities/register mod-bus)
+	(when (and (side/client-side?) (not datagen-run?))
+		(lifecycle-listeners/register-client-hooks!))
+	(ModFeatures/register mod-bus)
+	(deferred-registries/register-deferred-registries! mod-bus [sounds-register
+																		 effects-register
+																		 particle-types-register
+																		 fluid-types-register
+																		 fluids-register
+																		 blocks-register
+																		 items-register
+																		 block-entities-register
+																		 creative-tabs-register
+																		 gui-menu-register])
+	nil)
+
+(defn register-lifecycle-phase!
+	[^IEventBus mod-bus {:keys [on-common-setup on-client-setup]}]
+	(lifecycle-listeners/register-common-lifecycle-listeners! mod-bus on-common-setup on-client-setup)
+	(when (side/client-side?)
+		(lifecycle-listeners/register-client-key-mappings! mod-bus))
+	nil)
+
+(defn register-capability-phase!
+	[^IEventBus mod-bus _opts]
+	(setup-imc-dispatcher/register-imc-listener! mod-bus)
+	(capability-wiring/register-capability-listener! mod-bus)
+	nil)
+
+(defn registration-phase-plan
+	[_opts]
+	[[:config register-config-phase!]
+	 [:registry register-registry-phase!]
+	 [:lifecycle register-lifecycle-phase!]
+	 [:capability register-capability-phase!]])
+
+(defn run-registration-phases!
+	[opts]
+	(let [^IEventBus mod-bus (resolve-mod-bus)]
+		(doseq [[_phase phase-fn] (registration-phase-plan opts)]
+			(phase-fn mod-bus opts))
 		nil))
+
+(defn register-mod-bus!
+	[opts]
+	(run-registration-phases! opts))

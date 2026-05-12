@@ -3,7 +3,7 @@
 
   No Minecraft or loader imports — pure Clojure state management.
   Platform adapters supply the send-fn transport when calling tick-sync!."
-  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]))
+  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime]))
 
 (defonce ^:private dirty-players (atom #{}))
 (defonce ^:private tick-counter (atom 0))

@@ -5,7 +5,7 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.interaction-result :as interaction-result]
             [cn.li.mcmod.events.metadata :as event-metadata]
-            [cn.li.mcmod.platform.power-runtime :as power-runtime]
+            [cn.li.mcmod.runtime.hooks-core :as power-runtime]
             [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
             [cn.li.mc1201.runtime.sync-core :as runtime-sync]
             [cn.li.fabric1201.runtime.network :as runtime-network]

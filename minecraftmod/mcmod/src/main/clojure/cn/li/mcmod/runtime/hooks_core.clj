@@ -1,4 +1,4 @@
-(ns cn.li.mcmod.platform.power-runtime
+(ns cn.li.mcmod.runtime.hooks-core
   "Platform-neutral bridge for power runtime lifecycle hooks.
 
   forge/fabric adapters invoke these functions from platform events.

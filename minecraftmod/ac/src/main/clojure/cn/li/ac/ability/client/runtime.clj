@@ -4,7 +4,7 @@
   Keeps AC independent from Minecraft classes while delegating to platform runtime
   when available."
   (:require [cn.li.ac.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.platform.power-runtime :as power-runtime]))
+            [cn.li.mcmod.runtime.hooks-core :as power-runtime]))
 
 (defn on-slot-key-down!
   [player-uuid key-idx]

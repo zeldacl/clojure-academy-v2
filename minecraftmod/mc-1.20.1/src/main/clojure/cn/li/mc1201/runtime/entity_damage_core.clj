@@ -3,7 +3,7 @@
 
   Keeps generic shaping/calculation logic in shared mc1201 while platform layers
   own world/entity lookup and concrete damage application calls."
-  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime])
+  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime])
   (:import [net.minecraft.world.entity LivingEntity]
            [net.minecraft.world.phys Vec3]))
 

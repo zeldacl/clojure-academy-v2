@@ -16,7 +16,7 @@
             [cn.li.fabric1201.runtime.interop :as runtime-interop]
             [cn.li.fabric1201.runtime.block-manipulation :as runtime-block-manipulation]
             [cn.li.fabric1201.runtime.network :as runtime-network]
-            [cn.li.mcmod.platform.power-runtime :as power-runtime]))
+            [cn.li.mcmod.runtime.hooks-core :as power-runtime]))
 
 (defn install-runtime-adapters!
   []

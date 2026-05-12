@@ -1,34 +1,23 @@
 (ns cn.li.forge1201.setup.event-listeners
   "Forge common EventBus listener registration for gameplay events."
-  (:require [cn.li.forge1201.integration.events :as events])
-  (:import [net.minecraftforge.common MinecraftForge]
-           [net.minecraftforge.eventbus.api EventPriority]))
+  (:require [cn.li.forge1201.integration.events :as events]
+            [cn.li.forge1201.setup.consumer-support :as consumer-support])
+  (:import [net.minecraftforge.common MinecraftForge]))
+
+(defn- add-listener!
+  [listener-class f]
+  (consumer-support/add-normal-listener! (MinecraftForge/EVENT_BUS) listener-class f))
 
 (defn register-common-event-listeners!
   []
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false net.minecraftforge.event.entity.player.PlayerInteractEvent$RightClickBlock
-                (reify java.util.function.Consumer
-                  (accept [_ evt]
-                    (events/handle-right-click-event evt))))
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false net.minecraftforge.event.entity.player.PlayerInteractEvent$LeftClickBlock
-                (reify java.util.function.Consumer
-                  (accept [_ evt]
-                    (events/handle-left-click-block-event evt))))
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false net.minecraftforge.event.level.BlockEvent$EntityPlaceEvent
-                (reify java.util.function.Consumer
-                  (accept [_ evt]
-                    (events/handle-block-place-event evt))))
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false net.minecraftforge.event.level.BlockEvent$BreakEvent
-                (reify java.util.function.Consumer
-                  (accept [_ evt]
-                    (events/handle-block-break-event evt))))
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false net.minecraftforge.event.LootTableLoadEvent
-                (reify java.util.function.Consumer
-                  (accept [_ evt]
-                    (events/handle-loot-table-load evt))))
+  (add-listener! net.minecraftforge.event.entity.player.PlayerInteractEvent$RightClickBlock
+                 events/handle-right-click-event)
+  (add-listener! net.minecraftforge.event.entity.player.PlayerInteractEvent$LeftClickBlock
+                 events/handle-left-click-block-event)
+  (add-listener! net.minecraftforge.event.level.BlockEvent$EntityPlaceEvent
+                 events/handle-block-place-event)
+  (add-listener! net.minecraftforge.event.level.BlockEvent$BreakEvent
+                 events/handle-block-break-event)
+  (add-listener! net.minecraftforge.event.LootTableLoadEvent
+                 events/handle-loot-table-load)
   nil)

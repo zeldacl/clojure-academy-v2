@@ -697,7 +697,7 @@
         ;; Must happen here (during mod-init) 鈥?registries are locked by FMLCommonSetupEvent.
         (gui-registry-impl/register-menu-types!)
 
-        (setup-mod-bus/register-mod-bus!
+        (setup-mod-bus/run-registration-phases!
           {:datagen-run? (datagen-run?)
            :on-common-setup on-common-setup
            :on-client-setup on-client-setup
