@@ -2,7 +2,8 @@
 	"Forge mod-bus listener for processing incoming IMC registrations."
 	(:require [cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
 						[cn.li.mcmod.util.log :as log])
-	(:import [java.util.function Consumer Supplier]
+	(:import [clojure.lang Reflector]
+				 [java.util.function Consumer Supplier]
 					 [net.minecraftforge.eventbus.api EventPriority IEventBus]
 					 [net.minecraftforge.fml.event.lifecycle InterModProcessEvent]))
 
@@ -15,15 +16,19 @@
 		(catch Throwable _
 			nil)))
 
+(defn- invoke-noarg
+	[obj member]
+	(safe-invoke #(Reflector/invokeNoArgInstanceMember obj member)))
+
 (defn- imc-method-key
 	[msg]
-	(or (safe-invoke #(.method msg))
-			(safe-invoke #(.getMethod msg))))
+	(or (invoke-noarg msg "method")
+			(invoke-noarg msg "getMethod")))
 
 (defn- imc-supplier
 	[msg]
-	(or (safe-invoke #(.messageSupplier msg))
-			(safe-invoke #(.getMessageSupplier msg))))
+	(or (invoke-noarg msg "messageSupplier")
+			(invoke-noarg msg "getMessageSupplier")))
 
 (defn- resolve-payload
 	[msg]

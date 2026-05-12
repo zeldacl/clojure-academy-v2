@@ -7,6 +7,11 @@
 (defn register-common-event-listeners!
   []
   (.addListener (MinecraftForge/EVENT_BUS)
+                EventPriority/NORMAL false net.minecraftforge.event.entity.player.PlayerInteractEvent$RightClickBlock
+                (reify java.util.function.Consumer
+                  (accept [_ evt]
+                    (events/handle-right-click-event evt))))
+  (.addListener (MinecraftForge/EVENT_BUS)
                 EventPriority/NORMAL false net.minecraftforge.event.entity.player.PlayerInteractEvent$LeftClickBlock
                 (reify java.util.function.Consumer
                   (accept [_ evt]

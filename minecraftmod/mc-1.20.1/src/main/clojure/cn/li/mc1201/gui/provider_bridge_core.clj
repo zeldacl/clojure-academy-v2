@@ -2,7 +2,8 @@
   "Shared GUI provider-bridge helpers used by Forge/Fabric wrappers."
   (:require [cn.li.mc1201.gui.provider-common :as provider-common]
             [cn.li.mcmod.gui.adapter :as gui]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraft.world.entity.player Player]))
 
 (defn create-menu-from-provider!
   "Build a menu bridge from provider callback context.
@@ -27,8 +28,9 @@
            create-menu-bridge-fn
            log-prefix]
     :or {log-prefix "[MENU-PROVIDER]"}}]
-  (let [handler (gui/get-gui-handler)
-        world (.level player)
+    (let [handler (gui/get-gui-handler)
+      ^Player player player
+      world (.level player)
         pos (provider-common/tile->pos tile-entity player)]
     (log/info log-prefix "createMenu called: gui-id=" gui-id "window-id=" window-id "player=" (.getGameProfile player))
     (log/info log-prefix "Creating server-side container...")

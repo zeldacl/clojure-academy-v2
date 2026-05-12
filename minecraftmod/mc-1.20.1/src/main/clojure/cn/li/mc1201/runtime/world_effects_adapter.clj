@@ -9,7 +9,10 @@
             [cn.li.mcmod.platform.world-effects :as pwe]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
-           [net.minecraft.server.level ServerLevel]))
+           [net.minecraft.server.level ServerLevel]
+           [net.minecraft.world.entity Entity]
+           [net.minecraft.world.level.block Block]))
+
 
 (defn- resolve-level [server resolve-level-fn world-id]
   (when server
@@ -18,8 +21,8 @@
 (defn create-world-effects
   [server-fn {:keys [resolve-level-fn spawn-lightning-fn create-explosion-fn get-entities-in-aabb-fn resolve-entity-id-fn block-id-fn]
               :or {resolve-level-fn query-core/resolve-level-strict
-                   resolve-entity-id-fn (fn [entity] (str (.getDescriptionId (.getType entity))))
-                   block-id-fn (fn [block _block-state] (str (.getDescriptionId block)))}}]
+            resolve-entity-id-fn (fn [^Entity entity] (str (.getDescriptionId (.getType entity))))
+            block-id-fn (fn [^Block block _block-state] (str (.getDescriptionId block)))}}]
   (let [spawn-lightning! (or spawn-lightning-fn (fn [_level _x _y _z] false))
         create-explosion! (or create-explosion-fn (fn [_level _x _y _z _radius _fire?] false))
         get-entities-in-aabb (or get-entities-in-aabb-fn (fn [_level _aabb] []))]

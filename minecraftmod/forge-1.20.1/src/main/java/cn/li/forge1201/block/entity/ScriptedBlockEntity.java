@@ -2,7 +2,7 @@ package cn.li.forge1201.block.entity;
 
 import clojure.lang.RT;
 import clojure.lang.Var;
-import cn.li.forge1201.capability.NamedCapabilityRegistry;
+import cn.li.forge1201.capability.ForgeCapabilityHandler;
 import cn.li.mc1201.block.entity.AbstractScriptedBlockEntity;
 import cn.li.mc1201.block.entity.BlockEntityRegistry;
 import net.minecraft.core.BlockPos;
@@ -18,8 +18,6 @@ import net.minecraftforge.common.util.LazyOptional;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Forge scripted block entity with capability and container support.
@@ -44,8 +42,7 @@ public class ScriptedBlockEntity extends AbstractScriptedBlockEntity implements 
         return (BlockEntityType<ScriptedBlockEntity>) BlockEntityRegistry.getType(tileId);
     }
 
-    /** Cache of active LazyOptionals so invalidateCaps() can properly invalidate them. */
-    private final Map<String, LazyOptional<Object>> capCache = new ConcurrentHashMap<>();
+    private final ForgeCapabilityHandler capabilityHandler = new ForgeCapabilityHandler();
 
     public ScriptedBlockEntity(BlockEntityType<ScriptedBlockEntity> type,
                                BlockPos pos,
@@ -66,23 +63,9 @@ public class ScriptedBlockEntity extends AbstractScriptedBlockEntity implements 
     @Nonnull
     @Override
     public <T> LazyOptional<T> getCapability(@Nonnull Capability<T> cap, @Nullable Direction side) {
-        String key = NamedCapabilityRegistry.getKey(cap);
-        if (key != null) {
-            LazyOptional<Object> cached = capCache.get(key);
-            if (cached != null && cached.isPresent()) {
-                return cached.cast();
-            }
-            try {
-                Var getCapFn = RT.var("cn.li.mcmod.block.tile-logic", "get-capability");
-                Object handler = getCapFn.invoke(getTileId(), key, this, side);
-                if (handler != null) {
-                    LazyOptional<Object> lazyOptional = LazyOptional.of(() -> handler);
-                    capCache.put(key, lazyOptional);
-                    return lazyOptional.cast();
-                }
-            } catch (Exception ex) {
-                // fallthrough to super
-            }
+        LazyOptional<T> resolved = capabilityHandler.getCapability(cap, side, getTileId(), this);
+        if (resolved.isPresent()) {
+            return resolved;
         }
         return super.getCapability(cap, side);
     }
@@ -90,14 +73,13 @@ public class ScriptedBlockEntity extends AbstractScriptedBlockEntity implements 
     @Override
     public void invalidateCaps() {
         super.invalidateCaps();
-        capCache.values().forEach(LazyOptional::invalidate);
-        capCache.clear();
+        capabilityHandler.invalidate();
     }
 
     @Override
     public void reviveCaps() {
         super.reviveCaps();
-        // Handlers are re-created lazily on next getCapability call; nothing to do here.
+        capabilityHandler.revive();
     }
 
     // -------------------------------------------------------------------------

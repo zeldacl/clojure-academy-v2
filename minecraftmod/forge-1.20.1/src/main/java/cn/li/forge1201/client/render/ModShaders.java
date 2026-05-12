@@ -13,23 +13,15 @@ import java.io.IOException;
 
 @Mod.EventBusSubscriber(modid = MyMod1201.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class ModShaders {
-    private static ShaderInstance plasmaBodyShader;
-
     private ModShaders() {
     }
 
     @SubscribeEvent
     public static void onRegisterShaders(RegisterShadersEvent event) throws IOException {
-        event.registerShader(
-                new ShaderInstance(event.getResourceProvider(), new ResourceLocation(MyMod1201.MODID, "plasma_body"), ModRenderTypes.PLASMA_BODY_FORMAT),
-                shader -> {
-                    plasmaBodyShader = shader;
-                    ModRenderTypes.setPlasmaBodyShader(shader);
-                }
-        );
+        ForgeClientRenderRegistry.registerShaders(event);
     }
 
     public static ShaderInstance getPlasmaBodyShader() {
-        return plasmaBodyShader;
+        return ForgeClientRenderRegistry.getPlasmaBodyShader();
     }
 }

@@ -3,7 +3,7 @@
 
   Delegates tree-building to the shared cn.li.mc1201.command.brigadier-tree
   namespace; this file only contains the Forge-specific command registration
-  entry point called from CommandRegistrationHandler.java."
+  entry point called from ForgeEventBusManager.java."
   (:require [cn.li.mcmod.command.metadata :as cmd-meta]
             [cn.li.mcmod.platform.command-runtime :as command-runtime]
             [cn.li.mc1201.command.brigadier-tree :as brig-tree]
@@ -48,3 +48,4 @@
 
   (log/info "Command registration complete")
   nil)
+

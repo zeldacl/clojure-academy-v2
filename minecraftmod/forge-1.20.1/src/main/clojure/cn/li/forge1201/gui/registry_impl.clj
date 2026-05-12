@@ -11,7 +11,7 @@
             [cn.li.mc1201.gui.registry-open-core :as open-core]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.forge1201.shim LazyForgeBootstrapBridge]
+  (:import [cn.li.forge1201.shim ForgeBootstrapHelper]
            [net.minecraftforge.network NetworkHooks IContainerFactory]
            [net.minecraftforge.common.extensions IForgeMenuType]
            [net.minecraftforge.registries DeferredRegister RegistryObject]
@@ -32,7 +32,7 @@
 (defonce menu-register
   ;; AOT/checkClojure 阶段 Minecraft registries 尚未 bootstrapped。
   ;; 延迟创建，避免编译期触发 Bootstrap。
-  (delay (LazyForgeBootstrapBridge/createMenusRegister modid/*mod-id*)))
+  (delay (ForgeBootstrapHelper/createMenusRegister modid/*mod-id*)))
 
 (defonce gui-menu-types
   ^{:doc "Map from GUI ID to RegistryObject<MenuType>.

@@ -14,14 +14,14 @@
 
 (import '[net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target])
 (import '[net.minecraft.resources ResourceLocation])
-(import '[com.google.gson JsonElement])
+(import '[com.google.gson Gson JsonElement])
 (import '[java.util.concurrent CompletableFuture])
 
 (defn- parse-rl
 	[s]
 	(rl/parse-resource-location s))
 
-(def ^:private gson (gson-util/create-pretty-gson))
+(def ^:private ^Gson gson (gson-util/create-pretty-gson))
 
 (defn- write-json!
 	[^CachedOutput cached-output ^PackOutput$PathProvider path-provider ^ResourceLocation id payload]

@@ -3,6 +3,7 @@
 						[cn.li.ac.block.wireless-matrix.config :as matrix-config]
 						[cn.li.ac.block.wireless-node.config :as node-config]
 						[cn.li.ac.block.solar-gen.config :as solar-config]
+						[cn.li.ac.config.common :as config-common]
 						[cn.li.ac.wireless.search-config :as search-config]
 						[cn.li.mcmod.config.registry :as config-reg]))
 
@@ -22,9 +23,9 @@
 
 (defn init-configs! []
 	(config-reg/register-config-descriptors!
-		:cn.li.ac/wireless
+		config-common/wireless-domain
 		wireless-descriptors)
 	(config-reg/ensure-default-values!
-		:cn.li.ac/wireless
+		config-common/wireless-domain
 		wireless-default-values)
 	nil)

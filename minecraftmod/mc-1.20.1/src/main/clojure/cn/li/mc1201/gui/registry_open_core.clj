@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.gui.registry-open-core
   "Shared helper functions for GUI open flows in platform registry adapters."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraft.world.entity.player Player]))
 
 (defn resolve-optional-block-pos
   "Resolve BlockPos from tile entity when available, otherwise nil.
@@ -16,7 +17,8 @@
 
 (defn log-open-start!
   [prefix player gui-id tile-entity]
-  (log/info prefix "Starting GUI open: gui-id=" gui-id "player=" (.getName player) "has-tile-entity=" (not (nil? tile-entity))))
+  (let [^Player player player]
+    (log/info prefix "Starting GUI open: gui-id=" gui-id "player=" (.getName player) "has-tile-entity=" (not (nil? tile-entity)))))
 
 (defn log-open-success!
   [prefix]
@@ -24,7 +26,7 @@
 
 (defn log-open-error!
   [prefix e]
-  (log/error prefix "Failed to open GUI:" (.getMessage e))
+  (log/error prefix "Failed to open GUI:" (.getMessage ^Throwable e))
   (log/error prefix "Exception:" e))
 
 (defn open-player-menu-with-fallback!
