@@ -4,7 +4,9 @@
 	These functions use direct typed calls so Loom remapping remains valid in packaged jars."
 	(:require [cn.li.mcmod.platform.position :as pos]
 					[cn.li.mcmod.platform.be :as pbe]
-					[cn.li.mcmod.registry.metadata :as registry-metadata])
+					[cn.li.mcmod.registry.metadata :as registry-metadata]
+					[cn.li.forge1201.registry.state :as registry-state]
+					[cn.li.mcmod.util.log :as log])
 	(:import [net.minecraft.core BlockPos]
 				 [net.minecraft.world.level Level]
 				 [net.minecraft.world.level.block Block]
@@ -72,18 +74,30 @@
 	[^Level level pos]
 	(.canSeeSky level pos))
 
+(defn- block-id-candidates
+	[block-id]
+	(let [dsl-id (str block-id)
+			registry-name (registry-metadata/get-block-registry-name dsl-id)]
+		(distinct (cond-> [dsl-id]
+						registry-name (conj registry-name)))))
+
+(defn- lookup-registered-block
+	[block-id]
+	(try
+		(registry-state/get-registered-block block-id)
+		(catch Exception e
+			(log/debug "Failed to resolve registered block for" block-id ":" (.getMessage e))
+			nil)))
+
 (defn world-place-block-by-id
 	[^Level level block-id ^BlockPos pos flags]
 	(try
-		(let [dsl-id (str block-id)
-					registry-name (or (registry-metadata/get-block-registry-name dsl-id) dsl-id)
-					get-registered-block (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block)
-					^Block blk (or (get-registered-block dsl-id)
-											(get-registered-block registry-name))]
+			(let [^Block blk (some lookup-registered-block (block-id-candidates block-id))]
 			(when blk
 				(.setBlock level pos (.defaultBlockState blk) (int flags))
 				true))
-		(catch Exception _
+			(catch Exception e
+				(log/error "Failed to place block by id" block-id ":" (.getMessage e))
 			false)))
 
 (defn be-get-level

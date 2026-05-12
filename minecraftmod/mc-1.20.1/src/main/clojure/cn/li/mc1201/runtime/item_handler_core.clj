@@ -66,7 +66,7 @@
     item-id))
 
 (defn- run-plan-actions!
-  [^Player player hand stack side player-uuid plan {:keys [open-screen-fn]}]
+  [^Player player hand ^ItemStack stack side player-uuid plan {:keys [open-screen-fn]}]
   (when plan
     (doseq [action (:client-actions plan)]
       (case (:kind action)

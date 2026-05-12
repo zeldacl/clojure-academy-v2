@@ -6,9 +6,11 @@
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.client.multiplayer ClientLevel]
            [net.minecraft.core BlockPos]
-           [net.minecraft.core.particles BlockParticleOption ParticleTypes]
+           [net.minecraft.core.particles BlockParticleOption ParticleTypes ParticleType]
            [net.minecraft.core.registries BuiltInRegistries]
-           [net.minecraft.resources ResourceLocation]))
+           [net.minecraft.resources ResourceLocation]
+           [net.minecraft.world.level.block Block]
+           [net.minecraft.world.level.block.state BlockState]))
 
 (defn- ->resource-location
   [particle-type]
@@ -29,16 +31,18 @@
   [^ClientLevel level particle-cmd]
   (let [{:keys [particle-type block-id x y z]} particle-cmd]
     (if (= :block-crack particle-type)
-      (let [state (or (when block-id
-                        (some-> (.get BuiltInRegistries/BLOCK (ResourceLocation. ^String block-id))
-                                (.defaultBlockState)))
-                      (.getBlockState level (BlockPos. (int (Math/floor (double x)))
-                                                       (int (Math/floor (double y)))
-                                                       (int (Math/floor (double z))))))]
+      (let [block-registry ^net.minecraft.core.Registry BuiltInRegistries/BLOCK
+            ^BlockState state (or (when block-id
+                                     (some-> ^Block (.get block-registry ^ResourceLocation (ResourceLocation. ^String block-id))
+                                             (.defaultBlockState)))
+                                   (.getBlockState level (BlockPos. (int (Math/floor (double x)))
+                                                                    (int (Math/floor (double y)))
+                                                                    (int (Math/floor (double z))))))]
         (if (.isAir state)
           ParticleTypes/SMOKE
           (BlockParticleOption. ParticleTypes/BLOCK state)))
-      (let [ptype (some-> particle-type ->resource-location (as-> rl (.get BuiltInRegistries/PARTICLE_TYPE rl)))]
+      (let [particle-registry ^net.minecraft.core.Registry BuiltInRegistries/PARTICLE_TYPE
+            ptype (some-> particle-type ->resource-location (as-> rl ^ParticleType (.get particle-registry ^ResourceLocation rl)))]
         (or ptype ParticleTypes/SMOKE)))))
 
 (defn spawn-particle-effect!

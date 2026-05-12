@@ -2,10 +2,11 @@
   "Loader-agnostic player lifecycle flow for runtime state.
 
   Platform layers provide concrete persistence/sync callbacks and event binding."
-  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime]))
+  (:require [cn.li.mcmod.platform.power-runtime :as power-runtime])
+  (:import [net.minecraft.world.entity.player Player]))
 
 (defn- player-uuid
-  [player]
+  [^Player player]
   (some-> player .getUUID str))
 
 (defn on-player-login!

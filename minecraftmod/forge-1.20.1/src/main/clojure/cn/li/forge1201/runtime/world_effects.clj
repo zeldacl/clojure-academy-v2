@@ -7,6 +7,7 @@
   (:import [net.minecraft.server MinecraftServer]
            [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.server.level ServerLevel]
+           [net.minecraft.world.level.block Block]
            [net.minecraft.world.phys AABB]
            [net.minecraftforge.server ServerLifecycleHooks]))
 
@@ -53,7 +54,7 @@
       (core/find-blocks-in-radius-in-level
         level
         x y z radius block-predicate
-        (fn [block _block-state]
+        (fn [^Block block _block-state]
           (str (.getDescriptionId block)))))
     (catch Exception e
       (log/warn "Failed to find blocks:" (ex-message e))

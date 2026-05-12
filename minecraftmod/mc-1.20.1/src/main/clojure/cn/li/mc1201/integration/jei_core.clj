@@ -9,7 +9,7 @@
             [clojure.string :as str])
   (:import [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraft.world.item ItemStack]))
+           [net.minecraft.world.item Item ItemStack]))
 
 ;; ============================================================================
 ;; Item Parsing (Platform-Agnostic)
@@ -31,7 +31,7 @@
     (let [[id-part count-str] (str/split item-id #"#")
           count (if count-str (Integer/parseInt count-str) 1)
           res-loc (ResourceLocation. id-part)
-          item (.get BuiltInRegistries/ITEM res-loc)]
+          ^Item item (.get BuiltInRegistries/ITEM res-loc)]
       (when item
         (ItemStack. item (int count))))
     (catch Exception e

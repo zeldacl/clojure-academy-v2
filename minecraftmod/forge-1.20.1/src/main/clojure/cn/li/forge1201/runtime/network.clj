@@ -15,6 +15,16 @@
            [net.minecraftforge.server ServerLifecycleHooks]
            [net.minecraft.server.level ServerPlayer]))
 
+(def ^:private sync-message-specs
+  [{:msg-id runtime-catalog/MSG-SYNC-RUNTIME
+    :payload-key :ability-data}
+   {:msg-id runtime-catalog/MSG-SYNC-RESOURCE
+    :payload-key :resource-data}
+   {:msg-id runtime-catalog/MSG-SYNC-COOLDOWN
+    :payload-key :cooldown-data}
+   {:msg-id runtime-catalog/MSG-SYNC-PRESET
+    :payload-key :preset-data}])
+
 (defn send-to-server!
   "Client helper for runtime requests."
   [msg-id payload]
@@ -27,6 +37,13 @@
   [^ServerPlayer player msg-id payload]
   (ClojureNetwork/sendToClient player -1 (serialize {:msg-id msg-id :payload payload})))
 
+(defn- sync-message-payloads
+  [uuid payload]
+  (for [{:keys [msg-id payload-key]} sync-message-specs]
+    {:msg-id msg-id
+     :payload {:uuid uuid
+               payload-key (get payload payload-key)}}))
+
 (defn- find-player-by-uuid
   [uuid-str]
   (query-core/get-player-by-uuid (ServerLifecycleHooks/getCurrentServer) uuid-str))
@@ -34,10 +51,11 @@
 (defn send-sync-to-client!
   [uuid payload]
   (when-let [^ServerPlayer player (find-player-by-uuid uuid)]
-    (send-push-to-client! player runtime-catalog/MSG-SYNC-RUNTIME {:uuid uuid :ability-data (:ability-data payload)})
-    (send-push-to-client! player runtime-catalog/MSG-SYNC-RESOURCE {:uuid uuid :resource-data (:resource-data payload)})
-    (send-push-to-client! player runtime-catalog/MSG-SYNC-COOLDOWN {:uuid uuid :cooldown-data (:cooldown-data payload)})
-    (send-push-to-client! player runtime-catalog/MSG-SYNC-PRESET {:uuid uuid :preset-data (:preset-data payload)})))
+    (doseq [{:keys [msg-id payload]} (sync-message-payloads uuid payload)]
+      (try
+        (send-push-to-client! player msg-id payload)
+        (catch Exception e
+          (log/error "Failed to send runtime sync message" msg-id "for" uuid ":" (.getMessage e)))))))
 
 (defn- send-to-client!
   [uuid msg-id payload]
