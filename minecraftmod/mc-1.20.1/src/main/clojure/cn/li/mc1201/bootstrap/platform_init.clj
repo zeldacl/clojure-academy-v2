@@ -4,7 +4,7 @@
   Centralizes installer call sequences so platform SPI bootstraps keep only
   adapter creation and platform-specific hook maps/extensions."
   (:require [cn.li.mc1201.bootstrap.installer-core :as core]
-            [cn.li.mc1201.platform-adapter :as pa]))
+            [cn.li.mc1201.platform.item-ops :as item-ops]))
 
 (defn install-platform-core!
   "Install the full shared platform core for adapters that can provide
@@ -25,9 +25,9 @@
   (core/install-block-state-protocol-only! adapter)
   (core/install-resource-factory-only!)
   (core/install-item-factories-only!
-    (fn [nbt] (pa/item-stack-of adapter nbt))
-    (fn [item-id count] (pa/create-item-stack-by-id adapter item-id count))
-    (fn [stack] (pa/item-stack-empty? adapter stack)))
+    (fn [nbt] (item-ops/item-stack-of adapter nbt))
+    (fn [item-id count] (item-ops/create-item-stack-by-id adapter item-id count))
+    (fn [stack] (item-ops/item-stack-empty? adapter stack)))
   (when world-fns-map
     (core/install-world-fns-only! world-fns-map))
   (when be-fns-map

@@ -3,13 +3,9 @@
 
   Generates JSON from shared hook-driven blockstate definitions and registry metadata.")
 
-(require '[cn.li.mcmod.config :as modid])
-(require '[cn.li.mcmod.registry.metadata :as registry-metadata])
 (require '[cn.li.mc1201.datagen.blockstate-provider-core :as blockstate-core])
 (require '[cn.li.mc1201.datagen.resource-location :as rl])
-(require '[cn.li.mcmod.block.blockstate-definition :as blockstate-def])
 (require '[cn.li.mc1201.datagen.gson-util :as gson-util])
-(require '[cn.li.mc1201.datagen.blockstate-support :as bs-support])
 
 (import '[net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target])
 (import '[net.minecraft.resources ResourceLocation])
@@ -29,10 +25,6 @@
   ^JsonElement (.toJsonTree gson (gson-util/normalize-json payload))
    (.json path-provider id)))
 
-(defn- write-block-model!
-  [^CachedOutput cached-output ^PackOutput$PathProvider path-provider model-name model-json]
-  (write-json! cached-output path-provider (parse-rl (str modid/*mod-id* ":" model-name)) model-json))
-
 (defn create-provider
   [^PackOutput output]
   (let [blockstate-path-provider (.createPathProvider output PackOutput$Target/RESOURCE_PACK "blockstates")
@@ -40,39 +32,13 @@
         item-model-path-provider (.createPathProvider output PackOutput$Target/RESOURCE_PACK "models/item")]
     (reify DataProvider
       (^CompletableFuture run [_this ^CachedOutput cached-output]
-        (let [definitions (blockstate-def/get-all-definitions)
-              block-writes (mapcat
-                            (fn [[block-key definition]]
-                              (let [registry-name (:registry-name definition)
-                                    block-id (parse-rl (str modid/*mod-id* ":" registry-name))
-                                    first-model (some-> definition :parts first :models first)
-                                    blockstate-json (if (blockstate-def/is-multipart-block? definition)
-                                                      (bs-support/multipart-blockstate-json (:parts definition))
-                                                      (bs-support/simple-blockstate-json first-model))
-                                    model-ids (->> (:parts definition)
-                                                   (mapcat :models)
-                                                   distinct)
-                                    block-model-writes (for [model-id model-ids
-                                             :let [model-name (blockstate-core/model-id->model-name model-id)
-                                                                   model-rl (parse-rl (str modid/*mod-id* ":" model-name))
-                                               model-json (blockstate-core/block-model-json model-name)]]
-                                                         (write-json! cached-output block-model-path-provider model-rl model-json))
-                                    item-model-write (when (registry-metadata/should-create-block-item? (name block-key))
-                                                       (let [item-model-id (blockstate-def/get-item-model-id modid/*mod-id* registry-name)
-                                             item-model-name (blockstate-core/model-id->model-name item-model-id)
-                                                             known-model-ids (set model-ids)
-                                                             item-block-model-write (when-not (contains? known-model-ids item-model-id)
-                                                      (write-block-model! cached-output block-model-path-provider item-model-name (blockstate-core/block-model-json item-model-name)))
-                                                             item-id (parse-rl (str modid/*mod-id* ":" registry-name))
-                                                             multipart? (blockstate-def/is-multipart-block? definition)]
-                                                         (concat
-                                                           (when item-block-model-write [item-block-model-write])
-                                               [(write-json! cached-output item-model-path-provider item-id (blockstate-core/item-model-json registry-name multipart?))])))]
-                                (concat
-                                 [(write-json! cached-output blockstate-path-provider block-id blockstate-json)]
-                                 block-model-writes
-                                 item-model-write)))
-                            definitions)]
+        (let [block-writes (for [{:keys [path-key id payload]} (blockstate-core/blockstate-write-entries)
+                                  :let [rl-id (parse-rl id)]]
+                             (case path-key
+                               :blockstate (write-json! cached-output blockstate-path-provider rl-id payload)
+                               :block-model (write-json! cached-output block-model-path-provider rl-id payload)
+                               :item-model (write-json! cached-output item-model-path-provider rl-id payload)
+                               (throw (ex-info "Unknown blockstate write path" {:path-key path-key :id id}))))]
           (CompletableFuture/allOf
            (into-array CompletableFuture block-writes))))
 

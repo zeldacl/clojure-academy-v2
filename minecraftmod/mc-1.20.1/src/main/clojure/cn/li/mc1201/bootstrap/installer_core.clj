@@ -8,7 +8,11 @@
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as be]
             [cn.li.mc1201.reflect-util :as ru]
-            [cn.li.mc1201.platform-adapter :as pa]))
+            [cn.li.mc1201.platform.class-access :as class-access]
+            [cn.li.mc1201.platform.item-ops :as item-ops]
+            [cn.li.mc1201.platform.player-ops :as player-ops]
+            [cn.li.mc1201.platform.world-block-ops :as world-block-ops]
+            [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops]))
 
 (defonce ^:private item-protocols-installed? (atom false))
 (defonce ^:private pos-installed? (atom false))
@@ -28,7 +32,7 @@
   "Install only BlockState protocol extensions (no Level extensions)."
   [adapter]
   (when (compare-and-set! block-state-protocols-installed? false true)
-    (let [block-state-cls (pa/block-state-class adapter)]
+    (let [block-state-cls (class-access/block-state-class adapter)]
       (extend block-state-cls world/IBlockStateOps
               {:block-state-is-air (fn [this] (ru/inst this "isAir"))
                :block-state-get-block (fn [this] (ru/inst this "getBlock"))
@@ -93,16 +97,16 @@
 (defn- install-item! [adapter]
   (install-item-protocols-only! adapter)
   (install-item-factories-only!
-    (fn [nbt-tag] (pa/item-stack-of adapter nbt-tag))
-    (fn [item-id count] (pa/create-item-stack-by-id adapter (str item-id) (int count)))
-    (fn [stack] (pa/item-stack-empty? adapter stack))))
+    (fn [nbt-tag] (item-ops/item-stack-of adapter nbt-tag))
+    (fn [item-id count] (item-ops/create-item-stack-by-id adapter (str item-id) (int count)))
+    (fn [stack] (item-ops/item-stack-empty? adapter stack))))
 
 (defn install-item-protocols-only!
   "Install only item protocols for ItemStack/Item classes."
   [adapter]
   (when (compare-and-set! item-protocols-installed? false true)
-    (let [item-stack-cls (pa/item-stack-class adapter)
-          item-cls (pa/item-class adapter)]
+      (let [item-stack-cls (class-access/item-stack-class adapter)
+        item-cls (class-access/item-class adapter)]
       (extend item-stack-cls item/IItemStack
               {:item-is-empty? (fn [this] (ru/inst this "isEmpty"))
                :item-get-count (fn [this] (ru/inst this "getCount"))
@@ -118,12 +122,12 @@
                :item-split (fn [this amount] (ru/inst this "split" (int amount)))})
       (extend item-cls item/IItem
               {:item-get-description-id (fn [this] (ru/inst this "getDescriptionId"))
-               :item-get-registry-name (fn [this] (pa/item-registry-name adapter this))})
+               :item-get-registry-name (fn [this] (item-ops/item-registry-name adapter this))})
       (log/info "mc1201 shared item protocols initialized"))))
 
 (defn- install-world! [adapter]
   (when (compare-and-set! world-installed? false true)
-    (let [level-cls (pa/level-class adapter)]
+    (let [level-cls (class-access/level-class adapter)]
       (install-block-state-protocol-only! adapter)
       (try
         (extend level-cls world/IWorldAccess
@@ -132,7 +136,7 @@
                  :world-set-block (fn [this p s flags] (ru/inst this "setBlock" p s (int flags)))
                  :world-remove-block (fn [this p] (ru/inst this "destroyBlock" p false))
                  :world-break-block (fn [this p drop?] (ru/inst this "destroyBlock" p (boolean drop?)))
-                 :world-place-block-by-id (fn [this block-id p flags] (pa/world-place-block-by-id adapter this block-id p flags))
+                 :world-place-block-by-id (fn [this block-id p flags] (world-block-ops/world-place-block-by-id adapter this block-id p flags))
                  :world-is-chunk-loaded? (fn [this cx cz] (ru/inst this "hasChunk" (int cx) (int cz)))
                  :world-get-day-time (fn [this] (ru/inst this "getDayTime"))
                  :world-get-dimension-id (fn [this] (str (ru/inst (ru/inst this "dimension") "location")))
@@ -151,7 +155,7 @@
       (alter-var-root #'world/*world-set-block-fn* (constantly (fn [level p s flags] (ru/inst level "setBlock" p s (int flags)))))
       (alter-var-root #'world/*world-remove-block-fn* (constantly (fn [level p] (ru/inst level "destroyBlock" p false))))
       (alter-var-root #'world/*world-break-block-fn* (constantly (fn [level p drop?] (ru/inst level "destroyBlock" p (boolean drop?)))))
-      (alter-var-root #'world/*world-place-block-by-id-fn* (constantly (fn [level block-id p flags] (pa/world-place-block-by-id adapter level block-id p flags))))
+      (alter-var-root #'world/*world-place-block-by-id-fn* (constantly (fn [level block-id p flags] (world-block-ops/world-place-block-by-id adapter level block-id p flags))))
       (alter-var-root #'world/*world-is-chunk-loaded-fn* (constantly (fn [level cx cz] (ru/inst level "hasChunk" (int cx) (int cz)))))
       (alter-var-root #'world/*world-get-day-time-fn* (constantly (fn [level] (ru/inst level "getDayTime"))))
       (alter-var-root #'world/*world-get-dimension-id-fn* (constantly (fn [level] (str (ru/inst (ru/inst level "dimension") "location")))))
@@ -168,14 +172,14 @@
   "Install only entity/player/inventory/menu protocol extensions."
   [adapter]
   (when (compare-and-set! entity-installed? false true)
-    (let [entity-cls (pa/entity-class adapter)
-          player-cls (pa/player-class adapter)
-          server-player-cls (pa/server-player-class adapter)
-          inventory-cls (pa/inventory-class adapter)
-          menu-cls (pa/menu-class adapter)
+    (let [entity-cls (class-access/entity-class adapter)
+          player-cls (class-access/player-class adapter)
+          server-player-cls (class-access/server-player-class adapter)
+          inventory-cls (class-access/inventory-class adapter)
+          menu-cls (class-access/menu-class adapter)
           player-impl {:entity-distance-to-sqr (fn [this x y z]
                                                  (ru/inst this "distanceToSqr" (double x) (double y) (double z)))
-                       :player-get-level (fn [this] (pa/player-level adapter this))
+                       :player-get-level (fn [this] (player-ops/player-level adapter this))
                        :player-creative? (fn [this] (ru/inst this "isCreative"))
                        :player-spectator? (fn [this] (ru/inst this "isSpectator"))
                        :player-get-name (fn [this] (str (ru/inst this "getName")))
@@ -183,7 +187,7 @@
                        :player-get-main-hand-item-id (fn [this]
                                                        (let [stack (ru/player-main-hand-stack this)]
                                                          (when-not (ru/stack-empty? stack)
-                                                           (pa/item-registry-name adapter (ru/inst stack "getItem")))))
+                                                           (item-ops/item-registry-name adapter (ru/inst stack "getItem")))))
                        :player-get-main-hand-item-count (fn [this]
                                                           (let [stack (ru/player-main-hand-stack this)]
                                                             (if (ru/stack-empty? stack)
@@ -202,24 +206,24 @@
                                                                  (do
                                                                    (ru/inst stack "shrink" n)
                                                                    true))))))
-                       :player-count-item-by-id (fn [this item-id] (pa/count-player-item-by-id adapter this item-id))
-                       :player-consume-item-by-id! (fn [this item-id amount] (pa/consume-player-item-by-id! adapter this item-id amount))
-                       :player-give-item-stack! (fn [this stack] (pa/give-player-item-stack! adapter this stack))
-                       :player-spawn-entity-by-id! (fn [this entity-id speed] (pa/spawn-entity-by-id! adapter this entity-id speed))
-                       :player-raytrace-block (fn [this reach fluid-source-only?] (pa/raytrace-block adapter this reach fluid-source-only?))
-                       :player-get-container-menu (fn [this] (pa/player-container-menu adapter this))}]
+                       :player-count-item-by-id (fn [this item-id] (player-ops/count-player-item-by-id adapter this item-id))
+                       :player-consume-item-by-id! (fn [this item-id amount] (player-ops/consume-player-item-by-id! adapter this item-id amount))
+                       :player-give-item-stack! (fn [this stack] (player-ops/give-player-item-stack! adapter this stack))
+                       :player-spawn-entity-by-id! (fn [this entity-id speed] (player-ops/spawn-entity-by-id! adapter this entity-id speed))
+                       :player-raytrace-block (fn [this reach fluid-source-only?] (player-ops/raytrace-block adapter this reach fluid-source-only?))
+                       :player-get-container-menu (fn [this] (player-ops/player-container-menu adapter this))}]
       (extend entity-cls entity/IEntityOps
               {:entity-distance-to-sqr (fn [this x y z]
                                          (ru/inst this "distanceToSqr" (double x) (double y) (double z)))})
       (extend player-cls entity/IEntityOps player-impl)
       (when server-player-cls
         (extend server-player-cls entity/IEntityOps player-impl))
-      (when-let [local-player-cls (pa/local-player-class adapter)]
+            (when-let [local-player-cls (class-access/local-player-class adapter)]
         (extend local-player-cls entity/IEntityOps player-impl))
       (extend inventory-cls entity/IEntityOps
-              {:inventory-get-player (fn [this] (pa/inventory-owner adapter this))})
+              {:inventory-get-player (fn [this] (menu-inventory-ops/inventory-owner adapter this))})
       (extend menu-cls entity/IEntityOps
-              {:menu-get-container-id (fn [this] (pa/menu-container-id adapter this))})
+              {:menu-get-container-id (fn [this] (menu-inventory-ops/menu-container-id adapter this))})
       (log/info "mc1201 shared entity protocols initialized"))))
 
 (defn- install-resource-factory! []

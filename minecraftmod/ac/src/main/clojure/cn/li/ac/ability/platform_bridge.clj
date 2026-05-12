@@ -32,7 +32,7 @@
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
-            [cn.li.ac.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))

@@ -6,7 +6,8 @@
   IMPORTANT: Only imports from `cn.li.mcmod.gui.adapter` for the unified GUI API."
   (:require [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
-            [cn.li.forge1201.gui.bridge :as bridge]
+            [cn.li.forge1201.gui.menu-bridge :as menu-bridge]
+            [cn.li.forge1201.gui.provider-bridge :as provider-bridge]
             [cn.li.mc1201.gui.registry-common :as registry-common]
             [cn.li.mc1201.gui.registry-open-core :as open-core]
             [cn.li.mcmod.config :as modid]
@@ -77,7 +78,7 @@
               ;; (The proxy no longer has a getClojureContainer() method since
               ;; we replaced gen-class with proxy.)
               (gui/set-client-container! clj-container)
-              (bridge/wrap-clojure-container wid menu-type clj-container))
+              (menu-bridge/create-menu-bridge wid menu-type clj-container))
             get-menu-type
             gui-id
             window-id
@@ -122,7 +123,7 @@
   (open-core/log-open-start! "[OPEN-GUI-FOR-PLAYER]" player gui-id tile-entity)
   (try
     (log/info "[OPEN-GUI-FOR-PLAYER] Creating MenuProvider...")
-    (let [^MenuProvider provider (bridge/create-menu-provider gui-id tile-entity)
+    (let [^MenuProvider provider (provider-bridge/create-menu-provider gui-id tile-entity)
           ^BlockPos pos (open-core/resolve-optional-block-pos tile-entity)]
       (log/info "[OPEN-GUI-FOR-PLAYER] MenuProvider created, pos=" pos "calling NetworkHooks...")
       (if pos

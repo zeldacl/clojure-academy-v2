@@ -6,7 +6,11 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as be]
-            [cn.li.mc1201.platform-adapter :as pa]
+            [cn.li.mc1201.platform.class-access :as class-access]
+            [cn.li.mc1201.platform.item-ops :as item-ops]
+            [cn.li.mc1201.platform.player-ops :as player-ops]
+            [cn.li.mc1201.platform.world-block-ops :as world-block-ops]
+            [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops]
             [cn.li.mc1201.bootstrap.platform-init :as platform-init]
             [cn.li.mc1201.bootstrap.installer-core :as core]
             [cn.li.mc1201.runtime.bootstrap-interop-core :as bootstrap-core]
@@ -37,7 +41,7 @@
        :be-set-changed!  (fn [x] (ru/inst x "setChanged"))})))
 
 (def ^:private fabric-adapter
-  (reify pa/PlatformAdapter
+  (reify class-access/ClassAccess
     (entity-class [_] (ru/class-noinit "net.minecraft.world.entity.Entity"))
     (player-class [_] (ru/class-noinit "net.minecraft.world.entity.player.Player"))
     (server-player-class [_] (ru/class-noinit "net.minecraft.server.level.ServerPlayer"))
@@ -53,20 +57,9 @@
         (ru/class-noinit "cn.li.fabric1201.block.entity.ScriptedBlockEntity")
         (catch Throwable _ nil)))
 
+    item-ops/ItemOps
     (item-registry-name [_ item] (bootstrap-core/item-key-string item))
     (block-registry-name [_ block] (bootstrap-core/block-key-string block))
-
-    (player-level [_ player] (bootstrap-core/player-level player))
-    (player-container-menu [_ player] (ru/field player "containerMenu"))
-    (inventory-owner [_ inventory] (bootstrap-core/inventory-owner inventory))
-    (menu-container-id [_ menu] (ru/field menu "containerId"))
-
-    (count-player-item-by-id [_ player item-id] (bootstrap-core/count-player-item-by-id player item-id))
-    (consume-player-item-by-id! [_ player item-id amount] (bootstrap-core/consume-player-item-by-id! player item-id amount))
-    (give-player-item-stack! [_ player stack] (bootstrap-core/give-player-item-stack player stack))
-    (spawn-entity-by-id! [_ player entity-id speed] (bootstrap-core/spawn-entity-by-id-from-player player entity-id speed))
-    (raytrace-block [_ player reach fluid-source-only?] (bootstrap-core/raytrace-block-map player reach fluid-source-only?))
-
     (item-stack-of [_ nbt-tag]
       (let [item-stack-cls (ru/class-noinit "net.minecraft.world.item.ItemStack")]
         (ru/static item-stack-cls "of" nbt-tag)))
@@ -82,6 +75,20 @@
         (catch Throwable _ nil)))
     (item-stack-empty? [_ stack] (bootstrap-core/stack-empty? stack))
 
+    player-ops/PlayerOps
+    (player-level [_ player] (bootstrap-core/player-level player))
+    (player-container-menu [_ player] (ru/field player "containerMenu"))
+    (count-player-item-by-id [_ player item-id] (bootstrap-core/count-player-item-by-id player item-id))
+    (consume-player-item-by-id! [_ player item-id amount] (bootstrap-core/consume-player-item-by-id! player item-id amount))
+    (give-player-item-stack! [_ player stack] (bootstrap-core/give-player-item-stack player stack))
+    (spawn-entity-by-id! [_ player entity-id speed] (bootstrap-core/spawn-entity-by-id-from-player player entity-id speed))
+    (raytrace-block [_ player reach fluid-source-only?] (bootstrap-core/raytrace-block-map player reach fluid-source-only?))
+
+    menu-inventory-ops/MenuInventoryOps
+    (inventory-owner [_ inventory] (bootstrap-core/inventory-owner inventory))
+    (menu-container-id [_ menu] (ru/field menu "containerId"))
+
+    world-block-ops/WorldBlockOps
     (world-place-block-by-id [_ level block-id pos flags]
       (try
         (let [builtins-cls (ru/class-noinit "net.minecraft.core.registries.BuiltInRegistries")

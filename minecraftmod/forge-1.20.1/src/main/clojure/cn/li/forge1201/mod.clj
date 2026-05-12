@@ -1,44 +1,28 @@
 (ns cn.li.forge1201.mod
-    "Forge 1.20.1 main mod class - generated with gen-class"
-    (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
-              [cn.li.forge1201.init :as init]
-              [cn.li.forge1201.setup.common :as setup-common]
-              [cn.li.forge1201.setup.mod-bus :as setup-mod-bus]
-              [cn.li.forge1201.setup.lifecycle-init :as lifecycle-init]
-              [cn.li.forge1201.integration.side :as side]
-              [cn.li.forge1201.registry.state :as registry-state]
-              [cn.li.forge1201.integration.events :as events]
-              [cn.li.forge1201.gui.init :as gui-init]
-              [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
-              [cn.li.mcmod.block.tile-logic :as tile-logic]
-              [cn.li.mcmod.entity.dsl :as edsl]
-              [cn.li.mcmod.registry.metadata :as registry-metadata]
-              [cn.li.mcmod.lifecycle :as lifecycle]
-              [cn.li.mcmod.config :as modid]
-              [cn.li.mcmod.util.log :as log])
-    (:import [net.minecraft.core.particles SimpleParticleType]
-             [net.minecraft.network.chat Component]
-             [net.minecraft.resources ResourceLocation]
-             [net.minecraft.sounds SoundEvent]
-             [net.minecraft.world.effect MobEffectCategory]
-             [net.minecraft.world.food FoodProperties$Builder]
-             [net.minecraft.world.item Item Item$Properties BlockItem CreativeModeTab Items Rarity]
-             [net.minecraft.world.level ItemLike]
-             [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent]
-             [net.minecraftforge.registries DeferredRegister RegistryObject]
-             [cn.li.mc1201.effect ScriptedMobEffect]
-             [cn.li.mc1201.item NbtBarItem ScriptedItem]
-             [cn.li.forge1201.entity ModEntities]
-             [cn.li.mcmod.platform.spi PlatformBootstraps])
-    (:gen-class
-     :name com.example.my_mod1201.MyMod1201Clj
-     :prefix "mod-"
-     :init init
-     :state state
-     :constructors {[] []}
-     :methods [[onRightClickBlock [net.minecraftforge.event.entity.player.PlayerInteractEvent$RightClickBlock] void]
-               [commonSetup [net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent] void]
-               [clientSetup [net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent] void]]))
+  "Forge 1.20.1 main mod class - generated with gen-class"
+  (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
+    [cn.li.forge1201.init :as init]
+    [cn.li.forge1201.registry.content-registration :as content-registration]
+    [cn.li.forge1201.registry.creative-tab :as creative-tab]
+    [cn.li.forge1201.setup.common :as setup-common]
+    [cn.li.forge1201.setup.lifecycle-init :as lifecycle-init]
+    [cn.li.forge1201.integration.side :as side]
+    [cn.li.forge1201.registry.state :as registry-state]
+    [cn.li.forge1201.integration.events :as events]
+    [cn.li.forge1201.gui.init :as gui-init]
+    [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
+    [cn.li.mcmod.config :as modid]
+    [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent])
+  (:gen-class
+   :name com.example.my_mod1201.MyMod1201Clj
+   :prefix "mod-"
+   :init init
+   :state state
+   :constructors {[] []}
+   :methods [[onRightClickBlock [net.minecraftforge.event.entity.player.PlayerInteractEvent$RightClickBlock] void]
+     [commonSetup [net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent] void]
+     [clientSetup [net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent] void]]))
  
 (def mod-id modid/*mod-id*)
 
@@ -102,409 +86,20 @@
 (def registered-effects registry-state/registered-effects)
 (def registered-particles registry-state/registered-particles)
 
-(defn- rarity->forge-rarity
-  ^Rarity
-  [rarity-kw]
-  (case rarity-kw
-    :uncommon Rarity/UNCOMMON
-    :rare Rarity/RARE
-    :epic Rarity/EPIC
-    Rarity/COMMON))
-
-(defn- apply-item-properties
-  ^Item$Properties
-  [^Item$Properties base item-spec]
-  (let [max-stack-size (:max-stack-size item-spec)
-        durability (:durability item-spec)
-        rarity (:rarity item-spec)
-        food-props (:food-properties item-spec)
-        forge-food (when food-props
-                     (let [^FoodProperties$Builder b (FoodProperties$Builder.)
-                           _ (.nutrition b (int (or (:nutrition food-props) 0)))
-                           _ (.saturationMod b (float (or (:saturation food-props) 0.0)))]
-                       (when (:meat food-props)
-                         (.meat b))
-                       (when (:fast-to-eat food-props)
-                         (.fast b))
-                       (when (:always-edible food-props)
-                         (.alwaysEat b))
-                       (.build b)))]
-    (cond-> base
-      (some? max-stack-size) (.stacksTo (int max-stack-size))
-      (some? durability) (.durability (int durability))
-      (some? rarity) (.rarity (rarity->forge-rarity rarity))
-      (some? forge-food) (.food forge-food))))
-
-(defn- create-standalone-item
-  ^Item
-  [item-spec]
-  (let [props (apply-item-properties (Item$Properties.) item-spec)
-        energy-item? (true? (get-in item-spec [:properties :energy-item?]))
-        enchantability (int (or (:enchantability item-spec) 0))
-        tooltip-lines (mapv str (or (get-in item-spec [:properties :tooltip]) []))
-        current-key (str (or (get-in item-spec [:properties :bar-current-key]) "energy"))
-        max-key (str (or (get-in item-spec [:properties :bar-max-key]) "maxEnergy"))
-        default-max (double (or (get-in item-spec [:properties :energy-capacity]) 1.0))
-        bar-color (int (or (get-in item-spec [:properties :energy-bar-color]) 0x00E5FF))]
-    (if energy-item?
-      (NbtBarItem. props current-key max-key default-max bar-color)
-      (ScriptedItem. props enchantability tooltip-lines))))
-
-(defn- register-scripted-projectile-spec!
-  [registry-name entity-spec]
-  (let [projectile (get-in entity-spec [:properties :projectile])
-        hooks (:hooks projectile)]
-    (ModEntities/registerScriptedProjectileSpec
-      (str registry-name)
-      (str (or (:default-item-id projectile) ""))
-      (double (or (:gravity projectile) 0.05))
-      (double (or (:damage projectile) 0.0))
-      (double (or (:pickup-distance-sqr projectile) 2.25))
-      (not (false? (:drop-item-on-discard? projectile)))
-      (name (or (:on-hit-block hooks) :none))
-      (name (or (:on-hit-entity hooks) :none))
-      (name (or (:on-anchored-tick hooks) :none))
-      (name (or (:on-anchored-hurt hooks) :none))))
-  nil)
-
-(defn- register-scripted-effect-spec!
-  [registry-name entity-spec]
-  (let [effect (get-in entity-spec [:properties :effect])]
-    (letfn [(normalize-hook-params [params]
-              (into {}
-                    (map (fn [[k v]]
-                           [(cond
-                              (keyword? k) (name k)
-                              (string? k) k
-                              :else (str k))
-                            v]))
-                    (or params {})))]
-      (ModEntities/registerScriptedEffectSpec
-        (str registry-name)
-        (int (or (:life-ticks effect) 15))
-        (not (false? (:follow-owner? effect)))
-        (str (or (:renderer-id effect) "effect-billboard"))
-        (name (or (:hook effect) :none))
-        (normalize-hook-params (:hook-params effect)))))
-  nil)
-
-(defn- register-scripted-ray-spec!
-  [registry-name entity-spec]
-  (let [ray (get-in entity-spec [:properties :ray])]
-    (letfn [(normalize-hook-params [params]
-              (into {}
-                    (map (fn [[k v]]
-                           [(cond
-                              (keyword? k) (name k)
-                              (string? k) k
-                              :else (str k))
-                            v]))
-                    (or params {})))]
-      (ModEntities/registerScriptedRaySpec
-        (str registry-name)
-        (int (or (:life-ticks ray) 30))
-        (double (or (:length ray) 15.0))
-        (double (or (:blend-in-ms ray) 100.0))
-        (double (or (:blend-out-ms ray) 300.0))
-        (double (or (:inner-width ray) 0.03))
-        (double (or (:outer-width ray) 0.045))
-        (double (or (:glow-width ray) 0.3))
-        (int (or (:start-color ray) 0x78DCFF))
-        (int (or (:end-color ray) 0x32AAFF))
-        (str (or (:renderer-id ray) "ray-composite"))
-        (name (or (:hook ray) :none))
-        (normalize-hook-params (:hook-params ray)))))
-  nil)
-
-(defn- register-scripted-marker-spec!
-  [registry-name entity-spec]
-  (let [marker (get-in entity-spec [:properties :marker])]
-    (ModEntities/registerScriptedMarkerSpec
-      (str registry-name)
-      (int (or (:life-ticks marker) 40))
-      (not (false? (:follow-target? marker)))
-      (not (false? (:ignore-depth? marker)))
-      (not (false? (:available? marker)))
-      (str (or (:renderer-id marker) "marker-billboard"))
-      (name (or (:hook marker) :none))))
-  nil)
-
-(defn- register-scripted-block-body-spec!
-  [registry-name entity-spec]
-  (let [block-body (get-in entity-spec [:properties :block-body])]
-    (ModEntities/registerScriptedBlockBodySpec
-      (str registry-name)
-      (str (or (:default-block-id block-body) "minecraft:stone"))
-      (double (or (:gravity block-body) 0.05))
-      (double (or (:damage block-body) 0.0))
-      (not (false? (:place-when-collide? block-body)))
-      (str (or (:renderer-id block-body) "block-body"))
-      (name (or (:hook block-body) :none))))
-  nil)
-
-(defn- has-block-state-properties?
-  "Check if a block needs dynamic block state properties (via metadata).
-  Platform code queries business layer instead of hardcoding block names."
-  [block-id]
-  (registry-metadata/has-block-state-properties? block-id))
-
-;; Dynamic block registration using metadata
-(defn register-all-blocks!
-  "Register all blocks defined in DSL using metadata-driven approach.
-  Platform code does not know specific block names."
+(defn- build-registration-context
   []
-  (doseq [block-id (registry-metadata/get-all-block-ids)]
-    (let [registry-name (registry-metadata/get-block-registry-name block-id)
-          fluid-id (registry-metadata/get-fluid-id-for-block block-id)
-          needs-dynamic-properties? (has-block-state-properties? block-id)
-          has-be? (registry-metadata/has-block-entity? block-id)
-          tile-id (when has-be?
-                    (or (registry-metadata/get-block-tile-id block-id) block-id))
-          registered-obj (.register ^DeferredRegister (force blocks-register) registry-name
-                                    (reify java.util.function.Supplier
-                                      (get [_]
-                                        (let [get-props (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/get-all-properties)]
-                                          (cond
-                                            fluid-id
-                                            (when-let [fluid-source-ro (get @registered-fluids-source fluid-id)]
-                                              (bootstrap/create-liquid-block
-                                                (reify java.util.function.Supplier
-                                                  (get [_]
-                                                    (.get ^RegistryObject fluid-source-ro)))))
-                                            (and needs-dynamic-properties? has-be?)
-                                            (let [props (get-props block-id)]
-                                              (bootstrap/create-carrier-scripted-dynamic-block block-id tile-id props @carrier-properties))
-                                            needs-dynamic-properties?
-                                            (let [props (get-props block-id)]
-                                              (bootstrap/create-dynamic-state-block block-id props @base-properties))
-                                            has-be?
-                                            (bootstrap/create-carrier-scripted-block block-id tile-id @carrier-properties)
-                                            :else
-                                            (bootstrap/create-plain-block @base-properties))))))]
-      (swap! registered-blocks assoc block-id registered-obj))))
-
-(defn register-all-fluids!
-  "Register all fluids declared in the fluid DSL."
-  []
-  (doseq [fluid-id (registry-metadata/get-all-fluid-ids)]
-    (let [fluid-spec (registry-metadata/get-fluid-spec fluid-id)
-          physical (:physical fluid-spec)
-          rendering (:rendering fluid-spec)
-          behavior (:behavior fluid-spec)
-          block-spec (:block fluid-spec)
-          registry-name (registry-metadata/get-fluid-registry-name fluid-id)
-          flowing-name (str registry-name "_flowing")
-          fluid-type-ro
-          (.register ^DeferredRegister (force fluid-types-register) registry-name
-                     (reify java.util.function.Supplier
-                       (get [_]
-                         (bootstrap/create-fluid-type
-                           (:luminosity physical)
-                           (:density physical)
-                           (:viscosity physical)
-                           (:temperature physical)
-                           false
-                           (:supports-boat physical)
-                           (:still-texture rendering)
-                           (:flowing-texture rendering)
-                           (:overlay-texture rendering)
-                           (:tint-color rendering)))))
-          source-holder (atom nil)
-          flowing-holder (atom nil)
-          bucket-holder (atom nil)
-          source-ro (.register ^DeferredRegister (force fluids-register) registry-name
-                               (reify java.util.function.Supplier
-                                 (get [_]
-                                   (bootstrap/create-source-fluid
-                                     (bootstrap/create-flowing-fluid-properties
-                                       (reify java.util.function.Supplier
-                                         (get [_] (.get ^RegistryObject fluid-type-ro)))
-                                       (reify java.util.function.Supplier
-                                         (get [_] (.get ^RegistryObject @source-holder)))
-                                       (reify java.util.function.Supplier
-                                         (get [_] (.get ^RegistryObject @flowing-holder)))
-                                       (when (:has-bucket? block-spec)
-                                         (reify java.util.function.Supplier
-                                           (get [_] (.get ^RegistryObject @bucket-holder))))
-                                       (when-let [block-id (:block-id block-spec)]
-                                         (reify java.util.function.Supplier
-                                           (get [_]
-                                             (.get ^RegistryObject (get @registered-blocks block-id)))))
-                                       (:slope-find-distance behavior)
-                                       (:level-decrease-per-block behavior)
-                                       (:tick-rate behavior)
-                                       (:explosion-resistance behavior)
-                                       (:can-convert-to-source physical))))))
-          flowing-ro (.register ^DeferredRegister (force fluids-register) flowing-name
-                                (reify java.util.function.Supplier
-                                  (get [_]
-                                    (bootstrap/create-flowing-fluid
-                                      (bootstrap/create-flowing-fluid-properties
-                                        (reify java.util.function.Supplier
-                                          (get [_] (.get ^RegistryObject fluid-type-ro)))
-                                        (reify java.util.function.Supplier
-                                          (get [_] (.get ^RegistryObject @source-holder)))
-                                        (reify java.util.function.Supplier
-                                          (get [_] (.get ^RegistryObject @flowing-holder)))
-                                        (when (:has-bucket? block-spec)
-                                          (reify java.util.function.Supplier
-                                            (get [_] (.get ^RegistryObject @bucket-holder))))
-                                        (when-let [block-id (:block-id block-spec)]
-                                          (reify java.util.function.Supplier
-                                            (get [_]
-                                              (.get ^RegistryObject (get @registered-blocks block-id)))))
-                                        (:slope-find-distance behavior)
-                                        (:level-decrease-per-block behavior)
-                                        (:tick-rate behavior)
-                                        (:explosion-resistance behavior)
-                                        (:can-convert-to-source physical))))))]
-      (reset! source-holder source-ro)
-      (reset! flowing-holder flowing-ro)
-      (swap! registered-fluid-types assoc fluid-id fluid-type-ro)
-      (swap! registered-fluids-source assoc fluid-id source-ro)
-      (swap! registered-fluids-flowing assoc fluid-id flowing-ro)
-      (when (:has-bucket? block-spec)
-        (let [bucket-ro (.register ^DeferredRegister (force items-register) (:bucket-registry-name block-spec)
-                                   (reify java.util.function.Supplier
-                                     (get [_]
-                                       (bootstrap/create-fluid-bucket
-                                         (reify java.util.function.Supplier
-                                           (get [_] (.get ^RegistryObject source-ro)))))))]
-          (reset! bucket-holder bucket-ro)
-          (swap! registered-items assoc (:bucket-item-id block-spec) bucket-ro))))))
-
-(defn register-scripted-tile-hooks!
-  "Register metadata-driven scripted tile hooks from Tile DSL (or legacy block DSL).
-  Registers lifecycle hooks under tile-id so one tile can be shared by many blocks."
-  []
-  (doseq [tile-id (registry-metadata/get-all-tile-ids)]
-    (when-let [spec (registry-metadata/get-tile-spec tile-id)]
-      (let [tick-fn (:tick-fn spec)
-            read-nbt-fn (:read-nbt-fn spec)
-            write-nbt-fn (:write-nbt-fn spec)
-            tile-kind (:tile-kind spec)]
-        (when (or tick-fn read-nbt-fn write-nbt-fn tile-kind)
-          (tile-logic/register-tile-logic! tile-id
-                                           {:tile-kind tile-kind
-                                            :tick-fn tick-fn
-                                            :read-nbt-fn read-nbt-fn
-                                            :write-nbt-fn write-nbt-fn}))))))
-
-;; BlockEntity registration: one BlockEntityType per tile-id
-(defn register-block-entities!
-  []
-  (doseq [tile-id (registry-metadata/get-all-tile-ids)]
-    (let [registry-name (registry-metadata/get-tile-registry-name tile-id)
-          block-ids (registry-metadata/get-tile-block-ids tile-id)
-          ;; Capture RegistryObjects now; resolve to Blocks later inside Supplier.get
-          ros (keep (fn [block-id]
-                      (when-let [ro (get @registered-blocks block-id)]
-                        [block-id ro]))
-                    block-ids)]
-      (when (seq ros)
-        (let [registered-obj
-              (.register
-                ^DeferredRegister (force block-entities-register)
-                registry-name
-                (reify java.util.function.Supplier
-                  (get [_]
-                    ;; Resolve RegistryObjects to Blocks at registration time
-                    (let [pairs (map (fn [[block-id ^RegistryObject ro]]
-                                       [block-id (.get ro)])
-                                     ros)
-                          block-insts (mapv second pairs)
-                          block-id-by-inst (java.util.IdentityHashMap.)]
-                      (doseq [[block-id inst] pairs]
-                        (.put block-id-by-inst inst block-id))
-                      (let [be-type (bootstrap/create-scripted-block-entity-type
-                                      tile-id
-                                      block-insts
-                                      (reify java.util.function.Function
-                                        (apply [_ block-inst]
-                                          (.get block-id-by-inst block-inst))))]
-                        be-type)))))]
-          (swap! registered-block-entities assoc tile-id registered-obj))))))
-
-(defn register-all-entities!
-  "Register all entities declared in entity DSL."
-  []
-  (doseq [entity-id (edsl/list-entities)]
-    (let [entity-spec (edsl/get-entity entity-id)
-          registry-name (edsl/get-entity-registry-name entity-id)
-          entity-kind (:entity-kind entity-spec)]
-      (if (nil? entity-kind)
-        (log/error "Skipping entity registration: missing :entity-kind" {:entity-id entity-id})
-        (let [_ (case entity-kind
-                  :scripted-projectile (register-scripted-projectile-spec! registry-name entity-spec)
-                  :scripted-effect (register-scripted-effect-spec! registry-name entity-spec)
-              :scripted-ray (register-scripted-ray-spec! registry-name entity-spec)
-              :scripted-marker (register-scripted-marker-spec! registry-name entity-spec)
-              :scripted-block-body (register-scripted-block-body-spec! registry-name entity-spec)
-                  nil)
-              registered-obj
-              (ModEntities/register
-                registry-name
-                (reify java.util.function.Supplier
-                  (get [_]
-                    (bootstrap/create-entity-type-by-kind
-                      (str mod-id ":" registry-name)
-                      (name entity-kind)
-                      (name (or (:category entity-spec) :misc))
-                      (:width entity-spec)
-                      (:height entity-spec)
-                      (:client-tracking-range entity-spec)
-                      (:update-interval entity-spec)
-                      (:fire-immune? entity-spec)))))]
-          (swap! registered-entities assoc entity-id registered-obj))))))
-
-(defn register-all-sounds!
-  "Register all sounds defined in DSL using metadata-driven approach."
-  []
-  (doseq [sound-id (registry-metadata/get-all-sound-ids)]
-    (let [registry-name (registry-metadata/get-sound-registry-name sound-id)
-          registered-obj (.register ^DeferredRegister (force sounds-register) registry-name
-                                    (reify java.util.function.Supplier
-                                      (get [_]
-                                        (SoundEvent/createVariableRangeEvent
-                                          (ResourceLocation. mod-id registry-name)))))]
-      (swap! registered-sounds assoc sound-id registered-obj))))
-
-(defn- effect-category->forge
-  ^MobEffectCategory
-  [category-kw]
-  (case category-kw
-    :beneficial MobEffectCategory/BENEFICIAL
-    :neutral MobEffectCategory/NEUTRAL
-    MobEffectCategory/HARMFUL))
-
-(defn register-all-effects!
-  "Register all custom effects defined in DSL metadata."
-  []
-  (doseq [effect-id (registry-metadata/get-all-effect-ids)]
-    (let [effect-spec (registry-metadata/get-effect-spec effect-id)
-          registry-name (registry-metadata/get-effect-registry-name effect-id)
-          category (effect-category->forge (:category effect-spec))
-          color (int (or (:color effect-spec) 0xAA0000))
-          tick-interval (int (or (:tick-interval effect-spec) 20))
-          damage-per-tick (float (or (:damage-per-tick effect-spec) 0.0))
-          registered-obj (.register ^DeferredRegister (force effects-register) registry-name
-                                    (reify java.util.function.Supplier
-                                      (get [_]
-                                        (ScriptedMobEffect. category color tick-interval damage-per-tick))))]
-      (swap! registered-effects assoc effect-id registered-obj))))
-
-(defn register-all-particles!
-  "Register all custom particle types declared in DSL."
-  []
-  (doseq [particle-id (registry-metadata/get-all-particle-ids)]
-    (let [particle-spec (registry-metadata/get-particle-spec particle-id)
-          registry-name (registry-metadata/get-particle-registry-name particle-id)
-          always-show? (boolean (:always-show? particle-spec))
-          registered-obj (.register ^DeferredRegister (force particle-types-register) registry-name
-                                    (reify java.util.function.Supplier
-                                      (get [_]
-                                        (SimpleParticleType. always-show?))))]
-      (swap! registered-particles assoc particle-id registered-obj))))
+  {:mod-id mod-id
+   :blocks-register (force blocks-register)
+   :items-register (force items-register)
+   :block-entities-register (force block-entities-register)
+   :fluid-types-register (force fluid-types-register)
+   :fluids-register (force fluids-register)
+   :sounds-register (force sounds-register)
+   :effects-register (force effects-register)
+   :particle-types-register (force particle-types-register)
+   :registered-fluids-source registered-fluids-source
+   :base-properties @base-properties
+   :carrier-properties @carrier-properties})
 
 (defn get-registered-entity-type
   "Get a registered EntityType by entity-id."
@@ -515,33 +110,6 @@
   "Get a registered BlockEntityType by tile-id or block-id."
   [tile-or-block-id]
   (registry-state/get-registered-block-entity-type tile-or-block-id))
-
-;; Dynamic item registration using metadata
-(defn register-all-items!
-  "Register all items defined in DSL using metadata-driven approach.
-  Platform code does not know specific item names."
-  []
-  ;; Register standalone items
-  (doseq [item-id (registry-metadata/get-all-item-ids)]
-    (let [registry-name (registry-metadata/get-item-registry-name item-id)
-          item-spec (registry-metadata/get-item-spec item-id)
-          registered-obj (.register ^DeferredRegister (force items-register) registry-name
-                          (reify java.util.function.Supplier
-                            (get [_]
-                              (create-standalone-item item-spec))))]
-      (swap! registered-items assoc item-id registered-obj)))
-  
-  ;; Register BlockItems for all blocks
-  (doseq [block-id (registry-metadata/get-all-block-ids)]
-    (when (and (registry-metadata/should-create-block-item? block-id)
-               (not (registry-metadata/fluid-block? block-id)))
-      (let [registry-name (registry-metadata/get-block-registry-name block-id)
-            block-registered (get @registered-blocks block-id)
-            registered-obj (.register ^DeferredRegister (force items-register) registry-name
-                            (reify java.util.function.Supplier
-                              (get [_]
-                                (BlockItem. (.get ^RegistryObject block-registered) (Item$Properties.)))))]
-        (swap! registered-items assoc (str block-id "-item") registered-obj)))))
 
 ;; ============================================================================
 ;; Helper Functions for Registry Queries
@@ -588,29 +156,15 @@
   [fluid-id]
   (registry-state/get-registered-fluid-flowing fluid-id))
 
-(defn- build-creative-tab
-  "Build the mod creative tab. displayItems callback runs lazily (when tab is opened),
-  so registered-items/registered-blocks atoms are fully populated by then."
+(defn- registration-steps
   []
-  (-> (CreativeModeTab/builder)
-      (.title (Component/translatable (str "itemGroup." mod-id ".items")))
-      (.icon (reify java.util.function.Supplier
-           (get [_]
-             (try
-               (.getDefaultInstance Items/BARRIER)
-               (catch Exception _
-                 (net.minecraft.world.item.ItemStack/EMPTY))))))
-      (.displayItems (reify net.minecraft.world.item.CreativeModeTab$DisplayItemsGenerator
-                       (accept [_ _params output]
-                         (doseq [entry (registry-metadata/get-all-creative-tab-entries)]
-                           (when (some? (:tab entry))
-                             (let [item-id (:id entry)
-                                   item-obj (if (= (:type entry) :block-item)
-                                              (get-registered-block-item item-id)
-                                              (get-registered-item item-id))]
-                               (when item-obj
-                                 (.accept output (net.minecraft.world.item.ItemStack. ^ItemLike item-obj)))))))))
-      (.build)))
+  [(fn []
+     (content-registration/register-core-content! (build-registration-context)))
+   (fn []
+     (log/info "Registering Forge creative tab...")
+     (creative-tab/register-creative-tab! (force creative-tabs-register) mod-id))
+   (fn []
+     (gui-registry-impl/register-menu-types!))])
 
 ;; ============================================================================
 ;; Setup Phase Helpers (must be defined before mod-init)
@@ -666,22 +220,7 @@
        :block-entities-register (force block-entities-register)
        :creative-tabs-register (force creative-tabs-register)
        :gui-menu-register (force gui-registry-impl/menu-register)}
-      [register-scripted-tile-hooks!
-       register-all-fluids!
-       register-all-blocks!
-       register-all-entities!
-       register-all-sounds!
-       register-all-effects!
-       register-all-particles!
-       register-block-entities!
-       register-all-items!
-       (fn []
-         (log/info "Registering Forge creative tab...")
-         (.register ^DeferredRegister (force creative-tabs-register) "items"
-                    (reify java.util.function.Supplier
-                      (get [_] (build-creative-tab)))))
-       (fn []
-         (gui-registry-impl/register-menu-types!))]
+      (registration-steps)
       aot? cphant? check?)))
 
 

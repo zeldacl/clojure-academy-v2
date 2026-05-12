@@ -13,6 +13,7 @@
   This separates concerns so each phase is testable and reusable."
   (:require [cn.li.forge1201.init :as init]
             [cn.li.forge1201.setup.mod-bus :as setup-mod-bus]
+            [cn.li.mc1201.lifecycle.orchestrator :as lifecycle-orchestrator]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.setup.common :as setup-common])
@@ -70,10 +71,10 @@
   
   Called from mod.clj via setup-common/run-common-setup! or similar.
   Assumes phase 1-3 have completed."
-  [registry-fns]
-  (log/info "[LIFECYCLE] Phase 4: Content registration" {:registrations (count registry-fns)})
-  (doseq [register-fn registry-fns]
-    (register-fn))
+  [registration-steps]
+  (log/info "[LIFECYCLE] Phase 4: Content registration" {:registrations (count registration-steps)})
+  (doseq [register-step registration-steps]
+    (register-step))
   (log/info "[LIFECYCLE] Phase 4: Content registration complete"))
 
 ;; =============================================================================
@@ -110,16 +111,16 @@
   "Run complete Forge initialization lifecycle (all 6 phases).
   
   This is the high-level orchestrator called from mod.clj constructor."
-  [opts registry-fns]
-  (log/info "[LIFECYCLE] Forge initialization lifecycle begin")
+  [opts registration-steps]
   (try
-    (init-platform!)
-    (activate-runtime-content!)
-    (init-resource-definitions!)
-    (register-all-content! registry-fns)
-    (setup-mod-bus! opts)
-    (run-common-setup!)
-    (log/info "[LIFECYCLE] Forge initialization lifecycle complete")
+    (lifecycle-orchestrator/run-lifecycle!
+      {:label "forge-1.20.1"
+       :phases [{:id :platform-init :desc "platform bootstrap + init-from-java" :fn init-platform!}
+                {:id :runtime-activation :desc "activate shared runtime content" :fn activate-runtime-content!}
+                {:id :resource-init :desc "initialize blockstate/resource definitions" :fn init-resource-definitions!}
+                {:id :content-registration :desc "register content" :fn #(register-all-content! registration-steps)}
+                {:id :mod-bus-setup :desc "wire deferred registers and lifecycle listeners" :fn #(setup-mod-bus! opts)}
+                {:id :common-setup :desc "run common setup side effects" :fn run-common-setup!}]})
     (catch Exception e
       (log/error "Forge initialization lifecycle failed" e)
       (throw e))))
@@ -130,14 +131,14 @@
   Returns [state exception] for use with gen-class :init contract.
   - state: [] (empty state)
   - exception: nil on success, ex-info on failure (with type :bootstrap-skip)"
-  [opts registry-fns aot? cphant? check?]
+  [opts registration-steps aot? cphant? check?]
   (if (or aot? cphant? check?)
     (do
       (log/warn "[LIFECYCLE] Skipping bootstrap-sensitive path"
                 {:reason {:aot aot? :clojurephant cphant? :ac-check check?}})
       [[] nil])
     (try
-      (init-lifecycle! opts registry-fns)
+      (init-lifecycle! opts registration-steps)
       [[] nil]
       (catch IllegalArgumentException e
         (let [msg (some-> e .getMessage str)]

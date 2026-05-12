@@ -107,3 +107,53 @@
     (if (and flat-item? (not multipart?))
       (bs-support/flat-item-model-json (item-texture-from-spec registry-name))
       (bs-support/parent-model-json item-model-id))))
+
+(defn blockstate-write-entries
+  "Build platform-neutral write entries for blockstates/models/item-models.
+
+  Returns a sequence of maps:
+  {:path-key :blockstate|:block-model|:item-model
+   :id       \"<namespace:path>\"
+   :payload  <json-like map>}"
+  []
+  (let [definitions (blockstate-def/get-all-definitions)]
+    (mapcat
+     (fn [[block-key definition]]
+       (let [registry-name (:registry-name definition)
+             blockstate-id (str modid/*mod-id* ":" registry-name)
+             first-model (some-> definition :parts first :models first)
+             blockstate-json (if (blockstate-def/is-multipart-block? definition)
+                               (bs-support/multipart-blockstate-json (:parts definition))
+                               (bs-support/simple-blockstate-json first-model))
+             model-ids (->> (:parts definition)
+                            (mapcat :models)
+                            distinct)
+             block-model-entries (for [model-id model-ids
+                                       :let [model-name (model-id->model-name model-id)
+                                             model-id-str (str modid/*mod-id* ":" model-name)
+                                             model-json (block-model-json model-name)]]
+                                   {:path-key :block-model
+                                    :id model-id-str
+                                    :payload model-json})
+             item-model-entries (when (registry-metadata/should-create-block-item? (name block-key))
+                                  (let [item-model-id (blockstate-def/get-item-model-id modid/*mod-id* registry-name)
+                                        item-model-name (model-id->model-name item-model-id)
+                                        known-model-ids (set model-ids)
+                                        item-block-model-entry (when-not (contains? known-model-ids item-model-id)
+                                                                 {:path-key :block-model
+                                                                  :id (str modid/*mod-id* ":" item-model-name)
+                                                                  :payload (block-model-json item-model-name)})
+                                        item-id (str modid/*mod-id* ":" registry-name)
+                                        multipart? (blockstate-def/is-multipart-block? definition)]
+                                    (concat
+                                     (when item-block-model-entry [item-block-model-entry])
+                                     [{:path-key :item-model
+                                       :id item-id
+                                       :payload (item-model-json registry-name multipart?)}])))]
+         (concat
+          [{:path-key :blockstate
+            :id blockstate-id
+            :payload blockstate-json}]
+          block-model-entries
+          item-model-entries)))
+     definitions)))

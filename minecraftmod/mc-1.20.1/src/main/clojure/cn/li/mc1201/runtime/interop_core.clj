@@ -5,7 +5,6 @@
   so this works identically on both Forge and Fabric."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.platform.runtime-interop :as runtime-interop]
-            [cn.li.mcmod.platform.ability-interop :as legacy-interop]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core BlockPos]
            [net.minecraft.server MinecraftServer]
@@ -75,9 +74,8 @@
       (get-block-entity-at (server-fn) world-id x y z))))
 
 (defn install-runtime-interop!
-  "Install canonical + legacy runtime interop vars using a shared implementation."
+  "Install canonical runtime interop var using a shared implementation."
   [label server-fn]
   (let [impl (runtime-interop-impl server-fn)]
     (alter-var-root #'runtime-interop/*runtime-interop* (constantly impl))
-    (alter-var-root #'legacy-interop/*ability-interop* (constantly impl))
     (log/info (str label " runtime interop installed"))))

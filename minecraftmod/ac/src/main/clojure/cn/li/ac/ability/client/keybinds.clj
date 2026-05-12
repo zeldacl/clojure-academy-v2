@@ -12,7 +12,7 @@
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill :as skill]
-            [cn.li.ac.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]))
 
 ;; Dynamic var for getting player UUID (set by forge layer)

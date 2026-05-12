@@ -2,20 +2,9 @@ package cn.li.fabric1201.client;
 
 import cn.li.fabric1201.entity.FabricEntities;
 import cn.li.fabric1201.shim.FabricClientHelper;
-import cn.li.mc1201.client.render.effect.BloodSplashRenderer;
-import cn.li.mc1201.client.render.effect.DiamondShieldRenderer;
-import cn.li.mc1201.client.render.effect.GenericArcRenderer;
-import cn.li.mc1201.client.render.effect.IntensifyEffectRenderer;
-import cn.li.mc1201.client.render.effect.MdBallRenderer;
-import cn.li.mc1201.client.render.effect.MdShieldRenderer;
-import cn.li.mc1201.client.render.effect.RippleMarkRenderer;
+import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
-import cn.li.mc1201.client.render.effect.ScriptedEffectBillboardRenderer;
-import cn.li.mc1201.client.render.effect.ScriptedMarkerBillboardRenderer;
 import cn.li.mc1201.client.render.effect.ScriptedRayCompositeRenderer;
-import cn.li.mc1201.client.render.effect.SurroundArcRenderer;
-import cn.li.mc1201.client.render.effect.TpMarkingRenderer;
-import cn.li.mc1201.client.render.effect.WireMarkerRenderer;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
@@ -51,7 +40,7 @@ public final class FabricClientRenderSetup {
                 ? "effect-billboard"
                 : effectSpec.getRendererId();
 
-        FabricClientHelper.registerEntityRenderer(effectType, pickEffectRenderer(rendererId));
+        FabricClientHelper.registerEntityRenderer(effectType, EffectRendererDispatcher.pickEffectRenderer(rendererId));
     }
 
     private static void registerProjectileRenderer() {
@@ -89,13 +78,7 @@ public final class FabricClientRenderSetup {
                 ? "marker-billboard"
                 : markerSpec.getRendererId();
 
-        if ("tp-marking".equals(rendererId)) {
-            FabricClientHelper.registerEntityRenderer(markerType, TpMarkingRenderer::new);
-        } else if ("wire-marker".equals(rendererId)) {
-            FabricClientHelper.registerEntityRenderer(markerType, WireMarkerRenderer::new);
-        } else {
-            FabricClientHelper.registerEntityRenderer(markerType, ScriptedMarkerBillboardRenderer::new);
-        }
+        FabricClientHelper.registerEntityRenderer(markerType, EffectRendererDispatcher.pickMarkerRenderer(rendererId));
     }
 
     private static void registerBlockBodyRenderer() {
@@ -113,18 +96,4 @@ public final class FabricClientRenderSetup {
         }
     }
 
-    private static EntityRendererProvider<?> pickEffectRenderer(String rendererId) {
-        return switch (rendererId) {
-            case "diamond-shield" -> DiamondShieldRenderer::new;
-            case "md-shield" -> MdShieldRenderer::new;
-            case "surround-arc" -> SurroundArcRenderer::new;
-            case "arc-generic" -> GenericArcRenderer::new;
-            case "ripple-mark" -> RippleMarkRenderer::new;
-            case "blood-splash" -> BloodSplashRenderer::new;
-            case "md-ball" -> MdBallRenderer::new;
-            case "intensify-effect" -> IntensifyEffectRenderer::new;
-            case "effect-billboard" -> ScriptedEffectBillboardRenderer::new;
-            default -> ScriptedEffectBillboardRenderer::new;
-        };
-    }
 }

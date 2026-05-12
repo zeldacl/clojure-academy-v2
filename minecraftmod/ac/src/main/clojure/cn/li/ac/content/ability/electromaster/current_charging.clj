@@ -12,7 +12,7 @@
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.ability-interop :as interop]
+            [cn.li.mcmod.platform.runtime-interop :as interop]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
@@ -20,8 +20,8 @@
 (def ^:private arc-entity-id "my_mod:entity_arc")
 
 (defn- main-hand-item [player-id]
-  (when interop/*ability-interop*
-    (interop/get-player-main-hand-item interop/*ability-interop* player-id)))
+  (when interop/*runtime-interop*
+    (interop/get-player-main-hand-item interop/*runtime-interop* player-id)))
 
 (defn- charge-block-target!
   "Raycast for a block from player view and charge any energy receiver/node.
@@ -41,7 +41,7 @@
     (if-not hit
       {:effective? false :charged 0.0 :block-pos nil :ray-end ray-end}
       (let [bx (int (:x hit)) by (int (:y hit)) bz (int (:z hit))
-            be (interop/get-block-entity-at interop/*ability-interop* world-id bx by bz)]
+            be (interop/get-block-entity-at interop/*runtime-interop* world-id bx by bz)]
         (if-not be
           {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end ray-end}
           (cond
@@ -107,8 +107,8 @@
                          (ctx/ctx-send-to-client! ctx-id :current-charging/fx-update
                                                   {:is-item true :good? (boolean effective?)
                                                    :charge-ticks charge-ticks}))))
-                   (let [view   (when interop/*ability-interop*
-                                  (interop/get-player-view interop/*ability-interop* player-id))
+                   (let [view   (when interop/*runtime-interop*
+                                  (interop/get-player-view interop/*runtime-interop* player-id))
                          result (when view (charge-block-target! view charge))
                          {:keys [effective? charged block-pos ray-end]}
                          (or result {:effective? false :charged 0.0 :block-pos nil :ray-end nil})]

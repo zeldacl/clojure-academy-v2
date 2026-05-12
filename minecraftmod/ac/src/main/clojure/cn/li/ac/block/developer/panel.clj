@@ -11,7 +11,7 @@
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
-            [cn.li.ac.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.state.player :as ps]
             [cn.li.ac.ability.registry.category :as acat]
             [cn.li.ac.ability.server.service.learning :as learning]

@@ -9,7 +9,7 @@
   Must be loaded via side-checked requiring-resolve from platform layer."
   (:require [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
-            [cn.li.ac.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]

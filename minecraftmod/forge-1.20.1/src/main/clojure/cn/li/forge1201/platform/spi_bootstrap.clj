@@ -5,7 +5,11 @@
   Uses shared mc1201 installer with a Forge-specific adapter implementation."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.bootstrap.platform-init :as platform-init]
-            [cn.li.mc1201.platform-adapter :as pa]
+            [cn.li.mc1201.platform.class-access :as class-access]
+            [cn.li.mc1201.platform.item-ops :as item-ops]
+            [cn.li.mc1201.platform.player-ops :as player-ops]
+            [cn.li.mc1201.platform.world-block-ops :as world-block-ops]
+            [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops]
              [cn.li.forge1201.platform.bindings :as bindings]
              [cn.li.forge1201.integration.side :as side])
   (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]
@@ -34,7 +38,7 @@
        :block-id (ForgeRuntimeBridge/getBlockKey (.getBlock hit-state))})))
 
 (def ^:private forge-adapter
-  (reify pa/PlatformAdapter
+  (reify class-access/ClassAccess
     (entity-class [_] (ForgeRuntimeBridge/getEntityClass))
     (player-class [_] (ForgeRuntimeBridge/getPlayerClass))
     (server-player-class [_] (ForgeRuntimeBridge/getServerPlayerClass))
@@ -47,24 +51,27 @@
     (level-class [_] (Class/forName "net.minecraft.world.level.Level"))
     (scripted-be-class [_] nil)
 
+    item-ops/ItemOps
     (item-registry-name [_ item] (ForgeRuntimeBridge/getItemKeyString item))
     (block-registry-name [_ block] (ForgeRuntimeBridge/getBlockKey block))
+    (item-stack-of [_ nbt] (ForgeRuntimeBridge/itemStackOf nbt))
+    (create-item-stack-by-id [_ item-id count] (ForgeRuntimeBridge/createItemStackById (str item-id) (int count)))
+    (item-stack-empty? [_ stack] (ForgeRuntimeBridge/isItemStackEmpty stack))
 
+    player-ops/PlayerOps
     (player-level [_ player] (ForgeRuntimeBridge/getEntityLevel player))
     (player-container-menu [_ player] (ForgeRuntimeBridge/getPlayerContainerMenu player))
-    (inventory-owner [_ inventory] (ForgeRuntimeBridge/getInventoryPlayer inventory))
-    (menu-container-id [_ menu] (ForgeRuntimeBridge/getMenuContainerId menu))
-
     (count-player-item-by-id [_ player item-id] (ForgeRuntimeBridge/countPlayerItemById player (str item-id)))
     (consume-player-item-by-id! [_ player item-id amount] (ForgeRuntimeBridge/consumePlayerItemById player (str item-id) (int (or amount 0))))
     (give-player-item-stack! [_ player stack] (ForgeRuntimeBridge/givePlayerItemStack player stack))
     (spawn-entity-by-id! [_ player entity-id speed] (ForgeRuntimeBridge/spawnEntityByIdFromPlayer player (str entity-id) (float (or speed 1.0))))
     (raytrace-block [_ player reach fluid-source-only?] (raytrace-block-map player reach fluid-source-only?))
 
-    (item-stack-of [_ nbt] (ForgeRuntimeBridge/itemStackOf nbt))
-    (create-item-stack-by-id [_ item-id count] (ForgeRuntimeBridge/createItemStackById (str item-id) (int count)))
-    (item-stack-empty? [_ stack] (ForgeRuntimeBridge/isItemStackEmpty stack))
+    menu-inventory-ops/MenuInventoryOps
+    (inventory-owner [_ inventory] (ForgeRuntimeBridge/getInventoryPlayer inventory))
+    (menu-container-id [_ menu] (ForgeRuntimeBridge/getMenuContainerId menu))
 
+    world-block-ops/WorldBlockOps
     (world-place-block-by-id [_ level block-id pos flags] (bindings/world-place-block-by-id level block-id pos flags))))
 
 (defn init-platform!

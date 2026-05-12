@@ -2,7 +2,7 @@
   "Skill Tree app - Opens the existing skill tree screen."
   (:require [cn.li.ac.terminal.app-registry :as reg]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.ac.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
 

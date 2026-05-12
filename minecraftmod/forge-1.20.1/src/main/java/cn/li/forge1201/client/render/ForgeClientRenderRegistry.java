@@ -4,21 +4,11 @@ import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.forge1201.MyMod1201;
 import cn.li.forge1201.entity.ModEntities;
+import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import cn.li.mc1201.client.render.ModRenderTypes;
-import cn.li.mc1201.client.render.effect.BloodSplashRenderer;
-import cn.li.mc1201.client.render.effect.DiamondShieldRenderer;
-import cn.li.mc1201.client.render.effect.GenericArcRenderer;
 import cn.li.mc1201.client.render.effect.IntensifyEffectRenderer;
-import cn.li.mc1201.client.render.effect.MdBallRenderer;
-import cn.li.mc1201.client.render.effect.MdShieldRenderer;
-import cn.li.mc1201.client.render.effect.RippleMarkRenderer;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
-import cn.li.mc1201.client.render.effect.ScriptedEffectBillboardRenderer;
-import cn.li.mc1201.client.render.effect.ScriptedMarkerBillboardRenderer;
 import cn.li.mc1201.client.render.effect.ScriptedRayCompositeRenderer;
-import cn.li.mc1201.client.render.effect.SurroundArcRenderer;
-import cn.li.mc1201.client.render.effect.TpMarkingRenderer;
-import cn.li.mc1201.client.render.effect.WireMarkerRenderer;
 import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
 import cn.li.mc1201.entity.ScriptedEffectEntity;
 import cn.li.mc1201.entity.ScriptedMarkerEntity;
@@ -66,23 +56,7 @@ public final class ForgeClientRenderRegistry {
             if (ModEntities.getScriptedEffectSpec(registryName) != null) {
                 rendererId = ModEntities.getScriptedEffectSpec(registryName).getRendererId();
             }
-            if ("effect-billboard".equals(rendererId)) {
-                event.registerEntityRenderer(effectType, ScriptedEffectBillboardRenderer::new);
-            } else if ("diamond-shield".equals(rendererId)) {
-                event.registerEntityRenderer(effectType, DiamondShieldRenderer::new);
-            } else if ("md-shield".equals(rendererId)) {
-                event.registerEntityRenderer(effectType, MdShieldRenderer::new);
-            } else if ("surround-arc".equals(rendererId)) {
-                event.registerEntityRenderer(effectType, SurroundArcRenderer::new);
-            } else if ("arc-generic".equals(rendererId)) {
-                event.registerEntityRenderer(effectType, GenericArcRenderer::new);
-            } else if ("ripple-mark".equals(rendererId)) {
-                event.registerEntityRenderer(effectType, RippleMarkRenderer::new);
-            } else if ("blood-splash".equals(rendererId)) {
-                event.registerEntityRenderer(effectType, BloodSplashRenderer::new);
-            } else if ("md-ball".equals(rendererId)) {
-                event.registerEntityRenderer(effectType, MdBallRenderer::new);
-            }
+            event.registerEntityRenderer(effectType, EffectRendererDispatcher.pickEffectRenderer(rendererId));
         }
 
         EntityType<ScriptedProjectileEntity> magHook =
@@ -110,13 +84,7 @@ public final class ForgeClientRenderRegistry {
             }
             ScriptedMarkerSpec markerSpec = ModEntities.getScriptedMarkerSpec(registryName);
             String rendererId = markerSpec == null ? "marker-billboard" : markerSpec.getRendererId();
-            if ("marker-billboard".equals(rendererId)) {
-                event.registerEntityRenderer(markerType, ScriptedMarkerBillboardRenderer::new);
-            } else if ("tp-marking".equals(rendererId)) {
-                event.registerEntityRenderer(markerType, TpMarkingRenderer::new);
-            } else if ("wire-marker".equals(rendererId)) {
-                event.registerEntityRenderer(markerType, WireMarkerRenderer::new);
-            }
+            event.registerEntityRenderer(markerType, EffectRendererDispatcher.pickMarkerRenderer(rendererId));
         }
 
         for (String registryName : ModEntities.getScriptedBlockBodyRegistryNames()) {

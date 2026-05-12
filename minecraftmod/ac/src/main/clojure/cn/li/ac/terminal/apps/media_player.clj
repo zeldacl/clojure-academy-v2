@@ -3,7 +3,7 @@
   (:require [cn.li.ac.terminal.app-registry :as reg]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.ac.terminal.apps.media-backend :as media-backend]
-            [cn.li.ac.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.ac.config.modid :as modid]

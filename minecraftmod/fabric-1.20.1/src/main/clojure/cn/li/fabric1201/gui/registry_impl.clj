@@ -1,7 +1,8 @@
 (ns cn.li.fabric1201.gui.registry-impl
   "Fabric 1.20.1 GUI Registration Implementation"
   (:require [cn.li.mcmod.gui.adapter :as gui]
-            [cn.li.fabric1201.gui.bridge :as bridge]
+            [cn.li.fabric1201.gui.menu-bridge :as menu-bridge]
+            [cn.li.fabric1201.gui.provider-bridge :as provider-bridge]
             [cn.li.mc1201.gui.registry-common :as registry-common]
             [cn.li.mc1201.gui.registry-open-core :as open-core]
             [cn.li.ac.config.modid :as modid]
@@ -31,7 +32,7 @@
             (registry-common/create-wrapped-container
               (fn []
                 (.get-server-container handler gui-id-from-buf player world pos))
-              bridge/wrap-clojure-container
+              menu-bridge/create-menu-bridge
               get-handler-type
               gui-id-from-buf
               sync-id
@@ -50,7 +51,7 @@
 (defn open-gui-for-player [player gui-id tile-entity]
   (open-core/log-open-start! "[FABRIC-OPEN-GUI]" player gui-id tile-entity)
   (try
-    (let [factory (bridge/create-extended-screen-handler-factory gui-id tile-entity)]
+    (let [factory (provider-bridge/create-extended-menu-provider gui-id tile-entity)]
       (open-core/open-player-menu-with-fallback! player factory)
       (open-core/log-open-success! "[FABRIC-OPEN-GUI]"))
     (catch Exception e
