@@ -4,6 +4,7 @@
               [cn.li.forge1201.init :as init]
               [cn.li.forge1201.setup.common :as setup-common]
               [cn.li.forge1201.setup.mod-bus :as setup-mod-bus]
+              [cn.li.forge1201.setup.lifecycle-init :as lifecycle-init]
               [cn.li.forge1201.integration.side :as side]
               [cn.li.forge1201.registry.state :as registry-state]
               [cn.li.forge1201.integration.events :as events]
@@ -651,76 +652,41 @@
                :clojurephant cphant?
                :ac-check check?
                :compile-files (boolean *compile-files*)})
-    (if (or aot? cphant? check?)
-      (do
-        (log/warn "[BOOTSTRAP_TRACE] mod-init skip bootstrap-sensitive path"
-                  {:reason {:aot aot? :clojurephant cphant? :ac-check check?}})
-        [[] nil])
-      (try
-        (log/info "[BOOTSTRAP_TRACE] mod-init runtime path begin")
-        ;; CRITICAL: Initialize platform abstractions FIRST
-        ;; This must happen before any core code runs that uses NBT/BlockPos/World
-        (when-not (PlatformBootstraps/initialize "forge-1.20.1")
-          (log/error "No platform bootstrap provider found for forge-1.20.1")
-          (throw (ex-info "Forge platform bootstrap provider missing"
-                          {:platform "forge-1.20.1"})))
-        ;; Core init (ac) sets *resource-location-fn* for mcmod gui.components/client.resources.
-        (init/init-from-java)
-        ;; Runtime content load is registered via lifecycle hooks by shared content.
-        (log/info "[BOOTSTRAP_TRACE] activating runtime content")
-        (lifecycle/run-runtime-content-activation!)
+    (lifecycle-init/init-lifecycle-with-error-handling!
+      {:datagen-run? (datagen-run?)
+       :on-common-setup on-common-setup
+       :on-client-setup on-client-setup
+       :sounds-register (force sounds-register)
+       :effects-register (force effects-register)
+       :particle-types-register (force particle-types-register)
+       :fluid-types-register (force fluid-types-register)
+       :fluids-register (force fluids-register)
+       :blocks-register (force blocks-register)
+       :items-register (force items-register)
+       :block-entities-register (force block-entities-register)
+       :creative-tabs-register (force creative-tabs-register)
+       :gui-menu-register (force gui-registry-impl/menu-register)}
+      [register-scripted-tile-hooks!
+       register-all-fluids!
+       register-all-blocks!
+       register-all-entities!
+       register-all-sounds!
+       register-all-effects!
+       register-all-particles!
+       register-block-entities!
+       register-all-items!
+       (fn []
+         (log/info "Registering Forge creative tab...")
+         (.register ^DeferredRegister (force creative-tabs-register) "items"
+                    (reify java.util.function.Supplier
+                      (get [_] (build-creative-tab)))))
+       (fn []
+         (gui-registry-impl/register-menu-types!))]
+      aot? cphant? check?)))
 
-        ;; Initialize BlockState properties from Clojure metadata
-        ;; Must happen before block registration so Property objects are ready
-        (when-let [init-props! (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/init-all-properties!)]
-          (init-props!))
 
-        ;; Register all blocks and items using metadata-driven approach
-        ;; DSL systems are automatically initialized when namespaces load
-        (register-scripted-tile-hooks!)
-        (register-all-fluids!)
-        (register-all-blocks!)
-        (register-all-entities!)
-        (register-all-sounds!)
-        (register-all-effects!)
-        (register-all-particles!)
-        (register-block-entities!)
-        (register-all-items!)
 
-        ;; Register creative tab (safe icon = BARRIER so no dependency on item registry order)
-        (log/info "Registering Forge creative tab...")
-        (.register ^DeferredRegister (force creative-tabs-register) "items"
-                   (reify java.util.function.Supplier
-                     (get [_] (build-creative-tab))))
 
-        ;; Populate GUI DeferredRegister before it is registered with the bus.
-        ;; Must happen here (during mod-init) 鈥?registries are locked by FMLCommonSetupEvent.
-        (gui-registry-impl/register-menu-types!)
-
-        (setup-mod-bus/run-registration-phases!
-          {:datagen-run? (datagen-run?)
-           :on-common-setup on-common-setup
-           :on-client-setup on-client-setup
-           :sounds-register (force sounds-register)
-           :effects-register (force effects-register)
-           :particle-types-register (force particle-types-register)
-           :fluid-types-register (force fluid-types-register)
-           :fluids-register (force fluids-register)
-           :blocks-register (force blocks-register)
-           :items-register (force items-register)
-           :block-entities-register (force block-entities-register)
-           :creative-tabs-register (force creative-tabs-register)
-           :gui-menu-register (force gui-registry-impl/menu-register)})
-
-        (log/info "[BOOTSTRAP_TRACE] mod-init runtime path end")
-        [[] nil]
-        (catch IllegalArgumentException e
-          (let [msg (some-> e .getMessage str)]
-            (if (and msg (.contains msg "Not bootstrapped"))
-              (do
-                (log/warn "Skipping Forge mod-init during checkClojure: Minecraft registries not bootstrapped")
-                [[] nil])
-              (throw e))))))))
 
 ;; (defn start-repl-safe []
 ;;   (let [cl (.getContextClassLoader (Thread/currentThread))]

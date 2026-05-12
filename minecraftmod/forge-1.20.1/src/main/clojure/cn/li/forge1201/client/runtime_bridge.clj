@@ -5,11 +5,10 @@
             [cn.li.forge1201.client.key-input :as key-input]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mcmod.runtime.hooks-core :as power-runtime]
-            [cn.li.mcmod.util.log :as log])
+             [cn.li.mcmod.util.log :as log]
+             [cn.li.mc1201.client.player-state-core :as player-state])
   (:import [cn.li.forge1201.client.effect IntensifyEffectSpawner]
-           [net.minecraft.client Minecraft]
-           [net.minecraft.core.registries BuiltInRegistries]
-           [net.minecraftforge.common MinecraftForge]
+            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraftforge.eventbus.api EventPriority]))
 
@@ -22,31 +21,11 @@
   (power-runtime/client-latest-sync player-uuid))
 
 (defn local-player-item-id []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    (when-let [player (.player mc)]
-      (let [stack (.getMainHandItem player)]
-        (when (and stack (not (.isEmpty stack)))
-          (when-let [key (.getKey BuiltInRegistries/ITEM (.getItem stack))]
-            (str (.getNamespace key) ":" (.getPath key))))))))
+  (player-state/local-player-item-id))
 
-(defn local-player-pos []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    (when-let [player (.player mc)]
-      {:x (.getX player) :y (.getY player) :z (.getZ player)})))
-
-(defn local-player-eye-pos []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    (when-let [player (.player mc)]
-      {:x (.getX player) :y (+ (.getY player) 1.62) :z (.getZ player)})))
-
-(defn local-player-look-end [distance]
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    (when-let [player (.player mc)]
-      (let [look (.getLookAngle player)
-            eye (local-player-eye-pos)]
-        {:x (+ (:x eye) (* (.x look) distance))
-         :y (+ (:y eye) (* (.y look) distance))
-         :z (+ (:z eye) (* (.z look) distance))}))))
+(defn local-player-pos [] (player-state/local-player-pos))
+(defn local-player-eye-pos [] (player-state/local-player-eye-pos))
+(defn local-player-look-end [distance] (player-state/local-player-look-end distance))
 
 (defn clear-client-activated-overlay! []
   (overlay-state/clear-client-activated!))

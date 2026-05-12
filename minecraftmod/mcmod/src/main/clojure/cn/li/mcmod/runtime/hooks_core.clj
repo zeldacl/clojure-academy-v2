@@ -146,6 +146,11 @@
   [player-uuid]
   ((:get-player-state @runtime-hooks) player-uuid))
 
+(defn runtime-activated?
+  "Returns true if the player with the given UUID has the power runtime activated."
+  [player-uuid]
+  (boolean (get-in (get-player-state player-uuid) [:resource-data :activated])))
+
 (defn set-player-state!
   [player-uuid state]
   ((:set-player-state! @runtime-hooks) player-uuid state))

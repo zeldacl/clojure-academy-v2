@@ -41,8 +41,7 @@
        :on-short-up
        (fn []
          (when-let [uuid (get-player-uuid)]
-           (let [cur-activated (boolean (get-in (power-runtime/get-player-state uuid)
-                                                [:resource-data :activated]))]
+          (let [cur-activated (power-runtime/runtime-activated? uuid)]
              (overlay-state/set-client-activated! (not cur-activated))
              (power-runtime/client-trigger-mode-switch! uuid))))})))
 

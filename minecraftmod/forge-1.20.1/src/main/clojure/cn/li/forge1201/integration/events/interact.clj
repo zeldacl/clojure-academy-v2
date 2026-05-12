@@ -6,7 +6,7 @@
             [cn.li.mc1201.integration.event-handlers :as event-handlers]
             [cn.li.forge1201.integration.events.event-apply :as event-apply]
             [cn.li.forge1201.integration.events.gui-open-port :as gui-open-port]
-            [cn.li.forge1201.integration.events.bridge :as bridge])
+             [cn.li.mcmod.runtime.hooks-core :as power-runtime])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock
             PlayerInteractEvent$LeftClickBlock]
            [net.minecraft.world InteractionHand]))
@@ -34,7 +34,7 @@
           hand (.getHand evt)]
       (when (= hand InteractionHand/MAIN_HAND)
         (let [player-uuid (str (.getUUID player))
-              runtime-activated? (bridge/runtime-activated? player-uuid)]
+              runtime-activated? (power-runtime/runtime-activated? player-uuid)]
           (when runtime-activated?
             (event-apply/apply-runtime-activated-right-click! evt (not (.isClientSide level))))
 
@@ -68,7 +68,7 @@
           hand (.getHand evt)]
       (when (= hand InteractionHand/MAIN_HAND)
         (let [player-uuid (str (.getUUID player))
-              runtime-activated? (bridge/runtime-activated? player-uuid)]
+              runtime-activated? (power-runtime/runtime-activated? player-uuid)]
           (when runtime-activated?
             (event-apply/apply-runtime-activated-left-click! evt)))))
     (catch Throwable t

@@ -4,7 +4,7 @@
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.integration.events.event-apply :as event-apply]
-            [cn.li.forge1201.integration.events.bridge :as bridge])
+             [cn.li.mcmod.runtime.hooks-core :as power-runtime])
   (:import [net.minecraft.world.entity.player Player]
            [net.minecraftforge.event.level BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
 
@@ -27,7 +27,7 @@
       (when (and level pos)
         (if (and entity
                  (instance? Player entity)
-                 (bridge/runtime-activated? (str (.getUUID ^Player entity))))
+                 (power-runtime/runtime-activated? (str (.getUUID ^Player entity))))
           (event-apply/cancel-event! evt)
           (let [ret (handle-block-place
                       {:x (.getX pos)
@@ -51,7 +51,7 @@
           player (.getPlayer evt)
           block-state (.getBlockState level pos)
           block-id (event-metadata/identify-block-from-full-name (str (.getBlock block-state)))]
-      (if (bridge/runtime-activated? (str (.getUUID player)))
+      (if (power-runtime/runtime-activated? (str (.getUUID player)))
         (event-apply/cancel-event! evt)
         (when block-id
           (let [ret (dispatcher/on-block-break
