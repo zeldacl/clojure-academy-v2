@@ -81,11 +81,8 @@
 
         resp-handler
         (fn [request-id response-bytes]
-          (let [rid (int request-id)
-                payload (deserialize response-bytes)]
-            (if (neg? rid)
-              (net-client/handle-push (:msg-id payload) (:payload payload))
-              (net-client/handle-response rid payload))))]
+          (let [payload (deserialize response-bytes)]
+            (packet-base/dispatch-client-response! request-id payload)))]
 
     (invoke-network-static "init" req-handler resp-handler))
   (log/info "Forge 1.20.1 GUI network system initialized"))

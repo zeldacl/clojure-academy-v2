@@ -3,6 +3,7 @@
   (:require [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.fabric1201.gui.bridge :as bridge]
             [cn.li.mc1201.gui.registry-common :as registry-common]
+            [cn.li.mc1201.gui.registry-open-core :as open-core]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.resources ResourceLocation]
@@ -47,17 +48,13 @@
   (log/info "Registered" (count @gui-handler-types) "screen handler types"))
 
 (defn open-gui-for-player [player gui-id tile-entity]
-  (log/info "Opening GUI" gui-id "for player" (.getName player))
+  (open-core/log-open-start! "[FABRIC-OPEN-GUI]" player gui-id tile-entity)
   (try
     (let [factory (bridge/create-extended-screen-handler-factory gui-id tile-entity)]
-      (try
-        (clojure.lang.Reflector/invokeInstanceMethod player "openHandledScreen" (object-array [factory]))
-        (catch Exception _
-          (clojure.lang.Reflector/invokeInstanceMethod player "openMenu" (object-array [factory]))))
-      (log/info "GUI opened successfully"))
+      (open-core/open-player-menu-with-fallback! player factory)
+      (open-core/log-open-success! "[FABRIC-OPEN-GUI]"))
     (catch Exception e
-      (log/error "Failed to open GUI:" (.getMessage e))
-      (.printStackTrace e))))
+      (open-core/log-open-error! "[FABRIC-OPEN-GUI]" e))))
 
 (defmethod gui/register-gui-handler :fabric-1.20.1 [_]
   (log/info "Registering GUI handler for Fabric 1.20.1")

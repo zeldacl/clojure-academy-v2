@@ -95,7 +95,7 @@
                                buf (aget args 3)
                                {:keys [msg-id request-id payload]} (read-buf-map buf)
                                request-id (int (or request-id -1))
-                               payload (if (map? payload) payload {})]
+                                payload (packet-base/normalize-map payload)]
                            (.execute server
                                      (reify Runnable
                                        (run [_]
@@ -127,14 +127,12 @@
                                buf (aget args 2)
                                {:keys [request-id payload]} (read-buf-map buf)
                                request-id (int (or request-id -1))
-                               payload (if (map? payload) payload {})]
+                               payload (packet-base/normalize-map payload)]
                            (.execute client
                                      (reify Runnable
                                        (run [_]
-                                         (if (neg? request-id)
-                                           (net-client/handle-push (:msg-id payload) (:payload payload))
-                                           (net-client/handle-response request-id payload)))))))
-                       nil))]
+                                         (packet-base/dispatch-client-response! request-id payload))))))
+                        nil))]
       (Reflector/invokeStaticMethod client-networking "registerGlobalReceiver"
                                     (to-array [s2c-channel receiver]))
       (log/info "Fabric GUI network client transport initialized"))))

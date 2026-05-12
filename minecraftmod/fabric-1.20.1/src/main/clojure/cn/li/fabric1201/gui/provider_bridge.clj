@@ -2,7 +2,8 @@
   "Fabric 1.20.1 provider bridge.
 
   Uses reify factories and delegates menu construction to menu-bridge."
-  (:require [cn.li.mc1201.gui.provider-common :as provider-common]
+  (:require [cn.li.mc1201.gui.provider-bridge-core :as provider-core]
+            [cn.li.mc1201.gui.provider-common :as provider-common]
             [cn.li.mcmod.gui.adapter :as gui]
             [cn.li.mcmod.util.log :as log]
             [cn.li.fabric1201.gui.menu-bridge :as menu-bridge])
@@ -15,37 +16,32 @@
     (getDisplayName [_]
       (Component/literal (gui/get-display-name gui-id)))
     (createMenu [_ sync-id _player-inventory player]
-      (let [handler (gui/get-gui-handler)
-            world (.level player)
-        pos (provider-common/tile->pos tile-entity player)]
-        (log/info "Creating menu for GUI" gui-id)
-        (let [clj-container (.get-server-container handler gui-id player world pos)]
-          (when-not clj-container
-            (throw (ex-info "Failed to create Clojure container" {:gui-id gui-id})))
-          (gui/register-active-container! clj-container)
-          (gui/register-player-container! player clj-container)
-          (let [menu-type (gui/get-menu-type :fabric-1.20.1 gui-id)]
-            (when-not menu-type
-              (throw (ex-info "MenuType not registered" {:gui-id gui-id})))
-            (menu-bridge/create-menu-bridge sync-id menu-type clj-container)))))))
+      (provider-core/create-menu-from-provider!
+       {:gui-id gui-id
+        :tile-entity tile-entity
+        :window-id sync-id
+        :player player
+        :platform-key :fabric-1.20.1
+        :create-container-fn (fn [handler gid p world pos]
+                               (.get-server-container handler gid p world pos))
+        :create-menu-bridge-fn menu-bridge/create-menu-bridge
+        :log-prefix "[FABRIC-MENU-PROVIDER]"}))))
 
 (defn create-extended-menu-provider [gui-id tile-entity]
   (reify ExtendedScreenHandlerFactory
     (getDisplayName [_]
       (Component/literal (gui/get-display-name gui-id)))
     (createMenu [_ sync-id _player-inventory player]
-      (let [handler (gui/get-gui-handler)
-            world (.level player)
-        pos (provider-common/tile->pos tile-entity player)
-            clj-container (.get-server-container handler gui-id player world pos)]
-        (when-not clj-container
-          (throw (ex-info "Failed to create Clojure container" {:gui-id gui-id})))
-        (gui/register-active-container! clj-container)
-        (gui/register-player-container! player clj-container)
-        (let [menu-type (gui/get-menu-type :fabric-1.20.1 gui-id)]
-          (when-not menu-type
-            (throw (ex-info "MenuType not registered" {:gui-id gui-id})))
-          (menu-bridge/create-menu-bridge sync-id menu-type clj-container))))
+      (provider-core/create-menu-from-provider!
+       {:gui-id gui-id
+        :tile-entity tile-entity
+        :window-id sync-id
+        :player player
+        :platform-key :fabric-1.20.1
+        :create-container-fn (fn [handler gid p world pos]
+                               (.get-server-container handler gid p world pos))
+        :create-menu-bridge-fn menu-bridge/create-menu-bridge
+        :log-prefix "[FABRIC-MENU-PROVIDER]"}))
     (writeScreenOpeningData [_ player buf]
       (.writeInt buf gui-id)
       (if tile-entity

@@ -8,6 +8,7 @@
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.forge1201.gui.bridge :as bridge]
             [cn.li.mc1201.gui.registry-common :as registry-common]
+            [cn.li.mc1201.gui.registry-open-core :as open-core]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.shim LazyForgeBootstrapBridge]
@@ -19,8 +20,7 @@
            [net.minecraft.world MenuProvider]
            [net.minecraft.world.entity.player Inventory]
            [net.minecraft.world.level Level]
-           [net.minecraft.core BlockPos]
-           [net.minecraft.world.level.block.entity BlockEntity]))
+           [net.minecraft.core BlockPos]))
 
 
 ;; ============================================================================
@@ -119,16 +119,11 @@
   - gui-id: int
   - tile-entity: TileEntity (optional, can be nil)"
   [^ServerPlayer player gui-id tile-entity]
-  (log/info "[OPEN-GUI-FOR-PLAYER] Starting GUI open: gui-id=" gui-id "player=" (.getName player) "has-tile-entity=" (not (nil? tile-entity)))
+  (open-core/log-open-start! "[OPEN-GUI-FOR-PLAYER]" player gui-id tile-entity)
   (try
     (log/info "[OPEN-GUI-FOR-PLAYER] Creating MenuProvider...")
     (let [^MenuProvider provider (bridge/create-menu-provider gui-id tile-entity)
-          ^BlockPos pos (when tile-entity
-                (try
-                  (if (map? tile-entity)
-                    (:pos tile-entity)
-                    (.getBlockPos ^BlockEntity tile-entity))
-                  (catch Exception _ nil)))]
+          ^BlockPos pos (open-core/resolve-optional-block-pos tile-entity)]
       (log/info "[OPEN-GUI-FOR-PLAYER] MenuProvider created, pos=" pos "calling NetworkHooks...")
       (if pos
         (do
@@ -144,8 +139,7 @@
           (NetworkHooks/openScreen player provider)))
       (log/info "[OPEN-GUI-FOR-PLAYER] NetworkHooks called, GUI open request queued"))
     (catch Exception e
-      (log/error "[OPEN-GUI-FOR-PLAYER] Failed to open GUI:" (.getMessage e))
-      (log/error "[OPEN-GUI-FOR-PLAYER] Exception:" e))))
+      (open-core/log-open-error! "[OPEN-GUI-FOR-PLAYER]" e))))
 
 ;; ============================================================================
 ;; Registry Implementation

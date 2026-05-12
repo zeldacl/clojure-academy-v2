@@ -3,7 +3,8 @@
 
   This namespace is intentionally data-only and loader-agnostic."
   (:require [clojure.string :as str]
-            [cn.li.mc1201.runtime.edn-state :as es]))
+            [cn.li.mc1201.runtime.edn-state :as es]
+            [cn.li.mcmod.network.client :as net-client]))
 
 (defn make-packet
   [packet-id payload]
@@ -46,3 +47,17 @@
 (defn decode-payload-bytes
   [^bytes bs on-error]
   (decode-payload (String. bs "UTF-8") on-error))
+
+(defn normalize-map
+  [v]
+  (if (map? v) v {}))
+
+(defn dispatch-client-response!
+  "Route GUI network payload to push/response handlers by request-id convention.
+  request-id < 0 means push payload: {:msg-id ... :payload ...}."
+  [request-id payload]
+  (let [rid (int (or request-id -1))
+        p (normalize-map payload)]
+    (if (neg? rid)
+      (net-client/handle-push (:msg-id p) (:payload p))
+      (net-client/handle-response rid p))))

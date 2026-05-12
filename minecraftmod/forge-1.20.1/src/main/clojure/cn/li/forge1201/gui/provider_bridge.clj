@@ -2,14 +2,12 @@
   "Forge 1.20.1 provider bridge.
 
   Uses reify MenuProvider and delegates menu creation to menu-bridge."
-  (:require [cn.li.mc1201.gui.provider-common :as provider-common]
-            [cn.li.mcmod.gui.adapter :as gui]
-            [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.mc1201.gui.provider-bridge-core :as provider-core]
             [cn.li.mcmod.gui.handler :as gui-handler]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.gui.menu-bridge :as menu-bridge])
   (:import [net.minecraft.world MenuProvider]
-           [net.minecraft.network.chat Component]
-           [net.minecraft.world.entity.player Player]))
+           [net.minecraft.network.chat Component]))
 
 (defn create-menu-provider
   "Create a MenuProvider for opening GUI.
@@ -27,27 +25,17 @@
       )
 
     (createMenu [_ window-id _player-inventory player]
-      (log/info "[MENU-PROVIDER] createMenu called: gui-id=" gui-id "window-id=" window-id "player=" (.getGameProfile player))
       (try
-        (let [handler (gui/get-gui-handler)
-              world (.level player)
-            pos (provider-common/tile->pos tile-entity player)]
-          (log/info "[MENU-PROVIDER] Handler obtained for GUI" gui-id)
-          (log/info "[MENU-PROVIDER] Creating server-side container...")
-          (let [clj-container (gui-handler/get-server-container handler gui-id player world pos)]
-            (if clj-container
-              (do
-                (log/info "[MENU-PROVIDER] Server container created successfully")
-                (gui/register-active-container! clj-container)
-                (gui/register-player-container! player clj-container)
-                (let [menu-type (gui/get-menu-type :forge-1.20.1 gui-id)]
-                  (if menu-type
-                    (do
-                      (log/info "[MENU-PROVIDER] MenuType found, creating menu-bridge...")
-                      (menu-bridge/create-menu-bridge window-id menu-type clj-container))
-                    (throw (ex-info "MenuType not registered" {:gui-id gui-id})))))
-              (throw (ex-info "Failed to create Clojure container"
-                              {:gui-id gui-id :player player})))))
+        (provider-core/create-menu-from-provider!
+         {:gui-id gui-id
+          :tile-entity tile-entity
+          :window-id window-id
+          :player player
+          :platform-key :forge-1.20.1
+          :create-container-fn (fn [handler gid p world pos]
+                                 (gui-handler/get-server-container handler gid p world pos))
+          :create-menu-bridge-fn menu-bridge/create-menu-bridge
+          :log-prefix "[MENU-PROVIDER]"})
         (catch Exception e
           (log/error "[MENU-PROVIDER] Error creating menu:" (.getMessage e))
           (log/error "[MENU-PROVIDER] Stack trace:" e)
