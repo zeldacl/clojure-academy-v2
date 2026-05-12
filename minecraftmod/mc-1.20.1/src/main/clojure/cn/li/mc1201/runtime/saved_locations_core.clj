@@ -5,6 +5,7 @@
   rather than using loader-specific lifecycle hooks.
   NBT storage format: CompoundTag keyed 'SavedLocations' on player persistent data."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
+            [cn.li.mcmod.platform.saved-locations :as psl]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
@@ -121,3 +122,20 @@
     (catch Exception e
       (log/warn "Failed to check location:" (ex-message e))
       false)))
+
+(defn create-saved-locations
+  "Create an ISavedLocations adapter using a platform-provided server supplier."
+  [get-server]
+  (reify psl/ISavedLocations
+    (save-location! [_ player-uuid location-name world-id x y z]
+      (save-location! (get-server) player-uuid location-name world-id x y z))
+    (delete-location! [_ player-uuid location-name]
+      (delete-location! (get-server) player-uuid location-name))
+    (get-location [_ player-uuid location-name]
+      (get-location (get-server) player-uuid location-name))
+    (list-locations [_ player-uuid]
+      (list-locations (get-server) player-uuid))
+    (get-location-count [_ player-uuid]
+      (get-location-count (get-server) player-uuid))
+    (has-location? [_ player-uuid location-name]
+      (has-location? (get-server) player-uuid location-name))))

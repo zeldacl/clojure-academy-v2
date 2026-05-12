@@ -11,14 +11,6 @@
 (defn- get-server ^MinecraftServer []
   (server-context/get-server))
 
-(defn- entity-type-id
-  [world-id entity-uuid]
-  (try
-    (core/entity-type-id (get-server) world-id entity-uuid)
-    (catch Exception e
-      (log/warn "[fabric] Failed to query entity type id:" world-id entity-uuid (ex-message e))
-      nil)))
-
 (defn install-entity-query!
   []
   (if-not (compare-and-set! installed? false true)
@@ -26,5 +18,5 @@
     (do
       (server-context/install-server-context!)
       (alter-var-root #'pentity/*entity-get-type-id-fn*
-                      (constantly entity-type-id))
+                      (constantly (core/create-entity-type-id-fn get-server)))
       (log/info "Fabric entity query installed"))))

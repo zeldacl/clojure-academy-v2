@@ -1,5 +1,6 @@
 (ns cn.li.mc1201.runtime.entity-query-core
   "Shared Minecraft-side entity query helpers (no loader API imports)."
+  (:require [cn.li.mcmod.util.log :as log])
   (:import [java.util UUID]
            [net.minecraft.core.registries BuiltInRegistries Registries]
            [net.minecraft.resources ResourceKey ResourceLocation]
@@ -56,3 +57,13 @@
   (when-let [^ServerLevel level (resolve-level server world-id)]
     (some-> (get-entity-by-uuid level entity-uuid)
             (entity-type-id-for-entity))))
+
+(defn create-entity-type-id-fn
+  "Create a platform-neutral entity type lookup function backed by a server supplier."
+  [get-server]
+  (fn [world-id entity-uuid]
+    (try
+      (entity-type-id (get-server) world-id entity-uuid)
+      (catch Exception e
+        (log/warn "Failed to query entity type id:" world-id entity-uuid (ex-message e))
+        nil))))

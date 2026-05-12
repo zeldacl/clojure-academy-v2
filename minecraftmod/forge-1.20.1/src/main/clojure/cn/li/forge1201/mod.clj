@@ -25,8 +25,8 @@
              [net.minecraft.world.level ItemLike]
              [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent]
              [net.minecraftforge.registries DeferredRegister RegistryObject]
-             [cn.li.forge1201.effect ScriptedMobEffect]
-             [cn.li.forge1201.item NbtBarItem ScriptedItem]
+             [cn.li.mc1201.effect ScriptedMobEffect]
+             [cn.li.mc1201.item NbtBarItem ScriptedItem]
              [cn.li.forge1201.entity ModEntities]
              [cn.li.mcmod.platform.spi PlatformBootstraps])
     (:gen-class

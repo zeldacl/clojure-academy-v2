@@ -7,15 +7,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defn fabric-potion-effects []
-  (reify ppe/IPotionEffects
-    (apply-potion-effect! [_ player-uuid effect-type duration amplifier]
-      (pec/apply-potion-effect! (server-ctx/get-server) player-uuid effect-type duration amplifier))
-    (remove-potion-effect! [_ player-uuid effect-type]
-      (pec/remove-potion-effect! (server-ctx/get-server) player-uuid effect-type))
-    (has-potion-effect? [_ player-uuid effect-type]
-      (pec/has-potion-effect? (server-ctx/get-server) player-uuid effect-type))
-    (clear-all-effects! [_ player-uuid]
-      (pec/clear-all-effects! (server-ctx/get-server) player-uuid))))
+  (pec/create-potion-effects server-ctx/get-server))
 
 (defn install-potion-effects! []
   (alter-var-root #'ppe/*potion-effects*

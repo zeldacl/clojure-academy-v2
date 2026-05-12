@@ -4,6 +4,7 @@
   Uses BuiltInRegistries.MOB_EFFECT with vanilla ResourceLocations for
   both built-in and custom effects — no Forge-specific bridge needed."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
+            [cn.li.mcmod.platform.potion-effects :as ppe]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
@@ -113,3 +114,16 @@
     (catch Exception e
       (log/warn "Failed to clear all effects:" (ex-message e))
       false)))
+
+(defn create-potion-effects
+  "Create an IPotionEffects adapter using a platform-provided server supplier."
+  [get-server]
+  (reify ppe/IPotionEffects
+    (apply-potion-effect! [_ player-uuid effect-type duration amplifier]
+      (apply-potion-effect! (get-server) player-uuid effect-type duration amplifier))
+    (remove-potion-effect! [_ player-uuid effect-type]
+      (remove-potion-effect! (get-server) player-uuid effect-type))
+    (has-potion-effect? [_ player-uuid effect-type]
+      (has-potion-effect? (get-server) player-uuid effect-type))
+    (clear-all-effects! [_ player-uuid]
+      (clear-all-effects! (get-server) player-uuid))))

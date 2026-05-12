@@ -1,5 +1,7 @@
 package cn.li.forge1201.trigger;
 
+import cn.li.mc1201.trigger.ModCustomTrigger;
+
 import net.minecraft.advancements.CriteriaTriggers;
 
 /**

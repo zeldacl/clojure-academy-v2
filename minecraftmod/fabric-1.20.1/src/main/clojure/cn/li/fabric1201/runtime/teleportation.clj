@@ -8,17 +8,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defn fabric-teleportation []
-  (reify ptp/ITeleportation
-    (teleport-player! [_ player-uuid world-id x y z]
-      (tc/teleport-player! (server-ctx/get-server) player-uuid world-id x y z))
-    (teleport-with-entities! [_ player-uuid world-id x y z radius]
-      (tc/teleport-with-entities! (server-ctx/get-server) player-uuid world-id x y z radius))
-    (reset-fall-damage! [_ player-uuid]
-      (tc/reset-fall-damage! (server-ctx/get-server) player-uuid))
-    (get-player-position [_ player-uuid]
-      (tc/get-player-position (server-ctx/get-server) player-uuid))
-    (get-player-dimension [_ player-uuid]
-      (tc/get-player-dimension (server-ctx/get-server) player-uuid))))
+  (tc/create-teleportation server-ctx/get-server))
 
 (defn install-teleportation! []
   (alter-var-root #'ptp/*teleportation*

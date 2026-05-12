@@ -7,21 +7,8 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.server ServerLifecycleHooks]))
 
-(defn- get-server []
-  (ServerLifecycleHooks/getCurrentServer))
-
 (defn forge-teleportation []
-  (reify ptp/ITeleportation
-    (teleport-player! [_ player-uuid world-id x y z]
-      (tc/teleport-player! (get-server) player-uuid world-id x y z))
-    (teleport-with-entities! [_ player-uuid world-id x y z radius]
-      (tc/teleport-with-entities! (get-server) player-uuid world-id x y z radius))
-    (reset-fall-damage! [_ player-uuid]
-      (tc/reset-fall-damage! (get-server) player-uuid))
-    (get-player-position [_ player-uuid]
-      (tc/get-player-position (get-server) player-uuid))
-    (get-player-dimension [_ player-uuid]
-      (tc/get-player-dimension (get-server) player-uuid))))
+  (tc/create-teleportation #(ServerLifecycleHooks/getCurrentServer)))
 
 (defn install-teleportation! []
   (alter-var-root #'ptp/*teleportation*

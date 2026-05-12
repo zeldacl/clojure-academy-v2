@@ -8,7 +8,6 @@
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mc1201.runtime.network-core :as network-core]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.mcmod.runtime.catalog :as runtime-catalog]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server.level ServerPlayer]))
 
@@ -21,18 +20,11 @@
   [uuid-str]
   (query-core/get-player-by-uuid (server-context/get-server) uuid-str))
 
-(defn send-sync-to-client!
-  [uuid payload]
-  (when-let [^ServerPlayer player (find-player-by-uuid uuid)]
-    (gui-network/send-push-to-client! player runtime-catalog/MSG-SYNC-RUNTIME {:uuid uuid :ability-data (:ability-data payload)})
-    (gui-network/send-push-to-client! player runtime-catalog/MSG-SYNC-RESOURCE {:uuid uuid :resource-data (:resource-data payload)})
-    (gui-network/send-push-to-client! player runtime-catalog/MSG-SYNC-COOLDOWN {:uuid uuid :cooldown-data (:cooldown-data payload)})
-    (gui-network/send-push-to-client! player runtime-catalog/MSG-SYNC-PRESET {:uuid uuid :preset-data (:preset-data payload)})))
+(def send-sync-to-client!
+  (network-core/create-sync-sender find-player-by-uuid gui-network/send-push-to-client!))
 
-(defn- send-to-client!
-  [uuid msg-id payload]
-  (when-let [^ServerPlayer player (find-player-by-uuid uuid)]
-    (gui-network/send-push-to-client! player msg-id payload)))
+(def ^:private send-to-client!
+  (network-core/create-targeted-client-sender find-player-by-uuid gui-network/send-push-to-client!))
 
 (defn init!
   "Initialize runtime network stack: register server handlers and injected send fns."

@@ -1,5 +1,7 @@
 package cn.li.forge1201.worldgen;
 
+import cn.li.mc1201.worldgen.PhaseLiquidPoolFeature;
+
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.Blocks;

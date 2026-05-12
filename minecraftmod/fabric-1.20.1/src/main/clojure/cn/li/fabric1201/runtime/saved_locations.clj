@@ -8,19 +8,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defn fabric-saved-locations []
-  (reify psl/ISavedLocations
-    (save-location! [_ player-uuid location-name world-id x y z]
-      (slc/save-location! (server-ctx/get-server) player-uuid location-name world-id x y z))
-    (delete-location! [_ player-uuid location-name]
-      (slc/delete-location! (server-ctx/get-server) player-uuid location-name))
-    (get-location [_ player-uuid location-name]
-      (slc/get-location (server-ctx/get-server) player-uuid location-name))
-    (list-locations [_ player-uuid]
-      (slc/list-locations (server-ctx/get-server) player-uuid))
-    (get-location-count [_ player-uuid]
-      (slc/get-location-count (server-ctx/get-server) player-uuid))
-    (has-location? [_ player-uuid location-name]
-      (slc/has-location? (server-ctx/get-server) player-uuid location-name))))
+  (slc/create-saved-locations server-ctx/get-server))
 
 (defn install-saved-locations! []
   (alter-var-root #'psl/*saved-locations*

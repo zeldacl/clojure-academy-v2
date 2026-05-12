@@ -6,19 +6,8 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.server ServerLifecycleHooks]))
 
-(defn- get-server []
-  (ServerLifecycleHooks/getCurrentServer))
-
 (defn forge-potion-effects []
-  (reify ppe/IPotionEffects
-    (apply-potion-effect! [_ player-uuid effect-type duration amplifier]
-      (pec/apply-potion-effect! (get-server) player-uuid effect-type duration amplifier))
-    (remove-potion-effect! [_ player-uuid effect-type]
-      (pec/remove-potion-effect! (get-server) player-uuid effect-type))
-    (has-potion-effect? [_ player-uuid effect-type]
-      (pec/has-potion-effect? (get-server) player-uuid effect-type))
-    (clear-all-effects! [_ player-uuid]
-      (pec/clear-all-effects! (get-server) player-uuid))))
+  (pec/create-potion-effects #(ServerLifecycleHooks/getCurrentServer)))
 
 (defn install-potion-effects! []
   (alter-var-root #'ppe/*potion-effects*

@@ -4,7 +4,8 @@
             [cn.li.mc1201.runtime.vec-math :as vm]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
-           [cn.li.forge1201.client.render ModRenderTypes ModShaders]
+           [cn.li.mc1201.client.render ModRenderTypes]
+           [cn.li.forge1201.client.render ModShaders]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource]
