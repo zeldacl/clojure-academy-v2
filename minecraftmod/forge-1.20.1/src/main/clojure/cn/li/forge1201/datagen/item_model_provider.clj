@@ -12,50 +12,28 @@
    sibling models and overrides on predicate <modid>:energy (see client
    `energy-item-model-properties`)."
   (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.item.dsl :as item-dsl]
             [cn.li.mc1201.datagen.resource-location :as rl]
-            [cn.li.mc1201.datagen.item-model-patterns :as item-model-patterns])
+            [cn.li.mc1201.datagen.item-model-provider-core :as item-model-core])
   (:import [net.minecraft.data PackOutput]
            [net.minecraft.resources ResourceLocation]
            [net.minecraftforge.common.data ExistingFileHelper]
            [net.minecraftforge.client.model.generators ItemModelProvider ItemModelBuilder ModelFile$ExistingModelFile]))
 
-(defn- texture-rl ^ResourceLocation
-  [texture-name]
-  (ResourceLocation. modid/*mod-id* (str "item/" texture-name)))
-
-(defn- register-energy-tier-models!
-  [^ItemModelProvider this-provider ^ExistingFileHelper exfile-helper
-   item-id {:keys [texture-empty texture-half texture-full]}]
-  (let [{:keys [base empty-texture half-texture full-texture half-model full-model]}
-        (item-model-patterns/energy-tier-model-spec item-id {:texture-empty texture-empty
-                                                             :texture-half texture-half
-                                                             :texture-full texture-full})
-        ^String base (str base)
-        ^String half-model (str half-model)
-        ^String full-model (str full-model)
-        mod-s modid/*mod-id*
-        energy-rl (ResourceLocation. mod-s "energy")
-        gen-parent (.mcLoc this-provider "item/generated")
-        half-rl (ResourceLocation. mod-s (str "item/" half-model))
-        full-rl (ResourceLocation. mod-s (str "item/" full-model))]
-    (let [^ItemModelBuilder half-b (.withExistingParent this-provider half-model gen-parent)
-          ^ItemModelBuilder full-b (.withExistingParent this-provider full-model gen-parent)]
-      (.texture half-b "layer0" ^ResourceLocation (texture-rl half-texture))
-      (.texture full-b "layer0" ^ResourceLocation (texture-rl full-texture)))
-    (let [^ItemModelBuilder main-b (.withExistingParent this-provider base gen-parent)
-          half-mf (ModelFile$ExistingModelFile. half-rl exfile-helper)
-          full-mf (ModelFile$ExistingModelFile. full-rl exfile-helper)]
-      (.texture main-b "layer0" ^ResourceLocation (texture-rl empty-texture))
-      ;; Full threshold first so energy=1 resolves to full, not half (first-match wins).
-      (-> (.override main-b)
-          (.predicate energy-rl 1.0)
-          (.model full-mf)
-          (.end))
-      (-> (.override main-b)
-          (.predicate energy-rl 0.5)
-          (.model half-mf)
-          (.end)))))
+(defn- apply-model-spec!
+  [^ItemModelProvider provider ^ExistingFileHelper exfile-helper {:keys [model-name json]}]
+  (let [^ResourceLocation parent-rl (or (rl/parse-resource-location (:parent json))
+                                        (.mcLoc provider "item/generated"))
+        ^ItemModelBuilder builder (.withExistingParent provider (str model-name) parent-rl)]
+    (doseq [[layer texture-id] (:textures json)]
+      (.texture builder (name layer) ^ResourceLocation (rl/parse-resource-location texture-id modid/*mod-id*)))
+    (doseq [{:keys [predicate model]} (:overrides json)]
+      (let [override-builder (.override builder)
+            model-file (ModelFile$ExistingModelFile. (rl/parse-resource-location model modid/*mod-id*) exfile-helper)]
+        (doseq [[predicate-id value] predicate]
+          (.predicate override-builder (rl/parse-resource-location predicate-id modid/*mod-id*) (float value)))
+        (.model override-builder model-file)
+        (.end override-builder)))
+    builder))
 
 (defn create
   "创建Item Model DataProvider实例 (factory signature: PackOutput -> DataProvider)"
@@ -63,25 +41,9 @@
   (proxy [ItemModelProvider] [pack-output modid/*mod-id* exfile-helper]
     (registerModels []
       (let [this-provider ^ItemModelProvider this
-            all-item-names (item-dsl/list-items)
-            energy-tier-items (filter #(item-model-patterns/energy-tier-item? (item-dsl/get-item %))
-                                      all-item-names)
-            items-with-simple-model (keep (fn [item-name]
-                                            (let [item-spec (item-dsl/get-item item-name)]
-                                              (when-not (item-model-patterns/energy-tier-item? item-spec)
-                                                (item-model-patterns/simple-model-spec item-name item-spec))))
-                                          all-item-names)]
-        (doseq [item-name energy-tier-items]
-          (register-energy-tier-models!
-            this-provider exfile-helper item-name
-            (get-in (item-dsl/get-item item-name) [:properties :item-model-energy-levels])))
-        (doseq [{:keys [item-name model-texture model-parent]} items-with-simple-model]
-          (let [^String item-name item-name
-                ^String model-texture (str model-texture)
-                ^ResourceLocation parent-rl (or (rl/parse-resource-location (or model-parent "item/generated"))
-                                                (.mcLoc this-provider "item/generated"))
-                ^ItemModelBuilder builder (.withExistingParent this-provider item-name parent-rl)]
-            (.texture builder "layer0" ^ResourceLocation (texture-rl model-texture))))
-        (println (str "[item-model-provider] summary: items=" (count all-item-names)
-                      ", energy-tier=" (count energy-tier-items)
-                      ", simple-model=" (count items-with-simple-model)))))))
+            {:keys [all-item-count energy-tier-count simple-count models]} (item-model-core/gather-model-specs)]
+        (doseq [model-spec models]
+          (apply-model-spec! this-provider exfile-helper model-spec))
+        (println (str "[item-model-provider] summary: items=" all-item-count
+                      ", energy-tier=" energy-tier-count
+                      ", simple-model=" simple-count))))))

@@ -18,12 +18,11 @@
         ^Path base (.resolve ^Path out-root (str "assets/" modid/*mod-id* "/lang"))]
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
-        (let [results (atom [])]
-          (doseq [[file-name data] (lang-core/merged-language-data)]
-            (let [target-path (.resolve base ^String file-name)
-                  json-tree   (.toJsonTree gson data)]
-              (swap! results conj (DataProvider/saveStable cached json-tree target-path))))
-
-          (CompletableFuture/allOf (into-array CompletableFuture @results))))
+        (lang-core/save-language-files!
+         (lang-core/merged-language-entries)
+         (fn [file-name data]
+           (let [target-path (.resolve base ^String file-name)
+                 json-tree (.toJsonTree gson data)]
+             (DataProvider/saveStable cached json-tree target-path)))))
 
       (getName [_] (str modid/*mod-id* " Lang Provider")))))

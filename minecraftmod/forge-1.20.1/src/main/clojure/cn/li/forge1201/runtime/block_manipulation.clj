@@ -3,6 +3,7 @@
   Loader-agnostic ops delegate to mc1201 block-manipulation-core.
   Break/can-break use Forge BlockEvent$BreakEvent inline."
   (:require [cn.li.mcmod.platform.block-manipulation :as bm]
+            [cn.li.mc1201.runtime.adapter-support :as adapter-support]
             [cn.li.mc1201.runtime.block-manipulation-core :as bmc]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server.level ServerLevel ServerPlayer]
@@ -41,6 +42,6 @@
       (boolean (bmc/farmland-block? (get-server) world-id x y z)))))
 
 (defn install-block-manipulation! []
-  (alter-var-root #'bm/*block-manipulation*
-                  (constantly (forge-block-manipulation)))
-  (log/info "Forge block manipulation installed"))
+  (adapter-support/install-adapter! #'bm/*block-manipulation*
+                                    (forge-block-manipulation)
+                                    "Forge block manipulation"))

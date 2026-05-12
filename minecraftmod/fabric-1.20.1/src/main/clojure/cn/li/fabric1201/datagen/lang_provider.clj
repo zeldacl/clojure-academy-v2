@@ -10,10 +10,6 @@
            [net.minecraft.data CachedOutput DataProvider PackOutput$PathProvider PackOutput$Target]
            [net.minecraft.resources ResourceLocation]))
 
-(defn- language-map
-  [lang-code]
-  (lang-core/language-map lang-code))
-
 (defn create-provider
   [output
    lang-code]
@@ -22,9 +18,10 @@
         gson (gson-util/create-pretty-gson)]
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
-        (let [writes (atom [])
-          json-tree (.toJsonTree gson (language-map lang-code))
-          target-path (.json ^PackOutput$PathProvider path-provider (ResourceLocation. mod-id lang-code))]
-          (swap! writes conj (DataProvider/saveStable cached ^JsonElement json-tree ^java.nio.file.Path target-path))
-          (CompletableFuture/allOf (into-array CompletableFuture @writes))))
+        (lang-core/save-language-files!
+         [(lang-core/language-entry lang-code)]
+         (fn [_file-name data]
+           (let [json-tree (.toJsonTree gson data)
+                 target-path (.json ^PackOutput$PathProvider path-provider (ResourceLocation. mod-id lang-code))]
+             (DataProvider/saveStable cached ^JsonElement json-tree ^java.nio.file.Path target-path)))))
       (getName [_] (str mod-id " Language Provider " lang-code)))))

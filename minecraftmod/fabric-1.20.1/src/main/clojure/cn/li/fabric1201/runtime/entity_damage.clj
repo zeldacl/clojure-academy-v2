@@ -1,7 +1,7 @@
 (ns cn.li.fabric1201.runtime.entity-damage
   "Fabric implementation of IEntityDamage protocol."
   (:require [cn.li.fabric1201.runtime.server-context :as server-context]
-            [cn.li.mc1201.runtime.entity-damage-core :as core]
+            [cn.li.mc1201.runtime.entity-damage-adapter :as adapter]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.platform.entity-damage :as ped]
             [cn.li.mcmod.util.log :as log]))
@@ -26,90 +26,16 @@
                 (object-array [(double min-x) (double min-y) (double min-z)
                                (double max-x) (double max-y) (double max-z)])))
 
-(defn- resolve-level [world-id]
-  (query-core/resolve-level (get-server) world-id))
-
-(defn- apply-direct-damage-impl! [world-id entity-uuid damage source-type]
-  (try
-    (when-let [level (resolve-level world-id)]
-      (when-let [entity (query-core/get-entity-by-uuid level entity-uuid)]
-        (when (living-entity? entity)
-          (let [living entity
-                dmg-source (core/resolve-damage-source level source-type)]
-            (.hurt living dmg-source (float damage))
-            true))))
-    (catch Exception e
-      (log/warn "[fabric] Failed to apply direct damage:" (ex-message e))
-      false)))
-
-(defn- apply-aoe-damage-impl! [world-id x y z radius damage source-type falloff?]
-  (try
-    (when-let [level (resolve-level world-id)]
-      (let [origin-pos {:x x :y y :z z}
-            aabb (make-aabb (- x radius) (- y radius) (- z radius)
-                            (+ x radius) (+ y radius) (+ z radius))
-            entities (.getEntitiesOfClass level @living-entity-class aabb)
-            dmg-source (core/resolve-damage-source level source-type)]
-        (core/apply-aoe-damage-flow!
-          entities
-          origin-pos
-          radius
-          damage
-          falloff?
-          (fn [entity actual-damage]
-            (.hurt entity dmg-source (float actual-damage))))))
-    (catch Exception e
-      (log/warn "[fabric] Failed to apply AOE damage:" (ex-message e))
-      [])))
-
-(defn- find-reflection-target [level current-entity max-radius]
-  (let [current-pos (core/entity-pos-map current-entity)
-      aabb (make-aabb (- (:x current-pos) max-radius)
-          (- (:y current-pos) max-radius)
-          (- (:z current-pos) max-radius)
-          (+ (:x current-pos) max-radius)
-          (+ (:y current-pos) max-radius)
-          (+ (:z current-pos) max-radius))
-      entities (.getEntitiesOfClass level @living-entity-class aabb)
-        candidates (mapv core/candidate-map entities)
-        target-uuid (core/select-reflection-target-uuid
-                      (str (.getUUID current-entity))
-                      current-pos
-                      candidates
-                      max-radius)]
-    (when target-uuid
-      (query-core/get-entity-by-uuid level target-uuid))))
-
-(defn- apply-reflection-damage-impl! [world-id entity-uuid damage source-type reflection-count max-reflections]
-  (try
-    (when-let [level (resolve-level world-id)]
-      (when-let [entity (query-core/get-entity-by-uuid level entity-uuid)]
-        (when (living-entity? entity)
-          (let [living entity
-                dmg-source (core/resolve-damage-source level source-type)
-                search-radius (core/reflection-search-radius)]
-            (core/apply-reflection-damage-flow!
-              living
-              damage
-              reflection-count
-              max-reflections
-              search-radius
-              (fn [current-entity radius]
-                (find-reflection-target level current-entity radius))
-              (fn [target damage-value]
-                (.hurt target dmg-source (float damage-value))))))))
-    (catch Exception e
-      (log/warn "[fabric] Failed to apply reflection damage:" (ex-message e))
-      [])))
-
 (defn fabric-entity-damage []
-  (reify ped/IEntityDamage
-    (apply-direct-damage! [_ world-id entity-uuid damage source-type]
-      (apply-direct-damage-impl! world-id entity-uuid damage source-type))
-    (apply-aoe-damage! [_ world-id x y z radius damage source-type falloff?]
-      (apply-aoe-damage-impl! world-id x y z radius damage source-type falloff?))
-    (apply-reflection-damage! [_ world-id entity-uuid damage source-type reflection-count max-reflections]
-      (apply-reflection-damage-impl! world-id entity-uuid damage source-type reflection-count max-reflections))))
+  (adapter/create-entity-damage
+    get-server
+    {:resolve-level-fn (fn [server world-id] (query-core/resolve-level server world-id))
+     :get-entity-by-uuid-fn query-core/get-entity-by-uuid
+     :get-living-entities-in-aabb-fn (fn [level aabb]
+                                       (.getEntitiesOfClass level @living-entity-class aabb))
+     :living-entity?-fn living-entity?
+     :apply-hurt-fn (fn [entity dmg-source damage]
+                      (.hurt entity dmg-source (float damage)))}))
 
 (defn install-entity-damage! []
   (server-context/install-server-context!)

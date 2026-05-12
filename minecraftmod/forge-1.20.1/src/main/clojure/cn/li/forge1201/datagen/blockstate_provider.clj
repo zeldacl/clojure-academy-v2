@@ -8,6 +8,7 @@
    优势：定义层复用，易于支持新的Forge版本"
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.block.blockstate-definition :as blockstate-def]
+            [cn.li.mc1201.datagen.blockstate-provider-core :as blockstate-core]
             [cn.li.mc1201.datagen.resource-location :as rl]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
@@ -31,13 +32,6 @@
   ([s default-namespace]
    (rl/parse-resource-location s default-namespace)))
 
-(defn- normalize-candidates
-  [s]
-  (when (and s (not (str/blank? s)))
-    [s
-     (str/replace s "-" "_")
-     (str/replace s "_" "-")]))
-
 (defn- registry-object->block
   [registry-object]
   (try
@@ -54,8 +48,8 @@
         registered-blocks-map (when registered-blocks-var
                                 @(var-get registered-blocks-var))
         key-name (name block-key)
-        candidates (distinct (concat (normalize-candidates key-name)
-                                     (normalize-candidates registry-name)))]
+        candidates (distinct (concat (blockstate-core/normalize-candidates key-name)
+                   (blockstate-core/normalize-candidates registry-name)))]
     (when registered-blocks-map
       (some (fn [candidate]
               (when-let [registry-object (get registered-blocks-map candidate)]
@@ -82,8 +76,8 @@
 (defn- resolve-from-forge-registry
   [block-key registry-name]
   (let [key-name (name block-key)
-        candidates (distinct (concat (normalize-candidates registry-name)
-                                     (normalize-candidates key-name)))]
+        candidates (distinct (concat (blockstate-core/normalize-candidates registry-name)
+                                     (blockstate-core/normalize-candidates key-name)))]
     (some (fn [candidate]
       (LazyForgeBootstrapBridge/findBlock modid/*mod-id* candidate))
           candidates)))
@@ -93,19 +87,6 @@
   [block-key registry-name]
   (or (resolve-from-registered-map block-key registry-name)
       (resolve-from-forge-registry block-key registry-name)))
-
-(defn- infer-registry-name-from-model
-  "Infer block registry name from model name.
-   For default blocks, model name = registry name."
-  [model-name]
-  model-name)
-
-(defn- registry-name->block-spec
-  [registry-name]
-  (some (fn [block-id]
-          (when (= registry-name (registry-metadata/get-block-registry-name block-id))
-            (registry-metadata/get-block-spec block-id)))
-        (registry-metadata/get-all-block-ids)))
 
 (defn- normalize-block-texture
   "Keep texture paths as-is for ExistingFileHelper validation.
@@ -150,27 +131,6 @@
                        :resource-path resource-path})))
     texture-rl))
 
-(defn- texture-from-spec
-  [block-spec model-name]
-  (or (get-in block-spec [:model-textures model-name])
-      (get-in block-spec [:model-textures (keyword model-name)])
-      (get-in block-spec [:textures :all])
-      (get-in block-spec [:properties :model-textures model-name])
-      (get-in block-spec [:properties :model-textures (keyword model-name)])
-      (get-in block-spec [:properties :textures :all])
-      (get-in block-spec [:properties :texture])
-      (str modid/*mod-id* ":block/" model-name)))
-
-(defn- parent-from-spec
-  [block-spec]
-  (or (get-in block-spec [:rendering :model-parent])
-      (get-in block-spec [:properties :model-parent])
-      "minecraft:block/cube_all"))
-
-(defn- model-id->model-name
-  [model-id]
-  (str/replace model-id #".*:block/" ""))
-
 (defn- write-flat-item-model!
   [^BlockStateProvider provider ^String registry-name texture-rl]
   (let [item-models (.itemModels provider)
@@ -197,55 +157,35 @@
    - parent-driven model for explicit :model-parent definitions
    - .cubeAll() fallback for simple textured blocks"
   [^BlockStateProvider provider model-id]
-  (let [^String model-name (model-id->model-name model-id)]
-    ;; Query business layer for texture configuration
-    (if-let [cube-tex (blockstate-def/get-model-cube-texture-config model-name)]
-      (let [^ResourceLocation down-texture (ensure-texture-exists! (:down cube-tex))
-            ^ResourceLocation up-texture (ensure-texture-exists! (:up cube-tex))
-            ^ResourceLocation north-texture (ensure-texture-exists! (:north cube-tex))
-            ^ResourceLocation south-texture (ensure-texture-exists! (:south cube-tex))
-            ^ResourceLocation east-texture (ensure-texture-exists! (:east cube-tex))
-            ^ResourceLocation west-texture (ensure-texture-exists! (:west cube-tex))]
-        (.cube (.models provider)
-               model-name
-               down-texture
-               up-texture
-               north-texture
-               south-texture
-               east-texture
-               west-texture))
-      (if-let [tex-cfg (blockstate-def/get-model-texture-config model-name)]
-        ;; Special model: use .cube() with side/vert textures
-        (let [^ResourceLocation side-texture (parse-rl (:side tex-cfg))
-              ^ResourceLocation vert-texture (parse-rl (:vert tex-cfg))
-              builder (.cube (.models provider)
-                            model-name
-                            vert-texture   ; down
-                            vert-texture   ; up
-                            side-texture   ; north
-                            side-texture   ; south
-                            side-texture   ; east
-                            side-texture)] ; west
-          builder)
-        ;; Default model: honor explicit DSL parent/textures first.
-        (let [^String registry-name (infer-registry-name-from-model model-name)
-              block-spec (registry-name->block-spec registry-name)
-              ^String parent (parent-from-spec block-spec)
-              ^String explicit-texture (some-> (or (get-in block-spec [:rendering :textures :all])
-                                                   (get-in block-spec [:properties :textures :all]))
-                                         normalize-block-texture)]
-          (if (or (not= parent "minecraft:block/cube_all") explicit-texture)
-            (let [^ResourceLocation parent-rl (parse-rl parent "minecraft")
-                  ^BlockModelBuilder builder (.withExistingParent (.models provider)
-                                              model-name
-                                              parent-rl)]
-              (when explicit-texture
-                (let [^ResourceLocation tex-rl (ensure-texture-exists! explicit-texture)]
-                  (.texture builder "all" tex-rl)))
+  (let [^String model-name (blockstate-core/model-id->model-name model-id)
+        {:keys [kind textures particle parent texture]} (blockstate-core/block-model-spec model-name)]
+    (case kind
+      :cube (let [^ResourceLocation down-texture (ensure-texture-exists! (:down textures))
+                  ^ResourceLocation up-texture (ensure-texture-exists! (:up textures))
+                  ^ResourceLocation north-texture (ensure-texture-exists! (:north textures))
+                  ^ResourceLocation south-texture (ensure-texture-exists! (:south textures))
+                  ^ResourceLocation east-texture (ensure-texture-exists! (:east textures))
+                  ^ResourceLocation west-texture (ensure-texture-exists! (:west textures))
+                  builder (.cube (.models provider)
+                                 model-name
+                                 down-texture
+                                 up-texture
+                                 north-texture
+                                 south-texture
+                                 east-texture
+                                 west-texture)]
+              (when particle
+                (.texture ^BlockModelBuilder builder "particle" (ensure-texture-exists! particle)))
               builder)
-            (let [^ResourceLocation texture-all (ensure-texture-exists! (texture-from-spec block-spec model-name))
-                  builder (.cubeAll (.models provider) model-name texture-all)]
-              builder)))))))
+      :parent (let [^ResourceLocation parent-rl (parse-rl parent "minecraft")
+                    ^BlockModelBuilder builder (.withExistingParent (.models provider)
+                                                model-name
+                                                parent-rl)]
+                (doseq [[slot texture-id] textures]
+                  (.texture builder (name slot) (ensure-texture-exists! texture-id)))
+                builder)
+      :cube-all (let [^ResourceLocation texture-all (ensure-texture-exists! texture)]
+                  (.cubeAll (.models provider) model-name texture-all)))))
 
 (defn- parse-facing
   [value]
@@ -292,12 +232,12 @@
         nil)
       (let [model-id (first (:models (first (:parts definition))))
             ^ModelFile model-file (ensure-block-model! provider model-id)
-            block-spec (registry-name->block-spec registry-name)]
+        block-spec (blockstate-core/registry-name->block-spec registry-name)]
         (.simpleBlock provider block model-file)
         (when (registry-metadata/should-create-block-item? block-id)
           ;; Query metadata instead of hardcoded set
           (if (get-in block-spec [:rendering :flat-item-icon?])
-            (let [texture-rl (texture-from-spec block-spec registry-name)]
+            (let [texture-rl (blockstate-core/item-texture-from-spec registry-name)]
               (write-flat-item-model! provider registry-name texture-rl))
             (.simpleBlockItem provider block model-file)))))))
 

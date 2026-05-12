@@ -1,6 +1,6 @@
 (ns cn.li.fabric1201.runtime.item-handler
   "Item use event handler for runtime-driven items (Fabric layer)."
-  (:require [cn.li.mc1201.runtime.item-handler-core :as core]
+  (:require [cn.li.mc1201.runtime.item-handler-adapter :as adapter]
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.event.player UseItemCallback]
            [net.minecraft.world InteractionResultHolder InteractionHand]
@@ -12,15 +12,11 @@
 (defn- on-item-use
   "Handle Fabric UseItemCallback event."
   [^Player player world ^InteractionHand hand]
-  (try
-    (let [stack (.getItemInHand player hand)
-          side (if (.isClientSide world) :client :server)
-          {:keys [consume?]} (core/process-item-use! player hand stack side {})]
-      (if consume?
-        (InteractionResultHolder/success stack)
-        (InteractionResultHolder/pass ItemStack/EMPTY)))
-    (catch Exception e
-      (log/error "Error handling Fabric item use event" e)
+  (let [stack (.getItemInHand player hand)
+        side (if (.isClientSide world) :client :server)
+        {:keys [consume?]} (adapter/handle-item-use player hand stack side {} "Fabric")]
+    (if consume?
+      (InteractionResultHolder/success stack)
       (InteractionResultHolder/pass ItemStack/EMPTY))))
 
 (defn init!

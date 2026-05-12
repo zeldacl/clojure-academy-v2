@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.runtime.item-handler
   "Item use event handler for runtime-driven items (Forge layer)."
-    (:require [cn.li.mc1201.runtime.item-handler-core :as core]
+    (:require [cn.li.mc1201.runtime.item-handler-adapter :as adapter]
               [cn.li.mcmod.client.platform-bridge :as client-bridge]
               [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickItem]
@@ -9,43 +9,37 @@
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraft.world InteractionResult]
            [net.minecraft.world InteractionHand]
-           [net.minecraft.world.entity.player Player]
-           [net.minecraft.world.item ItemStack]))
+           [net.minecraft.world.entity.player Player]))
 
 (defn- on-item-finish-using
   "Handle finish using item event (e.g. food/charge complete)."
   [^LivingEntityUseItemEvent$Finish event]
-  (try
-    (let [entity (.getEntity event)]
-      (when (instance? Player entity)
-        (let [^Player player entity
-              stack (.getItem event)
-              side (if (.isClientSide (.level player)) :client :server)]
-          (core/dispatch-dsl-item-finish-using! player stack side))))
-    (catch Exception e
-      (log/error "Error handling item finish-using event" e))))
+  (let [entity (.getEntity event)
+        stack (.getItem event)
+        side (if (and (instance? Player entity)
+                      (.isClientSide (.level ^Player entity)))
+               :client
+               :server)]
+    (adapter/handle-item-finish-using! entity stack side "Forge")))
 
 (defn- on-item-use
   "Handle item right-click event."
   [^PlayerInteractEvent$RightClickItem event]
-  (try
-    (let [^InteractionHand hand (.getHand event)]
-      (when (= hand InteractionHand/MAIN_HAND)
-        (let [player (.getEntity event)
-              stack (.getItemStack event)
-              side (if (.isClientSide (.level player)) :client :server)
-              {:keys [consume?]} (core/process-item-use!
-                                  player
-                                  hand
-                                  stack
-                                  side
-                                  {:open-screen-fn (fn [^Player p _player-uuid]
-                                                     (client-bridge/open-skill-tree-screen! (.getUUID p)))})]
-          (when consume?
-            (.setCancellationResult event InteractionResult/CONSUME)
-            (.setCanceled event true)))))
-    (catch Exception e
-      (log/error "Error handling item use event" e))))
+  (let [^InteractionHand hand (.getHand event)
+        player (.getEntity event)
+        stack (.getItemStack event)
+        side (if (.isClientSide (.level player)) :client :server)
+        {:keys [consume?]} (adapter/handle-item-use
+                            player
+                            hand
+                            stack
+                            side
+                            {:open-screen-fn (fn [^Player p _player-uuid]
+                                               (client-bridge/open-skill-tree-screen! (.getUUID p)))}
+                            "Forge")]
+    (when consume?
+      (.setCancellationResult event InteractionResult/CONSUME)
+      (.setCanceled event true))))
 
 (defn init!
   "Initialize item use event handler."
