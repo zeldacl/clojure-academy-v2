@@ -2,9 +2,9 @@
   "Forge 1.20.1 recipe datagen provider."
   (:require [cn.li.mc1201.datagen.resource-location :as rl]
             [cn.li.mc1201.datagen.metadata-resolver :as metadata-resolver]
+            [cn.li.mc1201.datagen.recipe-core :as recipe-core]
             [cn.li.mc1201.datagen.recipe-patterns :as recipe-patterns]
-            [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.datagen.metadata :as datagen-metadata])
+            [cn.li.mcmod.config :as modid])
   (:import [java.util.function Consumer]
            [net.minecraft.advancements CriterionTriggerInstance]
            [net.minecraft.advancements.critereon InventoryChangeTrigger$TriggerInstance]
@@ -15,10 +15,6 @@
            [net.minecraft.world.item.crafting Ingredient]
            [net.minecraft.world.level ItemLike]
            [net.minecraftforge.common.data ExistingFileHelper]))
-
-(defn- load-recipes
-  []
-  (vec (datagen-metadata/get-recipes)))
 
 (defn- define-key!
   [^ShapedRecipeBuilder builder k spec]
@@ -92,11 +88,10 @@
   [^PackOutput pack-output ^ExistingFileHelper _exfile-helper]
   (proxy [RecipeProvider] [pack-output]
     (buildRecipes [^Consumer writer]
-      (let [recipes (load-recipes)]
-        (doseq [recipe recipes]
-          (case (:type recipe)
-            :shaped (emit-shaped! writer recipe)
-            :shapeless (emit-shapeless! writer recipe)
-            :smelting (emit-smelting! writer recipe)
-            (throw (ex-info "Unsupported recipe type" {:recipe recipe}))))
-        (println (str "[recipe-provider] generated recipes=" (count recipes)))))))
+      (let [recipes (recipe-core/load-recipes)
+            emitted (recipe-core/emit-recipes!
+                      recipes
+                      {:shaped (fn [recipe] (emit-shaped! writer recipe))
+                       :shapeless (fn [recipe] (emit-shapeless! writer recipe))
+                       :smelting (fn [recipe] (emit-smelting! writer recipe))})]
+        (println (str "[recipe-provider] generated recipes=" emitted))))))

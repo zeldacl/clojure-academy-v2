@@ -9,28 +9,13 @@
             [cn.li.fabric1201.registry.fabric-dispatch :as fabric-dispatch]
             [cn.li.mc1201.block.blockstate-properties :as bsp]
             [cn.li.fabric1201.integration.events :as events]
-            [cn.li.fabric1201.runtime.damage-interception :as runtime-damage-interception]
-            [cn.li.fabric1201.runtime.item-handler :as runtime-item-handler]
-            [cn.li.fabric1201.runtime.player-motion :as runtime-player-motion]
-            [cn.li.fabric1201.runtime.entity-damage :as runtime-entity-damage]
-            [cn.li.fabric1201.runtime.entity-motion :as runtime-entity-motion]
-            [cn.li.fabric1201.runtime.entity-query :as runtime-entity-query]
-            [cn.li.fabric1201.runtime.raycast :as runtime-raycast]
-            [cn.li.fabric1201.runtime.world-effects :as runtime-world-effects]
-            [cn.li.fabric1201.runtime.teleportation :as runtime-teleportation]
-            [cn.li.fabric1201.runtime.saved-locations :as runtime-saved-locations]
-            [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
-                        [cn.li.mc1201.runtime.sync-core :as runtime-sync]
-                        [cn.li.fabric1201.runtime.network :as runtime-network]
-                        [cn.li.fabric1201.runtime.potion-effects :as runtime-potion-effects]
-                        [cn.li.fabric1201.runtime.interop :as runtime-interop]
-                        [cn.li.fabric1201.runtime.block-manipulation :as runtime-block-manipulation]
+            [cn.li.fabric1201.runtime.install :as runtime-install]
             [cn.li.fabric1201.gui.init :as gui-init]
             [cn.li.fabric1201.config.bridge :as config-bridge]
-            [cn.li.mc1201.config.gameplay-init :as shared-gameplay-init]
+            [cn.li.fabric1201.config.gameplay-bridge :as gameplay-bridge]
+            [cn.li.mc1201.config.gameplay-bridge :as shared-gameplay-bridge]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mc1201.entity.effect-hooks :as effect-hooks]
@@ -265,8 +250,7 @@
   (init/init-from-java)
   (core/init)
   (config-bridge/load-all!)
-  (shared-gameplay-init/bind-gameplay-config!
-    (shared-gameplay-init/build-config-bridge 'cn.li.fabric1201.config.gameplay-bridge))
+  (shared-gameplay-bridge/bind-gameplay-config! (gameplay-bridge/provider-map))
   (bsp/init-all-properties!)
   (register-scripted-tile-hooks!)
   (register-all-blocks!)
@@ -276,21 +260,7 @@
   (effect-hooks/register-all-effect-hooks!)
   (ray-hooks/register-all-ray-hooks!)
   (marker-hooks/register-all-marker-hooks!)
-  (runtime-damage-interception/install-damage-interception!)
-  (runtime-item-handler/init!)
-  (runtime-player-motion/install-player-motion!)
-  (runtime-entity-damage/install-entity-damage!)
-  (runtime-entity-motion/install-entity-motion!)
-  (runtime-entity-query/install-entity-query!)
-  (runtime-raycast/install-raycast!)
-  (runtime-world-effects/install-world-effects!)
-  (runtime-teleportation/install-teleportation!)
-  (runtime-saved-locations/install-saved-locations!)
-  (runtime-potion-effects/install-potion-effects!)
-  (runtime-interop/install-runtime-interop!)
-  (runtime-block-manipulation/install-block-manipulation!)
-  (runtime-network/init!)
-  (power-runtime/init-damage-handlers!)
+  (runtime-install/install-runtime-adapters!)
   (gui-init/init-common!)
   (gui-init/init-server!)
   (events/register-events)

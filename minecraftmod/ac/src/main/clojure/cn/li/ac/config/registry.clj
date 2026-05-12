@@ -1,6 +1,5 @@
 (ns cn.li.ac.config.registry
-	(:require [cn.li.ac.config.common :as config-common]
-						[cn.li.ac.wireless.data.network-config :as network-config]
+	(:require [cn.li.ac.wireless.data.network-config :as network-config]
 						[cn.li.ac.block.wireless-matrix.config :as matrix-config]
 						[cn.li.ac.block.wireless-node.config :as node-config]
 						[cn.li.ac.block.solar-gen.config :as solar-config]
@@ -23,9 +22,9 @@
 
 (defn init-configs! []
 	(config-reg/register-config-descriptors!
-		config-common/wireless-domain
+		:cn.li.ac/wireless
 		wireless-descriptors)
 	(config-reg/ensure-default-values!
-		config-common/wireless-domain
+		:cn.li.ac/wireless
 		wireless-default-values)
 	nil)

@@ -70,3 +70,14 @@
     (add-provider! generator adv/create exfile-helper)
     
     (println (str "[" modid/*mod-id* "] DataGenerator setup complete!"))))
+
+(defn static-gather-data
+  "Static entry point used by Java annotation wrapper."
+  [^GatherDataEvent event]
+  (try
+    (println (str "[" modid/*mod-id* "] Gathering data generators..."))
+    (-gatherData event)
+    (println (str "[" modid/*mod-id* "] DataGenerator event processed!"))
+    (catch Exception e
+      (println (str "Error handling GatherDataEvent: " e))
+      (.printStackTrace e))))

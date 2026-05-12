@@ -21,7 +21,7 @@ public class ForgeEventHandler {
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
         try {
             LOGGER.info("[ForgeEventHandler] onRightClickBlock called, event: {}", event);
-            IFn handler = Clojure.var("cn.li.forge1201.events", "handle-right-click-event");
+            IFn handler = Clojure.var("cn.li.forge1201.integration.events", "handle-right-click-event");
             LOGGER.info("[ForgeEventHandler] Handler resolved: {}", handler);
             handler.invoke(event);
             LOGGER.info("[ForgeEventHandler] Handler invoked successfully");

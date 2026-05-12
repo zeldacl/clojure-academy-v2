@@ -63,6 +63,8 @@
     - `integration/events.clj`：Fabric 事件处理（事件对象解包、回写结果），业务逻辑委托到 mc1201
     - `datagen/setup.clj`：Datagen 入口（Fabric DataGeneratorEntrypoint）
     - `class-noinit` / `launch-ready` / 启动期反射属于平台语义，保留于此
+- **`forge-1.20.1`**：Loader 入口与平台适配；可使用 Minecraft/Forge API。
+- **Datagen shared core**：配方/语言等平台无关生成逻辑优先放在 `mc-1.20.1/src/main/clojure/cn/li/mc1201/datagen/*_core.clj`，Forge/Fabric provider 仅保留 PackOutput/Loader API 适配壳。
 - **边界规则（更新）**：
   - 禁止 `ac` 对 `cn.li.forge1201.*` 建立静态编译依赖。
   - `forge-1.20.1` / `fabric-1.20.1` 中凡是“只依赖 Minecraft、与 Loader 无关”的逻辑，应优先迁入 `mc-1.20.1`；平台层不得长期保留纯代理 wrapper 或双端镜像实现。

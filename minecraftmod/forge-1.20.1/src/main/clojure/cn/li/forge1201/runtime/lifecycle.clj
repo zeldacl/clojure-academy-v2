@@ -3,6 +3,7 @@
   (:require [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
             [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core]
             [cn.li.mc1201.runtime.sync-core :as runtime-sync]
+            [cn.li.forge1201.runtime.install :as runtime-install]
             [cn.li.forge1201.runtime.network :as runtime-network]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
@@ -46,55 +47,10 @@
                                          :tick-sync! runtime-sync/tick-sync!
                                          :send-sync-fn runtime-network/send-sync-to-client!}))))
 
-(defn- try-install! [ns-sym fn-sym label]
-  (try
-    (require ns-sym)
-    (if-let [f (resolve fn-sym)]
-      (f)
-      (log/warn "Install function not found for" label "(" fn-sym ")"))
-    (catch Exception e
-      (log/warn "Failed to install" label ":" (ex-message e)))))
-
 (defn init-common!
   "Register all forge-side lifecycle listeners for runtime bridge."
   []
-  ;; Keep this minimal and enable only adapters currently relied upon by migrated runtime features.
-  (try-install! 'cn.li.forge1201.runtime.entity-damage
-                'cn.li.forge1201.runtime.entity-damage/install-entity-damage!
-                "entity-damage")
-  (try-install! 'cn.li.forge1201.runtime.raycast
-                'cn.li.forge1201.runtime.raycast/install-raycast!
-                "raycast")
-  (try-install! 'cn.li.forge1201.runtime.interop
-                'cn.li.forge1201.runtime.interop/install-runtime-interop!
-                "runtime-interop")
-  (try-install! 'cn.li.forge1201.runtime.world-effects
-                'cn.li.forge1201.runtime.world-effects/install-world-effects!
-                "world-effects")
-  (try-install! 'cn.li.forge1201.runtime.potion-effects
-                'cn.li.forge1201.runtime.potion-effects/install-potion-effects!
-                "potion-effects")
-  (try-install! 'cn.li.forge1201.runtime.teleportation
-                'cn.li.forge1201.runtime.teleportation/install-teleportation!
-                "teleportation")
-  (try-install! 'cn.li.forge1201.runtime.saved-locations
-                'cn.li.forge1201.runtime.saved-locations/install-saved-locations!
-                "saved-locations")
-  (try-install! 'cn.li.forge1201.runtime.player-motion
-                'cn.li.forge1201.runtime.player-motion/install-player-motion!
-                "player-motion")
-  (try-install! 'cn.li.forge1201.runtime.entity-motion
-                'cn.li.forge1201.runtime.entity-motion/install-entity-motion!
-                "entity-motion")
-  (try-install! 'cn.li.forge1201.runtime.entity-query
-                'cn.li.forge1201.runtime.entity-query/install-entity-query!
-                "entity-query")
-  (try-install! 'cn.li.forge1201.runtime.block-manipulation
-                'cn.li.forge1201.runtime.block-manipulation/install-block-manipulation!
-                "block-manipulation")
-  (try-install! 'cn.li.forge1201.runtime.damage-interception
-                'cn.li.forge1201.runtime.damage-interception/install-damage-interception!
-                "damage-interception")
+  (runtime-install/install-runtime-adapters!)
   (runtime-network/init!)
   (.addListener (MinecraftForge/EVENT_BUS)
                 EventPriority/NORMAL false PlayerEvent$PlayerLoggedInEvent
