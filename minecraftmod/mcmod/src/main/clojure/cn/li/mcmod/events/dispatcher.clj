@@ -2,10 +2,14 @@
   "Platform-agnostic block event dispatchers.
 
    Forge/Fabric adapters should forward Forge events into these handlers.
-   Actual per-block behavior is looked up via `cn.li.mcmod.events.metadata`."
-  (:require [cn.li.mcmod.events.metadata :as event-metadata]
+   Actual per-block behavior is resolved from block specs in the DSL."
+  (:require [cn.li.mcmod.block.query :as bquery]
             [cn.li.mcmod.block.multiblock-core :as mb-core]
             [cn.li.mcmod.util.log :as log]))
+
+(defn- get-block-event-handler
+  [block-id event-type]
+  (get-in (bquery/get-block-spec block-id) [:events event-type]))
 
 (defn on-block-right-click
   "Generic block right-click event handler.
@@ -15,7 +19,7 @@
   (let [routed-ctx (mb-core/route-to-controller-context ctx)
         routed-block-id (:block-id routed-ctx)]
     (log/debug "  routed-block-id:" routed-block-id)
-    (let [handler (event-metadata/get-block-event-handler routed-block-id :on-right-click)]
+    (let [handler (get-block-event-handler routed-block-id :on-right-click)]
       (log/debug "  handler found?" (some? handler))
       (when handler
         (log/debug "  calling handler...")
@@ -27,7 +31,7 @@
   [ctx]
   (if-let [precheck-ret (mb-core/precheck-controller-place ctx)]
     precheck-ret
-    (let [handler-ret (when-let [handler (event-metadata/get-block-event-handler (:block-id ctx) :on-place)]
+    (let [handler-ret (when-let [handler (get-block-event-handler (:block-id ctx) :on-place)]
                         (handler ctx))
           core-ret (mb-core/post-place-controller! ctx)]
       (or core-ret handler-ret))))
@@ -39,7 +43,7 @@
   [ctx]
   (let [routed-ctx (mb-core/route-to-controller-context ctx)
         routed-block-id (:block-id routed-ctx)
-        handler-ret (when-let [handler (event-metadata/get-block-event-handler routed-block-id :on-break)]
+      handler-ret (when-let [handler (get-block-event-handler routed-block-id :on-break)]
                       (handler routed-ctx))
         core-ret (mb-core/apply-structure-break! ctx routed-ctx)]
     (merge (or handler-ret {}) (or core-ret {}))))

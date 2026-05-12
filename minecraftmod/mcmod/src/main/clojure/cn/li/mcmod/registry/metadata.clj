@@ -14,6 +14,7 @@
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.mcmod.fluid.dsl :as fdsl]
+            [cn.li.mcmod.block.query :as bquery]
             [cn.li.mcmod.effect.dsl :as edsl]
             [cn.li.mcmod.particle.dsl :as pdsl]
             [cn.li.mcmod.loot.dsl :as ldsl]
@@ -32,7 +33,7 @@
   Returns:
     Sequence of block ID strings (e.g., [\"demo-block\" \"copper-ore\" ...])"
   []
-  (bdsl/list-blocks))
+    (bquery/list-all-blocks))
 
 (declare get-block-spec)
 
@@ -64,12 +65,12 @@
   Returns:
     Map - Block specification with all properties"
   [block-id]
-  (bdsl/get-block block-id))
+    (bquery/get-block-spec block-id))
 
 (defn controller-parts-block?
   "Return true when the block uses DSL controller+parts mode."
   [block-id]
-  (= :controller-parts (get-in (get-block-spec block-id) [:multi-block :multiblock-mode])))
+  (bquery/controller-parts-block? block-id))
 
 (defn- norm-block-id-for-compare
   "Match BE / DSL ids whether stored as keyword or string (defrecord vs runtime)."
@@ -80,7 +81,7 @@
 (defn is-controller-block?
   "Return true when block-id is the controller block in controller+parts mode."
   [block-id]
-  (let [spec (get-block-spec block-id)
+    (let [spec (bquery/get-block-spec block-id)
         multi-block (:multi-block spec)
         cid (:controller-block-id multi-block)]
     (and (= :controller-parts (:multiblock-mode multi-block))
@@ -90,7 +91,7 @@
 (defn is-part-block?
   "Return true when block-id is the part block in controller+parts mode."
   [block-id]
-  (let [spec (get-block-spec block-id)
+    (let [spec (bquery/get-block-spec block-id)
         multi-block (:multi-block spec)
         pid (:part-block-id multi-block)]
     (and (= :controller-parts (:multiblock-mode multi-block))
@@ -100,18 +101,18 @@
 (defn get-controller-block-id
   "Get controller block-id for a block participating in controller+parts mode."
   [block-id]
-  (get-in (get-block-spec block-id) [:multi-block :controller-block-id]))
+    (bquery/get-controller-block-id block-id))
 
 (defn get-part-block-id
   "Get part block-id for a block participating in controller+parts mode."
   [block-id]
-  (get-in (get-block-spec block-id) [:multi-block :part-block-id]))
+    (bquery/get-part-block-id block-id))
 
 (defn get-structure-offsets
   "Get normalized relative offsets (including origin) for a controller block.
   Returns a vector of maps with :relative-x/:relative-y/:relative-z."
   [controller-block-id]
-  (when-let [spec (get-block-spec controller-block-id)]
+    (when-let [spec (bquery/get-block-spec controller-block-id)]
     (let [multi-block (:multi-block spec)
           origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})]
       (if-let [custom-pos (:multi-block-positions multi-block)]
@@ -127,7 +128,7 @@
   Returns:
     Boolean - true if block has block-state-properties defined"
   [block-id]
-  (let [block-spec (get-block-spec block-id)]
+    (let [block-spec (bquery/get-block-spec block-id)]
     (some? (get-in block-spec [:block-state :block-state-properties]))))
 
 (defn has-block-entity?

@@ -2,7 +2,7 @@
   "Centralized Forge event mutation helpers to keep write-back semantics consistent."
   (:import [net.minecraft.world InteractionResult]
            [net.minecraftforge.event.entity.player PlayerInteractEvent PlayerInteractEvent$RightClickBlock]
-           [net.minecraftforge.eventbus.api Event$Result]))
+           [net.minecraftforge.eventbus.api Event Event$Result]))
 
 (defn deny-right-click-use!
   [evt]
@@ -25,7 +25,7 @@
   evt)
 
 (defn cancel-event!
-  [evt]
+  [^Event evt]
   (.setCanceled evt true)
   evt)
 

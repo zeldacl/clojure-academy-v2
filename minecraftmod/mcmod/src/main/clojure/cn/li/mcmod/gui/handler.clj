@@ -4,10 +4,11 @@
    This namespace hosts:
    - IGuiHandler protocol
    - WirelessGuiHandler record implementation
-   - container state atoms (active/registered containers)
 
+   Container state atoms now live in `cn.li.mcmod.gui.container-state`.
    Platform adapters and game content should not re-implement these building blocks."
-  (:require [cn.li.mcmod.gui.dsl :as gui-dsl]
+  (:require [cn.li.mcmod.gui.registry :as gui-registry]
+            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.platform.world :as pworld]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
@@ -30,7 +31,7 @@
 (defn get-gui-config
   "Get GUI spec/config by gui-id (int)."
   [gui-id]
-  (gui-dsl/has-gui-id? gui-id))
+  (gui-registry/has-gui-id? gui-id))
 
 ;; Default handler implementation (driven by GUI config stored in `gui-dsl`).
 (defrecord WirelessGuiHandler []
@@ -38,7 +39,7 @@
   (get-server-container [_ gui-id player world pos]
     (let [tile-entity (pworld/world-get-tile-entity* world pos)
           cfg? (get-gui-config gui-id)
-          container-fn (gui-dsl/get-container-fn gui-id)]
+          container-fn (gui-registry/get-container-fn gui-id)]
       (if (and tile-entity cfg? container-fn)
         (do
           (log/debug "Creating container for player"
@@ -54,8 +55,8 @@
   (get-client-gui [_ gui-id player world pos]
     (let [tile-entity (pworld/world-get-tile-entity* world pos)
           cfg? (get-gui-config gui-id)
-          container-fn (gui-dsl/get-container-fn gui-id)
-          screen-fn (gui-dsl/get-screen-fn gui-id)]
+          container-fn (gui-registry/get-container-fn gui-id)
+          screen-fn (gui-registry/get-screen-fn gui-id)]
       (if (and tile-entity cfg? container-fn screen-fn)
         (do
           (log/debug "Creating GUI for player"
@@ -86,26 +87,12 @@
       (reset! gui-handler (->WirelessGuiHandler))))
 
 ;; ============================================================================
-;; Container State Atoms
+;; Container State Aliases (compatibility)
 ;; ============================================================================
 
-(defonce active-containers
-  ;; Containers active for server tick updates.
-  (atom #{}))
-
-(defonce player-containers
-  ;; Open tabbed containers keyed by player UUID (server-side lookup).
-  (atom {}))
-
-(defonce menu-containers
-  ;; Map from AbstractContainerMenu instance -> container.
-  (atom {}))
-
-(defonce containers-by-id
-  ;; Map from containerId/windowId -> container.
-  (atom {}))
-
-(defonce client-container
-  ;; Client-side active container reference used by screen factories.
-  (atom nil))
+(def active-containers container-state/active-containers)
+(def player-containers container-state/player-containers)
+(def menu-containers container-state/menu-containers)
+(def containers-by-id container-state/containers-by-id)
+(def client-container container-state/client-container)
 

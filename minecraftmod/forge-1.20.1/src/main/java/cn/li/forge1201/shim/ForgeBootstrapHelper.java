@@ -1,12 +1,12 @@
 package cn.li.forge1201.shim;
 
 import cn.li.forge1201.block.entity.ScriptedBlockEntity;
+import cn.li.mc1201.block.SharedBootstrapBlockHelper;
 import cn.li.mc1201.block.SharedDynamicStateBlock;
 import cn.li.mc1201.block.SharedScriptedBlock;
 import cn.li.mc1201.block.ScriptedRenderShapes;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.runtime.BlockRegistryShared;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTab;
@@ -15,14 +15,12 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.level.material.FlowingFluid;
@@ -35,7 +33,6 @@ import net.minecraftforge.fluids.ForgeFlowingFluid;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 
-import java.util.ArrayList;
 import java.lang.reflect.Constructor;
 import java.util.function.Function;
 import java.util.List;
@@ -90,28 +87,18 @@ public final class ForgeBootstrapHelper {
     }
 
     public static BlockBehaviour.Properties createStoneProperties() {
-        return BlockBehaviour.Properties.copy(Blocks.STONE);
+        return SharedBootstrapBlockHelper.createStoneProperties();
     }
 
     public static BlockBehaviour.Properties carrierBlockProperties(BlockBehaviour.Properties base) {
-        BlockBehaviour.StatePredicate alwaysFalse = new BlockBehaviour.StatePredicate() {
-            @Override
-            public boolean test(BlockState state, BlockGetter level, BlockPos pos) {
-                return false;
-            }
-        };
-        return base.noOcclusion()
-            .forceSolidOff()
-            .isViewBlocking(alwaysFalse)
-            .isSuffocating(alwaysFalse)
-            .isRedstoneConductor(alwaysFalse);
+        return SharedBootstrapBlockHelper.carrierBlockProperties(base);
     }
 
     public static Block createCarrierScriptedDynamicBlock(String blockId, String tileId, List<Property<?>> properties, BlockBehaviour.Properties blockProperties) {
-        return SharedScriptedBlock.create(
+        return SharedBootstrapBlockHelper.createCarrierScriptedDynamicBlock(
             blockId,
             tileId,
-            new ArrayList<>(properties),
+            properties,
             blockProperties,
             (resolvedTileId, resolvedBlockId, pos, state) -> {
                 BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
@@ -121,17 +108,16 @@ public final class ForgeBootstrapHelper {
                 if (blockEntity instanceof ScriptedBlockEntity scripted) {
                     ScriptedBlockEntity.serverTick(level, pos, state, scripted);
                 }
-            },
-            (resolvedBlockId, state) -> resolveRenderShape(resolvedBlockId)
+            }
         );
     }
 
     public static Block createDynamicStateBlock(String blockId, List<Property<?>> properties, BlockBehaviour.Properties blockProperties) {
-        return SharedDynamicStateBlock.create(blockId, new ArrayList<>(properties), blockProperties);
+        return SharedBootstrapBlockHelper.createDynamicStateBlock(blockId, properties, blockProperties);
     }
 
     public static Block createCarrierScriptedBlock(String blockId, String tileId, BlockBehaviour.Properties blockProperties) {
-        return new SharedScriptedBlock(
+        return SharedBootstrapBlockHelper.createCarrierScriptedBlock(
             blockId,
             tileId,
             blockProperties,
@@ -143,13 +129,12 @@ public final class ForgeBootstrapHelper {
                 if (blockEntity instanceof ScriptedBlockEntity scripted) {
                     ScriptedBlockEntity.serverTick(level, pos, state, scripted);
                 }
-            },
-            (resolvedBlockId, state) -> resolveRenderShape(resolvedBlockId)
+            }
         );
     }
 
     public static Block createPlainBlock(BlockBehaviour.Properties blockProperties) {
-        return new Block(blockProperties);
+        return SharedBootstrapBlockHelper.createPlainBlock(blockProperties);
     }
 
     public static FluidType createFluidType(int luminosity,
@@ -298,24 +283,13 @@ public final class ForgeBootstrapHelper {
     public static BlockEntityType<?> createScriptedBlockEntityType(String tileId,
                                                                    List<Block> blocks,
                                                                    Function<Block, String> blockIdResolver) {
-        Block[] blockArray = blocks.toArray(new Block[0]);
-        BlockEntityType<cn.li.forge1201.block.entity.ScriptedBlockEntity>[] typeHolder =
-            (BlockEntityType<cn.li.forge1201.block.entity.ScriptedBlockEntity>[]) new BlockEntityType<?>[1];
-        BlockEntityType<cn.li.forge1201.block.entity.ScriptedBlockEntity> beType =
-            BlockEntityType.Builder.of(
-                (pos, state) -> {
-                    Block blockInst = state.getBlock();
-                    String blockId = blockIdResolver.apply(blockInst);
-                    if (blockId == null) {
-                        blockId = tileId;
-                    }
-                    return new cn.li.forge1201.block.entity.ScriptedBlockEntity(typeHolder[0], pos, state, tileId, blockId);
-                },
-                blockArray
-            ).build(null);
-        typeHolder[0] = beType;
-        cn.li.forge1201.block.entity.ScriptedBlockEntity.registerType(tileId, beType);
-        return beType;
+        return SharedBootstrapBlockHelper.createScriptedBlockEntityType(
+            tileId,
+            blocks,
+            blockIdResolver,
+            (type, pos, state, resolvedTileId, blockId) -> new cn.li.forge1201.block.entity.ScriptedBlockEntity(type, pos, state, resolvedTileId, blockId),
+            cn.li.forge1201.block.entity.ScriptedBlockEntity::registerType
+        );
     }
 
     public static boolean isAirBlock(Block block, Block airBlock) {

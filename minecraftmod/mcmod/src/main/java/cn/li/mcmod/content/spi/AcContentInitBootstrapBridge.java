@@ -1,8 +1,5 @@
 package cn.li.mcmod.content.spi;
 
-import clojure.java.api.Clojure;
-import clojure.lang.IFn;
-
 /**
  * Runtime bootstrap provider for AC content registration.
  *
@@ -20,7 +17,6 @@ public final class AcContentInitBootstrapBridge implements ContentInitBootstrap 
 
     @Override
     public void register() {
-        IFn require = Clojure.var("clojure.core", "require");
-        require.invoke(Clojure.read("cn.li.ac.core"));
+        ClojureNamespaceBootstrapInvoker.requireNamespace("cn.li.ac.core");
     }
 }

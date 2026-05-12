@@ -4,10 +4,10 @@
   This namespace owns generic structure checks/routing. Business actions
   (GUI behavior, inventory policies, etc.) stay in ac handlers."
   (:require [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.block.query :as bquery]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   )
 
@@ -46,9 +46,9 @@
   "Check if controller placement has free space for all structure positions.
   Returns {:cancel-place? true} when placement should be cancelled."
   [{:keys [world pos block-id]}]
-  (if-not (registry-metadata/is-controller-block? block-id)
+  (if-not (bquery/is-controller-block? block-id)
     nil
-    (let [controller-spec (registry-metadata/get-block-spec block-id)
+    (let [controller-spec (bquery/get-block-spec block-id)
           occupied? (some (fn [bp]
                             (if (same-pos? bp pos)
                               false
@@ -63,9 +63,9 @@
   "Place part blocks and initialize their link state to controller.
   Returns nil or {:cancel-place? true} when required data is missing." 
   [{:keys [world pos block-id]}]
-  (when (registry-metadata/is-controller-block? block-id)
-    (let [controller-spec (registry-metadata/get-block-spec block-id)
-          part-block-id (registry-metadata/get-part-block-id block-id)
+  (when (bquery/is-controller-block? block-id)
+    (let [controller-spec (bquery/get-block-spec block-id)
+          part-block-id (bquery/get-part-block-id controller-spec)
           mx (pos/pos-x pos)
           my (pos/pos-y pos)
           mz (pos/pos-z pos)]
@@ -87,10 +87,10 @@
   Returns BlockPos or nil when unresolved." 
   [{:keys [world pos block-id]}]
   (cond
-    (registry-metadata/is-controller-block? block-id)
+    (bquery/is-controller-block? block-id)
     pos
 
-    (registry-metadata/is-part-block? block-id)
+    (bquery/is-part-block? block-id)
     (let [be (world/world-get-tile-entity* world pos)
           st (be-state be)
           cx (:controller-pos-x st)
@@ -107,7 +107,7 @@
   Keeps :original-block-id and :original-pos for break decisions." 
   [ctx]
   (if-let [controller-pos (resolve-controller-pos ctx)]
-    (let [controller-id (or (registry-metadata/get-controller-block-id (:block-id ctx))
+    (let [controller-id (or (bquery/get-controller-block-id (:block-id ctx))
                             (:block-id ctx))]
       (assoc ctx
              :original-block-id (:block-id ctx)
@@ -122,12 +122,12 @@
   [{:keys [world block-id]} routed-ctx]
   (let [controller-id (:block-id routed-ctx)
         controller-pos (:pos routed-ctx)
-        controller-spec (registry-metadata/get-block-spec controller-id)]
-    (if-not (and (registry-metadata/is-controller-block? controller-id)
+      controller-spec (bquery/get-block-spec controller-id)]
+    (if-not (and (bquery/is-controller-block? controller-id)
                  controller-spec)
       {:cancel-break? false}
       (let [original-id (or (:original-block-id routed-ctx) block-id)
-            remove-all? (registry-metadata/is-part-block? original-id)]
+        remove-all? (bquery/is-part-block? original-id)]
         (doseq [bp (structure-positions controller-pos controller-spec)
                 :when (or remove-all?
                           (not (same-pos? bp controller-pos)))]
