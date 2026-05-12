@@ -3,21 +3,17 @@
   (:require [cn.li.mc1201.runtime.entity-damage-adapter :as adapter]
             [cn.li.mc1201.runtime.adapter-support :as adapter-support]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
+            [cn.li.forge1201.runtime.server-context :as server-context]
             [cn.li.mcmod.platform.entity-damage :as ped]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.server MinecraftServer]
-           [cn.li.forge1201.bridge ForgeRuntimeBridge]
+  (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.entity Entity LivingEntity]
-           [net.minecraft.world.phys AABB]
-           [net.minecraftforge.server ServerLifecycleHooks]))
-
-(defn- get-server ^MinecraftServer []
-  (ServerLifecycleHooks/getCurrentServer))
+           [net.minecraft.world.phys AABB]))
 
 (defn forge-entity-damage []
   (adapter/create-entity-damage
-    get-server
+    server-context/get-server
     {:resolve-level-fn (fn [server world-id] (query-core/resolve-level server world-id))
      :get-entity-by-uuid-fn query-core/get-entity-by-uuid
      :get-living-entities-in-aabb-fn (fn [^ServerLevel level ^AABB aabb]

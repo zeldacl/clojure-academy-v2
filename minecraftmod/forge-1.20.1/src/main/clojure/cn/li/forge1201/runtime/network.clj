@@ -8,10 +8,10 @@
   Here we provide helper send-fns for context manager and sync service."
   (:require [cn.li.mc1201.runtime.network-core :as network-core]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
+            [cn.li.forge1201.runtime.server-context :as server-context]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.network ClojureNetwork]
-           [net.minecraftforge.server ServerLifecycleHooks]
            [net.minecraft.server.level ServerPlayer]))
 
 (defn send-to-server!
@@ -28,7 +28,7 @@
 
 (defn- find-player-by-uuid
   [uuid-str]
-  (query-core/get-player-by-uuid (ServerLifecycleHooks/getCurrentServer) uuid-str))
+  (query-core/get-player-by-uuid (server-context/get-server) uuid-str))
 
 (def send-sync-to-client!
   (network-core/create-sync-sender find-player-by-uuid send-push-to-client!))

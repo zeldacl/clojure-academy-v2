@@ -4,12 +4,11 @@
             [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core]
             [cn.li.mc1201.runtime.sync-core :as runtime-sync]
             [cn.li.forge1201.runtime.install :as runtime-install]
+            [cn.li.forge1201.runtime.lifecycle-event-binding :as lifecycle-event-binding]
             [cn.li.forge1201.runtime.network :as runtime-network]
             [cn.li.mcmod.platform.power-runtime :as power-runtime]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraftforge.common MinecraftForge]
-           [net.minecraftforge.eventbus.api EventPriority]
-           [net.minecraftforge.event.entity.player PlayerEvent$PlayerLoggedInEvent
+  (:import [net.minecraftforge.event.entity.player PlayerEvent$PlayerLoggedInEvent
                                                   PlayerEvent$PlayerLoggedOutEvent
                                                   PlayerEvent$Clone]
            [net.minecraftforge.event.entity.living LivingDeathEvent]
@@ -52,26 +51,12 @@
   []
   (runtime-install/install-runtime-adapters!)
   (runtime-network/init!)
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false PlayerEvent$PlayerLoggedInEvent
-                (reify java.util.function.Consumer
-                  (accept [_ evt] (on-player-login evt))))
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false PlayerEvent$PlayerLoggedOutEvent
-                (reify java.util.function.Consumer
-                  (accept [_ evt] (on-player-logout evt))))
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false PlayerEvent$Clone
-                (reify java.util.function.Consumer
-                  (accept [_ evt] (on-player-clone evt))))
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false LivingDeathEvent
-                (reify java.util.function.Consumer
-                  (accept [_ evt] (on-player-death evt))))
-  (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false TickEvent$PlayerTickEvent
-                (reify java.util.function.Consumer
-                  (accept [_ evt] (on-player-tick evt))))
+  (lifecycle-event-binding/register-lifecycle-listeners!
+    {:on-player-login on-player-login
+     :on-player-logout on-player-logout
+     :on-player-clone on-player-clone
+     :on-player-death on-player-death
+     :on-player-tick on-player-tick})
 
   ;; Initialize damage handlers after all protocols are installed
   (power-runtime/init-damage-handlers!)

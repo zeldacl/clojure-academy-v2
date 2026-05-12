@@ -5,11 +5,11 @@
   (:require [cn.li.mcmod.platform.saved-locations :as psl]
             [cn.li.mc1201.runtime.adapter-support :as adapter-support]
             [cn.li.mc1201.runtime.saved-locations-core :as slc]
-            [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraftforge.server ServerLifecycleHooks]))
+            [cn.li.forge1201.runtime.server-context :as server-context]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn forge-saved-locations []
-  (slc/create-saved-locations #(ServerLifecycleHooks/getCurrentServer)))
+  (slc/create-saved-locations server-context/get-server))
 
 (defn install-saved-locations! []
   (adapter-support/install-adapter! #'psl/*saved-locations*

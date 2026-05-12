@@ -5,44 +5,24 @@
 	common setup side effects and event subscriptions."
 	(:require [cn.li.forge1201.gui.init :as gui-init]
 						[cn.li.forge1201.runtime.lifecycle :as runtime-lifecycle]
-						[cn.li.forge1201.config.gameplay-bridge :as gameplay-bridge]
+						[cn.li.forge1201.config.bridge :as config-bridge]
 						[cn.li.mc1201.config.gameplay-bridge :as shared-gameplay-bridge]
 						[cn.li.forge1201.integration.forge-energy :as forge-energy]
 						[cn.li.forge1201.integration.ic2-energy :as ic2-energy]
 						[cn.li.forge1201.runtime.item-handler :as runtime-item-handler]
 						[cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
-						[cn.li.forge1201.integration.events :as events]
+						[cn.li.forge1201.setup.event-listeners :as event-listeners]
 						[cn.li.mcmod.util.log :as log])
-	(:import [net.minecraftforge.common MinecraftForge]
-					 [net.minecraftforge.eventbus.api EventPriority]))
+	)
 
 (defn run-common-setup!
 	[]
 	(gui-init/init-common!)
 	(runtime-lifecycle/init-common!)
-	(shared-gameplay-bridge/bind-gameplay-config! (gameplay-bridge/provider-map))
+	(shared-gameplay-bridge/bind-gameplay-config! (config-bridge/provider-map))
 	(forge-energy/init-forge-energy!)
 	(ic2-energy/init-ic2-energy!)
 	(runtime-item-handler/init!)
 	(imc-dispatch/init!)
-	(.addListener (MinecraftForge/EVENT_BUS)
-								EventPriority/NORMAL false net.minecraftforge.event.entity.player.PlayerInteractEvent$LeftClickBlock
-								(reify java.util.function.Consumer
-									(accept [_ evt]
-										(events/handle-left-click-block-event evt))))
-	(.addListener (MinecraftForge/EVENT_BUS)
-								EventPriority/NORMAL false net.minecraftforge.event.level.BlockEvent$EntityPlaceEvent
-								(reify java.util.function.Consumer
-									(accept [_ evt]
-										(events/handle-block-place-event evt))))
-	(.addListener (MinecraftForge/EVENT_BUS)
-								EventPriority/NORMAL false net.minecraftforge.event.level.BlockEvent$BreakEvent
-								(reify java.util.function.Consumer
-									(accept [_ evt]
-										(events/handle-block-break-event evt))))
-	(.addListener (MinecraftForge/EVENT_BUS)
-								EventPriority/NORMAL false net.minecraftforge.event.LootTableLoadEvent
-								(reify java.util.function.Consumer
-									(accept [_ evt]
-										(events/handle-loot-table-load evt))))
+	(event-listeners/register-common-event-listeners!)
 	(log/info "Forge common setup wiring complete"))

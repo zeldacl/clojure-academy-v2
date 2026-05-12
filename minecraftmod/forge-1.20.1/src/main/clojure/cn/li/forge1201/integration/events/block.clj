@@ -1,0 +1,69 @@
+(ns cn.li.forge1201.integration.events.block
+  "Forge block place/break event handlers." 
+  (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
+            [cn.li.mcmod.events.metadata :as event-metadata]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.forge1201.integration.events.bridge :as bridge])
+  (:import [net.minecraft.world.entity.player Player]
+           [net.minecraftforge.event.level BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
+
+(defn handle-block-place
+  [event-data]
+  (let [{:keys [x y z block]} event-data
+        block-name (str block)
+        block-id (event-metadata/identify-block-from-full-name block-name)]
+    (log/info "1.20.1 Place event at (" x "," y "," z ") block:" block-name)
+    (when block-id
+      (dispatcher/on-block-place (assoc event-data :block-id block-id)))))
+
+(defn handle-block-place-event
+  [^BlockEvent$EntityPlaceEvent evt]
+  (try
+    (let [pos (.getPos evt)
+          level (.getLevel evt)
+          entity (.getEntity evt)
+          placed-state (.getPlacedBlock evt)]
+      (when (and level pos)
+        (if (and entity
+                 (instance? Player entity)
+                 (bridge/runtime-activated? (str (.getUUID ^Player entity))))
+          (.setCanceled evt true)
+          (let [ret (handle-block-place
+                      {:x (.getX pos)
+                       :y (.getY pos)
+                       :z (.getZ pos)
+                       :pos pos
+                       :player entity
+                       :world level
+                       :block (.getBlock placed-state)})]
+            (when (and (map? ret) (:cancel-place? ret))
+              (.setCanceled evt true))))))
+    (catch Throwable t
+      (log/info "Error handling block place event:" (.getMessage t))
+      (.printStackTrace t))))
+
+(defn handle-block-break-event
+  [^BlockEvent$BreakEvent evt]
+  (try
+    (let [pos (.getPos evt)
+          level (.getLevel evt)
+          player (.getPlayer evt)
+          block-state (.getBlockState level pos)
+          block-id (event-metadata/identify-block-from-full-name (str (.getBlock block-state)))]
+      (if (bridge/runtime-activated? (str (.getUUID player)))
+        (.setCanceled evt true)
+        (when block-id
+          (let [ret (dispatcher/on-block-break
+                      {:x (.getX pos)
+                       :y (.getY pos)
+                       :z (.getZ pos)
+                       :pos pos
+                       :player player
+                       :world level
+                       :block (.getBlock block-state)
+                       :block-id block-id})]
+            (when (and (map? ret) (:cancel-break? ret))
+              (.setCanceled evt true))))))
+    (catch Throwable t
+      (log/info "Error handling block break event:" (.getMessage t))
+      (.printStackTrace t))))

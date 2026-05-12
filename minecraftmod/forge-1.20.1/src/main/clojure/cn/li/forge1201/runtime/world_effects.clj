@@ -3,21 +3,17 @@
   (:require [cn.li.mc1201.runtime.world-effects-adapter :as adapter]
             [cn.li.mc1201.runtime.adapter-support :as adapter-support]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
+            [cn.li.forge1201.runtime.server-context :as server-context]
             [cn.li.mcmod.platform.world-effects :as pwe]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.server MinecraftServer]
-           [cn.li.forge1201.bridge ForgeRuntimeBridge]
+  (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.level.block Block]
-           [net.minecraft.world.phys AABB]
-           [net.minecraftforge.server ServerLifecycleHooks]))
-
-(defn- get-server ^MinecraftServer []
-  (ServerLifecycleHooks/getCurrentServer))
+           [net.minecraft.world.phys AABB]))
 
 (defn forge-world-effects []
   (adapter/create-world-effects
-    get-server
+    server-context/get-server
     {:resolve-level-fn (fn [server world-id] (query-core/resolve-level-strict server world-id))
      :spawn-lightning-fn (fn [^ServerLevel level x y z]
                            (ForgeRuntimeBridge/spawnLightning level (double x) (double y) (double z)))

@@ -1,235 +1,44 @@
 (ns cn.li.forge1201.integration.events
-  "Forge 1.20.1 event handlers"
-  (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
-            [cn.li.mcmod.events.interaction-result :as interaction-result]
-            [cn.li.mcmod.platform.power-runtime :as power-runtime]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1201.integration.event-feedback :as event-feedback]
-            [cn.li.mc1201.integration.event-handlers :as event-handlers]
-            [cn.li.mcmod.events.metadata :as event-metadata]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
-            [cn.li.mcmod.events.world-lifecycle :as world-lifecycle])
-  (:import [cn.li.forge1201.loot LootInjectionHelper]
-           [net.minecraftforge.event LootTableLoadEvent]
-           [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock
-            PlayerInteractEvent$LeftClickBlock]
-       [net.minecraft.world InteractionHand InteractionResult]
-       [net.minecraft.world.entity.player Player]
-         [net.minecraft.world.level Level]
-           [net.minecraftforge.eventbus.api Event$Result]
-           [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload
-            BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
+  "Forge 1.20.1 event handler compatibility facade.
 
-(defn- is-gui-result?
-  "Forge predicate to detect GUI opening results"
-  [ret]
-  (and (map? ret) (contains? ret :gui-id) (contains? ret :player) 
-       (contains? ret :world) (contains? ret :pos)))
-
-(defn- open-gui-for-result
-  "Forge GUI opener from event result"
-  [gui-id player world _pos tile-entity]
-  (when (and tile-entity (not (.isClientSide ^Level world)))
-    (log/info "[RIGHT-CLICK] Opening GUI on server side...")
-    (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))
+  Actual handlers are split by domain under cn.li.forge1201.integration.events.*"
+  (:require [cn.li.forge1201.integration.events.interact :as interact]
+            [cn.li.forge1201.integration.events.block :as block]
+            [cn.li.forge1201.integration.events.world :as world]
+            [cn.li.forge1201.integration.events.loot :as loot]))
 
 (defn handle-right-click
-  "Handle right-click block event from event data map"
   [event-data]
-  (event-handlers/handle-block-right-click
-    event-data
-    dispatcher/on-block-right-click
-    is-gui-result?
-    open-gui-for-result
-    "[RIGHT-CLICK]"))
+  (interact/handle-right-click event-data))
 
 (defn handle-right-click-event
-  "Handle right-click block event directly from Forge event object"
-  [^PlayerInteractEvent$RightClickBlock evt]
-  (try
-    (let [pos (.getPos evt)
-          ^Level level (.getLevel evt)
-          player (.getEntity evt)
-          hand (.getHand evt)]
-      ;; Forge fires on both sides and both hands. Main hand only.
-      (when (= hand InteractionHand/MAIN_HAND)
-        (let [player-uuid (str (.getUUID player))
-              runtime-activated? (boolean (get-in (power-runtime/get-player-state player-uuid)
-                                                  [:resource-data :activated]))]
-          (when runtime-activated?
-            ;; Original behavior alignment: in runtime mode, block interaction is blocked.
-            (.setUseItem evt Event$Result/DENY)
-            (.setUseBlock evt Event$Result/DENY)
-            (when-not (.isClientSide level)
-              (.setCancellationResult evt InteractionResult/FAIL)
-              (.setCanceled evt true)))
-
-          (when-not runtime-activated?
-            (let [block-state (.getBlockState level pos)
-                  item-stack (.getItemInHand player hand)
-                  ret (handle-right-click
-                        {:x (.getX pos)
-                         :y (.getY pos)
-                         :z (.getZ pos)
-                         :pos pos
-                         :sneaking (.isShiftKeyDown player)
-                         :player player
-                         :hand hand
-                         :item-stack item-stack
-                         :world level
-                         :block (.getBlock block-state)})]
-                    (when (interaction-result/interaction-consumed? ret)
-                (if (.isClientSide level)
-                  ;; Client: deny Item#useOn / onItemUseFirst only so BlockItem does not show a
-                  ;; placement ghost; do not cancel the whole event (can block server handling).
-                  (.setUseItem evt Event$Result/DENY)
-                  (do
-                    (log/info "[FORGE-RIGHT-CLICK-EVENT] pos=" pos "player=" (.getGameProfile player)
-                              "block=" (.getBlock block-state))
-                    ;; Server: consume so vanilla item use does not place the held block afterward.
-                    (.setCancellationResult evt InteractionResult/CONSUME)
-                    (.setCanceled evt true)))))))))
-    (catch Throwable t
-      (log/error "[FORGE-RIGHT-CLICK-EVENT] EXCEPTION:" (ex-message t))
-      (log/error "[FORGE-RIGHT-CLICK-EVENT] Stack trace:" t))))
+  [evt]
+  (interact/handle-right-click-event evt))
 
 (defn handle-left-click-block-event
-  "Handle left-click block event directly from Forge event object.
-  We cancel early in runtime mode so client doesn't show fake break effects
-   when server-side breaking is disallowed."
-  [^PlayerInteractEvent$LeftClickBlock evt]
-  (try
-    (let [player (.getEntity evt)
-          hand (.getHand evt)]
-      ;; Main hand only; mirror right-click filtering.
-      (when (= hand InteractionHand/MAIN_HAND)
-        (let [player-uuid (str (.getUUID player))
-              runtime-activated? (boolean (get-in (power-runtime/get-player-state player-uuid)
-                                                  [:resource-data :activated]))]
-          (when runtime-activated?
-            ;; Deny vanilla interaction path on both sides to suppress visual-only break feedback.
-            (.setUseItem evt Event$Result/DENY)
-            (.setUseBlock evt Event$Result/DENY)
-            (.setCanceled evt true)))))
-    (catch Throwable t
-      (log/error "[FORGE-LEFT-CLICK-BLOCK-EVENT] EXCEPTION:" (ex-message t))
-      (log/error "[FORGE-LEFT-CLICK-BLOCK-EVENT] Stack trace:" t))))
-
-;; ============================================================================
-;; Block Place Events (Forge 1.20.1)
-;; ============================================================================
+  [evt]
+  (interact/handle-left-click-block-event evt))
 
 (defn handle-block-place
-  "Handle block place event from event data map.
-   Delegates generic checks/placement orchestration to core/mcmod."
   [event-data]
-  (let [{:keys [x y z block]} event-data
-        block-name (str block)
-        block-id   (event-metadata/identify-block-from-full-name block-name)]
-    (log/info "1.20.1 Place event at (" x "," y "," z ") block:" block-name)
-    (when block-id
-      (dispatcher/on-block-place (assoc event-data :block-id block-id)))))
+  (block/handle-block-place event-data))
 
 (defn handle-block-place-event
-  "Handle block place event directly from Forge event object."
-  [^BlockEvent$EntityPlaceEvent evt]
-  (try
-    (let [pos   (.getPos evt)
-          level (.getLevel evt)
-          entity (.getEntity evt)
-          placed-state (.getPlacedBlock evt)]
-      (when (and level pos)
-        (if (and entity
-                 (instance? Player entity)
-                 (boolean (get-in (power-runtime/get-player-state (str (.getUUID ^Player entity)))
-                                  [:resource-data :activated])))
-          (.setCanceled evt true)
-          (let [ret (handle-block-place
-                      {:x (.getX pos)
-                       :y (.getY pos)
-                       :z (.getZ pos)
-                       :pos pos
-                       :player entity
-                       :world level
-                       :block (.getBlock placed-state)})]
-            (when (and (map? ret) (:cancel-place? ret))
-              (.setCanceled evt true))))))
-    (catch Throwable t
-      (log/info "Error handling block place event:" (.getMessage t))
-      (.printStackTrace t))))
+  [evt]
+  (block/handle-block-place-event evt))
 
 (defn handle-block-break-event
-  "Handle block break event directly from Forge event object."
-  [^BlockEvent$BreakEvent evt]
-  (try
-    (let [pos (.getPos evt)
-          level (.getLevel evt)
-          player (.getPlayer evt)
-          block-state (.getBlockState level pos)
-          block-id (event-metadata/identify-block-from-full-name (str (.getBlock block-state)))]
-      (if (boolean (get-in (power-runtime/get-player-state (str (.getUUID player)))
-                           [:resource-data :activated]))
-        (.setCanceled evt true)
-        (when block-id
-          (let [ret (dispatcher/on-block-break
-                      {:x (.getX pos)
-                       :y (.getY pos)
-                       :z (.getZ pos)
-                       :pos pos
-                       :player player
-                       :world level
-                       :block (.getBlock block-state)
-                       :block-id block-id})]
-            (when (and (map? ret) (:cancel-break? ret))
-              (.setCanceled evt true))))))
-    (catch Throwable t
-      (log/info "Error handling block break event:" (.getMessage t))
-      (.printStackTrace t))))
-
-;; ============================================================================
-;; World Events (Forge 1.20.1)
-;; ============================================================================
+  [evt]
+  (block/handle-block-break-event evt))
 
 (defn handle-world-load
-  "Handle world load event - dispatch to registered handlers"
-  [^LevelEvent$Load evt]
-  (try
-    (let [level (.getLevel evt)]
-      (when-not (.isClientSide level)  ; Server side only
-        (log/info "World loaded, dispatching to lifecycle handlers")
-        (world-lifecycle/dispatch-world-load level nil)))
-    (catch Throwable t
-      (log/error "Error handling world load event:" (.getMessage t))
-      (.printStackTrace t))))
+  [evt]
+  (world/handle-world-load evt))
 
 (defn handle-world-unload
-  "Handle world unload event - dispatch to registered handlers"
-  [^LevelEvent$Unload evt]
-  (try
-    (let [level (.getLevel evt)]
-      (when-not (.isClientSide level)  ; Server side only
-        (log/info "World unloading, dispatching to lifecycle handlers")
-        (world-lifecycle/dispatch-world-unload level)))
-    (catch Throwable t
-      (log/error "Error handling world unload event:" (.getMessage t))
-      (.printStackTrace t))))
+  [evt]
+  (world/handle-world-unload evt))
 
 (defn handle-loot-table-load
-  "Inject DSL-defined loot entries into target loot tables at load time."
-  [^LootTableLoadEvent evt]
-  (try
-    (let [table-id (str (.getName evt))
-          injections (registry-metadata/get-loot-injections-for-table table-id)]
-      (when (seq injections)
-        (doseq [spec injections]
-          (LootInjectionHelper/addItemInjection
-            evt
-            (:item-id spec)
-            (int (or (:weight spec) 1))
-            (int (or (:quality spec) 0))
-            (float (or (:min-count spec) 1.0))
-            (float (or (:max-count spec) 1.0))))))
-    (catch Throwable t
-      (log/error "Error handling loot table load event:" (.getMessage t))
-      (.printStackTrace t))))
+  [evt]
+  (loot/handle-loot-table-load evt))
