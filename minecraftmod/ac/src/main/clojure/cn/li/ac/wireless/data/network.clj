@@ -7,6 +7,7 @@
   - Password authentication
   - Range validation"
   (:require [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.core.spatial-index :as si]
             [cn.li.ac.wireless.data.network-config :as network-config]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
@@ -69,21 +70,6 @@
   "Lookup existing network for a node directly from world-data lookup table."
   [world-data node-vblock]
   (get @(:net-lookup world-data) node-vblock))
-
-(defn- remove-from-spatial-index-local!
-  "Remove a vblock from world-data spatial index without calling world namespace."
-  [world-data vblock]
-  (let [chunk-key [(quot (:x vblock) 16)
-                   (quot (:y vblock) 16)
-                   (quot (:z vblock) 16)]]
-    (swap! (:spatial-index world-data)
-           (fn [idx]
-             (if-let [chunk-set (get idx chunk-key)]
-               (let [new-set (disj chunk-set vblock)]
-                 (if (empty? new-set)
-                   (dissoc idx chunk-key)
-                   (assoc idx chunk-key new-set)))
-               idx)))))
 
 ;; ============================================================================
 ;; Password Management
@@ -191,7 +177,7 @@
       ;; Remove from lookup and spatial index
       (doseq [node to-remove]
         (swap! (:net-lookup (:world-data network)) dissoc node)
-        (remove-from-spatial-index-local! (:world-data network) node))
+        (si/remove-from-index! (:spatial-index (:world-data network)) node))
 
       ;; Clear to-remove list
       (reset! (:to-remove-nodes network) [])

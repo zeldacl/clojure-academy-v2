@@ -146,45 +146,19 @@
     0.0))
 
 ;; ============================================================================
-;; Wireless Network (delegates to wireless.helper; fallback stub when unavailable)
+;; Wireless Network (delegates to wireless.helper)
 ;; ============================================================================
 
-(defrecord StubWirelessNetwork
-  [ssid password node-list])
-
 (defn get-wireless-network
-  "Get wireless network for a node (delegates to wireless.helper)"
-  [node password]
-  (try
-    (whelper/get-wireless-net-by-node node)
-    (catch Exception e
-      (log/info (format "Using stub wireless network for node with password: %s" password))
-      (->StubWirelessNetwork
-        (str "Network-" password)
-        password
-        []))))
+  "Get wireless network for a node (delegates to wireless.helper).
+  Returns nil if no network is found or an error occurs."
+  [node _password]
+  (whelper/get-wireless-net-by-node node))
 
 (defn is-node-connected?
   "Check if node is connected to wireless network (delegates to wireless.helper)"
-  [node password]
-  (try
-    (whelper/is-node-linked? node)
-    (catch Exception e
-      (not (empty? password)))))
-
-(defn transfer-energy-wireless
-  "Transfer energy through wireless network (stub implementation)
-  Returns the amount that couldn't be transferred"
-  [network from-node to-node amount]
-  (try
-    (let [actual-transfer (* amount 0.9)
-          leftover (* amount 0.1)]
-      (log/info (format "Wireless transfer: %.1f energy, %.1f loss (simulated)"
-                        actual-transfer leftover))
-      leftover)
-    (catch Exception e
-      (log/info (format "Wireless transfer error: %s"(ex-message e)))
-      amount)))
+  [node _password]
+  (whelper/is-node-linked? node))
 
 ;; ============================================================================
 ;; Network Synchronization (stub: logs only)
