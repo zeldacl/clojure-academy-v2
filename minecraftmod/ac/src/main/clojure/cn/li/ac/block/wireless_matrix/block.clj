@@ -11,13 +11,6 @@
 						[cn.li.ac.block.wireless-matrix.handlers :as matrix-handlers])
 	(:import [cn.li.acapi.wireless IWirelessMatrix]))
 
-;; Compatibility exports used by GUI/render namespaces.
-(def matrix-default-state matrix-logic/matrix-default-state)
-(def recalculate-counts matrix-logic/recalculate-counts)
-(def get-plate-count matrix-logic/get-plate-count)
-(def get-core-level matrix-logic/get-core-level)
-(defn ->MatrixJavaProxy [be] (matrix-logic/->MatrixJavaProxy be))
-
 (defonce-guard wireless-matrix-installed?)
 
 (defn init-wireless-matrix!

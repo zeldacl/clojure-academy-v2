@@ -56,36 +56,29 @@
   nil)
 
 (defn get-slot-item-be
-  "Get item from a ScriptedBlockEntity slot via customState.
-  Falls back to legacy atom inventory for plain-map tiles."
+  "Get item from a ScriptedBlockEntity slot via customState."
   [container slot-index]
   (let [tile (:tile-entity container)]
-    (if (map? tile)
-      (get-slot-item container slot-index)
-      (try
-        (get-in (platform-be/get-custom-state tile) [:inventory slot-index])
-        (catch Exception _ (get-slot-item container slot-index))))))
+    (try
+      (get-in (platform-be/get-custom-state tile) [:inventory slot-index])
+      (catch Exception _ nil))))
 
 (defn set-slot-item-be!
   "Set item in a ScriptedBlockEntity slot via customState.
   - default-state: map used when customState is nil
-  - post-write:    (fn [state]) -> state', applied after assoc-in
-  Falls back to legacy atom inventory for plain-map tiles."
+  - post-write:    (fn [state]) -> state', applied after assoc-in"
   [container slot-index item-stack default-state post-write]
   (let [tile (:tile-entity container)]
-    (if (map? tile)
-      (set-slot-item! container slot-index item-stack)
-      (try
-        (let [state  (or (platform-be/get-custom-state tile) default-state)
-              state' (-> state
-                         (assoc-in [:inventory slot-index] item-stack)
-                         post-write)]
-          (log/debug "set-slot-item-be! state-before=" state)
-          (log/debug "set-slot-item-be! state-after=" state')
-          (platform-be/set-custom-state! tile state'))
-        (catch Exception e
-          (log/error "set-slot-item-be! failed:" (ex-message e))
-          (set-slot-item! container slot-index item-stack))))))
+    (try
+      (let [state  (or (platform-be/get-custom-state tile) default-state)
+            state' (-> state
+                       (assoc-in [:inventory slot-index] item-stack)
+                       post-write)]
+        (log/debug "set-slot-item-be! state-before=" state)
+        (log/debug "set-slot-item-be! state-after=" state')
+        (platform-be/set-custom-state! tile state'))
+      (catch Exception e
+        (log/error "set-slot-item-be! failed:" (ex-message e))))))
 
 (defn get-tile-state
   "Get the current Clojure state map from a tile entity.

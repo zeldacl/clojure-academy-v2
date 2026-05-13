@@ -7,18 +7,11 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.ac.block.wireless-node.config :as node-config]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.block.wireless-node.handlers :as node-handlers]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessNode]
            [cn.li.mcmod.energy IEnergyCapable]))
-
-;; Compatibility exports for schema/gui lookups.
-(def energy->blockstate-level node-logic/energy->blockstate-level)
-(def ensure-node-slot-schema! node-logic/ensure-node-slot-schema!)
-(def node-types node-logic/node-types)
-(def node-max-energy node-logic/node-max-energy)
 
 (defn get-all-wireless-nodes []
   [(bdsl/get-block "wireless-node-basic")
@@ -29,7 +22,7 @@
 
 (defn init-wireless-nodes! []
   (with-init-guard wireless-node-installed?
-    (ensure-node-slot-schema!)
+    (node-logic/ensure-node-slot-schema!)
     (msg-registry/register-block-messages!
       :node
       [:get-status :change-name :change-password :list-networks :connect :disconnect])

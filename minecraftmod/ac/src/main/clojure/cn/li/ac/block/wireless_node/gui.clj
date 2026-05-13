@@ -38,6 +38,7 @@
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.gui.metadata :as metadata]
+            [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.gui.animation :as anim]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -53,12 +54,11 @@
 
 (defn- ensure-wireless-node-slot-schema!
   []
-  (if-let [ensure-fn (requiring-resolve 'cn.li.ac.block.wireless-node.block/ensure-node-slot-schema!)]
-    (ensure-fn)
-    (slot-schema/register-slot-schema!
-      {:schema-id wireless-node-id
-       :slots [{:id :input :type :energy :x 42 :y 10}
-               {:id :output :type :output :x 42 :y 80}]})))
+  (or (node-logic/ensure-node-slot-schema!)
+      (slot-schema/register-slot-schema!
+        {:schema-id wireless-node-id
+         :slots [{:id :input :type :energy :x 42 :y 10}
+                 {:id :output :type :output :x 42 :y 80}]})))
 
 (def ^:private inventory-pred
   (fn [slot-index player-inventory-start]

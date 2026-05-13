@@ -54,10 +54,9 @@
   
   Args:
   - sync-data: Map with :pos-x :pos-y :pos-z keys
-  - world: World object (unused but kept for API compatibility)
   
   Returns: platform-specific BlockPos object or nil"
-  [sync-data world]
+  [sync-data]
   (try
     (let [x (:pos-x sync-data)
           y (:pos-y sync-data)
@@ -236,7 +235,7 @@
         (do
           (reset! (:capacity container) 0)
           (reset! (:max-capacity container) 0))))
-    (catch Exception e
+    (catch Exception _
       (reset! (:capacity container) 0)
       (reset! (:max-capacity container) 0))))
 

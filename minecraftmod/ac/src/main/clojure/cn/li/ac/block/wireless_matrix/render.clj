@@ -19,7 +19,7 @@
             [cn.li.mcmod.client.render.multiblock-helper :as mb-helper]
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.obj-tesr-common :as obj-tesr]
-            [cn.li.ac.block.wireless-matrix.block :as wm]))
+            [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]))
 
 ;; ============================================================================
 ;; Resources (loaded once on initialization)
@@ -54,8 +54,8 @@
   - tile: TileMatrix
   - partial-ticks, pose-stack, vertex-consumer, packed-light, packed-overlay"
   [tile _partial-ticks pose-stack vertex-consumer packed-light packed-overlay]
-  (let [plate-count (int (wm/get-plate-count tile))
-        core-level (wm/get-core-level tile)
+    (let [plate-count (int (matrix-logic/get-plate-count tile))
+      core-level (matrix-logic/get-core-level tile)
         active-plates (if (and (= plate-count 3) (> core-level 0)) 3 0)
         time (render/get-render-time)
         dtheta (/ 360.0 (max active-plates 1))

@@ -17,7 +17,7 @@
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.ac.block.developer.schema :as dev-schema]
-            [cn.li.ac.block.developer.block :as dev-block]
+            [cn.li.ac.block.developer.logic :as dev-logic]
             [cn.li.ac.block.developer.panel :as dev-panel]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.platform.entity :as entity]
@@ -57,7 +57,7 @@
 
 (defn set-slot-item! [container slot-index item-stack]
   (common/set-slot-item-be! container slot-index item-stack
-                            dev-block/dev-default-state
+                            dev-logic/dev-default-state
                             normalize-inventory-2)
   (when-let [tile (:tile-entity container)]
     (try (platform-be/set-changed! tile) (catch Exception _ nil)))

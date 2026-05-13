@@ -12,10 +12,6 @@
 						[cn.li.mcmod.util.log :as log])
 	(:import [cn.li.acapi.wireless IWirelessReceiver]))
 
-;; Compatibility exports used by GUI/config/callers.
-(def dev-default-state dev-logic/dev-default-state)
-(def developer-multiblock-positions dev-logic/developer-multiblock-positions)
-
 (defonce-guard developer-installed?)
 
 (defn init-developer! []
@@ -48,7 +44,7 @@
 		(bdsl/register-block!
 			(bdsl/create-block-spec
 				"developer-normal"
-				{:multi-block {:positions developer-multiblock-positions
+				{:multi-block {:positions dev-logic/developer-multiblock-positions
 											 :rotation-center [0.5 0.0 0.5]
 											 :pivot-xz-override [0.0 0.0]
 											 :tesr-use-raw-rotation-center? true
@@ -73,7 +69,7 @@
 		(bdsl/register-block!
 			(bdsl/create-block-spec
 				"developer-advanced"
-				{:multi-block {:positions developer-multiblock-positions
+				{:multi-block {:positions dev-logic/developer-multiblock-positions
 											 :rotation-center [0.5 0.0 0.5]
 											 :pivot-xz-override [0.0 0.0]
 											 :tesr-use-raw-rotation-center? true

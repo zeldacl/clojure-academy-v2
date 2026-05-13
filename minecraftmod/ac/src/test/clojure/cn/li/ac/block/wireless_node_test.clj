@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.wireless-node-test
-  "Unit tests for wireless node pure logic (mirrors cn.li.ac.block.wireless-node.block)."
+  "Unit tests for wireless node pure logic."
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.block.wireless-node.block :as wnode]
+            [cn.li.ac.block.wireless-node.logic :as wnode]
             [cn.li.ac.block.wireless-node.config :as node-config]))
 
 (deftest node-types-source-of-truth-test

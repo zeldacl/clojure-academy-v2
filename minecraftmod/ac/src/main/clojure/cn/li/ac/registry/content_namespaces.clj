@@ -67,19 +67,6 @@
 (def content-load-plan
   (current-content-load-plan))
 
-;; Compatibility exports for docs/tooling that still reference these vars.
-(def block-namespaces (-> content-load-plan first :namespaces))
-(def block-init-fns (-> content-load-plan first :init-fns))
-(def item-namespaces (-> content-load-plan second :namespaces))
-(def item-init-fns (-> content-load-plan second :init-fns))
-(def entity-namespaces (-> content-load-plan (nth 2) :namespaces))
-(def entity-init-fns (-> content-load-plan (nth 2) :init-fns))
-(def ability-namespaces (-> content-load-plan (nth 3) :namespaces))
-(def ability-init-fns (-> content-load-plan (nth 3) :init-fns))
-(def achievement-namespaces (-> content-load-plan (nth 4) :namespaces))
-(def achievement-init-fns (-> content-load-plan (nth 4) :init-fns))
-(def system-namespaces (-> content-load-plan (nth 5) :namespaces))
-
 (defn- trace-tag [{:keys [phase trace-tag]}]
   (or trace-tag (keyword (str (name phase) "-init"))))
 

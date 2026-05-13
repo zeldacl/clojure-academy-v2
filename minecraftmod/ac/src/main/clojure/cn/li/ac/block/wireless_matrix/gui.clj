@@ -28,14 +28,12 @@
   (:require [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.components :as comp]
-            [cn.li.mcmod.gui.events :as events]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.block.wireless-matrix.block :as wm]
+            [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
@@ -48,7 +46,6 @@
             [cn.li.mcmod.gui.container.schema :as schema]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-            [cn.li.mcmod.gui.metadata :as metadata]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.position :as pos])
@@ -218,7 +215,7 @@
   (if (map? tile)
     [nil tile]
     (try
-      (let [state (or (platform-be/get-custom-state tile) wm/matrix-default-state)]
+      (let [state (or (platform-be/get-custom-state tile) matrix-logic/matrix-default-state)]
         [tile state])
       (catch Exception e
         (log/warn "Could not resolve customState from BE:"(ex-message e))
@@ -230,8 +227,8 @@
   [tile player]
   (let [[be state] (resolve-state tile)
     proxy      (if be
-         (wm/->MatrixJavaProxy be)
-         (wm/->MatrixJavaProxy tile))
+         (matrix-logic/->MatrixJavaProxy be)
+         (matrix-logic/->MatrixJavaProxy tile))
    gui-atoms (schema-runtime/build-gui-atoms matrix-schema/unified-matrix-schema state)]
     (assoc gui-atoms
        :tile-entity (or be tile)
@@ -261,11 +258,11 @@
   (let [tile (:tile-entity container)]
     (log/debug "set-slot-item! - tile=" tile " slot=" slot-index " item=" item-stack)
     (common/set-slot-item-be! container slot-index item-stack
-                              wm/matrix-default-state
-                              wm/recalculate-counts)
+                              matrix-logic/matrix-default-state
+                              matrix-logic/recalculate-counts)
     (when tile
-      (log/debug "set-slot-item! after-write - plate=" (wm/get-plate-count tile)
-                " core=" (wm/get-core-level tile)))
+      (log/debug "set-slot-item! after-write - plate=" (matrix-logic/get-plate-count tile)
+                " core=" (matrix-logic/get-core-level tile)))
     ;; DataSlot synchronization is handled by Menu.broadcastChanges(),
     ;; which reads plate-count and core-level from container atoms every tick.
     nil))
@@ -388,9 +385,6 @@
     payload
     (sync-field-mappings)
     "matrix"))
-
-(defn extract-position [sync-data world]
-  (sync-helpers/extract-position sync-data world))
 
 ;; ============================================================================
 ;; Component Builders
