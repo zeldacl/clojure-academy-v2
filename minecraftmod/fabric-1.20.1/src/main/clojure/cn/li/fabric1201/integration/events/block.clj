@@ -1,7 +1,6 @@
 (ns cn.li.fabric1201.integration.events.block
   "Fabric block break/place handlers extracted from monolithic events namespace."
-  (:require [cn.li.ac.core :as core]
-            [cn.li.mcmod.events.dispatcher :as dispatcher]
+  (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.runtime.hooks-core :as power-runtime]))
@@ -20,7 +19,7 @@
             block-id (event-metadata/identify-block-from-full-name (str block))]
         (if-not block-id
           true
-          (let [ret (core/on-block-break
+          (let [ret (dispatcher/on-block-break
                       {:x (.getX pos)
                        :y (.getY pos)
                        :z (.getZ pos)
