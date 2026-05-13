@@ -11,18 +11,18 @@
             [cn.li.mcmod.platform.entity        :as entity]
             [cn.li.ac.ability.state.player      :as ps]
             [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.server.service.learning  :as lrn]
             [cn.li.ac.ability.registry.skill             :as skill]
-            [cn.li.ac.ability.server.service.resource  :as res]
+            [cn.li.ac.ability.server.handlers.level-handler :as level-handler]
+            [cn.li.ac.ability.server.handlers.preset-handler :as preset-handler]
+            [cn.li.ac.ability.server.handlers.activation-handler :as activation-handler]
+            [cn.li.ac.ability.server.handlers.context-handler :as context-handler]
+            [cn.li.ac.ability.server.handlers.input-handler :as input-handler]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.block.developer.logic     :as dev-logic]
             [cn.li.mcmod.platform.position      :as pos]
             [cn.li.mcmod.platform.world         :as world]
             [cn.li.mcmod.platform.be            :as platform-be]
-            [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
-            [cn.li.ac.ability.server.service.context-runtime :as ctx-rt]
-            [cn.li.ac.ability.state.context           :as ctx]
             [cn.li.ac.ability.registry.event             :as evt]
             [cn.li.mcmod.util.log               :as log]))
 
@@ -120,100 +120,23 @@
               (log/debug "learn-skill rejected" uuid skill-id failures)))))))
 
   ;; ============================================================================
-  ;; Level up
+  ;; Delegated handlers (split from this namespace)
   ;; ============================================================================
 
-  (defn- handle-level-up-request
-    [_payload player]
-    (let [uuid  (uuid-of player)
-          state (get-state uuid)
-          ad    (:ability-data state)
-          {:keys [data event]} (lrn/level-up ad uuid)]
-      (when data
-        (ps/update-ability-data! uuid (constantly data))
-        (when event (evt/fire-ability-event! event)))))
+  (def handle-level-up-request level-handler/handle-level-up-request)
+  (def handle-set-preset-request preset-handler/handle-set-preset-request)
+  (def handle-switch-preset-request preset-handler/handle-switch-preset-request)
+  (def handle-set-activated-request activation-handler/handle-set-activated-request)
 
-  ;; ============================================================================
-  ;; Preset management
-  ;; ============================================================================
+  (def handle-begin-link-context context-handler/handle-begin-link-context)
+  (def handle-keepalive-context context-handler/handle-keepalive-context)
+  (def handle-terminate-context context-handler/handle-terminate-context)
+  (def handle-channel-context context-handler/handle-channel-context)
 
-  (defn- handle-set-preset-request
-    [{:keys [preset-idx key-idx cat-id ctrl-id]} player]
-    (let [uuid (uuid-of player)]
-      (ps/update-preset-data! uuid
-                              preset-data/set-slot
-                              preset-idx key-idx
-                              (when (and cat-id ctrl-id) [cat-id ctrl-id]))))
-
-  (defn- handle-switch-preset-request
-    [{:keys [preset-idx]} player]
-    (let [uuid (uuid-of player)]
-      (ps/update-preset-data! uuid preset-data/set-active-preset preset-idx)
-      (evt/fire-ability-event! {:event/type evt/EVT-PRESET-SWITCH
-                                 :player-id uuid
-                                 :preset    preset-idx})))
-
-  ;; ============================================================================
-  ;; Activation toggle
-  ;; ============================================================================
-
-  (defn- handle-set-activated-request
-    [{:keys [activated]} player]
-    (let [uuid  (uuid-of player)
-          state (get-state uuid)
-          rd    (:resource-data state)
-          before (boolean (:activated rd))
-          {:keys [data events]} (res/set-activated rd uuid activated)
-          after (boolean (:activated data))]
-      (log/info "[V-TRACE][AC][SERVER][REQ-SET-ACTIVATED]"
-                {:uuid uuid
-                 :requested (boolean activated)
-                 :before before
-                 :after after
-                 :events (count events)})
-      (ps/update-resource-data! uuid (constantly data))
-      (doseq [e events] (evt/fire-ability-event! e))))
-
-  ;; ============================================================================
-  ;; Context lifecycle
-  ;; ============================================================================
-
-  (defn- handle-begin-link-context
-    [{:keys [ctx-id skill-id]} player]
-    (ctx-mgr/establish-context! (uuid-of player) ctx-id skill-id))
-
-  (defn- handle-keepalive-context
-    [{:keys [ctx-id]} _player]
-    (ctx/update-keepalive! ctx-id))
-
-  (defn- handle-terminate-context
-    [{:keys [ctx-id]} _player]
-    (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
-
-  (defn- handle-channel-context
-    [{:keys [ctx-id channel payload]} _player]
-    (ctx/ctx-send-to-local! ctx-id channel payload))
-
-  (defn- handle-key-down-skill
-    [{:keys [ctx-id] :as payload} player]
-    (let [payload* (assoc payload :player player)
-          ctx0 (ctx/get-context ctx-id)
-          _ (when (nil? ctx0)
-              (when-let [skill-id (:skill-id payload*)]
-                (ctx-mgr/establish-context! (uuid-of player) ctx-id skill-id)))]
-      (ctx-rt/handle-key-down! ctx-id payload* ctx-mgr/send-terminated-context!)))
-
-  (defn- handle-key-tick-skill
-    [{:keys [ctx-id] :as payload} player]
-    (ctx-rt/handle-key-tick! ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!))
-
-  (defn- handle-key-up-skill
-    [{:keys [ctx-id] :as payload} player]
-    (ctx-rt/handle-key-up! ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!))
-
-  (defn- handle-key-abort-skill
-    [{:keys [ctx-id] :as payload} player]
-    (ctx-rt/handle-key-abort! ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!))
+  (def handle-key-down-skill input-handler/handle-key-down-skill)
+  (def handle-key-tick-skill input-handler/handle-key-tick-skill)
+  (def handle-key-up-skill input-handler/handle-key-up-skill)
+  (def handle-key-abort-skill input-handler/handle-key-abort-skill)
 
   ;; ============================================================================
   ;; ============================================================================

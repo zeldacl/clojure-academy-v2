@@ -14,6 +14,7 @@
      :until-overload-recover int    ; ticks before overload recovery starts (0 = recovering)
      :interferences         #{}     ; set of active interference source IDs (keywords)}"
   (:require [cn.li.ac.ability.config :as cfg]
+            [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -71,9 +72,7 @@
 (defn can-use-ability?
   "True when activated && not in overload recovery && no interference."
   [d]
-  (and (is-activated? d)
-       (:overload-fine d)
-       (empty? (:interferences d))))
+  (resource-check/can-use-resource-data? d))
 
 ;; ============================================================================
 ;; Resource Consumption
@@ -81,7 +80,7 @@
 
 (defn can-perform?
   "Returns true if (overload, cp) can be consumed. creative? bypasses CP check."
-  [d overload cp creative?]
+  [d _overload cp creative?]
   (and (or creative? (>= (:cur-cp d) (double cp)))
        (can-use-ability? d)))
 

@@ -1,383 +1,46 @@
 (ns cn.li.ac.wireless.api
-  "Wireless system helper functions
+	"Wireless system compatibility facade.
 
-  Provides utility functions for querying the wireless system:
-  - Network lookups
-  - Node connection lookups
-  - Range searches
-  - Link status checks"
-  (:require [cn.li.ac.wireless.data.world :as wd]
-            [cn.li.ac.wireless.search-config :as search-config]
-            [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.data.network :as network]
-            [cn.li.ac.wireless.data.node-conn :as node-conn]
-            [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.events :as platform-events]
-            [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix IWirelessGenerator IWirelessReceiver WirelessCapabilityKeys]))
+	Split into:
+	- cn.li.ac.wireless.api-query
+	- cn.li.ac.wireless.api-command
+	- cn.li.ac.wireless.api-lifecycle"
+	(:require [cn.li.ac.wireless.api-query :as api-query]
+						[cn.li.ac.wireless.api-command :as api-command]
+						[cn.li.ac.wireless.api-lifecycle :as api-lifecycle]
+						[cn.li.mcmod.util.log :as log]))
 
-;; ============================================================================
-;; Network Queries
-;; ============================================================================
+;; Queries
+(def get-wireless-net-by-matrix api-query/get-wireless-net-by-matrix)
+(def get-wireless-net-by-node api-query/get-wireless-net-by-node)
+(def is-node-linked? api-query/is-node-linked?)
+(def is-matrix-active? api-query/is-matrix-active?)
+(def get-nets-in-range api-query/get-nets-in-range)
+(def get-node-conn-by-node api-query/get-node-conn-by-node)
+(def get-node-conn-by-generator api-query/get-node-conn-by-generator)
+(def get-node-conn-by-receiver api-query/get-node-conn-by-receiver)
+(def is-receiver-linked? api-query/is-receiver-linked?)
+(def is-generator-linked? api-query/is-generator-linked?)
+(def get-nodes-in-range-at api-query/get-nodes-in-range-at)
+(def get-nodes-in-range api-query/get-nodes-in-range)
 
-(defn- tile-level
-  "Get the Level/World from a BlockEntity.
-  MC 1.17+ renamed getWorld() to getLevel(); try both for compatibility."
-  [tile]
-  (platform-be/be-get-world-safe tile))
+;; Commands
+(def create-network! api-command/create-network!)
+(def destroy-network! api-command/destroy-network!)
+(def link-node-to-network! api-command/link-node-to-network!)
+(def unlink-node-from-network! api-command/unlink-node-from-network!)
+(def link-generator-to-node! api-command/link-generator-to-node!)
+(def unlink-generator-from-node! api-command/unlink-generator-from-node!)
+(def link-receiver-to-node! api-command/link-receiver-to-node!)
+(def unlink-receiver-from-node! api-command/unlink-receiver-from-node!)
 
-(defn- get-cap
-  "Get a named capability from a tile, returning nil on error."
-  [tile cap-key]
-  (try (platform-be/get-capability tile cap-key)
-       (catch Exception _ nil)))
-
-(defn get-wireless-net-by-matrix
-  "Get wireless network by matrix TileEntity"
-  [matrix-tile]
-  (let [world (tile-level matrix-tile)
-        world-data (wd/get-world-data world)
-        matrix-vb (vb/create-vmatrix matrix-tile)]
-    (wd/get-network-by-matrix world-data matrix-vb)))
-
-(defn get-wireless-net-by-node
-  "Get wireless network by node TileEntity"
-  [node-tile]
-  (let [world (tile-level node-tile)
-        world-data (wd/get-world-data world)
-        node-vb (vb/create-vnode node-tile)]
-    (wd/get-network-by-node world-data node-vb)))
-
-(defn is-node-linked?
-  "Check if a node is linked to a wireless network"
-  [node-tile]
-  (some? (get-wireless-net-by-node node-tile)))
-
-(defn is-matrix-active?
-  "Check if a matrix is initialized with an SSID"
-  [matrix-tile]
-  (some? (get-wireless-net-by-matrix matrix-tile)))
-
-(defn get-nets-in-range
-  "Get wireless networks within range of coordinates
-
-  Parameters:
-  - world: World
-  - x, y, z: coordinates
-  - range: search radius
-  - max-results: maximum results to return
-
-  Returns: collection of WirelessNet"
-  [world x y z range max-results]
-  (let [world-data (wd/get-world-data world)]
-    (wd/range-search-networks world-data x y z range max-results)))
-
-;; ============================================================================
-;; Node Connection Queries
-;; ============================================================================
-
-(defn get-node-conn-by-node
-  "Get node connection by node TileEntity"
-  [node-tile]
-  (let [world (platform-be/be-get-world-safe node-tile)
-        world-data (wd/get-world-data world)
-        node-vb (vb/create-vnode-conn node-tile)]
-    (wd/get-node-connection world-data node-vb)))
-
-(defn get-node-conn-by-generator
-  "Get node connection by generator TileEntity"
-  [gen-tile]
-  (let [world (platform-be/be-get-world-safe gen-tile)
-        world-data (wd/get-world-data world)
-        gen-vb (vb/create-vgenerator gen-tile)]
-    (wd/get-node-connection world-data gen-vb)))
-
-(defn get-node-conn-by-receiver
-  "Get node connection by receiver TileEntity"
-  [rec-tile]
-  (let [world (platform-be/be-get-world-safe rec-tile)
-        world-data (wd/get-world-data world)
-        rec-vb (vb/create-vreceiver rec-tile)]
-    (wd/get-node-connection world-data rec-vb)))
-
-(defn is-receiver-linked?
-  "Check if a receiver is linked to a node"
-  [rec-tile]
-  (some? (get-node-conn-by-receiver rec-tile)))
-
-(defn is-generator-linked?
-  "Check if a generator is linked to a node"
-  [gen-tile]
-  (some? (get-node-conn-by-generator gen-tile)))
-
-;; ============================================================================
-;; Node Range Search
-;; ============================================================================
-
-(defn get-nodes-in-range-at
-  "Get all linkable nodes within range of coordinates.
-
-  Parameters:
-  - world: World
-  - x, y, z: block coordinates
-
-  Returns: list of IWirelessNode TileEntities"
-  [world x y z]
-    (let [search-range (search-config/node-search-range)
-      max-results (search-config/max-results)
-        world-data (wd/get-world-data world)
-        ;; Get nearby chunks using spatial index
-        nearby-chunks (wd/get-nearby-chunks x y z search-range)
-        candidate-vblocks (wd/get-vblocks-in-chunks world-data nearby-chunks)
-        ;; Filter candidates by actual distance and capacity
-        range-sq (* search-range search-range)
-        matching-nodes
-        (reduce
-          (fn [acc node-vb]
-            (let [dist-sq (vb/dist-sq-pos node-vb x y z)]
-              (if (<= dist-sq range-sq)
-                (if-let [node (vb/vblock-get node-vb world)]
-                  (let [node-range (.getRange ^cn.li.acapi.wireless.IWirelessNode node)
-                        node-range-sq (* node-range node-range)]
-                    (if (<= dist-sq node-range-sq)
-                      ;; Check capacity via node connection
-                      (if-let [conn (wd/get-node-connection world-data node-vb)]
-                        (if (< (node-conn/get-load conn)
-                               (node-conn/get-capacity conn))
-                          (conj acc node)
-                          acc)
-                        ;; No connection record, node is available
-                        (conj acc node))
-                      acc))
-                  acc)
-                acc)))
-          []
-          candidate-vblocks)]
-    (take max-results matching-nodes)))
-
-(defn get-nodes-in-range
-  "Get all linkable nodes within range of a position
-
-  Searches for IWirelessNode TileEntities that:
-  - Are within their range of the position
-  - Have available capacity (load < capacity)
-
-  Uses spatial indexing for efficient chunk-based lookup.
-
-  Parameters:
-  - world: World
-  - pos: BlockPos
-
-  Returns: list of IWirelessNode TileEntities"
-  [world pos]
-  (get-nodes-in-range-at world (pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos)))
-
-;; ============================================================================
-;; Network Operations (Event-based)
-;; ============================================================================
-
-(defn create-network!
-  "Create a new wireless network
-
-  Parameters:
-  - matrix-tile: IWirelessMatrix TileEntity
-  - ssid: network name (String)
-
-  Returns: true if successful"
-  [matrix-tile ssid password]
-  (let [world (platform-be/be-get-world-safe matrix-tile)
-        world-data (wd/get-world-data world)
-        matrix-vb (vb/create-vmatrix matrix-tile)
-        created? (wd/create-network-impl! world-data matrix-vb ssid password)]
-    (when created?
-      (when-let [matrix-cap (get-cap matrix-tile WirelessCapabilityKeys/MATRIX)]
-        (platform-events/fire-event!
-          {:kind :topology/network
-           :action :created
-           :ssid ssid
-           :matrix ^IWirelessMatrix matrix-cap})))
-    created?))
-
-(defn destroy-network!
-  "Destroy a wireless network"
-  [matrix-tile]
-  (when-let [network-item (get-wireless-net-by-matrix matrix-tile)]
-    (let [world (platform-be/be-get-world-safe matrix-tile)
-          world-data (wd/get-world-data world)
-          ssid (:ssid network-item)
-          destroyed? (wd/destroy-network-impl! world-data network-item)]
-      (when destroyed?
-        (when-let [matrix-cap (get-cap matrix-tile WirelessCapabilityKeys/MATRIX)]
-          (platform-events/fire-event!
-            {:kind :topology/network
-             :action :destroyed
-             :ssid ssid
-             :matrix ^IWirelessMatrix matrix-cap})))
-      destroyed?)))
-
-(defn link-node-to-network!
-  "Link a node to a wireless network
-
-  Parameters:
-  - node-tile: IWirelessNode TileEntity
-  - matrix-tile: IWirelessMatrix TileEntity
-  - password: network password
-
-  Returns: true if successful"
-  [node-tile matrix-tile password]
-  (when-let [network-item (get-wireless-net-by-matrix matrix-tile)]
-    (let [world (platform-be/be-get-world-safe matrix-tile)
-          world-data (wd/get-world-data world)
-          node-vb (vb/create-vnode node-tile)
-          linked? (wd/link-node-to-network! world-data network-item node-vb password)]
-      (when linked?
-        (when-let [matrix-cap (get-cap matrix-tile WirelessCapabilityKeys/MATRIX)]
-          (when-let [node-cap (get-cap node-tile WirelessCapabilityKeys/NODE)]
-            (platform-events/fire-event!
-              {:kind :topology/node
-               :action :connected
-               :matrix ^IWirelessMatrix matrix-cap
-               :node ^IWirelessNode node-cap}))))
-      linked?)))
-
-(defn unlink-node-from-network!
-  "Unlink a node from its network"
-  [node-tile]
-  (when-let [network-item (get-wireless-net-by-node node-tile)]
-    (let [world (platform-be/be-get-world-safe node-tile)
-          matrix-tile (when-let [matrix-vb (:matrix network-item)]
-                        (vb/vblock-get matrix-vb world))
-          node-vb (vb/create-vnode node-tile)
-          removed? (network/remove-node! network-item node-vb)]
-      (when removed?
-        (when-let [node-cap (get-cap node-tile WirelessCapabilityKeys/NODE)]
-          (when-let [matrix-cap (some-> matrix-tile (get-cap WirelessCapabilityKeys/MATRIX))]
-            (platform-events/fire-event!
-              {:kind :topology/node
-               :action :disconnected
-               :matrix ^IWirelessMatrix matrix-cap
-               :node ^IWirelessNode node-cap}))))
-      removed?)))
-
-(defn link-generator-to-node!
-  "Link a generator to a node
-
-  Parameters:
-  - gen-tile: IWirelessGenerator TileEntity
-  - node-tile: IWirelessNode TileEntity
-  - password: node password
-  - need-auth: whether authentication is required
-
-  Returns: true if successful"
-  [gen-tile node-tile password need-auth]
-  (when-let [node-cap (get-cap node-tile WirelessCapabilityKeys/NODE)]
-    (when (or (not need-auth)
-              (= password (.getPassword ^IWirelessNode node-cap)))
-      (let [world (platform-be/be-get-world-safe node-tile)
-            world-data (wd/get-world-data world)
-            node-vb (vb/create-vnode-conn node-tile)
-            conn (wd/ensure-node-connection! world-data node-vb)
-            gen-vb (vb/create-vgenerator gen-tile)
-            linked? (wd/link-generator-to-node-connection! world-data conn gen-vb)]
-        (when linked?
-          (when-let [gen-cap (get-cap gen-tile WirelessCapabilityKeys/GENERATOR)]
-            (platform-events/fire-event!
-              {:kind :topology/node
-               :action :generator-linked
-               :node ^IWirelessNode node-cap
-               :generator ^IWirelessGenerator gen-cap})))
-        linked?))))
-
-(defn unlink-generator-from-node!
-  "Unlink a generator from its node"
-  [gen-tile]
-  (when-let [conn (get-node-conn-by-generator gen-tile)]
-    (let [gen-vb (vb/create-vgenerator gen-tile)]
-      (node-conn/remove-generator! conn gen-vb))))
-
-(defn link-receiver-to-node!
-  "Link a receiver to a node
-
-  Parameters:
-  - rec-tile: IWirelessReceiver TileEntity
-  - node-tile: IWirelessNode TileEntity
-  - password: node password
-  - need-auth: whether authentication is required
-
-  Returns: true if successful"
-  [rec-tile node-tile password need-auth]
-  (when-let [node-cap (get-cap node-tile WirelessCapabilityKeys/NODE)]
-    (when (or (not need-auth)
-              (= password (.getPassword ^IWirelessNode node-cap)))
-      (let [world (platform-be/be-get-world-safe node-tile)
-            world-data (wd/get-world-data world)
-            node-vb (vb/create-vnode-conn node-tile)
-            conn (wd/ensure-node-connection! world-data node-vb)
-            rec-vb (vb/create-vreceiver rec-tile)
-            linked? (wd/link-receiver-to-node-connection! world-data conn rec-vb)]
-        (when linked?
-          (when-let [rec-cap (get-cap rec-tile WirelessCapabilityKeys/RECEIVER)]
-            (platform-events/fire-event!
-              {:kind :topology/node
-               :action :receiver-linked
-               :node ^IWirelessNode node-cap
-               :receiver ^IWirelessReceiver rec-cap})))
-        linked?))))
-
-(defn unlink-receiver-from-node!
-  "Unlink a receiver from its node"
-  [rec-tile]
-  (when-let [conn (get-node-conn-by-receiver rec-tile)]
-    (let [rec-vb (vb/create-vreceiver rec-tile)]
-      (node-conn/remove-receiver! conn rec-vb))))
-
-;; ============================================================================
-;; System-wide Operations
-;; ============================================================================
-
-(defn tick-wireless-system!
-  "Tick all wireless networks and connections in a world"
-  [world]
-  (when-let [world-data (wd/get-world-data-non-create world)]
-    (wd/tick-world-data! world-data)))
-
-(defn save-wireless-data
-  "Save wireless data for a world to NBT"
-  [world]
-  (when-let [world-data (wd/get-world-data-non-create world)]
-    (wd/world-data-to-nbt world-data)))
-
-(defn load-wireless-data
-  "Load wireless data for a world from NBT"
-  [world nbt]
-  (wd/world-data-from-nbt world nbt))
-
-;; ============================================================================
-;; Debug and Statistics
-;; ============================================================================
-
-(defn print-wireless-stats
-  "Print wireless system statistics for a world"
-  [world]
-  (when-let [world-data (wd/get-world-data-non-create world)]
-    (wd/print-statistics world-data)))
-
-(defn get-all-networks
-  "Get all networks in a world"
-  [world]
-  (when-let [world-data (wd/get-world-data-non-create world)]
-    @(:networks world-data)))
-
-(defn get-all-connections
-  "Get all node connections in a world"
-  [world]
-  (when-let [world-data (wd/get-world-data-non-create world)]
-    @(:connections world-data)))
-
-;; ============================================================================
-;; Initialization
-;; ============================================================================
+;; Lifecycle / diagnostics
+(def tick-wireless-system! api-lifecycle/tick-wireless-system!)
+(def save-wireless-data api-lifecycle/save-wireless-data)
+(def load-wireless-data api-lifecycle/load-wireless-data)
+(def print-wireless-stats api-lifecycle/print-wireless-stats)
+(def get-all-networks api-lifecycle/get-all-networks)
+(def get-all-connections api-lifecycle/get-all-connections)
 
 (defn init-wireless-helper! []
-  (log/info "Wireless helper system initialized"))
+	(log/info "Wireless helper system initialized"))

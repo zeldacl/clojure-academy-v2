@@ -2,40 +2,102 @@
   "Hook registry system for auto-registration of network handlers and client renderers.
 
   Blocks/items/GUIs register their hooks during namespace load, then cn.li.ac.core/init
-  calls all registered hooks during initialization.")
+  calls all registered hooks during initialization."
+  (:require [cn.li.mcmod.util.log :as log]))
 
-;; Registry of network handler registration functions.
-;; Each entry is a 0-arity function that registers network handlers.
-(defonce network-handler-registry (atom []))
+;; Unified hook registry state.
+(defonce hook-registry
+  (atom {:network-handlers []
+         :client-renderers []}))
 
-;; Registry of client renderer namespace symbols.
-;; Each entry is a namespace symbol with an init function.
-(defonce client-renderer-registry (atom []))
+(defn- dedupe-conj
+  [items item]
+  (if (some #(= % item) items)
+    items
+    (conj items item)))
+
+(defn get-network-handlers
+  "Return currently registered network handler init fns."
+  []
+  (:network-handlers @hook-registry))
+
+(defn get-client-renderers
+  "Return currently registered client renderer init symbols."
+  []
+  (:client-renderers @hook-registry))
+
+(defn reset-registries!
+  "Reset both registries to an empty state.
+  Primarily used by tests and REPL workflows."
+  []
+  (reset! hook-registry {:network-handlers []
+                         :client-renderers []}))
 
 (defn register-network-handler!
   "Register a network handler registration function.
   Called by block/GUI namespaces during load to register their handlers."
   [handler-fn]
-  (swap! network-handler-registry conj handler-fn))
+  (swap! hook-registry update :network-handlers dedupe-conj handler-fn))
 
 (defn register-client-renderer!
   "Register a client renderer namespace symbol.
   Called by block namespaces during load to register their renderers."
   [renderer-ns-sym]
-  (swap! client-renderer-registry conj renderer-ns-sym))
+  (swap! hook-registry update :client-renderers dedupe-conj renderer-ns-sym))
+
+(defn call-all-network-handlers-with-report!
+  "Call all network handler registration functions and collect result details.
+  Returns {:ok [...], :failed [...]} where each failed item includes
+  {:handler <fn> :error <message>}"
+  []
+  (reduce (fn [{:keys [ok failed] :as acc} handler]
+            (try
+              (handler)
+              (assoc acc :ok (conj ok handler))
+              (catch Throwable t
+                (assoc acc :failed (conj failed {:handler handler
+                                                 :error (ex-message t)})))))
+          {:ok [] :failed []}
+          (get-network-handlers)))
 
 (defn call-all-network-handlers!
   "Call all registered network handler registration functions.
   Called by core.clj during initialization."
   []
-  (doseq [handler @network-handler-registry]
-    (handler)))
+  (let [{:keys [failed] :as report} (call-all-network-handlers-with-report!)]
+    (when (seq failed)
+      (log/error "Network handler registration failed:" failed)
+      (throw (ex-info "Network handler registration failed"
+                      {:report report})))
+    nil))
+
+(defn load-all-client-renderers-with-report!
+  "Load all client renderer namespaces and collect result details.
+  Returns {:ok [...], :failed [...]} where failed items include
+  {:renderer <symbol> :error <message>}"
+  []
+  (reduce (fn [{:keys [ok failed] :as acc} renderer-ns]
+            (try
+              (if-let [init-fn (requiring-resolve renderer-ns)]
+                (do
+                  (init-fn)
+                  (assoc acc :ok (conj ok renderer-ns)))
+                (assoc acc :failed (conj failed {:renderer renderer-ns
+                                                 :error "init function not found"})))
+              (catch Throwable t
+                (assoc acc :failed (conj failed {:renderer renderer-ns
+                                                 :error (ex-message t)})))))
+          {:ok [] :failed []}
+          (get-client-renderers)))
 
 (defn load-all-client-renderers!
   "Load all registered client renderer namespaces.
   Called by core.clj during client initialization.
   Uses requiring-resolve to safely load client-only code."
   []
-  (doseq [renderer-ns @client-renderer-registry]
-    (when-let [init-fn (requiring-resolve renderer-ns)]
-      (init-fn))))
+  (let [{:keys [failed] :as report} (load-all-client-renderers-with-report!)]
+    (when (seq failed)
+      (log/error "Client renderer loading failed:" failed)
+      (throw (ex-info "Client renderer loading failed"
+                      {:report report})))
+    nil))

@@ -5,6 +5,7 @@
   - namespace require order
   - post-require init function execution order"
   (:require [cn.li.ac.registry.content-plan-builder :as plan-builder]
+            [cn.li.ac.registry.spi.content-phase :as content-phase-spi]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private default-phase-plugins
@@ -50,10 +51,21 @@
     :trace-tag :terminal-init}])
 
 (doseq [phase-spec default-phase-plugins]
-  (plan-builder/register-phase-plugin! phase-spec))
+  (content-phase-spi/declare-content-phase! phase-spec))
+
+(defn register-content-phase-plugin!
+  "Public extension point for content phase registration."
+  [phase-spec]
+  (content-phase-spi/declare-content-phase! phase-spec)
+  (plan-builder/build-load-plan))
+
+(defn current-content-load-plan
+  "Return latest materialized content load plan."
+  []
+  (content-phase-spi/list-content-phases))
 
 (def content-load-plan
-  (plan-builder/build-load-plan))
+  (current-content-load-plan))
 
 ;; Compatibility exports for docs/tooling that still reference these vars.
 (def block-namespaces (-> content-load-plan first :namespaces))
@@ -96,9 +108,10 @@
 (defn load-all!
   "Load all content namespaces and execute their declared init functions."
   []
-  (log/warn "[CONTENT_TRACE] load-all begin")
-  (doseq [phase-spec content-load-plan]
+  (let [plan (current-content-load-plan)]
+    (log/warn "[CONTENT_TRACE] load-all begin" {:phases (mapv :phase plan)})
+    (doseq [phase-spec plan]
     (require-namespaces! (:namespaces phase-spec)))
-  (doseq [phase-spec content-load-plan]
+    (doseq [phase-spec plan]
     (run-init-fns! phase-spec))
-  (log/warn "[CONTENT_TRACE] load-all end"))
+    (log/warn "[CONTENT_TRACE] load-all end")))

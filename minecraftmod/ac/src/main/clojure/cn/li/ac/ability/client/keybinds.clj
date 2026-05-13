@@ -11,6 +11,7 @@
             [cn.li.ac.ability.state.context :as ctx]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.model.preset :as preset-data]
+            [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.ac.ability.registry.skill :as skill]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]))
@@ -129,10 +130,7 @@
   "Check if player can use abilities (not overloaded, not interfered)."
   [player-uuid]
   (when-let [state (ps/get-player-state player-uuid)]
-    (let [rd (:resource-data state)]
-      (and (:activated rd)
-           (:overload-fine rd true)
-           (empty? (:interferences rd #{}))))))
+    (resource-check/can-use-resource-data? (:resource-data state))))
 
 (defn- skill-on-cooldown?
   "Check if the skill bound to a delegate is on cooldown."

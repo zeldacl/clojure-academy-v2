@@ -17,6 +17,8 @@
 ;; Compatibility exports for schema/gui lookups.
 (def energy->blockstate-level node-logic/energy->blockstate-level)
 (def ensure-node-slot-schema! node-logic/ensure-node-slot-schema!)
+(def node-types node-logic/node-types)
+(def node-max-energy node-logic/node-max-energy)
 
 (defn get-all-wireless-nodes []
   [(bdsl/get-block "wireless-node-basic")

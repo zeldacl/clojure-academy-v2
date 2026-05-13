@@ -6,6 +6,7 @@
   - Network handler registration
   - System initialization"
   (:require [cn.li.ac.terminal.app-registry :as app-reg]
+            [cn.li.ac.terminal.app-manifest :as app-manifest]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.util.log :as log]))
 
@@ -16,20 +17,22 @@
 (defn register-apps!
   "Load and register all terminal apps."
   []
-  (try
+  (let [init-symbols (app-manifest/list-app-init-symbols)
+        failures (atom [])]
     ;; Load all app namespaces, then perform explicit registration.
-    (doseq [init-sym '[cn.li.ac.terminal.apps.skill-tree/init-skill-tree-app!
-                      cn.li.ac.terminal.apps.settings/init-settings-app!
-                      cn.li.ac.terminal.apps.tutorial/init-tutorial-app!
-                      cn.li.ac.terminal.apps.freq-transmitter/init-freq-transmitter-app!
-                      cn.li.ac.terminal.apps.media-player/init-media-player-app!
-                      cn.li.ac.terminal.apps.about/init-about-app!]]
-      (when-let [init-fn (requiring-resolve init-sym)]
-        (init-fn)))
+    (doseq [init-sym init-symbols]
+      (try
+        (if-let [init-fn (requiring-resolve init-sym)]
+          (init-fn)
+          (swap! failures conj {:symbol init-sym
+                                :error "init function not found"}))
+        (catch Throwable t
+          (swap! failures conj {:symbol init-sym
+                                :error (ex-message t)}))))
 
-    (log/info "Registered" (app-reg/app-count) "terminal apps")
-    (catch Exception e
-      (log/error "Error registering terminal apps:" (ex-message e)))))
+    (if (seq @failures)
+      (log/error "Terminal app registration completed with failures" @failures)
+      (log/info "Registered" (app-reg/app-count) "terminal apps"))))
 
 ;; ============================================================================
 ;; Network Registration

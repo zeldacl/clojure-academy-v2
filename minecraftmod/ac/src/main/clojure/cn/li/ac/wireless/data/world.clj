@@ -4,7 +4,9 @@
   This namespace keeps all lifecycle and persistence functions explicit
   to make behavior easier to understand and debug."
   (:require [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.core.spatial-index :as si]
+            [cn.li.ac.wireless.data.world-registry :as world-registry]
+            [cn.li.ac.wireless.data.spatial-lookup :as spatial-lookup]
+            [cn.li.ac.wireless.data.network-lookup :as network-lookup]
             [cn.li.ac.wireless.data.network :as network]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
@@ -15,107 +17,75 @@
 (defprotocol IWiSavedData
   (get-wi-data [this] "Get the WiWorldData from the wrapper"))
 
-(defrecord WiWorldData
-  [world
-   net-lookup
-   node-lookup
-   spatial-index
-   networks
-   connections])
-
-(def ^:private world-data-registry (atom {}))
-
 (defn create-world-data
   "Create new world data for a world."
   [world]
-  (->WiWorldData
-    world
-    (atom {})
-    (atom {})
-    (si/create-spatial-index)
-    (atom [])
-    (atom [])))
+  (world-registry/create-world-data world))
 
 (defn get-world-data
   "Get world data for a world, creating it if missing."
   [world]
-  (or (get @world-data-registry world)
-      (let [created (create-world-data world)]
-        (swap! world-data-registry #(if (contains? % world) % (assoc % world created)))
-        (get @world-data-registry world))))
+  (world-registry/get-world-data world))
 
 (defn get-world-data-non-create
   "Get world data without creating."
   [world]
-  (get @world-data-registry world))
+  (world-registry/get-world-data-non-create world))
 
 (defn register-world-data!
   "Register a world -> WiWorldData mapping in the registry."
   [world wi-data]
-  (swap! world-data-registry assoc world wi-data)
-  wi-data)
+  (world-registry/register-world-data! world wi-data))
 
 (defn remove-world-data!
   "Remove world data (called on world unload)."
   [world]
-  (swap! world-data-registry dissoc world)
-  (log/info (format "Removed WiWorldData for world: %s" world)))
+  (world-registry/remove-world-data! world))
 
 (defn add-to-spatial-index!
   "Add a vblock to the spatial index."
   [world-data vblock]
-  (si/add-to-index! (:spatial-index world-data) vblock))
+  (spatial-lookup/add-to-spatial-index! world-data vblock))
 
 (defn remove-from-spatial-index!
   "Remove a vblock from the spatial index."
   [world-data vblock]
-  (si/remove-from-index! (:spatial-index world-data) vblock))
+  (spatial-lookup/remove-from-spatial-index! world-data vblock))
 
 (defn get-nearby-chunks
   "Get chunk keys within range of a position (delegates to spatial-index)."
   [x y z search-radius]
-  (si/nearby-chunk-keys x y z search-radius))
+  (spatial-lookup/get-nearby-chunks x y z search-radius))
 
 (defn get-vblocks-in-chunks
   "Get all vblocks in the specified chunks."
   [world-data chunk-keys]
-  (si/vblocks-in-chunks (:spatial-index world-data) chunk-keys))
+  (spatial-lookup/get-vblocks-in-chunks world-data chunk-keys))
 
 (defn get-network-by-matrix
   "Get network by matrix vblock."
   [world-data matrix-vblock]
-  (get @(:net-lookup world-data) matrix-vblock))
+  (network-lookup/get-network-by-matrix world-data matrix-vblock))
 
 (defn get-network-by-node
   "Get network by node vblock."
   [world-data node-vblock]
-  (get @(:net-lookup world-data) node-vblock))
+  (network-lookup/get-network-by-node world-data node-vblock))
 
 (defn get-network-by-ssid
   "Get network by SSID string."
   [world-data ssid]
-  (get @(:net-lookup world-data) ssid))
+  (network-lookup/get-network-by-ssid world-data ssid))
 
 (defn range-search-networks
   "Search for networks within range of coordinates using the spatial index."
   [world-data x y z search-radius max-results]
-  (let [range-sq (* search-radius search-radius)
-        chunk-keys (get-nearby-chunks x y z search-radius)
-        candidate-vblocks (get-vblocks-in-chunks world-data chunk-keys)
-        net-lookup @(:net-lookup world-data)]
-    (->> candidate-vblocks
-         (keep (fn [vblock]
-                 (when-let [net (get net-lookup vblock)]
-                   (when (= vblock (:matrix net))
-                     (when (<= (vb/dist-sq-pos vblock x y z) range-sq)
-                       net)))))
-         (distinct)
-         (take max-results))))
+  (network-lookup/range-search-networks world-data x y z search-radius max-results))
 
 (defn get-node-connection
   "Get node connection by node/generator/receiver vblock."
   [world-data vblock]
-  (get @(:node-lookup world-data) vblock))
+  (network-lookup/get-node-connection world-data vblock))
 
 (defn- register-network!
   [world-data net]
@@ -346,14 +316,14 @@
   (if saved-data
     (if-let [wi-data (get-saved-data-world-data saved-data)]
       (do
-        (swap! world-data-registry assoc world wi-data)
+        (register-world-data! world wi-data)
         (log/info "Restored WiWorldData for world from save")
         wi-data)
       (let [fresh (create-world-data world)]
-        (swap! world-data-registry assoc world fresh)
+        (register-world-data! world fresh)
         fresh))
     (let [fresh (create-world-data world)]
-      (swap! world-data-registry assoc world fresh)
+      (register-world-data! world fresh)
       fresh)))
 
 (defn on-world-save

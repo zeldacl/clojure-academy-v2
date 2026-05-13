@@ -4,6 +4,7 @@
   (:require [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.registry.skill :as skill]
             [cn.li.ac.ability.registry.category :as cat]
+            [cn.li.ac.ability.util.level-formula :as level-formula]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.mcmod.util.log :as log]))
@@ -114,11 +115,8 @@
                           (every? #(>= (adata/get-skill-exp ability-data (:id %)) 1.0)
                                   skills))
         cat-rate    (cat/get-prog-incr-rate cat-id)
-        global-rate cfg/*prog-incr-rate*
-        base        (* skill-count 1.333 cat-rate global-rate)]
-    (if all-mastered?
-      (* base 0.5)
-      base)))
+        global-rate cfg/*prog-incr-rate*]
+    (level-formula/level-up-threshold skill-count all-mastered? cat-rate global-rate)))
 
 (defn can-level-up?
   [ability-data]
