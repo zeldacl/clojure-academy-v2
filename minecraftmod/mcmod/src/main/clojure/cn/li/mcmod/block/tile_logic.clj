@@ -3,14 +3,15 @@
 
   Supports both block-id direct registration and reusable tile-kind registration.
   ScriptedBlockEntity calls into this namespace for tick/load/save/capability/container hooks."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.registry.core :as registry-core]
+            [cn.li.mcmod.util.log :as log]))
 
-(defonce tile-logic-registry (atom {}))
-(defonce tile-kind-registry (atom {}))
+(defonce tile-logic-registry (registry-core/atom-registry {}))
+(defonce tile-kind-registry (registry-core/atom-registry {}))
 
 ;; capability-registry: tile-id → {cap-key → handler-factory-fn}
 ;; handler-factory-fn is (fn [be side] handler-or-nil)
-(defonce capability-registry (atom {}))
+(defonce capability-registry (registry-core/atom-registry {}))
 
 ;; Resolve capability factory once at namespace load time
 (def ^:private capability-get-factory
@@ -28,7 +29,7 @@
 ;;   :slots-for-face            (fn [be face] int[])   ; optional
 ;;   :can-place-through-face?   (fn [be slot item face] bool)  ; optional
 ;;   :can-take-through-face?    (fn [be slot item face] bool)  ; optional
-(defonce container-registry (atom {}))
+(defonce container-registry (registry-core/atom-registry {}))
 
 (defn register-tile-kind!
   "Register reusable tile logic by tile-kind keyword.
@@ -41,7 +42,7 @@
   (when-not (keyword? tile-kind)
     (throw (ex-info "register-tile-kind!: tile-kind must be keyword"
                     {:tile-kind tile-kind})))
-  (swap! tile-kind-registry assoc tile-kind cfg)
+  (registry-core/swap-state! tile-kind-registry #(assoc % tile-kind cfg))
   (log/info "Registered tile-kind logic" tile-kind)
   nil)
 
@@ -76,7 +77,7 @@
         merged (merge-with-kind (or kind-cfg {}) normalized)]
     (if (or (:tick-fn merged) (:read-nbt-fn merged) (:write-nbt-fn merged))
       (do
-        (swap! tile-logic-registry assoc block-id merged)
+        (registry-core/swap-state! tile-logic-registry #(assoc % block-id merged))
         (log/info "Registered tile logic for block" block-id "with tile-kind" tile-kind))
       (do
         (log/warn "register-tile-logic!: no lifecycle hooks resolved, skipping registration"
@@ -87,7 +88,7 @@
         nil))))
 
 (defn get-tile-logic [block-id]
-  (get @tile-logic-registry block-id))
+  (registry-core/lookup tile-logic-registry block-id))
 
 (defn invoke-tick
   "Called from ScriptedBlockEntity.serverTick(level, pos, state, be).
@@ -136,7 +137,8 @@
   The actual handler-factory-fn is looked up from platform/capability-type-registry.
   Must be called after declare-capability! has been called for the key."
   [tile-id cap-key]
-  (swap! capability-registry update tile-id assoc cap-key cap-key)
+  (registry-core/swap-state! capability-registry
+                             #(update % tile-id (fnil assoc {}) cap-key cap-key))
   (log/info "Registered capability" cap-key "for tile" tile-id)
   nil)
 
@@ -145,7 +147,7 @@
   Returns a handler object for (tile-id, cap-key, be, side), or nil.
   Looks up handler-factory-fn from platform/capability-type-registry."
   [tile-id cap-key be side]
-  (when (get-in @capability-registry [tile-id cap-key])
+  (when (get-in (registry-core/snapshot capability-registry) [tile-id cap-key])
     (try
       (when-let [get-factory @capability-get-factory]
         (when-let [factory (get-factory cap-key)]
@@ -164,11 +166,11 @@
                 :remove-item-no-update :clear! :still-valid?
                 :slots-for-face :can-place-through-face? :can-take-through-face?"
   [tile-id fns-map]
-  (swap! container-registry assoc tile-id fns-map)
+  (registry-core/swap-state! container-registry #(assoc % tile-id fns-map))
   (log/info "Registered container for tile" tile-id)
   nil)
 
-(defn- container-fns [tile-id] (get @container-registry tile-id))
+(defn- container-fns [tile-id] (registry-core/lookup container-registry tile-id))
 
 (defn- invoke-container-fn
   "Invoke a container function by key, applying args. Returns nil if function not found."

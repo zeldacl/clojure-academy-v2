@@ -1,9 +1,10 @@
 (ns cn.li.mcmod.entity.dsl
   "Entity DSL - declarative registry metadata for platform adapters."
   (:require [clojure.string :as str]
+            [cn.li.mcmod.registry.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce entity-registry (atom {}))
+(defonce entity-registry (registry-core/atom-registry {}))
 
 (defrecord EntitySpec [id registry-name entity-kind category
                        width height
@@ -75,16 +76,16 @@
   [entity-spec]
   (validate-entity-spec entity-spec)
   (log/info "Registering entity:" (:id entity-spec))
-  (swap! entity-registry assoc (:id entity-spec) entity-spec)
+  (registry-core/swap-state! entity-registry #(assoc % (:id entity-spec) entity-spec))
   entity-spec)
 
 (defn get-entity
   [entity-id]
-  (get @entity-registry entity-id))
+  (registry-core/lookup entity-registry entity-id))
 
 (defn list-entities
   []
-  (keys @entity-registry))
+  (keys (registry-core/snapshot entity-registry)))
 
 (defn get-entity-registry-name
   [entity-id]

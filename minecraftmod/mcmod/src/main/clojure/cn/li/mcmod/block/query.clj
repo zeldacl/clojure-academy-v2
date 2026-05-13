@@ -2,7 +2,8 @@
   "Block query API - functions to query registered block specifications.
 
   Accepts either block ids or already-resolved block specs for most helpers so
-  callers can progressively migrate away from registry wrapper layers.")
+  callers can progressively migrate away from registry wrapper layers."
+  (:require [cn.li.mcmod.registry.core :as registry-core]))
 
 (declare get-block-spec)
 
@@ -36,7 +37,7 @@
 (defn- block-registry-state
   []
   (let [block-registry-var (requiring-resolve 'cn.li.mcmod.block.dsl/block-registry)]
-    @(var-get block-registry-var)))
+    (registry-core/snapshot (var-get block-registry-var))))
 
 (defn get-block-spec
   "Get a block specification by block-id from the registry
@@ -189,12 +190,12 @@
   (when-let [block-spec (resolve-block-spec block-or-spec)]
     (let [multi-block (:multi-block block-spec)]
       (when (:multi-block? multi-block)
-        (let [multiblock-router (requiring-resolve 'cn.li.mcmod.block.multiblock-router/calculate-multi-block-positions)]
-          (let [origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})
-                positions (if-let [custom-pos (:multi-block-positions multi-block)]
-                            (multiblock-router custom-pos origin)
-                            (multiblock-router (:multi-block-size multi-block) origin))]
-            positions))))))
+        (let [multiblock-router (requiring-resolve 'cn.li.mcmod.block.multiblock-router/calculate-multi-block-positions)
+              origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})
+              positions (if-let [custom-pos (:multi-block-positions multi-block)]
+                          (multiblock-router custom-pos origin)
+                          (multiblock-router (:multi-block-size multi-block) origin))]
+          positions)))))
 
 (defn has-block-state-properties?
   "Check if a block has custom block state properties

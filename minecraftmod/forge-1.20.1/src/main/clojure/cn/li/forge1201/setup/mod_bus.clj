@@ -4,7 +4,7 @@
 	Owns deferred-register registration and mod lifecycle/event listeners so
 	mod.clj stays focused on bootstrap flow."
 	(:require [cn.li.forge1201.setup.capability-setup :as capability-setup]
-				[cn.li.forge1201.setup.lifecycle-binding :as lifecycle-binding]
+				[cn.li.forge1201.setup.event-registration :as event-registration]
 				[cn.li.forge1201.setup.registry-binding :as registry-binding])
 	(:import [net.minecraftforge.eventbus.api IEventBus]
 	         [net.minecraftforge.eventbus.api IEventBus]
@@ -27,8 +27,8 @@
 
 (defn register-lifecycle-phase!
 	[^IEventBus mod-bus {:keys [on-common-setup on-client-setup]}]
-	(lifecycle-binding/register-lifecycle-phase! mod-bus {:on-common-setup on-common-setup
-																												 :on-client-setup on-client-setup})
+	(event-registration/register-lifecycle-phase! mod-bus {:on-common-setup on-common-setup
+															 :on-client-setup on-client-setup})
 	nil)
 
 (defn register-capability-phase!

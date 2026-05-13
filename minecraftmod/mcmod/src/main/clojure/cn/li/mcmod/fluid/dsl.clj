@@ -3,9 +3,10 @@
 
   Fluids are declared as pure data in mcmod; platform adapters (Forge/Fabric)
   translate this metadata into concrete runtime objects."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.registry.core :as registry-core]))
 
-(defonce fluid-registry (atom {}))
+(defonce fluid-registry (registry-core/atom-registry {}))
 
 (defrecord FluidPhysicalProperties
   [luminosity density viscosity temperature can-convert-to-source supports-boat])
@@ -89,14 +90,14 @@
 
 (defn register-fluid!
   [fluid-spec]
-  (swap! fluid-registry assoc (:id fluid-spec) fluid-spec)
+  (registry-core/swap-state! fluid-registry #(assoc % (:id fluid-spec) fluid-spec))
   fluid-spec)
 
 (defn get-fluid
   [fluid-id]
-  (get @fluid-registry (str fluid-id)))
+  (registry-core/lookup fluid-registry (str fluid-id)))
 
 (defn list-fluids
   []
-  (keys @fluid-registry))
+  (keys (registry-core/snapshot fluid-registry)))
 

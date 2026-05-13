@@ -41,6 +41,10 @@
 - **`ac`**：业务内容层（能力、无线、GUI 业务逻辑等）；禁止直接引用 Forge/Fabric/Minecraft API。
 - **`mc-1.20.1`**：共享 Minecraft 逻辑层；允许依赖 `net.minecraft.*`，但禁止依赖 Forge/Fabric Loader API。
   - **内部结构**（Phase C 后）：
+    - `runtime/*_spi.clj`：3 个平台独立 SPI 契约
+      - `server_context_spi.clj`：Server 上下文注册/获取契约
+      - `network_transport_spi.clj`：网络消息传输契约
+    - `gui/registry_api.clj`：GUI Menu 类型注册契约
     - `runtime/*_core.clj`：19+ 个运行时核心模块（实体、生命周期、网络、NBT 等）
     - `integration/event_handlers.clj`：共享事件处理业务逻辑
     - `integration/event_helpers_core.clj`：共享事件辅助函数（runtime 检查、数据构建）
@@ -49,7 +53,12 @@
     - `datagen/*_common.clj`：共享 datagen provider 实现
 - **`forge-1.20.1`**：Forge 事件绑定与 Loader 入口层（Phase C 后仅包含）；仅保留直接引用 Forge 的代码和事件注册胶水。
   - **结构规范**：
-    - `mod/` 与 `mod.clj`：Loader 入口与初始化
+    - `mod/` 与 `mod.clj`：Loader 入口与初始化（Wave A：调用 `setup/forge_lifecycle_coordinator.clj` 编排生命周期）
+    - `setup/event_registration_manifest.clj`：声明式事件注册规范（Wave A）
+    - `setup/event_registration.clj`：统一事件绑定器（Wave A）
+    - `runtime/server_context.clj`：Server 上下文 SPI 实现（Wave B）
+    - `runtime/network.clj`：网络 SPI 实现（Wave B）
+    - `gui/registry_impl.clj`：GUI Menu 类型 SPI 实现（Wave B）
     - `registry/`：Loader API 入口（DeferredRegister 等）
     - `client/`：Forge 事件绑定（`RenderGuiOverlayEvent` 等），仅做事件解包 → 调用 mc1201
     - `integration/events.clj`：Forge 事件处理（事件对象解包、回写结果），业务逻辑委托到 mc1201
@@ -57,7 +66,11 @@
     - 不得包含与 Loader 无关的 Minecraft-only 逻辑
 - **`fabric-1.20.1`**：Fabric 事件绑定与 Loader 入口层（Phase C 后仅包含）；Fabric 启动期 `class-noinit` / 反射外壳与事件 API 绑定属于平台语义。
   - **结构规范**（同 Forge）：
-    - `mod/` 与 `mod.clj`：Loader 入口
+    - `mod/` 与 `mod.clj`：Loader 入口（Wave A：调用 `setup/lifecycle_init.clj` 编排生命周期）
+    - `setup/lifecycle_init.clj`：Fabric 生命周期编排（Wave A）
+    - `runtime/server_context.clj`：Server 上下文 SPI 实现（Wave B）
+    - `runtime/network.clj`：网络 SPI 实现（Wave B）
+    - `gui/registry_impl.clj`：GUI Menu 类型 SPI 实现（Wave B）
     - `registry/`：Fabric API 入口（ScreenHandlerRegistry 等）
     - `client/`：Fabric 事件绑定（`HudRenderCallback` 等），仅做事件解包 → 调用 mc1201
     - `integration/events.clj`：Fabric 事件处理（事件对象解包、回写结果），业务逻辑委托到 mc1201

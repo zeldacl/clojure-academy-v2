@@ -4,8 +4,6 @@
   The proxy remains Forge-specific, but the rendering/input plumbing is split
   into smaller helpers so the lifecycle is easier to follow and test."
   (:require [cn.li.mc1201.gui.screen-registry :as screen-registry]
-            [cn.li.mc1201.gui.screen-impl-core :as screen-core]
-            [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens Screen]
            [cn.li.forge1201.shim ForgeClientHelper ForgeClientHelper$ScreenFactory]
@@ -13,7 +11,7 @@
            [net.minecraftforge.common MinecraftForge]))
 
 (defn- register-one-screen!
-  [gui-id menu-type factory-fn-kw]
+  [gui-id menu-type screen-creator factory-fn-kw]
   (log/info "[SCREEN-INIT] Registering GUI ID:" gui-id "menu-type:" menu-type "factory-fn-kw:" factory-fn-kw)
   (when menu-type
     (ForgeClientHelper/registerMenuScreen
@@ -21,14 +19,7 @@
      (reify ForgeClientHelper$ScreenFactory
        (create [_ menu player-inventory title]
          (log/info "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
-         (screen-core/create-screen-or-fallback
-          gui-id
-          menu
-          player-inventory
-          title
-          factory-fn-kw
-          {:on-render-tail! (fn [^Screen screen gg _mx _my _pt]
-                              (.post MinecraftForge/EVENT_BUS (ScreenEvent$BackgroundRendered. screen gg)))})))))
+         (screen-creator menu player-inventory title)))))
   (log/info "Registered screen for GUI ID" gui-id))
 
 (defn register-screens!
@@ -36,12 +27,13 @@
   []
   (log/info "Registering GUI screens for Forge 1.20.1")
   (try
-    (screen-registry/register-all-screens!
+    (screen-registry/register-platform-screens!
      :forge-1.20.1
-     gui/get-all-gui-ids
-     gui/get-menu-type
-     gui/get-screen-factory-fn-kw
-     register-one-screen!)
+     {:label "Forge 1.20.1"
+      :screen-opts-fn (fn [_gui-id _menu-type _factory-fn-kw]
+                        {:on-render-tail! (fn [^Screen screen gg _mx _my _pt]
+                                            (.post MinecraftForge/EVENT_BUS (ScreenEvent$BackgroundRendered. screen gg)))})
+      :register-menu-screen! register-one-screen!})
     (log/info "Screen factories registered successfully")
     (catch Exception e
       (log/error "Failed to register screen factories:" (.getMessage e))

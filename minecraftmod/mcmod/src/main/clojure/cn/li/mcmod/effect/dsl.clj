@@ -1,9 +1,10 @@
 (ns cn.li.mcmod.effect.dsl
 	"Effect DSL - declarative MobEffect definitions"
 	(:require [clojure.string :as str]
+						[cn.li.mcmod.registry.core :as registry-core]
 						[cn.li.mcmod.util.log :as log]))
 
-(defonce effect-registry (atom {}))
+(defonce effect-registry (registry-core/atom-registry {}))
 
 (defrecord EffectSpec [id registry-name category color tick-interval damage-per-tick properties])
 
@@ -26,16 +27,16 @@
 	(when-not (string? (:registry-name effect-spec))
 		(throw (ex-info "Effect :registry-name must be string" {:effect-spec effect-spec})))
 	(log/info "Registering effect:" (:id effect-spec) "->" (:registry-name effect-spec))
-	(swap! effect-registry assoc (:id effect-spec) effect-spec)
+	(registry-core/swap-state! effect-registry #(assoc % (:id effect-spec) effect-spec))
 	effect-spec)
 
 (defn get-effect
 	[effect-id]
-	(get @effect-registry effect-id))
+	(registry-core/lookup effect-registry effect-id))
 
 (defn list-effects
 	[]
-	(keys @effect-registry))
+	(keys (registry-core/snapshot effect-registry)))
 
 (defmacro defeffect
 	[effect-name & options]

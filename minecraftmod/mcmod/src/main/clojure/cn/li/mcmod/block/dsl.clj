@@ -1,13 +1,14 @@
 (ns cn.li.mcmod.block.dsl
   "Block DSL - Declarative block definition using Clojure macros"
   (:require [clojure.string :as str]
+            [cn.li.mcmod.registry.core :as registry-core]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as platform-be]))
 
 ;; Block Registry - stores all defined blocks
-(defonce block-registry (atom {}))
+(defonce block-registry (registry-core/atom-registry {}))
 
 ;; ============================================================================
 ;; Nested Record Structures for BlockSpec
@@ -655,17 +656,17 @@
 (defn register-block! [block-spec]
   (validate-block-spec block-spec)
   (log/info "Registering block:" (:id block-spec))
-  (swap! block-registry assoc (:id block-spec) block-spec)
+  (registry-core/swap-state! block-registry #(assoc % (:id block-spec) block-spec))
   block-spec)
 
 ;; Get block from registry
 (defn get-block [block-id]
   (let [id-str (if (keyword? block-id) (name block-id) block-id)]
-    (get @block-registry id-str)))
+    (registry-core/lookup block-registry id-str)))
 
 ;; List all registered blocks
 (defn list-blocks []
-  (keys @block-registry))
+  (keys (registry-core/snapshot block-registry)))
 
 ;; Main macro: defblock
 (defmacro defblock

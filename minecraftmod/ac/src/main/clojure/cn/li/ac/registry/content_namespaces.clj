@@ -4,9 +4,10 @@
   The `content-load-plan` value is the single source of truth for both:
   - namespace require order
   - post-require init function execution order"
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.ac.registry.content-plan-builder :as plan-builder]
+            [cn.li.mcmod.util.log :as log]))
 
-(def content-load-plan
+(def ^:private default-phase-plugins
   [{:phase :block
     :namespaces '[cn.li.ac.content.blocks.wireless
                   cn.li.ac.content.blocks.generators
@@ -45,6 +46,12 @@
     :namespaces '[cn.li.ac.terminal.init]
     :init-fns '[cn.li.ac.terminal.init/init-terminal!]
     :trace-tag :terminal-init}])
+
+(doseq [phase-spec default-phase-plugins]
+  (plan-builder/register-phase-plugin! phase-spec))
+
+(def content-load-plan
+  (plan-builder/build-load-plan))
 
 ;; Compatibility exports for docs/tooling that still reference these vars.
 (def block-namespaces (-> content-load-plan first :namespaces))

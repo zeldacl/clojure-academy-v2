@@ -6,6 +6,7 @@
   - Keep core platform-neutral: stores metadata only; platforms query via registry metadata."
   (:require [clojure.string :as str]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
+            [cn.li.mcmod.registry.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^{:doc "Registry of tile specs.
@@ -14,7 +15,7 @@ Structure:
 - :by-id {tile-id -> TileSpec}
 - :block->tile-id {block-id -> tile-id}"}
   tile-registry
-  (atom {:by-id {} :block->tile-id {}}))
+  (registry-core/atom-registry {:by-id {} :block->tile-id {}}))
 
 (defrecord TileSpec
   [id
@@ -92,42 +93,43 @@ Enforces:
   [tile-spec]
   (validate-tile-spec tile-spec)
   (let [{:keys [id blocks]} tile-spec]
-    (swap! tile-registry
-           (fn [{:keys [by-id block->tile-id] :as reg}]
-             (when (contains? by-id id)
-               ;; `checkClojure`/AOT 会重复加载同一份 DSL，导致 tile-spec 里函数对象不再“相等”。
-               ;; 这里将重复 tile-id 视为幂等；真正的约束由下面的 block->tile-id 冲突检查保证。
-               nil)
+    (registry-core/swap-state!
+     tile-registry
+     (fn [{:keys [by-id block->tile-id] :as reg}]
+       (when (contains? by-id id)
+         ;; `checkClojure`/AOT 会重复加载同一份 DSL，导致 tile-spec 里函数对象不再“相等”。
+         ;; 这里将重复 tile-id 视为幂等；真正的约束由下面的 block->tile-id 冲突检查保证。
+         nil)
 
-             (doseq [block-id blocks
-                     :let [existing (get block->tile-id block-id)]
-                     :when existing]
-               (when-not (= existing id)
-                 (when-not *compile-files*
-                   (throw (ex-info "Block is already bound to a tile-id"
-                                   {:block-id block-id
-                                    :existing-tile-id existing
-                                    :new-tile-id id})))))
+       (doseq [block-id blocks
+               :let [existing (get block->tile-id block-id)]
+               :when existing]
+         (when-not (= existing id)
+           (when-not *compile-files*
+             (throw (ex-info "Block is already bound to a tile-id"
+                             {:block-id block-id
+                              :existing-tile-id existing
+                              :new-tile-id id})))))
 
-             (-> reg
-                 (assoc-in [:by-id id] tile-spec)
-                 (update :block->tile-id
-                         into
-                         (map (fn [b] [b id]) blocks)))))
+       (-> reg
+           (assoc-in [:by-id id] tile-spec)
+           (update :block->tile-id
+                   into
+                   (map (fn [b] [b id]) blocks)))))
     (log/info "Registered tile" id "for blocks" blocks)
     tile-spec))
 
 (defn get-tile
   [tile-id]
-  (get-in @tile-registry [:by-id (normalize-id tile-id)]))
+  (registry-core/lookup-in tile-registry [:by-id (normalize-id tile-id)]))
 
 (defn list-tiles
   []
-  (keys (:by-id @tile-registry)))
+  (keys (:by-id (registry-core/snapshot tile-registry))))
 
 (defn get-tile-id-for-block
   [block-id]
-  (get-in @tile-registry [:block->tile-id (normalize-id block-id)]))
+  (registry-core/lookup-in tile-registry [:block->tile-id (normalize-id block-id)]))
 
 (defmacro deftile
   "Define and register a tile spec.

@@ -1,8 +1,9 @@
 (ns cn.li.mcmod.loot.dsl
   "Loot injection DSL for declarative loot table augmentation."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.registry.core :as registry-core]
+            [cn.li.mcmod.util.log :as log]))
 
-(defonce loot-injection-registry (atom {}))
+(defonce loot-injection-registry (registry-core/atom-registry {}))
 
 (defrecord LootInjectionSpec
   [id target-table item-id weight quality min-count max-count])
@@ -27,15 +28,15 @@
   (when-not (string? (:item-id spec))
     (throw (ex-info "Loot injection :item-id must be string" {:spec spec})))
   (log/info "Registering loot injection:" (:id spec) "table:" (:target-table spec) "item:" (:item-id spec))
-  (swap! loot-injection-registry assoc (:id spec) spec)
+  (registry-core/swap-state! loot-injection-registry #(assoc % (:id spec) spec))
   spec)
 
-(defn list-loot-injections [] (keys @loot-injection-registry))
-(defn get-loot-injection [injection-id] (get @loot-injection-registry injection-id))
+(defn list-loot-injections [] (keys (registry-core/snapshot loot-injection-registry)))
+(defn get-loot-injection [injection-id] (registry-core/lookup loot-injection-registry injection-id))
 
 (defn get-loot-injections-for-table
   [target-table]
-  (->> @loot-injection-registry
+  (->> (registry-core/snapshot loot-injection-registry)
        vals
        (filter (fn [spec] (= (:target-table spec) target-table)))))
 

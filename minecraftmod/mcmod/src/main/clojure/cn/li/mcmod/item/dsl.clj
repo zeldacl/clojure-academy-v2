@@ -1,9 +1,10 @@
 (ns cn.li.mcmod.item.dsl
   "Item DSL - Declarative item definition using Clojure macros"
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.registry.core :as registry-core]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; Item Registry - stores all defined items
-(defonce item-registry (atom {}))
+(defonce item-registry (registry-core/atom-registry {}))
 
 ;; Item specifications
 (defrecord ItemSpec [id max-stack-size durability creative-tab rarity
@@ -89,16 +90,16 @@
 (defn register-item! [item-spec]
   (validate-item-spec item-spec)
   (log/info "Registering item:" (:id item-spec))
-  (swap! item-registry assoc (:id item-spec) item-spec)
+  (registry-core/swap-state! item-registry #(assoc % (:id item-spec) item-spec))
   item-spec)
 
 ;; Get item from registry
 (defn get-item [item-id]
-  (get @item-registry item-id))
+  (registry-core/lookup item-registry item-id))
 
 ;; List all registered items
 (defn list-items []
-  (keys @item-registry))
+  (keys (registry-core/snapshot item-registry)))
 
 ;; Main macro: defitem
 (defmacro defitem

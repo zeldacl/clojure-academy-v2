@@ -1,9 +1,10 @@
 (ns cn.li.mcmod.particle.dsl
 	"Particle DSL - declarative particle type definitions"
 	(:require [clojure.string :as str]
+						[cn.li.mcmod.registry.core :as registry-core]
 						[cn.li.mcmod.util.log :as log]))
 
-(defonce particle-registry (atom {}))
+(defonce particle-registry (registry-core/atom-registry {}))
 
 (defrecord ParticleSpec [id registry-name always-show? properties])
 
@@ -21,11 +22,11 @@
 	(when-not (string? (:id particle-spec))
 		(throw (ex-info "Particle :id must be string" {:particle-spec particle-spec})))
 	(log/info "Registering particle:" (:id particle-spec) "->" (:registry-name particle-spec))
-	(swap! particle-registry assoc (:id particle-spec) particle-spec)
+	(registry-core/swap-state! particle-registry #(assoc % (:id particle-spec) particle-spec))
 	particle-spec)
 
-(defn get-particle [particle-id] (get @particle-registry particle-id))
-(defn list-particles [] (keys @particle-registry))
+(defn get-particle [particle-id] (registry-core/lookup particle-registry particle-id))
+(defn list-particles [] (keys (registry-core/snapshot particle-registry)))
 
 (defmacro defparticle
 	[particle-name & options]
