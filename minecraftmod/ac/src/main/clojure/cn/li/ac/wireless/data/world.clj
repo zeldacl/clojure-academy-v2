@@ -48,6 +48,12 @@
   [world]
   (get @world-data-registry world))
 
+(defn register-world-data!
+  "Register a world -> WiWorldData mapping in the registry."
+  [world wi-data]
+  (swap! world-data-registry assoc world wi-data)
+  wi-data)
+
 (defn remove-world-data!
   "Remove world data (called on world unload)."
   [world]
@@ -255,13 +261,13 @@
     (node-conn/remove-receiver! old-conn receiver-vblock))
   (node-conn/add-receiver! conn receiver-vblock))
 
-(defn- rebuild-network-indexes!
+(defn rebuild-network-indexes!
   [world-data net]
   (register-network! world-data net)
   (doseq [node @(:nodes net)]
     (register-network-node! world-data net node)))
 
-(defn- rebuild-connection-indexes!
+(defn rebuild-connection-indexes!
   [world-data conn]
   (register-node-connection! world-data conn)
   (doseq [generator @(:generators conn)]

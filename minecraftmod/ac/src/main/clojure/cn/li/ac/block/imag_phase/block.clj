@@ -2,47 +2,12 @@
   "Imaginary phase fluid block port for 1.20."
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.ac.block.phase-gen.config :as phase-config]
+            [cn.li.ac.block.imag-phase.handlers :as imag-phase-handlers]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.fluid.dsl :as fdsl]
-            [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce-guard imag-phase-installed?)
-
-(defn- stack-empty?
-  [stack]
-  (or (nil? stack)
-      (try
-        (boolean (pitem/item-is-empty? stack))
-        (catch Exception _
-          false))))
-
-(defn- stack-id
-  [stack]
-  (when-not (stack-empty? stack)
-    (try
-      (some-> stack pitem/item-get-item pitem/item-get-registry-name str)
-      (catch Exception _
-        nil))))
-
-(defn- to-phase-liquid-matter-unit!
-  [stack]
-  (try
-    (pitem/item-set-damage! stack phase-config/matter-unit-phase-liquid-meta)
-    true
-    (catch Exception _
-      false)))
-
-(defn- handle-imag-phase-click
-  [{:keys [world item-stack] :as _ctx}]
-  (when (and world
-             (not (world/world-is-client-side* world))
-             (not (stack-empty? item-stack))
-             (= (stack-id item-stack) phase-config/matter-unit-item-id))
-    (when (to-phase-liquid-matter-unit! item-stack)
-      {:consume? true})))
 
 (defn init-imag-phase!
   []
@@ -85,6 +50,6 @@
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "phase_liquid")}
                      :has-item-form? false}
-         :events {:on-right-click handle-imag-phase-click}}))
+            :events {:on-right-click imag-phase-handlers/handle-imag-phase-click}}))
     (log/info "Initialized Imag Phase fluid block")))
 
