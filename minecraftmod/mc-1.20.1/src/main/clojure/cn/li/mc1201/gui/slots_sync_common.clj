@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.gui.slots-sync-common
   "Shared slot/data-slot setup logic for menu bridges."
-  (:require [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
             [cn.li.mc1201.gui.container-adapter :as ca]
             [cn.li.mc1201.gui.slots-common :as slots-common])

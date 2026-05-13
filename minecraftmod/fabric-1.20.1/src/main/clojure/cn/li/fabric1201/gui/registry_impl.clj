@@ -1,6 +1,6 @@
 (ns cn.li.fabric1201.gui.registry-impl
   "Fabric 1.20.1 GUI Registration Implementation"
-  (:require [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.fabric1201.gui.menu-bridge :as menu-bridge]
             [cn.li.fabric1201.gui.provider-bridge :as provider-bridge]
             [cn.li.mc1201.gui.registry-common :as registry-common]

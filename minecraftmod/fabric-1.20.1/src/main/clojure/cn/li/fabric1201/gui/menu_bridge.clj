@@ -3,7 +3,7 @@
 
   Uses runtime `proxy` + a tiny Java bridge class (CMenuBridge) so protected
   AbstractContainerMenu APIs can be invoked from Clojure safely."
-  (:require [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mc1201.gui.menu-bridge-core :as menu-core])
   (:import [cn.li.mc1201.gui CMenuBridge]))
 

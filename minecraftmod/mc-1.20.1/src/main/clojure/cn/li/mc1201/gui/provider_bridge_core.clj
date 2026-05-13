@@ -1,7 +1,7 @@
 (ns cn.li.mc1201.gui.provider-bridge-core
   "Shared GUI provider-bridge helpers used by Forge/Fabric wrappers."
   (:require [cn.li.mc1201.gui.provider-common :as provider-common]
-            [cn.li.mcmod.gui.adapter :as gui]
+            [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.entity.player Player]))
 

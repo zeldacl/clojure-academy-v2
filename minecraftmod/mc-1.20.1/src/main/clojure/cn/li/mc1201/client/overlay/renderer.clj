@@ -2,7 +2,7 @@
   "Shared overlay rendering core (Minecraft-only)."
   (:require [clojure.string :as str]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
-            [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+            [cn.li.mcmod.runtime.hooks.client-ui :as client-ui]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.systems RenderSystem]
            [net.minecraft.client Minecraft]
@@ -211,7 +211,7 @@
             window (.getWindow mc)
             screen-width (.getGuiScaledWidth window)
             screen-height (.getGuiScaledHeight window)
-            overlay-plan (power-runtime/client-build-overlay-plan
+            overlay-plan (client-ui/client-build-overlay-plan
                            player-uuid
                            screen-width
                            screen-height

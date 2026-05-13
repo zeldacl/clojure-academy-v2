@@ -4,7 +4,7 @@
   Platform adapters should supply only registration API and optional render-tail
   callbacks (e.g. Forge event bus hooks)."
   (:require [cn.li.mc1201.gui.cgui-runtime :as cgui-rt]
-            [cn.li.mcmod.gui.adapter :as gui]
+            [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui GuiGraphics]
            [cn.li.mc1201.gui CGuiContainerScreen]))

@@ -3,7 +3,10 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+            [cn.li.mcmod.runtime.hooks.client-ui :as client-ui]
+            [cn.li.mcmod.runtime.hooks.effects :as effect-hooks]
+            [cn.li.mcmod.runtime.hooks.network :as network-hooks]
+            [cn.li.mcmod.runtime.hooks.player :as player-hooks]
             [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core.registries BuiltInRegistries]
@@ -71,12 +74,12 @@
     (doseq [action (:client-actions plan)]
       (case (:kind action)
         :notify-local-effect
-        (power-runtime/client-notify-charge-coin-throw! player-uuid)
+        (effect-hooks/client-notify-charge-coin-throw! player-uuid)
 
         :open-screen
         (if open-screen-fn
           (open-screen-fn player player-uuid)
-          (power-runtime/client-open-skill-tree-screen! player-uuid nil))
+          (client-ui/client-open-skill-tree-screen! player-uuid nil))
 
         nil))
 
@@ -92,7 +95,7 @@
               (.setItemInHand player hand ItemStack/EMPTY))))
 
         :domain-action
-        (power-runtime/on-runtime-item-action! (:action action) player-uuid (:payload action))
+        (network-hooks/on-runtime-item-action! (:action action) player-uuid (:payload action))
 
         :spawn-scripted-effect
         (when (= side :server)
@@ -114,9 +117,9 @@
      :plan nil}
     (let [player-uuid (str (.getUUID player))
           item-id (get-item-id stack)
-          ability-activated? (boolean (get-in (power-runtime/get-player-state player-uuid)
+          ability-activated? (boolean (get-in (player-hooks/get-player-state player-uuid)
                                               [:resource-data :activated]))
-          plan (power-runtime/build-item-use-plan player-uuid item-id ability-activated? side)]
+          plan (network-hooks/build-item-use-plan player-uuid item-id ability-activated? side)]
       (dispatch-dsl-item-use! player item-id hand stack side)
       (run-plan-actions! player hand stack side player-uuid plan opts)
       {:consume? (or (:consume? plan)

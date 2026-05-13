@@ -14,3 +14,4 @@
 (def client-tick-hand-effects! hooks-core/client-tick-hand-effects!)
 (def client-drain-camera-pitch-deltas! hooks-core/client-drain-camera-pitch-deltas!)
 (def client-current-hand-transform hooks-core/client-current-hand-transform)
+(def client-notify-charge-coin-throw! hooks-core/client-notify-charge-coin-throw!)

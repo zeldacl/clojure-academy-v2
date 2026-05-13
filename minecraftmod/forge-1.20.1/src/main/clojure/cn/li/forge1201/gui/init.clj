@@ -2,7 +2,7 @@
   "Forge 1.20.1 GUI System Initialization"
   (:require [cn.li.mc1201.gui.init-orchestrator :as gui-orchestrator]
             [cn.li.mc1201.gui.init-checks :as init-checks]
-            [cn.li.mcmod.gui.adapter :as gui]
+            [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.util.log :as log]))
 
 (defn init-common!

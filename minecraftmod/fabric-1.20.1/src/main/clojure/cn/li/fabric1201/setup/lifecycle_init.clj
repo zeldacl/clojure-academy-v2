@@ -2,7 +2,8 @@
   "Fabric lifecycle coordinator extracted from mod entry.
 
   Keeps the loader entry thin and makes phase ordering explicit."
-  (:require [cn.li.mc1201.lifecycle.orchestrator :as lifecycle-orchestrator]))
+  (:require [cn.li.mc1201.lifecycle.orchestrator :as lifecycle-orchestrator]
+            [cn.li.mc1201.lifecycle.phase-contract :as phase-contract]))
 
 (defn init-lifecycle!
   [{:keys [init-platform!
@@ -16,10 +17,11 @@
            register-events!]}]
   (lifecycle-orchestrator/run-lifecycle!
     {:label "fabric-1.20.1"
-     :phases [{:id :platform-init :desc "platform bootstrap + init-from-java" :fn #(do (init-platform!) (init-from-java!))}
-              {:id :core-config :desc "core init and config load/bind" :fn #(do (init-core!) (load-config!) (bind-gameplay-config!))}
-              {:id :resource-init :desc "shared blockstate property init" :fn init-blockstate-properties!}
-              {:id :content-registration :desc "register content" :fn register-content!}
-              {:id :runtime-setup :desc "runtime adapter + gui setup" :fn install-runtime!}
-              {:id :event-wiring :desc "register fabric events" :fn register-events!}]})
+     :phases [(phase-contract/phase :platform-init #(do (init-platform!) (init-from-java!)))
+              (phase-contract/phase :runtime-activation "core init and config load/bind"
+                                    #(do (init-core!) (load-config!) (bind-gameplay-config!)))
+              (phase-contract/phase :resource-init "shared blockstate property init" init-blockstate-properties!)
+              (phase-contract/phase :content-registration register-content!)
+              (phase-contract/phase :common-setup "runtime adapter + gui setup" install-runtime!)
+              (phase-contract/phase :event-wiring "register fabric events" register-events!)]})
   nil)

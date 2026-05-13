@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.gui.menu-bridge-common
   "Shared lifecycle and quick-move helpers for platform menu bridges."
-  (:require [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.gui CMenuBridge]
            [net.minecraft.world.inventory AbstractContainerMenu Slot]

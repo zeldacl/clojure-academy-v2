@@ -4,7 +4,7 @@
   Platform-agnostic design: Uses metadata-driven approach.
 
   IMPORTANT: Only imports from `cn.li.mcmod.gui.adapter` for the unified GUI API."
-  (:require [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.forge1201.gui.menu-bridge :as menu-bridge]
             [cn.li.forge1201.gui.provider-bridge :as provider-bridge]

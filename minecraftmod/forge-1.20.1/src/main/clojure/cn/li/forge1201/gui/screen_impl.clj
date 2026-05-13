@@ -5,7 +5,7 @@
   into smaller helpers so the lifecycle is easier to follow and test."
   (:require [cn.li.mc1201.gui.screen-registry :as screen-registry]
             [cn.li.mc1201.gui.screen-impl-core :as screen-core]
-            [cn.li.mcmod.gui.adapter :as gui]
+            [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens Screen]
            [cn.li.forge1201.shim ForgeClientHelper ForgeClientHelper$ScreenFactory]

@@ -6,7 +6,7 @@
   when Clojure source files are loaded dynamically without AOT compilation.
   Tabbed GUIs: same UI, same container; :tab-index is only the 'current tab' state.
   When container has :tab-index, we add DataSlot + conditional slots (slots active only when tab-index is 0)."
-  (:require [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mc1201.gui.menu-bridge-core :as menu-core])
   (:import [cn.li.mc1201.gui CMenuBridge]))
 

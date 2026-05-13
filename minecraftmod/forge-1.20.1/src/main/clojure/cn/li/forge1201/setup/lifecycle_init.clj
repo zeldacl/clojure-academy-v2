@@ -14,6 +14,7 @@
   (:require [cn.li.forge1201.init :as init]
             [cn.li.forge1201.setup.mod-bus :as setup-mod-bus]
             [cn.li.mc1201.lifecycle.orchestrator :as lifecycle-orchestrator]
+            [cn.li.mc1201.lifecycle.phase-contract :as phase-contract]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.setup.common :as setup-common])
@@ -115,12 +116,12 @@
   (try
     (lifecycle-orchestrator/run-lifecycle!
       {:label "forge-1.20.1"
-       :phases [{:id :platform-init :desc "platform bootstrap + init-from-java" :fn init-platform!}
-                {:id :runtime-activation :desc "activate shared runtime content" :fn activate-runtime-content!}
-                {:id :resource-init :desc "initialize blockstate/resource definitions" :fn init-resource-definitions!}
-                {:id :content-registration :desc "register content" :fn #(register-all-content! registration-steps)}
-                {:id :mod-bus-setup :desc "wire deferred registers and lifecycle listeners" :fn #(setup-mod-bus! opts)}
-                {:id :common-setup :desc "run common setup side effects" :fn run-common-setup!}]})
+       :phases [(phase-contract/phase :platform-init init-platform!)
+                (phase-contract/phase :runtime-activation "activate shared runtime content" activate-runtime-content!)
+                (phase-contract/phase :resource-init init-resource-definitions!)
+                (phase-contract/phase :content-registration #(register-all-content! registration-steps))
+                (phase-contract/phase :mod-bus-setup #(setup-mod-bus! opts))
+                (phase-contract/phase :common-setup run-common-setup!)]})
     (catch Exception e
       (log/error "Forge initialization lifecycle failed" e)
       (throw e))))

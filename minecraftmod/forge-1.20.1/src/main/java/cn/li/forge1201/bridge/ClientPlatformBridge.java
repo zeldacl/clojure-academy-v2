@@ -1,6 +1,6 @@
 package cn.li.forge1201.bridge;
 
-import net.minecraft.client.player.LocalPlayer;
+import cn.li.mc1201.client.ClientClassAccessor;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
@@ -17,6 +17,6 @@ public final class ClientPlatformBridge {
 
     @OnlyIn(Dist.CLIENT)
     public static Class<?> getLocalPlayerClass() {
-        return LocalPlayer.class;
+        return ClientClassAccessor.getLocalPlayerClass();
     }
 }

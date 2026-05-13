@@ -3,7 +3,7 @@
 
   Platforms provide transport functions; shared core wires runtime route/send
   integration with mcmod power-runtime and runtime-catalog." 
-  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+  (:require [cn.li.mcmod.runtime.hooks.network :as network-hooks]
             [cn.li.mcmod.runtime.catalog :as runtime-catalog]
             [cn.li.mcmod.util.log :as log]))
 
@@ -51,13 +51,13 @@
                              {:ctx-id ctx-id :channel channel :payload payload}))
         send-context-channel-to-client!
         (fn [ctx-id channel payload]
-          (when-let [player-uuid (power-runtime/get-context-player-uuid ctx-id)]
+          (when-let [player-uuid (network-hooks/get-context-player-uuid ctx-id)]
             (send-to-client-fn player-uuid
                                runtime-catalog/MSG-CTX-CHANNEL
                                {:ctx-id ctx-id :channel channel :payload payload})))]
-    (power-runtime/register-network-handlers!)
-    (power-runtime/register-context-route-fns! {:to-server send-context-channel-to-server!
+    (network-hooks/register-network-handlers!)
+    (network-hooks/register-context-route-fns! {:to-server send-context-channel-to-server!
                                                 :to-client send-context-channel-to-client!
                                                 :to-except-local send-to-except-local-fn})
-    (power-runtime/register-context-send-fns! {:to-server send-to-server-fn
+    (network-hooks/register-context-send-fns! {:to-server send-to-server-fn
                                                :to-client send-to-client-fn})))

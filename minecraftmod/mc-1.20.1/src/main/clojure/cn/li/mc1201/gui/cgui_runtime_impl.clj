@@ -8,6 +8,8 @@
     [clojure.java.io :as io]
     [clojure.string :as str]
     [cn.li.mcmod.gui.cgui :as cgui]
+    [cn.li.mc1201.gui.cgui-asset-loader :as cgui-asset-loader]
+    [cn.li.mc1201.gui.cgui-renderer :as cgui-renderer]
     [cn.li.mcmod.platform.resource :as res]
     [cn.li.mcmod.config :as modid]
     [cn.li.mcmod.util.log :as log]
@@ -28,19 +30,11 @@
 
 (defn- resource-location->asset-path
   [resource-location]
-  (when resource-location
-    (let [[ns path] (str/split (str resource-location) #":" 2)]
-      (when (and ns path)
-        (str "assets/" ns "/" path)))))
+  (cgui-asset-loader/resource-location->asset-path resource-location))
 
 (defn- get-texture-size-from-resource
   [resource-location]
-  (when-let [asset-path (resource-location->asset-path resource-location)]
-    (when-let [resource (or (io/resource asset-path)
-                            (io/resource asset-path (.getClassLoader (class get-texture-size-from-resource))))]
-      (with-open [stream (io/input-stream resource)]
-        (when-let [image (ImageIO/read stream)]
-          [(.getWidth image) (.getHeight image)])))))
+  (cgui-asset-loader/get-texture-size-from-resource resource-location))
 
 (defn- get-texture-size
   "Try to obtain the pixel size [width height] for the given `resource-location`.
@@ -105,74 +99,13 @@
   (or (:state c) (atom {})))
 
 (defn- ensure-resource-location [v]
-  (cond
-    (nil? v) nil
-    (instance? ResourceLocation v) v
-    (string? v) (if (re-find #":" v)
-                  (let [[ns path] (str/split v #":" 2)]
-                    (res/invoke-resource-location ns path))
-                  ;; If the string is an absolute assets path like "assets/ns/..",
-                  ;; extract namespace and path and resolve explicitly.
-                  (cond
-                    (str/starts-with? v "assets/")
-                    (let [after (subs v (count "assets/"))
-                          parts (str/split after #"/" 2)
-                          ns (first parts)
-                          path (second parts)]
-                      (if (and ns path)
-                        (res/invoke-resource-location ns path)
-                        (res/invoke-resource-location nil v)))
-
-                    ;; No namespace: resolve explicitly with current MOD-ID
-                    :else
-                    (res/invoke-resource-location modid/*mod-id* v)))
-    :else nil))
+  (cgui-asset-loader/ensure-resource-location v))
 
 (defn- collect-widgets-z-ordered
   "Depth-first traversal of widget tree, returning widgets in draw order (parents before children).
-   Only visible widgets. Each node is [widget absolute-pos cumulative-scale].
-   This version accumulates parent scale so children are rendered with parent's scale multiplied.
-   Additionally applies :transform-meta alignment and pivot when computing absolute positions so
-   child widgets inherit the adjusted coordinates."
+   Only visible widgets. Each node is [widget absolute-pos cumulative-scale]."
   [root abs-pos parent-scale parent-size]
-  (when (and root (cgui/visible? root))
-    (let [pos (cgui/get-pos root)
-          own-scale (double (or @(:scale root) 1.0))
-          cum-scale (* parent-scale own-scale)
-          [px py] abs-pos
-          [wx wy] pos
-          ;; parent-size is the logical size [pw ph] of the parent widget (unscaled).
-          [pw ph] (or parent-size [0 0])
-          ;; widget size (logical units)
-          [w h] (cgui/get-size root)
-          ;; transform-meta may include pivot-x/pivot-y and align-width/align-height
-          tm (get @(:metadata root) :transform-meta {})
-          pivot-x (or (:pivot-x tm) 0.0)
-          pivot-y (or (:pivot-y tm) 0.0)
-          align-w (when-let [a (:align-width tm)] (-> a name str/lower-case keyword))
-          align-h (when-let [a (:align-height tm)] (-> a name str/lower-case keyword))
-          ;; compute alignment offsets in logical units relative to parent size
-          align-offset-x (case align-w
-                           :center (round-int (/ (- pw w) 2.0))
-                           :right  (round-int (- pw w))
-                           ;; default :left or nil
-                           0)
-          align-offset-y (case align-h
-                           :center (round-int (/ (- ph h) 2.0))
-                           :bottom (round-int (- ph h))
-                           ;; default :top or nil
-                           0)
-          ;; pivot is fraction of widget size; shift top-left so pivot point is at position
-          pivot-shift-x (* pivot-x w)
-          pivot-shift-y (* pivot-y h)
-          ;; absolute position for this widget (logical units)
-          abs-x (+ px align-offset-x wx (- pivot-shift-x))
-          abs-y (+ py align-offset-y wy (- pivot-shift-y))
-          children (cgui/get-widgets root)
-          next-parent-size [w h]
-          next-pos [abs-x abs-y]]
-      (cons [root next-pos cum-scale]
-            (mapcat #(collect-widgets-z-ordered % next-pos cum-scale next-parent-size) children)))))
+  (cgui-renderer/collect-widgets-z-ordered root abs-pos parent-scale parent-size))
 
 (def ^:private DRAG-TIME-TOL-MS 100)
 

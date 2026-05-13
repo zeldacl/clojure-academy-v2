@@ -1,5 +1,5 @@
-(ns cn.li.mcmod.gui.adapter
-  "Facade for unified GUI operations split into focused submodules."
+(ns cn.li.mcmod.gui.registry-core
+  "Unified GUI operations API (replacing legacy gui.adapter facade file)."
   (:require [cn.li.mcmod.registry.metadata :as registry-metadata]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.gui.adapter.platform-registry :as platform-registry]

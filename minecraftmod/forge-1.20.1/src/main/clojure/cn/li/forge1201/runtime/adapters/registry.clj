@@ -8,6 +8,7 @@
             [cn.li.forge1201.runtime.block-manipulation :as block-manipulation]
             [cn.li.forge1201.runtime.damage-interception :as damage-interception]
             [cn.li.forge1201.runtime.server-context :as server-context]
+            [cn.li.mc1201.runtime.adapter-registry :as adapter-registry]
             [cn.li.mc1201.runtime.adapter-support :as adapter-support]
             [cn.li.mc1201.runtime.interop-core :as interop-core]
             [cn.li.mc1201.runtime.teleportation-core :as teleportation-core]
@@ -31,42 +32,44 @@
                                     (create-adapter server-context/get-server)
                                     label))
 
-(def adapter-installers
-  [{:id :entity-damage
-    :install entity-damage/install-entity-damage!}
-   {:id :raycast
-    :install #(install-bound-adapter! #'prc/*raycast*
-                                      raycast-core/create-raycast
-                                      "Forge raycast")}
-   {:id :interop
-    :install #(interop-core/install-runtime-interop! "Forge" server-context/get-server)}
-   {:id :world-effects
-    :install world-effects/install-world-effects!}
-   {:id :potion-effects
-    :install #(install-bound-adapter! #'ppe/*potion-effects*
-                                      potion-effects-core/create-potion-effects
-                                      "Forge potion effects")}
-   {:id :teleportation
-    :install #(install-bound-adapter! #'ptp/*teleportation*
-                                      teleportation-core/create-teleportation
-                                      "Forge teleportation")}
-   {:id :saved-locations
-    :install #(install-bound-adapter! #'psl/*saved-locations*
-                                      saved-locations-core/create-saved-locations
-                                      "Forge saved locations")}
-   {:id :player-motion
-    :install #(install-bound-adapter! #'pm/*player-motion*
-                                      player-motion-core/create-player-motion
-                                      "Forge player motion")}
-   {:id :entity-motion
-    :install #(install-bound-adapter! #'pem/*entity-motion*
-                                      entity-motion-core/create-entity-motion
-                                      "Forge entity motion")}
-   {:id :entity-query
-    :install #(adapter-support/install-adapter! #'pentity/*entity-get-type-id-fn*
-                                                (entity-query-core/create-entity-type-id-fn server-context/get-server)
-                                                "Forge entity query")}
-   {:id :block-manipulation
-    :install block-manipulation/install-block-manipulation!}
-   {:id :damage-interception
-    :install damage-interception/install-damage-interception!}])
+(def runtime-install-steps
+  [(adapter-registry/step :entity-damage
+                          entity-damage/install-entity-damage!)
+   (adapter-registry/step :raycast
+                          #(install-bound-adapter! #'prc/*raycast*
+                                                   raycast-core/create-raycast
+                                                   "Forge raycast"))
+   (adapter-registry/step :interop
+                          #(interop-core/install-runtime-interop! "Forge" server-context/get-server))
+   (adapter-registry/step :world-effects
+                          world-effects/install-world-effects!)
+   (adapter-registry/step :potion-effects
+                          #(install-bound-adapter! #'ppe/*potion-effects*
+                                                   potion-effects-core/create-potion-effects
+                                                   "Forge potion effects"))
+   (adapter-registry/step :teleportation
+                          #(install-bound-adapter! #'ptp/*teleportation*
+                                                   teleportation-core/create-teleportation
+                                                   "Forge teleportation"))
+   (adapter-registry/step :saved-locations
+                          #(install-bound-adapter! #'psl/*saved-locations*
+                                                   saved-locations-core/create-saved-locations
+                                                   "Forge saved locations"))
+   (adapter-registry/step :player-motion
+                          #(install-bound-adapter! #'pm/*player-motion*
+                                                   player-motion-core/create-player-motion
+                                                   "Forge player motion"))
+   (adapter-registry/step :entity-motion
+                          #(install-bound-adapter! #'pem/*entity-motion*
+                                                   entity-motion-core/create-entity-motion
+                                                   "Forge entity motion"))
+   (adapter-registry/step :entity-query
+                          #(adapter-support/install-adapter! #'pentity/*entity-get-type-id-fn*
+                                                             (entity-query-core/create-entity-type-id-fn server-context/get-server)
+                                                             "Forge entity query"))
+   (adapter-registry/step :block-manipulation
+                          block-manipulation/install-block-manipulation!)
+   (adapter-registry/step :damage-interception
+                          damage-interception/install-damage-interception!)])
+
+(def adapter-installers runtime-install-steps)

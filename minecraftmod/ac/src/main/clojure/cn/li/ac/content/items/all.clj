@@ -4,7 +4,7 @@
             [cn.li.ac.item.app-installers :as app-installers]
             [cn.li.ac.item.constraint-plate :as constraint-plate]
             [cn.li.ac.item.energy-items :as energy-items]
-            [cn.li.ac.item.legacy-materials :as legacy-materials]
+            [cn.li.ac.item.materials :as materials]
             [cn.li.ac.item.mat-core :as mat-core]
             [cn.li.ac.item.media :as media]
             [cn.li.ac.item.special-items :as special-items]
@@ -16,7 +16,7 @@
 (defn init-items!
   []
   (with-init-guard items-installed?
-    (legacy-materials/init-legacy-materials!)
+    (materials/init-materials!)
     (components/init-components!)
     (app-installers/init-app-installers!)
     (constraint-plate/init-constraint-plate!)

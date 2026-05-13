@@ -7,6 +7,7 @@
 
   Here we provide helper send-fns for context manager and sync service."
   (:require [cn.li.mc1201.runtime.network-core :as network-core]
+            [cn.li.mc1201.runtime.network-payload :as network-payload]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.forge1201.runtime.server-context :as server-context]
             [cn.li.mcmod.network.client :as net-client]
@@ -19,12 +20,9 @@
   [msg-id payload]
   (net-client/send-to-server msg-id payload))
 
-(defn- serialize ^bytes [data]
-  (.getBytes (pr-str data) "UTF-8"))
-
 (defn- send-push-to-client!
   [^ServerPlayer player msg-id payload]
-  (ClojureNetwork/sendToClient player -1 (serialize {:msg-id msg-id :payload payload})))
+  (ClojureNetwork/sendToClient player -1 (network-payload/serialize-message msg-id payload)))
 
 (defn- find-player-by-uuid
   [uuid-str]

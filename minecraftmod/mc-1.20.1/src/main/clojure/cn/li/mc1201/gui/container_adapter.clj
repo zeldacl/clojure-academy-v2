@@ -4,7 +4,7 @@
   Wraps a Clojure container map (using mcmod gui.adapter protocol) as a
   vanilla `net.minecraft.world.Container` so Forge and Fabric slot machinery
   can interact with it without platform-specific code."
-  (:require [cn.li.mcmod.gui.adapter :as gui])
+  (:require [cn.li.mcmod.gui.registry-core :as gui])
   (:import [net.minecraft.world Container]
            [net.minecraft.world.item ItemStack]))
 

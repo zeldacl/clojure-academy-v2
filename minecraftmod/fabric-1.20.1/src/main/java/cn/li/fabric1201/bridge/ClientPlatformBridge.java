@@ -1,6 +1,6 @@
 package cn.li.fabric1201.bridge;
 
-import net.minecraft.client.player.LocalPlayer;
+import cn.li.mc1201.client.ClientClassAccessor;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 
@@ -17,6 +17,6 @@ public final class ClientPlatformBridge {
 
     @Environment(EnvType.CLIENT)
     public static Class<?> getLocalPlayerClass() {
-        return LocalPlayer.class;
+        return ClientClassAccessor.getLocalPlayerClass();
     }
 }

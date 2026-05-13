@@ -2,7 +2,7 @@
   "AC 通用：多页签 TechUI 约定与辅助。
 
    This is shared client/server tab switching logic used by platform GUI/menu bridges."
-  (:require [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.gui.cgui :as cgui]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]

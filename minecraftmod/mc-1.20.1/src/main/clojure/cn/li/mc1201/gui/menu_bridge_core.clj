@@ -4,7 +4,7 @@
   Platform namespaces provide small callback/config differences (slot add callback,
   loader-specific remove semantics, player inventory mode defaults), while all menu
   proxy and slot/data-slot sync logic lives here."
-  (:require [cn.li.mcmod.gui.adapter :as gui]
+  (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
             [cn.li.mc1201.gui.tabbed-slots-core :as tabbed-slots-core]
             [cn.li.mc1201.gui.slots-sync-common :as slots-sync-common]
