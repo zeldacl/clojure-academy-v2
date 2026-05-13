@@ -1,15 +1,18 @@
 package cn.li.mc1201.client.render.effect;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
-import org.joml.Matrix4f;
 
+/**
+ * Deprecated placeholder.
+ *
+ * Render logic was unified into ScriptedEffectBillboardRenderer.
+ */
+@Deprecated
 public final class RippleMarkRenderer<T extends Entity> extends EntityRenderer<T> {
     public RippleMarkRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -18,34 +21,7 @@ public final class RippleMarkRenderer<T extends Entity> extends EntityRenderer<T
     @Override
     public void render(T entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
-        super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
-
-        float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
-        poseStack.pushPose();
-        Matrix4f mat = poseStack.last().pose();
-        VertexConsumer vc = bufferSource.getBuffer(RenderType.lines());
-
-        for (int layer = 0; layer < 3; layer++) {
-            float cyclePos = (age + layer * 1.2F) % 3.6F;
-            float ringAlpha = Math.max(0.0F, 1.0F - (cyclePos / 3.6F));
-            float ringRadius = 0.4F + cyclePos * 0.5F;
-            int alpha = (int) (200 * ringAlpha);
-            if (alpha <= 0) continue;
-
-            int segments = 16;
-            for (int i = 0; i < segments; i++) {
-                double a1 = (Math.PI * 2.0 * i) / segments;
-                double a2 = (Math.PI * 2.0 * (i + 1)) / segments;
-                float x1 = (float) (Math.cos(a1) * ringRadius);
-                float z1 = (float) (Math.sin(a1) * ringRadius);
-                float x2 = (float) (Math.cos(a2) * ringRadius);
-                float z2 = (float) (Math.sin(a2) * ringRadius);
-                vc.vertex(mat, x1, 0.02F, z1).color(150, 100, 255, alpha).normal(0.0F, 1.0F, 0.0F).endVertex();
-                vc.vertex(mat, x2, 0.02F, z2).color(120, 80, 200, alpha).normal(0.0F, 1.0F, 0.0F).endVertex();
-            }
-        }
-
-        poseStack.popPose();
+        throw new UnsupportedOperationException("RippleMarkRenderer has been retired; use ScriptedEffectBillboardRenderer");
     }
 
     @Override

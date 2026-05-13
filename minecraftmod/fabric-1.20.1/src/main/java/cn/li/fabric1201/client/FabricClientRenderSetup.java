@@ -2,9 +2,9 @@ package cn.li.fabric1201.client;
 
 import cn.li.fabric1201.entity.FabricEntities;
 import cn.li.fabric1201.shim.FabricClientHelper;
+import cn.li.mc1201.clj.ClojureInterop;
 import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
-import cn.li.mc1201.client.render.effect.ScriptedRayCompositeRenderer;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
@@ -19,10 +19,22 @@ import net.minecraft.world.entity.EntityType;
  */
 public final class FabricClientRenderSetup {
 
+    private static final String AC_RENDER_PROFILE_NS = "cn.li.ac.content.render-profiles.effect-profiles";
+
     private FabricClientRenderSetup() {
     }
 
+    private static void ensureScriptRenderProfilesLoaded() {
+        try {
+            ClojureInterop.requireNamespace(AC_RENDER_PROFILE_NS);
+            ClojureInterop.invoke(AC_RENDER_PROFILE_NS, "init-render-profiles!");
+        } catch (Throwable ignored) {
+            // Keep native/default renderer path operational.
+        }
+    }
+
     public static void registerEntityRenderers() {
+        ensureScriptRenderProfilesLoaded();
         registerEffectRenderer();
         registerProjectileRenderer();
         registerRayRenderer();
@@ -62,10 +74,7 @@ public final class FabricClientRenderSetup {
         String rendererId = raySpec == null || raySpec.getRendererId() == null || raySpec.getRendererId().isBlank()
                 ? "ray-composite"
                 : raySpec.getRendererId();
-
-        if ("ray-composite".equals(rendererId)) {
-            FabricClientHelper.registerEntityRenderer(rayType, ScriptedRayCompositeRenderer::new);
-        }
+        FabricClientHelper.registerEntityRenderer(rayType, EffectRendererDispatcher.pickRayRenderer(rendererId));
     }
 
     private static void registerMarkerRenderer() {

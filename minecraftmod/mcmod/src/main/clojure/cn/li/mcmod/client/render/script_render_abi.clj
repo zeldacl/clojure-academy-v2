@@ -1,0 +1,204 @@
+(ns cn.li.mcmod.client.render.script-render-abi
+	"Shared ScriptRender ABI contract and validation.
+
+	This namespace is platform-agnostic and intentionally data-only. Runtime
+	executors should consume validated profiles without additional shape checks
+	in hot render loops."
+	(:require [clojure.set :as set]))
+
+(def supported-kinds
+	#{:billboard-cross
+		:ring-lines
+		:polyline-arc
+		:wire-box
+		:ray-composite
+		:ray-composite-lite})
+
+(def ^:private allowed-top-level-keys
+	#{:id :kind :version :enabled? :state :anim :params :budget})
+
+(def ^:private allowed-state-keys
+	#{:depth-test :blend :cull :layer})
+
+(def ^:private allowed-depth-test
+	#{:default :force-on :force-off})
+
+(def ^:private allowed-blend
+	#{:alpha :additive})
+
+(def ^:private allowed-cull
+	#{:default :off})
+
+(def ^:private allowed-layer
+	#{:lines :translucent})
+
+(defn kind-default-params
+	[kind]
+	(case kind
+		:billboard-cross {:size 0.6
+											:color [180 220 255]}
+		:ring-lines {:rings 3
+								 :segments 16
+								 :radius-start 0.4
+								 :radius-step 0.5
+								 :y 0.02
+								 :color-a [150 100 255]
+								 :color-b [120 80 200]}
+		:polyline-arc {:segments 20
+									 :length 20.0
+									 :wiggle-amp 0.1
+									 :wiggle-freq 7.0
+									 :color-a [110 190 255]
+									 :color-b [200 230 255]}
+		:wire-box {:half-size 0.5
+							 :alpha 200
+							 :color-a [255 255 255]
+							 :color-b [255 80 80]}
+		:ray-composite {:length 15.0
+										:inner-width 0.17
+										:outer-width 0.22
+										:glow-width 1.5
+										:blend-in-ms 200.0
+										:blend-out-ms 700.0
+										:start-color 0xD8F8D8
+										:end-color 0x6AF26A}
+		:ray-composite-lite {:length 15.0
+												 :inner-width 0.17
+												 :outer-width 0.22
+												 :glow-width 1.5
+												 :blend-in-ms 200.0
+												 :blend-out-ms 700.0
+												 :start-color 0xD8F8D8
+												 :end-color 0x6AF26A}
+		{}))
+
+(defn profile-defaults
+	[kind]
+	{:version 1
+	 :enabled? true
+	 :state {:depth-test :default
+					 :blend :alpha
+					 :cull :default
+					 :layer (if (#{:billboard-cross :ray-composite :ray-composite-lite} kind)
+										:translucent
+										:lines)}
+	 :anim {}
+	 :params (kind-default-params kind)
+	 :budget {}})
+
+(defn normalize-profile
+	[profile]
+	(let [kind (:kind profile)
+				defaults (profile-defaults kind)]
+		(-> defaults
+				(merge profile)
+				(update :state #(merge (:state defaults) (or % {})))
+				(update :anim #(or % {}))
+				(update :params #(merge (:params defaults) (or % {})))
+				(update :budget #(or % {})))))
+
+(defn- assert!
+	[pred message data]
+	(when-not pred
+		(throw (ex-info message data))))
+
+(defn- assert-number-in-range!
+	[profile-id field value min-v max-v]
+	(assert! (number? value)
+				 (str "ScriptRender profile parameter must be numeric: " field)
+				 {:id profile-id :field field :value value})
+	(assert! (<= (double min-v) (double value) (double max-v))
+				 (str "ScriptRender profile parameter is out of range: " field)
+				 {:id profile-id
+					:field field
+					:value value
+					:min min-v
+					:max max-v}))
+
+(defn- validate-kind-params!
+	[normalized]
+	(let [pid (:id normalized)
+				kind (:kind normalized)
+				params (:params normalized)]
+		(case kind
+			:ring-lines
+			(do
+				(assert-number-in-range! pid :rings (get params :rings) 1 64)
+				(assert-number-in-range! pid :segments (get params :segments) 3 256)
+				(assert-number-in-range! pid :radius-start (get params :radius-start) 0.0 64.0)
+				(assert-number-in-range! pid :radius-step (get params :radius-step) 0.0 64.0))
+
+			:polyline-arc
+			(do
+				(assert-number-in-range! pid :segments (get params :segments) 2 512)
+				(assert-number-in-range! pid :length (get params :length) 0.0 512.0)
+				(assert-number-in-range! pid :wiggle-amp (get params :wiggle-amp) 0.0 16.0)
+				(assert-number-in-range! pid :wiggle-freq (get params :wiggle-freq) 0.0 64.0))
+
+			:wire-box
+			(do
+				(assert-number-in-range! pid :half-size (get params :half-size) 0.0 64.0)
+				(assert-number-in-range! pid :alpha (get params :alpha) 0 255))
+
+			(:ray-composite :ray-composite-lite)
+			(do
+				(assert-number-in-range! pid :length (get params :length) 0.0 1024.0)
+				(assert-number-in-range! pid :inner-width (get params :inner-width) 0.0 64.0)
+				(assert-number-in-range! pid :outer-width (get params :outer-width) 0.0 64.0)
+				(assert-number-in-range! pid :glow-width (get params :glow-width) 0.0 256.0)
+				(assert-number-in-range! pid :blend-in-ms (get params :blend-in-ms) 0.0 60000.0)
+				(assert-number-in-range! pid :blend-out-ms (get params :blend-out-ms) 0.0 60000.0))
+
+			nil)
+		normalized))
+
+(defn validate-profile!
+	[profile]
+	(assert! (map? profile)
+					 "ScriptRender profile must be a map"
+					 {:profile profile})
+	(assert! (string? (:id profile))
+					 "ScriptRender profile :id must be a string"
+					 {:id (:id profile)})
+	(assert! (keyword? (:kind profile))
+					 "ScriptRender profile :kind must be a keyword"
+					 {:kind (:kind profile)})
+	(assert! (contains? supported-kinds (:kind profile))
+					 "ScriptRender profile :kind is not supported"
+					 {:kind (:kind profile)
+						:supported supported-kinds})
+
+	(let [unknown-top (set/difference (set (keys profile)) allowed-top-level-keys)]
+		(assert! (empty? unknown-top)
+						 "ScriptRender profile has unsupported top-level keys"
+						 {:id (:id profile)
+							:unknown-keys unknown-top}))
+
+	(let [normalized (normalize-profile profile)
+				state (:state normalized)
+				unknown-state (set/difference (set (keys state)) allowed-state-keys)]
+		(assert! (empty? unknown-state)
+						 "ScriptRender profile has unsupported :state keys"
+						 {:id (:id normalized)
+							:unknown-keys unknown-state})
+		(assert! (contains? allowed-depth-test (:depth-test state))
+						 "ScriptRender profile :state/:depth-test is invalid"
+						 {:id (:id normalized)
+							:value (:depth-test state)
+							:allowed allowed-depth-test})
+		(assert! (contains? allowed-blend (:blend state))
+						 "ScriptRender profile :state/:blend is invalid"
+						 {:id (:id normalized)
+							:value (:blend state)
+							:allowed allowed-blend})
+		(assert! (contains? allowed-cull (:cull state))
+						 "ScriptRender profile :state/:cull is invalid"
+						 {:id (:id normalized)
+							:value (:cull state)
+							:allowed allowed-cull})
+		(assert! (contains? allowed-layer (:layer state))
+						 "ScriptRender profile :state/:layer is invalid"
+						 {:id (:id normalized)
+							:value (:layer state)
+							:allowed allowed-layer})
+		(validate-kind-params! normalized)))

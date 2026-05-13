@@ -110,6 +110,9 @@ public final class ModEntities {
         if (entry == null) {
             return null;
         }
+        if (!entry.isPresent()) {
+            return null;
+        }
         return (EntityType<T>) entry.get();
     }
 

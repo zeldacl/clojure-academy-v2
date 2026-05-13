@@ -95,6 +95,25 @@
       explicit-name
       (str/replace (str entity-id) #"-" "_"))))
 
+(defn resolve-render-profile-key
+  "Resolve renderer/profile key by precedence:
+  1) explicit :profile-key
+  2) :renderer-id
+  3) caller provided fallback
+
+  `entity-spec` is an EntitySpec map.
+  `kind-props-key` is one of :effect/:ray/:marker/:block-body.
+  Returns a non-blank string key."
+  [entity-spec kind-props-key fallback]
+  (let [props (get-in entity-spec [:properties kind-props-key])
+        profile-key (:profile-key props)
+        renderer-id (:renderer-id props)
+        chosen (cond
+                 (and (string? profile-key) (not (str/blank? profile-key))) profile-key
+                 (and (string? renderer-id) (not (str/blank? renderer-id))) renderer-id
+                 :else fallback)]
+    (str chosen)))
+
 (defmacro defentity
   [entity-name & options]
   (if (map? entity-name)

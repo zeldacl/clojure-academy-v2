@@ -416,7 +416,22 @@
                                              :phase-step 0.18
                                              :wobble-y-freq 1.4
                                              :wobble-y-phase-shift 0.8975979010256552
-                                             :theta-spread-factor 0.45}}}}))
+                                             :theta-spread-factor 0.45
+                                             ;; Hybrid renderer (V2): curve knobs (defaults keep current visuals).
+                                             :render-phase-speed 0.35
+                                             :render-phase-id-scale 0.61
+                                             :render-alpha-wiggle-freq 2.1
+                                             :render-alpha-wiggle-base 0.65
+                                             :render-alpha-wiggle-amp 0.35
+                                             :render-alpha-attack-ratio 0.12
+                                             :render-alpha-hold-end-ratio 0.8
+                                             :render-alpha-peak-end-ratio 0.97
+                                             :render-alpha-hold 0.6
+                                             :render-size-expand-start-ratio 0.88
+                                             :render-size-expand-end-ratio 0.97
+                                             :render-size-expanded-scale 1.5
+                                             :render-glow-size-factor 0.35
+                                             :render-core-size-factor 0.25}}}}))
 
     ;; Block-body family.
     (edsl/register-entity!

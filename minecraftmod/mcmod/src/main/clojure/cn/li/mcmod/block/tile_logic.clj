@@ -73,7 +73,7 @@
   [block-id cfg]
   (let [normalized (normalize-cfg cfg)
         tile-kind (:tile-kind normalized)
-        kind-cfg (when tile-kind (get @tile-kind-registry tile-kind))
+      kind-cfg (when tile-kind (registry-core/lookup tile-kind-registry tile-kind))
         merged (merge-with-kind (or kind-cfg {}) normalized)]
     (if (or (:tick-fn merged) (:read-nbt-fn merged) (:write-nbt-fn merged))
       (do

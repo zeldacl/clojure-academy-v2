@@ -4,11 +4,10 @@ import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.forge1201.MyMod1201;
 import cn.li.forge1201.entity.ModEntities;
+import cn.li.mc1201.clj.ClojureInterop;
 import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import cn.li.mc1201.client.render.ModRenderTypes;
-import cn.li.mc1201.client.render.effect.IntensifyEffectRenderer;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
-import cn.li.mc1201.client.render.effect.ScriptedRayCompositeRenderer;
 import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
 import cn.li.mc1201.entity.ScriptedEffectEntity;
 import cn.li.mc1201.entity.ScriptedMarkerEntity;
@@ -33,21 +32,26 @@ import java.io.IOException;
  * Centralized client rendering registration entrypoint for Forge.
  */
 public final class ForgeClientRenderRegistry {
+    private static final String AC_RENDER_PROFILE_NS = "cn.li.ac.content.render-profiles.effect-profiles";
+
     private static ShaderInstance plasmaBodyShader;
 
     private ForgeClientRenderRegistry() {
     }
 
-    public static void registerEntityAndBlockRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        EntityType<ScriptedEffectEntity> intensify = ModEntities.getEntityType("intensify_effect", ScriptedEffectEntity.class);
-        if (intensify != null) {
-            event.registerEntityRenderer(intensify, IntensifyEffectRenderer::new);
+    private static void ensureScriptRenderProfilesLoaded() {
+        try {
+            ClojureInterop.requireNamespace(AC_RENDER_PROFILE_NS);
+            ClojureInterop.invoke(AC_RENDER_PROFILE_NS, "init-render-profiles!");
+        } catch (Throwable ignored) {
+            // Keep native dispatcher path operational even when profiles fail to initialize.
         }
+    }
+
+    public static void registerEntityAndBlockRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        ensureScriptRenderProfilesLoaded();
 
         for (String registryName : ModEntities.getScriptedEffectRegistryNames()) {
-            if ("intensify_effect".equals(registryName)) {
-                continue;
-            }
             EntityType<ScriptedEffectEntity> effectType = ModEntities.getEntityType(registryName, ScriptedEffectEntity.class);
             if (effectType == null) {
                 continue;
@@ -72,9 +76,7 @@ public final class ForgeClientRenderRegistry {
             }
             ScriptedRaySpec raySpec = ModEntities.getScriptedRaySpec(registryName);
             String rendererId = raySpec == null ? "ray-composite" : raySpec.getRendererId();
-            if ("ray-composite".equals(rendererId)) {
-                event.registerEntityRenderer(rayType, ScriptedRayCompositeRenderer::new);
-            }
+            event.registerEntityRenderer(rayType, EffectRendererDispatcher.pickRayRenderer(rendererId));
         }
 
         for (String registryName : ModEntities.getScriptedMarkerRegistryNames()) {

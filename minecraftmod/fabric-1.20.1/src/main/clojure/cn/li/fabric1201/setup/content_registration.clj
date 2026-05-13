@@ -140,7 +140,7 @@
       (let [spec (ScriptedEffectSpec.
                    (int (or (:life-ticks effect) 15))
                    (not (false? (:follow-owner? effect)))
-                   (str (or (:renderer-id effect) "effect-billboard"))
+                   (edsl/resolve-render-profile-key entity-spec :effect "effect-billboard")
                    (name (or (:hook effect) :none))
                    (normalize-hook-params (:hook-params effect)))]
         (FabricScriptedEntityAccess/registerScriptedEffectSpec
@@ -163,7 +163,7 @@
         (double (or (:glow-width ray) 0.05))
         (int (or (:start-color ray) 0xFFFFFFFF))
         (int (or (:end-color ray) 0xFFFFFFFF))
-        ""
+        (edsl/resolve-render-profile-key entity-spec :ray "ray-composite")
         (name (or (:hook ray) :none)))))
   nil)
 
@@ -175,7 +175,7 @@
                (not (false? (:follow-target? marker)))
                (not (false? (:ignore-depth? marker)))
                (not (false? (:available? marker)))
-               ""
+               (edsl/resolve-render-profile-key entity-spec :marker "marker-billboard")
                (name (or (:hook marker) :none)))]
     (FabricScriptedEntityAccess/registerScriptedMarkerSpec
       (str registry-name)
@@ -190,7 +190,7 @@
                (double (or (:gravity block-body) 0.05))
                (double (or (:damage block-body) 0.0))
                (not (false? (:place-when-collide? block-body)))
-               ""
+               (edsl/resolve-render-profile-key entity-spec :block-body "block-body")
                (name (or (:hook block-body) :none)))]
     (FabricScriptedEntityAccess/registerScriptedBlockBodySpec
       (str registry-name)

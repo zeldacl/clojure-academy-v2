@@ -29,6 +29,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * and entity type lookup storage without introducing Forge-specific classes.</p>
  */
 public final class FabricScriptedEntityAccess {
+    private static final String EFFECT_KIND_KEY = "scripted-effect";
+    private static final String RAY_KIND_KEY = "scripted-ray";
+    private static final String MARKER_KIND_KEY = "scripted-marker";
+    private static final String BLOCK_BODY_KIND_KEY = "scripted-block-body";
+
     private static final Map<String, EntityType<?>> REGISTERED_ENTITY_TYPES = new ConcurrentHashMap<>();
     private static final Map<String, ScriptedProjectileSpec> SCRIPTED_PROJECTILE_SPECS = new ConcurrentHashMap<>();
     private static final Map<String, ScriptedEffectSpec> SCRIPTED_EFFECT_SPECS = new ConcurrentHashMap<>();
@@ -68,17 +73,17 @@ public final class FabricScriptedEntityAccess {
 
             @Override
             public ScriptedEffectSpec getScriptedEffectSpec(EntityType<?> entityType) {
-                return SCRIPTED_EFFECT_SPECS.get(registryName(entityType));
+                return getWithKindFallback(SCRIPTED_EFFECT_SPECS, registryName(entityType), EFFECT_KIND_KEY);
             }
 
             @Override
             public ScriptedRaySpec getScriptedRaySpec(EntityType<?> entityType) {
-                return SCRIPTED_RAY_SPECS.get(registryName(entityType));
+                return getWithKindFallback(SCRIPTED_RAY_SPECS, registryName(entityType), RAY_KIND_KEY);
             }
 
             @Override
             public ScriptedMarkerSpec getScriptedMarkerSpec(EntityType<?> entityType) {
-                return SCRIPTED_MARKER_SPECS.get(registryName(entityType));
+                return getWithKindFallback(SCRIPTED_MARKER_SPECS, registryName(entityType), MARKER_KIND_KEY);
             }
 
             @Override
@@ -88,7 +93,7 @@ public final class FabricScriptedEntityAccess {
 
             @Override
             public ScriptedBlockBodySpec getScriptedBlockBodySpec(EntityType<?> entityType) {
-                return SCRIPTED_BLOCK_BODY_SPECS.get(registryName(entityType));
+                return getWithKindFallback(SCRIPTED_BLOCK_BODY_SPECS, registryName(entityType), BLOCK_BODY_KIND_KEY);
             }
 
             @Override
@@ -124,25 +129,39 @@ public final class FabricScriptedEntityAccess {
     public static void registerScriptedEffectSpec(String registryName, ScriptedEffectSpec spec) {
         if (registryName != null && !registryName.isEmpty() && spec != null) {
             SCRIPTED_EFFECT_SPECS.put(registryName, spec);
+            SCRIPTED_EFFECT_SPECS.putIfAbsent(EFFECT_KIND_KEY, spec);
         }
     }
 
     public static void registerScriptedRaySpec(String registryName, ScriptedRaySpec spec) {
         if (registryName != null && !registryName.isEmpty() && spec != null) {
             SCRIPTED_RAY_SPECS.put(registryName, spec);
+            SCRIPTED_RAY_SPECS.putIfAbsent(RAY_KIND_KEY, spec);
         }
     }
 
     public static void registerScriptedMarkerSpec(String registryName, ScriptedMarkerSpec spec) {
         if (registryName != null && !registryName.isEmpty() && spec != null) {
             SCRIPTED_MARKER_SPECS.put(registryName, spec);
+            SCRIPTED_MARKER_SPECS.putIfAbsent(MARKER_KIND_KEY, spec);
         }
     }
 
     public static void registerScriptedBlockBodySpec(String registryName, ScriptedBlockBodySpec spec) {
         if (registryName != null && !registryName.isEmpty() && spec != null) {
             SCRIPTED_BLOCK_BODY_SPECS.put(registryName, spec);
+            SCRIPTED_BLOCK_BODY_SPECS.putIfAbsent(BLOCK_BODY_KIND_KEY, spec);
         }
+    }
+
+    private static <T> T getWithKindFallback(Map<String, T> map, String key, String fallbackKey) {
+        if (key != null) {
+            T value = map.get(key);
+            if (value != null) {
+                return value;
+            }
+        }
+        return map.get(fallbackKey);
     }
 
     private static String registryName(EntityType<?> entityType) {
