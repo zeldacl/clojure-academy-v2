@@ -5,8 +5,6 @@
 	common setup side effects and event subscriptions."
 	(:require [cn.li.forge1201.gui.init :as gui-init]
 						[cn.li.forge1201.runtime.lifecycle :as runtime-lifecycle]
-						[cn.li.forge1201.config.game-config :as game-config]
-						[cn.li.mc1201.config.gameplay-bridge :as shared-gameplay-bridge]
 						[cn.li.forge1201.integration.forge-energy :as forge-energy]
 						[cn.li.forge1201.integration.ic2-energy :as ic2-energy]
 						[cn.li.forge1201.runtime.item-handler :as runtime-item-handler]
@@ -19,7 +17,6 @@
 	[]
 	(gui-init/init-common!)
 	(runtime-lifecycle/init-common!)
-	(shared-gameplay-bridge/bind-gameplay-config! (game-config/provider-map))
 	(forge-energy/init-forge-energy!)
 	(ic2-energy/init-ic2-energy!)
 	(runtime-item-handler/init!)

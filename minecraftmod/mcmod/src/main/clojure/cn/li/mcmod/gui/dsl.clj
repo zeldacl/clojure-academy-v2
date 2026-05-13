@@ -22,6 +22,8 @@ Structure:
   (atom {:by-id {} :by-gui-id {}}))
 
 ;; Component specifications
+;; NOTE: These records are also defined in gui.schema for documentation and API consistency.
+;; Duplicated here for AOT compilation compatibility.
 (defrecord SlotSpec [index x y filter on-change])
 (defrecord ButtonSpec [id x y width height text on-click])
 (defrecord LabelSpec [x y text color])

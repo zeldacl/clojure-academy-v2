@@ -5,7 +5,7 @@
     [cn.li.forge1201.registry.content-registration :as content-registration]
     [cn.li.forge1201.registry.creative-tab :as creative-tab]
     [cn.li.forge1201.setup.common :as setup-common]
-    [cn.li.forge1201.setup.lifecycle-init :as lifecycle-init]
+    [cn.li.forge1201.setup.forge-lifecycle-coordinator :as lifecycle-coordinator]
     [cn.li.forge1201.integration.side :as side]
     [cn.li.forge1201.registry.state :as registry-state]
     [cn.li.forge1201.integration.events :as events]
@@ -206,7 +206,7 @@
                :clojurephant cphant?
                :ac-check check?
                :compile-files (boolean *compile-files*)})
-    (lifecycle-init/init-lifecycle-with-error-handling!
+    (lifecycle-coordinator/init-lifecycle-with-error-handling!
       {:datagen-run? (datagen-run?)
        :on-common-setup on-common-setup
        :on-client-setup on-client-setup

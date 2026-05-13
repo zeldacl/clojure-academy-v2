@@ -23,5 +23,5 @@
               (phase-contract/phase :resource-init "shared blockstate property init" init-blockstate-properties!)
               (phase-contract/phase :content-registration register-content!)
               (phase-contract/phase :common-setup "runtime adapter + gui setup" install-runtime!)
-              (phase-contract/phase :event-wiring "register fabric events" register-events!)]})
+              (phase-contract/phase :mod-bus-setup "register fabric callbacks/events" register-events!)]})
   nil)

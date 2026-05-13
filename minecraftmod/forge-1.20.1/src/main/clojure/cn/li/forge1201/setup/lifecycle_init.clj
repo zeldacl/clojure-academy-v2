@@ -12,7 +12,9 @@
   
   This separates concerns so each phase is testable and reusable."
   (:require [cn.li.forge1201.init :as init]
+            [cn.li.forge1201.config.game-config :as game-config]
             [cn.li.forge1201.setup.mod-bus :as setup-mod-bus]
+            [cn.li.mc1201.config.gameplay-bridge :as shared-gameplay-bridge]
             [cn.li.mc1201.lifecycle.orchestrator :as lifecycle-orchestrator]
             [cn.li.mc1201.lifecycle.phase-contract :as phase-contract]
             [cn.li.mcmod.lifecycle :as lifecycle]
@@ -48,6 +50,13 @@
   (log/info "[LIFECYCLE] Phase 2: Runtime content activation")
   (lifecycle/run-runtime-content-activation!)
   (log/info "[LIFECYCLE] Phase 2: Runtime content activation complete"))
+
+(defn bind-gameplay-config!
+  "Bind platform gameplay config provider into shared gameplay bridge."
+  []
+  (log/info "[LIFECYCLE] Phase 2b: Gameplay config binding")
+  (shared-gameplay-bridge/bind-gameplay-config! (game-config/provider-map))
+  (log/info "[LIFECYCLE] Phase 2b: Gameplay config binding complete"))
 
 ;; =============================================================================
 ;; Phase 3: Resource Initialization
@@ -118,6 +127,7 @@
       {:label "forge-1.20.1"
        :phases [(phase-contract/phase :platform-init init-platform!)
                 (phase-contract/phase :runtime-activation "activate shared runtime content" activate-runtime-content!)
+                (phase-contract/phase :config-binding bind-gameplay-config!)
                 (phase-contract/phase :resource-init init-resource-definitions!)
                 (phase-contract/phase :content-registration #(register-all-content! registration-steps))
                 (phase-contract/phase :mod-bus-setup #(setup-mod-bus! opts))

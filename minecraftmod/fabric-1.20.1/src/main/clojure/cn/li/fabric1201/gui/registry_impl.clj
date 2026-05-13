@@ -3,6 +3,7 @@
   (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.fabric1201.gui.menu-bridge :as menu-bridge]
             [cn.li.fabric1201.gui.provider-bridge :as provider-bridge]
+            [cn.li.mc1201.gui.registry-api :as registry-api]
             [cn.li.mc1201.gui.registry-common :as registry-common]
             [cn.li.mc1201.gui.registry-open-core :as open-core]
             [cn.li.ac.config.modid :as modid]
@@ -57,8 +58,19 @@
     (catch Exception e
       (open-core/log-open-error! "[FABRIC-OPEN-GUI]" e))))
 
+(defn- install-registry-contract!
+  []
+  (registry-api/register-registry-impl!
+    :fabric-1.20.1
+    {:register-menu-type! (fn [gui-id menu-type]
+                            (gui/register-menu-type! :fabric-1.20.1 gui-id menu-type))
+     :get-menu-type get-handler-type
+     :list-menu-types (fn [] @gui-handler-types)
+     :invalidate-menu-registry! (fn [] (reset! gui-handler-types {}))}))
+
 (defmethod gui/register-gui-handler :fabric-1.20.1 [_]
   (log/info "Registering GUI handler for Fabric 1.20.1")
+  (install-registry-contract!)
   (register-screen-handler-types!)
   (log/info "Fabric 1.20.1 GUI handler registered"))
 

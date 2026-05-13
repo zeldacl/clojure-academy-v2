@@ -8,6 +8,7 @@
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.forge1201.gui.menu-bridge :as menu-bridge]
             [cn.li.forge1201.gui.provider-bridge :as provider-bridge]
+            [cn.li.mc1201.gui.registry-api :as registry-api]
             [cn.li.mc1201.gui.registry-common :as registry-common]
             [cn.li.mc1201.gui.registry-open-core :as open-core]
             [cn.li.mcmod.config :as modid]
@@ -146,7 +147,18 @@
 ;; Registry Implementation
 ;; ============================================================================
 
+(defn- install-registry-contract!
+  []
+  (registry-api/register-registry-impl!
+    :forge-1.20.1
+    {:register-menu-type! (fn [gui-id menu-type]
+                            (gui/register-menu-type! :forge-1.20.1 gui-id menu-type))
+     :get-menu-type get-menu-type
+     :list-menu-types (fn [] @gui-menu-types)
+     :invalidate-menu-registry! (fn [] (reset! gui-menu-types {}))}))
+
 (defmethod gui/register-gui-handler :forge-1.20.1 [_]
   ;; MenuType registration is handled via DeferredRegister in mod-init.
   ;; This hook is kept for interface compliance only.
+  (install-registry-contract!)
   (log/info "Forge 1.20.1 GUI handler ready (menu types registered via DeferredRegister)"))
