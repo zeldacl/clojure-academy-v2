@@ -4,8 +4,8 @@
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.state]
-            [cn.li.ac.ability.state.context :as ctx]
-            [cn.li.ac.ability.state.player :as ps]))
+            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.player-state :as ps]))
 
 (use-fixtures :each
   (fn [f]

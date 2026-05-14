@@ -1,11 +1,6 @@
 (ns cn.li.ac.ability.server.handlers.common
 	"Shared handler helpers for ability server network handlers."
-	(:require [cn.li.mcmod.platform.entity :as entity]
-						[cn.li.ac.ability.service.player-state :as ps]))
-
-(defn uuid-of
-	[player]
-	(str (entity/player-get-uuid player)))
+	(:require [cn.li.ac.ability.service.player-state :as ps]))
 
 (defn get-state
 	[uuid]

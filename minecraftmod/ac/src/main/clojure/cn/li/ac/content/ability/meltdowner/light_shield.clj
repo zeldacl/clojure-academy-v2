@@ -13,7 +13,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.util.scaling :as scaling]
@@ -30,9 +29,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id)
-                  [:ability-data :skills :light-shield :exp]
-                  0.0)))
+  (skill-effects/skill-exp player-id :light-shield))
 
 (defn- get-player-position [player-id]
   (when-let [teleportation (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
@@ -82,7 +79,7 @@
     (when (and cost-ok? (toggle/is-toggle-active? ctx-data :light-shield))
       (let [exp      (skill-exp player-id)
             pos      (get-player-position player-id)
-            world-id (or (:world-id pos) (get-in (ps/get-player-state player-id) [:position :world-id]) "minecraft:overworld")]
+            world-id (or (:world-id pos) (skill-effects/player-path player-id [:position :world-id]) "minecraft:overworld")]
         (ctx/update-context! ctx-id update-in [:skill-state :shield-ticks] (fnil inc 0))
         ;; Touch damage entities in front 60° cone
         (when (and pos world-effects/*world-effects*)

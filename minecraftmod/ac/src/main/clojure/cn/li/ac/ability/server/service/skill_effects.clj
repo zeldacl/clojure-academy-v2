@@ -119,6 +119,38 @@
         (set-main-cooldown! player-id ctrl-id ticks)
         ticks))))
 
+(defn enforce-overload-floor!
+  "Ensure player overload is not below floor-value.
+
+  Returns true when player state exists; false otherwise."
+  [player-id floor-value]
+  (if-let [state (ps/get-player-state player-id)]
+    (do
+      (ps/update-resource-data!
+        player-id
+        (fn [res-data]
+          (if (< (double (or (:cur-overload res-data) 0.0)) (double floor-value))
+            (-> res-data
+                (assoc :cur-overload (double floor-value))
+                (assoc :overload-fine true))
+            res-data)))
+      true)
+    false))
+
+(defn assoc-player-path!
+  "Associate value at arbitrary player-state path and mark dirty." 
+  [player-id path value]
+  (ps/update-player-state! player-id assoc-in path value)
+  (ps/mark-dirty! player-id)
+  true)
+
+(defn update-player-path!
+  "Update value at arbitrary player-state path with f and args, then mark dirty."
+  [player-id path f & args]
+  (apply ps/update-player-state! player-id update-in path f args)
+  (ps/mark-dirty! player-id)
+  true)
+
 (defn gain-exp!
   "Apply exp gain from :exp-policy {:amount n :rate n} when present.
   Multiplies rate by the skill's :exp-incr-speed."
@@ -143,4 +175,26 @@
   "Emit fx stage for a context event."
   [spec evt stage]
   (fx/send! (:ctx-id evt) (:fx spec) stage evt))
+
+(defn get-player-state
+  "Return full player state map or nil when absent."
+  [player-id]
+  (ps/get-player-state player-id))
+
+(defn player-path
+  "Read arbitrary path from player state with optional default value."
+  ([player-id path]
+   (get-in (ps/get-player-state player-id) path))
+  ([player-id path default]
+   (get-in (ps/get-player-state player-id) path default)))
+
+(defn skill-exp
+  "Read clamped skill exp as double from ability-data."
+  [player-id skill-id]
+  (double (or (player-path player-id [:ability-data :skills skill-id :exp] 0.0) 0.0)))
+
+(defn current-cp
+  "Read current CP from resource-data as double."
+  [player-id]
+  (double (or (player-path player-id [:resource-data :cur-cp] 0.0) 0.0)))
 

@@ -35,13 +35,11 @@
 (defn set-item-energy!
   "Set energy on an item stack in place.
 
-  Returns the updated energy value for convenience."
+  Returns delegated battery result for supported items, else nil."
   [item-stack amount]
   (if (is-energy-item-supported? item-stack)
-    (do
-      (battery/set-battery-energy! item-stack amount)
-      (get-item-energy item-stack))
-    0.0))
+    (battery/set-battery-energy! item-stack amount)
+    nil))
 
 (defn charge-energy-to-item
   "Charge an item and return leftover energy that could not be inserted."

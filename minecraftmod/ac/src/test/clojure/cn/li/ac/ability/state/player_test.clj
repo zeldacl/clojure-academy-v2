@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.state.player-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.test.support.player-state :as ps-fix]
-            [cn.li.ac.ability.state.player :as ps]))
+            [cn.li.ac.ability.service.player-state :as ps]))
 
 (use-fixtures :each ps-fix/clean-player-states-fixture)
 

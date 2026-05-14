@@ -4,7 +4,7 @@
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.registry.category :as cat]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.ability.server.service.learning :as learning]))
 
 (deftest check-all-conditions-unknown-skill-test

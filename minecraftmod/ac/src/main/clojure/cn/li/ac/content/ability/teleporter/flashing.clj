@@ -15,7 +15,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -56,8 +55,7 @@
               player-pos (helper/player-position player-id)]
           (when (and look-vec player-pos)
             ;; Check CP available
-            (let [state (ps/get-player-state player-id)
-                  cur-cp (double (or (get-in state [:resource-data :cur-cp]) 0.0))]
+            (let [cur-cp (skill-effects/current-cp player-id)]
               (when (>= cur-cp cp-cost)
                 (let [world-id (geom/world-id-of player-id)
                       ;; Ignore Y component for horizontal blink
@@ -78,8 +76,7 @@
                                               :from-y dest-y
                                               :from-z (double (:z player-pos))}))))))))
       ;; Auto-deactivate if CP runs out
-      (let [state (ps/get-player-state player-id)
-            cur-cp (double (or (get-in state [:resource-data :cur-cp]) 0.0))]
+      (let [cur-cp (skill-effects/current-cp player-id)]
         (when (<= cur-cp 0.0)
           (ctx/terminate-context! ctx-id nil))))
     (catch Exception e

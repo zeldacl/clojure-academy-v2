@@ -8,6 +8,7 @@
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.mcmod.platform.entity :as entity]
 						[cn.li.mcmod.platform.ability :as platform-ability]
+						[cn.li.ac.ability.util.uuid :as uuid]
 						[cn.li.mcmod.platform.item :as pitem]
 						[cn.li.ac.block.ability-interferer.config :as interferer-config]
 						[cn.li.ac.block.ability-interferer.schema :as interferer-schema]
@@ -49,9 +50,6 @@
 	(let [n (try (entity/player-get-name player) (catch Exception _ nil))]
 		(if (and n (not (str/blank? (str n)))) (str n) "")))
 
-(defn- player-uuid-str [player]
-	(some-> (try (entity/player-get-uuid player) (catch Exception _ nil)) str))
-
 (defn- player-creative? [player]
 	(try (boolean (entity/player-creative? player)) (catch Exception _ false)))
 
@@ -75,7 +73,7 @@
 				 vec)))
 
 (defn- apply-interference-effect! [player src-id]
-	(when-let [uuid (player-uuid-str player)]
+	(when-let [uuid (uuid/player-uuid-str player)]
 		(try
 			(let [store (platform-ability/player-ability-store)]
 				(platform-ability/res-add-interference! store uuid src-id)
@@ -136,7 +134,7 @@
 										players (find-players-in-range level pos range)
 										whitelist (set (map str (:whitelist state2 [])))
 										affected-players (remove #(contains? whitelist (player-name %)) players)
-										affected-uuids (set (keep player-uuid-str affected-players))
+																affected-uuids (set (keep uuid/player-uuid-str affected-players))
 										player-count (count affected-uuids)
 										energy-cost (interferer-config/calculate-energy-cost range)
 										current-energy (double (:energy state2 0.0))]

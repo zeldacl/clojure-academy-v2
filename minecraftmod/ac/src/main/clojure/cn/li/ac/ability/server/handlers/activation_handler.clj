@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.server.handlers.activation-handler
 	"Activation toggle request network handler."
 	(:require [cn.li.ac.ability.server.handlers.common :as common]
+						[cn.li.ac.ability.util.uuid :as uuid]
 						[cn.li.ac.ability.server.service.resource :as res]
 						[cn.li.ac.ability.registry.event :as evt]
 						[cn.li.ac.ability.service.player-state :as ps]
@@ -8,7 +9,7 @@
 
 (defn handle-set-activated-request
 	[{:keys [activated]} player]
-	(let [uuid  (common/uuid-of player)
+	(let [uuid  (uuid/player-uuid-str player)
 				state (common/get-state uuid)
 				rd    (:resource-data state)
 				before (boolean (:activated rd))

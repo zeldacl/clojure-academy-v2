@@ -12,7 +12,7 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]
             [cn.li.mcmod.util.log :as log]))
 
@@ -21,9 +21,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id)
-                  [:ability-data :skills :mine-ray-basic :exp]
-                  0.0)))
+  (skill-effects/skill-exp player-id :mine-ray-basic))
 
 (defn- make-cfg [player-id]
   {:range       (bal/lerp 8.0 12.0 (skill-exp player-id))

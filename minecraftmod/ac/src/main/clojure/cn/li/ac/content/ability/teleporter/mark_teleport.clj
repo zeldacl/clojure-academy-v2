@@ -14,8 +14,7 @@
   - Client-side destination marker with looping teleport particles and execute sound
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -31,10 +30,11 @@
 (def ^:private eye-height 1.6)
 
 (defn- current-cp [player-id]
-  (double (or (get-in (ps/get-player-state player-id) [:resource-data :cur-cp]) 0.0)))
+  (skill-effects/current-cp player-id)
+  )
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :mark-teleport :exp] 0.0)))
+  (skill-effects/skill-exp player-id :mark-teleport))
 
 (defn- cp-per-block [exp]
   (bal/lerp 12.0 4.0 exp))

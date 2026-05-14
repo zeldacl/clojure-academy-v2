@@ -13,37 +13,18 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.ability.server.service.context-transport :as transport]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.mcmod.ability.catalog :as catalog]
             [cn.li.mcmod.util.log :as log]))
 
-;; ============================================================================
-;; send-fn registry (injected at forge layer startup)
-;; ============================================================================
-
-(defonce ^:private send-to-client-fn (atom nil))
-(defonce ^:private send-to-server-fn (atom nil))
-
 (defn register-send-fns! [{:keys [to-client to-server]}]
-  (reset! send-to-client-fn to-client)
-  (reset! send-to-server-fn to-server))
-
-;; ============================================================================
-;; Internal helpers
-;; ============================================================================
-
-(defn- send-to-client! [player-uuid msg-id payload]
-  (when-let [f @send-to-client-fn]
-    (f player-uuid msg-id payload)))
-
-(defn- send-to-server! [msg-id payload]
-  (when-let [f @send-to-server-fn]
-    (f msg-id payload)))
+  (transport/register-send-fns! {:to-client to-client :to-server to-server}))
 
 (defn- send-terminated! [ctx-id]
   (when-let [ctx (ctx/get-context ctx-id)]
     (let [player-uuid (:player-uuid ctx)]
-      (send-to-client! player-uuid catalog/MSG-CTX-TERMINATE {:ctx-id ctx-id}))))
+      (transport/send-to-client! player-uuid catalog/MSG-CTX-TERMINATE {:ctx-id ctx-id}))))
 
 ;; ============================================================================
 ;; Client-side: request to start a skill
@@ -55,9 +36,9 @@
   [player-uuid skill-id]
   (let [new-ctx (ctx/new-context player-uuid skill-id)]
     (ctx/register-context! new-ctx)
-    (send-to-server! catalog/MSG-CTX-BEGIN-LINK
-                     {:ctx-id   (:id new-ctx)
-                      :skill-id skill-id})
+    (transport/send-to-server! catalog/MSG-CTX-BEGIN-LINK
+                               {:ctx-id   (:id new-ctx)
+                                :skill-id skill-id})
     (log/debug "Context activated (client):" (:id new-ctx) skill-id)
     new-ctx))
 
@@ -79,12 +60,12 @@
                    (rdata/can-use-ability? rd))
         (do
           (log/debug "establish-context! rejected: conditions not met" player-uuid skill-id)
-          (send-to-client! player-uuid catalog/MSG-CTX-TERMINATE {:ctx-id client-ctx-id}))
+          (transport/send-to-client! player-uuid catalog/MSG-CTX-TERMINATE {:ctx-id client-ctx-id}))
         (let [server-ctx (ctx/new-server-context player-uuid skill-id client-ctx-id)]
           (ctx/register-context! server-ctx)
-          (send-to-client! player-uuid catalog/MSG-CTX-ESTABLISH
-                           {:ctx-id    client-ctx-id
-                            :server-id (:server-id server-ctx)})
+          (transport/send-to-client! player-uuid catalog/MSG-CTX-ESTABLISH
+                                     {:ctx-id    client-ctx-id
+                                      :server-id (:server-id server-ctx)})
           (log/debug "Context established (server):" (:server-id server-ctx) skill-id)
           server-ctx)))))
 
@@ -109,11 +90,11 @@
   This is used by delayed server-side tasks where the original context may
   already be terminated, but client FX still needs to be dispatched."
   [player-uuid ctx-id channel payload]
-  (send-to-client! player-uuid
-                   catalog/MSG-CTX-CHANNEL
-                   {:ctx-id ctx-id
-                    :channel channel
-                    :payload payload}))
+  (transport/send-to-client! player-uuid
+                             catalog/MSG-CTX-CHANNEL
+                             {:ctx-id ctx-id
+                              :channel channel
+                              :payload payload}))
 
 ;; ============================================================================
 ;; Server tick

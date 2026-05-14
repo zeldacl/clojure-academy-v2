@@ -13,6 +13,7 @@
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.wireless.gui.component.widget-helpers :as wh]
             [cn.li.ac.config.modid :as modid]))
 
 ;; ============================================================================
@@ -24,37 +25,6 @@
 
 (defn- wireless-panel-from-main [main-root]
   (or (cgui/find-widget main-root "panel_wireless") main-root))
-
-;; ============================================================================
-;; Private Widget Helpers
-;; ============================================================================
-
-(defn- widget-textbox [widget] (comp/get-textbox-component widget))
-(defn- widget-drawtexture [widget] (comp/get-drawtexture-component widget))
-
-(defn- set-textbox-text! [widget text]
-  (when-let [tb (widget-textbox widget)]
-    (comp/set-text! tb text)))
-
-(defn- set-drawtexture! [widget texture-path]
-  (when-let [dt (widget-drawtexture widget)]
-    (comp/set-texture! dt texture-path)))
-
-(defn- set-drawtexture-color!
-  [widget argb]
-  (when-let [dt (widget-drawtexture widget)]
-    (swap! (:state dt) assoc :color (unchecked-int argb))))
-
-(defn- set-tint-enabled!
-  [widget enabled?]
-  (when-let [t (comp/get-tint-component widget)]
-    (swap! (:state t) assoc :enabled (boolean enabled?))))
-
-(defn- alpha-argb
-  [argb alpha-f]
-  (let [a (int (Math/round (* 255.0 (double alpha-f))))
-        rgb (bit-and (long argb) 0x00FFFFFF)]
-    (unchecked-int (bit-or (bit-shift-left (bit-and a 0xFF) 24) rgb))))
 
 (defn- ensure-template-hidden! [elem-template]
   (when elem-template
@@ -109,20 +79,20 @@
             name (if connected? (name-fn linked) "Not Connected")]
         (reset! linked-atom linked)
         (when icon-connect
-          (set-drawtexture! icon-connect
+          (wh/set-drawtexture! icon-connect
                             (if connected?
                               (modid/asset-path "textures" "guis/icons/icon_connected.png")
                               (modid/asset-path "textures" "guis/icons/icon_unconnected.png")))
-          (set-drawtexture-color! icon-connect (alpha-argb 0xFFFFFFFF alpha))
-          (set-tint-enabled! icon-connect connected?)
+          (wh/set-drawtexture-color! icon-connect (wh/alpha-argb 0xFFFFFFFF alpha))
+          (wh/set-tint-enabled! icon-connect connected?)
           (events/on-left-click icon-connect
             (fn [_]
               (when-let [t @linked-atom]
                 (disconnect-fn t)))))
         (when icon-logo
-          (set-drawtexture-color! icon-logo (alpha-argb 0xFFFFFFFF alpha)))
+          (wh/set-drawtexture-color! icon-logo (wh/alpha-argb 0xFFFFFFFF alpha)))
         (when text-name
-          (set-textbox-text! text-name name))))
+          (wh/set-textbox-text! text-name name))))
 
     (when elist
       (comp/list-clear! elist)
@@ -133,17 +103,17 @@
                 icon-key (cgui/find-widget elem "icon_key")
                 input-pass (cgui/find-widget elem "input_pass")
                 icon-connect (cgui/find-widget elem "icon_connect")
-                pass-box (when input-pass (widget-textbox input-pass))
+                pass-box (when input-pass (wh/widget-textbox input-pass))
                 encrypted? (boolean (encrypted?-fn target))]
 
             (when text-name
-              (set-textbox-text! text-name (name-fn target)))
+              (wh/set-textbox-text! text-name (name-fn target)))
 
             (if encrypted?
               (do
                 (when icon-key
                   (cgui/set-visible! icon-key true)
-                  (set-drawtexture-color! icon-key (alpha-argb 0xFFFFFFFF 0.6)))
+                  (wh/set-drawtexture-color! icon-key (wh/alpha-argb 0xFFFFFFFF 0.6)))
                 (when input-pass
                   (cgui/set-visible! input-pass true))
                 (when (and input-pass pass-box)
@@ -155,11 +125,11 @@
                   (events/on-gain-focus input-pass
                     (fn [_]
                       (when icon-key
-                        (set-drawtexture-color! icon-key (alpha-argb 0xFFFFFFFF 1.0)))))
+                        (wh/set-drawtexture-color! icon-key (wh/alpha-argb 0xFFFFFFFF 1.0)))))
                   (events/on-lost-focus input-pass
                     (fn [_]
                       (when icon-key
-                        (set-drawtexture-color! icon-key (alpha-argb 0xFFFFFFFF 0.6)))))))
+                        (wh/set-drawtexture-color! icon-key (wh/alpha-argb 0xFFFFFFFF 0.6)))))))
               (do
                 (when input-pass (cgui/set-visible! input-pass false))
                 (when icon-key (cgui/set-visible! icon-key false))))
@@ -190,7 +160,7 @@
     nil"
   [panel texture-path]
   (when-let [logo (cgui/find-widget panel "icon_logo")]
-    (set-drawtexture! logo texture-path)))
+    (wh/set-drawtexture! logo texture-path)))
 
 ;; ============================================================================
 ;; Factory for Creating Wireless Panel

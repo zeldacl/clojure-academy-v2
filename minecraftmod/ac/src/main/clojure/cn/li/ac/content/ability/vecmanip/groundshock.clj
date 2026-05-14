@@ -15,8 +15,7 @@
   - Drop rate: 30-100% (based on experience)
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -73,7 +72,7 @@
      (bal/lerp 0.8 1.3 (bal/clamp01 exp))))
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :groundshock :exp] 0.0)))
+  (skill-effects/skill-exp player-id :groundshock))
 
 (defn- add-exp! [player-id amount]
   (skill-effects/add-skill-exp! player-id :groundshock amount))
@@ -95,12 +94,12 @@
   (or (when-let [teleportation (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
         (when-let [tp-impl @teleportation]
           ((resolve 'cn.li.mcmod.platform.teleportation/get-player-position) tp-impl player-id)))
-      (get (ps/get-player-state player-id)
-           :position
-           {:world-id "minecraft:overworld"
-            :x 0.0
-            :y 64.0
-            :z 0.0})))
+      (skill-effects/player-path player-id
+                                 :position
+                                 {:world-id "minecraft:overworld"
+                                  :x 0.0
+                                  :y 64.0
+                                  :z 0.0})))
 
 (defn- send-fx-start! [ctx-id]
   (ctx/ctx-send-to-client! ctx-id :groundshock/fx-start {:mode :start}))

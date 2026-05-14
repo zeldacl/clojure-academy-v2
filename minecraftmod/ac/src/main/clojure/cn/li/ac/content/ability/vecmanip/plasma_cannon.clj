@@ -17,8 +17,7 @@
   - Client FX: plasma body effect + tornado at ground + loop sound + charged sound
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -50,18 +49,16 @@
 ;; ============================================================
 
 (defn get-skill-exp [player-id]
-  (bal/clamp01 (double (get-in (ps/get-player-state player-id) [:ability-data :skills :plasma-cannon :exp] 0.0))))
+  (bal/clamp01 (skill-effects/skill-exp player-id :plasma-cannon)))
 
 (defn- get-player-position [player-id]
   (or (when-let [tp (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
         (when-let [impl @tp]
           ((resolve 'cn.li.mcmod.platform.teleportation/get-player-position) impl player-id)))
-      (get (ps/get-player-state player-id)
-           :position
-           {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0})))
+      (skill-effects/player-path player-id :position {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0})))
 
 (defn- get-world-id [player-id]
-  (or (get-in (ps/get-player-state player-id) [:position :world-id])
+  (or (skill-effects/player-path player-id [:position :world-id])
       "minecraft:overworld"))
 
 (defn- add-exp! [player-id amount]
@@ -78,12 +75,7 @@
 
 ;; Maintain overload floor each tick (prevent recovery below overload-keep)
 (defn- maintain-overload! [player-id min-overload]
-  (ps/update-resource-data!
-    player-id
-    (fn [rd]
-      (if (< (double (get rd :cur-overload 0.0)) (double min-overload))
-        (assoc rd :cur-overload (double min-overload))
-        rd))))
+  (skill-effects/enforce-overload-floor! player-id min-overload))
 
 (defn- apply-cooldown! [player-id exp]
   (skill-effects/set-main-cooldown! player-id :plasma-cannon (cooldown-ticks exp)))

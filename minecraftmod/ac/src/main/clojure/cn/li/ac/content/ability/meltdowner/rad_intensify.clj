@@ -2,13 +2,13 @@
   "Meltdowner passive: radiation intensify.
   Custom exp is derived from max-cp ratio; damage rate lerps from 1.4 to 1.8."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.config :as cfg]
+            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.balance :as bal]))
 
 (defn skill-exp
   [player-id]
-  (let [max-cp (double (or (get-in (ps/get-player-state player-id) [:resource-data :max-cp]) 0.0))
+  (let [max-cp (double (or (skill-effects/player-path player-id [:resource-data :max-cp] 0.0) 0.0))
         level5-cp (double (cfg/max-cp-for-level 5))]
     (bal/clamp01
       (if (pos? level5-cp)

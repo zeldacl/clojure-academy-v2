@@ -18,6 +18,7 @@
             [cn.li.ac.ability.server.handlers.activation-handler :as activation-handler]
             [cn.li.ac.ability.server.handlers.context-handler :as context-handler]
             [cn.li.ac.ability.server.handlers.input-handler :as input-handler]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.block.developer.logic     :as dev-logic]
             [cn.li.mcmod.platform.position      :as pos]
@@ -29,9 +30,6 @@
   ;; ============================================================================
   ;; Helpers
   ;; ============================================================================
-
-  (defn- uuid-of [player]
-    (str (entity/player-get-uuid player)))
 
   (defn- get-state [uuid]
     (ps/get-or-create-player-state! uuid))
@@ -71,7 +69,7 @@
   (defn- handle-learn-skill-request
     [payload player]
     (let [{:keys [skill-id pos-x pos-y pos-z]} payload
-          uuid (uuid-of player)
+          uuid (uuid/player-uuid-str player)
           state (get-state uuid)
           ad (:ability-data state)
           player-level (:level ad)

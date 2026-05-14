@@ -2,21 +2,11 @@
   "Wireless Node network message handlers."
   (:require [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.block.state-schema :as state-schema]
-            [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.position :as pos]
-            [cn.li.ac.energy.operations :as energy]
-            [cn.li.ac.block.wireless-node.config :as node-config]
-            [cn.li.ac.wireless.data.world :as world-data]
-            [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.search-config :as search-config]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-            [cn.li.ac.wireless.api :as helper]
-            [cn.li.ac.wireless.data.network :as wireless-net]
-            [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
-            [cn.li.ac.block.wireless-node.logic :as logic]
+            [cn.li.ac.block.wireless-node.network-infra :as infra]
+            [cn.li.ac.block.wireless-node.network-presenter :as presenter]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
-            [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix WirelessCapabilityKeys]))
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Message ID Helper
@@ -30,12 +20,10 @@
 
 (defn handle-get-status
   [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)]
+  (let [{:keys [tile]} (infra/resolve-world-tile payload player)]
     (if tile
-      (if-let [net (helper/get-wireless-net-by-node tile)]
-        {:linked {:ssid (:ssid net)
-                  :is-encrypted? (not (empty? (str (:password net))))}}
+      (if-let [net (infra/linked-network tile)]
+        {:linked (presenter/linked->dto net)}
         {:linked nil})
       {:linked false})))
 
@@ -48,63 +36,39 @@
 
 (defn handle-list-networks
   [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)]
+  (let [{:keys [world tile]} (infra/resolve-world-tile payload player)]
     (if tile
-      (let [linked (try (helper/get-wireless-net-by-node tile) (catch Exception _ nil))
+  (let [linked (infra/linked-network tile)
             linked-ssid (when linked (:ssid linked))
             x (double (:pos-x payload))
             y (double (:pos-y payload))
             z (double (:pos-z payload))
-            range (try (.getRange ^IWirelessNode tile) (catch Exception _ 20.0))
-            nets (helper/get-nets-in-range world x y z range (search-config/max-results))]
-        {:linked (when linked
-                   {:ssid (:ssid linked)
-                    :is-encrypted? (not (empty? (str (:password linked))))})
-         :avail (->> nets
-                     (remove (fn [net] (= (:ssid net) linked-ssid)))
-                     (mapv (fn [net]
-                             (let [matrix (when (:matrix net)
-                     (vb/vblock-get (:matrix net) world))
-                  matrix-cap (when matrix
-                                                 (platform-be/get-capability matrix WirelessCapabilityKeys/MATRIX))]
-              {:ssid (:ssid net)
-               :is-encrypted? (not (empty? (str (:password net))))
-               :load (wireless-net/get-load net)
-               :capacity (if matrix-cap
-                     (try (.getMatrixCapacity ^IWirelessMatrix matrix-cap) (catch Exception _ 0))
-                     0)
-               :bandwidth (if matrix-cap
-                      (try (.getMatrixBandwidth ^IWirelessMatrix matrix-cap) (catch Exception _ 0))
-                      0)
-               :range (if matrix-cap
-                  (try (.getMatrixRange ^IWirelessMatrix matrix-cap) (catch Exception _ 0.0))
-                  0.0)}))))})
+    range (infra/node-range tile)
+    avail (infra/available-networks world x y z range)]
+    (presenter/list-networks-response
+      {:linked linked
+       :avail avail
+       :linked-ssid linked-ssid
+       :matrix-cap-fn (fn [net] (infra/matrix-capability world net))
+       :matrix-capacity infra/matrix-capacity
+       :matrix-bandwidth infra/matrix-bandwidth
+       :matrix-range infra/matrix-range}))
       {:linked nil :avail []})))
 
 (defn handle-connect
   [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)
+  (let [{:keys [world tile]} (infra/resolve-world-tile payload player)
         ssid (:ssid payload)
         password (:password payload)]
     (if (and world tile ssid)
-      (let [world-data (world-data/get-world-data world)
-            net (world-data/get-network-by-ssid world-data ssid)
-            matrix (when net (vb/vblock-get (:matrix net) world))]
-        (if (and net matrix)
-          {:success (boolean (wireless-net/add-node! net (vb/create-vnode tile) password))}
-          {:success false}))
+      {:success (infra/connect-node! world tile ssid password)}
       {:success false})))
 
 (defn handle-disconnect
   [payload player]
-  (let [world (net-helpers/get-world player)
-        tile (net-helpers/get-tile-at world payload)]
+  (let [{:keys [world tile]} (infra/resolve-world-tile payload player)]
     (if (and world tile)
-      (do
-        (helper/unlink-node-from-network! tile)
-        {:success true})
+      {:success (infra/disconnect-node! tile)}
       {:success false})))
 
 ;; ============================================================================

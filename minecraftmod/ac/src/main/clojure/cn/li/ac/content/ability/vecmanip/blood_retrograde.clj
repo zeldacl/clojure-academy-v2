@@ -10,8 +10,7 @@
   - Successful hit plays blood splash / blood spray visuals and sound
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -26,7 +25,7 @@
 (def ^:private spray-angles [0.0 30.0 45.0 60.0 80.0 -30.0 -45.0 -60.0 -80.0])
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :blood-retrograde :exp] 0.0)))
+  (skill-effects/skill-exp player-id :blood-retrograde))
 
 (def ^:private world-up {:x 0.0 :y 1.0 :z 0.0})
 

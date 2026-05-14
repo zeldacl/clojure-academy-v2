@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.registry.skill-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [cn.li.ac.ability.registry.skill :as sk]))
+            [cn.li.ac.ability.service.registry :as sk]))
 
 (defn- reset-skills! [f]
   (let [saved @sk/skill-registry]

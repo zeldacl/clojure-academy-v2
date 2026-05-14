@@ -1,6 +1,6 @@
 (ns cn.li.ac.terminal.player-data-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.terminal.player-data :as td]
             [cn.li.mcmod.util.log :as log]))
 

@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.command.handlers :as h]
             [cn.li.ac.ability.registry.category :as cat]
-            [cn.li.ac.ability.registry.skill :as skill]))
+            [cn.li.ac.ability.service.registry :as skill]))
 
 (deftest get-target-player-test
   (is (= :tp (h/get-target-player {:target-player :tp :player :p})))

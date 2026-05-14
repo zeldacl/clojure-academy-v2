@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as h]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]

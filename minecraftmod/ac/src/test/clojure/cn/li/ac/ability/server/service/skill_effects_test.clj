@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.server.service.skill-effects-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.state.player :as ps]))
+            [cn.li.ac.ability.service.player-state :as ps]))
 
 (deftest scale-damage-default-and-custom-test
   (binding [cn.li.ac.ability.config/*damage-scale* 2.0]

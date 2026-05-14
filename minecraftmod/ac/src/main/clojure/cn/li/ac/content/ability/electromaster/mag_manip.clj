@@ -6,7 +6,6 @@
   Cooldown: manual, lerp(60,40) ticks by exp
   Exp:      +0.005 on successful throw"
   (:require [clojure.string :as str]
-            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -59,7 +58,7 @@
 ;; --- Domain helpers ---
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :mag-manip :exp] 0.0)))
+  (skill-effects/skill-exp player-id :mag-manip))
 
 (defn- metal-block-id? [block-id exp]
   (let [id (some-> block-id str/lower-case)]
@@ -150,7 +149,7 @@
     (let [ss (:skill-state ctx-data)]
       (when (and (= :holding (:mode ss)) (:held-block ss))
         (let [focus (or (:focus ss) (hold-focus player-id))
-              pos (get (ps/get-player-state player-id) :position {:x 0.0 :y 0.0 :z 0.0})]
+                pos (skill-effects/player-path player-id :position {:x 0.0 :y 0.0 :z 0.0})]
           (< (geom/vdist-sq pos focus) 25.0))))))
 
 (defn- cost-up-cp [{:keys [player-id ctx-id]}]
@@ -245,7 +244,7 @@
         (ctx/update-context! ctx-id assoc :skill-state
                              (assoc ss :fired false :mode :idle))
         (let [focus (or (:focus ss) (hold-focus player-id))
-              pos (get (ps/get-player-state player-id) :position {:x 0.0 :y 0.0 :z 0.0})
+              pos (skill-effects/player-path player-id :position {:x 0.0 :y 0.0 :z 0.0})
               too-far? (>= (geom/vdist-sq pos focus) 25.0)]
           (if too-far?
             (do

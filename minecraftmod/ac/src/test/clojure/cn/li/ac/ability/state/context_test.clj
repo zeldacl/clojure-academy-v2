@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.state.context-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
-            [cn.li.ac.ability.state.context :as ctx]))
+            [cn.li.ac.ability.service.dispatcher :as ctx]))
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 

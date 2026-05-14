@@ -5,8 +5,7 @@
   coin-QTE / item-charge logic; :beam op (effect.beam) for the actual shot.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -45,7 +44,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :railgun :exp] 0.0)))
+  (skill-effects/skill-exp player-id :railgun))
 
 (defn- accepted-item-in-hand? [player]
   (when player
@@ -65,17 +64,16 @@
   Called from the platform item-action hook when a coin is used in ability mode."
   [player-id payload]
   (let [now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
-    (ps/update-player-state! player-id assoc-in
-                             [:runtime :railgun :coin-window]
-                             {:start-ms  now-ms
-                              :window-ms coin-window-ms
-                              :source    :coin-item})
-    (ps/mark-dirty! player-id)
+    (skill-effects/assoc-player-path!
+      player-id
+      [:runtime :railgun :coin-window]
+      {:start-ms  now-ms
+       :window-ms coin-window-ms
+       :source    :coin-item})
     true))
 
 (defn- clear-coin-window! [player-id]
-  (ps/update-player-state! player-id update-in [:runtime :railgun] dissoc :coin-window)
-  (ps/mark-dirty! player-id))
+  (skill-effects/update-player-path! player-id [:runtime :railgun] dissoc :coin-window))
 
 (defn- coin-progress [coin-window now-ms]
   (let [elapsed (- (long now-ms) (long (:start-ms coin-window)))
@@ -89,7 +87,7 @@
    :perform?    (>= p coin-perform-threshold)})
 
 (defn- consume-coin-qte-window! [player-id now-ms]
-  (let [win (get-in (ps/get-player-state player-id) [:runtime :railgun :coin-window])]
+  (let [win (skill-effects/player-path player-id [:runtime :railgun :coin-window])]
     (if-not win
       {:has-window? false :active? false :perform? false :progress 0.0}
       (let [p (coin-progress win now-ms)]
@@ -97,7 +95,7 @@
         (qte-status p)))))
 
 (defn- peek-coin-qte-window [player-id now-ms]
-  (let [win (get-in (ps/get-player-state player-id) [:runtime :railgun :coin-window])]
+  (let [win (skill-effects/player-path player-id [:runtime :railgun :coin-window])]
     (if-not win
       {:has-window? false :active? false :perform? false :progress 0.0}
       (qte-status (coin-progress win now-ms)))))
@@ -114,7 +112,7 @@
 
 (defn- vec-reflection-can-reflect? [target-player-id incoming-damage]
   (when (toggle-active? target-player-id :vec-reflection)
-    (when-let [state (ps/get-player-state target-player-id)]
+    (when-let [state (skill-effects/get-player-state target-player-id)]
       (let [exp        (get-in state [:ability-data :skills :vec-reflection :exp] 0.0)
             consumption (* (double incoming-damage) (bal/lerp 20.0 15.0 exp))
             current-cp (get-in state [:resource-data :cur-cp] 0.0)]

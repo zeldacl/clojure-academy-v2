@@ -1,12 +1,12 @@
 (ns cn.li.ac.ability.server.handlers.context-handler
 	"Context lifecycle request network handlers."
-	(:require [cn.li.ac.ability.server.handlers.common :as common]
+	(:require [cn.li.ac.ability.util.uuid :as uuid]
 						[cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
 						[cn.li.ac.ability.service.dispatcher :as ctx]))
 
 (defn handle-begin-link-context
 	[{:keys [ctx-id skill-id]} player]
-	(ctx-mgr/establish-context! (common/uuid-of player) ctx-id skill-id))
+	(ctx-mgr/establish-context! (uuid/player-uuid-str player) ctx-id skill-id))
 
 (defn handle-keepalive-context
 	[{:keys [ctx-id]} _player]

@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.server.damage.runtime :as rt]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as dh]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]))
 

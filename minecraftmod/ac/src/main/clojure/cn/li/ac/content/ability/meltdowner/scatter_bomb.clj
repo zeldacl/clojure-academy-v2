@@ -14,11 +14,9 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
-            [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -41,20 +39,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id)
-                  [:ability-data :skills :scatter-bomb :exp]
-                  0.0)))
+  (skill-effects/skill-exp player-id :scatter-bomb))
 
 (defn- enforce-overload-floor!
   [player-id floor-value]
-  (ps/update-resource-data!
-    player-id
-    (fn [res-data]
-      (if (< (double (get res-data :cur-overload 0.0)) (double floor-value))
-        (-> res-data
-            (rdata/set-cur-overload floor-value)
-            (assoc :overload-fine true))
-        res-data))))
+  (skill-effects/enforce-overload-floor! player-id floor-value))
 
 (defn- random-cone-dir
   "Random direction within ±45° cone of look direction."

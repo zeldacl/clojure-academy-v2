@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.damage-helper
   "Meltdowner damage helper: mark targets and amplify incoming damage while marked."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
+  (:require [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]))
@@ -14,7 +14,7 @@
 (defn- learned-rad-intensify?
   [player-id]
   (boolean
-    (when-let [state (ps/get-player-state player-id)]
+    (when-let [state (skill-effects/get-player-state player-id)]
       (adata/is-learned? (:ability-data state) :rad-intensify))))
 
 (defn mark-target!

@@ -15,8 +15,7 @@
   - EXP gain: timeRate(ct) * 0.002
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
@@ -25,7 +24,6 @@
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-            [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
@@ -43,9 +41,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id)
-                  [:ability-data :skills :meltdowner :exp]
-                  0.0)))
+  (skill-effects/skill-exp player-id :meltdowner))
 
 (defn- time-rate [ct]
   (bal/lerp 0.8 1.2 (/ (- (double ct) 20.0) 20.0)))
@@ -59,14 +55,7 @@
 
 (defn- enforce-overload-floor!
   [player-id floor-value]
-  (ps/update-resource-data!
-   player-id
-   (fn [res-data]
-     (if (< (double (get res-data :cur-overload 0.0)) (double floor-value))
-       (-> res-data
-           (rdata/set-cur-overload floor-value)
-           (assoc :overload-fine true))
-       res-data))))
+  (skill-effects/enforce-overload-floor! player-id floor-value))
 
 ;; ---------------------------------------------------------------------------
 ;; Vec-reflection interaction
@@ -80,7 +69,7 @@
 
 (defn- vec-reflection-can-reflect? [target-player-id incoming-damage]
   (when (toggle-active? target-player-id :vec-reflection)
-    (when-let [state (ps/get-player-state target-player-id)]
+    (when-let [state (skill-effects/get-player-state target-player-id)]
       (let [exp        (get-in state [:ability-data :skills :vec-reflection :exp] 0.0)
             consumption (* (double incoming-damage) (bal/lerp 20.0 15.0 exp))
             current-cp (get-in state [:resource-data :cur-cp] 0.0)]

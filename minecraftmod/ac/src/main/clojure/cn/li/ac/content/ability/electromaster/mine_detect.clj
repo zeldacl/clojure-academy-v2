@@ -11,7 +11,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -24,9 +23,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id)
-                  [:ability-data :skills :mine-detect :exp]
-                  0.0)))
+  (skill-effects/skill-exp player-id :mine-detect))
 
 (defn- scan-range [exp]
   (bal/lerp 15.0 30.0 exp))
@@ -56,7 +53,7 @@
   [{:keys [player-id ctx-id]}]
   (try
     (let [exp       (skill-exp player-id)
-          pos-state (get-in (ps/get-player-state player-id) [:position])
+          pos-state (skill-effects/player-path player-id [:position])
           world-id  (or (:world-id pos-state) "minecraft:overworld")
           x         (double (or (:x pos-state) 0.0))
           y         (double (or (:y pos-state) 64.0))
@@ -84,9 +81,9 @@
                            (or ores []))
            :range    (double range)
            :advanced? (and (> exp 0.5)
-                           (>= (get-in (ps/get-player-state player-id)
-                                       [:ability-data :level]
-                                       1)
+                 (>= (skill-effects/player-path player-id
+                        [:ability-data :level]
+                        1)
                                4))})
         (skill-effects/add-skill-exp! player-id :mine-detect 0.003)
         (log/debug "MineDetect: found" (count ores) "ores in range" range)))

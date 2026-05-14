@@ -2,9 +2,7 @@
   "VecReflection skill - advanced reflection (toggle).
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.model.resource :as rdata]
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.util.scaling :as scaling]
@@ -30,11 +28,11 @@
 (defonce ^:private reflecting-players (atom #{}))
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :vec-reflection :exp] 0.0)))
+  (fx-common/skill-exp player-id :vec-reflection))
 
 (defn- current-cp
   [player-id]
-  (double (or (get-in (ps/get-player-state player-id) [:resource-data :cur-cp]) 0.0)))
+  (fx-common/current-cp player-id))
 
 (defn- consume-cp!
   [player-id cp]
@@ -42,14 +40,7 @@
 
 (defn- enforce-overload-floor!
   [player-id floor-value]
-  (ps/update-resource-data!
-    player-id
-    (fn [res-data]
-      (if (< (double (:cur-overload res-data)) (double floor-value))
-        (-> res-data
-            (rdata/set-cur-overload floor-value)
-            (assoc :overload-fine true))
-        res-data))))
+  (fx-common/enforce-overload-floor! player-id floor-value))
 
 (defn vec-reflection-cost-tick-cp
   [{:keys [player-id]}]
@@ -111,7 +102,7 @@
                             :z (double (or (:z pos) 0.0))}))
 
 (defn- try-find-attacker-pos [player-id attacker-id]
-  (or (when-let [st (ps/get-player-state attacker-id)]
+  (or (when-let [st (fx-common/get-player-state attacker-id)]
         (get st :position))
       (when-let [self-pos (get-player-position player-id)]
         (when world-effects/*world-effects*
@@ -242,7 +233,7 @@
       (do
         (swap! reflecting-players conj player-id)
         (try
-          (if-let [state (ps/get-player-state player-id)]
+          (if-let [state (fx-common/get-player-state player-id)]
             (let [exp (skill-exp player-id)
                   reflect-multiplier (scaling/lerp 0.6 1.2 exp)
                   reflected-damage (* original-damage reflect-multiplier)
@@ -254,7 +245,7 @@
                   (consume-cp! player-id consumption)
                   (when (and attacker-id entity-damage/*entity-damage*)
                     (let [world-id (or (get-in state [:position :world-id])
-                                       (get-in (ps/get-player-state attacker-id) [:position :world-id])
+                                       (fx-common/player-path attacker-id [:position :world-id])
                                        "minecraft:overworld")]
                       (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
                                                          world-id
@@ -279,7 +270,7 @@
   Mirrors original passby gate: only cancels when reflection can actually perform."
   [player-id _attacker-id original-damage]
   (try
-    (if (ps/get-player-state player-id)
+    (if (fx-common/get-player-state player-id)
       (let [ctx-id (active-vec-reflection-ctx-id player-id)
             exp (skill-exp player-id)
             consumption (* original-damage (scaling/lerp 20.0 15.0 exp))

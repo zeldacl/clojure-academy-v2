@@ -19,7 +19,6 @@
             [cn.li.ac.ability.server.effect.motion]
             [cn.li.ac.ability.server.effect.state]
             [cn.li.ac.ability.server.effect.fx]
-            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.player-motion :as player-motion]
@@ -85,7 +84,7 @@
   (contains? metallic-entity-types (normalize-id entity-type)))
 
 (defn- player-pos [player-id]
-  (get (ps/get-player-state player-id)
+  (get (skill-effects/get-player-state player-id)
        :position
        {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}))
 

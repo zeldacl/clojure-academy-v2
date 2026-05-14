@@ -21,8 +21,7 @@
   - 0.00005 per tick during flight
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -45,7 +44,7 @@
 ;; ============================================================================
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :storm-wing :exp] 0.0)))
+  (skill-effects/skill-exp player-id :storm-wing))
 
 (defn- get-player-pos [player-id]
   (when teleportation/*teleportation*

@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.skill-specs-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.content.ability.electromaster.arc-gen]
             [cn.li.ac.content.ability.electromaster.body-intensify]
             [cn.li.ac.content.ability.electromaster.mine-detect]

@@ -5,11 +5,9 @@
   Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (≤40 ticks)
   Cooldown: lerp(900,600) ticks (manual, applied on successful up ≥10 ticks)
   Exp: +0.01 on successful release"
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 
@@ -34,14 +32,7 @@
 (defn- get-buff-level [ct] (int (Math/floor (get-probability ct))))
 
 (defn- enforce-overload-floor! [player-id floor-value]
-  (ps/update-resource-data!
-   player-id
-   (fn [res-data]
-     (if (< (double (:cur-overload res-data)) (double floor-value))
-       (-> res-data
-           (rdata/set-cur-overload floor-value)
-           (assoc :overload-fine true))
-       res-data))))
+  (skill-effects/enforce-overload-floor! player-id floor-value))
 
 (defn- apply-body-intensify-buffs! [player-id charge-ticks exp]
   (when potion-effects/*potion-effects*

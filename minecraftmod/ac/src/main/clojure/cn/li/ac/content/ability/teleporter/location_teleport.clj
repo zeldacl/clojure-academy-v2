@@ -12,17 +12,15 @@
   - UI opened from key-down; actual add/remove/perform via RPC requests
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
-            [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.util.math.vec3 :as vec3]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.saved-locations :as saved-locations]
-            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.network.server :as net-srv]
             [cn.li.mcmod.ability.catalog :as catalog]
             [clojure.string :as str]
@@ -33,7 +31,7 @@
 (def ^:private max-location-name-length 16)
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :location-teleport :exp] 0.0)))
+  (skill-effects/skill-exp player-id :location-teleport))
 
 (defn- can-cross-dimension? [exp]
   (> (double exp) 0.8))
@@ -75,10 +73,8 @@
                     (:x loc) (:y loc) (:z loc))
         cp (compute-cp-cost exp dist cross-dim?)
         no-exp? (and cross-dim? (not (can-cross-dimension? exp)))
-        no-cp? (let [state (ps/get-player-state player-id)]
-                 (if state
-                   (not (rdata/can-perform? (:resource-data state) overload-cost cp false))
-                   true))]
+        no-cp? (let [cur-cp (skill-effects/current-cp player-id)]
+                 (< cur-cp (+ overload-cost cp))) ]
     (assoc loc
            :distance dist
            :cp-cost cp
@@ -267,27 +263,24 @@
 ;; Network handler self-registration (LocationTeleport GUI RPC)
 ;; ============================================================================
 
-(defn- uuid-of [player]
-  (str (entity/player-get-uuid player)))
-
 (net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-QUERY
   (fn [_payload player]
-    (query-location-teleport (uuid-of player))))
+    (query-location-teleport (uuid/player-uuid-str player))))
 
 (net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-ADD
   (fn [{:keys [name]} player]
-    (let [uuid (uuid-of player)
+    (let [uuid (uuid/player-uuid-str player)
           result (save-current-location! uuid name)]
       (merge result (query-location-teleport uuid)))))
 
 (net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-REMOVE
   (fn [{:keys [name]} player]
-    (let [uuid (uuid-of player)
+    (let [uuid (uuid/player-uuid-str player)
           result (delete-saved-location! uuid name)]
       (merge result (query-location-teleport uuid)))))
 
 (net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-PERFORM
   (fn [{:keys [name]} player]
-    (let [uuid (uuid-of player)
+    (let [uuid (uuid/player-uuid-str player)
           result (perform-location-teleport! uuid name)]
       (merge result (query-location-teleport uuid)))))

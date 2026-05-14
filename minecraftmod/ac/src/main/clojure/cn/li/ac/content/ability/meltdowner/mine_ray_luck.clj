@@ -13,7 +13,6 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -26,9 +25,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id)
-                  [:ability-data :skills :mine-ray-luck :exp]
-                  0.0)))
+  (skill-effects/skill-exp player-id :mine-ray-luck))
 
 ;; ---------------------------------------------------------------------------
 ;; Fortune-aware mining tick

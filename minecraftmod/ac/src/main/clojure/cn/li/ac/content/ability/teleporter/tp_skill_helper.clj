@@ -5,8 +5,7 @@
   and common balance formulas.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.model.ability :as adata]
+  (:require [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.util.balance :as bal]
@@ -25,7 +24,7 @@
   "Return current experience for skill-kw for player-id, 0.0 if missing."
   [player-id skill-kw]
   (double
-    (if-let [state (ps/get-player-state player-id)]
+    (if-let [state (skill-effects/get-player-state player-id)]
       (adata/get-skill-exp (:ability-data state) skill-kw)
       0.0)))
 
@@ -34,7 +33,7 @@
 (defn- learned?
   [player-id skill-id]
   (boolean
-    (when-let [state (ps/get-player-state player-id)]
+    (when-let [state (skill-effects/get-player-state player-id)]
       (adata/is-learned? (:ability-data state) skill-id))))
 
 (defn- try-lerp

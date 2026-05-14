@@ -1,5 +1,5 @@
 (ns cn.li.ac.test.support.player-state
-  (:require [cn.li.ac.ability.state.player :as ps]))
+  (:require [cn.li.ac.ability.service.player-state :as ps]))
 
 (defn clean-player-states-fixture
   [f]

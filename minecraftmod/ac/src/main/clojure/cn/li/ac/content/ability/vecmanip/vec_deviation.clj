@@ -14,8 +14,7 @@
   - No overload cost
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.dsl :refer [defskill!]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.util.toggle :as toggle]
@@ -42,11 +41,11 @@
   #{"minecraft:small_fireball"})
 
 (defn- skill-exp [player-id]
-  (double (get-in (ps/get-player-state player-id) [:ability-data :skills :vec-deviation :exp] 0.0)))
+  (fx-common/skill-exp player-id :vec-deviation))
 
 (defn- current-cp
   [player-id]
-  (double (or (get-in (ps/get-player-state player-id) [:resource-data :cur-cp]) 0.0)))
+  (fx-common/current-cp player-id))
 
 (defn- consume-cp!
   [player-id cp]
@@ -203,7 +202,7 @@
   Returns reduced damage amount."
   [player-id original-damage]
   (try
-    (if (ps/get-player-state player-id)
+    (if (fx-common/get-player-state player-id)
       (if (> (double original-damage) 9999.0)
         original-damage
         (let [exp (skill-exp player-id)

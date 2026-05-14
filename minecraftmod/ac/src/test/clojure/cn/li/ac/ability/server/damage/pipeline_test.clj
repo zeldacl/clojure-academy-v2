@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.server.damage.pipeline-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.registry.skill :as sk]
+            [cn.li.ac.ability.service.registry :as sk]
             [cn.li.ac.ability.server.damage.pipeline :as pl]))
 
 (defn- set-platform-fns!

@@ -3,7 +3,7 @@
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.passive :as passive]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.state.player :as ps]))
+            [cn.li.ac.ability.service.player-state :as ps]))
 
 (defn- reset-all! [f]
   (reset! ps/player-states {})

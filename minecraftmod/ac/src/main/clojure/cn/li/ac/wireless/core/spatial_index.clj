@@ -6,7 +6,8 @@
 
   This module is a pure atom-based data structure with no dependency on
   world.clj or network.clj, deliberately breaking the circular-dependency
-  that previously forced network.clj to duplicate removal logic.")
+  that previously forced network.clj to duplicate removal logic."
+  (:require [cn.li.ac.foundation.position :as pos]))
 
 ;; ============================================================================
 ;; Construction
@@ -18,28 +19,19 @@
   (atom {}))
 
 ;; ============================================================================
-;; Internal helpers
-;; ============================================================================
-
-(defn- pos->chunk-key
-  "Convert world coordinates to the enclosing 16³-block chunk key."
-  [x y z]
-  [(quot x 16) (quot y 16) (quot z 16)])
-
-;; ============================================================================
 ;; Mutation
 ;; ============================================================================
 
 (defn add-to-index!
   "Add `vblock` to `index-atom` at the appropriate chunk bucket."
   [index-atom vblock]
-  (let [chunk-key (pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
+  (let [chunk-key (pos/pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
     (swap! index-atom update chunk-key (fnil conj #{}) vblock)))
 
 (defn remove-from-index!
   "Remove `vblock` from `index-atom`.  Removes the bucket entirely when empty."
   [index-atom vblock]
-  (let [chunk-key (pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
+  (let [chunk-key (pos/pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
     (swap! index-atom
            (fn [idx]
              (if-let [chunk-set (get idx chunk-key)]
@@ -57,14 +49,7 @@
   "Return the set of chunk keys whose bounding boxes overlap a sphere of
   `search-radius` centered at (x, y, z)."
   [x y z search-radius]
-  (let [chunk-range (inc (quot search-radius 16))
-        cx (quot x 16)
-        cy (quot y 16)
-        cz (quot z 16)]
-    (for [dx (range (- chunk-range) (inc chunk-range))
-          dy (range (- chunk-range) (inc chunk-range))
-          dz (range (- chunk-range) (inc chunk-range))]
-      [(+ cx dx) (+ cy dy) (+ cz dz)])))
+  (pos/nearby-chunk-keys x y z search-radius))
 
 (defn vblocks-in-chunks
   "Return the union of all vblocks stored in the given `chunk-keys`."
