@@ -13,7 +13,7 @@
   "Register or replace a content provider by id."
   [provider]
   (let [provider* (core/normalize-provider provider)
-        id (core/provider-id provider*)]
+  id (core/provider-id* provider*)]
     (swap! providers* assoc id provider*)
     (log/debug "Registered content provider" id)
     provider*))
@@ -31,14 +31,14 @@
   "Return providers in load order."
   []
   (->> (registered-providers)
-       (sort-by (juxt core/priority core/provider-id))
+  (sort-by (juxt core/provider-priority* core/provider-id*))
        vec))
 
 (defn discovered-content-phases
   "Materialize all discovered provider phases into a single ordered load plan."
   []
   (->> (discover-providers)
-       (mapcat core/content-phases)
+  (mapcat core/provider-phases*)
        vec))
 
 (defn register-phase-provider!

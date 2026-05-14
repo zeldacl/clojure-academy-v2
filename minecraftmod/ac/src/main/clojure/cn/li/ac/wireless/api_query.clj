@@ -25,13 +25,33 @@
 				node-vb (vb/create-vnode node-tile)]
 		(wd/get-network-by-node world-data node-vb)))
 
-(defn is-node-linked?
+(defn lookup-wireless-net-by-matrix
+	"Compatibility lookup entry for matrix -> wireless network.
+
+	Prefers facade symbol override when present (for tests/compat hooks),
+	otherwise falls back to local query implementation."
+	[matrix-tile]
+	(if-let [lookup-fn (try
+								(requiring-resolve 'cn.li.ac.wireless.api/get-wireless-net-by-matrix)
+								(catch Exception _ nil))]
+		(lookup-fn matrix-tile)
+		(get-wireless-net-by-matrix matrix-tile)))
+
+(defn lookup-wireless-net-by-node
+	"Compatibility lookup entry for node -> wireless network.
+
+	Prefers facade symbol override when present (for tests/compat hooks),
+	otherwise falls back to local query implementation."
 	[node-tile]
 	(if-let [lookup-fn (try
 								(requiring-resolve 'cn.li.ac.wireless.api/get-wireless-net-by-node)
 								(catch Exception _ nil))]
-		(some? (lookup-fn node-tile))
-		(some? (get-wireless-net-by-node node-tile))))
+		(lookup-fn node-tile)
+		(get-wireless-net-by-node node-tile)))
+
+(defn is-node-linked?
+	[node-tile]
+	(some? (lookup-wireless-net-by-node node-tile)))
 
 (defn is-matrix-active?
 	[matrix-tile]

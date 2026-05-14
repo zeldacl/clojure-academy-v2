@@ -1,6 +1,7 @@
 (ns cn.li.ac.wireless.api-command
 	"Mutating/command APIs for wireless topology operations."
 	(:require [cn.li.ac.wireless.data.world :as wd]
+					[cn.li.ac.wireless.api-query :as api-query]
 						[cn.li.ac.wireless.core.vblock :as vb]
 						[cn.li.ac.wireless.data.network :as network]
 						[cn.li.ac.wireless.data.node-conn :as node-conn]
@@ -19,25 +20,11 @@
 
 (defn- get-wireless-net-by-matrix
 	[matrix-tile]
-	(if-let [lookup-fn (try
-								(requiring-resolve 'cn.li.ac.wireless.api/get-wireless-net-by-matrix)
-								(catch Exception _ nil))]
-		(lookup-fn matrix-tile)
-		(let [world (tile-level matrix-tile)
-					world-data (wd/get-world-data world)
-					matrix-vb (vb/create-vmatrix matrix-tile)]
-			(wd/get-network-by-matrix world-data matrix-vb))))
+	(api-query/lookup-wireless-net-by-matrix matrix-tile))
 
 (defn- get-wireless-net-by-node
 	[node-tile]
-	(if-let [lookup-fn (try
-								(requiring-resolve 'cn.li.ac.wireless.api/get-wireless-net-by-node)
-								(catch Exception _ nil))]
-		(lookup-fn node-tile)
-		(let [world (tile-level node-tile)
-					world-data (wd/get-world-data world)
-					node-vb (vb/create-vnode node-tile)]
-			(wd/get-network-by-node world-data node-vb))))
+	(api-query/lookup-wireless-net-by-node node-tile))
 
 (defn- get-node-conn-by-generator
 	[gen-tile]

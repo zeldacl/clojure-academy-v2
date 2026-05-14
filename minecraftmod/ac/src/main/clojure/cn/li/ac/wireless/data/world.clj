@@ -3,10 +3,11 @@
 
   This namespace keeps all lifecycle and persistence functions explicit
   to make behavior easier to understand and debug."
-  (:require [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.data.world-registry :as world-registry]
+  (:require [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.data.spatial-lookup :as spatial-lookup]
             [cn.li.ac.wireless.data.network-lookup :as network-lookup]
+            [cn.li.ac.wireless.data.world-topology :as topology]
+            [cn.li.ac.wireless.data.world-runtime :as runtime]
             [cn.li.ac.wireless.data.network :as network]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
@@ -87,164 +88,20 @@
   [world-data vblock]
   (network-lookup/get-node-connection world-data vblock))
 
-(defn- register-network!
-  [world-data net]
-  (swap! (:networks world-data) conj net)
-  (swap! (:net-lookup world-data) assoc (:matrix net) net @(:ssid net) net)
-  (add-to-spatial-index! world-data (:matrix net))
-  net)
+(def create-network-impl! topology/create-network-impl!)
+(def destroy-network-impl! topology/destroy-network-impl!)
+(def create-node-connection-impl! topology/create-node-connection-impl!)
+(def destroy-node-connection-impl! topology/destroy-node-connection-impl!)
+(def ensure-node-connection! topology/ensure-node-connection!)
+(def link-node-to-network! topology/link-node-to-network!)
+(def link-generator-to-node-connection! topology/link-generator-to-node-connection!)
+(def link-receiver-to-node-connection! topology/link-receiver-to-node-connection!)
+(def rebuild-network-indexes! topology/rebuild-network-indexes!)
+(def rebuild-connection-indexes! topology/rebuild-connection-indexes!)
 
-(defn- register-network-node!
-  [world-data net node-vblock]
-  (swap! (:net-lookup world-data) assoc node-vblock net)
-  (add-to-spatial-index! world-data node-vblock))
-
-(defn- unregister-network-node!
-  [world-data node-vblock]
-  (swap! (:net-lookup world-data) dissoc node-vblock)
-  (remove-from-spatial-index! world-data node-vblock))
-
-(defn- unregister-network!
-  [world-data net]
-  (swap! (:net-lookup world-data) dissoc (:matrix net) @(:ssid net))
-  (doseq [node @(:nodes net)]
-    (unregister-network-node! world-data node))
-  (remove-from-spatial-index! world-data (:matrix net))
-  (swap! (:networks world-data) (fn [items] (filterv #(not= % net) items))))
-
-(defn- register-node-connection!
-  [world-data conn]
-  (swap! (:connections world-data) conj conn)
-  (swap! (:node-lookup world-data) assoc (:node conn) conn)
-  (add-to-spatial-index! world-data (:node conn))
-  conn)
-
-(defn- register-node-device!
-  [world-data conn device-vblock]
-  (swap! (:node-lookup world-data) assoc device-vblock conn))
-
-(defn- unregister-node-device!
-  [world-data device-vblock]
-  (swap! (:node-lookup world-data) dissoc device-vblock))
-
-(defn- unregister-node-connection!
-  [world-data conn]
-  (swap! (:node-lookup world-data) dissoc (:node conn))
-  (doseq [device @(:generators conn)]
-    (unregister-node-device! world-data device))
-  (doseq [device @(:receivers conn)]
-    (unregister-node-device! world-data device))
-  (remove-from-spatial-index! world-data (:node conn))
-  (swap! (:connections world-data) (fn [items] (filterv #(not= % conn) items))))
-
-(defn create-network-impl!
-  "Create network and register lookups/indexes.
-  Returns true on success, false when uniqueness checks fail."
-  [world-data matrix-vblock ssid password]
-  (cond
-    (get-network-by-ssid world-data ssid)
-    false
-
-    (get-network-by-matrix world-data matrix-vblock)
-    false
-
-    :else
-    (let [item (network/create-wireless-net world-data matrix-vblock ssid password)]
-      (register-network! world-data item)
-      (log/info (format "Created network: SSID='%s'" ssid))
-      true)))
-
-(defn destroy-network-impl!
-  "Destroy network and clear all related lookups/indexes."
-  [world-data item]
-  (reset! (:disposed item) true)
-  (unregister-network! world-data item)
-  (log/info (format "Destroyed network: SSID='%s'" @(:ssid item))))
-
-(defn create-node-connection-impl!
-  "Create node connection and register lookups/indexes.
-  Returns created connection, or false if it already exists."
-  [world-data node-vblock]
-  (if (get-node-connection world-data node-vblock)
-    false
-    (let [item (node-conn/create-node-conn world-data node-vblock)]
-      (register-node-connection! world-data item))))
-
-(defn destroy-node-connection-impl!
-  "Destroy node connection and clear all related lookups/indexes."
-  [world-data item]
-  (reset! (:disposed item) true)
-  (unregister-node-connection! world-data item)
-  (log/info (format "Destroyed node connection: %s" (vb/vblock-to-string (:node item)))))
-
-(defn ensure-node-connection!
-  "Get or create node connection for a node."
-  [world-data node-vblock]
-  (or (get-node-connection world-data node-vblock)
-      (create-node-connection-impl! world-data node-vblock)))
-
-(defn link-node-to-network!
-  "Link a node vblock into the specified network with password check."
-  [world-data net node-vblock password-attempt]
-  (when-let [old-net (get-network-by-node world-data node-vblock)]
-    (network/remove-node! old-net node-vblock))
-  (network/add-node! net node-vblock password-attempt))
-
-(defn link-generator-to-node-connection!
-  "Link a generator vblock to a node connection."
-  [world-data conn generator-vblock]
-  (when-let [old-conn (get-node-connection world-data generator-vblock)]
-    (node-conn/remove-generator! old-conn generator-vblock))
-  (node-conn/add-generator! conn generator-vblock))
-
-(defn link-receiver-to-node-connection!
-  "Link a receiver vblock to a node connection."
-  [world-data conn receiver-vblock]
-  (when-let [old-conn (get-node-connection world-data receiver-vblock)]
-    (node-conn/remove-receiver! old-conn receiver-vblock))
-  (node-conn/add-receiver! conn receiver-vblock))
-
-(defn rebuild-network-indexes!
-  [world-data net]
-  (register-network! world-data net)
-  (doseq [node @(:nodes net)]
-    (register-network-node! world-data net node)))
-
-(defn rebuild-connection-indexes!
-  [world-data conn]
-  (register-node-connection! world-data conn)
-  (doseq [generator @(:generators conn)]
-    (register-node-device! world-data conn generator))
-  (doseq [receiver @(:receivers conn)]
-    (register-node-device! world-data conn receiver)))
-
-(defn network-impl-validator
-  "Remove disposed/invalid networks from world-data."
-  [world-data]
-  (doseq [item @(:networks world-data)]
-    (when (or @(:disposed item)
-              (and (vb/is-chunk-loaded? (:matrix item) (:world world-data))
-                   (nil? (vb/vblock-get (:matrix item) (:world world-data)))))
-      (destroy-network-impl! world-data item))))
-
-(defn node-connection-impl-validator
-  "Remove disposed/invalid node connections from world-data."
-  [world-data]
-  (doseq [item @(:connections world-data)]
-    (when (or @(:disposed item)
-              (and (vb/is-chunk-loaded? (:node item) (:world world-data))
-                   (nil? (vb/vblock-get (:node item) (:world world-data)))))
-      (destroy-node-connection-impl! world-data item))))
-
-(defn tick-world-data!
-  "Tick all world wireless items."
-  [world-data]
-  (doseq [item @(:networks world-data)]
-    (when-not @(:disposed item)
-      (network/tick-wireless-net! item)))
-  (doseq [item @(:connections world-data)]
-    (when-not @(:disposed item)
-      (node-conn/tick-node-conn! item))))
+(def network-impl-validator runtime/network-impl-validator)
+(def node-connection-impl-validator runtime/node-connection-impl-validator)
+(def tick-world-data! runtime/tick-world-data!)
 
 (defn- nbt-write-list!
   [nbt-root tag items to-nbt-fn skip-fn]
@@ -343,23 +200,8 @@
   (remove-world-data! world)
   (log/info "Cleaned up WiWorldData for unloaded world"))
 
-(defn get-statistics
-  "Get statistics about this world's wireless system."
-  [world-data]
-  {:networks (count @(:networks world-data))
-   :connections (count @(:connections world-data))
-   :net-lookups (count @(:net-lookup world-data))
-   :node-lookups (count @(:node-lookup world-data))})
-
-(defn print-statistics
-  "Print statistics to log."
-  [world-data]
-  (let [stats (get-statistics world-data)]
-    (log/info "=== Wireless System Statistics ===")
-    (log/info (format "Networks: %d" (:networks stats)))
-    (log/info (format "Connections: %d" (:connections stats)))
-    (log/info (format "Network lookups: %d" (:net-lookups stats)))
-    (log/info (format "Node lookups: %d" (:node-lookups stats)))))
+(def get-statistics runtime/get-statistics)
+(def print-statistics runtime/print-statistics)
 
 (defn init-world-data! []
   (log/info "Registering wireless world data lifecycle handlers...")

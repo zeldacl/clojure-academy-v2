@@ -18,10 +18,10 @@
             [cn.li.ac.ability.server.handlers.activation-handler :as activation-handler]
             [cn.li.ac.ability.server.handlers.context-handler :as context-handler]
             [cn.li.ac.ability.server.handlers.input-handler :as input-handler]
+            [cn.li.ac.ability.server.util.developer-validation :as dev-validate]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.block.developer.logic     :as dev-logic]
-            [cn.li.mcmod.platform.position      :as pos]
             [cn.li.mcmod.platform.world         :as world]
             [cn.li.mcmod.platform.be            :as platform-be]
             [cn.li.ac.ability.registry.event             :as evt]
@@ -33,34 +33,6 @@
 
   (defn- get-state [uuid]
     (ps/get-or-create-player-state! uuid))
-
-  (defn- developer-type-for-tile
-    [tile]
-    (let [bid (platform-be/get-block-id tile)
-          n (name (or bid ""))]
-      (if (= n "developer-advanced")
-        :advanced
-        :normal)))
-
-  (defn- dist-sq-ok-for-station?
-    [player tile]
-    (let [raw-pos (try (pos/position-get-block-pos tile) (catch Exception _ nil))
-          max-distance 8.0]
-      (boolean
-        (when raw-pos
-          (let [bx (+ 0.5 (double (or (try (pos/pos-x raw-pos) (catch Exception _ nil))
-                                      (:x raw-pos))))
-                by (+ 0.5 (double (or (try (pos/pos-y raw-pos) (catch Exception _ nil))
-                                      (:y raw-pos))))
-                bz (+ 0.5 (double (or (try (pos/pos-z raw-pos) (catch Exception _ nil))
-                                      (:z raw-pos))))]
-            (< (entity/entity-distance-to-sqr player bx by bz)
-               (* max-distance max-distance)))))))
-
-  (defn- developer-controller-tile?
-    [tile]
-    (let [n (name (or (platform-be/get-block-id tile) ""))]
-      (contains? #{"developer-normal" "developer-advanced"} n)))
 
   ;; ============================================================================
   ;; Skill learning
@@ -85,11 +57,11 @@
           (when all-coords?
             (cond (not server-world?) {:ok? false :reason :not-server}
                   (not tile) {:ok? false :reason :no-tile}
-                  (not (developer-controller-tile? tile)) {:ok? false :reason :wrong-block}
-                  (not (dist-sq-ok-for-station? player tile)) {:ok? false :reason :distance}
+                  (not (dev-validate/developer-controller-tile? tile)) {:ok? false :reason :wrong-block}
+                  (not (dev-validate/dist-sq-ok-for-station? player tile)) {:ok? false :reason :distance}
                   (not session-ok?) {:ok? false :reason :session}
                   (not (:structure-valid st)) {:ok? false :reason :structure}
-                  :else {:ok? true :tile tile :developer-type (developer-type-for-tile tile)}))
+                  :else {:ok? true :tile tile :developer-type (dev-validate/developer-type-for-tile tile)}))
           do-learn!
           (fn []
             (let [{:keys [data event]} (lrn/learn-skill ad uuid skill-id)]

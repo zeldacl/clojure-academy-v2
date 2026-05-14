@@ -1,120 +1,40 @@
 (ns cn.li.ac.ability.service.player-state
-	"Canonical AC player-state service implementation."
-	(:require [cn.li.ac.ability.model.ability :as ad]
-					[cn.li.ac.ability.model.resource :as rd]
-					[cn.li.ac.ability.model.cooldown :as cd]
-					[cn.li.ac.ability.model.preset :as pd]
-					[cn.li.ac.ability.model.develop :as dev]
-					[cn.li.ac.ability.server.service.resource :as svc-res]
-					[cn.li.ac.ability.server.service.cooldown :as svc-cd]
-					[cn.li.ac.ability.server.service.develop :as svc-dev]
-					[cn.li.ac.ability.registry.event :as evt]))
+	"Compatibility facade for player-state operations.
 
-(defonce player-states
-	(atom {}))
+	Implementation was split into focused namespaces:
+	- player-state-core
+	- player-state-dirty
+	- player-state-accessors
+	- player-state-tick"
+	(:require [cn.li.ac.ability.service.player-state-core :as core]
+					[cn.li.ac.ability.service.player-state-dirty :as dirty]
+					[cn.li.ac.ability.service.player-state-accessors :as accessors]
+					[cn.li.ac.ability.service.player-state-tick :as tick]))
 
-(defn get-player-state [uuid-str]
-	(get @player-states uuid-str))
+(def player-states core/player-states)
 
-(defn set-player-state! [uuid-str state]
-	(swap! player-states assoc uuid-str state))
+(def get-player-state core/get-player-state)
+(def set-player-state! core/set-player-state!)
+(def update-player-state! core/update-player-state!)
+(def fresh-state core/fresh-state)
+(def get-or-create-player-state! core/get-or-create-player-state!)
+(def remove-player-state! core/remove-player-state!)
+(def list-player-uuids core/list-player-uuids)
 
-(defn update-player-state! [uuid-str f & args]
-	(apply swap! player-states update uuid-str f args))
+(def mark-dirty! dirty/mark-dirty!)
+(def mark-clean! dirty/mark-clean!)
+(def dirty? dirty/dirty?)
 
-(defn mark-dirty! [uuid-str]
-	(update-player-state! uuid-str assoc :dirty? true))
+(def get-ability-data accessors/get-ability-data)
+(def get-resource-data accessors/get-resource-data)
+(def get-cooldown-data accessors/get-cooldown-data)
+(def get-preset-data accessors/get-preset-data)
+(def get-develop-data accessors/get-develop-data)
 
-(defn mark-clean! [uuid-str]
-	(update-player-state! uuid-str assoc :dirty? false))
+(def update-ability-data! accessors/update-ability-data!)
+(def update-resource-data! accessors/update-resource-data!)
+(def update-cooldown-data! accessors/update-cooldown-data!)
+(def update-preset-data! accessors/update-preset-data!)
+(def update-develop-data! accessors/update-develop-data!)
 
-(defn dirty? [uuid-str]
-	(boolean (:dirty? (get-player-state uuid-str))))
-
-(defn fresh-state []
-	{:ability-data  (ad/new-ability-data)
-	 :resource-data (rd/new-resource-data)
-	 :cooldown-data (cd/new-cooldown-data)
-	 :preset-data   (pd/new-preset-data)
-	 :develop-data  (dev/new-develop-data)
-	 :terminal-data {:terminal-installed? false
-	                 :installed-apps #{}}
-	 :dirty? false})
-
-(defn get-or-create-player-state! [uuid-str]
-	(or (get-player-state uuid-str)
-	    (let [s (fresh-state)]
-	      (set-player-state! uuid-str s)
-	      s)))
-
-(defn remove-player-state! [uuid-str]
-	(swap! player-states dissoc uuid-str))
-
-(defn get-ability-data [uuid-str]
-	(:ability-data (get-player-state uuid-str)))
-
-(defn get-resource-data [uuid-str]
-	(:resource-data (get-player-state uuid-str)))
-
-(defn get-cooldown-data [uuid-str]
-	(:cooldown-data (get-player-state uuid-str)))
-
-(defn get-preset-data [uuid-str]
-	(:preset-data (get-player-state uuid-str)))
-
-(defn get-develop-data [uuid-str]
-	(:develop-data (get-player-state uuid-str)))
-
-(defn update-ability-data! [uuid-str f & args]
-	(apply update-player-state! uuid-str update :ability-data f args)
-	(mark-dirty! uuid-str))
-
-(defn update-resource-data! [uuid-str f & args]
-	(apply update-player-state! uuid-str update :resource-data f args)
-	(mark-dirty! uuid-str))
-
-(defn update-cooldown-data! [uuid-str f & args]
-	(apply update-player-state! uuid-str update :cooldown-data f args)
-	(mark-dirty! uuid-str))
-
-(defn update-preset-data! [uuid-str f & args]
-	(apply update-player-state! uuid-str update :preset-data f args)
-	(mark-dirty! uuid-str))
-
-(defn update-develop-data! [uuid-str f & args]
-	(apply update-player-state! uuid-str update :develop-data f args)
-	(mark-dirty! uuid-str))
-
-(defn server-tick-player!
-	[uuid-str sync-fn]
-	(when-let [state (get-player-state uuid-str)]
-	  (let [{:keys [resource-data cooldown-data develop-data]} state
-	        {:keys [data events]} (svc-res/server-tick resource-data uuid-str)
-	        new-cd (svc-cd/tick-cooldowns cooldown-data)
-	        dev-result (when (and develop-data (dev/developing? develop-data))
-	                     (svc-dev/tick-develop develop-data))
-	        new-dev    (if dev-result (:develop-data dev-result) develop-data)
-	        completion (when (and dev-result (:completed? dev-result))
-	                     (svc-dev/apply-completion
-	                      new-dev
-	                      (:ability-data state)
-	                      data
-	                      uuid-str))
-	        final-ability  (if completion (:ability-data completion) (:ability-data state))
-	        final-resource (if completion (:resource-data completion) data)
-	        final-dev      (if completion (:develop-data completion) new-dev)
-	        all-events     (into (vec events)
-	                             (when completion (:events completion)))]
-	    (swap! player-states update uuid-str
-	           assoc
-	           :ability-data  final-ability
-	           :resource-data final-resource
-	           :cooldown-data new-cd
-	           :develop-data  (or final-dev (dev/new-develop-data)))
-	    (doseq [e all-events] (evt/fire-ability-event! e))
-	    (when (and sync-fn (seq all-events))
-	      (mark-dirty! uuid-str))
-	    {:events all-events})))
-
-(defn list-player-uuids []
-	(keys @player-states))
+(def server-tick-player! tick/server-tick-player!)
