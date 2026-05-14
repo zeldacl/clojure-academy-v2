@@ -39,9 +39,7 @@
 (def battery-slot 0)
 (def total-slots 1)
 
-(defn clamp-range [v]
-	(let [r (double (or v interferer-config/default-range))]
-		(-> r (max interferer-config/min-range) (min interferer-config/max-range))))
+(def clamp-range interferer-config/clamp-range)
 
 (defn source-id [level pos]
 	(let [dim-id (or (try (world/world-get-dimension-id* level) (catch Exception _ nil)) "unknown")]

@@ -5,7 +5,7 @@
   They consume resources per tick and maintain persistent state.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.state.context :as ctx]))
+  (:require [cn.li.ac.ability.service.dispatcher :as ctx]))
 
 (defn init-toggle-state
   "Initialize toggle skill state in context.

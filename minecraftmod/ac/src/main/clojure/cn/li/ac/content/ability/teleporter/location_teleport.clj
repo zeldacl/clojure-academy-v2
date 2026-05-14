@@ -12,12 +12,12 @@
   - UI opened from key-down; actual add/remove/perform via RPC requests
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.state.player :as ps]
+  (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.model.resource :as rdata]
-            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.util.math.vec3 :as vec3]
             [cn.li.mcmod.platform.teleportation :as teleportation]

@@ -5,7 +5,7 @@
   and common balance formulas.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.state.player :as ps]
+  (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]

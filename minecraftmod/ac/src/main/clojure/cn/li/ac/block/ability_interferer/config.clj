@@ -22,3 +22,10 @@
   (fn [range]
     (let [r (double range)]
       (* r r))))
+
+(defn clamp-range
+  [v]
+  (let [r (double (or v default-range))]
+    (-> r
+        (max min-range)
+        (min max-range))))

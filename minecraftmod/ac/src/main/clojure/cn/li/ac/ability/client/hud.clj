@@ -1,9 +1,9 @@
 (ns cn.li.ac.ability.client.hud
   "HUD render data builder (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.registry.skill :as skill]
+  (:require [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.client.delegate-state :as dstate]
-            [cn.li.ac.ability.state.context :as ctx]))
+            [cn.li.ac.ability.service.dispatcher :as ctx]))
 
 (defn- lerp-color
   "Linearly interpolate between two [r g b] colors."

@@ -3,7 +3,7 @@
   (:require [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
@@ -11,8 +11,8 @@
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.server.service.resource :as svc-res]
-            [cn.li.ac.ability.state.context :as ctx]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.state.store :as ability-store]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
@@ -88,7 +88,7 @@
 
    :list-player-uuids
    (fn []
-     (keys @ps/player-states))
+     (ps/list-player-uuids))
 
    :build-sync-payload
    (fn [player-uuid]

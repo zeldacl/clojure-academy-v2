@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.server.effect.geom
-  (:require [cn.li.ac.ability.state.player :as ps]
+  (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.util.math.vec3 :as vec3]
             [cn.li.mcmod.platform.raycast :as raycast]))

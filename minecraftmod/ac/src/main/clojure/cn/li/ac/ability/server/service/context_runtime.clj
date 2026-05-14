@@ -8,11 +8,11 @@
   - MSG-SKILL-KEY-ABORT
 
   It keeps input state transitions strict to avoid duplicated lifecycle calls."
-  (:require [cn.li.ac.ability.state.context :as ctx]
-            [cn.li.ac.ability.registry.skill :as skill]
+  (:require [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.ability.server.dispatch :as skill-rt]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.server.service.cooldown :as cd]))
 
 (def INPUT-IDLE :idle)

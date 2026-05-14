@@ -7,7 +7,7 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))

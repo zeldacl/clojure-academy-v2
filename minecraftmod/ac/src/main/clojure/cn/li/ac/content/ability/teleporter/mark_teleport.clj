@@ -14,10 +14,10 @@
   - Client-side destination marker with looping teleport particles and execute sound
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.state.player :as ps]
+  (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.util.math.vec3 :as vec3]
             [cn.li.mcmod.platform.entity :as entity]

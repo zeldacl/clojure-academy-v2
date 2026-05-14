@@ -6,10 +6,10 @@
   Cooldown: manual, lerp(60,40) ticks by exp
   Exp:      +0.005 on successful throw"
   (:require [clojure.string :as str]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.entity :as entity]

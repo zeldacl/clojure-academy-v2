@@ -17,10 +17,10 @@
   - Client FX: plasma body effect + tornado at ground + loop sound + charged sound
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.state.player :as ps]
+  (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]

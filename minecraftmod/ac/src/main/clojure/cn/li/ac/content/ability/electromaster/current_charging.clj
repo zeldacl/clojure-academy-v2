@@ -6,7 +6,7 @@
   Exp: +0.0001 effective / +0.00003 ineffective per tick"
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.state]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]

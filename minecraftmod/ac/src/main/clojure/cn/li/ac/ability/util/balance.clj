@@ -1,8 +1,7 @@
-(ns cn.li.ac.ability.util.balance)
+(ns cn.li.ac.ability.util.balance
+  (:require [cn.li.ac.ability.util.scaling :as scaling]))
 
-(defn lerp
-  [a b t]
-  (+ (double a) (* (- (double b) (double a)) (double t))))
+(def lerp scaling/lerp)
 
 (defn clamp01
   [x]

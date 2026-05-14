@@ -2,7 +2,7 @@
 	"Context lifecycle request network handlers."
 	(:require [cn.li.ac.ability.server.handlers.common :as common]
 						[cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
-						[cn.li.ac.ability.state.context :as ctx]))
+						[cn.li.ac.ability.service.dispatcher :as ctx]))
 
 (defn handle-begin-link-context
 	[{:keys [ctx-id skill-id]} player]

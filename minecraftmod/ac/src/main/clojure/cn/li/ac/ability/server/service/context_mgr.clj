@@ -9,10 +9,10 @@
 
   All state is in context/context-registry (owned by context.clj).
   Network send-fns are injected, keeping this ns free of forge deps."
-  (:require [cn.li.ac.ability.state.context :as ctx]
+  (:require [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.registry.skill :as skill]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.mcmod.ability.catalog :as catalog]
             [cn.li.mcmod.util.log :as log]))

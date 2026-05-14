@@ -5,9 +5,9 @@
   This module manages the registration and provides utilities for common patterns.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.state.player :as ps]
+  (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.mcmod.platform.damage-interception :as damage-interception]
             [cn.li.mcmod.util.log :as log]))
 

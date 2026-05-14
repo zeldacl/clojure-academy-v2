@@ -12,7 +12,8 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]
             [cn.li.mcmod.util.log :as log]))
 

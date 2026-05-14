@@ -3,7 +3,7 @@
   (:require [cn.li.ac.achievement.registry :as ach-reg]
             [cn.li.ac.achievement.trigger :as ach-trigger]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 

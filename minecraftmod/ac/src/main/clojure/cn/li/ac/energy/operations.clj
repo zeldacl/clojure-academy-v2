@@ -8,12 +8,16 @@
   - 无线网络：获取网络、连接状态、无线传输（含 fallback stub）
   - 网络同步：send-sync-message（当前为 stub 实现）"
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.energy.imag-energy-item :as energy-item]
-            [cn.li.ac.item.test-battery :as battery]
-            [cn.li.mcmod.platform.item :as item]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.ac.energy.api.impl :as energy-api]
+            [cn.li.ac.energy.service.item-manager :as item-manager]
+            [cn.li.ac.energy.service.node-manager :as node-manager]
             [cn.li.ac.wireless.api :as whelper])
   (:import [cn.li.acapi.wireless IWirelessNode IWirelessReceiver]))
+
+(defn energy-system
+  "Return the default Phase C energy system implementation."
+  []
+  (energy-api/energy-system))
 
 ;; ============================================================================
 ;; IFItemManager Implementation
@@ -22,51 +26,39 @@
 (defn is-energy-item-supported?
   "Check if an item supports energy storage"
   [item-stack]
-  (when item-stack
-    (battery/is-battery? item-stack)))
+  (item-manager/is-energy-item-supported? item-stack))
 
 (defn get-item-energy
   "Get energy stored in item"
   [item-stack]
-  (if (battery/is-battery? item-stack)
-    (battery/get-battery-energy item-stack)
-    0.0))
+  (item-manager/get-item-energy item-stack))
 
 (defn get-item-max-energy
   "Get maximum energy capacity of item"
   [item-stack]
-  (if (battery/is-battery? item-stack)
-    (battery/get-max-battery-energy item-stack)
-    0.0))
+  (item-manager/get-item-capacity item-stack))
 
 (defn get-item-bandwidth
   "Get energy transfer bandwidth of item"
   [item-stack]
-  (if (battery/is-battery? item-stack)
-    (battery/get-battery-bandwidth item-stack)
-    0.0))
+  (item-manager/get-item-bandwidth item-stack))
 
 (defn set-item-energy!
   "Set energy in item and update durability display"
   [item-stack energy]
-  (when (battery/is-battery? item-stack)
-    (battery/set-battery-energy! item-stack energy)))
+  (item-manager/set-item-energy! item-stack energy))
 
 (defn charge-energy-to-item
   "Charge energy to item
   Returns the amount that couldn't be charged (leftover)"
   [item-stack amount ignore-bandwidth]
-  (if (battery/is-battery? item-stack)
-    (battery/charge-battery! item-stack amount ignore-bandwidth)
-    amount))
+  (item-manager/charge-energy-to-item item-stack amount ignore-bandwidth))
 
 (defn pull-energy-from-item
   "Pull energy from item
   Returns the amount actually pulled"
   [item-stack amount ignore-bandwidth]
-  (if (battery/is-battery? item-stack)
-    (battery/pull-from-battery! item-stack amount ignore-bandwidth)
-    0.0))
+  (item-manager/pull-energy-from-item item-stack amount ignore-bandwidth))
 
 ;; ============================================================================
 ;; IFNodeManager Implementation
@@ -75,50 +67,29 @@
 (defn is-node-supported?
   "Check if TileEntity is an IWirelessNode"
   [tile-entity]
-  (instance? IWirelessNode tile-entity))
+  (node-manager/is-node-supported? tile-entity))
 
 (defn get-node-energy
   "Get energy from node"
   [tile-entity]
-  (when (is-node-supported? tile-entity)
-    (.getEnergy ^IWirelessNode tile-entity)))
+  (node-manager/get-node-energy tile-entity))
 
 (defn set-node-energy!
   "Set energy in node"
   [tile-entity energy]
-  (when (is-node-supported? tile-entity)
-    (.setEnergy ^IWirelessNode tile-entity energy)))
+  (node-manager/set-node-energy! tile-entity energy))
 
 (defn charge-node
   "Charge energy to node
   Returns the amount that couldn't be charged (leftover)"
   [tile-entity amount ignore-bandwidth]
-  (if (is-node-supported? tile-entity)
-    (let [node       ^IWirelessNode tile-entity
-          current    (.getEnergy node)
-          max-energy (.getMaxEnergy node)
-          bandwidth  (.getBandwidth node)
-          space (- max-energy current)
-          limit (if ignore-bandwidth Double/MAX_VALUE bandwidth)
-          to-charge (min amount space limit)
-          leftover (- amount to-charge)]
-      (.setEnergy node (+ current to-charge))
-      leftover)
-    amount))
+  (node-manager/charge-node tile-entity amount ignore-bandwidth))
 
 (defn pull-from-node
   "Pull energy from node
   Returns the amount actually pulled"
   [tile-entity amount ignore-bandwidth]
-  (if (is-node-supported? tile-entity)
-    (let [node      ^IWirelessNode tile-entity
-          current   (.getEnergy node)
-          bandwidth (.getBandwidth node)
-          limit (if ignore-bandwidth Double/MAX_VALUE bandwidth)
-          to-pull (min amount current limit)]
-      (.setEnergy node (- current to-pull))
-      to-pull)
-    0.0))
+  (node-manager/pull-from-node tile-entity amount ignore-bandwidth))
 
 ;; ============================================================================
 ;; IFReceiverManager Implementation
@@ -127,23 +98,19 @@
 (defn is-receiver-supported?
   "Check if TileEntity is an IWirelessReceiver"
   [tile-entity]
-  (instance? IWirelessReceiver tile-entity))
+  (node-manager/is-receiver-supported? tile-entity))
 
 (defn charge-receiver
   "Charge energy to receiver (calls inject-energy)
   Returns the amount that couldn't be charged"
   [tile-entity amount]
-  (if (is-receiver-supported? tile-entity)
-    (.injectEnergy ^IWirelessReceiver tile-entity amount)
-    amount))
+  (node-manager/charge-receiver tile-entity amount))
 
 (defn pull-from-receiver
   "Pull energy from receiver (calls pull-energy)
   Returns the amount actually pulled"
   [tile-entity amount]
-  (if (is-receiver-supported? tile-entity)
-    (.pullEnergy ^IWirelessReceiver tile-entity amount)
-    0.0))
+  (node-manager/pull-from-receiver tile-entity amount))
 
 ;; ============================================================================
 ;; Wireless Network (delegates to wireless.helper)

@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.damage-helper
   "Meltdowner damage helper: mark targets and amplify incoming damage while marked."
-  (:require [cn.li.ac.ability.state.player :as ps]
+  (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]))

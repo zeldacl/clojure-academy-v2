@@ -12,8 +12,9 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.registry.category :as acat]
+            [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.server.service.learning :as learning]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
@@ -50,9 +51,6 @@
 
 (defn- default-ability-icon-path []
   (modid/asset-path "textures" "abilities/electromaster/icon.png"))
-
-(defn- clamp01 ^double [^double x]
-  (min 1.0 (max 0.0 x)))
 
 (defn load-classic-developer-page
   "Return root `main` from `guis/rework/page_developer.xml`, with nested `ui_*` breathe like the original."
@@ -105,7 +103,7 @@
               dev? (boolean (or @(:is-developing container) false))
               bw (max 1.0 (double (or @(:wireless-bandwidth container) 1.0)))
               sync-in (double (or @(:wireless-inject-last-tick container) 0.0))
-              sync01 (clamp01 (/ sync-in bw))
+              sync01 (bal/clamp01 (/ sync-in bw))
               uuid-str (when pl (str (entity/player-get-uuid pl)))
               pstate (when uuid-str (ps/get-player-state uuid-str))
               ad (:ability-data pstate)
@@ -121,7 +119,7 @@
                        (learning/level-up-threshold cat-id ad))
               level-prog (double (:level-progress ad 0.0))
               cat-prog01 (if (and thresh (pos? thresh))
-                           (clamp01 (/ level-prog thresh))
+                           (bal/clamp01 (/ level-prog thresh))
                            (if (>= lvl 5) 1.0 0.0))
               exp-label (if (>= lvl 5)
                           "MAX"
@@ -136,7 +134,7 @@
           (set-text-path! root "parent_left/panel_ability/text_exp" exp-label)
           (set-text-path! root "parent_left/panel_ability/text_level" level-label)
           (set-progress-path! root "parent_left/panel_ability/logo_progress" cat-prog01)
-          (set-progress-path! root "parent_left/panel_machine/progress_power" (clamp01 (/ e me)))
+          (set-progress-path! root "parent_left/panel_machine/progress_power" (bal/clamp01 (/ e me)))
           (set-progress-path! root "parent_left/panel_machine/progress_syncrate" sync01)
           (sync-remote-node-name! root container last-net-ms))))
     root))

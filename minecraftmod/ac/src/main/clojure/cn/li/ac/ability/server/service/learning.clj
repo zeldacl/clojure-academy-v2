@@ -2,7 +2,7 @@
   "All functions are pure (take data maps, return updated data maps + events).
   Side-effectful callers (player-state.clj) apply the returned data and fire events."
   (:require [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.ability.registry.category :as cat]
             [cn.li.ac.ability.util.level-formula :as level-formula]
             [cn.li.ac.ability.config :as cfg]

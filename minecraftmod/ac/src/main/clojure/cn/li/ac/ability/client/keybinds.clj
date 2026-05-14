@@ -7,12 +7,12 @@
   - Pre-check logic (cooldown, resource) before dispatching"
   (:require [cn.li.ac.ability.client.runtime :as runtime]
             [cn.li.ac.ability.client.api :as api]
-            [cn.li.ac.ability.state.player :as ps]
-            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.util.resource-check :as resource-check]
-            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.service.registry :as skill]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]))
 

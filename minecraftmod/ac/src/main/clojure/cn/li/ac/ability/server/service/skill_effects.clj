@@ -5,7 +5,7 @@
   - resource consumption via res/perform-resource
   - player-state updates
   - firing ability events"
-  (:require [cn.li.ac.ability.state.player :as ps]
+  (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.server.service.resource :as res]
             [cn.li.ac.ability.server.service.learning :as learning]
             [cn.li.ac.ability.server.service.cooldown :as cd]

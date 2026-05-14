@@ -3,7 +3,7 @@
 
   Each handler is called server-side by cn.li.ac.ability.server.dispatch with an
   event map (from context-runtime) and the skill spec map."
-  (:require [cn.li.ac.ability.state.context :as ctx]
+  (:require [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.toggle :as toggle]

@@ -5,10 +5,10 @@
   Cost on perform: CP lerp(160,200), overload lerp(50,30) by exp
   Cooldown: lerp(80,50) ticks by exp
   Exp: +0.0025 on hit / +0.0012 on miss"
-  (:require [cn.li.ac.ability.state.player :as ps]
+  (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]

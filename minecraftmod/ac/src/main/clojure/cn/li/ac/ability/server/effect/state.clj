@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.server.effect.state
-  (:require [cn.li.ac.ability.state.context :as ctx]
+  (:require [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.resource :as rdata]))
 
 (effect/defop :assoc-state

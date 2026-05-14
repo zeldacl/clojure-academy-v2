@@ -3,7 +3,7 @@
 	(:require [cn.li.ac.ability.server.handlers.common :as common]
 						[cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
 						[cn.li.ac.ability.server.service.context-runtime :as ctx-rt]
-						[cn.li.ac.ability.state.context :as ctx]))
+						[cn.li.ac.ability.service.dispatcher :as ctx]))
 
 (defn handle-key-down-skill
 	[{:keys [ctx-id] :as payload} player]

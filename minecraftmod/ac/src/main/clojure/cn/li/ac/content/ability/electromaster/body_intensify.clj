@@ -5,10 +5,10 @@
   Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (≤40 ticks)
   Cooldown: lerp(900,600) ticks (manual, applied on successful up ≥10 ticks)
   Exp: +0.01 on successful release"
-  (:require [cn.li.ac.ability.state.player :as ps]
+  (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.state.context :as ctx]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))

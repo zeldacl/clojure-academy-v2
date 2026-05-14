@@ -14,17 +14,9 @@
      :until-overload-recover int    ; ticks before overload recovery starts (0 = recovering)
      :interferences         #{}     ; set of active interference source IDs (keywords)}"
   (:require [cn.li.ac.ability.config :as cfg]
+            [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.mcmod.util.log :as log]))
-
-;; ============================================================================
-;; Helpers
-;; ============================================================================
-
-(defn- lerp
-  "Linear interpolation: a + t*(b-a)."
-  ^double [^double a ^double b ^double t]
-  (+ a (* t (- b a))))
 
 ;; ============================================================================
 ;; Constructors
@@ -131,7 +123,7 @@
             max-cp  (double (:max-cp d))
             cur-cp  (double (:cur-cp d))
             ratio   (if (pos? max-cp) (/ cur-cp max-cp) 0.0)
-            delta   (* speed 0.0003 max-cp (lerp 1.0 2.0 ratio))]
+            delta   (* speed 0.0003 max-cp (scaling/lerp 1.0 2.0 ratio))]
         (update d :cur-cp #(min max-cp (+ (double %) delta)))))))
 
 (defn tick-overload-recovery
@@ -154,7 +146,7 @@
                 cur-ol  (double (:cur-overload d))
                 ratio   (if (pos? max-ol) (/ cur-ol max-ol 2.0) 0.0)
                 delta   (* speed (max (* 0.002 max-ol)
-                                      (* 0.007 max-ol (lerp 1.0 0.5 ratio))))
+                                      (* 0.007 max-ol (scaling/lerp 1.0 0.5 ratio))))
                 new-val (max 0.0 (- cur-ol delta))]
             (assoc d :cur-overload new-val)))))
 
@@ -168,7 +160,7 @@
               cur-ol  (double (:cur-overload d))
               ratio   (if (pos? max-ol) (/ cur-ol max-ol 2.0) 0.0)
               delta   (* speed (max (* 0.002 max-ol)
-                                    (* 0.007 max-ol (lerp 1.0 0.5 ratio))))
+                                    (* 0.007 max-ol (scaling/lerp 1.0 0.5 ratio))))
               new-val (max 0.0 (- cur-ol delta))]
           (if (zero? new-val)
             (assoc d :cur-overload 0.0 :overload-fine true)

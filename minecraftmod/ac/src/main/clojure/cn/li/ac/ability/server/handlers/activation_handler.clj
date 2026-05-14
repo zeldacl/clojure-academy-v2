@@ -3,7 +3,7 @@
 	(:require [cn.li.ac.ability.server.handlers.common :as common]
 						[cn.li.ac.ability.server.service.resource :as res]
 						[cn.li.ac.ability.registry.event :as evt]
-						[cn.li.ac.ability.state.player :as ps]
+						[cn.li.ac.ability.service.player-state :as ps]
 						[cn.li.mcmod.util.log :as log]))
 
 (defn handle-set-activated-request

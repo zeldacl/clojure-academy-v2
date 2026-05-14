@@ -4,7 +4,7 @@
   The `content-load-plan` value is the single source of truth for both:
   - namespace require order
   - post-require init function execution order"
-  (:require [cn.li.ac.registry.content-plan-builder :as plan-builder]
+  (:require [cn.li.ac.registry.discovery :as discovery]
             [cn.li.ac.registry.spi.content-phase :as content-phase-spi]
             [cn.li.mcmod.util.log :as log]))
 
@@ -50,19 +50,18 @@
     :init-fns '[cn.li.ac.terminal.init/init-terminal!]
     :trace-tag :terminal-init}])
 
-(doseq [phase-spec default-phase-plugins]
-  (content-phase-spi/declare-content-phase! phase-spec))
+(discovery/bootstrap-default-providers! default-phase-plugins)
 
 (defn register-content-phase-plugin!
   "Public extension point for content phase registration."
   [phase-spec]
   (content-phase-spi/declare-content-phase! phase-spec)
-  (plan-builder/build-load-plan))
+  (discovery/discovered-content-phases))
 
 (defn current-content-load-plan
   "Return latest materialized content load plan."
   []
-  (content-phase-spi/list-content-phases))
+  (discovery/discovered-content-phases))
 
 (def content-load-plan
   (current-content-load-plan))

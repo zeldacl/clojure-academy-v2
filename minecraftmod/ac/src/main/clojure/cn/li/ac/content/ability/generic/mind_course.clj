@@ -2,7 +2,7 @@
   "Generic passive skill: Mind Course (x1.2 CP recovery)."
   (:require [cn.li.ac.ability.passive :as passive]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.registry.skill :as sk]))
+            [cn.li.ac.ability.service.registry :as sk]))
 
 (def ^:private categories [:electromaster :meltdowner :teleporter :vecmanip])
 

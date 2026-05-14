@@ -3,7 +3,7 @@
 
   The store operates on AC player-state/maps and is platform-neutral."
   (:require [cn.li.mcmod.platform.ability :as pability]
-            [cn.li.ac.ability.state.player :as ps]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.model.cooldown :as cd]

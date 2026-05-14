@@ -3,7 +3,7 @@
 	(:require [cn.li.ac.ability.server.handlers.common :as common]
 						[cn.li.ac.ability.model.preset :as preset-data]
 						[cn.li.ac.ability.registry.event :as evt]
-						[cn.li.ac.ability.state.player :as ps]))
+						[cn.li.ac.ability.service.player-state :as ps]))
 
 (defn handle-set-preset-request
 	[{:keys [preset-idx key-idx cat-id ctrl-id]} player]

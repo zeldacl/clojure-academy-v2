@@ -5,7 +5,7 @@
     :idle    — no active context for this slot (alpha=0.7, no glow)
     :charge  — context is in charge phase (alpha=1.0, golden glow #FFAD37, sine)
     :active  — context is alive and active (alpha=1.0, blue glow #46B3FF, sine)"
-  (:require [cn.li.ac.ability.state.context :as ctx]))
+  (:require [cn.li.ac.ability.service.dispatcher :as ctx]))
 
 (def ^:private state-visual-params
   {:idle   {:alpha 0.7  :glow-color nil                    :sin-effect? false}

@@ -77,12 +77,6 @@
 
 (defn- still-valid? [_container _player] true)
 
-(defn- clamp-range [v]
-  (let [r (double (or v cfg/default-range))]
-    (-> r
-        (max cfg/min-range)
-        (min cfg/max-range))))
-
 (defn- parse-whitelist
   [s]
   (->> (str/split (str s) #",")
@@ -101,7 +95,7 @@
 
 (defn- request-set-range! [container new-range]
   (let [tile (:tile-entity container)
-        r (clamp-range new-range)]
+        r (cfg/clamp-range new-range)]
     (net-client/send-to-server
       (msg :change-range)
       (assoc (net-helpers/tile-pos-payload tile) :range r))
