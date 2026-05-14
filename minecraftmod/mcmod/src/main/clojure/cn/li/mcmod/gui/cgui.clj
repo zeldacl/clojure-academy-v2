@@ -1,311 +1,252 @@
 (ns cn.li.mcmod.gui.cgui
-  "Pure Clojure CGui model and operations."
-  (:require [clojure.string :as str]))
+  "Pure Clojure CGui model and operations.
+   
+   REFACTORED FOR CLARITY (Phase A.2):
+   This namespace has been reorganized into logical sub-modules while maintaining full backward compatibility.
+   
+   Sub-modules:
+   - cgui-core: Widget hierarchy and properties
+   - cgui-widget-model: Component system
+   - cgui-events: Event handling
+   - cgui-screen: CGUI screens and focus management
+   
+   This wrapper re-exports all public APIs for backward compatibility.
+   Direct dependencies on this namespace will continue to work without modification."
+  (:require [cn.li.mcmod.gui.cgui-core :as core]
+            [cn.li.mcmod.gui.cgui-widget-model :as model]
+            [cn.li.mcmod.gui.cgui-events :as events]
+            [cn.li.mcmod.gui.cgui-screen :as screen]))
 
-(defn- new-widget
-  [{:keys [name pos size scale z-level visible? widget-type]
-    :or {name nil pos [0 0] size [0 0] scale 1.0 z-level 0 visible? true widget-type :widget}}]
-  {:id (str (java.util.UUID/randomUUID))
-   :widget-type widget-type
-   :name (atom name)
-   :pos (atom (vec pos))
-   :size (atom (vec size))
-   :scale (atom scale)
-   :z-level (atom z-level)
-   :visible? (atom visible?)
-   :children (atom [])
-   :components (atom [])
-   :events (atom {})
-   :metadata (atom {})})
+;; ============================================================================
+;; cgui-core: Widget Creation & Hierarchy (170 LOC)
+;; ============================================================================
 
-(defn- widget? [x]
-  (and (map? x) (contains? x :children) (contains? x :components)))
+(def create-widget 
+  "Create a basic widget with optional properties.
+   :name - widget identifier (default nil)
+   :pos - [x y] position (default [0 0])
+   :size - [w h] size (default [0 0])
+   :scale - scale factor (default 1.0)
+   :z-level - rendering depth (default 0)"
+  core/create-widget)
 
-(defn- component-kind [component]
-  (or (:kind component) (::kind component) :unknown))
+(def create-container 
+  "Create a container widget (can hold child widgets)."
+  core/create-container)
 
+(def copy-widget 
+  "Deep copy a widget with all its properties and children."
+  core/copy-widget)
 
-(declare add-widget! copy-widget)
+(def add-widget! 
+  "Add a child widget to a container. Returns the container for chaining."
+  core/add-widget!)
 
-(defn create-widget
-  [& {:keys [name pos size scale z-level]
-      :or {name nil pos [0 0] size [0 0] scale 1.0 z-level 0}}]
-  (new-widget {:name name :pos pos :size size :scale scale :z-level z-level :widget-type :widget}))
+(def remove-widget! 
+  "Remove a child widget from its parent container by identity."
+  core/remove-widget!)
 
-(defn create-container
-  [& {:keys [name pos size scale z-level]
-      :or {name nil pos [0 0] size [0 0] scale 1.0 z-level 0}}]
-  (new-widget {:name name :pos pos :size size :scale scale :z-level z-level :widget-type :container}))
+(def clear-widgets! 
+  "Remove all child widgets from a container."
+  core/clear-widgets!)
 
-(defn copy-widget [widget]
-  (let [clone (new-widget {:name @(-> widget :name)
-                           :pos @(-> widget :pos)
-                           :size @(-> widget :size)
-                           :scale @(-> widget :scale)
-                           :z-level @(-> widget :z-level)
-                           :visible? @(-> widget :visible?)
-                           :widget-type (:widget-type widget)})]
-    (reset! (:components clone)
-            (mapv (fn [comp]
-                    (if (and (map? comp) (:state comp))
-                      (assoc comp :state (atom @(:state comp)))
-                      comp))
-                  @(:components widget)))
-    (doseq [child @(:children widget)]
-      (add-widget! clone (copy-widget child)))
-    clone))
+(def get-widgets 
+  "Get all child widgets from a container as a vector."
+  core/get-widgets)
 
-(defn add-widget!
-  [container widget]
-  (swap! (:children container) conj widget)
-  container)
+(def get-draw-list 
+  "Get rendering order of child widgets (currently same as child order)."
+  core/get-draw-list)
 
-(defn remove-widget!
-  [container widget]
-  (swap! (:children container) (fn [xs] (vec (remove #(= (:id %) (:id widget)) xs))))
-  container)
+(def find-widget 
+  "Find widget by path string (e.g., \"root/panel/button\") or name. Returns nil if not found."
+  core/find-widget)
 
-(defn clear-widgets!
-  [container]
-  (reset! (:children container) [])
-  container)
+(def set-name! 
+  "Set the widget's name. Returns widget for chaining."
+  core/set-name!)
 
-(defn get-widgets [container]
-  (vec @(:children container)))
+(def get-name 
+  "Get the widget's name (empty string if nil)."
+  core/get-name)
 
-(defn get-draw-list [container]
-  (get-widgets container))
+(def set-pos! 
+  "Set the widget's position [x y]. Returns widget for chaining."
+  core/set-pos!)
 
-(defn- find-child-by-name [node child-name]
-  (first (filter #(= child-name (or @(:name %) "")) (get-widgets node))))
+(def set-position! 
+  "Alias for set-pos!. Returns widget for chaining."
+  core/set-position!)
 
-(defn find-widget
-  [root name-or-path]
-  (let [parts (str/split (str name-or-path) #"/")]
-    (reduce (fn [node part]
-              (when (and node (widget? node))
-                (find-child-by-name node part)))
-            root
-            parts)))
+(def get-pos 
+  "Get the widget's position as [x y] vector."
+  core/get-pos)
 
-(defn set-name!
-  [widget name]
-  (reset! (:name widget) name)
-  widget)
+(def set-size! 
+  "Set the widget's size [w h]. Returns widget for chaining."
+  core/set-size!)
 
-(defn get-name [widget]
-  (or @(:name widget) ""))
+(def get-size 
+  "Get the widget's size as [w h] vector."
+  core/get-size)
 
-(defn set-pos!
-  [widget x y]
-  (reset! (:pos widget) [x y])
-  widget)
+(def get-width 
+  "Get the widget's width as a double."
+  core/get-width)
 
-(defn set-position! [widget x y]
-  (set-pos! widget x y))
+(def get-height 
+  "Get the widget's height as a double."
+  core/get-height)
 
-(defn get-pos [widget]
-  @(:pos widget))
+(def set-scale! 
+  "Set the widget's scale factor. Returns widget for chaining."
+  core/set-scale!)
 
-(defn set-size!
-  [widget w h]
-  (reset! (:size widget) [w h])
-  widget)
+(def set-w-align! 
+  "Set horizontal alignment metadata on widget.
+   Accepts keywords or strings: :left/:center/:right or \"left\"/\"center\"/\"right\".
+   Returns widget for chaining."
+  core/set-w-align!)
 
-(defn get-size [widget]
-  @(:size widget))
+(def set-h-align! 
+  "Set vertical alignment metadata on widget.
+   Accepts keywords or strings: :top/:middle/:bottom or \"top\"/\"middle\"/\"bottom\".
+   Returns widget for chaining."
+  core/set-h-align!)
 
-(defn get-width [widget]
-  (double (first (get-size widget))))
+(def set-z-level! 
+  "Set the widget's rendering depth. Returns widget for chaining."
+  core/set-z-level!)
 
-(defn get-height [widget]
-  (double (second (get-size widget))))
+(def set-visible! 
+  "Set widget visibility. Returns widget for chaining."
+  core/set-visible!)
 
-(defn set-scale!
-  [widget scale]
-  (reset! (:scale widget) scale)
-  widget)
+(def visible? 
+  "Check if widget is visible."
+  core/visible?)
 
-(defn set-w-align!
-  "Set horizontal alignment metadata on `widget`.
-  Accepts keywords or strings: :left/:center/:right or \"left\"/\"center\"/\"right\".
-  Stores value under `:w-align` in widget metadata and returns the widget." 
-  [widget align]
-  (when widget
-    (let [a (if (keyword? align) align (keyword (str/lower-case (str align))))]
-      (swap! (:metadata widget) assoc-in [:transform-meta :align-width] a))
-    widget))
+(def widget->map 
+  "Convert widget to a plain map representation (recursive for children).
+   Useful for serialization or debugging."
+  core/widget->map)
 
-(defn set-h-align!
-  "Set vertical alignment metadata on `widget`.
-  Accepts keywords or strings: :top/:middle/:bottom or \"top\"/\"middle\"/\"bottom\".
-  Stores value under `:h-align` in widget metadata and returns the widget." 
-  [widget align]
-  (when widget
-    (let [a (if (keyword? align) align (keyword (str/lower-case (str align))))]
-      (swap! (:metadata widget) assoc-in [:transform-meta :align-height] a))
-    widget))
+;; ============================================================================
+;; cgui-widget-model: Components (60 LOC)
+;; ============================================================================
 
-(defn set-z-level!
-  [widget z]
-  (reset! (:z-level widget) z)
-  widget)
+(def create-component-instance 
+  "Create a new component instance with a given kind and empty state.
+   Returns component map with :kind and :state (atom)."
+  model/create-component-instance)
 
-(defn set-visible!
-  [widget visible?]
-  (reset! (:visible? widget) (boolean visible?))
-  widget)
+(def add-widget-component! 
+  "Attach a component to a widget. Returns widget for chaining."
+  model/add-widget-component!)
 
-(defn visible? [widget]
-  (boolean @(:visible? widget)))
+(def remove-widget-component! 
+  "Detach a component from a widget. Returns widget for chaining."
+  model/remove-widget-component!)
 
-(defn add-widget-component!
-  [widget component]
-  (swap! (:components widget) conj component)
-  widget)
+(def get-widget-component 
+  "Get the first component of a given kind attached to this widget."
+  model/get-widget-component)
 
-(defn remove-widget-component!
-  [widget component]
-  (swap! (:components widget)
-         (fn [xs] (vec (remove #(= % component) xs))))
-  widget)
+(def get-widget-component-by-class 
+  "Get the first component whose kind matches a Java Class name."
+  model/get-widget-component-by-class)
 
-(defn get-widget-component
-  [widget kind]
-  (first (filter #(= (component-kind %) kind) @(:components widget))))
+(def get-widget-components 
+  "Get all components of a given kind attached to this widget."
+  model/get-widget-components)
 
-(defn get-widget-component-by-class
-  [widget component-class]
-  (let [s (str component-class)
-        ;; `str` on a Class yields strings like "class net.minecraft.foo.Bar".
-        s (if (clojure.string/starts-with? s "class ") (subs s 6) s)
-        simple (last (clojure.string/split s #"\."))
-        kind (keyword (clojure.string/lower-case (or simple "")))]
-    (get-widget-component widget kind)))
+(def get-all-widget-components 
+  "Get all components attached to this widget."
+  model/get-all-widget-components)
 
-(defn create-component-instance
-  [kind]
-  {:kind kind :state (atom {})})
+;; ============================================================================
+;; cgui-events: Event Handling (50 LOC)
+;; ============================================================================
 
-(defn listen-widget-event!
-  [widget event-klass-or-key handler]
-  (let [event-key (if (keyword? event-klass-or-key)
-                    event-klass-or-key
-                    (keyword (str/lower-case (str event-klass-or-key))))]
-    (swap! (:events widget) update event-key (fnil conj []) handler)
-    widget))
+(def listen-widget-event! 
+  "Register an event handler on a widget.
+   Multiple handlers can be registered for the same event (all will be called).
+   Returns widget for chaining."
+  events/listen-widget-event!)
 
-(defn unlisten-widget-event!
-  [widget event-klass-or-key]
-  (let [event-key (if (keyword? event-klass-or-key)
-                    event-klass-or-key
-                    (keyword (str/lower-case (str event-klass-or-key))))]
-    (swap! (:events widget) dissoc event-key)
-    widget))
+(def unlisten-widget-event! 
+  "Unregister all handlers for an event type on this widget. Returns widget for chaining."
+  events/unlisten-widget-event!)
 
-(defn clear-widget-events!
-  [widget]
-  (reset! (:events widget) {})
-  widget)
+(def clear-widget-events! 
+  "Remove all event handlers from a widget. Returns widget for chaining."
+  events/clear-widget-events!)
 
-(defn emit-widget-event!
-  [widget event-key event]
-  (doseq [handler (get @(:events widget) event-key)]
-    (handler event))
-  event)
+(def emit-widget-event! 
+  "Fire an event on a widget. All registered handlers for that event will be called.
+   Returns the event object (possibly modified by stop-event-propagation!)."
+  events/emit-widget-event!)
 
-(defn stop-event-propagation!
-  [event]
-  (if (map? event)
-    (assoc event :canceled? true)
-    event))
+(def stop-event-propagation! 
+  "Mark an event as handled/canceled to stop further processing."
+  events/stop-event-propagation!)
 
-(defn create-cgui []
-  (let [root (create-container :name "root" :pos [0 0] :size [0 0])]
-    ;; per-cgui runtime state stored in root metadata for platform runtime access
-    (swap! (:metadata root) assoc :cgui-focus (atom nil)
-                                  :dragging-node (atom nil)
-                                  :last-drag-time (atom 0)
-                                  :last-start-time (atom 0))
-    {:type :cgui :root root}))
+(def event-canceled? 
+  "Check if an event has been marked as canceled."
+  events/event-canceled?)
 
-(defn get-focus
-  "Return the current focused widget for the CGUI root (root is the cgui root widget)."
-  [root]
-  (when root
-    (let [m @(:metadata root)]
-      (when-let [a (:cgui-focus m)]
-        @a))))
+(def get-widget-event-handlers 
+  "Get all handlers registered for a specific event type on this widget."
+  events/get-widget-event-handlers)
 
-(defn gain-focus!
-  "Set focus to `widget` for this cgui root. Emits :gain-focus / :lost-focus events.
-   `root` is the cgui root widget (the value returned by `get-root`)."
-  [root widget]
-  (when root
-    (let [m @(:metadata root)
-          a (:cgui-focus m)]
-      (when a
-        (let [old @a]
-          (when (and old (not= old widget))
-            (swap! (:metadata old) assoc :focused? false)
-            (emit-widget-event! old :lost-focus {:new-focus widget}))
-          (reset! a widget)
-          (when widget
-            (swap! (:metadata widget) assoc :focused? true)
-            (emit-widget-event! widget :gain-focus {:old-focus old}))
-          widget)))))
+;; ============================================================================
+;; cgui-screen: Screens & Focus (80 LOC)
+;; ============================================================================
 
-(defn remove-focus!
-  "Clear focus for this cgui root."
-  [root]
-  (when root
-    (let [m @(:metadata root)
-          a (:cgui-focus m)
-          old (when a @a)]
-      (when a
-        (reset! a nil))
-      (when old
-        (swap! (:metadata old) assoc :focused? false)
-        (emit-widget-event! old :lost-focus {:new-focus nil}))
-      nil)))
+(def create-cgui 
+  "Create a new CGUI instance with focus tracking and drag state.
+   Returns a cgui map with :type and :root (root widget)."
+  screen/create-cgui)
 
-(defn get-root [cgui]
-  (:root cgui))
+(def get-root 
+  "Get the root widget of a CGUI instance."
+  screen/get-root)
 
-(defn cgui-add-widget!
-  [cgui widget]
-  (add-widget! (get-root cgui) widget)
-  cgui)
+(def cgui-add-widget! 
+  "Add a widget to the root of a CGUI. Returns cgui for chaining."
+  screen/cgui-add-widget!)
 
-(defn create-cgui-screen
-  [cgui]
-  {:type :cgui-screen :cgui cgui})
+(def get-focus 
+  "Get the currently focused widget for this CGUI root.
+   Returns nil if nothing is focused."
+  screen/get-focus)
 
-(defn create-cgui-screen-container
-  [cgui container]
-  {:type :cgui-screen-container :cgui cgui :minecraft-container container})
+(def gain-focus! 
+  "Set focus to a widget for this CGUI root. Emits :gain-focus / :lost-focus events.
+   Returns the focused widget."
+  screen/gain-focus!)
 
-(defn progressbar-direction-enum [direction]
-  direction)
+(def remove-focus! 
+  "Clear focus for this CGUI root. Emits :lost-focus event. Returns nil."
+  screen/remove-focus!)
 
-(defn build-widget-tree
-  [spec]
-  (let [{:keys [type name pos size scale z-level components children]
-         :or {type :widget name nil pos [0 0] size [0 0] scale 1.0 z-level 0}} spec
-        widget-fn (if (= type :container) create-container create-widget)
-        widget (widget-fn :name name :pos pos :size size :scale scale :z-level z-level)]
-    (doseq [component components]
-      (add-widget-component! widget component))
-    (doseq [child-spec children]
-      (add-widget! widget (build-widget-tree child-spec)))
-    widget))
+(def create-cgui-screen 
+  "Create a CGUI screen wrapper (for display/rendering on client).
+   Returns screen map with :type and :cgui."
+  screen/create-cgui-screen)
 
-(defn widget->map
-  [widget]
-  {:id (:id widget)
-   :name (get-name widget)
-   :widget-type (:widget-type widget)
-   :pos (get-pos widget)
-   :size (get-size widget)
-   :visible? (visible? widget)
-   :children (mapv widget->map (get-widgets widget))})
+(def create-cgui-screen-container 
+  "Create a CGUI screen wrapper backed by a Minecraft Container.
+   This bridges CGUI to server-side inventory sync logic."
+  screen/create-cgui-screen-container)
+
+(def build-widget-tree 
+  "Recursively build a widget tree from a spec map.
+   Spec format: {:type :widget|:container, :name str, :pos [x y], :size [w h],
+                 :scale num, :z-level num, :components [comp...], :children [spec...]}"
+  screen/build-widget-tree)
+
+(def progressbar-direction-enum 
+  "Utility: Return progressbar direction enum value (passthrough for now)."
+  screen/progressbar-direction-enum)
+

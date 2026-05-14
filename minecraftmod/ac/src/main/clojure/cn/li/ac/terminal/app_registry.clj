@@ -9,7 +9,8 @@
   - :gui-fn - Symbol pointing to GUI function
   - :available-fn - Optional predicate (fn [player] boolean)
   - :category - Optional category keyword"
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.terminal.app-spi :as app-spi]))
 
 ;; ============================================================================
 ;; Registry
@@ -17,6 +18,10 @@
 
 (defonce app-registry
   (atom {}))
+
+(defn- normalize-app
+  [app-spec]
+  (app-spi/normalize-app-spec app-spec))
 
 ;; ============================================================================
 ;; Registration
@@ -36,7 +41,8 @@
   - :available-fn (fn) - Predicate to check availability
   - :category (keyword) - App category"
   [app-spec]
-  (let [app-id (:id app-spec)]
+  (let [app-spec (normalize-app app-spec)
+        app-id (:id app-spec)]
     (when-not app-id
       (throw (ex-info "App must have an :id" {:spec app-spec})))
     (when-not (keyword? app-id)
@@ -116,7 +122,7 @@
   (if-let [app (get-app app-id)]
     (try
       (let [gui-fn-sym (:gui-fn app)
-            gui-fn (requiring-resolve gui-fn-sym)]
+            gui-fn (app-spi/app-launcher gui-fn-sym)]
         (if gui-fn
           (do
             (log/info "Launching app:" app-id "for player:" player)

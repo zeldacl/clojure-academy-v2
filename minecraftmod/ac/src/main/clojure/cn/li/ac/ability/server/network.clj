@@ -1,3 +1,5 @@
+(remove-ns 'cn.li.ac.ability.server.network)
+
 (ns cn.li.ac.ability.server.network
   "Server-side message handler registrations for the ability system.
 

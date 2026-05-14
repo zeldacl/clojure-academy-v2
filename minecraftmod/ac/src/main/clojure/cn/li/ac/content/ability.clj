@@ -2,52 +2,12 @@
   "Ability content bootstrap.
 
   Categories are declared here.
-  Skills are self-registered by requiring each skill namespace."
+  Skills are self-registered by requiring discovered skill namespaces."
   (:require [cn.li.ac.ability.dsl :refer [defcategory]]
+            [cn.li.ac.ability.discovery :as discovery]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.ac.content.ability.electromaster.body-intensify]
-            [cn.li.ac.content.ability.electromaster.current-charging]
-            [cn.li.ac.content.ability.electromaster.mag-manip]
-            [cn.li.ac.content.ability.electromaster.mag-movement]
-            [cn.li.ac.content.ability.electromaster.railgun]
-            [cn.li.ac.content.ability.electromaster.thunder-bolt]
-            [cn.li.ac.content.ability.electromaster.thunder-clap]
-            [cn.li.ac.content.ability.electromaster.mine-detect]
-            [cn.li.ac.content.ability.meltdowner.meltdowner]
-            [cn.li.ac.content.ability.meltdowner.electron-bomb]
-            [cn.li.ac.content.ability.meltdowner.scatter-bomb]
-            [cn.li.ac.content.ability.meltdowner.light-shield]
-            [cn.li.ac.content.ability.meltdowner.mine-ray-basic]
-            [cn.li.ac.content.ability.meltdowner.mine-ray-expert]
-            [cn.li.ac.content.ability.meltdowner.mine-ray-luck]
-            [cn.li.ac.content.ability.meltdowner.ray-barrage]
-            [cn.li.ac.content.ability.meltdowner.jet-engine]
-            [cn.li.ac.content.ability.meltdowner.electron-missile]
-            [cn.li.ac.content.ability.meltdowner.rad-intensify]
-            [cn.li.ac.content.ability.electromaster.arc-gen]
-            [cn.li.ac.content.ability.generic.brain-course]
-            [cn.li.ac.content.ability.generic.brain-course-advanced]
-            [cn.li.ac.content.ability.generic.mind-course]
-            [cn.li.ac.content.ability.teleporter.location-teleport]
-            [cn.li.ac.content.ability.teleporter.mark-teleport]
-            [cn.li.ac.content.ability.teleporter.threatening-teleport]
-            [cn.li.ac.content.ability.teleporter.penetrate-teleport]
-            [cn.li.ac.content.ability.teleporter.flesh-ripping]
-            [cn.li.ac.content.ability.teleporter.shift-teleport]
-            [cn.li.ac.content.ability.teleporter.flashing]
-            [cn.li.ac.content.ability.teleporter.dim-folding-theorem]
-            [cn.li.ac.content.ability.teleporter.space-fluct]
-            [cn.li.ac.content.ability.vecmanip.blood-retrograde]
-            [cn.li.ac.content.ability.vecmanip.directed-blastwave]
-            [cn.li.ac.content.ability.vecmanip.directed-shock]
-            [cn.li.ac.content.ability.vecmanip.groundshock]
-            [cn.li.ac.content.ability.vecmanip.plasma-cannon]
-            [cn.li.ac.content.ability.vecmanip.storm-wing]
-            [cn.li.ac.content.ability.vecmanip.vec-accel]
-            [cn.li.ac.content.ability.vecmanip.vec-deviation]
-            [cn.li.ac.content.ability.vecmanip.vec-reflection]
             [cn.li.mcmod.util.log :as log]))
 
 (defcategory electromaster
@@ -84,11 +44,30 @@
 
 (defonce-guard ability-content-installed?)
 
+(defn- require-discovered-skills! []
+  (discovery/bootstrap-default-providers!)
+  (doseq [ns-sym (discovery/discovered-skill-namespaces)]
+    (require ns-sym)))
+
+(defonce ^:private discovered-skills-required?
+  (delay
+    (require-discovered-skills!)
+    true))
+
+(defn ensure-discovered-skills-required!
+  "Preserve historical load semantics: requiring this namespace should make
+  skill specs available even before the explicit content init phase runs."
+  []
+  @discovered-skills-required?)
+
+(ensure-discovered-skills-required!)
+
 (defn init-ability-content!
   []
   (with-init-guard ability-content-installed?
     (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
       (category/register-category! (dissoc cat :ac/content-type)))
+    (ensure-discovered-skills-required!)
     ;; Register generic item actions (not skill-specific)
     (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)
     (log/info "Ability content initialized")))

@@ -1,3 +1,5 @@
+(remove-ns 'cn.li.ac.block.developer.logic)
+
 (ns cn.li.ac.block.developer.logic
 	(:require [clojure.string :as str]
 						[cn.li.mcmod.block.dsl :as bdsl]

@@ -1,10 +1,6 @@
 (ns cn.li.ac.ability.service.dispatcher
 	"Canonical AC context/dispatcher service implementation."
 	(:require [cn.li.ac.ability.registry.event :as evt]
-						[cn.li.ac.ability.service.registry :as skill]
-						[cn.li.ac.ability.service.player-state :as ps]
-						[cn.li.ac.ability.model.resource :as rdata]
-						[cn.li.mcmod.ability.catalog :as catalog]
 						[cn.li.mcmod.util.log :as log]))
 
 (def STATUS-CONSTRUCTED :constructed)
@@ -119,9 +115,22 @@
 	(get-all-contexts))
 
 (defn send-context-message!
-	[ctx-id channel payload]
-	(ctx-send-to-local! ctx-id channel payload))
+	([ctx-id channel payload]
+	 (ctx-send-to-local! ctx-id channel payload))
+	([ctx-id direction channel payload]
+	 (case direction
+		 :to-server (ctx-send-to-server! ctx-id channel payload)
+		 :to-client (ctx-send-to-client! ctx-id channel payload)
+		 :to-except-local (ctx-send-to-except-local! ctx-id channel payload)
+		 :to-self (ctx-send-to-self! ctx-id channel payload)
+		 ;; keep compatibility: unknown/nil direction falls back to local dispatch
+		 (ctx-send-to-local! ctx-id channel payload))))
 
 (defn dispatch-skill-event!
-	[event]
-	(evt/fire-ability-event! event))
+	([event]
+	 (evt/fire-ability-event! event))
+	([skill-id callback-key event]
+	 (evt/fire-ability-event!
+		 {:skill-id skill-id
+			:callback-key callback-key
+			:event event})))

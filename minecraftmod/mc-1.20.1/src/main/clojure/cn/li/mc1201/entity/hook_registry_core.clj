@@ -1,9 +1,234 @@
 (ns cn.li.mc1201.entity.hook-registry-core
-  "Shared helpers for scripted entity hook registration."
+  "Entity hook registration and lifecycle management.
+   
+   Hooks are functions that react to entity-related events and can be applied
+   to abstract IEntity instances. This registry provides:
+   - Hook registration for different event types
+   - Hook execution with proper error handling
+   - Hook metadata and documentation
+   - Lifecycle management (enable/disable hooks)"
   (:require [clojure.string :as str]
+            [cn.li.mc1201.entity.hook-abstraction :as hooks]
             [cn.li.mcmod.entity.dsl :as edsl]
+            [cn.li.mcmod.entity.hook-catalog :as hook-catalog]
             [cn.li.mcmod.util.log :as log]))
 
+;; ============================================================================
+;; Hook Event Types
+;; ============================================================================
+
+(def hook-event-types
+  "Supported entity hook event types"
+  {:on-entity-tick "Called each tick for entity"
+   :on-entity-damage "Called when entity takes damage"
+   :on-entity-heal "Called when entity is healed"
+   :on-entity-death "Called when entity dies"
+   :on-potion-effect-added "Called when potion effect added"
+   :on-potion-effect-removed "Called when potion effect removed"
+   :on-player-login "Called when player logs in"
+   :on-player-logout "Called when player logs out"
+   :on-player-gamemode-changed "Called when player gamemode changes"
+   :on-player-dimension-change "Called when player changes dimension"
+   :on-living-entity-spawn "Called when living entity spawns"
+   :on-living-entity-despawn "Called when living entity despawns"})
+
+;; ============================================================================
+;; Hook Registry
+;; ============================================================================
+
+(defonce ^:private hook-registry
+  (atom {}))
+
+(defonce ^:private hook-metadata
+  (atom {}))
+
+;; ============================================================================
+;; Hook Registration
+;; ============================================================================
+
+(defn register-hook!
+  "Register an entity hook for an event type.
+   
+   Parameters:
+   - event-type: keyword from hook-event-types (:on-entity-damage, etc.)
+   - hook-id: unique keyword identifier for this hook
+   - hook-fn: function to call when event occurs
+   - options: map with optional keys:
+       :priority - hook priority (default :normal)
+       :doc - documentation string
+       :enabled? - whether hook starts enabled (default true)
+   
+   Hook function signature depends on event-type:
+   - :on-entity-tick (entity tick-count)
+   - :on-entity-damage (entity damage source-keyword)
+   - :on-entity-death (entity damage-source-keyword)
+   - :on-player-login (player)
+   - :on-player-logout (player)
+   - etc."
+  [event-type hook-id hook-fn & [options]]
+  (when-not (contains? hook-event-types event-type)
+    (throw (ex-info "Unknown hook event type" {:type event-type})))
+  
+  (when-not (keyword? hook-id)
+    (throw (ex-info "Hook ID must be a keyword" {:id hook-id})))
+  
+  (when-not (fn? hook-fn)
+    (throw (ex-info "Hook must be a function" {:id hook-id})))
+  
+  (let [opts (or options {})
+        priority (get opts :priority :normal)
+        doc (get opts :doc "")
+        enabled? (get opts :enabled? true)]
+    
+    (log/info "Registering entity hook"
+              {:type event-type :id hook-id :priority priority})
+    
+    ;; Register hook in registry
+    (swap! hook-registry
+           (fn [registry]
+             (update registry event-type
+                     (fn [hooks]
+                       (conj (or hooks [])
+                             {:fn hook-fn
+                              :id hook-id
+                              :priority priority
+                              :enabled? enabled?})))))
+    
+    ;; Store metadata
+    (swap! hook-metadata
+           assoc hook-id
+           {:event-type event-type
+            :priority priority
+            :doc doc
+            :enabled? enabled?})))
+
+(defn register-hook-group!
+  "Register multiple hooks at once.
+   
+   hooks-list: sequence of [event-type hook-id hook-fn options] tuples
+   
+   Example:
+   (register-hook-group!
+     [[:on-entity-damage :my-damage-handler my-fn {:priority :high}]
+      [:on-entity-death :my-death-handler death-fn {:priority :normal}]])"
+  [hooks-list]
+  (doseq [[event-type hook-id hook-fn opts] hooks-list]
+    (register-hook! event-type hook-id hook-fn opts)))
+
+;; ============================================================================
+;; Hook Execution
+;; ============================================================================
+
+(defn call-hooks
+  "Execute all hooks for an event type.
+   
+   Parameters:
+   - event-type: keyword identifying event (:on-entity-damage, etc.)
+   - args: arguments to pass to each hook function
+   
+   Returns sequence of hook results (nil if hook disabled or error).
+   Logs errors but doesn't throw - ensures other hooks still execute."
+  [event-type & args]
+  (let [hooks (get (deref hook-registry) event-type [])
+        sorted-hooks (sort-by :priority hooks)]
+    (for [hook sorted-hooks]
+      (try
+        (if (:enabled? hook)
+          (apply (:fn hook) args)
+          nil)
+        (catch Exception e
+          (log/error "Hook execution error"
+                     {:event-type event-type
+                      :hook-id (:id hook)
+                      :error (str e)})
+          nil)))))
+
+(defn call-hooks-if-enabled
+  "Execute hooks only if all are enabled (useful for critical paths).
+   Throws if any hook is disabled."
+  [event-type & args]
+  (let [hooks (get (deref hook-registry) event-type [])]
+    (when-let [disabled-hooks (seq (filter #(not (:enabled? %)) hooks))]
+      (throw (ex-info "Cannot execute hooks - some are disabled"
+                      {:event-type event-type
+                       :disabled-count (count disabled-hooks)})))
+    (apply call-hooks event-type args)))
+
+;; ============================================================================
+;; Hook Management
+;; ============================================================================
+
+(defn enable-hook!
+  "Enable a specific hook"
+  [hook-id]
+  (swap! hook-metadata
+         (fn [meta]
+           (update meta hook-id assoc :enabled? true))))
+
+(defn disable-hook!
+  "Disable a specific hook"
+  [hook-id]
+  (swap! hook-metadata
+         (fn [meta]
+           (update meta hook-id assoc :enabled? false))))
+
+(defn is-hook-enabled?
+  "Check if a hook is enabled"
+  [hook-id]
+  (get-in (deref hook-metadata) [hook-id :enabled?] true))
+
+(defn get-hooks-for-event
+  "Get all hooks registered for an event type"
+  [event-type]
+  (get (deref hook-registry) event-type []))
+
+(defn list-all-hooks
+  "List all registered hooks with metadata"
+  []
+  (deref hook-metadata))
+
+(defn unregister-hook!
+  "Unregister a hook by ID"
+  [hook-id]
+  (let [event-type (get-in (deref hook-metadata) [hook-id :event-type])]
+    (when event-type
+      (swap! hook-registry
+             (fn [registry]
+               (update registry event-type
+                       (fn [hooks]
+                         (filterv #(not= (:id %) hook-id) hooks)))))
+      
+      (swap! hook-metadata dissoc hook-id))))
+
+(defn clear-hooks!
+  "Clear all hooks (for testing)"
+  []
+  (reset! hook-registry {})
+  (reset! hook-metadata {}))
+
+(defn clear-event-hooks!
+  "Clear all hooks for a specific event type"
+  [event-type]
+  (let [hook-ids (map :id (get @hook-registry event-type []))]
+    (doseq [id hook-ids]
+      (unregister-hook! id))))
+
+;; ============================================================================
+;; Hook Utilities
+;; ============================================================================
+
+(defn hook-statistics
+  "Get statistics about registered hooks"
+  []
+  (let [registry (deref hook-registry)
+        metadata (deref hook-metadata)]
+    {:total-hooks (count metadata)
+     :total-event-types (count registry)
+     :events-breakdown (into {}
+                             (for [[event-type hooks] registry]
+                               [event-type {:count (count hooks)
+                                            :enabled (count (filter :enabled? hooks))}]))
+     :hook-count-by-priority (frequencies (map :priority (vals metadata)))}))
 (defn normalize-impl-key
   [impl-key]
   (cond

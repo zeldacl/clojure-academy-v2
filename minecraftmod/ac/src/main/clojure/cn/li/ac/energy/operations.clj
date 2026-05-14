@@ -11,6 +11,7 @@
             [cn.li.ac.energy.api.impl :as energy-api]
             [cn.li.ac.energy.service.item-manager :as item-manager]
             [cn.li.ac.energy.service.node-manager :as node-manager]
+            [cn.li.ac.energy.service.transfer-service :as transfer-service]
             [cn.li.ac.wireless.api :as whelper])
   (:import [cn.li.acapi.wireless IWirelessNode IWirelessReceiver]))
 
@@ -139,7 +140,17 @@
   "Simulate wireless transfer and return transmission loss amount.
   Current behavior is a deterministic 10% loss model used by tests/stubs."
   [_network _from _to amount]
-  (* (double amount) 0.1))
+  (transfer-service/transfer-loss amount))
+
+(defn transfer-energy-wireless-result
+  "Simulate wireless transfer and return normalized transfer result map.
+
+  This is a new Phase C helper API while `transfer-energy-wireless` is kept as
+  a legacy-compatible wrapper returning only loss amount."
+  ([_network _from _to amount]
+   (transfer-service/transfer-result amount))
+  ([_network _from _to amount loss-rate]
+   (transfer-service/transfer-result amount loss-rate)))
 
 ;; ============================================================================
 ;; Network Synchronization (stub: logs only)

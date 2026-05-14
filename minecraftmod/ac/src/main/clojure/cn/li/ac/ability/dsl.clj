@@ -16,7 +16,8 @@
 
   Both macros resolve to register-category! / register-skill! calls wrapped
   in a defonce-guarded init so reloading is safe."
-  (:require [cn.li.ac.ability.service.registry :as registry]))
+  (:require [cn.li.ac.ability.definition-core :as definition-core]
+            [cn.li.ac.ability.service.registry :as registry]))
 
 ;; ============================================================================
 ;; defcategory
@@ -26,9 +27,9 @@
   "Declare and register an ability category.
   Keys: :id :name-key :enabled? :level-matcher :prog-incr-rate :metadata"
   [sym & opts]
-  (let [kv-map    (apply hash-map opts)
-        id        (get kv-map :id (keyword (name sym)))
-        rest-map  (dissoc kv-map :id)]
+  (let [category-spec (definition-core/build-category-spec sym (apply hash-map opts))
+        id           (:id category-spec)
+        rest-map     (dissoc category-spec :id)]
     `(let [category-map# (assoc ~rest-map :id ~id :ac/content-type :category)]
        (def ~sym category-map#))))
 
@@ -36,29 +37,11 @@
 ;; defskill
 ;; ============================================================================
 
-(defn- normalize-prereqs
-  [value]
-  (cond
-    (map? value) (mapv (fn [[skill-id min-exp]] {:skill-id skill-id :min-exp (double min-exp)}) value)
-    (vector? value) value
-    :else []))
-
-(defn- normalize-skill-spec
-  [sym kv-map]
-  (let [id (get kv-map :id (keyword (name sym)))
-        kv-map* (-> kv-map
-                    (dissoc :id)
-                    (update :category-id #(or % (:category kv-map)))
-                    (dissoc :category)
-                    (update :prerequisites #(normalize-prereqs (or % (:prereqs kv-map))))
-                    (dissoc :prereqs))]
-    (assoc kv-map* :id id)))
-
 (defmacro defskill
   "Declare a skill map without registration."
   [sym & opts]
   (let [kv-map (apply hash-map opts)
-        skill-map (normalize-skill-spec sym kv-map)]
+        skill-map (definition-core/build-skill-spec sym kv-map)]
     `(let [skill-map# (assoc ~skill-map :ac/content-type :skill)]
        (def ~sym skill-map#))))
 
@@ -67,7 +50,7 @@
   Supports :category alias for :category-id and :prereqs map sugar."
   [sym & opts]
   (let [kv-map (apply hash-map opts)
-        skill-map (normalize-skill-spec sym kv-map)]
+        skill-map (definition-core/build-skill-spec sym kv-map)]
     `(let [skill-map# ~skill-map
            registered# (registry/register-skill! skill-map#)]
        (def ~sym registered#))))
