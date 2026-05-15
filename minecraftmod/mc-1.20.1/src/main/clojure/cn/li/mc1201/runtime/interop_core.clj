@@ -10,13 +10,6 @@
            [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer ServerLevel]))
 
-(defn get-player-by-uuid
-  ^ServerPlayer [^MinecraftServer server uuid-str]
-  (try
-    (query-core/get-player-by-uuid server uuid-str)
-    (catch Exception _
-      nil)))
-
 (defn get-level-by-id
   ^ServerLevel [^MinecraftServer server world-id]
   (try
@@ -27,7 +20,7 @@
 (defn get-player-view
   [^MinecraftServer server player-uuid]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (let [eye (.getEyePosition player)
             look (.getLookAngle player)
             world-id (some-> (.dimension (.level player)) .location str)]
@@ -45,7 +38,7 @@
 (defn get-player-main-hand-item
   [^MinecraftServer server player-uuid]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (let [stack (.getMainHandItem player)]
         (when (and stack (not (.isEmpty stack)))
           stack)))

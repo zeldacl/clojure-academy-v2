@@ -14,7 +14,7 @@
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.mcmod.ability.catalog :as catalog]
+            [cn.li.mcmod.hooks.catalog :as catalog]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]))
@@ -175,7 +175,7 @@
 (defn register-client-push-handlers!
   []
   (with-init-guard client-push-handlers-registered?
-    (net-client/register-push-handler! catalog/MSG-SYNC-ABILITY
+    (net-client/register-push-handler! catalog/MSG-SYNC-RUNTIME
       (fn [{:keys [uuid ability-data]}]
         (when (and uuid ability-data)
           (ps/get-or-create-player-state! uuid)

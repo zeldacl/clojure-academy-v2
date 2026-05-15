@@ -1,4 +1,6 @@
-(remove-ns 'cn.li.mcmod.protocol.metadata)
+(when-let [ns-obj (find-ns 'cn.li.mcmod.protocol.metadata)]
+  (doseq [alias-sym (keys (ns-aliases ns-obj))]
+    (ns-unalias ns-obj alias-sym)))
 
 (ns cn.li.mcmod.protocol.metadata
   "Registry metadata system - single source of truth for block/item registration.

@@ -4,7 +4,8 @@
             [cn.li.ac.integration.block.energy-converter.config :as converter-config]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.data.network :as network]
+            [cn.li.ac.wireless.data.network-membership :as network-membership]
+            [cn.li.ac.wireless.data.network-runtime :as network-runtime]
             [cn.li.ac.wireless.data.network-config :as network-config]
             [cn.li.ac.wireless.data.world :as wdata]
             [cn.li.mcmod.platform.be :as platform-be]))
@@ -42,13 +43,13 @@
           (let [net (wdata/get-network-by-ssid wd "contract-net")
                 node-a (get @tiles [3 0 0])
                 node-b (get @tiles [5 0 0])]
-            (is (false? (network/add-node! net node-a-vb "wrong")))
-            (is (true? (network/add-node! net node-a-vb "pw")))
-            (is (true? (network/add-node! net node-b-vb "pw")))
+            (is (false? (network-membership/add-node! net node-a-vb "wrong")))
+            (is (true? (network-membership/add-node! net node-a-vb "pw")))
+            (is (true? (network-membership/add-node! net node-b-vb "pw")))
             (with-redefs [network-config/update-interval-ticks (constantly 1)
                           network-config/buffer-max (constantly 1.0e6)]
               (dotimes [_ 3]
-                (network/tick-wireless-net! net)))
+              (network-runtime/tick-wireless-net! net)))
             (is (< (Math/abs (- (.getEnergy node-a) (.getEnergy node-b))) 120.0))))))))
 
 (deftest energy-converter-simulate-and-bounds-contract-test
@@ -81,10 +82,10 @@
         (fn []
           (is (true? (wdata/create-network-impl! wd matrix-vb "cap-net" "pw")))
           (let [net (wdata/get-network-by-ssid wd "cap-net")]
-            (is (true? (network/add-node! net near-a "pw")))
-            (is (false? (network/add-node! net near-b "pw")))
-            (network/remove-node! net near-a)
+            (is (true? (network-membership/add-node! net near-a "pw")))
+            (is (false? (network-membership/add-node! net near-b "pw")))
+            (network-membership/remove-node! net near-a)
             (with-redefs [network-config/update-interval-ticks (constantly 1)]
-              (network/tick-wireless-net! net))
-            (is (false? (network/add-node! net far-node "pw")))
-            (is (true? (network/add-node! net near-b "pw")))))))))
+              (network-runtime/tick-wireless-net! net))
+            (is (false? (network-membership/add-node! net far-node "pw")))
+            (is (true? (network-membership/add-node! net near-b "pw")))))))))

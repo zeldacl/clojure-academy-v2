@@ -2,7 +2,8 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.data.network :as wireless-net]
+            [cn.li.ac.wireless.data.network-state :as network-state]
+            [cn.li.ac.wireless.data.network-membership :as network-membership]
             [cn.li.ac.wireless.data.world :as world]))
 
 (deftest get-world-data-caches-per-world-test
@@ -16,7 +17,7 @@
 (deftest create-network-uniqueness-test
   (let [wd (world/create-world-data :w)
         matrix {:x 0 :y 0 :z 0}]
-    (with-redefs [wireless-net/create-wireless-net
+    (with-redefs [network-state/create-wireless-net
                   (fn [world-data matrix-vblock ssid password]
                     {:world-data world-data
                      :matrix matrix-vblock
@@ -51,7 +52,7 @@
       (fn []
         (is (true? (world/create-network-impl! wd matrix-vb "dnet" "p")))
         (let [net (world/get-network-by-ssid wd "dnet")]
-          (is (true? (wireless-net/add-node! net node-vb "p")))
+          (is (true? (network-membership/add-node! net node-vb "p")))
           (is (some? (get @(:net-lookup wd) node-vb)))
           (world/destroy-network-impl! wd net)
           (is (nil? (get @(:net-lookup wd) node-vb)))

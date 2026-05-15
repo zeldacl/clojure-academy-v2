@@ -3,7 +3,8 @@
 
   Allows energy converters to act as wireless generators (provide energy)
   or wireless receivers (receive energy) when linked to wireless nodes."
-  (:require [cn.li.ac.wireless.api :as wireless-api]
+  (:require [cn.li.ac.wireless.api-query :as wireless-query]
+            [cn.li.ac.wireless.api-command :as wireless-command]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessGenerator IWirelessReceiver]))
 
@@ -139,10 +140,10 @@
           need-auth false]
       (case mode
         "generator"
-        (wireless-api/link-generator-to-node! tile-entity node-tile password need-auth)
+        (wireless-command/link-generator-to-node! tile-entity node-tile password need-auth)
 
         "receiver"
-        (wireless-api/link-receiver-to-node! tile-entity node-tile password need-auth)
+        (wireless-command/link-receiver-to-node! tile-entity node-tile password need-auth)
 
         false))
     (catch Exception e
@@ -163,10 +164,10 @@
     (let [mode (get-wireless-mode state)]
       (case mode
         "generator"
-        (wireless-api/unlink-generator-from-node! tile-entity)
+        (wireless-command/unlink-generator-from-node! tile-entity)
 
         "receiver"
-        (wireless-api/unlink-receiver-from-node! tile-entity)
+        (wireless-command/unlink-receiver-from-node! tile-entity)
 
         false))
     (catch Exception e
@@ -186,10 +187,10 @@
   (let [mode (get-wireless-mode state)]
     (case mode
       "generator"
-      (wireless-api/is-generator-linked? tile-entity)
+      (wireless-query/is-generator-linked? tile-entity)
 
       "receiver"
-      (wireless-api/is-receiver-linked? tile-entity)
+      (wireless-query/is-receiver-linked? tile-entity)
 
       false)))
 

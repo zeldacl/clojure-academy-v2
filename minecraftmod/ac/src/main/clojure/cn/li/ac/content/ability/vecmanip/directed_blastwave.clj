@@ -7,6 +7,7 @@
   Exp: +0.0025 on hit / +0.0012 on miss"
   (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -89,21 +90,6 @@
                                           player-id world-id x y z
                                           (or full-exp? (< (rand) p-drop)))))))))))
 
-(defn- send-fx-start! [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :directed-blastwave/fx-start {:mode :start}))
-(defn- send-fx-update! [ctx-id charge-ticks punched?]
-  (ctx/ctx-send-to-client! ctx-id :directed-blastwave/fx-update
-                           {:mode :update :charge-ticks (long (max 0 charge-ticks))
-                            :punched? (boolean punched?)}))
-(defn- send-fx-perform! [ctx-id hit-pos charge-ticks look]
-  (ctx/ctx-send-to-client! ctx-id :directed-blastwave/fx-perform
-                           {:mode :perform :pos hit-pos
-                            :look-dir (or look {:x 0.0 :y 0.0 :z 1.0})
-                            :charge-ticks (long (max 0 charge-ticks))}))
-(defn- send-fx-end! [ctx-id performed?]
-  (ctx/ctx-send-to-client! ctx-id :directed-blastwave/fx-end
-                           {:mode :end :performed? (boolean performed?)}))
-
 (defskill! directed-blastwave
   :id          :directed-blastwave
   :category-id :vecmanip
@@ -123,8 +109,9 @@
              (ctx/update-context! ctx-id assoc :skill-state
                                   {:charge-ticks 0 :punched? false
                                    :punch-ticks 0  :performed? false})
-             (send-fx-start! ctx-id)
-             (send-fx-update! ctx-id 0 false))
+             (fx/send-start! ctx-id :directed-blastwave/fx-start)
+             (fx/send-update! ctx-id :directed-blastwave/fx-update
+                              {:charge-ticks 0 :punched? false}))
    :tick!  (fn [{:keys [ctx-id]}]
              (when-let [ctx-data (ctx/get-context ctx-id)]
                (let [ss           (:skill-state ctx-data)
@@ -133,19 +120,23 @@
                      next-punch   (if punched? (inc (long (or (:punch-ticks ss) 0))) 0)]
                  (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next-charge)
                  (ctx/update-context! ctx-id assoc-in [:skill-state :punch-ticks]  next-punch)
-                 (send-fx-update! ctx-id next-charge punched?)
+                 (fx/send-update! ctx-id :directed-blastwave/fx-update
+                          {:charge-ticks (long (max 0 next-charge))
+                           :punched? punched?})
                  (cond
                    (>= next-charge MAX-TOLERANT-TICKS)
-                   (do (send-fx-end! ctx-id false) (ctx/terminate-context! ctx-id nil))
+                   (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? false})
+                     (ctx/terminate-context! ctx-id nil))
                    (and punched? (> next-punch PUNCH-ANIM-TICKS))
-                   (do (send-fx-end! ctx-id true) (ctx/terminate-context! ctx-id nil))))))
+                   (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? true})
+                     (ctx/terminate-context! ctx-id nil))))))
    :up!    (fn [{:keys [player-id ctx-id exp cost-ok?]}]
              (when-let [ctx-data (ctx/get-context ctx-id)]
                (let [charge-ticks (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0))
                      exp*         (bal/clamp01 exp)]
                  (if (and (> charge-ticks MIN-TICKS) (< charge-ticks MAX-ACCEPTED-TICKS))
                    (if-not cost-ok?
-                     (do (send-fx-end! ctx-id false)
+                     (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? false})
                          (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))
                      (let [world-id   (geom/world-id-of player-id)
                            trace      (when raycast/*raycast*
@@ -173,7 +164,10 @@
                               entity-motion/*entity-motion* world-id (:uuid entity)
                               (:x impulse) (:y impulse) (:z impulse)))))
                        (break-nearby-blocks! player-id world-id hit-pos exp*)
-                       (send-fx-perform! ctx-id hit-pos charge-ticks look)
+                       (fx/send-perform! ctx-id :directed-blastwave/fx-perform
+                                        {:pos hit-pos
+                                         :look-dir (or look {:x 0.0 :y 0.0 :z 1.0})
+                                         :charge-ticks (long (max 0 charge-ticks))})
                        (ctx/update-context! ctx-id update :skill-state assoc
                                             :punched? true :punch-ticks 0 :performed? true)
                        (skill-effects/set-main-cooldown!
@@ -182,9 +176,9 @@
                         player-id :directed-blastwave (if (seq entities) 0.0025 0.0012))
                        (log/info "DirectedBlastwave executed" "charge" charge-ticks
                                  "entities" (count entities))))
-                   (do (send-fx-end! ctx-id false)
+                   (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? false})
                        (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))))))
    :abort! (fn [{:keys [ctx-id]}]
-             (send-fx-end! ctx-id false)
+                 (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? false})
              (ctx/update-context! ctx-id dissoc :skill-state))}
   :prerequisites [{:skill-id :groundshock :min-exp 0.0}])

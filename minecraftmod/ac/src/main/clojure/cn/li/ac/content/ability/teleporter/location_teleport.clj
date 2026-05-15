@@ -22,7 +22,7 @@
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.saved-locations :as saved-locations]
             [cn.li.mcmod.network.server :as net-srv]
-            [cn.li.mcmod.ability.catalog :as catalog]
+            [cn.li.mcmod.hooks.catalog :as catalog]
             [clojure.string :as str]
             [cn.li.mcmod.util.log :as log]))
 
@@ -263,23 +263,23 @@
 ;; Network handler self-registration (LocationTeleport GUI RPC)
 ;; ============================================================================
 
-(net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-QUERY
+(net-srv/register-handler catalog/MSG-REQ-SAVED-POS-QUERY
   (fn [_payload player]
     (query-location-teleport (uuid/player-uuid-str player))))
 
-(net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-ADD
+(net-srv/register-handler catalog/MSG-REQ-SAVED-POS-ADD
   (fn [{:keys [name]} player]
     (let [uuid (uuid/player-uuid-str player)
           result (save-current-location! uuid name)]
       (merge result (query-location-teleport uuid)))))
 
-(net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-REMOVE
+(net-srv/register-handler catalog/MSG-REQ-SAVED-POS-REMOVE
   (fn [{:keys [name]} player]
     (let [uuid (uuid/player-uuid-str player)
           result (delete-saved-location! uuid name)]
       (merge result (query-location-teleport uuid)))))
 
-(net-srv/register-handler catalog/MSG-REQ-LOCATION-TELEPORT-PERFORM
+(net-srv/register-handler catalog/MSG-REQ-SAVED-POS-PERFORM
   (fn [{:keys [name]} player]
     (let [uuid (uuid/player-uuid-str player)
           result (perform-location-teleport! uuid name)]

@@ -2,13 +2,14 @@
   "Unit tests for Block DSL"
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]))
 
 (defn- reset-block-registry! [f]
-  (reset! bdsl/block-registry {})
+  (registry-core/reset-state! bdsl/block-registry {})
   (f)
-  (reset! bdsl/block-registry {}))
+  (registry-core/reset-state! bdsl/block-registry {}))
 
 (use-fixtures :each reset-block-registry!)
 

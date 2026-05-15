@@ -1,5 +1,3 @@
-(remove-ns 'cn.li.mcmod.block.multiblock-core)
-
 (ns cn.li.mcmod.block.multiblock-core
   "Platform-neutral controller+part multiblock orchestration.
 

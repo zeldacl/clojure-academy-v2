@@ -16,6 +16,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -101,25 +102,6 @@
                                   :y 64.0
                                   :z 0.0})))
 
-(defn- send-fx-start! [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :groundshock/fx-start {:mode :start}))
-
-(defn- send-fx-update! [ctx-id charge-ticks]
-  (ctx/ctx-send-to-client! ctx-id :groundshock/fx-update
-                           {:mode :update
-                            :charge-ticks (long (max 0 charge-ticks))}))
-
-(defn- send-fx-perform! [ctx-id affected-blocks broken-blocks]
-  (ctx/ctx-send-to-client! ctx-id :groundshock/fx-perform
-                           {:mode :perform
-                            :affected-blocks affected-blocks
-                            :broken-blocks broken-blocks}))
-
-(defn- send-fx-end! [ctx-id performed?]
-  (ctx/ctx-send-to-client! ctx-id :groundshock/fx-end
-                           {:mode :end
-                            :performed? (boolean performed?)}))
-
 (defn- entity-overlaps-shock-box?
   [entity bx by bz]
   (let [half-width (/ (double (or (:width entity) 0.6)) 2.0)
@@ -174,7 +156,7 @@
     (ctx/update-context! ctx-id assoc :skill-state
                          {:charge-ticks 0
                           :performed? false})
-    (send-fx-start! ctx-id)
+    (fx/send-start! ctx-id :groundshock/fx-start)
     (log/debug "Groundshock: Charge started")
     (catch Exception e
       (log/warn "Groundshock key-down failed:" (ex-message e)))))
@@ -188,7 +170,8 @@
             charge-ticks (long (or (:charge-ticks skill-state) 0))
             next-charge (inc charge-ticks)]
         (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next-charge)
-        (send-fx-update! ctx-id next-charge)))
+        (fx/send-update! ctx-id :groundshock/fx-update
+             {:charge-ticks (long (max 0 next-charge))})))
     (catch Exception e
       (log/warn "Groundshock key-tick failed:" (ex-message e)))))
 
@@ -342,7 +325,7 @@
                  (player-motion/is-on-ground? player-motion/*player-motion* player-id))
           (if-not cost-ok?
             (do
-              (send-fx-end! ctx-id false)
+              (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
               (log/debug "Groundshock perform failed: insufficient resource"))
             (when-let [pos (get-player-position player-id)]
               (if-let [flat-dir (horizontal-look player-id)]
@@ -360,17 +343,17 @@
                   (apply-cooldown! player-id exp)
                   (add-exp! player-id 0.001)
                   (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] true)
-                  (send-fx-perform! ctx-id
-                                    (:affected-blocks result)
-                                    (finalize-broken-blocks @broken-blocks*))
+                  (fx/send-perform! ctx-id :groundshock/fx-perform
+                                   {:affected-blocks (:affected-blocks result)
+                                    :broken-blocks (finalize-broken-blocks @broken-blocks*)})
                   (log/info "Groundshock: Affected" affected-count "blocks/entities"))
                 (do
-                  (send-fx-end! ctx-id false)
+                  (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
                   (log/debug "Groundshock: Missing horizontal look vector")))))
 
           ;; Invalid conditions
           (do
-            (send-fx-end! ctx-id false)
+            (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
             (log/debug "Groundshock: Invalid conditions (charge:" charge-ticks ")")))))
     (catch Exception e
       (log/warn "Groundshock key-up failed:" (ex-message e)))))
@@ -379,7 +362,7 @@
   "Clean up state on abort."
   [{:keys [ctx-id]}]
   (try
-    (send-fx-end! ctx-id false)
+    (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
     (ctx/update-context! ctx-id dissoc :skill-state)
     (log/debug "Groundshock aborted")
     (catch Exception e

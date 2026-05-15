@@ -7,7 +7,7 @@
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
-            [cn.li.mcmod.ability.catalog :as catalog]))
+            [cn.li.mcmod.hooks.catalog :as catalog]))
 
 (defn- reset-fixture [f]
   (test-contexts/clean-contexts-fixture

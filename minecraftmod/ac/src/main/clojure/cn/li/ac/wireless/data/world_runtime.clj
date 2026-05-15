@@ -1,6 +1,6 @@
 (ns cn.li.ac.wireless.data.world-runtime
 	(:require [cn.li.ac.wireless.core.vblock :as vb]
-						[cn.li.ac.wireless.data.network :as network]
+						[cn.li.ac.wireless.data.network-runtime :as network-runtime]
 						[cn.li.ac.wireless.data.node-conn :as node-conn]
 						[cn.li.ac.wireless.data.world-topology :as topology]
 						[cn.li.mcmod.util.log :as log]))
@@ -28,7 +28,7 @@
 	[world-data]
 	(doseq [item @(:networks world-data)]
 		(when-not @(:disposed item)
-			(network/tick-wireless-net! item)))
+			(network-runtime/tick-wireless-net! item)))
 	(doseq [item @(:connections world-data)]
 		(when-not @(:disposed item)
 			(node-conn/tick-node-conn! item))))

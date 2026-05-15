@@ -7,6 +7,7 @@
   Exp: +0.0035 on hit / +0.001 on miss"
   (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -33,13 +34,6 @@
         d1 (geom/vnorm {:x (:x d0) :y (- (:y d0) 0.6) :z (:z d0)})]
     {:x (* (:x d1) -0.7) :y (* (:y d1) -0.7) :z (* (:z d1) -0.7)}))
 
-(defn- send-fx-start! [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :directed-shock/fx-start {:mode :start}))
-(defn- send-fx-perform! [ctx-id payload]
-  (ctx/ctx-send-to-client! ctx-id :directed-shock/fx-perform (assoc payload :mode :perform)))
-(defn- send-fx-end! [ctx-id performed?]
-  (ctx/ctx-send-to-client! ctx-id :directed-shock/fx-end {:mode :end :performed? (boolean performed?)}))
-
 (defskill! directed-shock
   :id          :directed-shock
   :category-id :vecmanip
@@ -57,13 +51,13 @@
   :actions
   {:down! (fn [{:keys [ctx-id]}]
             (ctx/update-context! ctx-id assoc :skill-state {:charge-ticks 0 :performed? false})
-            (send-fx-start! ctx-id))
+            (fx/send-start! ctx-id :directed-shock/fx-start))
    :tick! (fn [{:keys [ctx-id]}]
             (when-let [ctx-data (ctx/get-context ctx-id)]
               (let [next-charge (inc (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0)))]
                 (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next-charge)
                 (when (>= next-charge MAX-TOLERANT-TICKS)
-                  (send-fx-end! ctx-id false)
+                  (fx/send-end! ctx-id :directed-shock/fx-end {:performed? false})
                   (ctx/terminate-context! ctx-id nil)))))
    :up!   (fn [{:keys [player-id ctx-id exp cost-ok?]}]
             (when-let [ctx-data (ctx/get-context ctx-id)]
@@ -71,7 +65,7 @@
                     exp*         (bal/clamp01 exp)]
                 (if (and (> charge-ticks MIN-TICKS) (< charge-ticks MAX-ACCEPTED-TICKS))
                   (if-not cost-ok?
-                    (do (send-fx-end! ctx-id false)
+                    (do (fx/send-end! ctx-id :directed-shock/fx-end {:performed? false})
                         (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))
                     (let [world-id   (geom/world-id-of player-id)
                           eye        (geom/eye-pos player-id)
@@ -103,18 +97,19 @@
                             (entity-motion/add-velocity!
                              entity-motion/*entity-motion* world-id target-id
                              (:x impulse) (:y impulse) (:z impulse)))
-                          (send-fx-perform! ctx-id {:target-id target-id
-                                                    :world-id world-id
-                                                    :impulse impulse
-                                                    :knockback knockback})
+                          (fx/send-perform! ctx-id :directed-shock/fx-perform
+                                           {:target-id target-id
+                                            :world-id world-id
+                                            :impulse impulse
+                                            :knockback knockback})
                           (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] true)
                           (skill-effects/add-skill-exp! player-id :directed-shock 0.0035)
                           (log/info "DirectedShock hit" target-id "dmg" (int (bal/lerp 7.0 15.0 exp*))))
-                        (do (send-fx-end! ctx-id false)
+                        (do (fx/send-end! ctx-id :directed-shock/fx-end {:performed? false})
                             (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false)
                             (skill-effects/add-skill-exp! player-id :directed-shock 0.001)))))
-                  (do (send-fx-end! ctx-id false)
+                      (do (fx/send-end! ctx-id :directed-shock/fx-end {:performed? false})
                       (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))))))
    :abort! (fn [{:keys [ctx-id]}]
-             (send-fx-end! ctx-id false)
+                   (fx/send-end! ctx-id :directed-shock/fx-end {:performed? false})
              (ctx/update-context! ctx-id dissoc :skill-state))})

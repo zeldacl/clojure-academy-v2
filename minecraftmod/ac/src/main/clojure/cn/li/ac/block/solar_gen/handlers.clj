@@ -3,7 +3,8 @@
 						[cn.li.mcmod.network.server :as net-server]
 						[cn.li.ac.wireless.gui.message.registry :as msg-registry]
 						[cn.li.ac.wireless.gui.sync.handler :as net-helpers]
-						[cn.li.ac.wireless.api :as helper]
+						[cn.li.ac.wireless.api-query :as wireless-query]
+						[cn.li.ac.wireless.api-command :as wireless-command]
 						[cn.li.ac.block.solar-gen.logic :as solar-logic]
 						[cn.li.mcmod.util.log :as log]))
 
@@ -21,7 +22,7 @@
 			(let [tile-pos    (pos/position-get-block-pos tile)
 						linked-node (solar-logic/get-linked-node tile)
 						linked-pos  (when linked-node (.getBlockPos linked-node))
-						nodes       (if tile-pos (helper/get-nodes-in-range world tile-pos) [])
+						nodes       (if tile-pos (wireless-query/get-nodes-in-range world tile-pos) [])
 						avail       (->> nodes
 														 (remove (fn [n]
 																			 (let [p (.getBlockPos n)]
@@ -43,7 +44,7 @@
 			(if-let [node (net-helpers/get-tile-at world {:pos-x (:node-x node-pos)
 																										:pos-y (:node-y node-pos)
 																										:pos-z (:node-z node-pos)})]
-				{:success (boolean (helper/link-generator-to-node! gen node pass need-auth?))}
+				{:success (boolean (wireless-command/link-generator-to-node! gen node pass need-auth?))}
 				{:success false})
 			{:success false})))
 
@@ -51,7 +52,7 @@
 	(let [world (net-helpers/get-world player)
 				gen   (net-helpers/get-tile-at world payload)]
 		(if (and world gen)
-			(do (helper/unlink-generator-from-node! gen)
+			(do (wireless-command/unlink-generator-from-node! gen)
 					{:success true})
 			{:success false})))
 

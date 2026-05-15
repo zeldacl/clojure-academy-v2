@@ -3,7 +3,9 @@
 
   Keeps imperative network/connection operations in one place so API facade
   namespaces stay thin and migration-friendly."
-  (:require [cn.li.ac.wireless.data.network :as network]
+  (:require [cn.li.ac.wireless.data.network-membership :as network-membership]
+            [cn.li.ac.wireless.data.network-mutation :as network-mutation]
+            [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.service.node-connection :as node-connection]
             [cn.li.ac.wireless.service.world-registry :as world-registry]))
 
@@ -21,19 +23,19 @@
 
 (defn unlink-node-from-network!
   [network-item node-vb]
-  (network/remove-node! network-item node-vb))
+  (network-membership/remove-node! network-item node-vb))
 
 (defn network-load
   [network-item]
-  (network/get-load network-item))
+  (network-state/get-load network-item))
 
 (defn reset-network-ssid!
   [network-item new-ssid]
-  (network/reset-ssid! network-item new-ssid))
+  (network-mutation/reset-ssid! network-item new-ssid))
 
 (defn reset-network-password!
   [network-item new-password]
-  (network/reset-password! network-item new-password))
+  (network-mutation/reset-password! network-item new-password))
 
 (defn refresh-world-ssid-lookup!
   [network-item old-ssid new-ssid]

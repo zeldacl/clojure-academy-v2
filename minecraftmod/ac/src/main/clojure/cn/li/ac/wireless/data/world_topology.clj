@@ -2,7 +2,8 @@
 	(:require [cn.li.ac.wireless.core.vblock :as vb]
 						[cn.li.ac.wireless.data.spatial-lookup :as spatial-lookup]
 						[cn.li.ac.wireless.data.network-lookup :as network-lookup]
-						[cn.li.ac.wireless.data.network :as network]
+						[cn.li.ac.wireless.data.network-state :as network-state]
+						[cn.li.ac.wireless.data.network-membership :as network-membership]
 						[cn.li.ac.wireless.data.node-conn :as node-conn]
 						[cn.li.mcmod.util.log :as log]))
 
@@ -92,7 +93,7 @@
 		false
 
 		:else
-		(let [item (network/create-wireless-net world-data matrix-vblock ssid password)]
+		(let [item (network-state/create-wireless-net world-data matrix-vblock ssid password)]
 			(register-network! world-data item)
 			(log/info (format "Created network: SSID='%s'" ssid))
 			true)))
@@ -130,8 +131,8 @@
 	"Link a node vblock into the specified network with password check."
 	[world-data net node-vblock password-attempt]
 	(when-let [old-net (get-network-by-node world-data node-vblock)]
-		(network/remove-node! old-net node-vblock))
-	(network/add-node! net node-vblock password-attempt))
+		(network-membership/remove-node! old-net node-vblock))
+	(network-membership/add-node! net node-vblock password-attempt))
 
 (defn link-generator-to-node-connection!
 	"Link a generator vblock to a node connection."

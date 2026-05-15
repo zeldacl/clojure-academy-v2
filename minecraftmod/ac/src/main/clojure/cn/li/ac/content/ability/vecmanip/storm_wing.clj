@@ -22,6 +22,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -119,20 +120,6 @@
 ;; FX helpers
 ;; ============================================================================
 
-(defn- send-fx-start! [ctx-id charge-ticks]
-  (ctx/ctx-send-to-client! ctx-id :storm-wing/fx-start
-                           {:mode :start :charge-ticks (long charge-ticks)}))
-
-(defn- send-fx-update! [ctx-id phase charge-ticks charge-ratio]
-  (ctx/ctx-send-to-client! ctx-id :storm-wing/fx-update
-                           {:mode :update
-                            :phase phase
-                            :charge-ticks (long charge-ticks)
-                            :charge-ratio (double charge-ratio)}))
-
-(defn- send-fx-end! [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :storm-wing/fx-end {:mode :end}))
-
 ;; ============================================================================
 ;; Skill callbacks
 ;; ============================================================================
@@ -147,7 +134,7 @@
                             :charge-ticks 0
                             :charge-ticks-needed charge-needed
                             :vx 0.0 :vy 0.0 :vz 0.0})
-      (send-fx-start! ctx-id charge-needed))
+      (fx/send-start! ctx-id :storm-wing/fx-start {:charge-ticks (long charge-needed)}))
     (catch Exception e
       (log/warn "StormWing key-down failed:" (ex-message e)))))
 
@@ -165,7 +152,10 @@
                     needed (long (:charge-ticks-needed skill-state 70))
                     new-ct (inc ct)]
                 (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] new-ct)
-                (send-fx-update! ctx-id :charging new-ct (min 1.0 (/ (double new-ct) (double needed))))
+                (fx/send-update! ctx-id :storm-wing/fx-update
+                                {:phase :charging
+                                 :charge-ticks (long new-ct)
+                                 :charge-ratio (min 1.0 (/ (double new-ct) (double needed)))})
                 (when (>= new-ct needed)
                   ;; Transition to flying
                   (ctx/update-context! ctx-id assoc-in [:skill-state :phase] :flying)
@@ -238,12 +228,15 @@
                         (add-exp! player-id)
 
                         ;; FX update
-                        (send-fx-update! ctx-id :flying 0 1.0)))))
+                        (fx/send-update! ctx-id :storm-wing/fx-update
+                                        {:phase :flying
+                                         :charge-ticks 0
+                                         :charge-ratio 1.0})))))
 
                 ;; Insufficient resources: terminate
                 (do
                   (apply-cooldown! player-id exp)
-                  (send-fx-end! ctx-id)
+                  (fx/send-end! ctx-id :storm-wing/fx-end)
                   (ctx/update-context! ctx-id assoc-in [:skill-state :phase] :terminated)))
 
               nil)))))
@@ -255,7 +248,7 @@
   (try
     (let [exp (skill-exp player-id)]
       (apply-cooldown! player-id exp)
-      (send-fx-end! ctx-id)
+      (fx/send-end! ctx-id :storm-wing/fx-end)
       (ctx/update-context! ctx-id dissoc :skill-state))
     (catch Exception e
       (log/warn "StormWing key-up failed:" (ex-message e)))))
@@ -265,7 +258,7 @@
   (try
     (let [exp (skill-exp player-id)]
       (apply-cooldown! player-id exp)
-      (send-fx-end! ctx-id)
+      (fx/send-end! ctx-id :storm-wing/fx-end)
       (ctx/update-context! ctx-id dissoc :skill-state))
     (catch Exception e
       (log/warn "StormWing key-abort failed:" (ex-message e)))))

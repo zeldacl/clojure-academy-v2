@@ -9,7 +9,7 @@
   All mutating calls go through player-state ns; no atom touched directly.
   No net.minecraft.* imports allowed."
   (:require [cn.li.mcmod.network.server         :as net-srv]
-            [cn.li.mcmod.ability.catalog        :as catalog]
+            [cn.li.mcmod.hooks.catalog          :as catalog]
             [cn.li.mcmod.platform.entity        :as entity]
             [cn.li.ac.ability.service.player-state      :as ps]
             [cn.li.ac.ability.model.ability :as adata]
@@ -122,7 +122,7 @@
   ;; ============================================================================
 
 (defn register-handlers! []
-  (net-srv/register-handler catalog/MSG-REQ-LEARN-SKILL    handle-learn-skill-request)
+  (net-srv/register-handler catalog/MSG-REQ-LEARN-NODE     handle-learn-skill-request)
   (net-srv/register-handler catalog/MSG-REQ-LEVEL-UP       handle-level-up-request)
   (net-srv/register-handler catalog/MSG-REQ-SET-PRESET     handle-set-preset-request)
   (net-srv/register-handler catalog/MSG-REQ-SWITCH-PRESET  handle-switch-preset-request)
@@ -131,8 +131,8 @@
   (net-srv/register-handler catalog/MSG-CTX-KEEPALIVE      handle-keepalive-context)
   (net-srv/register-handler catalog/MSG-CTX-TERMINATE      handle-terminate-context)
   (net-srv/register-handler catalog/MSG-CTX-CHANNEL        handle-channel-context)
-  (net-srv/register-handler catalog/MSG-SKILL-KEY-DOWN     handle-key-down-skill)
-  (net-srv/register-handler catalog/MSG-SKILL-KEY-TICK     handle-key-tick-skill)
-  (net-srv/register-handler catalog/MSG-SKILL-KEY-UP       handle-key-up-skill)
-  (net-srv/register-handler catalog/MSG-SKILL-KEY-ABORT    handle-key-abort-skill)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-DOWN      handle-key-down-skill)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-TICK      handle-key-tick-skill)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-UP        handle-key-up-skill)
+  (net-srv/register-handler catalog/MSG-SLOT-KEY-ABORT     handle-key-abort-skill)
   (log/info "Ability network handlers registered"))

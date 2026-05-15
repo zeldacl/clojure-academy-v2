@@ -1,16 +1,17 @@
 (ns cn.li.mcmod.block.tile-dsl-logic-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
-            [cn.li.mcmod.block.tile-logic :as tlog]))
+            [cn.li.mcmod.block.tile-logic :as tlog]
+            [cn.li.mcmod.protocol.core :as registry-core]))
 
 (defn- reset-tile-dsl! []
-  (reset! tdsl/tile-registry {:by-id {} :block->tile-id {}}))
+  (registry-core/reset-state! tdsl/tile-registry {:by-id {} :block->tile-id {}}))
 
 (defn- reset-tile-logic! []
-  (reset! tlog/tile-logic-registry {})
-  (reset! tlog/tile-kind-registry {})
-  (reset! tlog/capability-registry {})
-  (reset! tlog/container-registry {}))
+  (registry-core/reset-state! tlog/tile-logic-registry {})
+  (registry-core/reset-state! tlog/tile-kind-registry {})
+  (registry-core/reset-state! tlog/capability-registry {})
+  (registry-core/reset-state! tlog/container-registry {}))
 
 (defn- reset-all! [f]
   (reset-tile-dsl!)

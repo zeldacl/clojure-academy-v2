@@ -12,14 +12,6 @@
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.nbt CompoundTag]))
 
-(defn get-player-by-uuid
-  ^ServerPlayer [^MinecraftServer server uuid-str]
-  (try
-    (query-core/get-player-by-uuid server uuid-str)
-    (catch Exception e
-      (log/warn "Failed to get player by UUID:" uuid-str (ex-message e))
-      nil)))
-
 (defn- get-locations-tag
   ^CompoundTag [^ServerPlayer player]
   (let [persistent-data (.getPersistentData player)]
@@ -47,7 +39,7 @@
 (defn save-location!
   [^MinecraftServer server player-uuid location-name world-id x y z]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (let [locations-tag (get-locations-tag player)
             current-count (.size (.getAllKeys locations-tag))
             max-locations (long (power-runtime/get-max-saved-locations))]
@@ -67,7 +59,7 @@
 (defn delete-location!
   [^MinecraftServer server player-uuid location-name]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (let [locations-tag (get-locations-tag player)]
         (if (.contains locations-tag location-name)
           (do
@@ -82,7 +74,7 @@
 (defn get-location
   [^MinecraftServer server player-uuid location-name]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (let [locations-tag (get-locations-tag player)]
         (when (.contains locations-tag location-name)
           (nbt-to-location location-name (.getCompound locations-tag location-name)))))
@@ -93,7 +85,7 @@
 (defn list-locations
   [^MinecraftServer server player-uuid]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (let [locations-tag (get-locations-tag player)
             keys (.getAllKeys locations-tag)]
         (mapv (fn [key]
@@ -106,7 +98,7 @@
 (defn get-location-count
   [^MinecraftServer server player-uuid]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (let [locations-tag (get-locations-tag player)]
         (.size (.getAllKeys locations-tag))))
     (catch Exception e
@@ -116,7 +108,7 @@
 (defn has-location?
   [^MinecraftServer server player-uuid location-name]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (let [locations-tag (get-locations-tag player)]
         (.contains locations-tag location-name)))
     (catch Exception e

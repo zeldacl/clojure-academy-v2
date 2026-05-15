@@ -48,14 +48,6 @@
    :hero-of-the-village "minecraft:hero_of_the_village"
    :darkness            "minecraft:darkness"})
 
-(defn get-player-by-uuid
-  ^ServerPlayer [^MinecraftServer server uuid-str]
-  (try
-    (query-core/get-player-by-uuid server uuid-str)
-    (catch Exception e
-      (log/warn "Failed to get player by UUID:" uuid-str (ex-message e))
-      nil)))
-
 (defn- get-mob-effect [effect-type]
   (let [vanilla-key (get vanilla-effect-keys effect-type)]
     (if vanilla-key
@@ -75,7 +67,7 @@
 (defn apply-potion-effect!
   [^MinecraftServer server player-uuid effect-type duration amplifier]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (when-let [^MobEffect mob-effect (get-mob-effect effect-type)]
         (.addEffect player (MobEffectInstance. mob-effect (int duration) (int amplifier)))
         true))
@@ -86,7 +78,7 @@
 (defn remove-potion-effect!
   [^MinecraftServer server player-uuid effect-type]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (when-let [^MobEffect mob-effect (get-mob-effect effect-type)]
         (.removeEffect player mob-effect)
         true))
@@ -98,7 +90,7 @@
   [^MinecraftServer server player-uuid effect-type]
   (try
     (boolean
-      (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+      (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
         (when-let [^MobEffect mob-effect (get-mob-effect effect-type)]
           (.hasEffect player mob-effect))))
     (catch Exception e
@@ -108,7 +100,7 @@
 (defn clear-all-effects!
   [^MinecraftServer server player-uuid]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (.removeAllEffects player)
       true)
     (catch Exception e

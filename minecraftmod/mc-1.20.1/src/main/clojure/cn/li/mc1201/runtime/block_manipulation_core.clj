@@ -17,14 +17,6 @@
            [net.minecraft.server.level ServerPlayer ServerLevel]
            [net.minecraft.world.level.block Block Blocks]))
 
-(defn get-player-by-uuid
-  ^ServerPlayer [^MinecraftServer server uuid-str]
-  (try
-    (query-core/get-player-by-uuid server uuid-str)
-    (catch Exception e
-      (log/warn "Failed to get player by UUID:" uuid-str (ex-message e))
-      nil)))
-
 (defn get-level-by-id
   ^ServerLevel [^MinecraftServer server world-id]
   (try
@@ -43,7 +35,7 @@
   [^MinecraftServer server player-uuid world-id x y z drop? break-guard-fn]
   (try
     (when-let [^ServerLevel level (get-level-by-id server world-id)]
-      (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+      (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
         (let [pos (BlockPos. (int x) (int y) (int z))]
           (when (break-guard-fn level pos player)
             (when drop?
@@ -64,7 +56,7 @@
   [^MinecraftServer server player-uuid world-id x y z break-guard-fn]
   (try
     (when-let [^ServerLevel level (get-level-by-id server world-id)]
-      (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+      (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
         (let [pos (BlockPos. (int x) (int y) (int z))]
           (boolean (break-guard-fn level pos player)))))
     (catch Exception e

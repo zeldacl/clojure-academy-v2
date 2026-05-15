@@ -3,6 +3,7 @@
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.multiblock-core :as mb]
             [cn.li.mcmod.platform.be :as pbe]
+            [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]))
 
@@ -26,9 +27,9 @@
   (bdsl/register-block! (bdsl/create-block-spec "part-test" (controller-parts-opts))))
 
 (defn- reset-blocks! [f]
-  (reset! bdsl/block-registry {})
+  (registry-core/reset-state! bdsl/block-registry {})
   (f)
-  (reset! bdsl/block-registry {}))
+  (registry-core/reset-state! bdsl/block-registry {}))
 
 (use-fixtures :each reset-blocks!)
 

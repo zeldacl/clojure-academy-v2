@@ -11,14 +11,6 @@
            [net.minecraft.world.entity Entity LivingEntity]
            [net.minecraft.world.phys Vec3 AABB]))
 
-(defn get-player-by-uuid
-  ^ServerPlayer [^MinecraftServer server uuid-str]
-  (try
-    (query-core/get-player-by-uuid server uuid-str)
-    (catch Exception e
-      (log/warn "Failed to get player by UUID:" uuid-str (ex-message e))
-      nil)))
-
 (defn get-level
   ^ServerLevel [^MinecraftServer server world-id]
   (try
@@ -30,7 +22,7 @@
 (defn teleport-player!
   [^MinecraftServer server player-uuid world-id x y z]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (when-let [^ServerLevel target-level (get-level server world-id)]
         (when (.isPassenger player)
           (.stopRiding player))
@@ -65,7 +57,7 @@
 (defn teleport-with-entities!
   [^MinecraftServer server player-uuid world-id x y z radius]
   (try
-    (if-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (if-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (if-let [^ServerLevel target-level (get-level server world-id)]
         (let [current-level (.level player)
               player-pos (.position player)
@@ -100,7 +92,7 @@
 (defn reset-fall-damage!
   [^MinecraftServer server player-uuid]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (.resetFallDistance player)
       true)
     (catch Exception e
@@ -110,7 +102,7 @@
 (defn get-player-position
   [^MinecraftServer server player-uuid]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (let [pos (.position player)
             level (.level player)
             dimension-key (.dimension level)
@@ -126,7 +118,7 @@
 (defn get-player-dimension
   [^MinecraftServer server player-uuid]
   (try
-    (when-let [^ServerPlayer player (get-player-by-uuid server player-uuid)]
+    (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
       (let [level (.level player)
             dimension-key (.dimension level)]
         (str (.location dimension-key))))

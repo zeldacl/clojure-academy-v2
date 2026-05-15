@@ -3,7 +3,8 @@
 	(:require [cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.entity :as entity]
 						[cn.li.ac.wireless.gui.sync.handler :as net-helpers]
-						[cn.li.ac.wireless.api :as helper]
+						[cn.li.ac.wireless.api-query :as wireless-query]
+						[cn.li.ac.wireless.api-command :as wireless-command]
 						[cn.li.ac.wireless.service.network-command :as network-command]
 						[cn.li.ac.block.wireless-matrix.logic :as matrix-logic])
 	(:import [cn.li.acapi.wireless IWirelessMatrix WirelessCapabilityKeys]))
@@ -43,11 +44,11 @@
 (defn wireless-network
 	[ctrl]
 	(when ctrl
-		(helper/get-wireless-net-by-matrix ctrl)))
+		(wireless-query/get-wireless-net-by-matrix ctrl)))
 
 (defn create-network!
 	[ctrl ssid password]
-	(boolean (helper/create-network! ctrl ssid password)))
+	(boolean (wireless-command/create-network! ctrl ssid password)))
 
 (defn change-ssid!
 	[network new-ssid]

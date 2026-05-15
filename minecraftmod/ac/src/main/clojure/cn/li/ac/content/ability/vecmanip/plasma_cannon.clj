@@ -18,6 +18,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -83,21 +84,6 @@
 ;; ============================================================
 ;; FX messaging (server → client)
 ;; ============================================================
-
-(defn- send-fx-start! [ctx-id]
-  (ctx/ctx-send-to-client! ctx-id :plasma-cannon/fx-start {:mode :start}))
-
-(defn- send-fx-update! [ctx-id payload]
-  (ctx/ctx-send-to-client! ctx-id :plasma-cannon/fx-update
-                           (assoc payload :mode :update)))
-
-(defn- send-fx-perform! [ctx-id pos]
-  (ctx/ctx-send-to-client! ctx-id :plasma-cannon/fx-perform
-                           {:mode :perform :pos pos}))
-
-(defn- send-fx-end! [ctx-id performed?]
-  (ctx/ctx-send-to-client! ctx-id :plasma-cannon/fx-end
-                           {:mode :end :performed? (boolean performed?)}))
 
 ;; ============================================================
 ;; Projectile movement helpers
@@ -210,7 +196,7 @@
           ct  (int (charge-time exp))]
       (if-not cost-ok?
         (do
-          (send-fx-end! ctx-id false)
+          (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
           (ctx/terminate-context! ctx-id nil)
           (log/debug "PlasmaCannon: Not enough resources to activate"))
         (do
@@ -223,7 +209,7 @@
                                 :flight-ticks  0
                                 :charge-pos    nil
                                 :destination   nil})
-          (send-fx-start! ctx-id)
+          (fx/send-start! ctx-id :plasma-cannon/fx-start)
           (log/debug "PlasmaCannon: Charge started, need" ct "ticks"))))
     (catch Exception e
       (log/warn "PlasmaCannon key-down failed:" (ex-message e)))))
@@ -248,7 +234,7 @@
             (if-not cost-ok?
               ;; Out of CP: abort (original: terminate())
               (do
-                (send-fx-end! ctx-id false)
+                (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
                 (ctx/terminate-context! ctx-id nil)
                 (log/debug "PlasmaCannon: Ran out of CP, aborting"))
               ;; Still charging
@@ -256,8 +242,9 @@
                 (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next-ticks)
                 ;; Notify client: fully-charged flag triggers plasma_cannon_t sound
                 (let [fully-charged? (>= next-ticks charge-time)]
-                  (send-fx-update! ctx-id {:charge-ticks  next-ticks
-                                           :fully-charged? fully-charged?})))))
+                  (fx/send-update! ctx-id :plasma-cannon/fx-update
+                                   {:charge-ticks  next-ticks
+                                    :fully-charged? fully-charged?})))))
 
           :go
           (let [charge-pos   (:charge-pos skill-state)
@@ -277,8 +264,8 @@
                   ;; Explode at destination
                   (let [exp (get-skill-exp player-id)]
                     (do-explode! player-id world-id destination exp)
-                    (send-fx-perform! ctx-id destination)
-                    (send-fx-end! ctx-id true)
+                    (fx/send-perform! ctx-id :plasma-cannon/fx-perform {:pos destination})
+                    (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? true})
                     (ctx/terminate-context! ctx-id nil))
                   ;; Still flying: move and sync every 5 ticks
                   (let [next-sync (if (zero? sync-ticks) 5 (dec sync-ticks))]
@@ -287,12 +274,13 @@
                                          :flight-ticks next-flight
                                          :sync-ticks   next-sync)
                     (when (zero? sync-ticks)
-                      (send-fx-update! ctx-id {:charge-pos   new-pos
-                                               :flight-ticks next-flight})))))))
+                      (fx/send-update! ctx-id :plasma-cannon/fx-update
+                                       {:charge-pos   new-pos
+                                        :flight-ticks next-flight})))))))
 
           ;; Fallback: unknown state → terminate
           (do
-            (send-fx-end! ctx-id false)
+            (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
             (ctx/terminate-context! ctx-id nil)))))
     (catch Exception e
       (log/warn "PlasmaCannon key-tick failed:" (ex-message e)))))
@@ -313,7 +301,7 @@
                 (< charge-ticks charge-time))
           ;; Not fully charged or already flying → abort
           (when-not (= state :go)
-            (send-fx-end! ctx-id false)
+            (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
             (ctx/terminate-context! ctx-id nil)
             (log/debug "PlasmaCannon: Released before fully charged, aborting"))
 
@@ -336,9 +324,10 @@
                                  :flight-ticks 0
                                  :sync-ticks   0)
             ;; Notify client: state change to flying
-            (send-fx-update! ctx-id {:state       :go
-                                     :charge-pos  spawn-pos
-                                     :destination dest})
+            (fx/send-update! ctx-id :plasma-cannon/fx-update
+                             {:state       :go
+                              :charge-pos  spawn-pos
+                              :destination dest})
             (log/info "PlasmaCannon: Fired → destination"
                       [(int (:x dest)) (int (:y dest)) (int (:z dest))])))))
     (catch Exception e
@@ -348,7 +337,7 @@
   "Clean up on abort."
   [{:keys [ctx-id]}]
   (try
-    (send-fx-end! ctx-id false)
+    (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
     (ctx/update-context! ctx-id dissoc :skill-state)
     (log/debug "PlasmaCannon: Aborted")
     (catch Exception e

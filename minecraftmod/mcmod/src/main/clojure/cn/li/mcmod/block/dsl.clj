@@ -1,5 +1,3 @@
-(remove-ns 'cn.li.mcmod.block.dsl)
-
 (ns cn.li.mcmod.block.dsl
 	"Block DSL compatibility wrapper.
    
@@ -30,6 +28,8 @@
 (defonce default-friction props/default-friction)
 (defonce default-creative-tab props/default-creative-tab)
 
+(defonce block-registry core/block-registry)
+
 (defonce get-block-spec q/get-block-spec)
 (defonce list-blocks q/list-all-blocks)
 (defonce controller-parts-block? q/controller-parts-block?)
@@ -56,6 +56,11 @@
 (defonce all-multi-block-positions mb/all-multi-block-positions)
 (defonce can-place-multi-block? mb/can-place-multi-block?)
 (defonce is-multi-block-complete? mb/is-multi-block-complete?)
+(defonce create-cross-shape mb/create-cross-shape)
+(defonce create-l-shape mb/create-l-shape)
+(defonce create-t-shape mb/create-t-shape)
+(defonce create-pyramid-shape mb/create-pyramid-shape)
+(defonce create-hollow-cube mb/create-hollow-cube)
 
 (defonce create-block-spec core/create-block-spec)
 (defonce register-block! core/register-block!)
@@ -87,17 +92,20 @@
 
 (defn handle-right-click
 	[block-spec event-data]
-	(when-let [handler (:on-right-click (:events block-spec))]
+	(when-let [handler (or (:on-right-click block-spec)
+										(:on-right-click (:events block-spec)))]
 		(handler event-data)))
 
 (defn handle-break
 	[block-spec event-data]
-	(when-let [handler (:on-break (:events block-spec))]
+	(when-let [handler (or (:on-break block-spec)
+									(:on-break (:events block-spec)))]
 		(handler event-data)))
 
 (defn handle-place
 	[block-spec event-data]
-	(when-let [handler (:on-place (:events block-spec))]
+	(when-let [handler (or (:on-place block-spec)
+									(:on-place (:events block-spec)))]
 		(handler event-data)))
 
 (defn handle-multi-block-break

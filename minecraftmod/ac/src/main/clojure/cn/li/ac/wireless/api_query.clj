@@ -28,26 +28,16 @@
 (defn lookup-wireless-net-by-matrix
 	"Compatibility lookup entry for matrix -> wireless network.
 
-	Prefers facade symbol override when present (for tests/compat hooks),
-	otherwise falls back to local query implementation."
+	Directly delegates to local query implementation."
 	[matrix-tile]
-	(if-let [lookup-fn (try
-								(requiring-resolve 'cn.li.ac.wireless.api/get-wireless-net-by-matrix)
-								(catch Exception _ nil))]
-		(lookup-fn matrix-tile)
-		(get-wireless-net-by-matrix matrix-tile)))
+	(get-wireless-net-by-matrix matrix-tile))
 
 (defn lookup-wireless-net-by-node
 	"Compatibility lookup entry for node -> wireless network.
 
-	Prefers facade symbol override when present (for tests/compat hooks),
-	otherwise falls back to local query implementation."
+	Directly delegates to local query implementation."
 	[node-tile]
-	(if-let [lookup-fn (try
-								(requiring-resolve 'cn.li.ac.wireless.api/get-wireless-net-by-node)
-								(catch Exception _ nil))]
-		(lookup-fn node-tile)
-		(get-wireless-net-by-node node-tile)))
+	(get-wireless-net-by-node node-tile))
 
 (defn is-node-linked?
 	[node-tile]

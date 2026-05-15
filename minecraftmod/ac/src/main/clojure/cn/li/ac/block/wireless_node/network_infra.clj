@@ -5,7 +5,8 @@
 	(:require [cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.ac.wireless.search-config :as search-config]
 						[cn.li.ac.wireless.core.vblock :as vb]
-						[cn.li.ac.wireless.api :as helper]
+						[cn.li.ac.wireless.api-query :as wireless-query]
+						[cn.li.ac.wireless.api-command :as wireless-command]
 						[cn.li.ac.wireless.service.world-registry :as world-registry]
 						[cn.li.ac.wireless.service.network-command :as network-command]
 						[cn.li.ac.wireless.gui.sync.handler :as net-helpers])
@@ -20,7 +21,7 @@
 (defn linked-network
 	[tile]
 	(try
-		(helper/get-wireless-net-by-node tile)
+		(wireless-query/get-wireless-net-by-node tile)
 		(catch Exception _ nil)))
 
 (defn node-range
@@ -31,7 +32,7 @@
 
 (defn available-networks
 	[world x y z range]
-	(helper/get-nets-in-range world x y z range (search-config/max-results)))
+	(wireless-query/get-nets-in-range world x y z range (search-config/max-results)))
 
 (defn matrix-capability
 	[world net]
@@ -69,5 +70,5 @@
 
 (defn disconnect-node!
 	[tile]
-	(helper/unlink-node-from-network! tile)
+	(wireless-command/unlink-node-from-network! tile)
 	true)

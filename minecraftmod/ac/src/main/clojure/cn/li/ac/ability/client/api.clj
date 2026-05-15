@@ -3,7 +3,7 @@
 
   This namespace stays platform-neutral by using mcmod network client transport."
   (:require [cn.li.mcmod.network.client :as net-client]
-            [cn.li.mcmod.ability.catalog :as catalog]))
+            [cn.li.mcmod.hooks.catalog :as catalog]))
 
 (defn req-learn-skill!
   "Send learn-skill request. Optional `extra` map may include
@@ -11,7 +11,7 @@
   ([skill-id callback]
    (req-learn-skill! skill-id nil callback))
   ([skill-id extra callback]
-   (net-client/send-to-server catalog/MSG-REQ-LEARN-SKILL
+  (net-client/send-to-server catalog/MSG-REQ-LEARN-NODE
                                 (merge {:skill-id skill-id} (or extra {}))
                                 callback)))
 
@@ -38,22 +38,22 @@
                              callback))
 
 (defn req-location-teleport-query! [callback]
-  (net-client/send-to-server catalog/MSG-REQ-LOCATION-TELEPORT-QUERY {} callback))
+  (net-client/send-to-server catalog/MSG-REQ-SAVED-POS-QUERY {} callback))
 
 (defn req-location-teleport-add!
   [location-name callback]
-  (net-client/send-to-server catalog/MSG-REQ-LOCATION-TELEPORT-ADD
+  (net-client/send-to-server catalog/MSG-REQ-SAVED-POS-ADD
                              {:name location-name}
                              callback))
 
 (defn req-location-teleport-remove!
   [location-name callback]
-  (net-client/send-to-server catalog/MSG-REQ-LOCATION-TELEPORT-REMOVE
+  (net-client/send-to-server catalog/MSG-REQ-SAVED-POS-REMOVE
                              {:name location-name}
                              callback))
 
 (defn req-location-teleport-perform!
   [location-name callback]
-  (net-client/send-to-server catalog/MSG-REQ-LOCATION-TELEPORT-PERFORM
+  (net-client/send-to-server catalog/MSG-REQ-SAVED-POS-PERFORM
                              {:name location-name}
                              callback))

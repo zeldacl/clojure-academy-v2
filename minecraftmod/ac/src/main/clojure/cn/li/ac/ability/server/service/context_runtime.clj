@@ -2,10 +2,10 @@
   "Server-side handlers for context key input lifecycle.
 
   This namespace executes skill runtime callbacks behind context messages:
-  - MSG-SKILL-KEY-DOWN
-  - MSG-SKILL-KEY-TICK
-  - MSG-SKILL-KEY-UP
-  - MSG-SKILL-KEY-ABORT
+  - MSG-SLOT-KEY-DOWN
+  - MSG-SLOT-KEY-TICK
+  - MSG-SLOT-KEY-UP
+  - MSG-SLOT-KEY-ABORT
 
   It keeps input state transitions strict to avoid duplicated lifecycle calls."
   (:require [cn.li.ac.ability.service.dispatcher :as ctx]
