@@ -6,8 +6,8 @@
 						[cn.li.ac.wireless.search-config :as search-config]
 						[cn.li.ac.wireless.core.vblock :as vb]
 						[cn.li.ac.wireless.api :as helper]
-						[cn.li.ac.wireless.data.world :as world-data]
-						[cn.li.ac.wireless.data.network :as wireless-net]
+						[cn.li.ac.wireless.service.world-registry :as world-registry]
+						[cn.li.ac.wireless.service.network-command :as network-command]
 						[cn.li.ac.wireless.gui.sync.handler :as net-helpers])
 	(:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix WirelessCapabilityKeys]))
 
@@ -60,11 +60,11 @@
 
 (defn connect-node!
 	[world tile ssid password]
-	(let [world-state (world-data/get-world-data world)
-				net (world-data/get-network-by-ssid world-state ssid)
+	(let [world-state (world-registry/get-world-data world)
+				net (world-registry/get-network-by-ssid world-state ssid)
 				matrix (when net (vb/vblock-get (:matrix net) world))]
 		(if (and net matrix)
-			(boolean (wireless-net/add-node! net (vb/create-vnode tile) password))
+			(boolean (network-command/link-node-to-network! world-state net (vb/create-vnode tile) password))
 			false)))
 
 (defn disconnect-node!

@@ -6,7 +6,7 @@
 						[cn.li.mcmod.platform.world :as world]
 						[cn.li.ac.block.solar-gen.config :as solar-config]
 						[cn.li.ac.wireless.api :as helper]
-						[cn.li.ac.wireless.data.node-conn :as node-conn]
+						[cn.li.ac.wireless.service.node-connection :as node-connection]
 						[cn.li.mcmod.util.log :as log])
 	(:import [cn.li.acapi.wireless IWirelessNode]))
 
@@ -77,4 +77,4 @@
 
 (defn get-linked-node ^IWirelessNode [tile]
 	(when-let [conn (try (helper/get-node-conn-by-generator tile) (catch Exception _ nil))]
-		(try (node-conn/get-node conn) (catch Exception _ nil))))
+		(try (node-connection/get-node conn) (catch Exception _ nil))))

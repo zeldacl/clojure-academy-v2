@@ -6,7 +6,7 @@
   IMPORTANT: Only imports from `cn.li.mcmod.gui.adapter` for the unified GUI API."
   (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
-            [cn.li.forge1201.gui.menu-bridge :as menu-bridge]
+            [cn.li.mc1201.gui.menu-bridge-core :as menu-core]
             [cn.li.forge1201.gui.provider-bridge :as provider-bridge]
             [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
             [cn.li.mc1201.gui.registry-common :as registry-common]
@@ -79,7 +79,15 @@
               ;; (The proxy no longer has a getClojureContainer() method since
               ;; we replaced gen-class with proxy.)
               (gui/set-client-container! clj-container)
-              (menu-bridge/create-menu-bridge wid menu-type clj-container))
+              (menu-core/create-menu-bridge
+               wid
+               menu-type
+               clj-container
+               {:get-slot-layout gui/get-slot-layout
+                :default-player-inventory-mode :full
+                :call-super-removed? false
+                :remove-log-message "Menu closed for player"
+                :quick-move-error-prefix "Error in quickMoveStack:"}))
             get-menu-type
             gui-id
             window-id

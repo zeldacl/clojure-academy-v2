@@ -5,7 +5,7 @@
   to reduce code duplication between node and matrix sync implementations."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.ac.wireless.data.world :as wd]
+            [cn.li.ac.wireless.service.world-registry :as world-registry]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as platform-be])
   (:import [cn.li.acapi.wireless WirelessCapabilityKeys]))
@@ -218,8 +218,8 @@
           world (platform-be/be-get-level tile)
           block-pos (pos/position-get-block-pos tile)
           node-vblock (vb/create-vnode (pos/pos-x block-pos) (pos/pos-y block-pos) (pos/pos-z block-pos))
-          world-data  (wd/get-world-data world)
-          network     (wd/get-network-by-node world-data node-vblock)]
+          world-data  (world-registry/get-world-data world)
+          network     (world-registry/get-network-by-node world-data node-vblock)]
       (if network
         (do
           (reset! (:capacity container) (count @(:nodes network)))
@@ -255,8 +255,8 @@
           world (platform-be/be-get-level tile)
           block-pos (pos/position-get-block-pos tile)
           matrix-vblock (vb/create-vmatrix (pos/pos-x block-pos) (pos/pos-y block-pos) (pos/pos-z block-pos))
-          world-data    (wd/get-world-data world)
-          network       (wd/get-network-by-matrix world-data matrix-vblock)
+          world-data    (world-registry/get-world-data world)
+          network       (world-registry/get-network-by-matrix world-data matrix-vblock)
           stats-cap     (long (or (:capacity stats) 0))]
       (if network
         (do

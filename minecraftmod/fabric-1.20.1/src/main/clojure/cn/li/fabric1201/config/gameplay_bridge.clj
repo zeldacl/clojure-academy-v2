@@ -1,54 +1,169 @@
 (ns cn.li.fabric1201.config.gameplay-bridge
-  "Bridge to access Fabric gameplay configuration from Clojure (stub).
+  "Bridge to access Fabric gameplay configuration from Clojure.
 
-  This namespace provides functions to read config values at runtime.
-  For Fabric, this is a stub that returns default values.
+  Values are loaded from JSON under Fabric config dir and merged onto defaults
+  from `cn.li.ac.config.gameplay` to keep cross-platform semantics aligned."
+  (:require [clojure.java.io :as io]
+            [cn.li.ac.config.gameplay :as gameplay]
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.util.log :as log])
+  (:import [com.google.gson GsonBuilder]
+           [java.util LinkedHashMap]
+           [net.fabricmc.loader.api FabricLoader]))
 
-  A full implementation would require creating a FabricGameplayConfig.java
-  or using Fabric's modconfig library for configuration."
-  (:require [cn.li.mcmod.util.log :as log]))
+(defonce ^:private gson
+  (delay (-> (GsonBuilder.)
+             (.setPrettyPrinting)
+             (.create))))
 
-;; Note: This is a stub implementation. Full Fabric config support would require:
-;; 1. Creating a FabricGameplayConfig.java class similar to Forge's GameplayConfig
-;; 2. Or integrating with Fabric's ModConfig API
-;; 3. Loading config from fabric.mod.json or a custom config file
+(defonce ^:private loaded? (atom false))
+(defonce ^:private gameplay-config* (atom nil))
 
-;; ---------------------------------------------------------------------------
-;; Generic settings (Stub - returns defaults)
-;; ---------------------------------------------------------------------------
+(defn- default-config
+  []
+  {:analysis-enabled? (:analysis gameplay/default-generic-config)
+   :attack-player? (:attack-player gameplay/default-generic-config)
+   :destroy-blocks? (:destroy-blocks gameplay/default-generic-config)
+   :gen-ores? (:gen-ores gameplay/default-generic-config)
+   :gen-phase-liquid? (:gen-phase-liquid gameplay/default-generic-config)
+   :heads-or-tails? (:heads-or-tails gameplay/default-generic-config)
+   :normal-metal-blocks (:normal-metal-blocks gameplay/default-ability-config)
+   :weak-metal-blocks (:weak-metal-blocks gameplay/default-ability-config)
+   :metal-entities (:metal-entities gameplay/default-ability-config)
+   :cp-recover-cooldown (:cp-recover-cooldown gameplay/default-cp-overload-data)
+   :cp-recover-speed (:cp-recover-speed gameplay/default-cp-overload-data)
+   :overload-recover-cooldown (:overload-recover-cooldown gameplay/default-cp-overload-data)
+   :overload-recover-speed (:overload-recover-speed gameplay/default-cp-overload-data)
+   :init-cp-list (:init-cp gameplay/default-cp-overload-data)
+   :add-cp-list (:add-cp gameplay/default-cp-overload-data)
+   :init-overload-list (:init-overload gameplay/default-cp-overload-data)
+   :add-overload-list (:add-overload gameplay/default-cp-overload-data)
+   :damage-scale (:damage-scale gameplay/default-calc-global)})
 
-(defn analysis-enabled? []
-  ;; TODO: Load from Fabric config
-  true)
+(defn- config-file
+  []
+  (let [config-dir (-> (FabricLoader/getInstance) (.getConfigDir) (.toFile))]
+    (io/file config-dir (str modid/MOD-ID "-gameplay.json"))))
 
-(defn attack-player? []
-  true)
+(defn- read-json
+  [file]
+  (with-open [reader (io/reader file)]
+    (.fromJson @gson reader java.util.Map)))
 
-(defn destroy-blocks? []
-  true)
+(defn- parse-bool [raw default]
+  (cond
+    (instance? Boolean raw) raw
+    (string? raw) (Boolean/parseBoolean raw)
+    :else default))
 
-(defn gen-ores? []
-  true)
+(defn- parse-int [raw default]
+  (cond
+    (number? raw) (int raw)
+    (string? raw) (try (Integer/parseInt raw) (catch Exception _ default))
+    :else default))
 
-(defn gen-phase-liquid? []
-  true)
+(defn- parse-double-value [raw default]
+  (cond
+    (number? raw) (double raw)
+    (string? raw) (try (Double/parseDouble raw) (catch Exception _ default))
+    :else default))
 
-(defn heads-or-tails? []
-  true)
+(defn- parse-str-list [raw default]
+  (if (instance? java.util.List raw)
+    (->> raw (map str) vec)
+    default))
 
-;; ---------------------------------------------------------------------------
-;; Ability settings (Stub - returns defaults)
-;; ---------------------------------------------------------------------------
+(defn- parse-int-list [raw default]
+  (if (instance? java.util.List raw)
+    (->> raw (map #(parse-int % 0)) vec)
+    default))
 
-(defn get-normal-metal-blocks []
-  ;; TODO: Load from Fabric config
-  [])
+(defn- read-value [parsed k]
+  (or (get parsed k)
+      (get parsed (name k))))
 
-(defn get-weak-metal-blocks []
-  [])
+(defn- parse-config
+  [parsed defaults]
+  {:analysis-enabled? (parse-bool (read-value parsed "analysis-enabled") (:analysis-enabled? defaults))
+   :attack-player? (parse-bool (read-value parsed "attack-player") (:attack-player? defaults))
+   :destroy-blocks? (parse-bool (read-value parsed "destroy-blocks") (:destroy-blocks? defaults))
+   :gen-ores? (parse-bool (read-value parsed "gen-ores") (:gen-ores? defaults))
+   :gen-phase-liquid? (parse-bool (read-value parsed "gen-phase-liquid") (:gen-phase-liquid? defaults))
+   :heads-or-tails? (parse-bool (read-value parsed "heads-or-tails") (:heads-or-tails? defaults))
+   :normal-metal-blocks (parse-str-list (read-value parsed "normal-metal-blocks") (:normal-metal-blocks defaults))
+   :weak-metal-blocks (parse-str-list (read-value parsed "weak-metal-blocks") (:weak-metal-blocks defaults))
+   :metal-entities (parse-str-list (read-value parsed "metal-entities") (:metal-entities defaults))
+   :cp-recover-cooldown (parse-int (read-value parsed "cp-recover-cooldown") (:cp-recover-cooldown defaults))
+  :cp-recover-speed (parse-double-value (read-value parsed "cp-recover-speed") (:cp-recover-speed defaults))
+   :overload-recover-cooldown (parse-int (read-value parsed "overload-recover-cooldown") (:overload-recover-cooldown defaults))
+  :overload-recover-speed (parse-double-value (read-value parsed "overload-recover-speed") (:overload-recover-speed defaults))
+   :init-cp-list (parse-int-list (read-value parsed "init-cp-list") (:init-cp-list defaults))
+   :add-cp-list (parse-int-list (read-value parsed "add-cp-list") (:add-cp-list defaults))
+   :init-overload-list (parse-int-list (read-value parsed "init-overload-list") (:init-overload-list defaults))
+   :add-overload-list (parse-int-list (read-value parsed "add-overload-list") (:add-overload-list defaults))
+  :damage-scale (parse-double-value (read-value parsed "damage-scale") (:damage-scale defaults))})
 
-(defn get-metal-entities []
-  [])
+(defn- as-json-map
+  [cfg]
+  (doto (LinkedHashMap.)
+    (.put "analysis-enabled" (:analysis-enabled? cfg))
+    (.put "attack-player" (:attack-player? cfg))
+    (.put "destroy-blocks" (:destroy-blocks? cfg))
+    (.put "gen-ores" (:gen-ores? cfg))
+    (.put "gen-phase-liquid" (:gen-phase-liquid? cfg))
+    (.put "heads-or-tails" (:heads-or-tails? cfg))
+    (.put "normal-metal-blocks" (:normal-metal-blocks cfg))
+    (.put "weak-metal-blocks" (:weak-metal-blocks cfg))
+    (.put "metal-entities" (:metal-entities cfg))
+    (.put "cp-recover-cooldown" (:cp-recover-cooldown cfg))
+    (.put "cp-recover-speed" (:cp-recover-speed cfg))
+    (.put "overload-recover-cooldown" (:overload-recover-cooldown cfg))
+    (.put "overload-recover-speed" (:overload-recover-speed cfg))
+    (.put "init-cp-list" (:init-cp-list cfg))
+    (.put "add-cp-list" (:add-cp-list cfg))
+    (.put "init-overload-list" (:init-overload-list cfg))
+    (.put "add-overload-list" (:add-overload-list cfg))
+    (.put "damage-scale" (:damage-scale cfg))))
+
+(defn- write-json!
+  [file cfg]
+  (when-let [parent (.getParentFile file)]
+    (.mkdirs parent))
+  (with-open [writer (io/writer file)]
+    (.toJson @gson (as-json-map cfg) writer)))
+
+(defn- ensure-loaded!
+  []
+  (when-not @loaded?
+    (let [defaults (default-config)
+          file (config-file)
+          parsed (when (.exists file)
+                   (try
+                     (read-json file)
+                     (catch Exception e
+                       (log/warn "Failed reading Fabric gameplay config, using defaults:" (ex-message e))
+                       nil)))
+          merged (if parsed (parse-config parsed defaults) defaults)]
+      (reset! gameplay-config* merged)
+      (when (or (not (.exists file)) parsed)
+        (write-json! file merged))
+      (reset! loaded? true))))
+
+(defn- cfg
+  [k]
+  (ensure-loaded!)
+  (get @gameplay-config* k))
+
+(defn analysis-enabled? [] (boolean (cfg :analysis-enabled?)))
+(defn attack-player? [] (boolean (cfg :attack-player?)))
+(defn destroy-blocks? [] (boolean (cfg :destroy-blocks?)))
+(defn gen-ores? [] (boolean (cfg :gen-ores?)))
+(defn gen-phase-liquid? [] (boolean (cfg :gen-phase-liquid?)))
+(defn heads-or-tails? [] (boolean (cfg :heads-or-tails?)))
+
+(defn get-normal-metal-blocks [] (vec (cfg :normal-metal-blocks)))
+(defn get-weak-metal-blocks [] (vec (cfg :weak-metal-blocks)))
+(defn get-metal-entities [] (vec (cfg :metal-entities)))
 
 (defn is-metal-block? [block-id]
   (let [normal (set (get-normal-metal-blocks))
@@ -65,85 +180,38 @@
 (defn is-metal-entity? [entity-id]
   (contains? (set (get-metal-entities)) entity-id))
 
-;; ---------------------------------------------------------------------------
-;; CP/Overload data (Stub - returns defaults)
-;; ---------------------------------------------------------------------------
+(defn get-cp-recover-cooldown [] (int (cfg :cp-recover-cooldown)))
+(defn get-cp-recover-speed [] (double (cfg :cp-recover-speed)))
+(defn get-overload-recover-cooldown [] (int (cfg :overload-recover-cooldown)))
+(defn get-overload-recover-speed [] (double (cfg :overload-recover-speed)))
 
-(defn get-cp-recover-cooldown []
-  ;; TODO: Load from Fabric config
-  100)
-
-(defn get-cp-recover-speed []
-  1.0)
-
-(defn get-overload-recover-cooldown []
-  200)
-
-(defn get-overload-recover-speed []
-  0.5)
-
-(defn get-init-cp-list []
-  ;; Default CP initialization by level
-  [])
-
-(defn get-add-cp-list []
-  ;; Default CP addition by level
-  [])
-
-(defn get-init-overload-list []
-  ;; Default overload initialization by level
-  [])
-
-(defn get-add-overload-list []
-  ;; Default overload addition by level
-  [])
+(defn get-init-cp-list [] (vec (cfg :init-cp-list)))
+(defn get-add-cp-list [] (vec (cfg :add-cp-list)))
+(defn get-init-overload-list [] (vec (cfg :init-overload-list)))
+(defn get-add-overload-list [] (vec (cfg :add-overload-list)))
 
 (defn get-init-cp
-  "Get initial CP for a specific level."
   [level]
-  (if-let [cp-list (seq (get-init-cp-list))]
-    (get cp-list level 0)
-    0))
+  (get (get-init-cp-list) level 0))
 
 (defn get-add-cp
-  "Get CP addition for a specific level."
   [level]
-  (if-let [cp-list (seq (get-add-cp-list))]
-    (get cp-list level 0)
-    0))
+  (get (get-add-cp-list) level 0))
 
 (defn get-init-overload
-  "Get initial overload for a specific level."
   [level]
-  (if-let [ov-list (seq (get-init-overload-list))]
-    (get ov-list level 0)
-    0))
+  (get (get-init-overload-list) level 0))
 
 (defn get-add-overload
-  "Get overload addition for a specific level."
   [level]
-  (if-let [ov-list (seq (get-add-overload-list))]
-    (get ov-list level 0)
-    0))
+  (get (get-add-overload-list) level 0))
 
-;; ---------------------------------------------------------------------------
-;; Damage settings
-;; ---------------------------------------------------------------------------
-
-(defn get-damage-scale []
-  ;; TODO: Load from Fabric config
-  1.0)
-
-;; ============================================================================
-;; Initialization (Fabric Stub)
-;; ============================================================================
+(defn get-damage-scale [] (double (cfg :damage-scale)))
 
 (defn init-fabric-gameplay-config!
-  "Initialize Fabric gameplay configuration (stub).
-
-  For full implementation, this should load config from a Fabric config file."
   []
-  (log/info "Fabric gameplay config initialized (stub - using default values)")
+  (ensure-loaded!)
+  (log/info "Fabric gameplay config initialized")
   nil)
 
 (defn provider-map

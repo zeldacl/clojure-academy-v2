@@ -1,7 +1,7 @@
 (ns cn.li.fabric1201.adapter.gui-registry
   "Fabric 1.20.1 GUI Registration Implementation"
   (:require [cn.li.mcmod.gui.registry-core :as gui]
-            [cn.li.fabric1201.gui.menu-bridge :as menu-bridge]
+            [cn.li.mc1201.gui.menu-bridge-core :as menu-core]
             [cn.li.fabric1201.gui.provider-bridge :as provider-bridge]
             [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
             [cn.li.mc1201.gui.registry-common :as registry-common]
@@ -33,7 +33,16 @@
             (registry-common/create-wrapped-container
               (fn []
                 (.get-server-container handler gui-id-from-buf player world pos))
-              menu-bridge/create-menu-bridge
+              (fn [window-id menu-type clj-container]
+                (menu-core/create-menu-bridge
+                 window-id
+                 menu-type
+                 clj-container
+                 {:get-slot-layout gui/get-slot-layout
+                  :default-player-inventory-mode :full
+                  :call-super-removed? true
+                  :remove-log-message "Fabric menu closed for player"
+                  :quick-move-error-prefix "Error in Fabric quickMoveStack:"}))
               get-handler-type
               gui-id-from-buf
               sync-id

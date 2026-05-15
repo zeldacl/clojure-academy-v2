@@ -1,15 +1,26 @@
 (ns cn.li.fabric1201.gui.provider-bridge
   "Fabric 1.20.1 provider bridge.
 
-  Uses reify factories and delegates menu construction to menu-bridge."
+  Uses reify factories and delegates menu construction to shared menu-bridge core."
   (:require [cn.li.mc1201.gui.provider-bridge-core :as provider-core]
+            [cn.li.mc1201.gui.menu-bridge-core :as menu-core]
             [cn.li.mc1201.gui.provider-common :as provider-common]
-            [cn.li.mcmod.gui.registry-core :as gui]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.fabric1201.gui.menu-bridge :as menu-bridge])
+            [cn.li.mcmod.gui.registry-core :as gui])
   (:import [net.minecraft.world MenuProvider]
            [net.fabricmc.fabric.api.screenhandler.v1 ExtendedScreenHandlerFactory]
            [net.minecraft.network.chat Component]))
+
+(defn- create-menu-bridge
+  [window-id menu-type clj-container]
+  (menu-core/create-menu-bridge
+   window-id
+   menu-type
+   clj-container
+   {:get-slot-layout gui/get-slot-layout
+    :default-player-inventory-mode :full
+    :call-super-removed? true
+    :remove-log-message "Fabric menu closed for player"
+    :quick-move-error-prefix "Error in Fabric quickMoveStack:"}))
 
 (defn create-menu-provider [gui-id tile-entity]
   (reify MenuProvider
@@ -24,7 +35,7 @@
         :platform-key :fabric-1.20.1
         :create-container-fn (fn [handler gid p world pos]
                                (.get-server-container handler gid p world pos))
-        :create-menu-bridge-fn menu-bridge/create-menu-bridge
+        :create-menu-bridge-fn create-menu-bridge
         :log-prefix "[FABRIC-MENU-PROVIDER]"}))))
 
 (defn create-extended-menu-provider [gui-id tile-entity]
@@ -40,7 +51,7 @@
         :platform-key :fabric-1.20.1
         :create-container-fn (fn [handler gid p world pos]
                                (.get-server-container handler gid p world pos))
-        :create-menu-bridge-fn menu-bridge/create-menu-bridge
+        :create-menu-bridge-fn create-menu-bridge
         :log-prefix "[FABRIC-MENU-PROVIDER]"}))
     (writeScreenOpeningData [_ player buf]
       (.writeInt buf gui-id)

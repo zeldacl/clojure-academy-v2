@@ -3,7 +3,8 @@
   (:require [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
             [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core]
             [cn.li.mc1201.runtime.sync-core :as runtime-sync]
-            [cn.li.forge1201.runtime.install :as runtime-install]
+            [cn.li.forge1201.runtime.adapters.registry :as runtime-adapters-registry]
+            [cn.li.mc1201.runtime.adapter-registry :as adapter-registry]
             [cn.li.forge1201.runtime.lifecycle-event-binding :as lifecycle-event-binding]
             [cn.li.forge1201.adapter.network :as runtime-network]
             [cn.li.mcmod.hooks.core :as power-runtime]
@@ -49,7 +50,7 @@
 (defn init-common!
   "Register all forge-side lifecycle listeners for runtime bridge."
   []
-  (runtime-install/install-runtime-adapters!)
+  (adapter-registry/run-install-steps! "forge-1.20.1" runtime-adapters-registry/runtime-install-steps)
   (runtime-network/init!)
   (lifecycle-event-binding/register-lifecycle-listeners!
     {:on-player-login on-player-login

@@ -4,7 +4,7 @@
 						[cn.li.mcmod.platform.entity :as entity]
 						[cn.li.ac.wireless.gui.sync.handler :as net-helpers]
 						[cn.li.ac.wireless.api :as helper]
-						[cn.li.ac.wireless.data.network :as wireless-net]
+						[cn.li.ac.wireless.service.network-command :as network-command]
 						[cn.li.ac.block.wireless-matrix.logic :as matrix-logic])
 	(:import [cn.li.acapi.wireless IWirelessMatrix WirelessCapabilityKeys]))
 
@@ -52,12 +52,11 @@
 (defn change-ssid!
 	[network new-ssid]
 	(let [old-ssid (:ssid network)]
-		(wireless-net/reset-ssid! network new-ssid)
-		(swap! (:net-lookup (:world-data network)) dissoc old-ssid)
-		(swap! (:net-lookup (:world-data network)) assoc new-ssid network)
+		(network-command/reset-network-ssid! network new-ssid)
+		(network-command/refresh-world-ssid-lookup! network old-ssid new-ssid)
 		true))
 
 (defn change-password!
 	[network new-password]
-	(wireless-net/reset-password! network new-password)
+	(network-command/reset-network-password! network new-password)
 	true)

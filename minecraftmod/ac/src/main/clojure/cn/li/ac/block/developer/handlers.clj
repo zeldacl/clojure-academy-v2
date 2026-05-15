@@ -5,7 +5,7 @@
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.entity :as entity]
 						[cn.li.ac.wireless.api :as wapi]
-						[cn.li.ac.wireless.data.node-conn :as node-conn]
+						[cn.li.ac.wireless.service.node-connection :as node-connection]
 						[cn.li.ac.wireless.gui.message.registry :as msg-registry]
 						[cn.li.ac.wireless.gui.sync.handler :as net-helpers]
 						[cn.li.ac.block.developer.logic :as dev-logic]
@@ -26,7 +26,7 @@
 
 (defn- get-linked-node-for-receiver [tile]
 	(when-let [conn (try (wapi/get-node-conn-by-receiver tile) (catch Exception _ nil))]
-		(try (node-conn/get-node conn) (catch Exception _ nil))))
+		(try (node-connection/get-node conn) (catch Exception _ nil))))
 
 (defn handle-get-status [payload player]
 	(let [world (net-helpers/get-world player)

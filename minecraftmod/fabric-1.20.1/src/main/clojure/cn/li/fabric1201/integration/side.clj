@@ -1,42 +1,58 @@
 (ns cn.li.fabric1201.integration.side
-  "Runtime side detection for Fabric 1.20.1 (stub).
+  "Runtime side detection for Fabric 1.20.1."
+  (:require [cn.li.mcmod.util.log :as log])
+  (:import [net.fabricmc.api EnvType]
+           [net.fabricmc.loader.api FabricLoader]))
 
-  This namespace provides side detection utilities for Fabric mods.
-  Note: Full implementation depends on Fabric API availability."
-  (:require [cn.li.mcmod.util.log :as log]))
-
-;; Fabric side detection stub
-;; In practice, check FabricLoader.getInstance().getEnvironmentType()
+(defn- env-type
+  []
+  (try
+    (.getEnvironmentType (FabricLoader/getInstance))
+    (catch Throwable _ nil)))
 
 (defn client-side?
-  "Returns true if running on physical client.
-  Note: This is a stub - actual implementation depends on Fabric API."
+  "Returns true if running on physical client."
   []
-  false)
+  (= EnvType/CLIENT (env-type)))
 
 (defn server-side?
-  "Returns true if running on dedicated server.
-  Note: This is a stub."
+  "Returns true if running on dedicated server."
   []
-  true)
+  (= EnvType/SERVER (env-type)))
 
 (defn require-client-ns
   "Safely require client-only namespace."
   [ns-sym]
-  nil)
+  (when (client-side?)
+    (try
+      (require ns-sym)
+      true
+      (catch Throwable t
+        (log/warn "Failed requiring client namespace" ns-sym (ex-message t))
+        nil))))
 
 (defn resolve-client-fn
   "Safely resolve client-only function."
   [ns-sym fn-name]
-  nil)
+  (when (require-client-ns ns-sym)
+    (try
+      (ns-resolve ns-sym fn-name)
+      (catch Throwable t
+        (log/warn "Failed resolving client function" ns-sym fn-name (ex-message t))
+        nil))))
 
 (defn call-client-fn
   "Safely call client-only function."
   [ns-sym fn-name & args]
-  nil)
+  (when-let [f (resolve-client-fn ns-sym fn-name)]
+    (apply f args)))
 
-(defmacro when-client [& body]
-  nil)
+(defmacro when-client
+  [& body]
+  `(when (cn.li.fabric1201.integration.side/client-side?)
+     ~@body))
 
-(defmacro when-server [& body]
-  `(do ~@body))
+(defmacro when-server
+  [& body]
+  `(when (cn.li.fabric1201.integration.side/server-side?)
+     ~@body))

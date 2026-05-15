@@ -10,7 +10,7 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.block.wireless-node.config :as node-config]
-            [cn.li.ac.wireless.data.world :as world-data]
+            [cn.li.ac.wireless.service.world-registry :as world-registry]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.util.log :as log]))
@@ -155,8 +155,8 @@
   [state level pos]
   (try
     (let [vblock      (vb/create-vnode (pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos))
-          world-data  (world-data/get-world-data level)
-          network     (world-data/get-network-by-node world-data vblock)
+          world-data  (world-registry/get-world-data level)
+          network     (world-registry/get-network-by-node world-data vblock)
           connected?  (and network (not (:disposed network)))]
       (assoc state :enabled connected?))
     (catch Exception _

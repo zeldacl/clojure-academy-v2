@@ -1,6 +1,6 @@
 (ns cn.li.ac.block.wireless-node.network-presenter
 	"Response DTO builders for wireless node GUI network handlers."
-	(:require [cn.li.ac.wireless.data.network :as wireless-net]))
+	(:require [cn.li.ac.wireless.service.network-command :as network-command]))
 
 (defn linked->dto
 	[linked]
@@ -12,7 +12,7 @@
 	[net matrix-cap {:keys [matrix-capacity matrix-bandwidth matrix-range]}]
 	{:ssid (:ssid net)
 	 :is-encrypted? (not (empty? (str (:password net))))
-	 :load (wireless-net/get-load net)
+	 :load (network-command/network-load net)
 	 :capacity (matrix-capacity matrix-cap)
 	 :bandwidth (matrix-bandwidth matrix-cap)
 	 :range (matrix-range matrix-cap)})

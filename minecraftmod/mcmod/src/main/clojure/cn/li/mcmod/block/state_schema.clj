@@ -116,43 +116,6 @@
               :pos-z (pos/pos-z pos))))
 
 ;; ============================================================================
-;; BlockState updater (DEPRECATED - use build-block-state-updater for nested format)
-;; ============================================================================
-
-(defn schema->block-state-updater
-  "DEPRECATED: Use build-block-state-updater for nested :block-state format.
-
-  Return (fn [state level pos] -> nil).
-
-  Iterates over all FieldSpecs with :block-state-prop set and attempts to
-  update the in-world BlockState.  When :block-state-xf is supplied it is
-  called as (xf raw-value full-state) to get the coerced BlockState value.
-  Failures are silently swallowed so a missing property never crashes a tick."
-  [schema]
-  (let [bs-specs (filterv :block-state-prop schema)]
-    (fn [state level pos]
-      (try
-        (when-let [blk-state (platform-world/world-get-block-state* level pos)]
-              (let [state-def (platform-world/block-state-get-state-definition blk-state)
-                new-bs    (reduce
-                           (fn [bs spec]
-                             (let [prop-name (:block-state-prop spec)
-                                   raw-val   (get state (:key spec) (:default spec))
-                                   val       (if-let [xf (:block-state-xf spec)]
-                                               (xf raw-val state)
-                                               raw-val)
-                                      prop      (when state-def
-                                                  (platform-world/block-state-get-property blk-state state-def prop-name))]
-                               (if prop
-                                 (platform-world/block-state-set-property bs prop val)
-                                 bs)))
-                           blk-state
-                           bs-specs)]
-            (when (not= new-bs blk-state)
-              (platform-world/world-set-block* level pos new-bs 3))))
-        (catch Exception _)))))
-
-;; ============================================================================
 ;; Schema Organization Utilities
 ;; ============================================================================
 
@@ -172,7 +135,7 @@
   (let [all-fields (apply concat field-groups)
         by-key (group-by :key all-fields)]
     (vec
-      (for [[k fields] by-key]
+      (for [[_k fields] by-key]
         (apply merge fields)))))
 
 ;; ============================================================================
