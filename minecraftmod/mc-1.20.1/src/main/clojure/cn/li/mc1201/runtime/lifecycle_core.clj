@@ -2,7 +2,7 @@
   "Loader-agnostic player lifecycle flow for runtime state.
 
   Platform layers provide concrete persistence/sync callbacks and event binding."
-  (:require [cn.li.mcmod.hooks.player :as player-hooks])
+  (:require [cn.li.mcmod.hooks.core :as player-hooks])
   (:import [net.minecraft.world.entity.player Player]))
 
 (defn- player-uuid

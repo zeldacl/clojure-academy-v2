@@ -73,7 +73,7 @@
 				 vec)))
 
 (defn- apply-interference-effect! [player src-id]
-	(when-let [uuid (uuid/player-uuid-str player)]
+	(when-let [uuid (uuid/player-uuid player)]
 		(try
 			(let [store (platform-ability/player-ability-store)]
 				(platform-ability/res-add-interference! store uuid src-id)
@@ -134,7 +134,7 @@
 										players (find-players-in-range level pos range)
 										whitelist (set (map str (:whitelist state2 [])))
 										affected-players (remove #(contains? whitelist (player-name %)) players)
-																affected-uuids (set (keep uuid/player-uuid-str affected-players))
+																affected-uuids (set (keep uuid/player-uuid affected-players))
 										player-count (count affected-uuids)
 										energy-cost (interferer-config/calculate-energy-cost range)
 										current-energy (double (:energy state2 0.0))]

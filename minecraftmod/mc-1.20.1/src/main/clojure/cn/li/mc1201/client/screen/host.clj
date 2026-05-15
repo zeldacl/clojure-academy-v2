@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.client.screen.host
   "CLIENT-ONLY generic screen host. AC provides draw ops and interaction handlers."
-  (:require [cn.li.mcmod.hooks.client-ui :as client-ui]
+  (:require [cn.li.mcmod.hooks.core :as client-ui]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.client.gui.screens Screen]

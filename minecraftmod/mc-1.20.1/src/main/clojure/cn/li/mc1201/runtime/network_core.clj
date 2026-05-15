@@ -3,7 +3,7 @@
 
   Platforms provide transport functions; shared core wires runtime route/send
   integration with mcmod power-runtime and runtime-catalog." 
-  (:require [cn.li.mcmod.hooks.network :as network-hooks]
+  (:require [cn.li.mcmod.hooks.core :as network-hooks]
             [cn.li.mcmod.hooks.catalog :as runtime-catalog]
             [cn.li.mcmod.util.log :as log]))
 

@@ -1,14 +1,17 @@
 (ns cn.li.ac.wireless.data.network-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
+            [cn.li.ac.foundation.vblock :as fvb]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.network-membership :as network-membership]
             [cn.li.ac.wireless.data.network-validation :as network-validation]
             [cn.li.ac.wireless.data.network-runtime :as network-runtime]
-            [cn.li.ac.wireless.data.network-serialization :as network-ser]
             [cn.li.ac.wireless.data.network-config :as ncfg]
-            [cn.li.ac.wireless.data.world :as wdata]))
+            [cn.li.ac.wireless.data.world :as wdata]
+            [cn.li.ac.wireless.domain.energy :as domain-energy]
+            [cn.li.ac.wireless.domain.network :as domain-net]
+            [cn.li.ac.wireless.persistence.nbt-codec :as codec]))
 
 (deftest create-and-basic-accessors-test
   (let [wd {:world :w :net-lookup (atom {}) :spatial-index (atom {})}
@@ -89,12 +92,38 @@
         (let [net (network-state/create-wireless-net wd matrix-vb "ssid-nbt" "pw99")]
           (reset! (:buffer net) 12.5)
           (is (true? (network-membership/add-node! net node-vb "pw99")))
-          (let [comp (network-ser/network-to-nbt net)
-                net2 (network-ser/network-from-nbt wd comp)]
-            (is (= "ssid-nbt" (network-state/get-ssid net2)))
-            (is (= "pw99" (network-state/get-password net2)))
-            (is (= 12.5 @(:buffer net2)))
-            (is (= 1 (count @(:nodes net2))))))))))
+          (let [now (System/currentTimeMillis)
+                domain-network (domain-net/->Network
+                                :test-roundtrip
+                                (network-state/get-ssid net)
+                                (network-state/get-password net)
+                                (fvb/vblock (:x (:matrix net))
+                                            (:y (:matrix net))
+                                            (:z (:matrix net))
+                                            (:block-type (:matrix net))
+                                            (:ignore-chunk (:matrix net)))
+                                (mapv (fn [node]
+                                        (fvb/vblock (:x node)
+                                                    (:y node)
+                                                    (:z node)
+                                                    (:block-type node)
+                                                    (:ignore-chunk node)))
+                                      @(:nodes net))
+                                (domain-energy/->EnergyContainer
+                                 @(:buffer net)
+                                 (double (max 1 (network-state/get-capacity net)))
+                                 0.0
+                                 1.0
+                                 now)
+                                now
+                                now
+                                {})
+                comp (codec/network-to-nbt domain-network)
+                net2 (codec/network-from-nbt comp)]
+            (is (= "ssid-nbt" (:ssid net2)))
+            (is (= "pw99" (:password net2)))
+            (is (= 12.5 (:current (:energy net2))))
+            (is (= 1 (count (:nodes net2))))))))))
 
 (deftest balance-energy-moves-toward-average-test
   (let [w :w-bal

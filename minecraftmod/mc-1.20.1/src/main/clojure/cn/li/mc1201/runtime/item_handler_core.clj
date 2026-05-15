@@ -5,10 +5,7 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.hooks.client-ui :as client-ui]
-            [cn.li.mcmod.hooks.effects :as effect-hooks]
-            [cn.li.mcmod.hooks.network :as network-hooks]
-            [cn.li.mcmod.hooks.player :as player-hooks]
+            [cn.li.mcmod.hooks.core :as hooks-core]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core.registries BuiltInRegistries]
@@ -76,12 +73,12 @@
     (doseq [action (:client-actions plan)]
       (case (:kind action)
         :notify-local-effect
-        (effect-hooks/client-notify-charge-coin-throw! player-uuid)
+        (hooks-core/client-notify-charge-coin-throw! player-uuid)
 
         :open-screen
         (if open-screen-fn
           (open-screen-fn player player-uuid)
-          (client-ui/client-open-skill-tree-screen! player-uuid nil))
+          (hooks-core/client-open-skill-tree-screen! player-uuid nil))
 
         nil))
 
@@ -97,7 +94,7 @@
               (.setItemInHand player hand ItemStack/EMPTY))))
 
         :domain-action
-        (network-hooks/on-runtime-item-action! (:action action) player-uuid (:payload action))
+        (hooks-core/on-runtime-item-action! (:action action) player-uuid (:payload action))
 
         :spawn-scripted-effect
         (when (= side :server)
@@ -119,9 +116,9 @@
      :plan nil}
     (let [player-uuid (str (.getUUID player))
           item-id (get-item-id stack)
-          ability-activated? (boolean (get-in (player-hooks/get-player-state player-uuid)
+          ability-activated? (boolean (get-in (hooks-core/get-player-state player-uuid)
                                               [:resource-data :activated]))
-          plan (network-hooks/build-item-use-plan player-uuid item-id ability-activated? side)]
+          plan (hooks-core/build-item-use-plan player-uuid item-id ability-activated? side)]
       (dispatch-dsl-item-use! player item-id hand stack side)
       (run-plan-actions! player hand stack side player-uuid plan opts)
       {:consume? (or (:consume? plan)

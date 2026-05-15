@@ -164,25 +164,40 @@
 ;; NBT Serialization
 ;; ============================================================================
 
+;; NOTE:
+;; This codec is used by legacy mutable wireless data paths (e.g. node-conn).
+;; Canonical network persistence lives in wireless/persistence/nbt-codec.clj.
+;; Keep behavior aligned (defaults + tolerant reads) to avoid boundary drift.
+
 (defn vblock-to-nbt
   "Serialize vblock to NBT using platform abstraction"
   [vblock]
-  (doto (nbt/create-nbt-compound)
-    (nbt/nbt-set-int! "x" (:x vblock))
-    (nbt/nbt-set-int! "y" (:y vblock))
-    (nbt/nbt-set-int! "z" (:z vblock))
-    (nbt/nbt-set-string! "type" (name (:block-type vblock)))
-    (nbt/nbt-set-boolean! "ignoreChunk" (:ignore-chunk vblock))))
+  (let [compound (nbt/create-nbt-compound)]
+    (nbt/nbt-set-int! compound "x" (:x vblock))
+    (nbt/nbt-set-int! compound "y" (:y vblock))
+    (nbt/nbt-set-int! compound "z" (:z vblock))
+    (nbt/nbt-set-string! compound "type" (name (or (:block-type vblock) :node)))
+    (nbt/nbt-set-boolean! compound "ignoreChunk" (boolean (:ignore-chunk vblock)))
+    compound))
 
 (defn vblock-from-nbt
   "Deserialize vblock from NBT using platform abstraction"
-  [compound]
-  (->VBlock
-    (nbt/nbt-get-int compound "x")
-    (nbt/nbt-get-int compound "y")
-    (nbt/nbt-get-int compound "z")
-    (keyword (nbt/nbt-get-string compound "type"))
-    (nbt/nbt-get-boolean compound "ignoreChunk")))
+  ([compound]
+   (vblock-from-nbt compound :node false))
+  ([compound default-type default-ignore-chunk]
+   (let [x (nbt/nbt-get-int compound "x")
+         y (nbt/nbt-get-int compound "y")
+         z (nbt/nbt-get-int compound "z")
+         block-type-str (try
+                          (nbt/nbt-get-string compound "type")
+                          (catch Exception _ ""))
+         block-type (if (seq block-type-str)
+                      (keyword block-type-str)
+                      default-type)
+         ignore-chunk (try
+                        (nbt/nbt-get-boolean compound "ignoreChunk")
+                        (catch Exception _ default-ignore-chunk))]
+     (->VBlock x y z block-type ignore-chunk))))
 
 ;; ============================================================================
 ;; Equality and Hashing

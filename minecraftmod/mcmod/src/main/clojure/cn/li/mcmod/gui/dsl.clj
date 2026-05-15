@@ -88,20 +88,6 @@ Structure:
   ;; - slot-changed-fn: Function called when slot changes (fn [container slot-index] ...)
   )
 
-(defrecord LegacyLayout
-  [title width height slots buttons labels background]
-  ;; Legacy/generic GUI layout fields for XML-based GUIs.
-  ;;
-  ;; Fields:
-  ;; - title: GUI title text
-  ;; - width: GUI width in pixels
-  ;; - height: GUI height in pixels
-  ;; - slots: Vector of SlotSpec records
-  ;; - buttons: Vector of ButtonSpec records
-  ;; - labels: Vector of LabelSpec records
-  ;; - background: Background texture identifier
-  )
-
 (defrecord GuiSpec
   [id gui-id
    registration lifecycle sync operations slots legacy-layout]
@@ -244,7 +230,7 @@ Structure:
                            :slot-can-place-fn (or (:slot-can-place-fn slots-opts) (:slot-can-place-fn options))
                            :slot-changed-fn (or (:slot-changed-fn slots-opts) (:slot-changed-fn options))})
 
-        legacy-layout (map->LegacyLayout
+        legacy-layout (gui-schema/map->LegacyLayout
                         {:title (or (:title legacy-layout-opts) (:title options) "GUI")
                          :width (or (:width legacy-layout-opts) (:width options) default-gui-width)
                          :height (or (:height legacy-layout-opts) (:height options) default-gui-height)
@@ -624,41 +610,4 @@ Structure:
 ;; Phase A refactor delegation layer
 ;; ============================================================================
 
-(def map->SlotSpec gui-schema/map->SlotSpec)
-(def map->ButtonSpec gui-schema/map->ButtonSpec)
-(def map->LabelSpec gui-schema/map->LabelSpec)
-(def map->RegistrationConfig gui-schema/map->RegistrationConfig)
-(def map->LifecycleHandlers gui-schema/map->LifecycleHandlers)
-(def map->SyncConfig gui-schema/map->SyncConfig)
-(def map->OperationHandlers gui-schema/map->OperationHandlers)
-(def map->SlotOperations gui-schema/map->SlotOperations)
 (def map->LegacyLayout gui-schema/map->LegacyLayout)
-(def map->GuiSpec gui-schema/map->GuiSpec)
-
-(def parse-slot gui-parser/parse-slot)
-(def parse-button gui-parser/parse-button)
-(def parse-label gui-parser/parse-label)
-(def validate-gui-spec gui-validator/validate-gui-spec)
-(def create-gui-spec gui-parser/create-gui-spec)
-
-(def gui-registry gui-registry-core/gui-registry)
-(def register-gui! gui-registry-core/register-gui!)
-(def get-gui gui-registry-core/get-gui)
-(def list-guis gui-registry-core/list-guis)
-(def get-gui-by-gui-id gui-registry-core/get-gui-by-gui-id)
-(def list-gui-ids gui-registry-core/list-gui-ids)
-(def get-all-gui-ids gui-registry-core/get-all-gui-ids)
-(def has-gui-id? gui-registry-core/has-gui-id?)
-(def get-registry-name gui-registry-core/get-registry-name)
-(def get-screen-factory-fn-kw gui-registry-core/get-screen-factory-fn-kw)
-(def get-gui-type gui-registry-core/get-gui-type)
-(def get-slot-layout gui-registry-core/get-slot-layout)
-(def get-display-name gui-registry-core/get-display-name)
-(def get-container-fn gui-registry-core/get-container-fn)
-(def get-screen-fn gui-registry-core/get-screen-fn)
-(def get-container-predicate gui-registry-core/get-container-predicate)
-(def get-payload-sync-apply-fn gui-registry-core/get-payload-sync-apply-fn)
-(def get-slot-range gui-registry-core/get-slot-range)
-(def get-gui-by-type gui-registry-core/get-gui-by-type)
-(def get-gui-id-for-type gui-registry-core/get-gui-id-for-type)
-(def get-config-by-container gui-registry-core/get-config-by-container)

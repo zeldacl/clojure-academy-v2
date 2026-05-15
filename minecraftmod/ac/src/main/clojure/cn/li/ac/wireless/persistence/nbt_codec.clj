@@ -5,7 +5,7 @@
   (:require [cn.li.ac.wireless.domain.network :as domain-net]
             [cn.li.ac.wireless.domain.node :as domain-node]
             [cn.li.ac.wireless.domain.energy :as domain-energy]
-            [cn.li.ac.foundation.vblock :as vb]
+            [cn.li.ac.wireless.core.vblock :as core-vb]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
@@ -16,49 +16,11 @@
 (def current-nbt-version 2)
 
 ;; ============================================================================
-;; VBlock Serialization
+;; VBlock Serialization (SSOT delegated to wireless.core.vblock)
 ;; ============================================================================
 
-(defn vblock-to-nbt
-  "Serialize VBlock to NBT.
-  
-  Args:
-    vblock: VBlock record
-    
-  Returns:
-    NBT compound"
-  [vblock]
-  (let [compound (nbt/create-nbt-compound)]
-    (nbt/nbt-set-int! compound "x" (:x vblock))
-    (nbt/nbt-set-int! compound "y" (:y vblock))
-    (nbt/nbt-set-int! compound "z" (:z vblock))
-    (nbt/nbt-set-string! compound "type" (name (or (:block-type vblock) :node)))
-    (nbt/nbt-set-boolean! compound "ignoreChunk" (boolean (:ignore-chunk vblock)))
-    compound))
-
-(defn vblock-from-nbt
-  "Deserialize VBlock from NBT.
-  
-  Args:
-    compound: NBT compound
-    
-  Returns:
-    VBlock record"
-  ([compound]
-   (vblock-from-nbt compound :node false))
-  ([compound default-type default-ignore-chunk]
-   (let [x (nbt/nbt-get-int compound "x")
-         y (nbt/nbt-get-int compound "y")
-         z (nbt/nbt-get-int compound "z")
-         block-type-str (try (nbt/nbt-get-string compound "type")
-                             (catch Exception _ ""))
-         block-type (if (seq block-type-str)
-                      (keyword block-type-str)
-                      default-type)
-         ignore-chunk (try
-                        (nbt/nbt-get-boolean compound "ignoreChunk")
-                        (catch Exception _ default-ignore-chunk))]
-     (vb/vblock x y z block-type ignore-chunk))))
+(def vblock-to-nbt core-vb/vblock-to-nbt)
+(def vblock-from-nbt core-vb/vblock-from-nbt)
 
 ;; ============================================================================
 ;; Energy Serialization

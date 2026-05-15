@@ -5,7 +5,7 @@
   state helpers, so they are loader-agnostic and should live in mc1201.
   Forge/Fabric command registration just requires this namespace to install the
   multimethod implementations."
-  (:require [cn.li.mc1201.command.executor :as executor]
+  (:require [cn.li.mc1201.command.executor-core :as executor]
             [cn.li.mcmod.command.actions :as cmd-actions]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.i18n :as i18n]

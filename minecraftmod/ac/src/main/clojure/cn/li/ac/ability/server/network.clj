@@ -49,7 +49,7 @@
   (defn- handle-learn-skill-request
     [payload player]
     (let [{:keys [skill-id pos-x pos-y pos-z]} payload
-          uuid (uuid/player-uuid-str player)
+          uuid (uuid/player-uuid player)
           state (get-state uuid)
           ad (:ability-data state)
           player-level (:level ad)
