@@ -14,8 +14,28 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.be :as pbe]
             [cn.li.mcmod.nbt.dsl :as nbt-dsl]
-            [cn.li.mcmod.block.network-handler-bridge :as network-handler-bridge]
             [cn.li.mcmod.block.inventory-helpers :as inv-helpers]))
+
+(defonce ^:private network-helper-fns
+  (atom {:get-world (fn [_] nil)
+         :get-tile-at (fn [_ _] nil)}))
+
+(defn register-network-helper-fns!
+  "Register helper fns used by generated network handlers."
+  [{:keys [get-world get-tile-at]}]
+  (swap! network-helper-fns merge
+         (cond-> {}
+           get-world (assoc :get-world get-world)
+           get-tile-at (assoc :get-tile-at get-tile-at)))
+  nil)
+
+(defn get-network-world
+  [player]
+  ((:get-world @network-helper-fns) player))
+
+(defn get-network-tile-at
+  [world payload]
+  ((:get-tile-at @network-helper-fns) world payload))
 
 (def ^:private nbt-writers
   "NBT writers extracted from nbt.dsl/type-converters"
@@ -217,8 +237,8 @@
                 payload-key (:gui-payload-key field field-key)]]
       [msg-key
        (fn [payload player]
-         (let [world (network-handler-bridge/get-world player)
-               tile (network-handler-bridge/get-tile-at world payload)
+         (let [world (get-network-world player)
+               tile (get-network-tile-at world payload)
                new-value (get payload payload-key)]
            (if (and tile new-value)
              (do

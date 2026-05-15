@@ -32,6 +32,8 @@
     (nbt/nbt-set-int! compound "x" (:x vblock))
     (nbt/nbt-set-int! compound "y" (:y vblock))
     (nbt/nbt-set-int! compound "z" (:z vblock))
+    (nbt/nbt-set-string! compound "type" (name (or (:block-type vblock) :node)))
+    (nbt/nbt-set-boolean! compound "ignoreChunk" (boolean (:ignore-chunk vblock)))
     compound))
 
 (defn vblock-from-nbt
@@ -42,11 +44,21 @@
     
   Returns:
     VBlock record"
-  [compound]
-  (vb/vblock
-    (nbt/nbt-get-int compound "x")
-    (nbt/nbt-get-int compound "y")
-    (nbt/nbt-get-int compound "z")))
+  ([compound]
+   (vblock-from-nbt compound :node false))
+  ([compound default-type default-ignore-chunk]
+   (let [x (nbt/nbt-get-int compound "x")
+         y (nbt/nbt-get-int compound "y")
+         z (nbt/nbt-get-int compound "z")
+         block-type-str (try (nbt/nbt-get-string compound "type")
+                             (catch Exception _ ""))
+         block-type (if (seq block-type-str)
+                      (keyword block-type-str)
+                      default-type)
+         ignore-chunk (try
+                        (nbt/nbt-get-boolean compound "ignoreChunk")
+                        (catch Exception _ default-ignore-chunk))]
+     (vb/vblock x y z block-type ignore-chunk))))
 
 ;; ============================================================================
 ;; Energy Serialization
@@ -134,18 +146,18 @@
     Network record or nil if invalid"
   [compound]
   (try
-    (let [version (nbt/nbt-get-int compound "version")
+    (let [_version (nbt/nbt-get-int compound "version")
           id (keyword (nbt/nbt-get-string compound "id"))
           ssid (nbt/nbt-get-string compound "ssid")
           password (nbt/nbt-get-string compound "password")
           matrix-nbt (nbt/nbt-get-compound compound "matrix")
-          matrix (vblock-from-nbt matrix-nbt)
+          matrix (vblock-from-nbt matrix-nbt :matrix true)
           energy-nbt (nbt/nbt-get-compound compound "energy")
           energy (energy-from-nbt energy-nbt)
           nodes-nbt (nbt/nbt-get-list compound "nodes")
           nodes-size (nbt/nbt-list-size nodes-nbt)
           nodes (vec (for [i (range nodes-size)]
-                       (vblock-from-nbt (nbt/nbt-list-get-compound nodes-nbt i))))
+                       (vblock-from-nbt (nbt/nbt-list-get-compound nodes-nbt i) :node false)))
           metadata {}]
       
       ;; Construct network

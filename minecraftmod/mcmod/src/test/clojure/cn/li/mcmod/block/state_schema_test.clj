@@ -5,7 +5,6 @@
             [cn.li.mcmod.platform.be :as pbe]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.block.network-handler-bridge :as bridge]
             [cn.li.mcmod.block.inventory-helpers :as inv]))
 
 (deftest load-and-save-core-test
@@ -79,15 +78,15 @@
                    {:key :ignored :network-editable? false :network-msg :ignored}])
         updated (atom [])]
     (is (= #{:set-energy :set-mode} (set (keys handlers))))
-    (with-redefs [bridge/get-world (fn [_] :world)
-                  bridge/get-tile-at (fn [_ _] :tile)
+    (with-redefs [schema/get-network-world (fn [_] :world)
+                  schema/get-network-tile-at (fn [_ _] :tile)
                   inv/update-be-field! (fn [tile k v] (swap! updated conj [tile k v]))]
       (is (= {:success true} ((get handlers :set-energy) {:energy 7} :player)))
       (is (= {:success true} ((get handlers :set-mode) {:m 3} :player)))
       (is (= [[:tile :energy 7] [:tile :mode 3]] @updated)))
-    (with-redefs [bridge/get-world (fn [_] :world)
-                  bridge/get-tile-at (fn [_ _] nil)]
+    (with-redefs [schema/get-network-world (fn [_] :world)
+                  schema/get-network-tile-at (fn [_ _] nil)]
       (is (= {:success false} ((get handlers :set-energy) {:energy 7} :player))))
-    (with-redefs [bridge/get-world (fn [_] :world)
-                  bridge/get-tile-at (fn [_ _] :tile)]
+    (with-redefs [schema/get-network-world (fn [_] :world)
+                  schema/get-network-tile-at (fn [_ _] :tile)]
       (is (= {:success false} ((get handlers :set-mode) {} :player))))))

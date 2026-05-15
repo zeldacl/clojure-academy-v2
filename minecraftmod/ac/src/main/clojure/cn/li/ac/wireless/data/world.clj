@@ -8,10 +8,7 @@
             [cn.li.ac.wireless.data.network-lookup :as network-lookup]
             [cn.li.ac.wireless.data.world-topology :as topology]
             [cn.li.ac.wireless.data.world-runtime :as runtime]
-            [cn.li.ac.wireless.data.network-serialization :as network-ser]
-            [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
-            [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
 ;; Protocol for saved data wrapper to support Clojure deftype
@@ -102,46 +99,6 @@
 (def network-impl-validator runtime/network-impl-validator)
 (def node-connection-impl-validator runtime/node-connection-impl-validator)
 (def tick-world-data! runtime/tick-world-data!)
-
-(defn- nbt-write-list!
-  [nbt-root tag items to-nbt-fn skip-fn]
-  (let [lst (nbt/create-nbt-list)]
-    (doseq [item items]
-      (when-not (skip-fn item)
-        (nbt/nbt-append! lst (to-nbt-fn item))))
-    (nbt/nbt-set-tag! nbt-root tag lst)))
-
-(defn- nbt-read-list
-  [nbt-root tag from-nbt-fn world-data]
-  (let [lst (nbt/nbt-get-list nbt-root tag)
-        size (nbt/nbt-list-size lst)]
-    (vec (for [i (range size)]
-           (from-nbt-fn world-data (nbt/nbt-list-get-compound lst i))))))
-
-(defn world-data-to-nbt
-  "Serialize world-data to NBT."
-  [world-data]
-  (let [out (nbt/create-nbt-compound)]
-    (nbt-write-list! out "networks" @(:networks world-data) network-ser/network-to-nbt (fn [net] @(:disposed net)))
-    (nbt-write-list! out "connections" @(:connections world-data) node-conn/node-connection-to-nbt (fn [conn] @(:disposed conn)))
-    out))
-
-(defn world-data-from-nbt
-  "Deserialize world-data from NBT and rebuild indexes."
-  [world nbt-root]
-  (let [world-data (create-world-data world)
-      networks (nbt-read-list nbt-root "networks" network-ser/network-from-nbt world-data)
-        connections (nbt-read-list nbt-root "connections" node-conn/node-connection-from-nbt world-data)]
-    (reset! (:networks world-data) networks)
-    (reset! (:connections world-data) connections)
-
-    (doseq [net networks]
-      (rebuild-network-indexes! world-data net))
-
-    (doseq [conn connections]
-      (rebuild-connection-indexes! world-data conn))
-
-    world-data))
 
 (deftype WiSavedDataWrapper
   [^:volatile-mutable wi-data]

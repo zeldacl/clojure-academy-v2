@@ -26,6 +26,4 @@
 (def link-receiver-to-node-connection! wd/link-receiver-to-node-connection!)
 
 (def tick-world-data! wd/tick-world-data!)
-(def world-data-to-nbt wd/world-data-to-nbt)
-(def world-data-from-nbt wd/world-data-from-nbt)
 (def print-statistics wd/print-statistics)

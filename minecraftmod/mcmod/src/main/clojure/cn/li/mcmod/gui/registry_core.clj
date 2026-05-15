@@ -1,10 +1,12 @@
 (ns cn.li.mcmod.gui.registry-core
   "Unified GUI operations API (replacing legacy gui.adapter facade file)."
   (:require [cn.li.mcmod.gui.handler :as gui-handler]
-            [cn.li.mcmod.gui.adapter.platform-registry :as platform-registry]
-            [cn.li.mcmod.gui.adapter.runtime-api :as runtime-api]))
+            [cn.li.mcmod.gui.adapter.platform-registry :as platform-registry]))
 
 (defonce ^:private resolved-vars
+  (atom {}))
+
+(defonce ^:private screen-factories
   (atom {}))
 
 (defn- resolve-var
@@ -33,8 +35,18 @@
             (apply resolved2 args)))))))
 
 (def register-gui-platform-impl! platform-registry/register-gui-platform-impl!)
-(def register-screen-factory! runtime-api/register-screen-factory!)
-(def get-screen-factory-fn runtime-api/get-screen-factory-fn)
+
+(defn register-screen-factory!
+  [screen-fn-kw screen-fn]
+  (swap! screen-factories assoc (keyword screen-fn-kw) screen-fn)
+  nil)
+
+(defn get-screen-factory-fn
+  [screen-fn-kw]
+  (if-let [f (get @screen-factories (keyword screen-fn-kw))]
+    f
+    (throw (ex-info "Screen factory not registered"
+                    {:screen-fn-kw screen-fn-kw}))))
 
 (defn get-screen-factory-fn-kw [gui-id]
   (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-screen-factory-fn-kw gui-id))
@@ -59,39 +71,40 @@
 
 (defn get-gui-handler [] (gui-handler/get-gui-handler))
 
-(def set-client-container! runtime-api/set-client-container!)
-(def clear-client-container! runtime-api/clear-client-container!)
-(def get-client-container runtime-api/get-client-container)
-(def register-active-container! runtime-api/register-active-container!)
-(def unregister-active-container! runtime-api/unregister-active-container!)
-(def register-player-container! runtime-api/register-player-container!)
-(def unregister-player-container! runtime-api/unregister-player-container!)
-(def get-player-container runtime-api/get-player-container)
-(def get-player-container-from-active runtime-api/get-player-container-from-active)
-(def get-container-for-menu runtime-api/get-container-for-menu)
-(def get-container-by-id runtime-api/get-container-by-id)
-(def get-menu-container-id runtime-api/get-menu-container-id)
-(def register-menu-container! runtime-api/register-menu-container!)
-(def unregister-menu-container! runtime-api/unregister-menu-container!)
-(def register-container-by-id! runtime-api/register-container-by-id!)
-(def unregister-container-by-id! runtime-api/unregister-container-by-id!)
-(def safe-tick! runtime-api/safe-tick!)
-(def safe-validate runtime-api/safe-validate)
-(def safe-sync! runtime-api/safe-sync!)
-(def safe-close! runtime-api/safe-close!)
-(def slot-count runtime-api/slot-count)
-(def slot-get-item runtime-api/slot-get-item)
-(def slot-set-item! runtime-api/slot-set-item!)
-(def slot-changed! runtime-api/slot-changed!)
-(def slot-can-place? runtime-api/slot-can-place?)
-(def get-container-type runtime-api/get-container-type)
-(def node-container? runtime-api/node-container?)
-(def matrix-container? runtime-api/matrix-container?)
-(def get-gui-id-for-container runtime-api/get-gui-id-for-container)
+(defn set-client-container! [container] (platform-registry/invoke-platform! :set-client-container! container))
+(defn clear-client-container! [] (platform-registry/invoke-platform! :clear-client-container!))
+(defn get-client-container [] (platform-registry/invoke-platform! :get-client-container))
+(defn register-active-container! [container] (platform-registry/invoke-platform! :register-active-container! container))
+(defn unregister-active-container! [container] (platform-registry/invoke-platform! :unregister-active-container! container))
+(defn register-player-container! [player container] (platform-registry/invoke-platform! :register-player-container! player container))
+(defn unregister-player-container! [player] (platform-registry/invoke-platform! :unregister-player-container! player))
+(defn get-player-container [player] (platform-registry/invoke-platform! :get-player-container player))
+(defn get-player-container-from-active [player] (platform-registry/invoke-platform! :get-player-container-from-active player))
+(defn get-container-for-menu [menu] (platform-registry/invoke-platform! :get-container-for-menu menu))
+(defn get-container-by-id [container-id] (platform-registry/invoke-platform! :get-container-by-id container-id))
+(defn get-menu-container-id [menu] (platform-registry/invoke-platform! :get-menu-container-id menu))
+(defn register-menu-container! [menu container] (platform-registry/invoke-platform! :register-menu-container! menu container))
+(defn unregister-menu-container! [menu] (platform-registry/invoke-platform! :unregister-menu-container! menu))
+(defn register-container-by-id! [container-id container] (platform-registry/invoke-platform! :register-container-by-id! container-id container))
+(defn unregister-container-by-id! [container-id] (platform-registry/invoke-platform! :unregister-container-by-id! container-id))
+(defn safe-tick! [container] (platform-registry/invoke-platform! :safe-tick! container))
+(defn safe-validate [container player] (platform-registry/invoke-platform! :safe-validate container player))
+(defn safe-sync! [container] (platform-registry/invoke-platform! :safe-sync! container))
+(defn safe-close! [container] (platform-registry/invoke-platform! :safe-close! container))
+(defn slot-count [container] (platform-registry/invoke-platform! :slot-count container))
+(defn slot-get-item [container idx] (platform-registry/invoke-platform! :slot-get-item container idx))
+(defn slot-set-item! [container idx item] (platform-registry/invoke-platform! :slot-set-item! container idx item))
+(defn slot-changed! [container idx] (platform-registry/invoke-platform! :slot-changed! container idx))
+(defn slot-can-place? [container idx stack] (platform-registry/invoke-platform! :slot-can-place? container idx stack))
+(defn get-container-type [container] (platform-registry/invoke-platform! :get-container-type container))
+(defn node-container? [container] (platform-registry/invoke-platform! :node-container? container))
+(defn matrix-container? [container] (platform-registry/invoke-platform! :matrix-container? container))
+(defn get-gui-id-for-container [container] (platform-registry/invoke-platform! :get-gui-id-for-container container))
 
-(def get-menu-type runtime-api/get-menu-type)
-(def register-menu-type! runtime-api/register-menu-type!)
-(def execute-quick-move-forge runtime-api/execute-quick-move-forge)
+(defn get-menu-type [platform gui-id] (platform-registry/invoke-platform! :get-menu-type platform gui-id))
+(defn register-menu-type! [platform gui-id menu-type] (platform-registry/invoke-platform! :register-menu-type! platform gui-id menu-type))
+(defn execute-quick-move-forge [menu container slot-index slot stack]
+  (platform-registry/invoke-platform! :execute-quick-move-forge menu container slot-index slot stack))
 
 (defn register-set-tab-handler!
   []
