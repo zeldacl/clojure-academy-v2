@@ -1,6 +1,6 @@
 (ns cn.li.fabric1201.runtime.entity-query
   "Fabric-side entity query adapters for platform-neutral API."
-  (:require [cn.li.fabric1201.runtime.server-context :as server-context]
+  (:require [cn.li.fabric1201.adapter.server-context :as server-context]
             [cn.li.mc1201.runtime.entity-query-core :as core]
             [cn.li.mcmod.platform.entity :as pentity]
             [cn.li.mcmod.util.log :as log])

@@ -1,13 +1,18 @@
 (ns cn.li.forge1201.registry.effects
   "Sound, mob-effect, and particle registration for Forge 1.20.1."
   (:require [cn.li.forge1201.registry.state :as registry-state]
-            [cn.li.mcmod.registry.metadata :as registry-metadata])
+            [cn.li.mcmod.protocol.metadata :as registry-metadata])
   (:import [cn.li.mc1201.effect ScriptedMobEffect]
            [net.minecraft.core.particles SimpleParticleType]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.sounds SoundEvent]
            [net.minecraft.world.effect MobEffectCategory]
            [net.minecraftforge.registries DeferredRegister RegistryObject]))
+
+(defn- metadata-call
+  [var-sym & args]
+  (when-let [f (requiring-resolve var-sym)]
+    (apply f args)))
 
 (defn- effect-category->forge
   ^MobEffectCategory
@@ -19,8 +24,8 @@
 
 (defn register-all-sounds!
   [{:keys [sounds-register mod-id]}]
-  (doseq [sound-id (registry-metadata/get-all-sound-ids)]
-    (let [registry-name (registry-metadata/get-sound-registry-name sound-id)
+  (doseq [sound-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-sound-ids) [])]
+    (let [registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-sound-registry-name sound-id)
           registered-obj (.register ^DeferredRegister sounds-register registry-name
                                     (reify java.util.function.Supplier
                                       (get [_]
@@ -30,9 +35,9 @@
 
 (defn register-all-effects!
   [{:keys [effects-register]}]
-  (doseq [effect-id (registry-metadata/get-all-effect-ids)]
-    (let [effect-spec (registry-metadata/get-effect-spec effect-id)
-          registry-name (registry-metadata/get-effect-registry-name effect-id)
+  (doseq [effect-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-effect-ids) [])]
+    (let [effect-spec (metadata-call 'cn.li.mcmod.protocol.metadata/get-effect-spec effect-id)
+          registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-effect-registry-name effect-id)
           category (effect-category->forge (:category effect-spec))
           color (int (or (:color effect-spec) 0xAA0000))
           tick-interval (int (or (:tick-interval effect-spec) 20))
@@ -45,9 +50,9 @@
 
 (defn register-all-particles!
   [{:keys [particle-types-register]}]
-  (doseq [particle-id (registry-metadata/get-all-particle-ids)]
-    (let [particle-spec (registry-metadata/get-particle-spec particle-id)
-          registry-name (registry-metadata/get-particle-registry-name particle-id)
+  (doseq [particle-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-particle-ids) [])]
+    (let [particle-spec (metadata-call 'cn.li.mcmod.protocol.metadata/get-particle-spec particle-id)
+          registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-particle-registry-name particle-id)
           always-show? (boolean (:always-show? particle-spec))
           registered-obj (.register ^DeferredRegister particle-types-register registry-name
                                     (reify java.util.function.Supplier

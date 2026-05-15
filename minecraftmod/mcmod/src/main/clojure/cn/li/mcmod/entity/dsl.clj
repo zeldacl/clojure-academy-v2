@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.entity.dsl
   "Entity DSL - declarative registry metadata for platform adapters."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.registry.core :as registry-core]
+            [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce entity-registry (registry-core/atom-registry {}))

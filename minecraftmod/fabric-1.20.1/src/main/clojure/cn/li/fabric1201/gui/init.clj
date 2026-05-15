@@ -3,7 +3,7 @@
   (:require [cn.li.mc1201.gui.init-orchestrator :as gui-orchestrator]
             [cn.li.mc1201.gui.init-checks :as init-checks]
             [cn.li.mcmod.gui.registry-core :as gui]
-            [cn.li.fabric1201.gui.registry-impl :as registry-impl]
+            [cn.li.fabric1201.adapter.gui-registry :as registry-impl]
             [cn.li.fabric1201.gui.network :as network]
             [cn.li.mcmod.util.log :as log]))
 

@@ -9,7 +9,7 @@
   Node-specific blockstate logic has been extracted to wireless-node/blockstate.clj
   to colocate it with the node block implementation."
   (:require [cn.li.mcmod.config :as mcmod-config]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
              [cn.li.ac.block.wireless-node.blockstate :as node-blockstate]))
 
 ;; ============================================================================

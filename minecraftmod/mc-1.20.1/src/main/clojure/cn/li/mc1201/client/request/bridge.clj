@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.client.request.bridge
   "Provides screen-facing request functions for runtime operations."
-  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+  (:require [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log]))
 
 (defn learn-skill! [skill-id cb]

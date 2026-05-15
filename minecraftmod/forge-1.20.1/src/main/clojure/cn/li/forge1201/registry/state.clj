@@ -1,9 +1,11 @@
+(remove-ns 'cn.li.forge1201.registry.state)
+
 (ns cn.li.forge1201.registry.state
 	"Centralized Forge registry runtime state.
 
 	Keeps mutable registry atoms and lookup helpers out of the mod entry namespace
 	so mod orchestration stays focused on bootstrapping/event wiring."
-	(:require [cn.li.mcmod.registry.metadata :as registry-metadata])
+	(:require [cn.li.mcmod.protocol.metadata :as registry-metadata])
 	(:import [net.minecraftforge.registries RegistryObject]))
 
 ;; Storage for registered objects populated during mod initialization.

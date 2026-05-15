@@ -3,7 +3,7 @@
   Delegates to mc1201 potion-effects-core using Fabric server-context."
   (:require [cn.li.mcmod.platform.potion-effects :as ppe]
             [cn.li.mc1201.runtime.potion-effects-core :as pec]
-            [cn.li.fabric1201.runtime.server-context :as server-ctx]
+            [cn.li.fabric1201.adapter.server-context :as server-ctx]
             [cn.li.mcmod.util.log :as log]))
 
 (defn fabric-potion-effects []

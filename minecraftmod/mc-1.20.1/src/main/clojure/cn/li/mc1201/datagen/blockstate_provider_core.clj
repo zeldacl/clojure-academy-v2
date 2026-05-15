@@ -2,9 +2,35 @@
   "Shared blockstate/model/item-model datagen inference helpers."
   (:require [clojure.string :as str]
             [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.block.blockstate-definition :as blockstate-def]
             [cn.li.mc1201.datagen.blockstate-support :as bs-support]))
+
+(defn- safe-var-call
+  [ns-sym var-sym & args]
+  (let [resolved (requiring-resolve var-sym)]
+    (cond
+      (and resolved (bound? resolved))
+      (apply resolved args)
+
+      :else
+      (do
+        (require ns-sym :reload)
+        (let [resolved2 (requiring-resolve var-sym)]
+          (when (and resolved2 (bound? resolved2))
+            (apply resolved2 args)))))))
+
+(defn- metadata-call
+  [var-name & args]
+  (apply safe-var-call 'cn.li.mcmod.protocol.metadata
+         (symbol (str "cn.li.mcmod.protocol.metadata/" var-name))
+         args))
+
+(defn- blockstate-def-call
+  [var-name & args]
+  (apply safe-var-call 'cn.li.mcmod.block.blockstate-definition
+         (symbol (str "cn.li.mcmod.block.blockstate-definition/" var-name))
+         args))
 
 (defn normalize-candidates
   [s]
@@ -18,12 +44,12 @@
   (let [candidates (distinct (normalize-candidates registry-name))]
     (or
      (some (fn [candidate]
-             (registry-metadata/get-block-spec (keyword candidate)))
+             (metadata-call "get-block-spec" (keyword candidate)))
            candidates)
      (some (fn [block-id]
-             (when (some #{(registry-metadata/get-block-registry-name block-id)} candidates)
-               (registry-metadata/get-block-spec block-id)))
-           (registry-metadata/get-all-block-ids)))))
+             (when (some #{(metadata-call "get-block-registry-name" block-id)} candidates)
+               (metadata-call "get-block-spec" block-id)))
+           (or (metadata-call "get-all-block-ids") [])))))
 
 (defn item-texture-from-spec
   [registry-name]
@@ -63,14 +89,14 @@
 
 (defn block-model-spec
   [model-name]
-  (if-let [cube-config (or (blockstate-def/get-model-cube-texture-config model-name)
+  (if-let [cube-config (or (blockstate-def-call "get-model-cube-texture-config" model-name)
                            (when (= model-name "metal_former")
-                             (blockstate-def/get-model-cube-texture-config "metal_former_north")))]
+                             (blockstate-def-call "get-model-cube-texture-config" "metal_former_north")))]
     {:kind :cube
      :textures cube-config
      :particle (when (= model-name "metal_former")
                  (:north cube-config))}
-    (if-let [texture-config (blockstate-def/get-model-texture-config model-name)]
+    (if-let [texture-config (blockstate-def-call "get-model-texture-config" model-name)]
       {:kind :cube
        :textures {:down (:vert texture-config)
                   :up (:vert texture-config)
@@ -103,7 +129,7 @@
   [registry-name multipart?]
   (let [block-spec (registry-name->block-spec registry-name)
         flat-item? (true? (get-in block-spec [:rendering :flat-item-icon?]))
-        item-model-id (blockstate-def/get-item-model-id modid/*mod-id* registry-name)]
+  item-model-id (blockstate-def-call "get-item-model-id" modid/*mod-id* registry-name)]
     (if (and flat-item? (not multipart?))
       (bs-support/flat-item-model-json (item-texture-from-spec registry-name))
       (bs-support/parent-model-json item-model-id))))
@@ -116,13 +142,13 @@
    :id       \"<namespace:path>\"
    :payload  <json-like map>}"
   []
-  (let [definitions (blockstate-def/get-all-definitions)]
+  (let [definitions (or (blockstate-def-call "get-all-definitions") [])]
     (mapcat
      (fn [[block-key definition]]
        (let [registry-name (:registry-name definition)
              blockstate-id (str modid/*mod-id* ":" registry-name)
              first-model (some-> definition :parts first :models first)
-             blockstate-json (if (blockstate-def/is-multipart-block? definition)
+             blockstate-json (if (blockstate-def-call "is-multipart-block?" definition)
                                (bs-support/multipart-blockstate-json (:parts definition))
                                (bs-support/simple-blockstate-json first-model))
              model-ids (->> (:parts definition)
@@ -135,8 +161,8 @@
                                    {:path-key :block-model
                                     :id model-id-str
                                     :payload model-json})
-             item-model-entries (when (registry-metadata/should-create-block-item? (name block-key))
-                                  (let [item-model-id (blockstate-def/get-item-model-id modid/*mod-id* registry-name)
+             item-model-entries (when (metadata-call "should-create-block-item?" (name block-key))
+                      (let [item-model-id (blockstate-def-call "get-item-model-id" modid/*mod-id* registry-name)
                                         item-model-name (model-id->model-name item-model-id)
                                         known-model-ids (set model-ids)
                                         item-block-model-entry (when-not (contains? known-model-ids item-model-id)
@@ -144,7 +170,7 @@
                                                                   :id (str modid/*mod-id* ":" item-model-name)
                                                                   :payload (block-model-json item-model-name)})
                                         item-id (str modid/*mod-id* ":" registry-name)
-                                        multipart? (blockstate-def/is-multipart-block? definition)]
+                                        multipart? (blockstate-def-call "is-multipart-block?" definition)]
                                     (concat
                                      (when item-block-model-entry [item-block-model-entry])
                                      [{:path-key :item-model

@@ -6,7 +6,7 @@
   - Keep core platform-neutral: stores metadata only; platforms query via registry metadata."
   (:require [clojure.string :as str]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
-            [cn.li.mcmod.registry.core :as registry-core]
+            [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^{:doc "Registry of tile specs.

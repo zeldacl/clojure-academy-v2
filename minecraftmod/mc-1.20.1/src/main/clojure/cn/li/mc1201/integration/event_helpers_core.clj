@@ -3,7 +3,7 @@
   
   These helpers eliminate duplication of common event processing patterns
   between Forge and Fabric event handlers."
-  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+  (:require [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.entity.player Player]))
 

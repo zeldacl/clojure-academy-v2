@@ -4,7 +4,7 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
             [cn.li.mc1201.runtime.sync-core :as runtime-sync]
-            [cn.li.fabric1201.runtime.network :as runtime-network]
+            [cn.li.fabric1201.adapter.network :as runtime-network]
             [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core])
   (:import [net.minecraft.server.level ServerPlayer]))
 

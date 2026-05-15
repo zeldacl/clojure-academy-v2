@@ -1,6 +1,6 @@
 (ns cn.li.mcmod.client.ui-hooks
   "Client UI/screen hook surface (compat wrapper)."
-  (:require [cn.li.mcmod.runtime.hooks.client-ui :as client-ui]))
+  (:require [cn.li.mcmod.hooks.client-ui :as client-ui]))
 
 (def client-build-overlay-plan client-ui/client-build-overlay-plan)
 (def client-build-hud-render-data client-ui/client-build-hud-render-data)

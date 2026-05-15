@@ -3,21 +3,35 @@
   (:require [cn.li.fabric1201.registry.fabric-dispatch :as fabric-dispatch]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.entity.dsl :as edsl]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
            [cn.li.mc1201.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]
            [net.minecraft.world.item Item Item$Properties]))
 
+(defn- metadata-call
+  [var-sym & args]
+  (let [resolved (requiring-resolve var-sym)]
+    (cond
+      (and resolved (bound? resolved))
+      (apply resolved args)
+
+      :else
+      (do
+        (require 'cn.li.mcmod.protocol.metadata :reload)
+        (let [resolved2 (requiring-resolve var-sym)]
+          (when (and resolved2 (bound? resolved2))
+            (apply resolved2 args)))))))
+
 (defn- has-block-state-properties?
   [block-id]
-  (registry-metadata/has-block-state-properties? block-id))
+  (boolean (metadata-call 'cn.li.mcmod.protocol.metadata/has-block-state-properties? block-id)))
 
 (defn register-scripted-tile-hooks!
   []
-  (doseq [tile-id (registry-metadata/get-all-tile-ids)]
-    (when-let [spec (registry-metadata/get-tile-spec tile-id)]
+  (doseq [tile-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-tile-ids) [])]
+    (when-let [spec (metadata-call 'cn.li.mcmod.protocol.metadata/get-tile-spec tile-id)]
       (let [tick-fn (:tick-fn spec)
             read-nbt-fn (:read-nbt-fn spec)
             write-nbt-fn (:write-nbt-fn spec)
@@ -32,15 +46,15 @@
 (defn register-all-blocks!
   [{:keys [registered-blocks base-properties carrier-properties]}]
   (let [get-props (requiring-resolve 'cn.li.mc1201.block.blockstate-properties/get-all-properties)]
-    (doseq [block-id (registry-metadata/get-all-block-ids)]
-      (let [registry-name (registry-metadata/get-block-registry-name block-id)
-            fluid-id (registry-metadata/get-fluid-id-for-block block-id)
+    (doseq [block-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-block-ids) [])]
+      (let [registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-registry-name block-id)
+            fluid-id (metadata-call 'cn.li.mcmod.protocol.metadata/get-fluid-id-for-block block-id)
             needs-dynamic-properties? (has-block-state-properties? block-id)
-            has-be? (registry-metadata/has-block-entity? block-id)
+            has-be? (boolean (metadata-call 'cn.li.mcmod.protocol.metadata/has-block-entity? block-id))
             tile-id (when has-be?
-                      (or (registry-metadata/get-block-tile-id block-id) block-id))
+                      (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-tile-id block-id) block-id))
             block-inst (cond
-                         (and fluid-id (not (registry-metadata/fluid-block? block-id)))
+                         (and fluid-id (not (metadata-call 'cn.li.mcmod.protocol.metadata/fluid-block? block-id)))
                          (FabricBootstrapHelper/createPlainBlock base-properties)
 
                          fluid-id
@@ -66,9 +80,9 @@
 
 (defn register-block-entities!
   [{:keys [mod-id registered-blocks registered-block-entities]}]
-  (doseq [tile-id (registry-metadata/get-all-tile-ids)]
-    (let [registry-name (registry-metadata/get-tile-registry-name tile-id)
-          block-ids (registry-metadata/get-tile-block-ids tile-id)
+  (doseq [tile-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-tile-ids) [])]
+    (let [registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-tile-registry-name tile-id)
+          block-ids (metadata-call 'cn.li.mcmod.protocol.metadata/get-tile-block-ids tile-id)
           blocks (keep #(get @registered-blocks %) block-ids)]
       (when (seq blocks)
         (let [pairs (map vector block-ids blocks)
@@ -90,18 +104,18 @@
 
 (defn register-all-items!
   [{:keys [registered-items registered-blocks]}]
-  (doseq [item-id (registry-metadata/get-all-item-ids)]
-    (let [registry-name (registry-metadata/get-item-registry-name item-id)
-          item-spec (registry-metadata/get-item-spec item-id)
+  (doseq [item-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-item-ids) [])]
+    (let [registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-item-registry-name item-id)
+          item-spec (metadata-call 'cn.li.mcmod.protocol.metadata/get-item-spec item-id)
           item-inst (create-standalone-item item-spec)
           registered (fabric-dispatch/register-item registry-name item-inst)]
       (swap! registered-items assoc item-id registered)))
 
-  (doseq [block-id (registry-metadata/get-all-block-ids)]
-    (when (and (registry-metadata/should-create-block-item? block-id)
-               (not (registry-metadata/fluid-block? block-id)))
+  (doseq [block-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-block-ids) [])]
+    (when (and (metadata-call 'cn.li.mcmod.protocol.metadata/should-create-block-item? block-id)
+               (not (metadata-call 'cn.li.mcmod.protocol.metadata/fluid-block? block-id)))
       (when-let [block-inst (get @registered-blocks block-id)]
-        (let [registry-name (registry-metadata/get-block-registry-name block-id)
+        (let [registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-registry-name block-id)
               block-item (FabricBootstrapHelper/createBlockItem block-inst)
               registered (fabric-dispatch/register-item registry-name block-item)]
           (swap! registered-items assoc (str block-id "-item") registered))))))

@@ -2,18 +2,23 @@
   "Fluid registration for Forge 1.20.1."
   (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
             [cn.li.forge1201.registry.state :as registry-state]
-            [cn.li.mcmod.registry.metadata :as registry-metadata])
+            [cn.li.mcmod.protocol.metadata :as registry-metadata])
   (:import [net.minecraftforge.registries DeferredRegister RegistryObject]))
+
+(defn- metadata-call
+  [var-sym & args]
+  (when-let [f (requiring-resolve var-sym)]
+    (apply f args)))
 
 (defn register-all-fluids!
   [{:keys [fluid-types-register fluids-register items-register]}]
-  (doseq [fluid-id (registry-metadata/get-all-fluid-ids)]
-    (let [fluid-spec (registry-metadata/get-fluid-spec fluid-id)
+  (doseq [fluid-id (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-fluid-ids) [])]
+    (let [fluid-spec (metadata-call 'cn.li.mcmod.protocol.metadata/get-fluid-spec fluid-id)
           physical (:physical fluid-spec)
           rendering (:rendering fluid-spec)
           behavior (:behavior fluid-spec)
           block-spec (:block fluid-spec)
-          registry-name (registry-metadata/get-fluid-registry-name fluid-id)
+          registry-name (metadata-call 'cn.li.mcmod.protocol.metadata/get-fluid-registry-name fluid-id)
           flowing-name (str registry-name "_flowing")
           fluid-type-ro (.register ^DeferredRegister fluid-types-register registry-name
                                    (reify java.util.function.Supplier

@@ -6,7 +6,7 @@
   advancement APIs are also handled here because they are loader-agnostic.
   Both Forge and Fabric delegate to this core after setting up platform context."
   (:require [cn.li.mcmod.command.actions :as cmd-actions]
-            [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+            [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.advancements Advancement AdvancementProgress]

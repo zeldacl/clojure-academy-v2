@@ -1,7 +1,7 @@
 (ns cn.li.fabric1201.integration.events.loot
   "Fabric loot-table handlers extracted from monolithic events namespace."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.registry.metadata :as registry-metadata])
+            [cn.li.mcmod.protocol.metadata :as registry-metadata])
   (:import [cn.li.fabric1201.loot FabricLootInjectionHelper]))
 
 (defn handle-loot-table-modify

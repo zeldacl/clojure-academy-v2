@@ -2,7 +2,7 @@
   "Block DSL core - block specification, registration, and main macros.
    Provides the primary interface for defining blocks declaratively."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.registry.core :as registry-core]
+            [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.block.dsl-properties :as props]
             [cn.li.mcmod.block.dsl-validators :as validators]))

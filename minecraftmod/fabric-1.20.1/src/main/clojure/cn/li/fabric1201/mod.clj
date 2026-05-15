@@ -14,7 +14,7 @@
             [cn.li.fabric1201.config.bridge :as config-bridge]
             [cn.li.fabric1201.config.gameplay-bridge :as gameplay-bridge]
             [cn.li.mc1201.config.gameplay-bridge :as shared-gameplay-bridge]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.entity.effect-hooks :as effect-hooks]
             [cn.li.mc1201.entity.ray-hooks :as ray-hooks]

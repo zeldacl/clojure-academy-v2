@@ -1,14 +1,17 @@
 (ns cn.li.ac.ability.discovery
 	"Discovery/registration layer for AC ability content.
 
-	This replaces giant hard-coded require lists in bootstrap namespaces with a
-	deterministic provider registry. Providers contribute server-side skill
-	namespaces and/or client-side FX namespaces, sorted by `:priority` then `:id`."
-	(:require [cn.li.mcmod.util.log :as log]))
+	This namespace now builds provider lists from a classpath scanner,
+	while preserving the existing provider registry API surface."
+	(:require [cn.li.ac.discovery.registry :as discovery-registry]
+					[cn.li.ac.discovery.scanner :as scanner]
+					[cn.li.mcmod.util.log :as log]))
 
-(defonce ^:private providers* (atom {}))
+(defonce ^:private bootstrap-attempts* (atom 0))
 
-(def ^:private default-providers
+(declare register-provider! registered-providers)
+
+(def ^:private fallback-providers
 	[{:id :generic
 		:priority 10
 		:skill-namespaces
@@ -98,45 +101,55 @@
 			cn.li.ac.content.ability.vecmanip.vec-deviation-fx
 			cn.li.ac.content.ability.vecmanip.vec-reflection-fx]}])
 
-(defn- normalize-provider
-	[{:keys [id priority skill-namespaces fx-namespaces]
-		:or {priority 100}}]
-	{:pre [(keyword? id)]}
-	{:id id
-	 :priority (long priority)
-	 :skill-namespaces (vec (distinct (or skill-namespaces [])))
-	 :fx-namespaces (vec (distinct (or fx-namespaces [])))})
+(defn- provider-by-id
+	[provider-id]
+	(some #(when (= (:id %) provider-id) %) (registered-providers)))
+
+(defn- merge-provider!
+	[provider]
+	(let [existing (provider-by-id (:id provider))
+				merged (if existing
+						 (-> existing
+								 (assoc :priority (min (long (:priority existing)) (long (:priority provider))))
+								 (update :skill-namespaces #(vec (distinct (concat % (:skill-namespaces provider)))))
+								 (update :fx-namespaces #(vec (distinct (concat % (:fx-namespaces provider))))))
+						 provider)]
+		(register-provider! merged)))
 
 (defn register-provider!
 	"Register or replace an ability content provider."
 	[provider]
-	(let [provider* (normalize-provider provider)]
-		(swap! providers* assoc (:id provider*) provider*)
-		(log/debug "Registered ability content provider" (:id provider*))
-		provider*))
+	(discovery-registry/register-provider! provider))
 
 (defn unregister-provider!
 	[provider-id]
-	(swap! providers* dissoc provider-id)
-	nil)
+	(discovery-registry/unregister-provider! provider-id))
 
 (defn registered-providers
 	[]
-	(->> @providers*
-			 vals
-			 (sort-by (juxt :priority :id))
-			 vec))
+	(discovery-registry/registered-providers))
 
 (defn bootstrap-default-providers!
-	"Ensure built-in providers exist. Safe to call repeatedly."
+	"Discover and register built-in ability providers from classpath.
+
+	Safe to call repeatedly."
 	[]
-	(doseq [provider default-providers]
-		(register-provider! provider))
+	(when (or (zero? (count (registered-providers)))
+					(< @bootstrap-attempts* 1))
+		(swap! bootstrap-attempts* inc)
+		(let [providers (scanner/discover-ability-providers)]
+			(if (empty? providers)
+				(log/warn "Ability discovery returned no providers; check classpath/resource layout")
+				(doseq [provider providers]
+					(register-provider! provider)))
+			(doseq [provider fallback-providers]
+				(merge-provider! provider))))
 	(registered-providers))
 
 (defn discovered-skill-namespaces
 	"Return server-side skill namespaces in deterministic load order."
 	[]
+	(bootstrap-default-providers!)
 	(->> (registered-providers)
 			 (mapcat :skill-namespaces)
 			 distinct
@@ -145,6 +158,7 @@
 (defn discovered-fx-namespaces
 	"Return client-side FX namespaces in deterministic load order."
 	[]
+	(bootstrap-default-providers!)
 	(->> (registered-providers)
 			 (mapcat :fx-namespaces)
 			 distinct
@@ -155,7 +169,8 @@
 	([provider-id ns-sym]
 	 (register-skill-namespace! provider-id ns-sym 100))
 	([provider-id ns-sym priority]
-	 (let [existing (get @providers* provider-id {:id provider-id :priority priority})]
+	 (let [existing (or (some #(when (= (:id %) provider-id) %) (registered-providers))
+									 {:id provider-id :priority priority})]
 		 (register-provider! (update existing :skill-namespaces (fnil conj []) ns-sym)))))
 
 (defn register-fx-namespace!
@@ -163,5 +178,6 @@
 	([provider-id ns-sym]
 	 (register-fx-namespace! provider-id ns-sym 100))
 	([provider-id ns-sym priority]
-	 (let [existing (get @providers* provider-id {:id provider-id :priority priority})]
+	 (let [existing (or (some #(when (= (:id %) provider-id) %) (registered-providers))
+									 {:id provider-id :priority priority})]
 		 (register-provider! (update existing :fx-namespaces (fnil conj []) ns-sym)))))

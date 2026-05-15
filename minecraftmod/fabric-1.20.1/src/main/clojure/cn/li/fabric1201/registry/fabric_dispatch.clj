@@ -2,7 +2,7 @@
   "Fabric 1.20.1 registry placeholder.
 
   NOTE: Compile-unblocking stub. Avoids touching Minecraft registries during AOT."
-  (:require [cn.li.mcmod.registry.platform :as registry]
+  (:require [cn.li.mcmod.platform.registry :as registry]
             [cn.li.mc1201.registry.dispatch :as dispatch]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log]))

@@ -1,3 +1,5 @@
+(remove-ns 'cn.li.forge1201.mod)
+
 (ns cn.li.forge1201.mod
   "Forge 1.20.1 main mod class - generated with gen-class"
   (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
@@ -10,7 +12,7 @@
     [cn.li.forge1201.registry.state :as registry-state]
     [cn.li.forge1201.integration.events :as events]
     [cn.li.forge1201.gui.init :as gui-init]
-    [cn.li.forge1201.gui.registry-impl :as gui-registry-impl]
+    [cn.li.forge1201.adapter.gui-registry :as gui-registry-impl]
     [cn.li.mcmod.config :as modid]
     [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent])

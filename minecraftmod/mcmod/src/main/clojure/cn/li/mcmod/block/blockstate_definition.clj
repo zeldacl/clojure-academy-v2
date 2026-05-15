@@ -1,12 +1,14 @@
+(remove-ns 'cn.li.mcmod.block.blockstate-definition)
+
 (ns cn.li.mcmod.block.blockstate-definition
   "BlockState datagen business logic (platform independent).
 
    This module provides basic blockstate definitions from metadata.
    The ac layer overrides these with specialized multipart definitions.
 
-   It derives all needed information from `cn.li.mcmod.registry.metadata`,
+   It derives all needed information from `cn.li.mcmod.protocol.metadata`,
    which is populated by the DSL namespaces at runtime."
-  (:require [cn.li.mcmod.registry.metadata :as registry-metadata]
+  (:require [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.config :as config]))
 
 ;; ============================================================================

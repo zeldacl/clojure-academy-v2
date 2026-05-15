@@ -1,6 +1,6 @@
 (ns cn.li.mcmod.client.ability-hooks
   "Client ability-FX hook surface (compat wrapper)."
-  (:require [cn.li.mcmod.runtime.hooks.effects :as effects]))
+  (:require [cn.li.mcmod.hooks.effects :as effects]))
 
 (def client-poll-particle-effects effects/client-poll-particle-effects)
 (def client-poll-sound-effects effects/client-poll-sound-effects)

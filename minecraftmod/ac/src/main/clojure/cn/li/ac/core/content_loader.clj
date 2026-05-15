@@ -1,3 +1,5 @@
+(remove-ns 'cn.li.ac.core.content-loader)
+
 (ns cn.li.ac.core.content-loader
   "AC runtime content loading orchestration."
   (:require [cn.li.ac.gui.platform-adapter :as platform-gui]
@@ -24,7 +26,8 @@
               (partial screen-factory/create-screen gui-type))
             (log/info "Registered screen factory" screen-fn-kw "for GUI ID" gui-id
                       "gui-type=" gui-type "declared?" (boolean declared-screen-fn-kw))))))
-    (event-metadata/init-event-metadata!)
+    (when-let [f (requiring-resolve 'cn.li.mcmod.events.metadata/init-event-metadata!)]
+      (f))
     (hooks/call-all-network-handlers!)
     (tabbed-gui/register-set-tab-handler!)))
 

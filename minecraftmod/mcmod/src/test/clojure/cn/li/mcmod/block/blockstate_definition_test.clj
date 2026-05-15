@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.block.blockstate-definition :as sut]
             [cn.li.mcmod.config :as config]
-            [cn.li.mcmod.registry.metadata :as metadata]))
+            [cn.li.mcmod.protocol.metadata :as metadata]))
 
 (deftest default-definition-generation-test
   (with-redefs [metadata/get-all-block-ids (fn [] ["demo-block"])

@@ -7,7 +7,7 @@
             [cn.li.forge1201.runtime.world-effects :as world-effects]
             [cn.li.forge1201.runtime.block-manipulation :as block-manipulation]
             [cn.li.forge1201.runtime.damage-interception :as damage-interception]
-            [cn.li.forge1201.runtime.server-context :as server-context]
+            [cn.li.forge1201.adapter.server-context :as server-context]
             [cn.li.mc1201.runtime.adapter-registry :as adapter-registry]
             [cn.li.mc1201.runtime.adapter-support :as adapter-support]
             [cn.li.mc1201.runtime.interop-core :as interop-core]

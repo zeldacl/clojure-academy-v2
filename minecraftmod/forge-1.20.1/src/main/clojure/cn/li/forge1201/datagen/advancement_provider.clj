@@ -17,10 +17,10 @@
   "Build known items set using shared helper"
   []
   (item-registry/known-item-ids
-    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-all-item-ids)
-    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-item-registry-name)
-    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-all-block-ids)
-    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-block-registry-name)
+    (requiring-resolve 'cn.li.mcmod.protocol.metadata/get-all-item-ids)
+    (requiring-resolve 'cn.li.mcmod.protocol.metadata/get-item-registry-name)
+    (requiring-resolve 'cn.li.mcmod.protocol.metadata/get-all-block-ids)
+    (requiring-resolve 'cn.li.mcmod.protocol.metadata/get-block-registry-name)
     "my_mod"))
 
 (defn create

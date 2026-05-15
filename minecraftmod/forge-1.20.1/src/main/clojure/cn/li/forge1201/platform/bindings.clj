@@ -1,10 +1,12 @@
+(remove-ns 'cn.li.forge1201.platform.bindings)
+
 (ns cn.li.forge1201.platform.bindings
 	"Forge-specific static function bindings for core platform hooks.
 
 	These functions use direct typed calls so Loom remapping remains valid in packaged jars."
 	(:require [cn.li.mcmod.platform.position :as pos]
 					[cn.li.mcmod.platform.be :as pbe]
-					[cn.li.mcmod.registry.metadata :as registry-metadata]
+					[cn.li.mcmod.protocol.metadata :as registry-metadata]
 					[cn.li.forge1201.registry.state :as registry-state]
 					[cn.li.mcmod.util.log :as log])
 	(:import [net.minecraft.core BlockPos]

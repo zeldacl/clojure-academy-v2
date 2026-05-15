@@ -4,7 +4,7 @@
   from Fabric server-context."
   (:require [cn.li.mcmod.platform.teleportation :as ptp]
             [cn.li.mc1201.runtime.teleportation-core :as tc]
-            [cn.li.fabric1201.runtime.server-context :as server-ctx]
+            [cn.li.fabric1201.adapter.server-context :as server-ctx]
             [cn.li.mcmod.util.log :as log]))
 
 (defn fabric-teleportation []

@@ -3,7 +3,7 @@
   (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
             [cn.li.forge1201.registry.state :as registry-state]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
-            [cn.li.mcmod.registry.metadata :as registry-metadata])
+            [cn.li.mcmod.protocol.metadata :as registry-metadata])
   (:import [net.minecraftforge.registries DeferredRegister RegistryObject]))
 
 (defn- has-block-state-properties?

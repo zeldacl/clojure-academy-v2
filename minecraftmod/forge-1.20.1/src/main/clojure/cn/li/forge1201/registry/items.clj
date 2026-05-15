@@ -2,7 +2,7 @@
   "Item registration for Forge 1.20.1."
   (:require [cn.li.forge1201.registry.item-properties :as item-properties]
             [cn.li.forge1201.registry.state :as registry-state]
-            [cn.li.mcmod.registry.metadata :as registry-metadata])
+            [cn.li.mcmod.protocol.metadata :as registry-metadata])
   (:import [net.minecraft.world.item BlockItem Item$Properties]
            [net.minecraftforge.registries DeferredRegister RegistryObject]))
 

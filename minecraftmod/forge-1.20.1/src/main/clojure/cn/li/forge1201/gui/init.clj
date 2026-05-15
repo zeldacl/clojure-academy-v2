@@ -61,7 +61,7 @@
   
   Returns: boolean (true if all checks pass)"
   []
-  (let [get-menu-type (requiring-resolve 'cn.li.forge1201.gui.registry-impl/get-menu-type)
+  (let [get-menu-type (requiring-resolve 'cn.li.forge1201.adapter.gui-registry/get-menu-type)
         checks (init-checks/build-gui-checks
                  (gui/get-all-gui-ids)
                  "gui-"

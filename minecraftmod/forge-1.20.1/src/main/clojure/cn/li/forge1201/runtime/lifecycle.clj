@@ -5,8 +5,8 @@
             [cn.li.mc1201.runtime.sync-core :as runtime-sync]
             [cn.li.forge1201.runtime.install :as runtime-install]
             [cn.li.forge1201.runtime.lifecycle-event-binding :as lifecycle-event-binding]
-            [cn.li.forge1201.runtime.network :as runtime-network]
-            [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+            [cn.li.forge1201.adapter.network :as runtime-network]
+            [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerEvent$PlayerLoggedInEvent
                                                   PlayerEvent$PlayerLoggedOutEvent

@@ -7,7 +7,7 @@
   (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.util.render :as render]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.client.render.init :as render-init]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mc1201.client.effects.particle :as particle]

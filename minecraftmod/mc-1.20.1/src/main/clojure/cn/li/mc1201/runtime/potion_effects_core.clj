@@ -5,7 +5,7 @@
   both built-in and custom effects — no Forge-specific bridge needed."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.platform.potion-effects :as ppe]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core.registries BuiltInRegistries]

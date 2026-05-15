@@ -1,3 +1,5 @@
+(remove-ns 'cn.li.mcmod.events.metadata)
+
 (ns cn.li.mcmod.events.metadata
   "Event metadata system - maps blocks to their event handlers.
   

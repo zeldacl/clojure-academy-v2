@@ -1,9 +1,9 @@
 (ns cn.li.mcmod.ability.catalog
   "Compatibility shim for legacy ability catalog.
 
-  Canonical runtime message IDs now live in cn.li.mcmod.runtime.catalog.
+  Canonical runtime message IDs now live in cn.li.mcmod.hooks.catalog.
   Keep this namespace for backwards compatibility with existing AC code."
-  (:require [cn.li.mcmod.runtime.catalog :as runtime-catalog]))
+  (:require [cn.li.mcmod.hooks.catalog :as runtime-catalog]))
 
 ;; ============================================================================
 ;; Context Session Messages (client ↔ server handshake)

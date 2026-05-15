@@ -6,7 +6,7 @@
   NBT storage format: CompoundTag keyed 'SavedLocations' on player persistent data."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.platform.saved-locations :as psl]
-            [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+            [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]

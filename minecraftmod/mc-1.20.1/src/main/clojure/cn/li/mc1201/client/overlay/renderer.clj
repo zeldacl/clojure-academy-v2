@@ -2,7 +2,7 @@
   "Shared overlay rendering core (Minecraft-only)."
   (:require [clojure.string :as str]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
-            [cn.li.mcmod.runtime.hooks.client-ui :as client-ui]
+            [cn.li.mcmod.hooks.client-ui :as client-ui]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.systems RenderSystem]
            [net.minecraft.client Minecraft]

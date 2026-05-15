@@ -6,7 +6,7 @@
             [cn.li.forge1201.registry.state :as registry-state]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.entity.dsl :as edsl]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.entity ModEntities]
            [cn.li.mc1201.effect ScriptedMobEffect]

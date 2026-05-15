@@ -3,7 +3,7 @@
   (:require [cn.li.mc1201.runtime.entity-damage-adapter :as adapter]
             [cn.li.mc1201.runtime.adapter-support :as adapter-support]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
-            [cn.li.forge1201.runtime.server-context :as server-context]
+            [cn.li.forge1201.adapter.server-context :as server-context]
             [cn.li.mcmod.platform.entity-damage :as ped]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]

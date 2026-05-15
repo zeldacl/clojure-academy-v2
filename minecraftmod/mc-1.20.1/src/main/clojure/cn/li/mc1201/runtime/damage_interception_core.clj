@@ -1,7 +1,7 @@
 (ns cn.li.mc1201.runtime.damage-interception-core
   "Shared Minecraft-side damage interception helpers (no loader API imports)."
   (:require [cn.li.mcmod.platform.damage-interception :as pdi]
-            [cn.li.mcmod.runtime.hooks.damage :as damage-hooks]))
+            [cn.li.mcmod.hooks.damage :as damage-hooks]))
 
 (defn make-damage-interception
   []

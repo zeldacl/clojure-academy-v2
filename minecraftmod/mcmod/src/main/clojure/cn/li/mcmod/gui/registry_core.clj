@@ -1,7 +1,6 @@
 (ns cn.li.mcmod.gui.registry-core
   "Unified GUI operations API (replacing legacy gui.adapter facade file)."
-  (:require [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.mcmod.gui.handler :as gui-handler]
+  (:require [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.gui.adapter.platform-registry :as platform-registry]
             [cn.li.mcmod.gui.adapter.runtime-api :as runtime-api]))
 
@@ -19,19 +18,33 @@
   [var-sym & args]
   (apply (resolve-var var-sym) args))
 
+(defn- metadata-call
+  [var-sym & args]
+  (let [resolved (requiring-resolve var-sym)]
+    (cond
+      (and resolved (bound? resolved))
+      (apply resolved args)
+
+      :else
+      (do
+        (require 'cn.li.mcmod.protocol.metadata :reload)
+        (let [resolved2 (requiring-resolve var-sym)]
+          (when (and resolved2 (bound? resolved2))
+            (apply resolved2 args)))))))
+
 (def register-gui-platform-impl! platform-registry/register-gui-platform-impl!)
 (def register-screen-factory! runtime-api/register-screen-factory!)
 (def get-screen-factory-fn runtime-api/get-screen-factory-fn)
 
 (defn get-screen-factory-fn-kw [gui-id]
-  (registry-metadata/get-gui-screen-factory-fn-kw gui-id))
+  (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-screen-factory-fn-kw gui-id))
 
-(defn get-all-gui-ids [] (registry-metadata/get-all-gui-ids))
-(defn get-display-name [gui-id] (some-> (registry-metadata/get-gui-spec gui-id) :display-name))
-(defn get-gui-type [gui-id] (some-> (registry-metadata/get-gui-spec gui-id) :gui-type))
-(defn get-registry-name [gui-id] (registry-metadata/get-gui-registry-name gui-id))
-(defn get-slot-layout [gui-id] (registry-metadata/get-gui-slot-layout gui-id))
-(defn get-slot-range [gui-id section] (registry-metadata/get-gui-slot-range gui-id section))
+(defn get-all-gui-ids [] (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-gui-ids) []))
+(defn get-display-name [gui-id] (some-> (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-spec gui-id) :display-name))
+(defn get-gui-type [gui-id] (some-> (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-spec gui-id) :gui-type))
+(defn get-registry-name [gui-id] (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-registry-name gui-id))
+(defn get-slot-layout [gui-id] (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-slot-layout gui-id))
+(defn get-slot-range [gui-id section] (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-slot-range gui-id section))
 
 (defmulti register-gui-handler
   (fn [platform-type] platform-type))

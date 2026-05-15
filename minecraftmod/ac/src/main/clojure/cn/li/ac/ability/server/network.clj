@@ -36,6 +36,12 @@
   (defn- get-state [uuid]
     (ps/get-or-create-player-state! uuid))
 
+  (defn- try-pull-developer-energy!
+    [tile ^double amount]
+    (if-let [f (requiring-resolve 'cn.li.ac.block.developer.logic/try-pull-energy!)]
+      (boolean (f tile amount))
+      false))
+
   ;; ============================================================================
   ;; Skill learning
   ;; ============================================================================
@@ -80,7 +86,7 @@
             (if pass?
               (let [sk (skill/get-skill skill-id)
                     cost (double (skill/learning-cost (long (:level sk))))]
-                (if (dev-logic/try-pull-energy! (:tile station) cost)
+                (if (try-pull-developer-energy! (:tile station) cost)
                   (do-learn!)
                   (log/debug "learn-skill rejected (IF)" uuid skill-id cost)))
               (log/debug "learn-skill rejected" uuid skill-id failures)))

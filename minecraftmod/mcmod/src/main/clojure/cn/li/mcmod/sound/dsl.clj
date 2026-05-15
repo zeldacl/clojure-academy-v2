@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.sound.dsl
 	"Sound DSL - declarative sound event definitions"
 	(:require [clojure.string :as str]
-						[cn.li.mcmod.registry.core :as registry-core]
+						[cn.li.mcmod.protocol.core :as registry-core]
 						[cn.li.mcmod.util.log :as log]))
 
 (defonce sound-registry (registry-core/atom-registry {}))

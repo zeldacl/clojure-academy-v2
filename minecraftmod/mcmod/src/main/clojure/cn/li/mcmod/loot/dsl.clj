@@ -1,6 +1,6 @@
 (ns cn.li.mcmod.loot.dsl
   "Loot injection DSL for declarative loot table augmentation."
-  (:require [cn.li.mcmod.registry.core :as registry-core]
+  (:require [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce loot-injection-registry (registry-core/atom-registry {}))

@@ -7,7 +7,7 @@
   - duplicate warning is emitted at most once per profile id
   - registry can be frozen after initialization"
   (:require [cn.li.mcmod.client.render.script-render-abi :as abi]
-            [cn.li.mcmod.registry.core :as registry-core]
+            [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce profile-registry (registry-core/atom-registry {}))

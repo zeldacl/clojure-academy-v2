@@ -3,7 +3,7 @@
 
   Supports both block-id direct registration and reusable tile-kind registration.
   ScriptedBlockEntity calls into this namespace for tick/load/save/capability/container hooks."
-  (:require [cn.li.mcmod.registry.core :as registry-core]
+  (:require [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce tile-logic-registry (registry-core/atom-registry {}))

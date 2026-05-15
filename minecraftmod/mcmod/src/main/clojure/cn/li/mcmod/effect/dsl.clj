@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.effect.dsl
 	"Effect DSL - declarative MobEffect definitions"
 	(:require [clojure.string :as str]
-						[cn.li.mcmod.registry.core :as registry-core]
+						[cn.li.mcmod.protocol.core :as registry-core]
 						[cn.li.mcmod.util.log :as log]))
 
 (defonce effect-registry (registry-core/atom-registry {}))

@@ -5,7 +5,7 @@
   registry and default constructors can live entirely in mc1201 rather than be
   mirrored by Forge/Fabric wrapper namespaces."
   (:require [cn.li.mcmod.block.blockstate-properties :as shared]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.block.query :as bquery]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.level.block.state.properties IntegerProperty BooleanProperty BlockStateProperties]))
 
@@ -13,7 +13,7 @@
   (shared/create-property-registry))
 
 (defonce ^:private property-registry
-  (create-adapter-registry))
+  (shared/create-property-registry))
 
 (defn- create-integer-property [property-name min-value max-value]
   (IntegerProperty/create property-name (int min-value) (int max-value)))
@@ -60,14 +60,16 @@
    (init-all-properties!
     "mc1201 shared adapter"
     property-registry
-    registry-metadata/get-block-state-properties
+    (fn [block-id]
+      (get-in (bquery/get-block-spec block-id)
+              [:block-state :block-state-properties]))
     create-integer-property
     create-boolean-property
     create-horizontal-facing-property)
    (log/info "Shared BlockState properties initialized"))
   ([platform-label property-registry resolve-block-properties-fn create-integer-fn create-boolean-fn create-facing-fn]
    (log/info (str "Initializing BlockState properties (" platform-label ")..."))
-   (doseq [block-id (registry-metadata/get-all-block-ids)]
+   (doseq [block-id (bquery/list-all-blocks)]
      (when-let [props (resolve-block-properties-fn block-id)]
        (register-block-properties!
         property-registry

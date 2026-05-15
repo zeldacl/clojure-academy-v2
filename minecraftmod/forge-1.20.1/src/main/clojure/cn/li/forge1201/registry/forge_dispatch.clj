@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.registry.forge-dispatch
   "Forge 1.20.1 registry implementations using DeferredRegister"
-  (:require [cn.li.mcmod.registry.platform :as reg]
+  (:require [cn.li.mcmod.platform.registry :as reg]
             [cn.li.mcmod.util.log :as log]))
 
 ;; DeferredRegister managed in Java for 1.20.1

@@ -9,7 +9,7 @@
             [cn.li.mcmod.client.render.buffer :as buffer]
             [cn.li.mcmod.client.render.init :as render-init]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.fabric1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.fabric1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric1201.client.level-effect-renderer :as level-effect-renderer]

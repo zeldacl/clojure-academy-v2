@@ -5,7 +5,7 @@
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.fabric1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
-            [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+            [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.client.event.lifecycle.v1 ClientTickEvents ClientTickEvents$EndTick]
            [net.minecraft.client Minecraft]

@@ -5,7 +5,7 @@
   loader-agnostic and can be used by both Forge and Fabric adapters.
 
   Storage format: EDN string under one CompoundTag key in player persistent data."
-  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+  (:require [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mc1201.runtime.edn-state :as es]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server.level ServerPlayer]

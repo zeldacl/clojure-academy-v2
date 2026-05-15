@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.client.effects.particle
   "CLIENT-ONLY shared particle effect bridge for Minecraft 1.20.1."
-  (:require [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+  (:require [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.client Minecraft]

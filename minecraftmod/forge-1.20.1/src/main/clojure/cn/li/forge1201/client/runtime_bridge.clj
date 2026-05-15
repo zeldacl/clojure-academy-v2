@@ -4,7 +4,7 @@
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.forge1201.client.key-input :as key-input]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
-            [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+            [cn.li.mcmod.hooks.core :as power-runtime]
              [cn.li.mcmod.util.log :as log]
              [cn.li.mc1201.client.player-state-core :as player-state])
   (:import [cn.li.forge1201.client.effect IntensifyEffectSpawner]

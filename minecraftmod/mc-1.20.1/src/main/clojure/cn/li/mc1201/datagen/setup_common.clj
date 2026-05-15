@@ -1,3 +1,5 @@
+(remove-ns 'cn.li.mc1201.datagen.setup-common)
+
 (ns cn.li.mc1201.datagen.setup-common
   "Shared datagen setup utilities, platform-independent.
    
@@ -5,8 +7,11 @@
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.content :as mc-content]
             [cn.li.mcmod.lifecycle :as lifecycle]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
-            [cn.li.mcmod.datagen.metadata :as datagen-metadata]))
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.mcmod.datagen.metadata :as datagen-metadata]
+            [cn.li.ac.ability.datagen.registry :as ability-datagen]
+            [cn.li.ac.wireless.datagen.registry :as wireless-datagen]
+            [cn.li.ac.energy.datagen.registry :as energy-datagen]))
 
 (defn- snapshot-counts
   []
@@ -24,6 +29,14 @@
   []
   (lifecycle/run-content-init!)
   (lifecycle/run-runtime-content-activation!))
+
+(defn- register-domain-datagen!
+  "Register datagen metadata from all AC business domains.
+   Each domain's registry is responsible for populating shared mcmod.datagen.metadata atoms."
+  []
+  (ability-datagen/register-datagen-metadata!)
+  (wireless-datagen/register-datagen-metadata!)
+  (energy-datagen/register-datagen-metadata!))
 
 (defn ensure-ac-content-loaded!
   "Datagen runs outside normal mod init.
@@ -43,6 +56,7 @@
   (try
     (mc-content/ensure-content-init-registered!)
     (run-init-pipeline!)
+    (register-domain-datagen!)
     (let [initial (snapshot-counts)]
       (when-not (populated? initial)
         (println (str "[" modid/*mod-id* "] WARNING: datagen metadata still empty after SPI bootstrap, "

@@ -1,6 +1,6 @@
 (ns cn.li.mcmod.item.dsl
   "Item DSL - Declarative item definition using Clojure macros"
-  (:require [cn.li.mcmod.registry.core :as registry-core]
+  (:require [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]))
 
 ;; Item Registry - stores all defined items

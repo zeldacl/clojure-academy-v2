@@ -1,6 +1,6 @@
 (ns cn.li.fabric1201.runtime.entity-motion
   "Fabric implementation of IEntityMotion protocol."
-  (:require [cn.li.fabric1201.runtime.server-context :as server-context]
+  (:require [cn.li.fabric1201.adapter.server-context :as server-context]
             [cn.li.mc1201.runtime.entity-motion-core :as core]
             [cn.li.mcmod.platform.entity-motion :as pem]
             [cn.li.mcmod.util.log :as log])

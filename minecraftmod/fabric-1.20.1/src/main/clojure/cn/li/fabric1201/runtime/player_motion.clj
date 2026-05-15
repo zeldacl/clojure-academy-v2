@@ -1,6 +1,6 @@
 (ns cn.li.fabric1201.runtime.player-motion
   "Fabric implementation of IPlayerMotion protocol."
-  (:require [cn.li.fabric1201.runtime.server-context :as server-context]
+  (:require [cn.li.fabric1201.adapter.server-context :as server-context]
             [cn.li.mc1201.runtime.player-motion-core :as core]
             [cn.li.mcmod.platform.player-motion :as pm]
             [cn.li.mcmod.util.log :as log])

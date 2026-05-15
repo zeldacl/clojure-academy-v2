@@ -3,9 +3,9 @@
   (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.interaction-result :as interaction-result]
-            [cn.li.mcmod.runtime.hooks-core :as power-runtime]
+            [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mc1201.integration.event-handlers :as event-handlers]
-            [cn.li.fabric1201.gui.registry-impl :as gui-registry-impl])
+            [cn.li.fabric1201.adapter.gui-registry :as gui-registry-impl])
   (:import [net.minecraft.world InteractionResult]))
 
 (defn- is-gui-result?

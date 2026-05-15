@@ -1,19 +1,19 @@
 (ns cn.li.mcmod.datagen.metadata
   "Platform-neutral datagen metadata registry populated by game content.")
 
-(defonce ^:private achievement-tabs
+(defonce achievement-tabs
   (atom []))
 
-(defonce ^:private achievements
+(defonce achievements
   (atom []))
 
-(defonce ^:private translations
+(defonce translations
   (atom {:en_us {} :zh_cn {}}))
 
-(defonce ^:private recipes
+(defonce recipes
   (atom []))
 
-(defonce ^:private item-overlay-fns
+(defonce item-overlay-fns
   (atom {}))
 
 (defn register-achievement-data!

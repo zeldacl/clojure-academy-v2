@@ -1,6 +1,6 @@
 (ns cn.li.fabric1201.runtime.world-effects
   "Fabric implementation of IWorldEffects protocol."
-  (:require [cn.li.fabric1201.runtime.server-context :as server-context]
+  (:require [cn.li.fabric1201.adapter.server-context :as server-context]
             [cn.li.mc1201.runtime.world-effects-adapter :as adapter]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.platform.world-effects :as pwe]

@@ -31,13 +31,28 @@
   [id]
   (str modid/*mod-id* ":achievements/" (normalize-id id)))
 
+(defn- metadata-fn
+  [sym]
+  (let [v (requiring-resolve sym)]
+    (cond
+      (and v (bound? v))
+      (fn [& args] (apply v args))
+
+      :else
+      (do
+        (require 'cn.li.mcmod.protocol.metadata :reload)
+        (let [v2 (requiring-resolve sym)]
+          (if (and v2 (bound? v2))
+            (fn [& args] (apply v2 args))
+            (fn [& _] nil)))))))
+
 (defn- make-known-item-ids
   []
   (item-registry/known-item-ids
-    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-all-item-ids)
-    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-item-registry-name)
-    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-all-block-ids)
-    (requiring-resolve 'cn.li.mcmod.registry.metadata/get-block-registry-name)
+    (metadata-fn 'cn.li.mcmod.protocol.metadata/get-all-item-ids)
+    (metadata-fn 'cn.li.mcmod.protocol.metadata/get-item-registry-name)
+    (metadata-fn 'cn.li.mcmod.protocol.metadata/get-all-block-ids)
+    (metadata-fn 'cn.li.mcmod.protocol.metadata/get-block-registry-name)
     "my_mod"))
 
 (defn- item-predicate

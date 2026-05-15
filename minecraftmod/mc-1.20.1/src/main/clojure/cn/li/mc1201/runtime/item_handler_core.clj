@@ -1,13 +1,15 @@
+(remove-ns 'cn.li.mc1201.runtime.item-handler-core)
+
 (ns cn.li.mc1201.runtime.item-handler-core
   "Shared Minecraft-side item runtime helpers (no loader API imports)."
   (:require [clojure.string :as str]
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.runtime.hooks.client-ui :as client-ui]
-            [cn.li.mcmod.runtime.hooks.effects :as effect-hooks]
-            [cn.li.mcmod.runtime.hooks.network :as network-hooks]
-            [cn.li.mcmod.runtime.hooks.player :as player-hooks]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.hooks.client-ui :as client-ui]
+            [cn.li.mcmod.hooks.effects :as effect-hooks]
+            [cn.li.mcmod.hooks.network :as network-hooks]
+            [cn.li.mcmod.hooks.player :as player-hooks]
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]

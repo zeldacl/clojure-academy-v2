@@ -1,11 +1,20 @@
 (ns cn.li.ac.core
-  (:require [cn.li.ac.core.content-loader :as content-loader]
-            [cn.li.ac.core.init :as core-init]
-            [cn.li.mcmod.lifecycle :as lifecycle]
+  (:require [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.ac.registry.hooks :as hooks]))
 
-(def init core-init/init)
-(def activate-runtime-content! content-loader/activate-runtime-content!)
+(defn- resolve-required
+  [var-sym]
+  (or (requiring-resolve var-sym)
+      (throw (ex-info (str "Missing required var: " var-sym)
+                      {:var var-sym}))))
+
+(defn init
+  []
+  ((resolve-required 'cn.li.ac.core.init/init)))
+
+(defn activate-runtime-content!
+  []
+  ((resolve-required 'cn.li.ac.core.content-loader/activate-runtime-content!)))
 
 ;; Phase1.4/Phase2: register content init hook for platform adapters.
 (lifecycle/register-content-init! #'init)

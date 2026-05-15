@@ -1,10 +1,12 @@
+(remove-ns 'cn.li.fabric1201.integration.events.block)
+
 (ns cn.li.fabric1201.integration.events.block
   "Fabric block break/place handlers extracted from monolithic events namespace."
   (:require [cn.li.mc1201.integration.event-support :as event-support]
             [cn.li.mcmod.events.dispatcher :as dispatcher]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.metadata :as event-metadata]
-            [cn.li.mcmod.runtime.hooks-core :as power-runtime]))
+            [cn.li.mcmod.hooks.core :as power-runtime]))
 
 (defn- runtime-activated?
   [player]

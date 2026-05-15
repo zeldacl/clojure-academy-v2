@@ -13,9 +13,9 @@
             [cn.li.fabric1201.runtime.potion-effects :as runtime-potion-effects]
             [cn.li.fabric1201.runtime.interop :as runtime-interop]
             [cn.li.fabric1201.runtime.block-manipulation :as runtime-block-manipulation]
-            [cn.li.fabric1201.runtime.network :as runtime-network]
+            [cn.li.fabric1201.adapter.network :as runtime-network]
             [cn.li.mc1201.runtime.adapter-registry :as adapter-registry]
-            [cn.li.mcmod.runtime.hooks-core :as power-runtime]))
+            [cn.li.mcmod.hooks.core :as power-runtime]))
 
 (def runtime-install-steps
   [(adapter-registry/step :damage-interception runtime-damage-interception/install-damage-interception!)

@@ -3,7 +3,7 @@
 
   Accepts either block ids or already-resolved block specs for most helpers so
   callers can progressively migrate away from registry wrapper layers."
-  (:require [cn.li.mcmod.registry.core :as registry-core]))
+  (:require [cn.li.mcmod.protocol.core :as registry-core]))
 
 (declare get-block-spec)
 
@@ -36,7 +36,7 @@
 
 (defn- block-registry-state
   []
-  (let [block-registry-var (requiring-resolve 'cn.li.mcmod.block.dsl/block-registry)]
+  (let [block-registry-var (requiring-resolve 'cn.li.mcmod.block.dsl-core/block-registry)]
     (registry-core/snapshot (var-get block-registry-var))))
 
 (defn get-block-spec

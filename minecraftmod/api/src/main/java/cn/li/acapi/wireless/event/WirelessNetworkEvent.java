@@ -6,20 +6,7 @@ import cn.li.acapi.wireless.IWirelessGenerator;
 import cn.li.acapi.wireless.IWirelessReceiver;
 
 /**
- * Hierarchy of events fired on the Forge event bus when the wireless energy
- * network state changes.
- *
- * <p>External mods subscribe like this:
- * <pre>{@code
- * @Mod.EventBusSubscriber(modid = "yourmod", bus = Mod.EventBusSubscriber.Bus.FORGE)
- * public class YourWirelessListener {
- *     @SubscribeEvent
- *     public static void onNetworkCreated(WirelessNetworkEvent.NetworkCreated e) {
- *         IWirelessMatrix matrix = e.getMatrix();
- *         // ...
- *     }
- * }
- * }</pre>
+ * Hierarchy of events emitted when the wireless energy network state changes.
  *
  * <p>All subclasses are platform-neutral payload objects emitted by the wireless
  * runtime bridge. Platform adapters decide how to dispatch them (event bus, callbacks,

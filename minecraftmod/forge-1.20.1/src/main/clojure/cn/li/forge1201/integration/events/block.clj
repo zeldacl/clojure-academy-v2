@@ -5,7 +5,7 @@
             [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.integration.events.event-apply :as event-apply]
-             [cn.li.mcmod.runtime.hooks-core :as power-runtime])
+             [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [net.minecraft.world.entity.player Player]
            [net.minecraftforge.event.level BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))
 

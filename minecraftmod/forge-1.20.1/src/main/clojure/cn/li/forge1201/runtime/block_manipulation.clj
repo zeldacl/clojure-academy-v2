@@ -5,7 +5,7 @@
   (:require [cn.li.mcmod.platform.block-manipulation :as bm]
             [cn.li.mc1201.runtime.adapter-support :as adapter-support]
             [cn.li.mc1201.runtime.block-manipulation-core :as bmc]
-            [cn.li.forge1201.runtime.server-context :as server-context]
+            [cn.li.forge1201.adapter.server-context :as server-context]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server.level ServerLevel ServerPlayer]
            [net.minecraft.core BlockPos]

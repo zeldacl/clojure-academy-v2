@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.integration.events.loot
   "Forge loot-table load event handlers." 
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.registry.metadata :as registry-metadata])
+            [cn.li.mcmod.protocol.metadata :as registry-metadata])
   (:import [cn.li.forge1201.loot LootInjectionHelper]
            [net.minecraftforge.event LootTableLoadEvent]))
 

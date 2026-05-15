@@ -4,26 +4,22 @@ package cn.li.acapi.wireless;
  * Inter-Mod Communication (IMC) constants for the wireless energy system.
  *
  * <p>External mods that want to hook into the wireless system use these constants
- * to send IMC messages during the {@code InterModEnqueueEvent} phase:
+ * to send IMC messages through their platform communication channel.
  *
  * <pre>{@code
- * // In your FMLCommonSetup or InterModEnqueueEvent:
- * InterModComms.sendTo(
- *     WirelessImc.MOD_ID,
- *     WirelessImc.REGISTER_NETWORK_HANDLER,
- *     MyNetworkHandler::new   // Supplier<WirelessNetworkHandler>
- * );
+ * // Pseudocode: send a registration message with one of the keys below.
+ * // The platform adapter decides how this message is transported.
  * }</pre>
  *
- * <p>This mod processes these messages during {@code InterModProcessEvent} and
- * invokes registered handlers at the appropriate wireless lifecycle points.
+ * <p>This mod processes these messages and invokes registered handlers at the
+ * appropriate wireless lifecycle points.
  * A handler that throws an exception is removed silently (logged at DEBUG level).
  *
  * <p><b>Handler contracts:</b> see the nested interfaces below.
  */
 public final class WirelessImc {
 
-    /** The mod-id of this mod; use as the target of {@code InterModComms.sendTo}. */
+    /** The mod-id of this mod; use as target id in platform messaging. */
     public static final String MOD_ID = "academycraft";
 
     /**

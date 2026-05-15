@@ -1,7 +1,9 @@
+(remove-ns 'cn.li.forge1201.registry.creative-tab)
+
 (ns cn.li.forge1201.registry.creative-tab
   "Forge creative tab registration extracted from the mod entrypoint."
   (:require [cn.li.forge1201.registry.state :as registry-state]
-            [cn.li.mcmod.registry.metadata :as registry-metadata])
+            [cn.li.mcmod.protocol.metadata :as registry-metadata])
   (:import [net.minecraft.network.chat Component]
            [net.minecraft.world.item CreativeModeTab Item Items]
            [net.minecraft.world.level ItemLike]

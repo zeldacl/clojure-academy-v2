@@ -4,7 +4,7 @@
   reference from Fabric server-context."
   (:require [cn.li.mcmod.platform.saved-locations :as psl]
             [cn.li.mc1201.runtime.saved-locations-core :as slc]
-            [cn.li.fabric1201.runtime.server-context :as server-ctx]
+            [cn.li.fabric1201.adapter.server-context :as server-ctx]
             [cn.li.mcmod.util.log :as log]))
 
 (defn fabric-saved-locations []

@@ -4,7 +4,7 @@
   break-guard is (constantly true): Fabric has no equivalent Forge break event."
   (:require [cn.li.mcmod.platform.block-manipulation :as bm]
             [cn.li.mc1201.runtime.block-manipulation-core :as bmc]
-            [cn.li.fabric1201.runtime.server-context :as server-ctx]
+            [cn.li.fabric1201.adapter.server-context :as server-ctx]
             [cn.li.mcmod.util.log :as log]))
 
 (defn fabric-block-manipulation []

@@ -14,13 +14,28 @@
             [cn.li.fabric1201.datagen.recipe-provider :as recipe-provider]))
 
 
+(defn- ensure-content-loaded!
+  []
+  (let [resolved (requiring-resolve 'cn.li.mc1201.datagen.setup-common/ensure-ac-content-loaded!)]
+    (cond
+      (and resolved (bound? resolved))
+      (resolved)
+
+      :else
+      (do
+        (require 'cn.li.mc1201.datagen.setup-common :reload)
+        (when-let [resolved2 (requiring-resolve 'cn.li.mc1201.datagen.setup-common/ensure-ac-content-loaded!)]
+          (when (bound? resolved2)
+            (resolved2)))))))
+
+
 
 (defn register-data-generators!
   "Register all data generators for Fabric
 
    Call this during data generation phase."
   [generator _exfile-helper]
-  (setup-common/ensure-ac-content-loaded!)
+  (ensure-content-loaded!)
   (let [pack (.createPack ^net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator generator)
         lang-factory (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
                        (create [_ output]

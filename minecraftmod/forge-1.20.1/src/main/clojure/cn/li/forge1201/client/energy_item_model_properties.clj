@@ -4,7 +4,7 @@
    AcademyCraft uses NBT-driven energy + item model overrides; predicate id is
    <modid>:energy (see datagen item_model_provider)."
   (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.registry.metadata :as registry-metadata]
+            [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.mod :as forge-mod])
   (:import [net.minecraft.resources ResourceLocation]

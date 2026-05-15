@@ -4,7 +4,7 @@
   Fluids are declared as pure data in mcmod; platform adapters (Forge/Fabric)
   translate this metadata into concrete runtime objects."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.registry.core :as registry-core]))
+            [cn.li.mcmod.protocol.core :as registry-core]))
 
 (defonce fluid-registry (registry-core/atom-registry {}))
 

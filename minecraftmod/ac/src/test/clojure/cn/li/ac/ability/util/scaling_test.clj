@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.util.scaling-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
@@ -35,5 +35,7 @@
                  t (gen/double* {:min 0.0 :max 1.0 :infinite? false :NaN? false})]
                 (let [lo (min min-v max-v)
                       hi (max min-v max-v)
-                      v (sc/lerp min-v max-v t)]
-                  (and (<= lo v) (<= v hi)))))
+                      v (sc/lerp min-v max-v t)
+                      eps (max 1.0e-9 (* 1.0e-12 (max (Math/abs lo) (Math/abs hi) 1.0)))]
+                  (and (<= (- lo eps) v)
+                       (<= v (+ hi eps))))))

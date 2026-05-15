@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.integration.events.gui-open-port
   "Small port to isolate GUI opening side-effects from event flow orchestration."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.forge1201.gui.registry-impl :as gui-registry-impl])
+            [cn.li.forge1201.adapter.gui-registry :as gui-registry-impl])
   (:import [net.minecraft.world.level Level]))
 
 (defn open-gui-for-result
