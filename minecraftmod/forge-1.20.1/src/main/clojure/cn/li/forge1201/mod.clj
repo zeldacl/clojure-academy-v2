@@ -2,6 +2,7 @@
   "Forge 1.20.1 main mod class - generated with gen-class"
   (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
     [cn.li.forge1201.registry.content-registration :as content-registration]
+    [cn.li.forge1201.registry.creative-tab :as creative-tab]
     [cn.li.forge1201.setup.common :as setup-common]
     [cn.li.forge1201.setup.forge-lifecycle-coordinator :as lifecycle-coordinator]
     [cn.li.forge1201.integration.side :as side]
@@ -174,9 +175,7 @@
      (content-registration/register-core-content! (build-registration-context)))
    (fn []
      (log/info "Registering Forge creative tab...")
-     (if-let [register-tab! (requiring-resolve 'cn.li.forge1201.registry.creative-tab/register-creative-tab!)]
-       (register-tab! (force creative-tabs-register) mod-id)
-       (log/error "Creative tab registration function unavailable")))
+     (creative-tab/register-creative-tab! (force creative-tabs-register) mod-id))
    (fn []
      (gui-registry-impl/register-menu-types!))])
 

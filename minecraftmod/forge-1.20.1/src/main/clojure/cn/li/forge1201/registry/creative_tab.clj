@@ -1,5 +1,3 @@
-(remove-ns 'cn.li.forge1201.registry.creative-tab)
-
 (ns cn.li.forge1201.registry.creative-tab
   "Forge creative tab registration extracted from the mod entrypoint."
   (:require [cn.li.forge1201.registry.state :as registry-state]
@@ -26,11 +24,9 @@
             (doseq [entry (registry-metadata/get-all-creative-tab-entries)]
               (when (some? (:tab entry))
                 (let [item-id (:id entry)
-                      get-block-item (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block-item)
-                      get-item (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-item)
                       item-obj (if (= (:type entry) :block-item)
-                                 (when get-block-item (get-block-item item-id))
-                                 (when get-item (get-item item-id)))]
+                         (registry-state/get-registered-block-item item-id)
+                         (registry-state/get-registered-item item-id))]
                   (when item-obj
                     (.accept output (net.minecraft.world.item.ItemStack. ^ItemLike item-obj))))))))]
     (-> (CreativeModeTab/builder)

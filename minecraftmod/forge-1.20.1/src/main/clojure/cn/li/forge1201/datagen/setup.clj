@@ -10,6 +10,7 @@
             [cn.li.forge1201.datagen.lang-provider :as lang]
             [cn.li.forge1201.datagen.advancement-provider :as adv]
             [cn.li.forge1201.datagen.recipe-provider :as rp]
+            [cn.li.mc1201.datagen.provider-manifest :as provider-manifest]
             [cn.li.mc1201.datagen.setup-common :as setup-common])
   (:import [net.minecraftforge.data.event GatherDataEvent]
            [net.minecraft.data DataProvider$Factory DataGenerator]))
@@ -24,6 +25,25 @@
     (reify DataProvider$Factory
       (create [_ pack-output]
         (create-fn pack-output exfile-helper)))))
+
+(def ^:private provider-factories
+  {:blockstate bsp/create
+   :item-model imp/create
+   :lang lang/create
+   :recipe rp/create
+   :advancement adv/create})
+
+(defn- provider-factory
+  [{:keys [factory] :as provider}]
+  (or (get provider-factories factory)
+      (throw (ex-info "Unknown Forge datagen provider factory"
+                      {:provider provider
+                       :known-factories (sort (keys provider-factories))}))))
+
+(defn- register-provider!
+  [^DataGenerator generator exfile-helper provider]
+  (println (provider-manifest/registering-message modid/*mod-id* provider))
+  (add-provider! generator (provider-factory provider) exfile-helper))
 
 ;; ============================================================================
 ;; EventBusSubscriber Configuration
@@ -48,28 +68,11 @@
         exfile-helper (.getExistingFileHelper event)]
     ;; Ensure AC content registries are loaded before providers query metadata.
     (setup-common/ensure-ac-content-loaded!)
-    
-    ;; Register BlockState provider
-    (println (str "[" modid/*mod-id* "] Registering BlockState DataGenerator..."))
-    (add-provider! generator bsp/create exfile-helper)
 
-    ;; Register Item Model provider
-    (println (str "[" modid/*mod-id* "] Registering Item Model DataGenerator..."))
-    (add-provider! generator imp/create exfile-helper)
+    (doseq [provider (provider-manifest/providers-for :forge-1.20.1)]
+      (register-provider! generator exfile-helper provider))
 
-    ;; Register Language provider
-    (println (str "[" modid/*mod-id* "] Registering Lang DataGenerator..."))
-    (add-provider! generator lang/create exfile-helper)
-
-    ;; Register Recipe provider
-    (println (str "[" modid/*mod-id* "] Registering Recipe DataGenerator..."))
-    (add-provider! generator rp/create exfile-helper)
-
-    ;; Register Advancement provider
-    (println (str "[" modid/*mod-id* "] Registering Advancement DataGenerator..."))
-    (add-provider! generator adv/create exfile-helper)
-    
-    (println (str "[" modid/*mod-id* "] DataGenerator setup complete!"))))
+    (println (provider-manifest/summary-message modid/*mod-id* :forge-1.20.1))))
 
 (defn static-gather-data
   "Static entry point used by Java annotation wrapper."

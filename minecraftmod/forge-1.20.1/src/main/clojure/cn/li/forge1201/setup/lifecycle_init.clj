@@ -16,7 +16,7 @@
             [cn.li.forge1201.setup.mod-bus :as setup-mod-bus]
             [cn.li.mc1201.config.gameplay-bridge :as shared-gameplay-bridge]
             [cn.li.mc1201.lifecycle.orchestrator :as lifecycle-orchestrator]
-            [cn.li.mc1201.lifecycle.phase-contract :as phase-contract]
+            [cn.li.mc1201.lifecycle.platform-manifest :as platform-manifest]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.setup.common :as setup-common])
@@ -124,14 +124,15 @@
   [opts registration-steps]
   (try
     (lifecycle-orchestrator/run-lifecycle!
-      {:label "forge-1.20.1"
-       :phases [(phase-contract/phase :platform-init init-platform!)
-                (phase-contract/phase :runtime-activation "activate shared runtime content" activate-runtime-content!)
-                (phase-contract/phase :config-binding bind-gameplay-config!)
-                (phase-contract/phase :resource-init init-resource-definitions!)
-                (phase-contract/phase :content-registration #(register-all-content! registration-steps))
-                (phase-contract/phase :mod-bus-setup #(setup-mod-bus! opts))
-                (phase-contract/phase :common-setup run-common-setup!)]})
+     (platform-manifest/build-lifecycle
+      :forge-1.20.1
+      {:init-platform! init-platform!
+       :activate-runtime-content! activate-runtime-content!
+       :bind-gameplay-config! bind-gameplay-config!
+       :init-resource-definitions! init-resource-definitions!
+       :register-content! #(register-all-content! registration-steps)
+       :setup-mod-bus! #(setup-mod-bus! opts)
+       :run-common-setup! run-common-setup!}))
     (catch Exception e
       (log/error "Forge initialization lifecycle failed" e)
       (throw e))))

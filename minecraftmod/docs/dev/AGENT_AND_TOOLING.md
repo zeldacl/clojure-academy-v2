@@ -48,12 +48,14 @@
     - `runtime/*_core.clj`：19+ 个运行时核心模块（实体、生命周期、网络、NBT 等）
       - `runtime/network_core.clj` 负责 runtime network 的共享 handler/route/send 注册；平台层只提供 loader-specific push transport 与 server-context installer。
       - `runtime/spi/server_context.clj` 暴露显式 server state、fail-fast `require-current-server` 与 server available/unavailable callbacks。
+    - `lifecycle/platform_manifest.clj`：共享 Forge/Fabric lifecycle phase manifest；平台层只提供 action 函数与 Loader 事件绑定。
     - `integration/event_handlers.clj`：共享事件处理业务逻辑
     - `integration/event_helpers_core.clj`：共享事件辅助函数（runtime 检查、数据构建）
     - `client/overlay/renderer.clj`：共享 overlay 渲染核心
     - `gui/registry_common.clj`：共享 GUI 容器创建逻辑
     - `gui/init_orchestrator.clj`：共享 GUI phase manifest 编排与 safe phase execution；平台 GUI init 只声明 common/server/client phase steps。
     - `datagen/*_common.clj`：共享 datagen provider 实现
+    - `datagen/provider_manifest.clj`：共享 datagen provider 顺序与逻辑 provider 集合；平台 datagen setup 只适配具体 Factory/API。
 - **`forge-1.20.1`**：Forge 事件绑定与 Loader 入口层（Phase C 后仅包含）；仅保留直接引用 Forge 的代码和事件注册胶水。
   - **结构规范**：
     - `mod/` 与 `mod.clj`：Loader 入口与初始化（Wave A：调用 `setup/forge_lifecycle_coordinator.clj` 编排生命周期）
