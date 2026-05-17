@@ -5,10 +5,11 @@
   to reduce code duplication between node and matrix sync implementations."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.core.capability-resolver :as resolver]
+            [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.service.world-registry :as world-registry]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.be :as platform-be])
-  (:import [cn.li.acapi.wireless WirelessCapabilityKeys]))
+            [cn.li.mcmod.platform.be :as platform-be]))
 
 (defn- get-active-client-container
   "Get active client container from gui.registry without creating compile-time cycle."
@@ -222,15 +223,13 @@
           network     (world-registry/get-network-by-node world-data node-vblock)]
       (if network
         (do
-          (reset! (:capacity container) (count @(:nodes network)))
+          (reset! (:capacity container) (network-state/get-load network))
           ;; Get matrix capacity
           (when-let [matrix-vb (:matrix network)]
-            (when-let [matrix (vb/vblock-get matrix-vb world)]
+            (when-let [matrix-cap (resolver/resolve-matrix-cap world matrix-vb)]
               (reset! (:max-capacity container)
                       (try
-                        (if-let [matrix-cap (platform-be/get-capability matrix WirelessCapabilityKeys/MATRIX)]
-                          (.getMatrixCapacity ^cn.li.acapi.wireless.IWirelessMatrix matrix-cap)
-                          0)
+                        (.getMatrixCapacity ^cn.li.acapi.wireless.IWirelessMatrix matrix-cap)
                         (catch Exception _ 0))))))
         (do
           (reset! (:capacity container) 0)
@@ -261,7 +260,7 @@
       (if network
         (do
           ;; Real network capacity (current number of nodes)
-          (reset! (:capacity container) (count @(:nodes network)))
+          (reset! (:capacity container) (network-state/get-load network))
           ;; Max capacity from calculated stats
           (reset! (:max-capacity container) stats-cap))
         (do

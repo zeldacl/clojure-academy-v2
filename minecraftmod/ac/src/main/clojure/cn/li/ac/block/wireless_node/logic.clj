@@ -2,15 +2,16 @@
   "Wireless Node block logic - state management, validation, and business logic."
   (:require [clojure.string :as str]
             [cn.li.mcmod.block.state-schema :as state-schema]
-            [cn.li.mcmod.block.inventory-helpers :as inv-helpers]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.world :as platform-world]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.ac.block.wireless-node.config :as node-config]
+            [cn.li.ac.wireless.config :as node-config]
             [cn.li.ac.wireless.service.world-registry :as world-registry]
+            [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.util.log :as log]))
@@ -156,8 +157,8 @@
   (try
     (let [vblock      (vb/create-vnode (pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos))
           world-data  (world-registry/get-world-data level)
-          network     (world-registry/get-network-by-node world-data vblock)
-          connected?  (and network (not (:disposed network)))]
+            network     (world-registry/get-network-by-node world-data vblock)
+            connected?  (network-state/active? network)]
       (assoc state :enabled connected?))
     (catch Exception _
       (assoc state :enabled false))))
@@ -250,7 +251,7 @@
   (fn [event-data]
     (log/info "Wireless Node (" (name node-type) ") right-clicked!")
     (let [{:keys [player world pos]} event-data
-          be    (cn.li.mcmod.platform.world/world-get-tile-entity* world pos)
+          be    (platform-world/world-get-tile-entity* world pos)
           state (when be (or (platform-be/get-custom-state be) node-default-state))]
       (if state
         (do
@@ -274,7 +275,7 @@
     (log/info "Placing Wireless Node (" (name node-type) ")")
     (let [{:keys [player world pos]} event-data
           player-name (str player)
-          be          (cn.li.mcmod.platform.world/world-get-tile-entity* world pos)]
+          be          (platform-world/world-get-tile-entity* world pos)]
       (when be
         (let [state (or (platform-be/get-custom-state be) node-default-state)]
           (platform-be/set-custom-state! be (assoc state
@@ -286,7 +287,7 @@
   (fn [event-data]
     (log/info "Breaking Wireless Node (" (name node-type) ")")
     (let [{:keys [world pos]} event-data
-          be (cn.li.mcmod.platform.world/world-get-tile-entity* world pos)]
+          be (platform-world/world-get-tile-entity* world pos)]
       (when be
         (let [state (or (platform-be/get-custom-state be) node-default-state)]
           (doseq [item (:inventory state [])]

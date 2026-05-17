@@ -5,6 +5,7 @@
 						[cn.li.ac.wireless.data.network-state :as network-state]
 						[cn.li.ac.wireless.data.network-membership :as network-membership]
 						[cn.li.ac.wireless.data.node-conn :as node-conn]
+						[cn.li.ac.wireless.data.world-registry :as world-registry]
 						[cn.li.mcmod.util.log :as log]))
 
 (defn add-to-spatial-index!
@@ -33,53 +34,77 @@
 
 (defn register-network!
 	[world-data net]
-	(swap! (:networks world-data) conj net)
-	(swap! (:net-lookup world-data) assoc (:matrix net) net @(:ssid net) net)
-	(add-to-spatial-index! world-data (:matrix net))
-	net)
+	(world-registry/transact!
+		world-data
+		(fn [_]
+			(swap! (:networks world-data) conj net)
+			(swap! (:net-lookup world-data) assoc (:matrix net) net (network-state/get-ssid net) net)
+			(add-to-spatial-index! world-data (:matrix net))
+			net)))
 
 (defn register-network-node!
 	[world-data net node-vblock]
-	(swap! (:net-lookup world-data) assoc node-vblock net)
-	(add-to-spatial-index! world-data node-vblock))
+	(world-registry/transact!
+		world-data
+		(fn [_]
+			(swap! (:net-lookup world-data) assoc node-vblock net)
+			(add-to-spatial-index! world-data node-vblock))))
 
 (defn unregister-network-node!
 	[world-data node-vblock]
-	(swap! (:net-lookup world-data) dissoc node-vblock)
-	(remove-from-spatial-index! world-data node-vblock))
+	(world-registry/transact!
+		world-data
+		(fn [_]
+			(swap! (:net-lookup world-data) dissoc node-vblock)
+			(remove-from-spatial-index! world-data node-vblock))))
 
 (defn unregister-network!
 	[world-data net]
-	(swap! (:net-lookup world-data) dissoc (:matrix net) @(:ssid net))
-	(doseq [node @(:nodes net)]
-		(unregister-network-node! world-data node))
-	(remove-from-spatial-index! world-data (:matrix net))
-	(swap! (:networks world-data) (fn [items] (filterv #(not= % net) items))))
+	(world-registry/transact!
+		world-data
+		(fn [_]
+			(swap! (:net-lookup world-data) dissoc (:matrix net) (network-state/get-ssid net))
+			(doseq [node (network-state/get-nodes net)]
+				(unregister-network-node! world-data node))
+			(remove-from-spatial-index! world-data (:matrix net))
+			(swap! (:networks world-data) (fn [items] (filterv #(not= % net) items))))))
 
 (defn register-node-connection!
 	[world-data conn]
-	(swap! (:connections world-data) conj conn)
-	(swap! (:node-lookup world-data) assoc (:node conn) conn)
-	(add-to-spatial-index! world-data (:node conn))
-	conn)
+	(world-registry/transact!
+		world-data
+		(fn [_]
+			(swap! (:connections world-data) conj conn)
+			(swap! (:node-lookup world-data) assoc (:node conn) conn)
+			(add-to-spatial-index! world-data (:node conn))
+			conn)))
 
 (defn register-node-device!
 	[world-data conn device-vblock]
-	(swap! (:node-lookup world-data) assoc device-vblock conn))
+	(world-registry/transact!
+		world-data
+		(fn [_]
+			(swap! (:node-lookup world-data) assoc device-vblock conn))))
 
 (defn unregister-node-device!
 	[world-data device-vblock]
-	(swap! (:node-lookup world-data) dissoc device-vblock))
+	(world-registry/transact!
+		world-data
+		(fn [_]
+			(swap! (:node-lookup world-data) dissoc device-vblock))))
 
 (defn unregister-node-connection!
 	[world-data conn]
-	(swap! (:node-lookup world-data) dissoc (:node conn))
-	(doseq [device @(:generators conn)]
-		(unregister-node-device! world-data device))
-	(doseq [device @(:receivers conn)]
-		(unregister-node-device! world-data device))
-	(remove-from-spatial-index! world-data (:node conn))
-	(swap! (:connections world-data) (fn [items] (filterv #(not= % conn) items))))
+	(world-registry/transact!
+		world-data
+		(fn [_]
+			(swap! (:node-lookup world-data) dissoc (:node conn))
+			(doseq [device (node-conn/get-generators conn)]
+				(unregister-node-device! world-data device))
+			(doseq [device (node-conn/get-receivers conn)]
+				(unregister-node-device! world-data device))
+			(remove-from-spatial-index! world-data (:node conn))
+			(swap! (:connections world-data) (fn [items] (filterv #(not= % conn) items))))))
 
 (defn create-network-impl!
 	"Create network and register lookups/indexes.
@@ -103,7 +128,7 @@
 	[world-data item]
 	(reset! (:disposed item) true)
 	(unregister-network! world-data item)
-	(log/info (format "Destroyed network: SSID='%s'" @(:ssid item))))
+	(log/info (format "Destroyed network: SSID='%s'" (network-state/get-ssid item))))
 
 (defn create-node-connection-impl!
 	"Create node connection and register lookups/indexes.
@@ -151,13 +176,13 @@
 (defn rebuild-network-indexes!
 	[world-data net]
 	(register-network! world-data net)
-	(doseq [node @(:nodes net)]
+	(doseq [node (network-state/get-nodes net)]
 		(register-network-node! world-data net node)))
 
 (defn rebuild-connection-indexes!
 	[world-data conn]
 	(register-node-connection! world-data conn)
-	(doseq [generator @(:generators conn)]
+	(doseq [generator (node-conn/get-generators conn)]
 		(register-node-device! world-data conn generator))
-	(doseq [receiver @(:receivers conn)]
+	(doseq [receiver (node-conn/get-receivers conn)]
 		(register-node-device! world-data conn receiver)))

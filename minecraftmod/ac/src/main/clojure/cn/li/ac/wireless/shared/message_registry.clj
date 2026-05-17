@@ -1,8 +1,7 @@
 (ns cn.li.ac.wireless.shared.message-registry
   "Centralized wireless message registration.
 
-  This provides a single startup registration path while legacy namespaces
-  are still migrating."
+  This provides the single startup registration path for wireless GUI messages."
   (:require [cn.li.ac.wireless.gui.message.registry :as msg-registry]))
 
 (def ^:private default-domain-actions

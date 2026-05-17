@@ -1,6 +1,7 @@
 (ns cn.li.ac.wireless.data.network-validation
 	"Validation and disposal operations for wireless networks."
 	(:require [cn.li.ac.wireless.core.vblock :as vb]
+						[cn.li.ac.wireless.core.capability-resolver :as resolver]
 						[cn.li.ac.wireless.data.network-state :as net-state]
 						[cn.li.mcmod.util.log :as log]))
 
@@ -11,10 +12,10 @@
 	(let [world (:world (:world-data network))
 				matrix-vb (:matrix network)]
 		(when (vb/is-chunk-loaded? matrix-vb world)
-			(when-not (vb/vblock-get matrix-vb world)
+			(when-not (resolver/resolve-matrix-cap world matrix-vb)
 				(reset! (:disposed network) true)
-				(log/info (format "Network '%s' disposed: matrix destroyed" (:ssid network)))))
-		(not @(:disposed network))))
+				(log/info (format "Network '%s' disposed: matrix destroyed" (net-state/get-ssid network)))))
+		(net-state/active? network)))
 
 (defn is-in-range?
 	"Check if coordinates are in network range."
@@ -29,4 +30,4 @@
 	"Dispose the network and unlink all nodes."
 	[network]
 	(reset! (:disposed network) true)
-	(log/info (format "Network '%s' disposed" (:ssid network))))
+	(log/info (format "Network '%s' disposed" (net-state/get-ssid network))))

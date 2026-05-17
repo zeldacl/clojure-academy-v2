@@ -4,8 +4,7 @@
 						[cn.li.ac.wireless.gui.message.registry :as msg-registry]
 						[cn.li.ac.block.wireless-matrix.network-infra :as infra]
 						[cn.li.ac.block.wireless-matrix.network-presenter :as presenter]
-						[cn.li.mcmod.util.log :as log])
-	(:import [cn.li.acapi.wireless IWirelessMatrix]))
+						[cn.li.mcmod.util.log :as log]))
 
 (defn- msg [action]
 	(msg-registry/msg :matrix action))

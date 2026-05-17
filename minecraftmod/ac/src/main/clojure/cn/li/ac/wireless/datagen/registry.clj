@@ -1,7 +1,7 @@
 (ns cn.li.ac.wireless.datagen.registry
   "Datagen registry for wireless domain.
    Provides lightweight metadata output for wireless configuration and labels."
-  (:require [cn.li.ac.wireless.data.network-config :as network-config]
+  (:require [cn.li.ac.wireless.config :as wireless-config]
             [cn.li.mcmod.datagen.metadata :as metadata]))
 
 (defn- descriptor->entry
@@ -11,7 +11,7 @@
 
 (defn- wireless-translation-map
   []
-  (let [descriptor-entries (into {} (map descriptor->entry network-config/descriptors))]
+  (let [descriptor-entries (into {} (map descriptor->entry wireless-config/descriptors))]
     {:en_us (merge
               {"domain.my_mod.wireless" "Wireless System"
                "wireless.my_mod.network" "Wireless Network"
@@ -35,4 +35,4 @@
                  (update :zh_cn merge (:zh_cn translation-map)))))
     {:domain :wireless
      :translations (count (:en_us translation-map))
-     :config-descriptors (count network-config/descriptors)}))
+    :config-descriptors (count wireless-config/descriptors)}))

@@ -10,7 +10,8 @@
   Type checking (Design-3):
   - For Clojure state maps: use :node-type / :placer-name keys
   - For Java ScriptedBlockEntity: use getCapability().isPresent() via CapabilitySlots"
-  (:require [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.ac.foundation.vblock :as foundation-vb]
+             [cn.li.mcmod.util.log :as log]
              [cn.li.mcmod.platform.nbt :as nbt]
              [cn.li.mcmod.platform.position :as pos]
              [cn.li.mcmod.platform.be :as platform-be]
@@ -28,6 +29,16 @@
    block-type     ; keyword - :matrix/:node/:node-conn/:generator/:receiver
    ignore-chunk]) ; boolean - if true, force load chunk
 
+(defn from-foundation
+  "Create a wireless runtime VBlock from the pure foundation representation."
+  [vblock]
+  (->VBlock (:x vblock) (:y vblock) (:z vblock) (:block-type vblock) (:ignore-chunk vblock)))
+
+(defn to-foundation
+  "Convert a wireless runtime VBlock to the pure foundation representation."
+  [vblock]
+  (foundation-vb/vblock (:x vblock) (:y vblock) (:z vblock) (:block-type vblock) (:ignore-chunk vblock)))
+
 ;; ============================================================================
 ;; Factory Functions
 ;; ============================================================================
@@ -38,26 +49,27 @@
   ;; MC 1.17+ renamed getPos() to getBlockPos() on BlockEntity; try both.
   (let [block-pos (or (try (pos/position-get-block-pos tile-entity) (catch Exception _ nil))
                       (try (pos/position-get-pos tile-entity) (catch Exception _ nil)))]
-    (->VBlock
-      (pos/position-get-x block-pos)
-      (pos/position-get-y block-pos)
-      (pos/position-get-z block-pos)
-      block-type
-      ignore-chunk)))
+    (from-foundation
+      (foundation-vb/vblock
+        (pos/position-get-x block-pos)
+        (pos/position-get-y block-pos)
+        (pos/position-get-z block-pos)
+        block-type
+        ignore-chunk))))
 
 (defn create-vmatrix
   "Create virtual matrix reference (always ignore chunk)"
   ([matrix-tile]
    (create-vblock matrix-tile :matrix true))
   ([x y z]
-   (->VBlock x y z :matrix true)))
+    (from-foundation (foundation-vb/vmatrix x y z))))
 
 (defn create-vnode
   "Create virtual node reference for WirelessNet (check chunks)"
   ([node-tile]
    (create-vblock node-tile :node false))
   ([x y z]
-   (->VBlock x y z :node false)))
+    (from-foundation (foundation-vb/vnode x y z))))
 
 (defn create-vnode-conn
   "Create virtual node reference for NodeConn (ignore chunks)"
@@ -147,27 +159,22 @@
 (defn dist-sq
   "Calculate squared distance between two vblocks"
   [vblock1 vblock2]
-  (let [dx (- (:x vblock1) (:x vblock2))
-        dy (- (:y vblock1) (:y vblock2))
-        dz (- (:z vblock1) (:z vblock2))]
-    (+ (* dx dx) (* dy dy) (* dz dz))))
+  (foundation-vb/vblock-distance-squared vblock1 vblock2))
 
 (defn dist-sq-pos
   "Calculate squared distance from vblock to coordinates"
   [vblock x y z]
-  (let [dx (- (:x vblock) x)
-        dy (- (:y vblock) y)
-        dz (- (:z vblock) z)]
-    (+ (* dx dx) (* dy dy) (* dz dz))))
+  (foundation-vb/vblock-distance-squared
+    vblock
+    (foundation-vb/vblock x y z (:block-type vblock) (:ignore-chunk vblock))))
 
 ;; ============================================================================
 ;; NBT Serialization
 ;; ============================================================================
 
 ;; NOTE:
-;; This codec is used by legacy mutable wireless data paths (e.g. node-conn).
-;; Canonical network persistence lives in wireless/persistence/nbt-codec.clj.
-;; Keep behavior aligned (defaults + tolerant reads) to avoid boundary drift.
+;; Canonical wireless persistence is in wireless.data.persistence. Keep this
+;; position codec tolerant because it is shared by networks and node connections.
 
 (defn vblock-to-nbt
   "Serialize vblock to NBT using platform abstraction"
@@ -197,7 +204,7 @@
          ignore-chunk (try
                         (nbt/nbt-get-boolean compound "ignoreChunk")
                         (catch Exception _ default-ignore-chunk))]
-     (->VBlock x y z block-type ignore-chunk))))
+    (from-foundation (foundation-vb/vblock x y z block-type ignore-chunk)))))
 
 ;; ============================================================================
 ;; Equality and Hashing
@@ -206,9 +213,8 @@
 (defn vblock-equals?
   "Check if two vblocks refer to the same position"
   [vb1 vb2]
-  (and (= (:x vb1) (:x vb2))
-       (= (:y vb1) (:y vb2))
-       (= (:z vb1) (:z vb2))))
+  (= (foundation-vb/vblock->position vb1)
+     (foundation-vb/vblock->position vb2)))
 
 (defn vblock-hash
   "Calculate hash code for vblock (for use in maps)"
@@ -253,9 +259,7 @@
 (defn find-vblock-by-pos
   "Find vblock in collection by coordinates"
   [vblocks x y z]
-  (first (filter #(and (= (:x %) x)
-                       (= (:y %) y)
-                       (= (:z %) z))
+  (first (filter #(= [x y z] (foundation-vb/vblock->position %))
                  vblocks)))
 
 ;; ============================================================================
@@ -264,16 +268,3 @@
 
 (defn init-virtual-blocks! []
   (log/info "Virtual blocks system initialized"))
-
-;; Export public API
-(def ^:export create-vblock create-vblock)
-(def ^:export create-vmatrix create-vmatrix)
-(def ^:export create-vnode create-vnode)
-(def ^:export create-vnode-conn create-vnode-conn)
-(def ^:export create-vgenerator create-vgenerator)
-(def ^:export create-vreceiver create-vreceiver)
-(def ^:export vblock-get vblock-get)
-(def ^:export vblock-to-nbt vblock-to-nbt)
-(def ^:export vblock-from-nbt vblock-from-nbt)
-(def ^:export dist-sq dist-sq)
-(def ^:export dist-sq-pos dist-sq-pos)

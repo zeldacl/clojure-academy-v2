@@ -1,17 +1,13 @@
 (ns cn.li.ac.wireless.data.network-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
-            [cn.li.ac.foundation.vblock :as fvb]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.network-membership :as network-membership]
             [cn.li.ac.wireless.data.network-validation :as network-validation]
             [cn.li.ac.wireless.data.network-runtime :as network-runtime]
-            [cn.li.ac.wireless.data.network-config :as ncfg]
-            [cn.li.ac.wireless.data.world :as wdata]
-            [cn.li.ac.wireless.domain.energy :as domain-energy]
-            [cn.li.ac.wireless.domain.network :as domain-net]
-            [cn.li.ac.wireless.persistence.nbt-codec :as codec]))
+            [cn.li.ac.wireless.config :as ncfg]
+            [cn.li.ac.wireless.data.world :as wdata]))
 
 (deftest create-and-basic-accessors-test
   (let [wd {:world :w :net-lookup (atom {}) :spatial-index (atom {})}
@@ -21,6 +17,22 @@
     (is (= "pw" (network-state/get-password n)))
     (is (= 0 (network-state/get-load n)))
     (is (false? (network-state/is-disposed? n)))))
+
+(deftest snapshot-unwraps-network-atoms-test
+  (let [wd {:world :w :net-lookup (atom {}) :spatial-index (atom {})}
+        matrix {:x 0 :y 0 :z 0}
+        network (network-state/create-wireless-net wd matrix "ssid" "pw")]
+    (swap! (:nodes network) conj :node-a :node-b)
+    (is (= {:matrix matrix
+            :ssid "ssid"
+            :password "pw"
+            :nodes [:node-a :node-b]
+            :load 2
+            :disposed? false}
+           (network-state/snapshot network)))
+    (is (true? (network-state/active? network)))
+    (reset! (:disposed network) true)
+    (is (false? (network-state/active? network)))))
 
 (deftest add-node-password-and-capacity-and-range-gates-test
   (let [w :w-net
@@ -39,7 +51,7 @@
           (is (false? (network-membership/add-node! net far-node "secret")))
           (is (= net (get @(:net-lookup wd) near-node))))))))
 
-(deftest remove-node-cleanup-on-tick-test
+(deftest remove-node-cleans-up-indexes-test
   (let [w :w-net2
         wd (wdata/create-world-data w)
         tiles (atom {[0 0 0] (stubs/fake-matrix {:capacity 4})
@@ -53,8 +65,7 @@
           (is (true? (network-membership/add-node! net node-vb "p")))
           (is (some? (get @(:net-lookup wd) node-vb)))
           (network-membership/remove-node! net node-vb)
-          (with-redefs [ncfg/update-interval-ticks (constantly 1)]
-            (network-runtime/tick-wireless-net! net))
+              (is (empty? (network-state/get-nodes net)))
           (is (nil? (get @(:net-lookup wd) node-vb))))))))
 
 (deftest validate-disposes-when-matrix-destroyed-test
@@ -78,52 +89,6 @@
     (stubs/with-tile-world tiles
       (fn []
         (is (false? (network-validation/is-in-range? net 0 0 0)))))))
-
-(deftest network-nbt-round-trip-test
-  (let [w :w-nbt
-        wd (wdata/create-world-data w)
-        m (stubs/fake-matrix {})
-        n (stubs/mutable-node {})
-        tiles (atom {[0 0 0] m [7 0 0] n})
-        matrix-vb (vb/create-vmatrix 0 0 0)
-        node-vb (vb/create-vnode 7 0 0)]
-    (stubs/with-tile-world tiles
-      (fn []
-        (let [net (network-state/create-wireless-net wd matrix-vb "ssid-nbt" "pw99")]
-          (reset! (:buffer net) 12.5)
-          (is (true? (network-membership/add-node! net node-vb "pw99")))
-          (let [now (System/currentTimeMillis)
-                domain-network (domain-net/->Network
-                                :test-roundtrip
-                                (network-state/get-ssid net)
-                                (network-state/get-password net)
-                                (fvb/vblock (:x (:matrix net))
-                                            (:y (:matrix net))
-                                            (:z (:matrix net))
-                                            (:block-type (:matrix net))
-                                            (:ignore-chunk (:matrix net)))
-                                (mapv (fn [node]
-                                        (fvb/vblock (:x node)
-                                                    (:y node)
-                                                    (:z node)
-                                                    (:block-type node)
-                                                    (:ignore-chunk node)))
-                                      @(:nodes net))
-                                (domain-energy/->EnergyContainer
-                                 @(:buffer net)
-                                 (double (max 1 (network-state/get-capacity net)))
-                                 0.0
-                                 1.0
-                                 now)
-                                now
-                                now
-                                {})
-                comp (codec/network-to-nbt domain-network)
-                net2 (codec/network-from-nbt comp)]
-            (is (= "ssid-nbt" (:ssid net2)))
-            (is (= "pw99" (:password net2)))
-            (is (= 12.5 (:current (:energy net2))))
-            (is (= 1 (count (:nodes net2))))))))))
 
 (deftest balance-energy-moves-toward-average-test
   (let [w :w-bal

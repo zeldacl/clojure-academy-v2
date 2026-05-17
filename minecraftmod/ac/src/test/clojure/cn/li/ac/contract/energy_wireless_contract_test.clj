@@ -6,7 +6,7 @@
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.network-membership :as network-membership]
             [cn.li.ac.wireless.data.network-runtime :as network-runtime]
-            [cn.li.ac.wireless.data.network-config :as network-config]
+            [cn.li.ac.wireless.config :as network-config]
             [cn.li.ac.wireless.data.world :as wdata]
             [cn.li.mcmod.platform.be :as platform-be]))
 
@@ -85,7 +85,5 @@
             (is (true? (network-membership/add-node! net near-a "pw")))
             (is (false? (network-membership/add-node! net near-b "pw")))
             (network-membership/remove-node! net near-a)
-            (with-redefs [network-config/update-interval-ticks (constantly 1)]
-              (network-runtime/tick-wireless-net! net))
             (is (false? (network-membership/add-node! net far-node "pw")))
             (is (true? (network-membership/add-node! net near-b "pw")))))))))

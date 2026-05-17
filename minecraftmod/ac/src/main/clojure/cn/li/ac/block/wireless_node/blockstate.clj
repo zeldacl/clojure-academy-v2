@@ -30,7 +30,7 @@
 
 (defn- node-types*
   []
-  (if-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.config/node-types)]
+  (if-let [f (requiring-resolve 'cn.li.ac.wireless.config/node-types)]
     (f)
     {}))
 

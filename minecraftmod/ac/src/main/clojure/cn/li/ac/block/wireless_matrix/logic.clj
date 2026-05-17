@@ -1,7 +1,6 @@
 (ns cn.li.ac.block.wireless-matrix.logic
 	"Wireless Matrix block business logic."
-	(:require [cn.li.mcmod.block.dsl :as bdsl]
-						[cn.li.mcmod.block.state-schema :as schema]
+	(:require [cn.li.mcmod.block.state-schema :as schema]
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.item :as pitem]
@@ -9,7 +8,7 @@
 						[cn.li.mcmod.platform.world :as world]
 						[cn.li.ac.item.constraint-plate :as plate]
 						[cn.li.ac.item.mat-core :as core]
-						[cn.li.ac.block.wireless-matrix.config :as matrix-config]
+						[cn.li.ac.wireless.config :as matrix-config]
 						[cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
 						[cn.li.mcmod.util.log :as log])
 	(:import [cn.li.acapi.wireless IWirelessMatrix]))

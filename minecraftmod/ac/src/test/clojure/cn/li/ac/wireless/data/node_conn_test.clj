@@ -1,5 +1,5 @@
 (ns cn.li.ac.wireless.data.node-conn-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
@@ -70,6 +70,32 @@
         (node-conn/tick-node-conn! conn)
         (is (<= (.getEnergy node-t) 500.0))))))
 
+(deftest remove-and-transfer-device-cleans-lookup-immediately-test
+  (let [wd (wdata/create-world-data :wc-remove)
+        node-a (stubs/mutable-node {:capacity 4 :range 20.0})
+        node-b (stubs/mutable-node {:capacity 4 :range 20.0})
+        gen (stubs/generator-stub {})
+        rec (stubs/receiver-stub {})
+        tiles (atom {[0 0 0] node-a [10 0 0] node-b [2 0 0] gen [3 0 0] rec})
+        node-a-vb (vb/create-vnode 0 0 0)
+        node-b-vb (vb/create-vnode 10 0 0)
+        gen-vb (vb/->VBlock 2 0 0 :generator true)
+        rec-vb (vb/->VBlock 3 0 0 :receiver true)
+        conn-a (node-conn/create-node-conn wd node-a-vb)
+        conn-b (node-conn/create-node-conn wd node-b-vb)]
+    (stubs/with-tile-world tiles
+      (fn []
+        (is (true? (node-conn/add-generator! conn-a gen-vb)))
+        (is (true? (node-conn/add-receiver! conn-a rec-vb)))
+        (is (identical? conn-a (get @(:node-lookup wd) gen-vb)))
+        (is (true? (node-conn/remove-receiver! conn-a rec-vb)))
+        (is (empty? (node-conn/get-receivers conn-a)))
+        (is (nil? (get @(:node-lookup wd) rec-vb)))
+        (is (true? (node-conn/add-generator! conn-b gen-vb)))
+        (is (empty? (node-conn/get-generators conn-a)))
+        (is (= [gen-vb] (node-conn/get-generators conn-b)))
+        (is (identical? conn-b (get @(:node-lookup wd) gen-vb)))))))
+
 (deftest node-conn-nbt-round-trip-test
   (let [wd (wdata/create-world-data :wc-nbt)
         node-t (stubs/mutable-node {})
@@ -83,5 +109,5 @@
         (is (true? (node-conn/add-generator! conn gen-vb)))
         (let [nbt (node-conn/node-connection-to-nbt conn)
               conn2 (node-conn/node-connection-from-nbt wd nbt)]
-          (is (= 1 (count @(:generators conn2))))
-          (is (= 0 (count @(:receivers conn2)))))))))
+          (is (= 1 (count (node-conn/get-generators conn2))))
+          (is (= 0 (count (node-conn/get-receivers conn2)))))))))

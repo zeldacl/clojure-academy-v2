@@ -5,8 +5,7 @@
 						[cn.li.mcmod.platform.world :as world]
 						[cn.li.ac.block.cat-engine.config :as cat-config]
 						[cn.li.ac.block.cat-engine.schema :as cat-schema]
-						[cn.li.ac.wireless.api-query :as wireless-query]
-						[cn.li.ac.wireless.api-command :as wireless-command]
+						[cn.li.ac.wireless.api :as wireless-api]
 						[cn.li.ac.wireless.service.node-connection :as node-connection]
 						[cn.li.mcmod.util.log :as log])
 	(:import [cn.li.acapi.wireless IWirelessNode]))
@@ -17,13 +16,13 @@
 (def cat-scripted-save-fn (state-schema/schema->save-fn cat-state-schema))
 
 (defn- find-nearby-nodes [level block-pos]
-	(try (vec (wireless-query/get-nodes-in-range level block-pos))
+	(try (vec (wireless-api/get-nodes-in-range level block-pos))
 			 (catch Exception e
 				 (log/error "Cat Engine node search failed:" (ex-message e))
 				 [])))
 
 (defn get-linked-node ^IWirelessNode [be]
-	(when-let [conn (try (wireless-query/get-node-conn-by-generator be) (catch Exception _ nil))]
+	(when-let [conn (try (wireless-api/get-node-conn-by-generator be) (catch Exception _ nil))]
 		(try (node-connection/get-node conn) (catch Exception _ nil))))
 
 (defn sync-link-state [be state]
@@ -71,8 +70,8 @@
 		(cond
 			(nil? be) {:consume? true}
 			(world/world-is-client-side* world) {:consume? true}
-			(wireless-query/is-generator-linked? be)
-			(do (wireless-command/unlink-generator-from-node! be)
+			(wireless-api/is-generator-linked? be)
+			(do (wireless-api/unlink-generator-from-node! be)
 					(refresh-link-state! be)
 					(right-click-result "ac.cat_engine.unlink"))
 			:else
@@ -80,7 +79,7 @@
 				(if (empty? nodes)
 					(right-click-result "ac.cat_engine.notfound")
 					(let [target-node (nth nodes (rand-int (count nodes)))
-								linked? (try (boolean (wireless-command/link-generator-to-node! be target-node "" false))
+								linked? (try (boolean (wireless-api/link-generator-to-node! be target-node "" false))
 														 (catch Exception _ false))]
 						(if linked?
 							(do (refresh-link-state! be)

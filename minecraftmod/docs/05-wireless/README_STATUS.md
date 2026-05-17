@@ -2,6 +2,7 @@
 
 ## 现行（维护入口）
 
+- `../04-systems/WIRELESS_SYSTEM_MAINTENANCE.md`
 - `Node_GUI.md`
 - `Matrix_GUI.md`
 - `Wireless_GUI_Status.md`
@@ -19,3 +20,4 @@
 
 - 现行文档用于当前开发与维护。
 - 历史文档保留背景信息，不作为当前实现规范。
+- 当前代码以 `cn.li.ac.wireless.api`、`capability-resolver`、`wireless.data.persistence` 和 `wireless.config` 为维护入口。

@@ -24,6 +24,12 @@
 		(atom [])
 		(atom [])))
 
+(defn transact!
+	"Run a world-state mutation with serialized access to all world indexes."
+	[world-data mutation-fn]
+	(locking world-data
+		(mutation-fn world-data)))
+
 (defn get-world-data
 	"Get world data for a world, creating it if missing."
 	[world]

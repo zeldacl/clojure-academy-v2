@@ -1,0 +1,100 @@
+(ns cn.li.ac.wireless.data.persistence
+  "Canonical NBT persistence for the current wireless runtime state."
+  (:require [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.data.network-state :as network-state]
+            [cn.li.ac.wireless.data.node-conn :as node-conn]
+            [cn.li.ac.wireless.data.world-registry :as world-registry]
+            [cn.li.ac.wireless.data.world-topology :as topology]
+            [cn.li.mcmod.platform.nbt :as nbt]))
+
+(def schema-version 1)
+
+(defn- vblocks-to-nbt-list
+  [vblocks]
+  (let [items (nbt/create-nbt-list)]
+    (doseq [vblock vblocks]
+      (nbt/nbt-append! items (vb/vblock-to-nbt vblock)))
+    items))
+
+(defn- nbt-list->vblocks
+  [items default-type default-ignore-chunk]
+  (let [size (if items (nbt/nbt-list-size items) 0)]
+    (vec
+      (keep
+        (fn [index]
+          (when-let [compound (nbt/nbt-list-get-compound items index)]
+            (vb/vblock-from-nbt compound default-type default-ignore-chunk)))
+        (range size)))))
+
+(defn network-to-nbt
+  [network]
+  (let [compound (nbt/create-nbt-compound)]
+    (nbt/nbt-set-tag! compound "matrix" (vb/vblock-to-nbt (:matrix network)))
+    (nbt/nbt-set-string! compound "ssid" (network-state/get-ssid network))
+    (nbt/nbt-set-string! compound "password" (network-state/get-password network))
+    (nbt/nbt-set-tag! compound "nodes" (vblocks-to-nbt-list (network-state/get-nodes network)))
+    (nbt/nbt-set-double! compound "buffer" (double (network-state/field-value (:buffer network))))
+    (nbt/nbt-set-int! compound "updateCounter" (int (network-state/field-value (:update-counter network))))
+    (nbt/nbt-set-boolean! compound "disposed" (network-state/is-disposed? network))
+    compound))
+
+(defn network-from-nbt
+  [world-data compound]
+  (let [matrix-vb (vb/vblock-from-nbt (nbt/nbt-get-compound compound "matrix") :matrix true)
+        network (network-state/create-wireless-net
+                  world-data
+                  matrix-vb
+                  (nbt/nbt-get-string compound "ssid")
+                  (nbt/nbt-get-string compound "password"))]
+    (reset! (:nodes network) (nbt-list->vblocks (nbt/nbt-get-list compound "nodes") :node false))
+    (reset! (:buffer network) (nbt/nbt-get-double compound "buffer"))
+    (reset! (:update-counter network) (nbt/nbt-get-int compound "updateCounter"))
+    (reset! (:disposed network) (nbt/nbt-get-boolean compound "disposed"))
+    network))
+
+(defn connection-to-nbt
+  [conn]
+  (let [compound (node-conn/node-connection-to-nbt conn)]
+    (nbt/nbt-set-boolean! compound "disposed" (node-conn/is-disposed? conn))
+    compound))
+
+(defn connection-from-nbt
+  [world-data compound]
+  (let [conn (node-conn/node-connection-from-nbt world-data compound)]
+    (reset! (:disposed conn) (nbt/nbt-get-boolean compound "disposed"))
+    conn))
+
+(defn world-data-to-nbt
+  [world-data]
+  (let [compound (nbt/create-nbt-compound)
+        networks-list (nbt/create-nbt-list)
+        connections-list (nbt/create-nbt-list)]
+    (nbt/nbt-set-int! compound "schemaVersion" schema-version)
+    (doseq [network @(:networks world-data)]
+      (when-not (network-state/is-disposed? network)
+        (nbt/nbt-append! networks-list (network-to-nbt network))))
+    (doseq [conn @(:connections world-data)]
+      (when-not (node-conn/is-disposed? conn)
+        (nbt/nbt-append! connections-list (connection-to-nbt conn))))
+    (nbt/nbt-set-tag! compound "networks" networks-list)
+    (nbt/nbt-set-tag! compound "connections" connections-list)
+    compound))
+
+(defn world-data-from-nbt
+  [world compound]
+  (let [world-data (world-registry/create-world-data world)
+        networks-list (nbt/nbt-get-list compound "networks")
+        connections-list (nbt/nbt-get-list compound "connections")
+        networks-size (if networks-list (nbt/nbt-list-size networks-list) 0)
+        connections-size (if connections-list (nbt/nbt-list-size connections-list) 0)]
+    (doseq [index (range networks-size)]
+      (when-let [network-compound (nbt/nbt-list-get-compound networks-list index)]
+        (topology/rebuild-network-indexes!
+          world-data
+          (network-from-nbt world-data network-compound))))
+    (doseq [index (range connections-size)]
+      (when-let [connection-compound (nbt/nbt-list-get-compound connections-list index)]
+        (topology/rebuild-connection-indexes!
+          world-data
+          (connection-from-nbt world-data connection-compound))))
+    world-data))

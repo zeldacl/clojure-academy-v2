@@ -1,21 +1,22 @@
 (ns cn.li.ac.wireless.data.network-energy-balance
-	(:require [cn.li.ac.wireless.core.vblock :as vb])
+	(:require [cn.li.ac.wireless.core.capability-resolver :as resolver]
+					[cn.li.ac.wireless.data.network-state :as network-state])
 	(:import [cn.li.acapi.wireless IWirelessMatrix IWirelessNode]))
 
 (defn- get-matrix-bandwidth
 	[network]
 	(let [world (:world (:world-data network))
 				matrix-vb (:matrix network)]
-		(if-let [matrix (vb/vblock-get matrix-vb world)]
+		(if-let [matrix (resolver/resolve-matrix-cap world matrix-vb)]
 			(double (.getMatrixBandwidth ^IWirelessMatrix matrix))
 			0.0)))
 
 (defn- active-nodes
 	[network]
 	(let [world (:world (:world-data network))]
-		(->> @(:nodes network)
+		(->> (network-state/get-nodes network)
 				 (map (fn [node-vb]
-								(when-let [node (vb/vblock-get node-vb world)]
+								(when-let [node (resolver/resolve-node-cap world node-vb)]
 									[node-vb node])))
 				 (remove nil?)
 				 vec)))

@@ -1,6 +1,8 @@
 (ns cn.li.ac.wireless.data.world-runtime
 	(:require [cn.li.ac.wireless.core.vblock :as vb]
+						[cn.li.ac.wireless.core.capability-resolver :as resolver]
 						[cn.li.ac.wireless.data.network-runtime :as network-runtime]
+						[cn.li.ac.wireless.data.network-state :as network-state]
 						[cn.li.ac.wireless.data.node-conn :as node-conn]
 						[cn.li.ac.wireless.data.world-topology :as topology]
 						[cn.li.mcmod.util.log :as log]))
@@ -9,28 +11,28 @@
 	"Remove disposed/invalid networks from world-data."
 	[world-data]
 	(doseq [item @(:networks world-data)]
-		(when (or @(:disposed item)
+		(when (or (network-state/is-disposed? item)
 							(and (vb/is-chunk-loaded? (:matrix item) (:world world-data))
-									 (nil? (vb/vblock-get (:matrix item) (:world world-data)))))
+									 (nil? (resolver/resolve-matrix-cap (:world world-data) (:matrix item)))))
 			(topology/destroy-network-impl! world-data item))))
 
 (defn node-connection-impl-validator
 	"Remove disposed/invalid node connections from world-data."
 	[world-data]
 	(doseq [item @(:connections world-data)]
-		(when (or @(:disposed item)
+		(when (or (node-conn/is-disposed? item)
 							(and (vb/is-chunk-loaded? (:node item) (:world world-data))
-									 (nil? (vb/vblock-get (:node item) (:world world-data)))))
+									 (nil? (resolver/resolve-node-cap (:world world-data) (:node item)))))
 			(topology/destroy-node-connection-impl! world-data item))))
 
 (defn tick-world-data!
 	"Tick all world wireless items."
 	[world-data]
 	(doseq [item @(:networks world-data)]
-		(when-not @(:disposed item)
+		(when (network-state/active? item)
 			(network-runtime/tick-wireless-net! item)))
 	(doseq [item @(:connections world-data)]
-		(when-not @(:disposed item)
+		(when-not (node-conn/is-disposed? item)
 			(node-conn/tick-node-conn! item))))
 
 (defn get-statistics

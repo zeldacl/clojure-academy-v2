@@ -2,15 +2,11 @@
 	"Infrastructure accessors for wireless node GUI network handlers.
 
 	Isolates world/tile/capability/data access from message routing."
-	(:require [cn.li.mcmod.platform.be :as platform-be]
-						[cn.li.ac.wireless.search-config :as search-config]
-						[cn.li.ac.wireless.core.vblock :as vb]
-						[cn.li.ac.wireless.api-query :as wireless-query]
-						[cn.li.ac.wireless.api-command :as wireless-command]
-						[cn.li.ac.wireless.service.world-registry :as world-registry]
-						[cn.li.ac.wireless.service.network-command :as network-command]
+	(:require [cn.li.ac.wireless.config :as search-config]
+						[cn.li.ac.wireless.core.capability-resolver :as resolver]
+						[cn.li.ac.wireless.api :as wireless-api]
 						[cn.li.ac.wireless.gui.sync.handler :as net-helpers])
-	(:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix WirelessCapabilityKeys]))
+	(:import [cn.li.acapi.wireless IWirelessNode IWirelessMatrix]))
 
 (defn resolve-world-tile
 	[payload player]
@@ -21,7 +17,7 @@
 (defn linked-network
 	[tile]
 	(try
-		(wireless-query/get-wireless-net-by-node tile)
+		(wireless-api/get-wireless-net-by-node tile)
 		(catch Exception _ nil)))
 
 (defn node-range
@@ -32,14 +28,12 @@
 
 (defn available-networks
 	[world x y z range]
-	(wireless-query/get-nets-in-range world x y z range (search-config/max-results)))
+	(wireless-api/get-nets-in-range world x y z range (search-config/max-results)))
 
 (defn matrix-capability
 	[world net]
-	(let [matrix (when (:matrix net)
-						 (vb/vblock-get (:matrix net) world))]
-		(when matrix
-			(platform-be/get-capability matrix WirelessCapabilityKeys/MATRIX))))
+	(when (:matrix net)
+		(resolver/resolve-matrix-cap world (:matrix net))))
 
 (defn matrix-capacity
 	[matrix-cap]
@@ -61,14 +55,9 @@
 
 (defn connect-node!
 	[world tile ssid password]
-	(let [world-state (world-registry/get-world-data world)
-				net (world-registry/get-network-by-ssid world-state ssid)
-				matrix (when net (vb/vblock-get (:matrix net) world))]
-		(if (and net matrix)
-			(boolean (network-command/link-node-to-network! world-state net (vb/create-vnode tile) password))
-			false)))
+	(wireless-api/connect-node-to-ssid! world tile ssid password))
 
 (defn disconnect-node!
 	[tile]
-	(wireless-command/unlink-node-from-network! tile)
+	(wireless-api/unlink-node-from-network! tile)
 	true)

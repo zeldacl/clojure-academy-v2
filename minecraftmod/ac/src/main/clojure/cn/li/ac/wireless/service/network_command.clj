@@ -43,6 +43,13 @@
     (swap! (:net-lookup world-data) dissoc old-ssid)
     (swap! (:net-lookup world-data) assoc new-ssid network-item)))
 
+(defn change-network-ssid!
+  [network-item new-ssid]
+  (let [old-ssid (network-state/get-ssid network-item)]
+    (reset-network-ssid! network-item new-ssid)
+    (refresh-world-ssid-lookup! network-item old-ssid new-ssid)
+    true))
+
 (defn ensure-node-connection!
   [world-data node-vb]
   (world-registry/ensure-node-connection! world-data node-vb))

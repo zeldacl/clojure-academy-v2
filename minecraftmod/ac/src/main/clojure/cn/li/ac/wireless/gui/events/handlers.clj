@@ -8,7 +8,6 @@
   
   Key design: Handlers are pure functions that can be tested independently."
   (:require [cn.li.ac.wireless.gui.protocol :as proto]
-            [cn.li.ac.wireless.gui.events.bus :as bus]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]))
 
@@ -60,7 +59,7 @@
   Returns:
     Handler function: (event-data) -> void"
   [state-container tile-position disconnect-msg-fn on-success on-error]
-  (fn [event-data]
+  (fn [_event-data]
     (try
       (net-client/send-to-server
         (disconnect-msg-fn)
@@ -88,7 +87,7 @@
   Returns:
     Handler function: (event-data) -> void"
   [state-container tile-position list-msg-fn on-networks on-error]
-  (fn [event-data]
+  (fn [_event-data]
     (try
       (net-client/send-to-server
         (list-msg-fn)

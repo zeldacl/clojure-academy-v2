@@ -1,12 +1,13 @@
 (ns cn.li.ac.wireless.data.network-mutation
 	"Mutable operations for wireless network metadata."
-	(:require [cn.li.mcmod.util.log :as log]))
+	(:require [cn.li.ac.wireless.data.network-state :as network-state]
+					[cn.li.mcmod.util.log :as log]))
 
 (defn reset-password!
 	"Change network password"
 	[network new-password]
 	(reset! (:password network) new-password)
-	(log/info (format "Network '%s' password changed" @(:ssid network)))
+	(log/info (format "Network '%s' password changed" (network-state/get-ssid network)))
 	true)
 
 (defn reset-ssid!

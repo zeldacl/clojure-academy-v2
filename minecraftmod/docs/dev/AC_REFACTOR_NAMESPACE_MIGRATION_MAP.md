@@ -5,7 +5,8 @@ Scope: `ac` module structural refactor (wireless / ability / registry startup ch
 
 ## Principles
 
-- Keep old public entry namespaces available as compatibility facades when practical.
+- Keep stable public entry namespaces where they remain current.
+- Do not add compatibility facades for deleted wireless API/domain/service/persistence stacks.
 - Move cohesive responsibilities into focused namespaces.
 - Preserve call contracts while reducing monolithic files.
 
@@ -46,15 +47,15 @@ Removed obsolete modules:
 
 ### `cn.li.ac.wireless.api`
 
-Now organized by responsibility:
+Current canonical facade for wireless queries and commands. It delegates to:
 
-- Query: `cn.li.ac.wireless.api-query`
-- Command: `cn.li.ac.wireless.api-command`
-- Lifecycle: `cn.li.ac.wireless.api-lifecycle`
+- `cn.li.ac.wireless.core.capability-resolver` for runtime capability resolution.
+- `cn.li.ac.wireless.service.network-command` for command execution.
+- `cn.li.ac.wireless.service.node-connection` and `cn.li.ac.wireless.data.world` for topology operations.
 
 Compatibility:
 
-- `cn.li.ac.wireless.api` remains the stable facade.
+- Deleted split namespaces are not compatibility targets. New callers should require `cn.li.ac.wireless.api` directly.
 
 ## Wireless GUI tab layer
 

@@ -1,13 +1,11 @@
 (ns cn.li.ac.block.wireless-matrix.network-infra
 	"Infrastructure access for wireless matrix GUI handlers."
-	(:require [cn.li.mcmod.platform.be :as platform-be]
-						[cn.li.mcmod.platform.entity :as entity]
+	(:require [cn.li.mcmod.platform.entity :as entity]
 						[cn.li.ac.wireless.gui.sync.handler :as net-helpers]
-						[cn.li.ac.wireless.api-query :as wireless-query]
-						[cn.li.ac.wireless.api-command :as wireless-command]
-						[cn.li.ac.wireless.service.network-command :as network-command]
+						[cn.li.ac.wireless.core.capability-resolver :as resolver]
+						[cn.li.ac.wireless.api :as wireless-api]
 						[cn.li.ac.block.wireless-matrix.logic :as matrix-logic])
-	(:import [cn.li.acapi.wireless IWirelessMatrix WirelessCapabilityKeys]))
+	(:import [cn.li.acapi.wireless IWirelessMatrix]))
 
 (defn resolve-world-tile
 	[payload player]
@@ -25,8 +23,7 @@
 	(when be
 		(let [ctrl (matrix-logic/resolve-controller-be be)]
 			(when ctrl
-				(or (platform-be/get-capability ctrl WirelessCapabilityKeys/MATRIX)
-						(when (instance? IWirelessMatrix ctrl) ctrl))))))
+				(resolver/matrix-capability ctrl)))))
 
 (defn owner?
 	[^IWirelessMatrix matrix-cap player]
@@ -44,20 +41,16 @@
 (defn wireless-network
 	[ctrl]
 	(when ctrl
-		(wireless-query/get-wireless-net-by-matrix ctrl)))
+		(wireless-api/get-wireless-net-by-matrix ctrl)))
 
 (defn create-network!
 	[ctrl ssid password]
-	(boolean (wireless-command/create-network! ctrl ssid password)))
+	(boolean (wireless-api/create-network! ctrl ssid password)))
 
 (defn change-ssid!
 	[network new-ssid]
-	(let [old-ssid (:ssid network)]
-		(network-command/reset-network-ssid! network new-ssid)
-		(network-command/refresh-world-ssid-lookup! network old-ssid new-ssid)
-		true))
+	(wireless-api/change-network-ssid! network new-ssid))
 
 (defn change-password!
 	[network new-password]
-	(network-command/reset-network-password! network new-password)
-	true)
+	(wireless-api/change-network-password! network new-password))

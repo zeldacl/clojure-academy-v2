@@ -12,7 +12,7 @@
             [cn.li.ac.energy.service.item-manager :as item-manager]
             [cn.li.ac.energy.service.node-manager :as node-manager]
             [cn.li.ac.energy.service.transfer-service :as transfer-service]
-            [cn.li.ac.wireless.api-query :as wireless-query])
+            [cn.li.ac.wireless.api :as wireless-api])
   (:import [cn.li.acapi.wireless IWirelessNode IWirelessReceiver]))
 
 (defn energy-system
@@ -122,7 +122,7 @@
   Returns nil if no network is found or an error occurs."
   [node password]
   (try
-    (wireless-query/get-wireless-net-by-node node)
+    (wireless-api/get-wireless-net-by-node node)
     (catch Exception _
       {:ssid (str "Network-" password)
        :password password
@@ -132,7 +132,7 @@
   "Check if node is connected to wireless network (delegates to wireless.helper)"
   [node password]
   (try
-    (boolean (wireless-query/is-node-linked? node))
+    (boolean (wireless-api/is-node-linked? node))
     (catch Exception _
       (boolean (and password (not= "" (str password)))))))
 

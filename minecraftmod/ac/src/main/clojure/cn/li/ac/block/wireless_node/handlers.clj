@@ -3,6 +3,7 @@
   (:require [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+            [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.block.wireless-node.network-infra :as infra]
             [cn.li.ac.block.wireless-node.network-presenter :as presenter]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
@@ -39,7 +40,7 @@
   (let [{:keys [world tile]} (infra/resolve-world-tile payload player)]
     (if tile
   (let [linked (infra/linked-network tile)
-            linked-ssid (when linked (:ssid linked))
+            linked-ssid (when linked (wireless-api/network-ssid linked))
             x (double (:pos-x payload))
             y (double (:pos-y payload))
             z (double (:pos-z payload))

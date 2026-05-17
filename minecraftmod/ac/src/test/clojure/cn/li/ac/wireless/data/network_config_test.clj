@@ -1,7 +1,7 @@
 (ns cn.li.ac.wireless.data.network-config-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.config.common :as config-common]
-            [cn.li.ac.wireless.data.network-config :as network-config]
+            [cn.li.ac.wireless.config :as network-config]
             [cn.li.mcmod.config.registry :as config-reg]))
 
 (deftest default-values-contract-test

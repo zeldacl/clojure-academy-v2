@@ -12,7 +12,6 @@
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
-            [cn.li.mcmod.util.log :as log]
             [cn.li.ac.wireless.gui.component.widget-helpers :as wh]
             [cn.li.ac.config.modid :as modid]))
 
@@ -188,11 +187,11 @@
 
 (extend-protocol proto/IUIComponent
   Object
-  (render [this state event-bus]
+  (render [_this _state _event-bus]
     nil)
-  (get-layout [this]
+  (get-layout [_this]
     {:width 256 :height 256})
-  (on-event [this event-data]
+  (on-event [_this _event-data]
     false))
 
 ;; ============================================================================
@@ -208,11 +207,11 @@
   (let [state (atom {:linked nil :avail [] :name-fn (fn [n] (:ssid n))})
         events (atom [])]
     {:panel (reify proto/IUIComponent
-              (render [this st eb]
+              (render [_this st _eb]
                 (swap! events conj [:render st]))
-              (get-layout [this]
+              (get-layout [_this]
                 {:width 256 :height 256})
-              (on-event [this ed]
+              (on-event [_this ed]
                 (swap! events conj [:event ed])
                 true))
      :state state

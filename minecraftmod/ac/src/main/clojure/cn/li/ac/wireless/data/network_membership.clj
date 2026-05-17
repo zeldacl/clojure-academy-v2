@@ -3,6 +3,7 @@
 	(:require [cn.li.ac.wireless.core.vblock :as vb]
 						[cn.li.ac.wireless.data.network-state :as net-state]
 						[cn.li.ac.wireless.data.spatial-lookup :as spatial]
+						[cn.li.ac.wireless.data.world-registry :as world-registry]
 						[cn.li.mcmod.util.log :as log]))
 
 (defn- find-existing-network-by-node
@@ -11,7 +12,7 @@
 
 (defn- password-valid?
 	[network password-attempt]
-	(= password-attempt @(:password network)))
+	(= password-attempt (net-state/get-password network)))
 
 (defn- has-capacity?
 	[network]
@@ -24,12 +25,23 @@
 		(<= dist-sq (* range range))))
 
 (defn remove-node!
-	"Mark a node for removal from the network."
+	"Remove a node from the network immediately."
 	[network node-vblock]
-	(swap! (:to-remove-nodes network) conj node-vblock)
-	(log/info (format "Marked node %s for removal from '%s'"
-										(vb/vblock-to-string node-vblock)
-										(:ssid network))))
+	(world-registry/transact!
+		(:world-data network)
+		(fn [_]
+			(let [nodes-before (net-state/get-nodes network)
+						removed? (boolean (some #(vb/vblock-equals? % node-vblock) nodes-before))]
+				(when removed?
+					(swap! (:nodes network)
+								 (fn [nodes]
+									 (filterv #(not (vb/vblock-equals? % node-vblock)) nodes)))
+					(swap! (:net-lookup (:world-data network)) dissoc node-vblock)
+					(spatial/remove-from-spatial-index! (:world-data network) node-vblock)
+					(log/info (format "Removed node %s from '%s'"
+														(vb/vblock-to-string node-vblock)
+														(net-state/get-ssid network))))
+				removed?))))
 
 (defn- remove-node-from-old-network!
 	[network node-vblock]
@@ -40,13 +52,16 @@
 
 (defn- attach-node!
 	[network node-vblock]
-	(remove-node-from-old-network! network node-vblock)
-	(swap! (:nodes network) conj node-vblock)
-	(swap! (:net-lookup (:world-data network)) assoc node-vblock network)
-	(log/info (format "Added node %s to network '%s'"
-										(vb/vblock-to-string node-vblock)
-										(:ssid network)))
-	true)
+	(world-registry/transact!
+		(:world-data network)
+		(fn [_]
+			(remove-node-from-old-network! network node-vblock)
+			(swap! (:nodes network) conj node-vblock)
+			(swap! (:net-lookup (:world-data network)) assoc node-vblock network)
+			(log/info (format "Added node %s to network '%s'"
+												(vb/vblock-to-string node-vblock)
+												(net-state/get-ssid network)))
+			true)))
 
 (defn add-node!
 	"Add a node to the network.
@@ -55,12 +70,12 @@
 	(cond
 		(not (password-valid? network password-attempt))
 		(do
-			(log/info (format "Node add failed: incorrect password for '%s'" (:ssid network)))
+			(log/info (format "Node add failed: incorrect password for '%s'" (net-state/get-ssid network)))
 			false)
 
 		(not (has-capacity? network))
 		(do
-			(log/info (format "Node add failed: network '%s' at capacity" (:ssid network)))
+			(log/info (format "Node add failed: network '%s' at capacity" (net-state/get-ssid network)))
 			false)
 
 		:else
@@ -76,23 +91,3 @@
 															(Math/sqrt dist-sq) range))
 						false)
 					(attach-node! network node-vblock))))))
-
-(defn cleanup-removed-nodes!
-	"Actually remove nodes marked for removal."
-	[network]
-	(let [to-remove @(:to-remove-nodes network)]
-		(when (seq to-remove)
-			(swap! (:nodes network)
-						 (fn [nodes]
-							 (filterv #(not (some (partial vb/vblock-equals? %) to-remove))
-												nodes)))
-
-			(doseq [node to-remove]
-				(swap! (:net-lookup (:world-data network)) dissoc node)
-				(spatial/remove-from-spatial-index! (:world-data network) node))
-
-			(reset! (:to-remove-nodes network) [])
-
-			(log/info (format "Removed %d nodes from '%s'"
-												(count to-remove)
-												(:ssid network))))))

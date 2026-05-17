@@ -5,7 +5,7 @@
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.mcmod.platform.world :as world]
 						[cn.li.ac.block.solar-gen.config :as solar-config]
-						[cn.li.ac.wireless.api-query :as wireless-query]
+						[cn.li.ac.wireless.api :as wireless-api]
 						[cn.li.ac.wireless.service.node-connection :as node-connection]
 						[cn.li.mcmod.util.log :as log])
 	(:import [cn.li.acapi.wireless IWirelessNode]))
@@ -76,5 +76,5 @@
 			 :is-encrypted? (not (empty? pw))})))
 
 (defn get-linked-node ^IWirelessNode [tile]
-	(when-let [conn (try (wireless-query/get-node-conn-by-generator tile) (catch Exception _ nil))]
+	(when-let [conn (try (wireless-api/get-node-conn-by-generator tile) (catch Exception _ nil))]
 		(try (node-connection/get-node conn) (catch Exception _ nil))))

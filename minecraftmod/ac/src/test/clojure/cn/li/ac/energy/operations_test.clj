@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.energy.operations :as op]
             [cn.li.ac.item.test-battery :as battery]
-            [cn.li.ac.wireless.api-query :as wireless-query])
+            [cn.li.ac.wireless.api :as wireless-api])
   (:import [cn.li.acapi.wireless IWirelessNode IWirelessReceiver]))
 
 (deftest item-non-battery-path-test
@@ -71,13 +71,13 @@
 
 (deftest wireless-stub-fallback-test
   (testing "get-wireless-network uses stub on helper exception"
-    (with-redefs [wireless-query/get-wireless-net-by-node (fn [_] (throw (ex-info "no" {})))]
+    (with-redefs [wireless-api/get-wireless-net-by-node (fn [_] (throw (ex-info "no" {})))]
       (let [n (op/get-wireless-network :node "secret")]
         (is (map? n))
         (is (= "Network-secret" (:ssid n)))
         (is (= "secret" (:password n))))))
   (testing "is-node-connected? true on non-empty password when helper throws"
-    (with-redefs [wireless-query/is-node-linked? (fn [_] (throw (ex-info "no" {})))]
+    (with-redefs [wireless-api/is-node-linked? (fn [_] (throw (ex-info "no" {})))]
       (is (true? (op/is-node-connected? :n "pw")))
       (is (false? (op/is-node-connected? :n "")))))
   (testing "transfer-energy-wireless returns simulated loss"

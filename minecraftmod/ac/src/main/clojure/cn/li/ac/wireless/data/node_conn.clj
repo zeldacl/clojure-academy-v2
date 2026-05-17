@@ -8,6 +8,8 @@
   - Range validation"
   (:require [clojure.string :as str]
             [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.core.capability-resolver :as resolver]
+            [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
@@ -20,8 +22,6 @@
    node               ; VBlock - center node
    receivers          ; atom<vector<VBlock>> - receiver list
    generators         ; atom<vector<VBlock>> - generator list
-   to-remove-receivers ; atom<vector<VBlock>> - receivers to remove
-   to-remove-generators ; atom<vector<VBlock>> - generators to remove
    disposed])         ; atom<boolean> - disposed flag
 
 ;; ============================================================================
@@ -36,8 +36,6 @@
     node-vblock
     (atom [])        ; receivers
     (atom [])        ; generators
-    (atom [])        ; to-remove-receivers
-    (atom [])        ; to-remove-generators
     (atom false)))   ; disposed
 
 ;; ============================================================================
@@ -47,15 +45,21 @@
 (defn get-node
   "Get the node TileEntity"
   [conn]
-  (vb/vblock-get (:node conn) (:world (:world-data conn))))
+  (resolver/resolve-node-cap (:world (:world-data conn)) (:node conn)))
+
+(defn get-receivers [conn]
+  (vec @(:receivers conn)))
+
+(defn get-generators [conn]
+  (vec @(:generators conn)))
 
 (defn is-disposed? [conn] @(:disposed conn))
 
 (defn get-load
   "Get total load (receivers + generators)"
   [conn]
-  (+ (count @(:receivers conn))
-     (count @(:generators conn))))
+    (+ (count (get-receivers conn))
+      (count (get-generators conn))))
 
 (defn get-capacity
   "Get node capacity"
@@ -110,13 +114,33 @@
 
 (defn- attach-device!
   [conn device-vb device-atom device-name]
-  (swap! device-atom conj device-vb)
-  (swap! (:node-lookup (:world-data conn)) assoc device-vb conn)
-  (log/info (format "Added %s %s to node %s"
-                    device-name
-                    (vb/vblock-to-string device-vb)
-                    (vb/vblock-to-string (:node conn))))
-  true)
+  (world-registry/transact!
+    (:world-data conn)
+    (fn [_]
+      (swap! device-atom conj device-vb)
+      (swap! (:node-lookup (:world-data conn)) assoc device-vb conn)
+      (log/info (format "Added %s %s to node %s"
+                        device-name
+                        (vb/vblock-to-string device-vb)
+                        (vb/vblock-to-string (:node conn))))
+      true)))
+
+(defn- remove-device!
+  [conn device-vb device-atom device-name]
+  (world-registry/transact!
+    (:world-data conn)
+    (fn [_]
+      (let [removed? (boolean (some #(vb/vblock-equals? % device-vb) @device-atom))]
+        (when removed?
+          (swap! device-atom
+                 (fn [devices]
+                   (filterv #(not (vb/vblock-equals? % device-vb)) devices)))
+          (swap! (:node-lookup (:world-data conn)) dissoc device-vb)
+          (log/info (format "Removed %s %s from node %s"
+                            device-name
+                            (vb/vblock-to-string device-vb)
+                            (vb/vblock-to-string (:node conn)))))
+        removed?))))
 
 (defn- add-device!
   "Generic function to add a device (receiver or generator) to node connection
@@ -150,9 +174,9 @@
   (add-device! conn receiver-vb :receiver))
 
 (defn remove-receiver!
-  "Mark receiver for removal"
+  "Remove receiver from this node connection immediately."
   [conn receiver-vb]
-  (swap! (:to-remove-receivers conn) conj receiver-vb))
+  (remove-device! conn receiver-vb (:receivers conn) "receiver"))
 
 ;; ============================================================================
 ;; Generator Management
@@ -165,32 +189,9 @@
   (add-device! conn generator-vb :generator))
 
 (defn remove-generator!
-  "Mark generator for removal"
+  "Remove generator from this node connection immediately."
   [conn generator-vb]
-  (swap! (:to-remove-generators conn) conj generator-vb))
-
-;; ============================================================================
-;; Cleanup
-;; ============================================================================
-
-(defn- cleanup-removed-devices!
-  "Remove devices marked for removal from collection and lookup"
-  [conn device-atom to-remove-atom]
-  (let [to-remove @to-remove-atom]
-    (when (seq to-remove)
-      (swap! device-atom
-             (fn [devices]
-               (filterv #(not (some (partial vb/vblock-equals? %) to-remove))
-                        devices)))
-      (doseq [device to-remove]
-        (swap! (:node-lookup (:world-data conn)) dissoc device))
-      (reset! to-remove-atom []))))
-
-(defn- cleanup-removed!
-  "Remove all marked receivers and generators"
-  [conn]
-  (cleanup-removed-devices! conn (:receivers conn) (:to-remove-receivers conn))
-  (cleanup-removed-devices! conn (:generators conn) (:to-remove-generators conn)))
+  (remove-device! conn generator-vb (:generators conn) "generator"))
 
 ;; ============================================================================
 ;; Validation
@@ -205,8 +206,8 @@
     (when (and (not @(:disposed conn))
                (vb/is-chunk-loaded? node-vb world))
       (when (and (nil? (vb/vblock-get node-vb world))
-                 (zero? (count @(:generators conn)))
-                 (zero? (count @(:receivers conn))))
+                 (zero? (count (get-generators conn)))
+                 (zero? (count (get-receivers conn))))
         ;; Node destroyed and no users
         (reset! (:disposed conn) true)))
     (not @(:disposed conn))))
@@ -219,7 +220,7 @@
   "Collect energy from generators to node"
   [conn node bandwidth]
   (when (> bandwidth 0)
-    (let [generators @(:generators conn)]
+    (let [generators (get-generators conn)]
       (when (seq generators)
         (let [world (:world (:world-data conn))
               generators-shuffled (shuffle generators)]
@@ -228,7 +229,7 @@
             (when (and (seq gens-remaining) (> transfer-left 0))
               (let [gen-vb (first gens-remaining)]
                 (if (vb/is-chunk-loaded? gen-vb world)
-                  (if-let [gen (vb/vblock-get gen-vb world)]
+                  (if-let [gen (resolver/resolve-generator-cap world gen-vb)]
                     (let [gen-cap ^cn.li.acapi.wireless.IWirelessGenerator gen
                           ;; Match AC NodeConn semantics:
                           ;; request by node transfer-left, generator bandwidth, and node free space.
@@ -261,7 +262,7 @@
   "Distribute energy from node to receivers"
   [conn node bandwidth]
   (when (> bandwidth 0)
-    (let [receivers @(:receivers conn)]
+    (let [receivers (get-receivers conn)]
       (when (seq receivers)
         (let [world (:world (:world-data conn))
               receivers-shuffled (shuffle receivers)]
@@ -270,7 +271,7 @@
             (when (and (seq recs-remaining) (> transfer-left 0))
               (let [rec-vb (first recs-remaining)]
                 (if (vb/is-chunk-loaded? rec-vb world)
-                  (if-let [rec (vb/vblock-get rec-vb world)]
+                  (if-let [rec (resolver/resolve-receiver-cap world rec-vb)]
                     (let [rec-cap ^cn.li.acapi.wireless.IWirelessReceiver rec
                           ;; Match AC NodeConn semantics:
                           ;; bounded by node energy, node transfer-left, receiver bandwidth and requirement.
@@ -308,16 +309,13 @@
       (let [world (:world (:world-data conn))
             node-vb (:node conn)]
         (when (vb/is-chunk-loaded? node-vb world)
-          (when-let [node (vb/vblock-get node-vb world)]
+          (when-let [node (resolver/resolve-node-cap world node-vb)]
             (let [bandwidth (.getBandwidth ^ cn.li.acapi.wireless.IWirelessNode node)]
               ;; Collect from generators
               (transfer-from-generators! conn node bandwidth)
               
               ;; Distribute to receivers
-              (transfer-to-receivers! conn node bandwidth))))
-        
-        ;; Cleanup removed users
-        (cleanup-removed! conn)))))
+                (transfer-to-receivers! conn node bandwidth))))))))
 
 ;; ============================================================================
 ;; Disposal
@@ -342,13 +340,13 @@
         generators-list (nbt/create-nbt-list)
         world (:world (:world-data conn))]
     (nbt/nbt-set-tag! nbt-compound "node" (vb/vblock-to-nbt (:node conn)))
-    (doseq [receiver-vb @(:receivers conn)]
+    (doseq [receiver-vb (get-receivers conn)]
       (when (or (not (vb/is-chunk-loaded? receiver-vb world))
-                (vb/vblock-get receiver-vb world))
+                (resolver/resolve-receiver-cap world receiver-vb))
         (nbt/nbt-append! receivers-list (vb/vblock-to-nbt receiver-vb))))
-    (doseq [generator-vb @(:generators conn)]
+    (doseq [generator-vb (get-generators conn)]
       (when (or (not (vb/is-chunk-loaded? generator-vb world))
-                (vb/vblock-get generator-vb world))
+                (resolver/resolve-generator-cap world generator-vb))
         (nbt/nbt-append! generators-list (vb/vblock-to-nbt generator-vb))))
     (nbt/nbt-set-tag! nbt-compound "receivers" receivers-list)
     (nbt/nbt-set-tag! nbt-compound "generators" generators-list)
@@ -380,8 +378,8 @@
   [conn]
   (log/info (format "=== NodeConn: %s ===" (vb/vblock-to-string (:node conn))))
   (log/info (format "  Load: %d/%d" (get-load conn) (get-capacity conn)))
-  (log/info (format "  Generators: %d" (count @(:generators conn))))
-  (log/info (format "  Receivers: %d" (count @(:receivers conn))))
+  (log/info (format "  Generators: %d" (count (get-generators conn))))
+  (log/info (format "  Receivers: %d" (count (get-receivers conn))))
   (log/info (format "  Disposed: %s" @(:disposed conn))))
 
 ;; ============================================================================

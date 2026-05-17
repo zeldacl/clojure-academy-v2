@@ -6,6 +6,7 @@
   (:require [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.data.spatial-lookup :as spatial-lookup]
             [cn.li.ac.wireless.data.network-lookup :as network-lookup]
+            [cn.li.ac.wireless.data.persistence :as persistence]
             [cn.li.ac.wireless.data.world-topology :as topology]
             [cn.li.ac.wireless.data.world-runtime :as runtime]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
@@ -13,7 +14,8 @@
 
 ;; Protocol for saved data wrapper to support Clojure deftype
 (defprotocol IWiSavedData
-  (get-wi-data [this] "Get the WiWorldData from the wrapper"))
+  (get-wi-data [this] "Get the in-memory WiWorldData from the wrapper")
+  (get-wi-nbt [this] "Get the persisted wireless NBT payload from the wrapper"))
 
 (defn create-world-data
   "Create new world data for a world."
@@ -101,34 +103,43 @@
 (def tick-world-data! runtime/tick-world-data!)
 
 (deftype WiSavedDataWrapper
-  [^:volatile-mutable wi-data]
+  [^:volatile-mutable wi-data
+   ^:volatile-mutable wi-nbt]
   IWiSavedData
   (get-wi-data [_]
     wi-data)
+  (get-wi-nbt [_]
+    wi-nbt)
   Object
   (toString [_]
     (str "WiSavedDataWrapper["
-         (if wi-data (str (count @(:networks wi-data)) " networks") "uninitialized")
+         (if wi-data (str (count @(:networks wi-data)) " networks") "serialized")
          "]")))
 
 (defn create-saved-data
   "Create a saved data wrapper for a world."
   [world]
-  (WiSavedDataWrapper. (create-world-data world)))
+  (WiSavedDataWrapper. (create-world-data world) nil))
 
 (defn get-saved-data-world-data
   "Extract WiWorldData from SavedData wrapper."
-  [saved-data]
-  (when saved-data
-    (try
-      (get-wi-data saved-data)
-      (catch Exception _ nil))))
+  ([saved-data]
+   (get-saved-data-world-data nil saved-data))
+  ([world saved-data]
+   (when saved-data
+     (let [payload (try (get-wi-nbt saved-data) (catch Exception _ nil))]
+       (if payload
+         (when world
+           (persistence/world-data-from-nbt world payload))
+         (try
+           (get-wi-data saved-data)
+           (catch Exception _ nil)))))))
 
 (defn on-world-load
   "Called when world loads - restore from saved data."
   [world saved-data]
   (if saved-data
-    (if-let [wi-data (get-saved-data-world-data saved-data)]
+    (if-let [wi-data (get-saved-data-world-data world saved-data)]
       (do
         (register-world-data! world wi-data)
         (log/info "Restored WiWorldData for world from save")
@@ -148,7 +159,7 @@
       (network-impl-validator wi-data)
       (node-connection-impl-validator wi-data)
       (log/info "Prepared WiWorldData for save")
-      (WiSavedDataWrapper. wi-data))
+      (WiSavedDataWrapper. wi-data (persistence/world-data-to-nbt wi-data)))
     nil))
 
 (defn on-world-unload

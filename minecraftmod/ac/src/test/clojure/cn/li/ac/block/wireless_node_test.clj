@@ -2,7 +2,7 @@
   "Unit tests for wireless node pure logic."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.block.wireless-node.logic :as wnode]
-            [cn.li.ac.block.wireless-node.config :as node-config]))
+            [cn.li.ac.wireless.config :as node-config]))
 
 (deftest node-types-source-of-truth-test
   (testing "node-types mirrors config contract"

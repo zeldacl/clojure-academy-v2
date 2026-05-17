@@ -4,8 +4,7 @@
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.entity :as entity]
-						[cn.li.ac.wireless.api-query :as wireless-query]
-						[cn.li.ac.wireless.api-command :as wireless-command]
+						[cn.li.ac.wireless.api :as wireless-api]
 						[cn.li.ac.wireless.service.node-connection :as node-connection]
 						[cn.li.ac.wireless.gui.message.registry :as msg-registry]
 						[cn.li.ac.wireless.gui.sync.handler :as net-helpers]
@@ -26,7 +25,7 @@
 			 :is-encrypted? (not (str/blank? pw))})))
 
 (defn- get-linked-node-for-receiver [tile]
-	(when-let [conn (try (wireless-query/get-node-conn-by-receiver tile) (catch Exception _ nil))]
+	(when-let [conn (try (wireless-api/get-node-conn-by-receiver tile) (catch Exception _ nil))]
 		(try (node-connection/get-node conn) (catch Exception _ nil))))
 
 (defn handle-get-status [payload player]
@@ -83,7 +82,7 @@
 			(let [tile-pos (pos/position-get-block-pos tile)
 						linked-node (get-linked-node-for-receiver tile)
 						linked-pos (when linked-node (try (.getBlockPos ^IWirelessNode linked-node) (catch Exception _ nil)))
-						nodes (if tile-pos (wireless-query/get-nodes-in-range world tile-pos) [])
+						nodes (if tile-pos (wireless-api/get-nodes-in-range world tile-pos) [])
 						avail (->> nodes
 											 (remove (fn [^IWirelessNode n]
 																 (let [p (try (.getBlockPos n) (catch Exception _ nil))]
@@ -105,7 +104,7 @@
 			(if-let [node (net-helpers/get-tile-at world {:pos-x (:node-x node-pos)
 																									 :pos-y (:node-y node-pos)
 																									 :pos-z (:node-z node-pos)})]
-				{:success (boolean (wireless-command/link-receiver-to-node! recv node pass need-auth?))}
+				{:success (boolean (wireless-api/link-receiver-to-node! recv node pass need-auth?))}
 				{:success false})
 			{:success false})))
 
@@ -113,7 +112,7 @@
 	(let [world (net-helpers/get-world player)
 				recv (net-helpers/get-tile-at world payload)]
 		(if (and world recv)
-			(do (wireless-command/unlink-receiver-from-node! recv) {:success true})
+			(do (wireless-api/unlink-receiver-from-node! recv) {:success true})
 			{:success false})))
 
 (defn register-network-handlers! []
