@@ -1,5 +1,5 @@
 (ns cn.li.mcmod.block.tile-dsl-logic-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-logic :as tlog]
             [cn.li.mcmod.protocol.core :as registry-core]))
@@ -44,19 +44,19 @@
   (tlog/register-tile-kind! :k {:tick-fn (fn [_ _ _ _] :kind-tick)
                                 :read-nbt-fn (fn [_] {:from :kind})
                                 :write-nbt-fn (fn [_ _] nil)})
-  (tlog/register-tile-logic! "block-a" {:tile-kind :k :tick-fn (fn [_ _ _ _] :override)})
-  (is (= :override (tlog/invoke-tick "block-a" nil nil nil nil)))
-  (tlog/register-tile-logic! "block-b" {:tile-kind :k})
-  (is (= :kind-tick (tlog/invoke-tick "block-b" nil nil nil nil)))
-  (is (= {:from :kind} (tlog/read-nbt "block-b" :tag))))
+  (tlog/register-tile-logic! "tile-a" {:tile-kind :k :tick-fn (fn [_ _ _ _] :override)})
+  (is (= :override (tlog/invoke-tick "tile-a" nil nil nil nil)))
+  (tlog/register-tile-logic! "tile-b" {:tile-kind :k})
+  (is (= :kind-tick (tlog/invoke-tick "tile-b" nil nil nil nil)))
+  (is (= {:from :kind} (tlog/read-nbt "tile-b" :tag))))
 
 (deftest register-tile-logic-no-hooks-skipped-test
   (is (nil? (tlog/register-tile-logic! "lonely" {:tile-kind nil}))))
 
 (deftest tile-nbt-and-container-dispatch-test
-  (tlog/register-tile-logic! "nbt-b" {:read-nbt-fn (fn [t] {:tag t})
+  (tlog/register-tile-logic! "nbt-tile" {:read-nbt-fn (fn [t] {:tag t})
                                      :write-nbt-fn (fn [_be _t] :written)})
-  (is (= {:tag :x} (tlog/read-nbt "nbt-b" :x)))
+  (is (= {:tag :x} (tlog/read-nbt "nbt-tile" :x)))
   (tlog/register-container! "c-tile" {:get-size (fn [_] 3)
                                         :get-item (fn [_ slot] {:slot slot})})
   (is (= 3 (tlog/container-size "c-tile" :be)))

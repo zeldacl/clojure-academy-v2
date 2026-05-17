@@ -10,23 +10,8 @@
             [cn.li.fabric1201.datagen.blockstate-provider :as blockstate-provider]
             [cn.li.fabric1201.datagen.item-model-provider :as item-model-provider]
             [cn.li.fabric1201.datagen.advancement-provider :as advancement-provider]
-            [cn.li.fabric1201.datagen.recipe-provider :as recipe-provider]))
-
-
-(defn- ensure-content-loaded!
-  []
-  (let [resolved (requiring-resolve 'cn.li.mc1201.datagen.setup-common/ensure-ac-content-loaded!)]
-    (cond
-      (and resolved (bound? resolved))
-      (resolved)
-
-      :else
-      (do
-        (require 'cn.li.mc1201.datagen.setup-common :reload)
-        (when-let [resolved2 (requiring-resolve 'cn.li.mc1201.datagen.setup-common/ensure-ac-content-loaded!)]
-          (when (bound? resolved2)
-            (resolved2)))))))
-
+            [cn.li.fabric1201.datagen.recipe-provider :as recipe-provider]
+            [cn.li.mc1201.datagen.setup-common :as setup-common]))
 
 
 (defn register-data-generators!
@@ -34,7 +19,7 @@
 
    Call this during data generation phase."
   [generator _exfile-helper]
-  (ensure-content-loaded!)
+  (setup-common/ensure-ac-content-loaded!)
   (let [pack (.createPack ^net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator generator)
         lang-factory (reify net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator$Pack$Factory
                        (create [_ output]

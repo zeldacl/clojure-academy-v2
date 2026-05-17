@@ -6,7 +6,7 @@
 
 相关代码位置：
 - `mcmod/src/main/clojure/cn/li/mcmod/block/tile_dsl.clj`：Tile DSL（`deftile`、`deftile-kind`）
-- `mcmod/src/main/clojure/cn/li/mcmod/registry/metadata.clj`：平台侧查询入口（tile-id / block->tile 映射）
+- `mcmod/src/main/clojure/cn/li/mcmod/protocol/metadata.clj`：平台侧查询入口（tile-id / block->tile 映射）
 
 ---
 
@@ -71,7 +71,7 @@
 
 ## 4. 平台侧如何消费（你不需要改平台代码）
 
-Forge 适配层会通过 `cn.li.mcmod.registry.metadata` 查询：
+Forge/Fabric 适配层会通过 `cn.li.mcmod.protocol.metadata` 查询：
 - `get-all-tile-ids`
 - `get-tile-registry-name`
 - `get-tile-block-ids`

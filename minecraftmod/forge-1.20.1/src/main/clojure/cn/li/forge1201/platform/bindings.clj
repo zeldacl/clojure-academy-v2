@@ -1,5 +1,3 @@
-(remove-ns 'cn.li.forge1201.platform.bindings)
-
 (ns cn.li.forge1201.platform.bindings
 	"Forge-specific static function bindings for core platform hooks.
 
@@ -7,7 +5,6 @@
 	(:require [cn.li.mcmod.platform.position :as pos]
 					[cn.li.mcmod.platform.be :as pbe]
 					[cn.li.mcmod.protocol.metadata :as registry-metadata]
-					[cn.li.forge1201.registry.state :as registry-state]
 					[cn.li.mcmod.util.log :as log])
 	(:import [net.minecraft.core BlockPos]
 				 [net.minecraft.world.level Level]
@@ -86,11 +83,11 @@
 (defn- lookup-registered-block
 	[block-id]
 	(try
-		(registry-state/get-registered-block block-id)
+		(when-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block)]
+			(f block-id))
 		(catch Exception e
 			(log/debug "Failed to resolve registered block for" block-id ":" (.getMessage e))
 			nil)))
-
 (defn world-place-block-by-id
 	[^Level level block-id ^BlockPos pos flags]
 	(try

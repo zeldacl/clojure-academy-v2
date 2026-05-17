@@ -41,52 +41,54 @@
         lifecycle-opts (:lifecycle options)
         sync-opts (:sync options)
         operations-opts (:operations options)
-        slots-opts (:slots options)
-        legacy-layout-opts (:legacy-layout options)
+        slot-operations-opts (:slot-operations options)
+        layout-opts (:layout options)
 
-        slots-vec (mapv parse-slot (or (:slots legacy-layout-opts) (:slots options) []))
-        buttons-vec (mapv parse-button (or (:buttons legacy-layout-opts) (:buttons options) []))
-        labels-vec (mapv parse-label (or (:labels legacy-layout-opts) (:labels options) []))
+        slots-vec (mapv parse-slot (or (:slots layout-opts)
+                     (when (vector? (:slots options)) (:slots options))
+                     []))
+        buttons-vec (mapv parse-button (or (:buttons layout-opts) (:buttons options) []))
+        labels-vec (mapv parse-label (or (:labels layout-opts) (:labels options) []))
 
         registration (schema/map->RegistrationConfig
-                       {:display-name (or (:display-name registration-opts) (:display-name options))
-                        :gui-type (or (:gui-type registration-opts) (:gui-type options))
-                        :registry-name (or (:registry-name registration-opts) (:registry-name options))
-                        :screen-factory-fn-kw (or (:screen-factory-fn-kw registration-opts) (:screen-factory-fn-kw options))
-                        :slot-layout (or (:slot-layout registration-opts) (:slot-layout options))})
+                 {:display-name (:display-name registration-opts)
+                :gui-type (:gui-type registration-opts)
+                :registry-name (:registry-name registration-opts)
+                :screen-factory-fn-kw (:screen-factory-fn-kw registration-opts)
+                :slot-layout (:slot-layout registration-opts)})
 
         lifecycle (schema/map->LifecycleHandlers
-                    {:container-fn (or (:container-fn lifecycle-opts) (:container-fn options))
-                     :container-predicate (or (:container-predicate lifecycle-opts) (:container-predicate options))
-                     :screen-fn (or (:screen-fn lifecycle-opts) (:screen-fn options))
-                     :tick-fn (or (:tick-fn lifecycle-opts) (:tick-fn options))})
+              {:container-fn (:container-fn lifecycle-opts)
+               :container-predicate (:container-predicate lifecycle-opts)
+               :screen-fn (:screen-fn lifecycle-opts)
+               :tick-fn (:tick-fn lifecycle-opts)})
 
         sync (schema/map->SyncConfig
-               {:sync-get (or (:sync-get sync-opts) (:sync-get options))
-                :sync-apply (or (:sync-apply sync-opts) (:sync-apply options))
-                :payload-sync-apply-fn (or (:payload-sync-apply-fn sync-opts) (:payload-sync-apply-fn options))})
+             {:sync-get (:sync-get sync-opts)
+            :sync-apply (:sync-apply sync-opts)
+            :payload-sync-apply-fn (:payload-sync-apply-fn sync-opts)})
 
         operations (schema/map->OperationHandlers
-                     {:validate-fn (or (:validate-fn operations-opts) (:validate-fn options))
-                      :close-fn (or (:close-fn operations-opts) (:close-fn options))
-                      :button-click-fn (or (:button-click-fn operations-opts) (:button-click-fn options))
-                      :text-input-fn (or (:text-input-fn operations-opts) (:text-input-fn options))})
+               {:validate-fn (:validate-fn operations-opts)
+                :close-fn (:close-fn operations-opts)
+                :button-click-fn (:button-click-fn operations-opts)
+                :text-input-fn (:text-input-fn operations-opts)})
 
         slot-operations (schema/map->SlotOperations
-                          {:slot-count-fn (or (:slot-count-fn slots-opts) (:slot-count-fn options))
-                           :slot-get-fn (or (:slot-get-fn slots-opts) (:slot-get-fn options))
-                           :slot-set-fn (or (:slot-set-fn slots-opts) (:slot-set-fn options))
-                           :slot-can-place-fn (or (:slot-can-place-fn slots-opts) (:slot-can-place-fn options))
-                           :slot-changed-fn (or (:slot-changed-fn slots-opts) (:slot-changed-fn options))})
+                          {:slot-count-fn (:slot-count-fn slot-operations-opts)
+                           :slot-get-fn (:slot-get-fn slot-operations-opts)
+                           :slot-set-fn (:slot-set-fn slot-operations-opts)
+                           :slot-can-place-fn (:slot-can-place-fn slot-operations-opts)
+                           :slot-changed-fn (:slot-changed-fn slot-operations-opts)})
 
-        legacy-layout (schema/map->LegacyLayout
-                        {:title (or (:title legacy-layout-opts) (:title options) "GUI")
-                         :width (or (:width legacy-layout-opts) (:width options) default-gui-width)
-                         :height (or (:height legacy-layout-opts) (:height options) default-gui-height)
-                         :slots slots-vec
-                         :buttons buttons-vec
-                         :labels labels-vec
-                         :background (or (:background legacy-layout-opts) (:background options) :default)})
+        layout (schema/map->Layout
+           {:title (or (:title layout-opts) (:title options) "GUI")
+            :width (or (:width layout-opts) (:width options) default-gui-width)
+            :height (or (:height layout-opts) (:height options) default-gui-height)
+            :slots slots-vec
+            :buttons buttons-vec
+            :labels labels-vec
+            :background (or (:background layout-opts) (:background options) :default)})
 
         spec (schema/map->GuiSpec
                {:id gui-id
@@ -95,28 +97,7 @@
                 :lifecycle lifecycle
                 :sync sync
                 :operations operations
-                :slots slot-operations
-                :legacy-layout legacy-layout
-                :display-name (:display-name registration)
-                :gui-type (:gui-type registration)
-                :registry-name (:registry-name registration)
-                :screen-factory-fn-kw (:screen-factory-fn-kw registration)
-                :slot-layout (:slot-layout registration)
-                :container-fn (:container-fn lifecycle)
-                :container-predicate (:container-predicate lifecycle)
-                :screen-fn (:screen-fn lifecycle)
-                :tick-fn (:tick-fn lifecycle)
-                :sync-get (:sync-get sync)
-                :sync-apply (:sync-apply sync)
-                :payload-sync-apply-fn (:payload-sync-apply-fn sync)
-                :validate-fn (:validate-fn operations)
-                :close-fn (:close-fn operations)
-                :button-click-fn (:button-click-fn operations)
-                :text-input-fn (:text-input-fn operations)
-                :slot-count-fn (:slot-count-fn slot-operations)
-                :slot-get-fn (:slot-get-fn slot-operations)
-                :slot-set-fn (:slot-set-fn slot-operations)
-                :slot-can-place-fn (:slot-can-place-fn slot-operations)
-                :slot-changed-fn (:slot-changed-fn slot-operations)})]
+                :slot-operations slot-operations
+                    :layout layout})]
     (validator/validate-gui-spec spec)
     spec))

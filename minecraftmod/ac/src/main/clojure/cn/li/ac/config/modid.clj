@@ -12,6 +12,5 @@
 (alter-var-root #'mcmod-config/*mod-id* (constantly MOD-ID))
 
 (def resource-location mcmod-config/resource-location)
-(def identifier mcmod-config/identifier)
 (def namespaced-path mcmod-config/namespaced-path)
 (def asset-path mcmod-config/asset-path)

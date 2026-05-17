@@ -13,7 +13,8 @@
   [event-data]
   (let [{:keys [x y z block]} event-data
         block-name (str block)
-        block-id (event-metadata/identify-block-from-full-name block-name)]
+  identify-block-id (requiring-resolve 'cn.li.mcmod.events.metadata/identify-block-from-full-name)
+  block-id (when identify-block-id (identify-block-id block-name))]
     (log/info "1.20.1 Place event at (" x "," y "," z ") block:" block-name)
     (when block-id
       (dispatcher/on-block-place (assoc event-data :block-id block-id)))))
@@ -54,7 +55,8 @@
             level (.getLevel evt)
             player (.getPlayer evt)
             block-state (.getBlockState level pos)
-            block-id (event-metadata/identify-block-from-full-name (str (.getBlock block-state)))]
+        identify-block-id (requiring-resolve 'cn.li.mcmod.events.metadata/identify-block-from-full-name)
+        block-id (when identify-block-id (identify-block-id (str (.getBlock block-state))))]
         (if (power-runtime/runtime-activated? (str (.getUUID player)))
           (event-apply/cancel-event! evt)
           (when block-id

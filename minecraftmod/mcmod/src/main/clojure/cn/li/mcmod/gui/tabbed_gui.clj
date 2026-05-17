@@ -3,7 +3,7 @@
 
    This is shared client/server tab switching logic used by platform GUI/menu bridges."
   (:require [cn.li.mcmod.gui.registry-core :as gui]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.platform.entity :as entity]
@@ -81,7 +81,7 @@
   (when-let [cur (:current tech-ui)]
     (doseq [q pages]
       (when-let [w (:window q)]
-        (cgui/set-visible! w (= page-id (:id q)))))
+        (cgui-core/set-visible! w (= page-id (:id q)))))
     (reset! cur page-id)))
 
 ;; ============================================================================

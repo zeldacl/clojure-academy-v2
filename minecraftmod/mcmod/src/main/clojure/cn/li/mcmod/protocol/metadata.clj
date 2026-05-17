@@ -142,11 +142,9 @@
     block-id: String - DSL block identifier
 
   Returns:
-    Boolean - true if block has :has-block-entity? in its spec"
+    Boolean - true if Tile DSL binds the block to a tile-id"
   [block-id]
-  (let [block-spec (get-block-spec block-id)]
-    (boolean (or (get-in block-spec [:tile-entity :has-block-entity?])
-                 (some? (tdsl/get-tile-id-for-block block-id))))))
+  (boolean (tdsl/get-tile-id-for-block block-id)))
 
 (defn get-scripted-block-ids
   "Returns block IDs that use the generic scripted BlockEntity.
@@ -156,73 +154,33 @@
 
 (defn get-tile-kind
   "Returns optional :tile-kind metadata for a block.
-
-  Prefers Tile DSL (`deftile`) when the block is bound to a tile-id."
+  Tile kind is defined on the Tile DSL spec."
   [block-id]
-  (if-let [tile-id (tdsl/get-tile-id-for-block block-id)]
-    (some-> (tdsl/get-tile tile-id) :tile-kind)
-    (some-> (get-block-spec block-id) :tile-entity :tile-kind)))
+  (some-> (tdsl/get-tile-id-for-block block-id)
+          tdsl/get-tile
+          :tile-kind))
 
-(defn get-scripted-tile-hooks
-  "Returns optional scripted tile lifecycle hooks for a block.
-  Result keys: :tick-fn :read-nbt-fn :write-nbt-fn."
-  [block-id]
-  (if-let [tile-id (tdsl/get-tile-id-for-block block-id)]
-    (let [spec (tdsl/get-tile tile-id)]
-      {:tick-fn (:tick-fn spec)
-       :read-nbt-fn (:read-nbt-fn spec)
-       :write-nbt-fn (:write-nbt-fn spec)})
-    (let [spec (get-block-spec block-id)
-          tile-entity (:tile-entity spec)]
-      {:tick-fn (:tile-tick-fn tile-entity)
-       :read-nbt-fn (:tile-load-fn tile-entity)
-       :write-nbt-fn (:tile-save-fn tile-entity)})))
-
-;; Tile/BlockEntity Registration Metadata (Tile DSL + legacy block spec compatibility)
+;; Tile/BlockEntity Registration Metadata (Tile DSL)
 ;; ============================================================
 
 (defn get-all-tile-ids
-  "Return all registered tile ids.
-
-  Includes:
-  - explicit tile ids from Tile DSL
-  - implicit per-block tile ids for legacy blocks with :has-block-entity? true"
+  "Return all tile ids declared by Tile DSL."
   []
-  (let [explicit (set (tdsl/list-tiles))
-        implicit (->> (get-all-block-ids)
-                      (filter (fn [block-id]
-                                (boolean (get-in (get-block-spec block-id) [:tile-entity :has-block-entity?]))))
-                      set)]
-    (seq (into explicit implicit))))
+  (seq (tdsl/list-tiles)))
 
 (defn get-block-tile-id
   "Get tile-id for a block-id, if the block has a BlockEntity.
 
   Returns:
-  - tile-id string (explicit Tile DSL mapping if present, else block-id for legacy)
+  - tile-id string from Tile DSL mapping
   - nil if block has no BlockEntity"
   [block-id]
-  (or (tdsl/get-tile-id-for-block block-id)
-      (when (boolean (get-in (get-block-spec block-id) [:tile-entity :has-block-entity?]))
-        (str block-id))))
+  (tdsl/get-tile-id-for-block block-id))
 
 (defn get-tile-spec
-  "Get TileSpec for a tile-id.
-
-  For implicit legacy tiles, returns a synthetic spec map."
+  "Get TileSpec for a tile-id."
   [tile-id]
-  (if-let [spec (tdsl/get-tile tile-id)]
-    spec
-    (when-let [block-spec (get-block-spec tile-id)]
-      (let [tile-entity (:tile-entity block-spec)]
-        (when (boolean (:has-block-entity? tile-entity))
-          {:id tile-id
-           :impl :scripted
-           :blocks [tile-id]
-           :tile-kind (:tile-kind tile-entity)
-           :tick-fn (:tile-tick-fn tile-entity)
-           :read-nbt-fn (:tile-load-fn tile-entity)
-           :write-nbt-fn (:tile-save-fn tile-entity)})))))
+  (tdsl/get-tile tile-id))
 
 (defn get-tile-block-ids
   "Get block-ids bound to a tile-id."
@@ -234,15 +192,11 @@
   "Get the Minecraft registry name for a tile-id (BlockEntityType registry path).
 
   Rules:
-  - explicit TileSpec: :registry-name override if present else kebab->snake
-  - implicit legacy tile-id==block-id: uses block registry name to preserve stability"
+  - TileSpec :registry-name override if present else kebab->snake"
   [tile-id]
-  (if-let [spec (tdsl/get-tile tile-id)]
-    (if-let [explicit (:registry-name spec)]
-      explicit
-      (str/replace tile-id #"-" "_"))
-    ;; implicit legacy
-    (get-block-registry-name tile-id)))
+  (when-let [spec (tdsl/get-tile tile-id)]
+    (or (:registry-name spec)
+        (str/replace tile-id #"-" "_"))))
 
 ;; GUI metadata (core single source of truth)
 ;; ============================================================

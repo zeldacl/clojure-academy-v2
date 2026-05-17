@@ -5,7 +5,7 @@
   (:require [cn.li.forge1201.registry.state :as registry-state]
             [cn.li.mcmod.protocol.metadata :as registry-metadata])
   (:import [net.minecraft.network.chat Component]
-           [net.minecraft.world.item CreativeModeTab Item Items]
+           [net.minecraft.world.item CreativeModeTab Items]
            [net.minecraft.world.level ItemLike]
            [net.minecraftforge.registries DeferredRegister]))
 
@@ -26,9 +26,11 @@
             (doseq [entry (registry-metadata/get-all-creative-tab-entries)]
               (when (some? (:tab entry))
                 (let [item-id (:id entry)
+                      get-block-item (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block-item)
+                      get-item (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-item)
                       item-obj (if (= (:type entry) :block-item)
-                                 (registry-state/get-registered-block-item item-id)
-                                 (registry-state/get-registered-item item-id))]
+                                 (when get-block-item (get-block-item item-id))
+                                 (when get-item (get-item item-id)))]
                   (when item-obj
                     (.accept output (net.minecraft.world.item.ItemStack. ^ItemLike item-obj))))))))]
     (-> (CreativeModeTab/builder)

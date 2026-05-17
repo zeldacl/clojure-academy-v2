@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.gui.cgui-tree-traversal
   "CLIENT-ONLY widget tree traversal and hit-testing helpers for CGUI."
-  (:require [cn.li.mcmod.gui.cgui :as cgui]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mc1201.gui.cgui-renderer :as cgui-renderer]))
 
 (defn collect-widgets-z-ordered
@@ -18,10 +18,10 @@
         best
         (let [[node ox oy] (peek stack)
               rest-stack (pop stack)]
-          (if (or (nil? node) (not (cgui/visible? node)))
+          (if (or (nil? node) (not (cgui-core/visible? node)))
             (recur rest-stack best)
-            (let [pos (cgui/get-pos node)
-                  size (cgui/get-size node)
+            (let [pos (cgui-core/get-pos node)
+                  size (cgui-core/get-size node)
                   [wx wy] pos
                   [w h] size
                   x0 (+ ox wx)
@@ -32,5 +32,5 @@
               (recur (reduce (fn [acc child]
                                (conj acc [child x0 y0]))
                              rest-stack
-                             (reverse (cgui/get-widgets node)))
+                             (reverse (cgui-core/get-widgets node)))
                      (if inside node best)))))))))

@@ -14,7 +14,8 @@
   - InfoArea (histogram + properties)
   - Wireless page (network list + connect/disconnect)
   - Animated node status indicator"
-  (:require [cn.li.mcmod.gui.cgui :as cgui]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.gui.components :as comp]
@@ -131,7 +132,7 @@
                          (reset! (:current-state anim-state)
                                  (if is-linked :linked :unlinked))))))
                  2000)
-        widget (apply cgui/create-widget
+        widget (apply cgui-core/create-widget
                       (concat [:pos pos :size size]
                               (when scale [:scale scale])))]
     ;; attach per-frame update: animation + poller + render
@@ -408,45 +409,45 @@
   (try
     (let [tile (:tile-entity container)
           inv-page (tech-ui/create-inventory-page "node")
-          _ (log/info "DEBUG: inv-page created, id=" (:id inv-page) "window size=" (cgui/get-size (:window inv-page)) "visible=" (cgui/visible? (:window inv-page)))
+          _ (log/info "DEBUG: inv-page created, id=" (:id inv-page) "window size=" (cgui-core/get-size (:window inv-page)) "visible=" (cgui-core/visible? (:window inv-page)))
           ;; Use the inventory page window as the size reference so that the
           ;; wrapper container matches the XML layout (176x187) instead of
           ;; the smaller TechUI logical width. This prevents the background
           ;; from appearing zoomed or clipped.
           inv-window (:window inv-page)
           info-area (tech-ui/create-info-area)
-          _ (log/info "DEBUG: info-area created, size=" (cgui/get-size info-area))
+          _ (log/info "DEBUG: info-area created, size=" (cgui-core/get-size info-area))
           ;; create animation widget (includes anim-state and poller)
           {:keys [widget]} (create-anim-widget tile)
           anim-widget widget
-          _ (log/info "DEBUG: anim-widget created, size=" (cgui/get-size anim-widget) "visible=" (cgui/visible? anim-widget))
+          _ (log/info "DEBUG: anim-widget created, size=" (cgui-core/get-size anim-widget) "visible=" (cgui-core/visible? anim-widget))
           wireless-panel (create-wireless-panel container)
-          _ (log/info "DEBUG: wireless-panel created, size=" (cgui/get-size wireless-panel) "visible=" (cgui/visible? wireless-panel))
+          _ (log/info "DEBUG: wireless-panel created, size=" (cgui-core/get-size wireless-panel) "visible=" (cgui-core/visible? wireless-panel))
           pages [inv-page {:id "wireless" :window wireless-panel}]
           _ (log/info "DEBUG: pages created, count=" (count pages))
           container-id (when-let [m (:menu opts)] (gui/get-menu-container-id m))
           ;; Compose tech UI from pages (inventory, info, wireless)
           tech-ui (apply tech-ui/create-tech-ui pages)
-          _ (log/info "DEBUG: tech-ui created, window size=" (cgui/get-size (:window tech-ui)) "current=" @(:current tech-ui))
+          _ (log/info "DEBUG: tech-ui created, window size=" (cgui-core/get-size (:window tech-ui)) "current=" @(:current tech-ui))
           ;; Attach generic tab-change sync (pages sequence, tech-ui map, container, container-id)
           _ (tabbed-gui/attach-tab-sync! pages tech-ui container container-id)
           ;tech-ui (tech-ui/create-tech-ui)
           main-widget (:window tech-ui)
-          _ (log/info "DEBUG: main-widget extracted, size=" (cgui/get-size main-widget) "children count=" (count (cgui/get-widgets main-widget)))
+          _ (log/info "DEBUG: main-widget extracted, size=" (cgui-core/get-size main-widget) "children count=" (count (cgui-core/get-widgets main-widget)))
           ;show-info! (fn [] ((:show-page-fn tech-ui) "info"))
           ;show-wireless! (fn [] ((:show-page-fn tech-ui) "wireless"))
           ]
       
-      (cgui/add-widget! inv-window anim-widget)
+      (cgui-core/add-widget! inv-window anim-widget)
       (log/info "DEBUG: anim-widget added to inv-window")
 
       ;; Position and build info area (create-tech-ui has already attached it,
       ;; but we need to position and populate it)
-      (cgui/set-position! info-area (+ (cgui/get-width inv-window) 7) 5)
+      (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
       (build-info-area! info-area container player)
       (log/info "DEBUG: info-area positioned and built")
 
-      (cgui/add-widget! main-widget info-area)
+      (cgui-core/add-widget! main-widget info-area)
       (log/info "DEBUG: info-area added to main-widget")
       
       (log/info "Created Wireless Node GUI (TechUI)")
@@ -470,7 +471,7 @@
   [container minecraft-container player]
   (let [gui (create-node-gui container player {:menu minecraft-container})
         root (if (map? gui) (:root gui) gui)
-        base (cgui/create-cgui-screen-container root minecraft-container)]
+        base (cgui-screen/create-cgui-screen-container root minecraft-container)]
     (if (map? gui)
       (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current gui)))
       base)))
@@ -496,26 +497,26 @@
       (gui-dsl/create-gui-spec
         "wireless-node"
         {:gui-id 0
-         :display-name "Wireless Node"
-         :gui-type :node
-         :registry-name "wireless_node_gui"
-         :screen-factory-fn-kw :create-node-screen
-         :slot-layout (slot-schema/get-slot-layout wireless-node-id)
-         :container-predicate node-container?
-         :container-fn create-container
-         :screen-fn create-screen
-         :tick-fn tick!
-         :sync-get get-sync-data
-         :sync-apply apply-sync-data!
-         :payload-sync-apply-fn apply-node-sync-payload!
-         :validate-fn still-valid?
-         :close-fn on-close
-         :button-click-fn handle-button-click!
-         :slot-count-fn get-slot-count
-         :slot-get-fn get-slot-item
-         :slot-set-fn set-slot-item!
-         :slot-can-place-fn can-place-item?
-         :slot-changed-fn slot-changed!}))
+          :registration {:display-name "Wireless Node"
+               :gui-type :node
+               :registry-name "wireless_node_gui"
+               :screen-factory-fn-kw :create-node-screen
+               :slot-layout (slot-schema/get-slot-layout wireless-node-id)}
+          :lifecycle {:container-predicate node-container?
+            :container-fn create-container
+            :screen-fn create-screen
+            :tick-fn tick!}
+          :sync {:sync-get get-sync-data
+            :sync-apply apply-sync-data!
+            :payload-sync-apply-fn apply-node-sync-payload!}
+          :operations {:validate-fn still-valid?
+             :close-fn on-close
+             :button-click-fn handle-button-click!}
+           :slot-operations {:slot-count-fn get-slot-count
+             :slot-get-fn get-slot-item
+             :slot-set-fn set-slot-item!
+             :slot-can-place-fn can-place-item?
+             :slot-changed-fn slot-changed!}}))
     (log/info "Wireless Node GUI module initialized")))
 
 ;; ============================================================================

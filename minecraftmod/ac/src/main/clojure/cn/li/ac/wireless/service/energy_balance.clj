@@ -221,7 +221,7 @@
     (some (fn [net]
             (let [current (domain-net/get-energy net)
                   deviation (if (> avg-energy 0)
-                            (Math/abs (- current avg-energy))
+                (Math/abs (double (- current avg-energy)))
                             0)]
               (> deviation (* avg-energy balance-threshold))))
           networks)))

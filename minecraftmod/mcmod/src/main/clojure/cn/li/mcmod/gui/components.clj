@@ -1,7 +1,8 @@
 (ns cn.li.mcmod.gui.components
   "Pure Clojure component API inspired by Java references."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-widget-model :as cgui-model]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.platform.resource :as res]))
 
@@ -36,7 +37,7 @@
                             (swap! (:state native) assoc :owner-widget widget)
                             native)
                           native)]
-    (cgui/add-widget-component! widget comp-with-owner)
+    (cgui-model/add-widget-component! widget comp-with-owner)
     ;; component lifecycle hook: call :on-added if provided on native component
     (when (and (map? comp-with-owner) (fn? (:on-added comp-with-owner)))
       ((:on-added comp-with-owner) widget comp-with-owner))
@@ -45,7 +46,7 @@
 (defn remove-component!
   "Remove a component from widget"
   [widget component]
-  (cgui/remove-widget-component! widget component)
+  (cgui-model/remove-widget-component! widget component)
   ;; component lifecycle hook: call :on-removed if provided on component
   (when (and (map? component) (fn? (:on-removed component)))
     ((:on-removed component) widget component))
@@ -55,9 +56,9 @@
   "Get component of specific type from widget (keyword or class-like value)."
   [widget component-class]
   (if (keyword? component-class)
-    (cgui/get-widget-component widget component-class)
+    (cgui-model/get-widget-component widget component-class)
     (let [kind (-> (str component-class) str/lower-case keyword)]
-      (cgui/get-widget-component widget kind))))
+      (cgui-model/get-widget-component widget kind))))
 
 (defn get-textbox-component [widget]
   (get-component widget :textbox))
@@ -312,7 +313,7 @@
 (defn button
   [& {:keys [text x y width height text-color on-click]
       :or {text "Button" x 0 y 0 width 60 height 14 text-color 0xFFFFFF}}]
-  (let [widget (cgui/create-widget :pos [x y] :size [width height])
+  (let [widget (cgui-core/create-widget :pos [x y] :size [width height])
         label (text-box :text text :color text-color :scale 0.7 :shadow? true)]
     (add-component! widget (outline :color 0x404040 :width 1.0))
     (add-component! widget label)
@@ -325,7 +326,7 @@
       :or {label "" x 0 y 0 width 60 height 40 color 0x00FF00
            value-fn (constantly 0) max-fn (constantly 1)
            direction :vertical}}]
-  (let [panel (cgui/create-widget :pos [x y] :size [width height])
+  (let [panel (cgui-core/create-widget :pos [x y] :size [width height])
         bar (create-native-component
               {::kind :progressbar
                :direction direction
@@ -347,7 +348,7 @@
 (defn property-field
   [& {:keys [label x y width label-color value-color]
       :or {label "" x 0 y 0 width 70 label-color 0xAAAAAA value-color 0xFFFFFF}}]
-  (let [widget (cgui/create-widget :pos [x y] :size [width 12])
+  (let [widget (cgui-core/create-widget :pos [x y] :size [width 12])
         label-box (create-native-component
                     {::kind :textbox :text (str label ": ") :color label-color :scale 0.7 :shadow? true})
         value-box (create-native-component

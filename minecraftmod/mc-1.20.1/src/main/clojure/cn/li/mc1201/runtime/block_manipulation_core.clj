@@ -3,7 +3,7 @@
 
   Uses only vanilla MC APIs. Platform adapters supply:
   - server reference
-  - break-guard-fn: (fn [level pos player]) → boolean (Forge fires event; Fabric returns true)
+  - break-guard-fn: (fn [level pos player]) → boolean (Forge fires event; Fabric performs vanilla checks)
   - get-block-key-fn: (fn [block]) → String (BuiltInRegistries lookup, same on both loaders)
 
   Note: set-block and get-block use BuiltInRegistries/BLOCK directly.
@@ -31,7 +31,7 @@
 (defn break-block!
   "Break a block at [x y z] in world-id.
   break-guard-fn: (fn [^ServerLevel level ^BlockPos pos ^ServerPlayer player]) → boolean
-  Forge callers pass an event-based guard; Fabric callers pass (constantly true)."
+  Forge callers pass an event-based guard; Fabric callers pass a vanilla guard."
   [^MinecraftServer server player-uuid world-id x y z drop? break-guard-fn]
   (try
     (when-let [^ServerLevel level (get-level-by-id server world-id)]

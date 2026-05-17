@@ -7,7 +7,7 @@
   - 通用样式和动画
   - Histogram元素构建器"
   (:require [clojure.string :as str]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
@@ -47,15 +47,15 @@
         (let [page-xml (cgui-doc/read-xml (modid/namespaced-path "guis/rework/page_inv.xml"))
           page-widget (cgui-doc/get-widget page-xml "main")]
       
-      (log/info "TechUI page loaded, widget size:" (cgui/get-size page-widget) "visible:" (cgui/visible? page-widget))
+      (log/info "TechUI page loaded, widget size:" (cgui-core/get-size page-widget) "visible:" (cgui-core/visible? page-widget))
       
       ;; Add breathing effect to all UI elements
-      (doseq [widget (cgui/get-draw-list page-widget)]
-        (when (str/starts-with? (cgui/get-name widget) "ui_")
+      (doseq [widget (cgui-core/get-draw-list page-widget)]
+        (when (str/starts-with? (cgui-core/get-name widget) "ui_")
           (comp/add-component! widget (comp/breathe-effect))))
       
       ;; Set UI block texture based on name
-      (when-let [ui-block (cgui/find-widget page-widget "ui_block")]
+      (when-let [ui-block (cgui-core/find-widget page-widget "ui_block")]
         (comp/set-texture! ui-block 
           (modid/asset-path "textures" (str "guis/ui/ui_" name ".png"))))
       
@@ -64,7 +64,7 @@
     (catch Exception e
       (log/error "Error creating inventory page:"(ex-message e))
       (log/error "Stack trace:" (.printStackTrace e))
-      {:id "inv" :window (cgui/create-container :pos [0 0] :size [gui-width gui-height])})))
+      {:id "inv" :window (cgui-core/create-container :pos [0 0] :size [gui-width gui-height])})))
 
 ;; ============================================================================
 ;; InfoArea辅助函数 (参照TechUI.ContainerUI.InfoArea)
@@ -107,7 +107,7 @@
   "Depth-first sequence of `root` and all descendant widgets (shared TechUI helper)."
   [root]
   (when root
-    (tree-seq (constantly true) cgui/get-widgets root)))
+    (tree-seq (constantly true) cgui-core/get-widgets root)))
 
 (defn- register-blend-targets!
   "Scan widget subtree and register any components that should participate in InfoArea fade-in."
@@ -143,9 +143,9 @@
 (defn reset-info-area!
   "Clear InfoArea content and reset its internal layout/animation state."
   [info-area]
-  (cgui/clear-widgets! info-area)
+  (cgui-core/clear-widgets! info-area)
   (when-let [bg (:tech-ui/info-area-bg @(:metadata info-area))]
-    (cgui/add-widget! info-area bg))
+    (cgui-core/add-widget! info-area bg))
   (let [state-a (info-area-state-atom info-area)]
     (reset! state-a {:elem-y 0.0
                      :elements-count 0
@@ -178,19 +178,19 @@
   "Stack an element into InfoArea using internal elem-y, update expect-height, and register blend targets."
   [info-area elem]
   (let [state-a (info-area-state-atom info-area)
-        [_ew eh] (cgui/get-size elem)
+        [_ew eh] (cgui-core/get-size elem)
         s (double (or @(:scale elem) 1.0))]
     (swap! state-a
            (fn [st]
              (let [y (double (:elem-y st 10.0))
                    next-y (+ y (* (double eh) s))
                    next-expect (max info-area-min-height (+ next-y 8.0))]
-               (cgui/set-pos! elem (first (cgui/get-pos elem)) y)
+               (cgui-core/set-pos! elem (first (cgui-core/get-pos elem)) y)
                (-> st
                    (assoc :elem-y next-y)
                    (update :elements-count (fnil inc 0))
                    (assoc :expect-height next-expect)))))
-    (cgui/add-widget! info-area elem)
+    (cgui-core/add-widget! info-area elem)
     (register-blend-targets! info-area elem))
   info-area)
 
@@ -205,16 +205,16 @@
   Returns: Updated Y offset"
   [info-area elements y-offset]
   (maybe-init-elem-y! info-area y-offset)
-  (let [hist-widget (cgui/create-widget :pos [0 0] :size [210 210])
+  (let [hist-widget (cgui-core/create-widget :pos [0 0] :size [210 210])
         _ (comp/add-component! hist-widget
                                (comp/texture (modid/asset-path "textures" "guis/histogram.png") 0 0 210 210))
-        _ (cgui/set-scale! hist-widget 0.4)
-        _ (cgui/set-z-level! hist-widget 10)]
+        _ (cgui-core/set-scale! hist-widget 0.4)
+        _ (cgui-core/set-z-level! hist-widget 10)]
     
     ;; Add histogram bars
     (doseq [[elem idx] (map vector elements (range))]
       (let [bar-x (+ 56 (* idx 40))
-            bar (cgui/create-widget :pos [bar-x 78] :size [16 120])
+            bar (cgui-core/create-widget :pos [bar-x 78] :size [16 120])
             progress (comp/progress-bar
                        :direction :vertical
                        :progress 0.0
@@ -226,7 +226,7 @@
             (let [value ((:value-fn elem))
                   clamped (Math/max 0.03 (Math/min 1.0 (double value)))]
               (comp/set-progress! progress clamped))))
-        (cgui/add-widget! hist-widget bar)))
+        (cgui-core/add-widget! hist-widget bar)))
     
     (info-area-element! info-area hist-widget)
     ;; Keep rows below the histogram to avoid overlap in our scaled layout.
@@ -234,19 +234,19 @@
     
     ;; Add histogram property lines (icon + key/value aligned)
     (doseq [elem elements]
-      (let [row (cgui/create-widget :pos [6 0] :size [(- info-area-expect-width 10) 8])
-            key-area (cgui/create-widget :pos [4 0] :size [32 8])
-            icon (cgui/create-widget :pos [-3 0.5] :size [6 6])
-            value-area (cgui/create-widget :pos [info-area-key-length 0] :size [40 8])
+      (let [row (cgui-core/create-widget :pos [6 0] :size [(- info-area-expect-width 10) 8])
+            key-area (cgui-core/create-widget :pos [4 0] :size [32 8])
+            icon (cgui-core/create-widget :pos [-3 0.5] :size [6 6])
+            value-area (cgui-core/create-widget :pos [info-area-key-length 0] :size [40 8])
             key-box (comp/text-box :text (str (:label elem)) :color 0xFFAAAAAA :scale 0.8)
             value-box (comp/text-box :text (str ((:desc-fn elem))) :color 0xFFFFFFFF :scale 0.8)]
         (comp/add-component! icon (comp/draw-texture nil (:color elem)))
         (comp/add-component! key-area key-box)
         (comp/add-component! value-area value-box)
         (events/on-frame value-area (fn [_] (comp/set-text! value-box ((:desc-fn elem)))))
-        (cgui/add-widget! row key-area)
-        (cgui/add-widget! row icon)
-        (cgui/add-widget! row value-area)
+        (cgui-core/add-widget! row key-area)
+        (cgui-core/add-widget! row icon)
+        (cgui-core/add-widget! row value-area)
         (info-area-element! info-area row)))
     ;; small gap before next section
     (info-area-blank! info-area 3)
@@ -265,7 +265,7 @@
   [info-area label y-offset]
   (maybe-init-elem-y! info-area y-offset)
   (info-area-blank! info-area 3)
-  (let [sep-widget (cgui/create-widget :pos [3 0] :size [97 8])]
+  (let [sep-widget (cgui-core/create-widget :pos [3 0] :size [97 8])]
     (comp/add-component! sep-widget
       (comp/text-box
         :text label
@@ -289,10 +289,10 @@
   [info-area label value y-offset & {:keys [editable? on-change masked? color-change? content-cell]
                                       :or {editable? false masked? false color-change? true}}]
   (maybe-init-elem-y! info-area y-offset)
-  (let [prop-widget (cgui/create-widget :pos [6 0] :size [(- info-area-expect-width 10) 8])
-        key-area (cgui/create-widget :pos [0 0] :size [info-area-key-length 8])
+  (let [prop-widget (cgui-core/create-widget :pos [6 0] :size [(- info-area-expect-width 10) 8])
+        key-area (cgui-core/create-widget :pos [0 0] :size [info-area-key-length 8])
         ;; remaining width for value (roughly)
-        value-area (cgui/create-widget :pos [info-area-key-length 0]
+        value-area (cgui-core/create-widget :pos [info-area-key-length 0]
                                        :size [(max 1 (- info-area-expect-width info-area-key-length 10)) 8])
         label-box (comp/text-box :text (str label) :color 0xFFAAAAAA :scale 0.8)
         value-text (if (fn? value) (value) (str value))
@@ -303,8 +303,8 @@
     
     (comp/add-component! key-area label-box)
     (comp/add-component! value-area value-box-spec)
-    (cgui/add-widget! prop-widget key-area)
-    (cgui/add-widget! prop-widget value-area)
+    (cgui-core/add-widget! prop-widget key-area)
+    (cgui-core/add-widget! prop-widget value-area)
     (let [value-box (comp/get-textbox-component value-area)]
 
       (when (instance? clojure.lang.IAtom content-cell)
@@ -315,14 +315,14 @@
         ;; Visual brackets around editable value area.
         (let [box (fn [ch x]
                     ;; size 0 so it won't steal focus in hit-test, but still renders text
-                    (let [w (cgui/create-widget :pos [x 0] :size [0 0])
+                    (let [w (cgui-core/create-widget :pos [x 0] :size [0 0])
                           tb (comp/text-box :text ch :color 0xFFAAAAAA :scale 0.8)]
                       (comp/add-component! w tb)
                       w))
               left (box "[" -4)
-              right (box "]" (+ (cgui/get-width value-area) 2))]
-          (cgui/add-widget! value-area left)
-          (cgui/add-widget! value-area right))
+              right (box "]" (+ (cgui-core/get-width value-area) 2))]
+          (cgui-core/add-widget! value-area left)
+          (cgui-core/add-widget! value-area right))
         (when on-change
           (events/on-confirm-input value-box
             (fn [new-val]
@@ -355,7 +355,7 @@
   Returns: Updated Y offset"
   [info-area text on-click y-offset]
   (maybe-init-elem-y! info-area y-offset)
-  (let [button-widget (cgui/create-widget :pos [50 0] :size [50 8])
+  (let [button-widget (cgui-core/create-widget :pos [50 0] :size [50 8])
         text-box (comp/text-box :text text :color 0xFFFFFFFF :scale 0.9)]
     (comp/add-component! button-widget text-box)
     (events/on-left-click button-widget on-click)
@@ -408,13 +408,13 @@
   
   Returns: InfoArea widget"
   []
-  (let [info-area (cgui/create-container :pos [0 0] :size [info-area-expect-width info-area-min-height])
-        bg (cgui/create-widget :name "info_area_bg" :pos [0 0] :size [info-area-expect-width info-area-min-height])
+  (let [info-area (cgui-core/create-container :pos [0 0] :size [info-area-expect-width info-area-min-height])
+        bg (cgui-core/create-widget :name "info_area_bg" :pos [0 0] :size [info-area-expect-width info-area-min-height])
         state-a (info-area-state-atom info-area)]
     ;; True TechUI BlendQuad (nine-slice + line overlays), rendered by runtime.
     (comp/add-component! bg (comp/blend-quad :margin 4.0 :color 0x80FFFFFF))
-    (cgui/set-z-level! bg -100)
-    (cgui/add-widget! info-area bg)
+    (cgui-core/set-z-level! bg -100)
+    (cgui-core/add-widget! info-area bg)
     (swap! (:metadata info-area) assoc :tech-ui/info-area-bg bg)
     (register-blend-targets! info-area bg)
 
@@ -429,15 +429,15 @@
                                       delta (- (double to) (double from))
                                       step (min max-step (Math/abs delta))]
                                   (+ (double from) (* step (Math/signum delta)))))
-                         [cur-w cur-h] (cgui/get-size info-area)
+                         [cur-w cur-h] (cgui-core/get-size info-area)
                          nw (move cur-w expect-width)
                          nh (move cur-h expect-height)
                          ;; fade in over ~0.3s after 0.3s delay (same shape as old TechUI)
                          balpha (-> (/ (- t (double blend-start-time) 0.3) 0.3)
                                     (max 0.0) (min 1.0))
                          a (int (Math/round (* 255.0 balpha)))]
-                     (cgui/set-size! info-area nw nh)
-                     (cgui/set-size! bg nw nh)
+                     (cgui-core/set-size! info-area nw nh)
+                     (cgui-core/set-size! bg nw nh)
                      (doseq [{:keys [state key base]} blend-targets]
                        (when (and state key)
                          (swap! state assoc key (argb-with-alpha base a))))
@@ -451,15 +451,15 @@
 (defn apply-breathe-to-ui!
   "Apply breathe effect to all **direct** child widgets whose name starts with `ui_`."
   [page-widget]
-  (doseq [w (cgui/get-draw-list page-widget)]
-    (when (clojure.string/starts-with? (cgui/get-name w) "ui_")
+  (doseq [w (cgui-core/get-draw-list page-widget)]
+    (when (clojure.string/starts-with? (cgui-core/get-name w) "ui_")
       (comp/add-component! w (comp/breathe-effect)))))
 
 (defn apply-breathe-to-ui-descendants!
   "Apply breathe to every descendant named `ui_*` (e.g. nested `ui_left` / `ui_right` in `page_developer.xml`)."
   [page-root]
   (doseq [w (widget-subtree-seq page-root)]
-    (when (str/starts-with? (cgui/get-name w) "ui_")
+    (when (str/starts-with? (cgui-core/get-name w) "ui_")
       (comp/add-component! w (comp/breathe-effect)))))
 
 (defn- tech-ui-opts-map?
@@ -488,9 +488,9 @@
                    (log/info "Switching to page:" id)
                    (doseq [q pages]
                      (when-let [w (:window q)]
-                       (cgui/set-visible! w false)))
+                       (cgui-core/set-visible! w false)))
                    (when target-window
-                     (cgui/set-visible! target-window true))
+                     (cgui-core/set-visible! target-window true))
                    (reset! current-atom id)
                    (when on-tab-change (on-tab-change id))
                    (when on-click (on-click)))
@@ -504,10 +504,10 @@
     ;(comp/add-component! btn (comp/draw-texture icon-path 0xFFFFFFFF))
     (comp/set-texture! btn icon-path)
     ;; scale and position 
-    (cgui/set-w-align! btn :left)
-    (cgui/set-h-align! btn :top)
-    (cgui/set-scale! btn 0.7)
-    (cgui/set-pos! btn -20 y)
+    (cgui-core/set-w-align! btn :left)
+    (cgui-core/set-h-align! btn :top)
+    (cgui-core/set-scale! btn 0.7)
+    (cgui-core/set-pos! btn -20 y)
 
     ;; frame handler: adjust alpha and tint based on hover/current
     (events/on-frame btn
@@ -546,7 +546,7 @@
         main-size (vec (or (:main-size opts) [gui-width gui-height]))
         mw (double (nth main-size 0 gui-width))
         mh (double (nth main-size 1 gui-height))
-        main (cgui/create-widget :name "tech_ui_main" :pos [0 0] :size [mw mh])
+        main (cgui-core/create-widget :name "tech_ui_main" :pos [0 0] :size [mw mh])
         current (atom (when (seq pages) (:id (first pages))))
         pages-map (into {} (map (fn [p] [(:id p) p]) pages))]
 
@@ -556,17 +556,17 @@
         (when-not pw
           (log/error (str "create-tech-ui: page " (:id p) " has nil :window — skipping")))
         (when pw
-          (cgui/set-pos! pw 0 0)
-          (cgui/set-visible! pw false)
-          (cgui/add-widget! main pw)
+          (cgui-core/set-pos! pw 0 0)
+          (cgui-core/set-visible! pw false)
+          (cgui-core/add-widget! main pw)
 
           (let [btn (page-button (:id p) idx current pages pw nil on-tab-change)]
-            (cgui/add-widget! main btn)))))
+            (cgui-core/add-widget! main btn)))))
 
     ;; show first page by default
     (when-let [first-page (first pages)]
       (when-let [fw (:window first-page)]
-        (cgui/set-visible! fw true)))
+        (cgui-core/set-visible! fw true)))
 
     ;; apply breathe effect to inventory-like pages
     (doseq [p pages]
@@ -580,8 +580,8 @@
      ;; :show-page-fn (fn [id]
      ;;                 (when-let [p (get pages-map id)]
      ;;                   (doseq [[_ pm] pages-map]
-     ;;                     (cgui/set-visible! (:window pm) false))
-     ;;                   (cgui/set-visible! (:window p) true)
+     ;;                     (cgui-core/set-visible! (:window pm) false))
+     ;;                   (cgui-core/set-visible! (:window p) true)
      ;;                   (reset! current id)
      ;;                   p))
      }))

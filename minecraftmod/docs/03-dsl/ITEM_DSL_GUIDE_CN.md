@@ -2,7 +2,7 @@
 
 ## 概述
 
-Item DSL 提供声明式方式定义 **`ItemSpec`** 并写入 **`item-registry`**（atom），与 Block DSL 对称；Forge 通过 **`cn.li.mcmod.registry.metadata/get-all-item-ids`** 等在 **`cn.li.forge1201.mod/register-all-items!`** 中注册。
+Item DSL 提供声明式方式定义 **`ItemSpec`** 并写入 **`item-registry`**（atom），与 Block DSL 对称；Forge/Fabric 通过 **`cn.li.mcmod.protocol.metadata/get-all-item-ids`** 等在平台注册循环中注册。
 
 - **宏与 API**：**`cn.li.mcmod.item.dsl`**（**`idsl`**）。
 - **内容加载**：在 **`ac`** 中定义（例如 **`cn.li.ac.content.items.all`**），并列入 **`cn.li.ac.registry.content-namespaces`** 的 **`item-namespaces`**，由 **`load-all!`** 触发。
@@ -497,7 +497,7 @@ Item DSL 支持三种主要的交互处理器：
 
 ## 初始化物品
 
-**当前项目不需要**单独的 `init-demo-items!`：只要把物品定义放在 **`ac`** 的命名空间中，并在 **`cn.li.ac.registry.content-namespaces`** 的 **`item-namespaces`** 里声明，**`cn.li.ac.core/init`** → **`content-ns/load-all!`** 会在适当时机加载；Forge 侧 **`register-all-items!`** 读取 **`registry.metadata`**。
+**当前项目不需要**单独的 `init-demo-items!`：只要把物品定义放在 **`ac`** 的命名空间中，并在 **`cn.li.ac.registry.content-namespaces`** 的 **`item-namespaces`** 里声明，**`cn.li.ac.core/init`** → **`content-ns/load-all!`** 会在适当时机加载；平台侧 **`register-all-items!`** 读取 **`protocol.metadata`**。
 
 ```clojure
 ;; 仅作概念示例：物品命名空间被 require 后 defitem 即生效

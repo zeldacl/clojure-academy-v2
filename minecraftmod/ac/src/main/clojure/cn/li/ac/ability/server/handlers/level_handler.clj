@@ -8,7 +8,7 @@
 
 (defn handle-level-up-request
 	[_payload player]
-	(let [uuid  (uuid/player-uuid-str player)
+	(let [uuid  (uuid/player-uuid player)
 				state (common/get-state uuid)
 				ad    (:ability-data state)
 				{:keys [data event]} (lrn/level-up ad uuid)]

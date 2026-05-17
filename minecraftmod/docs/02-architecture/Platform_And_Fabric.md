@@ -71,7 +71,7 @@ Fabric:
 
 ## mod.clj 要点（Forge）
 
-- 动态方块/物品注册：从 `cn.li.mcmod.registry.metadata` 等获取 ID 与规格。
+- 动态方块/物品注册：从 `cn.li.mcmod.protocol.metadata` 等获取 ID 与规格。
 - BlockItem 等为需要物品的方块统一创建并注册。
 - 不依赖演示用硬编码模块；以元数据为准。
 

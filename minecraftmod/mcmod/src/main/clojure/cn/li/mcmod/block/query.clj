@@ -3,7 +3,8 @@
 
   Accepts either block ids or already-resolved block specs for most helpers so
   callers can progressively migrate away from registry wrapper layers."
-  (:require [cn.li.mcmod.protocol.core :as registry-core]))
+  (:require [cn.li.mcmod.block.tile-dsl :as tdsl]
+            [cn.li.mcmod.protocol.core :as registry-core]))
 
 (declare get-block-spec)
 
@@ -116,7 +117,7 @@
    Returns: true if block has tile entity"
   [block-or-spec]
   (when-let [block-spec (resolve-block-spec block-or-spec)]
-    (get-in block-spec [:tile-entity :has-block-entity?] false)))
+    (boolean (tdsl/get-tile-id-for-block (:id block-spec)))))
 
 (defn is-light-emitter?
   "Check if a block emits light
@@ -152,7 +153,9 @@
    Returns: keyword tile kind or nil"
   [block-or-spec]
   (when-let [block-spec (resolve-block-spec block-or-spec)]
-    (get-in block-spec [:tile-entity :tile-kind])))
+    (some-> (tdsl/get-tile-id-for-block (:id block-spec))
+            tdsl/get-tile
+            :tile-kind)))
 
 (defn get-light-level
   "Get the light emission level for a block
@@ -206,9 +209,8 @@
     (boolean (get-in block-spec [:block-state :block-state-properties]))))
 
 (defn has-block-entity?
-  "Check if a block has a block entity (tile entity)
+  "Check if a block is bound to a Tile DSL block entity.
    block-spec: BlockSpec record
-   Returns: true if block has block entity configured"
+   Returns: true if Tile DSL maps the block to a tile-id"
   [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
-    (get-in block-spec [:tile-entity :has-block-entity?] false)))
+  (has-tile-entity? block-or-spec))

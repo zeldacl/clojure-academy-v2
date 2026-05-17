@@ -9,7 +9,7 @@
 | 模块 | 职责 | 禁止事项 |
 |------|------|----------|
 | **`api`** | 对外 Java 接口（如无线/能量的 `acapi` 包），供 Java 与可选互操作 | 不含游戏逻辑 |
-| **`mcmod`** | 协议与 DSL：`defblock`/`defitem`/`deftile`、`registry.metadata`、GUI/NBT/事件元数据、`platform.*` 抽象 | **不得**引用 `net.minecraft.*` 或 Loader API |
+| **`mcmod`** | 协议与 DSL：`defblock`/`defitem`/`deftile`、`protocol.metadata`、GUI/NBT/事件元数据、`platform.*` 抽象 | **不得**引用 `net.minecraft.*` 或 Loader API |
 | **`ac`** | 内容与域逻辑：无线、能量、`content/*` 入口、方块/物品具体实现、网络与 GUI 业务 | **不得**引用 Forge/Fabric/Minecraft 类；通过 `mcmod` 协议与 `acapi` 边界交互 |
 | **`forge-1.20.1`** | `@Mod`、注册表、`DeferredRegister`、事件桥、Java 桥（BlockEntity、Menu 等） | **不得**依赖 `cn.li.ac.*` 命名空间（通过 `mcmod.content` + `lifecycle` 间接拉起 `ac`） |
 
@@ -23,13 +23,13 @@
 
 - **`cn.li.mcmod.block.dsl`**
   - `defblock`、`defmultiblock` / `defcontroller-multiblock`：宏展开为 `register-block!`，写入 **`block-registry`**（atom）。
-  - `create-block-spec` 将选项归并为 **`BlockSpec`**，含嵌套记录：`PhysicalProperties`、`RenderingProperties`、`TileEntityConfig`、`BlockStateConfig`、`EventHandlers`、`MultiBlockConfig`。
+  - `create-block-spec` 将选项归并为 **`BlockSpec`**，含嵌套记录：`PhysicalProperties`、`RenderingProperties`、`BlockStateConfig`、`EventHandlers`、`MultiBlockConfig`。
   - 支持 **扁平写法**（`:material`、`:on-right-click` 与顶层同级）与 **嵌套写法**（`:physical {...}`、`:events {...}`），二者在 `create-block-spec` 中合并。
 - **`cn.li.mcmod.item.dsl`**
   - `defitem` → **`item-registry`**（atom），`ItemSpec` 记录。
 - **`cn.li.mcmod.block.tile-dsl`**
-  - `deftile` / `deftile-kind` → **tile-registry**，描述哪些 block-id 绑定哪个 tile-id、生命周期钩子。
-- **`cn.li.mcmod.registry.metadata`**
+  - `deftile` / `deftile-kind` → **tile-registry**，描述哪些 block-id 绑定哪个 tile-id、BlockEntityType 注册名和生命周期钩子。
+- **`cn.li.mcmod.protocol.metadata`**
   - **唯一面向平台的聚合查询层**：从上述 registry 读取，提供 `get-all-block-ids`、`get-block-spec`、`has-block-entity?`、`get-all-tile-ids`、GUI/item 等查询，**避免 Forge 直接扫 `ac`**。
 
 ### 2.2 事件与方块 DSL 的关系
@@ -61,7 +61,7 @@
    - 按 GUI id 注册 screen factory（依赖上一步 DSL 已加载）；
    - **`event-metadata/init-event-metadata!`** → 从 block DSL 同步事件表；
    - **`hooks/call-all-network-handlers!`** 等。
-4. Forge **注册阶段**（如 **`cn.li.forge1201.mod/register-all-blocks!`**）：只对 **`registry.metadata`** 暴露的 id 循环，按 metadata 选择 `DynamicStateBlock`、`ScriptedBlock`、多方块等 Java 工厂；**`register-block-entities!`** 按 **tile-id** 聚合 BlockEntityType；**`register-all-items!`** 同理。
+4. Forge **注册阶段**（如 **`cn.li.forge1201.mod/register-all-blocks!`**）：只对 **`protocol.metadata`** 暴露的 id 循环，按 metadata 选择 `DynamicStateBlock`、`ScriptedBlock`、多方块等 Java 工厂；**`register-block-entities!`** 按 **tile-id** 聚合 BlockEntityType；**`register-all-items!`** 同理。
 
 ---
 
@@ -93,7 +93,7 @@
 | 主题 | 命名空间 / 路径 |
 |------|-----------------|
 | Block 宏与 BlockSpec | `cn.li.mcmod.block.dsl` |
-| 平台查询 | `cn.li.mcmod.registry.metadata` |
+| 平台查询 | `cn.li.mcmod.protocol.metadata` |
 | Forge 注册 | `cn.li.forge1201.mod` |
 | 内容加载 | `cn.li.ac.registry.content-namespaces`, `cn.li.ac.core` |
 | 生命周期 | `cn.li.mcmod.lifecycle`, `cn.li.mcmod.content` |

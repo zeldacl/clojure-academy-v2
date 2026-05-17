@@ -8,7 +8,3 @@
 	(some-> (try (entity/player-get-uuid player)
 							 (catch Exception _ nil))
 					str))
-
-(def player-uuid-str
-	"Backward-compatible alias for legacy call sites."
-	player-uuid)

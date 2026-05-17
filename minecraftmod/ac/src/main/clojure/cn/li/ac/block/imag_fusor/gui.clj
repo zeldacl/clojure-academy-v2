@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.imag-fusor.gui
   "CLIENT-ONLY: Imaginary Fusor GUI"
-  (:require [cn.li.mcmod.gui.cgui :as cgui]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
@@ -81,7 +82,7 @@
 
 (defn- bind-progress!
   [inv-window container]
-  (when-let [widget (cgui/find-widget inv-window "progress")]
+  (when-let [widget (cgui-core/find-widget inv-window "progress")]
     (when-let [bar (comp/get-component widget :progressbar)]
       (events/on-frame widget
         (fn [_]
@@ -89,7 +90,7 @@
 
 (defn- bind-requirement-text!
   [inv-window container]
-  (when-let [widget (cgui/find-widget inv-window "text_imagneeded")]
+  (when-let [widget (cgui-core/find-widget inv-window "text_imagneeded")]
     (when-let [tb (comp/get-textbox-component widget)]
       (events/on-frame widget
         (fn [_]
@@ -113,7 +114,7 @@
         max-liquid (fn [] (max 1.0 (double (or @(:tank-size container) cfg/tank-size))))
         _ (bind-progress! inv-window container)
         _ (bind-requirement-text! inv-window container)
-        _ (cgui/set-position! info-area (+ (cgui/get-width inv-window) 7) 5)
+        _ (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
         _ (tech-ui/reset-info-area! info-area)
         y0 (tech-ui/add-histogram
              info-area
@@ -129,9 +130,9 @@
                                     (let [req (int (or @(:current-recipe-liquid container) 0))]
                                       (if (pos? req) (str req) "IDLE")))
                                   y1)]
-    (cgui/add-widget! root info-area)
+    (cgui-core/add-widget! root info-area)
     (tech-ui/assoc-tech-ui-screen-size
-      (assoc (cgui/create-cgui-screen-container root minecraft-container)
+      (assoc (cgui-screen/create-cgui-screen-container root minecraft-container)
              :current-tab-atom (:current tech)))))
 
 (defn- fusor-container?
@@ -158,23 +159,23 @@
       (gui-dsl/create-gui-spec
         "imag-fusor"
         {:gui-id 5
-         :display-name "Imag Fusor"
-         :gui-type fusor-gui-type
-         :registry-name "imag_fusor_gui"
-         :screen-factory-fn-kw :create-imag-fusor-screen
-         :slot-layout (slot-schema/get-slot-layout fusor-slot-schema-id)
-         :container-predicate fusor-container?
-         :container-fn create-container
-         :screen-fn create-screen
-         :tick-fn tick!
-         :sync-get get-sync-data
-         :sync-apply apply-sync-data!
-         :validate-fn still-valid?
-         :close-fn on-close
-         :button-click-fn handle-button-click!
-         :slot-count-fn get-slot-count
-         :slot-get-fn get-slot-item
-         :slot-set-fn set-slot-item!
-         :slot-can-place-fn can-place-item?
-         :slot-changed-fn slot-changed!}))
+          :registration {:display-name "Imag Fusor"
+               :gui-type fusor-gui-type
+               :registry-name "imag_fusor_gui"
+               :screen-factory-fn-kw :create-imag-fusor-screen
+               :slot-layout (slot-schema/get-slot-layout fusor-slot-schema-id)}
+          :lifecycle {:container-predicate fusor-container?
+            :container-fn create-container
+            :screen-fn create-screen
+            :tick-fn tick!}
+          :sync {:sync-get get-sync-data
+            :sync-apply apply-sync-data!}
+          :operations {:validate-fn still-valid?
+             :close-fn on-close
+             :button-click-fn handle-button-click!}
+           :slot-operations {:slot-count-fn get-slot-count
+             :slot-get-fn get-slot-item
+             :slot-set-fn set-slot-item!
+             :slot-can-place-fn can-place-item?
+             :slot-changed-fn slot-changed!}}))
     (log/info "Imaginary Fusor GUI initialized")))

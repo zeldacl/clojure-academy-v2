@@ -11,7 +11,7 @@
 				ctx0 (ctx/get-context ctx-id)
 				_ (when (nil? ctx0)
 						(when-let [skill-id (:skill-id payload*)]
-							(ctx-mgr/establish-context! (uuid/player-uuid-str player) ctx-id skill-id)))]
+							(ctx-mgr/establish-context! (uuid/player-uuid player) ctx-id skill-id)))]
 		(ctx-rt/handle-key-down! ctx-id payload* ctx-mgr/send-terminated-context!)))
 
 (defn handle-key-tick-skill

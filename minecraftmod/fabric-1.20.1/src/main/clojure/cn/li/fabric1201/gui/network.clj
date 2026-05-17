@@ -4,6 +4,7 @@
   Mirrors Forge behavior with request/response RPC plus server push.
   Transport format is EDN maps written into FriendlyByteBuf UTF strings."
   (:require [cn.li.mc1201.gui.network-packet-base :as packet-base]
+            [cn.li.mc1201.reflect-util :as ru]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
@@ -23,9 +24,6 @@
 
 (def ^:private s2c-channel
   (ResourceLocation. modid/MOD-ID "clj_rpc_s2c"))
-
-(defn- class-noinit [^String class-name]
-  (Class/forName class-name false (.getContextClassLoader (Thread/currentThread))))
 
 (defn- jproxy
   [^Class iface invoke-fn]
@@ -60,7 +58,7 @@
 
 (defn send-to-server!
   [msg-id request-id payload]
-  (let [client-networking (class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking")
+  (let [client-networking (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking")
         buf (make-buf {:msg-id msg-id
                        :request-id (int request-id)
                        :payload (or payload {})})]
@@ -85,7 +83,7 @@
 (defn init-server!
   []
   (when (compare-and-set! server-initialized? false true)
-    (let [handler-iface (class-noinit "net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking$PlayChannelHandler")
+    (let [handler-iface (ru/class-noinit "net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking$PlayChannelHandler")
           receiver (jproxy
                      handler-iface
                      (fn [method-name args]
@@ -117,8 +115,8 @@
 (defn init-client!
   []
   (when (compare-and-set! client-initialized? false true)
-    (let [client-networking (class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking")
-          handler-iface (class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking$PlayChannelHandler")
+      (let [client-networking (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking")
+        handler-iface (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking$PlayChannelHandler")
           receiver (jproxy
                      handler-iface
                      (fn [method-name args]

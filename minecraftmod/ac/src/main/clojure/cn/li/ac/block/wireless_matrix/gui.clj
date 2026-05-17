@@ -25,7 +25,8 @@
   - Dynamic SSID/password display (owner can edit after init)
   - Initialization form for owner to create network"
   
-  (:require [cn.li.mcmod.gui.cgui :as cgui]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
@@ -506,11 +507,11 @@
           info-area (tech-ui/create-info-area)]
       
       ;; Add inventory page window
-      ;(cgui/add-widget! main-widget (:window inv-page))
+      ;(cgui-core/add-widget! main-widget (:window inv-page))
       
       ;; Position info area
-      (cgui/set-position! info-area
-        (+ (cgui/get-width main-widget) 7)
+      (cgui-core/set-position! info-area
+        (+ (cgui-core/get-width main-widget) 7)
         5)
       
       ;; Initialize network data and build InfoArea
@@ -519,7 +520,7 @@
           (rebuild-info-area! info-area tile player data)))
       
       ;; Add info area to main widget
-      (cgui/add-widget! main-widget info-area)
+      (cgui-core/add-widget! main-widget info-area)
       
       (log/info "Created Wireless Matrix GUI")
       
@@ -546,7 +547,7 @@
   [container minecraft-container player]
   (let [gui (create-matrix-gui container player {:menu minecraft-container})
         root (if (map? gui) (:root gui) gui)
-        base (cgui/create-cgui-screen-container root minecraft-container)]
+        base (cgui-screen/create-cgui-screen-container root minecraft-container)]
     (if (map? gui)
       (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current gui)))
       (tech-ui/assoc-tech-ui-screen-size base))))
@@ -585,24 +586,24 @@
       (gui-dsl/create-gui-spec
         "wireless-matrix"
         {:gui-id 1
-         :display-name "Wireless Matrix"
-         :gui-type :matrix
-         :registry-name "wireless_matrix_gui"
-         :screen-factory-fn-kw :create-matrix-screen
-         :slot-layout (slot-schema/get-slot-layout wireless-matrix-id)
-         :container-predicate matrix-container?
-         :container-fn create-container
-         :screen-fn create-screen
-         :tick-fn tick!
-         :sync-get get-sync-data
-         :sync-apply apply-sync-data!
-         :payload-sync-apply-fn apply-matrix-sync-payload!
-         :validate-fn still-valid?
-         :close-fn on-close
-         :button-click-fn handle-button-click!
-         :slot-count-fn get-slot-count
-         :slot-get-fn get-slot-item
-         :slot-set-fn set-slot-item!
-         :slot-can-place-fn can-place-item?
-         :slot-changed-fn slot-changed!}))
+          :registration {:display-name "Wireless Matrix"
+               :gui-type :matrix
+               :registry-name "wireless_matrix_gui"
+               :screen-factory-fn-kw :create-matrix-screen
+               :slot-layout (slot-schema/get-slot-layout wireless-matrix-id)}
+          :lifecycle {:container-predicate matrix-container?
+            :container-fn create-container
+            :screen-fn create-screen
+            :tick-fn tick!}
+          :sync {:sync-get get-sync-data
+            :sync-apply apply-sync-data!
+            :payload-sync-apply-fn apply-matrix-sync-payload!}
+          :operations {:validate-fn still-valid?
+             :close-fn on-close
+             :button-click-fn handle-button-click!}
+           :slot-operations {:slot-count-fn get-slot-count
+             :slot-get-fn get-slot-item
+             :slot-set-fn set-slot-item!
+             :slot-can-place-fn can-place-item?
+             :slot-changed-fn slot-changed!}}))
     (log/info "Wireless Matrix GUI registered")))

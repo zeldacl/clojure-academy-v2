@@ -2,7 +2,7 @@
 
 ## 概述
 
-Block DSL 提供声明式方式定义方块元数据，**由 `cn.li.mcmod.registry.metadata` 向 Forge 暴露查询接口**，平台注册循环不写死具体方块 id。
+Block DSL 提供声明式方式定义方块元数据，**由 `cn.li.mcmod.protocol.metadata` 向平台层暴露查询接口**，平台注册循环不写死具体方块 id。
 
 ### 与项目架构的关系（必读）
 
@@ -11,12 +11,12 @@ Block DSL 提供声明式方式定义方块元数据，**由 `cn.li.mcmod.regist
 3. **BlockSpec 结构**（嵌套记录，也可用扁平字段，`create-block-spec` 会合并）：
    - **`:physical`** — `PhysicalProperties`：`:material`、`:hardness`、`:resistance`、采集工具等。
    - **`:rendering`** — `RenderingProperties`：`:model-parent`、`:textures`、`:model-textures`、`:has-item-form?`、`:light-level` 等。
-   - **`:tile-entity`** — `TileEntityConfig`：是否 Scripted BE、`:tile-kind`、tick/NBT 钩子等（常与 **`cn.li.mcmod.block.tile-dsl`** 的 `deftile` 联用）。
    - **`:block-state`** — `BlockStateConfig`：动态 **`block-state-properties`**（供 `blockstate_properties` 生成 `Property`）。
    - **`:events`** — `EventHandlers`：`:on-right-click`、`:on-break`、`:on-place`、`:on-multi-block-break`（可与顶层扁平键混用）。
    - **`:multi-block`** — `MultiBlockConfig`：多方块体积、不规则坐标、`controller-parts` 模式等。
-4. **进阶宏**：**`defmultiblock`** / **`defcontroller-multiblock`** 一次生成 controller + part 两个 **`defblock`**，并设置 **`multiblock-mode :controller-parts`**。
-5. **事件进游戏**：`cn.li.ac.core/init` 在内容加载后调用 **`cn.li.mcmod.events.metadata/init-event-metadata!`**，从所有 `BlockSpec` 的 `:events` 同步到 **`events.metadata`**，Forge 侧只通过 **`cn.li.mcmod.events.dispatcher`** 分发。
+4. **BlockEntity 元数据**：需要 Scripted BlockEntity 的方块必须在 **`cn.li.mcmod.block.tile-dsl`** 中用 **`deftile`** 显式绑定 block-id -> tile-id；Block DSL 不再承载 tile 生命周期钩子。
+5. **进阶宏**：**`defmultiblock`** / **`defcontroller-multiblock`** 一次生成 controller + part 两个 **`defblock`**，并设置 **`multiblock-mode :controller-parts`**。
+6. **事件进游戏**：`cn.li.ac.core/init` 在内容加载后调用 **`cn.li.mcmod.events.metadata/init-event-metadata!`**，从所有 `BlockSpec` 的 `:events` 同步到 **`events.metadata`**，Forge 侧只通过 **`cn.li.mcmod.events.dispatcher`** 分发。
 
 完整启动链、与 `deftile`/Forge 注册的关系见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。
 
@@ -840,13 +840,13 @@ Block DSL 提供了多个辅助函数来生成常见的不规则形状：
 
 **不要**在适配层手写「遍历 `bdsl/get-block` + 手动 `.register`」。Forge 1.20.1 使用 **`cn.li.forge1201.mod/register-all-blocks!`**：
 
-- 对 **`cn.li.mcmod.registry.metadata/get-all-block-ids`** 返回的每个 id，读取 spec；
+- 对 **`cn.li.mcmod.protocol.metadata/get-all-block-ids`** 返回的每个 id，读取 spec；
 - 按是否需要 **动态 BlockState**、**Scripted BlockEntity**、**多方块** 等，调用 Java 侧 **`invoke-bootstrap-helper`** 工厂（如 `createDynamicStateBlock`、`createCarrierScriptedBlock`）；
 - BlockItem、BlockEntityType 等同理走 metadata。
 
 因此：**内容作者只负责在 `ac` 里 `defblock`（并确保命名空间被 `content-namespaces/load-all!` 加载）**；**注册表代码集中在 `forge1201.mod`**，与旧版「在 mod 里手写 demo 注册」不同。
 
-Fabric 若重新启用子工程，应对齐同一 **`registry.metadata`** 查询模式，而不是复制旧文档中的 `Registry/register` 片段。
+Fabric 若重新启用子工程，应对齐同一 **`protocol.metadata`** 查询模式，而不是复制旧文档中的 `Registry/register` 片段。
 
 ## API 参考
 

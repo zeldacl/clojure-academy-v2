@@ -6,7 +6,7 @@
 
 (defn handle-begin-link-context
 	[{:keys [ctx-id skill-id]} player]
-	(ctx-mgr/establish-context! (uuid/player-uuid-str player) ctx-id skill-id))
+	(ctx-mgr/establish-context! (uuid/player-uuid player) ctx-id skill-id))
 
 (defn handle-keepalive-context
 	[{:keys [ctx-id]} _player]

@@ -1,6 +1,6 @@
 (ns cn.li.mcmod.gui.events
   "LambdaLib2 GuiEventBus wrapper - Event handling DSL"
-  (:require [cn.li.mcmod.gui.cgui :as cgui]))
+  (:require [cn.li.mcmod.gui.cgui-events :as cgui-events]))
 
 ;; ============================================================================
 ;; Event Listener Registration
@@ -21,7 +21,7 @@
     (fn [event]
       (println \"Clicked at\" (.x event) (.y event))))"
   [widget event-class handler]
-  (cgui/listen-widget-event! widget event-class handler)
+  (cgui-events/listen-widget-event! widget event-class handler)
   widget)
 
 (defn unlisten!
@@ -31,10 +31,10 @@
   - widget: Widget instance
   - event-class: Event class to remove (optional, removes all if nil)"
   ([widget]
-   (cgui/clear-widget-events! widget)
+   (cgui-events/clear-widget-events! widget)
    widget)
   ([widget event-class]
-   (cgui/unlisten-widget-event! widget event-class)
+   (cgui-events/unlisten-widget-event! widget event-class)
    widget))
 
 ;; ============================================================================
@@ -211,7 +211,7 @@
 (defn stop-propagation!
   "Stop event from propagating to parent widgets"
   [event]
-  (cgui/stop-event-propagation! event))
+  (cgui-events/stop-event-propagation! event))
 
 (defn event-pos
   "Extract [x y] position from mouse event"

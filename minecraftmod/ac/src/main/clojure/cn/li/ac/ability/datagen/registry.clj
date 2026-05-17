@@ -11,7 +11,7 @@
    Called during datagen initialization phase."
   []
   (let [achievement-tabs (achievement-registry/all-tabs)
-        achievements (achievement-data/achievements)
+      achievements achievement-data/achievements
         recipes (crafting-recipes/get-all-recipes)]
     (swap! metadata/achievement-tabs (fn [_] achievement-tabs))
     (swap! metadata/achievements (fn [_] achievements))

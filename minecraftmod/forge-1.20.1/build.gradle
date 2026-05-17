@@ -485,6 +485,13 @@ tasks.matching { it.name == 'runGametestServer' }.configureEach {
 tasks.matching { it.name == 'checkClojure' }.configureEach {
     reflection = 'fail'
     dependsOn tasks.named('copyClojureClassesToJavaOutput')
+    doFirst {
+        def internalFile = file("$buildDir/tmp/checkClojure/internal.txt")
+        internalFile.parentFile.mkdirs()
+        if (!internalFile.exists()) {
+            internalFile.text = ''
+        }
+    }
     if (project.hasProperty('checkNsFile')) {
         def nsFile = rootProject.file(project.property('checkNsFile').toString())
         if (!nsFile.isFile()) {

@@ -20,7 +20,7 @@
 ### 数据流（DSL → 注册 → 游戏）
 
 - **`mcmod`** 中的 **`defblock`/`defitem`/`deftile`** 只往各自 **atom registry** 写元数据；**不**直接碰 Minecraft。
-- **`cn.li.mcmod.registry.metadata`** 聚合查询，供 Forge **`register-all-blocks!`** 等使用。
+- **`cn.li.mcmod.protocol.metadata`** 聚合查询，供 Forge/Fabric 注册循环使用。
 - **`ac`** 通过 **`content-namespaces`** 统一 `require` 内容命名空间，触发 DSL 副作用；**`cn.li.ac.core/init`** 在 `lifecycle` 中注册，由 **`forge1201.init`** 在设置版本号后执行。
 - 事件：DSL 中的 `:on-right-click` 等经 **`events.metadata/sync-handlers-from-dsl!`** 进入分发器，Forge 事件只调 **`events.dispatcher`**。
 
@@ -34,7 +34,7 @@ flowchart LR
   end
   subgraph mcmod [mcmod DSL 与元数据]
     R[block/item/tile registry atoms]
-    RM[registry.metadata 查询 API]
+    RM[protocol.metadata 查询 API]
     EM[events.metadata 分发注册表]
   end
   subgraph forge [forge-1.20.1]
@@ -65,7 +65,7 @@ flowchart LR
 ## 二、平台中立化重构摘要
 
 - **GUI**：`cn.li.mcmod.gui.dsl`、容器 schema、元数据；Forge 侧完成 MenuType/Screen 注册与桥接。
-- **注册**：`cn.li.mcmod.registry.metadata`、事件元数据；方块/物品由 DSL 与元数据驱动。
+- **注册**：`cn.li.mcmod.protocol.metadata`、事件元数据；方块/物品由 DSL 与元数据驱动。
 - **事件**：`cn.li.mcmod.events.*`；从 DSL 的 `:on-right-click` 等同步到处理器。
 - **能量**：物品/节点等充放电统一走 **`cn.li.ac.energy.operations`**。
 

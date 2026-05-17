@@ -21,10 +21,10 @@
 		(if tile
 			(let [tile-pos    (pos/position-get-block-pos tile)
 						linked-node (solar-logic/get-linked-node tile)
-						linked-pos  (when linked-node (.getBlockPos linked-node))
+						linked-pos  (when linked-node (.getBlockPos ^cn.li.acapi.wireless.IWirelessNode linked-node))
 						nodes       (if tile-pos (wireless-query/get-nodes-in-range world tile-pos) [])
 						avail       (->> nodes
-														 (remove (fn [n]
+															(remove (fn [^cn.li.acapi.wireless.IWirelessNode n]
 																			 (let [p (.getBlockPos n)]
 																				 (and p linked-pos
 																							(= (pos/pos-x p) (pos/pos-x linked-pos))

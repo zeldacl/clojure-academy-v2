@@ -6,7 +6,7 @@
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.registry.hooks :as hooks]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.ac.util.init-guard :refer [with-init-guard]]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.block.wireless-node.handlers :as node-handlers]
             [cn.li.mcmod.util.log :as log])
@@ -18,7 +18,8 @@
    (bdsl/get-block "wireless-node-standard")
    (bdsl/get-block "wireless-node-advanced")])
 
-(defonce-guard wireless-node-installed?)
+(defonce ^:private wireless-node-installed?
+  (atom false))
 
 (defn init-wireless-nodes! []
   (with-init-guard wireless-node-installed?

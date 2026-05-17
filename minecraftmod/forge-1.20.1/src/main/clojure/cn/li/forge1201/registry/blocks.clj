@@ -33,7 +33,7 @@
           needs-dynamic-properties? (has-block-state-properties? block-id)
           has-be? (registry-metadata/has-block-entity? block-id)
           tile-id (when has-be?
-                    (or (registry-metadata/get-block-tile-id block-id) block-id))
+                    (registry-metadata/get-block-tile-id block-id))
           registered-obj (.register ^DeferredRegister blocks-register registry-name
                                     (reify java.util.function.Supplier
                                       (get [_]

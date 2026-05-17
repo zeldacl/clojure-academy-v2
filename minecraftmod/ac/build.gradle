@@ -17,6 +17,8 @@ dependencies {
     cloverageRuntime "cloverage:cloverage:1.2.4"
 }
 
+sourceSets.test.clojure.srcDir rootProject.file('test-support/src/main/clojure')
+
 tasks.matching { it.name == 'checkClojure' }.configureEach {
     def existingArgs = forkOptions.jvmArgs ?: []
     forkOptions.jvmArgs = existingArgs + ['-Dac.check.clojure=true']
@@ -34,8 +36,12 @@ tasks.register('runAcClojureTests', JavaExec) {
     group = 'verification'
     description = 'Run clojure.test suites for ac via cn.li.ac.test-runner.'
     dependsOn compileTestClojure, compileClojure, classes
+    workingDir = project.projectDir
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'clojure.main'
+    if (System.getProperty('ac.test.only') != null) {
+        systemProperty 'ac.test.only', System.getProperty('ac.test.only')
+    }
     args '-m', 'cn.li.ac.test-runner'
 }
 

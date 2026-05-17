@@ -5,7 +5,8 @@
   GUI close clears tile session (`TileDeveloper` unuse / onGuiClosed)."
   (:require [clojure.string :as str]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.gui.platform-adapter :as gui]
@@ -114,7 +115,7 @@
           activate-wireless-tab! (wireless-tab/developer-wireless-tab-lazy-activator
                                    wireless-window container node-icon)
           classic-root (dev-panel/load-classic-developer-page)
-          _ (when-let [area (cgui/find-widget classic-root "parent_right/area")]
+          _ (when-let [area (cgui-core/find-widget classic-root "parent_right/area")]
               (wireless-tab/create-embedded-developer-wireless-panel!
                 container area {:connected-row-logo-path node-icon}))
           pages [inv-page
@@ -128,8 +129,8 @@
           ;; `page_inv` / `page_wireless` root uses XML CENTER align; wide `:main-size` would
           ;; center 176px-wide pages in `tech_ui_main` (~165px right shift vs matrix).
           _ (doseq [w [(:window inv-page) wireless-window]]
-              (cgui/set-w-align! w :left)
-              (cgui/set-h-align! w :top))
+              (cgui-core/set-w-align! w :left)
+              (cgui-core/set-h-align! w :top))
           _ (when-let [cur-atom (:current tech-ui)]
               (add-watch cur-atom :developer-wireless-tab-lazy
                 (fn [_ _ _old new-id]
@@ -149,9 +150,9 @@
           y2 (tech-ui/add-property info-area "tier" (fn [] (str @(:tier container))) y1)
           y3 (tech-ui/add-property info-area "structure_ok" (fn [] (str @(:structure-valid container))) y2)
           _y4 (tech-ui/add-property info-area "developing" (fn [] (str @(:is-developing container))) y3)]
-      (cgui/set-position! info-area (+ (cgui/get-width main-widget) 7) 5)
+      (cgui-core/set-position! info-area (+ (cgui-core/get-width main-widget) 7) 5)
       (tech-ui/reset-info-area! info-area)
-      (cgui/add-widget! main-widget info-area)
+      (cgui-core/add-widget! main-widget info-area)
       (log/info "Created Ability Developer TechUI (classic panel + phasegen inv)")
       (if (:menu opts)
         {:root main-widget :current (:current tech-ui)}
@@ -164,7 +165,7 @@
   [container minecraft-container player]
   (let [gui (create-developer-gui container player {:menu minecraft-container})
         root (if (map? gui) (:root gui) gui)
-        base (cgui/create-cgui-screen-container root minecraft-container)]
+        base (cgui-screen/create-cgui-screen-container root minecraft-container)]
     (if (map? gui)
       (-> base
           (tech-ui/assoc-tech-ui-screen-size)
@@ -193,23 +194,23 @@
       (gui-dsl/create-gui-spec
         "developer"
         {:gui-id 13
-         :display-name "Ability Developer"
-         :gui-type :developer
-         :registry-name "developer_gui"
-         :screen-factory-fn-kw :create-developer-screen
-         :slot-layout (slot-schema/get-slot-layout developer-gui-id)
-         :container-predicate developer-container?
-         :container-fn create-container
-         :screen-fn create-screen
-         :tick-fn tick!
-         :sync-get get-sync-data
-         :sync-apply apply-sync-data!
-         :validate-fn still-valid?
-         :close-fn on-close
-         :button-click-fn handle-button-click!
-         :slot-count-fn get-slot-count
-         :slot-get-fn get-slot-item
-         :slot-set-fn set-slot-item!
-         :slot-can-place-fn can-place-item?
-         :slot-changed-fn slot-changed!}))
+          :registration {:display-name "Ability Developer"
+               :gui-type :developer
+               :registry-name "developer_gui"
+               :screen-factory-fn-kw :create-developer-screen
+               :slot-layout (slot-schema/get-slot-layout developer-gui-id)}
+          :lifecycle {:container-predicate developer-container?
+            :container-fn create-container
+            :screen-fn create-screen
+            :tick-fn tick!}
+          :sync {:sync-get get-sync-data
+            :sync-apply apply-sync-data!}
+          :operations {:validate-fn still-valid?
+             :close-fn on-close
+             :button-click-fn handle-button-click!}
+           :slot-operations {:slot-count-fn get-slot-count
+             :slot-get-fn get-slot-item
+             :slot-set-fn set-slot-item!
+             :slot-can-place-fn can-place-item?
+             :slot-changed-fn slot-changed!}}))
     (log/info "Ability Developer GUI registered (gui-id 13)")))

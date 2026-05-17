@@ -24,6 +24,15 @@
    Moved to mcmod/gui/handler."
   gui-handler/get-gui-config)
 
+(defn- registration-value [cfg k]
+  (get-in cfg [:registration k]))
+
+(defn- lifecycle-value [cfg k]
+  (get-in cfg [:lifecycle k]))
+
+(defn- sync-value [cfg k]
+  (get-in cfg [:sync k]))
+
 (defn get-config-by-container
   "Get GUI config by container structure.
 
@@ -32,7 +41,7 @@
   [container]
   (some (fn [gui-id]
           (let [cfg (get-gui-config gui-id)
-                pred (:container-predicate cfg)]
+                pred (lifecycle-value cfg :container-predicate)]
             (when (and pred (pred container))
               cfg)))
         (gui-dsl/list-gui-ids)))
@@ -252,7 +261,7 @@
   (doseq [container @active-containers]
     (try
       (if-let [cfg (get-config-by-container container)]
-        ((:tick-fn cfg) container)
+        ((lifecycle-value cfg :tick-fn) container)
         (log/warn "Unknown container type:" (type container)))
       (catch Exception e
         (log/error "Error ticking container:" e)))))
@@ -270,8 +279,8 @@
   Returns: Map with sync data"
   [container]
   (if-let [cfg (get-config-by-container container)]
-    {:type (:gui-type cfg)
-     :data ((:sync-get cfg) container)}
+    {:type (registration-value cfg :gui-type)
+     :data ((sync-value cfg :sync-get) container)}
     (do
       (log/warn "Cannot sync unknown container type:" (type container))
       nil)))
@@ -286,7 +295,7 @@
   (let [{:keys [type data]} packet-data
         cfg (gui-dsl/get-gui-by-type type)]
     (if cfg
-      ((:sync-apply cfg) container data)
+      ((sync-value cfg :sync-apply) container data)
       (log/warn "Unknown sync packet type:" type))))
 
 ;; ============================================================================

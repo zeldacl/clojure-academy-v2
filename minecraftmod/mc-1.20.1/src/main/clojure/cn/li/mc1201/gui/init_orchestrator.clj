@@ -20,6 +20,27 @@
       (.printStackTrace e)
       false)))
 
+(defn run-phase!
+  [{:keys [platform-label phase-label steps]}]
+  (phase-start! platform-label phase-label)
+  (doseq [{:keys [run]} steps]
+    (run))
+  (phase-done! platform-label phase-label)
+  true)
+
+(defn safe-run-phase!
+  [{:keys [platform-label phase-label] :as phase}]
+  (safe-init! (str "Failed to initialize " platform-label " GUI system (" phase-label "):")
+              #(run-phase! phase)))
+
+(defn run-phases!
+  [phases]
+  (every? true? (map run-phase! phases)))
+
+(defn safe-run-phases!
+  [phases]
+  (every? true? (map safe-run-phase! phases)))
+
 (defn verify-checks!
   [title checks]
   (log/info title)

@@ -7,23 +7,39 @@
             [cn.li.fabric1201.gui.network :as network]
             [cn.li.mcmod.util.log :as log]))
 
+(def ^:private platform-label "Fabric 1.20.1")
+
+(defn- optional-init!
+  [sym missing-message]
+  (if-let [init! (requiring-resolve sym)]
+    (init!)
+    (log/warn missing-message)))
+
+(def ^:private common-phase
+  {:platform-label platform-label
+   :phase-label "Common"
+   :steps [{:run registry-impl/init!}]})
+
+(def ^:private server-phase
+  {:platform-label platform-label
+   :phase-label "Server"
+   :steps [{:run network/init-server!}]})
+
+(def ^:private client-phase
+  {:platform-label platform-label
+   :phase-label "Client"
+   :steps [{:run #(optional-init! 'cn.li.fabric1201.gui.screen-impl/init-client!
+                                  "Fabric GUI screen impl not available on current side")}
+           {:run network/init-client!}]})
+
 (defn init-common! []
-  (gui-orchestrator/phase-start! "Fabric 1.20.1" "Common")
-  (registry-impl/init!)
-  (gui-orchestrator/phase-done! "Fabric 1.20.1" "Common"))
+  (gui-orchestrator/run-phase! common-phase))
 
 (defn init-server! []
-  (gui-orchestrator/phase-start! "Fabric 1.20.1" "Server")
-  (network/init-server!)
-  (gui-orchestrator/phase-done! "Fabric 1.20.1" "Server"))
+  (gui-orchestrator/run-phase! server-phase))
 
 (defn init-client! []
-  (gui-orchestrator/phase-start! "Fabric 1.20.1" "Client")
-  (if-let [init-screen! (requiring-resolve 'cn.li.fabric1201.gui.screen-impl/init-client!)]
-    (init-screen!)
-    (log/warn "Fabric GUI screen impl not available on current side"))
-  (network/init-client!)
-  (gui-orchestrator/phase-done! "Fabric 1.20.1" "Client"))
+  (gui-orchestrator/run-phase! client-phase))
 
 (defn verify-initialization []
   (let [gui-checks (init-checks/build-gui-checks
@@ -35,13 +51,13 @@
     (gui-orchestrator/verify-checks! "Verifying Fabric GUI system initialization..." checks)))
 
 (defn safe-init-common! []
-  (gui-orchestrator/safe-init! "Failed to initialize common Fabric GUI system:" init-common!))
+  (gui-orchestrator/safe-run-phase! common-phase))
 
 (defn safe-init-client! []
-  (gui-orchestrator/safe-init! "Failed to initialize client Fabric GUI system:" init-client!))
+  (gui-orchestrator/safe-run-phase! client-phase))
 
 (defn safe-init-server! []
-  (gui-orchestrator/safe-init! "Failed to initialize server Fabric GUI system:" init-server!))
+  (gui-orchestrator/safe-run-phase! server-phase))
 
 (defn register-with-fabric-api! []
   (log/info "Registering with Fabric API events")
@@ -49,9 +65,7 @@
 
 (defn init-all! []
   (log/info "=== Full Fabric 1.20.1 GUI Initialization ===")
-  (safe-init-common!)
-  (safe-init-server!)
-  (safe-init-client!)
+  (gui-orchestrator/safe-run-phases! [common-phase server-phase client-phase])
   (verify-initialization)
   (log/info "=== Full Fabric 1.20.1 GUI Initialization Complete ==="))
 

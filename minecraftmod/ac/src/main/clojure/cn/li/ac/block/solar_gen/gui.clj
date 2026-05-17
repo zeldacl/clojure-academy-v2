@@ -11,7 +11,8 @@
 
   Uses existing XML page: assets/my_mod/guis/rework/page_solar.xml
   and composes it into TechUI tabs (inv + wireless) with InfoArea."
-  (:require [cn.li.mcmod.gui.cgui :as cgui]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
@@ -128,7 +129,7 @@
   "Attach per-frame UV update to `ui_block/anim_frame` so runtime renders 3-frame effect texture.
    Degrades gracefully if widget is missing."
   [inv-window container]
-  (when-let [anim-frame (cgui/find-widget inv-window "ui_block/anim_frame")]
+  (when-let [anim-frame (cgui-core/find-widget inv-window "ui_block/anim_frame")]
     (events/on-frame anim-frame
       (fn [_]
         (try
@@ -164,7 +165,7 @@
 
       (attach-anim-frame! inv-window container)
 
-      (cgui/set-position! info-area (+ (cgui/get-width inv-window) 7) 5)
+      (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
       (tech-ui/reset-info-area! info-area)
       (let [y (tech-ui/add-histogram
                 info-area
@@ -176,7 +177,7 @@
             y (tech-ui/add-property info-area "status" (fn [] @(:status container)) y)]
         y)
 
-      (cgui/add-widget! main-widget info-area)
+      (cgui-core/add-widget! main-widget info-area)
 
       (log/info "Created Solar Generator GUI (TechUI)")
       (if (:menu opts)
@@ -191,7 +192,7 @@
   [container minecraft-container player]
   (let [gui (create-solar-gui container player {:menu minecraft-container})
         root (if (map? gui) (:root gui) gui)
-        base (cgui/create-cgui-screen-container root minecraft-container)]
+        base (cgui-screen/create-cgui-screen-container root minecraft-container)]
     (if (map? gui)
       (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current gui)))
       (tech-ui/assoc-tech-ui-screen-size base))))
@@ -219,23 +220,23 @@
       (gui-dsl/create-gui-spec
         "solar-gen"
         {:gui-id 2
-         :display-name "Solar Generator"
-         :gui-type :solar
-         :registry-name "solar_gen_gui"
-         :screen-factory-fn-kw :create-solar-screen
-         :slot-layout (slot-schema/get-slot-layout solar-gen-id)
-         :container-predicate solar-container?
-         :container-fn create-container
-         :screen-fn create-screen
-         :tick-fn tick!
-         :sync-get get-sync-data
-         :sync-apply apply-sync-data!
-         :validate-fn still-valid?
-         :close-fn on-close
-         :button-click-fn handle-button-click!
-         :slot-count-fn get-slot-count
-         :slot-get-fn get-slot-item
-         :slot-set-fn set-slot-item!
-         :slot-can-place-fn can-place-item?
-            :slot-changed-fn slot-changed!}))))
+          :registration {:display-name "Solar Generator"
+               :gui-type :solar
+               :registry-name "solar_gen_gui"
+               :screen-factory-fn-kw :create-solar-screen
+               :slot-layout (slot-schema/get-slot-layout solar-gen-id)}
+          :lifecycle {:container-predicate solar-container?
+            :container-fn create-container
+            :screen-fn create-screen
+            :tick-fn tick!}
+          :sync {:sync-get get-sync-data
+            :sync-apply apply-sync-data!}
+          :operations {:validate-fn still-valid?
+             :close-fn on-close
+             :button-click-fn handle-button-click!}
+           :slot-operations {:slot-count-fn get-slot-count
+             :slot-get-fn get-slot-item
+             :slot-set-fn set-slot-item!
+             :slot-can-place-fn can-place-item?
+             :slot-changed-fn slot-changed!}}))))
 

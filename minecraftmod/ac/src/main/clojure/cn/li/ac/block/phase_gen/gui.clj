@@ -6,7 +6,8 @@
   - Wireless generator page
   - InfoArea histogram: Energy + IF(liquid) columns
   - Slot rules: liquid in / liquid out / energy output."
-  (:require [cn.li.mcmod.gui.cgui :as cgui]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -95,10 +96,10 @@
 
 (defn- add-panel-text!
   [parent x y w h text color scale]
-  (let [widget (cgui/create-widget :pos [x y] :size [w h])
+  (let [widget (cgui-core/create-widget :pos [x y] :size [w h])
         tb (comp/text-box :text text :color color :scale scale)]
     (comp/add-component! widget tb)
-    (cgui/add-widget! parent widget)
+    (cgui-core/add-widget! parent widget)
     {:widget widget :text-box tb}))
 
 (defn- attach-panel-readouts!
@@ -149,7 +150,7 @@
         _ (tabbed-gui/attach-tab-sync! pages tech container container-id)
         root (:window tech)
         info-area (tech-ui/create-info-area)
-        _ (cgui/set-position! info-area (+ (cgui/get-width (:window inv-page)) 7) 5)
+        _ (cgui-core/set-position! info-area (+ (cgui-core/get-width (:window inv-page)) 7) 5)
         _ (tech-ui/reset-info-area! info-area)
         max-e (fn [] (max 1.0 (double (or @(:max-energy container) phase-config/max-energy))))
         max-liquid (fn [] (max 1.0 (double (or @(:tank-size container) phase-config/tank-size))))
@@ -164,9 +165,9 @@
         y1 (tech-ui/add-sepline info-area "Phase Generator" y0)
         _y2 (tech-ui/add-property info-area "status" (fn [] (str (or @(:status container) "IDLE"))) y1)
         _ (attach-panel-readouts! (:window inv-page) container)]
-    (cgui/add-widget! root info-area)
+    (cgui-core/add-widget! root info-area)
     (tech-ui/assoc-tech-ui-screen-size
-      (assoc (cgui/create-cgui-screen-container root minecraft-container)
+      (assoc (cgui-screen/create-cgui-screen-container root minecraft-container)
              :current-tab-atom (:current tech)))))
 
 (defn- phase-container?
@@ -193,23 +194,23 @@
       (gui-dsl/create-gui-spec
         "phase-gen"
         {:gui-id 7
-         :display-name "Phase Generator"
-         :gui-type phase-gui-type
-         :registry-name "phase_gen_gui"
-         :screen-factory-fn-kw :create-phase-gen-screen
-         :slot-layout (slot-schema/get-slot-layout phase-slot-schema-id)
-         :container-predicate phase-container?
-         :container-fn create-container
-         :screen-fn create-screen
-         :tick-fn tick!
-         :sync-get get-sync-data
-         :sync-apply apply-sync-data!
-         :validate-fn still-valid?
-         :close-fn on-close
-         :button-click-fn handle-button-click!
-         :slot-count-fn get-slot-count
-         :slot-get-fn get-slot-item
-         :slot-set-fn set-slot-item!
-         :slot-can-place-fn can-place-item?
-         :slot-changed-fn slot-changed!}))
+          :registration {:display-name "Phase Generator"
+               :gui-type phase-gui-type
+               :registry-name "phase_gen_gui"
+               :screen-factory-fn-kw :create-phase-gen-screen
+               :slot-layout (slot-schema/get-slot-layout phase-slot-schema-id)}
+          :lifecycle {:container-predicate phase-container?
+            :container-fn create-container
+            :screen-fn create-screen
+            :tick-fn tick!}
+          :sync {:sync-get get-sync-data
+            :sync-apply apply-sync-data!}
+          :operations {:validate-fn still-valid?
+             :close-fn on-close
+             :button-click-fn handle-button-click!}
+           :slot-operations {:slot-count-fn get-slot-count
+             :slot-get-fn get-slot-item
+             :slot-set-fn set-slot-item!
+             :slot-can-place-fn can-place-item?
+             :slot-changed-fn slot-changed!}}))
     (log/info "Phase Generator GUI initialized")))

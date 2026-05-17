@@ -2,7 +2,8 @@
   "Classic AcademyCraft `page_developer.xml`: load once, bind widgets to container + optional status poll.
   Full wireless list is embedded under `parent_right/area` from code (`gui.clj`); the Wireless tab reuses the same page."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-widget-model :as cgui-model]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
@@ -25,21 +26,21 @@
   (msg-registry/msg :developer action))
 
 (defn- textbox-of [widget]
-  (cgui/get-widget-component widget :textbox))
+  (cgui-model/get-widget-component widget :textbox))
 
 (defn- set-text-path! [root path text]
-  (when-let [w (cgui/find-widget root path)]
+  (when-let [w (cgui-core/find-widget root path)]
     (when-let [tb (textbox-of w)]
       (comp/set-text! tb (str text)))))
 
 (defn- set-progress-path! [root path ^double v]
-  (when-let [w (cgui/find-widget root path)]
-    (when-let [pb (cgui/get-widget-component w :progressbar)]
+  (when-let [w (cgui-core/find-widget root path)]
+    (when-let [pb (cgui-model/get-widget-component w :progressbar)]
       (comp/set-progress! pb v))))
 
 (defn- set-drawtexture-path! [root path texture-path]
   (when (string? texture-path)
-    (when-let [w (cgui/find-widget root path)]
+    (when-let [w (cgui-core/find-widget root path)]
       (when-let [dt (comp/get-drawtexture-component w)]
         (comp/set-texture! dt texture-path)))))
 
@@ -62,7 +63,7 @@
       root)
     (catch Exception e
       (log/error "developer classic XML:" (ex-message e))
-      (cgui/create-widget :name "main" :pos [0 0] :size [400 187]))))
+      (cgui-core/create-widget :name "main" :pos [0 0] :size [400 187]))))
 
 (defn- sync-remote-node-name!
   [root container last-net-ms]
@@ -83,7 +84,7 @@
   [root container {:keys [switch-wireless-tab!]}]
   (let [pl (:player container)
         last-net-ms (atom 0)]
-    (when-let [learn (cgui/find-widget root "parent_left/panel_ability/btn_upgrade")]
+    (when-let [learn (cgui-core/find-widget root "parent_left/panel_ability/btn_upgrade")]
       (events/on-left-click learn
         (fn [_]
           (when (and pl (:tile-entity container))
@@ -93,7 +94,7 @@
                   bid (platform-be/get-block-id tile)
                   dtype (if (= (name (or bid "")) "developer-advanced") :advanced :normal)]
               (client-bridge/open-skill-tree-screen! uuid-str (merge pos {:developer-type dtype})))))))
-    (when-let [wbtn (cgui/find-widget root "parent_left/panel_machine/button_wireless")]
+    (when-let [wbtn (cgui-core/find-widget root "parent_left/panel_machine/button_wireless")]
       (when switch-wireless-tab!
         (events/on-left-click wbtn (fn [_] (switch-wireless-tab!)))))
     (events/on-frame root

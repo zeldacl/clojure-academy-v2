@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.gui.cgui-render-core
   "CLIENT-ONLY CGUI rendering and root sizing logic."
-  (:require [cn.li.mcmod.gui.cgui :as cgui]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mc1201.gui.cgui-asset-loader :as cgui-asset-loader]
             [cn.li.mc1201.gui.cgui-tree-traversal :as traversal]
             [cn.li.mcmod.util.log :as log])
@@ -75,9 +75,9 @@
 (defn resize-root!
   [root width height]
   (when root
-    (let [[w h] (cgui/get-size root)]
+    (let [[w h] (cgui-core/get-size root)]
       (when (and (zero? (double w)) (zero? (double h)))
-        (cgui/set-size! root width height))
+        (cgui-core/set-size! root width height))
       (swap! (:metadata root) assoc :screen-size [width height])))
   root)
 
@@ -109,9 +109,9 @@
 
 (defn render-widget!
   [^GuiGraphics gg root [abs-x abs-y] scale left top]
-  (when-not (cgui/visible? root)
+  (when-not (cgui-core/visible? root)
     (throw (ex-info "render-widget! called on invisible widget" {})))
-  (let [size (cgui/get-size root)
+  (let [size (cgui-core/get-size root)
         [w h] size
         x (int (+ left abs-x))
         y (int (+ top abs-y))
@@ -276,8 +276,8 @@
 (defn render-tree!
   [^GuiGraphics gg root left top]
   (when root
-    (let [visible (cgui/visible? root)
-          size (cgui/get-size root)
+    (let [visible (cgui-core/visible? root)
+          size (cgui-core/get-size root)
           widgets (traversal/collect-widgets-z-ordered root [0 0] 1.0 nil)
           widget-count (count widgets)]
       (when (not (get @(:metadata root) :cgui-render-debug-logged false))

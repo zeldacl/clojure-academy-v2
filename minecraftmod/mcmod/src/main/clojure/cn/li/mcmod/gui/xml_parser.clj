@@ -14,7 +14,7 @@
   (:require [clojure.xml :as xml]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.util.parse :as parse]
@@ -237,13 +237,13 @@
         all-buttons (collect-buttons widget-tree)
         all-labels (collect-labels widget-tree)]
     {:id gui-id
-     :title (or (:title widget-tree) "GUI")
-     :width (or (:width transform) 176.0)
-     :height (or (:height transform) 187.0)
-     :background (or (:texture main-texture) :default)
-     :slots all-slots
-     :buttons all-buttons
-     :labels all-labels
+     :layout {:title (or (:title widget-tree) "GUI")
+          :width (or (:width transform) 176.0)
+          :height (or (:height transform) 187.0)
+          :background (or (:texture main-texture) :default)
+          :slots all-slots
+          :buttons all-buttons
+          :labels all-labels}
      :widget-tree widget-tree})) ; Keep original tree for advanced usage
 
 ;; ============================================================================
@@ -342,10 +342,10 @@
             align-h (some-> (text-at component-node :alignHeight "TOP") str/upper-case keyword)
             does-listen (not= false (parse/parse-bool (text-at component-node :doesListenKey "true")))
             z-level (parse/parse-float (text-at component-node :zLevel "0") 0)]
-        (cgui/set-size! widget w h)
-        (cgui/set-pos! widget x-pos y-pos)
-        (cgui/set-scale! widget scale)
-        (cgui/set-visible! widget does-draw?)
+        (cgui-core/set-size! widget w h)
+        (cgui-core/set-pos! widget x-pos y-pos)
+        (cgui-core/set-scale! widget scale)
+        (cgui-core/set-visible! widget does-draw?)
         (swap! (:metadata widget) assoc
                :transform-meta {:pivot-x pivot-x
                                 :pivot-y pivot-y
@@ -416,11 +416,11 @@
       (get-in widget-node [:attrs "name"])))
 
 (defn- build-widget [widget-node]
-  (let [widget (cgui/create-container :name (widget-attrs-name widget-node))]
+  (let [widget (cgui-core/create-container :name (widget-attrs-name widget-node))]
     (doseq [component-node (x/get-elements widget-node :Component)]
       (apply-component! widget component-node))
     (doseq [child-node (x/get-elements widget-node :Widget)]
-      (cgui/add-widget! widget (build-widget child-node)))
+      (cgui-core/add-widget! widget (build-widget child-node)))
     widget))
 
 (defn read-xml
@@ -444,7 +444,7 @@
         root-widget-node (x/get-element parsed :Widget)]
     (log/info "[XML-PARSER] XML parsed successfully, building widget...")
     (let [result (build-widget root-widget-node)]
-      (log/info "[XML-PARSER] Widget built, size:" (cgui/get-size result) "visible:" (cgui/visible? result))
+      (log/info "[XML-PARSER] Widget built, size:" (cgui-core/get-size result) "visible:" (cgui-core/visible? result))
       result)))
 
 (defn get-widget
@@ -458,11 +458,11 @@
   [doc name]
   (when doc
     (let [want (str/trim (str name))
-          root-nm (str/trim (str (cgui/get-name doc)))]
+          root-nm (str/trim (str (cgui-core/get-name doc)))]
       (if (= want root-nm)
         doc
-        (or (cgui/find-widget doc name)
-            (cgui/find-widget doc want)
+        (or (cgui-core/find-widget doc name)
+            (cgui-core/find-widget doc want)
             (when (= "main" want) doc))))))
 
 ;; ============================================================================

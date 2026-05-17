@@ -136,7 +136,7 @@
           needs-dynamic-properties? (has-block-state-properties? block-id)
           has-be? (registry-metadata/has-block-entity? block-id)
           tile-id (when has-be?
-                    (or (registry-metadata/get-block-tile-id block-id) block-id))
+                    (registry-metadata/get-block-tile-id block-id))
           registered-obj (.register ^DeferredRegister blocks-register registry-name
                                     (reify java.util.function.Supplier
                                       (get [_]
@@ -264,9 +264,10 @@
                 registry-name
                 (reify java.util.function.Supplier
                   (get [_]
-                    (let [pairs (map (fn [[block-id ^RegistryObject ro]]
-                                       [block-id (.get ro)])
-                                     ros)
+                    (let [pairs (keep (fn [[block-id ^RegistryObject ro]]
+                                        (when (.isPresent ro)
+                                          [block-id (.get ro)]))
+                                      ros)
                           block-insts (mapv second pairs)
                           block-id-by-inst (java.util.IdentityHashMap.)]
                       (doseq [[block-id inst] pairs]
@@ -373,8 +374,10 @@
             registered-obj (.register ^DeferredRegister items-register registry-name
                                       (reify java.util.function.Supplier
                                         (get [_]
-                                          (BlockItem. (.get ^RegistryObject block-registered)
-                                                      (Item$Properties.)))))]
+                                          (when (and block-registered (.isPresent ^RegistryObject block-registered))
+                                            (BlockItem. (.get ^RegistryObject block-registered)
+                                                        (Item$Properties.))))))]
+
         (swap! registry-state/registered-items assoc (str block-id "-item") registered-obj)))))
 
 (defn register-core-content!

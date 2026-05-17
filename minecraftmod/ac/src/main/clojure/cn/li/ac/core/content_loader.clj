@@ -1,12 +1,9 @@
-(remove-ns 'cn.li.ac.core.content-loader)
-
 (ns cn.li.ac.core.content-loader
   "AC runtime content loading orchestration."
   (:require [cn.li.ac.gui.platform-adapter :as platform-gui]
             [cn.li.ac.registry.content-namespaces :as content-ns]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
-            [cn.li.mcmod.events.metadata :as event-metadata]
             [cn.li.mcmod.gui.registry-core :as gui-adapter]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.util.log :as log]))

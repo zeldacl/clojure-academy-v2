@@ -3,7 +3,7 @@
             [cn.li.mcmod.gui.xml-parser :as parser]
             [clojure.java.io :as io]
             [clojure.xml :as xml]
-            [cn.li.mcmod.gui.cgui :as cgui]))
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]))
 
 (deftest parse-xml-layout-contract-test
   (testing "resource missing throws ex-info with :path"
@@ -51,12 +51,12 @@
 (deftest get-widget-contract-test
   (testing "root-name match returns root directly; find fallback works; main fallback returns doc"
     (let [doc {:doc true}]
-      (with-redefs [cgui/get-name (fn [_] "  main ")
-                    cgui/find-widget (fn [_ _] :not-used)]
+      (with-redefs [cgui-core/get-name (fn [_] "  main ")
+                    cgui-core/find-widget (fn [_ _] :not-used)]
         (is (= doc (parser/get-widget doc "main"))))
-      (with-redefs [cgui/get-name (fn [_] "root")
-                    cgui/find-widget (fn [_ name] (when (= name "x") {:widget :x}))]
+      (with-redefs [cgui-core/get-name (fn [_] "root")
+                    cgui-core/find-widget (fn [_ name] (when (= name "x") {:widget :x}))]
         (is (= {:widget :x} (parser/get-widget doc "x"))))
-      (with-redefs [cgui/get-name (fn [_] "root")
-                    cgui/find-widget (fn [_ _] nil)]
+      (with-redefs [cgui-core/get-name (fn [_] "root")
+                    cgui-core/find-widget (fn [_ _] nil)]
         (is (= doc (parser/get-widget doc "main")))))))

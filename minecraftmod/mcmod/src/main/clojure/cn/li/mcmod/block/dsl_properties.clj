@@ -38,18 +38,6 @@
   ;; - light-level: Light emission level (0-15, 0 = no light, 15 = brightest)
   )
 
-(defrecord TileEntityConfig
-  [has-block-entity? tile-kind tile-tick-fn tile-load-fn tile-save-fn]
-  ;; Tile entity (block entity) configuration and lifecycle hooks.
-  ;;
-  ;; Fields:
-  ;; - has-block-entity?: Whether this block has a tile entity
-  ;; - tile-kind: Keyword identifying the tile entity type (e.g., :wireless-node)
-  ;; - tile-tick-fn: Function called every tick (fn [tile-entity world pos] ...)
-  ;; - tile-load-fn: Function called when loading from NBT (fn [tile-entity nbt] ...)
-  ;; - tile-save-fn: Function called when saving to NBT (fn [tile-entity] nbt-map)
-  )
-
 (defrecord BlockStateConfig
   [block-state-properties]
   ;; Block state properties configuration.

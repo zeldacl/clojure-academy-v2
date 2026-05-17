@@ -14,6 +14,8 @@ dependencies {
     cloverageRuntime "cloverage:cloverage:1.2.4"
 }
 
+sourceSets.test.clojure.srcDir rootProject.file('test-support/src/main/clojure')
+
 tasks.register('runMcmodClojureTests', JavaExec) {
     group = 'verification'
     description = 'Run clojure.test suites for mcmod via cn.li.mcmod.test-runner.'
@@ -21,6 +23,9 @@ tasks.register('runMcmodClojureTests', JavaExec) {
     workingDir = project.projectDir
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'clojure.main'
+    if (System.getProperty('mcmod.test.only') != null) {
+        systemProperty 'mcmod.test.only', System.getProperty('mcmod.test.only')
+    }
     args '-m', 'cn.li.mcmod.test-runner'
 }
 

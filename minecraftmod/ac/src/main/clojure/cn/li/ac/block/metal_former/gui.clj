@@ -2,7 +2,8 @@
   "CLIENT-ONLY: Metal Former GUI"
   (:require [clojure.string :as str]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -100,7 +101,7 @@
 
 (defn- bind-progress!
   [inv-window container]
-  (when-let [widget (cgui/find-widget inv-window "progress")]
+  (when-let [widget (cgui-core/find-widget inv-window "progress")]
     (when-let [bar (comp/get-component widget :progressbar)]
       (events/on-frame widget
         (fn [_]
@@ -111,7 +112,7 @@
 
 (defn- bind-mode-icon!
   [inv-window container]
-  (when-let [widget (cgui/find-widget inv-window "icon_mode")]
+  (when-let [widget (cgui-core/find-widget inv-window "icon_mode")]
     (when-let [dt (comp/get-drawtexture-component widget)]
       (events/on-frame widget
         (fn [_]
@@ -119,11 +120,11 @@
 
 (defn- bind-buttons!
   [inv-window container]
-  (when-let [btn-left (cgui/find-widget inv-window "btn_left")]
+  (when-let [btn-left (cgui-core/find-widget inv-window "btn_left")]
     (events/on-left-click btn-left
       (fn [_]
         (request-alternate! container -1))))
-  (when-let [btn-right (cgui/find-widget inv-window "btn_right")]
+  (when-let [btn-right (cgui-core/find-widget inv-window "btn_right")]
     (events/on-left-click btn-right
       (fn [_]
         (request-alternate! container 1)))))
@@ -146,7 +147,7 @@
         _ (bind-progress! inv-window container)
         _ (bind-mode-icon! inv-window container)
         _ (bind-buttons! inv-window container)
-        _ (cgui/set-position! info-area (+ (cgui/get-width inv-window) 7) 5)
+        _ (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
         _ (tech-ui/reset-info-area! info-area)
         y0 (tech-ui/add-histogram info-area
                                   [(tech-ui/hist-buffer (fn [] (double @(:energy container))) max-e)]
@@ -161,9 +162,9 @@
                                       (format "%d/%d" @(:work-counter container) cfg/work-ticks)
                                       "IDLE"))
                                   y2)]
-    (cgui/add-widget! root info-area)
+    (cgui-core/add-widget! root info-area)
     (tech-ui/assoc-tech-ui-screen-size
-      (assoc (cgui/create-cgui-screen-container root minecraft-container)
+      (assoc (cgui-screen/create-cgui-screen-container root minecraft-container)
              :current-tab-atom (:current tech)))))
 
 (defn- former-container?
@@ -188,23 +189,23 @@
       (gui-dsl/create-gui-spec
         "metal-former"
         {:gui-id 6
-         :display-name "Metal Former"
-         :gui-type former-gui-type
-         :registry-name "metal_former_gui"
-         :screen-factory-fn-kw :create-metal-former-screen
-         :slot-layout (slot-schema/get-slot-layout former-slot-schema-id)
-         :container-predicate former-container?
-         :container-fn create-container
-         :screen-fn create-screen
-         :tick-fn tick!
-         :sync-get get-sync-data
-         :sync-apply apply-sync-data!
-         :validate-fn still-valid?
-         :close-fn on-close
-         :button-click-fn handle-button-click!
-         :slot-count-fn get-slot-count
-         :slot-get-fn get-slot-item
-         :slot-set-fn set-slot-item!
-         :slot-can-place-fn can-place-item?
-         :slot-changed-fn slot-changed!}))
+          :registration {:display-name "Metal Former"
+               :gui-type former-gui-type
+               :registry-name "metal_former_gui"
+               :screen-factory-fn-kw :create-metal-former-screen
+               :slot-layout (slot-schema/get-slot-layout former-slot-schema-id)}
+          :lifecycle {:container-predicate former-container?
+            :container-fn create-container
+            :screen-fn create-screen
+            :tick-fn tick!}
+          :sync {:sync-get get-sync-data
+            :sync-apply apply-sync-data!}
+          :operations {:validate-fn still-valid?
+             :close-fn on-close
+             :button-click-fn handle-button-click!}
+           :slot-operations {:slot-count-fn get-slot-count
+             :slot-get-fn get-slot-item
+             :slot-set-fn set-slot-item!
+             :slot-can-place-fn can-place-item?
+             :slot-changed-fn slot-changed!}}))
     (log/info "Metal Former GUI initialized")))

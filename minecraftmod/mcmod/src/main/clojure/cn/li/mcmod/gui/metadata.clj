@@ -5,7 +5,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defn register-gui!
-  "Register GUI metadata via gui-dsl."
+  "Register GUI metadata."
   [gui-key {:keys [id display-name type registry-name screen-fn-kw slot-layout] :as cfg}]
   (when-not (integer? id)
     (throw (ex-info "register-gui!: :id must be an integer" {:gui-key gui-key :cfg cfg})))
@@ -13,11 +13,11 @@
   (gui-registry/register-gui!
     (gui-parser/create-gui-spec (name gui-key)
                                 {:gui-id id
-                                 :display-name display-name
-                                 :gui-type type
-                                 :registry-name registry-name
-                                 :screen-factory-fn-kw screen-fn-kw
-                                 :slot-layout slot-layout}))
+                                 :registration {:display-name display-name
+                                                :gui-type type
+                                                :registry-name registry-name
+                                                :screen-factory-fn-kw screen-fn-kw
+                                                :slot-layout slot-layout}}))
   nil)
 
 (defn get-all-gui-ids []

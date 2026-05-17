@@ -18,12 +18,13 @@
 
 (defn handle-right-click
   [event-data]
-  (event-handlers/handle-block-right-click
-    event-data
-    dispatcher/on-block-right-click
-    is-gui-result?
-    gui-open-port/open-gui-for-result
-    "[RIGHT-CLICK]"))
+  (when-let [handler (requiring-resolve 'cn.li.mc1201.integration.event-handlers/handle-block-right-click)]
+    (handler
+      event-data
+      dispatcher/on-block-right-click
+      is-gui-result?
+      gui-open-port/open-gui-for-result
+      "[RIGHT-CLICK]")))
 
 (defn handle-right-click-event
   [^PlayerInteractEvent$RightClickBlock evt]

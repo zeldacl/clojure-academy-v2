@@ -7,7 +7,7 @@
 | 模块 | 职责 |
 |------|------|
 | **`api`** | 对外 Java API（如互操作用的接口包），无 Clojure 游戏逻辑 |
-| **`mcmod`** | 平台无关：协议、DSL、`registry.metadata`、事件/GUI/NBT 等元数据；**禁止** `net.minecraft.*` 与 Loader API |
+| **`mcmod`** | 平台无关：协议、DSL、`protocol.metadata`、事件/GUI/NBT 等元数据；**禁止** `net.minecraft.*` 与 Loader API |
 | **`ac`** | 游戏内容与域逻辑；**禁止**直接引用 Forge/Fabric/Minecraft API；通过 `mcmod` 与约定边界交互 |
 | **`forge-1.20.1`** | Forge 入口、注册、桥接 Java、实现 `mcmod` 协议；允许通过受控运行时桥接使用 `ac` 能力 |
 | **`fabric-1.20.1`** | 可选 Fabric 适配；默认可能未在 `settings.gradle` 中 `include` |

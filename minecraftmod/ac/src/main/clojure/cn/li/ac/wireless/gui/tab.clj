@@ -4,7 +4,7 @@
   Modes:
   - :node      -> connect a Wireless Node to a Matrix network (SSID list)
   - :generator -> connect a Generator (SolarGen) to a Wireless Node"
-  (:require [cn.li.mcmod.gui.cgui :as cgui]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]
@@ -111,12 +111,12 @@
           main-root (cgui-doc/get-widget doc "main")
           panel (tab-view/wireless-panel-from-main main-root)
           payload (net-helpers/tile-pos-payload (:tile-entity container))]
-      (cgui/remove-widget! main-root panel)
-      (cgui/add-widget! host-widget panel)
-      (cgui/set-position! panel 0 0)
+      (cgui-core/remove-widget! main-root panel)
+      (cgui-core/add-widget! host-widget panel)
+      (cgui-core/set-position! panel 0 0)
       ;; `panel_wireless` transform is CENTER in XML; wide `parent_right/area` would offset it.
-      (cgui/set-w-align! panel :left)
-      (cgui/set-h-align! panel :top)
+      (cgui-core/set-w-align! panel :left)
+      (cgui-core/set-h-align! panel :top)
       (install-panel-rebuild! panel payload (:receiver role-config/role-config)
                               {:connected-row-logo-path connected-row-logo-path})
       panel)))

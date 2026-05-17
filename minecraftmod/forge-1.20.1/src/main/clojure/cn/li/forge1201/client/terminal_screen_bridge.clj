@@ -2,7 +2,7 @@
   "CLIENT-ONLY screen bridge for terminal GUI (Forge layer)."
   (:require [cn.li.mcmod.platform.terminal-ui :as terminal-ui]
             [cn.li.mc1201.gui.cgui-runtime :as cgui-rt]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens Screen]
            [net.minecraft.client.gui GuiGraphics]
@@ -18,7 +18,7 @@
   "Create a Minecraft Screen that renders the terminal CGui."
   [player]
   (let [gui-widget (or (terminal-ui/create-terminal-gui player)
-                       (cgui/create-widget :size [640 785]))
+                       (cgui-core/create-widget :size [640 785]))
         left (atom 0)
         top (atom 0)]
     (proxy [Screen] [(Component/literal "Data Terminal")]
@@ -30,7 +30,7 @@
                 window (.getWindow mc)
                 screen-width (.getGuiScaledWidth window)
                 screen-height (.getGuiScaledHeight window)
-                [gui-width gui-height] (cgui/get-size gui-widget)
+                [gui-width gui-height] (cgui-core/get-size gui-widget)
                 left-pos (int (/ (- screen-width gui-width) 2))
                 top-pos (int (/ (- screen-height gui-height) 2))]
             (reset! left left-pos)
@@ -115,7 +115,7 @@
                              window (.getWindow mc)
                              screen-width (.getGuiScaledWidth window)
                              screen-height (.getGuiScaledHeight window)
-                             [gui-width gui-height] (cgui/get-size gui-widget)
+                             [gui-width gui-height] (cgui-core/get-size gui-widget)
                              left-pos (int (/ (- screen-width gui-width) 2))
                              top-pos (int (/ (- screen-height gui-height) 2))]
                          (reset! left left-pos)

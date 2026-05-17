@@ -3,7 +3,7 @@
   (:require [cn.li.ac.terminal.app-registry :as reg]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log]))
@@ -15,20 +15,20 @@
 (defn- create-about-gui
   "Create the about/credits GUI."
   [_player]
-  (let [root (cgui/create-widget :size [400 300])
+  (let [root (cgui-core/create-widget :size [400 300])
 
         ;; Background
-        bg (cgui/create-widget :pos [0 0] :size [400 300])
+        bg (cgui-core/create-widget :pos [0 0] :size [400 300])
         bg-texture (comp/draw-texture (modid/asset-path "textures" "guis/data_terminal/app_back.png"))
         _ (comp/add-component! bg bg-texture)
 
         ;; Title
-        title (cgui/create-widget :pos [0 20] :size [400 30])
+        title (cgui-core/create-widget :pos [0 20] :size [400 30])
         title-text (comp/text-box :text "Academy Craft" :color 0xFFFFFFFF :scale 2.0)
         _ (comp/add-component! title title-text)
 
         ;; Version info
-        version (cgui/create-widget :pos [0 60] :size [400 20])
+        version (cgui-core/create-widget :pos [0 60] :size [400 20])
         version-text (comp/text-box :text "Version: 2.0.0" :color 0xFFFFFFFF :scale 1.0)
         _ (comp/add-component! version version-text)
 
@@ -45,17 +45,17 @@
 
         credits-widgets (map-indexed
                          (fn [idx line]
-                           (let [w (cgui/create-widget :pos [20 (+ credits-y (* idx 15))] :size [360 15])
+                           (let [w (cgui-core/create-widget :pos [20 (+ credits-y (* idx 15))] :size [360 15])
                                  t (comp/text-box :text line :color 0xFFCCCCCC :scale 0.8)]
                              (comp/add-component! w t)
                              w))
                          credits-lines)]
 
-    (cgui/add-widget! root bg)
-    (cgui/add-widget! root title)
-    (cgui/add-widget! root version)
+    (cgui-core/add-widget! root bg)
+    (cgui-core/add-widget! root title)
+    (cgui-core/add-widget! root version)
     (doseq [w credits-widgets]
-      (cgui/add-widget! root w))
+      (cgui-core/add-widget! root w))
 
     root))
 

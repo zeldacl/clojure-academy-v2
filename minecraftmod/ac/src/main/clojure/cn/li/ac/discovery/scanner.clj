@@ -7,7 +7,7 @@
             [cn.li.ac.discovery.core :as core]
             [cn.li.mcmod.util.log :as log])
   (:import [java.io File]
-           [java.net JarURLConnection URLDecoder]))
+           [java.net JarURLConnection]))
 
 (def ^:private ability-resource-prefix "cn/li/ac/content/ability")
 
@@ -52,11 +52,17 @@
   (let [root (io/resource ability-resource-prefix)]
     (when (and root (= "jar" (.getProtocol root)))
       (let [^JarURLConnection conn (.openConnection root)
-            jar-file (.getJarFile conn)]
-        (->> (enumeration-seq (.entries jar-file))
-             (map #(.getName %))
-             (filter #(str/starts-with? % (str ability-resource-prefix "/")))
-             (filter #(str/ends-with? % ".clj")))))))
+            jar-file (.getJarFile conn)
+            ^java.util.Enumeration entries (.entries jar-file)]
+        (loop [acc []]
+          (if (.hasMoreElements entries)
+            (let [^java.util.jar.JarEntry entry (.nextElement entries)
+                  name (.getName entry)]
+              (recur (if (and (str/starts-with? name (str ability-resource-prefix "/"))
+                              (str/ends-with? name ".clj"))
+                       (conj acc name)
+                       acc)))
+            acc))))))
 
 (defn- fallback-workspace-paths
   []

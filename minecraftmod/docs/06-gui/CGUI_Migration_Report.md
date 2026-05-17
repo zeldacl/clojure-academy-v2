@@ -112,9 +112,9 @@ Status: ✅ PASS
 
 ## Parser Enhancement Verification
 
-### cgui_document.clj Status
+### CGUI Parser Status
 
-**File**: `mcmod/src/main/clojure/cn/li/mcmod/gui/cgui.clj`（旧版 `cgui_document` 逻辑已并入 `xml_parser` 等，以仓库为准）
+**Files**: `mcmod/src/main/clojure/cn/li/mcmod/gui/xml_parser.clj`, `mcmod/src/main/clojure/cn/li/mcmod/gui/components.clj`, and the focused `cgui-core` / `cgui-widget-model` / `cgui-events` / `cgui-screen` namespaces. The old aggregate `cgui` facade has been removed; callers depend on the focused namespaces directly.
 
 **Enhancements Applied**:
 1. ✅ Added `normalize-component-kind` function

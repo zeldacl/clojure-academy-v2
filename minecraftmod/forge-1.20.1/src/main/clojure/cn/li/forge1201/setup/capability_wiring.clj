@@ -9,6 +9,10 @@
   [^IEventBus mod-bus ^Class listener-class f]
   (consumer-support/add-normal-listener! mod-bus listener-class f))
 
+(defn- forge-built-in-capability?
+  [^Class java-type]
+  (= "net.minecraftforge.energy.IEnergyStorage" (.getName java-type)))
+
 (defn register-capability-listener!
   [^IEventBus mod-bus]
   (add-listener! mod-bus RegisterCapabilitiesEvent
@@ -17,5 +21,6 @@
                      (doseq [^Class java-type (distinct (keep (fn [[_key {:keys [java-type]}]]
                                                                 java-type)
                                                               @platform-cap/capability-type-registry))]
-                       (.register event java-type)))))
+                       (when-not (forge-built-in-capability? java-type)
+                         (.register event java-type))))))
   nil)

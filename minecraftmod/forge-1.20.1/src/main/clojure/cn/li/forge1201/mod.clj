@@ -1,11 +1,7 @@
-(remove-ns 'cn.li.forge1201.mod)
-
 (ns cn.li.forge1201.mod
   "Forge 1.20.1 main mod class - generated with gen-class"
   (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
-    [cn.li.forge1201.init :as init]
     [cn.li.forge1201.registry.content-registration :as content-registration]
-    [cn.li.forge1201.registry.creative-tab :as creative-tab]
     [cn.li.forge1201.setup.common :as setup-common]
     [cn.li.forge1201.setup.forge-lifecycle-coordinator :as lifecycle-coordinator]
     [cn.li.forge1201.integration.side :as side]
@@ -106,12 +102,16 @@
 (defn get-registered-entity-type
   "Get a registered EntityType by entity-id."
   [entity-id]
-  (registry-state/get-registered-entity-type entity-id))
+  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-entity-type)]
+    (f entity-id)
+    nil))
 
 (defn get-registered-block-entity-type
   "Get a registered BlockEntityType by tile-id or block-id."
   [tile-or-block-id]
-  (registry-state/get-registered-block-entity-type tile-or-block-id))
+  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block-entity-type)]
+    (f tile-or-block-id)
+    nil))
 
 ;; ============================================================================
 ;; Helper Functions for Registry Queries
@@ -126,7 +126,9 @@
   Returns:
     RegistryObject - The registered block, or nil if not found"
   [block-id]
-  (registry-state/get-registered-block block-id))
+  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block)]
+    (f block-id)
+    nil))
 
 (defn get-registered-item
   "Get a registered item by its DSL ID.
@@ -137,7 +139,9 @@
   Returns:
     RegistryObject - The registered item, or nil if not found"
   [item-id]
-  (registry-state/get-registered-item item-id))
+  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-item)]
+    (f item-id)
+    nil))
 
 (defn get-registered-block-item
   "Get a registered block item by its block ID.
@@ -148,15 +152,21 @@
   Returns:
     RegistryObject - The registered block item, or nil if not found"
   [block-id]
-  (registry-state/get-registered-block-item block-id))
+  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-block-item)]
+    (f block-id)
+    nil))
 
 (defn get-registered-fluid-source
   [fluid-id]
-  (registry-state/get-registered-fluid-source fluid-id))
+  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-fluid-source)]
+    (f fluid-id)
+    nil))
 
 (defn get-registered-fluid-flowing
   [fluid-id]
-  (registry-state/get-registered-fluid-flowing fluid-id))
+  (if-let [f (requiring-resolve 'cn.li.forge1201.registry.state/get-registered-fluid-flowing)]
+    (f fluid-id)
+    nil))
 
 (defn- registration-steps
   []
@@ -164,7 +174,9 @@
      (content-registration/register-core-content! (build-registration-context)))
    (fn []
      (log/info "Registering Forge creative tab...")
-     (creative-tab/register-creative-tab! (force creative-tabs-register) mod-id))
+     (if-let [register-tab! (requiring-resolve 'cn.li.forge1201.registry.creative-tab/register-creative-tab!)]
+       (register-tab! (force creative-tabs-register) mod-id)
+       (log/error "Creative tab registration function unavailable")))
    (fn []
      (gui-registry-impl/register-menu-types!))])
 
@@ -198,8 +210,8 @@
 ;; Constructor Implementation
 ;; ============================================================================
 
-;; Constructor implementation
-(defn mod-init []
+;; Runtime bootstrap entrypoint for Java @Mod bridge.
+(defn start-forge-mod! []
   (let [aot? (aot-compilation?)
         cphant? (clojurephant-compilation?)
         check? (= "true" (System/getProperty "ac.check.clojure"))]
@@ -224,6 +236,10 @@
        :gui-menu-register (force gui-registry-impl/menu-register)}
       (registration-steps)
       aot? cphant? check?)))
+
+;; Keep legacy name for compatibility with existing call sites.
+(defn mod-init []
+  (start-forge-mod!))
 
 
 

@@ -18,13 +18,6 @@
   ([modid path]
    (resource/create-resource-location modid path)))
 
-(defn identifier
-  "Backward-compatible alias for `resource-location`."
-  ([path]
-   (identifier *mod-id* path))
-  ([modid path]
-   (resource/create-resource-location modid path)))
-
 (defn namespaced-path
   "Create a fully qualified resource path string 'modid:path'."
   ([path]

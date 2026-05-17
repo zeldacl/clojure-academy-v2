@@ -5,12 +5,12 @@
    Triggered during setup phase when running:
      ./gradlew :forge-1.20.1:runData"
   (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mc1201.datagen.setup-common :as setup-common]
             [cn.li.forge1201.datagen.blockstate-provider :as bsp]
             [cn.li.forge1201.datagen.item-model-provider :as imp]
             [cn.li.forge1201.datagen.lang-provider :as lang]
             [cn.li.forge1201.datagen.advancement-provider :as adv]
-            [cn.li.forge1201.datagen.recipe-provider :as rp])
+            [cn.li.forge1201.datagen.recipe-provider :as rp]
+            [cn.li.mc1201.datagen.setup-common :as setup-common])
   (:import [net.minecraftforge.data.event GatherDataEvent]
            [net.minecraft.data DataProvider$Factory DataGenerator]))
 

@@ -1309,7 +1309,9 @@ root (176×200)
 
 #### 自定义 Widget
 ```clojure
-(let [widget (cgui/create-widget :pos [10 20] :size [50 30])]
+(require '[cn.li.mcmod.gui.cgui-core :as cgui-core])
+
+(let [widget (cgui-core/create-widget :pos [10 20] :size [50 30])]
   (comp/add-component! widget (comp/texture "gui/my_icon.png"))
   (comp/add-component! widget (comp/outline :color 0xFF0000))
   (events/on-left-click widget #(println "Clicked!")))

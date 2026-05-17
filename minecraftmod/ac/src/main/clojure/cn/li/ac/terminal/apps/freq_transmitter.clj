@@ -3,7 +3,7 @@
   (:require [cn.li.ac.terminal.app-registry :as reg]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log]))
@@ -15,15 +15,15 @@
 (defn- create-freq-transmitter-gui
   "Create the frequency transmitter GUI."
   [_player]
-  (let [root (cgui/create-widget :size [450 400])
+  (let [root (cgui-core/create-widget :size [450 400])
 
         ;; Background
-        bg (cgui/create-widget :pos [0 0] :size [450 400])
+        bg (cgui-core/create-widget :pos [0 0] :size [450 400])
         bg-texture (comp/draw-texture (modid/asset-path "textures" "guis/data_terminal/app_back.png"))
         _ (comp/add-component! bg bg-texture)
 
         ;; Title
-        title (cgui/create-widget :pos [0 20] :size [450 30])
+        title (cgui-core/create-widget :pos [0 20] :size [450 30])
         title-text (comp/text-box :text "Frequency Transmitter" :color 0xFFFFFFFF :scale 1.5)
         _ (comp/add-component! title title-text)
 
@@ -56,16 +56,16 @@
 
         content-widgets (map-indexed
                          (fn [idx line]
-                           (let [w (cgui/create-widget :pos [30 (+ content-y (* idx 13))] :size [390 13])
+                           (let [w (cgui-core/create-widget :pos [30 (+ content-y (* idx 13))] :size [390 13])
                                  t (comp/text-box :text line :color 0xFFFFFFFF :scale 0.7)]
                              (comp/add-component! w t)
                              w))
                          content-lines)]
 
-    (cgui/add-widget! root bg)
-    (cgui/add-widget! root title)
+    (cgui-core/add-widget! root bg)
+    (cgui-core/add-widget! root title)
     (doseq [w content-widgets]
-      (cgui/add-widget! root w))
+      (cgui-core/add-widget! root w))
 
     root))
 

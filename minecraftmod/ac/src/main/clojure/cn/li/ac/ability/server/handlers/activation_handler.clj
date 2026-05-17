@@ -9,7 +9,7 @@
 
 (defn handle-set-activated-request
 	[{:keys [activated]} player]
-	(let [uuid  (uuid/player-uuid-str player)
+	(let [uuid  (uuid/player-uuid player)
 				state (common/get-state uuid)
 				rd    (:resource-data state)
 				before (boolean (:activated rd))

@@ -4,9 +4,8 @@
             [cn.li.mc1201.runtime.adapter-support :as adapter-support]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.forge1201.adapter.server-context :as server-context]
-            [cn.li.mcmod.platform.world-effects :as pwe]
-            [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]
+            [cn.li.mcmod.platform.world-effects :as pwe])
+  (:import [cn.li.mc1201.runtime RuntimeAccessShared WorldEntityShared]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.phys AABB]))
@@ -16,14 +15,14 @@
     server-context/get-server
     {:resolve-level-fn (fn [server world-id] (query-core/resolve-level-strict server world-id))
      :spawn-lightning-fn (fn [^ServerLevel level x y z]
-                           (ForgeRuntimeBridge/spawnLightning level (double x) (double y) (double z)))
+                 (WorldEntityShared/spawnLightning level (double x) (double y) (double z)))
      :create-explosion-fn (fn [^ServerLevel level x y z radius fire?]
-                            (ForgeRuntimeBridge/createExplosion level x y z (float radius) (boolean fire?))
+                (WorldEntityShared/createExplosion level x y z (float radius) (boolean fire?))
                             true)
      :get-entities-in-aabb-fn (fn [^ServerLevel l ^AABB aabb]
-                                (ForgeRuntimeBridge/getEntitiesInAabb l aabb))
+                  (WorldEntityShared/getEntitiesInAabb l aabb))
      :resolve-entity-id-fn (fn [entity]
-                             (ForgeRuntimeBridge/getEntityRegistryId entity))
+                 (RuntimeAccessShared/getEntityRegistryId entity))
      :block-id-fn (fn [^Block block _block-state]
                     (str (.getDescriptionId block)))}))
 

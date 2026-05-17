@@ -11,6 +11,8 @@
 
 (defn install-server-context!
 	[]
+	(when-let [server (get-server)]
+		(server-context-spi/notify-server-available! server))
 	nil)
 
 (server-context-spi/register-server-context-impl!

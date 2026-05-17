@@ -1,7 +1,6 @@
 (ns cn.li.mcmod.gui.registry
   "GUI registry and query API."
-  (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.gui.schema :as schema]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 (defonce ^{:doc "Registry for GUI specs.
 
@@ -44,39 +43,39 @@ Structure:
 
 (defn get-registry-name [gui-id]
   (some-> (get-gui-by-gui-id gui-id)
-          (schema/cfg-value [:registration :registry-name] :registry-name)))
+          (get-in [:registration :registry-name])))
 
 (defn get-screen-factory-fn-kw [gui-id]
   (some-> (get-gui-by-gui-id gui-id)
-          (schema/cfg-value [:registration :screen-factory-fn-kw] :screen-factory-fn-kw)))
+          (get-in [:registration :screen-factory-fn-kw])))
 
 (defn get-gui-type [gui-id]
   (some-> (get-gui-by-gui-id gui-id)
-          (schema/cfg-value [:registration :gui-type] :gui-type)))
+          (get-in [:registration :gui-type])))
 
 (defn get-slot-layout [gui-id]
   (some-> (get-gui-by-gui-id gui-id)
-          (schema/cfg-value [:registration :slot-layout] :slot-layout)))
+          (get-in [:registration :slot-layout])))
 
 (defn get-display-name [gui-id]
   (some-> (get-gui-by-gui-id gui-id)
-          (schema/cfg-value [:registration :display-name] :display-name)))
+          (get-in [:registration :display-name])))
 
 (defn get-container-fn [gui-id]
   (some-> (get-gui-by-gui-id gui-id)
-          (schema/cfg-value [:lifecycle :container-fn] :container-fn)))
+          (get-in [:lifecycle :container-fn])))
 
 (defn get-screen-fn [gui-id]
   (some-> (get-gui-by-gui-id gui-id)
-          (schema/cfg-value [:lifecycle :screen-fn] :screen-fn)))
+          (get-in [:lifecycle :screen-fn])))
 
 (defn get-container-predicate [gui-id]
   (some-> (get-gui-by-gui-id gui-id)
-          (schema/cfg-value [:lifecycle :container-predicate] :container-predicate)))
+          (get-in [:lifecycle :container-predicate])))
 
 (defn get-payload-sync-apply-fn [gui-id]
   (some-> (get-gui-by-gui-id gui-id)
-          (schema/cfg-value [:sync :payload-sync-apply-fn] :payload-sync-apply-fn)))
+          (get-in [:sync :payload-sync-apply-fn])))
 
 (defn get-slot-range [gui-id section]
   (if-let [layout (get-slot-layout gui-id)]
@@ -85,19 +84,19 @@ Structure:
 
 (defn get-gui-by-type [gui-type]
   (some (fn [[_gui-id spec]]
-          (when (= (schema/cfg-value spec [:registration :gui-type] :gui-type) gui-type)
+          (when (= (get-in spec [:registration :gui-type]) gui-type)
             spec))
         (:by-gui-id @gui-registry)))
 
 (defn get-gui-id-for-type [gui-type]
   (some (fn [[gui-id spec]]
-          (when (= (schema/cfg-value spec [:registration :gui-type] :gui-type) gui-type)
+          (when (= (get-in spec [:registration :gui-type]) gui-type)
             gui-id))
         (:by-gui-id @gui-registry)))
 
 (defn get-config-by-container [container]
   (some (fn [[_gui-id spec]]
-          (when-let [pred (schema/cfg-value spec [:lifecycle :container-predicate] :container-predicate)]
+          (when-let [pred (get-in spec [:lifecycle :container-predicate])]
             (when (pred container)
               spec)))
         (:by-gui-id @gui-registry)))

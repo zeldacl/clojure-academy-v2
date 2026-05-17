@@ -3,7 +3,6 @@
   (:require [cn.li.fabric1201.registry.fabric-dispatch :as fabric-dispatch]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.entity.dsl :as edsl]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
@@ -52,7 +51,7 @@
             needs-dynamic-properties? (has-block-state-properties? block-id)
             has-be? (boolean (metadata-call 'cn.li.mcmod.protocol.metadata/has-block-entity? block-id))
             tile-id (when has-be?
-                      (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-tile-id block-id) block-id))
+                      (metadata-call 'cn.li.mcmod.protocol.metadata/get-block-tile-id block-id))
             block-inst (cond
                          (and fluid-id (not (metadata-call 'cn.li.mcmod.protocol.metadata/fluid-block? block-id)))
                          (FabricBootstrapHelper/createPlainBlock base-properties)

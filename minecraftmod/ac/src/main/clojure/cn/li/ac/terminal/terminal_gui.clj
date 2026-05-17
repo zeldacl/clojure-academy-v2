@@ -7,7 +7,8 @@
   - App installation/launching logic
 
   Must be loaded via side-checked requiring-resolve from platform layer."
-  (:require [cn.li.mcmod.gui.cgui :as cgui]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.config.modid :as modid]
@@ -110,26 +111,26 @@
   "Create a widget for an app using the app_template from XML."
   [app index installed? on-click]
   (let [[x y] (grid-position index)
-        widget (cgui/create-widget :pos [x y] :size [(:app-width grid-config) (:app-height grid-config)])
+        widget (cgui-core/create-widget :pos [x y] :size [(:app-width grid-config) (:app-height grid-config)])
         ;; Create background
-        bg (cgui/create-widget :pos [0 0] :size [151 151])
+        bg (cgui-core/create-widget :pos [0 0] :size [151 151])
         bg-texture (comp/draw-texture (modid/asset-path "textures" "guis/data_terminal/app_back.png"))
         _ (comp/add-component! bg bg-texture)
         ;; Create icon
-        icon (cgui/create-widget :pos [9 32] :size [110 110])
+        icon (cgui-core/create-widget :pos [9 32] :size [110 110])
         icon-texture (or (:icon app) "academy:textures/guis/apps/default/icon.png")
         icon-comp (comp/draw-texture icon-texture [255 255 255 (if installed? 255 160)])
         _ (comp/add-component! icon icon-comp)
         ;; Create text label
-        text (cgui/create-widget :pos [0 148] :size [151 21])
+        text (cgui-core/create-widget :pos [0 148] :size [151 21])
         text-comp (comp/text-box :text (:name app) :color 0xFFFFFFFF :scale 1.0)
         _ (comp/add-component! text text-comp)
         ;; Add click handler
         _ (events/on-left-click widget (fn [_] (on-click app installed?)))]
 
-    (cgui/add-widget! widget bg)
-    (cgui/add-widget! widget icon)
-    (cgui/add-widget! widget text)
+    (cgui-core/add-widget! widget bg)
+    (cgui-core/add-widget! widget icon)
+    (cgui-core/add-widget! widget text)
     widget))
 
 ;; ============================================================================
@@ -139,7 +140,7 @@
 (defn- update-app-count!
   "Update the app count text."
   [root-widget]
-  (when-let [text-widget (cgui/find-widget root-widget "text_appcount")]
+  (when-let [text-widget (cgui-core/find-widget root-widget "text_appcount")]
     (let [installed-count (count (:installed-apps @terminal-state))
           total-count (count (:available-apps @terminal-state))
           ;; Get current time (simplified - just show count)
@@ -150,7 +151,7 @@
 (defn- update-username!
   "Update the username text."
   [root-widget player]
-  (when-let [text-widget (cgui/find-widget root-widget "text_username")]
+  (when-let [text-widget (cgui-core/find-widget root-widget "text_username")]
     (let [username (entity/player-get-name player)]
       (when-let [tb (comp/get-textbox-component text-widget)]
         (comp/set-text! tb username)))))
@@ -159,10 +160,10 @@
   "Update loading indicator visibility."
   [root-widget]
   (let [loading? (:loading? @terminal-state)]
-    (when-let [icon-widget (cgui/find-widget root-widget "icon_loading")]
-      (cgui/set-visible! icon-widget loading?))
-    (when-let [text-widget (cgui/find-widget root-widget "text_loading")]
-      (cgui/set-visible! text-widget loading?))))
+    (when-let [icon-widget (cgui-core/find-widget root-widget "icon_loading")]
+      (cgui-core/set-visible! icon-widget loading?))
+    (when-let [text-widget (cgui-core/find-widget root-widget "text_loading")]
+      (cgui-core/set-visible! text-widget loading?))))
 
 (declare rebuild-app-grid!)
 
@@ -193,8 +194,8 @@
   (try
     ;; Remove old app widgets
     (doseq [i (range 9)]
-      (when-let [old-widget (cgui/find-widget root-widget (str "app_" i))]
-        (cgui/remove-widget! root-widget old-widget)))
+      (when-let [old-widget (cgui-core/find-widget root-widget (str "app_" i))]
+        (cgui-core/remove-widget! root-widget old-widget)))
 
     ;; Get all apps
     (let [all-apps (app-reg/list-all-apps)
@@ -206,8 +207,8 @@
               app-widget (create-app-widget app index installed?
                                            (fn [a inst?]
                                              (handle-app-click a inst? player root-widget)))]
-          (cgui/set-name! app-widget (str "app_" index))
-          (cgui/add-widget! root-widget app-widget))))
+          (cgui-core/set-name! app-widget (str "app_" index))
+          (cgui-core/add-widget! root-widget app-widget))))
 
     ;; Update counters
     (update-app-count! root-widget)
@@ -234,7 +235,7 @@
       (if-not root-widget
         (do
           (log/error "Failed to load terminal.xml")
-          (cgui/create-widget :size [640 785]))
+          (cgui-core/create-widget :size [640 785]))
 
         (do
           ;; Update username
@@ -247,8 +248,8 @@
               (rebuild-app-grid! root-widget player)))
 
           ;; Hide app_template (it's just a template)
-          (when-let [template (cgui/find-widget root-widget "app_template")]
-            (cgui/set-visible! template false))
+          (when-let [template (cgui-core/find-widget root-widget "app_template")]
+            (cgui-core/set-visible! template false))
 
           ;; Set up periodic refresh (every 2 seconds)
           (events/on-frame root-widget
@@ -265,7 +266,7 @@
       (log/error "Error creating terminal GUI:" (ex-message e))
       (log/error "Stack trace:" (.printStackTrace e))
       ;; Return empty widget on error
-      (cgui/create-widget :size [640 785]))))
+      (cgui-core/create-widget :size [640 785]))))
 
 ;; ============================================================================
 ;; Screen Creation
@@ -275,7 +276,7 @@
   "Create CGuiScreen for Terminal GUI."
   [player]
   (let [gui (create-terminal-gui player)]
-    (cgui/create-cgui-screen gui)))
+    (cgui-screen/create-cgui-screen gui)))
 
 ;; ============================================================================
 ;; Public API

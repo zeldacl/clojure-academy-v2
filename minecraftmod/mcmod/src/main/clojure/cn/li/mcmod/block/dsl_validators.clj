@@ -2,7 +2,6 @@
   "Block specification validation.
    Validates block specs, properties, and multi-block configurations."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.block.dsl-properties :as props]
             [cn.li.mcmod.block.dsl-multiblock :as mb]))
 
@@ -10,9 +9,10 @@
 ;; Block Specification Validation
 ;; ============================================================================
 
-(defn validate-block-spec [block-spec]
+(defn validate-block-spec
   "Validate a complete block specification for correctness.
    Throws ex-info if validation fails."
+  [block-spec]
   (when-not (:id block-spec)
     (throw (ex-info "Block must have an :id" {:spec block-spec})))
   (when-not (string? (:id block-spec))
@@ -63,32 +63,6 @@
                           {:invalid-value texture-path
                            :model-name model-name
                            :id (:id block-spec)}))))))
-
-  ;; Validate tile entity config
-  (let [tile-entity (:tile-entity block-spec)]
-    (when (and (:tile-tick-fn tile-entity)
-               (not (or (fn? (:tile-tick-fn tile-entity))
-                        (symbol? (:tile-tick-fn tile-entity))
-                        (var? (:tile-tick-fn tile-entity)))))
-      (throw (ex-info "Block :tile-tick-fn must be a function or a symbol/var referencing one when provided"
-                      {:id (:id block-spec)})))
-    (when (and (:tile-load-fn tile-entity)
-               (not (or (fn? (:tile-load-fn tile-entity))
-                        (symbol? (:tile-load-fn tile-entity))
-                        (var? (:tile-load-fn tile-entity)))))
-      (throw (ex-info "Block :tile-load-fn must be a function or a symbol/var referencing one when provided"
-                      {:id (:id block-spec)})))
-    (when (and (:tile-save-fn tile-entity)
-               (not (or (fn? (:tile-save-fn tile-entity))
-                        (symbol? (:tile-save-fn tile-entity))
-                        (var? (:tile-save-fn tile-entity)))))
-      (throw (ex-info "Block :tile-save-fn must be a function or a symbol/var referencing one when provided"
-                      {:id (:id block-spec)})))
-    (when (and (:tile-kind tile-entity)
-               (not (keyword? (:tile-kind tile-entity))))
-      (throw (ex-info "Block :tile-kind must be a keyword when provided"
-                      {:id (:id block-spec)
-                       :tile-kind (:tile-kind tile-entity)}))))
 
   ;; Validate multi-block configuration
   (let [multi-block (:multi-block block-spec)]

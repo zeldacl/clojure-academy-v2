@@ -8,7 +8,7 @@
 
   Rendering is delegated to platform-specific adapters."
   (:require [cn.li.ac.wireless.gui.protocol :as proto]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -24,11 +24,11 @@
   (cgui-doc/read-xml (modid/namespaced-path "guis/rework/page_wireless.xml")))
 
 (defn- wireless-panel-from-main [main-root]
-  (or (cgui/find-widget main-root "panel_wireless") main-root))
+  (or (cgui-core/find-widget main-root "panel_wireless") main-root))
 
 (defn- ensure-template-hidden! [elem-template]
   (when elem-template
-    (cgui/set-visible! elem-template false)))
+    (cgui-core/set-visible! elem-template false)))
 
 (defn- attach-scroll-buttons! [btn-up btn-down elist]
   (when (and btn-up elist)
@@ -57,11 +57,11 @@
   Returns:
     wireless-root"
   [wireless-root {:keys [linked avail connect-fn disconnect-fn name-fn encrypted?-fn]}]
-  (let [wlist (cgui/find-widget wireless-root "zone_elementlist")
-        elem-template (cgui/find-widget wireless-root "zone_elementlist/element")
-        connected-elem (cgui/find-widget wireless-root "elem_connected")
-        btn-up (cgui/find-widget wireless-root "btn_arrowup")
-        btn-down (cgui/find-widget wireless-root "btn_arrowdown")
+  (let [wlist (cgui-core/find-widget wireless-root "zone_elementlist")
+        elem-template (cgui-core/find-widget wireless-root "zone_elementlist/element")
+        connected-elem (cgui-core/find-widget wireless-root "elem_connected")
+        btn-up (cgui-core/find-widget wireless-root "btn_arrowup")
+        btn-down (cgui-core/find-widget wireless-root "btn_arrowdown")
         elist (comp/element-list :spacing 2)
         linked-atom (atom linked)]
 
@@ -71,9 +71,9 @@
     (attach-scroll-buttons! btn-up btn-down elist)
 
     (when connected-elem
-      (let [icon-connect (cgui/find-widget connected-elem "icon_connect")
-            icon-logo (cgui/find-widget connected-elem "icon_logo")
-            text-name (cgui/find-widget connected-elem "text_name")
+      (let [icon-connect (cgui-core/find-widget connected-elem "icon_connect")
+            icon-logo (cgui-core/find-widget connected-elem "icon_logo")
+            text-name (cgui-core/find-widget connected-elem "text_name")
             connected? (some? linked)
             alpha (if connected? 1.0 0.6)
             name (if connected? (name-fn linked) "Not Connected")]
@@ -98,11 +98,11 @@
       (comp/list-clear! elist)
       (doseq [target avail]
         (when elem-template
-          (let [elem (cgui/copy-widget elem-template)
-                text-name (cgui/find-widget elem "text_name")
-                icon-key (cgui/find-widget elem "icon_key")
-                input-pass (cgui/find-widget elem "input_pass")
-                icon-connect (cgui/find-widget elem "icon_connect")
+          (let [elem (cgui-core/copy-widget elem-template)
+                text-name (cgui-core/find-widget elem "text_name")
+                icon-key (cgui-core/find-widget elem "icon_key")
+                input-pass (cgui-core/find-widget elem "input_pass")
+                icon-connect (cgui-core/find-widget elem "icon_connect")
                 pass-box (when input-pass (wh/widget-textbox input-pass))
                 encrypted? (boolean (encrypted?-fn target))]
 
@@ -112,10 +112,10 @@
             (if encrypted?
               (do
                 (when icon-key
-                  (cgui/set-visible! icon-key true)
+                  (cgui-core/set-visible! icon-key true)
                   (wh/set-drawtexture-color! icon-key (wh/alpha-argb 0xFFFFFFFF 0.6)))
                 (when input-pass
-                  (cgui/set-visible! input-pass true))
+                  (cgui-core/set-visible! input-pass true))
                 (when (and input-pass pass-box)
                   (events/on-confirm-input pass-box
                     (fn [_]
@@ -131,8 +131,8 @@
                       (when icon-key
                         (wh/set-drawtexture-color! icon-key (wh/alpha-argb 0xFFFFFFFF 0.6)))))))
               (do
-                (when input-pass (cgui/set-visible! input-pass false))
-                (when icon-key (cgui/set-visible! icon-key false))))
+                (when input-pass (cgui-core/set-visible! input-pass false))
+                (when icon-key (cgui-core/set-visible! icon-key false))))
 
             (when icon-connect
               (events/on-left-click icon-connect
@@ -159,7 +159,7 @@
   Returns:
     nil"
   [panel texture-path]
-  (when-let [logo (cgui/find-widget panel "icon_logo")]
+  (when-let [logo (cgui-core/find-widget panel "icon_logo")]
     (wh/set-drawtexture! logo texture-path)))
 
 ;; ============================================================================

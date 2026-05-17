@@ -114,7 +114,7 @@
 (defn find-clicked-button
   "Find which button was clicked, if any"
   [gui-spec left-pos top-pos mouse-x mouse-y]
-  (->> (:buttons gui-spec)
+  (->> (get-in gui-spec [:layout :buttons])
        (map-indexed vector)
        (filter (fn [[_idx btn]]
                  (button-hit-test btn left-pos top-pos mouse-x mouse-y)))
@@ -125,7 +125,7 @@
 (defn find-clicked-slot
   "Find which slot was clicked, if any"
   [gui-spec left-pos top-pos mouse-x mouse-y]
-  (->> (:slots gui-spec)
+  (->> (get-in gui-spec [:layout :slots])
        (filter (fn [slot]
                  (slot-hit-test slot left-pos top-pos mouse-x mouse-y)))
        (first)

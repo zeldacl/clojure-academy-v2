@@ -20,9 +20,9 @@
                                          :slots [{:index 0 :x 10 :y 10}]
                                          :buttons [{:id 0 :x 20 :y 20 :text "Test"}]})]
       (is (= (:id test-gui) "test-gui"))
-      (is (= "Test" (get-in test-gui [:legacy-layout :title])))
-      (is (= 1 (count (get-in test-gui [:legacy-layout :slots]))))
-      (is (= 1 (count (get-in test-gui [:legacy-layout :buttons])))))))
+      (is (= "Test" (get-in test-gui [:layout :title])))
+      (is (= 1 (count (get-in test-gui [:layout :slots]))))
+      (is (= 1 (count (get-in test-gui [:layout :buttons])))))))
 
 ;; Test GUI registry
 (deftest gui-registry-test

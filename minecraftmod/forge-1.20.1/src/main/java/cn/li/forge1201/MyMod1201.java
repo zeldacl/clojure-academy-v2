@@ -25,10 +25,26 @@ public class MyMod1201 {
             Var warnVar = clojure.lang.RT.var("clojure.core", "*warn-on-reflection*");
             warnVar.bindRoot(true); 
             IFn require = Clojure.var("clojure.core", "require");
-            require.invoke(Clojure.read("cn.li.forge1201.mod"));
+            Object modNs = Clojure.read("cn.li.forge1201.mod");
+            require.invoke(modNs, Clojure.read(":reload"));
 
-            IFn initFn = Clojure.var("cn.li.forge1201.mod", "mod-init");
-            initFn.invoke();
+            Var startFn = (Var) Clojure.var("cn.li.forge1201.mod", "start-forge-mod!");
+            if (!startFn.isBound()) {
+                // Retry with full dependency reload for occasional namespace init races.
+                require.invoke(modNs, Clojure.read(":reload-all"));
+                startFn = (Var) Clojure.var("cn.li.forge1201.mod", "start-forge-mod!");
+            }
+
+            if (startFn.isBound()) {
+                startFn.invoke();
+            } else {
+                Var legacyInit = (Var) Clojure.var("cn.li.forge1201.mod", "mod-init");
+                if (legacyInit.isBound()) {
+                    legacyInit.invoke();
+                } else {
+                    throw new IllegalStateException("Clojure bootstrap vars are unbound: cn.li.forge1201.mod/start-forge-mod!, mod-init");
+                }
+            }
         } catch (Throwable t) {
             System.err.println("Failed to load Clojure mod implementation:");
             t.printStackTrace();

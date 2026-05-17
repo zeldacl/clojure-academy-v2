@@ -1,4 +1,3 @@
-(remove-ns 'cn.li.forge1201.registry.state)
 
 (ns cn.li.forge1201.registry.state
 	"Centralized Forge registry runtime state.

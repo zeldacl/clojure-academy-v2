@@ -1,5 +1,3 @@
-(remove-ns 'cn.li.mc1201.datagen.setup-common)
-
 (ns cn.li.mc1201.datagen.setup-common
   "Shared datagen setup utilities, platform-independent.
    

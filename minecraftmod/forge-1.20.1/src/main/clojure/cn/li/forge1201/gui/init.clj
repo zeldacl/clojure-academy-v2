@@ -5,16 +5,37 @@
             [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.util.log :as log]))
 
+(def ^:private platform-label "Forge 1.20.1")
+
+(defn- optional-init!
+  [sym missing-message]
+  (if-let [init! (requiring-resolve sym)]
+    (init!)
+    (log/warn missing-message)))
+
+(def ^:private common-phase
+  {:platform-label platform-label
+   :phase-label "Common"
+   :steps [{:run #(optional-init! 'cn.li.forge1201.gui.network/init!
+                                  "Forge GUI network init fn not available")}]})
+
+(def ^:private client-phase
+  {:platform-label platform-label
+   :phase-label "Client"
+   :steps [{:run #(optional-init! 'cn.li.forge1201.gui.screen-impl/init-client!
+                                  "Forge GUI screen impl not available on current side")}]})
+
+(def ^:private server-phase
+  {:platform-label platform-label
+   :phase-label "Server"
+   :steps []})
+
 (defn init-common!
   "Initialize common GUI system (server + client).
   MenuType registration is handled earlier via DeferredRegister in mod-init;
   only non-registry setup belongs here."
   []
-  (gui-orchestrator/phase-start! "Forge 1.20.1" "Common")
-  (if-let [network-init! (requiring-resolve 'cn.li.forge1201.gui.network/init!)]
-    (network-init!)
-    (log/warn "Forge GUI network init fn not available"))
-  (gui-orchestrator/phase-done! "Forge 1.20.1" "Common"))
+  (gui-orchestrator/run-phase! common-phase))
 
 ;; ============================================================================
 ;; Client-Only Initialization
@@ -25,14 +46,7 @@
   
   Should be called during FMLClientSetupEvent"
   []
-  (gui-orchestrator/phase-start! "Forge 1.20.1" "Client")
-  
-  ;; Register screen factories
-  (if-let [init-screen! (requiring-resolve 'cn.li.forge1201.gui.screen-impl/init-client!)]
-    (init-screen!)
-    (log/warn "Forge GUI screen impl not available on current side"))
-  
-  (gui-orchestrator/phase-done! "Forge 1.20.1" "Client"))
+  (gui-orchestrator/run-phase! client-phase))
 
 ;; ============================================================================
 ;; Server-Only Initialization
@@ -43,12 +57,7 @@
   
   Should be called during FMLDedicatedServerSetupEvent"
   []
-  (gui-orchestrator/phase-start! "Forge 1.20.1" "Server")
-  
-  ;; Server-specific initialization (if needed)
-  ;; Currently all server logic is in common
-  
-  (gui-orchestrator/phase-done! "Forge 1.20.1" "Server"))
+  (gui-orchestrator/run-phase! server-phase))
 
 ;; ============================================================================
 ;; Verification
@@ -77,14 +86,14 @@
 (defn safe-init-common!
   "Initialize common GUI system with error handling"
   []
-  (gui-orchestrator/safe-init! "Failed to initialize common GUI system:" init-common!))
+  (gui-orchestrator/safe-run-phase! common-phase))
 
 (defn safe-init-client!
   "Initialize client GUI system with error handling"
   []
-  (gui-orchestrator/safe-init! "Failed to initialize client GUI system:" init-client!))
+  (gui-orchestrator/safe-run-phase! client-phase))
 
 (defn safe-init-server!
   "Initialize server GUI system with error handling"
   []
-  (gui-orchestrator/safe-init! "Failed to initialize server GUI system:" init-server!))
+  (gui-orchestrator/safe-run-phase! server-phase))

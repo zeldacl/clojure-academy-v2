@@ -26,7 +26,7 @@
   - title: Text component (not currently used but required by platform APIs)
   
   Returns: CGuiScreenContainer instance or nil on error"
-  [gui-type container-or-handler player-inventory title]
+  [gui-type container-or-handler player-inventory _title]
   (log/info "[SCREEN-FACTORY-CORE] Creating" (name gui-type) "screen (platform-agnostic factory)")
   (log/info "[SCREEN-FACTORY-CORE] gui-type=" gui-type "container=" (type container-or-handler))
   
@@ -38,7 +38,7 @@
         gui-id (gui-dsl/get-gui-id-for-type gui-type)
         _ (log/info "[SCREEN-FACTORY-CORE] gui-id=" gui-id "cfg found=" (not (nil? cfg)))
         screen-fn (or (when gui-id (gui-dsl/get-screen-fn gui-id))
-              (:screen-fn cfg))
+              (get-in cfg [:lifecycle :screen-fn]))
         _ (when-not screen-fn
           (throw (ex-info "GUI has no screen factory function"
                   {:gui-type gui-type :gui-id gui-id})))

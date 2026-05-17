@@ -1,7 +1,6 @@
 (ns cn.li.mcmod.gui.validator
   "Validation rules for GuiSpec and nested GUI components."
-  (:require [clojure.string :as str]
-            [cn.li.mcmod.gui.schema :as schema]))
+  (:require [clojure.string :as str]))
 
 (defn validate-gui-spec
   [gui-spec]
@@ -22,11 +21,11 @@
         (throw (ex-info "GUI :screen-factory-fn-kw must be a keyword when :gui-id is present"
                         {:id (:id gui-spec) :gui-id (:gui-id gui-spec) :screen-factory-fn-kw (:screen-factory-fn-kw registration)})))))
 
-  (let [legacy-layout (:legacy-layout gui-spec)]
-    (doseq [slot (:slots legacy-layout)]
+  (let [layout (:layout gui-spec)]
+    (doseq [slot (:slots layout)]
       (when-not (number? (:index slot))
         (throw (ex-info "Slot must have an :index number" {:slot slot}))))
-    (doseq [button (:buttons legacy-layout)]
+    (doseq [button (:buttons layout)]
       (when-not (number? (:id button))
         (throw (ex-info "Button must have an :id number" {:button button})))))
 

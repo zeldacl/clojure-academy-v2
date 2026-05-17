@@ -1,8 +1,7 @@
 (ns cn.li.mcmod.block.dsl-core
   "Block DSL core - block specification, registration, and main macros.
    Provides the primary interface for defining blocks declaratively."
-  (:require [clojure.string :as str]
-            [cn.li.mcmod.protocol.core :as registry-core]
+  (:require [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.block.dsl-properties :as props]
             [cn.li.mcmod.block.dsl-validators :as validators]))
@@ -13,7 +12,7 @@
 
 (defrecord BlockSpec
   [id registry-name properties
-   physical rendering tile-entity block-state events multi-block]
+  physical rendering block-state events multi-block]
   ;; Complete block specification with nested configuration groups.
   ;;
   ;; Core identity fields:
@@ -24,7 +23,6 @@
   ;; Nested configuration groups:
   ;; - physical: PhysicalProperties record
   ;; - rendering: RenderingProperties record
-  ;; - tile-entity: TileEntityConfig record
   ;; - block-state: BlockStateConfig record
   ;; - events: EventHandlers record
   ;; - multi-block: MultiBlockConfig record
@@ -52,7 +50,6 @@
   (let [;; Extract nested groups (new syntax)
         physical-opts (:physical options)
         rendering-opts (:rendering options)
-        tile-entity-opts (:tile-entity options)
         block-state-opts (:block-state options)
         events-opts (:events options)
         multi-block-opts (:multi-block options)
@@ -98,13 +95,6 @@
                      :flat-item-icon? (boolean (or (:flat-item-icon? rendering-opts) (:flat-item-icon? options)))
                      :creative-tab (or (:creative-tab rendering-opts) (:creative-tab options) props/default-creative-tab)
                      :light-level (or (:light-level rendering-opts) (:light-level options) props/default-light-level)})
-
-        tile-entity (props/map->TileEntityConfig
-                      {:has-block-entity? (boolean (or (:has-block-entity? tile-entity-opts) (:has-block-entity? options)))
-                       :tile-kind (or (:tile-kind tile-entity-opts) (:tile-kind options))
-                       :tile-tick-fn (or (:tile-tick-fn tile-entity-opts) (:tile-tick-fn options))
-                       :tile-load-fn (or (:tile-load-fn tile-entity-opts) (:tile-load-fn options))
-                       :tile-save-fn (or (:tile-save-fn tile-entity-opts) (:tile-save-fn options))})
 
         block-state (props/map->BlockStateConfig
                       {:block-state-properties (or (:block-state-properties block-state-opts)
@@ -176,7 +166,6 @@
        :properties (or (:properties options) {})
        :physical physical
        :rendering rendering
-       :tile-entity tile-entity
        :block-state block-state
        :events events
        :multi-block multi-block})))
@@ -295,20 +284,17 @@
                               :hardness 3.0
                               :resistance 8.0
                               :requires-tool true
-                              :harvest-tool :pickaxe}
-                   :tile-entity {:has-block-entity? true}}
+                              :harvest-tool :pickaxe}}
    :energy-gen {:physical {:material :metal
                            :hardness 3.5
                            :resistance 8.0
                            :requires-tool true
-                           :harvest-tool :pickaxe}
-                :tile-entity {:has-block-entity? true}}
+                           :harvest-tool :pickaxe}}
    :machine {:physical {:material :metal
                         :hardness 4.0
                         :resistance 10.0
                         :requires-tool true
-                        :harvest-tool :pickaxe}
-             :tile-entity {:has-block-entity? true}}
+                        :harvest-tool :pickaxe}}
    :ore {:physical {:material :stone
                     :hardness 3.0
                     :resistance 3.0

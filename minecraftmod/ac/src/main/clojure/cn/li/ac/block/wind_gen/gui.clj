@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wind-gen.gui
   "CLIENT-ONLY: Wind Generator GUI (main + base)."
-  (:require [cn.li.mcmod.gui.cgui :as cgui]
+  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
@@ -57,9 +58,9 @@
         y0 (tech-ui/add-sepline info-area "Info" 0)
         y1 (tech-ui/add-property info-area "fan" (fn [] (if @(:fan-installed container) "YES" "NO")) y0)
         _y2 (tech-ui/add-property info-area "obstacle" (fn [] (if @(:no-obstacle container) "CLEAR" "BLOCKED")) y1)
-        _ (cgui/set-position! info-area (+ (cgui/get-width (:window inv-page)) 7) 5)
-        _ (cgui/add-widget! root info-area)
-        base (cgui/create-cgui-screen-container root minecraft-container)]
+        _ (cgui-core/set-position! info-area (+ (cgui-core/get-width (:window inv-page)) 7) 5)
+        _ (cgui-core/add-widget! root info-area)
+        base (cgui-screen/create-cgui-screen-container root minecraft-container)]
     (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current tech)))))
 
 (defn- main-container? [container] (= (:container-type container) :wind-gen-main))
@@ -99,9 +100,9 @@
         y1 (tech-ui/add-sepline info-area "Info" y0)
         y2 (tech-ui/add-property info-area "gen_speed" (fn [] (format "%.2fIF/T" (double @(:gen-speed container)))) y1)
         _y3 (tech-ui/add-property info-area "status" (fn [] @(:status container)) y2)
-        _ (cgui/set-position! info-area (+ (cgui/get-width inv-window) 7) 5)
-        _ (cgui/add-widget! root info-area)
-        base (cgui/create-cgui-screen-container root minecraft-container)]
+        _ (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
+        _ (cgui-core/add-widget! root info-area)
+        base (cgui-screen/create-cgui-screen-container root minecraft-container)]
     (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current tech)))))
 
 (defn- base-container? [container] (= (:container-type container) :wind-gen-base))
@@ -117,35 +118,51 @@
     (gui-dsl/register-gui!
       (gui-dsl/create-gui-spec
         "wind-gen-main"
-        {:gui-id 3 :display-name "Wind Generator Main" :gui-type :wind-gen-main
-         :registry-name "wind_gen_main_gui" :screen-factory-fn-kw :create-wind-main-screen
-         :slot-layout (slot-schema/get-slot-layout main-schema-id)
-         :container-predicate main-container? :container-fn create-main-container
-         :screen-fn create-main-screen :tick-fn main-sync!
-         :sync-get (fn [c] {:status @(:status c) :complete @(:complete c) :no-obstacle @(:no-obstacle c) :fan-installed @(:fan-installed c)})
-         :sync-apply (fn [c d] (reset! (:status c) (str (:status d "INCOMPLETE")))
-                                (reset! (:complete c) (boolean (:complete d false)))
-                                (reset! (:no-obstacle c) (boolean (:no-obstacle d false)))
-                                (reset! (:fan-installed c) (boolean (:fan-installed d false))))
-         :validate-fn main-still-valid?
-         :slot-count-fn main-slot-count :slot-get-fn main-get-slot :slot-set-fn main-set-slot!
-         :slot-can-place-fn main-can-place? :slot-changed-fn (fn [_ _] nil)}))
+        {:gui-id 3
+         :registration {:display-name "Wind Generator Main"
+            :gui-type :wind-gen-main
+            :registry-name "wind_gen_main_gui"
+            :screen-factory-fn-kw :create-wind-main-screen
+            :slot-layout (slot-schema/get-slot-layout main-schema-id)}
+         :lifecycle {:container-predicate main-container?
+               :container-fn create-main-container
+               :screen-fn create-main-screen
+               :tick-fn main-sync!}
+         :sync {:sync-get (fn [c] {:status @(:status c) :complete @(:complete c) :no-obstacle @(:no-obstacle c) :fan-installed @(:fan-installed c)})
+          :sync-apply (fn [c d] (reset! (:status c) (str (:status d "INCOMPLETE")))
+                     (reset! (:complete c) (boolean (:complete d false)))
+                     (reset! (:no-obstacle c) (boolean (:no-obstacle d false)))
+                     (reset! (:fan-installed c) (boolean (:fan-installed d false))))}
+         :operations {:validate-fn main-still-valid?}
+         :slot-operations {:slot-count-fn main-slot-count
+           :slot-get-fn main-get-slot
+           :slot-set-fn main-set-slot!
+           :slot-can-place-fn main-can-place?
+           :slot-changed-fn (fn [_ _] nil)}}))
 
     (gui-dsl/register-gui!
       (gui-dsl/create-gui-spec
         "wind-gen-base"
-        {:gui-id 4 :display-name "Wind Generator Base" :gui-type :wind-gen-base
-         :registry-name "wind_gen_base_gui" :screen-factory-fn-kw :create-wind-base-screen
-         :slot-layout (slot-schema/get-slot-layout base-schema-id)
-         :container-predicate base-container? :container-fn create-base-container
-         :screen-fn create-base-screen :tick-fn base-sync!
-         :sync-get (fn [c] {:energy @(:energy c) :max-energy @(:max-energy c) :gen-speed @(:gen-speed c) :status @(:status c)})
-         :sync-apply (fn [c d] (reset! (:energy c) (double (:energy d 0.0)))
-                                (reset! (:max-energy c) (double (:max-energy d 20000.0)))
-                                (reset! (:gen-speed c) (double (:gen-speed d 0.0)))
-                                (reset! (:status c) (str (:status d "BASE_ONLY"))))
-         :validate-fn base-still-valid?
-         :slot-count-fn base-slot-count :slot-get-fn base-get-slot :slot-set-fn base-set-slot!
-         :slot-can-place-fn base-can-place? :slot-changed-fn (fn [_ _] nil)}))
+        {:gui-id 4
+         :registration {:display-name "Wind Generator Base"
+            :gui-type :wind-gen-base
+            :registry-name "wind_gen_base_gui"
+            :screen-factory-fn-kw :create-wind-base-screen
+            :slot-layout (slot-schema/get-slot-layout base-schema-id)}
+         :lifecycle {:container-predicate base-container?
+               :container-fn create-base-container
+               :screen-fn create-base-screen
+               :tick-fn base-sync!}
+         :sync {:sync-get (fn [c] {:energy @(:energy c) :max-energy @(:max-energy c) :gen-speed @(:gen-speed c) :status @(:status c)})
+          :sync-apply (fn [c d] (reset! (:energy c) (double (:energy d 0.0)))
+                     (reset! (:max-energy c) (double (:max-energy d 20000.0)))
+                     (reset! (:gen-speed c) (double (:gen-speed d 0.0)))
+                     (reset! (:status c) (str (:status d "BASE_ONLY"))))}
+         :operations {:validate-fn base-still-valid?}
+         :slot-operations {:slot-count-fn base-slot-count
+           :slot-get-fn base-get-slot
+           :slot-set-fn base-set-slot!
+           :slot-can-place-fn base-can-place?
+           :slot-changed-fn (fn [_ _] nil)}}))
 
     (log/info "Wind Generator GUIs initialized (main/base)")))

@@ -8,7 +8,7 @@
   this module will not be loaded."
   (:require [cn.li.mcmod.platform.integration-runtime :as integration-runtime]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.forge1201.bridge ForgeRuntimeBridge]))
+  (:import [cn.li.mc1201.runtime ItemInventoryShared RuntimeAccessShared]))
 
 
 (defn- load-class-no-init ^Class [class-name]
@@ -27,11 +27,11 @@
   Returns:
     Item spec map {:item 'modid:item' :count N}"
   [stack]
-  (when (and stack (not (ForgeRuntimeBridge/isItemStackEmpty stack)))
-    (let [item-id (ForgeRuntimeBridge/getItemKeyString (ForgeRuntimeBridge/getItemFromStack stack))]
+  (when (and stack (not (ItemInventoryShared/isItemStackEmpty stack)))
+    (let [item-id (ItemInventoryShared/getItemKeyString (ItemInventoryShared/getItemFromStack stack))]
       (when item-id
         {:item  item-id
-         :count (ForgeRuntimeBridge/getItemStackCount stack)}))))
+         :count (ItemInventoryShared/getItemStackCount stack)}))))
 
 (defn crafttweaker-itemstack-to-spec
   "Convert a CraftTweaker IItemStack to AC item spec.
@@ -48,8 +48,8 @@
   (try
     ;; CraftTweaker's IItemStack can be converted to Minecraft ItemStack
     ;; via CraftTweakerMC.getItemStack(IItemStack)
-    (let [ct-mc-class (load-class-no-init "com.blamejared.crafttweaker.api.CraftTweakerAPI")
-          get-stack-method (.getMethod ct-mc-class "getIItemStack" (into-array Class [(ForgeRuntimeBridge/getItemStackClass)]))]
+        (let [ct-mc-class (load-class-no-init "com.blamejared.crafttweaker.api.CraftTweakerAPI")
+          get-stack-method (.getMethod ct-mc-class "getIItemStack" (into-array Class [(RuntimeAccessShared/getItemStackClass)]))]
       (when-let [mc-stack (.invoke get-stack-method nil (into-array Object [ct-stack]))]
         (itemstack-to-item-spec mc-stack)))
     (catch Exception e

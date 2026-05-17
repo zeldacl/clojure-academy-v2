@@ -2,7 +2,8 @@
   "CLIENT-ONLY: Ability Interferer GUI"
   (:require [clojure.string :as str]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.mcmod.gui.cgui :as cgui]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -158,7 +159,7 @@
 
 (defn- wire-xml-controls!
   [inv-window container]
-  (when-let [range-text (cgui/find-widget inv-window "panel_config/element_range/element_text_range")]
+  (when-let [range-text (cgui-core/find-widget inv-window "panel_config/element_range/element_text_range")]
     (when-let [tb (comp/get-textbox-component range-text)]
       (comp/set-text! tb (format "%.0f" (double @(:range container)))))
     (events/on-frame range-text
@@ -166,7 +167,7 @@
         (when-let [tb (comp/get-textbox-component range-text)]
           (comp/set-text! tb (format "%.0f" (double @(:range container))))))))
 
-  (when-let [switch-btn (cgui/find-widget inv-window "panel_config/element_switch/element_btn_switch")]
+  (when-let [switch-btn (cgui-core/find-widget inv-window "panel_config/element_switch/element_btn_switch")]
     (update-switch-texture! switch-btn @(:enabled container))
     (events/on-left-click switch-btn
       (fn [_]
@@ -176,17 +177,17 @@
       (fn [_]
         (update-switch-texture! switch-btn @(:enabled container)))))
 
-  (when-let [btn-left (cgui/find-widget inv-window "panel_config/element_range/element_btn_left")]
+  (when-let [btn-left (cgui-core/find-widget inv-window "panel_config/element_range/element_btn_left")]
     (events/on-left-click btn-left
       (fn [_]
         (request-set-range! container (- @(:range container) 10.0)))))
 
-  (when-let [btn-right (cgui/find-widget inv-window "panel_config/element_range/element_btn_right")]
+  (when-let [btn-right (cgui-core/find-widget inv-window "panel_config/element_range/element_btn_right")]
     (events/on-left-click btn-right
       (fn [_]
         (request-set-range! container (+ @(:range container) 10.0)))))
 
-  (when-let [btn-add (cgui/find-widget inv-window "panel_whitelist/btn_add")]
+  (when-let [btn-add (cgui-core/find-widget inv-window "panel_whitelist/btn_add")]
     (events/on-left-click btn-add
       (fn [_]
         ;; Convenience behavior for current framework: add local player name quickly.
@@ -195,7 +196,7 @@
           (when-not (or (str/blank? player-name) (contains? wl player-name))
             (request-set-whitelist! container (conj (vec wl) player-name)))))))
 
-  (when-let [btn-remove (cgui/find-widget inv-window "panel_whitelist/btn_remove")]
+  (when-let [btn-remove (cgui-core/find-widget inv-window "panel_whitelist/btn_remove")]
     (events/on-left-click btn-remove
       (fn [_]
         ;; Remove the most recently added entry as a practical fallback UI action.
@@ -236,10 +237,10 @@
                                                (let [names (parse-whitelist new-text)]
                                                  (reset! (:whitelist-edit container) (str new-text))
                                                  (request-set-whitelist! container names))))
-        _ (cgui/set-position! info-area (+ (cgui/get-width inv-window) 7) 5)
-        _ (cgui/add-widget! root info-area)
+        _ (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
+        _ (cgui-core/add-widget! root info-area)
         _ (wire-xml-controls! inv-window container)
-        base (cgui/create-cgui-screen-container root minecraft-container)]
+        base (cgui-screen/create-cgui-screen-container root minecraft-container)]
     (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current tech)))))
 
 (defn- interferer-container?
@@ -261,23 +262,23 @@
       (gui-dsl/create-gui-spec
         "ability-interferer"
         {:gui-id 15
-         :display-name "Ability Interferer"
-         :gui-type interferer-gui-type
-         :registry-name "ability_interferer_gui"
-         :screen-factory-fn-kw :create-ability-interferer-screen
-         :slot-layout (interferer-slot-layout)
-         :container-predicate interferer-container?
-         :container-fn create-container
-         :screen-fn create-screen
-         :tick-fn tick!
-         :sync-get get-sync-data
-         :sync-apply apply-sync-data!
-         :validate-fn still-valid?
-         :close-fn on-close
-         :button-click-fn handle-button-click!
-         :slot-count-fn get-slot-count
-         :slot-get-fn get-slot-item
-         :slot-set-fn set-slot-item!
-         :slot-can-place-fn can-place-item?
-         :slot-changed-fn slot-changed!}))
+          :registration {:display-name "Ability Interferer"
+               :gui-type interferer-gui-type
+               :registry-name "ability_interferer_gui"
+               :screen-factory-fn-kw :create-ability-interferer-screen
+               :slot-layout (interferer-slot-layout)}
+          :lifecycle {:container-predicate interferer-container?
+            :container-fn create-container
+            :screen-fn create-screen
+            :tick-fn tick!}
+          :sync {:sync-get get-sync-data
+            :sync-apply apply-sync-data!}
+          :operations {:validate-fn still-valid?
+             :close-fn on-close
+             :button-click-fn handle-button-click!}
+           :slot-operations {:slot-count-fn get-slot-count
+             :slot-get-fn get-slot-item
+             :slot-set-fn set-slot-item!
+             :slot-can-place-fn can-place-item?
+             :slot-changed-fn slot-changed!}}))
     (log/info "Ability Interferer GUI initialized")))

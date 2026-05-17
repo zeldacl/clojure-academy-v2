@@ -46,10 +46,13 @@
       - `network_transport_spi.clj`：网络消息传输契约
     - `gui/registry_api.clj`：GUI Menu 类型注册契约
     - `runtime/*_core.clj`：19+ 个运行时核心模块（实体、生命周期、网络、NBT 等）
+      - `runtime/network_core.clj` 负责 runtime network 的共享 handler/route/send 注册；平台层只提供 loader-specific push transport 与 server-context installer。
+      - `runtime/spi/server_context.clj` 暴露显式 server state、fail-fast `require-current-server` 与 server available/unavailable callbacks。
     - `integration/event_handlers.clj`：共享事件处理业务逻辑
     - `integration/event_helpers_core.clj`：共享事件辅助函数（runtime 检查、数据构建）
     - `client/overlay/renderer.clj`：共享 overlay 渲染核心
     - `gui/registry_common.clj`：共享 GUI 容器创建逻辑
+    - `gui/init_orchestrator.clj`：共享 GUI phase manifest 编排与 safe phase execution；平台 GUI init 只声明 common/server/client phase steps。
     - `datagen/*_common.clj`：共享 datagen provider 实现
 - **`forge-1.20.1`**：Forge 事件绑定与 Loader 入口层（Phase C 后仅包含）；仅保留直接引用 Forge 的代码和事件注册胶水。
   - **结构规范**：
@@ -100,7 +103,8 @@
 - 测试文件统一命名：`*_test.clj`；测试命名空间统一 `*-test`。
 - `ac` 测试入口使用 `cn.li.ac.test-runner` 自动发现测试，不再手工维护列表。
 - 支持按命名空间过滤执行：`-Dac.test.only=cn.li.ac.foo-test,cn.li.ac.bar-test`。
-- 共享测试工具放在 `ac/src/test/clojure/cn/li/ac/test/support/**`，避免重复造 stub。
+- `ac` 与 `mcmod` 的测试入口只保留模块参数，公共发现/过滤/执行逻辑位于 `test-support/src/main/clojure/cn/li/test_support/auto_test_runner.clj`。
+- `ac` 专属测试 stub 放在 `ac/src/test/clojure/cn/li/ac/test/support/**`，避免在业务测试里重复造 stub。
 - 优先断言公开边界和业务不变量；仅在平台桥接边界使用 `with-redefs`。
 - 新增或重构测试时，禁止直接依赖私有实现细节（例如私有 helper 的调用序）。
 
