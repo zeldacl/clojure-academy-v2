@@ -8,12 +8,12 @@
             [cn.li.mc1201.datagen.gson-util :as gson-util]
             [cn.li.mc1201.datagen.item-registry :as item-registry]
             [cn.li.mcmod.datagen.metadata :as datagen-metadata])
-  (:import [com.google.gson JsonElement]
+  (:import [com.google.gson Gson JsonElement]
            [java.util.concurrent CompletableFuture]
-           [net.minecraft.data CachedOutput DataProvider PackOutput$PathProvider PackOutput$Target]
+           [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target]
            [net.minecraft.resources ResourceLocation]))
 
-(def ^:private gson
+(def ^:private ^Gson gson
   (gson-util/create-pretty-gson))
 
 (defn- normalize-id
@@ -106,9 +106,9 @@
      "requirements" reqs}))
 
 (defn create-provider
-  [output]
+  [^PackOutput output]
   (let [^String mod-id (str modid/*mod-id*)
-  path-provider (.createPathProvider output PackOutput$Target/DATA_PACK "advancements")]
+        path-provider (.createPathProvider output PackOutput$Target/DATA_PACK "advancements")]
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
         (let [known (make-known-item-ids)

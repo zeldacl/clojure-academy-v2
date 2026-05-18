@@ -5,13 +5,14 @@
   (:import [net.fabricmc.fabric.api.event.player UseItemCallback]
            [net.minecraft.world InteractionResultHolder InteractionHand]
            [net.minecraft.world.entity.player Player]
-           [net.minecraft.world.item ItemStack]))
+           [net.minecraft.world.item ItemStack]
+           [net.minecraft.world.level Level]))
 
 (defonce ^:private installed? (atom false))
 
 (defn- on-item-use
   "Handle Fabric UseItemCallback event."
-  [^Player player world ^InteractionHand hand]
+  [^Player player ^Level world ^InteractionHand hand]
   (let [stack (.getItemInHand player hand)
         side (if (.isClientSide world) :client :server)
       {:keys [consume?]} (item-use/handle-use player hand stack side {} "Fabric")]

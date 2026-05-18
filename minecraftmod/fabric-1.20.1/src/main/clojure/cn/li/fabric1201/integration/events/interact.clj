@@ -5,14 +5,19 @@
             [cn.li.mcmod.events.interaction-result :as interaction-result]
             [cn.li.mc1201.integration.event-handlers :as event-handlers]
             [cn.li.fabric1201.adapter.gui-registry :as gui-registry-impl])
-  (:import [net.minecraft.world InteractionResult]))
+  (:import [net.minecraft.core BlockPos]
+           [net.minecraft.world InteractionHand InteractionResult]
+           [net.minecraft.world.entity.player Player]
+           [net.minecraft.world.level Level]
+           [net.minecraft.world.level.block.state BlockState]
+           [net.minecraft.world.phys BlockHitResult]))
 
 (defn- is-gui-result?
   [ret]
   (interaction-result/gui-open-result? ret))
 
 (defn- open-gui-for-result
-  [gui-id player world _pos tile-entity]
+  [gui-id player ^Level world _pos tile-entity]
   (when (and tile-entity (not (.isClientSide world)))
     (gui-registry-impl/open-gui-for-player player gui-id tile-entity)))
 
@@ -26,11 +31,11 @@
     ""))
 
 (defn handle-use-block
-  [player world hand hit-result]
+  [^Player player ^Level world ^InteractionHand hand ^BlockHitResult hit-result]
   (try
-    (let [pos (.getBlockPos hit-result)
-          block-state (.getBlockState world pos)
-          item-stack (.getStackInHand player hand)
+    (let [^BlockPos pos (.getBlockPos hit-result)
+          ^BlockState block-state (.getBlockState world pos)
+          item-stack (.getItemInHand player hand)
           ret (handle-right-click
                 {:x (.getX pos)
                  :y (.getY pos)

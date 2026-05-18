@@ -7,6 +7,7 @@
   Storage format: EDN string under one CompoundTag key in player persistent data."
   (:require [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mc1201.runtime.edn-state :as es]
+            [cn.li.mc1201.reflect-util :as ru]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server.level ServerPlayer]
            [net.minecraft.nbt CompoundTag]))
@@ -15,7 +16,7 @@
 
 (defn- player-tag
   ^CompoundTag [^ServerPlayer player]
-  (.getPersistentData player))
+  (ru/inst player "getPersistentData"))
 
 (defn load-player-state!
   "Load runtime state from persistent NBT into in-memory player-state atom."

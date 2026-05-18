@@ -5,6 +5,7 @@
   (:import [cn.li.forge1201.bridge ConfigEventBridge]
            [java.util.function Consumer]
            [java.util.function Predicate]
+           [java.util ArrayList Collection]
             [net.minecraftforge.common ForgeConfigSpec$Builder ForgeConfigSpec$ConfigValue]
            [net.minecraftforge.eventbus.api IEventBus]
            [net.minecraftforge.fml ModLoadingContext]
@@ -38,6 +39,7 @@
     (.comment builder ^"[Ljava.lang.String;" (into-array String [(str comment)]))))
 
 (defn- list-value-predicate
+  ^Predicate
   [descriptor-type]
   (reify Predicate
     (test [_ value]
@@ -46,6 +48,13 @@
         :int-list (number? value)
         :double-list (number? value)
         false))))
+
+(defn- define-list-entry!
+  [^ForgeConfigSpec$Builder builder ^String leaf default descriptor-type]
+  (let [^ArrayList default-list (ArrayList.)
+        ^Predicate predicate (list-value-predicate descriptor-type)]
+    (.addAll default-list ^Collection (or default []))
+    (.defineList builder leaf default-list predicate)))
 
 (defn- define-entry!
   [^ForgeConfigSpec$Builder builder descriptor]
@@ -59,9 +68,9 @@
       :double (.defineInRange builder leaf (double default) (double (or min-val Double/MIN_VALUE)) (double (or max-val Double/MAX_VALUE)))
       :boolean (.define builder leaf (boolean default))
       :string (.define builder leaf (str default))
-      :string-list (.defineList builder leaf (vec default) (list-value-predicate :string-list))
-      :int-list (.defineList builder leaf (vec default) (list-value-predicate :int-list))
-      :double-list (.defineList builder leaf (vec default) (list-value-predicate :double-list))
+      :string-list (define-list-entry! builder leaf default :string-list)
+      :int-list (define-list-entry! builder leaf default :int-list)
+      :double-list (define-list-entry! builder leaf default :double-list)
       (throw (ex-info "Unsupported Forge config descriptor type"
                       {:descriptor descriptor})))))
 

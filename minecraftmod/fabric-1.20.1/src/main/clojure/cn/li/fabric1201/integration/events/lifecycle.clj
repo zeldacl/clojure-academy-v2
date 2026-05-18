@@ -1,12 +1,13 @@
 (ns cn.li.fabric1201.integration.events.lifecycle
   "Fabric player/server lifecycle handlers extracted from monolithic events namespace."
   (:require [cn.li.mc1201.integration.event-support :as event-support]
-            [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
             [cn.li.mc1201.runtime.sync-core :as runtime-sync]
             [cn.li.fabric1201.adapter.network :as runtime-network]
             [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core])
-  (:import [net.minecraft.server.level ServerPlayer]))
+  (:import [net.minecraft.server MinecraftServer]
+           [net.minecraft.server.players PlayerList]
+           [net.minecraft.server.level ServerPlayer]))
 
 (defn handle-player-login
   [^ServerPlayer player]
@@ -44,12 +45,13 @@
           (lifecycle-core/on-player-death! p {:save-player-state! runtime-nbt/save-player-state!}))))))
 
 (defn handle-player-tick
-  [server]
+  [^MinecraftServer server]
   (event-support/guarded-call
     "fabric player tick"
     nil
     (fn []
-      (doseq [^ServerPlayer player (.getPlayers (.getPlayerList server))]
-        (lifecycle-core/on-player-tick! player {:mark-player-dirty! runtime-sync/mark-player-dirty!
-                                                :tick-sync! runtime-sync/tick-sync!
-                                                :send-sync-fn runtime-network/send-sync-to-client!})))))
+      (let [^PlayerList player-list (.getPlayerList server)]
+        (doseq [^ServerPlayer player (.getPlayers player-list)]
+          (lifecycle-core/on-player-tick! player {:mark-player-dirty! runtime-sync/mark-player-dirty!
+                                                  :tick-sync! runtime-sync/tick-sync!
+                                                  :send-sync-fn runtime-network/send-sync-to-client!}))))))

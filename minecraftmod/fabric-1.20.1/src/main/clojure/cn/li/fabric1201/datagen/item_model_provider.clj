@@ -5,16 +5,16 @@
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mc1201.datagen.gson-util :as gson-util]
             [cn.li.mc1201.datagen.item-model-provider-core :as item-model-core])
-  (:import [com.google.gson JsonElement]
+    (:import [com.google.gson Gson JsonElement]
            [java.util.concurrent CompletableFuture]
-           [net.minecraft.data CachedOutput DataProvider PackOutput$PathProvider PackOutput$Target]
+         [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target]
            [net.minecraft.resources ResourceLocation]))
 
 (defn create-provider
-  [output]
+    [^PackOutput output]
   (let [^String mod-id (str modid/*mod-id*)
-  path-provider (.createPathProvider output PackOutput$Target/RESOURCE_PACK "models/item")
-        gson (gson-util/create-pretty-gson)]
+      path-provider (.createPathProvider output PackOutput$Target/RESOURCE_PACK "models/item")
+      ^Gson gson (gson-util/create-pretty-gson)]
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
         (let [{:keys [all-item-count energy-tier-count simple-count models]} (item-model-core/gather-model-specs)

@@ -1,13 +1,16 @@
-(remove-ns 'cn.li.fabric1201.integration.events.block)
-
 (ns cn.li.fabric1201.integration.events.block
   "Fabric block break/place handlers extracted from monolithic events namespace."
   (:require [cn.li.mc1201.integration.event-support :as event-support]
             [cn.li.mcmod.events.dispatcher :as dispatcher]
-            [cn.li.mc1201.integration.event-handlers :as event-handlers]))
+            [cn.li.mc1201.integration.event-handlers :as event-handlers])
+  (:import [net.minecraft.core BlockPos]
+           [net.minecraft.world.entity.player Player]
+           [net.minecraft.world.level Level]
+           [net.minecraft.world.level.block Block]
+           [net.minecraft.world.level.block.state BlockState]))
 
 (defn handle-block-break
-  [world player pos state _be]
+  [^Level world ^Player player ^BlockPos pos ^BlockState state _be]
   (event-support/guarded-call
     "fabric block break"
     true
@@ -25,7 +28,7 @@
         (not (and (map? ret) (:cancel-break? ret)))))))
 
 (defn handle-block-place-mixin
-  [player world pos block]
+  [^Player player ^Level world ^BlockPos pos ^Block block]
   (event-support/guarded-call
     "fabric block place"
     false

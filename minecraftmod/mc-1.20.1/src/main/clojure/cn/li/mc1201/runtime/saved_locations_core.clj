@@ -5,6 +5,7 @@
   rather than using loader-specific lifecycle hooks.
   NBT storage format: CompoundTag keyed 'SavedLocations' on player persistent data."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
+            [cn.li.mc1201.reflect-util :as ru]
             [cn.li.mcmod.platform.saved-locations :as psl]
             [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log])
@@ -14,7 +15,7 @@
 
 (defn- get-locations-tag
   ^CompoundTag [^ServerPlayer player]
-  (let [persistent-data (.getPersistentData player)]
+  (let [^CompoundTag persistent-data (ru/inst player "getPersistentData")]
     (if (.contains persistent-data "SavedLocations")
       (.getCompound persistent-data "SavedLocations")
       (let [new-tag (CompoundTag.)]

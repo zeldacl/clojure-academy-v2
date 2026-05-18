@@ -1,5 +1,3 @@
-(remove-ns 'cn.li.mc1201.runtime.accessor-registry-core)
-
 (ns cn.li.mc1201.runtime.accessor-registry-core
   "Core accessor registry implementation with schema enforcement.
    

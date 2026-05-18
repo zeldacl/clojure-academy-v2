@@ -6,6 +6,7 @@
             [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
             [cn.li.mc1201.gui.provider.common :as provider-common]
             [cn.li.mc1201.gui.registry.common :as registry-common]
+            [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.gui.registry-core :as gui])
   (:import [net.minecraft.world MenuProvider]
            [net.fabricmc.fabric.api.screenhandler.v1 ExtendedScreenHandlerFactory]
@@ -34,7 +35,7 @@
         :player player
         :platform-key :fabric-1.20.1
         :create-container-fn (fn [handler gid p world pos]
-                               (.get-server-container handler gid p world pos))
+                               (gui-handler/get-server-container handler gid p world pos))
         :create-menu-proxy-fn create-menu-proxy
         :log-prefix "[FABRIC-MENU-PROVIDER]"}))))
 
@@ -50,7 +51,7 @@
         :player player
         :platform-key :fabric-1.20.1
         :create-container-fn (fn [handler gid p world pos]
-                               (.get-server-container handler gid p world pos))
+                               (gui-handler/get-server-container handler gid p world pos))
         :create-menu-proxy-fn create-menu-proxy
         :log-prefix "[FABRIC-MENU-PROVIDER]"}))
     (writeScreenOpeningData [_ player buf]

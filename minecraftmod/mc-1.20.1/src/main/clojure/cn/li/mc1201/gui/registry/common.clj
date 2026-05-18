@@ -1,6 +1,8 @@
 (ns cn.li.mc1201.gui.registry.common
   "Shared helpers for platform GUI registry implementations."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraft.network FriendlyByteBuf]
+           [net.minecraft.world.entity.player Inventory Player]))
 
 (defn create-wrapped-container
   [create-container-fn wrap-container-fn resolve-handler-type-fn gui-id sync-or-window-id error-prefix]
@@ -13,17 +15,17 @@
 
 (defn read-block-pos
   "Read a required BlockPos from a platform buffer."
-  [buf]
+  [^FriendlyByteBuf buf]
   (.readBlockPos buf))
 
 (defn write-block-pos!
   "Write a required BlockPos to a platform buffer."
-  [buf pos]
+  [^FriendlyByteBuf buf pos]
   (.writeBlockPos buf pos))
 
 (defn read-extended-open-payload
   "Read the shared extended GUI open payload used by Fabric-style screen handlers."
-  [buf]
+  [^FriendlyByteBuf buf]
   (let [gui-id (.readInt buf)
         has-tile? (.readBoolean buf)]
     {:gui-id gui-id
@@ -32,7 +34,7 @@
 
 (defn write-extended-open-payload!
   "Write the shared extended GUI open payload used by Fabric-style screen handlers."
-  [buf gui-id pos]
+  [^FriendlyByteBuf buf gui-id pos]
   (.writeInt buf gui-id)
   (if pos
     (do
@@ -48,7 +50,8 @@
   player/world/pos/container/menu wrapping flow in mc-1.20.1."
   [{:keys [gui-id window-id player-inventory pos handler create-container-fn
            create-menu-proxy-fn resolve-menu-type-fn bridge-opts error-prefix]}]
-  (let [player (.player player-inventory)
+    (let [^Inventory player-inventory player-inventory
+      ^Player player (.player player-inventory)
         world (.level player)]
     (create-wrapped-container
       (fn []

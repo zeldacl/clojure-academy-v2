@@ -26,10 +26,7 @@
   [texture]
   (let [minecraft (Minecraft/getInstance)
         texture-manager (.getTextureManager minecraft)]
-    (try
-      (.bindForSetup texture-manager texture)
-      (catch Exception _
-        (.bind texture-manager texture)))))
+    (.bindForSetup texture-manager texture)))
 
 (defn register-renderers
   "Register platform-agnostic renderers for Fabric."

@@ -7,7 +7,8 @@
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.level Level$ExplosionInteraction]
-           [net.minecraft.world.entity EntityType LightningBolt]
+           [net.minecraft.world.entity Entity EntityType LightningBolt]
+           [net.minecraft.world.level.block Block]
            [net.minecraft.world.phys AABB]))
 
 (defonce ^:private installed? (atom false))
@@ -33,9 +34,9 @@
                                 true)))
      :get-entities-in-aabb-fn (fn [^ServerLevel l ^AABB aabb]
                                 (.getEntities l nil aabb))
-     :resolve-entity-id-fn (fn [entity]
+    :resolve-entity-id-fn (fn [^Entity entity]
                              (str (.getDescriptionId (.getType entity))))
-     :block-id-fn (fn [block _block-state]
+    :block-id-fn (fn [^Block block _block-state]
                     (str (.getDescriptionId block)))}))
 
 (defn install-world-effects! []

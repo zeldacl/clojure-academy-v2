@@ -1,6 +1,7 @@
 (ns cn.li.fabric1201.adapter.gui-registry
   "Fabric 1.20.1 GUI Registration Implementation"
   (:require [cn.li.mcmod.gui.registry-core :as gui]
+            [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
             [cn.li.fabric1201.gui.provider-bridge :as provider-bridge]
             [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
@@ -33,7 +34,7 @@
                :pos pos
                :handler handler
                :create-container-fn (fn [h gid player world block-pos]
-                                      (.get-server-container h gid player world block-pos))
+                                      (gui-handler/get-server-container h gid player world block-pos))
                :create-menu-proxy-fn (fn [window-id menu-type clj-container opts]
                                        (menu-proxy/create-menu-proxy window-id menu-type clj-container opts))
                :resolve-menu-type-fn get-handler-type

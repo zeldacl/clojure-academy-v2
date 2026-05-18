@@ -12,8 +12,10 @@
   (:import [clojure.lang Reflector]
            [io.netty.buffer Unpooled]
            [net.fabricmc.fabric.api.networking.v1 ServerPlayNetworking]
+           [net.minecraft.client Minecraft]
            [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.resources ResourceLocation]
+           [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]))
 
 (defonce ^:private server-initialized? (atom false))
@@ -32,7 +34,8 @@
     (into-array Class [iface])
     (reify java.lang.reflect.InvocationHandler
       (invoke [_ _ method args]
-        (invoke-fn (.getName method) args)))))
+        (let [^java.lang.reflect.Method method method]
+          (invoke-fn (.getName method) args))))))
 
 (defn- make-buf
   [payload]
@@ -75,11 +78,11 @@
     (let [handler-iface (ru/class-noinit "net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking$PlayChannelHandler")
           receiver (jproxy
                      handler-iface
-                     (fn [method-name args]
+                     (fn [method-name ^objects args]
                        (when (= method-name "receive")
-                         (let [server (aget args 0)
-                               player (aget args 1)
-                               buf (aget args 3)
+                         (let [^MinecraftServer server (aget args 0)
+                               ^ServerPlayer player (aget args 1)
+                               ^FriendlyByteBuf buf (aget args 3)
                            {:keys [msg-id request-id payload]} (packet-base/normalize-request (read-buf-map buf))]
                            (.execute server
                                      (reify Runnable
@@ -106,10 +109,10 @@
           handler-iface (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking$PlayChannelHandler")
           receiver (jproxy
                      handler-iface
-                     (fn [method-name args]
+                     (fn [method-name ^objects args]
                        (when (= method-name "receive")
-                         (let [client (aget args 0)
-                               buf (aget args 2)
+                         (let [^Minecraft client (aget args 0)
+                               ^FriendlyByteBuf buf (aget args 2)
                                {:keys [request-id payload]} (packet-base/normalize-response (read-buf-map buf))]
                            (.execute client
                                      (reify Runnable

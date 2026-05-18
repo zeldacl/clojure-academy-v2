@@ -5,17 +5,17 @@
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mc1201.datagen.gson-util :as gson-util]
             [cn.li.mc1201.datagen.lang-provider-core :as lang-core])
-  (:import [com.google.gson JsonElement]
+  (:import [com.google.gson Gson JsonElement]
            [java.util.concurrent CompletableFuture]
-           [net.minecraft.data CachedOutput DataProvider PackOutput$PathProvider PackOutput$Target]
+           [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target]
            [net.minecraft.resources ResourceLocation]))
 
 (defn create-provider
-  [output
+  [^PackOutput output
    lang-code]
   (let [^String mod-id (str modid/*mod-id*)
-      path-provider (.createPathProvider output PackOutput$Target/RESOURCE_PACK "lang")
-        gson (gson-util/create-pretty-gson)]
+        path-provider (.createPathProvider output PackOutput$Target/RESOURCE_PACK "lang")
+        ^Gson gson (gson-util/create-pretty-gson)]
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
         (lang-core/save-language-files!

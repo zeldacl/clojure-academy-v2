@@ -8,7 +8,7 @@
             [cn.li.fabric1201.datagen.lang-provider :as lang-provider]
             [cn.li.fabric1201.datagen.recipe-provider :as recipe-provider]
             [cn.li.mc1201.datagen.blockstate-provider-shell :as blockstate-shell])
-  (:import [net.fabricmc.fabric.api.datagen.v1 FabricDataGenerator$Pack$Factory]))
+  (:import [net.fabricmc.fabric.api.datagen.v1 FabricDataGenerator$Pack FabricDataGenerator$Pack$Factory]))
 
 (def ^:private blockstate-provider-name
   "AcademyCraft Fabric Blockstate Provider")
@@ -33,5 +33,6 @@
 
 (defn add-provider!
   "Register one shared provider manifest entry with a FabricDataGenerator pack."
-  [pack provider]
-  (.addProvider pack (provider-pack-factory provider)))
+  [^FabricDataGenerator$Pack pack provider]
+  (let [^FabricDataGenerator$Pack$Factory factory (provider-pack-factory provider)]
+    (.addProvider pack factory)))

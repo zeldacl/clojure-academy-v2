@@ -1,5 +1,3 @@
-(remove-ns 'cn.li.mc1201.integration.event-handlers)
-
 (ns cn.li.mc1201.integration.event-handlers
   "Shared event handler logic for block interactions.
   

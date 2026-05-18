@@ -3,7 +3,8 @@
             [clojure.string :as str]
             [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.mcmod.util.log :as log])
-  (:import [com.google.gson GsonBuilder]
+  (:import [com.google.gson Gson GsonBuilder]
+           [java.io File]
            [net.fabricmc.loader.api FabricLoader]))
 
 (defonce gson
@@ -29,9 +30,10 @@
           descriptors))
 
 (defn- read-json-file
-  [file]
+  [^File file]
   (with-open [reader (io/reader file)]
-    (.fromJson @gson reader java.util.Map)))
+    (let [^Gson gson-instance @gson]
+      (.fromJson gson-instance reader java.util.Map))))
 
 (defn- coerce-value
   [descriptor raw-value]
@@ -75,12 +77,13 @@
              (coerce-value descriptor raw-value))])))
 
 (defn- write-domain-file!
-  [file descriptors values]
-  (let [parent (.getParentFile file)]
+  [^File file descriptors values]
+  (let [^File parent (.getParentFile file)]
     (when parent
       (.mkdirs parent))
     (with-open [writer (io/writer file)]
-      (.toJson @gson (nested-config-map descriptors values) writer))))
+      (let [^Gson gson-instance @gson]
+        (.toJson gson-instance (nested-config-map descriptors values) writer)))))
 
 (defn- load-domain!
   [domain]
