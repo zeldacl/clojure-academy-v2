@@ -88,7 +88,7 @@
 	(fn [{:keys [player world pos sneaking]}]
 		(when (and player world pos (not sneaking))
 			(try
-				(if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
+				(if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
 					(let [block-spec (bdsl/get-block controller-block-id)
 								controller-pos (or (when block-spec (bdsl/resolve-multi-block-master-pos world pos block-spec)) pos)]
 						(if (world/world-is-client-side* world)

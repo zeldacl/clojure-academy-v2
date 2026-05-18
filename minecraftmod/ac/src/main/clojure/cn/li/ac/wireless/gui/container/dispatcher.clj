@@ -6,7 +6,7 @@
 
   Uses metadata-driven dispatch via GUI registry."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.gui.dsl :as gui-dsl]))
+            [cn.li.mcmod.gui.registry :as gui-registry]))
 
 (defn- registration-value [cfg k]
   (get-in cfg [:registration k]))
@@ -56,34 +56,34 @@
 (extend-protocol IContainerOperations
   Object
   (tick-container! [container]
-    (if-let [cfg (gui-dsl/get-config-by-container container)]
+    (if-let [cfg (gui-registry/get-config-by-container container)]
       (when-let [f (lifecycle-value cfg :tick-fn)] (f container))
       (log/warn "Unknown container type for tick")))
 
   (validate-container [container player]
-    (if-let [cfg (gui-dsl/get-config-by-container container)]
+    (if-let [cfg (gui-registry/get-config-by-container container)]
       (if-let [f (operation-value cfg :validate-fn)]
         (boolean (f container player))
         true)
       false))
 
   (sync-container! [container]
-    (if-let [cfg (gui-dsl/get-config-by-container container)]
+    (if-let [cfg (gui-registry/get-config-by-container container)]
       (when-let [f (sync-value cfg :sync-get)] (f container))
       (log/warn "Unknown container type for sync")))
 
   (handle-button-click! [container button-id player]
-    (if-let [cfg (gui-dsl/get-config-by-container container)]
+    (if-let [cfg (gui-registry/get-config-by-container container)]
       (when-let [f (operation-value cfg :button-click-fn)] (f container button-id player))
       (log/warn "Unknown container type for button click")))
 
   (handle-text-input! [container field-id text player]
-    (if-let [cfg (gui-dsl/get-config-by-container container)]
+    (if-let [cfg (gui-registry/get-config-by-container container)]
       (when-let [f (operation-value cfg :text-input-fn)] (f container field-id text player))
       (log/warn "Unknown container type for text input")))
 
   (close-container! [container]
-    (if-let [cfg (gui-dsl/get-config-by-container container)]
+    (if-let [cfg (gui-registry/get-config-by-container container)]
       (when-let [f (operation-value cfg :close-fn)] (f container))
       (log/warn "Unknown container type for close"))))
 
@@ -99,7 +99,7 @@
 
   Returns: :node or :matrix"
   [container]
-  (if-let [cfg (gui-dsl/get-config-by-container container)]
+  (if-let [cfg (gui-registry/get-config-by-container container)]
     (registration-value cfg :gui-type)
     (do
       (log/warn "Unknown container type:" (type container))
@@ -212,7 +212,7 @@
   "Get tile slot count for a container. Returns 0 for unknown containers."
   [container]
   (try
-    (if-let [cfg (gui-dsl/get-config-by-container container)]
+    (if-let [cfg (gui-registry/get-config-by-container container)]
       (if-let [f (slot-value cfg :slot-count-fn)]
         (f container)
         0)
@@ -225,7 +225,7 @@
   "Get slot item as ItemStack (or nil/empty when unavailable)."
   [container slot-index]
   (try
-    (when-let [cfg (gui-dsl/get-config-by-container container)]
+    (when-let [cfg (gui-registry/get-config-by-container container)]
       (when-let [f (slot-value cfg :slot-get-fn)]
         (f container slot-index)))
     (catch Exception e
@@ -236,7 +236,7 @@
   "Set slot item. Nil stack clears the slot."
   [container slot-index item-stack]
   (try
-    (when-let [cfg (gui-dsl/get-config-by-container container)]
+    (when-let [cfg (gui-registry/get-config-by-container container)]
       (when-let [f (slot-value cfg :slot-set-fn)]
         (f container slot-index item-stack)))
     (catch Exception e
@@ -247,7 +247,7 @@
   "Check whether a stack may be placed in a slot."
   [container slot-index item-stack]
   (try
-    (if-let [cfg (gui-dsl/get-config-by-container container)]
+    (if-let [cfg (gui-registry/get-config-by-container container)]
       (if-let [f (slot-value cfg :slot-can-place-fn)]
         (boolean (f container slot-index item-stack))
         true)
@@ -260,7 +260,7 @@
   "Notify container that slot content changed."
   [container slot-index]
   (try
-    (when-let [cfg (gui-dsl/get-config-by-container container)]
+    (when-let [cfg (gui-registry/get-config-by-container container)]
       (when-let [f (slot-value cfg :slot-changed-fn)]
         (f container slot-index)))
     (catch Exception e

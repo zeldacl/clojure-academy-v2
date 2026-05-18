@@ -9,11 +9,12 @@
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.mcmod.util.log :as log]))
@@ -140,45 +141,35 @@
     (slot-schema/register-slot-schema! {:schema-id base-schema-id :slots [{:id :energy :type :energy :x 42 :y 80}]})
 
     (gui-reg/register-block-gui!
-      "wind-gen-main"
-      {:gui-id 3
-       :display-name "Wind Generator Main"
-       :gui-type :wind-gen-main
-       :registry-name "wind_gen_main_gui"
-       :screen-factory-fn-kw :create-wind-main-screen
-       :slot-schema-id main-schema-id
-       :container-predicate main-container?
-       :container-fn create-main-container
-       :screen-fn create-main-screen
-       :tick-fn main-sync!
-       :sync-get main-sync-data
-       :sync-apply apply-main-sync!
-       :validate-fn main-still-valid?
-       :slot-count-fn main-slot-count
-       :slot-get-fn main-get-slot
-       :slot-set-fn main-set-slot!
-       :slot-can-place-fn main-can-place?
-       :slot-changed-fn (fn [_ _] nil)})
+      (gui-manifest/gui-name :wind-gen-main)
+      (merge (gui-manifest/gui-registration :wind-gen-main)
+             {:container-predicate main-container?
+          :container-fn create-main-container
+          :screen-fn create-main-screen
+          :tick-fn main-sync!
+          :sync-get main-sync-data
+          :sync-apply apply-main-sync!
+          :validate-fn main-still-valid?
+          :slot-count-fn main-slot-count
+          :slot-get-fn main-get-slot
+          :slot-set-fn main-set-slot!
+          :slot-can-place-fn main-can-place?
+              :slot-changed-fn (fn [_ _] nil)}))
 
     (gui-reg/register-block-gui!
-      "wind-gen-base"
-      {:gui-id 4
-       :display-name "Wind Generator Base"
-       :gui-type :wind-gen-base
-       :registry-name "wind_gen_base_gui"
-       :screen-factory-fn-kw :create-wind-base-screen
-       :slot-schema-id base-schema-id
-       :container-predicate base-container?
-       :container-fn create-base-container
-       :screen-fn create-base-screen
-       :tick-fn base-sync!
-       :sync-get base-sync-data
-       :sync-apply apply-base-sync!
-       :validate-fn base-still-valid?
-       :slot-count-fn base-slot-count
-       :slot-get-fn base-get-slot
-       :slot-set-fn base-set-slot!
-       :slot-can-place-fn base-can-place?
-       :slot-changed-fn (fn [_ _] nil)})
+      (gui-manifest/gui-name :wind-gen-base)
+      (merge (gui-manifest/gui-registration :wind-gen-base)
+             {:container-predicate base-container?
+              :container-fn create-base-container
+              :screen-fn create-base-screen
+              :tick-fn base-sync!
+              :sync-get base-sync-data
+              :sync-apply apply-base-sync!
+              :validate-fn base-still-valid?
+              :slot-count-fn base-slot-count
+              :slot-get-fn base-get-slot
+              :slot-set-fn base-set-slot!
+              :slot-can-place-fn base-can-place?
+              :slot-changed-fn (fn [_ _] nil)}))
 
     (log/info "Wind Generator GUIs initialized (main/base)")))

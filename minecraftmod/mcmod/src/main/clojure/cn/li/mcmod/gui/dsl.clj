@@ -1,14 +1,12 @@
 (ns cn.li.mcmod.gui.dsl
   "GUI DSL - Declarative GUI definition using Clojure macros
   
-  Supports generic GUI layout specs plus wireless/platform-visible GUI metadata
-  and runtime hooks."
+  Supports generic GUI layout specs and content-facing GUI definition macros.
+  Runtime metadata queries live in cn.li.mcmod.gui.registry."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.parser :as gui-parser]
             [cn.li.mcmod.gui.validator :as gui-validator]
-            [cn.li.mcmod.gui.registry :as gui-registry-core]))
-
-(def gui-registry gui-registry-core/gui-registry)
+            [cn.li.mcmod.gui.registry :as gui-registry]))
 
 (def default-gui-width gui-parser/default-gui-width)
 (def default-gui-height gui-parser/default-gui-height)
@@ -21,26 +19,7 @@
 (def parse-label gui-parser/parse-label)
 (def validate-gui-spec gui-validator/validate-gui-spec)
 (def create-gui-spec gui-parser/create-gui-spec)
-(def register-gui! gui-registry-core/register-gui!)
-(def get-gui gui-registry-core/get-gui)
-(def list-guis gui-registry-core/list-guis)
-(def get-gui-by-gui-id gui-registry-core/get-gui-by-gui-id)
-(def list-gui-ids gui-registry-core/list-gui-ids)
-(def get-all-gui-ids gui-registry-core/get-all-gui-ids)
-(def has-gui-id? gui-registry-core/has-gui-id?)
-(def get-registry-name gui-registry-core/get-registry-name)
-(def get-screen-factory-fn-kw gui-registry-core/get-screen-factory-fn-kw)
-(def get-gui-type gui-registry-core/get-gui-type)
-(def get-slot-layout gui-registry-core/get-slot-layout)
-(def get-display-name gui-registry-core/get-display-name)
-(def get-container-fn gui-registry-core/get-container-fn)
-(def get-screen-fn gui-registry-core/get-screen-fn)
-(def get-container-predicate gui-registry-core/get-container-predicate)
-(def get-payload-sync-apply-fn gui-registry-core/get-payload-sync-apply-fn)
-(def get-slot-range gui-registry-core/get-slot-range)
-(def get-gui-by-type gui-registry-core/get-gui-by-type)
-(def get-gui-id-for-type gui-registry-core/get-gui-id-for-type)
-(def get-config-by-container gui-registry-core/get-config-by-container)
+(def register-gui! gui-registry/register-gui!)
 
 ;; Main macro: defgui
 (defmacro defgui

@@ -30,6 +30,7 @@
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
+            [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.platform.entity :as entity]
@@ -38,7 +39,7 @@
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.item.constraint-plate :as plate]
             [cn.li.ac.item.mat-core :as core]
@@ -375,7 +376,7 @@
         tile       (if container? (:tile-entity source) source)
         container  (when container? source)
         block-pos  (pos/position-get-block-pos tile)]
-    (merge {:gui-id      1
+    (merge {:gui-id      (gui-manifest/gui-id :wireless-matrix)
             :pos-x       (pos/pos-x block-pos)
             :pos-y       (pos/pos-y block-pos)
             :pos-z       (pos/pos-z block-pos)
@@ -584,26 +585,21 @@
   (with-init-guard wireless-matrix-gui-installed?
     (ensure-wireless-matrix-slot-schema!)
     (gui-reg/register-block-gui!
-      "wireless-matrix"
-      {:gui-id 1
-       :display-name "Wireless Matrix"
-       :gui-type :matrix
-       :registry-name "wireless_matrix_gui"
-       :screen-factory-fn-kw :create-matrix-screen
-       :slot-schema-id wireless-matrix-id
-       :container-predicate matrix-container?
-       :container-fn create-container
-       :screen-fn create-screen
-       :tick-fn tick!
-       :sync-get get-sync-data
-       :sync-apply apply-sync-data!
-       :payload-sync-apply-fn apply-matrix-sync-payload!
-       :validate-fn still-valid?
-       :close-fn on-close
-       :button-click-fn handle-button-click!
-       :slot-count-fn get-slot-count
-       :slot-get-fn get-slot-item
-       :slot-set-fn set-slot-item!
-       :slot-can-place-fn can-place-item?
-       :slot-changed-fn slot-changed!})
+      (gui-manifest/gui-name :wireless-matrix)
+      (merge (gui-manifest/gui-registration :wireless-matrix)
+             {:container-predicate matrix-container?
+              :container-fn create-container
+              :screen-fn create-screen
+              :tick-fn tick!
+              :sync-get get-sync-data
+              :sync-apply apply-sync-data!
+              :payload-sync-apply-fn apply-matrix-sync-payload!
+              :validate-fn still-valid?
+              :close-fn on-close
+              :button-click-fn handle-button-click!
+              :slot-count-fn get-slot-count
+              :slot-get-fn get-slot-item
+              :slot-set-fn set-slot-item!
+              :slot-can-place-fn can-place-item?
+              :slot-changed-fn slot-changed!}))
     (log/info "Wireless Matrix GUI registered")))

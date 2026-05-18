@@ -9,16 +9,30 @@
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.service.world-registry :as world-registry]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.be :as platform-be]))
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.gui.container-state :as container-state]))
 
-(defn- get-active-client-container
-  "Get active client container from gui.registry without creating compile-time cycle."
-  []
-  (try
-    (when-let [container-var (requiring-resolve 'cn.li.ac.wireless.gui.registry/client-container)]
-      @container-var)
-    (catch Exception _
-      nil)))
+(defn- find-active-container-for-payload
+  "Find the active client container matching a sync payload position."
+  [payload]
+  (let [payload-pos [(:pos-x payload) (:pos-y payload) (:pos-z payload)]
+        positional? (every? number? payload-pos)
+        matches? (fn [container]
+                   (try
+                     (when-let [tile (:tile-entity container)]
+                       (let [tile-pos (pos/position-get-block-pos tile)]
+                         (= payload-pos
+                            [(pos/pos-x tile-pos)
+                             (pos/pos-y tile-pos)
+                             (pos/pos-z tile-pos)])))
+                     (catch Exception _
+                       false)))]
+    (or (some (fn [container]
+                (when (and positional? (matches? container))
+                  container))
+              (container-state/list-active-containers))
+        (when-not positional?
+          (first (container-state/list-active-containers))))))
 
 ;; ============================================================================
 ;; Universal Broadcast
@@ -142,14 +156,9 @@
   Returns: nil"
   [payload field-mappings log-prefix]
   (try
-    (when-let [container (get-active-client-container)]
-      (when (and (:tile-entity container)
-                 (= (:pos-x payload)
-                    (try (let [tile-pos (pos/position-get-block-pos (:tile-entity container))]
-                           (pos/pos-x tile-pos))
-                         (catch Exception _ nil))))
-        (apply-payload-fields! container payload field-mappings)
-        (log/debug (str "Applied " log-prefix " sync payload on client"))))
+    (when-let [container (find-active-container-for-payload payload)]
+      (apply-payload-fields! container payload field-mappings)
+      (log/debug (str "Applied " log-prefix " sync payload on client")))
     (catch Exception e
       (log/debug (str "Failed to apply " log-prefix " sync payload:")(ex-message e)))))
 

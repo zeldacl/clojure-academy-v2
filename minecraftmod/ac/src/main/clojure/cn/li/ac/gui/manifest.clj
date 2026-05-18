@@ -1,0 +1,186 @@
+(ns cn.li.ac.gui.manifest
+	"Central AC GUI manifest data.
+
+	AC content namespaces still own behavior (containers, screens, handlers), while
+	this namespace owns cross-cutting GUI catalog data such as wireless message
+	domains. Keeping this data here avoids scattered registration calls in block
+	initializers."
+	(:require [clojure.set :as set]))
+
+(def message-domain-actions
+	"Wireless GUI message actions keyed by GUI/message domain.
+
+	These domains are consumed by cn.li.ac.wireless.shared.message-registry during
+	content startup and by tests/guards that need one source of truth."
+	{:matrix [:gather-info :init :change-ssid :change-password :sync-state]
+	 :node [:get-status :change-name :change-password :list-networks :connect :disconnect]
+	 :generator [:get-status :list-nodes :connect :disconnect]
+	 :wind-gen [:get-status-main :get-status-base]
+	 :phase-gen [:get-status]
+	 :imag-fusor [:get-status]
+	 :metal-former [:get-status :alternate]
+	 :developer [:get-status :start-development :stop-development :list-nodes :connect :disconnect]
+	 :ability-interferer [:get-status :change-range :toggle-enabled :set-whitelist :add-to-whitelist :remove-from-whitelist]})
+
+(def gui-definitions
+	"Static AC GUI registration metadata keyed by content GUI key.
+
+	GUI implementation namespaces own behavior callbacks (container/screen/sync/slot
+	functions). This manifest owns stable IDs and metadata that must remain unique
+	and platform-visible."
+	{:wireless-node {:gui-name "wireless-node"
+					 :gui-id 0
+					 :display-name "Wireless Node"
+					 :gui-type :node
+					 :registry-name "wireless_node_gui"
+					 :screen-factory-fn-kw :create-node-screen
+					 :slot-schema-id :wireless-node
+					 :message-domain :node
+					 :init-fn 'cn.li.ac.block.wireless-node.gui/init!}
+	 :wireless-matrix {:gui-name "wireless-matrix"
+					 :gui-id 1
+					 :display-name "Wireless Matrix"
+					 :gui-type :matrix
+					 :registry-name "wireless_matrix_gui"
+					 :screen-factory-fn-kw :create-matrix-screen
+					 :slot-schema-id :wireless-matrix
+					 :message-domain :matrix
+					 :init-fn 'cn.li.ac.block.wireless-matrix.gui/init-wireless-matrix-gui!}
+	 :solar-gen {:gui-name "solar-gen"
+			 :gui-id 2
+			 :display-name "Solar Generator"
+			 :gui-type :solar
+			 :registry-name "solar_gen_gui"
+			 :screen-factory-fn-kw :create-solar-screen
+			 :slot-schema-id :solar-gen
+			 :message-domain :generator
+			 :init-fn 'cn.li.ac.block.solar-gen.gui/init-solar-gui!}
+	 :wind-gen-main {:gui-name "wind-gen-main"
+				 :gui-id 3
+				 :display-name "Wind Generator Main"
+				 :gui-type :wind-gen-main
+				 :registry-name "wind_gen_main_gui"
+				 :screen-factory-fn-kw :create-wind-main-screen
+				 :slot-schema-id :wind-gen-main
+				 :message-domain :wind-gen
+				 :init-fn 'cn.li.ac.block.wind-gen.gui/init-wind-gen-gui!}
+	 :wind-gen-base {:gui-name "wind-gen-base"
+				 :gui-id 4
+				 :display-name "Wind Generator Base"
+				 :gui-type :wind-gen-base
+				 :registry-name "wind_gen_base_gui"
+				 :screen-factory-fn-kw :create-wind-base-screen
+				 :slot-schema-id :wind-gen-base
+				 :message-domain :wind-gen
+				 :init-fn 'cn.li.ac.block.wind-gen.gui/init-wind-gen-gui!}
+	 :imag-fusor {:gui-name "imag-fusor"
+			  :gui-id 5
+			  :display-name "Imag Fusor"
+			  :gui-type :imag-fusor
+			  :registry-name "imag_fusor_gui"
+			  :screen-factory-fn-kw :create-imag-fusor-screen
+			  :slot-schema-id :imag-fusor
+			  :message-domain :imag-fusor
+			  :init-fn 'cn.li.ac.block.imag-fusor.gui/init-imag-fusor-gui!}
+	 :metal-former {:gui-name "metal-former"
+				 :gui-id 6
+				 :display-name "Metal Former"
+				 :gui-type :metal-former
+				 :registry-name "metal_former_gui"
+				 :screen-factory-fn-kw :create-metal-former-screen
+				 :slot-schema-id :metal-former
+				 :message-domain :metal-former
+				 :init-fn 'cn.li.ac.block.metal-former.gui/init-metal-former-gui!}
+	 :phase-gen {:gui-name "phase-gen"
+			 :gui-id 7
+			 :display-name "Phase Generator"
+			 :gui-type :phase-gen
+			 :registry-name "phase_gen_gui"
+			 :screen-factory-fn-kw :create-phase-gen-screen
+			 :slot-schema-id :phase-gen
+			 :message-domain :phase-gen
+			 :init-fn 'cn.li.ac.block.phase-gen.gui/init-phase-gen-gui!}
+	 :developer {:gui-name "developer"
+			 :gui-id 13
+			 :display-name "Ability Developer"
+			 :gui-type :developer
+			 :registry-name "developer_gui"
+			 :screen-factory-fn-kw :create-developer-screen
+			 :slot-schema-id :developer-gui
+			 :message-domain :developer
+			 :init-fn 'cn.li.ac.block.developer.gui/init-developer-gui!}
+	 :energy-converter {:gui-name "energy-converter"
+				    :gui-id 14
+				    :display-name "Energy Converter"
+				    :gui-type :energy-converter
+				    :registry-name "energy_converter_gui"
+				    :screen-factory-fn-kw :create-energy-converter-screen
+				    :slot-schema-id :energy-converter
+				    :message-domain nil
+				    :init-fn 'cn.li.ac.integration.block.energy-converter.gui/register-converter-guis!}
+	 :ability-interferer {:gui-name "ability-interferer"
+				       :gui-id 15
+				       :display-name "Ability Interferer"
+				       :gui-type :ability-interferer
+				       :registry-name "ability_interferer_gui"
+				       :screen-factory-fn-kw :create-ability-interferer-screen
+				       :slot-schema-id :ability-interferer
+				       :message-domain :ability-interferer
+				       :init-fn 'cn.li.ac.block.ability-interferer.gui/init-ability-interferer-gui!}})
+
+(def gui-registration-keys
+	[:gui-id :display-name :gui-type :registry-name :screen-factory-fn-kw :slot-schema-id])
+
+(defn gui-definition
+	"Return the full static manifest entry for a GUI key."
+	[gui-key]
+	(get gui-definitions gui-key))
+
+(defn require-gui-definition
+	"Return a manifest entry or fail fast with the unknown GUI key."
+	[gui-key]
+	(or (gui-definition gui-key)
+		(throw (ex-info "Unknown AC GUI manifest key" {:gui-key gui-key}))))
+
+(defn gui-name
+	"Return the content GUI name used by mcmod.gui parser/registry."
+	[gui-key]
+	(:gui-name (require-gui-definition gui-key)))
+
+(defn gui-id
+	"Return the stable integer GUI id for a GUI key."
+	[gui-key]
+	(:gui-id (require-gui-definition gui-key)))
+
+(defn gui-definition-for-type
+	"Return the manifest entry whose business GUI type matches gui-type."
+	[gui-type]
+	(some (fn [[_ entry]]
+			(when (= gui-type (:gui-type entry))
+				entry))
+		  gui-definitions))
+
+(defn gui-id-for-type
+	"Return the stable integer GUI id for a business GUI type keyword."
+	[gui-type]
+	(:gui-id (gui-definition-for-type gui-type)))
+
+(defn gui-registration
+	"Return the static metadata map consumed by ac.block.gui.registration/register-block-gui!."
+	[gui-key]
+	(select-keys (require-gui-definition gui-key) gui-registration-keys))
+
+(defn message-domains
+	"Return all known message domains."
+	[]
+	(keys message-domain-actions))
+
+(defn message-actions
+	"Return the declared action vector for a message domain."
+	[domain]
+	(get message-domain-actions domain))
+
+(defn missing-message-domains
+	"Return required domains that are absent from the manifest."
+	[required-domains]
+	(set/difference (set required-domains) (set (message-domains))))

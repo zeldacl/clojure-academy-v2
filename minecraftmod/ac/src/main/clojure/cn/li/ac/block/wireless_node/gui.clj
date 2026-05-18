@@ -19,6 +19,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.mcmod.network.client :as net-client]
@@ -29,7 +30,7 @@
             [cn.li.ac.energy.operations :as energy-stub]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
@@ -285,7 +286,7 @@
                     (try (pos/position-get-block-pos tile) (catch Exception _ nil)))
         state     (tile-state tile)]
     (when block-pos
-      (merge {:gui-id 0
+      (merge {:gui-id (gui-manifest/gui-id :wireless-node)
               :pos-x  (pos/pos-x block-pos)
               :pos-y  (pos/pos-y block-pos)
               :pos-z  (pos/pos-z block-pos)}
@@ -472,28 +473,23 @@
   (when (compare-and-set! wireless-node-gui-installed? false true)
     (ensure-wireless-node-slot-schema!)
     (gui-reg/register-block-gui!
-      "wireless-node"
-      {:gui-id 0
-       :display-name "Wireless Node"
-       :gui-type :node
-       :registry-name "wireless_node_gui"
-       :screen-factory-fn-kw :create-node-screen
-       :slot-schema-id wireless-node-id
-       :container-predicate node-container?
-       :container-fn create-container
-       :screen-fn create-screen
-       :tick-fn tick!
-       :sync-get get-sync-data
-       :sync-apply apply-sync-data!
-       :payload-sync-apply-fn apply-node-sync-payload!
-       :validate-fn still-valid?
-       :close-fn on-close
-       :button-click-fn handle-button-click!
-       :slot-count-fn get-slot-count
-       :slot-get-fn get-slot-item
-       :slot-set-fn set-slot-item!
-       :slot-can-place-fn can-place-item?
-       :slot-changed-fn slot-changed!})
+      (gui-manifest/gui-name :wireless-node)
+      (merge (gui-manifest/gui-registration :wireless-node)
+             {:container-predicate node-container?
+              :container-fn create-container
+              :screen-fn create-screen
+              :tick-fn tick!
+              :sync-get get-sync-data
+              :sync-apply apply-sync-data!
+              :payload-sync-apply-fn apply-node-sync-payload!
+              :validate-fn still-valid?
+              :close-fn on-close
+              :button-click-fn handle-button-click!
+              :slot-count-fn get-slot-count
+              :slot-get-fn get-slot-item
+              :slot-set-fn set-slot-item!
+              :slot-can-place-fn can-place-item?
+              :slot-changed-fn slot-changed!}))
     (log/info "Wireless Node GUI module initialized")))
 
 ;; ============================================================================

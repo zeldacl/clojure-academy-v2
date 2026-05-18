@@ -2,6 +2,7 @@
   "Tests for wireless GUI message DSL and catalog integration."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.gui.message.dsl :as msg-dsl]
+            [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.message.api :as wireless-msgs]
             [cn.li.ac.wireless.shared.message-registry :as shared-registry]))
@@ -10,7 +11,7 @@
   #{:get-status :change-name :change-password :list-networks :connect :disconnect})
 
 (def expected-matrix-actions
-  #{:gather-info :init :change-ssid :change-password})
+  #{:gather-info :init :change-ssid :change-password :sync-state})
 
 (deftest message-id-format-test
   (is (= "wireless_node_get_status" (msg-dsl/message-id :node :get-status)))
@@ -59,11 +60,16 @@
       (is (some? node-spec))
       (is (some? matrix-spec))
       (is (contains? (:domains catalog) :node))
-      (is (contains? (:domains catalog) :matrix)))
+      (is (contains? (:domains catalog) :matrix))
+      (is (empty? (gui-manifest/missing-message-domains [:node :matrix :generator :wind-gen
+                                                         :phase-gen :imag-fusor :metal-former
+                                                         :developer :ability-interferer]))))
 
     (testing "registered actions match expected sets"
       (is (= expected-node-actions (set (keys (:messages node-spec)))))
-      (is (= expected-matrix-actions (set (keys (:messages matrix-spec))))))
+      (is (= expected-matrix-actions (set (keys (:messages matrix-spec)))))
+      (is (= (set (gui-manifest/message-actions :metal-former))
+             (set (keys (:messages (msg-registry/get-domain-spec :metal-former)))))))
 
     (testing "catalog lookups are bidirectional"
       (is (= "wireless_node_get_status" (wireless-msgs/msg :node :get-status)))

@@ -18,6 +18,7 @@
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
@@ -26,10 +27,9 @@
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.ac.energy.operations :as energy-ops]
-            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
-            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.block.solar-gen.schema :as solar-schema]))
 
 ;; ============================================================================
@@ -190,16 +190,10 @@
     (slot-schema/register-slot-schema!
       {:schema-id solar-gen-id
        :slots [{:id :energy :type :energy :x 42 :y 81}]})
-    (msg-registry/register-block-messages! :generator [:get-status :list-nodes :connect :disconnect])
     (gui-reg/register-block-gui!
-      "solar-gen"
-      {:gui-id 2
-       :display-name "Solar Generator"
-       :gui-type :solar
-       :registry-name "solar_gen_gui"
-       :screen-factory-fn-kw :create-solar-screen
-       :slot-schema-id solar-gen-id
-       :container-predicate solar-container?
+      (gui-manifest/gui-name :solar-gen)
+      (merge (gui-manifest/gui-registration :solar-gen)
+         {:container-predicate solar-container?
        :container-fn create-container
        :screen-fn create-screen
        :tick-fn tick!
@@ -212,5 +206,5 @@
        :slot-get-fn get-slot-item
        :slot-set-fn set-slot-item!
        :slot-can-place-fn can-place-item?
-       :slot-changed-fn slot-changed!})))
+        :slot-changed-fn slot-changed!}))))
 

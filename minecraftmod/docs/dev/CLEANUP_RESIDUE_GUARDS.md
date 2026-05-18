@@ -53,13 +53,13 @@ explicit architecture seams that the multi-loader design requires.
 - Schema-backed AC block GUIs (`developer`, `imag_fusor`, `phase_gen`,
   `solar_gen`, `wireless_node`, `wireless_matrix`) use
   `cn.li.ac.block.gui.sync` for schema sync/get/apply/close helpers and
-  `cn.li.ac.block.gui.registration` for standard GUI spec/slot operation
+  `cn.li.mcmod.gui.spec` for standard GUI spec/slot operation
   grouping instead of direct per-file `schema-runtime/build-*` lifecycle calls
   or repeated `gui-dsl/create-gui-spec` templates.
 - Manual-sync complex AC block GUIs such as Metal Former, Ability Interferer,
   Wind Generator, and Energy Converter may keep custom atom update logic, but
   their standard GUI spec construction still goes through
-  `cn.li.ac.block.gui.registration` instead of duplicating the nested
+  `cn.li.mcmod.gui.spec` instead of duplicating the nested
   `:registration`/`:lifecycle`/`:sync`/`:operations` map shape.
 - Client ability beam/ray visual effects use
   `cn.li.ac.ability.client.effects.beam-ops` for RGB/alpha style composition,

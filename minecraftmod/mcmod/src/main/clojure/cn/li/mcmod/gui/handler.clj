@@ -32,7 +32,7 @@
   [gui-id]
   (gui-registry/has-gui-id? gui-id))
 
-;; Default handler implementation (driven by GUI config stored in `gui-dsl`).
+;; Default handler implementation (driven by GUI config stored in `gui-registry`).
 (defrecord WirelessGuiHandler []
   IGuiHandler
   (get-server-container [_ gui-id player world pos]

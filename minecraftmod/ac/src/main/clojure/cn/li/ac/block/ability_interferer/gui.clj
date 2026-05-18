@@ -7,7 +7,7 @@
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
-            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
@@ -17,6 +17,7 @@
             [cn.li.ac.block.ability-interferer.config :as cfg]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
@@ -259,13 +260,9 @@
       {:schema-id interferer-slot-schema-id
        :slots [{:id :battery :type :energy :x 139 :y 25}]})
     (gui-reg/register-block-gui!
-      "ability-interferer"
-      {:gui-id 15
-       :display-name "Ability Interferer"
-       :gui-type interferer-gui-type
-       :registry-name "ability_interferer_gui"
-       :screen-factory-fn-kw :create-ability-interferer-screen
-       :slot-layout (interferer-slot-layout)
+            (gui-manifest/gui-name :ability-interferer)
+            (merge (gui-manifest/gui-registration :ability-interferer)
+              {:slot-layout (interferer-slot-layout)
        :container-predicate interferer-container?
        :container-fn create-container
        :screen-fn create-screen
@@ -279,5 +276,5 @@
        :slot-get-fn get-slot-item
        :slot-set-fn set-slot-item!
        :slot-can-place-fn can-place-item?
-       :slot-changed-fn slot-changed!})
+              :slot-changed-fn slot-changed!}))
     (log/info "Ability Interferer GUI initialized")))

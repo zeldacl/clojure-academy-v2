@@ -19,9 +19,6 @@
 
 (defn init-wind-gen! []
   (with-init-guard wind-gen-installed?
-    (let [msg-registry (requiring-resolve 'cn.li.ac.wireless.gui.message.registry/register-block-messages!)]
-      (msg-registry :wind-gen [:get-status-main :get-status-base]))
-
     (tdsl/register-tile!
       (tdsl/create-tile-spec
         "wind-gen-main"

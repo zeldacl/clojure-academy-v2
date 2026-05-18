@@ -16,7 +16,7 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
-            [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.mcmod.gui.registry :as gui-registry]
             [cn.li.mcmod.fluid.dsl :as fdsl]
             [cn.li.mcmod.block.query :as bquery]
             [cn.li.mcmod.effect.dsl :as edsl]
@@ -204,28 +204,28 @@
 (defn get-all-gui-ids
   "Return all registered platform GUI ids (ints)."
   []
-  (gui-dsl/get-all-gui-ids))
+  (gui-registry/get-all-gui-ids))
 
 (defn get-gui-spec
   "Get a GUI spec by gui-id (int)."
   [gui-id]
-  (gui-dsl/get-gui-by-gui-id gui-id))
+  (gui-registry/get-gui-by-gui-id gui-id))
 
 (defn get-gui-registry-name
   [gui-id]
-  (gui-dsl/get-registry-name gui-id))
+  (gui-registry/get-registry-name gui-id))
 
 (defn get-gui-screen-factory-fn-kw
   [gui-id]
-  (gui-dsl/get-screen-factory-fn-kw gui-id))
+  (gui-registry/get-screen-factory-fn-kw gui-id))
 
 (defn get-gui-slot-layout
   [gui-id]
-  (gui-dsl/get-slot-layout gui-id))
+  (gui-registry/get-slot-layout gui-id))
 
 (defn get-gui-slot-range
   [gui-id section]
-  (gui-dsl/get-slot-range gui-id section))
+  (gui-registry/get-slot-range gui-id section))
 
 (defn get-block-state-properties
   "Returns the block state properties definition for a block.

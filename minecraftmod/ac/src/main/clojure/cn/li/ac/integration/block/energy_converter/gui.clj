@@ -1,12 +1,13 @@
 (ns cn.li.ac.integration.block.energy-converter.gui
 	(:require [cn.li.ac.gui.platform-adapter :as gui]
+	          [cn.li.ac.gui.manifest :as gui-manifest]
 	          [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.ac.gui.tech-ui-common :as tech-ui]
 						[cn.li.ac.wireless.gui.container.common :as common]
 						[cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
-						[cn.li.ac.block.gui.registration :as gui-reg]
+						[cn.li.mcmod.gui.spec :as gui-reg]
 						[cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
 						[cn.li.mcmod.gui.slot-schema :as slot-schema]
 						[cn.li.mcmod.gui.slot-registry :as slot-registry]
@@ -136,14 +137,9 @@
 			{:schema-id converter-slot-schema-id
 			 :slots []})
 		(gui-reg/register-block-gui!
-			"energy-converter"
-			{:gui-id 14
-			 :display-name "Energy Converter"
-			 :gui-type converter-gui-type
-			 :registry-name "energy_converter_gui"
-			 :screen-factory-fn-kw :create-energy-converter-screen
-			 :slot-schema-id converter-slot-schema-id
-			 :container-predicate converter-container?
+			(gui-manifest/gui-name :energy-converter)
+			(merge (gui-manifest/gui-registration :energy-converter)
+					 {:container-predicate converter-container?
 			 :container-fn create-container
 			 :screen-fn create-screen
 			 :tick-fn tick!
@@ -156,5 +152,5 @@
 			 :slot-get-fn get-slot-item
 			 :slot-set-fn set-slot-item!
 			 :slot-can-place-fn can-place-item?
-			 :slot-changed-fn slot-changed!})
+					  :slot-changed-fn slot-changed!}))
 		(log/info "Energy Converter GUI registered (gui-id 14)")))

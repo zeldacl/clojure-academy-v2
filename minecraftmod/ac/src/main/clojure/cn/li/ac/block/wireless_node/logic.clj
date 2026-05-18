@@ -63,7 +63,7 @@
           (log/info "  Connected:" (:enabled state))
           (log/info "  Name:" (:node-name state))
           (try
-            (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
+            (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
               (let [result (open-gui-by-type player :node world pos)]
                 (log/info "Opened Node GUI")
                 result)

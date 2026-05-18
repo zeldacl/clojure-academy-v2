@@ -16,9 +16,6 @@
 (defn init-imag-fusor!
   []
   (with-init-guard imag-fusor-installed?
-    (let [msg-registry (requiring-resolve 'cn.li.ac.wireless.gui.message.registry/register-block-messages!)]
-      (msg-registry :imag-fusor [:get-status]))
-    
     (tdsl/register-tile!
       (tdsl/create-tile-spec
         "imag-fusor"

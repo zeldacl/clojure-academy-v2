@@ -1,7 +1,7 @@
 (ns cn.li.fabric1201.adapter.gui-registry
   "Fabric 1.20.1 GUI Registration Implementation"
   (:require [cn.li.mcmod.gui.registry-core :as gui]
-            [cn.li.mc1201.gui.menu.bridge :as menu-core]
+            [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
             [cn.li.fabric1201.gui.provider-bridge :as provider-bridge]
             [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
             [cn.li.mc1201.gui.registry.common :as registry-common]
@@ -24,29 +24,25 @@
       (ResourceLocation. modid/*mod-id* registry-name)
       (reify net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry$ExtendedClientHandlerFactory
         (create [_ sync-id player-inventory buf]
-          (let [gui-id-from-buf (.readInt buf)
-                has-tile (.readBoolean buf)
-                pos (when has-tile (.readBlockPos buf))
-                handler (gui/get-gui-handler)
-                player (.player player-inventory)
-                world (.level player)]
-            (registry-common/create-wrapped-container
-              (fn []
-                (.get-server-container handler gui-id-from-buf player world pos))
-              (fn [window-id menu-type clj-container]
-                (menu-core/create-menu-bridge
-                 window-id
-                 menu-type
-                 clj-container
-                 {:get-slot-layout gui/get-slot-layout
-                  :default-player-inventory-mode :full
-                  :call-super-removed? true
-                  :remove-log-message "Fabric menu closed for player"
-                  :quick-move-error-prefix "Error in Fabric quickMoveStack:"}))
-              get-handler-type
-              gui-id-from-buf
-              sync-id
-              "Failed to create container for GUI")))))))
+          (let [{:keys [gui-id pos]} (registry-common/read-extended-open-payload buf)
+                handler (gui/get-gui-handler)]
+            (registry-common/create-client-menu!
+              {:gui-id gui-id
+               :window-id sync-id
+               :player-inventory player-inventory
+               :pos pos
+               :handler handler
+               :create-container-fn (fn [h gid player world block-pos]
+                                      (.get-server-container h gid player world block-pos))
+               :create-menu-proxy-fn (fn [window-id menu-type clj-container opts]
+                                       (menu-proxy/create-menu-proxy window-id menu-type clj-container opts))
+               :resolve-menu-type-fn get-handler-type
+               :bridge-opts {:get-slot-layout gui/get-slot-layout
+                             :default-player-inventory-mode :full
+                             :call-super-removed? true
+                             :remove-log-message "Fabric menu closed for player"
+                             :quick-move-error-prefix "Error in Fabric quickMoveStack:"}
+               :error-prefix "Failed to create container for GUI"})))))))
 
 (defn register-screen-handler-types! []
   (log/info "Registering GUI screen handler types for Fabric 1.20.1")

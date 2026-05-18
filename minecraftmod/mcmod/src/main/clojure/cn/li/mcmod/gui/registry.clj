@@ -15,9 +15,20 @@ Structure:
   (swap! gui-registry
          (fn [reg]
            (let [id (:id gui-spec)
-                 gui-id (:gui-id gui-spec)]
-             (when (and (some? gui-id) (contains? (:by-gui-id reg) gui-id))
-               nil)
+                 gui-id (:gui-id gui-spec)
+                 existing-by-id (get-in reg [:by-id id])
+                 existing-by-gui-id (when (some? gui-id)
+                                      (get-in reg [:by-gui-id gui-id]))]
+             (when existing-by-id
+               (throw (ex-info "Duplicate GUI registry id"
+                               {:id id
+                                :existing existing-by-id
+                                :new gui-spec})))
+             (when existing-by-gui-id
+               (throw (ex-info "Duplicate platform GUI id"
+                               {:gui-id gui-id
+                                :existing-id (:id existing-by-gui-id)
+                                :new-id id})))
              (cond-> reg
                true (assoc-in [:by-id id] gui-spec)
                (some? gui-id) (assoc-in [:by-gui-id gui-id] gui-spec)))))

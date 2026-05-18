@@ -7,6 +7,7 @@
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
@@ -16,7 +17,7 @@
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.block.imag-fusor.config :as cfg]
@@ -149,14 +150,9 @@
                {:id :energy :type :energy :x 42 :y 80}
                {:id :phase-output :type :phase-output :x 143 :y 10}]})
     (gui-reg/register-block-gui!
-      "imag-fusor"
-      {:gui-id 5
-       :display-name "Imag Fusor"
-       :gui-type fusor-gui-type
-       :registry-name "imag_fusor_gui"
-       :screen-factory-fn-kw :create-imag-fusor-screen
-       :slot-schema-id fusor-slot-schema-id
-       :container-predicate fusor-container?
+      (gui-manifest/gui-name :imag-fusor)
+      (merge (gui-manifest/gui-registration :imag-fusor)
+             {:container-predicate fusor-container?
        :container-fn create-container
        :screen-fn create-screen
        :tick-fn tick!
@@ -169,5 +165,5 @@
        :slot-get-fn get-slot-item
        :slot-set-fn set-slot-item!
        :slot-can-place-fn can-place-item?
-       :slot-changed-fn slot-changed!})
+        :slot-changed-fn slot-changed!}))
     (log/info "Imaginary Fusor GUI initialized")))

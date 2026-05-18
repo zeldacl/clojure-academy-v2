@@ -6,8 +6,8 @@
   
   Platform-specific screen_impl.clj files should delegate to this factory
   and only handle platform-specific registration mechanics."
-  (:require [cn.li.mcmod.gui.dsl :as gui-dsl]
-            [cn.li.ac.wireless.gui.registry :as gui-registry]
+  (:require [cn.li.mcmod.gui.registry :as gui-registry]
+            [cn.li.mcmod.gui.registry-core :as gui-core]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
 
@@ -15,13 +15,23 @@
 ;; Screen Creation - Core Game Logic
 ;; ============================================================================
 
+(defn- resolve-clj-container
+  [gui-type gui-id minecraft-menu]
+  (or (gui-core/resolve-container-for-menu minecraft-menu)
+      (throw (ex-info "No Clojure container registered for screen creation"
+                      {:gui-type gui-type
+                       :gui-id gui-id
+                       :menu-type (some-> minecraft-menu type str)
+                       :menu-container-id (try
+                                            (gui-core/get-menu-container-id minecraft-menu)
+                                            (catch Exception _ nil))}))))
+
 (defn create-screen
   "Generic screen creation function (platform-agnostic factory)
   
   Args:
   - gui-type: Keyword (:node, :matrix, etc.)
-  - container-or-handler: Platform-specific container/handler wrapper
-                          Must have .getClojureContainer() method
+  - container-or-handler: Minecraft menu/container created by mc1201 menu bridge
   - player-inventory: Player inventory (not currently used but required by platform APIs)
   - title: Text component (not currently used but required by platform APIs)
   
@@ -32,25 +42,19 @@
   
   (try
     (log/info "[SCREEN-FACTORY-CORE] Getting GUI config for gui-type:" gui-type)
-    (let [cfg (gui-dsl/get-gui-by-type gui-type)
+    (let [cfg (gui-registry/get-gui-by-type gui-type)
           _ (when-not cfg
               (throw (ex-info "Unknown gui-type" {:gui-type gui-type})))
-        gui-id (gui-dsl/get-gui-id-for-type gui-type)
+      gui-id (gui-registry/get-gui-id-for-type gui-type)
         _ (log/info "[SCREEN-FACTORY-CORE] gui-id=" gui-id "cfg found=" (not (nil? cfg)))
-        screen-fn (or (when gui-id (gui-dsl/get-screen-fn gui-id))
+      screen-fn (or (when gui-id (gui-registry/get-screen-fn gui-id))
               (get-in cfg [:lifecycle :screen-fn]))
         _ (when-not screen-fn
           (throw (ex-info "GUI has no screen factory function"
                   {:gui-type gui-type :gui-id gui-id})))
         _ (log/info "[SCREEN-FACTORY-CORE] screen-fn resolved=" (if screen-fn "YES" "NO"))
-          ;; The Clojure container was stored by the client-side IContainerFactory
-          ;; (registry_impl.clj) just before this screen factory is invoked.
-          ;; Previously the gen-class ForgeMenuBridge had getClojureContainer(),
-          ;; but the proxy replacement has no such method.
-        _ (log/info "[SCREEN-FACTORY-CORE] Getting client container...")
-        clj-container (or (gui-registry/get-client-container)
-                            (throw (ex-info "No client container registered for screen creation"
-                                            {:gui-type gui-type})))
+        _ (log/info "[SCREEN-FACTORY-CORE] Resolving clj-container from menu runtime state...")
+        clj-container (resolve-clj-container gui-type gui-id container-or-handler)
         _ (log/info "[SCREEN-FACTORY-CORE] Got clj-container=" (type clj-container))
         player (entity/inventory-get-player player-inventory)
         _ (log/info "[SCREEN-FACTORY-CORE] Got player=" (str player))

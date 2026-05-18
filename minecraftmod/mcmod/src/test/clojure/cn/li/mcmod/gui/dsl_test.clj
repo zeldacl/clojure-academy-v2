@@ -1,14 +1,24 @@
 (ns cn.li.mcmod.gui.dsl-test
   "Unit tests for GUI DSL"
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [cn.li.mcmod.gui.dsl :as dsl]))
+            [cn.li.mcmod.gui.dsl :as dsl]
+            [cn.li.mcmod.gui.registry :as gui-registry]))
 
 (defn- reset-gui-registry! [f]
-  (reset! dsl/gui-registry {:by-id {} :by-gui-id {}})
+  (reset! gui-registry/gui-registry {:by-id {} :by-gui-id {}})
   (f)
-  (reset! dsl/gui-registry {:by-id {} :by-gui-id {}}))
+  (reset! gui-registry/gui-registry {:by-id {} :by-gui-id {}}))
 
 (use-fixtures :each reset-gui-registry!)
+
+(defn- platform-gui-spec
+  [id gui-id gui-type]
+  (dsl/create-gui-spec id
+                       {:gui-id gui-id
+                        :registration {:display-name id
+                                       :gui-type gui-type
+                                       :registry-name (str id "_registry")
+                                       :screen-factory-fn-kw (keyword (str "create-" id "-screen"))}}))
 
 ;; Test basic GUI definition
 (deftest basic-gui-test
@@ -27,12 +37,33 @@
 ;; Test GUI registry
 (deftest gui-registry-test
   (testing "GUI registry stores and resolves by id"
-    (dsl/register-gui!
+    (gui-registry/register-gui!
       (dsl/create-gui-spec "registry-test-gui"
                            {:title "Registry Test"
                             :slots [{:index 0 :x 0 :y 0}]}))
-    (is (contains? (:by-id @dsl/gui-registry) "registry-test-gui"))
-    (is (= "registry-test-gui" (:id (dsl/get-gui "registry-test-gui"))))))
+    (is (contains? (:by-id @gui-registry/gui-registry) "registry-test-gui"))
+    (is (= "registry-test-gui" (:id (gui-registry/get-gui "registry-test-gui"))))))
+
+(deftest gui-registry-platform-id-test
+  (testing "GUI registry stores platform-visible GUI metadata"
+      (gui-registry/register-gui! (platform-gui-spec "platform-a" 42 :platform-a))
+      (is (= "platform-a" (:id (gui-registry/get-gui-by-gui-id 42))))
+      (is (= :platform-a (gui-registry/get-gui-type 42)))
+      (is (= 42 (gui-registry/get-gui-id-for-type :platform-a))))
+
+  (testing "duplicate logical GUI ids fail fast"
+      (gui-registry/register-gui! (platform-gui-spec "dup-logical" 43 :dup-logical-a))
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"Duplicate GUI registry id"
+        (gui-registry/register-gui! (platform-gui-spec "dup-logical" 44 :dup-logical-b)))))
+
+  (testing "duplicate platform GUI ids fail fast"
+      (gui-registry/register-gui! (platform-gui-spec "dup-platform-a" 45 :dup-platform-a))
+    (is (thrown-with-msg?
+          clojure.lang.ExceptionInfo
+          #"Duplicate platform GUI id"
+        (gui-registry/register-gui! (platform-gui-spec "dup-platform-b" 45 :dup-platform-b))))))
 
 ;; Test slot filters
 (deftest slot-filters-test

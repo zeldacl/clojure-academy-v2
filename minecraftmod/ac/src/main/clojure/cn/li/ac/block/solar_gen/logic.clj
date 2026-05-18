@@ -58,9 +58,9 @@
 (defn open-solar-gui! [{:keys [player world pos sneaking] :as _ctx}]
 	(when (and player world pos (not sneaking))
 		(try
-			(if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
+			(if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
 				(open-gui-by-type player :solar world pos)
-				(do (log/error "SolarGen GUI open fn not found: cn.li.ac.wireless.gui.registry/open-gui-by-type") nil))
+				(do (log/error "SolarGen GUI open fn not found: cn.li.ac.gui.open/open-gui-by-type") nil))
 			(catch Exception e
 				(log/error "Failed to open SolarGen GUI:" (ex-message e))
 				nil))))

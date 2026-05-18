@@ -4,7 +4,6 @@
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
-            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid]
@@ -17,7 +16,6 @@
 (defn init-metal-former!
   []
   (with-init-guard metal-former-installed?
-    (msg-registry/register-block-messages! :metal-former [:get-status :alternate])
     (tdsl/register-tile!
       (tdsl/create-tile-spec
         "metal-former"

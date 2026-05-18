@@ -197,7 +197,7 @@
 (defn open-former-gui! [{:keys [player world pos sneaking] :as _ctx}]
 	(when (and player world pos (not sneaking))
 		(try
-			(if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
+			(if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
 				(open-gui-by-type player :metal-former world pos)
 				(do (log/error "Metal Former GUI open fn not found") nil))
 			(catch Exception e

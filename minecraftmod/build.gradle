@@ -457,7 +457,10 @@ tasks.register('verifyDeletedCompatibilityResidues') {
         def deletedFiles = [
             file('forge-1.20.1/src/main/java/cn/li/forge1201/event/ForgeMissingMappingHandler.java'),
             file('forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/events.clj'),
-            file('mc-1.20.1/src/main/clojure/cn/li/mc1201/runtime/spi_contracts.clj')
+            file('mc-1.20.1/src/main/clojure/cn/li/mc1201/runtime/spi_contracts.clj'),
+            file('ac/src/main/clojure/cn/li/ac/block/gui/registration.clj'),
+            file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter/metadata_api.clj'),
+            file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter/registry_api.clj')
         ]
         def violations = []
         deletedFiles.each { File f ->
@@ -660,22 +663,170 @@ tasks.register('verifyRuntimeEventNoThinItemAdapter') {
     }
 }
 
+tasks.register('verifyPlatformEventsNoRuntimeBusinessState') {
+    group = 'verification'
+    description = 'Verify Forge/Fabric event glue does not directly inspect runtime-active business state.'
+
+    doLast {
+        def violations = []
+        def forbiddenTokens = [
+            'cn.li.mcmod.hooks.core',
+            'power-runtime',
+            'runtime-activated?',
+            'get-player-state',
+            ':activated',
+            'apply-runtime-activated'
+        ]
+
+        fileTree('.') {
+            include 'forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/events/**/*.clj'
+            include 'fabric-1.20.1/src/main/clojure/cn/li/fabric1201/integration/events/**/*.clj'
+            exclude '**/build/**', '**/.gradle/**'
+        }.files.each { File f ->
+            def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            f.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                forbiddenTokens.each { token ->
+                    if (line.contains(token)) {
+                        violations << "${rel}:${idx + 1}: ${token}"
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Platform event runtime business-state residue found:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyPlatformEventsNoRuntimeBusinessState] passed. Platform event glue delegates runtime-active policy to shared handlers.')
+    }
+}
+
+tasks.register('verifyAcGuiMessageManifestSsoT') {
+    group = 'verification'
+    description = 'Verify AC GUI message domains are registered from the centralized GUI manifest only.'
+
+    doLast {
+        def violations = []
+        def manifestFile = file('ac/src/main/clojure/cn/li/ac/gui/manifest.clj')
+        def sharedRegistry = file('ac/src/main/clojure/cn/li/ac/wireless/shared/message_registry.clj')
+
+        if (!manifestFile.exists()) {
+            violations << 'Missing centralized AC GUI manifest: ac/src/main/clojure/cn/li/ac/gui/manifest.clj'
+        } else {
+            def manifestText = manifestFile.getText('UTF-8')
+            ['message-domain-actions', ':matrix', ':node', ':generator', ':wind-gen', ':phase-gen', ':imag-fusor', ':metal-former', ':developer', ':ability-interferer'].each { token ->
+                if (!manifestText.contains(token)) {
+                    violations << "AC GUI manifest must declare ${token}"
+                }
+            }
+        }
+
+        if (!sharedRegistry.exists()) {
+            violations << 'Missing shared wireless message registry.'
+        } else {
+            def sharedText = sharedRegistry.getText('UTF-8')
+            if (!sharedText.contains('cn.li.ac.gui.manifest')) {
+                violations << 'wireless.shared.message-registry must consume cn.li.ac.gui.manifest'
+            }
+            if (!sharedText.contains('gui-manifest/message-domain-actions')) {
+                violations << 'wireless.shared.message-registry must iterate gui-manifest/message-domain-actions'
+            }
+        }
+
+        fileTree('ac/src/main/clojure/cn/li/ac') {
+            include '**/*.clj'
+            exclude 'wireless/gui/message/registry.clj'
+            exclude 'wireless/shared/message_registry.clj'
+        }.files.each { File f ->
+            def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            f.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                if (line.contains('register-block-messages!') || line.contains('wireless.gui.message.registry/register-block-messages!')) {
+                    violations << "${rel}:${idx + 1}: wireless GUI message registration must go through cn.li.ac.gui.manifest"
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("AC GUI message manifest SSoT guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyAcGuiMessageManifestSsoT] passed. AC GUI message domains are manifest-driven.')
+    }
+}
+
+tasks.register('verifyAcGuiRegistrationManifestSsoT') {
+    group = 'verification'
+    description = 'Verify AC GUI registration identifiers are declared in the centralized GUI manifest only.'
+
+    doLast {
+        def violations = []
+        def manifestFile = file('ac/src/main/clojure/cn/li/ac/gui/manifest.clj')
+
+        if (!manifestFile.exists()) {
+            violations << 'Missing centralized AC GUI manifest: ac/src/main/clojure/cn/li/ac/gui/manifest.clj'
+        } else {
+            def manifestText = manifestFile.getText('UTF-8')
+            ['gui-definitions', 'gui-registration', 'gui-name', 'gui-id-for-type', ':wireless-node', ':wireless-matrix', ':solar-gen', ':wind-gen-main', ':wind-gen-base', ':imag-fusor', ':metal-former', ':phase-gen', ':developer', ':energy-converter', ':ability-interferer'].each { token ->
+                if (!manifestText.contains(token)) {
+                    violations << "AC GUI manifest must declare ${token}"
+                }
+            }
+        }
+
+        def forbiddenPatterns = [
+            ~/:gui-id\s+\d+/,
+            ~/:display-name\s+"/,
+            ~/:registry-name\s+"/,
+            ~/:screen-factory-fn-kw\s+:/,
+            ~/:slot-schema-id\s+[:a-zA-Z]/
+        ]
+
+        fileTree('ac/src/main/clojure/cn/li/ac') {
+            include '**/gui.clj'
+        }.files.each { File f ->
+            def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            f.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                forbiddenPatterns.each { pattern ->
+                    if ((line =~ pattern).find()) {
+                        violations << "${rel}:${idx + 1}: GUI registration metadata must come from cn.li.ac.gui.manifest"
+                    }
+                }
+            }
+
+            def text = f.getText('UTF-8')
+            if (text.contains('register-block-gui!') && !text.contains('gui-manifest/gui-registration')) {
+                violations << "${rel}: register-block-gui! must merge gui-manifest/gui-registration"
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("AC GUI registration manifest SSoT guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyAcGuiRegistrationManifestSsoT] passed. AC GUI registration metadata is manifest-driven.')
+    }
+}
+
 tasks.register('verifyGuiNetworkTransportBoundaries') {
     group = 'verification'
-    description = 'Verify GUI network envelope/codec stays shared and platform transports stay thin.'
+    description = 'Verify GUI network envelope/codec and registry open payloads stay shared, with thin platform transports.'
 
     doLast {
         def sharedPacket = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/network/packet.clj')
+        def sharedRegistryCommon = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/registry/common.clj')
         def deletedTopLevelPacket = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/network_packet_base.clj')
         def forgeNetwork = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/gui/network.clj')
         def fabricNetwork = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/network.clj')
+        def forgeGuiRegistry = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/adapter/gui_registry.clj')
+        def fabricGuiRegistry = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/adapter/gui_registry.clj')
+        def fabricProviderBridge = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/provider_bridge.clj')
         def violations = []
 
         if (deletedTopLevelPacket.exists()) {
             violations << 'Top-level GUI network packet namespace must stay deleted; use cn.li.mc1201.gui.network.packet'
         }
 
-        [sharedPacket, forgeNetwork, fabricNetwork].each { File f ->
+        [sharedPacket, sharedRegistryCommon, forgeNetwork, fabricNetwork, forgeGuiRegistry, fabricGuiRegistry, fabricProviderBridge].each { File f ->
             if (!f.exists()) {
                 violations << "Required GUI network file missing: ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
             }
@@ -690,6 +841,15 @@ tasks.register('verifyGuiNetworkTransportBoundaries') {
             }
         }
 
+        if (sharedRegistryCommon.exists()) {
+            def commonText = sharedRegistryCommon.getText('UTF-8')
+            ['read-block-pos', 'write-block-pos!', 'read-extended-open-payload', 'write-extended-open-payload!', 'create-client-menu!'].each { token ->
+                if (!commonText.contains("defn ${token}")) {
+                    violations << "gui/registry/common.clj must define shared GUI registry helper ${token}"
+                }
+            }
+        }
+
         if (forgeNetwork.exists()) {
             def forgeText = forgeNetwork.getText('UTF-8')
             if (forgeText.contains('cn.li.mc1201.gui.network-packet-base')) {
@@ -698,6 +858,21 @@ tasks.register('verifyGuiNetworkTransportBoundaries') {
             ['defn- serialize', 'defn- deserialize'].each { token ->
                 if (forgeText.contains(token)) {
                     violations << "forge1201.gui.network must use shared packet-base codec directly, found ${token}"
+                }
+            }
+        }
+
+        if (forgeGuiRegistry.exists()) {
+            def forgeRegistryText = forgeGuiRegistry.getText('UTF-8')
+            if (!forgeRegistryText.contains('registry-common/create-client-menu!')) {
+                violations << 'forge1201.adapter.gui-registry must delegate client menu construction to registry-common/create-client-menu!'
+            }
+            if (!forgeRegistryText.contains('registry-common/read-block-pos')) {
+                violations << 'forge1201.adapter.gui-registry must delegate BlockPos decode to registry-common/read-block-pos'
+            }
+            ['registry-common/create-wrapped-container', '.readBlockPos'].each { token ->
+                if (forgeRegistryText.contains(token)) {
+                    violations << "forge1201.adapter.gui-registry must not inline shared GUI registry flow, found ${token}"
                 }
             }
         }
@@ -717,11 +892,38 @@ tasks.register('verifyGuiNetworkTransportBoundaries') {
             }
         }
 
+        if (fabricGuiRegistry.exists()) {
+            def fabricRegistryText = fabricGuiRegistry.getText('UTF-8')
+            if (!fabricRegistryText.contains('registry-common/create-client-menu!')) {
+                violations << 'fabric1201.adapter.gui-registry must delegate client menu construction to registry-common/create-client-menu!'
+            }
+            if (!fabricRegistryText.contains('registry-common/read-extended-open-payload')) {
+                violations << 'fabric1201.adapter.gui-registry must delegate extended open payload decode to registry-common/read-extended-open-payload'
+            }
+            ['registry-common/create-wrapped-container', '.readInt', '.readBoolean', '.readBlockPos'].each { token ->
+                if (fabricRegistryText.contains(token)) {
+                    violations << "fabric1201.adapter.gui-registry must not inline shared GUI registry flow, found ${token}"
+                }
+            }
+        }
+
+        if (fabricProviderBridge.exists()) {
+            def fabricProviderText = fabricProviderBridge.getText('UTF-8')
+            if (!fabricProviderText.contains('registry-common/write-extended-open-payload!')) {
+                violations << 'fabric1201.gui.provider-bridge must delegate extended open payload encode to registry-common/write-extended-open-payload!'
+            }
+            ['.writeInt', '.writeBoolean', '.writeBlockPos'].each { token ->
+                if (fabricProviderText.contains(token)) {
+                    violations << "fabric1201.gui.provider-bridge must not inline extended open payload encode, found ${token}"
+                }
+            }
+        }
+
         if (!violations.isEmpty()) {
             throw new GradleException("GUI network transport boundary guard failed:\n - ${violations.join('\n - ')}")
         }
 
-        logger.lifecycle('[verifyGuiNetworkTransportBoundaries] passed. GUI network envelope/codec is shared and transports stay thin.')
+        logger.lifecycle('[verifyGuiNetworkTransportBoundaries] passed. GUI network envelope/codec and registry open payloads are shared; transports stay thin.')
     }
 }
 
@@ -737,14 +939,14 @@ tasks.register('verifyGuiNamespaceLayout') {
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/renderer.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/runtime.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/traversal.clj',
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu/bridge.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu/container.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu/contract.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu/proxy.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/network/packet.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/init/checks.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/init/orchestrator.clj',
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/provider/bridge.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/provider/common.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/provider/dispatcher.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/registry/common.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/registry/open.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/screen/impl.clj',
@@ -768,9 +970,11 @@ tasks.register('verifyGuiNamespaceLayout') {
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu_bridge_common.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu_bridge_core.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu_contract.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu/bridge.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/network_packet_base.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/provider_bridge_core.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/provider_common.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/provider/bridge.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/registry_common.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/registry_open_core.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/screen_impl_core.clj',
@@ -794,9 +998,11 @@ tasks.register('verifyGuiNamespaceLayout') {
             'cn.li.mc1201.gui.menu-bridge-common',
             'cn.li.mc1201.gui.menu-bridge-core',
             'cn.li.mc1201.gui.menu-contract',
+            'cn.li.mc1201.gui.menu.bridge',
             'cn.li.mc1201.gui.network-packet-base',
             'cn.li.mc1201.gui.provider-bridge-core',
             'cn.li.mc1201.gui.provider-common',
+            'cn.li.mc1201.gui.provider.bridge',
             'cn.li.mc1201.gui.registry-common',
             'cn.li.mc1201.gui.registry-open-core',
             'cn.li.mc1201.gui.screen-impl-core',
@@ -934,7 +1140,7 @@ tasks.register('verifyBlockDslNoRuntimeEvents') {
 
 tasks.register('verifyAcBlockGuiSyncHelpers') {
     group = 'verification'
-    description = 'Verify AC block GUIs use shared sync/registration helpers where applicable.'
+    description = 'Verify AC block GUIs use shared sync helpers and mcmod GUI spec builders where applicable.'
 
     doLast {
         def violations = []
@@ -942,9 +1148,13 @@ tasks.register('verifyAcBlockGuiSyncHelpers') {
         if (!syncHelper.exists()) {
             violations << 'Required AC block GUI sync helper missing: cn.li.ac.block.gui.sync'
         }
-        def registrationHelper = file('ac/src/main/clojure/cn/li/ac/block/gui/registration.clj')
+        def registrationHelper = file('mcmod/src/main/clojure/cn/li/mcmod/gui/spec.clj')
         if (!registrationHelper.exists()) {
-            violations << 'Required AC block GUI registration helper missing: cn.li.ac.block.gui.registration'
+            violations << 'Required shared block GUI spec helper missing: cn.li.mcmod.gui.spec'
+        }
+        def deletedRegistrationHelper = file('ac/src/main/clojure/cn/li/ac/block/gui/registration.clj')
+        if (deletedRegistrationHelper.exists()) {
+            violations << 'AC block GUI registration helper must stay deleted; use cn.li.mcmod.gui.spec'
         }
         def schemaBackedGuis = [
             'ac/src/main/clojure/cn/li/ac/block/developer/gui.clj',
@@ -963,8 +1173,8 @@ tasks.register('verifyAcBlockGuiSyncHelpers') {
                 if (!text.contains('cn.li.ac.block.gui.sync')) {
                     violations << "${path}: must require cn.li.ac.block.gui.sync"
                 }
-                if (!text.contains('cn.li.ac.block.gui.registration')) {
-                    violations << "${path}: must require cn.li.ac.block.gui.registration"
+                if (!text.contains('cn.li.mcmod.gui.spec')) {
+                    violations << "${path}: must require cn.li.mcmod.gui.spec"
                 }
                 ['schema-runtime/build-sync-to-client-fn',
                  'schema-runtime/build-get-sync-data-fn',
@@ -975,7 +1185,7 @@ tasks.register('verifyAcBlockGuiSyncHelpers') {
                     }
                 }
                 if (text.contains('gui-dsl/create-gui-spec')) {
-                    violations << "${path}: direct create-gui-spec call should use ac.block.gui.registration"
+                    violations << "${path}: direct create-gui-spec call should use mcmod.gui.spec"
                 }
             }
         }
@@ -991,11 +1201,11 @@ tasks.register('verifyAcBlockGuiSyncHelpers') {
                 violations << "Manual-sync GUI missing: ${path}"
             } else {
                 def text = f.getText('UTF-8')
-                if (!text.contains('cn.li.ac.block.gui.registration')) {
-                    violations << "${path}: must require cn.li.ac.block.gui.registration"
+                if (!text.contains('cn.li.mcmod.gui.spec')) {
+                    violations << "${path}: must require cn.li.mcmod.gui.spec"
                 }
                 if (text.contains('gui-dsl/create-gui-spec')) {
-                    violations << "${path}: direct create-gui-spec call should use ac.block.gui.registration"
+                    violations << "${path}: direct create-gui-spec call should use mcmod.gui.spec"
                 }
             }
         }
@@ -1003,7 +1213,7 @@ tasks.register('verifyAcBlockGuiSyncHelpers') {
             throw new GradleException("AC block GUI sync helper guard failed:\n - ${violations.join('\n - ')}")
         }
 
-        logger.lifecycle('[verifyAcBlockGuiSyncHelpers] passed. AC block GUIs use shared sync/registration helpers where applicable.')
+        logger.lifecycle('[verifyAcBlockGuiSyncHelpers] passed. AC block GUIs use shared sync helpers and mcmod GUI spec builders where applicable.')
     }
 }
 
@@ -1203,7 +1413,7 @@ tasks.register('verifyLoaderEntrypointNames') {
 tasks.register('verifyCleanupResidueGuards') {
     group = 'verification'
     description = 'Run cleanup-residue guard checks for SSOT regressions.'
-    dependsOn 'verifyAcPlayerUuidSsoT', 'verifyGameplayConfigContractSsoT', 'verifyMcmodNoAcSpecificBootstrap', 'verifyRuntimeEventNoThinItemAdapter', 'verifyGuiNetworkTransportBoundaries', 'verifyGuiNamespaceLayout', 'verifyEntityHookRegistrySpecs', 'verifyBlockDslNoRuntimeEvents', 'verifyAcBlockGuiSyncHelpers', 'verifyAbilityFxBeamOpsHelper', 'verifyDatagenProviderFactoryAdapters', 'verifyTransientBuildArtifactsIgnored', 'verifyLoaderEntrypointNames', 'verifyPlatformNoAcSourceInjection', 'verifyDeletedCompatibilityResidues'
+    dependsOn 'verifyAcPlayerUuidSsoT', 'verifyGameplayConfigContractSsoT', 'verifyMcmodNoAcSpecificBootstrap', 'verifyRuntimeEventNoThinItemAdapter', 'verifyPlatformEventsNoRuntimeBusinessState', 'verifyAcGuiMessageManifestSsoT', 'verifyAcGuiRegistrationManifestSsoT', 'verifyGuiNetworkTransportBoundaries', 'verifyGuiNamespaceLayout', 'verifyEntityHookRegistrySpecs', 'verifyBlockDslNoRuntimeEvents', 'verifyAcBlockGuiSyncHelpers', 'verifyAbilityFxBeamOpsHelper', 'verifyDatagenProviderFactoryAdapters', 'verifyTransientBuildArtifactsIgnored', 'verifyLoaderEntrypointNames', 'verifyPlatformNoAcSourceInjection', 'verifyDeletedCompatibilityResidues'
 }
 
 tasks.register('runFabricSmoke') {

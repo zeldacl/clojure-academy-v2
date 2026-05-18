@@ -7,13 +7,14 @@
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
-            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.block.metal-former.config :as cfg]
             [cn.li.ac.block.metal-former.recipes :as recipes]
@@ -186,14 +187,9 @@
                {:id :output :type :output :x 143 :y 49}
                {:id :energy :type :energy :x 42 :y 80}]})
     (gui-reg/register-block-gui!
-      "metal-former"
-      {:gui-id 6
-       :display-name "Metal Former"
-       :gui-type former-gui-type
-       :registry-name "metal_former_gui"
-       :screen-factory-fn-kw :create-metal-former-screen
-       :slot-schema-id former-slot-schema-id
-       :container-predicate former-container?
+      (gui-manifest/gui-name :metal-former)
+      (merge (gui-manifest/gui-registration :metal-former)
+             {:container-predicate former-container?
        :container-fn create-container
        :screen-fn create-screen
        :tick-fn tick!
@@ -206,5 +202,5 @@
        :slot-get-fn get-slot-item
        :slot-set-fn set-slot-item!
        :slot-can-place-fn can-place-item?
-       :slot-changed-fn slot-changed!})
+        :slot-changed-fn slot-changed!}))
     (log/info "Metal Former GUI initialized")))

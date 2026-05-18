@@ -1,9 +1,7 @@
-(ns cn.li.ac.block.gui.registration
-  "Shared registration helpers for AC block GUIs.
-
-  Block GUI files still own their screen/container behavior; this namespace owns
-  the repeated mcmod GUI spec shape and slot operation grouping."
-  (:require [cn.li.mcmod.gui.dsl :as gui-dsl]
+(ns cn.li.mcmod.gui.spec
+  "Shared GUI spec builders for common Minecraft GUI shapes."
+  (:require [cn.li.mcmod.gui.parser :as gui-parser]
+            [cn.li.mcmod.gui.registry :as gui-registry]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]))
 
 (defn slot-operations
@@ -18,9 +16,9 @@
 (defn create-block-gui-spec
   "Create a standard block GUI spec.
 
-  Required option groups are flattened intentionally so individual block GUI
-  namespaces do not keep copying the same nested `:registration`, `:lifecycle`,
-  `:sync`, `:operations`, and `:slot-operations` maps."
+  Required option groups are flattened intentionally so block GUI namespaces do
+  not keep copying the same nested `:registration`, `:lifecycle`, `:sync`,
+  `:operations`, and `:slot-operations` maps."
   [gui-name {:keys [gui-id
                     display-name gui-type registry-name screen-factory-fn-kw
                     slot-schema-id slot-layout
@@ -35,7 +33,7 @@
                       :sync-apply sync-apply}
                payload-sync-apply-fn
                (assoc :payload-sync-apply-fn payload-sync-apply-fn))]
-    (gui-dsl/create-gui-spec
+    (gui-parser/create-gui-spec
       gui-name
       {:gui-id gui-id
        :registration {:display-name display-name
@@ -47,14 +45,14 @@
                    :container-fn container-fn
                    :screen-fn screen-fn
                    :tick-fn tick-fn}
-      :sync sync
+       :sync sync
        :operations {:validate-fn validate-fn
                     :close-fn close-fn
                     :button-click-fn button-click-fn}
        :slot-operations (slot-operations opts)})))
 
 (defn register-block-gui!
-  "Register a standard AC block GUI spec and return the registered spec."
+  "Register a standard block GUI spec and return the registered spec."
   [gui-name opts]
-  (gui-dsl/register-gui!
+  (gui-registry/register-gui!
     (create-block-gui-spec gui-name opts)))

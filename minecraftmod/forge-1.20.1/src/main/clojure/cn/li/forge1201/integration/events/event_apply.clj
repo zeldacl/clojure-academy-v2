@@ -29,19 +29,6 @@
   (.setCanceled evt true)
   evt)
 
-(defn apply-runtime-activated-right-click!
-  [^PlayerInteractEvent evt server-side?]
-  (deny-right-click-use! evt)
-  (when server-side?
-    (cancel-player-interact-fail! evt))
-  evt)
-
-(defn apply-runtime-activated-left-click!
-  [evt]
-  (deny-right-click-use! evt)
-  (cancel-event! evt)
-  evt)
-
 (defn apply-consumed-right-click!
   [^PlayerInteractEvent evt client-side?]
   (if client-side?

@@ -319,13 +319,13 @@
   ;; Follow Minecraft 1.20 use order:
   ;; when player is holding the pillar block item, let item placement run (PASS).
   (when (and player world pos (not sneaking) (not (pillar-item-stack? item-stack)))
-    (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
+    (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
       (open-gui-by-type player :wind-gen-main world pos)
       nil)))
 
 (defn open-wind-base-gui! [{:keys [player world pos sneaking item-stack]}]
   ;; Keep placement path for pillar item: return nil/PASS to let BlockItem#useOn run.
   (when (and player world pos (not sneaking) (not (pillar-item-stack? item-stack)))
-    (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.wireless.gui.registry/open-gui-by-type)]
+    (if-let [open-gui-by-type (requiring-resolve 'cn.li.ac.gui.open/open-gui-by-type)]
       (open-gui-by-type player :wind-gen-base world pos)
       nil)))

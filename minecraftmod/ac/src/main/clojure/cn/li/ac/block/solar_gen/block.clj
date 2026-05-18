@@ -8,7 +8,6 @@
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.ac.block.role-impls :as impls]
-            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid]
@@ -21,7 +20,6 @@
 (defn init-solar-gen!
   []
   (with-init-guard solar-gen-installed?
-    (msg-registry/register-block-messages! :generator [:get-status :list-nodes :connect :disconnect])
     (tdsl/register-tile!
       (tdsl/create-tile-spec
         "solar-gen"

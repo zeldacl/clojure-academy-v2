@@ -4,7 +4,7 @@
   Platform-agnostic design: Uses metadata-driven approach."
   (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
-            [cn.li.mc1201.gui.menu.bridge :as menu-core]
+            [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
             [cn.li.forge1201.gui.provider-bridge :as provider-bridge]
             [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
             [cn.li.mc1201.gui.registry.common :as registry-common]
@@ -69,29 +69,24 @@
         ;; after receiving the open-screen packet.
         (let [handler (gui/get-gui-handler)
               ^ServerPlayer player (.player ^Inventory player-inventory)
-              ^Level world (.level player)
-              ^BlockPos pos (.readBlockPos ^FriendlyByteBuf buf)]
-          (registry-common/create-wrapped-container
-            (fn []
-              (gui-handler/get-server-container handler gui-id player world pos))
-            (fn [wid menu-type clj-container]
-              ;; Store for screen_factory.clj which needs to read it back.
-              ;; (The proxy no longer has a getClojureContainer() method since
-              ;; we replaced gen-class with proxy.)
-              (gui/set-client-container! clj-container)
-              (menu-core/create-menu-bridge
-               wid
-               menu-type
-               clj-container
-               {:get-slot-layout gui/get-slot-layout
-                :default-player-inventory-mode :full
-                :call-super-removed? false
-                :remove-log-message "Menu closed for player"
-                :quick-move-error-prefix "Error in quickMoveStack:"}))
-            get-menu-type
-            gui-id
-            window-id
-            "Failed to create container for GUI"))))))
+              pos (registry-common/read-block-pos buf)]
+          (registry-common/create-client-menu!
+            {:gui-id gui-id
+             :window-id window-id
+             :player-inventory player-inventory
+             :pos pos
+             :handler handler
+             :create-container-fn (fn [h gid p world block-pos]
+                                    (gui-handler/get-server-container h gid p world block-pos))
+             :create-menu-proxy-fn (fn [wid menu-type clj-container opts]
+                                     (menu-proxy/create-menu-proxy wid menu-type clj-container opts))
+             :resolve-menu-type-fn get-menu-type
+             :bridge-opts {:get-slot-layout gui/get-slot-layout
+                           :default-player-inventory-mode :full
+                           :call-super-removed? false
+                           :remove-log-message "Menu closed for player"
+                           :quick-move-error-prefix "Error in quickMoveStack:"}
+             :error-prefix "Failed to create container for GUI"}))))))
 
 (defn register-menu-types!
   "Populate menu-register DeferredRegister with all GUI menu types.
@@ -144,7 +139,7 @@
             provider
             (reify java.util.function.Consumer
               (accept [_ buf]
-                (.writeBlockPos ^FriendlyByteBuf buf pos)))))
+                (registry-common/write-block-pos! buf pos)))))
         (do
           (log/info "[OPEN-GUI-FOR-PLAYER] Opening screen without position data...")
           (NetworkHooks/openScreen player provider)))

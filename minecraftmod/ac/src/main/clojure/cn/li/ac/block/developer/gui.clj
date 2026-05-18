@@ -10,11 +10,12 @@
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.block.developer.schema :as dev-schema]
@@ -187,14 +188,9 @@
        :slots [{:id :inv-0 :type :generic :x 42 :y 10}
                {:id :inv-1 :type :generic :x 42 :y 80}]})
     (gui-reg/register-block-gui!
-      "developer"
-      {:gui-id 13
-       :display-name "Ability Developer"
-       :gui-type :developer
-       :registry-name "developer_gui"
-       :screen-factory-fn-kw :create-developer-screen
-       :slot-schema-id developer-gui-id
-       :container-predicate developer-container?
+      (gui-manifest/gui-name :developer)
+      (merge (gui-manifest/gui-registration :developer)
+             {:container-predicate developer-container?
        :container-fn create-container
        :screen-fn create-screen
        :tick-fn tick!
@@ -207,5 +203,5 @@
        :slot-get-fn get-slot-item
        :slot-set-fn set-slot-item!
        :slot-can-place-fn can-place-item?
-       :slot-changed-fn slot-changed!})
+        :slot-changed-fn slot-changed!}))
     (log/info "Ability Developer GUI registered (gui-id 13)")))

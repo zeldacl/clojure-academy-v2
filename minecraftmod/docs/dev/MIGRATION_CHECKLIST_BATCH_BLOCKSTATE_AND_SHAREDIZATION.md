@@ -18,10 +18,10 @@
 
 ### Existing shared modules adopted by both loaders in this batch
 - GUI bridge/common flow (now organized by domain subpackage):
-   - `cn.li.mc1201.gui.menu.bridge`
+   - `cn.li.mc1201.gui.menu.proxy`
    - `cn.li.mc1201.gui.menu.container`
    - `cn.li.mc1201.gui.provider.common`
-   - `cn.li.mc1201.gui.provider.bridge`
+   - `cn.li.mc1201.gui.provider.dispatcher`
    - `cn.li.mc1201.gui.registry.common`
    - `cn.li.mc1201.gui.registry.open`
    - `cn.li.mc1201.gui.screen.registry`

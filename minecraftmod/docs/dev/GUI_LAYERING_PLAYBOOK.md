@@ -15,8 +15,8 @@
 主要包含：
 
 - `cgui/runtime.clj`、`cgui/renderer.clj`、`cgui/input.clj`、`cgui/assets.clj`、`cgui/traversal.clj`：共享 CGUI 运行时、渲染、输入、资源与遍历实现
-- `menu/container.clj`、`menu/bridge.clj`、`menu/contract.clj`：共享菜单容器适配、菜单行为与契约
-- `provider/common.clj`、`provider/bridge.clj`：共享 provider helper 与桥接装配
+- `menu/container.clj`、`menu/proxy.clj`、`menu/contract.clj`：共享菜单容器适配、菜单 proxy 行为与契约
+- `provider/common.clj`、`provider/dispatcher.clj`：共享 provider helper 与回调分发
 - `registry/common.clj`、`registry/open.clj`：共享注册包装与打开逻辑
 - `screen/registry.clj`、`screen/impl.clj`：共享 screen 注册循环与 screen 实现
 - `slots/common.clj`、`slots/sync.clj`、`slots/tabbed.clj`：共享槽位布局、同步与 tabbed 约束

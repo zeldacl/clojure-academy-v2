@@ -4,7 +4,6 @@
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.platform.capability :as platform-cap]
-            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.ac.util.init-guard :refer [with-init-guard]]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
@@ -24,9 +23,6 @@
 (defn init-wireless-nodes! []
   (with-init-guard wireless-node-installed?
     (node-logic/ensure-node-slot-schema!)
-    (msg-registry/register-block-messages!
-      :node
-      [:get-status :change-name :change-password :list-networks :connect :disconnect])
     (tile-logic/register-tile-kind!
       :wireless-node
       {:tick-fn node-logic/node-scripted-tick-fn

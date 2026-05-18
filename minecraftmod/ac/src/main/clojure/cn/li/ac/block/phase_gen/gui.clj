@@ -16,9 +16,10 @@
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
@@ -184,14 +185,9 @@
                {:id :liquid-out :type :phase-output :x 112 :y 51}
                {:id :output-energy :type :energy :x 42 :y 80}]})
     (gui-reg/register-block-gui!
-      "phase-gen"
-      {:gui-id 7
-       :display-name "Phase Generator"
-       :gui-type phase-gui-type
-       :registry-name "phase_gen_gui"
-       :screen-factory-fn-kw :create-phase-gen-screen
-       :slot-schema-id phase-slot-schema-id
-       :container-predicate phase-container?
+      (gui-manifest/gui-name :phase-gen)
+      (merge (gui-manifest/gui-registration :phase-gen)
+             {:container-predicate phase-container?
        :container-fn create-container
        :screen-fn create-screen
        :tick-fn tick!
@@ -204,5 +200,5 @@
        :slot-get-fn get-slot-item
        :slot-set-fn set-slot-item!
        :slot-can-place-fn can-place-item?
-       :slot-changed-fn slot-changed!})
+        :slot-changed-fn slot-changed!}))
     (log/info "Phase Generator GUI initialized")))

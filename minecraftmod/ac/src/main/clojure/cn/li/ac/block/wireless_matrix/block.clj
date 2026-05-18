@@ -5,7 +5,6 @@
 						[cn.li.mcmod.block.tile-dsl :as tdsl]
 						[cn.li.mcmod.block.tile-logic :as tile-logic]
 						[cn.li.mcmod.platform.capability :as platform-cap]
-						[cn.li.ac.wireless.gui.message.registry :as msg-registry]
 						[cn.li.ac.registry.hooks :as hooks]
 						[cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
 						[cn.li.ac.block.wireless-matrix.handlers :as matrix-handlers])
@@ -17,9 +16,6 @@
 	[]
 	(with-init-guard wireless-matrix-installed?
 		(matrix-logic/ensure-matrix-slot-schema!)
-		(msg-registry/register-block-messages!
-			:matrix
-			[:gather-info :init :change-ssid :change-password :sync-state])
 		(tile-logic/register-tile-kind!
 			:wireless-matrix
 			{:tick-fn matrix-logic/matrix-scripted-tick-fn

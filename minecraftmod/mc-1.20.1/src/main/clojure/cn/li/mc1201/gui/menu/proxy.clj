@@ -1,5 +1,5 @@
-(ns cn.li.mc1201.gui.menu.bridge
-  "Shared menu-bridge proxy builder for platform adapters.
+(ns cn.li.mc1201.gui.menu.proxy
+  "Shared CMenuBridge proxy builder for platform adapters.
 
   Platform namespaces provide small callback/config differences (slot add callback,
   loader-specific remove semantics, player inventory mode defaults), while all menu
@@ -54,22 +54,27 @@
       ItemStack/EMPTY)))
 
 (defn- finalize-menu-registration!
-  [menu window-id clj-container]
+  [menu window-id clj-container player]
+  (gui/register-active-container! clj-container)
+  (when player
+    (gui/register-player-container! player clj-container))
   (gui/register-menu-container! menu clj-container)
   (gui/register-container-by-id! window-id clj-container)
   menu)
 
-(defn create-menu-bridge
+(defn create-menu-proxy
   "Create a CMenuBridge proxy around a Clojure container.
 
   Optional opts:
   - :get-slot-layout          fn [gui-id] -> layout map (default gui/get-slot-layout)
   - :default-player-inventory-mode  :full/:hotbar-only/:none (default :full)
+  - :player                   player owning this menu, when available
   - :call-super-removed?      boolean
   - :remove-log-message       string
   - :quick-move-error-prefix  string"
   [window-id menu-type clj-container {:keys [get-slot-layout
                                              default-player-inventory-mode
+                                             player
                                              call-super-removed?
                                              remove-log-message
                                              quick-move-error-prefix]
@@ -117,4 +122,4 @@
                (canDragTo [_slot] true))]
     (slots-sync/setup-menu-slots! menu clj-container tab-slot {:get-slot-layout get-slot-layout
                                                                :default-player-inventory-mode default-player-inventory-mode})
-    (finalize-menu-registration! menu window-id clj-container)))
+    (finalize-menu-registration! menu window-id clj-container player)))

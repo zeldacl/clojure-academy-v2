@@ -10,3 +10,55 @@
       (do
         (log/error error-prefix gui-id)
         nil))))
+
+(defn read-block-pos
+  "Read a required BlockPos from a platform buffer."
+  [buf]
+  (.readBlockPos buf))
+
+(defn write-block-pos!
+  "Write a required BlockPos to a platform buffer."
+  [buf pos]
+  (.writeBlockPos buf pos))
+
+(defn read-extended-open-payload
+  "Read the shared extended GUI open payload used by Fabric-style screen handlers."
+  [buf]
+  (let [gui-id (.readInt buf)
+        has-tile? (.readBoolean buf)]
+    {:gui-id gui-id
+     :pos (when has-tile?
+            (.readBlockPos buf))}))
+
+(defn write-extended-open-payload!
+  "Write the shared extended GUI open payload used by Fabric-style screen handlers."
+  [buf gui-id pos]
+  (.writeInt buf gui-id)
+  (if pos
+    (do
+      (.writeBoolean buf true)
+      (.writeBlockPos buf pos))
+    (.writeBoolean buf false)))
+
+(defn create-client-menu!
+  "Create a Minecraft menu from a client-side menu factory callback.
+
+  Platform adapters provide only handler lookup, MenuType resolution, bridge opts,
+  and the platform-specific clj-container creator. This keeps the common
+  player/world/pos/container/menu wrapping flow in mc-1.20.1."
+  [{:keys [gui-id window-id player-inventory pos handler create-container-fn
+           create-menu-proxy-fn resolve-menu-type-fn bridge-opts error-prefix]}]
+  (let [player (.player player-inventory)
+        world (.level player)]
+    (create-wrapped-container
+      (fn []
+        (create-container-fn handler gui-id player world pos))
+      (fn [wid menu-type clj-container]
+        (create-menu-proxy-fn wid
+                              menu-type
+                              clj-container
+                              (assoc bridge-opts :player player)))
+      resolve-menu-type-fn
+      gui-id
+      window-id
+      error-prefix)))

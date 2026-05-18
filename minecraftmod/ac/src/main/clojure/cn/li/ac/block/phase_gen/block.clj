@@ -6,7 +6,6 @@
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.ac.block.role-impls :as impls]
-            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.config.modid :as modid]
@@ -19,7 +18,6 @@
 (defn init-phase-gen!
   []
   (with-init-guard phase-gen-installed?
-    (msg-registry/register-block-messages! :phase-gen [:get-status])
     (tdsl/register-tile!
       (tdsl/create-tile-spec
         "phase-gen"

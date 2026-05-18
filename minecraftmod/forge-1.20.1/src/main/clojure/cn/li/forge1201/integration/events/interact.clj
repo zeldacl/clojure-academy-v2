@@ -5,8 +5,7 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.integration.event-handlers :as event-handlers]
             [cn.li.forge1201.integration.events.event-apply :as event-apply]
-            [cn.li.forge1201.integration.events.gui-open-port :as gui-open-port]
-             [cn.li.mcmod.hooks.core :as power-runtime])
+            [cn.li.forge1201.integration.events.gui-open-port :as gui-open-port])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock
             PlayerInteractEvent$LeftClickBlock]
            [net.minecraft.world InteractionHand]))
@@ -34,30 +33,32 @@
           player (.getEntity evt)
           hand (.getHand evt)]
       (when (= hand InteractionHand/MAIN_HAND)
-        (let [player-uuid (str (.getUUID player))
-              runtime-activated? (power-runtime/runtime-activated? player-uuid)]
-          (when runtime-activated?
-            (event-apply/apply-runtime-activated-right-click! evt (not (.isClientSide level))))
+        (let [block-state (.getBlockState level pos)
+              item-stack (.getItemInHand player hand)
+              ret (handle-right-click
+                    {:x (.getX pos)
+                     :y (.getY pos)
+                     :z (.getZ pos)
+                     :pos pos
+                     :sneaking (.isShiftKeyDown player)
+                     :player player
+                     :hand hand
+                     :item-stack item-stack
+                     :world level
+                     :block (.getBlock block-state)})]
+          (cond
+            (event-handlers/runtime-active-result? ret)
+            (do
+              (event-apply/deny-right-click-use! evt)
+              (when-not (.isClientSide level)
+                (event-apply/cancel-player-interact-fail! evt)))
 
-          (when-not runtime-activated?
-            (let [block-state (.getBlockState level pos)
-                  item-stack (.getItemInHand player hand)
-                  ret (handle-right-click
-                        {:x (.getX pos)
-                         :y (.getY pos)
-                         :z (.getZ pos)
-                         :pos pos
-                         :sneaking (.isShiftKeyDown player)
-                         :player player
-                         :hand hand
-                         :item-stack item-stack
-                         :world level
-                         :block (.getBlock block-state)})]
-              (when (interaction-result/interaction-consumed? ret)
-                (when-not (.isClientSide level)
-                  (log/info "[FORGE-RIGHT-CLICK-EVENT] pos=" pos "player=" (.getGameProfile player)
-                            "block=" (.getBlock block-state)))
-                (event-apply/apply-consumed-right-click! evt (.isClientSide level))))))))
+            (interaction-result/interaction-consumed? ret)
+            (do
+              (when-not (.isClientSide level)
+                (log/info "[FORGE-RIGHT-CLICK-EVENT] pos=" pos "player=" (.getGameProfile player)
+                          "block=" (.getBlock block-state)))
+              (event-apply/apply-consumed-right-click! evt (.isClientSide level)))))))
     (catch Throwable t
       (log/error "[FORGE-RIGHT-CLICK-EVENT] EXCEPTION:" (ex-message t))
       (log/error "[FORGE-RIGHT-CLICK-EVENT] Stack trace:" t))))
@@ -68,10 +69,9 @@
     (let [player (.getEntity evt)
           hand (.getHand evt)]
       (when (= hand InteractionHand/MAIN_HAND)
-        (let [player-uuid (str (.getUUID player))
-              runtime-activated? (power-runtime/runtime-activated? player-uuid)]
-          (when runtime-activated?
-            (event-apply/apply-runtime-activated-left-click! evt)))))
+        (when (event-handlers/runtime-active-result?
+                (event-handlers/handle-block-left-click {:player player}))
+          (event-apply/cancel-event! evt))))
     (catch Throwable t
       (log/error "[FORGE-LEFT-CLICK-BLOCK-EVENT] EXCEPTION:" (ex-message t))
       (log/error "[FORGE-LEFT-CLICK-BLOCK-EVENT] Stack trace:" t))))

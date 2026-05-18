@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.block.solar-gen.config :as solar-config]
             [cn.li.ac.config.common :as config-common]
+            [cn.li.ac.config.gameplay :as gameplay-config]
             [cn.li.ac.config.registry :as registry]
             [cn.li.ac.wireless.config :as wireless-config]
             [cn.li.mcmod.config.registry :as config-reg]))
@@ -20,7 +21,7 @@
       (is (= expected registry/wireless-default-values)))))
 
 (deftest init-configs-registers-descriptors-and-defaults-test
-  (testing "init-configs! registers descriptors then defaults for wireless domain"
+  (testing "init-configs! registers descriptors then defaults for AC config domains"
     (let [calls (atom [])]
       (with-redefs [config-reg/register-config-descriptors!
                     (fn [domain descriptors]
@@ -29,8 +30,8 @@
                     (fn [domain defaults]
                       (swap! calls conj [:defaults domain defaults]))]
         (is (nil? (registry/init-configs!)))
-        (is (= 2 (count @calls)))
-        (is (= [:register config-common/wireless-domain registry/wireless-descriptors]
-               (first @calls)))
-        (is (= [:defaults config-common/wireless-domain registry/wireless-default-values]
-               (second @calls)))))))
+        (is (= [[:register config-common/wireless-domain registry/wireless-descriptors]
+                [:defaults config-common/wireless-domain registry/wireless-default-values]
+                [:register config-common/gameplay-domain gameplay-config/descriptors]
+                [:defaults config-common/gameplay-domain gameplay-config/default-values]]
+               @calls))))))

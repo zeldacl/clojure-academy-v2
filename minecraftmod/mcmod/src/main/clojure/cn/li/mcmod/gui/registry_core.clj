@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.gui.registry-core
   "Unified GUI operations API (replacing legacy gui.adapter facade file)."
   (:require [cn.li.mcmod.gui.handler :as gui-handler]
+            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.adapter.platform-registry :as platform-registry]))
 
 (defonce ^:private resolved-vars
@@ -71,22 +72,21 @@
 
 (defn get-gui-handler [] (gui-handler/get-gui-handler))
 
-(defn set-client-container! [container] (platform-registry/invoke-platform! :set-client-container! container))
-(defn clear-client-container! [] (platform-registry/invoke-platform! :clear-client-container!))
-(defn get-client-container [] (platform-registry/invoke-platform! :get-client-container))
-(defn register-active-container! [container] (platform-registry/invoke-platform! :register-active-container! container))
-(defn unregister-active-container! [container] (platform-registry/invoke-platform! :unregister-active-container! container))
-(defn register-player-container! [player container] (platform-registry/invoke-platform! :register-player-container! player container))
-(defn unregister-player-container! [player] (platform-registry/invoke-platform! :unregister-player-container! player))
-(defn get-player-container [player] (platform-registry/invoke-platform! :get-player-container player))
-(defn get-player-container-from-active [player] (platform-registry/invoke-platform! :get-player-container-from-active player))
-(defn get-container-for-menu [menu] (platform-registry/invoke-platform! :get-container-for-menu menu))
-(defn get-container-by-id [container-id] (platform-registry/invoke-platform! :get-container-by-id container-id))
-(defn get-menu-container-id [menu] (platform-registry/invoke-platform! :get-menu-container-id menu))
-(defn register-menu-container! [menu container] (platform-registry/invoke-platform! :register-menu-container! menu container))
-(defn unregister-menu-container! [menu] (platform-registry/invoke-platform! :unregister-menu-container! menu))
-(defn register-container-by-id! [container-id container] (platform-registry/invoke-platform! :register-container-by-id! container-id container))
-(defn unregister-container-by-id! [container-id] (platform-registry/invoke-platform! :unregister-container-by-id! container-id))
+(defn register-active-container! [container] (container-state/register-active-container! container))
+(defn unregister-active-container! [container] (container-state/unregister-active-container! container))
+(defn list-active-containers [] (container-state/list-active-containers))
+(defn register-player-container! [player container] (container-state/register-player-container! player container))
+(defn unregister-player-container! [player] (container-state/unregister-player-container! player))
+(defn get-player-container [player] (container-state/get-player-container player))
+(defn get-player-container-from-active [player] (container-state/get-player-container-from-active player))
+(defn get-container-for-menu [menu] (container-state/get-container-for-menu menu))
+(defn resolve-container-for-menu [menu] (container-state/resolve-container-for-menu menu))
+(defn get-container-by-id [container-id] (container-state/get-container-by-id container-id))
+(defn get-menu-container-id [menu] (container-state/get-menu-container-id menu))
+(defn register-menu-container! [menu container] (container-state/register-menu-container! menu container))
+(defn unregister-menu-container! [menu] (container-state/unregister-menu-container! menu))
+(defn register-container-by-id! [container-id container] (container-state/register-container-by-id! container-id container))
+(defn unregister-container-by-id! [container-id] (container-state/unregister-container-by-id! container-id))
 (defn safe-tick! [container] (platform-registry/invoke-platform! :safe-tick! container))
 (defn safe-validate [container player] (platform-registry/invoke-platform! :safe-validate container player))
 (defn safe-sync! [container] (platform-registry/invoke-platform! :safe-sync! container))
