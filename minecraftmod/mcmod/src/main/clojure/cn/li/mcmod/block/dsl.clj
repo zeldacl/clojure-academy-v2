@@ -1,5 +1,5 @@
 (ns cn.li.mcmod.block.dsl
-	"Block DSL compatibility wrapper.
+	"Public aggregate entrypoint for the block DSL.
    
 	 The actual implementation now lives in:
 	 - cn.li.mcmod.block.dsl-properties
@@ -9,8 +9,8 @@
 	 - cn.li.mcmod.block.dsl-core
 	 - cn.li.mcmod.block.query
    
-	 This namespace keeps the historical public API stable while delegating to
-	 the modularized implementation."
+	 This namespace is intentionally retained as the user-facing DSL surface;
+	 implementation details remain in the focused modules above."
 	(:require [cn.li.mcmod.util.log :as log]
 						[cn.li.mcmod.block.dsl-properties :as props]
 						[cn.li.mcmod.block.dsl-multiblock :as mb]

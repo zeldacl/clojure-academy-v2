@@ -1,8 +1,6 @@
 (ns cn.li.mc1201.entity.ray-hooks
   "Shared registration for scripted ray hook strategies."
-  (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.entity.dsl :as edsl]
-            [cn.li.mcmod.entity.hook-catalog :as hook-catalog]
+  (:require [cn.li.mcmod.entity.hook-catalog :as hook-catalog]
             [cn.li.mc1201.entity.hook-registry-core :as hook-core])
   (:import [cn.li.mc1201.entity ScriptedEntitySpecAccess]))
 

@@ -2,16 +2,36 @@
   "Shared gameplay-config bridge holder.
 
   Platform modules install a provider map of gameplay access fns.
-  Shared/business code can call this namespace without depending on loader config APIs."
+  Shared/business code can call this namespace without depending on loader config APIs.
+
+  Provider contract and helper builders live here so Forge/Fabric keep only raw
+  storage access while level fallback and predicate semantics stay aligned."
   (:require [cn.li.mcmod.util.log :as log]))
 
+(def provider-keys
+  "Canonical gameplay provider key set shared by platform adapters and AC."
+  [:attack-player?
+   :destroy-blocks?
+   :get-normal-metal-blocks
+   :get-weak-metal-blocks
+   :get-metal-entities
+   :is-normal-metal-block?
+   :is-weak-metal-block?
+   :is-metal-block?
+   :is-metal-entity?
+   :get-cp-recover-cooldown
+   :get-cp-recover-speed
+   :get-overload-recover-cooldown
+   :get-overload-recover-speed
+   :get-init-cp
+   :get-add-cp
+   :get-init-overload
+   :get-add-overload
+   :get-damage-scale])
+
 (def ^:private default-provider
-  {:analysis-enabled? (constantly true)
-   :attack-player? (constantly true)
+  {:attack-player? (constantly true)
    :destroy-blocks? (constantly true)
-   :gen-ores? (constantly true)
-   :gen-phase-liquid? (constantly true)
-   :heads-or-tails? (constantly false)
    :get-normal-metal-blocks (constantly [])
    :get-weak-metal-blocks (constantly [])
    :get-metal-entities (constantly [])
@@ -28,6 +48,59 @@
    :get-init-overload (constantly 0)
    :get-add-overload (constantly 0)
    :get-damage-scale (constantly 1.0)})
+
+(defn level-value
+  "Read a level-indexed numeric list using the AC/Fabric fallback rule: out of
+  range or non-numeric levels return 0 instead of leaking platform defaults."
+  [values level]
+  (let [idx (if (number? level) (int level) -1)]
+    (get (vec (or values [])) idx 0)))
+
+(defn list-predicate
+  "Build a predicate over a dynamic string list getter."
+  [values-fn]
+  (fn [id]
+    (contains? (set (map str (values-fn))) (str id))))
+
+(defn make-provider-map
+  "Build a canonical provider map from raw platform config getter fns."
+  [{:keys [attack-player?
+           destroy-blocks?
+           get-normal-metal-blocks
+           get-weak-metal-blocks
+           get-metal-entities
+           get-cp-recover-cooldown
+           get-cp-recover-speed
+           get-overload-recover-cooldown
+           get-overload-recover-speed
+           get-init-cp-list
+           get-add-cp-list
+           get-init-overload-list
+           get-add-overload-list
+           get-damage-scale]}]
+  (let [normal-metal? (list-predicate get-normal-metal-blocks)
+        weak-metal? (list-predicate get-weak-metal-blocks)
+        metal-entity? (list-predicate get-metal-entities)]
+    {:attack-player? attack-player?
+     :destroy-blocks? destroy-blocks?
+     :get-normal-metal-blocks get-normal-metal-blocks
+     :get-weak-metal-blocks get-weak-metal-blocks
+     :get-metal-entities get-metal-entities
+     :is-normal-metal-block? normal-metal?
+     :is-weak-metal-block? weak-metal?
+     :is-metal-block? (fn [block-id]
+                        (or (normal-metal? block-id)
+                            (weak-metal? block-id)))
+     :is-metal-entity? metal-entity?
+     :get-cp-recover-cooldown get-cp-recover-cooldown
+     :get-cp-recover-speed get-cp-recover-speed
+     :get-overload-recover-cooldown get-overload-recover-cooldown
+     :get-overload-recover-speed get-overload-recover-speed
+     :get-init-cp #(level-value (get-init-cp-list) %)
+     :get-add-cp #(level-value (get-add-cp-list) %)
+     :get-init-overload #(level-value (get-init-overload-list) %)
+     :get-add-overload #(level-value (get-add-overload-list) %)
+     :get-damage-scale get-damage-scale}))
 
 (defonce ^:private provider* (atom default-provider))
 
@@ -46,12 +119,8 @@
 (defn- call1 [k x]
   ((or (get @provider* k) (get default-provider k)) x))
 
-(defn analysis-enabled? [] (call0 :analysis-enabled?))
 (defn attack-player? [] (call0 :attack-player?))
 (defn destroy-blocks? [] (call0 :destroy-blocks?))
-(defn gen-ores? [] (call0 :gen-ores?))
-(defn gen-phase-liquid? [] (call0 :gen-phase-liquid?))
-(defn heads-or-tails? [] (call0 :heads-or-tails?))
 (defn get-normal-metal-blocks [] (vec (call0 :get-normal-metal-blocks)))
 (defn get-weak-metal-blocks [] (vec (call0 :get-weak-metal-blocks)))
 (defn get-metal-entities [] (vec (call0 :get-metal-entities)))

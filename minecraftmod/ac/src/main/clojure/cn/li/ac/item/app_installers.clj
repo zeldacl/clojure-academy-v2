@@ -2,7 +2,7 @@
   "Terminal app installer items migrated from original AcademyCraft."
   (:require [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.terminal.player-data :as term-data]
             [cn.li.ac.terminal.app-registry :as app-reg]
             [cn.li.mcmod.util.log :as log]))
@@ -11,7 +11,7 @@
 
 (defn- install-app-for-player!
   [player app-id]
-  (let [uuid-str (str (entity/player-get-uuid player))]
+  (let [uuid-str (uuid/player-uuid player)]
     (cond
       (not (term-data/terminal-installed? uuid-str))
       (do

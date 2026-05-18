@@ -1,5 +1,8 @@
 (ns cn.li.mc1201.runtime.entity-query-core
-  "Compatibility wrapper delegating entity query helpers to split lookup/iterators modules."
+  "Public aggregate API for shared entity query helpers.
+
+  Lookup and iteration implementations live in focused modules, while this
+  namespace remains the stable runtime-facing entrypoint for platform code."
   (:require [cn.li.mc1201.runtime.entity-iterators :as entity-iterators]
             [cn.li.mc1201.runtime.entity-lookup :as entity-lookup]))
 

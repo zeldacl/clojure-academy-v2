@@ -4,7 +4,7 @@
 
 (deftest gameplay-default-branch-test
   (binding [gameplay/*config-bridge* nil]
-    (is (true? (gameplay/analysis-enabled?)))
+    (is (true? (gameplay/attack-player-enabled?)))
     (is (true? (gameplay/destroy-blocks-enabled?)))
     (is (= 1800 (gameplay/get-init-cp 0)))
     (is (= 900 (gameplay/get-add-cp 1)))
@@ -13,7 +13,7 @@
 
 (deftest gameplay-bridge-branch-test
   (binding [gameplay/*config-bridge*
-            {:analysis-enabled? (fn [] false)
+            {:attack-player? (fn [] false)
              :destroy-blocks? (fn [] false)
              :get-init-cp (fn [level] (+ 100 level))
              :get-add-cp (fn [level] (+ 200 level))
@@ -21,7 +21,7 @@
              :get-cp-recover-speed (fn [] 2.0)
              :get-overload-recover-speed (fn [] 3.0)
              :get-damage-scale (fn [] 4.0)}]
-    (is (false? (gameplay/analysis-enabled?)))
+    (is (false? (gameplay/attack-player-enabled?)))
     (is (false? (gameplay/destroy-blocks-enabled?)))
     (is (= 102 (gameplay/get-init-cp 2)))
     (is (= 203 (gameplay/get-add-cp 3)))

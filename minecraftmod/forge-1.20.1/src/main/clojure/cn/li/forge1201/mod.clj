@@ -180,10 +180,10 @@
      (gui-registry-impl/register-menu-types!))])
 
 ;; ============================================================================
-;; Setup Phase Helpers (must be defined before mod-init)
+;; Setup Phase Helpers (must be defined before start-forge-mod!)
 ;; ============================================================================
 
-;; Helper: Common setup phase (subscribed to FMLCommonSetupEvent in mod-init)
+;; Helper: Common setup phase (subscribed to FMLCommonSetupEvent during bootstrap)
 (defn on-common-setup [_event]
   (log/info "FMLCommonSetupEvent - Common setup phase")
   (setup-common/run-common-setup!))
@@ -214,7 +214,7 @@
   (let [aot? (aot-compilation?)
         cphant? (clojurephant-compilation?)
         check? (= "true" (System/getProperty "ac.check.clojure"))]
-    (log/info "[BOOTSTRAP_TRACE] mod-init enter"
+    (log/info "[BOOTSTRAP_TRACE] start-forge-mod! enter"
               {:aot aot?
                :clojurephant cphant?
                :ac-check check?
@@ -235,15 +235,6 @@
        :gui-menu-register (force gui-registry-impl/menu-register)}
       (registration-steps)
       aot? cphant? check?)))
-
-;; Keep legacy name for compatibility with existing call sites.
-(defn mod-init []
-  (start-forge-mod!))
-
-
-
-
-
 ;; (defn start-repl-safe []
 ;;   (let [cl (.getContextClassLoader (Thread/currentThread))]
 ;;     (nrepl/start-server :port 7888 :handler (nrepl/default-handler))

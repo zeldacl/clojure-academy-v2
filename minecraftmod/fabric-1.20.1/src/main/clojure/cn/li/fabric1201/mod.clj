@@ -1,7 +1,8 @@
 (ns cn.li.fabric1201.mod
-  "Fabric 1.20.1 mod placeholder entry.
+  "Fabric 1.20.1 loader entrypoint.
 
-  Compile-unblocking stub that avoids touching Minecraft registries during AOT."
+  Owns Fabric-specific bootstrap ordering and delegates cross-loader lifecycle
+  phases to shared setup namespaces."
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.fabric1201.init :as init]
             [cn.li.ac.core :as core]
@@ -42,8 +43,8 @@
    :base-properties @base-properties
    :carrier-properties @carrier-properties})
 
-(defn mod-init
-  "Main mod initialization called from Java ModInitializer."
+(defn start-fabric-mod!
+  "Main Fabric mod initialization called from the Java ModInitializer."
   []
   (log/info "Initializing MyMod (Fabric 1.20.1) from Clojure...")
   (lifecycle-init/init-lifecycle!

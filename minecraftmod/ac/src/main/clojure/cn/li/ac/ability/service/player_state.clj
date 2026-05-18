@@ -1,11 +1,14 @@
 (ns cn.li.ac.ability.service.player-state
-	"Compatibility facade for player-state operations.
+	"Public aggregate API for player-state operations.
 
-	Implementation was split into focused namespaces:
+	Implementation is split into focused namespaces:
 	- player-state-core
 	- player-state-dirty
 	- player-state-accessors
-	- player-state-tick"
+	- player-state-tick
+
+	This namespace is intentionally retained as the stable service surface for
+	callers that need the complete player-state toolkit."
 	(:require [cn.li.ac.ability.service.player-state-core :as core]
 					[cn.li.ac.ability.service.player-state-dirty :as dirty]
 					[cn.li.ac.ability.service.player-state-accessors :as accessors]

@@ -32,7 +32,7 @@
 
 (defn init-common!
   "Initialize common GUI system (server + client).
-  MenuType registration is handled earlier via DeferredRegister in mod-init;
+  MenuType registration is handled earlier via DeferredRegister during Forge bootstrap;
   only non-registry setup belongs here."
   []
   (gui-orchestrator/run-phase! common-phase))

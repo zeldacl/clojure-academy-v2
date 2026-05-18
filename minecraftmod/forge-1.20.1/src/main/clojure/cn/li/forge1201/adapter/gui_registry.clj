@@ -99,7 +99,7 @@
 (defn register-menu-types!
   "Populate menu-register DeferredRegister with all GUI menu types.
   Must be called before menu-register is registered with the mod event bus
-  (i.e. during mod-init, not during FMLCommonSetupEvent)."
+  (i.e. during Forge bootstrap, not during FMLCommonSetupEvent)."
   []
   (log/info "Queueing GUI menu types into DeferredRegister")
   (install-registry-contract!)
@@ -200,7 +200,7 @@
      :invalidate-menu-registry! (fn [] (reset! gui-menu-types {}))}))
 
 (defmethod gui/register-gui-handler :forge-1.20.1 [_]
-  ;; MenuType registration is handled via DeferredRegister in mod-init.
+  ;; MenuType registration is handled via DeferredRegister during Forge bootstrap.
   ;; This hook is kept for interface compliance only.
   (install-registry-contract!)
   (log/info "Forge 1.20.1 GUI handler ready (menu types registered via DeferredRegister)"))

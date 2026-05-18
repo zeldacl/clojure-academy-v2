@@ -45,6 +45,36 @@
   [p1 p2 color]
   {:kind :line :p1 p1 :p2 p2 :color color})
 
+(def ^:private default-beam-texture
+  "minecraft:textures/entity/beacon_beam.png")
+
+(declare beam-right-axis)
+
+(defn billboard-beam-ops
+  "Build the standard ability beam primitive: outer quad, inner/core quad, and
+  optional center line. Widths are world-space half-widths around the beam axis."
+  [cam-pos start end {:keys [texture width core-width core-ratio
+                              outer-color inner-color line-color]}]
+  (let [texture (or texture default-beam-texture)
+        width (double (or width 0.0))
+        core-width (double (or core-width (* width (double (or core-ratio 0.45)))))
+        right (beam-right-axis start end cam-pos)
+        outer-offset (v* right width)
+        core-offset (v* right core-width)
+        p0 (v+ start outer-offset)
+        p1 (v- start outer-offset)
+        p2 (v- end outer-offset)
+        p3 (v+ end outer-offset)
+        c0 (v+ start core-offset)
+        c1 (v- start core-offset)
+        c2 (v- end core-offset)
+        c3 (v+ end core-offset)
+        quads [(quad-op texture p0 p1 p2 p3 outer-color)
+               (quad-op texture c0 c1 c2 c3 inner-color)]]
+    (if line-color
+      (conj quads (line-op start end line-color))
+      quads)))
+
 ;; ---------------------------------------------------------------------------
 ;; Camera-relative basis helpers
 ;; ---------------------------------------------------------------------------

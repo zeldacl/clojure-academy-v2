@@ -4,6 +4,7 @@
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.entity :as entity]
+						[cn.li.ac.ability.util.uuid :as uuid]
 						[cn.li.ac.wireless.api :as wireless-api]
 						[cn.li.ac.wireless.service.node-connection :as node-connection]
 						[cn.li.ac.wireless.gui.message.registry :as msg-registry]
@@ -54,7 +55,7 @@
 		(if-not tile
 			{:success false :reason "no-tile"}
 			(let [state (or (platform-be/get-custom-state tile) dev-logic/dev-default-state)
-						pid (str (entity/player-get-uuid player))
+						pid (uuid/player-uuid player)
 						holder (str (:user-uuid state ""))]
 				(cond
 					(not (:structure-valid state false)) {:success false :reason "invalid-structure"}

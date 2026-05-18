@@ -21,6 +21,7 @@
             [cn.li.ac.block.developer.logic :as dev-logic]
             [cn.li.ac.block.developer.panel :as dev-panel]
             [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as platform-be]))
@@ -70,7 +71,7 @@
   (and (common/still-valid? container player)
        (let [tile (:tile-entity container)
              st (or (common/get-tile-state tile) {})
-             pid (str (entity/player-get-uuid player))
+         pid (uuid/player-uuid player)
              holder (str (:user-uuid st ""))]
          (or (str/blank? holder) (= holder pid)))))
 

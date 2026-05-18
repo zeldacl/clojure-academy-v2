@@ -34,10 +34,6 @@
       (invoke [_ _ method args]
         (invoke-fn (.getName method) args)))))
 
-(defn- serialize-map
-  [m]
-  (packet-base/encode-payload m))
-
 (defn- deserialize-map
   [^String s]
   (packet-base/decode-payload s
@@ -46,7 +42,7 @@
 (defn- make-buf
   [payload]
   (doto (FriendlyByteBuf. (Unpooled/buffer))
-    (.writeUtf (serialize-map payload))))
+    (.writeUtf (packet-base/encode-payload payload))))
 
 (defn- read-buf-map
   [^FriendlyByteBuf buf]
@@ -59,21 +55,17 @@
 (defn send-to-server!
   [msg-id request-id payload]
   (let [client-networking (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking")
-        buf (make-buf {:msg-id msg-id
-                       :request-id (int request-id)
-                       :payload (or payload {})})]
+        buf (make-buf (packet-base/request-map msg-id request-id payload))]
     (Reflector/invokeStaticMethod client-networking "send" (to-array [c2s-channel buf]))))
 
 (defn send-response-to-client!
   [^ServerPlayer player request-id payload]
-  (let [buf (make-buf {:request-id (int request-id)
-                       :payload (or payload {})})]
+  (let [buf (make-buf (packet-base/response-map request-id payload))]
     (ServerPlayNetworking/send player s2c-channel buf)))
 
 (defn send-push-to-client!
   [^ServerPlayer player msg-id payload]
-  (let [buf (make-buf {:request-id -1
-                       :payload {:msg-id msg-id :payload (or payload {})}})]
+  (let [buf (make-buf (packet-base/push-map msg-id payload))]
     (ServerPlayNetworking/send player s2c-channel buf)))
 
 (defmethod net-client/send-request :fabric-1.20.1
@@ -91,9 +83,7 @@
                          (let [server (aget args 0)
                                player (aget args 1)
                                buf (aget args 3)
-                               {:keys [msg-id request-id payload]} (read-buf-map buf)
-                               request-id (int (or request-id -1))
-                                payload (packet-base/normalize-map payload)]
+                           {:keys [msg-id request-id payload]} (packet-base/normalize-request (read-buf-map buf))]
                            (.execute server
                                      (reify Runnable
                                        (run [_]
@@ -115,17 +105,15 @@
 (defn init-client!
   []
   (when (compare-and-set! client-initialized? false true)
-      (let [client-networking (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking")
-        handler-iface (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking$PlayChannelHandler")
+    (let [client-networking (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking")
+          handler-iface (ru/class-noinit "net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking$PlayChannelHandler")
           receiver (jproxy
                      handler-iface
                      (fn [method-name args]
                        (when (= method-name "receive")
                          (let [client (aget args 0)
                                buf (aget args 2)
-                               {:keys [request-id payload]} (read-buf-map buf)
-                               request-id (int (or request-id -1))
-                               payload (packet-base/normalize-map payload)]
+                               {:keys [request-id payload]} (packet-base/normalize-response (read-buf-map buf))]
                            (.execute client
                                      (reify Runnable
                                        (run [_]

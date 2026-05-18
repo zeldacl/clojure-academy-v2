@@ -3,8 +3,10 @@
   (:require [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.mcmod.gui.metadata :as gui-meta]
             [cn.li.mcmod.gui.handler :as gui-handler]
+            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.platform.world :as pworld]
             [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -137,11 +139,11 @@
 ;; Container Tick Management
 ;; ============================================================================
 
-(def active-containers gui-handler/active-containers)
-(def player-containers gui-handler/player-containers)
-(def menu-containers gui-handler/menu-containers)
-(def containers-by-id gui-handler/containers-by-id)
-(def client-container gui-handler/client-container)
+(def active-containers container-state/active-containers)
+(def player-containers container-state/player-containers)
+(def menu-containers container-state/menu-containers)
+(def containers-by-id container-state/containers-by-id)
+(def client-container container-state/client-container)
 
 (defn register-active-container!
   "Register a container as active (for tick updates)"
@@ -150,11 +152,9 @@
   (log/info "Registered active container, total:" (count @active-containers)))
 
 (defn- player-key
-  "Stable key for player (UUID) so lookup works regardless of object reference. Uses reflection."
+  "Stable key for player (UUID) so lookup works regardless of object reference."
   [player]
-  (try
-    (entity/player-get-uuid player)
-    (catch Exception _ nil)))
+  (uuid/player-uuid player))
 
 (defn register-player-container!
   "Register a container for a specific player (keyed by player UUID for stable lookup)."

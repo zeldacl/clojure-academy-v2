@@ -6,6 +6,7 @@
   (:require [clojure.java.io :as io]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.config.modid :as modid]
+            [cn.li.mc1201.config.gameplay-bridge :as shared-gameplay]
             [cn.li.mcmod.util.log :as log])
   (:import [com.google.gson GsonBuilder]
            [java.util LinkedHashMap]
@@ -21,12 +22,8 @@
 
 (defn- default-config
   []
-  {:analysis-enabled? (:analysis gameplay/default-generic-config)
-   :attack-player? (:attack-player gameplay/default-generic-config)
+  {:attack-player? (:attack-player gameplay/default-generic-config)
    :destroy-blocks? (:destroy-blocks gameplay/default-generic-config)
-   :gen-ores? (:gen-ores gameplay/default-generic-config)
-   :gen-phase-liquid? (:gen-phase-liquid gameplay/default-generic-config)
-   :heads-or-tails? (:heads-or-tails gameplay/default-generic-config)
    :normal-metal-blocks (:normal-metal-blocks gameplay/default-ability-config)
    :weak-metal-blocks (:weak-metal-blocks gameplay/default-ability-config)
    :metal-entities (:metal-entities gameplay/default-ability-config)
@@ -84,16 +81,12 @@
 
 (defn- parse-config
   [parsed defaults]
-  {:analysis-enabled? (parse-bool (read-value parsed "analysis-enabled") (:analysis-enabled? defaults))
-   :attack-player? (parse-bool (read-value parsed "attack-player") (:attack-player? defaults))
+  {:attack-player? (parse-bool (read-value parsed "attack-player") (:attack-player? defaults))
    :destroy-blocks? (parse-bool (read-value parsed "destroy-blocks") (:destroy-blocks? defaults))
-   :gen-ores? (parse-bool (read-value parsed "gen-ores") (:gen-ores? defaults))
-   :gen-phase-liquid? (parse-bool (read-value parsed "gen-phase-liquid") (:gen-phase-liquid? defaults))
-   :heads-or-tails? (parse-bool (read-value parsed "heads-or-tails") (:heads-or-tails? defaults))
    :normal-metal-blocks (parse-str-list (read-value parsed "normal-metal-blocks") (:normal-metal-blocks defaults))
    :weak-metal-blocks (parse-str-list (read-value parsed "weak-metal-blocks") (:weak-metal-blocks defaults))
    :metal-entities (parse-str-list (read-value parsed "metal-entities") (:metal-entities defaults))
-   :cp-recover-cooldown (parse-int (read-value parsed "cp-recover-cooldown") (:cp-recover-cooldown defaults))
+  :cp-recover-cooldown (parse-int (read-value parsed "cp-recover-cooldown") (:cp-recover-cooldown defaults))
   :cp-recover-speed (parse-double-value (read-value parsed "cp-recover-speed") (:cp-recover-speed defaults))
    :overload-recover-cooldown (parse-int (read-value parsed "overload-recover-cooldown") (:overload-recover-cooldown defaults))
   :overload-recover-speed (parse-double-value (read-value parsed "overload-recover-speed") (:overload-recover-speed defaults))
@@ -106,12 +99,8 @@
 (defn- as-json-map
   [cfg]
   (doto (LinkedHashMap.)
-    (.put "analysis-enabled" (:analysis-enabled? cfg))
     (.put "attack-player" (:attack-player? cfg))
     (.put "destroy-blocks" (:destroy-blocks? cfg))
-    (.put "gen-ores" (:gen-ores? cfg))
-    (.put "gen-phase-liquid" (:gen-phase-liquid? cfg))
-    (.put "heads-or-tails" (:heads-or-tails? cfg))
     (.put "normal-metal-blocks" (:normal-metal-blocks cfg))
     (.put "weak-metal-blocks" (:weak-metal-blocks cfg))
     (.put "metal-entities" (:metal-entities cfg))
@@ -154,31 +143,34 @@
   (ensure-loaded!)
   (get @gameplay-config* k))
 
-(defn analysis-enabled? [] (boolean (cfg :analysis-enabled?)))
 (defn attack-player? [] (boolean (cfg :attack-player?)))
 (defn destroy-blocks? [] (boolean (cfg :destroy-blocks?)))
-(defn gen-ores? [] (boolean (cfg :gen-ores?)))
-(defn gen-phase-liquid? [] (boolean (cfg :gen-phase-liquid?)))
-(defn heads-or-tails? [] (boolean (cfg :heads-or-tails?)))
 
 (defn get-normal-metal-blocks [] (vec (cfg :normal-metal-blocks)))
 (defn get-weak-metal-blocks [] (vec (cfg :weak-metal-blocks)))
 (defn get-metal-entities [] (vec (cfg :metal-entities)))
 
+(def ^:private normal-metal-block?
+  (shared-gameplay/list-predicate get-normal-metal-blocks))
+
+(def ^:private weak-metal-block?
+  (shared-gameplay/list-predicate get-weak-metal-blocks))
+
+(def ^:private metal-entity?
+  (shared-gameplay/list-predicate get-metal-entities))
+
 (defn is-metal-block? [block-id]
-  (let [normal (set (get-normal-metal-blocks))
-        weak (set (get-weak-metal-blocks))]
-    (or (contains? normal block-id)
-        (contains? weak block-id))))
+  (or (normal-metal-block? block-id)
+      (weak-metal-block? block-id)))
 
 (defn is-normal-metal-block? [block-id]
-  (contains? (set (get-normal-metal-blocks)) block-id))
+  (normal-metal-block? block-id))
 
 (defn is-weak-metal-block? [block-id]
-  (contains? (set (get-weak-metal-blocks)) block-id))
+  (weak-metal-block? block-id))
 
 (defn is-metal-entity? [entity-id]
-  (contains? (set (get-metal-entities)) entity-id))
+  (metal-entity? entity-id))
 
 (defn get-cp-recover-cooldown [] (int (cfg :cp-recover-cooldown)))
 (defn get-cp-recover-speed [] (double (cfg :cp-recover-speed)))
@@ -192,19 +184,19 @@
 
 (defn get-init-cp
   [level]
-  (get (get-init-cp-list) level 0))
+  (shared-gameplay/level-value (get-init-cp-list) level))
 
 (defn get-add-cp
   [level]
-  (get (get-add-cp-list) level 0))
+  (shared-gameplay/level-value (get-add-cp-list) level))
 
 (defn get-init-overload
   [level]
-  (get (get-init-overload-list) level 0))
+  (shared-gameplay/level-value (get-init-overload-list) level))
 
 (defn get-add-overload
   [level]
-  (get (get-add-overload-list) level 0))
+  (shared-gameplay/level-value (get-add-overload-list) level))
 
 (defn get-damage-scale [] (double (cfg :damage-scale)))
 
@@ -216,25 +208,18 @@
 
 (defn provider-map
   []
-  {:analysis-enabled? analysis-enabled?
-   :attack-player? attack-player?
-   :destroy-blocks? destroy-blocks?
-   :gen-ores? gen-ores?
-   :gen-phase-liquid? gen-phase-liquid?
-   :heads-or-tails? heads-or-tails?
-   :get-normal-metal-blocks get-normal-metal-blocks
-   :get-weak-metal-blocks get-weak-metal-blocks
-   :get-metal-entities get-metal-entities
-   :is-normal-metal-block? is-normal-metal-block?
-   :is-weak-metal-block? is-weak-metal-block?
-   :is-metal-block? is-metal-block?
-   :is-metal-entity? is-metal-entity?
-   :get-cp-recover-cooldown get-cp-recover-cooldown
-   :get-cp-recover-speed get-cp-recover-speed
-   :get-overload-recover-cooldown get-overload-recover-cooldown
-   :get-overload-recover-speed get-overload-recover-speed
-   :get-init-cp get-init-cp
-   :get-add-cp get-add-cp
-   :get-init-overload get-init-overload
-   :get-add-overload get-add-overload
-   :get-damage-scale get-damage-scale})
+  (shared-gameplay/make-provider-map
+   {:attack-player? attack-player?
+    :destroy-blocks? destroy-blocks?
+    :get-normal-metal-blocks get-normal-metal-blocks
+    :get-weak-metal-blocks get-weak-metal-blocks
+    :get-metal-entities get-metal-entities
+    :get-cp-recover-cooldown get-cp-recover-cooldown
+    :get-cp-recover-speed get-cp-recover-speed
+    :get-overload-recover-cooldown get-overload-recover-cooldown
+    :get-overload-recover-speed get-overload-recover-speed
+    :get-init-cp-list get-init-cp-list
+    :get-add-cp-list get-add-cp-list
+    :get-init-overload-list get-init-overload-list
+    :get-add-overload-list get-add-overload-list
+    :get-damage-scale get-damage-scale}))

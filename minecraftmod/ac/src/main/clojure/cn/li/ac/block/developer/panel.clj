@@ -16,11 +16,11 @@
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.registry.category :as acat]
             [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.server.service.learning :as learning]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
-            [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.entity :as entity]))
+            [cn.li.mcmod.platform.be :as platform-be]))
 
 (defn- dev-msg [action]
   (msg-registry/msg :developer action))
@@ -89,7 +89,7 @@
         (fn [_]
           (when (and pl (:tile-entity container))
             (let [tile (:tile-entity container)
-                  uuid-str (str (entity/player-get-uuid pl))
+              uuid-str (uuid/player-uuid pl)
                   pos (net-helpers/tile-pos-payload tile)
                   bid (platform-be/get-block-id tile)
                   dtype (if (= (name (or bid "")) "developer-advanced") :advanced :normal)]
@@ -105,7 +105,7 @@
               bw (max 1.0 (double (or @(:wireless-bandwidth container) 1.0)))
               sync-in (double (or @(:wireless-inject-last-tick container) 0.0))
               sync01 (bal/clamp01 (/ sync-in bw))
-              uuid-str (when pl (str (entity/player-get-uuid pl)))
+              uuid-str (when pl (uuid/player-uuid pl))
               pstate (when uuid-str (ps/get-player-state uuid-str))
               ad (:ability-data pstate)
               cat-id (:category-id ad)

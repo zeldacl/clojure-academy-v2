@@ -52,6 +52,37 @@
   [v]
   (if (map? v) v {}))
 
+(defn request-map
+  "Canonical client->server RPC envelope used by string/buffer transports."
+  [msg-id request-id payload]
+  {:msg-id msg-id
+   :request-id (int (or request-id -1))
+   :payload (normalize-map payload)})
+
+(defn response-map
+  "Canonical server->client response envelope."
+  [request-id payload]
+  {:request-id (int (or request-id -1))
+   :payload (normalize-map payload)})
+
+(defn push-map
+  "Canonical server push envelope. request-id -1 is reserved for pushes."
+  [msg-id payload]
+  (response-map -1 {:msg-id msg-id
+                    :payload (normalize-map payload)}))
+
+(defn normalize-request
+  "Normalize a decoded client->server RPC envelope."
+  [decoded]
+  (let [m (normalize-map decoded)]
+    (request-map (:msg-id m) (:request-id m) (:payload m))))
+
+(defn normalize-response
+  "Normalize a decoded server->client response or push envelope."
+  [decoded]
+  (let [m (normalize-map decoded)]
+    (response-map (:request-id m) (:payload m))))
+
 (defn dispatch-client-response!
   "Route GUI network payload to push/response handlers by request-id convention.
   request-id < 0 means push payload: {:msg-id ... :payload ...}."

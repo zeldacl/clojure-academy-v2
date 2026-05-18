@@ -143,7 +143,7 @@
 主初始化链建议固定为：
 
 1. Java 入口加载主 Clojure namespace。
-2. `mod-init` 首先执行 `platform-bootstrap/init-platform!`。
+2. 显式命名的 `start-<loader>-mod!` 首先执行 `platform-bootstrap/init-platform!`。
 3. 安装平台对象协议、工厂函数与共享运行时桥接。
 4. 再执行共享层初始化：`init-from-java` / `core/init`。
 5. 最后完成 registry、config、events、GUI common/server init。

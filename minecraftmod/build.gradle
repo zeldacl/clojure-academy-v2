@@ -376,6 +376,184 @@ tasks.register('verifyPlatformNoBusinessHookIds') {
     }
 }
 
+tasks.register('verifyAcPlayerUuidSsoT') {
+    group = 'verification'
+    description = 'Verify AC code uses cn.li.ac.ability.util.uuid/player-uuid as the player UUID SSOT.'
+
+    doLast {
+        def allowedFiles = [
+            'ac/src/main/clojure/cn/li/ac/ability/util/uuid.clj'
+        ] as Set
+        def violations = []
+        def matcher = ~/entity\/player-get-uuid/
+
+        fileTree('ac/src/main/clojure') {
+            include '**/*.clj'
+            exclude '**/build/**', '**/.gradle/**'
+        }.files.each { File f ->
+            def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            if (!allowedFiles.contains(rel)) {
+                f.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                    def trimmed = line.trim()
+                    if (!trimmed.startsWith(';') && matcher.matcher(line).find()) {
+                        violations << "${rel}:${idx + 1}: ${trimmed}"
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Direct player UUID access found outside UUID SSOT:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyAcPlayerUuidSsoT] passed. Direct player UUID access is confined to ability.util.uuid.')
+    }
+}
+
+tasks.register('verifyGameplayConfigContractSsoT') {
+    group = 'verification'
+    description = 'Verify gameplay config provider-map construction and removed keys stay centralized.'
+
+    doLast {
+        def sharedFile = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/config/gameplay_bridge.clj')
+        def forgeFile = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/config/game_config.clj')
+        def fabricFile = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/config/gameplay_bridge.clj')
+        def acFile = file('ac/src/main/clojure/cn/li/ac/config/gameplay.clj')
+        def forgeJavaFile = file('forge-1.20.1/src/main/java/cn/li/forge1201/config/GameplayConfig.java')
+        def requiredFiles = [sharedFile, forgeFile, fabricFile, acFile, forgeJavaFile]
+
+        requiredFiles.each { File f ->
+            if (!f.exists()) {
+                throw new GradleException("Required gameplay config contract file not found: ${f}")
+            }
+        }
+
+        def sharedText = sharedFile.getText('UTF-8')
+        if (!sharedText.contains('(def provider-keys') || !sharedText.contains('(defn make-provider-map')) {
+            throw new GradleException('Shared gameplay config contract must define provider-keys and make-provider-map.')
+        }
+
+        [forgeFile, fabricFile].each { File f ->
+            def text = f.getText('UTF-8')
+            if (!text.contains('shared-gameplay/make-provider-map')) {
+                throw new GradleException("Platform gameplay provider must delegate provider-map construction to shared-gameplay/make-provider-map: ${f}")
+            }
+        }
+
+        def forbiddenTokens = [
+            ':analysis-enabled?', ':gen-ores?', ':gen-phase-liquid?', ':heads-or-tails?',
+            'analysis-enabled', 'gen-ores', 'gen-phase-liquid', 'heads-or-tails',
+            'ANALYSIS_ENABLED', 'GEN_ORES', 'GEN_PHASE_LIQUID', 'HEADS_OR_TAILS',
+            'genOres', 'genPhaseLiquid', 'headsOrTails'
+        ]
+        def violations = []
+        requiredFiles.each { File f ->
+            def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            def text = f.getText('UTF-8')
+            forbiddenTokens.each { token ->
+                if (text.contains(token)) {
+                    violations << "${rel}: ${token}"
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Removed gameplay config keys resurfaced:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyGameplayConfigContractSsoT] passed. Platform providers delegate to shared contract and removed keys stay absent.')
+    }
+}
+
+tasks.register('verifyTransientBuildArtifactsIgnored') {
+    group = 'verification'
+    description = 'Verify transient build/log capture artifacts are ignored and not tracked.'
+
+    doLast {
+        def ignoreFile = file('.gitignore')
+        if (!ignoreFile.exists()) {
+            throw new GradleException('Required .gitignore file not found.')
+        }
+
+        def ignoreLines = ignoreFile.readLines('UTF-8').collect { it.trim() } as Set
+        def requiredIgnorePatterns = ['build', '*.log', '/build-*.txt', '/compile-*.txt']
+        def missingIgnorePatterns = requiredIgnorePatterns.findAll { !ignoreLines.contains(it) }
+        if (!missingIgnorePatterns.isEmpty()) {
+            throw new GradleException("Missing transient artifact ignore patterns in .gitignore: ${missingIgnorePatterns}")
+        }
+
+        def gitOutput = new ByteArrayOutputStream()
+        exec {
+            workingDir rootDir
+            commandLine 'git', 'ls-files'
+            standardOutput = gitOutput
+        }
+
+        def transientTracked = gitOutput.toString('UTF-8')
+            .readLines()
+            .findAll { String rel ->
+                def rootFile = !rel.contains('/')
+                def rootCapture = rootFile && (rel ==~ /(build|compile)-.*\.txt/ || rel ==~ /.*\.log/)
+                def buildCapture = rel.startsWith('build/') && (rel ==~ /(?i).*\.(txt|log|ps1|orig|clj)/ || rel.contains('/orig-'))
+                (rootCapture || buildCapture) && file(rel).exists()
+            }
+
+        if (!transientTracked.isEmpty()) {
+            throw new GradleException("Transient build/log artifacts are tracked and should be removed from Git:\n - ${transientTracked.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyTransientBuildArtifactsIgnored] passed. Transient build/log captures are ignored and absent from Git index.')
+    }
+}
+
+tasks.register('verifyLoaderEntrypointNames') {
+    group = 'verification'
+    description = 'Verify active Forge/Fabric loader entrypoints use explicit start-<loader>-mod! names.'
+
+    doLast {
+        def entrypoints = [
+            [loader: 'Forge', javaFile: file('forge-1.20.1/src/main/java/cn/li/forge1201/MyMod1201.java'), cljFile: file('forge-1.20.1/src/main/clojure/cn/li/forge1201/mod.clj'), startFn: 'start-forge-mod!'],
+            [loader: 'Fabric', javaFile: file('fabric-1.20.1/src/main/java/cn/li/fabric1201/MyModFabric.java'), cljFile: file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/mod.clj'), startFn: 'start-fabric-mod!']
+        ]
+
+        def violations = []
+        entrypoints.each { entry ->
+            [entry.javaFile, entry.cljFile].each { File f ->
+                if (!f.exists()) {
+                    violations << "${entry.loader}: required entrypoint file missing: ${f}"
+                }
+            }
+            if (!entry.javaFile.exists() || !entry.cljFile.exists()) {
+                return
+            }
+
+            def javaText = entry.javaFile.getText('UTF-8')
+            def cljText = entry.cljFile.getText('UTF-8')
+            if (!javaText.contains(entry.startFn)) {
+                violations << "${entry.loader}: Java entrypoint must call ${entry.startFn}"
+            }
+            if (!cljText.contains("(defn ${entry.startFn}")) {
+                violations << "${entry.loader}: Clojure entrypoint must define ${entry.startFn}"
+            }
+            if (javaText.contains('mod-init') || cljText.contains('(defn mod-init')) {
+                violations << "${entry.loader}: legacy mod-init entrypoint name must not return"
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Loader entrypoint naming guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyLoaderEntrypointNames] passed. Forge/Fabric use explicit start-<loader>-mod! entrypoints.')
+    }
+}
+
+tasks.register('verifyCleanupResidueGuards') {
+    group = 'verification'
+    description = 'Run cleanup-residue guard checks for SSOT regressions.'
+    dependsOn 'verifyAcPlayerUuidSsoT', 'verifyGameplayConfigContractSsoT', 'verifyTransientBuildArtifactsIgnored', 'verifyLoaderEntrypointNames'
+}
+
 tasks.register('runFabricSmoke') {
     group = 'verification'
     description = 'Run minimal Fabric smoke scenario via datagen entrypoint.'
@@ -422,7 +600,7 @@ tasks.register('verifyFabricSmoke') {
 tasks.register('verifyCurrentPlatforms') {
     group = 'verification'
     description = 'Run compile-level verification matrix for current maintained platforms (Forge + Fabric).'
-    dependsOn 'verifyForgeBaseline', 'verifyFabricBaseline', 'verifyFabricSmoke', 'verifyPlatformHookCoverage', 'verifyPlatformNoBusinessHookIds'
+    dependsOn 'verifyForgeBaseline', 'verifyFabricBaseline', 'verifyFabricSmoke', 'verifyPlatformHookCoverage', 'verifyPlatformNoBusinessHookIds', 'verifyCleanupResidueGuards'
 }
 
 def collectRelativeFiles = { File rootDir, String relativeDir, Set<String> excludedRelPaths ->

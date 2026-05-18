@@ -7,6 +7,7 @@
 						[cn.li.mcmod.platform.world :as world]
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.entity :as entity]
+						[cn.li.ac.ability.util.uuid :as uuid]
 						[cn.li.ac.block.developer.config :as dev-config]
 						[cn.li.ac.block.developer.schema :as dev-schema]
 						[cn.li.ac.block.energy-converter.wireless-impl :as wireless-impl]
@@ -95,7 +96,7 @@
 							(open-gui-by-type player :developer world controller-pos)
 							(when-let [be (world/world-get-tile-entity* world controller-pos)]
 								(let [state (or (platform-be/get-custom-state be) dev-default-state)
-											pid (str (entity/player-get-uuid player))
+											pid (uuid/player-uuid player)
 											cur (str (:user-uuid state ""))]
 									(when (or (str/blank? cur) (= cur pid))
 										(platform-be/set-custom-state! be (assoc state :user-uuid pid :user-name (entity/player-get-name player)))

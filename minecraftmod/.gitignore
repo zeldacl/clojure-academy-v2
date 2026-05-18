@@ -27,6 +27,8 @@ Logs/*
 *.Log
 *.Logs
 *.logs
+/build-*.txt
+/compile-*.txt
 
 # Files from Forge MDK
 forge*changelog.txt

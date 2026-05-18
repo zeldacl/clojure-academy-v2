@@ -16,12 +16,8 @@ public class GameplayConfig {
     public static final ForgeConfigSpec SPEC;
 
     // Generic settings
-    public static final ForgeConfigSpec.BooleanValue ANALYSIS_ENABLED;
     public static final ForgeConfigSpec.BooleanValue ATTACK_PLAYER;
     public static final ForgeConfigSpec.BooleanValue DESTROY_BLOCKS;
-    public static final ForgeConfigSpec.BooleanValue GEN_ORES;
-    public static final ForgeConfigSpec.BooleanValue GEN_PHASE_LIQUID;
-    public static final ForgeConfigSpec.BooleanValue HEADS_OR_TAILS;
 
     // Ability settings
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> NORMAL_METAL_BLOCKS;
@@ -48,10 +44,6 @@ public class GameplayConfig {
         // Generic settings
         builder.comment("Generic gameplay settings").push("generic");
 
-        ANALYSIS_ENABLED = builder
-                .comment("Enable analysis system (deprecated, kept for compatibility)")
-                .define("analysis", false);
-
         ATTACK_PLAYER = builder
                 .comment("Allow abilities to damage other players (PvP)")
                 .define("attackPlayer", true);
@@ -59,18 +51,6 @@ public class GameplayConfig {
         DESTROY_BLOCKS = builder
                 .comment("Allow abilities to destroy blocks")
                 .define("destroyBlocks", true);
-
-        GEN_ORES = builder
-                .comment("Generate AcademyCraft ores in world")
-                .define("genOres", true);
-
-        GEN_PHASE_LIQUID = builder
-                .comment("Generate phase liquid pools in world")
-                .define("genPhaseLiquid", true);
-
-        HEADS_OR_TAILS = builder
-                .comment("Show heads or tails display for coin flip")
-                .define("headsOrTails", true);
 
         builder.pop();
 

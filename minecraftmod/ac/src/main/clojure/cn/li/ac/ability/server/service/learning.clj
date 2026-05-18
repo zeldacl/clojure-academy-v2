@@ -1,10 +1,13 @@
 (ns cn.li.ac.ability.server.service.learning
-  "Compatibility facade for learning services.
+  "Public aggregate API for learning services.
 
-  Implementation was split into:
+  Implementation is split into:
   - learning-conditions
   - learning-progression
-  - learning-coordinator"
+  - learning-coordinator
+
+  This namespace is intentionally retained as the stable learning-service
+  surface while the implementation stays modular."
   (:require [cn.li.ac.ability.server.service.learning-conditions :as conditions]
             [cn.li.ac.ability.server.service.learning-progression :as progression]
             [cn.li.ac.ability.server.service.learning-coordinator :as coordinator]))

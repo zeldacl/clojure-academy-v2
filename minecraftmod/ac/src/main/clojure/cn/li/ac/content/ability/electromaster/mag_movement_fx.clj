@@ -60,16 +60,14 @@
         hide-prob (+ 0.6 (* 0.25 (- 1.0 flicker)))
         outer-alpha (int (+ 45 (* 95 show-prob)))
         inner-alpha (int (+ 70 (* 120 hide-prob)))
-        right (ru/beam-right-axis start end cam-pos)
-        r0 (ru/v* right wiggle)
-        r1 (ru/v* right (* wiggle 0.52))
-        p0 (ru/v+ start r0) p1 (ru/v- start r0) p2 (ru/v- end r0) p3 (ru/v+ end r0)
-        c0 (ru/v+ start r1) c1 (ru/v- start r1) c2 (ru/v- end r1) c3 (ru/v+ end r1)
         outer-a {:r 89 :g 196 :b 255 :a outer-alpha}
         inner-a {:r 234 :g 250 :b 255 :a inner-alpha}]
-    [(ru/quad-op "minecraft:textures/entity/beacon_beam.png" p0 p1 p2 p3 outer-a)
-     (ru/quad-op "minecraft:textures/entity/beacon_beam.png" c0 c1 c2 c3 inner-a)
-     (ru/line-op start end {:r 161 :g 236 :b 255 :a (int (+ 90 (* 110 flicker)))})]))
+    (ru/billboard-beam-ops cam-pos start end
+      {:width wiggle
+       :core-width (* wiggle 0.52)
+       :outer-color outer-a
+       :inner-color inner-a
+       :line-color {:r 161 :g 236 :b 255 :a (int (+ 90 (* 110 flicker)))}})))
 
 ;; ---------------------------------------------------------------------------
 ;; Build plan

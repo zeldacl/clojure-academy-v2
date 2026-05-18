@@ -18,8 +18,8 @@
 
 1. Forge 发现 `MyMod1201`。
 2. Java 入口 `require` `cn.li.forge1201.mod`。
-3. 调用 `mod-init`。
-4. `mod-init` 内先完成平台初始化与共享生命周期装配。
+3. 调用 `start-forge-mod!`。
+4. `start-forge-mod!` 内先完成平台初始化与共享生命周期装配。
 5. 完成 registry、事件、配置、内容注册。
 
 #### 对应文件顺序
@@ -59,7 +59,7 @@
 
 1. NeoForge 发现 `MyModNeoForge`。
 2. Java 入口 `require` `cn.li.neoforge1201.mod`。
-3. `mod-init` 首先调用 `platform-bootstrap/init-platform!`。
+3. `start-neoforge-mod!` 首先调用 `platform-bootstrap/init-platform!`。
 4. 通过 SPI 安装平台桥接实现。
 5. 再启动共享内容初始化、registry、config、events。
 
@@ -103,7 +103,7 @@
 
 1. `fabric.mod.json` `entrypoints.main` 指向 Java `ModInitializer`。
 2. Java 入口 `require` `cn.li.fabric1201.mod`。
-3. `mod-init` 先执行 `platform-bootstrap/init-platform!`。
+3. 调用 `start-fabric-mod!`，先执行 `platform-bootstrap/init-platform!`。
 4. 再执行共享初始化、registry、events、GUI common/server init、config load。
 
 #### 对应文件顺序

@@ -7,6 +7,7 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
@@ -45,11 +46,11 @@
     (let [normalized-id (last (str/split (str item-id) #":" 2))
           target-category (get induction-factor->category normalized-id)]
       (when target-category
-        (let [uuid (str (entity/player-get-uuid player))
-              state (ps/get-or-create-player-state! uuid)
-              ability (:ability-data state)
-              current-category (:category-id ability)
-              current-level (int (:level ability 1))]
+      (let [uuid (uuid/player-uuid player)
+          state (ps/get-or-create-player-state! uuid)
+          ability (:ability-data state)
+          current-category (:category-id ability)
+          current-level (int (:level ability 1))]
           (cond
             (nil? current-category)
             (do

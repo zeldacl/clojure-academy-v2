@@ -104,20 +104,18 @@
 
 (defn- ray-ops [cam-pos {:keys [start end ttl max-ttl is-reflect?]}]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
-        right (ru/beam-right-axis start end cam-pos)
         width (if is-reflect?
                 (* 0.05 (+ 0.45 (* 0.55 life)))
                 (* 0.09 (+ 0.6 (* 0.4 life))))
         core-width (* width 0.42)
         outer-a (ru/with-alpha {:r 161 :g 255 :b 142} (int (+ 35 (* 170 life))))
-        inner-a (ru/with-alpha {:r 244 :g 255 :b 236} (int (+ 70 (* 170 life))))
-        r0 (ru/v* right width)
-        r1 (ru/v* right core-width)
-        p0 (ru/v+ start r0) p1 (ru/v- start r0) p2 (ru/v- end r0) p3 (ru/v+ end r0)
-        c0 (ru/v+ start r1) c1 (ru/v- start r1) c2 (ru/v- end r1) c3 (ru/v+ end r1)]
-    [(ru/quad-op "minecraft:textures/entity/beacon_beam.png" p0 p1 p2 p3 outer-a)
-     (ru/quad-op "minecraft:textures/entity/beacon_beam.png" c0 c1 c2 c3 inner-a)
-     (ru/line-op start end (ru/with-alpha {:r 192 :g 255 :b 188} (int (+ 55 (* 150 life)))))]))
+  inner-a (ru/with-alpha {:r 244 :g 255 :b 236} (int (+ 70 (* 170 life))))]
+    (ru/billboard-beam-ops cam-pos start end
+      {:width width
+       :core-width core-width
+       :outer-color outer-a
+       :inner-color inner-a
+       :line-color (ru/with-alpha {:r 192 :g 255 :b 188} (int (+ 55 (* 150 life))))})))
 
 (defn- local-walk-speed [ticks]
   (float (max 0.001 (- 0.1 (* 0.001 (double ticks))))))

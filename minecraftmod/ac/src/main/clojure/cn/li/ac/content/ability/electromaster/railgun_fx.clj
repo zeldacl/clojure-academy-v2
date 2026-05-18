@@ -44,18 +44,16 @@
 
 (defn- beam-ops [cam-pos {:keys [start end ttl max-ttl]}]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
-        right (ru/beam-right-axis start end cam-pos)
         width (* 0.08 (+ 0.5 life))
         core-width (* width 0.45)
         outer-a (ru/with-alpha {:r 236 :g 170 :b 93} (+ 50 (* 150 life)))
-        inner-a (ru/with-alpha {:r 241 :g 240 :b 222} (+ 80 (* 150 life)))
-        r0 (ru/v* right width)
-        r1 (ru/v* right core-width)
-        p0 (ru/v+ start r0) p1 (ru/v- start r0) p2 (ru/v- end r0) p3 (ru/v+ end r0)
-        c0 (ru/v+ start r1) c1 (ru/v- start r1) c2 (ru/v- end r1) c3 (ru/v+ end r1)]
-    [(ru/quad-op "minecraft:textures/entity/beacon_beam.png" p0 p1 p2 p3 outer-a)
-     (ru/quad-op "minecraft:textures/entity/beacon_beam.png" c0 c1 c2 c3 inner-a)
-     (ru/line-op start end (ru/with-alpha {:r 165 :g 230 :b 255} (+ 40 (* 120 life))))]))
+        inner-a (ru/with-alpha {:r 241 :g 240 :b 222} (+ 80 (* 150 life)))]
+    (ru/billboard-beam-ops cam-pos start end
+      {:width width
+       :core-width core-width
+       :outer-color outer-a
+       :inner-color inner-a
+       :line-color (ru/with-alpha {:r 165 :g 230 :b 255} (+ 40 (* 120 life)))})))
 
 (defn- impact-ring-ops [end ttl max-ttl]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))

@@ -8,7 +8,6 @@
    Container state atoms now live in `cn.li.mcmod.gui.container-state`.
    Platform adapters and game content should not re-implement these building blocks."
   (:require [cn.li.mcmod.gui.registry :as gui-registry]
-            [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.platform.world :as pworld]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
@@ -85,14 +84,3 @@
   []
   (or @gui-handler
       (reset! gui-handler (->WirelessGuiHandler))))
-
-;; ============================================================================
-;; Container State Aliases (compatibility)
-;; ============================================================================
-
-(def active-containers container-state/active-containers)
-(def player-containers container-state/player-containers)
-(def menu-containers container-state/menu-containers)
-(def containers-by-id container-state/containers-by-id)
-(def client-container container-state/client-container)
-

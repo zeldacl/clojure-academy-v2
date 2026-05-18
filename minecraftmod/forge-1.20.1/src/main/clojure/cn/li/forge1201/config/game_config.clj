@@ -7,29 +7,18 @@
   
   - bridge.clj: Forge ForgeConfigSpec registration (technical layer)
   - game_config.clj: Business config value access (business layer)"
+  (:require [cn.li.mc1201.config.gameplay-bridge :as shared-gameplay])
   (:import [cn.li.forge1201.config GameplayConfig]))
 
 ;; =============================================================================
 ;; Boolean config values
 ;; =============================================================================
 
-(defn analysis-enabled? []
-  (.get GameplayConfig/ANALYSIS_ENABLED))
-
 (defn attack-player? []
   (.get GameplayConfig/ATTACK_PLAYER))
 
 (defn destroy-blocks? []
   (.get GameplayConfig/DESTROY_BLOCKS))
-
-(defn gen-ores? []
-  (.get GameplayConfig/GEN_ORES))
-
-(defn gen-phase-liquid? []
-  (.get GameplayConfig/GEN_PHASE_LIQUID))
-
-(defn heads-or-tails? []
-  (.get GameplayConfig/HEADS_OR_TAILS))
 
 ;; =============================================================================
 ;; Block and entity config lists
@@ -48,20 +37,27 @@
 ;; Block and entity predicates
 ;; =============================================================================
 
+(def ^:private normal-metal-block?
+  (shared-gameplay/list-predicate get-normal-metal-blocks))
+
+(def ^:private weak-metal-block?
+  (shared-gameplay/list-predicate get-weak-metal-blocks))
+
+(def ^:private metal-entity?
+  (shared-gameplay/list-predicate get-metal-entities))
+
 (defn is-metal-block? [block-id]
-  (let [normal (set (get-normal-metal-blocks))
-        weak (set (get-weak-metal-blocks))]
-    (or (contains? normal block-id)
-        (contains? weak block-id))))
+  (or (normal-metal-block? block-id)
+      (weak-metal-block? block-id)))
 
 (defn is-normal-metal-block? [block-id]
-  (contains? (set (get-normal-metal-blocks)) block-id))
+  (normal-metal-block? block-id))
 
 (defn is-weak-metal-block? [block-id]
-  (contains? (set (get-weak-metal-blocks)) block-id))
+  (weak-metal-block? block-id))
 
 (defn is-metal-entity? [entity-id]
-  (contains? (set (get-metal-entities)) entity-id))
+  (metal-entity? entity-id))
 
 ;; =============================================================================
 ;; CP (Combat Power) recovery config
@@ -104,36 +100,24 @@
 ;; =============================================================================
 
 (defn get-init-cp
-  "Get initial CP for a given level, with fallback to last value for out-of-bounds levels"
+  "Get initial CP for a given level, returning 0 for out-of-bounds levels."
   [level]
-  (let [cp-list (get-init-cp-list)]
-    (if (and (>= level 0) (< level (count cp-list)))
-      (nth cp-list level)
-      (last cp-list))))
+  (shared-gameplay/level-value (get-init-cp-list) level))
 
 (defn get-add-cp
-  "Get additional CP per level, with fallback to last value for out-of-bounds levels"
+  "Get additional CP per level, returning 0 for out-of-bounds levels."
   [level]
-  (let [cp-list (get-add-cp-list)]
-    (if (and (>= level 0) (< level (count cp-list)))
-      (nth cp-list level)
-      (last cp-list))))
+  (shared-gameplay/level-value (get-add-cp-list) level))
 
 (defn get-init-overload
-  "Get initial overload for a given level, with fallback to last value for out-of-bounds levels"
+  "Get initial overload for a given level, returning 0 for out-of-bounds levels."
   [level]
-  (let [overload-list (get-init-overload-list)]
-    (if (and (>= level 0) (< level (count overload-list)))
-      (nth overload-list level)
-      (last overload-list))))
+  (shared-gameplay/level-value (get-init-overload-list) level))
 
 (defn get-add-overload
-  "Get additional overload per level, with fallback to last value for out-of-bounds levels"
+  "Get additional overload per level, returning 0 for out-of-bounds levels."
   [level]
-  (let [overload-list (get-add-overload-list)]
-    (if (and (>= level 0) (< level (count overload-list)))
-      (nth overload-list level)
-      (last overload-list))))
+  (shared-gameplay/level-value (get-add-overload-list) level))
 
 ;; =============================================================================
 ;; Damage config
@@ -150,25 +134,18 @@
 (defn provider-map
   "Return map of all config accessors for shared layer protocol binding"
   []
-  {:analysis-enabled? analysis-enabled?
-   :attack-player? attack-player?
-   :destroy-blocks? destroy-blocks?
-   :gen-ores? gen-ores?
-   :gen-phase-liquid? gen-phase-liquid?
-   :heads-or-tails? heads-or-tails?
-   :get-normal-metal-blocks get-normal-metal-blocks
-   :get-weak-metal-blocks get-weak-metal-blocks
-   :get-metal-entities get-metal-entities
-   :is-normal-metal-block? is-normal-metal-block?
-   :is-weak-metal-block? is-weak-metal-block?
-   :is-metal-block? is-metal-block?
-   :is-metal-entity? is-metal-entity?
-   :get-cp-recover-cooldown get-cp-recover-cooldown
-   :get-cp-recover-speed get-cp-recover-speed
-   :get-overload-recover-cooldown get-overload-recover-cooldown
-   :get-overload-recover-speed get-overload-recover-speed
-   :get-init-cp get-init-cp
-   :get-add-cp get-add-cp
-   :get-init-overload get-init-overload
-   :get-add-overload get-add-overload
-   :get-damage-scale get-damage-scale})
+  (shared-gameplay/make-provider-map
+   {:attack-player? attack-player?
+    :destroy-blocks? destroy-blocks?
+    :get-normal-metal-blocks get-normal-metal-blocks
+    :get-weak-metal-blocks get-weak-metal-blocks
+    :get-metal-entities get-metal-entities
+    :get-cp-recover-cooldown get-cp-recover-cooldown
+    :get-cp-recover-speed get-cp-recover-speed
+    :get-overload-recover-cooldown get-overload-recover-cooldown
+    :get-overload-recover-speed get-overload-recover-speed
+    :get-init-cp-list get-init-cp-list
+    :get-add-cp-list get-add-cp-list
+    :get-init-overload-list get-init-overload-list
+    :get-add-overload-list get-add-overload-list
+    :get-damage-scale get-damage-scale}))

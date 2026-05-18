@@ -21,15 +21,11 @@
 ;; Default Configuration (fallback when *config-bridge* is nil)
 ;; ============================================================================
 (def default-generic-config
-  {:analysis true
-   :attack-player true
+  {:attack-player true
    :destroy-blocks true
    :worlds-whitelisted-destroying-blocks []
    :use-mouse-wheel false
-   :gen-ores true
-   :gen-phase-liquid true
    :give-cloud-terminal true
-   :heads-or-tails false
    :font "Microsoft YaHei"})
 
 ;; Ability Configuration
@@ -106,12 +102,6 @@
   (when-not (use-bridge?)
     (log/info "Using default gameplay configuration (no config bridge)")))
 
-;; Generic Config
-(defn analysis-enabled? []
-  (if (use-bridge?)
-    ((:analysis-enabled? *config-bridge*))
-    (:analysis default-generic-config)))
-
 (defn attack-player-enabled? []
   (if (use-bridge?)
     ((:attack-player? *config-bridge*))
@@ -121,21 +111,6 @@
   (if (use-bridge?)
     ((:destroy-blocks? *config-bridge*))
     (:destroy-blocks default-generic-config)))
-
-(defn gen-ores-enabled? []
-  (if (use-bridge?)
-    ((:gen-ores? *config-bridge*))
-    (:gen-ores default-generic-config)))
-
-(defn gen-phase-liquid-enabled? []
-  (if (use-bridge?)
-    ((:gen-phase-liquid? *config-bridge*))
-    (:gen-phase-liquid default-generic-config)))
-
-(defn heads-or-tails-enabled? []
-  (if (use-bridge?)
-    ((:heads-or-tails? *config-bridge*))
-    (:heads-or-tails default-generic-config)))
 
 ;; Ability Config
 (defn get-normal-metal-blocks []
