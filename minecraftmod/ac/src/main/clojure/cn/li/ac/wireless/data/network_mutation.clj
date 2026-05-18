@@ -6,13 +6,13 @@
 (defn reset-password!
 	"Change network password"
 	[network new-password]
-	(reset! (:password network) new-password)
+	(network-state/set-state-value! network :password new-password)
 	(log/info (format "Network '%s' password changed" (network-state/get-ssid network)))
 	true)
 
 (defn reset-ssid!
 	"Change network ssid"
 	[network new-ssid]
-	(reset! (:ssid network) new-ssid)
+	(network-state/set-state-value! network :ssid new-ssid)
 	(log/info (format "Network ssid changed to '%s'" new-ssid))
 	true)

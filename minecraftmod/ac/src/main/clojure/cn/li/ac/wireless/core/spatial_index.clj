@@ -18,28 +18,41 @@
   []
   (atom {}))
 
+(defn create-spatial-index-value
+  "Return a fresh spatial-index value: {[cx cy cz] -> #{vblock}}."
+  []
+  {})
+
 ;; ============================================================================
 ;; Mutation
 ;; ============================================================================
 
+(defn add-to-index
+  "Add `vblock` to an immutable spatial index value."
+  [index vblock]
+  (let [chunk-key (pos/pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
+    (update index chunk-key (fnil conj #{}) vblock)))
+
 (defn add-to-index!
   "Add `vblock` to `index-atom` at the appropriate chunk bucket."
   [index-atom vblock]
+  (swap! index-atom add-to-index vblock))
+
+(defn remove-from-index
+  "Remove `vblock` from an immutable spatial index value."
+  [index vblock]
   (let [chunk-key (pos/pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
-    (swap! index-atom update chunk-key (fnil conj #{}) vblock)))
+    (if-let [chunk-set (get index chunk-key)]
+      (let [new-set (disj chunk-set vblock)]
+        (if (empty? new-set)
+          (dissoc index chunk-key)
+          (assoc index chunk-key new-set)))
+      index)))
 
 (defn remove-from-index!
   "Remove `vblock` from `index-atom`.  Removes the bucket entirely when empty."
   [index-atom vblock]
-  (let [chunk-key (pos/pos->chunk-key (:x vblock) (:y vblock) (:z vblock))]
-    (swap! index-atom
-           (fn [idx]
-             (if-let [chunk-set (get idx chunk-key)]
-               (let [new-set (disj chunk-set vblock)]
-                 (if (empty? new-set)
-                   (dissoc idx chunk-key)
-                   (assoc idx chunk-key new-set)))
-               idx)))))
+  (swap! index-atom remove-from-index vblock))
 
 ;; ============================================================================
 ;; Query
@@ -51,13 +64,17 @@
   [x y z search-radius]
   (pos/nearby-chunk-keys x y z search-radius))
 
+(defn vblocks-in-index
+  "Return the union of all vblocks in `chunk-keys` from an index value."
+  [index chunk-keys]
+  (reduce (fn [acc chunk-key]
+            (if-let [vblocks (get index chunk-key)]
+              (into acc vblocks)
+              acc))
+          #{}
+          chunk-keys))
+
 (defn vblocks-in-chunks
   "Return the union of all vblocks stored in the given `chunk-keys`."
   [index-atom chunk-keys]
-  (let [idx @index-atom]
-    (reduce (fn [acc chunk-key]
-              (if-let [vblocks (get idx chunk-key)]
-                (into acc vblocks)
-                acc))
-            #{}
-            chunk-keys)))
+  (vblocks-in-index @index-atom chunk-keys))

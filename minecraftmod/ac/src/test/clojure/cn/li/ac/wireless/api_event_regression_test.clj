@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.api :as wireless-api]
+            [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.service.world-registry :as world-registry]
             [cn.li.ac.wireless.service.network-command :as network-command]
             [cn.li.ac.wireless.core.vblock :as vb]
@@ -44,7 +45,7 @@
 (deftest destroy-network-fires-when-destroyed
   (let [events (atom [])
         matrix (stubs/fake-matrix)
-        net {:ssid "ssid-z"}]
+      net (network-state/create-wireless-net {:world :world} :matrix-vb "ssid-z" "pw")]
     (with-redefs [wireless-api/get-wireless-net-by-matrix (fn [_] net)
                   platform-be/be-get-world-safe (fn [_] :world)
                   world-registry/get-world-data (fn [_] :world-data)

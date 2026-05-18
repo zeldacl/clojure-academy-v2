@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.wireless-node.logic
-  "Compatibility facade for Wireless Node block logic.
+  "Stable entry point for Wireless Node block logic.
 
   Implementation has been split by responsibility:
   - `wireless-node.state` owns schema/default/tier/blockstate projection.
@@ -18,7 +18,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
-;; State/schema compatibility exports
+;; State/schema exports
 ;; ============================================================================
 
 (def node-state-schema node-state/node-state-schema)
@@ -32,7 +32,7 @@
 (def energy->blockstate-level node-state/energy->blockstate-level)
 
 ;; ============================================================================
-;; Inventory/tick/capability compatibility exports
+;; Inventory/tick/capability exports
 ;; ============================================================================
 
 (def ensure-node-slot-schema! node-inventory/ensure-node-slot-schema!)

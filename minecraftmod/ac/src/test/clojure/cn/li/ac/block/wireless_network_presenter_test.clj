@@ -37,7 +37,7 @@
 
 (deftest matrix-presenter-uses-plain-network-values-test
   (let [network (network "ssid" "pw")]
-    (swap! (:nodes network) conj :node-a)
+    (network-state/update-nodes! network conj :node-a)
     (is (= {:ssid "ssid"
             :password "pw"
             :owner "tester"

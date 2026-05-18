@@ -1,13 +1,13 @@
 (ns cn.li.ac.wireless.service.world-registry
-  "Service-level world registry facade for wireless runtime data.
+  "Service-level world registry boundary for wireless runtime data.
 
   This namespace intentionally centralizes access to world-scoped wireless
   state so higher-level API modules stop depending on `wireless.data.world`
   directly.
 
-  It should remain a thin service boundary: expose stable reads/writes needed
+  It should remain a focused service boundary: expose stable reads/writes needed
   by application services, but keep persistence/index mutation mechanics in
-  `wireless.data.*`. New service orchestration should depend on this facade
+  `wireless.data.*`. New service orchestration should depend on this boundary
   instead of reaching through to data internals."
   (:require [cn.li.ac.wireless.data.world :as wd]))
 

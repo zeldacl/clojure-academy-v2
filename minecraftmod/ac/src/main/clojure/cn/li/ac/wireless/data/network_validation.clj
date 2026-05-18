@@ -13,7 +13,7 @@
 				matrix-vb (:matrix network)]
 		(when (vb/is-chunk-loaded? matrix-vb world)
 			(when-not (resolver/resolve-matrix-cap world matrix-vb)
-				(reset! (:disposed network) true)
+				(net-state/mark-disposed! network)
 				(log/info (format "Network '%s' disposed: matrix destroyed" (net-state/get-ssid network)))))
 		(net-state/active? network)))
 
@@ -29,5 +29,5 @@
 (defn dispose!
 	"Dispose the network and unlink all nodes."
 	[network]
-	(reset! (:disposed network) true)
+	(net-state/mark-disposed! network)
 	(log/info (format "Network '%s' disposed" (net-state/get-ssid network))))

@@ -10,7 +10,7 @@
 	[network]
 	(when (network-state/active? network)
 		(when (validation/validate! network)
-			(swap! (:update-counter network) inc)
-			(when (>= @(:update-counter network) (network-config/update-interval-ticks))
-				(reset! (:update-counter network) 0)
+			(network-state/increment-update-counter! network)
+			(when (>= (network-state/get-update-counter network) (network-config/update-interval-ticks))
+				(network-state/set-update-counter! network 0)
 				(energy-balance/balance-energy! network)))))

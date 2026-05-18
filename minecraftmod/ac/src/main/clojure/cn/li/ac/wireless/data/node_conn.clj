@@ -21,9 +21,7 @@
 (defrecord NodeConn
   [world-data         ; WiWorldData - parent world data
    node               ; VBlock - center node
-   receivers          ; atom<vector<VBlock>> - receiver list
-   generators         ; atom<vector<VBlock>> - generator list
-   disposed])         ; atom<boolean> - disposed flag
+  state])            ; atom<{:receivers :generators :disposed}>
 
 ;; ============================================================================
 ;; Factory
@@ -35,9 +33,9 @@
   (->NodeConn
     world-data
     node-vblock
-    (atom [])        ; receivers
-    (atom [])        ; generators
-    (atom false)))   ; disposed
+    (atom {:receivers []
+           :generators []
+           :disposed false})))
 
 ;; ============================================================================
 ;; Accessors
@@ -49,12 +47,18 @@
   (resolver/resolve-node-cap (:world (:world-data conn)) (:node conn)))
 
 (defn get-receivers [conn]
-  (vec @(:receivers conn)))
+  (vec (:receivers @(:state conn))))
 
 (defn get-generators [conn]
-  (vec @(:generators conn)))
+  (vec (:generators @(:state conn))))
 
-(defn is-disposed? [conn] @(:disposed conn))
+(defn is-disposed? [conn]
+  (boolean (:disposed @(:state conn))))
+
+(defn set-disposed!
+  [conn value]
+  (swap! (:state conn) assoc :disposed (boolean value))
+  (boolean value))
 
 (defn get-load
   "Get total load (receivers + generators)"
@@ -74,7 +78,7 @@
 (defn- find-existing-node-connection
   "Lookup existing node connection directly from world-data lookup table."
   [world-data vblock]
-  (get @(:node-lookup world-data) vblock))
+  (get (world-registry/node-lookup world-data) vblock))
 
 ;; ============================================================================
 ;; Range Checking
@@ -98,10 +102,10 @@
   (< (get-load conn) (get-capacity conn)))
 
 (defn- resolve-device-context
-  [conn device-type]
-  {:device-atom (case device-type
-                  :receiver (:receivers conn)
-                  :generator (:generators conn))
+  [_conn device-type]
+  {:device-key (case device-type
+                 :receiver :receivers
+                 :generator :generators)
    :remove-fn (case device-type
                 :receiver remove-receiver!
                 :generator remove-generator!)
@@ -114,12 +118,12 @@
       (remove-fn old-conn device-vb))))
 
 (defn- attach-device!
-  [conn device-vb device-atom device-name]
+  [conn device-vb device-key device-name]
   (world-registry/transact!
     (:world-data conn)
     (fn [_]
-      (swap! device-atom conj device-vb)
-      (swap! (:node-lookup (:world-data conn)) assoc device-vb conn)
+      (swap! (:state conn) update device-key conj device-vb)
+      (world-registry/update-state-value! (:world-data conn) :node-lookup assoc device-vb conn)
       (log/info (format "Added %s %s to node %s"
                         device-name
                         (vb/vblock-to-string device-vb)
@@ -127,16 +131,17 @@
       true)))
 
 (defn- remove-device!
-  [conn device-vb device-atom device-name]
+  [conn device-vb device-key device-name]
   (world-registry/transact!
     (:world-data conn)
     (fn [_]
-      (let [removed? (boolean (some #(vb/vblock-equals? % device-vb) @device-atom))]
+      (let [devices (get @(:state conn) device-key)
+            removed? (boolean (some #(vb/vblock-equals? % device-vb) devices))]
         (when removed?
-          (swap! device-atom
-                 (fn [devices]
-                   (filterv #(not (vb/vblock-equals? % device-vb)) devices)))
-          (swap! (:node-lookup (:world-data conn)) dissoc device-vb)
+          (swap! (:state conn) update device-key
+                 (fn [items]
+                   (filterv #(not (vb/vblock-equals? % device-vb)) items)))
+          (world-registry/update-state-value! (:world-data conn) :node-lookup dissoc device-vb)
           (log/info (format "Removed %s %s from node %s"
                             device-name
                             (vb/vblock-to-string device-vb)
@@ -147,7 +152,7 @@
   "Generic function to add a device (receiver or generator) to node connection
   Returns true if successful"
   [conn device-vb device-type]
-  (let [{:keys [device-atom remove-fn device-name]} (resolve-device-context conn device-type)]
+  (let [{:keys [device-key remove-fn device-name]} (resolve-device-context conn device-type)]
     (cond
       (not (capacity-available? conn))
       (do
@@ -162,7 +167,7 @@
       :else
       (do
         (remove-device-from-old-connection! conn device-vb remove-fn)
-        (attach-device! conn device-vb device-atom device-name)))))
+        (attach-device! conn device-vb device-key device-name)))))
 
 ;; ============================================================================
 ;; Receiver Management
@@ -177,7 +182,7 @@
 (defn remove-receiver!
   "Remove receiver from this node connection immediately."
   [conn receiver-vb]
-  (remove-device! conn receiver-vb (:receivers conn) "receiver"))
+  (remove-device! conn receiver-vb :receivers "receiver"))
 
 ;; ============================================================================
 ;; Generator Management
@@ -192,7 +197,7 @@
 (defn remove-generator!
   "Remove generator from this node connection immediately."
   [conn generator-vb]
-  (remove-device! conn generator-vb (:generators conn) "generator"))
+  (remove-device! conn generator-vb :generators "generator"))
 
 ;; ============================================================================
 ;; Validation
@@ -204,14 +209,13 @@
   [conn]
   (let [world (:world (:world-data conn))
         node-vb (:node conn)]
-    (when (and (not @(:disposed conn))
+    (when (and (not (is-disposed? conn))
                (vb/is-chunk-loaded? node-vb world))
       (when (and (nil? (vb/vblock-get node-vb world))
                  (zero? (count (get-generators conn)))
                  (zero? (count (get-receivers conn))))
-        ;; Node destroyed and no users
-        (reset! (:disposed conn) true)))
-    (not @(:disposed conn))))
+      (set-disposed! conn true)))
+    (not (is-disposed? conn))))
 
 ;; ============================================================================
 ;; Energy Transfer
@@ -304,7 +308,7 @@
 (defn tick-node-conn!
   "Tick the node connection"
   [conn]
-  (when-not @(:disposed conn)
+  (when-not (is-disposed? conn)
     ;; Validate
     (when (validate! conn)
       (let [world (:world (:world-data conn))
@@ -325,7 +329,7 @@
 (defn dispose!
   "Dispose the connection"
   [conn]
-  (reset! (:disposed conn) true)
+  (set-disposed! conn true)
   (log/info (format "Node connection %s disposed"
                     (vb/vblock-to-string (:node conn)))))
 
@@ -366,8 +370,7 @@
         generators (vec (for [i (range generators-size)]
                           (vb/vblock-from-nbt (nbt/nbt-list-get-compound generators-list i))))
         conn (create-node-conn world-data node-vb)]
-    (reset! (:receivers conn) receivers)
-    (reset! (:generators conn) generators)
+      (swap! (:state conn) assoc :receivers receivers :generators generators)
     conn))
 
 ;; ============================================================================
@@ -381,7 +384,7 @@
   (log/info (format "  Load: %d/%d" (get-load conn) (get-capacity conn)))
   (log/info (format "  Generators: %d" (count (get-generators conn))))
   (log/info (format "  Receivers: %d" (count (get-receivers conn))))
-  (log/info (format "  Disposed: %s" @(:disposed conn))))
+  (log/info (format "  Disposed: %s" (is-disposed? conn))))
 
 ;; ============================================================================
 ;; Initialization

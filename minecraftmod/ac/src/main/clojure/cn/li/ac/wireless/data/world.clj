@@ -6,11 +6,9 @@
 
   Ownership boundary:
   - Data ownership lives in `wireless.data.*` namespaces: world registry,
-    indexes, persistence codecs, and lifecycle wrappers.
-  - Business commands should be introduced in `wireless.service.*` and only
-    delegate to this namespace for storage/lifecycle compatibility.
-  - Keep this namespace as a facade for existing callers while moving
-    orchestration upward into services."
+    indexes, persistence codecs, and lifecycle integration.
+  - Business commands live in `wireless.service.*`; this namespace provides
+    the explicit world data and lifecycle entry points."
   (:require [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.data.spatial-lookup :as spatial-lookup]
             [cn.li.ac.wireless.data.network-lookup :as network-lookup]
@@ -121,7 +119,7 @@
   Object
   (toString [_]
     (str "WiSavedDataWrapper["
-         (if wi-data (str (count @(:networks wi-data)) " networks") "serialized")
+         (if wi-data (str (count (world-registry/networks wi-data)) " networks") "serialized")
          "]")))
 
 (defn create-saved-data

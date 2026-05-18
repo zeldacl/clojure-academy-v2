@@ -153,7 +153,7 @@
   (let [atom-obj (atom initial-value)
         changes (atom [])]
     (add-watch atom-obj :spy
-      (fn [key ref old-value new-value]
+      (fn [_key _ref old-value new-value]
         (swap! changes conj {:old old-value :new new-value})))
     {:atom atom-obj
      :changes changes}))
@@ -217,8 +217,9 @@
   Returns:
     nil"
   [mock]
-  (when (and (map? mock) (:disposed mock))
-    (reset! (:disposed mock) true)))
+  (when (map? mock)
+    (when-let [disposed (:disposed mock)]
+      (reset! disposed true))))
 
 (defn cleanup-all-mocks
   "Cleanup all mock objects in collection.
@@ -297,7 +298,4 @@
   Throws:
     AssertionError if invalid"
   [network]
-  (assert (instance? clojure.lang.IAtom (:ssid network)))
-  (assert (instance? clojure.lang.IAtom (:nodes network)))
-  (assert (instance? clojure.lang.IAtom (:energy network)))
-  (assert (instance? clojure.lang.IAtom (:disposed network))))
+  (assert (instance? clojure.lang.IAtom (:state network))))

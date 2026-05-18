@@ -1,10 +1,10 @@
-# AC 模块分层与兼容 Facade 约定
+# AC 模块分层约定
 
 ## 背景
 
 `ac` 是业务/content 层，承载能力、无线、电力、GUI 业务逻辑等内容。它必须保持平台无关：不静态依赖 `net.minecraft.*`、Forge/Fabric Loader API，也不依赖 `cn.li.forge1201.*` / `cn.li.fabric1201.*`。
 
-本轮结构性重构采用 **compatibility facade + internal extraction**：保留旧 public-ish namespace，逐步把实现拆进更小的 domain/data/service/client/block 组件，减少一次性改全仓 import 的风险。
+本轮结构性重构采用 **stable public boundary + internal extraction**：对外保留当前正式入口，把实现拆进更小的 domain/data/service/client/block 组件，并删除过渡性旧结构。
 
 ## 目标依赖方向
 

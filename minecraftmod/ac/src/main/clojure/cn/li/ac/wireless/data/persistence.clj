@@ -17,8 +17,8 @@
     (nbt/nbt-set-string! compound "ssid" (network-state/get-ssid network))
     (nbt/nbt-set-string! compound "password" (network-state/get-password network))
     (nbt/nbt-set-tag! compound "nodes" (vblock-codec/vblocks-to-nbt-list (network-state/get-nodes network)))
-    (nbt/nbt-set-double! compound "buffer" (double (network-state/field-value (:buffer network))))
-    (nbt/nbt-set-int! compound "updateCounter" (int (network-state/field-value (:update-counter network))))
+    (nbt/nbt-set-double! compound "buffer" (double (network-state/get-buffer network)))
+    (nbt/nbt-set-int! compound "updateCounter" (int (network-state/get-update-counter network)))
     (nbt/nbt-set-boolean! compound "disposed" (network-state/is-disposed? network))
     compound))
 
@@ -30,10 +30,16 @@
                   matrix-vb
                   (nbt/nbt-get-string compound "ssid")
                   (nbt/nbt-get-string compound "password"))]
-            (reset! (:nodes network) (vblock-codec/nbt-list->vblocks (nbt/nbt-get-list compound "nodes") :node false vb/from-foundation))
-    (reset! (:buffer network) (nbt/nbt-get-double compound "buffer"))
-    (reset! (:update-counter network) (nbt/nbt-get-int compound "updateCounter"))
-    (reset! (:disposed network) (nbt/nbt-get-boolean compound "disposed"))
+    (network-state/set-nodes!
+      network
+      (vblock-codec/nbt-list->vblocks
+        (nbt/nbt-get-list compound "nodes")
+        :node
+        false
+        vb/from-foundation))
+    (network-state/set-buffer! network (nbt/nbt-get-double compound "buffer"))
+    (network-state/set-update-counter! network (nbt/nbt-get-int compound "updateCounter"))
+    (network-state/set-state-value! network :disposed (nbt/nbt-get-boolean compound "disposed"))
     network))
 
 (defn connection-to-nbt
@@ -45,7 +51,7 @@
 (defn connection-from-nbt
   [world-data compound]
   (let [conn (node-conn/node-connection-from-nbt world-data compound)]
-    (reset! (:disposed conn) (nbt/nbt-get-boolean compound "disposed"))
+    (node-conn/set-disposed! conn (nbt/nbt-get-boolean compound "disposed"))
     conn))
 
 (defn world-data-to-nbt
@@ -54,10 +60,10 @@
         networks-list (nbt/create-nbt-list)
         connections-list (nbt/create-nbt-list)]
     (nbt/nbt-set-int! compound "schemaVersion" schema-version)
-    (doseq [network @(:networks world-data)]
+    (doseq [network (world-registry/networks world-data)]
       (when-not (network-state/is-disposed? network)
         (nbt/nbt-append! networks-list (network-to-nbt network))))
-    (doseq [conn @(:connections world-data)]
+    (doseq [conn (world-registry/connections world-data)]
       (when-not (node-conn/is-disposed? conn)
         (nbt/nbt-append! connections-list (connection-to-nbt conn))))
     (nbt/nbt-set-tag! compound "networks" networks-list)

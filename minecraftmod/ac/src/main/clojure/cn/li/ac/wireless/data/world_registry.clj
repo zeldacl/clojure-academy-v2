@@ -5,11 +5,7 @@
 
 (defrecord WiWorldData
 	[world
-	 net-lookup
-	 node-lookup
-	 spatial-index
-	 networks
-	 connections])
+	 state])
 
 (def ^:private world-data-registry (atom {}))
 
@@ -18,11 +14,35 @@
 	[world]
 	(->WiWorldData
 		world
-		(atom {})
-		(atom {})
-		(si/create-spatial-index)
-		(atom [])
-		(atom [])))
+		(atom {:net-lookup {}
+					 :node-lookup {}
+					 :spatial-index (si/create-spatial-index-value)
+					 :networks []
+					 :connections []})))
+
+(defn state-value
+	[world-data key]
+	(get @(:state world-data) key))
+
+(defn set-state-value!
+	[world-data key value]
+	(swap! (:state world-data) assoc key value)
+	value)
+
+(defn update-state-value!
+	[world-data key f & args]
+	(apply swap! (:state world-data) update key f args)
+	(state-value world-data key))
+
+(defn update-state!
+	[world-data f & args]
+	(apply swap! (:state world-data) f args))
+
+(defn net-lookup [world-data] (state-value world-data :net-lookup))
+(defn node-lookup [world-data] (state-value world-data :node-lookup))
+(defn spatial-index [world-data] (state-value world-data :spatial-index))
+(defn networks [world-data] (state-value world-data :networks))
+(defn connections [world-data] (state-value world-data :connections))
 
 (defn transact!
 	"Run a world-state mutation with serialized access to all world indexes."

@@ -1,9 +1,8 @@
 (ns cn.li.ac.wireless.data.world-topology
-  "Compatibility facade for wireless topology operations.
+  "Stable topology boundary for wireless world operations.
 
   Low-level index mutation now lives in `wireless.data.topology-index` and
-  business command orchestration lives in `wireless.service.topology-service`.
-  Keep this namespace for existing callers during the migration window."
+  business command orchestration lives in `wireless.service.topology-service`."
   (:require [cn.li.ac.wireless.data.topology-index :as topology-index]
             [cn.li.ac.wireless.service.topology-service :as topology-service]))
 

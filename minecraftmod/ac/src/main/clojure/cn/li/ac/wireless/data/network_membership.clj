@@ -8,7 +8,7 @@
 
 (defn- find-existing-network-by-node
 	[world-data node-vblock]
-	(get @(:net-lookup world-data) node-vblock))
+	(get (world-registry/net-lookup world-data) node-vblock))
 
 (defn- password-valid?
 	[network password-attempt]
@@ -33,10 +33,11 @@
 			(let [nodes-before (net-state/get-nodes network)
 						removed? (boolean (some #(vb/vblock-equals? % node-vblock) nodes-before))]
 				(when removed?
-					(swap! (:nodes network)
-								 (fn [nodes]
-									 (filterv #(not (vb/vblock-equals? % node-vblock)) nodes)))
-					(swap! (:net-lookup (:world-data network)) dissoc node-vblock)
+					(net-state/update-nodes!
+						network
+						(fn [nodes]
+							(filterv #(not (vb/vblock-equals? % node-vblock)) nodes)))
+					(world-registry/update-state-value! (:world-data network) :net-lookup dissoc node-vblock)
 					(spatial/remove-from-spatial-index! (:world-data network) node-vblock)
 					(log/info (format "Removed node %s from '%s'"
 														(vb/vblock-to-string node-vblock)
@@ -56,8 +57,8 @@
 		(:world-data network)
 		(fn [_]
 			(remove-node-from-old-network! network node-vblock)
-			(swap! (:nodes network) conj node-vblock)
-			(swap! (:net-lookup (:world-data network)) assoc node-vblock network)
+			(net-state/update-nodes! network conj node-vblock)
+			(world-registry/update-state-value! (:world-data network) :net-lookup assoc node-vblock network)
 			(log/info (format "Added node %s to network '%s'"
 												(vb/vblock-to-string node-vblock)
 												(net-state/get-ssid network)))

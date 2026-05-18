@@ -158,9 +158,8 @@
   [vblock]
   (bit-xor (:x vblock) (:y vblock) (:z vblock)))
 
-;; Override hashCode and equals for record
-;; Note: In Clojure, records already implement hashCode/equals based on fields
-;; but we can provide explicit functions for compatibility
+;; Records keep full-field equality; this helper intentionally compares only
+;; world position because topology indexes are position-keyed.
 
 ;; ============================================================================
 ;; Utility Functions

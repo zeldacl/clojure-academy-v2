@@ -6,6 +6,7 @@
             [cn.li.ac.wireless.data.network-membership :as network-membership]
             [cn.li.ac.wireless.data.network-validation :as network-validation]
             [cn.li.ac.wireless.data.network-runtime :as network-runtime]
+            [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.config :as ncfg]
             [cn.li.ac.wireless.data.world :as wdata]))
 
@@ -18,11 +19,11 @@
     (is (= 0 (network-state/get-load n)))
     (is (false? (network-state/is-disposed? n)))))
 
-(deftest snapshot-unwraps-network-atoms-test
+(deftest snapshot-unwraps-network-state-test
   (let [wd {:world :w :net-lookup (atom {}) :spatial-index (atom {})}
         matrix {:x 0 :y 0 :z 0}
         network (network-state/create-wireless-net wd matrix "ssid" "pw")]
-    (swap! (:nodes network) conj :node-a :node-b)
+    (network-state/update-nodes! network conj :node-a :node-b)
     (is (= {:matrix matrix
             :ssid "ssid"
             :password "pw"
@@ -31,7 +32,7 @@
             :disposed? false}
            (network-state/snapshot network)))
     (is (true? (network-state/active? network)))
-    (reset! (:disposed network) true)
+    (network-state/mark-disposed! network)
     (is (false? (network-state/active? network)))))
 
 (deftest add-node-password-and-capacity-and-range-gates-test
@@ -49,7 +50,7 @@
           (is (true? (network-membership/add-node! net near-node "secret")))
           (is (false? (network-membership/add-node! net (vb/create-vnode 6 0 0) "secret")))
           (is (false? (network-membership/add-node! net far-node "secret")))
-          (is (= net (get @(:net-lookup wd) near-node))))))))
+          (is (= net (get (world-registry/net-lookup wd) near-node))))))))
 
 (deftest remove-node-cleans-up-indexes-test
   (let [w :w-net2
@@ -63,10 +64,10 @@
         (is (true? (wdata/create-network-impl! wd matrix-vb "n2" "p")))
         (let [net (wdata/get-network-by-ssid wd "n2")]
           (is (true? (network-membership/add-node! net node-vb "p")))
-          (is (some? (get @(:net-lookup wd) node-vb)))
+          (is (some? (get (world-registry/net-lookup wd) node-vb)))
           (network-membership/remove-node! net node-vb)
               (is (empty? (network-state/get-nodes net)))
-          (is (nil? (get @(:net-lookup wd) node-vb))))))))
+          (is (nil? (get (world-registry/net-lookup wd) node-vb))))))))
 
 (deftest validate-disposes-when-matrix-destroyed-test
   (let [w :w-net3

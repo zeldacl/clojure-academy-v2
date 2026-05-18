@@ -1,5 +1,5 @@
 (ns cn.li.ac.wireless.service.node-connection
-  "Service wrappers for node-connection read/write operations."
+  "Service boundary for node-connection read/write operations."
   (:require [cn.li.ac.wireless.data.node-conn :as node-conn]))
 
 (def get-node node-conn/get-node)

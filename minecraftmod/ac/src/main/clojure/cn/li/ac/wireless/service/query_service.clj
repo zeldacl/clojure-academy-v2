@@ -1,7 +1,7 @@
 (ns cn.li.ac.wireless.service.query-service
   "Application-level wireless query service.
 
-  Public API namespaces delegate here so query algorithms stay out of facade and
+  Public API namespaces delegate here so query algorithms stay out of transport and
   event/transport code. This service coordinates world registry lookups,
   capability resolution, range filtering, and connection-capacity checks without
   firing topology events."

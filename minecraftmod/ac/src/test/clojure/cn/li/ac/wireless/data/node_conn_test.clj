@@ -3,6 +3,7 @@
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
+            [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.data.world :as wdata]))
 
 (deftest create-node-conn-defaults-test
@@ -87,14 +88,14 @@
       (fn []
         (is (true? (node-conn/add-generator! conn-a gen-vb)))
         (is (true? (node-conn/add-receiver! conn-a rec-vb)))
-        (is (identical? conn-a (get @(:node-lookup wd) gen-vb)))
+        (is (identical? conn-a (get (world-registry/node-lookup wd) gen-vb)))
         (is (true? (node-conn/remove-receiver! conn-a rec-vb)))
         (is (empty? (node-conn/get-receivers conn-a)))
-        (is (nil? (get @(:node-lookup wd) rec-vb)))
+        (is (nil? (get (world-registry/node-lookup wd) rec-vb)))
         (is (true? (node-conn/add-generator! conn-b gen-vb)))
         (is (empty? (node-conn/get-generators conn-a)))
         (is (= [gen-vb] (node-conn/get-generators conn-b)))
-        (is (identical? conn-b (get @(:node-lookup wd) gen-vb)))))))
+        (is (identical? conn-b (get (world-registry/node-lookup wd) gen-vb)))))))
 
 (deftest node-conn-nbt-round-trip-test
   (let [wd (wdata/create-world-data :wc-nbt)

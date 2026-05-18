@@ -82,7 +82,7 @@
 
 (defn get-tile-state
   "Get the current Clojure state map from a tile entity.
-  Returns the map itself for legacy map tiles, calls getCustomState for BEs.
+  Returns the map itself for state-map fixtures, calls getCustomState for BEs.
   Returns nil if tile is nil."
   [tile]
   (when tile

@@ -5,6 +5,7 @@
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.network-membership :as network-membership]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
+            [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.service.network-command :as network-command]
             [cn.li.ac.wireless.data.world :as world]))
 
@@ -18,17 +19,9 @@
 
 (deftest create-network-uniqueness-test
   (let [wd (world/create-world-data :w)
-        matrix {:x 0 :y 0 :z 0}]
-    (with-redefs [network-state/create-wireless-net
-                  (fn [world-data matrix-vblock ssid password]
-                    {:world-data world-data
-                     :matrix matrix-vblock
-                     :ssid (atom ssid)
-                     :password (atom password)
-                     :nodes (atom [])
-                     :disposed (atom false)})]
-      (is (true? (world/create-network-impl! wd matrix "s1" "pw")))
-      (is (false? (world/create-network-impl! wd matrix "s1" "pw2"))))))
+        matrix (vb/create-vmatrix 0 0 0)]
+    (is (true? (world/create-network-impl! wd matrix "s1" "pw")))
+    (is (false? (world/create-network-impl! wd matrix "s1" "pw2")))))
 
 (deftest create-network-registers-lookups-test
   (let [w :w-lu
@@ -40,7 +33,7 @@
         (is (true? (world/create-network-impl! wd matrix-vb "reg" "pw")))
         (is (some? (world/get-network-by-matrix wd matrix-vb)))
         (is (some? (world/get-network-by-ssid wd "reg")))
-        (is (pos? (count @(:spatial-index wd))))))))
+        (is (pos? (count (world-registry/spatial-index wd))))))))
 
 (deftest destroy-network-clears-node-lookups-test
   (let [w :w-dest
@@ -55,9 +48,9 @@
         (is (true? (world/create-network-impl! wd matrix-vb "dnet" "p")))
         (let [net (world/get-network-by-ssid wd "dnet")]
           (is (true? (network-membership/add-node! net node-vb "p")))
-          (is (some? (get @(:net-lookup wd) node-vb)))
+          (is (some? (get (world-registry/net-lookup wd) node-vb)))
           (world/destroy-network-impl! wd net)
-          (is (nil? (get @(:net-lookup wd) node-vb)))
+          (is (nil? (get (world-registry/net-lookup wd) node-vb)))
           (is (nil? (world/get-network-by-ssid wd "dnet"))))))))
 
 (deftest change-network-ssid-refreshes-string-lookup-test

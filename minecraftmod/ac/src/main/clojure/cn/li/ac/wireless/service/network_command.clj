@@ -1,8 +1,8 @@
 (ns cn.li.ac.wireless.service.network-command
   "Service-level wireless topology mutation helpers.
 
-  Keeps imperative network/connection operations in one place so API facade
-  namespaces stay thin and migration-friendly."
+  Keeps imperative network/connection operations in one place so the public API
+  namespace stays thin."
   (:require [cn.li.ac.wireless.service.topology-service :as topology-service]))
 
 (defn create-network!

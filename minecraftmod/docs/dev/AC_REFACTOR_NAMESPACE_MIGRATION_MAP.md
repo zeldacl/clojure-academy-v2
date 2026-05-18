@@ -6,7 +6,7 @@ Scope: `ac` module structural refactor (wireless / ability / registry startup ch
 ## Principles
 
 - Keep stable public entry namespaces where they remain current.
-- Do not add compatibility facades for deleted wireless API/domain/service/persistence stacks.
+- Do not add transitional wrappers for deleted wireless API/domain/service/persistence stacks.
 - Move cohesive responsibilities into focused namespaces.
 - Preserve call contracts while reducing monolithic files.
 
@@ -113,6 +113,6 @@ Content phase orchestration support introduced:
 
 ## Caller migration guidance
 
-- Preferred: keep requiring original facade namespaces unless you need internal granularity.
+- Preferred: depend on the current stable namespace for each subsystem.
 - For new code, depend on granular modules only when scoped responsibilities are required.
-- Do not bypass compatibility facades from external modules unless there is a measured reason.
+- Do not introduce transitional wrapper namespaces for deleted structures.

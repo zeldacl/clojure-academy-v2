@@ -3,8 +3,8 @@
 
   This namespace is intentionally data-only: it depends on the pure foundation
   VBlock representation and platform NBT, but not on runtime tile resolution.
-  Runtime facades can wrap decoded foundation VBlocks when they need a specific
-  record type for compatibility."
+  Runtime code can wrap decoded foundation VBlocks when it needs the wireless
+  runtime record type."
   (:require [cn.li.ac.foundation.vblock :as foundation-vb]
             [cn.li.mcmod.platform.nbt :as nbt]))
 
@@ -49,8 +49,8 @@
 (defn nbt-list->vblocks
   "Deserialize an NBT list to VBlocks.
 
-  Optional `from-foundation` allows compatibility facades to preserve their
-  runtime record type while keeping this codec independent from runtime code."
+  Optional `from-foundation` keeps this codec independent from runtime code
+  while allowing callers to choose their VBlock representation."
   ([items default-type default-ignore-chunk]
    (nbt-list->vblocks items default-type default-ignore-chunk identity))
   ([items default-type default-ignore-chunk from-foundation]

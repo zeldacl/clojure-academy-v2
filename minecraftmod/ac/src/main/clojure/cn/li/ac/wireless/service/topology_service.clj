@@ -10,6 +10,7 @@
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.ac.wireless.data.topology-index :as topology-index]
+            [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.util.log :as log]))
 
 (defn create-network!
@@ -32,7 +33,7 @@
 (defn destroy-network!
   "Destroy network and clear all related lookups/indexes."
   [world-data item]
-  (reset! (:disposed item) true)
+  (network-state/mark-disposed! item)
   (topology-index/unregister-network! world-data item)
   (log/info (format "Destroyed network: SSID='%s'" (network-state/get-ssid item)))
   true)
@@ -49,7 +50,7 @@
 (defn destroy-node-connection!
   "Destroy node connection and clear all related lookups/indexes."
   [world-data item]
-  (reset! (:disposed item) true)
+  (node-conn/set-disposed! item true)
   (topology-index/unregister-node-connection! world-data item)
   (log/info (format "Destroyed node connection: %s" (vb/vblock-to-string (:node item))))
   true)
@@ -108,8 +109,8 @@
 (defn refresh-world-ssid-lookup!
   [network-item old-ssid new-ssid]
   (let [world-data (:world-data network-item)]
-    (swap! (:net-lookup world-data) dissoc old-ssid)
-    (swap! (:net-lookup world-data) assoc new-ssid network-item)))
+    (world-registry/update-state-value! world-data :net-lookup dissoc old-ssid)
+    (world-registry/update-state-value! world-data :net-lookup assoc new-ssid network-item)))
 
 (defn change-network-ssid!
   [network-item new-ssid]
