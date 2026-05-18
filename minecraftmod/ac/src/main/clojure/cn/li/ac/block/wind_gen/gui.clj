@@ -1,26 +1,25 @@
 (ns cn.li.ac.block.wind-gen.gui
   "CLIENT-ONLY: Wind Generator GUI (main + base)."
-  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.mcmod.gui.xml-parser :as cgui-doc]
-            [cn.li.mcmod.gui.components :as comp]
-            [cn.li.mcmod.gui.events :as events]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
+  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
-            [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.ac.gui.manifest :as gui-manifest]
+            [cn.li.ac.block.gui.sync :as gui-sync]
+            [cn.li.ac.block.wind-gen.schema :as wind-schema]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private main-schema-id :wind-gen-main)
 (def ^:private base-schema-id :wind-gen-base)
+(def ^:private main-sync-fns
+  (gui-sync/schema-sync-fns wind-schema/wind-gen-main-schema))
+(def ^:private base-sync-fns
+  (gui-sync/schema-sync-fns wind-schema/wind-gen-base-schema))
 
 (defn- fan-item-stack? [stack]
   (when (and stack (not (item/item-is-empty? stack)))
@@ -29,9 +28,7 @@
       (or (= rn "windgen_fan") (= rn "my_mod:windgen_fan") (.endsWith s ":windgen_fan")))))
 
 (defn- create-main-container [tile player]
-  {:tile-entity tile :player player :container-type :wind-gen-main
-   :status (atom "INCOMPLETE") :complete (atom false)
-   :no-obstacle (atom false) :fan-installed (atom false)})
+  (gui-sync/create-schema-container wind-schema/wind-gen-main-schema tile player :wind-gen-main))
 
 (defn- main-slot-count [_] (slot-registry/get-slot-count main-schema-id))
 (defn- main-get-slot [container slot] (common/get-slot-item-be container slot))
@@ -40,48 +37,28 @@
 (defn- main-can-place? [_ _slot stack] (boolean (fan-item-stack? stack)))
 (defn- main-still-valid? [_ _player] true)
 
-(defn- main-sync! [container]
-  (let [state (or (common/get-tile-state (:tile-entity container)) {})]
-    (reset! (:status container) (str (get state :status "INCOMPLETE")))
-    (reset! (:complete container) (boolean (get state :complete false)))
-    (reset! (:no-obstacle container) (boolean (get state :no-obstacle false)))
-    (reset! (:fan-installed container) (boolean (get state :fan-installed false)))))
-
-(defn- main-sync-data [c]
-  {:status @(:status c)
-   :complete @(:complete c)
-   :no-obstacle @(:no-obstacle c)
-   :fan-installed @(:fan-installed c)})
-
-(defn- apply-main-sync! [c d]
-  (reset! (:status c) (str (:status d "INCOMPLETE")))
-  (reset! (:complete c) (boolean (:complete d false)))
-  (reset! (:no-obstacle c) (boolean (:no-obstacle d false)))
-  (reset! (:fan-installed c) (boolean (:fan-installed d false))))
+(def ^:private main-sync! (:sync-to-client! main-sync-fns))
+(def ^:private main-sync-data (:get-sync-data main-sync-fns))
+(def ^:private apply-main-sync! (:apply-sync-data! main-sync-fns))
 
 (defn- create-main-screen [container minecraft-container _player]
   (main-sync! container)
   (let [inv-page (tech-ui/create-inventory-page "windmain")
         pages [inv-page]
-        container-id (gui/get-menu-container-id minecraft-container)
-        tech (apply tech-ui/create-tech-ui pages)
-        _ (tabbed-gui/attach-tab-sync! pages tech container container-id)
-        root (:window tech)
-        info-area (tech-ui/create-info-area)
-        y0 (tech-ui/add-sepline info-area "Info" 0)
-        y1 (tech-ui/add-property info-area "fan" (fn [] (if @(:fan-installed container) "YES" "NO")) y0)
-        _y2 (tech-ui/add-property info-area "obstacle" (fn [] (if @(:no-obstacle container) "CLEAR" "BLOCKED")) y1)
-        _ (cgui-core/set-position! info-area (+ (cgui-core/get-width (:window inv-page)) 7) 5)
-        _ (cgui-core/add-widget! root info-area)
-        base (cgui-screen/create-cgui-screen-container root minecraft-container)]
-    (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current tech)))))
+        info (fn [info-area]
+               (let [y0 (tech-ui/add-sepline info-area "Info" 0)
+                     y1 (tech-ui/add-property info-area "fan" (fn [] (if @(:fan-installed container) "YES" "NO")) y0)]
+                 (tech-ui/add-property info-area "obstacle" (fn [] (if @(:no-obstacle container) "CLEAR" "BLOCKED")) y1)))]
+    (tech-ui/create-tech-screen-container
+      {:pages pages
+       :container container
+       :minecraft-container minecraft-container
+       :build-info-area! info})))
 
 (defn- main-container? [container] (= (:container-type container) :wind-gen-main))
 
 (defn- create-base-container [tile player]
-  {:tile-entity tile :player player :container-type :wind-gen-base
-   :energy (atom 0.0) :max-energy (atom 20000.0)
-   :gen-speed (atom 0.0) :status (atom "BASE_ONLY")})
+  (gui-sync/create-schema-container wind-schema/wind-gen-base-schema tile player :wind-gen-base))
 
 (defn- base-slot-count [_] (slot-registry/get-slot-count base-schema-id))
 (defn- base-get-slot [container slot] (common/get-slot-item-be container slot))
@@ -90,45 +67,26 @@
 (defn- base-can-place? [_ _slot stack] (boolean (energy/is-energy-item-supported? stack)))
 (defn- base-still-valid? [_ _player] true)
 
-(defn- base-sync! [container]
-  (let [state (or (common/get-tile-state (:tile-entity container)) {})]
-    (reset! (:energy container) (double (get state :energy 0.0)))
-    (reset! (:max-energy container) (double (get state :max-energy 20000.0)))
-    (reset! (:gen-speed container) (double (get state :gen-speed 0.0)))
-    (reset! (:status container) (str (get state :status "BASE_ONLY")))))
-
-(defn- base-sync-data [c]
-  {:energy @(:energy c)
-   :max-energy @(:max-energy c)
-   :gen-speed @(:gen-speed c)
-   :status @(:status c)})
-
-(defn- apply-base-sync! [c d]
-  (reset! (:energy c) (double (:energy d 0.0)))
-  (reset! (:max-energy c) (double (:max-energy d 20000.0)))
-  (reset! (:gen-speed c) (double (:gen-speed d 0.0)))
-  (reset! (:status c) (str (:status d "BASE_ONLY"))))
+(def ^:private base-sync! (:sync-to-client! base-sync-fns))
+(def ^:private base-sync-data (:get-sync-data base-sync-fns))
+(def ^:private apply-base-sync! (:apply-sync-data! base-sync-fns))
 
 (defn- create-base-screen [container minecraft-container _player]
   (base-sync! container)
-  (let [doc (cgui-doc/read-xml "assets/my_mod/guis/rework/page_windbase.xml")
-        inv-window (cgui-doc/get-widget doc "main")
-        wireless-window (wireless-tab/create-wireless-panel {:mode :generator :container container})
-        pages [{:id "inv" :window inv-window} {:id "wireless" :window wireless-window}]
-        container-id (gui/get-menu-container-id minecraft-container)
-        tech (apply tech-ui/create-tech-ui pages)
-        _ (tabbed-gui/attach-tab-sync! pages tech container container-id)
-        root (:window tech)
-        info-area (tech-ui/create-info-area)
+  (let [inv-page (tech-ui/create-rework-page "guis/rework/page_windbase.xml")
+        wireless-window (wireless-tab/create-wireless-panel {:role :generator :container container})
+        pages [inv-page {:id "wireless" :window wireless-window}]
         max-e (fn [] (max 1.0 (double @(:max-energy container))))
-        y0 (tech-ui/add-histogram info-area [(tech-ui/hist-buffer (fn [] (double @(:energy container))) (max-e))] 0)
-        y1 (tech-ui/add-sepline info-area "Info" y0)
-        y2 (tech-ui/add-property info-area "gen_speed" (fn [] (format "%.2fIF/T" (double @(:gen-speed container)))) y1)
-        _y3 (tech-ui/add-property info-area "status" (fn [] @(:status container)) y2)
-        _ (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
-        _ (cgui-core/add-widget! root info-area)
-        base (cgui-screen/create-cgui-screen-container root minecraft-container)]
-    (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current tech)))))
+        info (fn [info-area]
+               (let [y0 (tech-ui/add-histogram info-area [(tech-ui/hist-buffer (fn [] (double @(:energy container))) (max-e))] 0)
+                     y1 (tech-ui/add-sepline info-area "Info" y0)
+                     y2 (tech-ui/add-property info-area "gen_speed" (fn [] (format "%.2fIF/T" (double @(:gen-speed container)))) y1)]
+                 (tech-ui/add-property info-area "status" (fn [] @(:status container)) y2)))]
+    (tech-ui/create-tech-screen-container
+      {:pages pages
+       :container container
+       :minecraft-container minecraft-container
+       :build-info-area! info})))
 
 (defn- base-container? [container] (= (:container-type container) :wind-gen-base))
 
@@ -150,6 +108,7 @@
           :sync-get main-sync-data
           :sync-apply apply-main-sync!
           :validate-fn main-still-valid?
+          :close-fn (:on-close main-sync-fns)
           :slot-count-fn main-slot-count
           :slot-get-fn main-get-slot
           :slot-set-fn main-set-slot!
@@ -166,6 +125,7 @@
               :sync-get base-sync-data
               :sync-apply apply-base-sync!
               :validate-fn base-still-valid?
+              :close-fn (:on-close base-sync-fns)
               :slot-count-fn base-slot-count
               :slot-get-fn base-get-slot
               :slot-set-fn base-set-slot!

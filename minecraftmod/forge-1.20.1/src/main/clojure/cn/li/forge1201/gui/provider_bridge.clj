@@ -4,7 +4,6 @@
   Uses reify MenuProvider and delegates menu creation to shared provider dispatcher."
   (:require [cn.li.mc1201.gui.provider.dispatcher :as provider-dispatcher]
             [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
-            [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world MenuProvider]
@@ -14,16 +13,12 @@
   ([window-id menu-type clj-container]
   (create-menu-proxy window-id menu-type clj-container nil))
   ([window-id menu-type clj-container opts]
-  (menu-proxy/create-menu-proxy
+  (menu-proxy/create-platform-menu-proxy
+    :forge-1.20.1
     window-id
     menu-type
     clj-container
-    (merge {:get-slot-layout gui/get-slot-layout
-            :default-player-inventory-mode :full
-            :call-super-removed? false
-            :remove-log-message "Menu closed for player"
-            :quick-move-error-prefix "Error in quickMoveStack:"}
-           opts))))
+    opts)))
 
 (defn create-menu-provider
   "Create a MenuProvider for opening GUI.
@@ -36,7 +31,6 @@
   [gui-id tile-entity]
   (reify MenuProvider
     (getDisplayName [_]
-      ;(Component/literal (gui/get-display-name gui-id))
       (Component/empty)
       )
 

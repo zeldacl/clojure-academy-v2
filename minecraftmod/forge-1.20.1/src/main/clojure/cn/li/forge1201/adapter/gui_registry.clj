@@ -15,11 +15,8 @@
            [net.minecraftforge.network NetworkHooks IContainerFactory]
            [net.minecraftforge.common.extensions IForgeMenuType]
            [net.minecraftforge.registries DeferredRegister RegistryObject]
-           [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world MenuProvider]
-           [net.minecraft.world.entity.player Inventory]
-           [net.minecraft.world.level Level]
            [net.minecraft.core BlockPos]))
 
 
@@ -51,8 +48,10 @@
   
   Returns: MenuType or nil"
   [gui-id]
-  (when-let [^RegistryObject ro (get @gui-menu-types gui-id)]
-    (.get ro)))
+  (when-let [registered (get @gui-menu-types gui-id)]
+    (if (instance? RegistryObject registered)
+      (.get ^RegistryObject registered)
+      registered)))
 
 (defn create-menu-type
   "Create a MenuType for a GUI
@@ -67,8 +66,7 @@
       (create [_ window-id player-inventory buf]
         ;; This factory is invoked on the CLIENT when Forge recreates the menu
         ;; after receiving the open-screen packet.
-        (let [handler (gui/get-gui-handler)
-              ^ServerPlayer player (.player ^Inventory player-inventory)
+          (let [handler (gui/get-gui-handler)
               pos (registry-common/read-block-pos buf)]
           (registry-common/create-client-menu!
             {:gui-id gui-id
@@ -81,11 +79,7 @@
              :create-menu-proxy-fn (fn [wid menu-type clj-container opts]
                                      (menu-proxy/create-menu-proxy wid menu-type clj-container opts))
              :resolve-menu-type-fn get-menu-type
-             :bridge-opts {:get-slot-layout gui/get-slot-layout
-                           :default-player-inventory-mode :full
-                           :call-super-removed? false
-                           :remove-log-message "Menu closed for player"
-                           :quick-move-error-prefix "Error in quickMoveStack:"}
+             :bridge-opts (menu-proxy/platform-menu-proxy-opts :forge-1.20.1)
              :error-prefix "Failed to create container for GUI"}))))))
 
 (defn register-menu-types!
@@ -108,8 +102,6 @@
                    ;; Store menu-type in platform adapter's metadata system
                    menu-type)))]
       (swap! gui-menu-types assoc gui-id ro)
-      ;; Sync into unified business-layer metadata via mcmod (no direct `ac` dependency).
-      (gui/register-menu-type! :forge-1.20.1 gui-id menu-type)
       (log/info "Queued menu type:" registry-name "for GUI ID" gui-id)))
       (log/info "Queued" (count @gui-menu-types) "menu types"))
 
@@ -156,7 +148,8 @@
   (registry-api/register-registry-impl!
     :forge-1.20.1
     {:register-menu-type! (fn [gui-id menu-type]
-                            (gui/register-menu-type! :forge-1.20.1 gui-id menu-type))
+                            (swap! gui-menu-types assoc gui-id menu-type)
+                            nil)
      :get-menu-type get-menu-type
      :list-menu-types (fn [] @gui-menu-types)
      :invalidate-menu-registry! (fn [] (reset! gui-menu-types {}))}))

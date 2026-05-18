@@ -62,6 +62,25 @@
   (gui/register-container-by-id! window-id clj-container)
   menu)
 
+(defn platform-menu-proxy-opts
+  "Return shared CMenuBridge options for a loader platform key."
+  ([platform-key]
+   (platform-menu-proxy-opts platform-key nil))
+  ([platform-key opts]
+   (merge
+    {:get-slot-layout gui/get-slot-layout
+     :default-player-inventory-mode :full
+     :call-super-removed? false
+     :remove-log-message "Menu closed for player"
+     :quick-move-error-prefix "Error in quickMoveStack:"}
+    (case platform-key
+      :fabric-1.20.1 {:call-super-removed? true
+                      :remove-log-message "Fabric menu closed for player"
+                      :quick-move-error-prefix "Error in Fabric quickMoveStack:"}
+      :forge-1.20.1 {}
+      {})
+    opts)))
+
 (defn create-menu-proxy
   "Create a CMenuBridge proxy around a Clojure container.
 
@@ -123,3 +142,12 @@
     (slots-sync/setup-menu-slots! menu clj-container tab-slot {:get-slot-layout get-slot-layout
                                                                :default-player-inventory-mode default-player-inventory-mode})
     (finalize-menu-registration! menu window-id clj-container player)))
+
+(defn create-platform-menu-proxy
+  "Create a menu proxy with loader-specific shared options."
+  [platform-key window-id menu-type clj-container opts]
+  (create-menu-proxy
+   window-id
+   menu-type
+   clj-container
+   (platform-menu-proxy-opts platform-key opts)))

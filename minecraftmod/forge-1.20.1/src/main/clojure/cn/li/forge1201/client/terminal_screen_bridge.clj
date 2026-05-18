@@ -11,21 +11,20 @@
 
 
 ;; ============================================================================
-;; Terminal Screen
+;; Simple CGui Screen Host
 ;; ============================================================================
 
-(defn- create-terminal-screen
-  "Create a Minecraft Screen that renders the terminal CGui."
-  [player]
-  (let [gui-widget (or (terminal-ui/create-terminal-gui player)
-                       (cgui-core/create-widget :size [640 785]))
-        left (atom 0)
-        top (atom 0)]
-    (proxy [Screen] [(Component/literal "Data Terminal")]
+(defn- create-cgui-screen
+  "Create a Minecraft Screen host for a CGui widget tree."
+  [gui-widget title {:keys [log-label drag? keyboard?]}]
+  (let [left (atom 0)
+        top (atom 0)
+        resolved-log-label (or log-label title)]
+    (proxy [Screen] [(Component/literal title)]
       (render [^GuiGraphics graphics mouse-x mouse-y partial-tick]
         (try
-          (let [^Screen s this]
-            (.renderBackground s graphics))
+          (let [^Screen screen-this this]
+            (.renderBackground screen-this graphics))
           (let [^Minecraft mc (Minecraft/getInstance)
                 window (.getWindow mc)
                 screen-width (.getGuiScaledWidth window)
@@ -38,7 +37,7 @@
             (cgui-rt/frame-tick! gui-widget {:partial-ticks partial-tick})
             (cgui-rt/render-tree! graphics gui-widget left-pos top-pos))
           (catch Exception e
-            (log/error "Error rendering terminal screen:" (.getMessage e))
+            (log/error "Error rendering" resolved-log-label ":" (.getMessage e))
             (log/error "Exception:" e))))
 
       (mouseClicked [mouse-x mouse-y button]
@@ -46,38 +45,59 @@
           (cgui-rt/mouse-click! gui-widget (int mouse-x) (int mouse-y) @left @top button)
           true
           (catch Exception e
-            (log/error "Error handling terminal mouse click:" (.getMessage e))
+            (log/error "Error handling" resolved-log-label "mouse click:" (.getMessage e))
             false)))
 
       (mouseDragged [mouse-x mouse-y button drag-x drag-y]
-        (try
-          (cgui-rt/mouse-drag! gui-widget (int mouse-x) (int mouse-y) @left @top)
-          true
-          (catch Exception e
-            (log/error "Error handling terminal mouse drag:" (.getMessage e))
-            false)))
+        (if drag?
+          (try
+            (cgui-rt/mouse-drag! gui-widget (int mouse-x) (int mouse-y) @left @top)
+            true
+            (catch Exception e
+              (log/error "Error handling" resolved-log-label "mouse drag:" (.getMessage e))
+              false))
+          (proxy-super mouseDragged mouse-x mouse-y button drag-x drag-y)))
 
       (keyPressed [key-code scan-code modifiers]
-        (try
-          (cgui-rt/key-input! gui-widget key-code scan-code (char 0))
-          true
-          (catch Exception e
-            (log/error "Error handling terminal key press:" (.getMessage e))
-            false)))
+        (if keyboard?
+          (try
+            (cgui-rt/key-input! gui-widget key-code scan-code (char 0))
+            true
+            (catch Exception e
+              (log/error "Error handling" resolved-log-label "key press:" (.getMessage e))
+              false))
+          (proxy-super keyPressed key-code scan-code modifiers)))
 
       (charTyped [code-point modifiers]
-        (try
-          (cgui-rt/key-input! gui-widget 0 0 (char code-point))
-          true
-          (catch Exception e
-            (log/error "Error handling terminal char typed:" (.getMessage e))
-            false)))
+        (if keyboard?
+          (try
+            (cgui-rt/key-input! gui-widget 0 0 (char code-point))
+            true
+            (catch Exception e
+              (log/error "Error handling" resolved-log-label "char typed:" (.getMessage e))
+              false))
+          (proxy-super charTyped code-point modifiers)))
 
       (removed []
         (try
           (cgui-rt/dispose! gui-widget)
           (catch Exception e
-            (log/error "Error disposing terminal GUI:" (.getMessage e))))))))
+            (log/error "Error disposing" resolved-log-label ":" (.getMessage e))))))))
+
+;; ============================================================================
+;; Terminal Screen
+;; ============================================================================
+
+(defn- create-terminal-screen
+  "Create a Minecraft Screen that renders the terminal CGui."
+  [player]
+  (create-cgui-screen
+   (or (terminal-ui/create-terminal-gui player)
+       (cgui-core/create-widget :size [640 785]))
+   "Data Terminal"
+   {:log-label "terminal screen"
+    :drag? true
+    :keyboard? true}))
 
 ;; ============================================================================
 ;; Screen Opening Functions
@@ -104,40 +124,7 @@
   (try
     (log/info "Opening simple GUI screen:" title)
     (let [^Minecraft mc (Minecraft/getInstance)
-          left (atom 0)
-          top (atom 0)
-          screen (proxy [Screen] [(Component/literal title)]
-                   (render [^GuiGraphics graphics mouse-x mouse-y partial-tick]
-                     (try
-                       (let [^Screen s this]
-                         (.renderBackground s graphics))
-                       (let [^Minecraft mc (Minecraft/getInstance)
-                             window (.getWindow mc)
-                             screen-width (.getGuiScaledWidth window)
-                             screen-height (.getGuiScaledHeight window)
-                             [gui-width gui-height] (cgui-core/get-size gui-widget)
-                             left-pos (int (/ (- screen-width gui-width) 2))
-                             top-pos (int (/ (- screen-height gui-height) 2))]
-                         (reset! left left-pos)
-                         (reset! top top-pos)
-                         (cgui-rt/frame-tick! gui-widget {:partial-ticks partial-tick})
-                         (cgui-rt/render-tree! graphics gui-widget left-pos top-pos))
-                       (catch Exception e
-                         (log/error "Error rendering simple GUI:" (.getMessage e)))))
-
-                   (mouseClicked [mouse-x mouse-y button]
-                     (try
-                       (cgui-rt/mouse-click! gui-widget (int mouse-x) (int mouse-y) @left @top button)
-                       true
-                       (catch Exception e
-                         (log/error "Error handling mouse click:" (.getMessage e))
-                         false)))
-
-                   (removed []
-                     (try
-                       (cgui-rt/dispose! gui-widget)
-                       (catch Exception e
-                         (log/error "Error disposing GUI:" (.getMessage e))))))]
+          screen (create-cgui-screen gui-widget title {:log-label "simple GUI"})]
       (.setScreen mc screen))
     (catch Exception e
       (log/error "Failed to open simple GUI:" (.getMessage e))

@@ -203,7 +203,7 @@
 (defn create-wireless-panel
   "Shared wireless tab (node mode)."
   [container]
-  (wireless-tab/create-wireless-panel {:mode :node :container container}))
+  (wireless-tab/create-wireless-panel {:role :node :container container}))
 
 ;; ============================================================================
 ;; Container Sync (from node_container.clj)

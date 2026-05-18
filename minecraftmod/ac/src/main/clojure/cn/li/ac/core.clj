@@ -31,6 +31,9 @@
   "Load renderer namespaces to trigger auto-registration.
   Called by mcmod during client initialization."
   []
+  (when-let [install-terminal-hooks!
+             (requiring-resolve 'cn.li.ac.terminal.platform-bridge/install-terminal-ui-hooks!)]
+    (install-terminal-hooks!))
   (hooks/load-all-client-renderers!))
 
 ;; Register the callback with mcmod lifecycle system

@@ -9,7 +9,6 @@
   (:require [cn.li.ac.gui.platform-adapter.dispatcher-api :as dispatcher-api]
             [cn.li.ac.gui.platform-adapter.sync-api :as sync-api]
             [cn.li.ac.gui.slot-validators :as slot-validators]
-            [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
             [cn.li.ac.wireless.gui.registry :as wireless-registry]
             [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.handler :as gui-handler]
@@ -47,8 +46,6 @@
 (def get-display-name metadata/get-display-name)
 (def get-gui-type metadata/get-gui-type)
 (def get-registry-name metadata/get-registry-name)
-(def get-menu-type metadata/get-menu-type)
-(def register-menu-type! metadata/register-menu-type!)
 (def get-all-gui-ids metadata/get-all-gui-ids)
 (def get-screen-factory-fn metadata/get-screen-factory-fn)
 (def get-screen-factory-fn-keyword metadata/get-screen-factory-fn)
@@ -102,9 +99,7 @@
   all AC GUI metadata/container behavior is registered by AC itself."
   []
   (gui-core/register-gui-platform-impl!
-    {:register-menu-type! register-menu-type!
-     :get-menu-type get-menu-type
-     :safe-tick! safe-tick!
+    {:safe-tick! safe-tick!
      :safe-validate safe-validate
      :safe-sync! safe-sync!
      :safe-close! safe-close!

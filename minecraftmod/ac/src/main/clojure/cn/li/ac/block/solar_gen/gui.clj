@@ -12,14 +12,10 @@
   Uses existing XML page: assets/my_mod/guis/rework/page_solar.xml
   and composes it into TechUI tabs (inv + wireless) with InfoArea."
   (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
-            [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.ac.gui.manifest :as gui-manifest]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.ac.config.modid :as modid]
@@ -115,48 +111,41 @@
             ;; Keep UI alive even if texture path/resource fails at runtime.
             nil))))))
 
-(declare create-wireless-panel)
-
 (defn create-solar-gui
   "Create Solar Generator GUI root widget."
   [container _player & [opts]]
   (try
-    (let [doc (cgui-doc/read-xml (modid/namespaced-path "guis/rework/page_solar.xml"))
-          inv-window (cgui-doc/get-widget doc "main")
-          wireless-window (wireless-tab/create-wireless-panel {:mode :generator :container container})
-          inv-page {:id "inv" :window inv-window}
+    (let [inv-page (tech-ui/create-rework-page "guis/rework/page_solar.xml")
+          inv-window (:window inv-page)
+          wireless-window (wireless-tab/create-wireless-panel {:role :generator :container container})
           wireless-page {:id "wireless" :window wireless-window}
           pages [inv-page wireless-page]
-          container-id (when-let [m (:menu opts)] (gui/get-menu-container-id m))
-          tech-ui (apply tech-ui/create-tech-ui pages)
-          _ (tabbed-gui/attach-tab-sync! pages tech-ui container container-id)
-          main-widget (:window tech-ui)
-          info-area (tech-ui/create-info-area)
           max-e (fn [] (max 1.0 (double @(:max-energy container))))
           speed-str (fn []
                       (try
                         (format "%.2fIF/T" (double @(:gen-speed container)))
-                        (catch Exception _ "0.00IF/T")))]
-
-      (attach-anim-frame! inv-window container)
-
-      (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
-      (tech-ui/reset-info-area! info-area)
-      (let [y (tech-ui/add-histogram
-                info-area
-                [(tech-ui/hist-buffer (fn [] (double @(:energy container)))
-                                      (max-e))]
-                0)
-            y (tech-ui/add-sepline info-area "Info" y)
-            y (tech-ui/add-property info-area "gen_speed" speed-str y)
-            y (tech-ui/add-property info-area "status" (fn [] @(:status container)) y)]
-        y)
-
-      (cgui-core/add-widget! main-widget info-area)
+                        (catch Exception _ "0.00IF/T")))
+          assembled (tech-ui/assemble-tech-ui-root
+                      {:pages pages
+                       :container container
+                       :minecraft-container (:menu opts)
+                       :bind! (fn [_]
+                                (attach-anim-frame! inv-window container))
+                       :build-info-area!
+                       (fn [info-area]
+                         (let [y (tech-ui/add-histogram
+                                   info-area
+                                   [(tech-ui/hist-buffer (fn [] (double @(:energy container)))
+                                                         (max-e))]
+                                   0)
+                               y (tech-ui/add-sepline info-area "Info" y)
+                               y (tech-ui/add-property info-area "gen_speed" speed-str y)]
+                           (tech-ui/add-property info-area "status" (fn [] @(:status container)) y)))})
+          main-widget (:root assembled)]
 
       (log/info "Created Solar Generator GUI (TechUI)")
       (if (:menu opts)
-        {:root main-widget :current (:current tech-ui)}
+        {:root main-widget :current (:current assembled)}
         main-widget))
     (catch Exception e
       (log/error "Error creating Solar GUI:"(ex-message e))
@@ -167,10 +156,8 @@
   [container minecraft-container player]
   (let [gui (create-solar-gui container player {:menu minecraft-container})
         root (if (map? gui) (:root gui) gui)
-        base (cgui-screen/create-cgui-screen-container root minecraft-container)]
-    (if (map? gui)
-      (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current gui)))
-      (tech-ui/assoc-tech-ui-screen-size base))))
+        current (when (map? gui) (:current gui))]
+    (tech-ui/create-tech-screen-from-root root current minecraft-container)))
 
 ;; ============================================================================
 ;; GUI Registration

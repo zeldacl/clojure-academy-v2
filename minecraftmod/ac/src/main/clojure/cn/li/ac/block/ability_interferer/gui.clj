@@ -3,26 +3,25 @@
   (:require [clojure.string :as str]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
-            [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.block.ability-interferer.config :as cfg]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.gui.platform-adapter :as gui]
+            [cn.li.ac.block.gui.sync :as gui-sync]
+            [cn.li.ac.block.ability-interferer.schema :as interferer-schema]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
-            [cn.li.ac.wireless.gui.message.registry :as msg-registry]))
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+            [cn.li.ac.energy.operations :as energy]))
 
 (def ^:private interferer-slot-schema-id :ability-interferer)
 (def ^:private interferer-gui-type :ability-interferer)
@@ -45,19 +44,25 @@
 (defn- msg [action]
   (msg-registry/msg interferer-gui-type action))
 
+(defn- sync-whitelist-edit!
+  [container]
+  (when-let [edit-atom (:whitelist-edit container)]
+    (reset! edit-atom (str/join "," (or @(:whitelist container) [])))))
+
+(def ^:private interferer-sync
+  (gui-sync/schema-sync-fns interferer-schema/ability-interferer-schema
+                            {:after-sync! sync-whitelist-edit!
+                             :after-apply! (fn [container _data]
+                                             (sync-whitelist-edit! container))}))
+
 (defn- create-container [tile player]
   (let [state (or (common/get-tile-state tile) {})]
-    {:tile-entity tile
-     :player player
-     :container-type interferer-gui-type
-     :energy (atom (double (get state :energy 0.0)))
-     :max-energy (atom (double (get state :max-energy cfg/max-energy)))
-     :range (atom (double (get state :range cfg/default-range)))
-     :enabled (atom (boolean (get state :enabled false)))
-     :placer-name (atom (str (get state :placer-name "")))
-     :whitelist (atom (vec (get state :whitelist [])))
-     :whitelist-edit (atom (str/join "," (get state :whitelist [])))
-     :affected-player-count (atom (int (get state :affected-player-count 0)))}))
+    (gui-sync/create-schema-container interferer-schema/ability-interferer-schema
+                                      tile
+                                      player
+                                      interferer-gui-type
+                                      {:state state
+                                       :base {:whitelist-edit (atom (str/join "," (get state :whitelist [])))}})))
 
 (defn- get-slot-count [_container]
   (slot-registry/get-slot-count interferer-slot-schema-id))
@@ -71,11 +76,7 @@
 (defn- slot-changed! [_container _slot-index] nil)
 
 (defn- can-place-item? [_container _slot-index item-stack]
-  (try
-    (let [is-energy-item? (requiring-resolve 'cn.li.ac.energy.operations/is-energy-item-supported?)]
-      (boolean (is-energy-item? item-stack)))
-    (catch Exception _
-      false)))
+  (boolean (energy/is-energy-item-supported? item-stack)))
 
 (defn- still-valid? [_container _player] true)
 
@@ -111,42 +112,14 @@
       (assoc (net-helpers/tile-pos-payload tile) :enabled enabled?))
     (reset! (:enabled container) enabled?)))
 
-(defn- sync-to-client! [container]
-  (let [state (or (common/get-tile-state (:tile-entity container)) {})
-        wl (vec (get state :whitelist []))]
-    (reset! (:energy container) (double (get state :energy 0.0)))
-    (reset! (:max-energy container) (double (get state :max-energy cfg/max-energy)))
-    (reset! (:range container) (double (get state :range cfg/default-range)))
-    (reset! (:enabled container) (boolean (get state :enabled false)))
-    (reset! (:placer-name container) (str (get state :placer-name "")))
-    (reset! (:whitelist container) wl)
-    (reset! (:whitelist-edit container) (str/join "," wl))
-    (reset! (:affected-player-count container) (int (get state :affected-player-count 0)))))
-
-(defn- get-sync-data [container]
-  {:energy @(:energy container)
-   :max-energy @(:max-energy container)
-   :range @(:range container)
-   :enabled @(:enabled container)
-   :placer-name @(:placer-name container)
-   :whitelist @(:whitelist container)
-   :affected-player-count @(:affected-player-count container)})
-
-(defn- apply-sync-data! [container data]
-  (let [wl (vec (:whitelist data []))]
-    (reset! (:energy container) (double (:energy data 0.0)))
-    (reset! (:max-energy container) (double (:max-energy data cfg/max-energy)))
-    (reset! (:range container) (double (:range data cfg/default-range)))
-    (reset! (:enabled container) (boolean (:enabled data false)))
-    (reset! (:placer-name container) (str (:placer-name data "")))
-    (reset! (:whitelist container) wl)
-    (reset! (:whitelist-edit container) (str/join "," wl))
-    (reset! (:affected-player-count container) (int (:affected-player-count data 0)))))
+(def ^:private sync-to-client! (:sync-to-client! interferer-sync))
+(def ^:private get-sync-data (:get-sync-data interferer-sync))
+(def ^:private apply-sync-data! (:apply-sync-data! interferer-sync))
 
 (defn- tick! [container]
-  (sync-to-client! container))
+  (gui-sync/sync-tick! container sync-to-client!))
 
-(defn- on-close [_container] nil)
+(def ^:private on-close (:on-close interferer-sync))
 (defn- handle-button-click! [_container _button-id _player] nil)
 
 (defn- update-switch-texture!
@@ -207,42 +180,39 @@
 
 (defn- create-screen [container minecraft-container _player]
   (sync-to-client! container)
-  (let [doc (cgui-doc/read-xml "assets/my_mod/guis/rework/page_interfere.xml")
-        inv-window (cgui-doc/get-widget doc "main")
-        wireless-window (wireless-tab/create-wireless-panel {:mode :receiver :container container})
-        inv-page {:id "inv" :window inv-window}
+  (let [inv-page (tech-ui/create-rework-page "guis/rework/page_interfere.xml")
+        inv-window (:window inv-page)
+        wireless-window (wireless-tab/create-wireless-panel {:role :receiver :container container})
         wireless-page {:id "wireless" :window wireless-window}
         pages [inv-page wireless-page]
-        container-id (gui/get-menu-container-id minecraft-container)
-        tech (apply tech-ui/create-tech-ui pages)
-        _ (tabbed-gui/attach-tab-sync! pages tech container container-id)
-        root (:window tech)
-        info-area (tech-ui/create-info-area)
         max-e (fn [] (max 1.0 (double @(:max-energy container))))
         wl-text (fn []
                   (let [wl @(:whitelist container)]
                     (if (seq wl)
                       (str/join ", " wl)
-                      "<empty>")))
-        y0 (tech-ui/add-histogram info-area
-                                  [(tech-ui/hist-buffer (fn [] (double @(:energy container))) max-e)]
-                                  0)
-        y1 (tech-ui/add-sepline info-area "Interferer" y0)
-        y2 (tech-ui/add-property info-area "enabled" (fn [] (if @(:enabled container) "ON" "OFF")) y1)
-        y3 (tech-ui/add-property info-area "range" (fn [] (format "%.0f" (double @(:range container)))) y2)
-        y4 (tech-ui/add-property info-area "affected" (fn [] (str @(:affected-player-count container))) y3)
-        y5 (tech-ui/add-property info-area "owner" (fn [] @(:placer-name container)) y4)
-        _y6 (tech-ui/add-property info-area "whitelist" wl-text y5
+                      "<empty>")))]
+    (tech-ui/create-tech-screen-container
+      {:pages pages
+       :container container
+       :minecraft-container minecraft-container
+       :bind! (fn [_]
+                (wire-xml-controls! inv-window container))
+       :build-info-area!
+       (fn [info-area]
+         (let [y0 (tech-ui/add-histogram info-area
+                                         [(tech-ui/hist-buffer (fn [] (double @(:energy container))) max-e)]
+                                         0)
+               y1 (tech-ui/add-sepline info-area "Interferer" y0)
+               y2 (tech-ui/add-property info-area "enabled" (fn [] (if @(:enabled container) "ON" "OFF")) y1)
+               y3 (tech-ui/add-property info-area "range" (fn [] (format "%.0f" (double @(:range container)))) y2)
+               y4 (tech-ui/add-property info-area "affected" (fn [] (str @(:affected-player-count container))) y3)
+               y5 (tech-ui/add-property info-area "owner" (fn [] @(:placer-name container)) y4)]
+           (tech-ui/add-property info-area "whitelist" wl-text y5
                                   :editable? true
                                   :on-change (fn [new-text]
                                                (let [names (parse-whitelist new-text)]
                                                  (reset! (:whitelist-edit container) (str new-text))
-                                                 (request-set-whitelist! container names))))
-        _ (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
-        _ (cgui-core/add-widget! root info-area)
-        _ (wire-xml-controls! inv-window container)
-        base (cgui-screen/create-cgui-screen-container root minecraft-container)]
-    (tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current tech)))))
+                                                 (request-set-whitelist! container names))))))})))
 
 (defn- interferer-container?
   [container]

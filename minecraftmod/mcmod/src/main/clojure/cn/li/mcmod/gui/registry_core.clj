@@ -2,38 +2,12 @@
   "Unified GUI operations API (replacing legacy gui.adapter facade file)."
   (:require [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.gui.container-state :as container-state]
-            [cn.li.mcmod.gui.adapter.platform-registry :as platform-registry]))
-
-(defonce ^:private resolved-vars
-  (atom {}))
+            [cn.li.mcmod.gui.adapter.platform-registry :as platform-registry]
+            [cn.li.mcmod.gui.metadata :as metadata]
+            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]))
 
 (defonce ^:private screen-factories
   (atom {}))
-
-(defn- resolve-var
-  [var-sym]
-  (or (@resolved-vars var-sym)
-      (let [v (requiring-resolve var-sym)]
-        (swap! resolved-vars assoc var-sym v)
-        v)))
-
-(defn- delegate
-  [var-sym & args]
-  (apply (resolve-var var-sym) args))
-
-(defn- metadata-call
-  [var-sym & args]
-  (let [resolved (requiring-resolve var-sym)]
-    (cond
-      (and resolved (bound? resolved))
-      (apply resolved args)
-
-      :else
-      (do
-        (require 'cn.li.mcmod.protocol.metadata :reload)
-        (let [resolved2 (requiring-resolve var-sym)]
-          (when (and resolved2 (bound? resolved2))
-            (apply resolved2 args)))))))
 
 (def register-gui-platform-impl! platform-registry/register-gui-platform-impl!)
 
@@ -49,15 +23,13 @@
     (throw (ex-info "Screen factory not registered"
                     {:screen-fn-kw screen-fn-kw}))))
 
-(defn get-screen-factory-fn-kw [gui-id]
-  (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-screen-factory-fn-kw gui-id))
-
-(defn get-all-gui-ids [] (or (metadata-call 'cn.li.mcmod.protocol.metadata/get-all-gui-ids) []))
-(defn get-display-name [gui-id] (some-> (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-spec gui-id) :display-name))
-(defn get-gui-type [gui-id] (some-> (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-spec gui-id) :gui-type))
-(defn get-registry-name [gui-id] (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-registry-name gui-id))
-(defn get-slot-layout [gui-id] (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-slot-layout gui-id))
-(defn get-slot-range [gui-id section] (metadata-call 'cn.li.mcmod.protocol.metadata/get-gui-slot-range gui-id section))
+(defn get-screen-factory-fn-kw [gui-id] (metadata/get-screen-factory-fn gui-id))
+(defn get-all-gui-ids [] (metadata/get-all-gui-ids))
+(defn get-display-name [gui-id] (metadata/get-display-name gui-id))
+(defn get-gui-type [gui-id] (metadata/get-gui-type gui-id))
+(defn get-registry-name [gui-id] (metadata/get-registry-name gui-id))
+(defn get-slot-layout [gui-id] (metadata/get-slot-layout gui-id))
+(defn get-slot-range [gui-id section] (metadata/get-slot-range gui-id section))
 
 (defmulti register-gui-handler
   (fn [platform-type] platform-type))
@@ -101,11 +73,9 @@
 (defn matrix-container? [container] (platform-registry/invoke-platform! :matrix-container? container))
 (defn get-gui-id-for-container [container] (platform-registry/invoke-platform! :get-gui-id-for-container container))
 
-(defn get-menu-type [platform gui-id] (platform-registry/invoke-platform! :get-menu-type platform gui-id))
-(defn register-menu-type! [platform gui-id menu-type] (platform-registry/invoke-platform! :register-menu-type! platform gui-id menu-type))
 (defn execute-quick-move-forge [menu container slot-index slot stack]
   (platform-registry/invoke-platform! :execute-quick-move-forge menu container slot-index slot stack))
 
 (defn register-set-tab-handler!
   []
-  (delegate 'cn.li.mcmod.gui.tabbed-gui/register-set-tab-handler!))
+  (tabbed-gui/register-set-tab-handler!))

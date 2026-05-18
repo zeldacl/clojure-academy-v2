@@ -2,7 +2,7 @@
   "AC 通用：多页签 TechUI 约定与辅助。
 
    This is shared client/server tab switching logic used by platform GUI/menu bridges."
-  (:require [cn.li.mcmod.gui.registry-core :as gui]
+  (:require [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
@@ -54,7 +54,7 @@
 (defn slots-active-for-menu?
   "True when slot clicks should be allowed for this menu. Prefers client-set tab by container id, else container :tab-index."
   [menu container]
-  (let [cid (when menu (gui/get-menu-container-id menu))
+  (let [cid (when menu (container-state/get-menu-container-id menu))
         tid (when cid (get-tab-index-by-container-id cid))]
     (if (some? tid)
       (zero? (int tid))
@@ -103,13 +103,13 @@
   [payload player]
   (let [tab-index (int (or (:tab-index payload) 0))
         menu (get-player-menu player)
-        container (or (when menu (gui/get-container-for-menu menu))
-                      (when (and menu (gui/get-menu-container-id menu))
-                        (gui/get-container-by-id (gui/get-menu-container-id menu)))
+        container (or (when menu (container-state/get-container-for-menu menu))
+                      (when (and menu (container-state/get-menu-container-id menu))
+                        (container-state/get-container-by-id (container-state/get-menu-container-id menu)))
                       (when (some? (:container-id payload))
-                        (gui/get-container-by-id (int (:container-id payload))))
-                      (gui/get-player-container-from-active player)
-                      (gui/get-player-container player))]
+                        (container-state/get-container-by-id (int (:container-id payload))))
+                      (container-state/get-player-container-from-active player)
+                      (container-state/get-player-container player))]
     (if (and container (tabbed-container? container))
       (do
         (reset! (:tab-index container) tab-index)

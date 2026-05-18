@@ -105,10 +105,12 @@
   (try
     (let [inv-page (tech-ui/create-inventory-page "phasegen")
           node-icon (modid/asset-path "textures" "guis/icons/icon_node.png")
-          wireless-window (wireless-tab/create-wireless-panel-receiver container
-                            {:tab-logo-path node-icon
-                             :connected-row-logo-path node-icon
-                             :defer-initial-rebuild? true})
+          wireless-window (wireless-tab/create-wireless-panel
+                {:role :receiver
+                 :container container
+                 :tab-logo-path node-icon
+                 :connected-row-logo-path node-icon
+                 :defer-initial-rebuild? true})
           activate-wireless-tab! (wireless-tab/developer-wireless-tab-lazy-activator
                                    wireless-window container node-icon)
           classic-root (dev-panel/load-classic-developer-page)

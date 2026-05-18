@@ -1,13 +1,12 @@
 (ns cn.li.ac.wireless.gui.tab
   "Shared Wireless tab (page_wireless.xml) for all TechUI screens.
 
-  Modes:
+  Roles:
   - :node      -> connect a Wireless Node to a Matrix network (SSID list)
   - :generator -> connect a Generator (SolarGen) to a Wireless Node"
   (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.mcmod.util.log :as log]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.wireless.gui.tab.role-config :as role-config]
             [cn.li.ac.wireless.gui.tab.view :as tab-view]))
@@ -42,7 +41,7 @@
                   (tab-view/set-connected-row-logo! panel connected-row-logo-path))))]
       (rebuild!))))
 
-(defn create-wireless-panel-by-role
+(defn create-wireless-panel
   "Unified wireless panel factory.
 
    opts:
@@ -66,33 +65,9 @@
                               {:connected-row-logo-path connected-row-logo-path}))
     root))
 
-(defn create-wireless-panel-node
-  "Wireless tab for Wireless Node: connect node -> matrix network (SSID list)."
-  [container]
-  (create-wireless-panel-by-role {:role :node :container container}))
-
-(defn create-wireless-panel-generator
-  "Wireless tab for Generator (SolarGen): connect generator -> wireless node."
-  [container]
-  (create-wireless-panel-by-role {:role :generator :container container}))
-
-(defn create-wireless-panel-receiver
-  "Wireless tab for IF receivers: link receiver -> wireless node.
-
-  opts:
-  - :tab-logo-path              top-left tab icon
-  - :connected-row-logo-path    elem_connected row icon
-  - :defer-initial-rebuild?     skip first list fetch until lazy activator runs"
-  [container & [{:keys [tab-logo-path connected-row-logo-path defer-initial-rebuild?]}]]
-  (create-wireless-panel-by-role {:role                     :receiver
-                                  :container                container
-                                  :tab-logo-path            tab-logo-path
-                                  :connected-row-logo-path  connected-row-logo-path
-                                  :defer-initial-rebuild?   defer-initial-rebuild?}))
-
 (defn developer-wireless-tab-lazy-activator
   "Return a zero-arg fn: first call runs install-panel-rebuild! (use with :defer-initial-rebuild?).
-  `main-root` must be the root widget returned by `create-wireless-panel-receiver`."
+  `main-root` must be the root widget returned by `create-wireless-panel` with :role :receiver."
   [main-root container connected-row-logo-path]
   (let [done? (atom false)
         panel (tab-view/wireless-panel-from-main main-root)
@@ -120,24 +95,3 @@
       (install-panel-rebuild! panel payload (:receiver role-config/role-config)
                               {:connected-row-logo-path connected-row-logo-path})
       panel)))
-
-(defn create-wireless-panel
-  "Create shared wireless tab panel.
-
-  opts:
-  - :mode      :node | :generator | :receiver
-  - :container the GUI container (must have :tile-entity)
-  - :receiver-tab-logo-path / :receiver-connected-logo-path — only for :receiver
-  - :receiver-defer-initial-rebuild? — receiver only: skip first list fetch until lazy activator (developer GUI)"
-  [{:keys [mode container receiver-tab-logo-path receiver-connected-logo-path
-           receiver-defer-initial-rebuild?]}]
-  (case mode
-    :generator (create-wireless-panel-generator container)
-    :receiver (create-wireless-panel-receiver container
-                {:tab-logo-path receiver-tab-logo-path
-                 :connected-row-logo-path receiver-connected-logo-path
-                 :defer-initial-rebuild? receiver-defer-initial-rebuild?})
-    :node (create-wireless-panel-node container)
-    (do
-      (log/warn "Unknown wireless-tab mode:" mode ", falling back to :node")
-      (create-wireless-panel-node container))))

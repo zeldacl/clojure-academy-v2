@@ -7,22 +7,10 @@
   - Terminal state queries"
   (:require [cn.li.ac.terminal.player-data :as term-data]
             [cn.li.ac.terminal.app-registry :as app-reg]
+            [cn.li.ac.terminal.messages :as terminal-messages]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]))
-
-;; ============================================================================
-;; Message IDs
-;; ============================================================================
-
-(def msg-ids
-  {:install-terminal 1000
-   :install-app 1001
-   :uninstall-app 1002
-   :get-state 1003})
-
-(defn msg-id [action]
-  (get msg-ids action))
 
 ;; ============================================================================
 ;; Message Handlers
@@ -88,8 +76,8 @@
 (defn register-handlers!
   "Register all terminal network handlers."
   []
-  (net-server/register-handler (msg-id :install-terminal) handle-install-terminal)
-  (net-server/register-handler (msg-id :install-app) handle-install-app)
-  (net-server/register-handler (msg-id :uninstall-app) handle-uninstall-app)
-  (net-server/register-handler (msg-id :get-state) handle-get-state)
+  (net-server/register-handler (terminal-messages/msg-id :install-terminal) handle-install-terminal)
+  (net-server/register-handler (terminal-messages/msg-id :install-app) handle-install-app)
+  (net-server/register-handler (terminal-messages/msg-id :uninstall-app) handle-uninstall-app)
+  (net-server/register-handler (terminal-messages/msg-id :get-state) handle-get-state)
   (log/info "Terminal network handlers registered"))

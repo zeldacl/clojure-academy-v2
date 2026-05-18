@@ -1,19 +1,17 @@
 (ns cn.li.ac.integration.block.energy-converter.gui
-	(:require [cn.li.ac.gui.platform-adapter :as gui]
-	          [cn.li.ac.gui.manifest :as gui-manifest]
+	(:require [cn.li.ac.gui.manifest :as gui-manifest]
 	          [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+						[cn.li.ac.block.gui.sync :as gui-sync]
 						[cn.li.ac.gui.tech-ui-common :as tech-ui]
 						[cn.li.ac.wireless.gui.container.common :as common]
 						[cn.li.ac.wireless.gui.tab :as wireless-tab]
-            [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
 						[cn.li.mcmod.gui.spec :as gui-reg]
-						[cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
 						[cn.li.mcmod.gui.slot-schema :as slot-schema]
 						[cn.li.mcmod.gui.slot-registry :as slot-registry]
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.util.log :as log]
-						[cn.li.ac.integration.block.energy-converter.config :as ec-config]))
+						[cn.li.ac.integration.block.energy-converter.config :as ec-config]
+						[cn.li.ac.integration.block.energy-converter.schema :as ec-schema]))
 
 (def ^:private converter-slot-schema-id :energy-converter)
 (def ^:private converter-gui-type :energy-converter)
@@ -26,19 +24,35 @@
 	[block-id]
 	(if (output-block? block-id) :generator :receiver))
 
+(defn- reset-derived-mode!
+	[container]
+	(let [mode (block-wireless-mode (:block-id container))]
+		(reset! (:wireless-mode container) mode)
+		(reset! (:status container) (if (= mode :generator) "OUTPUT" "INPUT"))))
+
+(defn- apply-derived-mode!
+	[container data]
+	(let [mode (keyword (or (:wireless-mode data) (block-wireless-mode (:block-id container))))]
+		(reset! (:wireless-mode container) mode)
+		(reset! (:status container) (str (:status data (if (= mode :generator) "OUTPUT" "INPUT"))))))
+
+(def ^:private converter-sync
+	(gui-sync/schema-sync-fns ec-schema/energy-converter-gui-schema
+		{:after-sync! reset-derived-mode!
+		 :after-apply! apply-derived-mode!}))
+
 (defn- create-container
 	[tile player]
 	(let [state (or (common/get-tile-state tile) {})
 				block-id (str (platform-be/get-block-id tile))]
-		{:tile-entity tile
-		 :player player
-		 :container-type converter-gui-type
-		 :block-id block-id
-		 :wireless-mode (atom (block-wireless-mode block-id))
-		 :energy (atom (double (get state :energy 0.0)))
-		 :max-energy (atom (double (get state :max-energy ec-config/energy-capacity)))
-		 :wireless-enabled (atom (boolean (get state :wireless-enabled true)))
-		 :status (atom (if (output-block? block-id) "OUTPUT" "INPUT"))}))
+		(gui-sync/create-schema-container ec-schema/energy-converter-gui-schema
+			 tile
+			 player
+			 converter-gui-type
+			 {:state state
+				:base {:block-id block-id
+						 :wireless-mode (atom (block-wireless-mode block-id))
+						 :status (atom (if (output-block? block-id) "OUTPUT" "INPUT"))}})))
 
 (defn- get-slot-count [_container]
 	(slot-registry/get-slot-count converter-slot-schema-id))
@@ -49,46 +63,27 @@
 (defn- can-place-item? [_container _slot-index _item-stack] false)
 (defn- still-valid? [_container _player] true)
 
-(defn- sync-to-client!
-	[container]
-	(let [state (or (common/get-tile-state (:tile-entity container)) {})
-				energy (double (get state :energy 0.0))
-				max-energy (double (get state :max-energy ec-config/energy-capacity))
-				block-id (str (:block-id container))
-				mode (block-wireless-mode block-id)]
-		(reset! (:energy container) energy)
-		(reset! (:max-energy container) max-energy)
-		(reset! (:wireless-enabled container) (boolean (get state :wireless-enabled true)))
-		(reset! (:wireless-mode container) mode)
-		(reset! (:status container) (if (= mode :generator) "OUTPUT" "INPUT"))))
+(def ^:private sync-to-client! (:sync-to-client! converter-sync))
 
 (defn- get-sync-data
 	[container]
-	{:energy @(:energy container)
-	 :max-energy @(:max-energy container)
-	 :wireless-enabled @(:wireless-enabled container)
-	 :status @(:status container)
-	 :wireless-mode @(:wireless-mode container)})
+	(assoc ((:get-sync-data converter-sync) container)
+		:status @(:status container)
+		:wireless-mode @(:wireless-mode container)))
 
-(defn- apply-sync-data!
-	[container data]
-	(reset! (:energy container) (double (:energy data 0.0)))
-	(reset! (:max-energy container) (double (:max-energy data ec-config/energy-capacity)))
-	(reset! (:wireless-enabled container) (boolean (:wireless-enabled data true)))
-	(reset! (:status container) (str (:status data "INPUT")))
-	(reset! (:wireless-mode container) (keyword (:wireless-mode data :receiver))))
+(def ^:private apply-sync-data! (:apply-sync-data! converter-sync))
 
 (defn- tick!
 	[container]
-	(sync-to-client! container))
+	(gui-sync/sync-tick! container sync-to-client!))
 
-(defn- on-close [_container] nil)
+(def ^:private on-close (:on-close converter-sync))
 (defn- handle-button-click! [_container _button-id _player] nil)
 
 (defn- create-wireless-page
 	[container]
 	(wireless-tab/create-wireless-panel
-		{:mode (if (= @(:wireless-mode container) :generator) :generator :receiver)
+		{:role (if (= @(:wireless-mode container) :generator) :generator :receiver)
 		 :container container}))
 
 (defn- create-screen
@@ -97,29 +92,25 @@
 	(let [inv-page (tech-ui/create-inventory-page "inventory")
 				wireless-page {:id "wireless" :window (create-wireless-page container)}
 				pages [inv-page wireless-page]
-				container-id (gui/get-menu-container-id minecraft-container)
-				tech (apply tech-ui/create-tech-ui pages)
-				_ (tabbed-gui/attach-tab-sync! pages tech container container-id)
-				root (:window tech)
-				info-area (tech-ui/create-info-area)
 				max-e (fn [] (max 1.0 (double @(:max-energy container))))
 				ratio (fn [] (/ (double @(:energy container)) (max-e)))
 				mode-s (fn [] (if (= @(:wireless-mode container) :generator) "GEN" "RECV"))
-				enabled-s (fn [] (if @(:wireless-enabled container) "ON" "OFF"))
-				y0 (tech-ui/add-histogram info-area
-						 [(tech-ui/hist-buffer (fn [] (double @(:energy container))) max-e)]
-						 0)
-				y1 (tech-ui/add-sepline info-area "Converter" y0)
-				y2 (tech-ui/add-property info-area "block" (fn [] (str (:block-id container))) y1)
-				y3 (tech-ui/add-property info-area "status" (fn [] @(:status container)) y2)
-				y4 (tech-ui/add-property info-area "wireless" enabled-s y3)
-				_y5 (tech-ui/add-property info-area "load" (fn [] (format "%.1f%%" (* 100.0 (ratio)))) y4)
-				_y6 (tech-ui/add-property info-area "mode" mode-s _y5)
-				_ (cgui-core/set-position! info-area (+ (cgui-core/get-width (:window inv-page)) 7) 5)
-				_ (tech-ui/reset-info-area! info-area)
-				_ (cgui-core/add-widget! root info-area)
-				base (cgui-screen/create-cgui-screen-container root minecraft-container)]
-		(tech-ui/assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current tech)))))
+				enabled-s (fn [] (if @(:wireless-enabled container) "ON" "OFF"))]
+		(tech-ui/create-tech-screen-container
+			{:pages pages
+			 :container container
+			 :minecraft-container minecraft-container
+			 :build-info-area!
+			 (fn [info-area]
+				 (let [y0 (tech-ui/add-histogram info-area
+													 [(tech-ui/hist-buffer (fn [] (double @(:energy container))) max-e)]
+													 0)
+						 y1 (tech-ui/add-sepline info-area "Converter" y0)
+						 y2 (tech-ui/add-property info-area "block" (fn [] (str (:block-id container))) y1)
+						 y3 (tech-ui/add-property info-area "status" (fn [] @(:status container)) y2)
+						 y4 (tech-ui/add-property info-area "wireless" enabled-s y3)
+						 y5 (tech-ui/add-property info-area "load" (fn [] (format "%.1f%%" (* 100.0 (ratio)))) y4)]
+					 (tech-ui/add-property info-area "mode" mode-s y5)))})))
 
 (defn- converter-container?
 	[container]

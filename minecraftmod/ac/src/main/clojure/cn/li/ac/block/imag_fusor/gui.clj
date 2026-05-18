@@ -1,17 +1,12 @@
 (ns cn.li.ac.block.imag-fusor.gui
   "CLIENT-ONLY: Imaginary Fusor GUI"
   (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
-            [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
-            [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.ac.gui.manifest :as gui-manifest]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
-            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
@@ -93,41 +88,36 @@
 
 (defn create-screen
   [container minecraft-container _player]
-  (let [doc (cgui-doc/read-xml (modid/namespaced-path "guis/rework/page_imagfusor.xml"))
-        inv-window (cgui-doc/get-widget doc "main")
-        wireless-window (wireless-tab/create-wireless-panel {:mode :receiver :container container})
-        inv-page {:id "inv" :window inv-window}
+  (let [inv-page (tech-ui/create-rework-page "guis/rework/page_imagfusor.xml")
+        inv-window (:window inv-page)
+        wireless-window (wireless-tab/create-wireless-panel {:role :receiver :container container})
         wireless-page {:id "wireless" :window wireless-window}
         pages [inv-page wireless-page]
-        container-id (gui/get-menu-container-id minecraft-container)
-        tech (apply tech-ui/create-tech-ui pages)
-        _ (tabbed-gui/attach-tab-sync! pages tech container container-id)
-        root (:window tech)
-        info-area (tech-ui/create-info-area)
         max-e (fn [] (max 1.0 (double (or @(:max-energy container) cfg/max-energy))))
-        max-liquid (fn [] (max 1.0 (double (or @(:tank-size container) cfg/tank-size))))
-        _ (bind-progress! inv-window container)
-        _ (bind-requirement-text! inv-window container)
-        _ (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
-        _ (tech-ui/reset-info-area! info-area)
-        y0 (tech-ui/add-histogram
-             info-area
-             [(tech-ui/hist-buffer (fn [] (double (or @(:energy container) 0.0)) ) max-e)
-              {:label "Liquid"
-               :color 0xFF8A7DFF
-               :value-fn (fn [] (/ (double (or @(:liquid-amount container) 0)) (max-liquid)))
-               :desc-fn (fn [] (str (int (or @(:liquid-amount container) 0)) " mB"))}]
-             0)
-        y1 (tech-ui/add-sepline info-area "Imag Fusor" y0)
-        _y2 (tech-ui/add-property info-area "required_liquid"
+        max-liquid (fn [] (max 1.0 (double (or @(:tank-size container) cfg/tank-size))))]
+    (tech-ui/create-tech-screen-container
+      {:pages pages
+       :container container
+       :minecraft-container minecraft-container
+       :bind! (fn [_]
+                (bind-progress! inv-window container)
+                (bind-requirement-text! inv-window container))
+       :build-info-area!
+       (fn [info-area]
+         (let [y0 (tech-ui/add-histogram
+                    info-area
+                    [(tech-ui/hist-buffer (fn [] (double (or @(:energy container) 0.0))) max-e)
+                     {:label "Liquid"
+                      :color 0xFF8A7DFF
+                      :value-fn (fn [] (/ (double (or @(:liquid-amount container) 0)) (max-liquid)))
+                      :desc-fn (fn [] (str (int (or @(:liquid-amount container) 0)) " mB"))}]
+                    0)
+               y1 (tech-ui/add-sepline info-area "Imag Fusor" y0)]
+           (tech-ui/add-property info-area "required_liquid"
                                   (fn []
                                     (let [req (int (or @(:current-recipe-liquid container) 0))]
                                       (if (pos? req) (str req) "IDLE")))
-                                  y1)]
-    (cgui-core/add-widget! root info-area)
-    (tech-ui/assoc-tech-ui-screen-size
-      (assoc (cgui-screen/create-cgui-screen-container root minecraft-container)
-             :current-tab-atom (:current tech)))))
+                                  y1)))})))
 
 (defn- fusor-container?
   [container]

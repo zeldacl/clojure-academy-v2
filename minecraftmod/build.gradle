@@ -460,7 +460,14 @@ tasks.register('verifyDeletedCompatibilityResidues') {
             file('mc-1.20.1/src/main/clojure/cn/li/mc1201/runtime/spi_contracts.clj'),
             file('ac/src/main/clojure/cn/li/ac/block/gui/registration.clj'),
             file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter/metadata_api.clj'),
-            file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter/registry_api.clj')
+            file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter/registry_api.clj'),
+            file('ac/src/main/clojure/cn/li/ac/wireless/gui/protocol.clj'),
+            file('ac/src/main/clojure/cn/li/ac/wireless/gui/state/sync.clj'),
+            file('ac/src/main/clojure/cn/li/ac/wireless/gui/events/bus.clj'),
+            file('ac/src/main/clojure/cn/li/ac/wireless/gui/events/handlers.clj'),
+            file('ac/src/main/clojure/cn/li/ac/wireless/gui/component/tabs.clj'),
+            file('ac/src/main/clojure/cn/li/ac/testing/fixtures.clj'),
+            file('ac/src/main/clojure/cn/li/ac/testing/mocks.clj')
         ]
         def violations = []
         deletedFiles.each { File f ->
@@ -1044,6 +1051,102 @@ tasks.register('verifyGuiNamespaceLayout') {
     }
 }
 
+tasks.register('verifyGuiRegistrySpiSsoT') {
+    group = 'verification'
+    description = 'Verify GUI MenuType lookup uses mc1201 runtime SPI and mcmod metadata does not own platform MenuTypes.'
+
+    doLast {
+        def violations = []
+        def files = [
+            registryCore: file('mcmod/src/main/clojure/cn/li/mcmod/gui/registry_core.clj'),
+            dsl: file('mcmod/src/main/clojure/cn/li/mcmod/gui/dsl.clj'),
+            metadata: file('mcmod/src/main/clojure/cn/li/mcmod/gui/metadata.clj'),
+            providerDispatcher: file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/provider/dispatcher.clj'),
+            screenRegistry: file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/screen/registry.clj'),
+            acPlatformAdapter: file('ac/src/main/clojure/cn/li/ac/gui/platform_adapter.clj'),
+            forgeRegistry: file('forge-1.20.1/src/main/clojure/cn/li/forge1201/adapter/gui_registry.clj'),
+            fabricRegistry: file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/adapter/gui_registry.clj')
+        ]
+
+        files.each { name, File f ->
+            if (!f.exists()) {
+                violations << "Required GUI SPI file missing (${name}): ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
+            }
+        }
+
+        if (files.registryCore.exists()) {
+            def text = files.registryCore.getText('UTF-8')
+            ['requiring-resolve', ':reload', 'metadata-call', 'resolve-var', '(defn get-menu-type', '(defn register-menu-type!'].each { token ->
+                if (text.contains(token)) {
+                    violations << "mcmod.gui.registry-core must stay a thin facade without dynamic metadata/MenuType SPI residue: ${token}"
+                }
+            }
+        }
+
+        if (files.metadata.exists()) {
+            def text = files.metadata.getText('UTF-8')
+            ['platform-menu-types', '(defn register-menu-type!', '(defn get-menu-type', 'unregister-menu-types!'].each { token ->
+                if (text.contains(token)) {
+                    violations << "mcmod.gui.metadata must not own platform MenuType state: ${token}"
+                }
+            }
+        }
+
+        if (files.dsl.exists()) {
+            def text = files.dsl.getText('UTF-8')
+            ['requiring-resolve', 'defgui-with-lazy-fns', 'defgui-from-xml'].each { token ->
+                if (text.contains(token)) {
+                    violations << "mcmod.gui.dsl must not reintroduce dynamic GUI wrapper macros: ${token}"
+                }
+            }
+        }
+
+        [files.providerDispatcher, files.screenRegistry].each { File f ->
+            if (f.exists()) {
+                def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+                def text = f.getText('UTF-8')
+                if (!text.contains('cn.li.mc1201.runtime.spi.gui-registry')) {
+                    violations << "${rel}: shared GUI flow must require mc1201 runtime GUI registry SPI"
+                }
+                if (!text.contains('registry-api/get-menu-type')) {
+                    violations << "${rel}: MenuType lookup must use registry-api/get-menu-type"
+                }
+                if (text.contains('gui/get-menu-type')) {
+                    violations << "${rel}: shared GUI flow must not read MenuType through mcmod registry-core"
+                }
+            }
+        }
+
+        if (files.acPlatformAdapter.exists()) {
+            def text = files.acPlatformAdapter.getText('UTF-8')
+            ['metadata/get-menu-type', 'metadata/register-menu-type!', ':register-menu-type!', ':get-menu-type'].each { token ->
+                if (text.contains(token)) {
+                    violations << "ac.gui.platform-adapter must not install or re-export platform MenuType callbacks: ${token}"
+                }
+            }
+        }
+
+        [files.forgeRegistry, files.fabricRegistry].each { File f ->
+            if (f.exists()) {
+                def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+                def text = f.getText('UTF-8')
+                if (!text.contains('registry-api/register-registry-impl!')) {
+                    violations << "${rel}: platform GUI registry must install mc1201 runtime GUI registry SPI"
+                }
+                if (text.contains('gui/register-menu-type!')) {
+                    violations << "${rel}: platform registry must not mirror MenuType into mcmod registry-core"
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("GUI registry SPI SSoT guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyGuiRegistrySpiSsoT] passed. GUI MenuType ownership is isolated to platform registries behind mc1201 runtime SPI.')
+    }
+}
+
 tasks.register('verifyEntityHookRegistrySpecs') {
     group = 'verification'
     description = 'Verify scripted entity hook registration uses one data-driven specs entrypoint.'
@@ -1158,11 +1261,15 @@ tasks.register('verifyAcBlockGuiSyncHelpers') {
         }
         def schemaBackedGuis = [
             'ac/src/main/clojure/cn/li/ac/block/developer/gui.clj',
+            'ac/src/main/clojure/cn/li/ac/block/ability_interferer/gui.clj',
             'ac/src/main/clojure/cn/li/ac/block/imag_fusor/gui.clj',
+            'ac/src/main/clojure/cn/li/ac/block/metal_former/gui.clj',
             'ac/src/main/clojure/cn/li/ac/block/phase_gen/gui.clj',
             'ac/src/main/clojure/cn/li/ac/block/solar_gen/gui.clj',
+            'ac/src/main/clojure/cn/li/ac/block/wind_gen/gui.clj',
             'ac/src/main/clojure/cn/li/ac/block/wireless_node/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/block/wireless_matrix/gui.clj'
+            'ac/src/main/clojure/cn/li/ac/block/wireless_matrix/gui.clj',
+            'ac/src/main/clojure/cn/li/ac/integration/block/energy_converter/gui.clj'
         ]
         schemaBackedGuis.each { path ->
             def f = file(path)
@@ -1189,31 +1296,453 @@ tasks.register('verifyAcBlockGuiSyncHelpers') {
                 }
             }
         }
-        def manualSyncGuis = [
-            'ac/src/main/clojure/cn/li/ac/block/metal_former/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/block/ability_interferer/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/block/wind_gen/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/integration/block/energy_converter/gui.clj'
-        ]
-        manualSyncGuis.each { path ->
-            def f = file(path)
-            if (!f.exists()) {
-                violations << "Manual-sync GUI missing: ${path}"
-            } else {
-                def text = f.getText('UTF-8')
-                if (!text.contains('cn.li.mcmod.gui.spec')) {
-                    violations << "${path}: must require cn.li.mcmod.gui.spec"
-                }
-                if (text.contains('gui-dsl/create-gui-spec')) {
-                    violations << "${path}: direct create-gui-spec call should use mcmod.gui.spec"
-                }
-            }
-        }
         if (!violations.isEmpty()) {
             throw new GradleException("AC block GUI sync helper guard failed:\n - ${violations.join('\n - ')}")
         }
 
         logger.lifecycle('[verifyAcBlockGuiSyncHelpers] passed. AC block GUIs use shared sync helpers and mcmod GUI spec builders where applicable.')
+    }
+}
+
+tasks.register('verifyTechUiScreenBuilder') {
+    group = 'verification'
+    description = 'Verify simple AC TechUI block screens use the shared screen builder instead of local assembly templates.'
+
+    doLast {
+        def violations = []
+        def common = file('ac/src/main/clojure/cn/li/ac/gui/tech_ui_common.clj')
+        if (!common.exists()) {
+            violations << 'Required TechUI common namespace missing: cn.li.ac.gui.tech-ui-common'
+        } else {
+            def text = common.getText('UTF-8')
+            ['defn create-rework-page', 'defn assemble-tech-ui-root', 'defn create-tech-screen-container'].each { token ->
+                if (!text.contains(token)) {
+                    violations << "tech-ui-common missing shared screen builder token: ${token}"
+                }
+            }
+        }
+
+        def simpleTechUiGuis = [
+            'ac/src/main/clojure/cn/li/ac/block/ability_interferer/gui.clj',
+            'ac/src/main/clojure/cn/li/ac/block/imag_fusor/gui.clj',
+            'ac/src/main/clojure/cn/li/ac/block/metal_former/gui.clj',
+            'ac/src/main/clojure/cn/li/ac/block/phase_gen/gui.clj',
+            'ac/src/main/clojure/cn/li/ac/block/solar_gen/gui.clj',
+            'ac/src/main/clojure/cn/li/ac/block/wind_gen/gui.clj',
+            'ac/src/main/clojure/cn/li/ac/integration/block/energy_converter/gui.clj'
+        ]
+        def forbiddenTokens = [
+            'cn.li.mcmod.gui.xml-parser',
+            'cgui-doc/read-xml',
+            'cn.li.mcmod.gui.tabbed-gui',
+            'tabbed-gui/attach-tab-sync!',
+            'cn.li.ac.gui.platform-adapter',
+            'gui/get-menu-container-id',
+            'cn.li.mcmod.gui.cgui-screen',
+            'cgui-screen/create-cgui-screen-container'
+        ]
+        simpleTechUiGuis.each { path ->
+            def f = file(path)
+            if (!f.exists()) {
+                violations << "Simple TechUI GUI missing: ${path}"
+            } else {
+                def text = f.getText('UTF-8')
+                if (!text.contains('cn.li.ac.gui.tech-ui-common')) {
+                    violations << "${path}: must require cn.li.ac.gui.tech-ui-common"
+                }
+                if (!(text.contains('tech-ui/create-tech-screen-container') ||
+                      text.contains('tech-ui/assemble-tech-ui-root') ||
+                      text.contains('tech-ui/create-tech-screen-from-root'))) {
+                    violations << "${path}: must use the shared TechUI screen builder"
+                }
+                forbiddenTokens.each { token ->
+                    if (text.contains(token)) {
+                        violations << "${path}: direct TechUI screen assembly is forbidden: ${token}"
+                    }
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException("TechUI screen builder guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyTechUiScreenBuilder] passed. Simple TechUI block screens use the shared builder.')
+    }
+}
+
+tasks.register('verifyWirelessGuiTabApi') {
+    group = 'verification'
+    description = 'Verify wireless GUI tabs use the role-based API and deleted experimental namespaces stay absent.'
+
+    doLast {
+        def violations = []
+        def tabApi = file('ac/src/main/clojure/cn/li/ac/wireless/gui/tab.clj')
+        if (!tabApi.exists()) {
+            violations << 'Required wireless tab API missing: cn.li.ac.wireless.gui.tab'
+        } else {
+            def text = tabApi.getText('UTF-8')
+            ['defn create-wireless-panel-by-role',
+             'defn create-wireless-panel-node',
+             'defn create-wireless-panel-generator',
+             'defn create-wireless-panel-receiver',
+             'Unknown wireless-tab mode',
+             ':receiver-tab-logo-path',
+             ':receiver-connected-logo-path',
+             ':receiver-defer-initial-rebuild?'].each { token ->
+                if (text.contains(token)) {
+                    violations << "ac/src/main/clojure/cn/li/ac/wireless/gui/tab.clj: removed mode/wrapper API token returned: ${token}"
+                }
+            }
+            if (!text.contains(':role                  :node | :generator | :receiver')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/wireless/gui/tab.clj: create-wireless-panel must document the required :role option'
+            }
+        }
+
+        def deletedWirelessNamespaces = [
+            'cn.li.ac.wireless.gui.protocol',
+            'cn.li.ac.wireless.gui.state.sync',
+            'cn.li.ac.wireless.gui.events.bus',
+            'cn.li.ac.wireless.gui.events.handlers',
+            'cn.li.ac.wireless.gui.component.tabs',
+            'cn.li.ac.testing'
+        ]
+        fileTree('ac/src/main/clojure') {
+            include '**/*.clj'
+            exclude '**/wireless/gui/tab.clj'
+        }.files.each { File f ->
+            def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            def text = f.getText('UTF-8')
+            deletedWirelessNamespaces.each { ns ->
+                if (text.contains(ns)) {
+                    violations << "${rel}: deleted/unwired namespace reference returned: ${ns}"
+                }
+            }
+            if ((text =~ /wireless-tab\/create-wireless-panel\s*\{[\s\S]{0,240}:mode\b/).find()) {
+                violations << "${rel}: wireless-tab/create-wireless-panel must use :role, not :mode"
+            }
+            if (text.contains('wireless-tab/create-wireless-panel-receiver') ||
+                text.contains('wireless-tab/create-wireless-panel-generator') ||
+                text.contains('wireless-tab/create-wireless-panel-node')) {
+                violations << "${rel}: wireless tab wrapper API call returned; use create-wireless-panel with :role"
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Wireless GUI tab API guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyWirelessGuiTabApi] passed. Wireless tabs use role-based API and deleted experimental namespaces stay absent.')
+    }
+}
+
+tasks.register('verifyTerminalMessageIdsStatic') {
+    group = 'verification'
+    description = 'Verify terminal client/server message ids are shared through terminal.messages without GUI-side dynamic network resolution.'
+
+    doLast {
+        def violations = []
+        def messages = file('ac/src/main/clojure/cn/li/ac/terminal/messages.clj')
+        if (!messages.exists()) {
+            violations << 'Required terminal message catalog missing: cn.li.ac.terminal.messages'
+        } else {
+            def text = messages.getText('UTF-8')
+            [':install-terminal', ':install-app', ':uninstall-app', ':get-state'].each { action ->
+                if (!text.contains(action)) {
+                    violations << "ac/src/main/clojure/cn/li/ac/terminal/messages.clj: missing ${action}"
+                }
+            }
+        }
+
+        def terminalGui = file('ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj')
+        if (terminalGui.exists()) {
+            def text = terminalGui.getText('UTF-8')
+            ['cn.li.ac.terminal.network/msg-id',
+             'terminal.network/msg-id',
+             '(requiring-resolve'].each { token ->
+                if (text.contains(token)) {
+                    violations << "ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj: GUI must use cn.li.ac.terminal.messages, not dynamic network message resolution: ${token}"
+                }
+            }
+            if (!text.contains('cn.li.ac.terminal.messages')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj: must require cn.li.ac.terminal.messages'
+            }
+        }
+
+        def terminalNetwork = file('ac/src/main/clojure/cn/li/ac/terminal/network.clj')
+        if (terminalNetwork.exists()) {
+            def text = terminalNetwork.getText('UTF-8')
+            if (text.contains('(def msg-ids') || text.contains('(defn msg-id')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/network.clj: message ids must live in cn.li.ac.terminal.messages'
+            }
+            if (!text.contains('cn.li.ac.terminal.messages')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/network.clj: must require cn.li.ac.terminal.messages'
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Terminal message id guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyTerminalMessageIdsStatic] passed. Terminal message ids are shared through terminal.messages.')
+    }
+}
+
+tasks.register('verifyTerminalBridgeInitOrchestration') {
+    group = 'verification'
+    description = 'Verify terminal GUI widget hooks are installed from AC client init and consumed by the platform screen bridge.'
+
+    doLast {
+        def violations = []
+        def acCore = file('ac/src/main/clojure/cn/li/ac/core.clj')
+        def acBridge = file('ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj')
+        def terminalGui = file('ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj')
+        def mcmodBridge = file('mcmod/src/main/clojure/cn/li/mcmod/platform/terminal_ui.clj')
+        def forgeBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/terminal_screen_bridge.clj')
+
+        [acCore, acBridge, terminalGui, mcmodBridge, forgeBridge].each { f ->
+            if (!f.exists()) {
+                violations << "Required terminal bridge file missing: ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
+            }
+        }
+
+        if (acCore.exists()) {
+            def text = acCore.getText('UTF-8')
+            if (!text.contains('cn.li.ac.terminal.platform-bridge/install-terminal-ui-hooks!')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/core.clj: client init must install terminal UI hooks'
+            }
+            if (!text.contains('hooks/load-all-client-renderers!')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/core.clj: client init must still load registered client renderers'
+            }
+        }
+        if (acBridge.exists()) {
+            def text = acBridge.getText('UTF-8')
+            if (!text.contains('terminal-ui/register-terminal-ui-hooks!')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj: must register terminal UI hooks'
+            }
+            if (!text.contains('terminal-gui/create-terminal-gui')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj: must delegate widget creation to terminal-gui'
+            }
+        }
+        if (terminalGui.exists()) {
+            def text = terminalGui.getText('UTF-8')
+            if (!text.contains('client-bridge/open-terminal-screen!')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj: must open terminal through mcmod client bridge'
+            }
+            if (text.contains('cn.li.mcmod.platform.terminal-ui')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj: must not depend on terminal-ui hook storage directly'
+            }
+        }
+        if (mcmodBridge.exists()) {
+            def text = mcmodBridge.getText('UTF-8')
+            if (!text.contains('defn register-terminal-ui-hooks!') || !text.contains('defn create-terminal-gui')) {
+                violations << 'mcmod/src/main/clojure/cn/li/mcmod/platform/terminal_ui.clj: must expose terminal UI hook registration and lookup'
+            }
+            if (text.contains('cn.li.ac.')) {
+                violations << 'mcmod terminal UI bridge must stay platform-neutral and AC-free'
+            }
+        }
+        if (forgeBridge.exists()) {
+            def text = forgeBridge.getText('UTF-8')
+            if (!text.contains('terminal-ui/create-terminal-gui')) {
+                violations << 'forge terminal screen bridge must obtain the terminal widget through terminal-ui/create-terminal-gui'
+            }
+            if (text.contains('cn.li.ac.')) {
+                violations << 'forge terminal screen bridge must not import AC terminal internals directly'
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Terminal bridge initialization guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyTerminalBridgeInitOrchestration] passed. Terminal widget hooks are installed by AC client init and consumed by the platform bridge.')
+    }
+}
+
+tasks.register('verifyCguiRuntimeShimBoundaries') {
+    group = 'verification'
+    description = 'Verify Java CGui shims stay thin and the shared CGui runtime ownership is documented.'
+
+    doLast {
+        def violations = []
+        def requiredFiles = [
+            'mc-1.20.1/src/main/java/cn/li/mc1201/gui/CMenuBridge.java',
+            'mc-1.20.1/src/main/java/cn/li/mc1201/gui/CGuiContainerScreen.java',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/runtime.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/renderer.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/input.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/traversal.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/assets.clj'
+        ]
+        requiredFiles.each { path ->
+            if (!file(path).exists()) {
+                violations << "Required CGui runtime/shim file missing: ${path}"
+            }
+        }
+
+        ['mc-1.20.1/src/main/java/cn/li/mc1201/gui/CMenuBridge.java',
+         'mc-1.20.1/src/main/java/cn/li/mc1201/gui/CGuiContainerScreen.java'].each { path ->
+            def f = file(path)
+            if (f.exists()) {
+                def text = f.getText('UTF-8')
+                ['cn.li.ac.', 'net.minecraftforge.', 'net.fabricmc.'].each { forbidden ->
+                    if (text.contains(forbidden)) {
+                        violations << "${path}: Java CGui shim must stay shared and must not import ${forbidden}"
+                    }
+                }
+            }
+        }
+
+        def forgeTerminalBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/terminal_screen_bridge.clj')
+        if (forgeTerminalBridge.exists()) {
+            def text = forgeTerminalBridge.getText('UTF-8')
+            ['defn- create-cgui-screen', 'cgui-rt/frame-tick!', 'cgui-rt/render-tree!', 'cgui-rt/mouse-click!', 'cgui-rt/dispose!'].each { token ->
+                if (!text.contains(token)) {
+                    violations << "forge-1.20.1/src/main/clojure/cn/li/forge1201/client/terminal_screen_bridge.clj: simple screens must use the shared CGui host/runtime token ${token}"
+                }
+            }
+        }
+
+        def guiDoc = file('docs/06-gui/GUI_Architecture_Refactoring.md')
+        if (!guiDoc.exists()) {
+            violations << 'docs/06-gui/GUI_Architecture_Refactoring.md: missing Java shim/CGui runtime documentation'
+        } else {
+            def text = guiDoc.getText('UTF-8')
+            ['CMenuBridge', 'CGuiContainerScreen', 'mc1201.gui.cgui.runtime', 'renderer', 'input', 'traversal', 'assets'].each { token ->
+                if (!text.contains(token)) {
+                    violations << "docs/06-gui/GUI_Architecture_Refactoring.md: missing Java shim/CGui runtime ownership token ${token}"
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("CGui runtime shim boundary guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyCguiRuntimeShimBoundaries] passed. Java CGui shims stay thin and runtime ownership is documented.')
+    }
+}
+
+tasks.register('verifyPlatformGuiProviderThinAdapters') {
+    group = 'verification'
+    description = 'Verify Forge/Fabric GUI providers stay thin and use shared dispatcher/menu proxy defaults.'
+
+    doLast {
+        def violations = []
+        def sharedProxy = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu/proxy.clj')
+        if (!sharedProxy.exists()) {
+            violations << 'Required shared menu proxy missing: cn.li.mc1201.gui.menu.proxy'
+        } else {
+            def text = sharedProxy.getText('UTF-8')
+            ['defn platform-menu-proxy-opts', 'defn create-platform-menu-proxy'].each { token ->
+                if (!text.contains(token)) {
+                    violations << "mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu/proxy.clj: missing ${token}"
+                }
+            }
+        }
+
+        def providerFiles = [
+            'forge-1.20.1/src/main/clojure/cn/li/forge1201/gui/provider_bridge.clj': ':forge-1.20.1',
+            'fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/provider_bridge.clj': ':fabric-1.20.1'
+        ]
+        providerFiles.each { path, platformKey ->
+            def f = file(path)
+            if (!f.exists()) {
+                violations << "Platform provider bridge missing: ${path}"
+            } else {
+                def text = f.getText('UTF-8')
+                if (!text.contains('provider-dispatcher/create-menu-from-provider!')) {
+                    violations << "${path}: must delegate provider menu creation to shared dispatcher"
+                }
+                if (!text.contains('menu-proxy/create-platform-menu-proxy') || !text.contains(platformKey)) {
+                    violations << "${path}: must use shared platform menu proxy defaults for ${platformKey}"
+                }
+                if (text.contains(':quick-move-error-prefix') || text.contains(':remove-log-message')) {
+                    violations << "${path}: must not duplicate menu proxy option templates"
+                }
+            }
+        }
+
+        def registryFiles = [
+            'forge-1.20.1/src/main/clojure/cn/li/forge1201/adapter/gui_registry.clj': ':forge-1.20.1',
+            'fabric-1.20.1/src/main/clojure/cn/li/fabric1201/adapter/gui_registry.clj': ':fabric-1.20.1'
+        ]
+        registryFiles.each { path, platformKey ->
+            def f = file(path)
+            if (!f.exists()) {
+                violations << "Platform GUI registry adapter missing: ${path}"
+            } else {
+                def text = f.getText('UTF-8')
+                if (!text.contains('menu-proxy/platform-menu-proxy-opts') || !text.contains(platformKey)) {
+                    violations << "${path}: client menu registry must use shared bridge opts for ${platformKey}"
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Platform GUI provider thinning guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyPlatformGuiProviderThinAdapters] passed. Platform GUI providers use shared dispatcher and menu proxy defaults.')
+    }
+}
+
+tasks.register('verifyGuiXmlResourcesSync') {
+    group = 'verification'
+    description = 'Verify GUI XML resources referenced from AC code exist and all shipped GUI XML parses cleanly.'
+
+    doLast {
+        def violations = []
+        def resourceRoot = file('ac/src/main/resources')
+        def guiRoot = file('ac/src/main/resources/assets/my_mod/guis')
+        if (!guiRoot.exists()) {
+            violations << 'GUI XML resource root missing: ac/src/main/resources/assets/my_mod/guis'
+        }
+
+        def xmlFiles = fileTree(guiRoot) { include '**/*.xml' }.files.sort { it.path }
+        if (xmlFiles.size() < 24) {
+            violations << "Expected at least 24 GUI XML resources, found ${xmlFiles.size()}"
+        }
+
+        def parser = new XmlParser(false, false)
+        xmlFiles.each { File f ->
+            def rel = resourceRoot.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            def text = f.getText('UTF-8')
+            if (text.contains('cn.lambdalib2')) {
+                violations << "${rel}: old LambdaLib widget/class reference returned"
+            }
+            try {
+                parser.parse(f)
+            } catch (Throwable t) {
+                violations << "${rel}: XML parse failed: ${t.message}"
+            }
+        }
+
+        def referenced = [] as Set
+        fileTree('ac/src/main/clojure') { include '**/*.clj' }.files.each { File f ->
+            def text = f.getText('UTF-8')
+            (text =~ /"assets\/my_mod\/guis\/([^"]+\.xml)"/).each { m ->
+                referenced << "assets/my_mod/guis/${m[1]}"
+            }
+            (text =~ /modid\/namespaced-path\s+"guis\/([^"]+\.xml)"/).each { m ->
+                referenced << "assets/my_mod/guis/${m[1]}"
+            }
+            (text =~ /modid\/asset-path\s+"guis"\s+"([^"]+\.xml)"/).each { m ->
+                referenced << "assets/my_mod/guis/${m[1]}"
+            }
+        }
+
+        referenced.sort().each { rel ->
+            if (!file("ac/src/main/resources/${rel}").exists()) {
+                violations << "AC code references missing GUI XML resource: ${rel}"
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("GUI XML resource sync guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle("[verifyGuiXmlResourcesSync] passed. ${xmlFiles.size()} GUI XML resources parse and referenced resources exist.")
     }
 }
 
@@ -1413,7 +1942,7 @@ tasks.register('verifyLoaderEntrypointNames') {
 tasks.register('verifyCleanupResidueGuards') {
     group = 'verification'
     description = 'Run cleanup-residue guard checks for SSOT regressions.'
-    dependsOn 'verifyAcPlayerUuidSsoT', 'verifyGameplayConfigContractSsoT', 'verifyMcmodNoAcSpecificBootstrap', 'verifyRuntimeEventNoThinItemAdapter', 'verifyPlatformEventsNoRuntimeBusinessState', 'verifyAcGuiMessageManifestSsoT', 'verifyAcGuiRegistrationManifestSsoT', 'verifyGuiNetworkTransportBoundaries', 'verifyGuiNamespaceLayout', 'verifyEntityHookRegistrySpecs', 'verifyBlockDslNoRuntimeEvents', 'verifyAcBlockGuiSyncHelpers', 'verifyAbilityFxBeamOpsHelper', 'verifyDatagenProviderFactoryAdapters', 'verifyTransientBuildArtifactsIgnored', 'verifyLoaderEntrypointNames', 'verifyPlatformNoAcSourceInjection', 'verifyDeletedCompatibilityResidues'
+    dependsOn 'verifyAcPlayerUuidSsoT', 'verifyGameplayConfigContractSsoT', 'verifyMcmodNoAcSpecificBootstrap', 'verifyRuntimeEventNoThinItemAdapter', 'verifyPlatformEventsNoRuntimeBusinessState', 'verifyAcGuiMessageManifestSsoT', 'verifyAcGuiRegistrationManifestSsoT', 'verifyGuiNetworkTransportBoundaries', 'verifyGuiNamespaceLayout', 'verifyGuiRegistrySpiSsoT', 'verifyEntityHookRegistrySpecs', 'verifyBlockDslNoRuntimeEvents', 'verifyAcBlockGuiSyncHelpers', 'verifyTechUiScreenBuilder', 'verifyWirelessGuiTabApi', 'verifyTerminalMessageIdsStatic', 'verifyTerminalBridgeInitOrchestration', 'verifyCguiRuntimeShimBoundaries', 'verifyPlatformGuiProviderThinAdapters', 'verifyGuiXmlResourcesSync', 'verifyAbilityFxBeamOpsHelper', 'verifyDatagenProviderFactoryAdapters', 'verifyTransientBuildArtifactsIgnored', 'verifyLoaderEntrypointNames', 'verifyPlatformNoAcSourceInjection', 'verifyDeletedCompatibilityResidues'
 }
 
 tasks.register('runFabricSmoke') {

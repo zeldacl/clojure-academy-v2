@@ -17,6 +17,7 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.terminal.messages :as terminal-messages]
             [cn.li.ac.terminal.app-registry :as app-reg]))
 
 ;; ============================================================================
@@ -33,15 +34,11 @@
 ;; Network Communication
 ;; ============================================================================
 
-(defn- msg-id [action]
-  (let [msg-id-fn (requiring-resolve 'cn.li.ac.terminal.network/msg-id)]
-    (msg-id-fn action)))
-
 (defn query-terminal-state!
   "Query terminal state from server."
   [callback]
   (net-client/send-to-server
-    (msg-id :get-state)
+    (terminal-messages/msg-id :get-state)
     {}
     (fn [response]
       (swap! terminal-state merge
@@ -55,7 +52,7 @@
   [callback]
   (swap! terminal-state assoc :loading? true)
   (net-client/send-to-server
-    (msg-id :install-terminal)
+    (terminal-messages/msg-id :install-terminal)
     {}
     (fn [response]
       (swap! terminal-state assoc :loading? false)
@@ -68,7 +65,7 @@
   [app-id callback]
   (swap! terminal-state assoc :loading? true)
   (net-client/send-to-server
-    (msg-id :install-app)
+    (terminal-messages/msg-id :install-app)
     {:app-id (name app-id)}
     (fn [response]
       (swap! terminal-state assoc :loading? false)
@@ -80,7 +77,7 @@
   "Send app uninstallation request to server."
   [app-id callback]
   (net-client/send-to-server
-    (msg-id :uninstall-app)
+    (terminal-messages/msg-id :uninstall-app)
     {:app-id (name app-id)}
     (fn [response]
       (when (:success response)

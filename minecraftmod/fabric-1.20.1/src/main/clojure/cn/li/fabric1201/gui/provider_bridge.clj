@@ -15,16 +15,12 @@
   ([window-id menu-type clj-container]
   (create-menu-proxy window-id menu-type clj-container nil))
   ([window-id menu-type clj-container opts]
-  (menu-proxy/create-menu-proxy
+  (menu-proxy/create-platform-menu-proxy
+    :fabric-1.20.1
     window-id
     menu-type
     clj-container
-    (merge {:get-slot-layout gui/get-slot-layout
-            :default-player-inventory-mode :full
-            :call-super-removed? true
-            :remove-log-message "Fabric menu closed for player"
-            :quick-move-error-prefix "Error in Fabric quickMoveStack:"}
-           opts))))
+    opts)))
 
 (defn create-menu-provider [gui-id tile-entity]
   (reify MenuProvider

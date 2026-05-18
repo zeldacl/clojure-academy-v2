@@ -8,10 +8,13 @@
   - Histogram元素构建器"
   (:require [clojure.string :as str]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
+            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.ac.config.modid :as modid]))
 
 ;; ============================================================================
@@ -30,6 +33,8 @@
   "Merge TechUI size deltas into a cgui-screen-container map. Call when create-screen returns a TechUI layout so the platform layer gets :size-dx/:size-dy without repeating constants."
   [m]
   (assoc m :size-dx tech-ui-size-dx :size-dy tech-ui-size-dy))
+
+(declare create-tech-ui create-info-area reset-info-area!)
 
 ;; ============================================================================
 ;; InventoryPage - 共享库存页面
@@ -65,6 +70,82 @@
       (log/error "Error creating inventory page:"(ex-message e))
       (log/error "Stack trace:" (.printStackTrace e))
       {:id "inv" :window (cgui-core/create-container :pos [0 0] :size [gui-width gui-height])})))
+
+(defn create-rework-page
+  "Create a TechUI page from an XML resource under assets/my_mod/guis/rework."
+  ([resource-path]
+   (create-rework-page "inv" resource-path))
+  ([page-id resource-path]
+   (let [doc (cgui-doc/read-xml (if (str/starts-with? resource-path "assets/")
+                                  resource-path
+                                  (modid/namespaced-path resource-path)))
+         window (cgui-doc/get-widget doc "main")]
+     {:id page-id :window window})))
+
+(defn- page-window-by-id
+  [pages page-id]
+  (some (fn [page]
+          (when (= (:id page) page-id)
+            (:window page)))
+        pages))
+
+(defn assemble-tech-ui-root
+  "Assemble common TechUI tabs, tab sync, optional bindings and InfoArea.
+
+  Options:
+  - :pages vector of {:id string :window widget}
+  - :container AC GUI container map
+  - :container-id menu container id used by tab sync
+  - :minecraft-container optional menu object used to derive :container-id
+  - :bind! optional fn receiving {:root :tech :pages :page-window}
+  - :build-info-area! optional fn receiving the created info-area widget
+  - :info-anchor-page-id page id used for InfoArea positioning, default first page
+  Returns {:root widget :tech tech-ui-map :current atom :pages pages}.
+  "
+  [{:keys [pages container container-id minecraft-container bind! build-info-area! info-anchor-page-id]
+    :or {info-anchor-page-id nil}}]
+  (let [pages (vec pages)
+        container-id (or container-id
+                         (when minecraft-container
+                           (gui/get-menu-container-id minecraft-container)))
+        tech (apply create-tech-ui pages)
+        _ (tabbed-gui/attach-tab-sync! pages tech container container-id)
+        root (:window tech)
+        anchor-id (or info-anchor-page-id (:id (first pages)))
+        page-window (fn [page-id] (page-window-by-id pages page-id))
+        ctx {:root root
+             :tech tech
+             :pages pages
+             :page-window page-window}]
+    (when bind!
+      (bind! ctx))
+    (when build-info-area!
+      (let [info-area (create-info-area)
+            anchor-window (or (page-window anchor-id) (:window (first pages)))]
+        (when anchor-window
+          (cgui-core/set-position! info-area (+ (cgui-core/get-width anchor-window) 7) 5))
+        (reset-info-area! info-area)
+        (build-info-area! info-area)
+        (cgui-core/add-widget! root info-area)))
+    {:root root
+     :tech tech
+     :current (:current tech)
+     :pages pages}))
+
+(defn create-tech-screen-container
+  "Create a CGui screen container from common TechUI screen options."
+  [{:keys [minecraft-container] :as opts}]
+  (let [assembled (assemble-tech-ui-root
+                    (assoc opts :container-id (gui/get-menu-container-id minecraft-container)))
+        base (cgui-screen/create-cgui-screen-container (:root assembled) minecraft-container)]
+    (assoc-tech-ui-screen-size (assoc base :current-tab-atom (:current assembled)))))
+
+(defn create-tech-screen-from-root
+  "Wrap an already assembled TechUI root as a CGui screen container."
+  [root current minecraft-container]
+  (let [base (cgui-screen/create-cgui-screen-container root minecraft-container)]
+    (cond-> (assoc-tech-ui-screen-size base)
+      current (assoc :current-tab-atom current))))
 
 ;; ============================================================================
 ;; InfoArea辅助函数 (参照TechUI.ContainerUI.InfoArea)

@@ -2,7 +2,7 @@
 
 > 状态标签：**现行**（规范文档）
 
-本文档合并自 GUI DSL 使用指南与实现总结。**默认构建为 Forge 1.20.1**；Fabric 子工程存在但未纳入根 `settings.gradle`。能量相关使用 **`cn.li.ac.energy.operations`**。
+本文档合并自 GUI DSL 使用指南与实现总结。**默认目标为 Forge 1.20.1**；Fabric 子工程按 minimal maintenance 维护。能量相关使用 **`cn.li.ac.energy.operations`**。
 
 **架构**：`defgui` 元数据在 **`cn.li.mcmod.gui.dsl`**；具体 Wireless 等 GUI 在 **`ac`**；**`cn.li.ac.core/init`** 在加载 **`content-ns/load-all!`** 之后注册 screen factory。模块边界与启动顺序见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。
 
@@ -22,16 +22,18 @@
 - **GuiSpec / SlotSpec / ButtonSpec / LabelSpec**：数据结构。
 - **GuiInstance**：运行时实例；gui-registry 管理注册。
 - **辅助**：slot-change-handler、clear-slot-handler、processing-handler 等。
-- **defgui-from-xml**：从 XML 布局加载并转换为 DSL（与 wireless Node/Matrix GUI 共用）。
+- **XML / CGui runtime**：`xml-parser`、`cgui-core`、`components` 和 `events` 负责平台无关 widget/model；Minecraft 渲染、screen host 与 MenuType 注册不在 `mcmod.gui.dsl` 内。
 
 #### 1.1 Wireless（平台可注册 GUI）的扩展字段
 
 当 `defgui` 提供 `:gui-id`（int）时，该 GUI 会进入“平台可见”注册集合，Forge/Fabric 适配层会通过元数据自动完成：
-- **MenuType/ScreenHandlerType 注册**（根据 `:registry-name`）
+
+- **MenuType/ScreenHandlerType 注册**（由平台 adapter 持有，并通过 `mc1201.runtime.spi.gui-registry` 暴露给 shared GUI 路径）
 - **Screen 注册**（根据 `:screen-factory-fn-kw`）
 - **容器 tick/sync 分发**（根据 `:container-predicate` / `:tick-fn` / `:sync-*`）
 
 常用字段：
+
 - `:gui-id`：稳定的整数 GUI id（用于打开 GUI / 网络 payload 中的 `:gui-id`）
 - `:registry-name`：注册名（snake_case）
 - `:display-name`：显示名（用于 debug/标题等）
@@ -42,7 +44,17 @@
 - `:screen-fn`：`(fn [container minecraft-container player] -> screen)`（客户端 screen 创建）
 - `:payload-sync-apply-fn`：`(fn [payload] ...)`（客户端应用网络 payload，可选）
 
-实际项目中，Wireless 等 GUI 的 `defgui` / `defgui-with-lazy-fns` 声明在 **内容层**，例如 `ac/src/main/clojure/cn/li/ac/block/wireless_node/gui.clj`、`wireless_matrix/gui.clj` 等；通用 DSL 在 `mcmod/src/main/clojure/cn/li/mcmod/gui/dsl.clj`。新增 GUI 通常以 DSL + 元数据为主，Forge 侧只做注册与桥接。
+实际项目中，Wireless 等 GUI 的 `defgui` 声明在 **内容层**，例如 `ac/src/main/clojure/cn/li/ac/block/wireless_node/gui.clj`、`wireless_matrix/gui.clj` 等；通用 DSL 在 `mcmod/src/main/clojure/cn/li/mcmod/gui/dsl.clj`。新增 GUI 通常以 DSL + 元数据为主，Forge/Fabric 侧只做注册与桥接。
+
+#### 1.2 TechUI 块屏幕组装
+
+简单块 GUI 的 screen 创建应使用 **`cn.li.ac.gui.tech-ui-common`**：
+
+- `create-inventory-page` / `create-rework-page` 负责标准 inventory page 或现有 XML page 加载。
+- `create-tech-screen-container` 负责组合 pages、安装 tab sync、创建 InfoArea、包装 CGui screen container。
+- GUI 文件只保留业务绑定（例如进度条、按钮、动画帧）和 InfoArea 内容构造，不直接调用 `cgui-doc/read-xml`、`tabbed-gui/attach-tab-sync!` 或 `cgui-screen/create-cgui-screen-container`。
+
+复杂 GUI（如 wireless node/matrix/developer）可保留业务专用组装，但应复用同一套 widget/runtime helper，不能恢复旧动态 wrapper API。
 
 **Slot**：`{:index :x :y :filter :on-change}`；**Button**：`{:id :x :y :width :height :text :on-click}`；**Label**：`{:x :y :text :color}`。
 
@@ -87,4 +99,5 @@
 - 详见 `05-wireless/Node_GUI.md`、`05-wireless/Matrix_GUI.md`。
 
 **更新（当前架构）**：
+
 - Wireless GUI 的“元数据源”以 `cn.li.mcmod.gui.dsl` 的 registry 与 `cn.li.mcmod.gui.metadata` 为主；具体各 GUI 定义在 `ac` 对应 `gui.clj` 中。

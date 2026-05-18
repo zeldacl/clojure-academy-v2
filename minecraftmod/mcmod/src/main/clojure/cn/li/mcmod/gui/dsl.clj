@@ -1,7 +1,6 @@
 (ns cn.li.mcmod.gui.dsl
-  "GUI DSL - Declarative GUI definition using Clojure macros
-  
-  Supports generic GUI layout specs and content-facing GUI definition macros.
+  "GUI DSL - Declarative GUI definitions and runtime helpers.
+
   Runtime metadata queries live in cn.li.mcmod.gui.registry."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.parser :as gui-parser]
@@ -39,106 +38,6 @@
     `(def ~gui-name
        (register-gui!
          (create-gui-spec ~gui-id ~options-map)))))
-
-;; Macro: defgui-with-lazy-fns
-(defmacro defgui-with-lazy-fns
-  "Define a GUI with automatic lazy function resolution.
-
-  Eliminates boilerplate by automatically generating requiring-resolve wrappers
-  for all standard GUI functions from a specified namespace.
-
-  Example:
-  (defgui-with-lazy-fns machine-panel
-    :gui-id 0
-    :namespace 'example.content.machine.gui
-    :registration {:display-name \"Machine Panel\"
-             :registry-name \"machine_panel\"
-             :gui-type :machine
-             :screen-factory-fn-kw :create-machine-screen
-             :slot-layout {...}}
-    :payload-sync-fn 'apply-machine-sync-payload!)
-
-  This will automatically create lazy wrappers for:
-  - create-container, create-screen, tick!
-  - get-sync-data, apply-sync-data!
-  - still-valid?, on-close, handle-button-click!
-  - get-slot-count, get-slot-item, set-slot-item!
-  - can-place-item?, slot-changed!
-
-  Use :payload-sync-fn to specify the payload sync function name (varies per GUI)."
-  [gui-name & {:keys [namespace payload-sync-fn] :as opts}]
-  (when-not namespace
-    (throw (ex-info "defgui-with-lazy-fns requires :namespace parameter" {:gui-name gui-name})))
-  (let [ns-sym (if (and (seq? namespace) (= 'quote (first namespace)))
-                 (second namespace)
-                 namespace)
-        payload-sync-sym (when payload-sync-fn
-                           (if (and (seq? payload-sync-fn) (= 'quote (first payload-sync-fn)))
-                             (second payload-sync-fn)
-                             payload-sync-fn))
-        ;; Map function names to their corresponding defgui option keywords
-        fn-mappings {'create-container :container-fn
-                     'create-screen :screen-fn
-                     'tick! :tick-fn
-                     'get-sync-data :sync-get
-                     'apply-sync-data! :sync-apply
-                     'still-valid? :validate-fn
-                     'on-close :close-fn
-                     'handle-button-click! :button-click-fn
-                     'get-slot-count :slot-count-fn
-                     'get-slot-item :slot-get-fn
-                     'set-slot-item! :slot-set-fn
-                     'can-place-item? :slot-can-place-fn
-                     'slot-changed! :slot-changed-fn}
-        wrappers (into {}
-                   (for [[fn-name opt-kw] fn-mappings]
-                     [opt-kw
-                      `(fn [& args#]
-                         (when-let [f# (requiring-resolve '~(symbol (str ns-sym) (str fn-name)))]
-                           (apply f# args#)))]))
-        wrappers (if payload-sync-fn
-                   (assoc wrappers :payload-sync-apply-fn
-                     `(fn [& args#]
-                        (when-let [f# (requiring-resolve '~(symbol (str ns-sym) (str payload-sync-sym)))]
-                          (apply f# args#))))
-                   wrappers)
-        merged-opts (merge opts wrappers)
-        lifecycle-keys #{:container-fn :screen-fn :tick-fn}
-        sync-keys #{:sync-get :sync-apply :payload-sync-apply-fn}
-        operation-keys #{:validate-fn :close-fn :button-click-fn :text-input-fn}
-        slot-operation-keys #{:slot-count-fn :slot-get-fn :slot-set-fn :slot-can-place-fn :slot-changed-fn}
-        grouped-opts (let [grouped (-> merged-opts
-                     (dissoc :namespace :payload-sync-fn)
-                     (assoc :lifecycle (merge (select-keys merged-opts lifecycle-keys)
-                      (:lifecycle merged-opts))
-                      :sync (merge (select-keys merged-opts sync-keys)
-                       (:sync merged-opts))
-                      :operations (merge (select-keys merged-opts operation-keys)
-                       (:operations merged-opts))
-                      :slot-operations (merge (select-keys merged-opts slot-operation-keys)
-                            (:slot-operations merged-opts))))]
-                 (apply dissoc grouped (concat lifecycle-keys sync-keys operation-keys slot-operation-keys)))]
-    `(defgui ~gui-name
-       ~@(apply concat grouped-opts))))
-
-;; XML-based GUI macro
-(defmacro defgui-from-xml
-  "Define a GUI from XML layout file
-  
-  Example:
-  (defgui-from-xml node-gui
-    :xml-layout \"page_wireless_node\"
-    :on-init (fn [gui] ...)
-    :on-render (fn [gui dt] ...))"
-  [gui-name & options]
-  (let [options-map (apply hash-map options)
-        xml-layout (:xml-layout options-map)
-        gui-id (name gui-name)]
-    `(def ~gui-name
-       (let [xml-parser# (requiring-resolve 'cn.li.mcmod.gui.xml-parser/load-gui-from-xml)
-         base-spec# (xml-parser# ~gui-id ~xml-layout)
-         merged-spec# (merge base-spec# ~(dissoc options-map :xml-layout))]
-       (register-gui! (create-gui-spec (:id base-spec#) merged-spec#))))))
 
 ;; Helper: create slot handler that updates atom
 (defn slot-change-handler [slots-atom slot-index]

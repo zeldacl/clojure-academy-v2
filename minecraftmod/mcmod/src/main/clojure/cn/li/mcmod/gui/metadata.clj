@@ -50,20 +50,6 @@
 (defn get-gui-id-for-type [container-type]
   (gui-registry/get-gui-id-for-type container-type))
 
-(defonce platform-menu-types
-  ^{:doc "Platform-specific menu type registry: {:platform {:gui-id menu-type}}"}
-  (atom {}))
-
-(defn register-menu-type! [platform gui-id menu-type]
-  (swap! platform-menu-types assoc-in [platform gui-id] menu-type)
-  (log/info "Registered MenuType for" platform "GUI" gui-id))
-
-(defn get-menu-type [platform gui-id]
-  (get-in @platform-menu-types [platform gui-id]))
-
-(defn unregister-menu-types! []
-  (reset! platform-menu-types {}))
-
 (defn validate-gui-metadata []
   (let [errors (atom [])]
     (doseq [gui-id (get-all-gui-ids)]

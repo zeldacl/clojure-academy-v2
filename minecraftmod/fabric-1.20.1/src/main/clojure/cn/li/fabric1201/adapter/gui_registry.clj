@@ -37,11 +37,7 @@
                :create-menu-proxy-fn (fn [window-id menu-type clj-container opts]
                                        (menu-proxy/create-menu-proxy window-id menu-type clj-container opts))
                :resolve-menu-type-fn get-handler-type
-               :bridge-opts {:get-slot-layout gui/get-slot-layout
-                             :default-player-inventory-mode :full
-                             :call-super-removed? true
-                             :remove-log-message "Fabric menu closed for player"
-                             :quick-move-error-prefix "Error in Fabric quickMoveStack:"}
+               :bridge-opts (menu-proxy/platform-menu-proxy-opts :fabric-1.20.1)
                :error-prefix "Failed to create container for GUI"})))))))
 
 (defn register-screen-handler-types! []
@@ -50,7 +46,6 @@
     (let [handler-type (create-extended-screen-handler-type gui-id)
           registry-name (gui/get-registry-name gui-id)]
       (swap! gui-handler-types assoc gui-id handler-type)
-      (gui/register-menu-type! :fabric-1.20.1 gui-id handler-type)
       (log/info "Registered screen handler type:" registry-name "for GUI ID" gui-id)))
   (log/info "Registered" (count @gui-handler-types) "screen handler types"))
 
@@ -68,7 +63,8 @@
   (registry-api/register-registry-impl!
     :fabric-1.20.1
     {:register-menu-type! (fn [gui-id menu-type]
-                            (gui/register-menu-type! :fabric-1.20.1 gui-id menu-type))
+                            (swap! gui-handler-types assoc gui-id menu-type)
+                            nil)
      :get-menu-type get-handler-type
      :list-menu-types (fn [] @gui-handler-types)
      :invalidate-menu-registry! (fn [] (reset! gui-handler-types {}))}))

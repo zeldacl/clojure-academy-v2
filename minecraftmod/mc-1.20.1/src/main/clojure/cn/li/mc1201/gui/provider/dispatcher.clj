@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.gui.provider.dispatcher
   "Shared GUI provider callback dispatcher used by Forge/Fabric wrappers."
   (:require [cn.li.mc1201.gui.provider.common :as provider-common]
+            [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
             [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.entity.player Player]))
@@ -38,7 +39,7 @@
       (when-not clj-container
         (throw (ex-info "Failed to create Clojure container"
                         {:gui-id gui-id :player player :platform platform-key})))
-      (let [menu-type (gui/get-menu-type platform-key gui-id)]
+      (let [menu-type (registry-api/get-menu-type platform-key gui-id)]
         (when-not menu-type
           (throw (ex-info "MenuType not registered"
                           {:gui-id gui-id :platform platform-key})))

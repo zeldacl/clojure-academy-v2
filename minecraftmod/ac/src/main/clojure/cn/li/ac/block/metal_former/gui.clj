@@ -3,21 +3,19 @@
   (:require [clojure.string :as str]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
-            [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
-            [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
+            [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.block.metal-former.config :as cfg]
             [cn.li.ac.block.metal-former.recipes :as recipes]
+            [cn.li.ac.block.metal-former.schema :as former-schema]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
@@ -26,21 +24,24 @@
 
 (def ^:private former-slot-schema-id :metal-former)
 (def ^:private former-gui-type :metal-former)
+(def ^:private former-gui-schema
+  (mapv (fn [field]
+          (if (= (:key field) :mode)
+            (assoc field
+                   :gui-init (fn [state]
+                               (recipes/normalize-mode (get state :mode (:default field))))
+                   :gui-coerce recipes/normalize-mode)
+            field))
+        former-schema/metal-former-schema))
+(def ^:private former-sync
+  (gui-sync/schema-sync-fns former-gui-schema))
 
 (defn- msg [action]
   (msg-registry/msg former-gui-type action))
 
 (defn- create-container
   [tile player]
-  (let [state (or (common/get-tile-state tile) {})]
-    {:tile-entity tile
-     :player player
-     :container-type former-gui-type
-     :energy (atom (double (get state :energy 0.0)))
-     :max-energy (atom (double (get state :max-energy cfg/max-energy)))
-     :mode (atom (recipes/normalize-mode (get state :mode :plate)))
-     :work-counter (atom (int (get state :work-counter 0)))
-     :working (atom (boolean (get state :working false)))}))
+  (gui-sync/create-schema-container former-gui-schema tile player former-gui-type))
 
 (defn- get-slot-count [_container]
   (slot-registry/get-slot-count former-slot-schema-id))
@@ -61,32 +62,18 @@
 
 (defn- still-valid? [_container _player] true)
 
-(defn- sync-to-client! [container]
-  (let [state (or (common/get-tile-state (:tile-entity container)) {})]
-    (reset! (:energy container) (double (get state :energy 0.0)))
-    (reset! (:max-energy container) (double (get state :max-energy cfg/max-energy)))
-    (reset! (:mode container) (recipes/normalize-mode (get state :mode :plate)))
-    (reset! (:work-counter container) (int (get state :work-counter 0)))
-    (reset! (:working container) (boolean (get state :working false)))))
+(def ^:private sync-to-client! (:sync-to-client! former-sync))
 
 (defn- get-sync-data [container]
-  {:energy @(:energy container)
-   :max-energy @(:max-energy container)
-   :mode (recipes/mode->string @(:mode container))
-   :work-counter @(:work-counter container)
-   :working @(:working container)})
+  (assoc ((:get-sync-data former-sync) container)
+         :mode (recipes/mode->string @(:mode container))))
 
-(defn- apply-sync-data! [container data]
-  (reset! (:energy container) (double (:energy data 0.0)))
-  (reset! (:max-energy container) (double (:max-energy data cfg/max-energy)))
-  (reset! (:mode container) (recipes/normalize-mode (:mode data :plate)))
-  (reset! (:work-counter container) (int (:work-counter data 0)))
-  (reset! (:working container) (boolean (:working data false))))
+(def ^:private apply-sync-data! (:apply-sync-data! former-sync))
 
 (defn- tick! [container]
-  (sync-to-client! container))
+  (gui-sync/sync-tick! container sync-to-client!))
 
-(defn- on-close [_container] nil)
+(def ^:private on-close (:on-close former-sync))
 (defn- handle-button-click! [_container _button-id _player] nil)
 
 (defn- request-alternate!
@@ -133,40 +120,35 @@
 (defn- create-screen
   [container minecraft-container _player]
   (sync-to-client! container)
-  (let [doc (cgui-doc/read-xml "assets/my_mod/guis/rework/page_metalformer.xml")
-        inv-window (cgui-doc/get-widget doc "main")
-        wireless-window (wireless-tab/create-wireless-panel {:mode :receiver :container container})
-        inv-page {:id "inv" :window inv-window}
+  (let [inv-page (tech-ui/create-rework-page "guis/rework/page_metalformer.xml")
+        inv-window (:window inv-page)
+        wireless-window (wireless-tab/create-wireless-panel {:role :receiver :container container})
         wireless-page {:id "wireless" :window wireless-window}
         pages [inv-page wireless-page]
-        container-id (gui/get-menu-container-id minecraft-container)
-        tech (apply tech-ui/create-tech-ui pages)
-        _ (tabbed-gui/attach-tab-sync! pages tech container container-id)
-        root (:window tech)
-        info-area (tech-ui/create-info-area)
-        max-e (fn [] (max 1.0 (double @(:max-energy container))))
-        _ (bind-progress! inv-window container)
-        _ (bind-mode-icon! inv-window container)
-        _ (bind-buttons! inv-window container)
-        _ (cgui-core/set-position! info-area (+ (cgui-core/get-width inv-window) 7) 5)
-        _ (tech-ui/reset-info-area! info-area)
-        y0 (tech-ui/add-histogram info-area
-                                  [(tech-ui/hist-buffer (fn [] (double @(:energy container))) max-e)]
-                                  0)
-        y1 (tech-ui/add-sepline info-area "Metal Former" y0)
-        y2 (tech-ui/add-property info-area "mode"
-                                 (fn [] (str/upper-case (recipes/mode->string @(:mode container))))
-                                 y1)
-        _y3 (tech-ui/add-property info-area "progress"
+        max-e (fn [] (max 1.0 (double @(:max-energy container))))]
+    (tech-ui/create-tech-screen-container
+      {:pages pages
+       :container container
+       :minecraft-container minecraft-container
+       :bind! (fn [_]
+                (bind-progress! inv-window container)
+                (bind-mode-icon! inv-window container)
+                (bind-buttons! inv-window container))
+       :build-info-area!
+       (fn [info-area]
+         (let [y0 (tech-ui/add-histogram info-area
+                                         [(tech-ui/hist-buffer (fn [] (double @(:energy container))) max-e)]
+                                         0)
+               y1 (tech-ui/add-sepline info-area "Metal Former" y0)
+               y2 (tech-ui/add-property info-area "mode"
+                                        (fn [] (str/upper-case (recipes/mode->string @(:mode container))))
+                                        y1)]
+           (tech-ui/add-property info-area "progress"
                                   (fn []
                                     (if @(:working container)
                                       (format "%d/%d" @(:work-counter container) cfg/work-ticks)
                                       "IDLE"))
-                                  y2)]
-    (cgui-core/add-widget! root info-area)
-    (tech-ui/assoc-tech-ui-screen-size
-      (assoc (cgui-screen/create-cgui-screen-container root minecraft-container)
-             :current-tab-atom (:current tech)))))
+                                  y2)))})))
 
 (defn- former-container?
   [container]
