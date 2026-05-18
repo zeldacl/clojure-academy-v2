@@ -7,7 +7,7 @@
     [cn.li.forge1201.setup.forge-lifecycle-coordinator :as lifecycle-coordinator]
     [cn.li.forge1201.integration.side :as side]
     [cn.li.forge1201.registry.state :as registry-state]
-    [cn.li.forge1201.integration.events :as events]
+    [cn.li.forge1201.integration.events.interact :as interact-events]
     [cn.li.forge1201.gui.init :as gui-init]
     [cn.li.forge1201.adapter.gui-registry :as gui-registry-impl]
     [cn.li.mcmod.config :as modid]
@@ -254,4 +254,4 @@
 
 ;; Event handler method (required by gen-class, but not used directly in 1.20.1)
 (defn mod-onRightClickBlock [_this event]
-  (events/handle-right-click-event event))
+  (interact-events/handle-right-click-event event))

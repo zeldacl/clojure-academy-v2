@@ -3,23 +3,13 @@
   (:require [cn.li.forge1201.config.bridge :as config-bridge]
             [cn.li.forge1201.integration.side :as side]
             [cn.li.forge1201.setup.deferred-registries :as deferred-registries]
-            [cn.li.forge1201.setup.lifecycle-listeners :as lifecycle-listeners]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.forge1201.setup.lifecycle-listeners :as lifecycle-listeners])
   (:import [cn.li.forge1201.entity ModEntities]
            [cn.li.forge1201.worldgen ModFeatures]
            [net.minecraftforge.eventbus.api IEventBus]))
 
-(defn- register-gameplay-config!
-  []
-  (try
-    (let [config-class (Class/forName "cn.li.forge1201.config.GameplayConfig")]
-      (.invoke (.getMethod config-class "register" (make-array Class 0)) nil (make-array Object 0)))
-    (catch Exception e
-      (log/warn "Failed to register gameplay config" e))))
-
 (defn register-config-phase!
   [^IEventBus mod-bus _opts]
-  (register-gameplay-config!)
   (config-bridge/register-all! mod-bus)
   nil)
 

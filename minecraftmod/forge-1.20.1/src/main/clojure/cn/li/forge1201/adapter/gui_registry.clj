@@ -1,11 +1,8 @@
 (ns cn.li.forge1201.adapter.gui-registry
   "Forge 1.20.1 GUI Registration Implementation
 
-  Platform-agnostic design: Uses metadata-driven approach.
-
-  IMPORTANT: Only imports from `cn.li.mcmod.gui.adapter` for the unified GUI API."
-  (:require [cn.li.ac.gui.platform-adapter :as gui-platform]
-            [cn.li.mcmod.gui.registry-core :as gui]
+  Platform-agnostic design: Uses metadata-driven approach."
+  (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mc1201.gui.menu.bridge :as menu-core]
             [cn.li.forge1201.gui.provider-bridge :as provider-bridge]
@@ -161,40 +158,10 @@
 
 (defn- install-registry-contract!
   []
-  (gui/register-gui-platform-impl!
-    {:register-menu-type! gui-platform/register-menu-type!
-     :get-menu-type gui-platform/get-menu-type
-     :set-client-container! gui-platform/set-client-container!
-     :clear-client-container! gui-platform/clear-client-container!
-     :get-client-container gui-platform/get-client-container
-     :register-active-container! gui-platform/register-active-container!
-     :unregister-active-container! gui-platform/unregister-active-container!
-     :register-player-container! gui-platform/register-player-container!
-     :unregister-player-container! gui-platform/unregister-player-container!
-     :get-player-container gui-platform/get-player-container
-     :get-player-container-from-active gui-platform/get-player-container-from-active
-     :get-container-for-menu gui-platform/get-container-for-menu
-     :get-container-by-id gui-platform/get-container-by-id
-     :get-menu-container-id gui-platform/get-menu-container-id
-     :register-menu-container! gui-platform/register-menu-container!
-     :unregister-menu-container! gui-platform/unregister-menu-container!
-     :register-container-by-id! gui-platform/register-container-by-id!
-     :unregister-container-by-id! gui-platform/unregister-container-by-id!
-     :safe-tick! gui-platform/safe-tick!
-     :safe-validate gui-platform/safe-validate
-     :safe-sync! gui-platform/safe-sync!
-     :safe-close! gui-platform/safe-close!
-     :slot-count gui-platform/slot-count
-     :slot-get-item gui-platform/slot-get-item
-     :slot-set-item! gui-platform/slot-set-item!
-     :slot-changed! gui-platform/slot-changed!
-     :slot-can-place? gui-platform/slot-can-place?
-     :get-container-type gui-platform/get-container-type
-     :get-gui-id-for-container gui-platform/get-gui-id-for-container})
   (registry-api/register-registry-impl!
     :forge-1.20.1
     {:register-menu-type! (fn [gui-id menu-type]
-                            (gui-platform/register-menu-type! :forge-1.20.1 gui-id menu-type))
+                            (gui/register-menu-type! :forge-1.20.1 gui-id menu-type))
      :get-menu-type get-menu-type
      :list-menu-types (fn [] @gui-menu-types)
      :invalidate-menu-registry! (fn [] (reset! gui-menu-types {}))}))

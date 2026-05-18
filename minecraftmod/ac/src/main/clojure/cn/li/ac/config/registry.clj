@@ -1,5 +1,6 @@
 (ns cn.li.ac.config.registry
-	(:require [cn.li.ac.wireless.config :as wireless-config]
+	(:require [cn.li.ac.config.gameplay :as gameplay-config]
+						[cn.li.ac.wireless.config :as wireless-config]
 						[cn.li.ac.block.solar-gen.config :as solar-config]
 						[cn.li.ac.config.common :as config-common]
 						[cn.li.mcmod.config.registry :as config-reg]))
@@ -19,4 +20,10 @@
 	(config-reg/ensure-default-values!
 		config-common/wireless-domain
 		wireless-default-values)
+	(config-reg/register-config-descriptors!
+		config-common/gameplay-domain
+		gameplay-config/descriptors)
+	(config-reg/ensure-default-values!
+		config-common/gameplay-domain
+		gameplay-config/default-values)
 	nil)

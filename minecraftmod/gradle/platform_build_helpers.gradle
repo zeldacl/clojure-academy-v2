@@ -1,12 +1,9 @@
 ext.configureInjectedPlatformSources = { Map opts = [:] ->
-    def includeAcJava = (opts.get('includeAcJava', false) as boolean)
-
     sourceSets {
         main {
             clojure {
                 srcDirs += [
                     "${rootProject.projectDir}/mc-1.20.1/src/main/clojure",
-                    "${project(':ac').projectDir}/src/main/clojure",
                     "${project(':mcmod').projectDir}/src/main/clojure"
                 ]
             }
@@ -16,17 +13,49 @@ ext.configureInjectedPlatformSources = { Map opts = [:] ->
                     "${project(':mcmod').projectDir}/src/main/java",
                     "${rootProject.projectDir}/mc-1.20.1/src/main/java"
                 ]
-                if (includeAcJava) {
-                    sharedJavaDirs += ["${project(':ac').projectDir}/src/main/java"]
-                }
                 srcDirs += sharedJavaDirs
             }
             resources {
                 srcDirs += [
-                    "${project(':ac').projectDir}/src/main/resources",
                     "${project(':mcmod').projectDir}/src/main/resources"
                 ]
             }
+        }
+    }
+}
+
+ext.configureAcContentRuntime = {
+    evaluationDependsOn(':ac')
+    def acProject = project(':ac')
+    def acClojureSources = acProject.file('src/main/clojure')
+
+    dependencies {
+        // Use file/source-set outputs instead of `implementation project(':ac')`.
+        // Architectury/Fabric Loom 1.13 scans ProjectDependency entries during
+        // Minecraft jar processing and is not compatible with Gradle 8.8's
+        // ProjectDependency API. File outputs keep AC off platform sourceSets
+        // while still making the ServiceLoader provider/resources available.
+        runtimeOnly acProject.sourceSets.main.output
+        runtimeOnly files(acClojureSources)
+    }
+
+    tasks.named('jar', Jar).configure {
+        dependsOn acProject.tasks.named('classes')
+        from(acProject.sourceSets.main.output) {
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        from(acClojureSources) {
+            include '**/*.clj'
+        }
+    }
+
+    tasks.matching { it.name == 'shadowJar' }.configureEach {
+        dependsOn acProject.tasks.named('classes')
+        from(acProject.sourceSets.main.output) {
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        from(acClojureSources) {
+            include '**/*.clj'
         }
     }
 }

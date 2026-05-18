@@ -23,7 +23,8 @@
 (defn- run-init-pipeline!
   []
   (lifecycle/run-content-init!)
-  (lifecycle/run-runtime-content-activation!))
+  (lifecycle/run-runtime-content-activation!)
+  (lifecycle/run-datagen-metadata-init!))
 
 (defn ensure-content-loaded!
   "Datagen runs outside normal mod init.
@@ -35,6 +36,7 @@
    - load the content bootstrap provider so it can register lifecycle init
    - run content init (installs hooks, binds mod-id, etc.)
    - activate runtime content (loads all DSL namespaces; fills registry metadata)
+  - run content-owned datagen metadata hooks
 
    Called by both Forge and Fabric datagen entry points.
    Note: Uses cn.li.mcmod.config/*mod-id* for logging, so modid binding

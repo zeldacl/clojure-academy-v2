@@ -1,5 +1,6 @@
 (ns cn.li.ac.core
   (:require [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.ac.datagen.bootstrap :as datagen-bootstrap]
             [cn.li.ac.registry.hooks :as hooks]))
 
 (defn- resolve-required
@@ -16,9 +17,14 @@
   []
   ((resolve-required 'cn.li.ac.core.content-loader/activate-runtime-content!)))
 
+(defn register-datagen-metadata!
+  []
+  (datagen-bootstrap/register-datagen-metadata!))
+
 ;; Phase1.4/Phase2: register content init hook for platform adapters.
 (lifecycle/register-content-init! #'init)
 (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
+(lifecycle/register-datagen-metadata-init! #'register-datagen-metadata!)
 
 ;; Register client-side initialization callback
 (defn- init-client-renderers

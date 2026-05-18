@@ -1,9 +1,8 @@
 (ns cn.li.ac.datagen.bootstrap
   "AC datagen metadata bootstrap.
 
-  Platform datagen entrypoints call this after shared content initialization.
-  Keeping these registrations in AC prevents mc-1.20.1 from depending on AC
-  business namespaces."
+  AC registers this through mcmod.lifecycle so platform datagen entrypoints do
+  not depend on AC business namespaces."
   (:require [cn.li.ac.ability.datagen.registry :as ability-datagen]
             [cn.li.ac.wireless.datagen.registry :as wireless-datagen]
             [cn.li.ac.energy.datagen.registry :as energy-datagen]))

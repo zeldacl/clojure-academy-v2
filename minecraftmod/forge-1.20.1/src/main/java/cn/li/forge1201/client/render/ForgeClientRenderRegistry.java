@@ -4,9 +4,9 @@ import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.forge1201.MyMod1201;
 import cn.li.forge1201.entity.ModEntities;
-import cn.li.mc1201.clj.ClojureInterop;
 import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import cn.li.mc1201.client.render.ModRenderTypes;
+import cn.li.mc1201.client.render.RenderProfileBootstrap;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
 import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
 import cn.li.mc1201.entity.ScriptedEffectEntity;
@@ -32,24 +32,13 @@ import java.io.IOException;
  * Centralized client rendering registration entrypoint for Forge.
  */
 public final class ForgeClientRenderRegistry {
-    private static final String AC_RENDER_PROFILE_NS = "cn.li.ac.content.render-profiles.effect-profiles";
-
     private static ShaderInstance plasmaBodyShader;
 
     private ForgeClientRenderRegistry() {
     }
 
-    private static void ensureScriptRenderProfilesLoaded() {
-        try {
-            ClojureInterop.requireNamespace(AC_RENDER_PROFILE_NS);
-            ClojureInterop.invoke(AC_RENDER_PROFILE_NS, "init-render-profiles!");
-        } catch (Throwable ignored) {
-            // Keep native dispatcher path operational even when profiles fail to initialize.
-        }
-    }
-
     public static void registerEntityAndBlockRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        ensureScriptRenderProfilesLoaded();
+        RenderProfileBootstrap.runContentClientInitHooks();
 
         for (String registryName : ModEntities.getScriptedEffectRegistryNames()) {
             EntityType<ScriptedEffectEntity> effectType = ModEntities.getEntityType(registryName, ScriptedEffectEntity.class);

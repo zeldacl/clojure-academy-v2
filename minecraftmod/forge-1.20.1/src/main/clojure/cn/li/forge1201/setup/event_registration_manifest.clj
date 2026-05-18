@@ -11,12 +11,12 @@
 (defn common-event-listener-specs
   []
   [{:listener-class net.minecraftforge.event.entity.player.PlayerInteractEvent$RightClickBlock
-    :handler 'cn.li.forge1201.integration.events/handle-right-click-event}
+    :handler 'cn.li.forge1201.integration.events.interact/handle-right-click-event}
    {:listener-class net.minecraftforge.event.entity.player.PlayerInteractEvent$LeftClickBlock
-    :handler 'cn.li.forge1201.integration.events/handle-left-click-block-event}
+    :handler 'cn.li.forge1201.integration.events.interact/handle-left-click-block-event}
    {:listener-class net.minecraftforge.event.level.BlockEvent$EntityPlaceEvent
-    :handler 'cn.li.forge1201.integration.events/handle-block-place-event}
+    :handler 'cn.li.forge1201.integration.events.block/handle-block-place-event}
    {:listener-class net.minecraftforge.event.level.BlockEvent$BreakEvent
-    :handler 'cn.li.forge1201.integration.events/handle-block-break-event}
+    :handler 'cn.li.forge1201.integration.events.block/handle-block-break-event}
    {:listener-class net.minecraftforge.event.LootTableLoadEvent
-    :handler 'cn.li.forge1201.integration.events/handle-loot-table-load}])
+    :handler 'cn.li.forge1201.integration.events.loot/handle-loot-table-load}])

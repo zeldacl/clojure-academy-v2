@@ -5,7 +5,6 @@
    Triggered during setup phase when running:
      ./gradlew :forge-1.20.1:runData"
   (:require [cn.li.mcmod.config :as modid]
-            [cn.li.ac.datagen.bootstrap :as ac-datagen]
             [cn.li.forge1201.datagen.provider-factory :as provider-factory]
             [cn.li.mc1201.datagen.provider-registration :as provider-registration]
             [cn.li.mc1201.datagen.setup-common :as setup-common])
@@ -35,7 +34,6 @@
         exfile-helper (.getExistingFileHelper event)]
     ;; Ensure AC content registries are loaded before providers query metadata.
     (setup-common/ensure-content-loaded! "ac")
-    (ac-datagen/register-datagen-metadata!)
 
     (provider-registration/register-providers!
       :forge-1.20.1

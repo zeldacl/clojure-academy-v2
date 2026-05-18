@@ -1,29 +1,18 @@
 (ns cn.li.ac.gui.platform-adapter
   "Platform Adapter for GUI framework
   
-  This module serves as the single import point for platform-specific GUI code
-  (forge/fabric bridges). It aggregates and re-exports all GUI framework functionality
-  without exposing the details of the underlying wireless.gui implementation.
+  This module aggregates and re-exports AC GUI framework functionality without
+  exposing wireless implementation details.
   
-  Platform layers should ONLY import from this module, not directly from cn.li.wireless.gui.
-  This allows the wireless implementation to change without affecting platform code.
-  
-  **Usage in platform code:**
-  ```clojure
-  (:require [cn.li.ac.gui.platform-adapter :as gui]
-           [cn.li.mcmod.util.log :as log])
-  
-  ;; Use the unified API
-  (gui/safe-tick! container)
-  (gui/safe-close! container)
-  (gui/get-display-name gui-id)
-  ```"
+  Loader modules must not import this namespace directly. AC installs these
+  callbacks into mcmod during content activation."
   (:require [cn.li.ac.gui.platform-adapter.dispatcher-api :as dispatcher-api]
             [cn.li.ac.gui.platform-adapter.metadata-api :as metadata-api]
             [cn.li.ac.gui.platform-adapter.registry-api :as registry-api]
             [cn.li.ac.gui.platform-adapter.sync-api :as sync-api]
             [cn.li.ac.gui.slot-validators :as slot-validators]
-            [cn.li.ac.wireless.gui.screen-factory :as screen-factory]))
+            [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
+            [cn.li.mcmod.gui.registry-core :as gui-core]))
 
 ;; ============================================================================
 ;; Re-export Container Dispatcher (polymorphic operations)
@@ -115,14 +104,49 @@
 (def get-platform-broadcast-fn sync-api/get-platform-broadcast-fn)
 (def apply-gui-sync-payload! sync-api/apply-gui-sync-payload!)
 
+(defn install-into-mcmod!
+  "Install AC GUI callbacks into the platform-neutral mcmod GUI registry.
+
+  Platform loaders only provide loader-specific MenuType/open-screen shells;
+  all AC GUI metadata/container behavior is registered by AC itself."
+  []
+  (gui-core/register-gui-platform-impl!
+    {:register-menu-type! register-menu-type!
+     :get-menu-type get-menu-type
+     :set-client-container! set-client-container!
+     :clear-client-container! clear-client-container!
+     :get-client-container get-client-container
+     :register-active-container! register-active-container!
+     :unregister-active-container! unregister-active-container!
+     :register-player-container! register-player-container!
+     :unregister-player-container! unregister-player-container!
+     :get-player-container get-player-container
+     :get-player-container-from-active get-player-container-from-active
+     :get-container-for-menu get-container-for-menu
+     :get-container-by-id get-container-by-id
+     :get-menu-container-id get-menu-container-id
+     :register-menu-container! register-menu-container!
+     :unregister-menu-container! unregister-menu-container!
+     :register-container-by-id! register-container-by-id!
+     :unregister-container-by-id! unregister-container-by-id!
+     :safe-tick! safe-tick!
+     :safe-validate safe-validate
+     :safe-sync! safe-sync!
+     :safe-close! safe-close!
+     :slot-count slot-count
+     :slot-get-item slot-get-item
+     :slot-set-item! slot-set-item!
+     :slot-changed! slot-changed!
+     :slot-can-place? slot-can-place?
+     :get-container-type get-container-type
+     :get-gui-id-for-container get-gui-id-for-container})
+  nil)
+
 ;; ============================================================================
 ;; Adapter Guarantees
 ;; ============================================================================
 
-;; This adapter guarantees that platform code:
-;; 1. Never directly imports cn.li.wireless.gui.* modules
-;; 2. Only depends on this single unified API
-;; 3. Remains isolated from wireless implementation details
+;; This adapter guarantees that loader code never imports AC GUI internals.
 ;;
 ;; Benefits:
 ;; - Platform code has zero wireless knowledge

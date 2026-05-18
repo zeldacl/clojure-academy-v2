@@ -25,8 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Fabric-side installer for shared scripted entity access.
  *
- * <p>This is a minimal bridge for migration: it provides shared spec lookup
- * and entity type lookup storage without introducing Forge-specific classes.</p>
+ * <p>Provides shared spec lookup and entity type lookup storage without
+ * introducing Forge-specific classes.</p>
  */
 public final class FabricScriptedEntityAccess {
     private static final String EFFECT_KIND_KEY = "scripted-effect";

@@ -1,10 +1,10 @@
 (ns cn.li.fabric1201.registry.fabric-dispatch
-  "Fabric 1.20.1 registry placeholder.
+  "Fabric 1.20.1 registry dispatch.
 
-  NOTE: Compile-unblocking stub. Avoids touching Minecraft registries during AOT."
+  Avoids touching Minecraft registries during AOT namespace load."
   (:require [cn.li.mcmod.platform.registry :as registry]
             [cn.li.mc1201.registry.dispatch :as dispatch]
-            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- register-into-builtins!
@@ -17,7 +17,7 @@
         builtins-registry (.get (.getField builtins-class registry-field) nil)
         rl (clojure.lang.Reflector/invokeConstructor
              rl-class
-             (to-array [modid/MOD-ID (str entry-id)]))]
+             (to-array [modid/*mod-id* (str entry-id)]))]
     (clojure.lang.Reflector/invokeStaticMethod
       registry-class
       "register"

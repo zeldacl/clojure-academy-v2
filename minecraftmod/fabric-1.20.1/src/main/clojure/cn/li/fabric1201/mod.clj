@@ -3,9 +3,8 @@
 
   Owns Fabric-specific bootstrap ordering and delegates cross-loader lifecycle
   phases to shared setup namespaces."
-  (:require [cn.li.ac.config.modid :as modid]
+  (:require [cn.li.mcmod.config :as modid]
             [cn.li.fabric1201.init :as init]
-            [cn.li.ac.core :as core]
             [cn.li.fabric1201.platform.bootstrap-entry :as platform-bootstrap]
             [cn.li.mc1201.block.blockstate-properties :as bsp]
             [cn.li.fabric1201.setup.lifecycle-init :as lifecycle-init]
@@ -13,14 +12,13 @@
             [cn.li.fabric1201.setup.runtime-setup :as runtime-setup]
             [cn.li.fabric1201.setup.event-wiring :as event-wiring]
             [cn.li.fabric1201.config.bridge :as config-bridge]
-            [cn.li.fabric1201.config.gameplay-bridge :as gameplay-bridge]
-            [cn.li.ac.config.gameplay :as gameplay]
+            [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.entity.hooks :as entity-hooks])
   (:import [cn.li.fabric1201.shim FabricBootstrapHelper]))
 
-(def mod-id modid/MOD-ID)
+(def mod-id modid/*mod-id*)
 
 (defonce registered-blocks (atom {}))
 (defonce registered-items (atom {}))
@@ -48,9 +46,8 @@
   (lifecycle-init/init-lifecycle!
     {:init-platform! platform-bootstrap/init-platform!
      :init-from-java! init/init-from-java
-     :init-core! core/init
      :load-config! config-bridge/load-all!
-    :bind-gameplay-config! #(gameplay/install-config-bridge! (gameplay-bridge/provider-map))
+     :activate-runtime-content! lifecycle/run-runtime-content-activation!
      :init-blockstate-properties! bsp/init-all-properties!
      :register-content! #(do
                            (content-registration/register-content! (registration-context))

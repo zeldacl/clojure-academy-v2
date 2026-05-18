@@ -10,6 +10,7 @@
 
 (defonce runtime-content-loader
   (delay
+    (platform-gui/install-into-mcmod!)
     (content-ns/load-all!)
     (let [gui-ids (gui-adapter/get-all-gui-ids)]
       (log/info "Registering screen factories for GUI IDs:" gui-ids)

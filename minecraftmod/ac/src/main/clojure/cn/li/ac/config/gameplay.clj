@@ -1,46 +1,12 @@
 (ns cn.li.ac.config.gameplay
-  "Gameplay configuration for AcademyCraft.
+  "Gameplay configuration owned by AC and exposed through mcmod config descriptors.
 
-  This namespace provides access to gameplay configuration values.
-  In production, values are loaded from ForgeConfigSpec (forge-1.20.1 module).
-  During development/testing, default values are used.
+  Platform modules provide storage/backends only; gameplay defaults and typed
+  accessors stay in AC so loader projects never import cn.li.ac.* directly."
+  (:require [cn.li.ac.config.common :as config-common]
+            [cn.li.mcmod.config.registry :as config-reg]
+            [cn.li.mcmod.util.log :as log]))
 
-  No Minecraft imports."
-  (:require [cn.li.mcmod.util.log :as log]))
-
-;; ============================================================================
-;; Config Bridge (injected by platform layer)
-;; ============================================================================
-
-(def ^:dynamic *config-bridge*
-  "Dynamic var bound to config bridge implementation by platform layer.
-  If nil, uses default values."
-  nil)
-
-(def provider-keys
-  "Canonical gameplay provider key set shared by platform adapters and AC."
-  [:attack-player?
-   :destroy-blocks?
-   :get-normal-metal-blocks
-   :get-weak-metal-blocks
-   :get-metal-entities
-   :is-normal-metal-block?
-   :is-weak-metal-block?
-   :is-metal-block?
-   :is-metal-entity?
-   :get-cp-recover-cooldown
-   :get-cp-recover-speed
-   :get-overload-recover-cooldown
-   :get-overload-recover-speed
-   :get-init-cp
-   :get-add-cp
-   :get-init-overload
-   :get-add-overload
-   :get-damage-scale])
-
-;; ============================================================================
-;; Default Configuration (fallback when *config-bridge* is nil)
-;; ============================================================================
 (def default-generic-config
   {:attack-player true
    :destroy-blocks true
@@ -49,7 +15,6 @@
    :give-cloud-terminal true
    :font "Microsoft YaHei"})
 
-;; Ability Configuration
 (def default-ability-config
   {:normal-metal-blocks
    ["minecraft:rail"
@@ -87,30 +52,173 @@
     "my_mod:entity_mag_hook"
     "minecraft:iron_golem"]})
 
-;; CP and Overload Data
 (def default-cp-overload-data
   {:cp-recover-cooldown 15
    :cp-recover-speed 1.0
    :overload-recover-cooldown 32
    :overload-recover-speed 1.0
-
    :maxcp-incr-rate 0.0025
    :maxo-incr-rate 0.0058
    :prog-incr-rate 1.0
-
-   ;; Level data (6 levels: 0-5)
    :init-cp [1800 1800 2800 4000 5800 8000]
    :add-cp [0 900 1000 1500 1700 12000]
    :init-overload [100 100 150 240 350 500]
    :add-overload [0 40 70 80 100 500]})
 
-;; Global Calculation Parameters
 (def default-calc-global
   {:damage-scale 1.0})
 
+(def default-values
+  (merge default-generic-config
+         default-ability-config
+         default-cp-overload-data
+         default-calc-global))
+
+(def descriptors
+  [{:key :attack-player
+    :path "generic.attack-player"
+    :section :generic
+    :type :boolean
+    :default (:attack-player default-values)
+    :comment "Whether abilities are allowed to attack players."}
+   {:key :destroy-blocks
+    :path "generic.destroy-blocks"
+    :section :generic
+    :type :boolean
+    :default (:destroy-blocks default-values)
+    :comment "Whether abilities are allowed to destroy blocks."}
+   {:key :worlds-whitelisted-destroying-blocks
+    :path "generic.worlds-whitelisted-destroying-blocks"
+    :section :generic
+    :type :string-list
+    :default (:worlds-whitelisted-destroying-blocks default-values)
+    :comment "World IDs where block destruction is explicitly allowed."}
+   {:key :use-mouse-wheel
+    :path "generic.use-mouse-wheel"
+    :section :generic
+    :type :boolean
+    :default (:use-mouse-wheel default-values)
+    :comment "Whether AC GUI interactions may use mouse wheel shortcuts."}
+   {:key :give-cloud-terminal
+    :path "generic.give-cloud-terminal"
+    :section :generic
+    :type :boolean
+    :default (:give-cloud-terminal default-values)
+    :comment "Whether players receive a Cloud Terminal through AC flows."}
+   {:key :font
+    :path "generic.font"
+    :section :generic
+    :type :string
+    :default (:font default-values)
+    :comment "Preferred AC UI font name."}
+
+   {:key :normal-metal-blocks
+    :path "ability.normal-metal-blocks"
+    :section :ability
+    :type :string-list
+    :default (:normal-metal-blocks default-values)
+    :comment "Block IDs treated as normal metal blocks."}
+   {:key :weak-metal-blocks
+    :path "ability.weak-metal-blocks"
+    :section :ability
+    :type :string-list
+    :default (:weak-metal-blocks default-values)
+    :comment "Block IDs treated as weak metal blocks."}
+   {:key :metal-entities
+    :path "ability.metal-entities"
+    :section :ability
+    :type :string-list
+    :default (:metal-entities default-values)
+    :comment "Entity IDs treated as metal entities."}
+
+   {:key :cp-recover-cooldown
+    :path "cp-overload.cp-recover-cooldown"
+    :section :cp-overload
+    :type :int
+    :min 0
+    :default (:cp-recover-cooldown default-values)
+    :comment "Cooldown ticks before CP starts recovering."}
+   {:key :cp-recover-speed
+    :path "cp-overload.cp-recover-speed"
+    :section :cp-overload
+    :type :double
+    :min 0.0
+    :default (:cp-recover-speed default-values)
+    :comment "CP recovery speed multiplier."}
+   {:key :overload-recover-cooldown
+    :path "cp-overload.overload-recover-cooldown"
+    :section :cp-overload
+    :type :int
+    :min 0
+    :default (:overload-recover-cooldown default-values)
+    :comment "Cooldown ticks before overload starts recovering."}
+   {:key :overload-recover-speed
+    :path "cp-overload.overload-recover-speed"
+    :section :cp-overload
+    :type :double
+    :min 0.0
+    :default (:overload-recover-speed default-values)
+    :comment "Overload recovery speed multiplier."}
+   {:key :maxcp-incr-rate
+    :path "cp-overload.maxcp-incr-rate"
+    :section :cp-overload
+    :type :double
+    :min 0.0
+    :default (:maxcp-incr-rate default-values)
+    :comment "Maximum CP growth rate."}
+   {:key :maxo-incr-rate
+    :path "cp-overload.maxo-incr-rate"
+    :section :cp-overload
+    :type :double
+    :min 0.0
+    :default (:maxo-incr-rate default-values)
+    :comment "Maximum overload growth rate."}
+   {:key :prog-incr-rate
+    :path "cp-overload.prog-incr-rate"
+    :section :cp-overload
+    :type :double
+    :min 0.0
+    :default (:prog-incr-rate default-values)
+    :comment "Ability progression growth rate."}
+   {:key :init-cp
+    :path "cp-overload.init-cp"
+    :section :cp-overload
+    :type :int-list
+    :default (:init-cp default-values)
+    :comment "Initial CP values for levels 0-5."}
+   {:key :add-cp
+    :path "cp-overload.add-cp"
+    :section :cp-overload
+    :type :int-list
+    :default (:add-cp default-values)
+    :comment "Additional CP values for levels 0-5."}
+   {:key :init-overload
+    :path "cp-overload.init-overload"
+    :section :cp-overload
+    :type :int-list
+    :default (:init-overload default-values)
+    :comment "Initial overload values for levels 0-5."}
+   {:key :add-overload
+    :path "cp-overload.add-overload"
+    :section :cp-overload
+    :type :int-list
+    :default (:add-overload default-values)
+    :comment "Additional overload values for levels 0-5."}
+
+   {:key :damage-scale
+    :path "calc.damage-scale"
+    :section :calc
+    :type :double
+    :min 0.0
+    :default (:damage-scale default-values)
+    :comment "Global AC damage multiplier."}])
+
+(defn- value
+  [k]
+  (get (config-common/gameplay-config) k (get default-values k)))
+
 (defn level-value
-  "Read a level-indexed numeric list using the AC fallback rule: out-of-range
-  or non-numeric levels return 0 instead of leaking platform defaults."
+  "Read a level-indexed numeric list. Out-of-range or non-numeric levels return 0."
   [values level]
   (let [idx (if (number? level) (int level) -1)]
     (get (vec (or values [])) idx 0)))
@@ -121,210 +229,97 @@
   (fn [id]
     (contains? (set (map str (values-fn))) (str id))))
 
-(defn make-provider-map
-  "Build a canonical provider map from raw platform config getter fns."
-  [{:keys [attack-player?
-           destroy-blocks?
-           get-normal-metal-blocks
-           get-weak-metal-blocks
-           get-metal-entities
-           get-cp-recover-cooldown
-           get-cp-recover-speed
-           get-overload-recover-cooldown
-           get-overload-recover-speed
-           get-init-cp-list
-           get-add-cp-list
-           get-init-overload-list
-           get-add-overload-list
-           get-damage-scale]}]
-  (let [normal-metal? (list-predicate get-normal-metal-blocks)
-        weak-metal? (list-predicate get-weak-metal-blocks)
-        metal-entity? (list-predicate get-metal-entities)]
-    {:attack-player? attack-player?
-     :destroy-blocks? destroy-blocks?
-     :get-normal-metal-blocks get-normal-metal-blocks
-     :get-weak-metal-blocks get-weak-metal-blocks
-     :get-metal-entities get-metal-entities
-     :is-normal-metal-block? normal-metal?
-     :is-weak-metal-block? weak-metal?
-     :is-metal-block? (fn [block-id]
-                        (or (normal-metal? block-id)
-                            (weak-metal? block-id)))
-     :is-metal-entity? metal-entity?
-     :get-cp-recover-cooldown get-cp-recover-cooldown
-     :get-cp-recover-speed get-cp-recover-speed
-     :get-overload-recover-cooldown get-overload-recover-cooldown
-     :get-overload-recover-speed get-overload-recover-speed
-     :get-init-cp #(level-value (get-init-cp-list) %)
-     :get-add-cp #(level-value (get-add-cp-list) %)
-     :get-init-overload #(level-value (get-init-overload-list) %)
-     :get-add-overload #(level-value (get-add-overload-list) %)
-     :get-damage-scale get-damage-scale}))
-
-(defn install-config-bridge!
-  "Install the platform gameplay config provider into AC.
-
-  Platform modules call this during lifecycle initialization. Keeping the root
-  binding in AC removes the old mc-1.20.1 -> ac reverse dependency."
-  [provider-map]
-  (when (map? provider-map)
-    (alter-var-root #'*config-bridge* (constantly provider-map))
-    (log/info "Installed AC gameplay config provider" {:keys (count provider-map)}))
+(defn init-config!
+  "Ensure gameplay defaults are present in the shared config registry."
+  []
+  (config-reg/register-config-descriptors! config-common/gameplay-domain descriptors)
+  (config-reg/ensure-default-values! config-common/gameplay-domain default-values)
+  (log/info "Initialized gameplay config descriptors" {:domain config-common/gameplay-domain})
   nil)
 
-;; ============================================================================
-;; Configuration Access Functions
-;; ============================================================================
-
-(defn- use-bridge?
-  "Check if config bridge is available."
-  []
-  (some? *config-bridge*))
-
-(defn init-config!
-  "Initialize configuration. No-op when using config bridge."
-  []
-  (when-not (use-bridge?)
-    (log/info "Using default gameplay configuration (no config bridge)")))
-
 (defn attack-player-enabled? []
-  (if (use-bridge?)
-    ((:attack-player? *config-bridge*))
-    (:attack-player default-generic-config)))
+  (boolean (value :attack-player)))
 
 (defn destroy-blocks-enabled? []
-  (if (use-bridge?)
-    ((:destroy-blocks? *config-bridge*))
-    (:destroy-blocks default-generic-config)))
+  (boolean (value :destroy-blocks)))
 
-;; Ability Config
 (defn get-normal-metal-blocks []
-  (if (use-bridge?)
-    ((:get-normal-metal-blocks *config-bridge*))
-    (:normal-metal-blocks default-ability-config)))
+  (vec (value :normal-metal-blocks)))
 
 (defn get-weak-metal-blocks []
-  (if (use-bridge?)
-    ((:get-weak-metal-blocks *config-bridge*))
-    (:weak-metal-blocks default-ability-config)))
+  (vec (value :weak-metal-blocks)))
 
 (defn get-metal-entities []
-  (if (use-bridge?)
-    ((:get-metal-entities *config-bridge*))
-    (:metal-entities default-ability-config)))
+  (vec (value :metal-entities)))
 
 (defn is-normal-metal-block?
-  "Check if a block ID is a normal metal block."
   [block-id]
-  (if (use-bridge?)
-    ((:is-normal-metal-block? *config-bridge*) block-id)
-    (some #(= % block-id) (get-normal-metal-blocks))))
+  ((list-predicate get-normal-metal-blocks) block-id))
 
 (defn is-weak-metal-block?
-  "Check if a block ID is a weak metal block."
   [block-id]
-  (if (use-bridge?)
-    ((:is-weak-metal-block? *config-bridge*) block-id)
-    (some #(= % block-id) (get-weak-metal-blocks))))
+  ((list-predicate get-weak-metal-blocks) block-id))
 
 (defn is-metal-block?
-  "Check if a block ID is any metal block."
   [block-id]
-  (if (use-bridge?)
-    ((:is-metal-block? *config-bridge*) block-id)
-    (or (is-normal-metal-block? block-id)
-        (is-weak-metal-block? block-id))))
+  (or (is-normal-metal-block? block-id)
+      (is-weak-metal-block? block-id)))
 
 (defn is-metal-entity?
-  "Check if an entity ID is a metal entity."
   [entity-id]
-  (if (use-bridge?)
-    ((:is-metal-entity? *config-bridge*) entity-id)
-    (some #(= % entity-id) (get-metal-entities))))
+  ((list-predicate get-metal-entities) entity-id))
 
-;; CP/Overload Config
 (defn get-cp-recover-cooldown []
-  (if (use-bridge?)
-    ((:get-cp-recover-cooldown *config-bridge*))
-    (:cp-recover-cooldown default-cp-overload-data)))
+  (int (value :cp-recover-cooldown)))
 
 (defn get-cp-recover-speed []
-  (if (use-bridge?)
-    ((:get-cp-recover-speed *config-bridge*))
-    (:cp-recover-speed default-cp-overload-data)))
+  (double (value :cp-recover-speed)))
 
 (defn get-overload-recover-cooldown []
-  (if (use-bridge?)
-    ((:get-overload-recover-cooldown *config-bridge*))
-    (:overload-recover-cooldown default-cp-overload-data)))
+  (int (value :overload-recover-cooldown)))
 
 (defn get-overload-recover-speed []
-  (if (use-bridge?)
-    ((:get-overload-recover-speed *config-bridge*))
-    (:overload-recover-speed default-cp-overload-data)))
+  (double (value :overload-recover-speed)))
 
 (defn get-init-cp
-  "Get initial CP for a level (0-5)."
   [level]
-  (if (use-bridge?)
-    ((:get-init-cp *config-bridge*) level)
-    (level-value (:init-cp default-cp-overload-data) level)))
+  (level-value (value :init-cp) level))
 
 (defn get-add-cp
-  "Get additional CP for a level (0-5)."
   [level]
-  (if (use-bridge?)
-    ((:get-add-cp *config-bridge*) level)
-    (level-value (:add-cp default-cp-overload-data) level)))
+  (level-value (value :add-cp) level))
 
 (defn get-init-overload
-  "Get initial overload for a level (0-5)."
   [level]
-  (if (use-bridge?)
-    ((:get-init-overload *config-bridge*) level)
-    (level-value (:init-overload default-cp-overload-data) level)))
+  (level-value (value :init-overload) level))
 
 (defn get-add-overload
-  "Get additional overload for a level (0-5)."
   [level]
-  (if (use-bridge?)
-    ((:get-add-overload *config-bridge*) level)
-    (level-value (:add-overload default-cp-overload-data) level)))
+  (level-value (value :add-overload) level))
 
-;; Global Calculation
 (defn get-damage-scale []
-  (if (use-bridge?)
-    ((:get-damage-scale *config-bridge*))
-    (:damage-scale default-calc-global)))
-
-;; ============================================================================
-;; Configuration Validation
-;; ============================================================================
+  (double (value :damage-scale)))
 
 (defn validate-config!
-  "Validate configuration values."
+  "Validate currently effective gameplay configuration values."
   []
   (let [errors (atom [])]
-    ;; Validate CP/Overload arrays have 6 elements
-    (when (not= 6 (count (:init-cp default-cp-overload-data)))
-      (swap! errors conj "init-cp must have 6 elements"))
-    (when (not= 6 (count (:add-cp default-cp-overload-data)))
-      (swap! errors conj "add-cp must have 6 elements"))
-    (when (not= 6 (count (:init-overload default-cp-overload-data)))
-      (swap! errors conj "init-overload must have 6 elements"))
-    (when (not= 6 (count (:add-overload default-cp-overload-data)))
-      (swap! errors conj "add-overload must have 6 elements"))
-
-    ;; Validate positive values
+    (doseq [[k values] {:init-cp (value :init-cp)
+                        :add-cp (value :add-cp)
+                        :init-overload (value :init-overload)
+                        :add-overload (value :add-overload)}]
+      (when (not= 6 (count values))
+        (swap! errors conj (str (name k) " must have 6 elements"))))
     (when (<= (get-cp-recover-speed) 0)
       (swap! errors conj "cp-recover-speed must be positive"))
     (when (<= (get-overload-recover-speed) 0)
       (swap! errors conj "overload-recover-speed must be positive"))
     (when (<= (get-damage-scale) 0)
       (swap! errors conj "damage-scale must be positive"))
-
     (if (empty? @errors)
-      (log/info "Configuration validation passed")
       (do
-        (log/error "Configuration validation failed:" @errors)
-        (throw (ex-info "Invalid configuration" {:errors @errors}))))))
+        (log/info "Gameplay configuration validation passed")
+        nil)
+      (do
+        (log/error "Gameplay configuration validation failed:" @errors)
+        (throw (ex-info "Invalid gameplay configuration" {:errors @errors}))))))

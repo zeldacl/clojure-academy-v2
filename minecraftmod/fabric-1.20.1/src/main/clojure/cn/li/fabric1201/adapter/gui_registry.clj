@@ -6,7 +6,7 @@
             [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
             [cn.li.mc1201.gui.registry.common :as registry-common]
             [cn.li.mc1201.gui.registry.open :as open-core]
-            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.resources ResourceLocation]
            [net.fabricmc.fabric.api.screenhandler.v1 ScreenHandlerRegistry]))
@@ -21,7 +21,7 @@
 (defn create-extended-screen-handler-type [gui-id]
   (let [registry-name (gui/get-registry-name gui-id)]
     (ScreenHandlerRegistry/registerExtended
-      (ResourceLocation. modid/MOD-ID registry-name)
+      (ResourceLocation. modid/*mod-id* registry-name)
       (reify net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry$ExtendedClientHandlerFactory
         (create [_ sync-id player-inventory buf]
           (let [gui-id-from-buf (.readInt buf)

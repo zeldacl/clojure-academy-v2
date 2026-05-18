@@ -3,8 +3,8 @@
             [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.bridge ConfigEventBridge]
-           [cn.li.forge1201.config GameplayConfig]
            [java.util.function Consumer]
+           [java.util.function Predicate]
             [net.minecraftforge.common ForgeConfigSpec$Builder ForgeConfigSpec$ConfigValue]
            [net.minecraftforge.eventbus.api IEventBus]
            [net.minecraftforge.fml ModLoadingContext]
@@ -37,6 +37,16 @@
     builder
     (.comment builder ^"[Ljava.lang.String;" (into-array String [(str comment)]))))
 
+(defn- list-value-predicate
+  [descriptor-type]
+  (reify Predicate
+    (test [_ value]
+      (case descriptor-type
+        :string-list (string? value)
+        :int-list (number? value)
+        :double-list (number? value)
+        false))))
+
 (defn- define-entry!
   [^ForgeConfigSpec$Builder builder descriptor]
   (let [default (:default descriptor)
@@ -49,6 +59,9 @@
       :double (.defineInRange builder leaf (double default) (double (or min-val Double/MIN_VALUE)) (double (or max-val Double/MAX_VALUE)))
       :boolean (.define builder leaf (boolean default))
       :string (.define builder leaf (str default))
+      :string-list (.defineList builder leaf (vec default) (list-value-predicate :string-list))
+      :int-list (.defineList builder leaf (vec default) (list-value-predicate :int-list))
+      :double-list (.defineList builder leaf (vec default) (list-value-predicate :double-list))
       (throw (ex-info "Unsupported Forge config descriptor type"
                       {:descriptor descriptor})))))
 
@@ -102,6 +115,5 @@
                                               (handle-config-event! event))))
     nil))
 
-;; Note: GameplayConfig facade functions have been moved to cn.li.forge1201.config.game-config
-;; to maintain separation: bridge.clj handles Forge technical details,
-;; while game_config.clj handles business-layer config access.
+;; This namespace intentionally contains only ForgeConfigSpec/event plumbing.
+;; Config domains, defaults, and typed accessors live in content/shared modules.

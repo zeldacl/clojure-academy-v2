@@ -76,7 +76,7 @@ tasks.register('runMcmodUnitTests') {
 
 tasks.register('verifyArchitectureBoundaries') {
     group = 'verification'
-    description = 'Verify architecture boundaries: ac/mcmod must not reference Minecraft or loader APIs.'
+    description = 'Verify architecture boundaries across shared, Minecraft, and loader platform modules.'
 
     doLast {
         def sourceIncludes = [
@@ -148,6 +148,14 @@ tasks.register('verifyArchitectureBoundaries') {
             include sourceIncludes
             exclude '**/build/**', '**/.gradle/**'
         }
+        def forge1201MainSource = fileTree('forge-1.20.1/src/main') {
+            include sourceIncludes
+            exclude '**/build/**', '**/.gradle/**'
+        }
+        def fabric1201MainSource = fileTree('fabric-1.20.1/src/main') {
+            include sourceIncludes
+            exclude '**/build/**', '**/.gradle/**'
+        }
 
         checkPattern(
             'AC_MCMOD_NO_MINECRAFT_OR_FORGE',
@@ -180,6 +188,27 @@ tasks.register('verifyArchitectureBoundaries') {
         checkPattern(
             'MC1201_NO_AC_STATIC_DEPENDENCY',
             mc1201Source,
+            ~/cn\.li\.ac\./,
+            { String line -> !isSkippableLine(line) }
+        )
+
+        checkPattern(
+            'FORGE1201_NO_FABRIC_API_OR_NS',
+            forge1201MainSource,
+            ~/(net\.fabricmc|cn\.li\.fabric1201|ModInitializer)/,
+            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+        )
+
+        checkPattern(
+            'FABRIC1201_NO_FORGE_API_OR_NS',
+            fabric1201MainSource,
+            ~/(net\.minecraftforge|cn\.li\.forge1201|@Mod\b)/,
+            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+        )
+
+        checkPattern(
+            'PLATFORM_NO_AC_STATIC_OR_HARDCODED_DEPENDENCY',
+            forge1201MainSource + fabric1201MainSource,
             ~/cn\.li\.ac\./,
             { String line -> !isSkippableLine(line) }
         )
@@ -247,33 +276,37 @@ def extractKeywordSet = { String mapBody ->
     out
 }
 
+def extractTaggedMapBodies = { String text, String tag ->
+    def escaped = java.util.regex.Pattern.quote(tag)
+    def matcher = (text =~ /(?s)${escaped}\s*\{(.*?)\}/)
+    def out = []
+    matcher.each { out << it[1] }
+    out
+}
+
 tasks.register('verifyForgeHookCoverage') {
     group = 'verification'
     description = 'Verify hook implementation keys cover shared hook catalog declarations (Phase C: mc1201 is shared source).'
 
     doLast {
         def hookCatalog = file('mcmod/src/main/clojure/cn/li/mcmod/entity/hook_catalog.clj')
-        // Phase C: Hooks moved from Forge to shared mc1201 layer (Phase A deleted forge1201 wrappers)
-        def sharedEffectHooks = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/entity/effect_hooks.clj')
-        def sharedRayHooks = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/entity/ray_hooks.clj')
+        def sharedHookCore = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/entity/hook_registry_core.clj')
 
-        [hookCatalog, sharedEffectHooks, sharedRayHooks].each { f ->
+        [hookCatalog, sharedHookCore].each { f ->
             if (!f.exists()) {
                 throw new GradleException("Required hook coverage file not found: ${f}")
             }
         }
 
         def catalogText = hookCatalog.getText('UTF-8')
-        def sharedEffectText = sharedEffectHooks.getText('UTF-8')
-        def sharedRayText = sharedRayHooks.getText('UTF-8')
+        def sharedHookText = sharedHookCore.getText('UTF-8')
 
         def effectCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'effect-hook->impl-key'))
         def rayCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'ray-hook->impl-key'))
-        def sharedEffectImpls = extractKeywordSet(extractMapBody(sharedEffectText, 'impl-key->hook-class'))
-        def sharedRayImpls = extractKeywordSet(extractMapBody(sharedRayText, 'impl-key->hook-class'))
+        def sharedImpls = extractKeywordSet(extractTaggedMapBodies(sharedHookText, ':impl-key->hook-class').join('\n'))
 
-        def missingEffect = (effectCatalogImpls - sharedEffectImpls)
-        def missingRay = (rayCatalogImpls - sharedRayImpls)
+        def missingEffect = (effectCatalogImpls - sharedImpls)
+        def missingRay = (rayCatalogImpls - sharedImpls)
 
         if (!missingEffect.isEmpty() || !missingRay.isEmpty()) {
             throw new GradleException("Hook coverage missing impl keys in mc1201 (Phase C shared layer). effect=${missingEffect} ray=${missingRay}")
@@ -383,6 +416,87 @@ tasks.register('verifyPlatformNoBusinessHookIds') {
     }
 }
 
+tasks.register('verifyPlatformNoAcSourceInjection') {
+    group = 'verification'
+    description = 'Verify Forge/Fabric sourceSets do not physically inject AC sources or resources.'
+
+    doLast {
+        def acPath = project(':ac').projectDir.canonicalFile.toPath()
+        def platformProjects = [project(':forge-1.20.1'), project(':fabric-1.20.1')]
+        def violations = []
+
+        platformProjects.each { Project p ->
+            def sourceSet = p.sourceSets.main
+            def roots = [] as Set
+            roots.addAll(sourceSet.java.srcDirs)
+            roots.addAll(sourceSet.resources.srcDirs)
+            if (sourceSet.hasProperty('clojure')) {
+                roots.addAll(sourceSet.clojure.srcDirs)
+            }
+            roots.findAll { it != null && it.exists() }.each { File root ->
+                def rootPath = root.canonicalFile.toPath()
+                if (rootPath.startsWith(acPath)) {
+                    violations << "${p.path}: ${rootPath}"
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Platform sourceSets must not inject AC source/resource roots:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyPlatformNoAcSourceInjection] passed. Platform sourceSets do not inject AC roots.')
+    }
+}
+
+tasks.register('verifyDeletedCompatibilityResidues') {
+    group = 'verification'
+    description = 'Verify deleted legacy compatibility files/tokens do not return.'
+
+    doLast {
+        def deletedFiles = [
+            file('forge-1.20.1/src/main/java/cn/li/forge1201/event/ForgeMissingMappingHandler.java'),
+            file('forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/events.clj'),
+            file('mc-1.20.1/src/main/clojure/cn/li/mc1201/runtime/spi_contracts.clj')
+        ]
+        def violations = []
+        deletedFiles.each { File f ->
+            if (f.exists()) {
+                violations << "deleted compatibility file returned: ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
+            }
+        }
+
+        def forbiddenTokens = [
+            'ForgeMissingMappingHandler',
+            'ignoreLegacyConverters',
+            'runtime.spi-contracts',
+            'spi_contracts',
+            'compatibility facade',
+            'minimal bridge for migration',
+            'Compile-unblocking stub'
+        ]
+        fileTree(project.rootDir) {
+            include 'mc-1.20.1/src/main/**/*.clj', 'mc-1.20.1/src/main/**/*.java'
+            include 'forge-1.20.1/src/main/**/*.clj', 'forge-1.20.1/src/main/**/*.java'
+            include 'fabric-1.20.1/src/main/**/*.clj', 'fabric-1.20.1/src/main/**/*.java'
+            exclude '**/build/**', '**/.gradle/**'
+        }.files.each { File f ->
+            def text = f.getText('UTF-8')
+            forbiddenTokens.each { token ->
+                if (text.contains(token)) {
+                    violations << "${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}: ${token}"
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Deleted compatibility residue guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyDeletedCompatibilityResidues] passed. Deleted compatibility residues stay absent.')
+    }
+}
+
 tasks.register('verifyAcPlayerUuidSsoT') {
     group = 'verification'
     description = 'Verify AC code uses cn.li.ac.ability.util.uuid/player-uuid as the player UUID SSOT.'
@@ -419,14 +533,18 @@ tasks.register('verifyAcPlayerUuidSsoT') {
 
 tasks.register('verifyGameplayConfigContractSsoT') {
     group = 'verification'
-    description = 'Verify gameplay config provider-map construction and removed keys stay centralized.'
+    description = 'Verify gameplay config descriptors are owned by AC and platform gameplay bridges stay deleted.'
 
     doLast {
-        def forgeFile = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/config/game_config.clj')
-        def fabricFile = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/config/gameplay_bridge.clj')
         def acFile = file('ac/src/main/clojure/cn/li/ac/config/gameplay.clj')
-        def forgeJavaFile = file('forge-1.20.1/src/main/java/cn/li/forge1201/config/GameplayConfig.java')
-        def requiredFiles = [forgeFile, fabricFile, acFile, forgeJavaFile]
+        def acRegistryFile = file('ac/src/main/clojure/cn/li/ac/config/registry.clj')
+        def acCommonFile = file('ac/src/main/clojure/cn/li/ac/config/common.clj')
+        def deletedPlatformFiles = [
+            file('forge-1.20.1/src/main/clojure/cn/li/forge1201/config/game_config.clj'),
+            file('forge-1.20.1/src/main/java/cn/li/forge1201/config/GameplayConfig.java'),
+            file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/config/gameplay_bridge.clj')
+        ]
+        def requiredFiles = [acFile, acRegistryFile, acCommonFile]
 
         requiredFiles.each { File f ->
             if (!f.exists()) {
@@ -434,26 +552,30 @@ tasks.register('verifyGameplayConfigContractSsoT') {
             }
         }
 
-        def acText = acFile.getText('UTF-8')
-        if (!acText.contains('(def provider-keys') || !acText.contains('(defn make-provider-map') || !acText.contains('(defn install-config-bridge!')) {
-            throw new GradleException('AC gameplay config contract must define provider-keys, make-provider-map, and install-config-bridge!.')
+        deletedPlatformFiles.each { File f ->
+            if (f.exists()) {
+                throw new GradleException("Platform-owned gameplay config bridge must stay deleted: ${f}")
+            }
         }
 
-        [forgeFile, fabricFile].each { File f ->
-            def text = f.getText('UTF-8')
-            if (!text.contains('gameplay/make-provider-map')) {
-                throw new GradleException("Platform gameplay provider must delegate provider-map construction to gameplay/make-provider-map: ${f}")
-            }
+        def acText = acFile.getText('UTF-8')
+        if (!acText.contains('(def descriptors') || !acText.contains('(def default-values') || !acText.contains('config-reg/register-config-descriptors!')) {
+            throw new GradleException('AC gameplay config contract must define descriptors/default-values and register them through mcmod config registry.')
+        }
+
+        if (!acRegistryFile.getText('UTF-8').contains('config-common/gameplay-domain') || !acCommonFile.getText('UTF-8').contains('(def gameplay-domain')) {
+            throw new GradleException('AC gameplay domain must be registered through ac.config.registry/common.')
         }
 
         def forbiddenTokens = [
             ':analysis-enabled?', ':gen-ores?', ':gen-phase-liquid?', ':heads-or-tails?',
             'analysis-enabled', 'gen-ores', 'gen-phase-liquid', 'heads-or-tails',
             'ANALYSIS_ENABLED', 'GEN_ORES', 'GEN_PHASE_LIQUID', 'HEADS_OR_TAILS',
-            'genOres', 'genPhaseLiquid', 'headsOrTails'
+            'genOres', 'genPhaseLiquid', 'headsOrTails',
+            '*config-bridge*', 'install-config-bridge!', 'make-provider-map', 'provider-keys'
         ]
         def violations = []
-        requiredFiles.each { File f ->
+        [acFile].each { File f ->
             def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
             def text = f.getText('UTF-8')
             forbiddenTokens.each { token ->
@@ -467,7 +589,7 @@ tasks.register('verifyGameplayConfigContractSsoT') {
             throw new GradleException("Removed gameplay config keys resurfaced:\n - ${violations.join('\n - ')}")
         }
 
-        logger.lifecycle('[verifyGameplayConfigContractSsoT] passed. Platform providers delegate to shared contract and removed keys stay absent.')
+        logger.lifecycle('[verifyGameplayConfigContractSsoT] passed. Gameplay config descriptors are AC-owned and platform bridges stay deleted.')
     }
 }
 
@@ -1081,7 +1203,7 @@ tasks.register('verifyLoaderEntrypointNames') {
 tasks.register('verifyCleanupResidueGuards') {
     group = 'verification'
     description = 'Run cleanup-residue guard checks for SSOT regressions.'
-    dependsOn 'verifyAcPlayerUuidSsoT', 'verifyGameplayConfigContractSsoT', 'verifyMcmodNoAcSpecificBootstrap', 'verifyRuntimeEventNoThinItemAdapter', 'verifyGuiNetworkTransportBoundaries', 'verifyGuiNamespaceLayout', 'verifyEntityHookRegistrySpecs', 'verifyBlockDslNoRuntimeEvents', 'verifyAcBlockGuiSyncHelpers', 'verifyAbilityFxBeamOpsHelper', 'verifyDatagenProviderFactoryAdapters', 'verifyTransientBuildArtifactsIgnored', 'verifyLoaderEntrypointNames'
+    dependsOn 'verifyAcPlayerUuidSsoT', 'verifyGameplayConfigContractSsoT', 'verifyMcmodNoAcSpecificBootstrap', 'verifyRuntimeEventNoThinItemAdapter', 'verifyGuiNetworkTransportBoundaries', 'verifyGuiNamespaceLayout', 'verifyEntityHookRegistrySpecs', 'verifyBlockDslNoRuntimeEvents', 'verifyAcBlockGuiSyncHelpers', 'verifyAbilityFxBeamOpsHelper', 'verifyDatagenProviderFactoryAdapters', 'verifyTransientBuildArtifactsIgnored', 'verifyLoaderEntrypointNames', 'verifyPlatformNoAcSourceInjection', 'verifyDeletedCompatibilityResidues'
 }
 
 tasks.register('runFabricSmoke') {

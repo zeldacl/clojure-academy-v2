@@ -8,9 +8,8 @@
 (defn init-lifecycle!
   [{:keys [init-platform!
            init-from-java!
-           init-core!
            load-config!
-           bind-gameplay-config!
+           activate-runtime-content!
            init-blockstate-properties!
            register-content!
            install-runtime!
@@ -20,9 +19,8 @@
     :fabric-1.20.1
     {:init-platform! init-platform!
      :init-from-java! init-from-java!
-     :init-core! init-core!
      :load-config! load-config!
-     :bind-gameplay-config! bind-gameplay-config!
+      :activate-runtime-content! activate-runtime-content!
      :init-blockstate-properties! init-blockstate-properties!
      :register-content! register-content!
      :install-runtime! install-runtime!

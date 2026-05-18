@@ -6,11 +6,13 @@ plugins {
 
 apply from: rootProject.file('gradle/platform_build_helpers.gradle')
 
-// 物理注入 ac �?mcmod 的源码与资源
-configureInjectedPlatformSources(includeAcJava: true)
+// Inject only shared Minecraft/mcmod sources. AC is loaded through explicit
+// runtime outputs plus content SPI/lifecycle, not as platform source.
+configureInjectedPlatformSources()
+configureAcContentRuntime()
 
 loom {
-    // 移除 forge {} 块，Fabric 不需�?    
+    // Fabric does not use the Forge-specific Loom block.
     runs {
         client {
             client()
@@ -22,7 +24,7 @@ loom {
             configName = "Fabric Server 1.20.1"
             runDir = "run"
         }
-        // Fabric �?DataGen 配置方式不同
+        // Fabric datagen uses Fabric API system properties.
         datagen {
             server()
             configName = "Fabric DataGen 1.20.1"
@@ -45,18 +47,15 @@ dependencies {
     minecraft "com.mojang:minecraft:1.20.1"
     mappings loom.officialMojangMappings()
     
-    // --- 核心变化：替换为 Fabric 依赖 ---
-    modImplementation "net.fabricmc:fabric-loader:0.15.11" // 建议版本
+    modImplementation "net.fabricmc:fabric-loader:0.15.11"
     modImplementation "net.fabricmc.fabric-api:fabric-api:0.92.0+1.20.1" // Fabric API
-    
-    // Shared sources are injected physically via sourceSets above.
 }
 
 addSharedClojureRuntimeDeps(null)
 
 configureSharedClojureShadowJar()
 
-// 配置重映射，Architectury Loom 会自动处�?Fabric 的重映射
+// Architectury Loom remaps the Fabric artifact.
 remapJar {
     inputFile = shadowJar.archiveFile
     dependsOn shadowJar

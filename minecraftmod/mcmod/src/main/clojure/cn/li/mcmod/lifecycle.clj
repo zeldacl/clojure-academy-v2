@@ -38,6 +38,25 @@
   (when-let [f @runtime-content-activation-fn]
     (f)))
 
+(defonce datagen-metadata-init-fns
+  ;; Vector of datagen metadata init functions supplied by content modules.
+  (atom []))
+
+(defn register-datagen-metadata-init!
+  "Register content-owned datagen metadata initialization (fn [] ...).
+
+  Platform datagen entrypoints execute these hooks through mc-1.20.1 shared
+  setup utilities instead of referencing concrete content namespaces."
+  [init-fn]
+  (swap! datagen-metadata-init-fns conj init-fn)
+  nil)
+
+(defn run-datagen-metadata-init!
+  "Run all registered datagen metadata initialization hooks."
+  []
+  (doseq [f @datagen-metadata-init-fns]
+    (f)))
+
 (defonce client-init-fns
   ;; Vector of client init functions to run during client setup.
   (atom []))

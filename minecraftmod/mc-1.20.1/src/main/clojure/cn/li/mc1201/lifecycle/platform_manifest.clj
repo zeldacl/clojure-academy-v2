@@ -11,8 +11,8 @@
     :phases [{:id :platform-init
               :actions [:init-platform!]}
              {:id :runtime-activation
-              :desc "activate runtime content and gameplay config"
-              :actions [:activate-runtime-content! :bind-gameplay-config!]}
+              :desc "activate runtime content"
+              :actions [:activate-runtime-content!]}
              {:id :resource-init
               :actions [:init-resource-definitions!]}
              {:id :content-registration
@@ -27,8 +27,8 @@
     :phases [{:id :platform-init
               :actions [:init-platform! :init-from-java!]}
              {:id :runtime-activation
-              :desc "core init and config load/bind"
-              :actions [:init-core! :load-config! :bind-gameplay-config!]}
+              :desc "load platform config and activate runtime content"
+              :actions [:load-config! :activate-runtime-content!]}
              {:id :resource-init
               :desc "shared blockstate property init"
               :actions [:init-blockstate-properties!]}
