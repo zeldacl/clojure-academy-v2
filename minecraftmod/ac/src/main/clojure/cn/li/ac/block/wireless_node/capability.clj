@@ -1,0 +1,84 @@
+(ns cn.li.ac.block.wireless-node.capability
+  "Wireless node API/capability implementations."
+  (:require [cn.li.ac.block.wireless-node.state :as node-state]
+            [cn.li.ac.wireless.config :as node-config]
+            [cn.li.mcmod.block.state-schema :as state-schema]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.position :as pos]))
+
+(deftype WirelessNodeImpl [be]
+  cn.li.acapi.wireless.IWirelessNode
+
+  (getEnergy [_]
+    (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)]
+      (double (state-schema/get-field node-state/node-state-schema state :energy))))
+
+  (getMaxEnergy [_]
+    (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)]
+      (double (node-state/node-max-energy state))))
+
+  (getBandwidth [_]
+    (let [state     (or (platform-be/get-custom-state be) node-state/node-default-state)
+          node-type (keyword (state-schema/get-field node-state/node-state-schema state :node-type))]
+      (double (node-config/bandwidth node-type))))
+
+  (getCapacity [_]
+    (let [state     (or (platform-be/get-custom-state be) node-state/node-default-state)
+          node-type (keyword (state-schema/get-field node-state/node-state-schema state :node-type))]
+      (int (node-config/capacity node-type))))
+
+  (getRange [_]
+    (let [state     (or (platform-be/get-custom-state be) node-state/node-default-state)
+          node-type (keyword (state-schema/get-field node-state/node-state-schema state :node-type))]
+      (double (node-config/range-blocks node-type))))
+
+  (getNodeName [_]
+    (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)]
+      (str (state-schema/get-field node-state/node-state-schema state :node-name))))
+
+  (getPassword [_]
+    (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)]
+      (str (state-schema/get-field node-state/node-state-schema state :password))))
+
+  (getBlockPos [_]
+    (pos/position-get-block-pos be))
+
+  Object
+  (toString [_]
+    (str "WirelessNodeImpl@" (pos/position-get-block-pos be))))
+
+(deftype ClojureEnergyImpl [be]
+  cn.li.mcmod.energy.IEnergyCapable
+
+  (receiveEnergy [_ max-receive simulate]
+    (let [state    (or (platform-be/get-custom-state be) node-state/node-default-state)
+          cur      (double (state-schema/get-field node-state/node-state-schema state :energy))
+          max-e    (double (node-state/node-max-energy state))
+          can-recv (- max-e cur)
+          actual   (min can-recv (double max-receive))]
+      (when (and (not simulate) (pos? actual))
+        (platform-be/set-custom-state! be (assoc state :energy (+ cur actual))))
+      (int actual)))
+
+  (extractEnergy [_ max-extract simulate]
+    (let [state  (or (platform-be/get-custom-state be) node-state/node-default-state)
+          cur    (double (state-schema/get-field node-state/node-state-schema state :energy))
+          actual (min cur (double max-extract))]
+      (when (and (not simulate) (pos? actual))
+        (platform-be/set-custom-state! be (assoc state :energy (- cur actual))))
+      (int actual)))
+
+  (getEnergyStored [_]
+    (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)]
+      (int (state-schema/get-field node-state/node-state-schema state :energy))))
+
+  (getMaxEnergyStored [_]
+    (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)]
+      (int (node-state/node-max-energy state))))
+
+  (canExtract [_] true)
+  (canReceive [_] true)
+
+  Object
+  (toString [_]
+    (str "ClojureEnergyImpl@" (pos/position-get-block-pos be))))

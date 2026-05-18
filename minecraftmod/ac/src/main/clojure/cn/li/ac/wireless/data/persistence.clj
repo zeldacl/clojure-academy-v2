@@ -1,6 +1,7 @@
 (ns cn.li.ac.wireless.data.persistence
   "Canonical NBT persistence for the current wireless runtime state."
   (:require [cn.li.ac.wireless.core.vblock :as vb]
+            [cn.li.ac.wireless.data.vblock-codec :as vblock-codec]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
@@ -9,30 +10,13 @@
 
 (def schema-version 1)
 
-(defn- vblocks-to-nbt-list
-  [vblocks]
-  (let [items (nbt/create-nbt-list)]
-    (doseq [vblock vblocks]
-      (nbt/nbt-append! items (vb/vblock-to-nbt vblock)))
-    items))
-
-(defn- nbt-list->vblocks
-  [items default-type default-ignore-chunk]
-  (let [size (if items (nbt/nbt-list-size items) 0)]
-    (vec
-      (keep
-        (fn [index]
-          (when-let [compound (nbt/nbt-list-get-compound items index)]
-            (vb/vblock-from-nbt compound default-type default-ignore-chunk)))
-        (range size)))))
-
 (defn network-to-nbt
   [network]
   (let [compound (nbt/create-nbt-compound)]
-    (nbt/nbt-set-tag! compound "matrix" (vb/vblock-to-nbt (:matrix network)))
+    (nbt/nbt-set-tag! compound "matrix" (vblock-codec/vblock-to-nbt (:matrix network)))
     (nbt/nbt-set-string! compound "ssid" (network-state/get-ssid network))
     (nbt/nbt-set-string! compound "password" (network-state/get-password network))
-    (nbt/nbt-set-tag! compound "nodes" (vblocks-to-nbt-list (network-state/get-nodes network)))
+    (nbt/nbt-set-tag! compound "nodes" (vblock-codec/vblocks-to-nbt-list (network-state/get-nodes network)))
     (nbt/nbt-set-double! compound "buffer" (double (network-state/field-value (:buffer network))))
     (nbt/nbt-set-int! compound "updateCounter" (int (network-state/field-value (:update-counter network))))
     (nbt/nbt-set-boolean! compound "disposed" (network-state/is-disposed? network))
@@ -46,7 +30,7 @@
                   matrix-vb
                   (nbt/nbt-get-string compound "ssid")
                   (nbt/nbt-get-string compound "password"))]
-    (reset! (:nodes network) (nbt-list->vblocks (nbt/nbt-get-list compound "nodes") :node false))
+            (reset! (:nodes network) (vblock-codec/nbt-list->vblocks (nbt/nbt-get-list compound "nodes") :node false vb/from-foundation))
     (reset! (:buffer network) (nbt/nbt-get-double compound "buffer"))
     (reset! (:update-counter network) (nbt/nbt-get-int compound "updateCounter"))
     (reset! (:disposed network) (nbt/nbt-get-boolean compound "disposed"))

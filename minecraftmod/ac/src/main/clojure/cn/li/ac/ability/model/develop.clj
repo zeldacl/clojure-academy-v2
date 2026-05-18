@@ -14,21 +14,15 @@
      :max-stim       int     ; total stim units required
      :tick-this-stim int     ; ticks accumulated in current stim unit
      :energy-consumed float} ; total energy consumed this session"
-  (:require [cn.li.ac.ability.config :as cfg]))
+  (:require [cn.li.ac.ability.domain.developer :as developer]))
 
 ;; ============================================================================
 ;; Developer types (mirrors original DeveloperType.java)
 ;; ============================================================================
 
 (def developer-types
-  "Developer device specifications.
-  :energy   - total energy capacity
-  :tps      - ticks per stim (higher = slower)
-  :cps      - energy consumed per stim
-  :bandwidth - learning bandwidth multiplier (unused for now, reserved)"
-  {:portable {:energy 10000.0 :tps 25 :cps 750.0 :bandwidth 0.3}
-   :normal   {:energy 50000.0 :tps 20 :cps 700.0 :bandwidth 0.7}
-   :advanced {:energy 200000.0 :tps 15 :cps 600.0 :bandwidth 1.0}})
+  "Compatibility alias for developer device specifications."
+  developer/developer-specs)
 
 ;; ============================================================================
 ;; Stim count formulas (matches original)
@@ -83,8 +77,7 @@
 (defn energy-per-tick
   "Energy consumed per tick: CPS / TPS"
   [developer-type]
-  (let [dt (get developer-types developer-type)]
-    (/ (:cps dt) (:tps dt))))
+  (developer/energy-per-tick developer-type))
 
 (defn tick-develop
   "Advance one tick of development.
@@ -92,9 +85,9 @@
   [d]
   (if (not= :developing (:state d))
     d
-    (let [dt        (get developer-types (:developer-type d))
+        (let [dt        (developer/developer-spec (:developer-type d))
           tps       (int (:tps dt))
-          ept       (/ (:cps dt) (double tps))
+          ept       (developer/energy-per-tick (:developer-type d))
           new-tick  (inc (:tick-this-stim d))
           new-energy (+ (:energy-consumed d) ept)]
       (if (>= new-tick tps)
@@ -135,7 +128,7 @@
 
 (defn abort
   "Abort development, returning to idle."
-  [d]
+  [_d]
   (new-develop-data))
 
 (defn fail
@@ -145,5 +138,5 @@
 
 (defn complete-and-reset
   "After processing a :done result, reset to idle."
-  [d]
+  [_d]
   (new-develop-data))

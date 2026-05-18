@@ -3,7 +3,12 @@
 
   This namespace intentionally centralizes access to world-scoped wireless
   state so higher-level API modules stop depending on `wireless.data.world`
-  directly."
+  directly.
+
+  It should remain a thin service boundary: expose stable reads/writes needed
+  by application services, but keep persistence/index mutation mechanics in
+  `wireless.data.*`. New service orchestration should depend on this facade
+  instead of reaching through to data internals."
   (:require [cn.li.ac.wireless.data.world :as wd]))
 
 (def get-world-data wd/get-world-data)

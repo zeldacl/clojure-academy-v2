@@ -1,4 +1,4 @@
- (ns cn.li.ac.wireless.core.vblock
+(ns cn.li.ac.wireless.core.vblock
   "Virtual block reference system for wireless network.
 
   Provides position-based TileEntity references that:
@@ -11,12 +11,10 @@
   - For Clojure state maps: use :node-type / :placer-name keys
   - For Java ScriptedBlockEntity: use getCapability().isPresent() via CapabilitySlots"
   (:require [cn.li.ac.foundation.vblock :as foundation-vb]
-             [cn.li.mcmod.util.log :as log]
-             [cn.li.mcmod.platform.nbt :as nbt]
-             [cn.li.mcmod.platform.position :as pos]
-             [cn.li.mcmod.platform.be :as platform-be]
-             [cn.li.mcmod.platform.world :as world])
-  (:import [cn.li.acapi.wireless WirelessCapabilityKeys]))
+            [cn.li.ac.wireless.core.vblock-resolver :as resolver]
+            [cn.li.ac.wireless.data.vblock-codec :as codec]
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.platform.position :as pos]))
 
 ;; ============================================================================
 ;; VBlock Record
@@ -93,44 +91,12 @@
 (defn vblock-pos
   "Get BlockPos for vblock using platform abstraction"
   [vblock]
-  (pos/create-block-pos (:x vblock) (:y vblock) (:z vblock)))
+  (resolver/vblock-pos vblock))
 
 (defn is-chunk-loaded?
   "Check if the chunk containing this vblock is loaded"
   [vblock w]
-  (let [chunk-x (bit-shift-right (:x vblock) 4)
-        chunk-z (bit-shift-right (:z vblock) 4)]
-    (world/world-is-chunk-loaded?* w chunk-x chunk-z)))
-
-;; ============================================================================
-;; Capability-based type checking
-;; ============================================================================
-
-(defn- has-capability?
-  "Return true if tile exposes the named wireless capability."
-  [tile cap-key]
-  (try (some? (platform-be/get-capability tile cap-key))
-       (catch Exception _ false)))
-
-(defn- tile-has-wireless-matrix? [tile]
-  (if (map? tile)
-    (contains? tile :plate-count)
-    (or (has-capability? tile WirelessCapabilityKeys/MATRIX)
-        (instance? cn.li.acapi.wireless.IWirelessMatrix tile))))
-
-(defn- tile-has-wireless-node? [tile]
-  (if (map? tile)
-    (contains? tile :node-type)
-    (or (has-capability? tile WirelessCapabilityKeys/NODE)
-        (instance? cn.li.acapi.wireless.IWirelessNode tile))))
-
-(defn- tile-has-wireless-generator? [tile]
-  (or (has-capability? tile WirelessCapabilityKeys/GENERATOR)
-      (instance? cn.li.acapi.wireless.IWirelessGenerator tile)))
-
-(defn- tile-has-wireless-receiver? [tile]
-  (or (has-capability? tile WirelessCapabilityKeys/RECEIVER)
-      (instance? cn.li.acapi.wireless.IWirelessReceiver tile)))
+  (resolver/is-chunk-loaded? vblock w))
 
 (defn vblock-get
   "Get the TileEntity/state for this vblock (lazy loading).
@@ -143,18 +109,7 @@
 
   Returns the BlockEntity instance (which holds customState internally)."
   [vblock w]
-  (when w
-    (when (or (:ignore-chunk vblock) (is-chunk-loaded? vblock w))
-      (let [block-pos (vblock-pos vblock)
-            tile      (world/world-get-tile-entity* w block-pos)]
-        (when tile
-          (case (:block-type vblock)
-            :matrix    (when (tile-has-wireless-matrix?    tile) tile)
-            :node      (when (tile-has-wireless-node?      tile) tile)
-            :node-conn (when (tile-has-wireless-node?      tile) tile)
-            :generator (when (tile-has-wireless-generator? tile) tile)
-            :receiver  (when (tile-has-wireless-receiver?  tile) tile)
-            nil))))))
+  (resolver/vblock-get vblock w))
 
 (defn dist-sq
   "Calculate squared distance between two vblocks"
@@ -179,32 +134,14 @@
 (defn vblock-to-nbt
   "Serialize vblock to NBT using platform abstraction"
   [vblock]
-  (let [compound (nbt/create-nbt-compound)]
-    (nbt/nbt-set-int! compound "x" (:x vblock))
-    (nbt/nbt-set-int! compound "y" (:y vblock))
-    (nbt/nbt-set-int! compound "z" (:z vblock))
-    (nbt/nbt-set-string! compound "type" (name (or (:block-type vblock) :node)))
-    (nbt/nbt-set-boolean! compound "ignoreChunk" (boolean (:ignore-chunk vblock)))
-    compound))
+  (codec/vblock-to-nbt vblock))
 
 (defn vblock-from-nbt
   "Deserialize vblock from NBT using platform abstraction"
   ([compound]
    (vblock-from-nbt compound :node false))
   ([compound default-type default-ignore-chunk]
-   (let [x (nbt/nbt-get-int compound "x")
-         y (nbt/nbt-get-int compound "y")
-         z (nbt/nbt-get-int compound "z")
-         block-type-str (try
-                          (nbt/nbt-get-string compound "type")
-                          (catch Exception _ ""))
-         block-type (if (seq block-type-str)
-                      (keyword block-type-str)
-                      default-type)
-         ignore-chunk (try
-                        (nbt/nbt-get-boolean compound "ignoreChunk")
-                        (catch Exception _ default-ignore-chunk))]
-    (from-foundation (foundation-vb/vblock x y z block-type ignore-chunk)))))
+     (from-foundation (codec/vblock-from-nbt compound default-type default-ignore-chunk))))
 
 ;; ============================================================================
 ;; Equality and Hashing

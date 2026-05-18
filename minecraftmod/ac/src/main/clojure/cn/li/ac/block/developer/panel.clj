@@ -15,6 +15,7 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.registry.category :as acat]
+            [cn.li.ac.ability.domain.developer :as developer]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.server.service.learning :as learning]
@@ -92,7 +93,7 @@
               uuid-str (uuid/player-uuid pl)
                   pos (net-helpers/tile-pos-payload tile)
                   bid (platform-be/get-block-id tile)
-                  dtype (if (= (name (or bid "")) "developer-advanced") :advanced :normal)]
+                    dtype (or (developer/developer-type-for-block-id bid) :normal)]
               (client-bridge/open-skill-tree-screen! uuid-str (merge pos {:developer-type dtype})))))))
     (when-let [wbtn (cgui-core/find-widget root "parent_left/panel_machine/button_wireless")]
       (when switch-wireless-tab!

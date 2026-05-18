@@ -9,6 +9,7 @@
   (:require [clojure.string :as str]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.core.capability-resolver :as resolver]
+            [cn.li.ac.wireless.data.vblock-codec :as vblock-codec]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
@@ -339,15 +340,15 @@
         receivers-list (nbt/create-nbt-list)
         generators-list (nbt/create-nbt-list)
         world (:world (:world-data conn))]
-    (nbt/nbt-set-tag! nbt-compound "node" (vb/vblock-to-nbt (:node conn)))
+    (nbt/nbt-set-tag! nbt-compound "node" (vblock-codec/vblock-to-nbt (:node conn)))
     (doseq [receiver-vb (get-receivers conn)]
       (when (or (not (vb/is-chunk-loaded? receiver-vb world))
                 (resolver/resolve-receiver-cap world receiver-vb))
-        (nbt/nbt-append! receivers-list (vb/vblock-to-nbt receiver-vb))))
+        (nbt/nbt-append! receivers-list (vblock-codec/vblock-to-nbt receiver-vb))))
     (doseq [generator-vb (get-generators conn)]
       (when (or (not (vb/is-chunk-loaded? generator-vb world))
                 (resolver/resolve-generator-cap world generator-vb))
-        (nbt/nbt-append! generators-list (vb/vblock-to-nbt generator-vb))))
+        (nbt/nbt-append! generators-list (vblock-codec/vblock-to-nbt generator-vb))))
     (nbt/nbt-set-tag! nbt-compound "receivers" receivers-list)
     (nbt/nbt-set-tag! nbt-compound "generators" generators-list)
     nbt-compound))

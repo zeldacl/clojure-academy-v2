@@ -1,7 +1,9 @@
 (ns cn.li.ac.block.wireless-node-test
   "Unit tests for wireless node pure logic."
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.block.wireless-node.inventory :as node-inventory]
             [cn.li.ac.block.wireless-node.logic :as wnode]
+            [cn.li.ac.block.wireless-node.state :as node-state]
             [cn.li.ac.wireless.config :as node-config]))
 
 (deftest node-types-source-of-truth-test
@@ -36,3 +38,17 @@
       (is (= 2 (wnode/energy->blockstate-level (/ max-energy 2.0) state)))
       (is (= 4 (wnode/energy->blockstate-level max-energy state)))
       (is (= 4 (wnode/energy->blockstate-level (* max-energy 2.0) state))))))
+
+(deftest split-namespace-facade-test
+  (testing "logic facade keeps existing public entry points"
+    (is (identical? node-state/node-default-state wnode/node-default-state))
+    (is (= node-state/node-state-schema wnode/node-state-schema))
+    (is (= node-state/node-max-energy wnode/node-max-energy))
+    (is (= node-inventory/node-container-fns wnode/node-container-fns))
+    (is (fn? wnode/->WirelessNodeImpl))
+    (is (fn? wnode/->ClojureEnergyImpl)))
+  (testing "inventory namespace owns slot metadata"
+    (node-inventory/ensure-node-slot-schema!)
+    (is (= 2 (node-inventory/node-slot-count)))
+    (is (= 0 (node-inventory/node-input-slot-index)))
+    (is (= 1 (node-inventory/node-output-slot-index)))))

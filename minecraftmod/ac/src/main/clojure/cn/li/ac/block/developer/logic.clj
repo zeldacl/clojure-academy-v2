@@ -1,5 +1,3 @@
-(remove-ns 'cn.li.ac.block.developer.logic)
-
 (ns cn.li.ac.block.developer.logic
 	(:require [clojure.string :as str]
 						[cn.li.mcmod.block.dsl :as bdsl]
@@ -8,6 +6,7 @@
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.entity :as entity]
 						[cn.li.ac.ability.util.uuid :as uuid]
+						[cn.li.ac.ability.domain.developer :as developer]
 						[cn.li.ac.block.developer.config :as dev-config]
 						[cn.li.ac.block.developer.schema :as dev-schema]
 						[cn.li.ac.block.energy-converter.wireless-impl :as wireless-impl]
@@ -38,7 +37,7 @@
 				 false)))
 
 (defn- tier-kw-for-block-id [block-id]
-	(if (= (name (or block-id "")) "developer-advanced") :advanced :normal))
+	(or (developer/developer-type-for-block-id block-id) :normal))
 
 (defn- ensure-inventory-shape [state]
 	(let [v2 (vec (take 2 (concat (vec (:inventory state [])) (repeat nil))))]

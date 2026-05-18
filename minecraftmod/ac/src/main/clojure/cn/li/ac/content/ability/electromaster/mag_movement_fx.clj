@@ -1,8 +1,8 @@
 (ns cn.li.ac.content.ability.electromaster.mag-movement-fx
   "Client FX for Magnetic Movement: beam between hand and target."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.ability.client.effects.beam-render :as beam-render]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
 (defonce ^:private effect-state (atom nil))
@@ -62,7 +62,7 @@
         inner-alpha (int (+ 70 (* 120 hide-prob)))
         outer-a {:r 89 :g 196 :b 255 :a outer-alpha}
         inner-a {:r 234 :g 250 :b 255 :a inner-alpha}]
-    (ru/billboard-beam-ops cam-pos start end
+      (beam-render/beam-ops cam-pos start end
       {:width wiggle
        :core-width (* wiggle 0.52)
        :outer-color outer-a

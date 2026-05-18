@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.meltdowner-fx
   "Client FX for Meltdowner: charge ring + beam rays + walk speed."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.ability.client.effects.beam-render :as beam-render]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
@@ -103,19 +104,15 @@
         (range ring-segments)))))
 
 (defn- ray-ops [cam-pos {:keys [start end ttl max-ttl is-reflect?]}]
-  (let [life (/ (double ttl) (double (max 1 max-ttl)))
-        width (if is-reflect?
+  (beam-render/fading-beam-ops cam-pos {:start start :end end :ttl ttl :max-ttl max-ttl :is-reflect? is-reflect?}
+    {:width (fn [{:keys [is-reflect?]} life]
+              (if is-reflect?
                 (* 0.05 (+ 0.45 (* 0.55 life)))
-                (* 0.09 (+ 0.6 (* 0.4 life))))
-        core-width (* width 0.42)
-        outer-a (ru/with-alpha {:r 161 :g 255 :b 142} (int (+ 35 (* 170 life))))
-  inner-a (ru/with-alpha {:r 244 :g 255 :b 236} (int (+ 70 (* 170 life))))]
-    (ru/billboard-beam-ops cam-pos start end
-      {:width width
-       :core-width core-width
-       :outer-color outer-a
-       :inner-color inner-a
-       :line-color (ru/with-alpha {:r 192 :g 255 :b 188} (int (+ 55 (* 150 life))))})))
+                (* 0.09 (+ 0.6 (* 0.4 life)))))
+     :core-ratio 0.42
+     :outer-color (fn [_ life] (ru/with-alpha {:r 161 :g 255 :b 142} (int (+ 35 (* 170 life)))))
+     :inner-color (fn [_ life] (ru/with-alpha {:r 244 :g 255 :b 236} (int (+ 70 (* 170 life)))))
+     :line-color (fn [_ life] (ru/with-alpha {:r 192 :g 255 :b 188} (int (+ 55 (* 150 life)))))}))
 
 (defn- local-walk-speed [ticks]
   (float (max 0.001 (- 0.1 (* 0.001 (double ticks))))))

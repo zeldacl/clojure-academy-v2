@@ -1,5 +1,3 @@
-(remove-ns 'cn.li.ac.ability.server.network)
-
 (ns cn.li.ac.ability.server.network
   "Server-side message handler registrations for the ability system.
 
@@ -23,7 +21,6 @@
             [cn.li.ac.ability.server.util.developer-validation :as dev-validate]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
-            [cn.li.ac.block.developer.logic     :as dev-logic]
             [cn.li.mcmod.platform.world         :as world]
             [cn.li.mcmod.platform.be            :as platform-be]
             [cn.li.ac.ability.registry.event             :as evt]

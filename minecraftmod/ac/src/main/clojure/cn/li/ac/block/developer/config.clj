@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.developer.config
   "Developer configuration — values aligned with AcademyCraft `DeveloperType`
-  energy / stimulation pacing (gameplay constants, not 1:1 Java port).")
+  energy / stimulation pacing (gameplay constants, not 1:1 Java port)."
+  (:require [cn.li.ac.ability.domain.developer :as developer]))
 
 ;; Structure footprint: `cn.li.ac.block.developer.block/developer-multiblock-positions`
 
@@ -8,20 +9,26 @@
   "Ticks between multi-block structure validation."
   100)
 
+(def ^:private wireless-bandwidth-by-tier
+  {:normal 1000.0
+   :advanced 1200.0})
+
+(defn- tier-spec->config
+  [tier]
+  (let [{:keys [energy cps tps]} (developer/developer-spec tier)]
+    {:max-energy energy
+     :energy-per-stimulation cps
+     :stimulation-interval-ticks tps
+     :wireless-bandwidth (get wireless-bandwidth-by-tier tier 1000.0)}))
+
 (def ^:private tier-table
   "Per-tier limits (NORMAL / ADVANCED from classic AC).
   - :max-energy — buffer size (IF)
   - :energy-per-stimulation — IF consumed each stimulation when developing
   - :stimulation-interval-ticks — ticks between stimulations (classic `tps`)
   - :wireless-bandwidth — IF/tick cap for `IWirelessReceiver` inject path"
-  {:normal {:max-energy 50000.0
-            :energy-per-stimulation 700.0
-            :stimulation-interval-ticks 20
-            :wireless-bandwidth 1000.0}
-   :advanced {:max-energy 200000.0
-              :energy-per-stimulation 600.0
-              :stimulation-interval-ticks 15
-              :wireless-bandwidth 1200.0}})
+  {:normal (tier-spec->config :normal)
+   :advanced (tier-spec->config :advanced)})
 
 (defn tier-config
   "Keyword tier `:normal` / `:advanced` → config map."

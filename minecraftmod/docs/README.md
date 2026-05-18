@@ -16,7 +16,7 @@
 | 目录 | 用途 | 入口文档 |
 |------|------|----------|
 | **01-overview** | 总览、布局、构建速查 | [Project_Summary_CN.md](01-overview/Project_Summary_CN.md)、[PROJECT_LAYOUT.md](01-overview/PROJECT_LAYOUT.md)、[GETTING_STARTED.md](01-overview/GETTING_STARTED.md) |
-| **02-architecture** | 架构与平台 | [**Runtime_And_DSL_CN.md**](02-architecture/Runtime_And_DSL_CN.md)、[BlockState_Architecture.md](02-architecture/BlockState_Architecture.md)、[Platform_And_Fabric.md](02-architecture/Platform_And_Fabric.md)、[CLIENT_SERVER_SEPARATION.md](02-architecture/CLIENT_SERVER_SEPARATION.md)、[platform-expansion/README.md](02-architecture/platform-expansion/README.md) |
+| **02-architecture** | 架构与平台 | [**Runtime_And_DSL_CN.md**](02-architecture/Runtime_And_DSL_CN.md)、[AC_MODULE_LAYERING.md](02-architecture/AC_MODULE_LAYERING.md)、[BlockState_Architecture.md](02-architecture/BlockState_Architecture.md)、[Platform_And_Fabric.md](02-architecture/Platform_And_Fabric.md)、[CLIENT_SERVER_SEPARATION.md](02-architecture/CLIENT_SERVER_SEPARATION.md)、[platform-expansion/README.md](02-architecture/platform-expansion/README.md)、[decisions/0001-java-contract-ownership.md](02-architecture/decisions/0001-java-contract-ownership.md) |
 | **03-dsl** | DSL 说明 | [BLOCK_DSL_GUIDE_CN.md](03-dsl/BLOCK_DSL_GUIDE_CN.md)、[ITEM_DSL_GUIDE_CN.md](03-dsl/ITEM_DSL_GUIDE_CN.md)、[NBT_DSL_GUIDE.md](03-dsl/NBT_DSL_GUIDE.md)、[TILE_DSL_GUIDE_CN.md](03-dsl/TILE_DSL_GUIDE_CN.md) |
 | **04-datagen** | 数据生成 | [DataGenerator.md](04-datagen/DataGenerator.md) |
 | **04-systems** | 系统维护手册（架构/边界/排障） | [SYSTEMS_MAINTENANCE_INDEX.md](04-systems/SYSTEMS_MAINTENANCE_INDEX.md) |
@@ -36,6 +36,8 @@
 - **工程路径与命名空间**：[PROJECT_LAYOUT.md](01-overview/PROJECT_LAYOUT.md)
 - **系统维护索引（全量核心系统）**：[04-systems/SYSTEMS_MAINTENANCE_INDEX.md](04-systems/SYSTEMS_MAINTENANCE_INDEX.md)
 - **DSL 与运行时怎么接起来**：[Runtime_And_DSL_CN.md](02-architecture/Runtime_And_DSL_CN.md)
+- **AC 内部分层与兼容 facade 约定**：[AC_MODULE_LAYERING.md](02-architecture/AC_MODULE_LAYERING.md)
+- **Java contract ownership ADR**：[decisions/0001-java-contract-ownership.md](02-architecture/decisions/0001-java-contract-ownership.md)
 - **客户端/服务端代码分离**：[CLIENT_SERVER_SEPARATION.md](02-architecture/CLIENT_SERVER_SEPARATION.md)
 - **多 Loader / 多版本扩展设计**：[platform-expansion/README.md](02-architecture/platform-expansion/README.md)
 - **BlockState 与 DataProvider**：[BlockState_Architecture.md](02-architecture/BlockState_Architecture.md)、[DataGenerator.md](04-datagen/DataGenerator.md)

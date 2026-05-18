@@ -4,88 +4,37 @@
   This namespace bridges the new protocol layer to the concrete item/node
   service implementations while keeping migration friction low."
   (:require [cn.li.ac.energy.api.protocol :as proto]
+            [cn.li.ac.energy.service.provider-registry :as provider-registry]
+            [cn.li.ac.energy.service.subscription :as subscription]
+            [cn.li.ac.energy.service.transfer-executor :as transfer-executor]
             [cn.li.ac.energy.service.item-manager :as item-manager]
             [cn.li.ac.energy.service.node-manager :as node-manager]
             [cn.li.ac.energy.domain.container :as container]
-            [cn.li.mcmod.util.log :as log])
-  (:import [java.util UUID]))
-
-(defn- subscription-id []
-  (str (UUID/randomUUID)))
-
-(defn- infer-provider
-  [value]
-  (cond
-    (nil? value) nil
-    (and (map? value) (:kind value)) value
-    (item-manager/is-energy-item-supported? value) {:kind :item :value value}
-    (node-manager/is-node-supported? value) {:kind :node :value value}
-    (container/energy-container? value) {:kind :container :value value}
-    :else nil))
-
-(defn- resolve-provider
-  [providers id-or-value]
-  (or (get @providers id-or-value)
-      (when (keyword? id-or-value) (get @providers (name id-or-value)))
-      (infer-provider id-or-value)))
-
-(defn- provider-energy
-  [{:keys [kind value ref]}]
-  (case kind
-    :item (item-manager/get-item-energy value)
-    :node (or (node-manager/get-node-energy value) 0.0)
-    :container (container/get-current (if ref @ref value))
-    nil))
-
-(defn- provider-capacity
-  [{:keys [kind value ref]}]
-  (case kind
-    :item (item-manager/get-item-capacity value)
-    :node (or (node-manager/get-node-capacity value) 0.0)
-    :container (container/get-capacity (if ref @ref value))
-    nil))
-
-(defn- update-container-ref!
-  [{:keys [ref value]} f & args]
-  (let [target (or ref value)]
-    (when (instance? clojure.lang.IAtom target)
-      (let [old @target
-            new-value (apply f old args)]
-        (reset! target new-value)
-        [old new-value]))))
-
-(defn- notify-subscribers!
-  [subscriptions source-id old-value new-value]
-  (doseq [[_ {:keys [id callback]}] @subscriptions]
-    (when (= id source-id)
-      (try
-        (callback old-value new-value)
-        (catch Exception e
-          (log/warn (str "Energy subscription callback failed for " source-id ": " (.getMessage e))))))))
+            [cn.li.mcmod.util.log :as log]))
 
 (defrecord EnergySystemImpl [providers subscriptions scheduled-transfers]
   proto/IEnergyManager
   (get-energy [_this id]
-    (some-> (resolve-provider providers id) provider-energy))
+    (some-> (provider-registry/resolve-provider providers id) provider-registry/provider-energy))
 
   (get-capacity [_this id]
-    (some-> (resolve-provider providers id) provider-capacity))
+    (some-> (provider-registry/resolve-provider providers id) provider-registry/provider-capacity))
 
   (set-energy [_this id amount]
-    (if-let [{:keys [kind value] :as provider} (resolve-provider providers id)]
-      (let [old-value (provider-energy provider)]
+    (if-let [{:keys [kind value] :as provider} (provider-registry/resolve-provider providers id)]
+      (let [old-value (provider-registry/provider-energy provider)]
         (case kind
           :item (do
                   (item-manager/set-item-energy! value amount)
-                  (notify-subscribers! subscriptions id old-value (item-manager/get-item-energy value))
+                  (subscription/notify! subscriptions id old-value (item-manager/get-item-energy value))
                   {:success true :reason "ok"})
           :node (do
                   (node-manager/set-node-energy! value amount)
-                  (notify-subscribers! subscriptions id old-value (node-manager/get-node-energy value))
+                  (subscription/notify! subscriptions id old-value (node-manager/get-node-energy value))
                   {:success true :reason "ok"})
-          :container (if-let [[before after] (update-container-ref! provider container/set-energy amount)]
+          :container (if-let [[before after] (provider-registry/update-container-ref! provider container/set-energy amount)]
                        (do
-                         (notify-subscribers! subscriptions id (container/get-current before) (container/get-current after))
+                         (subscription/notify! subscriptions id (container/get-current before) (container/get-current after))
                          {:success true :reason "ok"})
                        {:success false :reason "container is immutable unless registered with an atom ref"})
           {:success false :reason "unsupported provider"}))
@@ -95,61 +44,29 @@
     (proto/transfer-energy this source dest amount nil))
 
   (transfer-energy [_this source dest amount callback]
-    (let [source-provider (resolve-provider providers source)
-          dest-provider (resolve-provider providers dest)]
-      (cond
-        (not (and source-provider dest-provider))
-        {:transferred 0.0 :lost 0.0 :reason "provider not found"}
-
-        (not (pos? (double amount)))
-        {:transferred 0.0 :lost 0.0 :reason "amount must be positive"}
-
-        :else
-        (let [extracted (case (:kind source-provider)
-                          :item (item-manager/discharge-item (:value source-provider) amount)
-                          :node (node-manager/extract-node-energy (:value source-provider) amount)
-                          :container 0.0
-                          0.0)
-              leftover (case (:kind dest-provider)
-                         :item (item-manager/charge-energy-to-item (:value dest-provider) extracted false)
-                         :node (node-manager/charge-node (:value dest-provider) extracted false)
-                         :container extracted
-                         extracted)
-              transferred (- extracted leftover)
-              result {:transferred transferred :lost 0.0 :reason "ok"}]
-          (when (and (pos? leftover) (pos? extracted))
-            (case (:kind source-provider)
-              :item (item-manager/charge-energy-to-item (:value source-provider) leftover false)
-              :node (node-manager/charge-node (:value source-provider) leftover false)
-              nil))
-          (when callback
-            (callback result))
-          result))))
+    (transfer-executor/transfer!
+      (provider-registry/resolve-provider providers source)
+      (provider-registry/resolve-provider providers dest)
+      amount
+      callback))
 
   (drain-energy [_this id amount]
-    (if-let [{:keys [kind value] :as provider} (resolve-provider providers id)]
-      (let [old-value (provider-energy provider)
-            extracted (case kind
-                        :item (item-manager/discharge-item value amount)
-                        :node (node-manager/extract-node-energy value amount)
-                        :container 0.0
-                        0.0)
-            new-value (provider-energy provider)]
-        (notify-subscribers! subscriptions id old-value new-value)
-        [(pos? extracted) extracted])
-      [false 0.0]))
+    (let [provider (provider-registry/resolve-provider providers id)
+          old-value (some-> provider provider-registry/provider-energy)
+          [success extracted] (transfer-executor/drain! provider amount)
+          new-value (some-> provider provider-registry/provider-energy)]
+      (when provider
+        (subscription/notify! subscriptions id old-value new-value))
+      [success extracted]))
 
   (subscribe-to-changes [_this id callback]
-    (let [sid (subscription-id)]
-      (swap! subscriptions assoc sid {:id id :callback callback})
-      sid))
+    (subscription/subscribe! subscriptions id callback))
 
   (unsubscribe-from-changes [_this sid]
-    (swap! subscriptions dissoc sid)
-    nil)
+    (subscription/unsubscribe! subscriptions sid))
 
   (list-energy-providers [_this]
-    (vec (keys @providers)))
+    (provider-registry/provider-ids providers))
 
   proto/IEnergyItem
   (get-item-energy [_this item-stack]
@@ -194,12 +111,12 @@
   (validate-transfer [this source dest amount]
     (let [amount-validation (proto/validate-energy-amount this amount)]
       {:valid (and (:valid amount-validation)
-                   (some? (resolve-provider providers source))
-                   (some? (resolve-provider providers dest)))
+                   (some? (provider-registry/resolve-provider providers source))
+                   (some? (provider-registry/resolve-provider providers dest)))
        :reason (cond
                  (not (:valid amount-validation)) (first (:errors amount-validation))
-                 (nil? (resolve-provider providers source)) "source not found"
-                 (nil? (resolve-provider providers dest)) "destination not found"
+                 (nil? (provider-registry/resolve-provider providers source)) "source not found"
+                 (nil? (provider-registry/resolve-provider providers dest)) "destination not found"
                  :else "ok")}))
   (validate-network-consistency [_this _network-id]
     {:consistent true :errors []})
@@ -208,18 +125,13 @@
 
   proto/IEnergyAdmin
   (admin-dump-state [_this]
-    (into {}
-          (map (fn [[id provider]]
-                 [id {:kind (:kind provider)
-                      :energy (provider-energy provider)
-                      :capacity (provider-capacity provider)}]))
-          @providers))
+    (provider-registry/dump-state providers))
   (admin-set-energy-unsafe [this id amount reason]
     (log/warn (str "Unsafe energy set for " id ": " amount " because " reason))
     (proto/set-energy this id amount))
   (admin-reset-energy-system [_this]
-    (reset! providers {})
-    (reset! subscriptions {})
+    (provider-registry/clear! providers)
+    (subscription/clear! subscriptions)
     (reset! scheduled-transfers {})
     nil)
   (admin-simulate-loss [_this _network-id amount-lost reason]
@@ -243,20 +155,9 @@
   - an EnergyContainer
   - an atom holding an EnergyContainer"
   [id value]
-  (let [provider (cond
-                   (instance? clojure.lang.IAtom value)
-                   (if-let [nested (infer-provider @value)]
-                     (assoc nested :ref value)
-                     {:kind :container :ref value :value @value})
-
-                   :else
-                   (infer-provider value))]
-    (when provider
-      (swap! (:providers (energy-system)) assoc id provider)
-      id)))
+  (provider-registry/register-provider! (:providers (energy-system)) id value))
 
 (defn unregister-provider!
   "Unregister a previously registered provider id."
   [id]
-  (swap! (:providers (energy-system)) dissoc id)
-  nil)
+  (provider-registry/unregister-provider! (:providers (energy-system)) id))

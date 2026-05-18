@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-fx
   "Client FX for Railgun: beam effects + charge hand aura."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.ability.client.effects.beam-render :as beam-render]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]))
@@ -43,17 +44,12 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- beam-ops [cam-pos {:keys [start end ttl max-ttl]}]
-  (let [life (/ (double ttl) (double (max 1 max-ttl)))
-        width (* 0.08 (+ 0.5 life))
-        core-width (* width 0.45)
-        outer-a (ru/with-alpha {:r 236 :g 170 :b 93} (+ 50 (* 150 life)))
-        inner-a (ru/with-alpha {:r 241 :g 240 :b 222} (+ 80 (* 150 life)))]
-    (ru/billboard-beam-ops cam-pos start end
-      {:width width
-       :core-width core-width
-       :outer-color outer-a
-       :inner-color inner-a
-       :line-color (ru/with-alpha {:r 165 :g 230 :b 255} (+ 40 (* 120 life)))})))
+  (beam-render/fading-beam-ops cam-pos {:start start :end end :ttl ttl :max-ttl max-ttl}
+    {:width (fn [_ life] (* 0.08 (+ 0.5 life)))
+     :core-ratio 0.45
+     :outer-color (fn [_ life] (ru/with-alpha {:r 236 :g 170 :b 93} (+ 50 (* 150 life))))
+     :inner-color (fn [_ life] (ru/with-alpha {:r 241 :g 240 :b 222} (+ 80 (* 150 life))))
+     :line-color (fn [_ life] (ru/with-alpha {:r 165 :g 230 :b 255} (+ 40 (* 120 life))))}))
 
 (defn- impact-ring-ops [end ttl max-ttl]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))

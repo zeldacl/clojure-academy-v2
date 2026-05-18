@@ -2,17 +2,15 @@
 	"Validation helpers for developer controller stations used by ability learning handlers."
 	(:require [cn.li.mcmod.platform.entity :as entity]
 						[cn.li.mcmod.platform.position :as pos]
-						[cn.li.mcmod.platform.be :as platform-be]))
+						[cn.li.mcmod.platform.be :as platform-be]
+						[cn.li.ac.ability.domain.developer :as developer]))
 
 (def ^:private max-station-distance 8.0)
 
 (defn developer-type-for-tile
 	[tile]
-	(let [bid (platform-be/get-block-id tile)
-				n (name (or bid ""))]
-		(if (= n "developer-advanced")
-			:advanced
-			:normal)))
+	(or (developer/developer-type-for-block-id (platform-be/get-block-id tile))
+			:normal))
 
 (defn dist-sq-ok-for-station?
 	[player tile]
@@ -30,5 +28,4 @@
 
 (defn developer-controller-tile?
 	[tile]
-	(let [n (name (or (platform-be/get-block-id tile) ""))]
-		(contains? #{"developer-normal" "developer-advanced"} n)))
+	(developer/controller-block? (platform-be/get-block-id tile)))

@@ -16,9 +16,7 @@
   - Animated node status indicator"
   (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
-            [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
             [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
@@ -35,16 +33,13 @@
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
             [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
-            [cn.li.mcmod.gui.container.schema :as schema]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-            [cn.li.mcmod.gui.metadata :as metadata]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.gui.animation :as anim]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.position :as pos]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]])
+            [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
 ;; ============================================================================
@@ -205,24 +200,6 @@
 ;; ============================================================================
 ;; Wireless Page (network list + connect)
 ;; ============================================================================
-
-(defn- widget-textbox
-  [widget]
-  (comp/get-textbox-component widget))
-
-(defn- widget-drawtexture
-  [widget]
-  (comp/get-drawtexture-component widget))
-
-(defn- set-textbox-text!
-  [widget text]
-  (when-let [tb (widget-textbox widget)]
-    (comp/set-text! tb text)))
-
-(defn- set-drawtexture!
-  [widget texture-path]
-  (when-let [dt (widget-drawtexture widget)]
-    (comp/set-texture! dt texture-path)))
 
 (defn create-wireless-panel
   "Shared wireless tab (node mode)."
@@ -486,12 +463,12 @@
   (create-node-gui container player))
 
 (declare node-container?)
-(defonce-guard wireless-node-gui-installed?)
+(defonce ^:private wireless-node-gui-installed? (atom false))
 
 (defn init!
   "Initialize Node GUI module"
   []
-  (with-init-guard wireless-node-gui-installed?
+  (when (compare-and-set! wireless-node-gui-installed? false true)
     (ensure-wireless-node-slot-schema!)
     (gui-dsl/register-gui!
       (gui-dsl/create-gui-spec

@@ -1,0 +1,63 @@
+(ns cn.li.ac.wireless.data.vblock-codec
+  "NBT codec for wireless virtual block references.
+
+  This namespace is intentionally data-only: it depends on the pure foundation
+  VBlock representation and platform NBT, but not on runtime tile resolution.
+  Runtime facades can wrap decoded foundation VBlocks when they need a specific
+  record type for compatibility."
+  (:require [cn.li.ac.foundation.vblock :as foundation-vb]
+            [cn.li.mcmod.platform.nbt :as nbt]))
+
+(defn vblock-to-nbt
+  "Serialize a vblock-like map to an NBT compound."
+  [vblock]
+  (let [compound (nbt/create-nbt-compound)]
+    (nbt/nbt-set-int! compound "x" (:x vblock))
+    (nbt/nbt-set-int! compound "y" (:y vblock))
+    (nbt/nbt-set-int! compound "z" (:z vblock))
+    (nbt/nbt-set-string! compound "type" (name (or (:block-type vblock) :node)))
+    (nbt/nbt-set-boolean! compound "ignoreChunk" (boolean (:ignore-chunk vblock)))
+    compound))
+
+(defn vblock-from-nbt
+  "Deserialize an NBT compound to a pure foundation VBlock."
+  ([compound]
+   (vblock-from-nbt compound :node false))
+  ([compound default-type default-ignore-chunk]
+   (let [x (nbt/nbt-get-int compound "x")
+         y (nbt/nbt-get-int compound "y")
+         z (nbt/nbt-get-int compound "z")
+         block-type-str (try
+                          (nbt/nbt-get-string compound "type")
+                          (catch Exception _ ""))
+         block-type (if (seq block-type-str)
+                      (keyword block-type-str)
+                      default-type)
+         ignore-chunk (try
+                        (nbt/nbt-get-boolean compound "ignoreChunk")
+                        (catch Exception _ default-ignore-chunk))]
+     (foundation-vb/vblock x y z block-type ignore-chunk))))
+
+(defn vblocks-to-nbt-list
+  "Serialize a collection of vblocks to an NBT list."
+  [vblocks]
+  (let [items (nbt/create-nbt-list)]
+    (doseq [vblock vblocks]
+      (nbt/nbt-append! items (vblock-to-nbt vblock)))
+    items))
+
+(defn nbt-list->vblocks
+  "Deserialize an NBT list to VBlocks.
+
+  Optional `from-foundation` allows compatibility facades to preserve their
+  runtime record type while keeping this codec independent from runtime code."
+  ([items default-type default-ignore-chunk]
+   (nbt-list->vblocks items default-type default-ignore-chunk identity))
+  ([items default-type default-ignore-chunk from-foundation]
+   (let [size (if items (nbt/nbt-list-size items) 0)]
+     (vec
+       (keep
+         (fn [index]
+           (when-let [compound (nbt/nbt-list-get-compound items index)]
+             (from-foundation (vblock-from-nbt compound default-type default-ignore-chunk))))
+         (range size))))))

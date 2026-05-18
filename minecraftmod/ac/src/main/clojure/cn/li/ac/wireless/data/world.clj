@@ -2,7 +2,15 @@
   "World-level wireless registry and lifecycle.
 
   This namespace keeps all lifecycle and persistence functions explicit
-  to make behavior easier to understand and debug."
+  to make behavior easier to understand and debug.
+
+  Ownership boundary:
+  - Data ownership lives in `wireless.data.*` namespaces: world registry,
+    indexes, persistence codecs, and lifecycle wrappers.
+  - Business commands should be introduced in `wireless.service.*` and only
+    delegate to this namespace for storage/lifecycle compatibility.
+  - Keep this namespace as a facade for existing callers while moving
+    orchestration upward into services."
   (:require [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.data.spatial-lookup :as spatial-lookup]
             [cn.li.ac.wireless.data.network-lookup :as network-lookup]
