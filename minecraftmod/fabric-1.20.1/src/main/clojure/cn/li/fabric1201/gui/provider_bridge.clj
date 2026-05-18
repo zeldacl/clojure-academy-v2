@@ -2,9 +2,9 @@
   "Fabric 1.20.1 provider bridge.
 
   Uses reify factories and delegates menu construction to shared menu-bridge core."
-  (:require [cn.li.mc1201.gui.provider-bridge-core :as provider-core]
-            [cn.li.mc1201.gui.menu-bridge-core :as menu-core]
-            [cn.li.mc1201.gui.provider-common :as provider-common]
+  (:require [cn.li.mc1201.gui.provider.bridge :as provider-core]
+            [cn.li.mc1201.gui.menu.bridge :as menu-core]
+            [cn.li.mc1201.gui.provider.common :as provider-common]
             [cn.li.mcmod.gui.registry-core :as gui])
   (:import [net.minecraft.world MenuProvider]
            [net.fabricmc.fabric.api.screenhandler.v1 ExtendedScreenHandlerFactory]

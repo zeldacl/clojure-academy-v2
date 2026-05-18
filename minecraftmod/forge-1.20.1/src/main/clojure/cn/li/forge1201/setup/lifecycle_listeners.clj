@@ -2,9 +2,7 @@
   "Lifecycle and client listener registration for Forge mod event bus." 
   (:require [cn.li.forge1201.integration.side :as side]
             [cn.li.forge1201.setup.consumer-support :as consumer-support]
-            [cn.li.mc1201.entity.effect-hooks :as effect-hooks]
-            [cn.li.mc1201.entity.ray-hooks :as ray-hooks]
-            [cn.li.mc1201.entity.marker-hooks :as marker-hooks]
+            [cn.li.mc1201.entity.hooks :as entity-hooks]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.eventbus.api IEventBus]
            [net.minecraftforge.fml.event.lifecycle FMLClientSetupEvent FMLCommonSetupEvent]))
@@ -23,9 +21,7 @@
 
 (defn register-client-hooks!
   []
-  (effect-hooks/register-all-effect-hooks!)
-  (ray-hooks/register-all-ray-hooks!)
-  (marker-hooks/register-all-marker-hooks!)
+  (entity-hooks/register-all-hooks!)
   nil)
 
 (defn register-client-key-mappings!

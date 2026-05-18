@@ -38,7 +38,8 @@
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.item.constraint-plate :as plate]
             [cn.li.ac.item.mat-core :as core]
             [cn.li.ac.wireless.gui.container.common :as common]
@@ -227,15 +228,15 @@
   Uses container atoms for sync; platform layer may attach DataSlots if needed."
   [tile player]
   (let [[be state] (resolve-state tile)
-    proxy      (if be
-         (matrix-logic/->MatrixJavaProxy be)
-         (matrix-logic/->MatrixJavaProxy tile))
-   gui-atoms (schema-runtime/build-gui-atoms matrix-schema/unified-matrix-schema state)]
-    (assoc gui-atoms
-       :tile-entity (or be tile)
-       :tile-java proxy
-       :player player
-     :container-type :matrix)))
+        entity (or be tile)
+        proxy (matrix-logic/->MatrixJavaProxy entity)]
+    (gui-sync/create-schema-container
+      matrix-schema/unified-matrix-schema
+      state
+      player
+      :matrix
+      {:base {:tile-entity entity
+              :tile-java proxy}})))
 
 ;; ============================================================================
 ;; Slot Management (from matrix_container.clj)
@@ -324,11 +325,11 @@
             (reset! (:range container) (:range stats))
             (sync-helpers/query-matrix-network-capacity! container stats)))))))
 
-(defn get-sync-data [container]
-  ((schema-runtime/build-get-sync-data-fn matrix-schema/unified-matrix-schema) container))
+(def ^:private matrix-sync
+  (gui-sync/schema-sync-fns matrix-schema/unified-matrix-schema))
 
-(defn apply-sync-data! [container data]
-  ((schema-runtime/build-apply-sync-data-fn matrix-schema/unified-matrix-schema) container data))
+(def get-sync-data (:get-sync-data matrix-sync))
+(def apply-sync-data! (:apply-sync-data! matrix-sync))
 
 (defn still-valid? [container player]
   (common/still-valid? container player))
@@ -357,7 +358,7 @@
 
 (defn on-close [container]
   (log/debug "Closing wireless matrix container")
-  ((schema-runtime/build-on-close-fn matrix-schema/unified-matrix-schema) container))
+  ((:on-close matrix-sync) container))
 
 ;; ============================================================================
 ;; Sync Packet Handling (from matrix_sync.clj)
@@ -582,28 +583,27 @@
   []
   (with-init-guard wireless-matrix-gui-installed?
     (ensure-wireless-matrix-slot-schema!)
-    (gui-dsl/register-gui!
-      (gui-dsl/create-gui-spec
-        "wireless-matrix"
-        {:gui-id 1
-          :registration {:display-name "Wireless Matrix"
-               :gui-type :matrix
-               :registry-name "wireless_matrix_gui"
-               :screen-factory-fn-kw :create-matrix-screen
-               :slot-layout (slot-schema/get-slot-layout wireless-matrix-id)}
-          :lifecycle {:container-predicate matrix-container?
-            :container-fn create-container
-            :screen-fn create-screen
-            :tick-fn tick!}
-          :sync {:sync-get get-sync-data
-            :sync-apply apply-sync-data!
-            :payload-sync-apply-fn apply-matrix-sync-payload!}
-          :operations {:validate-fn still-valid?
-             :close-fn on-close
-             :button-click-fn handle-button-click!}
-           :slot-operations {:slot-count-fn get-slot-count
-             :slot-get-fn get-slot-item
-             :slot-set-fn set-slot-item!
-             :slot-can-place-fn can-place-item?
-             :slot-changed-fn slot-changed!}}))
+    (gui-reg/register-block-gui!
+      "wireless-matrix"
+      {:gui-id 1
+       :display-name "Wireless Matrix"
+       :gui-type :matrix
+       :registry-name "wireless_matrix_gui"
+       :screen-factory-fn-kw :create-matrix-screen
+       :slot-schema-id wireless-matrix-id
+       :container-predicate matrix-container?
+       :container-fn create-container
+       :screen-fn create-screen
+       :tick-fn tick!
+       :sync-get get-sync-data
+       :sync-apply apply-sync-data!
+       :payload-sync-apply-fn apply-matrix-sync-payload!
+       :validate-fn still-valid?
+       :close-fn on-close
+       :button-click-fn handle-button-click!
+       :slot-count-fn get-slot-count
+       :slot-get-fn get-slot-item
+       :slot-set-fn set-slot-item!
+       :slot-can-place-fn can-place-item?
+       :slot-changed-fn slot-changed!})
     (log/info "Wireless Matrix GUI registered")))

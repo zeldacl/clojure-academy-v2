@@ -14,21 +14,10 @@
   (:require [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1201.gui.network-packet-base :as packet-base])
+            [cn.li.mc1201.gui.network.packet :as packet-base])
   (:import [cn.li.forge1201.network ClojureNetwork]
            [net.minecraft.server.level ServerPlayer]
            [clojure.lang IFn]))
-
-;; ---------------------------------------------------------------------------
-;; EDN serialization helpers (delegates to shared mc1201 edn-state)
-;; ---------------------------------------------------------------------------
-
-(defn- serialize ^bytes [data]
-  (packet-base/encode-payload-bytes data))
-
-(defn- deserialize [^bytes bs]
-  (packet-base/decode-payload-bytes bs
-                                    #(log/error "Failed to deserialize network payload:" (ex-message %))))
 
 ;; ---------------------------------------------------------------------------
 ;; Platform multimethod implementation
@@ -54,7 +43,7 @@
 
 (defmethod net-client/send-request :forge-1.20.1
   [msg-id payload request-id]
-  (invoke-network-static "sendToServer" msg-id (int request-id) (serialize payload)))
+  (invoke-network-static "sendToServer" msg-id (int request-id) (packet-base/encode-payload-bytes payload)))
 
 ;; ---------------------------------------------------------------------------
 ;; Initialization
@@ -66,12 +55,14 @@
   []
   (let [req-handler
         (fn [msg-id request-id payload-bytes player]
-          (let [payload (deserialize payload-bytes)
+          (let [payload (packet-base/decode-payload-bytes
+                          payload-bytes
+                          #(log/error "Failed to deserialize Forge request payload:" (ex-message %)))
                 respond-fn (fn [req-id response]
                              (invoke-network-static "sendToClient"
                                player
                                (int req-id)
-                               (serialize response)))]
+                               (packet-base/encode-payload-bytes response)))]
             (net-server/handle-request
               msg-id
               (int request-id)
@@ -81,7 +72,9 @@
 
         resp-handler
         (fn [request-id response-bytes]
-          (let [payload (deserialize response-bytes)]
+          (let [payload (packet-base/decode-payload-bytes
+                          response-bytes
+                          #(log/error "Failed to deserialize Forge response payload:" (ex-message %)))]
             (packet-base/dispatch-client-response! request-id payload)))]
 
     (invoke-network-static "init" req-handler resp-handler))

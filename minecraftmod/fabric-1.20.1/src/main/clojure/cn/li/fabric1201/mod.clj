@@ -14,12 +14,10 @@
             [cn.li.fabric1201.setup.event-wiring :as event-wiring]
             [cn.li.fabric1201.config.bridge :as config-bridge]
             [cn.li.fabric1201.config.gameplay-bridge :as gameplay-bridge]
-            [cn.li.mc1201.config.gameplay-bridge :as shared-gameplay-bridge]
+            [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1201.entity.effect-hooks :as effect-hooks]
-            [cn.li.mc1201.entity.ray-hooks :as ray-hooks]
-            [cn.li.mc1201.entity.marker-hooks :as marker-hooks])
+            [cn.li.mc1201.entity.hooks :as entity-hooks])
   (:import [cn.li.fabric1201.shim FabricBootstrapHelper]))
 
 (def mod-id modid/MOD-ID)
@@ -52,13 +50,11 @@
      :init-from-java! init/init-from-java
      :init-core! core/init
      :load-config! config-bridge/load-all!
-     :bind-gameplay-config! #(shared-gameplay-bridge/bind-gameplay-config! (gameplay-bridge/provider-map))
+    :bind-gameplay-config! #(gameplay/install-config-bridge! (gameplay-bridge/provider-map))
      :init-blockstate-properties! bsp/init-all-properties!
      :register-content! #(do
                            (content-registration/register-content! (registration-context))
-                           (effect-hooks/register-all-effect-hooks!)
-                           (ray-hooks/register-all-ray-hooks!)
-                           (marker-hooks/register-all-marker-hooks!))
+                           (entity-hooks/register-all-hooks!))
      :install-runtime! runtime-setup/install-runtime!
      :register-events! event-wiring/register-events!})
   (log/info "Fabric mod initialization complete"))

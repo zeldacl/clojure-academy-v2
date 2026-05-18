@@ -28,8 +28,7 @@
                       (constantly imc-dispatch/dispatch-event!))
       ;; Register custom advancement triggers.
       (ModTriggers/init)
-      ;; Ensure shared content init is registered (without Forge referencing
-      ;; the shared content namespace directly).
-      (content/ensure-content-init-registered!)
+      ;; Ensure AC content init is registered through the generic content SPI.
+      (content/register-content! "ac")
       (lifecycle/run-content-init!)
       (achievement-bridge/init!))))

@@ -7,7 +7,7 @@
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
-            [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.ac.block.gui.registration :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
@@ -185,27 +185,26 @@
        :slots [{:id :input :type :input :x 13 :y 49}
                {:id :output :type :output :x 143 :y 49}
                {:id :energy :type :energy :x 42 :y 80}]})
-    (gui-dsl/register-gui!
-      (gui-dsl/create-gui-spec
-        "metal-former"
-        {:gui-id 6
-          :registration {:display-name "Metal Former"
-               :gui-type former-gui-type
-               :registry-name "metal_former_gui"
-               :screen-factory-fn-kw :create-metal-former-screen
-               :slot-layout (slot-schema/get-slot-layout former-slot-schema-id)}
-          :lifecycle {:container-predicate former-container?
-            :container-fn create-container
-            :screen-fn create-screen
-            :tick-fn tick!}
-          :sync {:sync-get get-sync-data
-            :sync-apply apply-sync-data!}
-          :operations {:validate-fn still-valid?
-             :close-fn on-close
-             :button-click-fn handle-button-click!}
-           :slot-operations {:slot-count-fn get-slot-count
-             :slot-get-fn get-slot-item
-             :slot-set-fn set-slot-item!
-             :slot-can-place-fn can-place-item?
-             :slot-changed-fn slot-changed!}}))
+    (gui-reg/register-block-gui!
+      "metal-former"
+      {:gui-id 6
+       :display-name "Metal Former"
+       :gui-type former-gui-type
+       :registry-name "metal_former_gui"
+       :screen-factory-fn-kw :create-metal-former-screen
+       :slot-schema-id former-slot-schema-id
+       :container-predicate former-container?
+       :container-fn create-container
+       :screen-fn create-screen
+       :tick-fn tick!
+       :sync-get get-sync-data
+       :sync-apply apply-sync-data!
+       :validate-fn still-valid?
+       :close-fn on-close
+       :button-click-fn handle-button-click!
+       :slot-count-fn get-slot-count
+       :slot-get-fn get-slot-item
+       :slot-set-fn set-slot-item!
+       :slot-can-place-fn can-place-item?
+       :slot-changed-fn slot-changed!})
     (log/info "Metal Former GUI initialized")))

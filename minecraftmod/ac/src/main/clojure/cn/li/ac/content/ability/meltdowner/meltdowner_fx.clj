@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.meltdowner-fx
   "Client FX for Meltdowner: charge ring + beam rays + walk speed."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.effects.beam-render :as beam-render]
+            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
@@ -10,6 +10,18 @@
 (defonce ^:private rays (atom []))
 (def ^:private charge-loop-sound "my_mod:md.md_charge")
 (def ^:private fire-sound "my_mod:md.meltdowner")
+(def ^:private meltdowner-ray-style
+  {:width (fn [{:keys [is-reflect?]} life]
+            (if is-reflect?
+              (* 0.05 (+ 0.45 (* 0.55 life)))
+              (* 0.09 (+ 0.6 (* 0.4 life)))))
+   :core-ratio 0.42
+   :outer-rgb {:r 161 :g 255 :b 142}
+   :outer-alpha (fn [_ life] (int (+ 35 (* 170 life))))
+   :inner-rgb {:r 244 :g 255 :b 236}
+   :inner-alpha (fn [_ life] (int (+ 70 (* 170 life))))
+   :line-rgb {:r 192 :g 255 :b 188}
+   :line-alpha (fn [_ life] (int (+ 55 (* 150 life))))})
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
@@ -103,17 +115,6 @@
              (ru/line-op center p0 link-color)]))
         (range ring-segments)))))
 
-(defn- ray-ops [cam-pos {:keys [start end ttl max-ttl is-reflect?]}]
-  (beam-render/fading-beam-ops cam-pos {:start start :end end :ttl ttl :max-ttl max-ttl :is-reflect? is-reflect?}
-    {:width (fn [{:keys [is-reflect?]} life]
-              (if is-reflect?
-                (* 0.05 (+ 0.45 (* 0.55 life)))
-                (* 0.09 (+ 0.6 (* 0.4 life)))))
-     :core-ratio 0.42
-     :outer-color (fn [_ life] (ru/with-alpha {:r 161 :g 255 :b 142} (int (+ 35 (* 170 life)))))
-     :inner-color (fn [_ life] (ru/with-alpha {:r 244 :g 255 :b 236} (int (+ 70 (* 170 life)))))
-     :line-color (fn [_ life] (ru/with-alpha {:r 192 :g 255 :b 188} (int (+ 55 (* 150 life)))))}))
-
 (defn- local-walk-speed [ticks]
   (float (max 0.001 (- 0.1 (* 0.001 (double ticks))))))
 
@@ -132,7 +133,7 @@
                       [])
         ws (when (and md (:active? md))
              (local-walk-speed (:ticks md)))
-        ray-plan (mapcat #(ray-ops camera-pos %) current-rays)]
+           ray-plan (fx-beam/fading-beams-ops camera-pos current-rays meltdowner-ray-style)]
     (when (or (seq charge-plan) (seq ray-plan) ws)
       {:ops (vec (concat charge-plan ray-plan))
        :local-walk-speed ws})))

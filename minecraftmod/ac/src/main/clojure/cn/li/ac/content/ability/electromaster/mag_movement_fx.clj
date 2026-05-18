@@ -1,12 +1,31 @@
 (ns cn.li.ac.content.ability.electromaster.mag-movement-fx
   "Client FX for Magnetic Movement: beam between hand and target."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.effects.beam-render :as beam-render]
+            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
 (defonce ^:private effect-state (atom nil))
 (def ^:private loop-sound "my_mod:em.move_loop")
+
+(defn- magnetic-beam-style [tick]
+  (let [phase (* 0.9 (double tick))
+        tex-phase (* 1.7 (double tick))
+        wiggle (+ 0.02
+                  (* 0.02 (Math/sin phase))
+                  (* 0.012 (Math/sin tex-phase)))
+        flicker (+ (* 0.5 (+ 1.0 (Math/sin (* 0.27 (double tick)))))
+                   (* 0.5 (+ 1.0 (Math/sin (* 0.53 (double tick))))))
+        show-prob (+ 0.1 (* 0.35 flicker))
+        hide-prob (+ 0.6 (* 0.25 (- 1.0 flicker)))]
+    {:width wiggle
+     :core-width (* wiggle 0.52)
+     :outer-rgb {:r 89 :g 196 :b 255}
+     :outer-alpha (int (+ 45 (* 95 show-prob)))
+     :inner-rgb {:r 234 :g 250 :b 255}
+     :inner-alpha (int (+ 70 (* 120 hide-prob)))
+     :line-rgb {:r 161 :g 236 :b 255}
+     :line-alpha (int (+ 90 (* 110 flicker)))}))
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
@@ -48,40 +67,15 @@
 ;; Render ops
 ;; ---------------------------------------------------------------------------
 
-(defn- mag-movement-beam-ops [cam-pos start end tick]
-  (let [phase (* 0.9 (double tick))
-        tex-phase (* 1.7 (double tick))
-        wiggle (+ 0.02
-                  (* 0.02 (Math/sin phase))
-                  (* 0.012 (Math/sin tex-phase)))
-        flicker (+ (* 0.5 (+ 1.0 (Math/sin (* 0.27 (double tick)))))
-                   (* 0.5 (+ 1.0 (Math/sin (* 0.53 (double tick))))))
-        show-prob (+ 0.1 (* 0.35 flicker))
-        hide-prob (+ 0.6 (* 0.25 (- 1.0 flicker)))
-        outer-alpha (int (+ 45 (* 95 show-prob)))
-        inner-alpha (int (+ 70 (* 120 hide-prob)))
-        outer-a {:r 89 :g 196 :b 255 :a outer-alpha}
-        inner-a {:r 234 :g 250 :b 255 :a inner-alpha}]
-      (beam-render/beam-ops cam-pos start end
-      {:width wiggle
-       :core-width (* wiggle 0.52)
-       :outer-color outer-a
-       :inner-color inner-a
-       :line-color {:r 161 :g 236 :b 255 :a (int (+ 90 (* 110 flicker)))}})))
-
-;; ---------------------------------------------------------------------------
-;; Build plan
-;; ---------------------------------------------------------------------------
-
 (defn- build-plan [camera-pos hand-center-pos tick]
   (let [mag-move @effect-state]
     (when (and hand-center-pos
                (:active? mag-move)
                (map? (:target mag-move)))
-      {:ops (vec (mag-movement-beam-ops camera-pos
-                                        (dissoc hand-center-pos :player-uuid)
-                                        (:target mag-move)
-                                        tick))})))
+      {:ops (vec (fx-beam/beam-ops camera-pos
+                                   (dissoc hand-center-pos :player-uuid)
+                                   (:target mag-move)
+                                   (magnetic-beam-style tick)))})))
 
 ;; ---------------------------------------------------------------------------
 ;; Registration

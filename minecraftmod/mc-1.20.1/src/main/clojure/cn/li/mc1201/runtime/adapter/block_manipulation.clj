@@ -1,0 +1,33 @@
+(ns cn.li.mc1201.runtime.adapter.block-manipulation
+  "Shared IBlockManipulation adapter factory.
+
+  Platform namespaces provide the server lookup and break guard. Shared
+  Minecraft-version-specific code owns the protocol implementation and delegates
+  the actual block operations to block-manipulation-core."
+  (:require [cn.li.mc1201.runtime.adapter-support :as adapter-support]
+            [cn.li.mc1201.runtime.block-manipulation-core :as core]
+            [cn.li.mcmod.platform.block-manipulation :as bm]))
+
+(defn create-block-manipulation
+  [server-fn break-guard-fn]
+  (reify bm/IBlockManipulation
+    (break-block! [_ player-id world-id x y z drop?]
+      (core/break-block! (server-fn) player-id world-id x y z drop? break-guard-fn))
+    (set-block! [_ world-id x y z block-id]
+      (core/set-block! (server-fn) world-id x y z block-id))
+    (get-block [_ world-id x y z]
+      (core/get-block (server-fn) world-id x y z))
+    (get-block-hardness [_ world-id x y z]
+      (core/get-block-hardness (server-fn) world-id x y z))
+    (can-break-block? [_ player-id world-id x y z]
+      (boolean (core/can-break-block? (server-fn) player-id world-id x y z break-guard-fn)))
+    (find-blocks-in-line [_ world-id x1 y1 z1 dx dy dz max-distance]
+      (core/find-blocks-in-line (server-fn) world-id x1 y1 z1 dx dy dz max-distance))
+    (liquid-block? [_ world-id x y z]
+      (boolean (core/liquid-block? (server-fn) world-id x y z)))
+    (farmland-block? [_ world-id x y z]
+      (boolean (core/farmland-block? (server-fn) world-id x y z)))))
+
+(defn install-block-manipulation!
+  [block-manipulation label]
+  (adapter-support/install-adapter! #'bm/*block-manipulation* block-manipulation label))

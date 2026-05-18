@@ -259,7 +259,7 @@ apply from: rootProject.file('gradle/platform_build_helpers.gradle')
 // }
 
 // 物理注入 ac 和 mcmod 的源码与资源
-configureInjectedPlatformSources(includeAcJava: false)
+configureInjectedPlatformSources(includeAcJava: true)
 
 loom {
     // 现代 Loom 1.7+ 的 Forge 专用配置块

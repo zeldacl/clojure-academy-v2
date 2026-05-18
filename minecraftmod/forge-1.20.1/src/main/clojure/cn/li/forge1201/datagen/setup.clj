@@ -5,45 +5,12 @@
    Triggered during setup phase when running:
      ./gradlew :forge-1.20.1:runData"
   (:require [cn.li.mcmod.config :as modid]
-            [cn.li.forge1201.datagen.blockstate-provider :as bsp]
-            [cn.li.forge1201.datagen.item-model-provider :as imp]
-            [cn.li.forge1201.datagen.lang-provider :as lang]
-            [cn.li.forge1201.datagen.advancement-provider :as adv]
-            [cn.li.forge1201.datagen.recipe-provider :as rp]
-            [cn.li.mc1201.datagen.provider-manifest :as provider-manifest]
+            [cn.li.ac.datagen.bootstrap :as ac-datagen]
+            [cn.li.forge1201.datagen.provider-factory :as provider-factory]
+            [cn.li.mc1201.datagen.provider-registration :as provider-registration]
             [cn.li.mc1201.datagen.setup-common :as setup-common])
   (:import [net.minecraftforge.data.event GatherDataEvent]
-           [net.minecraft.data DataProvider$Factory DataGenerator]))
-
-
-
-(defn- add-provider!
-  "Registers a DataProvider via Factory, correctly using Minecraft 1.20.1 API.
-   DataGenerator.addProvider expects a DataProvider.Factory<T> (PackOutput -> DataProvider)."
-  [^DataGenerator generator create-fn exfile-helper]
-  (.addProvider generator true
-    (reify DataProvider$Factory
-      (create [_ pack-output]
-        (create-fn pack-output exfile-helper)))))
-
-(def ^:private provider-factories
-  {:blockstate bsp/create
-   :item-model imp/create
-   :lang lang/create
-   :recipe rp/create
-   :advancement adv/create})
-
-(defn- provider-factory
-  [{:keys [factory] :as provider}]
-  (or (get provider-factories factory)
-      (throw (ex-info "Unknown Forge datagen provider factory"
-                      {:provider provider
-                       :known-factories (sort (keys provider-factories))}))))
-
-(defn- register-provider!
-  [^DataGenerator generator exfile-helper provider]
-  (println (provider-manifest/registering-message modid/*mod-id* provider))
-  (add-provider! generator (provider-factory provider) exfile-helper))
+           [net.minecraft.data DataGenerator]))
 
 ;; ============================================================================
 ;; EventBusSubscriber Configuration
@@ -67,12 +34,14 @@
   (let [generator (.getGenerator event)
         exfile-helper (.getExistingFileHelper event)]
     ;; Ensure AC content registries are loaded before providers query metadata.
-    (setup-common/ensure-ac-content-loaded!)
+    (setup-common/ensure-content-loaded! "ac")
+    (ac-datagen/register-datagen-metadata!)
 
-    (doseq [provider (provider-manifest/providers-for :forge-1.20.1)]
-      (register-provider! generator exfile-helper provider))
-
-    (println (provider-manifest/summary-message modid/*mod-id* :forge-1.20.1))))
+    (provider-registration/register-providers!
+      :forge-1.20.1
+      {:mod-id modid/*mod-id*
+       :register-provider! (fn [provider]
+                             (provider-factory/add-provider! generator exfile-helper provider))})))
 
 (defn static-gather-data
   "Static entry point used by Java annotation wrapper."

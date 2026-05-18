@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.client.terminal-screen-bridge
   "CLIENT-ONLY screen bridge for terminal GUI (Forge layer)."
   (:require [cn.li.mcmod.platform.terminal-ui :as terminal-ui]
-            [cn.li.mc1201.gui.cgui-runtime :as cgui-rt]
+            [cn.li.mc1201.gui.cgui.runtime :as cgui-rt]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens Screen]

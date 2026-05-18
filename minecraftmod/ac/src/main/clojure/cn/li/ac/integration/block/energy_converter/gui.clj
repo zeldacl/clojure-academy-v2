@@ -6,7 +6,7 @@
 						[cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
-						[cn.li.mcmod.gui.dsl :as gui-dsl]
+						[cn.li.ac.block.gui.registration :as gui-reg]
 						[cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
 						[cn.li.mcmod.gui.slot-schema :as slot-schema]
 						[cn.li.mcmod.gui.slot-registry :as slot-registry]
@@ -135,27 +135,26 @@
 		(slot-schema/register-slot-schema!
 			{:schema-id converter-slot-schema-id
 			 :slots []})
-		(gui-dsl/register-gui!
-			(gui-dsl/create-gui-spec
-				"energy-converter"
-				{:gui-id 14
-				 :registration {:display-name "Energy Converter"
-				                :gui-type converter-gui-type
-				                :registry-name "energy_converter_gui"
-				                :screen-factory-fn-kw :create-energy-converter-screen
-				                :slot-layout (slot-schema/get-slot-layout converter-slot-schema-id)}
-				 :lifecycle {:container-predicate converter-container?
-				             :container-fn create-container
-				             :screen-fn create-screen
-				             :tick-fn tick!}
-				 :sync {:sync-get get-sync-data
-				        :sync-apply apply-sync-data!}
-				 :operations {:validate-fn still-valid?
-				              :close-fn on-close
-				              :button-click-fn handle-button-click!}
-				 :slot-operations {:slot-count-fn get-slot-count
-				         :slot-get-fn get-slot-item
-				         :slot-set-fn set-slot-item!
-				         :slot-can-place-fn can-place-item?
-				         :slot-changed-fn slot-changed!}}))
+		(gui-reg/register-block-gui!
+			"energy-converter"
+			{:gui-id 14
+			 :display-name "Energy Converter"
+			 :gui-type converter-gui-type
+			 :registry-name "energy_converter_gui"
+			 :screen-factory-fn-kw :create-energy-converter-screen
+			 :slot-schema-id converter-slot-schema-id
+			 :container-predicate converter-container?
+			 :container-fn create-container
+			 :screen-fn create-screen
+			 :tick-fn tick!
+			 :sync-get get-sync-data
+			 :sync-apply apply-sync-data!
+			 :validate-fn still-valid?
+			 :close-fn on-close
+			 :button-click-fn handle-button-click!
+			 :slot-count-fn get-slot-count
+			 :slot-get-fn get-slot-item
+			 :slot-set-fn set-slot-item!
+			 :slot-can-place-fn can-place-item?
+			 :slot-changed-fn slot-changed!})
 		(log/info "Energy Converter GUI registered (gui-id 14)")))

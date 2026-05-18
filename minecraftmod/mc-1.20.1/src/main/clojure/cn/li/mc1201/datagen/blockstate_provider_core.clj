@@ -77,13 +77,9 @@
 
 (defn model-id->registry-name
   [model-name]
-  (let [from-node (when (try
-                          (requiring-resolve 'cn.li.ac.block.wireless-node.blockstate/get-node-model-texture-config)
-                          true
-                          (catch Throwable _ false))
-                    (when-let [f (requiring-resolve 'cn.li.ac.block.wireless-node.blockstate/get-node-model-texture-config)]
-                      (when (f model-name)
-                        (second (re-find #"^(node_[^_]+)" model-name)))))]
+  (let [from-node (when (and (str/starts-with? (str model-name) "node_")
+                             (blockstate-def-call "get-model-texture-config" model-name))
+                    (second (re-find #"^(node_[^_]+)" model-name)))]
     (or from-node
         model-name)))
 

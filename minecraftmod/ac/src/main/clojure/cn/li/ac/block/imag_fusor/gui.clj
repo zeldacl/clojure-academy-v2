@@ -14,17 +14,19 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.ac.energy.operations :as energy]
+            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
-            [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.ac.block.imag-fusor.config :as cfg]
             [cn.li.ac.block.imag-fusor.schema :as fusor-schema]
             [cn.li.ac.block.imag-fusor.recipes :as recipes]))
 
 (def fusor-gui-type :imag-fusor)
 (def fusor-slot-schema-id :imag-fusor)
+(def ^:private fusor-sync
+  (gui-sync/schema-sync-fns fusor-schema/imag-fusor-schema))
 
 (defn- phase-liquid-unit?
   [stack]
@@ -36,10 +38,7 @@
 (defn create-container
   [tile player]
   (let [state (or (common/get-tile-state tile) {})]
-    (merge {:tile-entity tile
-            :player player
-            :container-type fusor-gui-type}
-           (schema-runtime/build-gui-atoms fusor-schema/imag-fusor-schema state))))
+    (gui-sync/create-schema-container fusor-schema/imag-fusor-schema tile player fusor-gui-type {:state state})))
 
 (defn get-slot-count [_container]
   (slot-registry/get-slot-count fusor-slot-schema-id))
@@ -63,22 +62,16 @@
 
 (defn still-valid? [_container _player] true)
 
-(defn sync-to-client! [container]
-  ((schema-runtime/build-sync-to-client-fn fusor-schema/imag-fusor-schema) container))
-
-(defn get-sync-data [container]
-  ((schema-runtime/build-get-sync-data-fn fusor-schema/imag-fusor-schema) container))
-
-(defn apply-sync-data! [container data]
-  ((schema-runtime/build-apply-sync-data-fn fusor-schema/imag-fusor-schema) container data))
+(def sync-to-client! (:sync-to-client! fusor-sync))
+(def get-sync-data (:get-sync-data fusor-sync))
+(def apply-sync-data! (:apply-sync-data! fusor-sync))
 
 (defn tick! [container]
   (sync-to-client! container))
 
 (defn handle-button-click! [_container _button-id _player] nil)
 
-(defn on-close [container]
-  ((schema-runtime/build-on-close-fn fusor-schema/imag-fusor-schema) container))
+(def on-close (:on-close fusor-sync))
 
 (defn- bind-progress!
   [inv-window container]
@@ -155,27 +148,26 @@
                {:id :phase-input :type :phase-input :x 13 :y 10}
                {:id :energy :type :energy :x 42 :y 80}
                {:id :phase-output :type :phase-output :x 143 :y 10}]})
-    (gui-dsl/register-gui!
-      (gui-dsl/create-gui-spec
-        "imag-fusor"
-        {:gui-id 5
-          :registration {:display-name "Imag Fusor"
-               :gui-type fusor-gui-type
-               :registry-name "imag_fusor_gui"
-               :screen-factory-fn-kw :create-imag-fusor-screen
-               :slot-layout (slot-schema/get-slot-layout fusor-slot-schema-id)}
-          :lifecycle {:container-predicate fusor-container?
-            :container-fn create-container
-            :screen-fn create-screen
-            :tick-fn tick!}
-          :sync {:sync-get get-sync-data
-            :sync-apply apply-sync-data!}
-          :operations {:validate-fn still-valid?
-             :close-fn on-close
-             :button-click-fn handle-button-click!}
-           :slot-operations {:slot-count-fn get-slot-count
-             :slot-get-fn get-slot-item
-             :slot-set-fn set-slot-item!
-             :slot-can-place-fn can-place-item?
-             :slot-changed-fn slot-changed!}}))
+    (gui-reg/register-block-gui!
+      "imag-fusor"
+      {:gui-id 5
+       :display-name "Imag Fusor"
+       :gui-type fusor-gui-type
+       :registry-name "imag_fusor_gui"
+       :screen-factory-fn-kw :create-imag-fusor-screen
+       :slot-schema-id fusor-slot-schema-id
+       :container-predicate fusor-container?
+       :container-fn create-container
+       :screen-fn create-screen
+       :tick-fn tick!
+       :sync-get get-sync-data
+       :sync-apply apply-sync-data!
+       :validate-fn still-valid?
+       :close-fn on-close
+       :button-click-fn handle-button-click!
+       :slot-count-fn get-slot-count
+       :slot-get-fn get-slot-item
+       :slot-set-fn set-slot-item!
+       :slot-can-place-fn can-place-item?
+       :slot-changed-fn slot-changed!})
     (log/info "Imaginary Fusor GUI initialized")))

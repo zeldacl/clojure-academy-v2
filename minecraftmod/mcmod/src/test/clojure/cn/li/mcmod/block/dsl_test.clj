@@ -2,6 +2,7 @@
   "Unit tests for Block DSL"
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.mcmod.block.dsl :as bdsl]
+            [cn.li.mcmod.block.events :as block-events]
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]))
@@ -130,7 +131,7 @@
   (is (= :stone (:material (bdsl/merge-presets (bdsl/wood-preset) {:material :stone})))))
 
 (deftest interaction-handlers-test
-  ;; Handler fns are read from top-level keys on the spec map (see block/dsl handle-*).
+  ;; Handler fns are read from top-level keys on the spec map by block event helpers.
   (let [spec (-> (bdsl/create-block-spec "evt"
                                          {:material :stone
                                           :multi-block? true
@@ -139,10 +140,10 @@
                  (assoc :on-right-click (fn [e] [:right e])
                         :on-break (fn [e] [:break e])
                         :on-place (fn [e] [:place e])))]
-    (is (= [:right :x] (bdsl/handle-right-click spec :x)))
-    (is (= [:break :y] (bdsl/handle-break spec :y)))
-    (is (= [:place :z] (bdsl/handle-place spec :z)))
-    (let [r (bdsl/handle-multi-block-break spec {:pos :p})]
+    (is (= [:right :x] (block-events/handle-right-click spec :x)))
+    (is (= [:break :y] (block-events/handle-break spec :y)))
+    (is (= [:place :z] (block-events/handle-place spec :z)))
+    (let [r (block-events/handle-multi-block-break spec {:pos :p})]
       (is (true? (:should-break-all r)))
       ;; `calculate-multi-block-positions` uses `for` for regular shapes → lazy seq, not vec.
       (is (sequential? (:positions r)))

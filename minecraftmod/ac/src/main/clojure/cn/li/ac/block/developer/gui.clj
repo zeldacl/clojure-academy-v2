@@ -14,9 +14,9 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
-            [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.ac.block.developer.schema :as dev-schema]
             [cn.li.ac.block.developer.logic :as dev-logic]
             [cn.li.ac.block.developer.panel :as dev-panel]
@@ -37,11 +37,12 @@
 
 (def gui-width tech-ui/gui-width)
 (def gui-height tech-ui/gui-height)
+(def ^:private developer-sync
+  (gui-sync/schema-sync-fns dev-schema/unified-developer-schema))
 
 (defn create-container [tile player]
   (let [state (or (common/get-tile-state tile) {})]
-    (merge {:tile-entity tile :player player :container-type :developer}
-           (schema-runtime/build-gui-atoms dev-schema/unified-developer-schema state))))
+    (gui-sync/create-schema-container dev-schema/unified-developer-schema tile player :developer {:state state})))
 
 (defn get-slot-count [_container]
   (slot-registry/get-slot-count developer-gui-id))
@@ -75,23 +76,17 @@
              holder (str (:user-uuid st ""))]
          (or (str/blank? holder) (= holder pid)))))
 
-(defn sync-to-client! [container]
-  ((schema-runtime/build-sync-to-client-fn dev-schema/unified-developer-schema) container))
-
-(defn get-sync-data [container]
-  ((schema-runtime/build-get-sync-data-fn dev-schema/unified-developer-schema) container))
-
-(defn apply-sync-data! [container data]
-  ((schema-runtime/build-apply-sync-data-fn dev-schema/unified-developer-schema) container data))
+(def sync-to-client! (:sync-to-client! developer-sync))
+(def get-sync-data (:get-sync-data developer-sync))
+(def apply-sync-data! (:apply-sync-data! developer-sync))
 
 (defn tick! [container]
-  (swap! (:sync-ticker container) inc)
-  (sync-to-client! container))
+  (gui-sync/sync-tick! container sync-to-client! {:ticker-key :sync-ticker}))
 
 (defn handle-button-click! [_container _button-id _player] nil)
 
 (defn on-close [container]
-  ((schema-runtime/build-on-close-fn dev-schema/unified-developer-schema) container)
+  ((:on-close developer-sync) container)
   (when-let [tile (:tile-entity container)]
     (when-let [pl (:player container)]
       (let [lvl (entity/player-get-level pl)]
@@ -191,27 +186,26 @@
        ;; AcademyCraft 1.0.7: `TileDeveloper` inv size 2; `ContainerNode`-style slots on `ui_phasegen`.
        :slots [{:id :inv-0 :type :generic :x 42 :y 10}
                {:id :inv-1 :type :generic :x 42 :y 80}]})
-    (gui-dsl/register-gui!
-      (gui-dsl/create-gui-spec
-        "developer"
-        {:gui-id 13
-          :registration {:display-name "Ability Developer"
-               :gui-type :developer
-               :registry-name "developer_gui"
-               :screen-factory-fn-kw :create-developer-screen
-               :slot-layout (slot-schema/get-slot-layout developer-gui-id)}
-          :lifecycle {:container-predicate developer-container?
-            :container-fn create-container
-            :screen-fn create-screen
-            :tick-fn tick!}
-          :sync {:sync-get get-sync-data
-            :sync-apply apply-sync-data!}
-          :operations {:validate-fn still-valid?
-             :close-fn on-close
-             :button-click-fn handle-button-click!}
-           :slot-operations {:slot-count-fn get-slot-count
-             :slot-get-fn get-slot-item
-             :slot-set-fn set-slot-item!
-             :slot-can-place-fn can-place-item?
-             :slot-changed-fn slot-changed!}}))
+    (gui-reg/register-block-gui!
+      "developer"
+      {:gui-id 13
+       :display-name "Ability Developer"
+       :gui-type :developer
+       :registry-name "developer_gui"
+       :screen-factory-fn-kw :create-developer-screen
+       :slot-schema-id developer-gui-id
+       :container-predicate developer-container?
+       :container-fn create-container
+       :screen-fn create-screen
+       :tick-fn tick!
+       :sync-get get-sync-data
+       :sync-apply apply-sync-data!
+       :validate-fn still-valid?
+       :close-fn on-close
+       :button-click-fn handle-button-click!
+       :slot-count-fn get-slot-count
+       :slot-get-fn get-slot-item
+       :slot-set-fn set-slot-item!
+       :slot-can-place-fn can-place-item?
+       :slot-changed-fn slot-changed!})
     (log/info "Ability Developer GUI registered (gui-id 13)")))

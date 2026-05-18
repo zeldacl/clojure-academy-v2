@@ -2,7 +2,7 @@
   "Client FX for VecAccel: trajectory preview ribbon."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
 (defonce ^:private effect-state (atom nil))
@@ -82,18 +82,18 @@
                      :z (+ (double (:z pos)) (* (double (:z vel2)) dt))}
               vel3  (assoc vel2 :y (- (double (:y vel2)) (* dt 1.9)))]
           (when (and prev (< idx 99))
-            (let [raw-alpha (max 0.0 (- 0.7 (* idx 0.021)))
-                  a-int     (int (* raw-alpha 255.0))]
+            (let [a-int (fx-beam/fade-alpha idx)]
               (when (> a-int 0)
-                (let [color (if can-do?
-                              {:r 255 :g 255 :b 255 :a a-int}
-                              {:r 255 :g  51 :b  51 :a a-int})
+                (let [color (fx-beam/rgba
+                              (if can-do?
+                                {:r 255 :g 255 :b 255}
+                                {:r 255 :g  51 :b  51})
+                              a-int)
                       p0 {:x (double (:x prev)) :y (+ (double (:y prev)) h) :z (double (:z prev))}
                       p1 {:x (double (:x pos))  :y (+ (double (:y pos))  h) :z (double (:z pos))}
                       p2 {:x (double (:x pos))  :y (- (double (:y pos))  h) :z (double (:z pos))}
                       p3 {:x (double (:x prev)) :y (- (double (:y prev)) h) :z (double (:z prev))}]
-                  (conj! ops (ru/quad-op "my_mod:textures/effects/glow_line.png"
-                                         p0 p1 p2 p3 color))))))
+                  (conj! ops (fx-beam/glow-line-quad-op p0 p1 p2 p3 color))))))
           (if (>= idx 99)
             (persistent! ops)
             (recur pos2 vel3 pos ops (inc idx))))))))

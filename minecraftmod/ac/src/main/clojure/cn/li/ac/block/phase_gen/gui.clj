@@ -14,20 +14,22 @@
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.ac.energy.operations :as energy]
+            [cn.li.ac.block.gui.registration :as gui-reg]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
             [cn.li.ac.gui.platform-adapter :as gui]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
+            [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
-            [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.ac.block.phase-gen.schema :as phase-schema]
             [cn.li.ac.block.phase-gen.config :as phase-config]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private phase-slot-schema-id :phase-gen)
 (def ^:private phase-gui-type :phase-gen)
+(def ^:private phase-sync
+  (gui-sync/schema-sync-fns phase-schema/phase-gen-schema))
 
 (defn- stack-empty?
   [stack]
@@ -50,10 +52,7 @@
 
 (defn create-container
   [tile player]
-  (merge {:tile-entity tile
-          :player player
-          :container-type phase-gui-type}
-         (schema-runtime/build-gui-atoms phase-schema/phase-gen-schema tile)))
+  (gui-sync/create-schema-container phase-schema/phase-gen-schema tile player phase-gui-type))
 
 (defn get-slot-count [_container]
   (slot-registry/get-slot-count phase-slot-schema-id))
@@ -77,22 +76,16 @@
 
 (defn still-valid? [_container _player] true)
 
-(defn sync-to-client! [container]
-  ((schema-runtime/build-sync-to-client-fn phase-schema/phase-gen-schema) container))
-
-(defn get-sync-data [container]
-  ((schema-runtime/build-get-sync-data-fn phase-schema/phase-gen-schema) container))
-
-(defn apply-sync-data! [container data]
-  ((schema-runtime/build-apply-sync-data-fn phase-schema/phase-gen-schema) container data))
+(def sync-to-client! (:sync-to-client! phase-sync))
+(def get-sync-data (:get-sync-data phase-sync))
+(def apply-sync-data! (:apply-sync-data! phase-sync))
 
 (defn tick! [container]
   (sync-to-client! container))
 
 (defn handle-button-click! [_container _button-id _player] nil)
 
-(defn on-close [container]
-  ((schema-runtime/build-on-close-fn phase-schema/phase-gen-schema) container))
+(def on-close (:on-close phase-sync))
 
 (defn- add-panel-text!
   [parent x y w h text color scale]
@@ -190,27 +183,26 @@
        :slots [{:id :liquid-in :type :phase-input :x 45 :y 12}
                {:id :liquid-out :type :phase-output :x 112 :y 51}
                {:id :output-energy :type :energy :x 42 :y 80}]})
-    (gui-dsl/register-gui!
-      (gui-dsl/create-gui-spec
-        "phase-gen"
-        {:gui-id 7
-          :registration {:display-name "Phase Generator"
-               :gui-type phase-gui-type
-               :registry-name "phase_gen_gui"
-               :screen-factory-fn-kw :create-phase-gen-screen
-               :slot-layout (slot-schema/get-slot-layout phase-slot-schema-id)}
-          :lifecycle {:container-predicate phase-container?
-            :container-fn create-container
-            :screen-fn create-screen
-            :tick-fn tick!}
-          :sync {:sync-get get-sync-data
-            :sync-apply apply-sync-data!}
-          :operations {:validate-fn still-valid?
-             :close-fn on-close
-             :button-click-fn handle-button-click!}
-           :slot-operations {:slot-count-fn get-slot-count
-             :slot-get-fn get-slot-item
-             :slot-set-fn set-slot-item!
-             :slot-can-place-fn can-place-item?
-             :slot-changed-fn slot-changed!}}))
+    (gui-reg/register-block-gui!
+      "phase-gen"
+      {:gui-id 7
+       :display-name "Phase Generator"
+       :gui-type phase-gui-type
+       :registry-name "phase_gen_gui"
+       :screen-factory-fn-kw :create-phase-gen-screen
+       :slot-schema-id phase-slot-schema-id
+       :container-predicate phase-container?
+       :container-fn create-container
+       :screen-fn create-screen
+       :tick-fn tick!
+       :sync-get get-sync-data
+       :sync-apply apply-sync-data!
+       :validate-fn still-valid?
+       :close-fn on-close
+       :button-click-fn handle-button-click!
+       :slot-count-fn get-slot-count
+       :slot-get-fn get-slot-item
+       :slot-set-fn set-slot-item!
+       :slot-can-place-fn can-place-item?
+       :slot-changed-fn slot-changed!})
     (log/info "Phase Generator GUI initialized")))

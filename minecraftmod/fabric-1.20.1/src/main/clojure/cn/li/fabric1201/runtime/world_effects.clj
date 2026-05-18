@@ -1,9 +1,8 @@
 (ns cn.li.fabric1201.runtime.world-effects
   "Fabric implementation of IWorldEffects protocol."
   (:require [cn.li.fabric1201.adapter.server-context :as server-context]
-            [cn.li.mc1201.runtime.world-effects-adapter :as adapter]
+            [cn.li.mc1201.runtime.adapter.world-effects :as world-effects]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
-            [cn.li.mcmod.platform.world-effects :as pwe]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
@@ -17,7 +16,7 @@
   (server-context/get-server))
 
 (defn fabric-world-effects []
-  (adapter/create-world-effects
+  (world-effects/create-world-effects
     get-server
     {:resolve-level-fn (fn [server world-id] (query-core/resolve-level-strict server world-id))
      :spawn-lightning-fn (fn [^ServerLevel level x y z]
@@ -44,6 +43,5 @@
     (log/info "Fabric world effects already installed, skipping")
     (do
       (server-context/install-server-context!)
-      (alter-var-root #'pwe/*world-effects*
-                      (constantly (fabric-world-effects)))
-      (log/info "Fabric world effects installed"))))
+      (world-effects/install-world-effects! (fabric-world-effects)
+                                            "Fabric world effects"))))

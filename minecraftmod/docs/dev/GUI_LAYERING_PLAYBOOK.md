@@ -14,14 +14,18 @@
 
 主要包含：
 
-- `cgui_runtime.clj` / `cgui_runtime_impl.clj`：共享 CGUI runtime facade + 实现
-- `container_adapter.clj`：共享容器适配
-- `menu_bridge_common.clj`：共享菜单行为
-- `provider_common.clj`：共享 provider helper
-- `registry_common.clj`：共享注册包装逻辑
-- `screen_registry.clj`：共享 screen 注册循环
+- `cgui/runtime.clj`、`cgui/renderer.clj`、`cgui/input.clj`、`cgui/assets.clj`、`cgui/traversal.clj`：共享 CGUI 运行时、渲染、输入、资源与遍历实现
+- `menu/container.clj`、`menu/bridge.clj`、`menu/contract.clj`：共享菜单容器适配、菜单行为与契约
+- `provider/common.clj`、`provider/bridge.clj`：共享 provider helper 与桥接装配
+- `registry/common.clj`、`registry/open.clj`：共享注册包装与打开逻辑
+- `screen/registry.clj`、`screen/impl.clj`：共享 screen 注册循环与 screen 实现
+- `slots/common.clj`、`slots/sync.clj`、`slots/tabbed.clj`：共享槽位布局、同步与 tabbed 约束
+- `network/packet.clj`：共享 GUI packet/envelope 编解码 SSOT
+- `init/orchestrator.clj`、`init/checks.clj`：共享 GUI phase manifest 编排与初始化自检
 - `CMenuBridge.java`：共享菜单桥 Java 基类
 - `CGuiContainerScreen.java`：共享 container screen Java 基类
+
+旧的顶层 `*_core` / `*_common` / `*_bridge` / `*_adapter` GUI Clojure 文件已删除，后续不要再作为兼容壳恢复。
 
 约束：
 
@@ -35,7 +39,7 @@
 - `init.clj`：Forge 生命周期阶段入口
 - `registry_impl.clj`：`DeferredRegister` / `IForgeMenuType` / `NetworkHooks`
 - `network.clj`：Forge 网络通道注册与桥接
-- `menu_bridge.clj` / `provider_bridge.clj` / `screen_impl.clj`：平台壳装配共享核心
+- `menu_bridge.clj` / `provider_bridge.clj` / `screen_impl.clj`：平台壳装配共享核心（调用 `mc1201.gui.*` domain namespace）
 - `bridge.clj`：Facade（对外桥接入口）
 
 ### 3) Fabric (`fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui`)
@@ -45,7 +49,7 @@
 - `init.clj`：Fabric 生命周期阶段入口
 - `registry_impl.clj`：`ScreenHandlerRegistry` + opening data + 客户端重建容器
 - `network.clj`：Fabric networking receiver
-- `menu_bridge.clj` / `provider_bridge.clj` / `screen_impl.clj`：平台壳装配共享核心
+- `menu_bridge.clj` / `provider_bridge.clj` / `screen_impl.clj`：平台壳装配共享核心（调用 `mc1201.gui.*` domain namespace）
 - `bridge.clj`：Facade（对外桥接入口）
 
 备注：
@@ -69,10 +73,10 @@
 
 至少执行：
 
-- `gradlew.bat :mcmod:compileJava :mcmod:compileClojure`
-- `gradlew.bat :forge-1.20.1:compileJava :forge-1.20.1:compileClojure`
-- `gradlew.bat :fabric-1.20.1:compileJava :fabric-1.20.1:compileClojure`
-- `gradlew.bat verifyArchitectureBoundaries verifyCurrentPlatforms`
+- `cmd /c .\gradlew.bat :mcmod:compileJava :mcmod:compileClojure`
+- `cmd /c .\gradlew.bat :forge-1.20.1:compileJava :forge-1.20.1:compileClojure`
+- `cmd /c .\gradlew.bat :fabric-1.20.1:compileJava :fabric-1.20.1:compileClojure`
+- `cmd /c .\gradlew.bat verifyArchitectureBoundaries verifyCurrentPlatforms`
 
 并做代表性 GUI 烟测：
 

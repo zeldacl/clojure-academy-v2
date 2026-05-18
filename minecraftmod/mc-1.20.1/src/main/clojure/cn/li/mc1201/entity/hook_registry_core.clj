@@ -11,7 +11,8 @@
             [cn.li.mc1201.entity.hook-abstraction :as hooks]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.entity.hook-catalog :as hook-catalog]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.mc1201.entity ScriptedEntitySpecAccess]))
 
 ;; ============================================================================
 ;; Hook Event Types
@@ -294,4 +295,96 @@
         (log/info success-label {:hook-id hook-id :class class-name})
         (log/error (str "Failed to register " (str/lower-case success-label))
                    {:hook-id hook-id :class class-name}))))
+  nil)
+
+(defonce ^:private scripted-hook-install-state
+  {:effect (atom false)
+   :ray (atom false)
+   :marker (atom false)})
+
+(def scripted-hook-specs
+  "Data-driven specs for scripted entity hook class registration.
+
+  Adding a new hook kind should be a spec addition here, not a new wrapper
+  namespace with duplicated collect/register plumbing."
+  {:effect {:entity-kind :scripted-effect
+            :property-key :effect
+            :label "scripted-effect"
+            :catalog-impl-key-fn hook-catalog/effect-impl-key
+            :impl-key->hook-class {:intensify-arcs "cn.li.mc1201.entity.hook.effect.IntensifyArcsEffectHook"
+                                   :owner-offset "cn.li.mc1201.entity.hook.effect.OwnerOffsetEffectHook"
+                                   :generic-arc "cn.li.mc1201.entity.hook.effect.GenericArcEffectHook"
+                                   :md-ball "cn.li.mc1201.entity.hook.effect.MdBallEffectHook"
+                                   :noop "cn.li.mc1201.entity.hook.effect.NoopEffectHook"
+                                   :coin-throwing "cn.li.mc1201.entity.hook.effect.CoinThrowingEffectHook"}
+            :conflict-mode :by-hook-id
+            :installed?-atom (:effect scripted-hook-install-state)
+            :register-fn ScriptedEntitySpecAccess/registerScriptedEffectHookClass
+            :success-label "Registered scripted effect hook"}
+   :ray {:entity-kind :scripted-ray
+         :property-key :ray
+         :label "scripted-ray"
+         :catalog-impl-key-fn hook-catalog/ray-impl-key
+         :impl-key->hook-class {:owner-follow "cn.li.mc1201.entity.hook.ray.OwnerFollowRayHook"}
+         :conflict-mode :by-hook-id
+         :installed?-atom (:ray scripted-hook-install-state)
+         :register-fn ScriptedEntitySpecAccess/registerScriptedRayHookClass
+         :success-label "Registered scripted ray hook"}
+   :marker {:entity-kind :scripted-marker
+            :property-key :marker
+            :label "scripted-marker"
+            :hook-id->hook-class {"tp-marking" "cn.li.mc1201.entity.hook.marker.OwnerFollowMarkerHook"
+                                  "marker" "cn.li.mc1201.entity.hook.marker.OwnerFollowMarkerHook"}
+            :conflict-mode :allow-duplicates
+            :installed?-atom (:marker scripted-hook-install-state)
+            :register-fn ScriptedEntitySpecAccess/registerScriptedMarkerHookClass
+            :success-label "Registered scripted marker hook"}})
+
+(defn- resolve-scripted-hook-class
+  [{:keys [catalog-impl-key-fn impl-key->hook-class hook-id->hook-class]}
+   {:keys [hook-props hook-id]}]
+  (let [impl-key (or (some-> (:hook-impl-key hook-props) normalize-impl-key)
+                     (when catalog-impl-key-fn
+                       (catalog-impl-key-fn hook-id)))
+        hook-class (or (some-> (:hook-class hook-props) str)
+                       (when impl-key
+                         (get impl-key->hook-class impl-key))
+                       (get hook-id->hook-class hook-id))]
+    (cond-> {:hook-class hook-class}
+      impl-key (assoc :hook-impl-key impl-key))))
+
+(defn collect-scripted-hook-entries
+  "Collect platform hook-class registration entries for one scripted hook kind."
+  [hook-kind]
+  (let [spec (or (get scripted-hook-specs hook-kind)
+                 (throw (ex-info "Unknown scripted hook kind" {:hook-kind hook-kind})))]
+    (collect-hook-entries
+     (assoc spec :resolve-hook-class #(resolve-scripted-hook-class spec %)))))
+
+(defn- registration-entries
+  [{:keys [label conflict-mode]} hook-entries]
+  (case conflict-mode
+    :by-hook-id (resolve-hook-conflicts label hook-entries)
+    :allow-duplicates (->> hook-entries
+                           (map (juxt :hook-id :hook-class)))
+    (throw (ex-info "Unknown scripted hook conflict mode"
+                    {:label label :conflict-mode conflict-mode}))))
+
+(defn register-scripted-hook-kind!
+  "Register one scripted entity hook kind by spec key (:effect, :ray, :marker)."
+  [hook-kind]
+  (let [{:keys [installed?-atom register-fn success-label] :as spec}
+        (or (get scripted-hook-specs hook-kind)
+            (throw (ex-info "Unknown scripted hook kind" {:hook-kind hook-kind})))]
+    (register-hook-classes!
+     {:installed?-atom installed?-atom
+      :entries (registration-entries spec (collect-scripted-hook-entries hook-kind))
+      :register-fn register-fn
+      :success-label success-label})))
+
+(defn register-all-scripted-hooks!
+  "Register all scripted entity hook kinds declared in `scripted-hook-specs`."
+  []
+  (doseq [hook-kind [:effect :ray :marker]]
+    (register-scripted-hook-kind! hook-kind))
   nil)

@@ -6,8 +6,7 @@
   Forge LivingHurtEvent, so damage amount rewriting is not applied here."
   (:require [cn.li.mc1201.runtime.damage-interception-core :as core]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.fabricmc.fabric.api.entity.event.v1 ServerLivingEntityEvents$AllowDamage]
-           [net.minecraft.server.level ServerPlayer]))
+  (:import [net.fabricmc.fabric.api.entity.event.v1 ServerLivingEntityEvents$AllowDamage]))
 
 (defonce ^:private installed? (atom false))
 
@@ -16,15 +15,8 @@
   reflection should preempt incoming attack effects."
   [entity damage-source amount]
   (try
-    (if (instance? ServerPlayer entity)
-      (let [^ServerPlayer player entity
-            player-id (str (.getUUID player))
-            original-damage (double amount)
-            attacker (.getEntity damage-source)
-            attacker-id (when attacker (str (.getUUID attacker)))
-            allow? (core/should-allow-attack?
-                     player-id attacker-id original-damage damage-source)]
-        (boolean allow?))
+    (if-let [{:keys [allow?]} (core/attack-precheck-result entity damage-source amount)]
+      (boolean allow?)
       true)
     (catch Exception e
       (log/warn "Fabric damage interception precheck failed:" (ex-message e))

@@ -11,12 +11,68 @@ explicit architecture seams that the multi-loader design requires.
   - Guard: `verifyAcPlayerUuidSsoT`
   - Only `ac/ability/util/uuid.clj` may call `entity/player-get-uuid` directly.
 - Gameplay config provider contract lives in
-  `cn.li.mc1201.config.gameplay-bridge`.
+  `cn.li.ac.config.gameplay`.
   - Guard: `verifyGameplayConfigContractSsoT`
   - Forge/Fabric provider maps must delegate construction to
-    `shared-gameplay/make-provider-map`.
+    `gameplay/make-provider-map`.
   - Removed self-cycling keys must not return:
     `analysis-enabled`, `gen-ores`, `gen-phase-liquid`, `heads-or-tails`.
+- `mcmod` content SPI must remain content-agnostic.
+  - Guard: `verifyMcmodNoAcSpecificBootstrap`
+  - AC-owned content bootstrap providers live under `ac`, not `mcmod`.
+- Runtime item handling uses shared event helpers, not a thin compatibility
+  adapter namespace.
+  - Guard: `verifyRuntimeEventNoThinItemAdapter`
+  - `cn.li.mc1201.runtime.event.item-use` owns item-use event semantics.
+  - `cn.li.mc1201.runtime.adapter.entity-damage` owns the shared entity-damage
+    adapter factory; the old top-level `entity-damage-adapter` namespace must
+    not return.
+  - `cn.li.mc1201.runtime.adapter.world-effects` owns the shared world-effects
+    adapter factory; the old top-level `world-effects-adapter` namespace must
+    not return.
+- GUI network envelope/codec is shared by `cn.li.mc1201.gui.network.packet`,
+  while Forge/Fabric files remain transport-only.
+  - Guard: `verifyGuiNetworkTransportBoundaries`
+  - Forge GUI network must call packet-base encode/decode helpers directly rather
+    than reintroducing local `serialize`/`deserialize` wrappers.
+  - Fabric GUI network must use platform-neutral `cn.li.mcmod.config` for mod-id
+    and `packet-base/request-map`, `response-map`, and `push-map` for envelopes.
+- Migrated GUI helper namespaces live under domain subpackages such as
+  `cn.li.mc1201.gui.cgui.*`, `cn.li.mc1201.gui.init.*`,
+  `cn.li.mc1201.gui.menu.*`, `cn.li.mc1201.gui.network.*`,
+  `cn.li.mc1201.gui.provider.*`, `cn.li.mc1201.gui.registry.*`,
+  `cn.li.mc1201.gui.screen.*`, and `cn.li.mc1201.gui.slots.*`; their old
+  top-level files must stay deleted.
+- Scripted entity hook registration must flow through `cn.li.mc1201.entity.hooks`
+  and the `scripted-hook-specs` table in `hook_registry_core.clj`; the old
+  per-kind wrappers (`effect_hooks`, `ray_hooks`, `marker_hooks`) must stay
+  deleted.
+- Block runtime event side-effect helpers live in `cn.li.mcmod.block.events`;
+  `cn.li.mcmod.block.dsl` remains the declaration/preset/query aggregate and
+  must not define `handle-*` runtime event functions.
+- Schema-backed AC block GUIs (`developer`, `imag_fusor`, `phase_gen`,
+  `solar_gen`, `wireless_node`, `wireless_matrix`) use
+  `cn.li.ac.block.gui.sync` for schema sync/get/apply/close helpers and
+  `cn.li.ac.block.gui.registration` for standard GUI spec/slot operation
+  grouping instead of direct per-file `schema-runtime/build-*` lifecycle calls
+  or repeated `gui-dsl/create-gui-spec` templates.
+- Manual-sync complex AC block GUIs such as Metal Former, Ability Interferer,
+  Wind Generator, and Energy Converter may keep custom atom update logic, but
+  their standard GUI spec construction still goes through
+  `cn.li.ac.block.gui.registration` instead of duplicating the nested
+  `:registration`/`:lifecycle`/`:sync`/`:operations` map shape.
+- Client ability beam/ray visual effects use
+  `cn.li.ac.ability.client.effects.beam-ops` for RGB/alpha style composition,
+  fading beam/ray op construction, and VecAccel glow-line ribbon helpers. Local
+  `beam-ops`/`ray-ops`/`mag-movement-beam-ops` render builders and direct
+  `beam-render` usage should not return in the migrated FX files.
+- Forge/Fabric datagen setup files use shared
+  `cn.li.mc1201.datagen.provider-registration` for provider iteration/logging
+  and platform-local `datagen.provider-factory` adapters for Loader API wiring.
+  Thin blockstate provider wrappers are deleted; blockstate provider creation
+  calls the shared `mc1201.datagen.blockstate-provider-shell` directly from the
+  platform factory adapter.
+  - Guard: `verifyGuiNamespaceLayout`
 - Transient build/log captures must stay out of the Git index.
   - Guard: `verifyTransientBuildArtifactsIgnored`
   - Root `build-*.txt`, `compile-*.txt`, root `*.log`, and historical

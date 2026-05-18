@@ -3,7 +3,7 @@
 
   The proxy remains Forge-specific, but the rendering/input plumbing is split
   into smaller helpers so the lifecycle is easier to follow and test."
-  (:require [cn.li.mc1201.gui.screen-registry :as screen-registry]
+  (:require [cn.li.mc1201.gui.screen.registry :as screen-registry]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens Screen]
            [cn.li.forge1201.shim ForgeClientHelper ForgeClientHelper$ScreenFactory]

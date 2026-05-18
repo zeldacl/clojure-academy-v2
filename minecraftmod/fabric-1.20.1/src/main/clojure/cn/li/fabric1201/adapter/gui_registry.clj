@@ -1,11 +1,11 @@
 (ns cn.li.fabric1201.adapter.gui-registry
   "Fabric 1.20.1 GUI Registration Implementation"
   (:require [cn.li.mcmod.gui.registry-core :as gui]
-            [cn.li.mc1201.gui.menu-bridge-core :as menu-core]
+            [cn.li.mc1201.gui.menu.bridge :as menu-core]
             [cn.li.fabric1201.gui.provider-bridge :as provider-bridge]
             [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
-            [cn.li.mc1201.gui.registry-common :as registry-common]
-            [cn.li.mc1201.gui.registry-open-core :as open-core]
+            [cn.li.mc1201.gui.registry.common :as registry-common]
+            [cn.li.mc1201.gui.registry.open :as open-core]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.resources ResourceLocation]

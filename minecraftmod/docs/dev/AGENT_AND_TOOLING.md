@@ -2,37 +2,39 @@
 
 本文档是仓库内 Agent/开发辅助工具规则正文。根目录 `CLAUDE.md` 仅保留指向本文件的指针。
 
-## 构建与开发基线（Windows 使用 `.\gradlew.bat`）
+## 构建与开发基线（Windows 使用 `cmd /c .\gradlew.bat`）
 
 - **工作目录**：始终在包含根 `settings.gradle` 的 `minecraftmod` 目录执行命令。
+- **Windows 命令壳**：在当前 VS Code/PowerShell 环境中优先使用
+  `cmd /c .\gradlew.bat ...`；带 `-D...` 的系统属性放在 task 前并加引号。
 - **默认构建平台**：根工程默认包含 `api`、`mcmod`、`ac`、`forge-1.20.1`、`fabric-1.20.1`。
 - **Fabric 维护级别**：`minimal maintenance`（至少保证 compile 与边界门禁，不承诺与 Forge 完全功能对齐）。
 - **Java 版本**：Java 17。
-- **LSP 刷新**：修改 Java 后执行 `.\gradlew.bat :<subproject>:classes`。
+- **LSP 刷新**：修改 Java 后执行 `cmd /c .\gradlew.bat :<subproject>:classes`。
 
 ## 常用命令矩阵
 
-- **本地运行**：`.\gradlew.bat :forge-1.20.1:runClient` / `:forge-1.20.1:runServer` / `:forge-1.20.1:runData`
-- **快速编译**：`.\gradlew.bat :ac:compileClojure`、`.\gradlew.bat :mcmod:compileClojure`、`.\gradlew.bat :forge-1.20.1:compileClojure`
+- **本地运行**：`cmd /c .\gradlew.bat :forge-1.20.1:runClient` / `:forge-1.20.1:runServer` / `:forge-1.20.1:runData`
+- **快速编译**：`cmd /c .\gradlew.bat :ac:compileClojure`、`:mcmod:compileClojure`、`:forge-1.20.1:compileClojure`
 - **测试与验证入口**：
-  - `.\gradlew.bat verifyArchitectureBoundaries`
-  - `.\gradlew.bat unitTestCompile`
-  - `.\gradlew.bat runAcUnitTests`（执行 `ac` 的 `clojure.test`，入口为 `:ac:runAcClojureTests` / `cn.li.ac.test-runner`）
-  - `.\gradlew.bat runMcmodUnitTests`（执行 `mcmod` 的 `clojure.test`，入口为 `:mcmod:runMcmodClojureTests` / `cn.li.mcmod.test-runner`；可选 `-Dmcmod.test.only=cn.li.mcmod.foo-test,cn.li.mcmod.bar-test`）
-  - `.\gradlew.bat verifyForgeBaseline`
-  - `.\gradlew.bat verifyFabricBaseline`
-  - `.\gradlew.bat verifyFabricSmoke`
-  - `.\gradlew.bat verifyForgeHookCoverage`
-  - `.\gradlew.bat verifyFabricHookManifest`
-  - `.\gradlew.bat verifyPlatformHookCoverage`
-  - `.\gradlew.bat verifyPlatformNoBusinessHookIds`
-  - `.\gradlew.bat verifyCurrentPlatforms`
-  - `.\gradlew.bat runForgeGameTests`
-  - `.\gradlew.bat validateForgeGameTestLog`
-  - `.\gradlew.bat verifyForgeTesting`
+  - `cmd /c .\gradlew.bat verifyArchitectureBoundaries`
+  - `cmd /c .\gradlew.bat unitTestCompile`
+  - `cmd /c .\gradlew.bat runAcUnitTests`（执行 `ac` 的 `clojure.test`，入口为 `:ac:runAcClojureTests` / `cn.li.ac.test-runner`）
+  - `cmd /c .\gradlew.bat runMcmodUnitTests`（执行 `mcmod` 的 `clojure.test`，入口为 `:mcmod:runMcmodClojureTests` / `cn.li.mcmod.test-runner`；可选 `"-Dmcmod.test.only=cn.li.mcmod.foo-test,cn.li.mcmod.bar-test"`）
+  - `cmd /c .\gradlew.bat verifyForgeBaseline`
+  - `cmd /c .\gradlew.bat verifyFabricBaseline`
+  - `cmd /c .\gradlew.bat verifyFabricSmoke`
+  - `cmd /c .\gradlew.bat verifyForgeHookCoverage`
+  - `cmd /c .\gradlew.bat verifyFabricHookManifest`
+  - `cmd /c .\gradlew.bat verifyPlatformHookCoverage`
+  - `cmd /c .\gradlew.bat verifyPlatformNoBusinessHookIds`
+  - `cmd /c .\gradlew.bat verifyCurrentPlatforms`
+  - `cmd /c .\gradlew.bat runForgeGameTests`
+  - `cmd /c .\gradlew.bat validateForgeGameTestLog`
+  - `cmd /c .\gradlew.bat verifyForgeTesting`
 - **故障定位**：
-  - `.\gradlew.bat :forge-1.20.1:bisectCompileClojure`
-  - `.\gradlew.bat :forge-1.20.1:bisectCheckClojure`
+  - `cmd /c .\gradlew.bat :forge-1.20.1:bisectCompileClojure`
+  - `cmd /c .\gradlew.bat :forge-1.20.1:bisectCheckClojure`
   - `-PcompileNsOnly=<ns1,ns2>` / `-PcheckNsOnly=<ns1,ns2>` / `-PcheckNsFile=<path>`
 
 ## 模块边界与依赖红线
@@ -52,8 +54,9 @@
     - `integration/event_handlers.clj`：共享事件处理业务逻辑
     - `integration/event_helpers_core.clj`：共享事件辅助函数（runtime 检查、数据构建）
     - `client/overlay/renderer.clj`：共享 overlay 渲染核心
-    - `gui/registry_common.clj`：共享 GUI 容器创建逻辑
-    - `gui/init_orchestrator.clj`：共享 GUI phase manifest 编排与 safe phase execution；平台 GUI init 只声明 common/server/client phase steps。
+    - `gui/registry/common.clj` 与 `gui/registry/open.clj`：共享 GUI 容器创建与打开逻辑
+    - `gui/init/orchestrator.clj` 与 `gui/init/checks.clj`：共享 GUI phase manifest 编排、safe phase execution 与初始化自检；平台 GUI init 只声明 common/server/client phase steps。
+    - `gui/menu/*`、`gui/provider/*`、`gui/screen/*`、`gui/slots/*`、`gui/cgui/*`：按职责拆分的菜单桥接、provider、screen、slot 与 CGui 运行时实现；旧的顶层 `*_core` / `*_common` / `*_bridge` GUI 文件不得回流。
     - `datagen/*_common.clj`：共享 datagen provider 实现
     - `datagen/provider_manifest.clj`：共享 datagen provider 顺序与逻辑 provider 集合；平台 datagen setup 只适配具体 Factory/API。
 - **`forge-1.20.1`**：Forge 事件绑定与 Loader 入口层（Phase C 后仅包含）；仅保留直接引用 Forge 的代码和事件注册胶水。
@@ -112,13 +115,13 @@
 
 ### 覆盖率与 ratchet（ac）
 
-- 生成报告：`.\gradlew.bat :ac:coverageAcClojureTests`（HTML 在 `ac/build/reports/coverage/index.html`）。
+- 生成报告：`cmd /c .\gradlew.bat :ac:coverageAcClojureTests`（HTML 在 `ac/build/reports/coverage/index.html`）。
 - **Soft ratchet**：CI 用 `scripts/ac_coverage_ratchet.sh` 从 `ac/build/reports/coverage/index.html` 的 **Totals** 行解析 **% Lines**，要求不低于 `ac/coverage-baseline.txt` 中的基线减去 **0.5** 个百分点。
 - 有意提升整体行覆盖后，将 `ac/coverage-baseline.txt` 更新为新百分比（可四舍五入一位小数），随 PR 提交。
 
 ### 覆盖率与 ratchet（mcmod）
 
-- 生成报告：`.\gradlew.bat :mcmod:coverageMcmodClojureTests`（HTML 在 `mcmod/build/reports/coverage/index.html`）。
+- 生成报告：`cmd /c .\gradlew.bat :mcmod:coverageMcmodClojureTests`（HTML 在 `mcmod/build/reports/coverage/index.html`）。
 - **Soft ratchet**：CI 用 `scripts/mcmod_coverage_ratchet.sh` 从 `index.html` 的 **Totals** 行解析 **% Lines**，要求不低于 `mcmod/coverage-baseline.txt` 中的基线减去 **0.5** 个百分点。
 - 提升基线后更新 `mcmod/coverage-baseline.txt`（建议一位小数），随 PR 提交。
 - `coverageMcmodClojureTests` 通过 `--ns-exclude-regex` 排除 `cn.li.mcmod.client.obj` 与 `cn.li.mcmod.platform.position`（前者体量与单测 ROI，后者避免 Cloverage 与 `IBlockPos` 测试桩的协议冲突）；详见 [BUILD_AND_VERIFY_PLAYBOOK.md](BUILD_AND_VERIFY_PLAYBOOK.md)。
@@ -139,7 +142,7 @@
 
 ## 结构性校验（快速自检）
 
-- 推荐优先执行：`.\gradlew.bat verifyArchitectureBoundaries`（自动汇总并定位违规文件/行号）。
+- 推荐优先执行：`cmd /c .\gradlew.bat verifyArchitectureBoundaries`（自动汇总并定位违规文件/行号）。
 - `rg "cn\.li\.forge|cn\.li\.fabric" ac/src/` 应为空。
 - `rg "net\.minecraft|net\.minecraftforge" ac/src/ mcmod/src/` 应为空（允许注释或字符串需人工甄别）。
 - `rg "net\.minecraft\.client" ac/src/ mcmod/src/` 在非 client 目录应无泄漏。
@@ -148,14 +151,14 @@
 
 - 共享 hook catalog：`mcmod/src/main/clojure/cn/li/mcmod/entity/hook_catalog.clj`
 - Fabric 缺口清单：`docs/dev/fabric-hook-support.properties`
-- 执行：`.\gradlew.bat verifyPlatformHookCoverage`
+- 执行：`cmd /c .\gradlew.bat verifyPlatformHookCoverage`
 - 规则：
   - Forge 必须覆盖共享 catalog 声明的实现键。
   - Fabric 若暂未实现，必须在缺口清单显式声明；新增实现键时清单必须同步更新。
 
 ## 平台层去业务化回归守卫
 
-- 执行：`.\gradlew.bat verifyPlatformNoBusinessHookIds`
+- 执行：`cmd /c .\gradlew.bat verifyPlatformNoBusinessHookIds`
 - 规则：
   - 平台 hook 适配文件不得出现来自业务实体定义中的 hook-id 字面量。
   - 若任务失败，需把业务 hook-id -> impl-key 映射迁回共享层（`mcmod`）。

@@ -3,9 +3,9 @@
 
   Mirrors Forge behavior with request/response RPC plus server push.
   Transport format is EDN maps written into FriendlyByteBuf UTF strings."
-  (:require [cn.li.mc1201.gui.network-packet-base :as packet-base]
+  (:require [cn.li.mc1201.gui.network.packet :as packet-base]
             [cn.li.mc1201.reflect-util :as ru]
-            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.config :as mod-config]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log])
@@ -20,10 +20,10 @@
 (defonce ^:private client-initialized? (atom false))
 
 (def ^:private c2s-channel
-  (ResourceLocation. modid/MOD-ID "clj_rpc_c2s"))
+  (ResourceLocation. mod-config/*mod-id* "clj_rpc_c2s"))
 
 (def ^:private s2c-channel
-  (ResourceLocation. modid/MOD-ID "clj_rpc_s2c"))
+  (ResourceLocation. mod-config/*mod-id* "clj_rpc_s2c"))
 
 (defn- jproxy
   [^Class iface invoke-fn]
@@ -33,11 +33,6 @@
     (reify java.lang.reflect.InvocationHandler
       (invoke [_ _ method args]
         (invoke-fn (.getName method) args)))))
-
-(defn- deserialize-map
-  [^String s]
-  (packet-base/decode-payload s
-                              #(log/error "Failed to deserialize Fabric network payload:" (ex-message %))))
 
 (defn- make-buf
   [payload]
@@ -50,7 +45,9 @@
               (.readUtf buf 1048576)
               (catch Throwable _
                 (.readUtf buf)))]
-    (deserialize-map raw)))
+    (packet-base/decode-payload
+      raw
+      #(log/error "Failed to deserialize Fabric network payload:" (ex-message %)))))
 
 (defn send-to-server!
   [msg-id request-id payload]

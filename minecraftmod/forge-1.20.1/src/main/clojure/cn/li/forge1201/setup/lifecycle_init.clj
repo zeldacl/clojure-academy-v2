@@ -14,7 +14,7 @@
   (:require [cn.li.forge1201.init :as init]
             [cn.li.forge1201.config.game-config :as game-config]
             [cn.li.forge1201.setup.mod-bus :as setup-mod-bus]
-            [cn.li.mc1201.config.gameplay-bridge :as shared-gameplay-bridge]
+            [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.mc1201.lifecycle.orchestrator :as lifecycle-orchestrator]
             [cn.li.mc1201.lifecycle.platform-manifest :as platform-manifest]
             [cn.li.mcmod.lifecycle :as lifecycle]
@@ -55,7 +55,7 @@
   "Bind platform gameplay config provider into shared gameplay bridge."
   []
   (log/info "[LIFECYCLE] Phase 2b: Gameplay config binding")
-  (shared-gameplay-bridge/bind-gameplay-config! (game-config/provider-map))
+  (gameplay/install-config-bridge! (game-config/provider-map))
   (log/info "[LIFECYCLE] Phase 2b: Gameplay config binding complete"))
 
 ;; =============================================================================

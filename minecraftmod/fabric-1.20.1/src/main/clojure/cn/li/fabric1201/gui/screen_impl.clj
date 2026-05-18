@@ -5,7 +5,7 @@
   to register, eliminating hardcoded game concepts.
 
   Uses shared CGUI runtime host path for :cgui-screen-container payloads."
-  (:require [cn.li.mc1201.gui.screen-registry :as screen-registry]
+  (:require [cn.li.mc1201.gui.screen.registry :as screen-registry]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens MenuScreens]))
 

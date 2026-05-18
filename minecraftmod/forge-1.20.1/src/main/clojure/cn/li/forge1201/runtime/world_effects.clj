@@ -1,17 +1,15 @@
 (ns cn.li.forge1201.runtime.world-effects
   "Forge implementation of IWorldEffects protocol."
-  (:require [cn.li.mc1201.runtime.world-effects-adapter :as adapter]
-            [cn.li.mc1201.runtime.adapter-support :as adapter-support]
+  (:require [cn.li.mc1201.runtime.adapter.world-effects :as world-effects]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
-            [cn.li.forge1201.adapter.server-context :as server-context]
-            [cn.li.mcmod.platform.world-effects :as pwe])
+            [cn.li.forge1201.adapter.server-context :as server-context])
   (:import [cn.li.mc1201.runtime RuntimeAccessShared WorldEntityShared]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.phys AABB]))
 
 (defn forge-world-effects []
-  (adapter/create-world-effects
+  (world-effects/create-world-effects
     server-context/get-server
     {:resolve-level-fn (fn [server world-id] (query-core/resolve-level-strict server world-id))
      :spawn-lightning-fn (fn [^ServerLevel level x y z]
@@ -27,6 +25,5 @@
                     (str (.getDescriptionId block)))}))
 
 (defn install-world-effects! []
-  (adapter-support/install-adapter! #'pwe/*world-effects*
-                                    (forge-world-effects)
-                                    "Forge world effects"))
+  (world-effects/install-world-effects! (forge-world-effects)
+                                        "Forge world effects"))

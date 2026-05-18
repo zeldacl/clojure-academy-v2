@@ -11,20 +11,26 @@
    - Reason: blockstate/model JSON assembly logic is loader-agnostic and should not be duplicated in Forge/Fabric providers.
    - Risk: low (pure data-shaping helpers).
 
-2. `mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/network_packet_base.clj` (extended)
+2. `mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/network/packet.clj`
    - Reason: EDN payload encode/decode behavior was duplicated between Forge/Fabric network bridges.
    - Change: shared `encode-payload*`/`decode-payload*` APIs for string+bytes.
    - Risk: medium (packet compatibility); covered by platform verification.
 
 ### Existing shared modules adopted by both loaders in this batch
-- GUI bridge/common flow:
-  - `cn.li.mc1201.gui.bridge`
-  - `cn.li.mc1201.gui.menu-bridge-common`
-  - `cn.li.mc1201.gui.provider-common`
-  - `cn.li.mc1201.gui.registry-common`
-  - `cn.li.mc1201.gui.screen-registry`
-  - `cn.li.mc1201.gui.slots-common`
-  - `cn.li.mc1201.gui.init-checks`
+- GUI bridge/common flow (now organized by domain subpackage):
+   - `cn.li.mc1201.gui.menu.bridge`
+   - `cn.li.mc1201.gui.menu.container`
+   - `cn.li.mc1201.gui.provider.common`
+   - `cn.li.mc1201.gui.provider.bridge`
+   - `cn.li.mc1201.gui.registry.common`
+   - `cn.li.mc1201.gui.registry.open`
+   - `cn.li.mc1201.gui.screen.registry`
+   - `cn.li.mc1201.gui.screen.impl`
+   - `cn.li.mc1201.gui.slots.common`
+   - `cn.li.mc1201.gui.slots.sync`
+   - `cn.li.mc1201.gui.slots.tabbed`
+   - `cn.li.mc1201.gui.init.checks`
+   - `cn.li.mc1201.gui.init.orchestrator`
 - Datagen common:
   - `cn.li.mc1201.datagen.resource-location`
   - `cn.li.mc1201.datagen.gson-util`
@@ -51,8 +57,8 @@
 Reason for all above: logic is either pure algorithm/data-conversion or shared lifecycle/adapter glue that should remain single-source across loaders.
 
 ## Fabric parity completion in this batch
-1. `fabric-1.20.1/src/main/clojure/cn/li/fabric1201/datagen/blockstate_provider.clj` (new)
-   - Provides Fabric blockstate + block model + block-item model generation from shared blockstate definitions.
+1. `fabric-1.20.1/src/main/clojure/cn/li/fabric1201/datagen/provider_factory.clj`
+   - Provides Fabric provider factory glue for blockstate + block model + block-item model generation from shared blockstate definitions.
 2. `fabric-1.20.1/src/main/clojure/cn/li/fabric1201/datagen/setup.clj`
    - Registers blockstate provider with existing lang/item/advancement/recipe providers.
 3. `fabric-1.20.1/src/generated/resources/assets/my_mod/{blockstates,models}`

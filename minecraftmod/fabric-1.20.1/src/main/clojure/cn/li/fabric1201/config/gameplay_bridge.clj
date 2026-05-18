@@ -6,7 +6,6 @@
   (:require [clojure.java.io :as io]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mc1201.config.gameplay-bridge :as shared-gameplay]
             [cn.li.mcmod.util.log :as log])
   (:import [com.google.gson GsonBuilder]
            [java.util LinkedHashMap]
@@ -151,13 +150,13 @@
 (defn get-metal-entities [] (vec (cfg :metal-entities)))
 
 (def ^:private normal-metal-block?
-  (shared-gameplay/list-predicate get-normal-metal-blocks))
+  (gameplay/list-predicate get-normal-metal-blocks))
 
 (def ^:private weak-metal-block?
-  (shared-gameplay/list-predicate get-weak-metal-blocks))
+  (gameplay/list-predicate get-weak-metal-blocks))
 
 (def ^:private metal-entity?
-  (shared-gameplay/list-predicate get-metal-entities))
+  (gameplay/list-predicate get-metal-entities))
 
 (defn is-metal-block? [block-id]
   (or (normal-metal-block? block-id)
@@ -184,19 +183,19 @@
 
 (defn get-init-cp
   [level]
-  (shared-gameplay/level-value (get-init-cp-list) level))
+    (gameplay/level-value (get-init-cp-list) level))
 
 (defn get-add-cp
   [level]
-  (shared-gameplay/level-value (get-add-cp-list) level))
+    (gameplay/level-value (get-add-cp-list) level))
 
 (defn get-init-overload
   [level]
-  (shared-gameplay/level-value (get-init-overload-list) level))
+    (gameplay/level-value (get-init-overload-list) level))
 
 (defn get-add-overload
   [level]
-  (shared-gameplay/level-value (get-add-overload-list) level))
+    (gameplay/level-value (get-add-overload-list) level))
 
 (defn get-damage-scale [] (double (cfg :damage-scale)))
 
@@ -208,7 +207,7 @@
 
 (defn provider-map
   []
-  (shared-gameplay/make-provider-map
+    (gameplay/make-provider-map
    {:attack-player? attack-player?
     :destroy-blocks? destroy-blocks?
     :get-normal-metal-blocks get-normal-metal-blocks

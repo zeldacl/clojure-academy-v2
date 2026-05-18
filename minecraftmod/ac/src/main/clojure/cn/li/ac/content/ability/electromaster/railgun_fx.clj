@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-fx
   "Client FX for Railgun: beam effects + charge hand aura."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.effects.beam-render :as beam-render]
+            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]))
@@ -12,6 +12,15 @@
 
 (defonce ^:private beam-effects (atom []))
 (def ^:private beam-life-ticks 12)
+(def ^:private railgun-beam-style
+  {:width (fn [_ life] (* 0.08 (+ 0.5 life)))
+   :core-ratio 0.45
+   :outer-rgb {:r 236 :g 170 :b 93}
+   :outer-alpha (fn [_ life] (+ 50 (* 150 life)))
+   :inner-rgb {:r 241 :g 240 :b 222}
+   :inner-alpha (fn [_ life] (+ 80 (* 150 life)))
+   :line-rgb {:r 165 :g 230 :b 255}
+   :line-alpha (fn [_ life] (+ 40 (* 120 life)))})
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
@@ -42,14 +51,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Render ops
 ;; ---------------------------------------------------------------------------
-
-(defn- beam-ops [cam-pos {:keys [start end ttl max-ttl]}]
-  (beam-render/fading-beam-ops cam-pos {:start start :end end :ttl ttl :max-ttl max-ttl}
-    {:width (fn [_ life] (* 0.08 (+ 0.5 life)))
-     :core-ratio 0.45
-     :outer-color (fn [_ life] (ru/with-alpha {:r 236 :g 170 :b 93} (+ 50 (* 150 life))))
-     :inner-color (fn [_ life] (ru/with-alpha {:r 241 :g 240 :b 222} (+ 80 (* 150 life))))
-     :line-color (fn [_ life] (ru/with-alpha {:r 165 :g 230 :b 255} (+ 40 (* 120 life))))}))
 
 (defn- impact-ring-ops [end ttl max-ttl]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
@@ -95,7 +96,7 @@
                        (client-runtime/railgun-charge-visual-state player-uuid))
         beam-plan (mapcat (fn [beam]
                             (concat
-                              (beam-ops camera-pos beam)
+                              (fx-beam/fading-beam-ops camera-pos beam railgun-beam-style)
                               (impact-ring-ops (:end beam) (:ttl beam) (:max-ttl beam))))
                           beams)
         charge-plan (if (and hand-center-pos (:active? charge-state))

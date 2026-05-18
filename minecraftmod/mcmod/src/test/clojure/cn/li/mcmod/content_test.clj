@@ -2,13 +2,13 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.content :as content]))
 
-(deftest ensure-content-init-registered-contract-test
+(deftest register-content-contract-test
   (testing "content bootstrap call is best-effort and always returns nil"
-    (is (nil? (content/ensure-content-init-registered!)))
-    (is (nil? (content/ensure-content-init-registered!)))))
+    (is (nil? (content/register-content! "ac")))
+    (is (nil? (content/register-content! "ac")))))
 
-(deftest ensure-content-init-registered-repeatability-test
+(deftest register-content-repeatability-test
   (testing "repeated calls remain stable and non-throwing"
     (dotimes [_ 5]
-      (is (nil? (content/ensure-content-init-registered!))))))
+      (is (nil? (content/register-content! "ac"))))))
 

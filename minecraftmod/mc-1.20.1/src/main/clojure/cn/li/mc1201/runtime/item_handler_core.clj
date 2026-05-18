@@ -1,5 +1,3 @@
-(remove-ns 'cn.li.mc1201.runtime.item-handler-core)
-
 (ns cn.li.mc1201.runtime.item-handler-core
   "Shared Minecraft-side item runtime helpers (no loader API imports)."
   (:require [clojure.string :as str]

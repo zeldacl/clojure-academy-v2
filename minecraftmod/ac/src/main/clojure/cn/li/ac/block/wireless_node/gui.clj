@@ -29,7 +29,8 @@
             [cn.li.ac.energy.operations :as energy-stub]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
             [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
@@ -162,10 +163,7 @@
 (defn create-container [tile player]
   (let [[be _state] (resolve-state tile)
         entity     (or be tile)]
-    (merge {:tile-entity    entity
-            :player         player
-            :container-type :node}
-         (schema-runtime/build-gui-atoms node-schema/unified-node-schema entity))))
+    (gui-sync/create-schema-container node-schema/unified-node-schema entity player :node)))
 
 ;; ============================================================================
 ;; Slot Management (from node_container.clj)
@@ -210,29 +208,32 @@
 ;; Container Sync (from node_container.clj)
 ;; ============================================================================
 
-;; Generated from schema with custom sync logic
-(defn sync-to-client! [container]
-  (let [base-sync (schema-runtime/build-sync-to-client-fn node-schema/unified-node-schema)
-        tile (:tile-entity container)
+(defn- update-derived-sync-fields!
+  [container]
+  (let [tile (:tile-entity container)
         state (or (common/get-tile-state tile) {})
-        old-rate @(:transfer-rate container)]
-    (base-sync container)
-    ;; Handle special sync logic (throttled queries, etc.)
+        current-rate @(:transfer-rate container)]
     (when-let [ticker (:sync-ticker container)]
       (sync-helpers/with-throttled-sync! ticker 100
         (fn [] (sync-helpers/query-node-network-capacity! container))))
-    ;; Calculate transfer-rate from charging flags - only update if changed
     (when-let [rate-atom (:transfer-rate container)]
       (let [rate (cond
                    (and (:charging-in state) (:charging-out state)) 200
                    (:charging-in state) 100
                    (:charging-out state) 100
                    :else 0)]
-        (when (not= rate old-rate)
+        (when (not= rate current-rate)
           (reset! rate-atom rate))))))
 
-(def get-sync-data (schema-runtime/build-get-sync-data-fn node-schema/unified-node-schema))
-(def apply-sync-data! (schema-runtime/build-apply-sync-data-fn node-schema/unified-node-schema))
+(def ^:private node-sync
+  (gui-sync/schema-sync-fns node-schema/unified-node-schema
+                            {:after-sync! update-derived-sync-fields!}))
+
+(defn sync-to-client! [container]
+  ((:sync-to-client! node-sync) container))
+
+(def get-sync-data (:get-sync-data node-sync))
+(def apply-sync-data! (:apply-sync-data! node-sync))
 
 (defn still-valid? [container player]
   (common/still-valid? container player))
@@ -268,7 +269,7 @@
 
 (defn on-close [container]
   (log/debug "Closing wireless node container")
-  ((schema-runtime/build-on-close-fn node-schema/unified-node-schema) container))
+  ((:on-close node-sync) container))
 
 ;; ============================================================================
 ;; Sync Packet Handling (from node_sync.clj)
@@ -470,30 +471,29 @@
   []
   (when (compare-and-set! wireless-node-gui-installed? false true)
     (ensure-wireless-node-slot-schema!)
-    (gui-dsl/register-gui!
-      (gui-dsl/create-gui-spec
-        "wireless-node"
-        {:gui-id 0
-          :registration {:display-name "Wireless Node"
-               :gui-type :node
-               :registry-name "wireless_node_gui"
-               :screen-factory-fn-kw :create-node-screen
-               :slot-layout (slot-schema/get-slot-layout wireless-node-id)}
-          :lifecycle {:container-predicate node-container?
-            :container-fn create-container
-            :screen-fn create-screen
-            :tick-fn tick!}
-          :sync {:sync-get get-sync-data
-            :sync-apply apply-sync-data!
-            :payload-sync-apply-fn apply-node-sync-payload!}
-          :operations {:validate-fn still-valid?
-             :close-fn on-close
-             :button-click-fn handle-button-click!}
-           :slot-operations {:slot-count-fn get-slot-count
-             :slot-get-fn get-slot-item
-             :slot-set-fn set-slot-item!
-             :slot-can-place-fn can-place-item?
-             :slot-changed-fn slot-changed!}}))
+    (gui-reg/register-block-gui!
+      "wireless-node"
+      {:gui-id 0
+       :display-name "Wireless Node"
+       :gui-type :node
+       :registry-name "wireless_node_gui"
+       :screen-factory-fn-kw :create-node-screen
+       :slot-schema-id wireless-node-id
+       :container-predicate node-container?
+       :container-fn create-container
+       :screen-fn create-screen
+       :tick-fn tick!
+       :sync-get get-sync-data
+       :sync-apply apply-sync-data!
+       :payload-sync-apply-fn apply-node-sync-payload!
+       :validate-fn still-valid?
+       :close-fn on-close
+       :button-click-fn handle-button-click!
+       :slot-count-fn get-slot-count
+       :slot-get-fn get-slot-item
+       :slot-set-fn set-slot-item!
+       :slot-can-place-fn can-place-item?
+       :slot-changed-fn slot-changed!})
     (log/info "Wireless Node GUI module initialized")))
 
 ;; ============================================================================

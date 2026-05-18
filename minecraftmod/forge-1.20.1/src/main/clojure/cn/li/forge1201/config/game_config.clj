@@ -7,7 +7,7 @@
   
   - bridge.clj: Forge ForgeConfigSpec registration (technical layer)
   - game_config.clj: Business config value access (business layer)"
-  (:require [cn.li.mc1201.config.gameplay-bridge :as shared-gameplay])
+  (:require [cn.li.ac.config.gameplay :as gameplay])
   (:import [cn.li.forge1201.config GameplayConfig]))
 
 ;; =============================================================================
@@ -38,13 +38,13 @@
 ;; =============================================================================
 
 (def ^:private normal-metal-block?
-  (shared-gameplay/list-predicate get-normal-metal-blocks))
+  (gameplay/list-predicate get-normal-metal-blocks))
 
 (def ^:private weak-metal-block?
-  (shared-gameplay/list-predicate get-weak-metal-blocks))
+  (gameplay/list-predicate get-weak-metal-blocks))
 
 (def ^:private metal-entity?
-  (shared-gameplay/list-predicate get-metal-entities))
+  (gameplay/list-predicate get-metal-entities))
 
 (defn is-metal-block? [block-id]
   (or (normal-metal-block? block-id)
@@ -102,22 +102,22 @@
 (defn get-init-cp
   "Get initial CP for a given level, returning 0 for out-of-bounds levels."
   [level]
-  (shared-gameplay/level-value (get-init-cp-list) level))
+    (gameplay/level-value (get-init-cp-list) level))
 
 (defn get-add-cp
   "Get additional CP per level, returning 0 for out-of-bounds levels."
   [level]
-  (shared-gameplay/level-value (get-add-cp-list) level))
+    (gameplay/level-value (get-add-cp-list) level))
 
 (defn get-init-overload
   "Get initial overload for a given level, returning 0 for out-of-bounds levels."
   [level]
-  (shared-gameplay/level-value (get-init-overload-list) level))
+    (gameplay/level-value (get-init-overload-list) level))
 
 (defn get-add-overload
   "Get additional overload per level, returning 0 for out-of-bounds levels."
   [level]
-  (shared-gameplay/level-value (get-add-overload-list) level))
+    (gameplay/level-value (get-add-overload-list) level))
 
 ;; =============================================================================
 ;; Damage config
@@ -134,7 +134,7 @@
 (defn provider-map
   "Return map of all config accessors for shared layer protocol binding"
   []
-  (shared-gameplay/make-provider-map
+    (gameplay/make-provider-map
    {:attack-player? attack-player?
     :destroy-blocks? destroy-blocks?
     :get-normal-metal-blocks get-normal-metal-blocks

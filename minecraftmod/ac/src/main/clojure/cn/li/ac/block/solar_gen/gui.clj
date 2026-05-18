@@ -25,16 +25,12 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
-            [cn.li.mcmod.gui.dsl :as gui-dsl]
             [cn.li.ac.energy.operations :as energy-ops]
+            [cn.li.ac.block.gui.registration :as gui-reg]
+            [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
-            [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
-            [cn.li.mcmod.gui.container.schema :as schema]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
-            [cn.li.ac.block.solar-gen.schema :as solar-schema]
-            [cn.li.ac.block.solar-gen.config :as solar-config]
-            [cn.li.mcmod.platform.position :as pos])
-  (:import [cn.li.acapi.wireless IWirelessNode]))
+            [cn.li.ac.block.solar-gen.schema :as solar-schema]))
 
 ;; ============================================================================
 ;; Slot Schema
@@ -54,13 +50,12 @@
 ;; ============================================================================
 
 (def ^:private solar-slot-schema-id solar-gen-id)
+(def ^:private solar-sync
+  (gui-sync/schema-sync-fns solar-schema/unified-solar-schema))
 
 (defn create-container [tile player]
   (let [state (or (common/get-tile-state tile) {})]
-    (merge {:tile-entity    tile
-            :player         player
-            :container-type :solar}
-           (schema-runtime/build-gui-atoms solar-schema/unified-solar-schema state))))
+    (gui-sync/create-schema-container solar-schema/unified-solar-schema tile player :solar {:state state})))
 
 (defn get-slot-count [_container]
   (slot-registry/get-slot-count solar-slot-schema-id))
@@ -78,36 +73,16 @@
 
 (defn still-valid? [_container _player] true)
 
-(defn sync-to-client! [container]
-  (let [state (or (common/get-tile-state (:tile-entity container)) {})
-        new-energy (double (get state :energy 0.0))
-  new-max-energy (double (get state :max-energy (solar-config/max-energy)))
-        new-status (str (get state :status "STOPPED"))
-        new-gen-speed (double (get state :gen-speed 0.0))]
-    ;; Only update atoms if values changed
-    (when (not= new-energy @(:energy container))
-      (reset! (:energy container) new-energy))
-    (when (not= new-max-energy @(:max-energy container))
-      (reset! (:max-energy container) new-max-energy))
-    (when (not= new-status @(:status container))
-      (reset! (:status container) new-status))
-    (when (not= new-gen-speed @(:gen-speed container))
-      (reset! (:gen-speed container) new-gen-speed))))
-
-(defn get-sync-data [container]
-  ((schema-runtime/build-get-sync-data-fn solar-schema/unified-solar-schema) container))
-
-(defn apply-sync-data! [container data]
-  ((schema-runtime/build-apply-sync-data-fn solar-schema/unified-solar-schema) container data))
+(def sync-to-client! (:sync-to-client! solar-sync))
+(def get-sync-data (:get-sync-data solar-sync))
+(def apply-sync-data! (:apply-sync-data! solar-sync))
 
 (defn tick! [container]
-  (swap! (:sync-ticker container) inc)
-  (sync-to-client! container))
+  (gui-sync/sync-tick! container sync-to-client! {:ticker-key :sync-ticker}))
 
 (defn handle-button-click! [_container _button-id _player] nil)
 
-(defn on-close [container]
-  ((schema-runtime/build-on-close-fn solar-schema/unified-solar-schema) container))
+(def on-close (:on-close solar-sync))
 
 ;; ============================================================================
 ;; GUI Components
@@ -216,27 +191,26 @@
       {:schema-id solar-gen-id
        :slots [{:id :energy :type :energy :x 42 :y 81}]})
     (msg-registry/register-block-messages! :generator [:get-status :list-nodes :connect :disconnect])
-    (gui-dsl/register-gui!
-      (gui-dsl/create-gui-spec
-        "solar-gen"
-        {:gui-id 2
-          :registration {:display-name "Solar Generator"
-               :gui-type :solar
-               :registry-name "solar_gen_gui"
-               :screen-factory-fn-kw :create-solar-screen
-               :slot-layout (slot-schema/get-slot-layout solar-gen-id)}
-          :lifecycle {:container-predicate solar-container?
-            :container-fn create-container
-            :screen-fn create-screen
-            :tick-fn tick!}
-          :sync {:sync-get get-sync-data
-            :sync-apply apply-sync-data!}
-          :operations {:validate-fn still-valid?
-             :close-fn on-close
-             :button-click-fn handle-button-click!}
-           :slot-operations {:slot-count-fn get-slot-count
-             :slot-get-fn get-slot-item
-             :slot-set-fn set-slot-item!
-             :slot-can-place-fn can-place-item?
-             :slot-changed-fn slot-changed!}}))))
+    (gui-reg/register-block-gui!
+      "solar-gen"
+      {:gui-id 2
+       :display-name "Solar Generator"
+       :gui-type :solar
+       :registry-name "solar_gen_gui"
+       :screen-factory-fn-kw :create-solar-screen
+       :slot-schema-id solar-gen-id
+       :container-predicate solar-container?
+       :container-fn create-container
+       :screen-fn create-screen
+       :tick-fn tick!
+       :sync-get get-sync-data
+       :sync-apply apply-sync-data!
+       :validate-fn still-valid?
+       :close-fn on-close
+       :button-click-fn handle-button-click!
+       :slot-count-fn get-slot-count
+       :slot-get-fn get-slot-item
+       :slot-set-fn set-slot-item!
+       :slot-can-place-fn can-place-item?
+       :slot-changed-fn slot-changed!})))
 

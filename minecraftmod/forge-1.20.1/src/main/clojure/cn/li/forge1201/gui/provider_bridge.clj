@@ -2,8 +2,8 @@
   "Forge 1.20.1 provider bridge.
 
   Uses reify MenuProvider and delegates menu creation to shared menu-bridge core."
-  (:require [cn.li.mc1201.gui.provider-bridge-core :as provider-core]
-            [cn.li.mc1201.gui.menu-bridge-core :as menu-core]
+  (:require [cn.li.mc1201.gui.provider.bridge :as provider-core]
+            [cn.li.mc1201.gui.menu.bridge :as menu-core]
             [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.util.log :as log])

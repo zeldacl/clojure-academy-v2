@@ -7,7 +7,7 @@
             [cn.li.mcmod.gui.xml-parser :as cgui-doc]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
-            [cn.li.mcmod.gui.dsl :as gui-dsl]
+            [cn.li.ac.block.gui.registration :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
@@ -258,27 +258,26 @@
     (slot-schema/register-slot-schema!
       {:schema-id interferer-slot-schema-id
        :slots [{:id :battery :type :energy :x 139 :y 25}]})
-    (gui-dsl/register-gui!
-      (gui-dsl/create-gui-spec
-        "ability-interferer"
-        {:gui-id 15
-          :registration {:display-name "Ability Interferer"
-               :gui-type interferer-gui-type
-               :registry-name "ability_interferer_gui"
-               :screen-factory-fn-kw :create-ability-interferer-screen
-               :slot-layout (interferer-slot-layout)}
-          :lifecycle {:container-predicate interferer-container?
-            :container-fn create-container
-            :screen-fn create-screen
-            :tick-fn tick!}
-          :sync {:sync-get get-sync-data
-            :sync-apply apply-sync-data!}
-          :operations {:validate-fn still-valid?
-             :close-fn on-close
-             :button-click-fn handle-button-click!}
-           :slot-operations {:slot-count-fn get-slot-count
-             :slot-get-fn get-slot-item
-             :slot-set-fn set-slot-item!
-             :slot-can-place-fn can-place-item?
-             :slot-changed-fn slot-changed!}}))
+    (gui-reg/register-block-gui!
+      "ability-interferer"
+      {:gui-id 15
+       :display-name "Ability Interferer"
+       :gui-type interferer-gui-type
+       :registry-name "ability_interferer_gui"
+       :screen-factory-fn-kw :create-ability-interferer-screen
+       :slot-layout (interferer-slot-layout)
+       :container-predicate interferer-container?
+       :container-fn create-container
+       :screen-fn create-screen
+       :tick-fn tick!
+       :sync-get get-sync-data
+       :sync-apply apply-sync-data!
+       :validate-fn still-valid?
+       :close-fn on-close
+       :button-click-fn handle-button-click!
+       :slot-count-fn get-slot-count
+       :slot-get-fn get-slot-item
+       :slot-set-fn set-slot-item!
+       :slot-can-place-fn can-place-item?
+       :slot-changed-fn slot-changed!})
     (log/info "Ability Interferer GUI initialized")))
