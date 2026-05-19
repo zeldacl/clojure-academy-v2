@@ -48,9 +48,19 @@
 (defn register-context! [ctx] (swap! context-registry assoc (:id ctx) ctx) ctx)
 (defn get-context [ctx-id] (get @context-registry ctx-id))
 (defn get-all-contexts [] @context-registry)
-(defn update-context! [ctx-id f & args] (apply swap! context-registry update ctx-id f args))
+(defn update-context! [ctx-id f & args]
+	(swap! context-registry
+			 (fn [registry]
+				 (if (contains? registry ctx-id)
+					 (apply update registry ctx-id f args)
+					 registry))))
 (defn remove-context! [ctx-id] (swap! context-registry dissoc ctx-id))
 (defn get-all-contexts-for-player [player-uuid] (filter #(= player-uuid (:player-uuid %)) (vals @context-registry)))
+
+(defn context-owned-by?
+	[ctx-id player-uuid]
+	(when-let [ctx (get-context ctx-id)]
+		(= player-uuid (:player-uuid ctx))))
 
 (defn transition-to-alive! [ctx-id server-id flush-fn]
 	(when-let [ctx (get-context ctx-id)]
@@ -75,7 +85,8 @@
 		(terminate-context! (:id ctx) send-terminated-fn)))
 
 (def ^:private KEEPALIVE-TIMEOUT-MS 1500)
-(defn update-keepalive! [ctx-id] (update-context! ctx-id assoc :last-keepalive-ms (System/currentTimeMillis)))
+(defn update-keepalive! [ctx-id]
+	(update-context! ctx-id assoc :last-keepalive-ms (System/currentTimeMillis)))
 (defn check-keepalive-timeout! [send-terminated-fn]
 	(let [now (System/currentTimeMillis)]
 		(doseq [[ctx-id ctx] @context-registry]
@@ -111,8 +122,17 @@
 (defn ctx-send-to-self! [ctx-id channel msg] (ctx-send-to-local! ctx-id channel msg))
 (defn ctx-on! [ctx-id channel handler-fn] (update-context! ctx-id update-in [:listeners channel] (fnil conj []) handler-fn))
 
-(defn active-contexts []
-	(get-all-contexts))
+(defn active-context? [ctx]
+	(not= STATUS-TERMINATED (:status ctx)))
+
+(defn active-contexts
+	([]
+	 (->> @context-registry
+			(filter (fn [[_ctx-id ctx]] (active-context? ctx)))
+			(into {})))
+	([player-uuid]
+	 (->> (get-all-contexts-for-player player-uuid)
+			(filter active-context?))))
 
 (defn send-context-message!
 	([ctx-id channel payload]

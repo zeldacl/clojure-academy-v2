@@ -115,3 +115,26 @@
                 e2 (.getEnergy n2)]
             (is (< (Math/abs (- e1 e2)) 120.0)
                 "energies should move closer after balancing")))))))
+
+(deftest balance-energy-conserves-energy-with-different-node-capacities-test
+  (let [w :w-bal-capacity
+        wd (wdata/create-world-data w)
+        small (stubs/mutable-node {:energy 0.0 :max-energy 100.0})
+        large (stubs/mutable-node {:energy 1000.0 :max-energy 1000.0})
+        tiles (atom {[0 0 0] (stubs/fake-matrix {:bandwidth 5000.0})
+                     [2 0 0] small
+                     [4 0 0] large})
+        matrix-vb (vb/create-vmatrix 0 0 0)
+        small-vb (vb/create-vnode 2 0 0)
+        large-vb (vb/create-vnode 4 0 0)]
+    (stubs/with-tile-world tiles
+      (fn []
+        (let [net (network-state/create-wireless-net wd matrix-vb "bal-cap" "p")]
+          (is (true? (network-membership/add-node! net small-vb "p")))
+          (is (true? (network-membership/add-node! net large-vb "p")))
+          (with-redefs [ncfg/update-interval-ticks (constantly 1)
+                        ncfg/buffer-max (constantly 1.0e6)]
+            (network-runtime/tick-wireless-net! net))
+          (is (= 100.0 (.getEnergy small)))
+          (is (= 900.0 (.getEnergy large)))
+          (is (= 1000.0 (+ (.getEnergy small) (.getEnergy large)))))))))

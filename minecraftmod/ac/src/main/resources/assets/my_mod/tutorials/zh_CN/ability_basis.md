@@ -9,7 +9,7 @@
 
 你可以通过__能力开发机__或者数据终端的__技能树App__来检查自身的能力学习情况。在技能树中，你可以看到当前的能力等级、当前等级的升级情况以及所有可见技能的学习情况。
 
-![技能树](academy:textures/tutorial/skill_tree_ui.png)
+![技能树](my_mod:textures/tutorial/skill_tree_ui.png)
 
 ## 学习技能
 
@@ -31,7 +31,7 @@
 
 你需要通过__能力激活键__ ![key id="ability_activation"] 开启能力使用。开启能力使用后，游戏的UI会发生一定的变化：
 
-![能力模式(部分)](academy:textures/tutorial/ability_ui.png)
+![能力模式(部分)](my_mod:textures/tutorial/ability_ui.png)
 
 右上方的__计算力条__可以让你实时检查你的计算力和过载状态。
 
@@ -43,7 +43,7 @@
 
 你可以使用 ![key id="edit_preset"] 键来打开预设编辑界面。
 
-![预设编辑界面](academy:textures/tutorial/preset_selection_ui.png)
+![预设编辑界面](my_mod:textures/tutorial/preset_selection_ui.png)
 
 在能力激活的状态下，通过使用 ![key id="switch_preset"] 来切换当前预设。你可以看到UI上的键位提示发生相应的变化。
 
@@ -55,7 +55,7 @@ P.S. 超能力所使用的四个键位可以通过数据终端中的__设置App_
 
 同时，超能力使用也会产生短时间内急剧的负荷，它以__过载__的形式被表现出来，显示在CP条的下方。当过载超过上限时，你将不得不停止使用能力，直到冷却恢复。
 
-![过载时的界面](academy:textures/tutorial/overload.png)
+![过载时的界面](my_mod:textures/tutorial/overload.png)
 
 ## 能力重置
 

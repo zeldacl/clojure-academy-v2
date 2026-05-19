@@ -5,7 +5,7 @@
 (deftest mode-normalization-test
   (is (= :plate (recipes/normalize-mode nil)))
   (is (= :incise (recipes/normalize-mode "incise")))
-  (is (= "academy:textures/guis/icons/icon_former_refine.png"
+  (is (= "my_mod:textures/guis/icons/icon_former_refine.png"
          (recipes/mode->icon-texture :refine))))
 
 (deftest recipe-by-id-and-form-guard-test

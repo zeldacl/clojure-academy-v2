@@ -6,7 +6,6 @@
 						[cn.li.ac.registry.hooks :as hooks]
 						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.ac.config.modid :as modid]
-						[cn.li.ac.block.developer.logic :as dev-logic]
 						[cn.li.ac.block.developer.handlers :as dev-handlers]
 						[cn.li.mcmod.util.log :as log])
 	(:import [cn.li.acapi.wireless IWirelessReceiver]))
@@ -30,9 +29,9 @@
 		(f level pos block-state be)))
 
 (defn- developer-load-dispatch
-	[be nbt]
+	[nbt]
 	(when-let [f (requiring-resolve 'cn.li.ac.block.developer.logic/dev-scripted-load-fn)]
-		(f be nbt)))
+		(f nbt)))
 
 (defn- developer-save-dispatch
 	[be nbt]

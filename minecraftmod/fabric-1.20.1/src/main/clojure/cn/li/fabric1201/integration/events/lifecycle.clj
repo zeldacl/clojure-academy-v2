@@ -7,7 +7,11 @@
             [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.players PlayerList]
-           [net.minecraft.server.level ServerPlayer]))
+           [net.minecraft.server.level ServerLevel ServerPlayer]))
+
+(defn- dimension-id
+  [^ServerLevel level]
+  (some-> level .dimension .location str))
 
 (defn handle-player-login
   [^ServerPlayer player]
@@ -43,6 +47,19 @@
       (when (instance? ServerPlayer entity)
         (let [^ServerPlayer p entity]
           (lifecycle-core/on-player-death! p {:save-player-state! runtime-nbt/save-player-state!}))))))
+
+(defn handle-player-dimension-change
+  [^ServerPlayer player ^ServerLevel origin ^ServerLevel destination]
+  (event-support/guarded-call
+    "fabric player dimension change"
+    nil
+    (fn []
+      (lifecycle-core/on-player-dimension-change! player
+                                                  (dimension-id origin)
+                                                  (dimension-id destination)
+                                                  {:mark-player-dirty! runtime-sync/mark-player-dirty!
+                                                   :tick-sync! runtime-sync/tick-sync!
+                                                   :send-sync-fn runtime-network/send-sync-to-client!}))))
 
 (defn handle-player-tick
   [^MinecraftServer server]

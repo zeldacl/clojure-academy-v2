@@ -80,7 +80,7 @@
 (def settings-app
   {:id :settings
    :name "Settings"
-   :icon "academy:textures/guis/apps/settings/icon.png"
+  :icon "my_mod:textures/guis/apps/settings/icon.png"
    :description "Configure game settings"
    :gui-fn 'cn.li.ac.terminal.apps.settings/open-settings-gui
    :category :system})

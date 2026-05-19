@@ -83,7 +83,7 @@
 (def freq-transmitter-app
   {:id :freq-transmitter
    :name "Frequency Transmitter"
-   :icon "academy:textures/guis/apps/freq_transmitter/icon.png"
+  :icon "my_mod:textures/guis/apps/freq_transmitter/icon.png"
    :description "Manage wireless frequencies"
    :gui-fn 'cn.li.ac.terminal.apps.freq-transmitter/open-freq-transmitter-gui
    :category :wireless})

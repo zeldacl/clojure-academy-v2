@@ -148,6 +148,9 @@
      :open-location-teleport-screen screen-host/open-location-teleport-screen!
      :open-terminal-screen terminal-screen-bridge/open-terminal-screen!
      :open-simple-gui terminal-screen-bridge/open-simple-gui!
+    :slot-key-down runtime-bridge/on-slot-key-down!
+    :slot-key-tick runtime-bridge/on-slot-key-tick!
+    :slot-key-up runtime-bridge/on-slot-key-up!
      :local-player-item-id runtime-bridge/local-player-item-id
      :local-player-pos runtime-bridge/local-player-pos
      :local-player-eye-pos runtime-bridge/local-player-eye-pos

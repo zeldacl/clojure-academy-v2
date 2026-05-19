@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.state.player-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.edn :as edn]
+            [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.service.player-state :as ps]))
 
@@ -39,3 +40,26 @@
   (is (some? (ps/get-player-state "u4")))
   (ps/remove-player-state! "u4")
   (is (nil? (ps/get-player-state "u4"))))
+
+(deftest persisted-state-edn-roundtrip-keeps-core-data-test
+  (let [state (-> (ps/fresh-state)
+                  (assoc-in [:ability-data :category-id] :electromaster)
+                  (update-in [:ability-data :learned-skills] conj :railgun)
+                  (assoc-in [:ability-data :skill-exps :railgun] 0.75)
+                  (assoc-in [:resource-data :cur-cp] 42.0)
+                  (assoc-in [:cooldown-data [:railgun :main]] 20)
+                  (assoc-in [:preset-data :slots [0 0]] [:electromaster :railgun])
+                  (assoc-in [:develop-data :state] :developing)
+                  (assoc-in [:terminal-data :terminal-installed?] true)
+                  (update-in [:terminal-data :installed-apps] conj :skill-tree)
+                  (assoc :dirty? true))
+        persisted (dissoc state :dirty?)
+        decoded (edn/read-string (pr-str persisted))]
+    (is (= persisted decoded))
+    (is (false? (contains? decoded :dirty?)))
+    (is (= #{:ability-data :resource-data :cooldown-data :preset-data :develop-data :terminal-data}
+           (set (keys decoded))))
+    (is (= [:electromaster :railgun]
+           (get-in decoded [:preset-data :slots [0 0]])))
+    (is (= #{:skill-tree}
+           (get-in decoded [:terminal-data :installed-apps])))))

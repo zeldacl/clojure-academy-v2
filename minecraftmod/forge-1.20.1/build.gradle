@@ -35,14 +35,16 @@ loom {
             server()
             configName = "Forge Server 1.20.1"
             runDir = "run"
-            property 'forge.enabledGameTestNamespaces', mod_id
+            property 'forge.enabledGameTestNamespaces', "${mod_id},minecraft"
         }
         gametestServer {
             server()
             configName = "Forge GameTest Server 1.20.1"
             runDir = "run-gametest"
             property 'forge.enableGameTest', 'true'
-            property 'forge.enabledGameTestNamespaces', mod_id
+            // Tests use the vanilla minecraft:empty structure template, and Forge filters
+            // registration by GameTest.templateNamespace, so keep both namespaces enabled.
+            property 'forge.enabledGameTestNamespaces', "${mod_id},minecraft"
             // Use an ephemeral port in GameTest runs to avoid local server conflicts.
             programArgs '--safeMode', '--port', '0'
         }

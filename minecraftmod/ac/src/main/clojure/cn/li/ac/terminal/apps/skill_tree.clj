@@ -26,7 +26,7 @@
 (def skill-tree-app
   {:id :skill-tree
    :name "Skill Tree"
-   :icon "academy:textures/guis/apps/skill_tree/icon.png"
+  :icon "my_mod:textures/guis/apps/skill_tree/icon.png"
    :description "View and manage your abilities"
    :gui-fn 'cn.li.ac.terminal.apps.skill-tree/open-skill-tree-gui
    :category :abilities})

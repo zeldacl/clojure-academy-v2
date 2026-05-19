@@ -115,7 +115,7 @@
         _ (comp/add-component! bg bg-texture)
         ;; Create icon
         icon (cgui-core/create-widget :pos [9 32] :size [110 110])
-        icon-texture (or (:icon app) "academy:textures/guis/apps/default/icon.png")
+        icon-texture (or (:icon app) (modid/asset-path "textures" "guis/apps/default/icon.png"))
         icon-comp (comp/draw-texture icon-texture [255 255 255 (if installed? 255 160)])
         _ (comp/add-component! icon icon-comp)
         ;; Create text label

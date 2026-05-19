@@ -28,6 +28,8 @@ ext.configureAcContentRuntime = {
     evaluationDependsOn(':ac')
     def acProject = project(':ac')
     def acClojureSources = acProject.file('src/main/clojure')
+    def acJavaClasses = acProject.layout.buildDirectory.dir('classes/java/main')
+    def acResources = acProject.layout.buildDirectory.dir('resources/main')
 
     dependencies {
         // Use file/source-set outputs instead of `implementation project(':ac')`.
@@ -57,6 +59,40 @@ ext.configureAcContentRuntime = {
         from(acClojureSources) {
             include '**/*.clj'
         }
+    }
+
+    // Forge/Fabric dev launchers do not necessarily expose runtimeOnly source-set
+    // outputs to the mod classloader used by ServiceLoader/Clojure `require`.
+    // Mirror AC runtime artifacts into the platform output so dev runs and GameTest
+    // see the same content bootstrap/resources that packaged jars include.
+    tasks.named('processResources', Copy).configure {
+        dependsOn acProject.tasks.named('processResources')
+        from(acResources) {
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        from(acClojureSources) {
+            include '**/*.clj'
+        }
+    }
+
+    def copyAcJavaClassesToPlatformOutput = tasks.register('copyAcJavaClassesToPlatformOutput', Copy) {
+        dependsOn acProject.tasks.named('classes')
+        from(acJavaClasses) {
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        into layout.buildDirectory.dir('classes/java/main')
+    }
+
+    tasks.named('classes').configure {
+        dependsOn copyAcJavaClassesToPlatformOutput
+    }
+
+    tasks.matching { it.name == 'compileClojure' }.configureEach {
+        dependsOn copyAcJavaClassesToPlatformOutput
+    }
+
+    tasks.matching { it.name in ['runClient', 'runServer', 'runData', 'runGametestServer', 'checkClojure'] }.configureEach {
+        dependsOn copyAcJavaClassesToPlatformOutput
     }
 }
 

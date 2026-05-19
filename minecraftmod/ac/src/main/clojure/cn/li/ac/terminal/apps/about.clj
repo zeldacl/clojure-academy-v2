@@ -73,7 +73,7 @@
 (def about-app
   {:id :about
    :name "About"
-   :icon "academy:textures/guis/apps/about/icon.png"
+  :icon "my_mod:textures/guis/apps/about/icon.png"
    :description "Credits and information"
    :gui-fn 'cn.li.ac.terminal.apps.about/open-about-gui
    :category :help})

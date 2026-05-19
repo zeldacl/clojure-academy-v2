@@ -26,7 +26,7 @@
   {:id imag-fusor-category-id
    :title-key "tile.ac_imag_fusor.name"
   :block-id (str modid/MOD-ID ":imag_fusor")
-   :background {:texture "academy:textures/guis/nei_fusor.png"
+  :background {:texture (modid/asset-path "textures" "guis/nei_fusor.png")
                 :u 0 :v 0
                 :width 120 :height 80}
    :input-slots [(slot-pos 5 36)]
@@ -39,7 +39,7 @@
   {:id metal-former-category-id
    :title-key "tile.ac_metal_former.name"
   :block-id (str modid/MOD-ID ":metal_former")
-   :background {:texture "academy:textures/guis/nei_metalformer.png"
+  :background {:texture (modid/asset-path "textures" "guis/nei_metalformer.png")
                 :u 0 :v 0
                 :width 94 :height 57}
    :input-slots [(slot-pos 5 23)]

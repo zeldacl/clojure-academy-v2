@@ -12,10 +12,4 @@
 
 (defn normalize-xml-texture [s]
   (when s
-    (let [s (str/trim s)]
-      (cond
-        (str/starts-with? s "assets/") s
-        (str/includes? s ":")
-        (let [[ns path] (str/split s #":" 2)]
-          (if (= ns "academy") path s))
-        :else s))))
+    (str/trim s)))

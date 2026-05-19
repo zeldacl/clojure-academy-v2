@@ -16,7 +16,7 @@
                                     (elem :scale ["1.5"])
                                     (elem :doesDraw ["true"])]}
           texture-node {:tag :Component
-                        :content [(elem :texture ["academy:block/a"])
+                        :content [(elem :texture ["my_mod:block/a"])
                                   (elem :color [(elem :red ["1"])
                                                 (elem :green ["2"])
                                                 (elem :blue ["3"])
@@ -28,7 +28,7 @@
           button-node {:tag :Button
                        :attrs {:name "ok"}
                        :content [(elem :x ["1"]) (elem :y ["2"]) (elem :width ["9"]) (elem :height ["10"])
-                                 (elem :texture ["academy:ui/btn"]) (elem :scale ["0.5"])
+                                 (elem :texture ["my_mod:ui/btn"]) (elem :scale ["0.5"])
                                  (elem :pageId ["main"]) (elem :tooltip ["hello"])]}
           label-node {:tag :Label
                       :content [(elem :x ["8"]) (elem :y ["9"]) (elem :text ["txt"]) (elem :color ["#010203"])]}
@@ -40,12 +40,12 @@
       (is (= 180.0 (:width transform)))
       (is (= 200.0 (:height transform)))
       (is (= true (:does-draw transform)))
-      (is (= "block/a" (:texture tex)))
+      (is (= "my_mod:block/a" (:texture tex)))
       (is (= {:red 1 :green 2 :blue 3 :alpha 4} (:color tex)))
       (is (= 2.5 (:z-level tex)))
       (is (= {:index 4 :x 5 :y 6 :filter :energy :tooltip "tip"} slot))
       (is (= "ok" (:id button)))
-      (is (= "ui/btn" (:texture button)))
+      (is (= "my_mod:ui/btn" (:texture button)))
       (is (= :main (:page-id button)))
       (is (= "hello" (:tooltip button)))
       (is (= 66051 (:color label))))))
@@ -73,7 +73,7 @@
                            :content [(elem :width ["188"]) (elem :height ["166"])]}
                           {:tag :Component
                            :attrs {:class "DrawTexture"}
-                           :content [(elem :texture ["academy:gui/bg"])]}
+                          :content [(elem :texture ["my_mod:gui/bg"])]}
                           {:tag :Slot :content [(elem :index ["0"]) (elem :x ["1"]) (elem :y ["2"])]}
                           {:tag :Button :attrs {:name "b0"} :content [(elem :x ["5"]) (elem :y ["6"])]}
                           {:tag :Label :content [(elem :text ["hello"])]}
@@ -92,5 +92,5 @@
       (is (= "gui-id" (:id spec)))
       (is (= 188.0 (get-in spec [:layout :width])))
       (is (= 166.0 (get-in spec [:layout :height])))
-      (is (= "gui/bg" (get-in spec [:layout :background])))
+      (is (= "my_mod:gui/bg" (get-in spec [:layout :background])))
       (is (map? (:widget-tree spec))))))

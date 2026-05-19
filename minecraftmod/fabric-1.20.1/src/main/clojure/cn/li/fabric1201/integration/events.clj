@@ -15,7 +15,9 @@
            [net.fabricmc.fabric.api.networking.v1 ServerPlayConnectionEvents$Join
             ServerPlayConnectionEvents$Disconnect]
            [net.fabricmc.fabric.api.entity.event.v1 ServerPlayerEvents$CopyFrom
-            ServerLivingEntityEvents$AfterDeath]
+            ServerLivingEntityEvents$AfterDeath
+            ServerEntityWorldChangeEvents
+            ServerEntityWorldChangeEvents$AfterPlayerChange]
            [net.fabricmc.fabric.api.loot.v2 LootTableEvents$Modify]))
 
 (defonce ^:private events-registered? (atom false))
@@ -83,6 +85,11 @@
                  (reify ServerLivingEntityEvents$AfterDeath
                    (afterDeath [_ entity _damage-source]
                      (lifecycle-events/handle-player-death entity))))
+
+      (.register ServerEntityWorldChangeEvents/AFTER_PLAYER_CHANGE_WORLD
+                 (reify ServerEntityWorldChangeEvents$AfterPlayerChange
+                   (afterChangeWorld [_ player origin destination]
+                     (lifecycle-events/handle-player-dimension-change player origin destination))))
 
       (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents/END_SERVER_TICK
                  (reify ServerTickEvents$EndTick

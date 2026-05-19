@@ -11,14 +11,19 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerEvent$PlayerLoggedInEvent
                                                   PlayerEvent$PlayerLoggedOutEvent
-                                                  PlayerEvent$Clone]
+                                   PlayerEvent$Clone
+                                   PlayerEvent$PlayerChangedDimensionEvent]
            [net.minecraftforge.event.entity.living LivingDeathEvent]
            [net.minecraftforge.event TickEvent$PlayerTickEvent TickEvent$Phase]
+           [net.minecraft.resources ResourceKey]
            [net.minecraft.server.level ServerPlayer]))
 
 
 (defn- server-player [player]
   (when (instance? ServerPlayer player) player))
+
+(defn- dimension-id [^ResourceKey dimension-key]
+  (some-> dimension-key .location str))
 
 (defn- on-player-login [^PlayerEvent$PlayerLoggedInEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
@@ -30,14 +35,22 @@
     (lifecycle-core/on-player-logout! p {:save-player-state! runtime-nbt/save-player-state!})))
 
 (defn- on-player-clone [^PlayerEvent$Clone evt]
-  (when (not (.isWasDeath evt))
-    (when-let [^ServerPlayer oldp (server-player (.getOriginal evt))]
-      (when-let [^ServerPlayer newp (server-player (.getEntity evt))]
-        (lifecycle-core/on-player-clone! oldp newp true {:clone-player-state! runtime-nbt/clone-player-state!})))))
+  (when-let [^ServerPlayer oldp (server-player (.getOriginal evt))]
+    (when-let [^ServerPlayer newp (server-player (.getEntity evt))]
+      (lifecycle-core/on-player-clone! oldp newp (not (.isWasDeath evt)) {:clone-player-state! runtime-nbt/clone-player-state!}))))
 
 (defn- on-player-death [^LivingDeathEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
     (lifecycle-core/on-player-death! p {:save-player-state! runtime-nbt/save-player-state!})))
+
+(defn- on-player-dimension-change [^PlayerEvent$PlayerChangedDimensionEvent evt]
+  (when-let [^ServerPlayer p (server-player (.getEntity evt))]
+    (lifecycle-core/on-player-dimension-change! p
+                                                (dimension-id (.getFrom evt))
+                                                (dimension-id (.getTo evt))
+                                                {:mark-player-dirty! runtime-sync/mark-player-dirty!
+                                                 :tick-sync! runtime-sync/tick-sync!
+                                                 :send-sync-fn runtime-network/send-sync-to-client!})))
 
 (defn- on-player-tick [^TickEvent$PlayerTickEvent evt]
   (when (and (= TickEvent$Phase/END (.phase evt))
@@ -57,6 +70,7 @@
      :on-player-logout on-player-logout
      :on-player-clone on-player-clone
      :on-player-death on-player-death
+      :on-player-dimension-change on-player-dimension-change
      :on-player-tick on-player-tick})
 
   ;; Initialize damage handlers after all protocols are installed

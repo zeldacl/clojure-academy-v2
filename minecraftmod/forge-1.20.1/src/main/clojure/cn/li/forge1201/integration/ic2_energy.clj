@@ -8,7 +8,8 @@
   will not be loaded and no errors will occur."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.energy-integration :as energy-integration])
-  (:import [cn.li.mcmod.energy IEnergyCapable]))
+  (:import [cn.li.mcmod.energy IEnergyCapable]
+           [java.lang.reflect InvocationHandler Proxy]))
 
 
 (defonce ^:private resolved-vars
@@ -25,6 +26,58 @@
   [var-sym & args]
   (apply (resolve-var var-sym) args))
 
+(def ^:private ic2-source-class-name "ic2.api.energy.tile.IEnergySource")
+(def ^:private ic2-sink-class-name "ic2.api.energy.tile.IEnergySink")
+
+(defn- context-class-loader
+  []
+  (or (.getContextClassLoader (Thread/currentThread))
+      (.getClassLoader (class *ns*))))
+
+(defn- resolve-class
+  [class-name]
+  (Class/forName class-name false (context-class-loader)))
+
+(defn- class-present?
+  [class-name]
+  (try
+    (some? (resolve-class class-name))
+    (catch ClassNotFoundException _
+      false)
+    (catch LinkageError e
+      (log/warn "Optional IC2 class could not be linked:" class-name (ex-message e))
+      false)))
+
+(defn- primitive-default
+  [^Class return-type]
+  (cond
+    (= Boolean/TYPE return-type) false
+    (= Character/TYPE return-type) (char 0)
+    (= Byte/TYPE return-type) (byte 0)
+    (= Short/TYPE return-type) (short 0)
+    (= Integer/TYPE return-type) (int 0)
+    (= Long/TYPE return-type) (long 0)
+    (= Float/TYPE return-type) (float 0)
+    (= Double/TYPE return-type) (double 0)
+    :else nil))
+
+(defn- create-interface-proxy
+  [^Class iface method-handlers label]
+  (Proxy/newProxyInstance
+    (.getClassLoader iface)
+    (into-array Class [iface])
+    (reify InvocationHandler
+      (invoke [_ proxy method args]
+        (let [method-name (.getName method)
+              ^objects args (or args (object-array 0))]
+          (case method-name
+            "toString" (str label " proxy")
+            "hashCode" (System/identityHashCode proxy)
+            "equals" (identical? proxy (aget args 0))
+            (if-let [handler (get method-handlers method-name)]
+              (handler args)
+              (primitive-default (.getReturnType method)))))))))
+
 ;; IC2 detection
 
 (defn ic2-available?
@@ -33,12 +86,8 @@
   Uses requiring-resolve to safely check for IC2 classes without
   causing ClassNotFoundException if IC2 is not present."
   []
-  (try
-    ;; Try to load IC2's main API class
-    (some? (Class/forName "ic2.api.energy.tile.IEnergySource" false
-                          (.getContextClassLoader (Thread/currentThread))))
-    (catch ClassNotFoundException _
-      false)))
+  (and (class-present? ic2-source-class-name)
+       (class-present? ic2-sink-class-name)))
 
 ;; IC2 conversion rates
 
@@ -89,33 +138,24 @@
     IEnergySink proxy object"
   [^IEnergyCapable energy-capable tier]
   (try
-    ;; Use reflection to create IC2 interface implementation
-    ;; This avoids compile-time dependency on IC2
     (let [^IEnergyCapable ec energy-capable
-          proxy-obj (proxy [Object] []
-                      ;; getDemandedEnergy() - how much EU can be accepted
-                      (getDemandedEnergy []
-                        (let [current (.getEnergyStored ec)
-                              max-energy (.getMaxEnergyStored ec)
-                              space (- max-energy current)]
-                          (if-to-eu space)))
-
-                      ;; getSinkTier() - IC2 voltage tier
-                      (getSinkTier []
-                        (int tier))
-
-                      ;; injectEnergy(EnumFacing, double, double) - receive EU
-                      (injectEnergy [direction amount voltage]
-                        (let [if-amount (eu-to-if amount)
-                              received (.receiveEnergy ec (int if-amount) false)
-                              eu-received (if-to-eu received)
-                              rejected (- amount eu-received)]
-                          rejected))
-
-                      ;; acceptsEnergyFrom(IEnergyEmitter, EnumFacing) - accept from any side
-                      (acceptsEnergyFrom [emitter direction]
-                        true))]
-      proxy-obj)
+          iface (resolve-class ic2-sink-class-name)]
+      (create-interface-proxy
+        iface
+        {"getDemandedEnergy" (fn [_]
+                                (let [current (.getEnergyStored ec)
+                                      max-energy (.getMaxEnergyStored ec)
+                                      space (- max-energy current)]
+                                  (double (if-to-eu space))))
+         "getSinkTier" (fn [_] (int tier))
+         "injectEnergy" (fn [^objects args]
+                           (let [amount (double (aget args 1))
+                                 if-amount (eu-to-if amount)
+                                 received (.receiveEnergy ec (int if-amount) false)
+                                 eu-received (if-to-eu received)]
+                             (double (- amount eu-received))))
+         "acceptsEnergyFrom" (fn [_] true)}
+        "IC2 IEnergySink"))
     (catch Exception e
       (log/error "Failed to create IC2 energy sink:" (ex-message e))
       nil)))
@@ -134,25 +174,19 @@
   [^IEnergyCapable energy-capable tier]
   (try
     (let [^IEnergyCapable ec energy-capable
-          proxy-obj (proxy [Object] []
-                      ;; getOfferedEnergy() - how much EU is available
-                      (getOfferedEnergy []
-                        (let [current (.getEnergyStored ec)]
-                          (if-to-eu current)))
-
-                      ;; drawEnergy(double) - extract EU
-                      (drawEnergy [amount]
-                        (let [if-amount (eu-to-if amount)]
-                          (.extractEnergy ec (int if-amount) false)))
-
-                      ;; getSourceTier() - IC2 voltage tier
-                      (getSourceTier []
-                        (int tier))
-
-                      ;; emitsEnergyTo(IEnergyAcceptor, EnumFacing) - emit to any side
-                      (emitsEnergyTo [acceptor direction]
-                        true))]
-      proxy-obj)
+          iface (resolve-class ic2-source-class-name)]
+      (create-interface-proxy
+        iface
+        {"getOfferedEnergy" (fn [_]
+                               (double (if-to-eu (.getEnergyStored ec))))
+         "drawEnergy" (fn [^objects args]
+                         (let [amount (double (aget args 0))
+                               if-amount (eu-to-if amount)]
+                           (.extractEnergy ec (int if-amount) false)
+                           nil))
+         "getSourceTier" (fn [_] (int tier))
+         "emitsEnergyTo" (fn [_] true)}
+        "IC2 IEnergySource"))
     (catch Exception e
       (log/error "Failed to create IC2 energy source:" (ex-message e))
       nil)))

@@ -27,7 +27,7 @@
 
 (defn mode->icon-texture
   [mode]
-  (str "academy:textures/guis/icons/icon_former_" (mode->string mode) ".png"))
+  (modid/asset-path "textures" (str "guis/icons/icon_former_" (mode->string mode) ".png")))
 
 (defn item-id-from-stack
   "Best-effort item id extraction from ItemStack."

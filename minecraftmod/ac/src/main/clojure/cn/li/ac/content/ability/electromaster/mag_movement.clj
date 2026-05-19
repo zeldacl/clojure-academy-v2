@@ -53,10 +53,7 @@
     "minecraft:spawner_minecart"
     "minecraft:command_block_minecart"
     "minecraft:iron_golem"
-    "academy:entitymaghook"
-    "academy:entity_mag_hook"
-    "my_mod:entity_mag_hook"
-    "ac:entity_mag_hook"})
+    "my_mod:entity_mag_hook"})
 
 (defn- normalize-id
   [raw-id]

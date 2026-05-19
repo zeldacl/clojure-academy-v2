@@ -75,6 +75,10 @@
    (fn [player-uuid]
      (ctx-mgr/abort-player-contexts! player-uuid))
 
+   :on-player-dimension-change!
+   (fn [player-uuid _from-dim _to-dim]
+     (ctx-mgr/abort-player-contexts! player-uuid))
+
    :get-skills-for-category
    (fn [cat-id]
      (vec (skill/get-skills-for-category cat-id)))
@@ -97,7 +101,9 @@
         :ability-data (:ability-data state)
         :resource-data (:resource-data state)
         :cooldown-data (:cooldown-data state)
-        :preset-data (:preset-data state)}))
+        :preset-data (:preset-data state)
+        :develop-data (:develop-data state)
+        :terminal-data (:terminal-data state)}))
 
    :mark-player-clean!
    (fn [player-uuid]

@@ -26,8 +26,8 @@
     (player-hooks/on-player-logout! uuid)))
 
 (defn on-player-clone!
-  [old-player new-player alive {:keys [clone-player-state!]}]
-  (when (and alive old-player new-player)
+  [old-player new-player _alive {:keys [clone-player-state!]}]
+  (when (and old-player new-player)
     (when clone-player-state!
       (clone-player-state! old-player new-player))
     (let [old-uuid (player-uuid old-player)
@@ -41,6 +41,15 @@
     (player-hooks/on-player-death! uuid)
     (when save-player-state!
       (save-player-state! player))))
+
+(defn on-player-dimension-change!
+  [player from-dim to-dim {:keys [mark-player-dirty! tick-sync! send-sync-fn]}]
+  (when-let [uuid (player-uuid player)]
+    (player-hooks/on-player-dimension-change! uuid from-dim to-dim)
+    (when mark-player-dirty!
+      (mark-player-dirty! uuid))
+    (when tick-sync!
+      (tick-sync! send-sync-fn))))
 
 (defn on-player-tick!
   [player {:keys [mark-player-dirty! tick-sync! send-sync-fn]}]

@@ -2104,30 +2104,19 @@ def registerForgeGameTestTask = {
     ]
     def gameTestTasks = forgeProject.tasks.matching { candidates.contains(it.name) }
 
-    tasks.register('runForgeGameTests') {
+    def prepareGameTestRun = tasks.register('prepareForgeGameTestRun') {
         group = 'verification'
-        description = 'Run Forge GameTest server using official task exit code.'
-        dependsOn 'unitTestCompile', ':forge-1.20.1:compileClojure'
-        if (!gameTestTasks.isEmpty()) {
-            dependsOn gameTestTasks
-        }
+        description = 'Prepare run directories and minimal structures for Forge GameTest execution.'
 
-        onlyIf {
-            if (gameTestTasks.isEmpty()) {
-                logger.lifecycle('[runForgeGameTests] skipped. No Forge GameTest task found. Checked: {}', candidates.join(', '))
-                return false
-            }
-            logger.lifecycle('[runForgeGameTests] using task(s): {}', gameTestTasks.collect { it.path }.join(', '))
-            return true
-        }
-
-        doFirst {
+        doLast {
             def isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows()
             def runGameTestDir = file('forge-1.20.1/run-gametest')
             def legacyRunDir = file('forge-1.20.1/run')
             def lockFile = file('forge-1.20.1/run-gametest/world/session.lock')
             def serverProperties = file('forge-1.20.1/run-gametest/server.properties')
             def legacyServerProperties = file('forge-1.20.1/run/server.properties')
+            def gameTestStructuresDir = file('forge-1.20.1/run-gametest/gameteststructures')
+            def emptyStructure = file('forge-1.20.1/run-gametest/gameteststructures/empty.snbt')
 
             if (lockFile.exists()) {
                 if (!lockFile.delete()) {
@@ -2140,6 +2129,12 @@ def registerForgeGameTestTask = {
             }
             if (!legacyRunDir.exists()) {
                 legacyRunDir.mkdirs()
+            }
+            if (!gameTestStructuresDir.exists()) {
+                gameTestStructuresDir.mkdirs()
+            }
+            if (!emptyStructure.exists()) {
+                emptyStructure.text = '{DataVersion:3465,size:[1,1,1],palette:[{Name:"minecraft:air"}],blocks:[],entities:[]}' + System.lineSeparator()
             }
             // Avoid local dedicated-server conflicts in CI/dev machines.
             serverProperties.text = "server-port=0${System.lineSeparator()}online-mode=false${System.lineSeparator()}"
@@ -2164,6 +2159,26 @@ def registerForgeGameTestTask = {
                     logger.lifecycle('[runForgeGameTests] failed to pre-clean 25565 listener: {}', e.message)
                 }
             }
+        }
+    }
+
+    gameTestTasks.configureEach { dependsOn prepareGameTestRun }
+
+    tasks.register('runForgeGameTests') {
+        group = 'verification'
+        description = 'Run Forge GameTest server using official task exit code.'
+        dependsOn 'unitTestCompile', ':forge-1.20.1:compileClojure', prepareGameTestRun
+        if (!gameTestTasks.isEmpty()) {
+            dependsOn gameTestTasks
+        }
+
+        onlyIf {
+            if (gameTestTasks.isEmpty()) {
+                logger.lifecycle('[runForgeGameTests] skipped. No Forge GameTest task found. Checked: {}', candidates.join(', '))
+                return false
+            }
+            logger.lifecycle('[runForgeGameTests] using task(s): {}', gameTestTasks.collect { it.path }.join(', '))
+            return true
         }
     }
 }
@@ -2194,6 +2209,7 @@ tasks.register('validateForgeGameTestLog') {
             'Failed to load registries due to above errors',
             'Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/feature]',
             'Failed to parse my_mod:worldgen/configured_feature/phase_liquid_pool.json',
+            'Could not find structure file',
             'Failed to start the minecraft server',
             'The process cannot access the file because another process has locked a portion of the file'
         ]
@@ -2223,12 +2239,34 @@ tasks.register('validateForgeGameTestLog') {
             }
         }
 
+        def lowerLogText = logText.toLowerCase(Locale.ROOT)
+        def allPassedMatcher = (logText =~ /All\s+(\d+)\s+required tests passed/)
+        def allDeclaredTestsPassed = false
+        if (allPassedMatcher.find()) {
+            allDeclaredTestsPassed = Integer.parseInt(allPassedMatcher.group(1)) >= batchByMethod.size()
+        }
+
+        def runningCounts = []
+        def runningMatcher = (logText =~ /(\d+)\s+tests are now running!?/)
+        runningMatcher.each { m -> runningCounts << Integer.parseInt(m[1]) }
+        def completeCounts = []
+        def completeMatcher = (logText =~ /(\d+)\s+GAME TESTS COMPLETE/)
+        completeMatcher.each { m -> completeCounts << Integer.parseInt(m[1]) }
+        def latestRunningCount = runningCounts.isEmpty() ? null : runningCounts[-1]
+        def latestCompleteCount = completeCounts.isEmpty() ? null : completeCounts[-1]
+
+        if (!batchByMethod.isEmpty()
+            && !allDeclaredTestsPassed
+            && ((latestRunningCount != null && latestRunningCount == 0)
+                || (latestRunningCount == null && latestCompleteCount != null && latestCompleteCount == 0))) {
+            throw new GradleException("Forge GameTest server ran 0 tests even though ${batchByMethod.size()} @GameTest methods are declared")
+        }
+
         def statusByBatch = [:].withDefault { [passed: 0, failed: 0, notObserved: 0] }
         batchByMethod.each { methodName, batch ->
-            def lower = logText.toLowerCase(Locale.ROOT)
             def methodLower = methodName.toLowerCase(Locale.ROOT)
-            def passed = (lower.contains(methodLower) && (lower.contains('passed') || lower.contains('succeeded')))
-            def failed = (lower.contains(methodLower) && (lower.contains('failed') || lower.contains('error')))
+            def passed = allDeclaredTestsPassed || (lowerLogText.contains(methodLower) && (lowerLogText.contains('passed') || lowerLogText.contains('succeeded')))
+            def failed = (!allDeclaredTestsPassed && lowerLogText.contains(methodLower) && (lowerLogText.contains('failed') || lowerLogText.contains('error')))
             if (failed) {
                 statusByBatch[batch].failed++
             } else if (passed) {

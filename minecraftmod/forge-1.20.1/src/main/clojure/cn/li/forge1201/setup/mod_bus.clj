@@ -7,9 +7,8 @@
 				[cn.li.forge1201.setup.event-registration :as event-registration]
 				[cn.li.forge1201.setup.registry-binding :as registry-binding])
 	(:import [net.minecraftforge.eventbus.api IEventBus]
-	         [net.minecraftforge.eventbus.api IEventBus]
-	         [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
-	         ))
+				 [net.minecraftforge.fml.javafmlmod FMLJavaModLoadingContext]
+				 [cn.li.forge1201.gametest ForgeGameTestRegistration]))
 
 (defn- resolve-mod-bus
 	[]
@@ -28,7 +27,12 @@
 (defn register-lifecycle-phase!
 	[^IEventBus mod-bus {:keys [on-common-setup on-client-setup]}]
 	(event-registration/register-lifecycle-phase! mod-bus {:on-common-setup on-common-setup
-															 :on-client-setup on-client-setup})
+																 :on-client-setup on-client-setup})
+	nil)
+
+(defn register-gametest-phase!
+	[^IEventBus mod-bus _opts]
+	(ForgeGameTestRegistration/register mod-bus)
 	nil)
 
 (defn register-capability-phase!
@@ -41,6 +45,7 @@
 	[[:config register-config-phase!]
 	 [:registry register-registry-phase!]
 	 [:lifecycle register-lifecycle-phase!]
+	 [:gametest register-gametest-phase!]
 	 [:capability register-capability-phase!]])
 
 (defn run-registration-phases!

@@ -6,7 +6,8 @@
             [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.data.world-topology :as topology]
-            [cn.li.mcmod.platform.nbt :as nbt]))
+            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.util.log :as log]))
 
 (def schema-version 1)
 
@@ -79,12 +80,18 @@
         connections-size (if connections-list (nbt/nbt-list-size connections-list) 0)]
     (doseq [index (range networks-size)]
       (when-let [network-compound (nbt/nbt-list-get-compound networks-list index)]
-        (topology/rebuild-network-indexes!
-          world-data
-          (network-from-nbt world-data network-compound))))
+        (try
+          (topology/rebuild-network-indexes!
+            world-data
+            (network-from-nbt world-data network-compound))
+          (catch Exception e
+            (log/warn "Skipping invalid wireless network NBT entry" index ":" (ex-message e))))))
     (doseq [index (range connections-size)]
       (when-let [connection-compound (nbt/nbt-list-get-compound connections-list index)]
-        (topology/rebuild-connection-indexes!
-          world-data
-          (connection-from-nbt world-data connection-compound))))
+        (try
+          (topology/rebuild-connection-indexes!
+            world-data
+            (connection-from-nbt world-data connection-compound))
+          (catch Exception e
+            (log/warn "Skipping invalid wireless connection NBT entry" index ":" (ex-message e))))))
     world-data))

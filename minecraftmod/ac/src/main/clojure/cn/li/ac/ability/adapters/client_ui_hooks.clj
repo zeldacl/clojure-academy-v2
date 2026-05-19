@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
+            [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -22,6 +23,59 @@
 (defonce-guard client-push-handlers-registered?)
 (defonce ^:private vm-wave-circles (atom []))
 (defonce ^:private vm-wave-last-spawn-ms (atom 0))
+(defonce ^:private slot-context-ids (atom {}))
+
+(defn- slot-context-key [player-uuid key-idx]
+  [player-uuid key-idx])
+
+(defn- remove-slot-context! [ctx-id]
+  (swap! slot-context-ids
+         (fn [m]
+           (into {}
+                 (remove (fn [[_slot-key active-ctx-id]]
+                           (= active-ctx-id ctx-id))
+                         m)))))
+
+(defn- clear-player-slot-contexts! [player-uuid]
+  (swap! slot-context-ids
+         (fn [m]
+           (into {}
+                 (remove (fn [[[slot-player-uuid _key-idx] _ctx-id]]
+                           (= slot-player-uuid player-uuid))
+                         m)))))
+
+(defn- context-id-for-slot!
+  [player-uuid key-idx skill-id]
+  (let [slot-key (slot-context-key player-uuid key-idx)]
+    (or (get @slot-context-ids slot-key)
+        (let [ctx-map (ctx-mgr/activate-context! player-uuid skill-id)
+              ctx-id (:id ctx-map)]
+          (swap! slot-context-ids assoc slot-key ctx-id)
+          ctx-id))))
+
+(defn- send-slot-key-message!
+  [msg-id player-uuid key-idx]
+  (when-let [skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
+    (when-let [ctx-id (context-id-for-slot! player-uuid key-idx skill-id)]
+      (net-client/send-to-server msg-id {:ctx-id ctx-id
+                                         :skill-id skill-id
+                                         :key-idx key-idx})
+      ctx-id)))
+
+(defn- send-slot-key-up-message!
+  [player-uuid key-idx]
+  (let [slot-key (slot-context-key player-uuid key-idx)]
+    (when-let [ctx-id (get @slot-context-ids slot-key)]
+      (net-client/send-to-server catalog/MSG-SLOT-KEY-UP {:ctx-id ctx-id
+                                                          :key-idx key-idx})
+      (swap! slot-context-ids dissoc slot-key)
+      ctx-id)))
+
+(defn- flush-buffered-context-message!
+  [ctx-id {:keys [channel payload]}]
+  (net-client/send-to-server catalog/MSG-CTX-CHANNEL {:ctx-id ctx-id
+                                                      :channel channel
+                                                      :payload payload}))
 
 (defn- vec-reflection-active?
   [player-uuid]
@@ -197,12 +251,14 @@
           (ps/update-preset-data! uuid (constantly preset-data)))))
     (net-client/register-push-handler! catalog/MSG-CTX-ESTABLISH
       (fn [{:keys [ctx-id server-id]}]
-        (ctx/transition-to-alive! ctx-id server-id nil)))
+        (ctx/transition-to-alive! ctx-id server-id (partial flush-buffered-context-message! ctx-id))))
     (net-client/register-push-handler! catalog/MSG-CTX-TERMINATE
       (fn [{:keys [ctx-id]}]
+        (remove-slot-context! ctx-id)
         (ctx/terminate-context! ctx-id nil)))
     (net-client/register-push-handler! catalog/MSG-CTX-TERMINATED
       (fn [{:keys [ctx-id]}]
+        (remove-slot-context! ctx-id)
         (ctx/terminate-context! ctx-id nil)))
     (net-client/register-push-handler! catalog/MSG-CTX-CHANNEL on-context-channel-push!)
     (log/info "Ability client push handlers registered")))
@@ -263,7 +319,8 @@
 
    :client-terminate-context!
    (fn [ctx-id reason]
-     (ctx/terminate-context! ctx-id reason))
+     (remove-slot-context! ctx-id)
+     (ctx/terminate-context! ctx-id nil))
 
    :client-transition-to-alive!
    (fn [ctx-id server-id payload]
@@ -272,6 +329,24 @@
    :client-send-context-local!
    (fn [ctx-id channel payload]
      (ctx/ctx-send-to-local! ctx-id channel payload))
+
+   :client-on-slot-key-down!
+   (fn [player-uuid key-idx]
+     (send-slot-key-message! catalog/MSG-SLOT-KEY-DOWN player-uuid key-idx))
+
+   :client-on-slot-key-tick!
+   (fn [player-uuid key-idx]
+     (send-slot-key-message! catalog/MSG-SLOT-KEY-TICK player-uuid key-idx))
+
+   :client-on-slot-key-up!
+   (fn [player-uuid key-idx]
+     (send-slot-key-up-message! player-uuid key-idx))
+
+   :client-abort-all!
+   (fn []
+     (doseq [ctx-id (vals @slot-context-ids)]
+       (ctx/terminate-context! ctx-id nil))
+     (reset! slot-context-ids {}))
 
    :client-update-ability-data!
    (fn [player-uuid ability-data]

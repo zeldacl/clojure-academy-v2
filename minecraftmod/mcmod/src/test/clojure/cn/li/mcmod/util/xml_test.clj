@@ -26,9 +26,11 @@
 
 (deftest xml-texture-contract-test
   (testing "texture normalization contract"
-    (doseq [{:keys [input expected]}
-            [{:input "academy:block/a" :expected "block/a"}
+    (let [legacy-namespace (str "academy" ":")]
+      (doseq [{:keys [input expected]}
+            [{:input (str legacy-namespace "block/a") :expected (str legacy-namespace "block/a")}
+             {:input "my_mod:block/a" :expected "my_mod:block/a"}
              {:input "other:block/a" :expected "other:block/a"}
              {:input "plain/path" :expected "plain/path"}
              {:input " assets/x " :expected "assets/x"}]]
-      (is (= expected (xml/normalize-xml-texture input))))))
+        (is (= expected (xml/normalize-xml-texture input)))))))

@@ -12,7 +12,6 @@
   (:import [clojure.lang Reflector]
            [io.netty.buffer Unpooled]
            [net.fabricmc.fabric.api.networking.v1 ServerPlayNetworking]
-           [net.minecraft.client Minecraft]
            [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.server MinecraftServer]
@@ -111,13 +110,16 @@
                      handler-iface
                      (fn [method-name ^objects args]
                        (when (= method-name "receive")
-                         (let [^Minecraft client (aget args 0)
+                         (let [client (aget args 0)
                                ^FriendlyByteBuf buf (aget args 2)
                                {:keys [request-id payload]} (packet-base/normalize-response (read-buf-map buf))]
-                           (.execute client
-                                     (reify Runnable
-                                       (run [_]
-                                         (packet-base/dispatch-client-response! request-id payload))))))
+                           (Reflector/invokeInstanceMethod
+                             client
+                             "execute"
+                             (to-array
+                               [(reify Runnable
+                                  (run [_]
+                                    (packet-base/dispatch-client-response! request-id payload)))]))))
                         nil))]
       (Reflector/invokeStaticMethod client-networking "registerGlobalReceiver"
                                     (to-array [s2c-channel receiver]))

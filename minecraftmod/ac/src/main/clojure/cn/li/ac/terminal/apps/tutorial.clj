@@ -80,7 +80,7 @@
 (def tutorial-app
   {:id :tutorial
    :name "Tutorial"
-   :icon "academy:textures/guis/apps/tutorial/icon.png"
+  :icon "my_mod:textures/guis/apps/tutorial/icon.png"
    :description "Learn how to use your abilities"
    :gui-fn 'cn.li.ac.terminal.apps.tutorial/open-tutorial-gui
    :category :help})

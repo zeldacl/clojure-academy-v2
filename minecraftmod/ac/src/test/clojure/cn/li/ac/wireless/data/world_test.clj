@@ -7,7 +7,8 @@
             [cn.li.ac.wireless.data.node-conn :as node-conn]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.service.network-command :as network-command]
-            [cn.li.ac.wireless.data.world :as world]))
+            [cn.li.ac.wireless.data.world :as world]
+            [cn.li.mcmod.platform.nbt :as nbt]))
 
 (deftest get-world-data-caches-per-world-test
   (let [w :world-a
@@ -91,3 +92,22 @@
                 (is (= [node-vb] (network-state/get-nodes network)))
                 (is (identical? network (world/get-network-by-node restored node-vb)))
                 (is (= [gen-vb] (node-conn/get-generators conn)))))))))))
+
+(deftest world-lifecycle-skips-invalid-saved-wireless-entries-test
+  (let [world-id :w-lifecycle-corrupt
+        tiles (atom {})]
+    (stubs/with-tile-world tiles
+      (fn []
+        (let [payload (nbt/create-nbt-compound)
+              networks (nbt/create-nbt-list)
+              connections (nbt/create-nbt-list)]
+          ;; Missing required nested fields (`matrix`, `node`, receivers/generators).
+          ;; A single corrupt entry should not prevent the world from loading.
+          (nbt/nbt-append! networks (nbt/create-nbt-compound))
+          (nbt/nbt-append! connections (nbt/create-nbt-compound))
+          (nbt/nbt-set-tag! payload "networks" networks)
+          (nbt/nbt-set-tag! payload "connections" connections)
+          (let [restored (world/on-world-load world-id (world/->WiSavedDataWrapper nil payload))]
+            (is (identical? restored (world/get-world-data-non-create world-id)))
+            (is (empty? (world-registry/networks restored)))
+            (is (empty? (world-registry/connections restored)))))))))

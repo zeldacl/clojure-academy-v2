@@ -12,6 +12,7 @@
          :on-player-logout! noop
          :on-player-clone! noop
          :on-player-death! noop
+         :on-player-dimension-change! noop
          :on-player-tick! noop
          :init-damage-handlers! noop
          :list-player-uuids (fn [] [])
@@ -121,6 +122,10 @@
 (defn on-player-death!
   [player-uuid]
   ((:on-player-death! @runtime-hooks) player-uuid))
+
+(defn on-player-dimension-change!
+  [player-uuid from-dim to-dim]
+  ((:on-player-dimension-change! @runtime-hooks) player-uuid from-dim to-dim))
 
 (defn on-player-tick!
   [player-uuid]

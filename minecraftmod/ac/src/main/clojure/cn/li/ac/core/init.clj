@@ -1,6 +1,7 @@
 (ns cn.li.ac.core.init
   "AC core initialization orchestration extracted from cn.li.ac.core."
-  (:require [cn.li.ac.config.modid :as modid]
+  (:require [cn.li.ac.ability.adapters.runtime-bridge :as ability-runtime]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.config.registry :as config-registry]
             [cn.li.mcmod.util.log :as log]))
 
@@ -9,4 +10,5 @@
   []
   (log/info "Initializing core for mod-id=" modid/MOD-ID)
   (config-registry/init-configs!)
+  (ability-runtime/install-runtime-hooks!)
   nil)

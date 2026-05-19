@@ -12,7 +12,7 @@ to become a strong ESPer.
 You can checkout your ability learning status through __Ability Developer__ or __Skill Tree App__ in the Data Terminal. Within the skill tree you 
 can see your current skills' experience, your level upgrading status and all visible skills' learning status.
 
-![Skill Tree](academy:textures/tutorial/skill_tree_ui.png)
+![Skill Tree](my_mod:textures/tutorial/skill_tree_ui.png)
 
 ## Learning Skills
 
@@ -45,7 +45,7 @@ You can manage your control of skills through the __Preset System__ and change t
 
 Activate the ability using __Ability Activation Key__ ![key id="ability_activation"]. After which, the ability UI will popup:
 
-![Ability Mode](academy:textures/tutorial/ability_ui.png)
+![Ability Mode](my_mod:textures/tutorial/ability_ui.png)
 
 The __Calculation Point Bar__ located in right-top corner lets you check your CP and overload status any time.
 
@@ -57,7 +57,7 @@ Preset System lets you modify what skills each key is correspond to. A player ca
 
 Use ![key id="edit_preset"] to open the preset edit UI.
 
-![Preset Edit UI](academy:textures/tutorial/preset_selection_ui.png)
+![Preset Edit UI](my_mod:textures/tutorial/preset_selection_ui.png)
 
 While your ability is activated, use ![key id="switch_preset"] to switch the current preset.
 
@@ -71,4 +71,4 @@ The consuming and recovering of CP are both slow.
 Also, using ability will cause dramatic workload in a short time, which is measured as __Overload__. It is displayed in the background layer 
 of the CP bar. When overload exceeds the max value, You have to stop using ability until fully recover.
 
-![Overload UI](academy:textures/tutorial/overload.png)
+![Overload UI](my_mod:textures/tutorial/overload.png)

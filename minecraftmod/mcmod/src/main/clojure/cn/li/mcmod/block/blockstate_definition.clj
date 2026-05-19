@@ -1,9 +1,3 @@
-(when-let [ns-obj (find-ns 'cn.li.mcmod.block.blockstate-definition)]
-  (when (get (ns-aliases ns-obj) 'registry-metadata)
-    (ns-unalias ns-obj 'registry-metadata))
-  (when (get (ns-aliases ns-obj) 'config)
-    (ns-unalias ns-obj 'config)))
-
 (ns cn.li.mcmod.block.blockstate-definition
   "BlockState datagen business logic (platform independent).
 

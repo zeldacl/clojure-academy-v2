@@ -45,7 +45,7 @@
 (def media-player-app
   {:id :media-player
    :name "Media Player"
-   :icon "academy:textures/guis/apps/media_player/icon.png"
+  :icon "my_mod:textures/guis/apps/media_player/icon.png"
    :description "Browse AcademyCraft media tracks"
    :gui-fn 'cn.li.ac.terminal.apps.media-player/open-media-player-gui
    :category :media})

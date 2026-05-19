@@ -10,16 +10,20 @@
 						[cn.li.forge1201.runtime.item-handler :as runtime-item-handler]
 						[cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
 						[cn.li.forge1201.setup.event-registration :as event-registration]
-						[cn.li.mcmod.util.log :as log])
-	)
+						[cn.li.mcmod.util.log :as log]))
+
+(defonce ^:private common-setup-ran? (atom false))
 
 (defn run-common-setup!
 	[]
-	(gui-init/init-common!)
-	(runtime-lifecycle/init-common!)
-	(forge-energy/init-forge-energy!)
-	(ic2-energy/init-ic2-energy!)
-	(runtime-item-handler/init!)
-	(imc-dispatch/init!)
-	(event-registration/register-common-event-listeners!)
-	(log/info "Forge common setup wiring complete"))
+	(if (compare-and-set! common-setup-ran? false true)
+		(do
+			(gui-init/init-common!)
+			(runtime-lifecycle/init-common!)
+			(forge-energy/init-forge-energy!)
+			(ic2-energy/init-ic2-energy!)
+			(runtime-item-handler/init!)
+			(imc-dispatch/init!)
+			(event-registration/register-common-event-listeners!)
+			(log/info "Forge common setup wiring complete"))
+		(log/info "Forge common setup wiring already complete; skipping duplicate invocation")))
