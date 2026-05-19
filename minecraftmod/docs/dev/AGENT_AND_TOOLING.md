@@ -11,6 +11,7 @@
 - **Fabric 维护级别**：`minimal maintenance`（至少保证 compile 与边界门禁，不承诺与 Forge 完全功能对齐）。
 - **Java 版本**：Java 17。
 - **LSP 刷新**：修改 Java 后执行 `cmd /c .\gradlew.bat :<subproject>:classes`。
+- **性能采样**：门禁耗时使用 `powershell -ExecutionPolicy Bypass -File .\scripts\perf\record_gate_performance.ps1 -WarmDaemon -Iterations 3`，结果写入 `build/reports/gate-performance/`。
 
 ## 常用命令矩阵
 
@@ -19,8 +20,10 @@
 - **测试与验证入口**：
   - `cmd /c .\gradlew.bat verifyArchitectureBoundaries`
   - `cmd /c .\gradlew.bat unitTestCompile`
-  - `cmd /c .\gradlew.bat runAcUnitTests`（执行 `ac` 的 `clojure.test`，入口为 `:ac:runAcClojureTests` / `cn.li.ac.test-runner`）
-  - `cmd /c .\gradlew.bat runMcmodUnitTests`（执行 `mcmod` 的 `clojure.test`，入口为 `:mcmod:runMcmodClojureTests` / `cn.li.mcmod.test-runner`；可选 `"-Dmcmod.test.only=cn.li.mcmod.foo-test,cn.li.mcmod.bar-test"`）
+  - `cmd /c .\gradlew.bat runAcUnitTests`（执行 `ac` 的 `clojure.test`，入口为 `:ac:runAcClojureTests` / `cn.li.ac.test-runner`；可选 `"-Dac.test.only=cn.li.ac.foo-test,cn.li.ac.bar-test"`；输出慢测试 namespace Top 10）
+  - `cmd /c .\gradlew.bat runMcmodUnitTests`（执行 `mcmod` 的 `clojure.test`，入口为 `:mcmod:runMcmodClojureTests` / `cn.li.mcmod.test-runner`；可选 `"-Dmcmod.test.only=cn.li.mcmod.foo-test,cn.li.mcmod.bar-test"`；输出慢测试 namespace Top 10）
+  - `cmd /c .\gradlew.bat quickUnitTests`（聚合 `runAcUnitTests` + `runMcmodUnitTests`）
+  - `cmd /c .\gradlew.bat verifyLocalPrGate`（聚合 `verifyCurrentPlatforms` + `quickUnitTests`）
   - `cmd /c .\gradlew.bat verifyForgeBaseline`
   - `cmd /c .\gradlew.bat verifyFabricBaseline`
   - `cmd /c .\gradlew.bat verifyFabricSmoke`
@@ -35,6 +38,7 @@
 - **故障定位**：
   - `cmd /c .\gradlew.bat :forge-1.20.1:bisectCompileClojure`
   - `cmd /c .\gradlew.bat :forge-1.20.1:bisectCheckClojure`
+  - 快速候选定位可加 `-PbisectMode=fast`；默认 clean-safe 保留，fast 候选会自动 clean-safe 单 namespace 确认。
   - `-PcompileNsOnly=<ns1,ns2>` / `-PcheckNsOnly=<ns1,ns2>` / `-PcheckNsFile=<path>`
 
 ## 模块边界与依赖红线
@@ -143,6 +147,8 @@
 ## 结构性校验（快速自检）
 
 - 推荐优先执行：`cmd /c .\gradlew.bat verifyArchitectureBoundaries`（自动汇总并定位违规文件/行号）。
+- `verifyArchitectureBoundaries` 已按文件单次扫描并声明输入/通过标记输出；连续热运行若源文件未变应显示 `UP-TO-DATE`。
+- `verifyCleanupResidueGuards` 子任务已声明共享源输入与通过 marker；热运行应避免重复执行 25+ 个扫描型守卫。
 - `rg "cn\.li\.forge|cn\.li\.fabric" ac/src/` 应为空。
 - `rg "net\.minecraft|net\.minecraftforge" ac/src/ mcmod/src/` 应为空（允许注释或字符串需人工甄别）。
 - `rg "net\.minecraft\.client" ac/src/ mcmod/src/` 在非 client 目录应无泄漏。

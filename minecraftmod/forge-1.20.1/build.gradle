@@ -124,22 +124,60 @@ clojure {
 // it encounters LVT entries whose slot index is -1, which Clojure 1.12 AOT can emit
 // for closure/try-catch patterns.  Line numbers are preserved so stack traces are
 // still readable.
+def clojureAotDir = layout.buildDirectory.dir('clojure/main')
+def strippedClojureAotDir = layout.buildDirectory.dir('clojure/main-stripped')
+
+def cleanMirroredClojureClassesForCompile = tasks.register('cleanMirroredClojureClassesForCompile') {
+    group = 'build'
+    description = 'Remove Clojure AOT classes mirrored into Java output before compileClojure snapshots its classpath.'
+    mustRunAfter tasks.named('compileJava')
+    doLast {
+        def clojureDir = clojureAotDir.get().asFile
+        def javaMainDir = layout.buildDirectory.dir('classes/java/main').get().asFile
+        if (!clojureDir.isDirectory() || !javaMainDir.isDirectory()) {
+            return
+        }
+        int deleted = 0
+        clojureDir.eachFileRecurse { file ->
+            if (!file.isFile() || !file.name.endsWith('.class')) return
+            def rel = clojureDir.toPath().relativize(file.toPath()).toString()
+            def victim = new File(javaMainDir, rel)
+            if (victim.isFile() && victim.delete()) {
+                deleted++
+            }
+        }
+        if (deleted > 0) {
+            logger.lifecycle('[cleanMirroredClojureClassesForCompile] removed {} mirrored Clojure class files from Java output', deleted)
+        }
+    }
+}
+
 def stripClojureLVT = tasks.register('stripClojureLVT') {
     dependsOn tasks.named('compileClojure')
-    outputs.upToDateWhen { false }
+    inputs.dir(clojureAotDir)
+    outputs.dir(strippedClojureAotDir)
     doLast {
-        def clojureDir = layout.buildDirectory.dir('clojure/main').get().asFile
+        def clojureDir = clojureAotDir.get().asFile
+        def strippedDir = strippedClojureAotDir.get().asFile
+        delete(strippedDir)
         if (!clojureDir.isDirectory()) {
+            strippedDir.mkdirs()
             logger.lifecycle('[stripClojureLVT] skipping – clojure/main not found')
             return
         }
         int count = 0
+        int rewritten = 0
+        int copied = 0
         clojureDir.eachFileRecurse { file ->
             if (!file.name.endsWith('.class')) return
             try {
+                def rel = clojureDir.toPath().relativize(file.toPath()).toString()
+                def target = new File(strippedDir, rel)
+                target.parentFile.mkdirs()
                 def bytes = file.bytes
                 def reader = new org.objectweb.asm.ClassReader(bytes)
                 def writer = new org.objectweb.asm.ClassWriter(0)
+                def droppedLocalVariables = [0]
                 // Read with 0 flags so StackMapTable frames are preserved (passed
                 // through via visitFrame). Only LVT entries are dropped below.
                 def cv = new org.objectweb.asm.ClassVisitor(org.objectweb.asm.Opcodes.ASM9, writer) {
@@ -153,18 +191,24 @@ def stripClojureLVT = tasks.register('stripClojureLVT') {
                             void visitLocalVariable(String n, String d, String s,
                                                     org.objectweb.asm.Label st,
                                                     org.objectweb.asm.Label en,
-                                                    int idx) { /* drop LVT entry */ }
+                                                    int idx) { droppedLocalVariables[0]++ /* drop LVT entry */ }
                         }
                     }
                 }
                 reader.accept(cv, 0)
-                file.bytes = writer.toByteArray()
                 count++
+                if (droppedLocalVariables[0] > 0) {
+                    target.bytes = writer.toByteArray()
+                    rewritten++
+                } else {
+                    target.bytes = bytes
+                    copied++
+                }
             } catch (Exception ex) {
                 logger.warn("[stripClojureLVT] skipping ${file.name}: ${ex.message}")
             }
         }
-        logger.lifecycle("[stripClojureLVT] stripped LVT from ${count} Clojure AOT class files")
+        logger.lifecycle("[stripClojureLVT] scanned ${count} Clojure AOT class files; rewrote ${rewritten} with LVT entries; copied ${copied} unchanged")
     }
 }
 
@@ -172,14 +216,14 @@ def stripClojureLVT = tasks.register('stripClojureLVT') {
 // `build/classes/java/main` on the transformed mod classpath. Copy (do not use Sync:
 // it would delete Java outputs) so `require` finds `__init.class` next to Java classes.
 def copyClojureClassesToJavaOutput = tasks.register('copyClojureClassesToJavaOutput', Copy) {
-    from layout.buildDirectory.dir('clojure/main')
+    from strippedClojureAotDir
     into layout.buildDirectory.dir('classes/java/main')
-    dependsOn tasks.named('compileClojure'), stripClojureLVT
+    dependsOn stripClojureLVT
 }
 
 // 确保 Java 接口先编译，供 Clojure 调用
 tasks.named('compileClojure').configure {
-    dependsOn 'compileJava'
+    dependsOn 'compileJava', cleanMirroredClojureClassesForCompile
     forkOptions.memoryMaximumSize = '2g'
     // Merged AOT lives in `classes/java/main` for Loom runs. Those `.class` files must not
     // stay on the compile classpath for the next `compileClojure`, or loaders will execute
@@ -304,7 +348,7 @@ def collectMainClojureNamespaces = {
 
 tasks.register('bisectCompileClojure') {
     group = 'verification'
-    description = 'Binary search first failing namespace for :forge-1.20.1:compileClojure (each trial runs clean first).'
+    description = 'Binary search first failing namespace for :forge-1.20.1:compileClojure. Use -PbisectMode=fast for hot trials, clean-safe is default.'
 
     doLast {
         def allNamespaces = collectMainClojureNamespaces()
@@ -320,33 +364,52 @@ tasks.register('bisectCompileClojure') {
         def gradlew = isWindows ?
             new File(rootDir, 'gradlew.bat').absolutePath :
             new File(rootDir, 'gradlew').absolutePath
+        def nsSubsetFile = new File(rootDir, 'build/bisect-compile-subset.txt')
+        def fastMode = (project.findProperty('bisectMode')?.toString()?.equalsIgnoreCase('fast') ?: false) ||
+            (project.findProperty('bisectFast')?.toString()?.toBoolean() ?: false)
+        def cleanEachTrial = !(fastMode || (project.findProperty('bisectNoClean')?.toString()?.toBoolean() ?: false))
+        def useNoDaemon = !fastMode && !(project.findProperty('bisectReuseDaemon')?.toString()?.toBoolean() ?: false)
+        def maxAttempts = (project.findProperty('bisectMaxAttempts') ?: '3').toString().toInteger()
+        int trialNo = 0
+        logger.lifecycle('[bisect] mode={} cleanEachTrial={} useNoDaemon={} maxAttempts={}',
+            fastMode ? 'fast' : 'clean-safe', cleanEachTrial, useNoDaemon, maxAttempts)
 
-        def runSubset = { List<String> subset ->
+        def runSubset = { List<String> subset, boolean forceCleanSafeConfirm = false ->
             def propValue = subset.join(',')
-            logger.lifecycle("[bisect] trial size={} first={} last={}", subset.size(), subset.first(), subset.last())
-            int maxAttempts = 3
+            nsSubsetFile.parentFile.mkdirs()
+            nsSubsetFile.setText(subset.join(System.lineSeparator()), 'UTF-8')
+            trialNo++
+            def trialClean = forceCleanSafeConfirm || cleanEachTrial
+            def trialNoDaemon = forceCleanSafeConfirm || useNoDaemon
+            def trialMode = forceCleanSafeConfirm ? 'clean-safe-confirm' : (fastMode ? 'fast' : 'clean-safe')
+            logger.lifecycle('[bisect] trial #{} mode={} clean={} size={} first={} last={} file={}',
+                trialNo, trialMode, trialClean, subset.size(), subset.first(), subset.last(),
+                rootDir.toPath().relativize(nsSubsetFile.toPath()).toString().replace('\\', '/'))
             for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                def args = []
+                if (trialClean) {
+                    args << ':forge-1.20.1:clean'
+                }
+                args << ':forge-1.20.1:compileClojure'
+                args << "-PcompileNsOnly=${propValue}"
+                if (trialNoDaemon) {
+                    args << '--no-daemon'
+                }
+                args << '--stacktrace'
+                args << '--info'
+                def startedAt = System.nanoTime()
                 def execResult = exec {
                     workingDir rootDir
                     if (isWindows) {
-                        commandLine 'cmd', '/c', gradlew,
-                            ':forge-1.20.1:clean',
-                            ':forge-1.20.1:compileClojure',
-                            "\"-PcompileNsOnly=${propValue}\"",
-                            '--no-daemon',
-                            '--stacktrace',
-                            '--info'
+                        commandLine(['cmd', '/c', gradlew] + args)
                     } else {
-                        commandLine gradlew,
-                            ':forge-1.20.1:clean',
-                            ':forge-1.20.1:compileClojure',
-                            "-PcompileNsOnly=${propValue}",
-                            '--no-daemon',
-                            '--stacktrace',
-                            '--info'
+                        commandLine([gradlew] + args)
                     }
                     ignoreExitValue = true
                 }
+                def elapsedMs = ((System.nanoTime() - startedAt) / 1_000_000L) as long
+                logger.lifecycle('[bisect] trial #{} attempt {}/{} exit={} elapsed={}ms',
+                    trialNo, attempt, maxAttempts, execResult.exitValue, elapsedMs)
                 if (execResult.exitValue == 0) {
                     return true
                 }
@@ -377,6 +440,12 @@ tasks.register('bisectCompileClojure') {
         }
 
         firstFailing = allNamespaces.get(lo)
+        if (fastMode) {
+            logger.lifecycle('[bisect] fast candidate found; confirming single namespace in clean-safe mode...')
+            if (runSubset([firstFailing], true)) {
+                throw new GradleException("Fast bisect candidate did not fail in clean-safe confirmation: ${firstFailing}")
+            }
+        }
         logger.lifecycle('[bisect] first failing namespace={}', firstFailing)
         logger.lifecycle('[bisect] reproducer: ./gradlew :forge-1.20.1:clean :forge-1.20.1:compileClojure "-PcompileNsOnly={}"', firstFailing)
         throw new GradleException("First failing namespace: ${firstFailing}")
@@ -385,7 +454,7 @@ tasks.register('bisectCompileClojure') {
 
 tasks.register('bisectCheckClojure') {
     group = 'verification'
-    description = 'Find first failing namespace for :forge-1.20.1:checkClojure via deterministic single-namespace scan (each trial runs clean first).'
+    description = 'Find first failing namespace for :forge-1.20.1:checkClojure. Use -PbisectMode=fast for hot trials, clean-safe is default.'
 
     doLast {
         def allNamespaces = collectMainClojureNamespaces()
@@ -402,34 +471,50 @@ tasks.register('bisectCheckClojure') {
             new File(rootDir, 'gradlew.bat').absolutePath :
             new File(rootDir, 'gradlew').absolutePath
         def nsSubsetFile = new File(rootDir, 'build/bisect-check-subset.txt')
+        def fastMode = (project.findProperty('bisectMode')?.toString()?.equalsIgnoreCase('fast') ?: false) ||
+            (project.findProperty('bisectFast')?.toString()?.toBoolean() ?: false)
+        def cleanEachTrial = !(fastMode || (project.findProperty('bisectNoClean')?.toString()?.toBoolean() ?: false))
+        def useNoDaemon = !fastMode && !(project.findProperty('bisectReuseDaemon')?.toString()?.toBoolean() ?: false)
+        def maxAttempts = (project.findProperty('bisectMaxAttempts') ?: '3').toString().toInteger()
+        int trialNo = 0
+        logger.lifecycle('[bisect-check] mode={} cleanEachTrial={} useNoDaemon={} maxAttempts={}',
+            fastMode ? 'fast' : 'clean-safe', cleanEachTrial, useNoDaemon, maxAttempts)
 
-        def runSubset = { List<String> subset ->
+        def runSubset = { List<String> subset, boolean forceCleanSafeConfirm = false ->
             nsSubsetFile.parentFile.mkdirs()
             nsSubsetFile.setText(subset.join(System.lineSeparator()), 'UTF-8')
-            logger.lifecycle("[bisect-check] trial size={} first={} last={}", subset.size(), subset.first(), subset.last())
-            int maxAttempts = 3
+            trialNo++
+            def trialClean = forceCleanSafeConfirm || cleanEachTrial
+            def trialNoDaemon = forceCleanSafeConfirm || useNoDaemon
+            def trialMode = forceCleanSafeConfirm ? 'clean-safe-confirm' : (fastMode ? 'fast' : 'clean-safe')
+            logger.lifecycle('[bisect-check] trial #{} mode={} clean={} size={} first={} last={} file={}',
+                trialNo, trialMode, trialClean, subset.size(), subset.first(), subset.last(),
+                rootDir.toPath().relativize(nsSubsetFile.toPath()).toString().replace('\\', '/'))
             for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                def args = []
+                if (trialClean) {
+                    args << ':forge-1.20.1:clean'
+                }
+                args << ':forge-1.20.1:checkClojure'
+                args << '-PcheckNsFile=build/bisect-check-subset.txt'
+                if (trialNoDaemon) {
+                    args << '--no-daemon'
+                }
+                args << '--stacktrace'
+                args << '--info'
+                def startedAt = System.nanoTime()
                 def execResult = exec {
                     workingDir rootDir
                     if (isWindows) {
-                        commandLine 'cmd', '/c', gradlew,
-                            ':forge-1.20.1:clean',
-                            ':forge-1.20.1:checkClojure',
-                            "\"-PcheckNsFile=build/bisect-check-subset.txt\"",
-                            '--no-daemon',
-                            '--stacktrace',
-                            '--info'
+                        commandLine(['cmd', '/c', gradlew] + args)
                     } else {
-                        commandLine gradlew,
-                            ':forge-1.20.1:clean',
-                            ':forge-1.20.1:checkClojure',
-                            '-PcheckNsFile=build/bisect-check-subset.txt',
-                            '--no-daemon',
-                            '--stacktrace',
-                            '--info'
+                        commandLine([gradlew] + args)
                     }
                     ignoreExitValue = true
                 }
+                def elapsedMs = ((System.nanoTime() - startedAt) / 1_000_000L) as long
+                logger.lifecycle('[bisect-check] trial #{} attempt {}/{} exit={} elapsed={}ms',
+                    trialNo, attempt, maxAttempts, execResult.exitValue, elapsedMs)
                 if (execResult.exitValue == 0) {
                     return true
                 }
@@ -459,6 +544,12 @@ tasks.register('bisectCheckClojure') {
         }
 
         def firstFailing = allNamespaces.get(lo)
+        if (fastMode) {
+            logger.lifecycle('[bisect-check] fast candidate found; confirming single namespace in clean-safe mode...')
+            if (runSubset([firstFailing], true)) {
+                throw new GradleException("Fast bisect candidate did not fail in clean-safe confirmation: ${firstFailing}")
+            }
+        }
         logger.lifecycle('[bisect-check] first failing namespace={}', firstFailing)
         logger.lifecycle('[bisect-check] reproducer: ./gradlew :forge-1.20.1:clean :forge-1.20.1:checkClojure "-PcheckNsOnly={}"', firstFailing)
         throw new GradleException("First failing namespace (check): ${firstFailing}")

@@ -41,6 +41,24 @@ subprojects {
     // *err* 无类型提示 → 大量 NO_SOURCE_PATH 反射告警。由 buildSrc 替换为带 ^java.io.Writer 的 flush。
     local.ClojurephantFlushFix.configure(project)
 
+    plugins.withId('dev.clojurephant.clojure') {
+        tasks.matching { task ->
+            task.metaClass.hasProperty(task, 'forkOptions') != null
+        }.configureEach { task ->
+            if (!task.forkOptions.memoryMaximumSize) {
+                task.forkOptions.memoryMaximumSize = '1536m'
+            }
+            def jvmArgs = (task.forkOptions.jvmArgs ?: []) as List
+            ['-Dfile.encoding=UTF-8', '-XX:+UseG1GC'].each { arg ->
+                if (!jvmArgs.contains(arg)) {
+                    jvmArgs << arg
+                }
+            }
+            task.forkOptions.jvmArgs = jvmArgs
+        }
+
+    }
+
     // 只有应用了 java 或 clojure 插件的子工程才添加此 Task
     plugins.withType(JavaPlugin) {
         tasks.register('printClasspath') {
@@ -51,6 +69,32 @@ subprojects {
                 
                 // 打印出该子工程的完整类路径
                 println(classpathFiles.filter { it.exists() }.join(File.pathSeparator))
+            }
+        }
+    }
+}
+
+gradle.projectsEvaluated {
+    subprojects { sp ->
+        sp.plugins.withId('dev.clojurephant.clojure') {
+            sp.tasks.matching { task ->
+                task.name in ['checkClojure', 'checkTestClojure']
+            }.configureEach { task ->
+                def namespaceReport = sp.layout.buildDirectory.file("reports/clojure/${task.name}-namespaces.txt")
+                task.outputs.file(namespaceReport)
+                    .withPropertyName("${task.name}NamespaceReport")
+                task.doLast {
+                    def reportFile = namespaceReport.get().asFile
+                    reportFile.parentFile.mkdirs()
+                    def selectedNamespaces = (task.namespaces.get() as Set).collect { it.toString() }.sort()
+                    reportFile.setText(([
+                        "task=${task.path}",
+                        "timestamp=${new Date().format('yyyy-MM-dd HH:mm:ss')}",
+                        "namespace.count=${selectedNamespaces.size()}",
+                        ''
+                    ] + selectedNamespaces).join(System.lineSeparator()) + System.lineSeparator(), 'UTF-8')
+                    logger.lifecycle('[{}] wrote namespace report: {}', task.path, reportFile)
+                }
             }
         }
     }
@@ -74,21 +118,52 @@ tasks.register('runMcmodUnitTests') {
     dependsOn ':mcmod:runMcmodClojureTests'
 }
 
+tasks.register('quickUnitTests') {
+    group = 'verification'
+    description = 'Execute platform-neutral ac and mcmod Clojure unit tests in one Gradle invocation.'
+    dependsOn 'runAcUnitTests', 'runMcmodUnitTests'
+}
+
+tasks.register('verifyLocalPrGate') {
+    group = 'verification'
+    description = 'Run the recommended local PR gate: current platforms plus platform-neutral unit tests.'
+    dependsOn 'verifyCurrentPlatforms', 'quickUnitTests'
+}
+
 tasks.register('verifyArchitectureBoundaries') {
     group = 'verification'
     description = 'Verify architecture boundaries across shared, Minecraft, and loader platform modules.'
 
-    doLast {
-        def sourceIncludes = [
-            '**/*.clj',
-            '**/*.cljc',
-            '**/*.cljs',
-            '**/*.java',
-            '**/*.kt',
-            '**/*.kts',
-            '**/*.groovy'
-        ]
+    def sourceIncludes = [
+        '**/*.clj',
+        '**/*.cljc',
+        '**/*.cljs',
+        '**/*.java',
+        '**/*.kt',
+        '**/*.kts',
+        '**/*.groovy'
+    ]
 
+    def makeSourceTree = { String relativeDir ->
+        fileTree(relativeDir) {
+            include sourceIncludes
+            exclude '**/build/**', '**/.gradle/**'
+        }
+    }
+
+    def acSource = makeSourceTree('ac/src')
+    def mcmodSource = makeSourceTree('mcmod/src')
+    def mc1201Source = makeSourceTree('mc-1.20.1/src')
+    def forge1201MainSource = makeSourceTree('forge-1.20.1/src/main')
+    def fabric1201MainSource = makeSourceTree('fabric-1.20.1/src/main')
+    def passMarker = layout.buildDirectory.file('verification/verifyArchitectureBoundaries/passed.txt')
+
+    inputs.files(acSource, mcmodSource, mc1201Source, forge1201MainSource, fabric1201MainSource)
+        .withPropertyName('architectureBoundarySources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    outputs.file(passMarker)
+
+    doLast {
         def violations = []
 
         def isSkippableLine = { String line ->
@@ -105,28 +180,109 @@ tasks.register('verifyArchitectureBoundaries') {
                 trimmed.startsWith('`')
         }
 
-            def isLikelyCodeLine = { String line ->
-                def trimmed = line.trim()
-                if (trimmed.isEmpty()) {
-                    return false
-                }
-                def first = trimmed.charAt(0)
-                return trimmed.startsWith('import ') ||
+        def isLikelyCodeLine = { String line ->
+            def trimmed = line.trim()
+            if (trimmed.isEmpty()) {
+                return false
+            }
+            def first = trimmed.charAt(0)
+            return trimmed.startsWith('import ') ||
                 trimmed.startsWith('package ') ||
                 trimmed.startsWith('(ns ') ||
                 trimmed.startsWith('(:require') ||
                 trimmed.startsWith('(:import') ||
-                    trimmed.endsWith(';') ||
-                    ['(', '[', '{', ':', '^', '@'].contains(String.valueOf(first))
-            }
+                trimmed.endsWith(';') ||
+                ['(', '[', '{', ':', '^', '@'].contains(String.valueOf(first))
+        }
 
-        def checkPattern = { String ruleName, FileTree tree, def pattern, Closure<Boolean> shouldCheckLine ->
+        def ruleSpecs = [
+            [
+                rule: 'AC_MCMOD_NO_MINECRAFT_OR_FORGE',
+                scopes: ['ac', 'mcmod'] as Set,
+                pattern: ~/(net\.minecraft(?!\.client)|net\.minecraftforge)/,
+                shouldCheckLine: { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+            ],
+            [
+                rule: 'AC_NO_PLATFORM_NS_DEPENDENCY',
+                scopes: ['ac'] as Set,
+                pattern: ~/(cn\.li\.(forge|fabric)\d*)/,
+                shouldCheckLine: { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+            ],
+            [
+                rule: 'NON_CLIENT_NO_MC_CLIENT_IMPORT',
+                scopes: ['ac', 'mcmod'] as Set,
+                pattern: ~/net\.minecraft\.client/,
+                shouldCheckLine: { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+            ],
+            [
+                rule: 'MC1201_NO_LOADER_IMPORT',
+                scopes: ['mc1201'] as Set,
+                pattern: ~/(net\.minecraftforge|net\.fabricmc|net\.neoforged|cn\.li\.(forge|fabric|neoforge))/,
+                shouldCheckLine: { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+            ],
+            [
+                rule: 'MC1201_NO_AC_STATIC_DEPENDENCY',
+                scopes: ['mc1201'] as Set,
+                pattern: ~/cn\.li\.ac\./,
+                shouldCheckLine: { String line -> !isSkippableLine(line) }
+            ],
+            [
+                rule: 'FORGE1201_NO_FABRIC_API_OR_NS',
+                scopes: ['forge1201'] as Set,
+                pattern: ~/(net\.fabricmc|cn\.li\.fabric1201|ModInitializer)/,
+                shouldCheckLine: { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+            ],
+            [
+                rule: 'FABRIC1201_NO_FORGE_API_OR_NS',
+                scopes: ['fabric1201'] as Set,
+                pattern: ~/(net\.minecraftforge|cn\.li\.forge1201|@Mod\b)/,
+                shouldCheckLine: { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
+            ],
+            [
+                rule: 'PLATFORM_NO_AC_STATIC_OR_HARDCODED_DEPENDENCY',
+                scopes: ['forge1201', 'fabric1201'] as Set,
+                pattern: ~/cn\.li\.ac\./,
+                shouldCheckLine: { String line -> !isSkippableLine(line) }
+            ]
+        ]
+
+        def markerFile = passMarker.get().asFile
+        if (markerFile.exists()) {
+            markerFile.delete()
+        }
+
+        def filesByRelativePath = new TreeMap<String, Map>()
+        def addScopedFiles = { String scope, FileTree tree ->
             tree.files.each { File file ->
                 def rel = project.rootDir.toPath().relativize(file.toPath()).toString().replace('\\', '/')
-                file.readLines('UTF-8').eachWithIndex { String line, int idx ->
-                    if (shouldCheckLine(line) && pattern.matcher(line).find()) {
+                def entry = filesByRelativePath[rel]
+                if (entry == null) {
+                    entry = [file: file, scopes: new LinkedHashSet<String>()]
+                    filesByRelativePath[rel] = entry
+                }
+                entry.scopes.add(scope)
+            }
+        }
+
+        addScopedFiles('ac', acSource)
+        addScopedFiles('mcmod', mcmodSource)
+        addScopedFiles('mc1201', mc1201Source)
+        addScopedFiles('forge1201', forge1201MainSource)
+        addScopedFiles('fabric1201', fabric1201MainSource)
+
+        filesByRelativePath.each { String rel, Map entry ->
+            def applicableRules = ruleSpecs.findAll { rule ->
+                !java.util.Collections.disjoint(rule.scopes, entry.scopes)
+            }
+            if (applicableRules.isEmpty()) {
+                return
+            }
+
+            entry.file.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                applicableRules.each { rule ->
+                    if (rule.shouldCheckLine(line) && rule.pattern.matcher(line).find()) {
                         violations << [
-                            rule   : ruleName,
+                            rule   : rule.rule,
                             file   : rel,
                             lineNo : idx + 1,
                             text   : line.trim()
@@ -135,83 +291,6 @@ tasks.register('verifyArchitectureBoundaries') {
                 }
             }
         }
-
-        def acSource = fileTree('ac/src') {
-            include sourceIncludes
-            exclude '**/build/**', '**/.gradle/**'
-        }
-        def mcmodSource = fileTree('mcmod/src') {
-            include sourceIncludes
-            exclude '**/build/**', '**/.gradle/**'
-        }
-        def mc1201Source = fileTree('mc-1.20.1/src') {
-            include sourceIncludes
-            exclude '**/build/**', '**/.gradle/**'
-        }
-        def forge1201MainSource = fileTree('forge-1.20.1/src/main') {
-            include sourceIncludes
-            exclude '**/build/**', '**/.gradle/**'
-        }
-        def fabric1201MainSource = fileTree('fabric-1.20.1/src/main') {
-            include sourceIncludes
-            exclude '**/build/**', '**/.gradle/**'
-        }
-
-        checkPattern(
-            'AC_MCMOD_NO_MINECRAFT_OR_FORGE',
-            acSource + mcmodSource,
-            ~/(net\.minecraft(?!\.client)|net\.minecraftforge)/,
-            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
-        )
-
-        checkPattern(
-            'AC_NO_PLATFORM_NS_DEPENDENCY',
-            acSource,
-            ~/(cn\.li\.(forge|fabric)\d*)/,
-            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
-        )
-
-        checkPattern(
-            'NON_CLIENT_NO_MC_CLIENT_IMPORT',
-            acSource + mcmodSource,
-            ~/net\.minecraft\.client/,
-            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
-        )
-
-        checkPattern(
-            'MC1201_NO_LOADER_IMPORT',
-            mc1201Source,
-            ~/(net\.minecraftforge|net\.fabricmc|net\.neoforged|cn\.li\.(forge|fabric|neoforge))/,
-            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
-        )
-
-        checkPattern(
-            'MC1201_NO_AC_STATIC_DEPENDENCY',
-            mc1201Source,
-            ~/cn\.li\.ac\./,
-            { String line -> !isSkippableLine(line) }
-        )
-
-        checkPattern(
-            'FORGE1201_NO_FABRIC_API_OR_NS',
-            forge1201MainSource,
-            ~/(net\.fabricmc|cn\.li\.fabric1201|ModInitializer)/,
-            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
-        )
-
-        checkPattern(
-            'FABRIC1201_NO_FORGE_API_OR_NS',
-            fabric1201MainSource,
-            ~/(net\.minecraftforge|cn\.li\.forge1201|@Mod\b)/,
-            { String line -> !isSkippableLine(line) && isLikelyCodeLine(line) }
-        )
-
-        checkPattern(
-            'PLATFORM_NO_AC_STATIC_OR_HARDCODED_DEPENDENCY',
-            forge1201MainSource + fabric1201MainSource,
-            ~/cn\.li\.ac\./,
-            { String line -> !isSkippableLine(line) }
-        )
 
         def nonClientViolations = violations.findAll {
             it.rule == 'NON_CLIENT_NO_MC_CLIENT_IMPORT' &&
@@ -228,7 +307,9 @@ tasks.register('verifyArchitectureBoundaries') {
             throw new GradleException('verifyArchitectureBoundaries failed. See violations above.')
         }
 
-        logger.lifecycle('[verifyArchitectureBoundaries] passed. No boundary violations detected.')
+        markerFile.parentFile.mkdirs()
+        markerFile.text = "passed files=${filesByRelativePath.size()} rules=${ruleSpecs.size()}${System.lineSeparator()}"
+        logger.lifecycle('[verifyArchitectureBoundaries] passed. Scanned {} files with {} rules.', filesByRelativePath.size(), ruleSpecs.size())
     }
 }
 
@@ -1939,10 +2020,106 @@ tasks.register('verifyLoaderEntrypointNames') {
     }
 }
 
+def cleanupResidueGuardTaskNames = [
+    'verifyAcPlayerUuidSsoT',
+    'verifyGameplayConfigContractSsoT',
+    'verifyMcmodNoAcSpecificBootstrap',
+    'verifyRuntimeEventNoThinItemAdapter',
+    'verifyPlatformEventsNoRuntimeBusinessState',
+    'verifyAcGuiMessageManifestSsoT',
+    'verifyAcGuiRegistrationManifestSsoT',
+    'verifyGuiNetworkTransportBoundaries',
+    'verifyGuiNamespaceLayout',
+    'verifyGuiRegistrySpiSsoT',
+    'verifyEntityHookRegistrySpecs',
+    'verifyBlockDslNoRuntimeEvents',
+    'verifyAcBlockGuiSyncHelpers',
+    'verifyTechUiScreenBuilder',
+    'verifyWirelessGuiTabApi',
+    'verifyTerminalMessageIdsStatic',
+    'verifyTerminalBridgeInitOrchestration',
+    'verifyCguiRuntimeShimBoundaries',
+    'verifyPlatformGuiProviderThinAdapters',
+    'verifyGuiXmlResourcesSync',
+    'verifyAbilityFxBeamOpsHelper',
+    'verifyDatagenProviderFactoryAdapters',
+    'verifyTransientBuildArtifactsIgnored',
+    'verifyLoaderEntrypointNames',
+    'verifyPlatformNoAcSourceInjection',
+    'verifyDeletedCompatibilityResidues'
+]
+
+def cleanupResidueGuardInputs = fileTree(project.rootDir) {
+    include 'ac/src/**'
+    include 'api/src/**'
+    include 'mcmod/src/**'
+    include 'mc-1.20.1/src/**'
+    include 'forge-1.20.1/src/**'
+    include 'fabric-1.20.1/src/**'
+    include 'docs/dev/**'
+    include 'docs/06-gui/**'
+    include 'gradle/**'
+    include '*.gradle'
+    include 'gradle.properties'
+    include '.gitignore'
+    exclude '**/build/**', '**/.gradle/**', '**/bin/**', '**/run/**', '**/run-data/**', '**/run-gametest/**'
+}
+
+cleanupResidueGuardTaskNames.each { guardTaskName ->
+    tasks.named(guardTaskName).configure { task ->
+        def marker = layout.buildDirectory.file("verification/cleanup-residue-guards/${guardTaskName}.passed.txt")
+        inputs.files(cleanupResidueGuardInputs)
+            .withPropertyName('cleanupResidueGuardSources')
+            .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+        inputs.file(file('build.gradle'))
+            .withPropertyName('cleanupResidueGuardImplementation')
+            .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+        if (file('.git/index').exists()) {
+            inputs.file(file('.git/index'))
+                .withPropertyName('gitIndex')
+                .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+        }
+        outputs.file(marker)
+        outputs.cacheIf { true }
+        doLast {
+            def markerFile = marker.get().asFile
+            markerFile.parentFile.mkdirs()
+            markerFile.setText("passed ${task.path} ${new Date().format('yyyy-MM-dd HH:mm:ss')}${System.lineSeparator()}", 'UTF-8')
+        }
+    }
+}
+
 tasks.register('verifyCleanupResidueGuards') {
     group = 'verification'
     description = 'Run cleanup-residue guard checks for SSOT regressions.'
-    dependsOn 'verifyAcPlayerUuidSsoT', 'verifyGameplayConfigContractSsoT', 'verifyMcmodNoAcSpecificBootstrap', 'verifyRuntimeEventNoThinItemAdapter', 'verifyPlatformEventsNoRuntimeBusinessState', 'verifyAcGuiMessageManifestSsoT', 'verifyAcGuiRegistrationManifestSsoT', 'verifyGuiNetworkTransportBoundaries', 'verifyGuiNamespaceLayout', 'verifyGuiRegistrySpiSsoT', 'verifyEntityHookRegistrySpecs', 'verifyBlockDslNoRuntimeEvents', 'verifyAcBlockGuiSyncHelpers', 'verifyTechUiScreenBuilder', 'verifyWirelessGuiTabApi', 'verifyTerminalMessageIdsStatic', 'verifyTerminalBridgeInitOrchestration', 'verifyCguiRuntimeShimBoundaries', 'verifyPlatformGuiProviderThinAdapters', 'verifyGuiXmlResourcesSync', 'verifyAbilityFxBeamOpsHelper', 'verifyDatagenProviderFactoryAdapters', 'verifyTransientBuildArtifactsIgnored', 'verifyLoaderEntrypointNames', 'verifyPlatformNoAcSourceInjection', 'verifyDeletedCompatibilityResidues'
+    dependsOn cleanupResidueGuardTaskNames
+}
+
+def scanLogForFatalPatterns = { File logFile, List<String> fatalPatterns, List<List<String>> markerGroups = [] ->
+    def matchedFatalPatterns = [] as LinkedHashSet<String>
+    def markerHits = markerGroups.collect { false }
+    logFile.withReader('UTF-8') { reader ->
+        String line
+        while ((line = reader.readLine()) != null) {
+            fatalPatterns.each { pattern ->
+                if (line.contains(pattern)) {
+                    matchedFatalPatterns << pattern
+                }
+            }
+            markerGroups.eachWithIndex { group, idx ->
+                if (!markerHits[idx] && group.any { marker -> line.contains(marker) }) {
+                    markerHits[idx] = true
+                }
+            }
+            if (!matchedFatalPatterns.isEmpty()) {
+                break
+            }
+        }
+    }
+    return [
+        matchedFatalPatterns: matchedFatalPatterns as List,
+        missingMarkerGroups : markerGroups.withIndex().findAll { group, idx -> !markerHits[idx] }.collect { group, idx -> group }
+    ]
 }
 
 tasks.register('runFabricSmoke') {
@@ -1962,7 +2139,6 @@ tasks.register('validateFabricSmokeLog') {
             throw new GradleException("Fabric smoke log not found: ${logFile}")
         }
 
-        def logText = logFile.getText('UTF-8')
         def fatalPatterns = [
             'Failed to load Clojure mod implementation',
             'Exception in thread',
@@ -1973,7 +2149,7 @@ tasks.register('validateFabricSmokeLog') {
             'Failed to run data generator'
         ]
 
-        def matchedFatalPatterns = fatalPatterns.findAll { logText.contains(it) }
+        def matchedFatalPatterns = scanLogForFatalPatterns(logFile, fatalPatterns).matchedFatalPatterns
         if (!matchedFatalPatterns.isEmpty()) {
             throw new GradleException("Fabric smoke log contains fatal errors: ${matchedFatalPatterns}")
         }
@@ -2109,7 +2285,6 @@ def registerForgeGameTestTask = {
         description = 'Prepare run directories and minimal structures for Forge GameTest execution.'
 
         doLast {
-            def isWindows = org.gradle.internal.os.OperatingSystem.current().isWindows()
             def runGameTestDir = file('forge-1.20.1/run-gametest')
             def legacyRunDir = file('forge-1.20.1/run')
             def lockFile = file('forge-1.20.1/run-gametest/world/session.lock')
@@ -2140,7 +2315,10 @@ def registerForgeGameTestTask = {
             serverProperties.text = "server-port=0${System.lineSeparator()}online-mode=false${System.lineSeparator()}"
             legacyServerProperties.text = "server-port=0${System.lineSeparator()}online-mode=false${System.lineSeparator()}"
 
-            if (isWindows) {
+            // GameTest already uses an ephemeral port through server.properties and
+            // the Loom run config (`--port 0`). Keep legacy 25565 cleanup opt-in so
+            // the normal prep task does not spend time probing/killing unrelated dev servers.
+            if (project.findProperty('forgeGameTestCleanPort25565')?.toString()?.toBoolean()) {
                 try {
                     def portProbe = ['cmd', '/c', 'netstat -ano | findstr ":25565"']
                         .execute()
@@ -2198,7 +2376,6 @@ tasks.register('validateForgeGameTestLog') {
         def gameTestJava = file('forge-1.20.1/src/main/java/cn/li/forge1201/gametest/ForgeSmokeGameTests.java')
         def batchReport = file('build/reports/forge-gametest-batch-report.txt')
 
-        def logText = logFile.getText('UTF-8')
         def requiredMarkerGroups = [
             ['Starting minecraft server version', 'Started game test server'],
             ['Loading properties', 'Preparing start region for dimension']
@@ -2214,18 +2391,19 @@ tasks.register('validateForgeGameTestLog') {
             'The process cannot access the file because another process has locked a portion of the file'
         ]
 
-        def missingMarkerGroups = requiredMarkerGroups.findAll { group ->
-            !group.any { marker -> logText.contains(marker) }
-        }
+        def logScan = scanLogForFatalPatterns(logFile, fatalPatterns, requiredMarkerGroups)
+        def missingMarkerGroups = logScan.missingMarkerGroups
         if (!missingMarkerGroups.isEmpty()) {
             def display = missingMarkerGroups.collect { it.join(' | ') }
             throw new GradleException("Forge GameTest log is missing expected startup marker groups: ${display}")
         }
 
-        def matchedFatalPatterns = fatalPatterns.findAll { logText.contains(it) }
+        def matchedFatalPatterns = logScan.matchedFatalPatterns
         if (!matchedFatalPatterns.isEmpty()) {
             throw new GradleException("Forge GameTest log contains fatal errors: ${matchedFatalPatterns}")
         }
+
+        def logText = logFile.getText('UTF-8')
 
         // Build a per-batch report from declared @GameTest methods.
         // This keeps verification output actionable even when Forge server lifecycle

@@ -61,6 +61,27 @@
     1
     0))
 
+(defn- elapsed-ms
+  [started-at-ns]
+  (long (/ (- (System/nanoTime) started-at-ns) 1000000)))
+
+(defn- merge-test-result
+  [acc result]
+  (merge-with + acc (select-keys result [:test :pass :fail :error])))
+
+(defn- print-summary!
+  [{:keys [test pass fail error]}]
+  (println)
+  (println "Ran" test "tests containing" (+ pass fail error) "assertions.")
+  (println fail "failures," error "errors."))
+
+(defn- print-slowest-namespaces!
+  [timings]
+  (when (seq timings)
+    (println "Slowest test namespaces:")
+    (doseq [{:keys [ns elapsed-ms]} (take 10 (sort-by (comp - :elapsed-ms) timings))]
+      (println " " ns (str elapsed-ms "ms")))))
+
 (defn run-tests!
   "Discover, require, and run clojure.test namespaces.
 
@@ -77,10 +98,25 @@
     (when-not (seq selected)
       (throw (ex-info "No test namespaces selected" opts)))
     (println "Discovered" (count namespaces) "test namespaces; running" (count selected))
-    (doseq [ns-sym selected]
-      (require ns-sym))
-    (let [result (apply test/run-tests selected)
+    (let [require-start (System/nanoTime)]
+      (doseq [ns-sym selected]
+        (require ns-sym))
+      (println "Required" (count selected) "test namespaces in" (str (elapsed-ms require-start) "ms")))
+    (let [timings (mapv (fn [ns-sym]
+                          (let [started-at (System/nanoTime)
+                                result (test/test-ns ns-sym)
+                                elapsed (elapsed-ms started-at)]
+                            (println "Finished" ns-sym "in" (str elapsed "ms"))
+                            {:ns ns-sym
+                             :elapsed-ms elapsed
+                             :result result}))
+                        selected)
+          result (reduce merge-test-result
+                         {:test 0 :pass 0 :fail 0 :error 0}
+                         (map :result timings))
           code (exit-code result)]
+      (print-summary! result)
+      (print-slowest-namespaces! timings)
       (shutdown-agents)
       (when-not (zero? code)
         (System/exit code))

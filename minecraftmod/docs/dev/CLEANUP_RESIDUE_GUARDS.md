@@ -4,6 +4,12 @@ This document records cleanup decisions that are enforced by Gradle verification
 tasks. The goal is to remove stale compatibility residue while preserving the
 explicit architecture seams that the multi-loader design requires.
 
+`verifyCleanupResidueGuards` keeps each guard as an independently named task for
+actionable failures, but the root build now attaches shared source inputs and a
+per-guard pass marker under `build/verification/cleanup-residue-guards/`. When
+source files and guard implementation stay unchanged, hot runs can skip the 25+
+pure scan guards instead of rereading the same trees.
+
 ## Guarded SSOT rules
 
 - Player UUID strings in `ac` must go through
