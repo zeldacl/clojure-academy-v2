@@ -2,9 +2,9 @@
   "MagMovement skill - magnetic acceleration toward metal blocks/entities.
 
   Mechanics:
-  - Raycast to metal blocks/entities (25 block range)
+  - Raycast to metal blocks/entities
   - Accelerate player toward target with smooth interpolation
-  - Energy: 15-8 CP per tick (scales with exp), 60-30 overload max
+  - Energy and progression values are read from ability skill config
   - Low exp requires strong metal blocks only; high exp unlocks weak metal blocks
   - Visual: Arc with wiggle animation
   - Audio: Looping ambient sound
@@ -12,7 +12,8 @@
   - Grants experience based on distance traveled"
   (:require [clojure.string :as str]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal :refer [by-exp]]
+            [cn.li.ac.ability.config :as ability-config]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -26,34 +27,17 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private accel 0.08)
+(def ^:private mag-movement-skill-id :mag-movement)
 (def ^:private arc-entity-id "my_mod:entity_arc")
 
-(def ^:private normal-metal-blocks
-  #{"minecraft:rail"
-    "minecraft:iron_bars"
-    "minecraft:iron_block"
-    "minecraft:activator_rail"
-    "minecraft:detector_rail"
-    "minecraft:powered_rail"
-    "minecraft:sticky_piston"
-    "minecraft:piston"})
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double mag-movement-skill-id field-id))
 
-(def ^:private weak-metal-blocks
-  #{"minecraft:dispenser"
-    "minecraft:hopper"
-    "minecraft:iron_ore"})
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int mag-movement-skill-id field-id))
 
-(def ^:private metallic-entity-types
-  #{"minecraft:minecart"
-    "minecraft:chest_minecart"
-    "minecraft:furnace_minecart"
-    "minecraft:tnt_minecart"
-    "minecraft:hopper_minecart"
-    "minecraft:spawner_minecart"
-    "minecraft:command_block_minecart"
-    "minecraft:iron_golem"
-    "my_mod:entity_mag_hook"})
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double mag-movement-skill-id field-id exp))
 
 (defn- normalize-id
   [raw-id]
@@ -71,14 +55,14 @@
 
 (defn- is-metal-block? [block-id exp]
   (let [id      (normalize-id block-id)
-        normal? (contains? normal-metal-blocks id)
-        weak?   (contains? weak-metal-blocks id)
+        normal? (ability-config/is-normal-metal-block? id)
+        weak?   (ability-config/is-weak-metal-block? id)
         metal?  (or normal? weak?)]
-    (and (if (< (double exp) 0.6) metal? true)
+    (and (if (< (double exp) (cfg-double :targeting.weak-metal-exp-threshold)) metal? true)
          (or weak? metal?))))
 
 (defn- is-metal-entity? [entity-type]
-  (contains? metallic-entity-types (normalize-id entity-type)))
+  (ability-config/is-metal-entity? (normalize-id entity-type)))
 
 (defn- player-pos [player-id]
   (get (skill-effects/get-player-state player-id)
@@ -86,7 +70,8 @@
        {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}))
 
 (defn- try-adjust [from to]
-  (let [d (- (double to) (double from))]
+  (let [d (- (double to) (double from))
+        accel (cfg-double :movement.acceleration)]
     (if (< (Math/abs d) accel)
       (double to)
       (if (pos? d)
@@ -101,7 +86,7 @@
                        world-effects/*world-effects*
                        (or target-world-id "minecraft:overworld")
                        (double target-x) (double target-y) (double target-z)
-                       4.0)
+                       (cfg-double :targeting.target-update-radius))
           matched (some #(when (= (:uuid %) target-entity-uuid) %) candidates)]
       (when matched
         (assoc skill-state
@@ -120,7 +105,7 @@
                                              (double (:x look))
                                              (double (:y look))
                                              (double (:z look))
-                                             25.0)]
+                                             (cfg-double :targeting.range))]
       (case (:hit-type hit)
         :block
         (let [block-id (normalize-id (:block-id hit))]
@@ -150,7 +135,7 @@
 (defn- tick-cp-cost [{:keys [ctx-id exp]}]
   (if-let [ctx (ctx/get-context ctx-id)]
     (if (get-in ctx [:skill-state :has-target])
-      (bal/lerp 15.0 8.0 (double (or exp 0.0)))
+      (cfg-lerp :cost.tick.cp (double (or exp 0.0)))
       0.0)
     0.0))
 
@@ -165,8 +150,9 @@
                                       {:x (:start-x skill-state)
                                        :y (:start-y skill-state)
                                        :z (:start-z skill-state)})]
-      (skill-effects/add-skill-exp! player-id :mag-movement
-                                    (max 0.005 (* 0.0011 traveled))))
+      (skill-effects/add-skill-exp! player-id mag-movement-skill-id
+                                    (max (cfg-double :progression.exp-min)
+                                         (* (cfg-double :progression.exp-distance-scale) traveled))))
     (effect/run-op! evt [:reset-fall-damage nil])
     (effect/run-op! evt [:fx {:topic :mag-movement/fx-end
                               :payload {:mode :end}}])))
@@ -184,7 +170,7 @@
                                (merge target-state
                                       {:has-target true
                                        :movement-ticks 0
-                                       :overload-floor (bal/lerp 60.0 30.0 (double (or exp 0.0)))
+                                       :overload-floor (cfg-lerp :cost.down.overload (double (or exp 0.0)))
                                        :start-x        (double (:x state-pos))
                                        :start-y        (double (:y state-pos))
                                        :start-z        (double (:z state-pos))
@@ -280,8 +266,6 @@
   (ctx/update-context! ctx-id dissoc :skill-state)
   (log/debug "MagMovement aborted"))
 
-
-
 (defskill! mag-movement
   :id              :mag-movement
   :category-id     :electromaster
@@ -294,10 +278,11 @@
   :ctrl-id         :mag-movement
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks  60
+  :cooldown-ticks  (fn [_] (cfg-int :cooldown.ticks))
   :pattern         :charge-window
   :cooldown        {:mode :manual}
-  :cost {:down {:overload   (by-exp 60.0 30.0)
+  :cost {:down {:overload   (fn [{:keys [exp]}]
+                              (cfg-lerp :cost.down.overload (double (or exp 0.0))))
                 :creative?  (fn [{:keys [player]}]
                               (boolean (and player (entity/player-creative? player))))}
          :tick {:cp         tick-cp-cost

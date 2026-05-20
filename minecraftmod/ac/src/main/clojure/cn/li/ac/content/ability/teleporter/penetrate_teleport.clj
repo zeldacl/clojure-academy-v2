@@ -13,7 +13,6 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -25,6 +24,8 @@
 ;; ---------------------------------------------------------------------------
 ;; Wall-penetration scan
 ;; ---------------------------------------------------------------------------
+
+(def ^:private penetrate-teleport-skill-id :penetrate-teleport)
 
 (defn- solid? [world-id bx by bz]
   (when bm/*block-manipulation*
@@ -52,13 +53,13 @@
               dx (double (:x look-vec))
               dy (double (:y look-vec))
               dz (double (:z look-vec))
-              ;; Step 0.5 blocks at a time
-              steps (int (* (double scan-dist) 2))]
+              step (helper/cfg-double penetrate-teleport-skill-id :targeting.scan-step)
+              steps (int (Math/ceil (/ (double scan-dist) step)))]
           (loop [i 0
                  inside-wall? false
                  wall-start-i nil]
             (when (< i steps)
-              (let [t   (* (double i) 0.5)
+              (let [t   (* (double i) step)
                     cx  (int (Math/floor (+ px (* t dx))))
                     cy  (int (Math/floor (+ py (* t dy))))
                     cz  (int (Math/floor (+ pz (* t dz))))
@@ -73,7 +74,7 @@
                   (recur (inc i) true i)
                   ;; Inside wall: check max depth
                   (and inside-wall? sol)
-                  (if (> (- i (long (or wall-start-i i))) (* 2 (double max-depth)))
+                  (if (> (* (- i (long (or wall-start-i i))) step) (double max-depth))
                     nil  ; too deep
                     (recur (inc i) true wall-start-i))
                   ;; Still in air before wall
@@ -96,17 +97,21 @@
 (defn penetrate-tp-up!
   [{:keys [player-id ctx-id]}]
   (try
-    (let [exp       (helper/skill-exp player-id :penetrate-teleport)
-          max-depth (bal/lerp 3.0 6.0 exp)
+        (let [exp       (helper/skill-exp player-id penetrate-teleport-skill-id)
+          max-depth (helper/cfg-lerp penetrate-teleport-skill-id :targeting.max-depth exp)
           look-vec  (helper/player-look-vec player-id)
-          dest      (find-penetrate-destination player-id look-vec max-depth 30.0)]
+          dest      (find-penetrate-destination player-id look-vec max-depth
+                    (helper/cfg-double penetrate-teleport-skill-id
+                           :targeting.scan-distance))]
       (if dest
         (let [world-id (geom/world-id-of player-id)]
           (when (helper/teleport-to! player-id world-id (:x dest) (:y dest) (:z dest))
-            (skill-effects/add-skill-exp! player-id :penetrate-teleport 0.003)
+            (skill-effects/add-skill-exp! player-id penetrate-teleport-skill-id
+                                          (helper/cfg-double penetrate-teleport-skill-id
+                                                             :progression.exp-success))
             (ach-dispatcher/trigger-custom-event! player-id "teleporter.ignore_barrier")
-            (let [cd (int (bal/lerp 40.0 25.0 exp))]
-              (skill-effects/set-main-cooldown! player-id :penetrate-teleport cd))
+            (let [cd (helper/cfg-lerp-int penetrate-teleport-skill-id :cooldown.ticks exp)]
+              (skill-effects/set-main-cooldown! player-id penetrate-teleport-skill-id cd))
             (ctx/ctx-send-to-client! ctx-id :penetrate-tp/fx-perform dest)))
         (log/debug "PenetrateTP: no valid destination found")))
     (catch Exception e
@@ -134,11 +139,13 @@
   :overload-consume-speed 0.0
   :pattern        :release-cast
   :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (bal/lerp 200.0 140.0
-                                                (helper/skill-exp player-id :penetrate-teleport)))
+                                      (helper/cfg-lerp penetrate-teleport-skill-id
+                                                       :cost.down.cp
+                                                       (helper/skill-exp player-id penetrate-teleport-skill-id)))
                           :overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 80.0 55.0
-                                                (helper/skill-exp player-id :penetrate-teleport)))}}
+                                      (helper/cfg-lerp penetrate-teleport-skill-id
+                                                       :cost.down.overload
+                                                       (helper/skill-exp player-id penetrate-teleport-skill-id)))}}
   :cooldown       {:mode :manual}
   :actions        {:down!  penetrate-tp-down!
                    :tick!  penetrate-tp-tick!

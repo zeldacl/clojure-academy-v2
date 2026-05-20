@@ -19,7 +19,7 @@
                           (every? #(>= (adata/get-skill-exp ability-data (:id %)) 1.0)
                                   skills))
         cat-rate    (cat/get-prog-incr-rate cat-id)
-        global-rate cfg/*prog-incr-rate*]
+        global-rate (cfg/prog-incr-rate)]
     (level-formula/level-up-threshold skill-count all-mastered? cat-rate global-rate)))
 
 (defn can-level-up?
@@ -39,7 +39,7 @@
   [ability-data uuid skill-id raw-amount exp-incr-speed]
   (let [scaled-amount (* (double raw-amount)
                          (double (or exp-incr-speed 1.0))
-                         cfg/*prog-incr-rate*)
+                         (cfg/prog-incr-rate))
         {:keys [data delta]} (adata/add-skill-exp ability-data skill-id scaled-amount)
         data2 (adata/add-level-progress data delta)
         exp-added-event {:event/type evt/EVT-SKILL-EXP-ADDED

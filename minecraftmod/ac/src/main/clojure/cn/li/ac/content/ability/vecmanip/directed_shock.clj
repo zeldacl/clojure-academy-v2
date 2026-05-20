@@ -8,7 +8,7 @@
   (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -17,22 +17,35 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private MIN-TICKS 6)
-(def ^:private MAX-ACCEPTED-TICKS 50)
-(def ^:private MAX-TOLERANT-TICKS 200)
-(def ^:private RAYCAST-DISTANCE 3.0)
+(def ^:private directed-shock-skill-id :directed-shock)
+
+(defn- exp01 [exp]
+  (max 0.0 (min 1.0 (double (or exp 0.0)))))
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double directed-shock-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int directed-shock-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double directed-shock-skill-id field-id (exp01 exp)))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int directed-shock-skill-id field-id (exp01 exp)))
 
 (defn- hit-impulse [caster-pos hit-pos]
-  (-> (geom/v- hit-pos caster-pos) geom/vnorm (geom/v* 0.24)))
+  (-> (geom/v- hit-pos caster-pos) geom/vnorm (geom/v* (cfg-double :movement.hit-impulse))))
 
 (defn- knockback-velocity [player-id hit-pos]
   (let [player-head (geom/eye-pos player-id)
         target-head {:x (:x hit-pos)
-                     :y (+ (:y hit-pos) (double (or (:eye-height hit-pos) 1.62)))
+               :y (+ (:y hit-pos) (double (or (:eye-height hit-pos) (cfg-double :targeting.eye-height))))
                      :z (:z hit-pos)}
         d0 (geom/vnorm (geom/v- player-head target-head))
-        d1 (geom/vnorm {:x (:x d0) :y (- (:y d0) 0.6) :z (:z d0)})]
-    {:x (* (:x d1) -0.7) :y (* (:y d1) -0.7) :z (* (:z d1) -0.7)}))
+        d1 (geom/vnorm {:x (:x d0) :y (- (:y d0) (cfg-double :movement.knockback-y-adjust)) :z (:z d0)})
+        scale (cfg-double :movement.knockback-scale)]
+      {:x (* (:x d1) scale) :y (* (:y d1) scale) :z (* (:z d1) scale)}))
 
 (defskill! directed-shock
   :id          :directed-shock
@@ -46,8 +59,8 @@
   :ctrl-id     :directed-shock
   :pattern     :charge-window
   :cooldown    {:mode :manual}
-  :cost        {:up {:cp       (fn [{:keys [exp]}] (bal/lerp 50.0 100.0 (bal/clamp01 exp)))
-                     :overload (fn [{:keys [exp]}] (bal/lerp 18.0  12.0 (bal/clamp01 exp)))}}
+  :cost        {:up {:cp       (fn [{:keys [exp]}] (cfg-lerp :cost.up.cp exp))
+                     :overload (fn [{:keys [exp]}] (cfg-lerp :cost.up.overload exp))}}
   :actions
   {:down! (fn [{:keys [ctx-id]}]
             (ctx/update-context! ctx-id assoc :skill-state {:charge-ticks 0 :performed? false})
@@ -56,14 +69,14 @@
             (when-let [ctx-data (ctx/get-context ctx-id)]
               (let [next-charge (inc (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0)))]
                 (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next-charge)
-                (when (>= next-charge MAX-TOLERANT-TICKS)
+                (when (>= next-charge (cfg-int :charge.max-tolerant-ticks))
                   (fx/send-end! ctx-id :directed-shock/fx-end {:performed? false})
                   (ctx/terminate-context! ctx-id nil)))))
    :up!   (fn [{:keys [player-id ctx-id exp cost-ok?]}]
             (when-let [ctx-data (ctx/get-context ctx-id)]
               (let [charge-ticks (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0))
-                    exp*         (bal/clamp01 exp)]
-                (if (and (> charge-ticks MIN-TICKS) (< charge-ticks MAX-ACCEPTED-TICKS))
+                    exp*         (exp01 exp)]
+                (if (and (> charge-ticks (cfg-int :charge.min-ticks)) (< charge-ticks (cfg-int :charge.max-accepted-ticks)))
                   (if-not cost-ok?
                     (do (fx/send-end! ctx-id :directed-shock/fx-end {:performed? false})
                         (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))
@@ -72,19 +85,19 @@
                           trace      (when raycast/*raycast*
                                        (raycast/raycast-from-player raycast/*raycast*
                                                                     player-id
-                                                                    RAYCAST-DISTANCE
+                                                                    (cfg-double :targeting.raycast-distance)
                                                                     true))]
                       (skill-effects/set-main-cooldown!
                        player-id :directed-shock
-                       (int (bal/lerp 60.0 20.0 exp*)))
+                       (cfg-lerp-int :cooldown.ticks exp*))
                       (if-let [target-id (:entity-id trace)]
                         (let [hit-pos  {:x (double (or (:x trace) 0.0))
                                         :y (double (or (:y trace) 0.0))
                                         :z (double (or (:z trace) 0.0))
-                                        :eye-height (double (or (:eye-height trace) 1.62))}
-                              damage   (bal/lerp 7.0 15.0 exp*)
+                                        :eye-height (double (or (:eye-height trace) (cfg-double :targeting.eye-height)))}
+                              damage   (cfg-lerp :combat.damage exp*)
                               impulse  (hit-impulse eye hit-pos)
-                              knockback (when (>= exp* 0.25)
+                              knockback (when (>= exp* (cfg-double :movement.knockback-exp-threshold))
                                           (knockback-velocity player-id hit-pos))]
                           (when entity-damage/*entity-damage*
                             (entity-damage/apply-direct-damage!
@@ -103,11 +116,11 @@
                                             :impulse impulse
                                             :knockback knockback})
                           (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] true)
-                          (skill-effects/add-skill-exp! player-id :directed-shock 0.0035)
-                          (log/info "DirectedShock hit" target-id "dmg" (int (bal/lerp 7.0 15.0 exp*))))
+                          (skill-effects/add-skill-exp! player-id :directed-shock (cfg-double :progression.exp-hit))
+                          (log/info "DirectedShock hit" target-id "dmg" (int damage)))
                         (do (fx/send-end! ctx-id :directed-shock/fx-end {:performed? false})
                             (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false)
-                            (skill-effects/add-skill-exp! player-id :directed-shock 0.001)))))
+                            (skill-effects/add-skill-exp! player-id :directed-shock (cfg-double :progression.exp-miss))))))
                       (do (fx/send-end! ctx-id :directed-shock/fx-end {:performed? false})
                       (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))))))
    :abort! (fn [{:keys [ctx-id]}]

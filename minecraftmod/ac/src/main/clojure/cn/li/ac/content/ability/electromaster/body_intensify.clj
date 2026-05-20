@@ -5,29 +5,51 @@
   Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (≤40 ticks)
   Cooldown: lerp(900,600) ticks (manual, applied on successful up ≥10 ticks)
   Exp: +0.01 on successful release"
-  (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+  (:require [clojure.string :as str]
+            [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))
 
-(def ^:private min-time 10)
-(def ^:private max-time 40)
-(def ^:private max-tolerant-time 100)
+(def ^:private body-intensify-skill-id :body-intensify)
 
-(def ^:private base-effects
-  [{:effect :speed        :max-amplifier 3}
-   {:effect :jump-boost   :max-amplifier 1}
-   {:effect :regeneration :max-amplifier 1}
-   {:effect :strength     :max-amplifier 1}
-   {:effect :resistance   :max-amplifier 1}])
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double body-intensify-skill-id field-id))
 
-(defn- get-probability [ct] (/ (- (double ct) 10.0) 18.0))
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int body-intensify-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double body-intensify-skill-id field-id exp))
+
+(defn- min-time [] (cfg-int :charge.min-ticks))
+(defn- max-time [] (cfg-int :charge.max-ticks))
+(defn- max-tolerant-time [] (cfg-int :charge.max-tolerant-ticks))
+
+(defn- parse-effect-entry [entry]
+  (let [[effect-name amp-text] (str/split (str entry) #":" 2)
+        effect-name (str/trim (or effect-name ""))]
+    (when-not (str/blank? effect-name)
+      {:effect (keyword effect-name)
+       :max-amplifier (max 0 (try
+                               (Integer/parseInt (str/trim (or amp-text "0")))
+                               (catch Exception _ 0)))})))
+
+(defn- base-effects []
+  (vec (keep parse-effect-entry
+             (skill-config/tunable-string-list body-intensify-skill-id
+                                               :effect.available-effects))))
+
+(defn- get-probability [ct]
+  (/ (- (double ct) (cfg-double :effect.probability-offset-ticks))
+     (cfg-double :effect.probability-divisor)))
 
 (defn- get-buff-time [ct exp]
-  (int (* (+ 1.0 (rand)) (double ct) (bal/lerp 1.5 2.5 exp))))
+  (int (* (+ 1.0 (rand)) (double ct) (cfg-lerp :effect.duration-multiplier exp))))
 
-(defn- get-hunger-buff-time [ct] (int (* 1.25 (double ct))))
+(defn- get-hunger-buff-time [ct]
+  (int (* (cfg-double :effect.hunger-multiplier) (double ct))))
 
 (defn- get-buff-level [ct] (int (Math/floor (get-probability ct))))
 
@@ -40,7 +62,7 @@
           duration        (get-buff-time charge-ticks exp)
           hunger-duration (get-hunger-buff-time charge-ticks)
           level           (get-buff-level charge-ticks)
-          shuffled        (vec (shuffle base-effects))]
+          shuffled        (vec (shuffle (base-effects)))]
       (loop [p prob picked 0]
         (when (> p 0.0)
           (let [roll (rand)]
@@ -54,7 +76,7 @@
               (recur (- p 1.0) picked)))))
       (potion-effects/apply-potion-effect!
        potion-effects/*potion-effects*
-       player-id :hunger hunger-duration 2))))
+        player-id :hunger hunger-duration (cfg-int :effect.hunger-amplifier)))))
 
 (defskill! body-intensify
   :id          :body-intensify
@@ -68,28 +90,33 @@
   :ctrl-id     :body-intensify
   :pattern     :charge-window
   :cooldown    {:mode :manual}
-  :cost        {:down {:overload (bal/by-exp 200.0 120.0)}
+  :cost        {:down {:overload (fn [{:keys [exp]}]
+                                  (cfg-lerp :cost.down.overload (double (or exp 0.0))))}
                 :tick {:cp (fn [{:keys [hold-ticks exp]}]
-                             (when (<= (long (or hold-ticks 0)) max-time)
-                               (bal/lerp 20.0 15.0 (double (or exp 0.0)))))}}
+                             (when (<= (long (or hold-ticks 0)) (max-time))
+                               (cfg-lerp :cost.tick.cp (double (or exp 0.0)))))}}
   :fx          {:end {:topic   :body-intensify/fx-end
                       :payload (fn [{:keys [hold-ticks]}]
-                                 {:performed? (>= (long (or hold-ticks 0)) min-time)})}}
+                                 {:performed? (>= (long (or hold-ticks 0)) (min-time))})}}
   :actions
   {:cost-fail! (fn [{:keys [ctx-id]}]
                  (ctx/terminate-context! ctx-id nil))
    :tick!      (fn [{:keys [player-id ctx-id hold-ticks exp]}]
-                 (enforce-overload-floor! player-id (bal/lerp 200.0 120.0 (double (or exp 0.0))))
-                 (when (>= (long (or hold-ticks 0)) max-tolerant-time)
+                 (enforce-overload-floor! player-id
+                                          (cfg-lerp :cost.down.overload (double (or exp 0.0))))
+                 (when (>= (long (or hold-ticks 0)) (max-tolerant-time))
                    (ctx/terminate-context! ctx-id nil)))
    :up!        (fn [{:keys [player-id hold-ticks exp]}]
                  (let [ticks (long (or hold-ticks 0))]
-                   (when (>= ticks min-time)
-                     (let [effective-tick (min ticks max-time)
+                   (when (>= ticks (min-time))
+                     (let [effective-tick (min ticks (max-time))
                            exp*           (double (or exp 0.0))]
                        (apply-body-intensify-buffs! player-id effective-tick exp*)
-                       (skill-effects/add-skill-exp! player-id :body-intensify 0.01)
-                       (skill-effects/set-main-cooldown! player-id :body-intensify
-                                                         (int (Math/round (double (bal/lerp 900.0 600.0 exp*)))))))))}
+                       (skill-effects/add-skill-exp! player-id body-intensify-skill-id
+                                                     (cfg-double :progression.exp-use))
+                       (skill-effects/set-main-cooldown! player-id body-intensify-skill-id
+                                                         (skill-config/lerp-int body-intensify-skill-id
+                                                                                :cooldown.ticks
+                                                                                exp*))))))}
   :prerequisites [{:skill-id :arc-gen         :min-exp 1.0}
                   {:skill-id :current-charging :min-exp 1.0}])

@@ -10,7 +10,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -22,11 +22,22 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+(def ^:private mine-detect-skill-id :mine-detect)
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double mine-detect-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int mine-detect-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double mine-detect-skill-id field-id exp))
+
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :mine-detect))
+  (skill-effects/skill-exp player-id mine-detect-skill-id))
 
 (defn- scan-range [exp]
-  (bal/lerp 15.0 30.0 exp))
+  (cfg-lerp :targeting.range exp))
 
 (defn- ore-block? [block-id]
   (when block-id
@@ -63,7 +74,9 @@
       (when potion-effects/*potion-effects*
         (potion-effects/apply-potion-effect!
           potion-effects/*potion-effects*
-          player-id :blindness 100 0))
+          player-id :blindness
+          (cfg-int :effect.blindness-duration-ticks)
+          (cfg-int :effect.blindness-amplifier)))
       ;; Scan for ores and send to client
       (let [ores (when world-effects/*world-effects*
                    (world-effects/find-blocks-in-radius
@@ -85,7 +98,8 @@
                         [:ability-data :level]
                         1)
                                4))})
-        (skill-effects/add-skill-exp! player-id :mine-detect 0.003)
+        (skill-effects/add-skill-exp! player-id mine-detect-skill-id
+                    (cfg-double :progression.exp-cast))
         (log/debug "MineDetect: found" (count ores) "ores in range" range)))
     (catch Exception e
       (log/warn "MineDetect perform! failed:" (ex-message e)))))
@@ -106,10 +120,12 @@
   :ctrl-id        :mine-detect
   :pattern        :instant
   :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (bal/lerp 600.0 400.0 (skill-exp player-id)))
+                                      (cfg-lerp :cost.down.cp (skill-exp player-id)))
                           :overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 80.0 50.0 (skill-exp player-id)))}}
+                                      (cfg-lerp :cost.down.overload (skill-exp player-id)))} }
   :cooldown-ticks (fn [{:keys [player-id]}]
-                    (int (bal/lerp 200.0 100.0 (skill-exp player-id))))
+                    (skill-config/lerp-int mine-detect-skill-id
+                                           :cooldown.ticks
+                                           (skill-exp player-id)))
   :actions        {:perform! mine-detect-perform!}
   :prerequisites  [{:skill-id :mag-manip :min-exp 1.0}])

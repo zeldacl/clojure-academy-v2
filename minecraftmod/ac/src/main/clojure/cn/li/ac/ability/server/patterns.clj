@@ -24,6 +24,18 @@
   [spec evt stage]
   (effect/run-stage! spec evt stage))
 
+(defn- resolve-event-value
+  [value evt]
+  (if (fn? value)
+    (value evt)
+    value))
+
+(defn- resolved-state
+  [spec evt]
+  (into {}
+        (map (fn [[k value]] [k (resolve-event-value value evt)]))
+        (or (:state spec) {})))
+
 (defn- emit-fx!
   [spec evt stage]
   (skill-effects/emit-fx! spec evt stage))
@@ -58,7 +70,7 @@
   [spec {:keys [ctx-id] :as evt}]
   (ensure-skill-state! ctx-id)
   (let [init (merge {:charge-ticks 0}
-                    (or (:state spec) {}))]
+                    (resolved-state spec evt))]
     (ctx/update-context! ctx-id assoc :skill-state init))
   (run-stage-ops! spec evt :down)
   (emit-fx! spec evt :start))
@@ -70,7 +82,9 @@
       (cost-fail! spec evt :tick)
       (ctx/terminate-context! ctx-id nil))
     (when-let [ctx (ctx/get-context ctx-id)]
-      (let [max-charge (long (or (get-in spec [:state :max-charge]) Long/MAX_VALUE))
+      (let [max-charge (long (or (get-in ctx [:skill-state :max-charge])
+                 (resolve-event-value (get-in spec [:state :max-charge]) evt)
+                 Long/MAX_VALUE))
             prev (long (or (get-in ctx [:skill-state :charge-ticks]) 0))
             next (min max-charge (inc prev))]
         (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next)

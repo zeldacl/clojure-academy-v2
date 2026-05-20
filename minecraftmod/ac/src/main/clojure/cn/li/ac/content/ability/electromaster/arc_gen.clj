@@ -17,7 +17,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -28,13 +28,24 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private arc-entity-id "my_mod:entity_arc")
+(def ^:private arc-gen-skill-id :arc-gen)
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :arc-gen))
+  (skill-effects/skill-exp player-id arc-gen-skill-id))
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double arc-gen-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double arc-gen-skill-id field-id exp))
+
+(defn- cfg-progression [field-id exp]
+  (let [[base scale] (skill-config/tunable-double-list arc-gen-skill-id field-id)]
+    (+ (double base) (* (double scale) (double exp)))))
 
 (defn- try-ignite-block!
   "Attempt to ignite block at position with given probability."
@@ -70,11 +81,13 @@
 (defn- perform-arc-gen! [{:keys [player-id ctx-id player]}]
   (try
     (let [exp           (skill-exp player-id)
-          damage        (bal/lerp 5.0 9.0 exp)
-          range         (bal/lerp 6.0 15.0 exp)
-          ignite-prob   (bal/lerp 0.0 0.6 exp)
-          fish-prob     (if (> exp 0.5) 0.1 0.0)
-          can-stun?     (>= exp 1.0)
+          damage        (cfg-lerp :combat.damage exp)
+          range         (cfg-lerp :targeting.range exp)
+          ignite-prob   (cfg-lerp :effect.ignite-probability exp)
+          fish-prob     (if (> exp (cfg-double :effect.fishing-exp-threshold))
+                          (skill-config/probability arc-gen-skill-id :effect.fishing-probability)
+                          0.0)
+          can-stun?     (>= exp (cfg-double :effect.stun-exp-threshold))
           world-id      (geom/world-id-of player-id)
           eye           (geom/eye-pos player-id)
           look-vec      (when raycast/*raycast*
@@ -113,8 +126,8 @@
                                                     :lightning)
                 (when can-stun?
                   (apply-stun! world-id entity-uuid))
-                (skill-effects/add-skill-exp! player-id :arc-gen
-                                              (+ 0.0048 (* 0.0024 exp)))))
+                (skill-effects/add-skill-exp! player-id arc-gen-skill-id
+                                              (cfg-progression :progression.exp-entity exp))))
 
             (= hit-type :block)
             (let [block-x (int (:block-x hit-result))
@@ -122,11 +135,12 @@
                   block-z (int (:block-z hit-result))]
               (try-ignite-block! world-id block-x block-y block-z ignite-prob)
               (try-fishing! world-id block-x block-y block-z fish-prob player-id)
-              (skill-effects/add-skill-exp! player-id :arc-gen
-                                            (+ 0.0018 (* 0.0009 exp))))
+              (skill-effects/add-skill-exp! player-id arc-gen-skill-id
+                                            (cfg-progression :progression.exp-block exp)))
 
             :else
-            (skill-effects/add-skill-exp! player-id :arc-gen 0.001)))))
+            (skill-effects/add-skill-exp! player-id arc-gen-skill-id
+                                          (cfg-double :progression.exp-miss))))))
     (catch Exception e
       (log/warn "Arc Gen perform! failed:" (ex-message e)))))
 
@@ -150,10 +164,10 @@
   :ctrl-id        :arc-gen
   :pattern        :instant
   :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (bal/lerp 30.0 70.0 (skill-exp player-id)))
+                                      (cfg-lerp :cost.down.cp (skill-exp player-id)))
                           :overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 18.0 11.0 (skill-exp player-id)))}}
+                                      (cfg-lerp :cost.down.overload (skill-exp player-id)))}}
   :cooldown-ticks (fn [{:keys [player-id]}]
-                    (int (bal/lerp 15.0 5.0 (skill-exp player-id))))
+                    (skill-config/lerp-int arc-gen-skill-id :cooldown.ticks (skill-exp player-id)))
   :actions        {:perform! arc-gen-perform!}
   :prerequisites  [])

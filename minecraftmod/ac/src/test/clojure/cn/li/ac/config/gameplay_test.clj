@@ -7,12 +7,9 @@
 (deftest gameplay-default-branch-test
   (try
     (gameplay/init-config!)
-    (is (true? (gameplay/attack-player-enabled?)))
-    (is (true? (gameplay/destroy-blocks-enabled?)))
-    (is (= 1800 (gameplay/get-init-cp 0)))
-    (is (= 900 (gameplay/get-add-cp 1)))
-    (is (true? (boolean (gameplay/is-metal-block? "minecraft:iron_block"))))
-    (is (false? (boolean (gameplay/is-metal-block? "minecraft:dirt"))))
+    (is (false? (gameplay/use-mouse-wheel-enabled?)))
+    (is (true? (gameplay/give-cloud-terminal-enabled?)))
+    (is (= "Microsoft YaHei" (gameplay/get-font)))
     (finally
       (config-reg/set-config-values! config-common/gameplay-domain gameplay/default-values))))
 
@@ -21,17 +18,12 @@
     (gameplay/init-config!)
     (config-reg/set-config-values!
      config-common/gameplay-domain
-     {:attack-player false
-      :destroy-blocks false
-      :init-cp [100 101 102 103 104 105]
-      :add-cp [200 201 202 203 204 205]
-      :normal-metal-blocks ["custom:metal"]})
-    (is (false? (gameplay/attack-player-enabled?)))
-    (is (false? (gameplay/destroy-blocks-enabled?)))
-    (is (= 102 (gameplay/get-init-cp 2)))
-    (is (= 203 (gameplay/get-add-cp 3)))
-    (is (true? (gameplay/is-metal-block? "custom:metal")))
-    (is (false? (gameplay/is-metal-block? "custom:stone")))
+     {:use-mouse-wheel true
+      :give-cloud-terminal false
+      :font "Inter"})
+    (is (true? (gameplay/use-mouse-wheel-enabled?)))
+    (is (false? (gameplay/give-cloud-terminal-enabled?)))
+    (is (= "Inter" (gameplay/get-font)))
     (finally
       (config-reg/set-config-values! config-common/gameplay-domain gameplay/default-values))))
 
@@ -47,16 +39,12 @@
       (gameplay/init-config!)
       (config-reg/set-config-values!
        config-common/gameplay-domain
-       {:cp-recover-speed 0
-        :overload-recover-speed -1
-        :damage-scale 0})
+       {:font 42})
       (try
         (gameplay/validate-config!)
         (is false)
         (catch clojure.lang.ExceptionInfo e
           (let [errors (:errors (ex-data e))]
-            (is (some #(= % "cp-recover-speed must be positive") errors))
-            (is (some #(= % "overload-recover-speed must be positive") errors))
-            (is (some #(= % "damage-scale must be positive") errors)))))
+            (is (some #(= % "font must be a string") errors)))))
       (finally
         (config-reg/set-config-values! config-common/gameplay-domain gameplay/default-values)))))

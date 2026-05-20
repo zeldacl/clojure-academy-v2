@@ -1,35 +1,29 @@
 (ns cn.li.ac.content.ability.skill-specs-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.registry :as skill]
-            [cn.li.ac.content.ability.electromaster.arc-gen]
-            [cn.li.ac.content.ability.electromaster.body-intensify]
-            [cn.li.ac.content.ability.electromaster.mine-detect]
-            [cn.li.ac.content.ability.electromaster.thunder-clap]
-            [cn.li.ac.content.ability.meltdowner.electron-bomb]
-            [cn.li.ac.content.ability.meltdowner.mine-ray-basic]
-            [cn.li.ac.content.ability.meltdowner.mine-ray-luck]
-            [cn.li.ac.content.ability.meltdowner.rad-intensify]
-            [cn.li.ac.content.ability.teleporter.flashing]
-            [cn.li.ac.content.ability.teleporter.flesh-ripping]
-            [cn.li.ac.content.ability.teleporter.mark-teleport]
-            [cn.li.ac.content.ability.teleporter.shift-teleport]
-            [cn.li.ac.content.ability.vecmanip.directed-shock]
-            [cn.li.ac.content.ability.vecmanip.vec-accel]
-            [cn.li.ac.content.ability.vecmanip.vec-deviation]
-            [cn.li.ac.content.ability.vecmanip.vec-reflection]))
+            [cn.li.ac.content.ability]))
 
-(def ^:private sampled-skill-ids
-  [:arc-gen :body-intensify :mine-detect :thunder-clap
-   :electron-bomb :mine-ray-basic :mine-ray-luck :rad-intensify
-   :flashing :flesh-ripping :mark-teleport :shift-teleport
-   :directed-shock :vec-accel :vec-deviation :vec-reflection])
+(def ^:private configured-skill-ids
+  skill-config/all-skill-ids)
 
-(deftest representative-skill-specs-contract-test
-  (doseq [sid sampled-skill-ids]
+(deftest configured-skill-specs-contract-test
+  (is (= 38 (count configured-skill-ids)))
+  (is (= (set configured-skill-ids)
+         (set (map :id (filter #(skill-config/skill-configured? (:id %))
+                               (skill/list-skills))))))
+  (doseq [sid configured-skill-ids]
     (let [spec (skill/get-skill sid)]
       (is (some? spec) (str sid " should be registered"))
       (is (= sid (:id spec)))
       (is (keyword? (:category-id spec)))
+      (is (boolean? (:enabled spec)))
+      (is (boolean? (:controllable? spec)))
+      (is (<= 1 (:level spec) 5))
+      (is (number? (:damage-scale spec)))
+      (is (number? (:cp-consume-speed spec)))
+      (is (number? (:overload-consume-speed spec)))
+      (is (number? (:exp-incr-speed spec)))
       (is (map? (:actions spec)))
       (is (map? (:cooldown spec)))
       (is (or (nil? (:cost spec)) (map? (:cost spec))) (str sid " :cost shape"))

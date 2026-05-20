@@ -14,7 +14,6 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -27,6 +26,8 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+(def ^:private shift-teleport-skill-id :shift-teleport)
+
 (defn- raycast-block-target
   "Raycast for block target at given range, returns {:x :y :z} or nil."
   [player-id max-range]
@@ -36,7 +37,8 @@
       (when (and player-pos look-vec)
         (let [world-id (geom/world-id-of player-id)
               eye-x (+ (double (:x player-pos)) 0.0)
-              eye-y (+ (double (:y player-pos)) 1.6)
+              eye-y (+ (double (:y player-pos))
+                       (helper/cfg-double shift-teleport-skill-id :targeting.eye-height))
               eye-z (+ (double (:z player-pos)) 0.0)]
           (raycast/raycast-blocks
             raycast/*raycast*
@@ -63,8 +65,8 @@
 (defn shift-tp-up!
   [{:keys [player-id ctx-id]}]
   (try
-    (let [exp     (helper/skill-exp player-id :shift-teleport)
-          range   (bal/lerp 20.0 35.0 exp)
+        (let [exp     (helper/skill-exp player-id shift-teleport-skill-id)
+          range   (helper/cfg-lerp shift-teleport-skill-id :targeting.range exp)
           target  (raycast-block-target player-id range)]
       (if target
         (let [world-id (geom/world-id-of player-id)
@@ -72,9 +74,11 @@
               dest-y   (double (:y target))
               dest-z   (+ (double (:z target)) 0.5)]
           (when (helper/teleport-to! player-id world-id dest-x dest-y dest-z)
-            (skill-effects/add-skill-exp! player-id :shift-teleport 0.002)
-            (let [cd (int (bal/lerp 25.0 15.0 exp))]
-              (skill-effects/set-main-cooldown! player-id :shift-teleport cd))
+            (skill-effects/add-skill-exp! player-id shift-teleport-skill-id
+                                          (helper/cfg-double shift-teleport-skill-id
+                                                             :progression.exp-success))
+            (let [cd (helper/cfg-lerp-int shift-teleport-skill-id :cooldown.ticks exp)]
+              (skill-effects/set-main-cooldown! player-id shift-teleport-skill-id cd))
             (ctx/ctx-send-to-client! ctx-id :shift-tp/fx-perform
                                      {:x dest-x :y dest-y :z dest-z})))
         (log/debug "ShiftTeleport: no block target")))
@@ -103,11 +107,13 @@
   :overload-consume-speed 0.0
   :pattern        :release-cast
   :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (bal/lerp 120.0 80.0
-                                                (helper/skill-exp player-id :shift-teleport)))
+                                      (helper/cfg-lerp shift-teleport-skill-id
+                                                       :cost.down.cp
+                                                       (helper/skill-exp player-id shift-teleport-skill-id)))
                           :overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 50.0 35.0
-                                                (helper/skill-exp player-id :shift-teleport)))}}
+                                      (helper/cfg-lerp shift-teleport-skill-id
+                                                       :cost.down.overload
+                                                       (helper/skill-exp player-id shift-teleport-skill-id)))}}
   :cooldown       {:mode :manual}
   :actions        {:down!  shift-tp-down!
                    :tick!  shift-tp-tick!

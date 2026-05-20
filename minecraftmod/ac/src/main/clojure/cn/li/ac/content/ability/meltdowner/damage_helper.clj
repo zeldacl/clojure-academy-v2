@@ -5,7 +5,6 @@
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]))
 
-(def ^:private mark-duration-ms 3000)
 (defonce ^:private marks (atom {}))
 
 (defn- now-ms []
@@ -20,7 +19,7 @@
 (defn mark-target!
   [attacker-id target-id]
   (when (and attacker-id target-id (learned-rad-intensify? attacker-id))
-    (let [expire (+ (now-ms) mark-duration-ms)
+    (let [expire (+ (now-ms) (rad/mark-duration-ms))
           mark-rate (rad/rate attacker-id)]
       (swap! marks assoc target-id {:expire-at expire :rate mark-rate}))))
 

@@ -44,8 +44,12 @@
 	[{:keys [player-id] :as task}]
 	(schedule-task! player-id (:delay-ticks task) (assoc task :kind :scatter-bomb-beam)))
 
+(defn- beam-param
+	[beam key default]
+	(double (or (get beam key) default)))
+
 (defn- run-electron-bomb-beam!
-	[{:keys [player-id ctx-id world-id eye look-dir damage]}]
+	[{:keys [player-id ctx-id world-id eye look-dir damage beam exp-gain]}]
 	(try
 		(let [result (effect/run-op!
 									 {:player-id player-id
@@ -53,17 +57,18 @@
 										:world-id  world-id
 										:eye-pos   eye
 										:look-dir  look-dir}
-									 [:beam {:radius          0.3
-													 :query-radius    20.0
-													 :step            0.8
-													 :max-distance    30.0
-													 :visual-distance 28.0
+									 [:beam {:radius          (beam-param beam :radius 0.3)
+												 :query-radius    (beam-param beam :query-radius 20.0)
+												 :step            (beam-param beam :step 0.8)
+												 :max-distance    (beam-param beam :max-distance 30.0)
+												 :visual-distance (beam-param beam :visual-distance 28.0)
 													 :damage          (double (or damage 0.0))
 													 :damage-type     :magic
 													 :break-blocks?   false
 													 :block-energy    0.0
 													 :fx-topic        nil}])
-					visual-distance (double (or (get-in result [:beam-result :visual-distance]) 28.0))
+					visual-distance (double (or (get-in result [:beam-result :visual-distance])
+																				 (beam-param beam :visual-distance 28.0)))
 					end-pos (geom/v+ eye (geom/v* (geom/vnorm look-dir) visual-distance))]
 			(ctx-mgr/push-channel-to-player! player-id ctx-id :electron-bomb/fx-beam
 																			 {:mode :perform
@@ -71,7 +76,7 @@
 																				:end end-pos
 																				:hit-distance visual-distance})
 			(when (get-in result [:beam-result :performed?])
-				(skill-effects/add-skill-exp! player-id :electron-bomb 0.003)))
+				(skill-effects/add-skill-exp! player-id :electron-bomb (double (or exp-gain 0.003)))))
 		(catch Exception e
 			(log/warn "Delayed ElectronBomb settle failed:" (ex-message e)))))
 
@@ -94,7 +99,7 @@
 			(log/warn "Delayed ElectronMissile settle failed:" (ex-message e)))))
 
 (defn- run-scatter-bomb-beam!
-	[{:keys [player-id ctx-id world-id eye look-dir damage]}]
+	[{:keys [player-id ctx-id world-id eye look-dir damage beam]}]
 	(try
 		(let [result (effect/run-op!
 										 {:player-id player-id
@@ -102,17 +107,18 @@
 											:world-id  world-id
 											:eye-pos   eye
 											:look-dir  look-dir}
-										 [:beam {:radius          0.3
-													 :query-radius    20.0
-													 :step            0.8
-													 :max-distance    25.0
-													 :visual-distance 23.0
+										 [:beam {:radius          (beam-param beam :radius 0.3)
+												 :query-radius    (beam-param beam :query-radius 20.0)
+												 :step            (beam-param beam :step 0.8)
+												 :max-distance    (beam-param beam :max-distance 25.0)
+												 :visual-distance (beam-param beam :visual-distance 23.0)
 													 :damage          (double (or damage 0.0))
 													 :damage-type     :magic
 													 :break-blocks?   false
 													 :block-energy    0.0
 													 :fx-topic        nil}])
-				visual-distance (double (or (get-in result [:beam-result :visual-distance]) 23.0))
+				visual-distance (double (or (get-in result [:beam-result :visual-distance])
+																	 (beam-param beam :visual-distance 23.0)))
 				end-pos (geom/v+ eye (geom/v* (geom/vnorm look-dir) visual-distance))]
 			(ctx-mgr/push-channel-to-player! player-id ctx-id :scatter-bomb/fx-beam
 															 {:start eye

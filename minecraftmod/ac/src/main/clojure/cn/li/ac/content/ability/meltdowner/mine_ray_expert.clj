@@ -11,7 +11,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]
@@ -21,20 +21,33 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+(def ^:private mine-ray-expert-skill-id :mine-ray-expert)
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double mine-ray-expert-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int mine-ray-expert-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double mine-ray-expert-skill-id field-id exp))
+
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :mine-ray-expert))
+  (skill-effects/skill-exp player-id mine-ray-expert-skill-id))
 
 (defn- make-cfg [player-id]
-  {:range       (bal/lerp 16.0 22.0 (skill-exp player-id))
-   :break-speed (bal/lerp 0.4 0.8 (skill-exp player-id))
-   :skill-id    :mine-ray-expert
-   :lucky?      false})
+  (let [exp (skill-exp player-id)]
+    {:range       (cfg-lerp :targeting.range exp)
+     :break-speed (cfg-lerp :mining.break-speed exp)
+     :skill-id    mine-ray-expert-skill-id
+     :exp-block   (cfg-double :progression.exp-block)
+     :lucky?      false}))
 
 ;; ---------------------------------------------------------------------------
 ;; Actions
 ;; ---------------------------------------------------------------------------
 
-(defn mine-ray-expert-down!  [evt] (base/mining-ray-down!  :mine-ray-expert evt))
+(defn mine-ray-expert-down!  [evt] (base/mining-ray-down!  mine-ray-expert-skill-id evt))
 (defn mine-ray-expert-tick!  [evt] (base/mining-ray-tick!  (make-cfg (:player-id evt)) evt))
 (defn mine-ray-expert-up!    [evt] (base/mining-ray-up!    {} evt))
 (defn mine-ray-expert-abort! [evt] (base/mining-ray-abort! {} evt))
@@ -57,10 +70,10 @@
   :overload-consume-speed 0.0
   :pattern        :hold-channel
   :cost           {:down {:overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 80.0 55.0 (skill-exp player-id)))}
+                (cfg-lerp :cost.down.overload (skill-exp player-id)))}
                    :tick {:cp (fn [{:keys [player-id]}]
-                                (bal/lerp 18.0 12.0 (skill-exp player-id)))}}
-  :cooldown-ticks 5
+              (cfg-lerp :cost.tick.cp (skill-exp player-id)))} }
+    :cooldown-ticks (fn [_] (cfg-int :cooldown.ticks))
   :actions        {:down!  mine-ray-expert-down!
                    :tick!  mine-ray-expert-tick!
                    :up!    mine-ray-expert-up!

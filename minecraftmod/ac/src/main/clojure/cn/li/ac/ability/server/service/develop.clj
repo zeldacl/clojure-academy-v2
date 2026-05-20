@@ -13,7 +13,6 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.server.service.learning :as learning]
             [cn.li.ac.ability.server.service.resource :as svc-res]
-            [cn.li.ac.ability.config :as cfg]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================

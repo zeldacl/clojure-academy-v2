@@ -36,10 +36,10 @@
 
 (defn mining-ray-tick!
   "Tick handler for mining ray.
-  cfg: {:range double :break-speed double :skill-id keyword :lucky? boolean}"
+  cfg: {:range double :break-speed double :skill-id keyword :lucky? boolean :exp-block double}"
   [cfg {:keys [player-id ctx-id]}]
   (try
-    (let [{:keys [range break-speed skill-id lucky?]} cfg
+    (let [{:keys [range break-speed skill-id lucky? exp-block]} cfg
           ctx-data  (ctx/get-context ctx-id)
           world-id  (geom/world-id-of player-id)
           eye       (geom/eye-pos player-id)
@@ -78,7 +78,7 @@
                 ;; Block ready to break
                 (when (bm/can-break-block? bm/*block-manipulation* player-id world-id hx hy hz)
                   (bm/break-block! bm/*block-manipulation* player-id world-id hx hy hz true)
-                  (skill-effects/add-skill-exp! player-id skill-id 0.001)
+                  (skill-effects/add-skill-exp! player-id skill-id (double (or exp-block 0.001)))
                   (ctx/update-context! ctx-id assoc :skill-state
                                        {:target-x nil :target-y nil :target-z nil :countdown 0.0}))
                 ;; Still counting down

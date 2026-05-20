@@ -6,7 +6,7 @@
   Cooldown: lerp(80,50) ticks (manual)
   Exp: +0.002 per use"
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.player-motion :as player-motion]
@@ -14,12 +14,28 @@
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private MAX-VELOCITY 2.5)
-(def ^:private MAX-CHARGE 20)
+(def ^:private vec-accel-skill-id :vec-accel)
+
+(defn- exp01 [exp]
+  (max 0.0 (min 1.0 (double (or exp 0.0)))))
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double vec-accel-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int vec-accel-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double vec-accel-skill-id field-id (exp01 exp)))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int vec-accel-skill-id field-id (exp01 exp)))
 
 (defn- calculate-speed [charge-ticks]
-  (let [prog (bal/lerp 0.4 1.0 (bal/clamp01 (/ (double charge-ticks) MAX-CHARGE)))]
-    (* (Math/sin prog) MAX-VELOCITY)))
+  (let [max-charge (cfg-int :charge.max-ticks)
+        progress (exp01 (/ (double charge-ticks) (double max-charge)))
+        prog (skill-config/lerp-double vec-accel-skill-id :movement.speed-progress progress)]
+    (* (Math/sin prog) (cfg-double :movement.max-velocity))))
 
 (defn- get-player-position [player-id]
   (or (when-let [tp teleportation/*teleportation*]
@@ -34,7 +50,7 @@
       (some? (raycast/raycast-blocks raycast/*raycast*
                                      world-id
                                      (double (:x pos)) (double (:y pos)) (double (:z pos))
-                                     0 -1 0 2.0)))))
+                                     0 -1 0 (cfg-double :targeting.ground-check-distance))))))
 
 (defn- compute-init-vel [look-dir charge-ticks]
   (let [look-x   (double (:x look-dir))
@@ -43,7 +59,7 @@
         horiz-len (Math/sqrt (+ (* look-x look-x) (* look-z look-z)))
         safe-h    (max 1.0e-8 horiz-len)
         cur-pitch (Math/atan2 (- look-y) safe-h)
-        new-pitch (+ cur-pitch -0.174533)
+        new-pitch (+ cur-pitch (cfg-double :movement.pitch-offset-radians))
         cos-p     (Math/cos new-pitch)
         sin-p     (Math/sin new-pitch)
         hx        (/ look-x safe-h)
@@ -65,12 +81,12 @@
   :ctrl-id     :vec-accel
   :pattern     :hold-charge-release
   :cooldown    {:mode :manual}
-  :state       {:max-charge MAX-CHARGE}
-  :cost        {:up {:cp       (fn [{:keys [exp]}] (bal/lerp 120.0 80.0 (bal/clamp01 exp)))
-                     :overload (fn [{:keys [exp]}] (bal/lerp 30.0  15.0 (bal/clamp01 exp)))}}
+  :state       {:max-charge (fn [_] (cfg-int :charge.max-ticks))}
+  :cost        {:up {:cp       (fn [{:keys [exp]}] (cfg-lerp :cost.up.cp exp))
+                     :overload (fn [{:keys [exp]}] (cfg-lerp :cost.up.overload exp))}}
   :actions
   {:tick!    (fn [{:keys [player-id ctx-id charge-ticks exp]}]
-               (let [can-perform? (or (>= (double exp) 0.5) (check-ground-raycast player-id))
+         (let [can-perform? (or (>= (double (or exp 0.0)) (cfg-double :targeting.groundless-exp-threshold)) (check-ground-raycast player-id))
                      look-dir     (when raycast/*raycast*
                                     (raycast/get-player-look-vector raycast/*raycast* player-id))
                      init-vel     (when look-dir (compute-init-vel look-dir (long (or charge-ticks 0))))]
@@ -95,8 +111,8 @@
                            (when teleportation/*teleportation*
                              (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
                            (skill-effects/set-main-cooldown! player-id :vec-accel
-                                                             (int (bal/lerp 80.0 50.0 (bal/clamp01 exp))))
-                           (skill-effects/add-skill-exp! player-id :vec-accel 0.002)
+                                                             (cfg-lerp-int :cooldown.ticks exp))
+                           (skill-effects/add-skill-exp! player-id :vec-accel (cfg-double :progression.exp-use))
                            (ctx/update-context! ctx-id update :skill-state merge
                                                 {:performed? true :final-vel {:x x :y y :z z}})
                            (log/debug "VecAccel launched" x y z))

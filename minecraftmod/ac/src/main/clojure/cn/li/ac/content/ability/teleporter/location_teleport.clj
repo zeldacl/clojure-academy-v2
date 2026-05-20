@@ -13,7 +13,6 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -24,33 +23,45 @@
             [cn.li.mcmod.network.server :as net-srv]
             [cn.li.mcmod.hooks.catalog :as catalog]
             [clojure.string :as str]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]))
 
-(def ^:private overload-cost 240.0)
-(def ^:private teleport-radius 5.0)
-(def ^:private max-location-name-length 16)
+(def ^:private location-teleport-skill-id :location-teleport)
 
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :location-teleport))
+  (skill-effects/skill-exp player-id location-teleport-skill-id))
 
 (defn- can-cross-dimension? [exp]
-  (> (double exp) 0.8))
+  (> (double exp) (helper/cfg-double location-teleport-skill-id
+                                     :targeting.cross-dimension-exp-threshold)))
 
 (defn- norm-name [s]
   (let [trimmed (-> (or s "") str str/trim)]
-    (subs trimmed 0 (min max-location-name-length (count trimmed)))))
+    (subs trimmed 0 (min (helper/cfg-int location-teleport-skill-id
+                                         :ui.max-location-name-length)
+                         (count trimmed)))))
 
 (defn- compute-cp-cost [exp distance cross-dimension?]
-  (let [base (bal/lerp 200.0 150.0 exp)
-        dim-penalty (if cross-dimension? 2.0 1.0)
-        dist-mult (max 8.0 (Math/sqrt (min 800.0 (double distance))))]
+  (let [base (helper/cfg-lerp location-teleport-skill-id :cost.perform.cp-base exp)
+        dim-penalty (if cross-dimension?
+                      (helper/cfg-double location-teleport-skill-id
+                                         :cost.perform.cross-dimension-multiplier)
+                      1.0)
+        dist-mult (max (helper/cfg-double location-teleport-skill-id
+                                          :cost.perform.min-distance-multiplier)
+                       (Math/sqrt (min (helper/cfg-double location-teleport-skill-id
+                                                          :cost.perform.distance-cap)
+                                       (double distance))))]
     (* base dim-penalty dist-mult)))
 
 (defn- compute-cooldown [exp]
-  (int (bal/lerp 30.0 20.0 exp)))
+  (helper/cfg-lerp-int location-teleport-skill-id :cooldown.ticks exp))
 
 (defn- compute-exp-gain [distance]
-  (if (>= (double distance) 200.0) 0.03 0.015))
+  (if (>= (double distance) (helper/cfg-double location-teleport-skill-id
+                                               :progression.long-distance-threshold))
+    (helper/cfg-double location-teleport-skill-id :progression.exp-long)
+    (helper/cfg-double location-teleport-skill-id :progression.exp-short)))
 
 (defn- add-exp! [player-id amount]
   (skill-effects/add-skill-exp! player-id :location-teleport (double amount)))
@@ -74,7 +85,9 @@
         cp (compute-cp-cost exp dist cross-dim?)
         no-exp? (and cross-dim? (not (can-cross-dimension? exp)))
         no-cp? (let [cur-cp (skill-effects/current-cp player-id)]
-                 (< cur-cp (+ overload-cost cp))) ]
+                 (< cur-cp (+ (helper/cfg-double location-teleport-skill-id
+                                                 :cost.perform.overload)
+                              cp))) ]
     (assoc loc
            :distance dist
            :cp-cost cp
@@ -181,9 +194,15 @@
                 can-cross? (or (not cross-dim?) (can-cross-dimension? exp))]
             (cond
               (not can-cross?)
-              {:success? false :error :err-exp :require-exp 0.8 :current-exp exp}
+              {:success? false :error :err-exp
+               :require-exp (helper/cfg-double location-teleport-skill-id
+                                               :targeting.cross-dimension-exp-threshold)
+               :current-exp exp}
 
-              (not (consume-resource! player-id overload-cost cp))
+              (not (consume-resource! player-id
+                                      (helper/cfg-double location-teleport-skill-id
+                                                         :cost.perform.overload)
+                                      cp))
               {:success? false :error :err-cp :cp-cost cp}
 
               :else
@@ -194,7 +213,8 @@
                              (:x dest)
                              (:y dest)
                              (:z dest)
-                             teleport-radius)]
+                             (helper/cfg-double location-teleport-skill-id
+                                                :targeting.teleport-radius))]
                 (if-not (:success result)
                   {:success? false :error :teleport-failed}
                   (do
@@ -202,7 +222,7 @@
                     (add-exp! player-id (compute-exp-gain _dist))
                     (when cross-dim?
                       (ach-dispatcher/trigger-custom-event! player-id "teleporter.ignore_barrier"))
-                    (skill-effects/set-main-cooldown! player-id :location-teleport
+                    (skill-effects/set-main-cooldown! player-id location-teleport-skill-id
                                                        (compute-cooldown exp))
                     {:success? true
                      :name name*
@@ -249,7 +269,8 @@
   :ctrl-id :location-teleport
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks 25
+  :cooldown-ticks (fn [{:keys [player-id]}]
+                    (compute-cooldown (skill-exp player-id)))
   :pattern :release-cast
   :cooldown {:mode :manual}
   :actions {:down! location-teleport-on-key-down

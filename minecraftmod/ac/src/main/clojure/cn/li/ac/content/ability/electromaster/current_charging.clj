@@ -5,7 +5,7 @@
   Cost: overload lerp(65,48) on down; CP lerp(3,7)/tick while charging
   Exp: +0.0001 effective / +0.00003 ineffective per tick"
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.state]
@@ -16,8 +16,17 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private max-distance 15.0)
+(def ^:private current-charging-skill-id :current-charging)
 (def ^:private arc-entity-id "my_mod:entity_arc")
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double current-charging-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double current-charging-skill-id field-id exp))
+
+(defn- targeting-range []
+  (cfg-double :targeting.range))
 
 (defn- main-hand-item [player-id]
   (when interop/*runtime-interop*
@@ -33,11 +42,11 @@
                                            world-id
                                            (double (:x view)) (double (:y view)) (double (:z view))
                                            (double (:look-x view)) (double (:look-y view)) (double (:look-z view))
-                                           max-distance))
+                                           (targeting-range)))
         dist     (when (and hit (number? (:distance hit))) (double (:distance hit)))
-        ray-end  {:x (+ (:x view) (* (:look-x view) (or dist max-distance)))
-                  :y (+ (:y view) (* (:look-y view) (or dist max-distance)))
-                  :z (+ (:z view) (* (:look-z view) (or dist max-distance)))}]
+        ray-end  {:x (+ (:x view) (* (:look-x view) (or dist (targeting-range))))
+                  :y (+ (:y view) (* (:look-y view) (or dist (targeting-range))))
+                  :z (+ (:z view) (* (:look-z view) (or dist (targeting-range))))}]
     (if-not hit
       {:effective? false :charged 0.0 :block-pos nil :ray-end ray-end}
       (let [bx (int (:x hit)) by (int (:y hit)) bz (int (:z hit))
@@ -67,16 +76,17 @@
   :ctrl-id     :current-charging
   :pattern     :charge-window
   :cooldown    {:mode :manual}
-  :cost        {:down {:overload (bal/by-exp 65.0 48.0)}
+  :cost        {:down {:overload (fn [{:keys [exp]}]
+                                  (cfg-lerp :cost.down.overload (double (or exp 0.0))))}
                 :tick {:cp (fn [{:keys [player-id ctx-id exp]}]
                              (let [state (:skill-state (ctx/get-context ctx-id))]
                                (if (and (:is-item state) (nil? (main-hand-item player-id)))
                                  0.0
-                                 (bal/lerp 3.0 7.0 (double (or (:exp state) exp 0.0))))))}}
+                                 (cfg-lerp :cost.tick.cp (double (or (:exp state) exp 0.0))))))}}
   :actions
   {:down!  (fn [{:keys [player-id ctx-id exp cost-ok?]}]
              (let [is-item        (boolean (main-hand-item player-id))
-                   overload-floor (bal/lerp 65.0 48.0 (double exp))]
+         overload-floor (cfg-lerp :cost.down.overload (double exp))]
                (if-not cost-ok?
                  (do (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end {:is-item is-item})
                      (ctx/terminate-context! ctx-id nil))
@@ -88,7 +98,7 @@
              (when-let [{:keys [skill-state]} (ctx/get-context ctx-id)]
                (let [is-item        (boolean (:is-item skill-state))
                      exp            (double (or (:exp skill-state) 0.0))
-                     charge         (Math/floor (bal/lerp 15.0 35.0 exp))
+                   charge         (Math/floor (cfg-lerp :effect.charge-amount exp))
                      overload-floor (double (or (:overload-floor skill-state) 0.0))
                      base-evt       {:player-id player-id :ctx-id ctx-id}
                      {:keys [charge-ticks]} (effect/run-op! base-evt [:charge-tick {}])]
@@ -103,7 +113,9 @@
                        (let [effective? (energy/is-energy-item-supported? stack)]
                          (when effective? (energy/charge-energy-to-item stack charge false))
                          (skill-effects/add-skill-exp! player-id :current-charging
-                                                       (if effective? 0.0001 0.00003))
+                                                       (if effective?
+                                                         (cfg-double :progression.exp-effective)
+                                                         (cfg-double :progression.exp-ineffective)))
                          (ctx/ctx-send-to-client! ctx-id :current-charging/fx-update
                                                   {:is-item true :good? (boolean effective?)
                                                    :charge-ticks charge-ticks}))))
@@ -116,7 +128,9 @@
                        (do (ctx/ctx-send-to-client! ctx-id :current-charging/fx-end {:is-item false})
                            (ctx/terminate-context! ctx-id nil))
                        (do (skill-effects/add-skill-exp! player-id :current-charging
-                                                         (if effective? 0.0001 0.00003))
+                                                         (if effective?
+                                                           (cfg-double :progression.exp-effective)
+                                                           (cfg-double :progression.exp-ineffective)))
                          (when (and player
                               (not is-item)
                               effective?

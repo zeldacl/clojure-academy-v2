@@ -6,7 +6,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
@@ -27,17 +27,32 @@
 (def ^:private accepted-item-ids
   #{"minecraft:iron_ingot" "minecraft:iron_block"})
 
-(def ^:private coin-window-ms        1000)
-(def ^:private coin-active-threshold 0.6)
-(def ^:private coin-perform-threshold 0.7)
-(def ^:private item-charge-ticks     20)
-(def ^:private beam-radius           2.0)
-(def ^:private beam-query-radius     30.0)
-(def ^:private beam-step             0.9)
-(def ^:private beam-max-distance     50.0)
-(def ^:private beam-visual-distance  45.0)
-(def ^:private reflect-distance      15.0)
-(def ^:private reflect-damage        14.0)
+(def ^:private railgun-skill-id :railgun)
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double railgun-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int railgun-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double railgun-skill-id field-id exp))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int railgun-skill-id field-id exp))
+
+(defn- coin-window-ms [] (cfg-int :qte.coin-window-ms))
+(defn- coin-active-threshold [] (cfg-double :qte.coin-active-threshold))
+(defn- coin-perform-threshold [] (cfg-double :qte.coin-perform-threshold))
+(defn- item-charge-ticks [] (cfg-int :charge.item-charge-ticks))
+(defn- reflection-distance [] (cfg-double :reflection.distance))
+(defn- reflection-damage [] (cfg-double :reflection.damage))
+(defn- railgun-exp-gain [reflection-hit?]
+  (cfg-double (if reflection-hit?
+                :progression.exp-reflection-hit
+                :progression.exp-hit)))
+(defn- railgun-cooldown-ticks [exp]
+  (cfg-lerp-int :cooldown.manual-ticks exp))
 
 ;; ---------------------------------------------------------------------------
 ;; Player / item helpers
@@ -68,7 +83,7 @@
       player-id
       [:runtime :railgun :coin-window]
       {:start-ms  now-ms
-       :window-ms coin-window-ms
+       :window-ms (coin-window-ms)
        :source    :coin-item})
     true))
 
@@ -83,8 +98,8 @@
 (defn- qte-status [p]
   {:has-window? true
    :progress    p
-   :active?     (>= p coin-active-threshold)
-   :perform?    (>= p coin-perform-threshold)})
+  :active?     (>= p (coin-active-threshold))
+  :perform?    (>= p (coin-perform-threshold))})
 
 (defn- consume-coin-qte-window! [player-id now-ms]
   (let [win (skill-effects/player-path player-id [:runtime :railgun :coin-window])]
@@ -114,7 +129,8 @@
   (when (toggle-active? target-player-id :vec-reflection)
     (when-let [state (skill-effects/get-player-state target-player-id)]
       (let [exp        (get-in state [:ability-data :skills :vec-reflection :exp] 0.0)
-            consumption (* (double incoming-damage) (bal/lerp 20.0 15.0 exp))
+            consumption (* (double incoming-damage)
+                           (cfg-lerp :reflection.cp-consumption-per-damage exp))
             current-cp (get-in state [:resource-data :cur-cp] 0.0)]
         (>= (double current-cp) (double consumption))))))
 
@@ -127,14 +143,15 @@
         look-vec  (when raycast/*raycast*
                     (raycast/get-player-look-vector raycast/*raycast* reflector-player-id))]
     (when look-vec
-      (let [hit (raycast/raycast-entities raycast/*raycast*
+      (let [max-distance (reflection-distance)
+            hit (raycast/raycast-entities raycast/*raycast*
                                           world-id
                                           (:x start-pos) (:y start-pos) (:z start-pos)
                                           (:dx look-vec) (:dy look-vec) (:dz look-vec)
-                                          reflect-distance)
+                                          max-distance)
             actual-dist (if (= (:hit-type hit) :entity)
-                          (double (or (:distance hit) reflect-distance))
-                          reflect-distance)
+                          (double (or (:distance hit) max-distance))
+                          max-distance)
             dir         {:x (:dx look-vec) :y (:dy look-vec) :z (:dz look-vec)}
             end-pos     (geom/v+ start-pos (geom/v* dir actual-dist))]
         (ctx/ctx-send-to-client! ctx-id :railgun/fx-reflect
@@ -145,7 +162,7 @@
         (when (and (= (:hit-type hit) :entity) entity-damage/*entity-damage*)
           (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
                                               world-id (:uuid hit)
-                                              reflect-damage :magic)
+                                              (reflection-damage) :magic)
           true)))))
 
 ;; ---------------------------------------------------------------------------
@@ -161,7 +178,7 @@
                     (raycast/get-player-look-vector raycast/*raycast* player-id))]
     (if-not look-vec
       {:performed? false}
-      (let [damage   (bal/lerp 60.0 110.0 exp)
+      (let [damage   (cfg-lerp :beam.damage exp)
             result   (effect/run-op!
                        {:player-id       player-id
                         :ctx-id          ctx-id
@@ -170,15 +187,15 @@
                         :look-dir        look-vec
                         :reflect-can-fn  (fn [uuid] (vec-reflection-can-reflect? uuid damage))
                         :reflect-shot-fn (fn [uuid] (perform-reflection-shot! ctx-id uuid))}
-                       [:beam {:radius          beam-radius
-                               :query-radius    beam-query-radius
-                               :step            beam-step
-                               :max-distance    beam-max-distance
-                               :visual-distance beam-visual-distance
+                       [:beam {:radius          (cfg-double :beam.radius)
+                               :query-radius    (cfg-double :beam.query-radius)
+                               :step            (cfg-double :beam.step)
+                               :max-distance    (cfg-double :beam.max-distance)
+                               :visual-distance (cfg-double :beam.visual-distance)
                                :damage          damage
                                :damage-type     :magic
                                :break-blocks?   true
-                               :block-energy    (bal/lerp 900.0 2000.0 exp)
+                               :block-energy    (cfg-lerp :beam.block-energy exp)
                                :fx-topic        :railgun/fx-shot}])]
         (or (:beam-result result) {:performed? false})))))
 
@@ -206,20 +223,20 @@
 
 (defn- down-cost-cp        [{:keys [player-id]}]
   (let [qte (peek-coin-qte-window player-id (System/currentTimeMillis))]
-    (if (:perform? qte) (bal/lerp 200.0 450.0 (skill-exp player-id)) 0.0)))
+    (if (:perform? qte) (cfg-lerp :cost.down.cp (skill-exp player-id)) 0.0)))
 
 (defn- down-cost-overload  [{:keys [player-id]}]
   (let [qte (peek-coin-qte-window player-id (System/currentTimeMillis))]
-    (if (:perform? qte) (bal/lerp 180.0 120.0 (skill-exp player-id)) 0.0)))
+    (if (:perform? qte) (cfg-lerp :cost.down.overload (skill-exp player-id)) 0.0)))
 
 (defn- tick-cost-cp        [{:keys [player-id ctx-id player]}]
   (if (item-charge-ready? ctx-id player)
-    (bal/lerp 200.0 450.0 (skill-exp player-id))
+    (cfg-lerp :cost.tick.cp (skill-exp player-id))
     0.0))
 
 (defn- tick-cost-overload  [{:keys [player-id ctx-id player]}]
   (if (item-charge-ready? ctx-id player)
-    (bal/lerp 180.0 120.0 (skill-exp player-id))
+    (cfg-lerp :cost.tick.overload (skill-exp player-id))
     0.0))
 
 ;; ---------------------------------------------------------------------------
@@ -237,12 +254,12 @@
       (if cost-ok?
         (let [{:keys [performed? reflection-hit? normal-hit-count hit-uuids]} (perform-main-shot! player-id ctx-id exp)]
           (when performed?
-            (skill-effects/add-skill-exp! player-id :railgun (if reflection-hit? 0.01 0.005))
+            (skill-effects/add-skill-exp! player-id :railgun (railgun-exp-gain reflection-hit?))
             (when (and (pos? (long (or normal-hit-count 0)))
                        (creeper-hit? (geom/world-id-of player-id) hit-uuids))
               (ach-dispatcher/trigger-custom-event! player-id "electromaster.attack_creeper"))
             (skill-effects/set-main-cooldown! player-id :railgun
-                                              (int (Math/round (double (bal/lerp 300.0 160.0 exp)))))
+                                              (railgun-cooldown-ticks exp))
             (ctx/update-context! ctx-id assoc :skill-state
                                  {:fired       true
                                   :mode        :performed
@@ -259,7 +276,7 @@
       (ctx/update-context! ctx-id assoc :skill-state
                            {:fired        false
                             :mode         :item-charge
-                            :charge-ticks item-charge-ticks
+                            :charge-ticks (item-charge-ticks)
                             :hit-count    0})
 
       :else
@@ -282,12 +299,12 @@
                         {:keys [performed? reflection-hit? normal-hit-count hit-uuids]}
                         (perform-main-shot! player-id ctx-id exp)]
                     (when performed?
-                      (skill-effects/add-skill-exp! player-id :railgun (if reflection-hit? 0.01 0.005))
+                      (skill-effects/add-skill-exp! player-id :railgun (railgun-exp-gain reflection-hit?))
                       (when (and (pos? (long (or normal-hit-count 0)))
                                  (creeper-hit? (geom/world-id-of player-id) hit-uuids))
                         (ach-dispatcher/trigger-custom-event! player-id "electromaster.attack_creeper"))
                       (skill-effects/set-main-cooldown! player-id :railgun
-                                                        (int (Math/round (double (bal/lerp 300.0 160.0 exp)))))
+                                                        (railgun-cooldown-ticks exp))
                       (ctx/update-context! ctx-id assoc :skill-state
                                            {:fired     true
                                             :mode      :performed

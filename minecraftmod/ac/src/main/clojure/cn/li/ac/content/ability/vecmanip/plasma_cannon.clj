@@ -19,7 +19,7 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -32,25 +32,36 @@
 ;; Scaling helpers (all values from original PlasmaCannon.scala)
 ;; ============================================================
 
-;; lerpf(60, 30, exp) — charge time
-(defn- charge-time [exp] (bal/lerp 60.0 30.0 (bal/clamp01 exp)))
-;; lerpf(18, 25, exp) — CP per tick during charge (scales UP)
-(defn- cp-per-tick [exp] (bal/lerp 18.0 25.0 (bal/clamp01 exp)))
-;; lerpf(500, 400, exp) — overload to maintain
-(defn- overload-keep [exp] (bal/lerp 500.0 400.0 (bal/clamp01 exp)))
-;; lerpf(80, 150, exp) — damage per entity in 10-block radius
-(defn- damage-amount [exp] (bal/lerp 80.0 150.0 (bal/clamp01 exp)))
-;; lerpf(12, 15, exp) — explosion radius
-(defn- explosion-radius [exp] (bal/lerp 12.0 15.0 (bal/clamp01 exp)))
-;; lerpf(1000, 600, exp) — cooldown ticks
-(defn- cooldown-ticks [exp] (int (bal/lerp 1000.0 600.0 (bal/clamp01 exp))))
+(def ^:private plasma-cannon-skill-id :plasma-cannon)
+
+(defn- exp01 [exp]
+  (max 0.0 (min 1.0 (double (or exp 0.0)))))
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double plasma-cannon-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int plasma-cannon-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double plasma-cannon-skill-id field-id (exp01 exp)))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int plasma-cannon-skill-id field-id (exp01 exp)))
+
+(defn- charge-time [exp] (cfg-lerp :charge.time exp))
+(defn- cp-per-tick [exp] (cfg-lerp :cost.tick.cp exp))
+(defn- overload-keep [exp] (cfg-lerp :cost.overload-keep exp))
+(defn- damage-amount [exp] (cfg-lerp :combat.damage exp))
+(defn- explosion-radius [exp] (cfg-lerp :combat.explosion-radius exp))
+(defn- cooldown-ticks [exp] (cfg-lerp-int :cooldown.ticks exp))
 
 ;; ============================================================
 ;; Player state helpers
 ;; ============================================================
 
 (defn get-skill-exp [player-id]
-  (bal/clamp01 (skill-effects/skill-exp player-id :plasma-cannon)))
+  (exp01 (skill-effects/skill-exp player-id plasma-cannon-skill-id)))
 
 (defn- get-player-position [player-id]
   (or (when-let [tp (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
@@ -119,7 +130,7 @@
                                          (double (:y last-pos))
                                          (double (:z last-pos))
                                          (:x dir) (:y dir) (:z dir)
-                                         (+ dist 0.1))]
+                                         (+ dist (cfg-double :projectile.block-hit-extra-distance)))]
           (some? hit))))))
 
 ;; ============================================================
@@ -135,7 +146,7 @@
     ;; Damage all living entities in 10-block radius (excluding caster)
     (when world-effects/*world-effects*
       (let [entities (world-effects/find-entities-in-radius
-                       world-effects/*world-effects* world-id tx ty tz 10.0)]
+                       world-effects/*world-effects* world-id tx ty tz (cfg-double :combat.damage-radius))]
         (doseq [entity entities]
           (when-not (= (:uuid entity) player-id)
             (when entity-damage/*entity-damage*
@@ -149,7 +160,7 @@
       (world-effects/create-explosion! world-effects/*world-effects*
                                        world-id tx ty tz radius false))
     ;; Grant experience on successful cast
-    (add-exp! player-id 0.008)
+    (add-exp! player-id (cfg-double :progression.exp-use))
     (log/info "PlasmaCannon: Exploded at" [tx ty tz]
               "radius:" (int radius) "damage:" (int dmg))))
 
@@ -160,8 +171,9 @@
 (defn- resolve-destination [player-id world-id player-pos]
   ;; Raycast from player eye in look direction (max 100 blocks, prefer living).
   (let [eye-x (double (:x player-pos))
-        eye-y (+ (double (:y player-pos)) 1.62)
-        eye-z (double (:z player-pos))]
+      eye-y (+ (double (:y player-pos)) (cfg-double :targeting.eye-height))
+      eye-z (double (:z player-pos))
+      max-distance (cfg-double :targeting.raycast-distance)]
     (if raycast/*raycast*
       (let [look (raycast/get-player-look-vector raycast/*raycast* player-id)
             dx (double (or (:x look) 0.0))
@@ -171,15 +183,15 @@
             hit (raycast/raycast-combined raycast/*raycast*
                                           world-id
                                           eye-x eye-y eye-z
-                                          dx dy dz 100.0)]
+                                          dx dy dz max-distance)]
         (if hit
           {:x (double (or (:x hit) eye-x))
            :y (double (or (:y hit) eye-y))
            :z (double (or (:z hit) eye-z))}
           ;; No hit: position at max distance along look vector
-          {:x (+ eye-x (* dx 100.0))
-           :y (+ eye-y (* dy 100.0))
-           :z (+ eye-z (* dz 100.0))}))
+          {:x (+ eye-x (* dx max-distance))
+           :y (+ eye-y (* dy max-distance))
+           :z (+ eye-z (* dz max-distance))}))
       ;; Fallback if raycast not available
       {:x eye-x :y eye-y :z eye-z})))
 
@@ -221,7 +233,7 @@
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
             state       (or (:state skill-state) :charging)
-            ov-keep     (double (or (:overload-keep skill-state) 400.0))]
+        ov-keep     (double (or (:overload-keep skill-state) (overload-keep 1.0)))]
 
         ;; Always maintain overload floor (prevent recovery below overload-keep)
         (maintain-overload! player-id ov-keep)
@@ -229,7 +241,7 @@
         (case state
           :charging
           (let [charge-ticks (long (or (:charge-ticks skill-state) 0))
-                charge-time  (long (or (:charge-time skill-state) 60))
+                charge-time  (long (or (:charge-time skill-state) (charge-time (get-skill-exp player-id))))
                 next-ticks   (inc charge-ticks)]
             (if-not cost-ok?
               ;; Out of CP: abort (original: terminate())
@@ -258,8 +270,8 @@
                     dist-to-dest       (geom/vdist new-pos destination)
                     hit-block?         (block-hit? world-id last-pos new-pos)
                     should-explode?    (or hit-block?
-                                          (< dist-to-dest 1.5)
-                                          (>= next-flight 240))]
+                                          (< dist-to-dest (cfg-double :projectile.destination-epsilon))
+                                          (>= next-flight (cfg-int :projectile.max-flight-ticks)))]
                 (if should-explode?
                   ;; Explode at destination
                   (let [exp (get-skill-exp player-id)]
@@ -267,8 +279,8 @@
                     (fx/send-perform! ctx-id :plasma-cannon/fx-perform {:pos destination})
                     (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? true})
                     (ctx/terminate-context! ctx-id nil))
-                  ;; Still flying: move and sync every 5 ticks
-                  (let [next-sync (if (zero? sync-ticks) 5 (dec sync-ticks))]
+                  ;; Still flying: move and sync every configured interval
+                  (let [next-sync (if (zero? sync-ticks) (cfg-int :projectile.sync-interval-ticks) (dec sync-ticks))]
                     (ctx/update-context! ctx-id update :skill-state assoc
                                          :charge-pos   new-pos
                                          :flight-ticks next-flight
@@ -312,7 +324,7 @@
                 ;; Projectile spawns 15 blocks above player
                 ;; (original: add(player.getPositionVector, Vec3d(0, 15, 0)))
                 spawn-pos {:x (double (:x pos))
-                           :y (+ (double (:y pos)) 15.0)
+                           :y (+ (double (:y pos)) (cfg-double :projectile.spawn-y-offset))
                            :z (double (:z pos))}]
             ;; Set cooldown (original: ctx.setCooldown in s_perform)
             (apply-cooldown! player-id exp)

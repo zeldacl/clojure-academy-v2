@@ -7,7 +7,7 @@
   Exp:      +0.005 on successful throw"
   (:require [clojure.string :as str]
             [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -20,52 +20,39 @@
 
 ;; --- Constants ---
 
-(def ^:private max-grab-range 10.0)
-(def ^:private max-throw-range 20.0)
-(def ^:private hold-distance 2.0)
-;; Original: subtract(entityHeadPos, new Vec3d(0, 0.1, 0)) -> -0.1 on Y
-(def ^:private hold-head-y-offset 0.1)
-(def ^:private throw-hit-radius 1.15)
+(def ^:private mag-manip-skill-id :mag-manip)
 
-(def ^:private strong-metal-blocks
-  #{"minecraft:iron_block"
-    "minecraft:iron_ore"
-    "minecraft:deepslate_iron_ore"
-    "minecraft:gold_block"
-    "minecraft:gold_ore"
-    "minecraft:deepslate_gold_ore"
-    "minecraft:copper_block"
-    "minecraft:copper_ore"
-    "minecraft:deepslate_copper_ore"
-    "minecraft:netherite_block"
-    "minecraft:ancient_debris"
-    "minecraft:anvil"
-    "minecraft:chipped_anvil"
-    "minecraft:damaged_anvil"
-    "minecraft:hopper"
-    "minecraft:chain"
-    "minecraft:iron_bars"
-    "minecraft:iron_door"
-    "minecraft:iron_trapdoor"
-    "minecraft:rail"
-    "minecraft:powered_rail"
-    "minecraft:detector_rail"
-    "minecraft:activator_rail"})
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double mag-manip-skill-id field-id))
 
-(def ^:private weak-metal-hints
-  ["iron" "gold" "copper" "rail" "anvil" "chain" "ore" "debris" "metal" "steel"])
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double mag-manip-skill-id field-id exp))
+
+(defn- strong-metal-blocks []
+  (set (map str/lower-case
+            (skill-config/tunable-string-list mag-manip-skill-id
+                                              :targeting.strong-metal-blocks))))
+
+(defn- weak-metal-hints []
+  (map str/lower-case
+       (skill-config/tunable-string-list mag-manip-skill-id
+                                         :targeting.weak-metal-keywords)))
+
+(defn- max-hold-distance-sq []
+  (let [distance (cfg-double :targeting.max-hold-distance)]
+    (* distance distance)))
 
 ;; --- Domain helpers ---
 
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :mag-manip))
+  (skill-effects/skill-exp player-id mag-manip-skill-id))
 
 (defn- metal-block-id? [block-id exp]
   (let [id (some-> block-id str/lower-case)]
     (boolean
-      (or (contains? strong-metal-blocks id)
-          (and (>= (double exp) 0.5)
-               (some #(str/includes? id %) weak-metal-hints))))))
+      (or (contains? (strong-metal-blocks) id)
+          (and (>= (double exp) (cfg-double :targeting.weak-metal-exp-threshold))
+               (some #(str/includes? id %) (weak-metal-hints)))))))
 
 (defn- look-dir [player-id]
   (when-let [look (when raycast/*raycast*
@@ -77,9 +64,9 @@
 ;; origin = eye - (0, hold-head-y-offset, 0); focus = origin + look * hold-distance
 (defn- hold-focus [player-id]
   (let [eye (geom/eye-pos player-id)
-        origin (geom/v+ eye {:x 0.0 :y (- hold-head-y-offset) :z 0.0})
+    origin (geom/v+ eye {:x 0.0 :y (- (cfg-double :movement.hold-head-y-offset)) :z 0.0})
         dir (or (look-dir player-id) {:x 0.0 :y 0.0 :z 1.0})]
-    (geom/v+ origin (geom/v* dir hold-distance))))
+  (geom/v+ origin (geom/v* dir (cfg-double :movement.hold-distance)))))
 
 ;; --- Block-manipulation helpers ---
 
@@ -106,7 +93,7 @@
                                         world-id
                                         (:x start) (:y start) (:z start)
                                         (:x dir) (:y dir) (:z dir)
-                                        max-grab-range)]
+                                        (cfg-double :targeting.grab-range))]
         (when hit
           (let [bx (int (or (:x hit) 0))
                 by (int (or (:y hit) 0))
@@ -150,16 +137,16 @@
       (when (and (= :holding (:mode ss)) (:held-block ss))
         (let [focus (or (:focus ss) (hold-focus player-id))
                 pos (skill-effects/player-path player-id :position {:x 0.0 :y 0.0 :z 0.0})]
-          (< (geom/vdist-sq pos focus) 25.0))))))
+                  (< (geom/vdist-sq pos focus) (max-hold-distance-sq)))))))
 
 (defn- cost-up-cp [{:keys [player-id ctx-id]}]
   (if (holding-nearby? player-id ctx-id)
-    (bal/lerp 140.0 270.0 (skill-exp player-id))
+    (cfg-lerp :cost.up.cp (skill-exp player-id))
     0.0))
 
 (defn- cost-up-overload [{:keys [player-id ctx-id]}]
   (if (holding-nearby? player-id ctx-id)
-    (bal/lerp 35.0 20.0 (skill-exp player-id))
+    (cfg-lerp :cost.up.overload (skill-exp player-id))
     0.0))
 
 (defn- cost-creative? [{:keys [player]}]
@@ -245,7 +232,7 @@
                              (assoc ss :fired false :mode :idle))
         (let [focus (or (:focus ss) (hold-focus player-id))
               pos (skill-effects/player-path player-id :position {:x 0.0 :y 0.0 :z 0.0})
-              too-far? (>= (geom/vdist-sq pos focus) 25.0)]
+              too-far? (>= (geom/vdist-sq pos focus) (max-hold-distance-sq))]
           (if too-far?
             (do
               (restore-held-block! held-block)
@@ -264,11 +251,11 @@
                                                     world-id
                                                     (:x start) (:y start) (:z start)
                                                     (:x dir) (:y dir) (:z dir)
-                                                    max-throw-range))
+                                                        (cfg-double :targeting.throw-range)))
                     end (if hit
                           {:x (double (:x hit)) :y (double (:y hit)) :z (double (:z hit))}
-                          (geom/v+ start (geom/v* dir max-throw-range)))
-                    damage 10.0
+                                              (geom/v+ start (geom/v* dir (cfg-double :targeting.throw-range))))
+                                            damage (cfg-double :combat.throw-damage)
                     direct-hit? (and (= (:hit-type hit) :entity)
                                      (:uuid hit)
                                      entity-damage/*entity-damage*)]
@@ -288,7 +275,7 @@
                       (when-let [target (first
                                          (filter (fn [{:keys [x y z]}]
                                                    (let [{:keys [distance t]} (distance-to-segment {:x x :y y :z z} start end)]
-                                                     (and (<= distance throw-hit-radius)
+                                                     (and (<= distance (cfg-double :targeting.throw-hit-radius))
                                                           (<= 0.0 t 1.0))))
                                                  entities))]
                         (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
@@ -302,9 +289,12 @@
                                           :hit-type (:hit-type hit)
                                           :block-id (:block-id held-block)})
                 ;; Manual cooldown and exp - only on successful throw
-                (skill-effects/set-main-cooldown! player-id :mag-manip
-                                                  (int (Math/round ^double (bal/lerp 60.0 40.0 exp))))
-                (skill-effects/add-skill-exp! player-id :mag-manip 0.005)
+                (skill-effects/set-main-cooldown! player-id mag-manip-skill-id
+                                                  (skill-config/lerp-int mag-manip-skill-id
+                                                                         :cooldown.ticks
+                                                                         exp))
+                (skill-effects/add-skill-exp! player-id mag-manip-skill-id
+                                              (cfg-double :progression.exp-throw))
                 (ctx/update-context! ctx-id assoc :skill-state
                                      {:fired true
                                       :mode :thrown
@@ -330,7 +320,10 @@
   :ctrl-id :mag-manip
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks 60
+  :cooldown-ticks (fn [{:keys [player-id]}]
+                    (skill-config/lerp-int mag-manip-skill-id
+                                           :cooldown.ticks
+                                           (skill-exp player-id)))
   :pattern :release-cast
   :cooldown {:mode :manual}
   :cost {:up {:cp cost-up-cp

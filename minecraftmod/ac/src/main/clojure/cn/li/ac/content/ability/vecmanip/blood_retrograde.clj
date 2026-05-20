@@ -12,7 +12,7 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -21,12 +21,28 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private max-charge-ticks 30)
-(def ^:private target-distance 2.0)
-(def ^:private spray-angles [0.0 30.0 45.0 60.0 80.0 -30.0 -45.0 -60.0 -80.0])
+(def ^:private blood-retrograde-skill-id :blood-retrograde)
+
+(defn- exp01 [exp]
+  (max 0.0 (min 1.0 (double (or exp 0.0)))))
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double blood-retrograde-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int blood-retrograde-skill-id field-id))
+
+(defn- cfg-double-list [field-id]
+  (skill-config/tunable-double-list blood-retrograde-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double blood-retrograde-skill-id field-id (exp01 exp)))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int blood-retrograde-skill-id field-id (exp01 exp)))
 
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :blood-retrograde))
+  (skill-effects/skill-exp player-id blood-retrograde-skill-id))
 
 (def ^:private world-up {:x 0.0 :y 1.0 :z 0.0})
 
@@ -41,9 +57,9 @@
                   :x (double (or (:x fallback-hit) 0.0))
                   :y (double (or (:y fallback-hit) 0.0))
                   :z (double (or (:z fallback-hit) 0.0))
-                  :width 0.6
-                  :height 1.8
-                  :eye-height 1.62}]
+                  :width (cfg-double :targeting.fallback-width)
+                  :height (cfg-double :targeting.fallback-height)
+                  :eye-height (cfg-double :targeting.fallback-eye-height)}]
     (or (when (and world-effects/*world-effects* target-id)
           (some (fn [{:keys [uuid] :as entity}]
                   (when (= uuid target-id)
@@ -53,30 +69,30 @@
                                                        (:x fallback)
                                                        (:y fallback)
                                                        (:z fallback)
-                                                       4.0)))
+                                                       (cfg-double :targeting.entity-search-radius))))
         fallback)))
 
 (defn- overload-cost [exp]
-  (bal/lerp 55.0 40.0 exp))
+  (cfg-lerp :cost.release.overload exp))
 
 (defn- cp-cost [exp]
-  (bal/lerp 280.0 350.0 exp))
+  (cfg-lerp :cost.release.cp exp))
 
 (defn- damage-value [exp]
-  (bal/lerp 30.0 60.0 exp))
+  (cfg-lerp :combat.damage exp))
 
 (defn- cooldown-ticks [exp]
-  (int (bal/lerp 90.0 40.0 exp)))
+  (cfg-lerp-int :cooldown.ticks exp))
 
 (defn- release-hit
   [player-id ctx-id stage]
   (let [ticks (long (or (get-in (ctx/get-context ctx-id) [:skill-state :ticks]) 0))
         should-release? (case stage
-                          :tick (>= (inc ticks) max-charge-ticks)
+                          :tick (>= (inc ticks) (cfg-int :charge.max-ticks))
                           :up true
                           false)]
     (when (and should-release? raycast/*raycast*)
-      (raycast/raycast-from-player raycast/*raycast* player-id target-distance true))))
+      (raycast/raycast-from-player raycast/*raycast* player-id (cfg-double :targeting.distance) true))))
 
 (defn blood-retrograde-cost-release-cp
   [{:keys [player-id ctx-id]}]
@@ -97,7 +113,7 @@
         head-pos {:x (:x target-info)
                   :y (+ (double (:y target-info)) (* (double (:height target-info)) 0.6))
                   :z (:z target-info)}]
-    (->> spray-angles
+    (->> (cfg-double-list :effect.spray-angles)
          (mapcat (fn [pitch-deg]
                    (let [yaw-jitter (- (* (rand) 40.0) 20.0)
                          yaw-turned (geom/rotate-around-axis base-look world-up yaw-jitter)
@@ -183,7 +199,7 @@
                                                 target-id
                                                 (damage-value exp)
                                                 :generic))
-          (skill-effects/add-skill-exp! player-id :blood-retrograde 0.002)
+          (skill-effects/add-skill-exp! player-id blood-retrograde-skill-id (cfg-double :progression.exp-hit))
           (send-fx-perform! ctx-id player-id world-id target-id hit)
           true)))))
 
@@ -210,10 +226,10 @@
                                :ticks ticks)
           (fx/send-update! ctx-id :blood-retrograde/fx-update
                            {:ticks (long ticks)
-                            :charge-ratio (bal/clamp01 (/ (double ticks) 20.0))})
-          (when (>= ticks max-charge-ticks)
+                            :charge-ratio (exp01 (/ (double ticks) (cfg-double :charge.fx-ratio-ticks)))})
+          (when (>= ticks (cfg-int :charge.max-ticks))
             (let [hit (when raycast/*raycast*
-                        (raycast/raycast-from-player raycast/*raycast* player-id target-distance true))
+                        (raycast/raycast-from-player raycast/*raycast* player-id (cfg-double :targeting.distance) true))
                   performed? (boolean (and hit (try-perform! player-id ctx-id hit cost-ok?)))]
               (finish! ctx-id performed?)
               (log/debug "BloodRetrograde auto-release" "ticks" ticks "performed" performed?))))))))
@@ -226,7 +242,7 @@
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
         (let [hit (when raycast/*raycast*
-                    (raycast/raycast-from-player raycast/*raycast* player-id target-distance true))
+              (raycast/raycast-from-player raycast/*raycast* player-id (cfg-double :targeting.distance) true))
               performed? (boolean (and hit (try-perform! player-id ctx-id hit cost-ok?)))]
           (finish! ctx-id performed?)
           (log/debug "BloodRetrograde released" "performed" performed?))))))

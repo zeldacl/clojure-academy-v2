@@ -75,11 +75,11 @@
                       :learned-skills #{}}]
     (with-redefs [skill/get-controllable-skills-at-level (fn [_ _]
                                                            [{:id :s1} {:id :s2}])
-                  cat/get-prog-incr-rate (fn [_] 1.5)]
-      (binding [cfg/*prog-incr-rate* 2.0]
-        (let [unmastered (assoc ability-base :skill-exps {:s1 1.0 :s2 0.2})
-              mastered (assoc ability-base :skill-exps {:s1 1.0 :s2 1.0})
-              t1 (learning/level-up-threshold :cat-a unmastered)
-              t2 (learning/level-up-threshold :cat-a mastered)]
-          (is (> t1 t2))
-          (is (= (* 0.5 t1) t2)))))))
+            cat/get-prog-incr-rate (fn [_] 1.5)
+            cfg/prog-incr-rate (fn [] 2.0)]
+      (let [unmastered (assoc ability-base :skill-exps {:s1 1.0 :s2 0.2})
+        mastered (assoc ability-base :skill-exps {:s1 1.0 :s2 1.0})
+        t1 (learning/level-up-threshold :cat-a unmastered)
+        t2 (learning/level-up-threshold :cat-a mastered)]
+      (is (> t1 t2))
+      (is (= (* 0.5 t1) t2))))))

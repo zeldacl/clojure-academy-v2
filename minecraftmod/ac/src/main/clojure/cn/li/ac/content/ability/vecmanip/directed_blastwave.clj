@@ -8,7 +8,7 @@
   (:require [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -19,12 +19,25 @@
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private MIN-TICKS 6)
-(def ^:private MAX-ACCEPTED-TICKS 50)
-(def ^:private MAX-TOLERANT-TICKS 200)
-(def ^:private RAYCAST-DISTANCE 4.0)
-(def ^:private AOE-RADIUS 3.0)
-(def ^:private PUNCH-ANIM-TICKS 6)
+(def ^:private directed-blastwave-skill-id :directed-blastwave)
+
+(defn- exp01 [exp]
+  (max 0.0 (min 1.0 (double (or exp 0.0)))))
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double directed-blastwave-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int directed-blastwave-skill-id field-id))
+
+(defn- cfg-double-list [field-id]
+  (skill-config/tunable-double-list directed-blastwave-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double directed-blastwave-skill-id field-id (exp01 exp)))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int directed-blastwave-skill-id field-id (exp01 exp)))
 
 (defn- hit-pos-from-trace [player-id trace]
   (let [eye  (geom/eye-pos player-id)
@@ -33,14 +46,14 @@
                  {:x 0.0 :y 0.0 :z 1.0})]
     (cond
       (nil? trace)
-      (geom/v+ eye (geom/v* (geom/vnorm look) RAYCAST-DISTANCE))
+      (geom/v+ eye (geom/v* (geom/vnorm look) (cfg-double :targeting.raycast-distance)))
       (= :block (:hit-type trace))
       {:x (Math/floor (double (or (:x trace) 0.0)))
        :y (Math/floor (double (or (:y trace) 0.0)))
        :z (Math/floor (double (or (:z trace) 0.0)))}
       (= :entity (:hit-type trace))
       {:x (double (or (:x trace) 0.0))
-       :y (+ (double (or (:y trace) 0.0)) (double (or (:eye-height trace) 1.62)))
+        :y (+ (double (or (:y trace) 0.0)) (double (or (:eye-height trace) (cfg-double :targeting.eye-height))))
        :z (double (or (:z trace) 0.0))}
       :else
       {:x (double (or (:x trace) 0.0))
@@ -50,16 +63,17 @@
 (defn- knockback-impulse [player-id entity]
   (let [player-head (geom/eye-pos player-id)
         target-head {:x (double (or (:x entity) 0.0))
-                     :y (+ (double (or (:y entity) 0.0)) (double (or (:eye-height entity) 1.62)))
+                     :y (+ (double (or (:y entity) 0.0)) (double (or (:eye-height entity) (cfg-double :targeting.eye-height))))
                      :z (double (or (:z entity) 0.0))}
         d0 (geom/vnorm (geom/v- player-head target-head))
-        d1 (geom/vnorm {:x (:x d0) :y (- (:y d0) 0.4) :z (:z d0)})]
-    (geom/v* d1 -1.2)))
+        d1 (geom/vnorm {:x (:x d0) :y (- (:y d0) (cfg-double :movement.knockback-y-adjust)) :z (:z d0)})]
+    (geom/v* d1 (cfg-double :movement.knockback-scale))))
 
 (defn- break-hardness [exp]
-  (cond (< (double exp) 0.25) 2.9
-        (< (double exp) 0.5)  25.0
-        :else                 55.0))
+  (let [[low-cap mid-cap high-cap] (cfg-double-list :breaking.hardness-caps)]
+    (cond (< (double exp) (cfg-double :breaking.hardness-low-threshold)) low-cap
+          (< (double exp) (cfg-double :breaking.hardness-mid-threshold)) mid-cap
+          :else high-cap)))
 
 (defn- break-nearby-blocks! [player-id world-id pos exp]
   (when block-manip/*block-manipulation*
@@ -67,9 +81,9 @@
           y0        (int (Math/floor (double (:y pos))))
           z0        (int (Math/floor (double (:z pos))))
           hard-cap  (break-hardness exp)
-          p-break   (bal/lerp 0.5 0.8 exp)
-          p-drop    (bal/lerp 0.4 0.9 exp)
-          full-exp? (= 1.0 (double (bal/clamp01 exp)))]
+          p-break   (cfg-lerp :breaking.break-probability exp)
+          p-drop    (cfg-lerp :breaking.drop-probability exp)
+          full-exp? (= 1.0 (double (exp01 exp)))]
       (doseq [x (range (- x0 3) (+ x0 3))
               y (range (- y0 3) (+ y0 3))
               z (range (- z0 3) (+ z0 3))]
@@ -102,8 +116,8 @@
   :ctrl-id     :directed-blastwave
   :pattern     :charge-window
   :cooldown    {:mode :manual}
-  :cost        {:up {:cp       (fn [{:keys [exp]}] (bal/lerp 160.0 200.0 (bal/clamp01 exp)))
-                     :overload (fn [{:keys [exp]}] (bal/lerp 50.0   30.0 (bal/clamp01 exp)))}}
+  :cost        {:up {:cp       (fn [{:keys [exp]}] (cfg-lerp :cost.up.cp exp))
+                     :overload (fn [{:keys [exp]}] (cfg-lerp :cost.up.overload exp))}}
   :actions
   {:down!  (fn [{:keys [ctx-id]}]
              (ctx/update-context! ctx-id assoc :skill-state
@@ -124,24 +138,24 @@
                           {:charge-ticks (long (max 0 next-charge))
                            :punched? punched?})
                  (cond
-                   (>= next-charge MAX-TOLERANT-TICKS)
+                   (>= next-charge (cfg-int :charge.max-tolerant-ticks))
                    (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? false})
                      (ctx/terminate-context! ctx-id nil))
-                   (and punched? (> next-punch PUNCH-ANIM-TICKS))
+                   (and punched? (> next-punch (cfg-int :charge.punch-anim-ticks)))
                    (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? true})
                      (ctx/terminate-context! ctx-id nil))))))
    :up!    (fn [{:keys [player-id ctx-id exp cost-ok?]}]
              (when-let [ctx-data (ctx/get-context ctx-id)]
                (let [charge-ticks (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0))
-                     exp*         (bal/clamp01 exp)]
-                 (if (and (> charge-ticks MIN-TICKS) (< charge-ticks MAX-ACCEPTED-TICKS))
+                   exp*         (exp01 exp)]
+                 (if (and (> charge-ticks (cfg-int :charge.min-ticks)) (< charge-ticks (cfg-int :charge.max-accepted-ticks)))
                    (if-not cost-ok?
                      (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? false})
                          (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))
                      (let [world-id   (geom/world-id-of player-id)
                            trace      (when raycast/*raycast*
                                         (raycast/raycast-from-player raycast/*raycast*
-                                                                     player-id RAYCAST-DISTANCE true))
+                                                                     player-id (cfg-double :targeting.raycast-distance) true))
                            hit-pos    (hit-pos-from-trace player-id trace)
                            look       (when raycast/*raycast*
                                         (raycast/get-player-look-vector raycast/*raycast* player-id))
@@ -149,11 +163,11 @@
                                         (->> (world-effects/find-entities-in-radius
                                                world-effects/*world-effects*
                                                world-id (:x hit-pos) (:y hit-pos) (:z hit-pos)
-                                               AOE-RADIUS)
+                                               (cfg-double :combat.aoe-radius))
                                              (remove #(= (:uuid %) player-id))
                                              vec)
                                         [])
-                           damage     (bal/lerp 10.0 25.0 exp*)]
+                           damage     (cfg-lerp :combat.damage exp*)]
                        (doseq [entity entities]
                          (when entity-damage/*entity-damage*
                            (entity-damage/apply-direct-damage!
@@ -171,9 +185,11 @@
                        (ctx/update-context! ctx-id update :skill-state assoc
                                             :punched? true :punch-ticks 0 :performed? true)
                        (skill-effects/set-main-cooldown!
-                        player-id :directed-blastwave (int (bal/lerp 80.0 50.0 exp*)))
+                        player-id :directed-blastwave (cfg-lerp-int :cooldown.ticks exp*))
                        (skill-effects/add-skill-exp!
-                        player-id :directed-blastwave (if (seq entities) 0.0025 0.0012))
+                        player-id :directed-blastwave (if (seq entities)
+                                                        (cfg-double :progression.exp-hit)
+                                                        (cfg-double :progression.exp-miss)))
                        (log/info "DirectedBlastwave executed" "charge" charge-ticks
                                  "entities" (count entities))))
                    (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? false})

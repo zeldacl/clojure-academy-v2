@@ -17,6 +17,7 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -29,25 +30,40 @@
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
-;; Constants
+;; Config helpers
 ;; ---------------------------------------------------------------------------
 
-(def ^:private ticks-min      20)
-(def ^:private ticks-max      40)
-(def ^:private ticks-tolerant 100)
+(def ^:private meltdowner-skill-id :meltdowner)
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double meltdowner-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int meltdowner-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double meltdowner-skill-id field-id exp))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int meltdowner-skill-id field-id exp))
+
+(defn- ticks-min [] (cfg-int :charge.min-ticks))
+(defn- ticks-max [] (cfg-int :charge.max-ticks))
+(defn- ticks-tolerant [] (cfg-int :charge.max-tolerant-ticks))
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :meltdowner))
+  (skill-effects/skill-exp player-id meltdowner-skill-id))
 
 (defn- time-rate [ct]
-  (bal/lerp 0.8 1.2 (/ (- (double ct) 20.0) 20.0)))
+  (let [charge-window (max 1.0 (- (double (ticks-max)) (double (ticks-min))))]
+    (cfg-lerp :charge.time-rate (/ (- (double ct) (double (ticks-min))) charge-window))))
 
 (defn- to-charge-ticks [ticks]
-  (int (min ticks-max (max ticks-min (int ticks)))))
+  (int (min (ticks-max) (max (ticks-min) (int ticks)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Overload floor enforcement
@@ -71,7 +87,7 @@
   (when (toggle-active? target-player-id :vec-reflection)
     (when-let [state (skill-effects/get-player-state target-player-id)]
       (let [exp        (get-in state [:ability-data :skills :vec-reflection :exp] 0.0)
-            consumption (* (double incoming-damage) (bal/lerp 20.0 15.0 exp))
+        consumption (* (double incoming-damage) (cfg-lerp :reflection.cp-per-damage exp))
             current-cp (get-in state [:resource-data :cur-cp] 0.0)]
         (>= (double current-cp) (double consumption))))))
 
@@ -85,7 +101,7 @@
                     (raycast/get-player-look-vector raycast/*raycast* reflector-player-id))]
     (when look-vec
       (let [dir (geom/vnorm {:x (:dx look-vec) :y (:dy look-vec) :z (:dz look-vec)})
-            end (geom/v+ start-pos (geom/v* dir 10.0))]
+            end (geom/v+ start-pos (geom/v* dir (cfg-double :reflection.shot-distance)))]
         (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-reflect
                                  {:mode  :reflect
                                   :start start-pos
@@ -95,12 +111,13 @@
                                              world-id
                                              (:x start-pos) (:y start-pos) (:z start-pos)
                                              (:dx look-vec) (:dy look-vec) (:dz look-vec)
-                                             10.0))]
+                                             (cfg-double :reflection.shot-distance)))]
           (when (and (= (:hit-type hit) :entity) entity-damage/*entity-damage*)
             (md-damage/mark-target! reflector-player-id (:uuid hit))
             (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
                                                world-id (:uuid hit)
-                                               (* 0.5 (bal/lerp 20.0 50.0 caster-exp))
+                                                (* (cfg-double :reflection.damage-multiplier)
+                                                  (cfg-lerp :combat.damage caster-exp))
                                                :magic)
             true))))))
 
@@ -113,7 +130,7 @@
   [{:keys [player-id ctx-id hold-ticks]}]
   (let [exp      (skill-exp player-id)
         ct       (to-charge-ticks hold-ticks)
-        damage   (* (time-rate ct) (bal/lerp 18.0 50.0 exp))
+      damage   (* (time-rate ct) (cfg-lerp :combat.damage exp))
         world-id (geom/world-id-of player-id)
         eye      (geom/eye-pos player-id)
         look-vec (when raycast/*raycast*
@@ -128,15 +145,15 @@
                      :look-dir        look-vec
                      :reflect-can-fn  (fn [uuid] (vec-reflection-can-reflect? uuid damage))
                      :reflect-shot-fn (fn [uuid] (perform-reflection-shot! ctx-id uuid exp))}
-                    [:beam {:radius          (bal/lerp 2.0 3.0 exp)
-                            :query-radius    30.0
-                            :step            0.9
-                            :max-distance    50.0
-                            :visual-distance 45.0
+                        [:beam {:radius          (cfg-lerp :beam.radius exp)
+                          :query-radius    (cfg-double :beam.query-radius)
+                          :step            (cfg-double :beam.step)
+                          :max-distance    (cfg-double :beam.max-distance)
+                          :visual-distance (cfg-double :beam.visual-distance)
                             :damage          damage
                             :damage-type     :magic
                             :break-blocks?   true
-                            :block-energy    (* (time-rate ct) (bal/lerp 300.0 700.0 exp))
+                            :block-energy    (* (time-rate ct) (cfg-lerp :beam.block-energy exp))
                             :fx-topic        :meltdowner/fx-perform}])]
         (or (:beam-result result) {:performed? false})))))
 
@@ -147,7 +164,7 @@
 (defn- meltdowner-on-down!
   [{:keys [player-id ctx-id cost-ok?]}]
   (when cost-ok?
-    (let [overload-floor (bal/lerp 200.0 170.0 (skill-exp player-id))]
+    (let [overload-floor (cfg-lerp :cost.down.overload (skill-exp player-id))]
       (ctx/update-context! ctx-id update :skill-state assoc :overload-floor overload-floor))))
 
 (defn- meltdowner-on-tick!
@@ -155,7 +172,7 @@
   (let [ticks (long (or hold-ticks 0))]
     (when-let [floor (get-in (ctx/get-context ctx-id) [:skill-state :overload-floor])]
       (enforce-overload-floor! player-id floor))
-    (when (> ticks ticks-tolerant)
+    (when (> ticks (ticks-tolerant))
       (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
       (ctx/terminate-context! ctx-id nil)
       (log/debug "Meltdowner aborted: over tolerant ticks" ticks))))
@@ -164,7 +181,7 @@
   [{:keys [player-id ctx-id hold-ticks]}]
   (let [ticks (long (or hold-ticks 0))
         exp   (skill-exp player-id)]
-    (if (< ticks ticks-min)
+      (if (< ticks (ticks-min))
       (do
         (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
         (log/debug "Meltdowner: insufficient charge ticks" ticks))
@@ -174,9 +191,12 @@
                                   :hold-ticks ticks})]
         (if performed?
           (let [ct (to-charge-ticks ticks)]
-            (skill-effects/add-skill-exp! player-id :meltdowner (* (time-rate ct) 0.002))
-            (skill-effects/set-main-cooldown! player-id :meltdowner
-                                             (int (* (time-rate ct) 20.0 (bal/lerp 15.0 7.0 exp))))
+            (skill-effects/add-skill-exp! player-id meltdowner-skill-id
+                                          (* (time-rate ct) (cfg-double :progression.exp-use)))
+            (skill-effects/set-main-cooldown! player-id meltdowner-skill-id
+                                             (int (* (time-rate ct)
+                                                     (cfg-double :cooldown.base-multiplier)
+                                                     (cfg-lerp :cooldown.ticks exp))))
             (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? true})
             (log/debug "Meltdowner performed; reflection?" (boolean reflection-hit?)))
           (do
@@ -203,9 +223,9 @@
   :pattern         :charge-window
   :cooldown        {:mode :manual}
   :cost            {:down {:overload (fn [{:keys [player-id]}]
-                                       (bal/lerp 200.0 170.0 (skill-exp player-id)))}
+                 (cfg-lerp :cost.down.overload (skill-exp player-id)))}
                     :tick {:cp (fn [{:keys [player-id]}]
-                                 (bal/lerp 10.0 15.0 (skill-exp player-id)))}}
+               (cfg-lerp :cost.tick.cp (skill-exp player-id)))} }
   :fx              {:start  {:topic   :meltdowner/fx-start
                              :payload (fn [_] {:mode :start})}
                     :update {:topic   :meltdowner/fx-update
@@ -214,7 +234,7 @@
                                           {:ticks        ticks
                                            :charge-ratio (bal/clamp01
                                                           (/ (double ticks)
-                                                             (double ticks-max)))}))}}
+                                                       (double (ticks-max))))}))}}
   :actions         {:down!      meltdowner-on-down!
                     :tick!      meltdowner-on-tick!
                     :up!        meltdowner-on-up!

@@ -8,7 +8,7 @@
   (:require [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
@@ -28,7 +28,23 @@
       (adata/get-skill-exp (:ability-data state) skill-kw)
       0.0)))
 
-(def ^:private crit-rates [1.3 1.6 2.6])
+(defn cfg-double [skill-id field-id]
+  (skill-config/tunable-double skill-id field-id))
+
+(defn cfg-int [skill-id field-id]
+  (skill-config/tunable-int skill-id field-id))
+
+(defn cfg-lerp [skill-id field-id exp]
+  (skill-config/lerp-double skill-id field-id exp))
+
+(defn cfg-lerp-int [skill-id field-id exp]
+  (skill-config/lerp-int skill-id field-id exp))
+
+(defn cfg-probability [skill-id field-id]
+  (skill-config/probability skill-id field-id))
+
+(defn cfg-double-list [skill-id field-id]
+  (skill-config/tunable-double-list skill-id field-id))
 
 (defn- learned?
   [player-id skill-id]
@@ -42,6 +58,12 @@
     0.0
     (+ a (* l (- b a)))))
 
+(defn- passive-cfg-lerp
+  [skill-id field-id exp]
+  (if (neg? exp)
+    0.0
+    (cfg-lerp skill-id field-id exp)))
+
 (defn- passive-exp
   [player-id skill-id]
   (if (learned? player-id skill-id)
@@ -53,10 +75,10 @@
   (let [dim-exp (passive-exp player-id :dim-folding-theorem)
         space-exp (passive-exp player-id :space-fluct)]
     (cond
-      (= level 0) (+ (try-lerp 0.1 0.2 dim-exp)
-                     (try-lerp 0.18 0.25 space-exp))
-      (= level 1) (try-lerp 0.10 0.15 space-exp)
-      (= level 2) (try-lerp 0.01 0.03 space-exp)
+  (= level 0) (+ (passive-cfg-lerp :dim-folding-theorem :critical.level0-probability dim-exp)
+         (passive-cfg-lerp :space-fluct :critical.level0-probability space-exp))
+  (= level 1) (passive-cfg-lerp :space-fluct :critical.level1-probability space-exp)
+  (= level 2) (passive-cfg-lerp :space-fluct :critical.level2-probability space-exp)
       :else 0.0)))
 
 (defn- roll-crit-level
@@ -69,9 +91,13 @@
 (defn- apply-teleporter-crit
   [player-id base-damage]
   (if-let [crit-level (roll-crit-level player-id)]
-    (let [scaled (* base-damage (nth crit-rates crit-level 1.0))]
-      (skill-effects/add-skill-exp! player-id :dim-folding-theorem (* 0.005 (inc crit-level)))
-      (skill-effects/add-skill-exp! player-id :space-fluct 0.0001)
+    (let [crit-rates (cfg-double-list :dim-folding-theorem :critical.damage-multipliers)
+          scaled (* base-damage (nth crit-rates crit-level 1.0))]
+      (skill-effects/add-skill-exp! player-id :dim-folding-theorem
+                                    (* (cfg-double :dim-folding-theorem :progression.exp-per-crit-level)
+                                       (inc crit-level)))
+      (skill-effects/add-skill-exp! player-id :space-fluct
+                                    (cfg-double :space-fluct :progression.exp-critical))
       (ach-dispatcher/trigger-custom-event! player-id "teleporter.critical_attack")
       (when (= crit-level 2)
         (ach-dispatcher/trigger-custom-event! player-id "teleporter.mastery"))

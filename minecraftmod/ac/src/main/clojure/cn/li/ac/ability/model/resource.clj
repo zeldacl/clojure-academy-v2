@@ -205,8 +205,7 @@
 (defn grow-max-cp
   "Grow add-max-cp by (consumed-cp × rate), capped at add-cp ceiling for level."
   [d consumed-cp rate level]
-  (let [idx       (dec level)
-        ceiling   (double (nth cfg/*add-cp* idx))
+  (let [ceiling   (double (cfg/add-cp-ceiling level))
         current   (double (:add-max-cp d 0.0))
         growth    (* (double consumed-cp) (double rate))
         new-val   (min ceiling (+ current growth))]
@@ -215,8 +214,7 @@
 (defn grow-max-overload
   "Grow add-max-overload by clamp(0,10, overload × rate), capped at add-overload ceiling for level."
   [d cur-overload rate level]
-  (let [idx       (dec level)
-        ceiling   (double (nth cfg/*add-overload* idx))
+  (let [ceiling   (double (cfg/add-overload-ceiling level))
         current   (double (:add-max-overload d 0.0))
         growth    (max 0.0 (min 10.0 (* (double cur-overload) (double rate))))
         new-val   (min ceiling (+ current growth))]

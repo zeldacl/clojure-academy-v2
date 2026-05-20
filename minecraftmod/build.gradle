@@ -663,7 +663,14 @@ tasks.register('verifyGameplayConfigContractSsoT') {
             'analysis-enabled', 'gen-ores', 'gen-phase-liquid', 'heads-or-tails',
             'ANALYSIS_ENABLED', 'GEN_ORES', 'GEN_PHASE_LIQUID', 'HEADS_OR_TAILS',
             'genOres', 'genPhaseLiquid', 'headsOrTails',
-            '*config-bridge*', 'install-config-bridge!', 'make-provider-map', 'provider-keys'
+            '*config-bridge*', 'install-config-bridge!', 'make-provider-map', 'provider-keys',
+            ':attack-player', ':destroy-blocks', ':worlds-whitelisted-destroying-blocks',
+            ':normal-metal-blocks', ':weak-metal-blocks', ':metal-entities',
+            ':cp-recover-cooldown', ':cp-recover-speed', ':overload-recover-cooldown', ':overload-recover-speed',
+            ':maxcp-incr-rate', ':maxo-incr-rate', ':prog-incr-rate', ':init-cp', ':add-cp',
+            ':init-overload', ':add-overload', ':damage-scale',
+            'ability.normal-metal-blocks', 'ability.weak-metal-blocks', 'ability.metal-entities',
+            'cp-overload.', 'calc.damage-scale'
         ]
         def violations = []
         [acFile].each { File f ->
@@ -681,6 +688,229 @@ tasks.register('verifyGameplayConfigContractSsoT') {
         }
 
         logger.lifecycle('[verifyGameplayConfigContractSsoT] passed. Gameplay config descriptors are AC-owned and platform bridges stay deleted.')
+    }
+}
+
+tasks.register('verifyAbilityConfigContractSsoT') {
+    group = 'verification'
+    description = 'Verify ability config descriptors/defaults are AC-owned and not mixed back into gameplay config.'
+
+    doLast {
+        def abilityFile = file('ac/src/main/clojure/cn/li/ac/ability/config.clj')
+        def gameplayFile = file('ac/src/main/clojure/cn/li/ac/config/gameplay.clj')
+        def acRegistryFile = file('ac/src/main/clojure/cn/li/ac/config/registry.clj')
+        def acCommonFile = file('ac/src/main/clojure/cn/li/ac/config/common.clj')
+        def requiredFiles = [abilityFile, gameplayFile, acRegistryFile, acCommonFile]
+
+        requiredFiles.each { File f ->
+            if (!f.exists()) {
+                throw new GradleException("Required ability config contract file not found: ${f}")
+            }
+        }
+
+        def abilityText = abilityFile.getText('UTF-8')
+        if (!abilityText.contains('(def descriptors') || !abilityText.contains('(def default-values') || !abilityText.contains('config-reg/register-config-descriptors!')) {
+            throw new GradleException('AC ability config contract must define descriptors/default-values and register them through mcmod config registry.')
+        }
+
+        if (abilityText.contains('(def ^:dynamic *') || abilityText.contains('*runtime-main-cooldown-ticks*')) {
+            throw new GradleException('Ability config must stay descriptor-backed; legacy dynamic vars/dead runtime cooldown config must not return.')
+        }
+
+        def registryText = acRegistryFile.getText('UTF-8')
+        def commonText = acCommonFile.getText('UTF-8')
+        if (!registryText.contains('config-common/ability-domain') ||
+            !registryText.contains('ability-config/descriptors') ||
+            !registryText.contains('ability-config/default-values') ||
+            !commonText.contains('(def ability-domain')) {
+            throw new GradleException('AC ability domain must be registered through ac.config.registry/common.')
+        }
+
+        def gameplayText = gameplayFile.getText('UTF-8')
+        def forbiddenGameplayTokens = [
+            ':attack-player', ':destroy-blocks', ':worlds-whitelisted-destroying-blocks',
+            ':normal-metal-blocks', ':weak-metal-blocks', ':metal-entities',
+            ':cp-recover-cooldown', ':cp-recover-speed', ':overload-recover-cooldown', ':overload-recover-speed',
+            ':maxcp-incr-rate', ':maxo-incr-rate', ':prog-incr-rate', ':init-cp', ':add-cp',
+            ':init-overload', ':add-overload', ':damage-scale',
+            'ability.normal-metal-blocks', 'ability.weak-metal-blocks', 'ability.metal-entities',
+            'cp-overload.', 'calc.damage-scale'
+        ]
+        def violations = forbiddenGameplayTokens.findAll { token -> gameplayText.contains(token) }
+        if (!violations.isEmpty()) {
+            throw new GradleException("Ability config keys must not resurface in gameplay config:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyAbilityConfigContractSsoT] passed. Ability config descriptors are AC-owned and separated from gameplay config.')
+    }
+}
+
+tasks.register('verifyAbilityExternalConfigFilesContract') {
+    group = 'verification'
+    description = 'Verify ability config is exposed through generic Forge TOML and Fabric JSON config files.'
+
+    doLast {
+        def commonFile = file('ac/src/main/clojure/cn/li/ac/config/common.clj')
+        def abilityFile = file('ac/src/main/clojure/cn/li/ac/ability/config.clj')
+        def forgeBridgeFile = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/config/bridge.clj')
+        def fabricBridgeFile = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/config/bridge.clj')
+
+        [commonFile, abilityFile, forgeBridgeFile, fabricBridgeFile].each { File f ->
+            if (!f.exists()) {
+                throw new GradleException("Required ability external config contract file not found: ${f}")
+            }
+        }
+
+        def commonText = commonFile.getText('UTF-8')
+        def abilityText = abilityFile.getText('UTF-8')
+        def forgeText = forgeBridgeFile.getText('UTF-8')
+        def fabricText = fabricBridgeFile.getText('UTF-8')
+
+        if (!commonText.contains(':cn.li.ac/ability')) {
+            throw new GradleException('Ability domain keyword must stay :cn.li.ac/ability so external files remain cn.li.ac-ability.*')
+        }
+
+        def requiredAbilityPaths = [
+            'general.attack-player', 'general.destroy-blocks',
+            'targeting.metal.normal-metal-blocks', 'targeting.metal.weak-metal-blocks', 'targeting.metal.metal-entities',
+            'resource.init-cp', 'resource.add-cp', 'resource.init-overload', 'resource.add-overload',
+            'resource.cp-recover-cooldown', 'resource.cp-recover-speed',
+            'resource.overload-recover-cooldown', 'resource.overload-recover-speed',
+            'resource.maxcp-incr-rate', 'resource.maxo-incr-rate',
+            'combat.damage-scale',
+            'runtime.cp-consume-per-tick', 'runtime.overload-per-tick',
+            'progression.prog-incr-rate'
+        ]
+        def missingPaths = requiredAbilityPaths.findAll { path -> !abilityText.contains('"' + path + '"') }
+        if (!missingPaths.isEmpty()) {
+            throw new GradleException("Ability external config paths missing from descriptors:\n - ${missingPaths.join('\n - ')}")
+        }
+
+        def forgeRequiredTokens = [
+            '(domain->file-name domain ".toml")',
+            '.registerConfig',
+            'ModConfig$Type/COMMON',
+            'registered-configs'
+        ]
+        def missingForgeTokens = forgeRequiredTokens.findAll { token -> !forgeText.contains(token) }
+        if (!missingForgeTokens.isEmpty()) {
+            throw new GradleException("Forge config bridge no longer exposes generic TOML domain files:\n - ${missingForgeTokens.join('\n - ')}")
+        }
+
+        def fabricRequiredTokens = [
+            '(domain->file-name domain ".json")',
+            'write-domain-file!',
+            'nested-config-map',
+            'config-reg/get-all-config-domains',
+            'load-all!'
+        ]
+        def missingFabricTokens = fabricRequiredTokens.findAll { token -> !fabricText.contains(token) }
+        if (!missingFabricTokens.isEmpty()) {
+            throw new GradleException("Fabric config bridge no longer exposes generic JSON domain files:\n - ${missingFabricTokens.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyAbilityExternalConfigFilesContract] passed. Ability domain maps to cn.li.ac-ability.toml/json through generic platform bridges.')
+    }
+}
+
+tasks.register('verifyAbilitySkillConfigContractSsoT') {
+    group = 'verification'
+    description = 'Verify per-skill ability config descriptors/defaults are AC-owned and dynamically applied.'
+
+    doLast {
+        def skillConfigFile = file('ac/src/main/clojure/cn/li/ac/ability/skill_config.clj')
+        def commonFile = file('ac/src/main/clojure/cn/li/ac/config/common.clj')
+        def registryFile = file('ac/src/main/clojure/cn/li/ac/config/registry.clj')
+        def skillRegistryFile = file('ac/src/main/clojure/cn/li/ac/ability/service/registry.clj')
+
+        [skillConfigFile, commonFile, registryFile, skillRegistryFile].each { File f ->
+            if (!f.exists()) {
+                throw new GradleException("Required ability skill config contract file not found: ${f}")
+            }
+        }
+
+        def skillText = skillConfigFile.getText('UTF-8')
+        def commonText = commonFile.getText('UTF-8')
+        def registryText = registryFile.getText('UTF-8')
+        def skillRegistryText = skillRegistryFile.getText('UTF-8')
+
+        [
+            ':cn.li.ac/ability-skills-electromaster',
+            ':cn.li.ac/ability-skills-meltdowner',
+            ':cn.li.ac/ability-skills-teleporter',
+            ':cn.li.ac/ability-skills-vecmanip'
+        ].each { token ->
+            if (!commonText.contains(token)) {
+                throw new GradleException("Per-skill ability config domain missing from common.clj: ${token}")
+            }
+        }
+
+        [
+            '(def skill-definitions',
+            '(def field-definitions',
+            '(def skill-tunable-definitions',
+            '(def descriptors-by-category',
+            '(def default-values-by-category',
+            '(defn tunable-double',
+            '(defn tunable-double-list',
+            '(defn lerp-double',
+            '(defn apply-skill-overrides'
+        ].each { token ->
+            if (!skillText.contains(token)) {
+                throw new GradleException("Per-skill ability config SSoT is missing required token: ${token}")
+            }
+        }
+
+        if (!registryText.contains('ability-skill-config/category-ids') ||
+            !registryText.contains('ability-skill-config/descriptors-by-category') ||
+            !registryText.contains('ability-skill-config/default-values-by-category')) {
+            throw new GradleException('Per-skill ability config domains must be registered through ac.config.registry.')
+        }
+
+        if (!skillRegistryText.contains('skill-config/apply-skill-overrides')) {
+            throw new GradleException('Skill registry must return effective specs using skill-config/apply-skill-overrides.')
+        }
+
+        logger.lifecycle('[verifyAbilitySkillConfigContractSsoT] passed. Per-skill config is AC-owned and dynamically applied.')
+    }
+}
+
+tasks.register('verifyAbilitySkillConfigCoverage') {
+    group = 'verification'
+    description = 'Verify every current content defskill! has a per-skill config entry.'
+
+    doLast {
+        def skillConfigFile = file('ac/src/main/clojure/cn/li/ac/ability/skill_config.clj')
+        if (!skillConfigFile.exists()) {
+            throw new GradleException("Required ability skill config file not found: ${skillConfigFile}")
+        }
+
+        def configured = [] as LinkedHashSet<String>
+        def configMatcher = (skillConfigFile.getText('UTF-8') =~ /\{:id :([a-z0-9-]+)\s+:category-id/)
+        configMatcher.each { match -> configured << match[1] }
+
+        def discovered = [] as LinkedHashSet<String>
+        fileTree('ac/src/main/clojure/cn/li/ac/content/ability') {
+            include '**/*.clj'
+            exclude '**/generic/**'
+            exclude '**/build/**', '**/.gradle/**'
+        }.files.each { File f ->
+            def text = f.getText('UTF-8')
+            def matcher = (text =~ /\(defskill!\s+([A-Za-z0-9_-]+)/)
+            matcher.each { match -> discovered << match[1].replace('_', '-') }
+        }
+
+        def missing = discovered.findAll { !configured.contains(it) }
+        def extra = configured.findAll { !discovered.contains(it) }
+        if (!missing.isEmpty() || !extra.isEmpty()) {
+            throw new GradleException("Per-skill ability config coverage mismatch:\n missing: ${missing}\n extra: ${extra}")
+        }
+
+        if (configured.size() != 38) {
+            throw new GradleException("Expected 38 configured content skills, found ${configured.size()}: ${configured}")
+        }
+
+        logger.lifecycle('[verifyAbilitySkillConfigCoverage] passed. All current defskill! entries have config coverage.')
     }
 }
 
@@ -2023,6 +2253,10 @@ tasks.register('verifyLoaderEntrypointNames') {
 def cleanupResidueGuardTaskNames = [
     'verifyAcPlayerUuidSsoT',
     'verifyGameplayConfigContractSsoT',
+    'verifyAbilityConfigContractSsoT',
+    'verifyAbilityExternalConfigFilesContract',
+    'verifyAbilitySkillConfigContractSsoT',
+    'verifyAbilitySkillConfigCoverage',
     'verifyMcmodNoAcSpecificBootstrap',
     'verifyRuntimeEventNoThinItemAdapter',
     'verifyPlatformEventsNoRuntimeBusinessState',

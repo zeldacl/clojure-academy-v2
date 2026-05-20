@@ -5,8 +5,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.ac.ability.util.scaling :as scaling]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.server.service.skill-effects :as fx-common]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
@@ -16,20 +15,42 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private affected-entity-difficulty
-  {"minecraft:arrow" 1.0
-   "minecraft:potion" 1.4
-   "minecraft:snowball" 0.1})
-
-(def ^:private excluded-entity-ids
-  #{"minecraft:item"
-    "minecraft:xp_bottle"
-    "minecraft:experience_bottle"})
+(def ^:private vec-reflection-skill-id :vec-reflection)
 
 (defonce ^:private reflecting-players (atom #{}))
 
+(defn- exp01 [exp]
+  (max 0.0 (min 1.0 (double (or exp 0.0)))))
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double vec-reflection-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double vec-reflection-skill-id field-id (exp01 exp)))
+
+(defn- cfg-string-set [field-id]
+  (set (skill-config/tunable-string-list vec-reflection-skill-id field-id)))
+
+(defn- parse-difficulty-entry [entry]
+  (try
+    (let [entry* (str entry)
+          idx (.lastIndexOf ^String entry* ":")]
+      (when (pos? idx)
+        [(subs entry* 0 idx)
+         (Double/parseDouble (subs entry* (inc idx)))]))
+    (catch Exception _
+      nil)))
+
+(defn- affected-entity-difficulty []
+  (into {}
+        (keep parse-difficulty-entry)
+        (skill-config/tunable-string-list vec-reflection-skill-id :targeting.affected-entity-difficulty)))
+
+(defn- excluded-entity-ids []
+  (cfg-string-set :targeting.excluded-entity-ids))
+
 (defn- skill-exp [player-id]
-  (fx-common/skill-exp player-id :vec-reflection))
+  (fx-common/skill-exp player-id vec-reflection-skill-id))
 
 (defn- current-cp
   [player-id]
@@ -45,7 +66,7 @@
 
 (defn vec-reflection-cost-tick-cp
   [{:keys [player-id]}]
-  (scaling/lerp 15.0 11.0 (skill-exp player-id)))
+  (cfg-lerp :cost.tick.cp (skill-exp player-id)))
 
 (defn- get-player-position [player-id]
   (when-let [teleportation (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
@@ -57,7 +78,7 @@
 
 (defn- excluded-entity? [entity]
   (let [eid (entity-registry-id entity)]
-    (or (contains? excluded-entity-ids eid)
+    (or (contains? (excluded-entity-ids) eid)
         (:item? entity)
         (:living? entity)
         (:mob? entity))))
@@ -65,7 +86,7 @@
 (defn- affect-difficulty [entity]
   (let [eid (entity-registry-id entity)]
     (when-not (excluded-entity? entity)
-      (double (get affected-entity-difficulty eid 1.0)))))
+      (double (get (affected-entity-difficulty) eid 1.0)))))
 
 (defn- active-vec-reflection-ctx-id
   [player-id]
@@ -77,7 +98,7 @@
        first))
 
 (defn- add-exp! [player-id amount]
-  (fx-common/add-skill-exp! player-id :vec-reflection amount))
+  (fx-common/add-skill-exp! player-id vec-reflection-skill-id amount))
 
 (defn- send-fx-reflect-entity! [ctx-id entity]
   (ctx/ctx-send-to-client! ctx-id :vec-reflection/fx-reflect-entity
@@ -103,12 +124,12 @@
         (when world-effects/*world-effects*
           (first (filter (fn [ent] (= (:uuid ent) attacker-id))
                          (world-effects/find-entities-in-radius
-                           world-effects/*world-effects*
-                           (:world-id self-pos)
-                           (:x self-pos)
-                           (:y self-pos)
-                           (:z self-pos)
-                           20.0)))))))
+                          world-effects/*world-effects*
+                          (:world-id self-pos)
+                          (:x self-pos)
+                          (:y self-pos)
+                          (:z self-pos)
+                          (cfg-double :targeting.attacker-search-radius))))))))
 
 (defn vec-reflection-on-key-down
   "Activate or deactivate toggle skill."
@@ -127,7 +148,7 @@
           (do
             (toggle/activate-toggle! ctx-id :vec-reflection)
             (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-visited] #{})
-            (let [overload-keep (scaling/lerp 350.0 250.0 exp)]
+            (let [overload-keep (cfg-lerp :cost.overload-keep exp)]
               (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-overload-keep] overload-keep)
               (enforce-overload-floor! player-id overload-keep))
             (fx/send-start! ctx-id :vec-reflection/fx-start)
@@ -159,7 +180,7 @@
                       y (:y pos)
                       z (:z pos)
                       entities (world-effects/find-entities-in-radius world-effects/*world-effects*
-                                                                      world-id x y z 4.0)
+                                                                      world-id x y z (cfg-double :targeting.radius))
                       visited (get-in ctx-data [:skill-state :vec-reflection-visited] #{})
                       fresh-entities (remove (fn [entity]
                                                (contains? visited (:uuid entity)))
@@ -182,7 +203,7 @@
                                 vel-x (* (double (:x look-vec)) speed)
                                 vel-y (* (double (:y look-vec)) speed)
                                 vel-z (* (double (:z look-vec)) speed)
-                                reflect-cost (* difficulty (scaling/lerp 300.0 160.0 exp))]
+                                reflect-cost (* difficulty (cfg-lerp :cost.reflect-entity.cp exp))]
                             (if-not (consume-cp! player-id reflect-cost)
                               (do
                                 (toggle/deactivate-toggle! ctx-id :vec-reflection)
@@ -193,7 +214,7 @@
                                   (entity-motion/set-velocity! entity-motion/*entity-motion*
                                                                world-id
                                                                entity-id vel-x vel-y vel-z))
-                                (add-exp! player-id (* difficulty 0.0008))
+                                (add-exp! player-id (* difficulty (cfg-double :progression.exp-reflect-entity-scale)))
                                 (send-fx-reflect-entity! ctx-id entity)
                                 (log/debug "VecReflection: Reflected entity" entity-id))))))))
                   (let [visited-ids (into #{} (keep :uuid entities))]
@@ -230,12 +251,12 @@
         (try
           (if-let [state (fx-common/get-player-state player-id)]
             (let [exp (skill-exp player-id)
-                  reflect-multiplier (scaling/lerp 0.6 1.2 exp)
+                  reflect-multiplier (cfg-lerp :combat.damage-multiplier exp)
                   reflected-damage (* original-damage reflect-multiplier)
-                  consumption (* original-damage (scaling/lerp 20.0 15.0 exp))
+                  consumption (* original-damage (cfg-lerp :cost.damage.cp exp))
                   current-cp (current-cp player-id)]
               (if (and (>= current-cp consumption)
-                       (>= reflected-damage 1.0))
+                       (>= reflected-damage (cfg-double :combat.min-reflected-damage)))
                 (do
                   (consume-cp! player-id consumption)
                   (when (and attacker-id entity-damage/*entity-damage*)
@@ -243,11 +264,11 @@
                                        (fx-common/player-path attacker-id [:position :world-id])
                                        "minecraft:overworld")]
                       (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
-                                                         world-id
-                                                         attacker-id
-                                                         reflected-damage
-                                                         :generic)))
-                  (add-exp! player-id (* original-damage 0.0004))
+                                                          world-id
+                                                          attacker-id
+                                                          reflected-damage
+                                                          :generic)))
+                  (add-exp! player-id (* original-damage (cfg-double :progression.exp-damage-scale)))
                   (when-let [ctx-id (active-vec-reflection-ctx-id player-id)]
                     (when-let [attacker-pos (and attacker-id (try-find-attacker-pos player-id attacker-id))]
                       (send-fx-play! ctx-id attacker-pos)))
@@ -268,12 +289,12 @@
     (if (fx-common/get-player-state player-id)
       (let [ctx-id (active-vec-reflection-ctx-id player-id)
             exp (skill-exp player-id)
-            consumption (* original-damage (scaling/lerp 20.0 15.0 exp))
-            reflected-damage (* original-damage (scaling/lerp 0.6 1.2 exp))
+            consumption (* original-damage (cfg-lerp :cost.damage.cp exp))
+            reflected-damage (* original-damage (cfg-lerp :combat.damage-multiplier exp))
             current-cp (current-cp player-id)]
         (and ctx-id
              (>= current-cp consumption)
-             (>= reflected-damage 1.0)))
+             (>= reflected-damage (cfg-double :combat.min-reflected-damage))))
       false)
     (catch Exception e
       (log/warn "VecReflection can-cancel-attack failed:" (ex-message e))

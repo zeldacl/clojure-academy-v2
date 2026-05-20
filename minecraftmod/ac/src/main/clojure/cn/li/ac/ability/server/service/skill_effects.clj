@@ -19,7 +19,7 @@
   spec is the skill spec map (with :damage-scale key, default 1.0)."
   [spec raw-damage]
   (* (double raw-damage)
-     (double cfg/*damage-scale*)
+      (double (cfg/damage-scale))
      (double (or (:damage-scale spec) 1.0))))
 
 (defn perform-resource!
@@ -79,8 +79,8 @@
   [cost-spec]
   (let [cp-speed (double (or (:cp-speed cost-spec) 1.0))
         overload-speed (double (or (:overload-speed cost-spec) 1.0))]
-    {:cp (* cfg/*runtime-cp-consume-per-tick* cp-speed)
-     :overload (* cfg/*runtime-overload-per-tick* overload-speed)}))
+    {:cp (* (cfg/runtime-cp-consume-per-tick) cp-speed)
+     :overload (* (cfg/runtime-overload-per-tick) overload-speed)}))
 
 (defn apply-cost!
   "Apply stage cost for a skill spec and event.

@@ -1,8 +1,11 @@
 (ns cn.li.ac.ability.server.damage.pipeline-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.registry :as sk]
-            [cn.li.ac.ability.server.damage.pipeline :as pl]))
+            [cn.li.ac.ability.server.damage.pipeline :as pl]
+            [cn.li.ac.config.common :as config-common]
+            [cn.li.mcmod.config.registry :as config-reg]))
 
 (defn- set-platform-fns!
   [{:keys [attack attack-ignore-armor nearby-players]}]
@@ -22,6 +25,8 @@
 (defn- reset-fixture [f]
   (let [saved-skills @sk/skill-registry]
     (reset! @#'cn.li.ac.ability.registry.event/subscribers {})
+    (ability-config/init-config!)
+    (config-reg/set-config-values! config-common/ability-domain ability-config/default-values)
     (try
       ;; Clear injected platform fns for isolation. Avoid with-redefs on these
       ;; private injected vars; it would override register-platform-fns! and
@@ -30,11 +35,11 @@
         (try
           (set-platform-fns!
             {:attack nil :attack-ignore-armor nil :nearby-players nil})
-          (binding [pl/*can-destroy-blocks* true]
-            (f))
+          (f)
           (finally
             (restore-platform-fns! prev))))
       (finally
+        (config-reg/set-config-values! config-common/ability-domain ability-config/default-values)
         (reset! sk/skill-registry saved-skills)))))
 
 (use-fixtures :each reset-fixture)
@@ -90,8 +95,8 @@
                        :pattern :instant
                        :actions {:perform! (fn [_] nil)}
                        :can-break-blocks false})
-  (binding [pl/*can-destroy-blocks* true]
-    (is (false? (pl/can-break-block? :skill-brk))))
+  (config-reg/set-config-values! config-common/ability-domain {:destroy-blocks true})
+  (is (false? (pl/can-break-block? :skill-brk)))
   ;; no skill-id → falls back to global flag
-  (binding [pl/*can-destroy-blocks* false]
-    (is (false? (pl/can-break-block? nil)))))
+  (config-reg/set-config-values! config-common/ability-domain {:destroy-blocks false})
+  (is (false? (pl/can-break-block? nil))))

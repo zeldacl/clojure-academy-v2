@@ -12,7 +12,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
@@ -22,13 +22,30 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private mdball-entity-id "my_mod:entity_md_ball")
+(def ^:private electron-bomb-skill-id :electron-bomb)
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :electron-bomb))
+  (skill-effects/skill-exp player-id electron-bomb-skill-id))
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double electron-bomb-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double electron-bomb-skill-id field-id exp))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int electron-bomb-skill-id field-id exp))
+
+(defn- beam-config []
+  {:radius          (cfg-double :beam.radius)
+   :query-radius    (cfg-double :beam.query-radius)
+   :step            (cfg-double :beam.step)
+   :max-distance    (cfg-double :beam.max-distance)
+   :visual-distance (cfg-double :beam.visual-distance)})
 
 ;; ---------------------------------------------------------------------------
 ;; Action
@@ -37,7 +54,7 @@
 (defn- perform-electron-bomb! [{:keys [player-id ctx-id player]}]
   (try
     (let [exp      (skill-exp player-id)
-          damage   (bal/lerp 6.0 12.0 exp)
+          damage   (cfg-lerp :combat.damage exp)
           world-id (geom/world-id-of player-id)
           eye      (geom/eye-pos player-id)
           look-vec (when raycast/*raycast*
@@ -56,7 +73,9 @@
            :eye eye
            :look-dir look-vec
            :damage damage
-            :delay-ticks (delayed-projectiles/mdball-near-expire-delay)})
+           :beam (beam-config)
+           :exp-gain (cfg-double :progression.exp-hit)
+           :delay-ticks (delayed-projectiles/mdball-near-expire-delay)})
           (log/debug "ElectronBomb: scheduled delayed beam"
                  {:delay (delayed-projectiles/mdball-near-expire-delay)
                   :player player-id})))
@@ -83,10 +102,10 @@
   :ctrl-id        :electron-bomb
   :pattern        :instant
   :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (bal/lerp 250.0 180.0 (skill-exp player-id)))
+                                      (cfg-lerp :cost.down.cp (skill-exp player-id)))
                           :overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 120.0 90.0 (skill-exp player-id)))}}
+                                      (cfg-lerp :cost.down.overload (skill-exp player-id)))} }
   :cooldown-ticks (fn [{:keys [player-id]}]
-                    (int (bal/lerp 20.0 10.0 (skill-exp player-id))))
+                    (cfg-lerp-int :cooldown.ticks (skill-exp player-id)))
   :actions        {:perform! electron-bomb-perform!}
   :prerequisites  [])

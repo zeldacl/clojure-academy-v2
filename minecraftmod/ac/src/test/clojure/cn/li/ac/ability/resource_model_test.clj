@@ -9,8 +9,8 @@
 (deftest resource-core-and-edge-test
   (with-redefs [cfg/max-cp-for-level (fn [level] (* 100.0 level))
                 cfg/max-overload-for-level (fn [level] (* 10.0 level))
-                cfg/*add-cp* [0 50 60 70 80 90]
-                cfg/*add-overload* [0 10 20 30 40 50]]
+                cfg/add-cp-ceiling (fn [_level] 50.0)
+                cfg/add-overload-ceiling (fn [_level] 10.0)]
     (let [d0 (resource/new-resource-data)]
       (is (= 100.0 (:max-cp d0)))
       (is (= 10.0 (:max-overload d0)))

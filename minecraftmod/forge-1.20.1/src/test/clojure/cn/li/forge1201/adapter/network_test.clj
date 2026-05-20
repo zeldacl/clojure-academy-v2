@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.adapter.network-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.forge1201.adapter.network :as network]
+            [cn.li.mc1201.runtime.network-core :as network]
             [cn.li.mcmod.hooks.catalog :as runtime-catalog]))
 
 (deftest sync-message-payloads-test

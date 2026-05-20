@@ -17,7 +17,7 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
@@ -29,8 +29,22 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private min-charge-ticks 5)
-(def ^:private ground-break-prob 0.3)
+(def ^:private groundshock-skill-id :groundshock)
+
+(defn- exp01 [exp]
+  (max 0.0 (min 1.0 (double (or exp 0.0)))))
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double groundshock-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int groundshock-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double groundshock-skill-id field-id (exp01 exp)))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int groundshock-skill-id field-id (exp01 exp)))
 
 (defn- horizontal-look [player-id]
   (when-let [look-vec (and raycast/*raycast*
@@ -48,29 +62,30 @@
    :z (double (:x flat-dir))})
 
 (defn- cp-cost [exp]
-  (bal/lerp 80.0 150.0 (bal/clamp01 exp)))
+  (cfg-lerp :cost.up.cp exp))
 
 (defn- overload-cost [exp]
-  (bal/lerp 15.0 10.0 (bal/clamp01 exp)))
+  (cfg-lerp :cost.up.overload exp))
 
 (defn- init-energy [exp]
-  (bal/lerp 60.0 120.0 (bal/clamp01 exp)))
+  (cfg-lerp :effect.init-energy exp))
 
 (defn- max-iterations [exp]
-  (int (bal/lerp 10.0 25.0 (bal/clamp01 exp))))
+  (cfg-lerp-int :effect.max-iterations exp))
 
 (defn- damage-value [exp]
-  (bal/lerp 4.0 6.0 (bal/clamp01 exp)))
+  (cfg-lerp :combat.damage exp))
 
 (defn- drop-rate [exp]
-  (bal/lerp 0.3 1.0 (bal/clamp01 exp)))
+  (cfg-lerp :breaking.drop-rate exp))
 
 (defn- cooldown-ticks [exp]
-  (int (bal/lerp 80.0 40.0 (bal/clamp01 exp))))
+  (cfg-lerp-int :cooldown.ticks exp))
 
 (defn- launch-y-speed [exp]
-  (* (+ 0.6 (* (rand) 0.3))
-     (bal/lerp 0.8 1.3 (bal/clamp01 exp))))
+  (* (+ (cfg-double :movement.launch-random-base)
+        (* (rand) (cfg-double :movement.launch-random-span)))
+     (cfg-lerp :movement.launch-scale exp)))
 
 (defn- skill-exp [player-id]
   (skill-effects/skill-exp player-id :groundshock))
@@ -80,11 +95,11 @@
 
 (defn groundshock-cost-up-cp
   [{:keys [player-id]}]
-  (cp-cost (bal/clamp01 (skill-exp player-id))))
+  (cp-cost (exp01 (skill-exp player-id))))
 
 (defn groundshock-cost-up-overload
   [{:keys [player-id]}]
-  (overload-cost (bal/clamp01 (skill-exp player-id))))
+  (overload-cost (exp01 (skill-exp player-id))))
 
 (defn- apply-cooldown! [player-id exp]
   (skill-effects/set-main-cooldown! player-id :groundshock (cooldown-ticks exp)))
@@ -183,7 +198,7 @@
                                                           (+ (double bx) 0.5)
                                                           (+ (double by) 1.0)
                                                           (+ (double bz) 0.5)
-                                                          2.0)]
+                                                          (cfg-double :combat.entity-search-radius))]
       (let [entity-id (:uuid entity)]
         (when (and entity-id
                    (not= entity-id player-id)
@@ -203,7 +218,7 @@
                                          y-speed
                                          0.0))
           (swap! affected-entities* conj entity-id)
-          (add-exp! player-id 0.002))))))
+          (add-exp! player-id (cfg-double :progression.exp-entity)))))))
 
 (defn- propagation-positions [perp]
   [[{:x 0.0 :y 0.0 :z 0.0} 1.0]
@@ -280,7 +295,7 @@
 
                       (swap! energy* - 0.5))
 
-                    (when (< (rand) ground-break-prob)
+                    (when (< (rand) (cfg-double :breaking.ground-break-probability))
                       (break-with-force! player-id world-id block-x block-y block-z false energy* block-drop-rate broken-blocks*))
 
                     (let [before-entities (count @affected-entities*)]
@@ -296,18 +311,18 @@
 
 (defn- break-mastery-ring!
   [player-id world-id player-pos exp broken-blocks*]
-  (when (and (= 1.0 (bal/clamp01 exp))
+  (when (and (>= (exp01 exp) (cfg-double :breaking.mastery-exp-threshold))
              block-manip/*block-manipulation*)
     (let [energy* (atom Double/MAX_VALUE)
           x0 (int (double (:x player-pos)))
           y0 (int (double (:y player-pos)))
           z0 (int (double (:z player-pos)))]
-      (doseq [x (range (- x0 5) (+ x0 5))
+      (doseq [x (range (- x0 (cfg-int :breaking.mastery-radius)) (+ x0 (cfg-int :breaking.mastery-radius)))
               y (range (- y0 1) (+ y0 1))
-              z (range (- z0 5) (+ z0 5))]
+          z (range (- z0 (cfg-int :breaking.mastery-radius)) (+ z0 (cfg-int :breaking.mastery-radius)))]
         (when-let [hardness (block-manip/get-block-hardness block-manip/*block-manipulation* world-id x y z)]
           (when (and (number? hardness)
-                     (<= (double hardness) 0.6))
+             (<= (double hardness) (cfg-double :breaking.mastery-hardness-cap)))
             (break-with-force! player-id world-id x y z true energy* 1.0 broken-blocks*)))))))
 
 (defn groundshock-on-key-up
@@ -317,10 +332,10 @@
     (when-let [ctx-data (ctx/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
             charge-ticks (long (or (:charge-ticks skill-state) 0))
-            exp (bal/clamp01 (skill-exp player-id))]
+            exp (exp01 (skill-exp player-id))]
 
         ;; Check if charge is valid (5+ ticks) and player is on ground
-        (if (and (>= charge-ticks min-charge-ticks)
+          (if (and (>= charge-ticks (cfg-int :charge.min-ticks))
                  player-motion/*player-motion*
                  (player-motion/is-on-ground? player-motion/*player-motion* player-id))
           (if-not cost-ok?
@@ -341,7 +356,7 @@
                                         (count (:affected-entities result)))]
                   (break-mastery-ring! player-id world-id pos exp broken-blocks*)
                   (apply-cooldown! player-id exp)
-                  (add-exp! player-id 0.001)
+                  (add-exp! player-id (cfg-double :progression.exp-use))
                   (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] true)
                   (fx/send-perform! ctx-id :groundshock/fx-perform
                                    {:affected-blocks (:affected-blocks result)

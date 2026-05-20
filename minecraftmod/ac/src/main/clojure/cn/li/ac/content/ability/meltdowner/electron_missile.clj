@@ -15,11 +15,10 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.mcmod.platform.entity :as entity]
@@ -30,6 +29,19 @@
 (md-damage/ensure-damage-handler!)
 
 (def ^:private mdball-entity-id "my_mod:entity_md_ball")
+(def ^:private electron-missile-skill-id :electron-missile)
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double electron-missile-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int electron-missile-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double electron-missile-skill-id field-id exp))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int electron-missile-skill-id field-id exp))
 
 (defn- estimate-travel-ticks
   [start-pos target]
@@ -37,19 +49,20 @@
         dy (- (double (:y target 0.0)) (double (:y start-pos 0.0)))
         dz (- (double (:z target 0.0)) (double (:z start-pos 0.0)))
         dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
-        ticks (Math/ceil (/ dist 1.6))]
-    (int (max 2 (min 20 ticks)))))
+        ticks (Math/ceil (/ dist (cfg-double :projectile.travel-speed)))]
+      (int (max (cfg-int :projectile.travel-ticks-min)
+            (min (cfg-int :projectile.travel-ticks-max) ticks)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :electron-missile))
+  (skill-effects/skill-exp player-id electron-missile-skill-id))
 
 (defn- find-nearest-entity [player-id world-id exp]
   (when world-effects/*world-effects*
-    (let [seek-range (bal/lerp 5.0 13.0 exp)
+    (let [seek-range (cfg-lerp :targeting.seek-range exp)
           eye (geom/eye-pos player-id)
           candidates (world-effects/find-entities-in-radius
                        world-effects/*world-effects*
@@ -85,19 +98,19 @@
           state      (get ctx-data :skill-state {})
           ticker     (long (or (:fire-ticker state) 0))
           exp        (skill-exp player-id)
-          max-hold   (int (bal/lerp 80.0 200.0 exp))
+          max-hold   (cfg-lerp-int :charge.max-hold-ticks exp)
           new-ticker (inc ticker)]
       ;; Anti-AFK: terminate after max-hold ticks (lerp 80→200 based on exp)
       (when (>= (long hold-ticks) max-hold)
         (log/debug "ElectronMissile: max hold reached" hold-ticks "/" max-hold)
         (ctx/terminate-context! ctx-id nil))
       ;; Fire a ball every 8 ticks (fixed, per upstream)
-      (when (zero? (mod new-ticker 8))
+      (when (zero? (mod new-ticker (cfg-int :timing.fire-interval-ticks)))
         (try
           (let [world-id (geom/world-id-of player-id)
                 target   (find-nearest-entity player-id world-id exp)]
             (when target
-              (let [damage      (bal/lerp 10.0 18.0 exp)
+              (let [damage      (cfg-lerp :combat.damage exp)
                     target-uuid (:uuid target)]
                 (when player
                   (entity/player-spawn-entity-by-id! player mdball-entity-id 0.0))
@@ -116,7 +129,8 @@
                      ;; Damage-helper: mark target for RadiationIntensify amplification
                      :on-hit!     (fn [hit-uuid]
                                     (md-damage/mark-target! player-id hit-uuid)
-                                    (skill-effects/add-skill-exp! player-id :electron-missile 0.002))})))))
+                                    (skill-effects/add-skill-exp! player-id electron-missile-skill-id
+                                                                  (cfg-double :progression.exp-hit)))})))) )
           (catch Exception e
             (log/warn "ElectronMissile fire failed:" (ex-message e)))))
       (ctx/update-context! ctx-id assoc-in [:skill-state :fire-ticker] new-ticker))
@@ -126,8 +140,8 @@
 (defn electron-missile-up!
   [{:keys [player-id ctx-id]}]
   (let [exp (skill-exp player-id)
-        cd  (int (bal/lerp 700.0 400.0 exp))]
-    (skill-effects/set-main-cooldown! player-id :electron-missile cd)
+    cd  (cfg-lerp-int :cooldown.ticks exp)]
+  (skill-effects/set-main-cooldown! player-id electron-missile-skill-id cd)
     (ctx/update-context! ctx-id assoc :skill-state {:fire-ticker 0 :active? false})))
 
 (defn electron-missile-abort!
@@ -151,9 +165,9 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :pattern        :hold-channel
-  :cost           {:down {:overload (constantly 200.0)}
+  :cost           {:down {:overload (fn [_] (cfg-double :cost.down.overload))}
                    :tick {:cp (fn [{:keys [player-id]}]
-                                (bal/lerp 12.0 5.0 (skill-exp player-id)))}}
+                                (cfg-lerp :cost.tick.cp (skill-exp player-id)))}}
   :cooldown       {:mode :manual}
   :cooldown-ticks 1
   :actions        {:down!  electron-missile-down!

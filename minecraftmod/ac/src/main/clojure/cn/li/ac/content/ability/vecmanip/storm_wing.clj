@@ -23,7 +23,7 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.player-motion :as player-motion]
@@ -38,30 +38,45 @@
 ;; Constants
 ;; ============================================================================
 
-(def ^:private ACCEL 0.16)
+(def ^:private storm-wing-skill-id :storm-wing)
+
+(defn- exp01 [exp]
+  (max 0.0 (min 1.0 (double (or exp 0.0)))))
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double storm-wing-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int storm-wing-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double storm-wing-skill-id field-id (exp01 exp)))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int storm-wing-skill-id field-id (exp01 exp)))
 
 ;; ============================================================================
 ;; Helpers
 ;; ============================================================================
 
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :storm-wing))
+  (skill-effects/skill-exp player-id storm-wing-skill-id))
 
 (defn- get-player-pos [player-id]
   (when teleportation/*teleportation*
     (teleportation/get-player-position teleportation/*teleportation* player-id)))
 
 (defn- apply-cooldown! [player-id exp]
-  (let [cd-ticks (int (Math/round (double (bal/lerp 30.0 10.0 exp))))]
+  (let [cd-ticks (cfg-lerp-int :cooldown.ticks exp)]
     (skill-effects/set-main-cooldown! player-id :storm-wing cd-ticks)))
 
 (defn storm-wing-cost-tick-cp
   [{:keys [player-id]}]
-  (bal/lerp 40.0 25.0 (skill-exp player-id)))
+  (cfg-lerp :cost.tick.cp (skill-exp player-id)))
 
 (defn storm-wing-cost-tick-overload
   [{:keys [player-id]}]
-  (bal/lerp 10.0 7.0 (skill-exp player-id)))
+  (cfg-lerp :cost.tick.overload (skill-exp player-id)))
 
 (defn storm-wing-cost-creative?
   [{:keys [player]}]
@@ -70,19 +85,21 @@
                   (catch Exception _ false)))))
 
 (defn- add-exp! [player-id]
-  (skill-effects/add-skill-exp! player-id :storm-wing 0.00005))
+  (skill-effects/add-skill-exp! player-id storm-wing-skill-id (cfg-double :progression.exp-tick)))
 
 (defn- break-soft-blocks! [player-id world-id px py pz]
   (when block-manip/*block-manipulation*
-    (let [tries 40]
+    (let [tries (cfg-int :breaking.soft-block-tries)
+          radius (cfg-int :breaking.soft-block-search-radius)]
       (dotimes [_ tries]
-        (let [bx (+ (int px) (- (rand-int 21) 10))
-              by (+ (int py) (- (rand-int 21) 10))
-              bz (+ (int pz) (- (rand-int 21) 10))]
+        (let [diameter (inc (* 2 radius))
+              bx (+ (int px) (- (rand-int diameter) radius))
+              by (+ (int py) (- (rand-int diameter) radius))
+              bz (+ (int pz) (- (rand-int diameter) radius))]
           (when-let [hardness (block-manip/get-block-hardness
                                 block-manip/*block-manipulation*
                                 world-id bx by bz)]
-            (when (and (> hardness 0.0) (<= hardness 0.3))
+            (when (and (> hardness 0.0) (<= hardness (cfg-double :breaking.soft-hardness-max)))
               (block-manip/break-block! block-manip/*block-manipulation*
                                         player-id world-id bx by bz false))))))))
 
@@ -90,7 +107,7 @@
   (when (and world-effects/*world-effects* entity-motion/*entity-motion*)
     (let [entities (world-effects/find-entities-in-radius
                      world-effects/*world-effects*
-                     world-id (double px) (double py) (double pz) 3.0)]
+                     world-id (double px) (double py) (double pz) (cfg-double :combat.mastery-knockback-radius))]
       (doseq [entity entities
               :let [eid (:uuid entity)]
               :when (not= eid player-id)]
@@ -100,21 +117,22 @@
               dist (max 1.0e-6 (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz))))]
           (entity-motion/add-velocity! entity-motion/*entity-motion*
                                        world-id eid
-                                       (* (/ dx dist) 2.0)
-                                       (* (/ dy dist) 2.0)
-                                       (* (/ dz dist) 2.0)))))))
+                                       (* (/ dx dist) (cfg-double :combat.mastery-knockback-strength))
+                                       (* (/ dy dist) (cfg-double :combat.mastery-knockback-strength))
+                                       (* (/ dz dist) (cfg-double :combat.mastery-knockback-strength))))))))
 
 ;; ============================================================================
 ;; Velocity helpers (smooth accel toward target)
 ;; ============================================================================
 
 (defn- accel-toward [current target]
-  (let [d (- (double target) (double current))]
-    (if (< (Math/abs d) ACCEL)
+  (let [d (- (double target) (double current))
+        accel (cfg-double :movement.acceleration)]
+    (if (< (Math/abs d) accel)
       (double target)
       (if (pos? d)
-        (+ (double current) ACCEL)
-        (- (double current) ACCEL)))))
+        (+ (double current) accel)
+        (- (double current) accel)))))
 
 ;; ============================================================================
 ;; FX helpers
@@ -128,7 +146,7 @@
   [{:keys [ctx-id player-id]}]
   (try
     (let [exp (skill-exp player-id)
-          charge-needed (int (Math/round (double (bal/lerp 70.0 30.0 exp))))]
+          charge-needed (cfg-lerp-int :charge.time exp)]
       (ctx/update-context! ctx-id assoc :skill-state
                            {:phase :charging
                             :charge-ticks 0
@@ -174,7 +192,9 @@
                           px (double (:x pos))
                           py (double (:y pos))
                           pz (double (:z pos))
-                          speed (* (if (< exp 0.45) 0.7 1.2) (bal/lerp 2.0 3.0 exp))
+                          [low-speed high-speed] (skill-config/tunable-double-list storm-wing-skill-id :movement.speed-multipliers)
+                          speed (* (if (< exp (cfg-double :movement.speed-exp-threshold)) low-speed high-speed)
+                                   (cfg-lerp :movement.speed-scale exp))
                           ;; Get current move direction from context (set by client)
                           dir (:move-dir skill-state)
                           cur-vx (double (:vx skill-state 0.0))
@@ -182,7 +202,7 @@
                           cur-vz (double (:vz skill-state 0.0))]
 
                       ;; Low exp: break soft blocks
-                      (when (< exp 0.15)
+                      (when (< exp (cfg-double :breaking.low-exp-threshold))
                         (break-soft-blocks! player-id world-id px py pz))
 
                       ;; Compute target velocity
@@ -200,11 +220,13 @@
                                                    (let [hit (raycast/raycast-blocks
                                                                raycast/*raycast*
                                                                world-id
-                                                               px (+ py 1.62) pz
+                                                               px (+ py (cfg-double :targeting.near-ground-eye-height)) pz
                                                                0.0 -1.0 0.0
-                                                               2.0)]
+                                                               (cfg-double :targeting.near-ground-distance))]
                                                      (boolean hit)))
-                                    hover-vy (if near-ground? 0.1 0.078)]
+                                    hover-vy (if near-ground?
+                                               (cfg-double :movement.hover-near-ground-velocity)
+                                               (cfg-double :movement.hover-air-velocity))]
                                 [0.0 hover-vy 0.0]))
 
                             new-vx (accel-toward cur-vx tvx)

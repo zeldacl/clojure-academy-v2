@@ -11,7 +11,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.core :as effect]
@@ -24,8 +24,22 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+(def ^:private ray-barrage-skill-id :ray-barrage)
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double ray-barrage-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int ray-barrage-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double ray-barrage-skill-id field-id exp))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int ray-barrage-skill-id field-id exp))
+
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :ray-barrage))
+  (skill-effects/skill-exp player-id ray-barrage-skill-id))
 
 (defn- jitter-dir
   "Add small random jitter to a direction vector."
@@ -47,7 +61,7 @@
   [{:keys [player-id ctx-id]}]
   (try
     (let [exp      (skill-exp player-id)
-          damage   (bal/lerp 4.0 10.0 exp)
+          damage   (cfg-lerp :combat.damage exp)
           world-id (geom/world-id-of player-id)
           eye      (geom/eye-pos player-id)
           look-vec (when raycast/*raycast*
@@ -55,19 +69,19 @@
       (when look-vec
         ;; Fire 5 beams in a spread cone
         (let [hit-count (atom 0)]
-          (dotimes [_i 5]
-            (let [dir (jitter-dir look-vec 0.18)
+          (dotimes [_i (cfg-int :beam.count)]
+            (let [dir (jitter-dir look-vec (cfg-double :beam.spread))
                   result (effect/run-op!
                            {:player-id  player-id
                             :ctx-id     ctx-id
                             :world-id   world-id
                             :eye-pos    eye
                             :look-dir   {:x (:x dir) :y (:y dir) :z (:z dir)}}
-                           [:beam {:radius          0.3
-                                   :query-radius    20.0
-                                   :step            0.8
-                                   :max-distance    22.0
-                                   :visual-distance 20.0
+                             [:beam {:radius          (cfg-double :beam.radius)
+                               :query-radius    (cfg-double :beam.query-radius)
+                               :step            (cfg-double :beam.step)
+                               :max-distance    (cfg-double :beam.max-distance)
+                               :visual-distance (cfg-double :beam.visual-distance)
                                    :damage          damage
                                    :damage-type     :magic
                                    :break-blocks?   false
@@ -76,7 +90,8 @@
               (when (get-in result [:beam-result :performed?])
                 (swap! hit-count inc))))
           (when (pos? @hit-count)
-            (skill-effects/add-skill-exp! player-id :ray-barrage 0.003)
+            (skill-effects/add-skill-exp! player-id ray-barrage-skill-id
+                                          (cfg-double :progression.exp-hit))
             (log/debug "RayBarrage: hit" @hit-count "beams")))))
     (catch Exception e
       (log/warn "RayBarrage perform! failed:" (ex-message e)))))
@@ -97,10 +112,10 @@
   :ctrl-id        :ray-barrage
   :pattern        :instant
   :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (bal/lerp 300.0 220.0 (skill-exp player-id)))
+                                      (cfg-lerp :cost.down.cp (skill-exp player-id)))
                           :overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 130.0 100.0 (skill-exp player-id)))}}
+                                      (cfg-lerp :cost.down.overload (skill-exp player-id)))} }
   :cooldown-ticks (fn [{:keys [player-id]}]
-                    (int (bal/lerp 40.0 25.0 (skill-exp player-id))))
+                    (cfg-lerp-int :cooldown.ticks (skill-exp player-id)))
   :actions        {:perform! ray-barrage-perform!}
   :prerequisites  [{:skill-id :meltdowner :min-exp 0.5}])

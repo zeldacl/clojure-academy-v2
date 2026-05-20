@@ -12,7 +12,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.util.scaling :as scaling]
@@ -28,8 +28,22 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+(def ^:private light-shield-skill-id :light-shield)
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double light-shield-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int light-shield-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double light-shield-skill-id field-id exp))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int light-shield-skill-id field-id exp))
+
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :light-shield))
+  (skill-effects/skill-exp player-id light-shield-skill-id))
 
 (defn- get-player-position [player-id]
   (when-let [teleportation (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
@@ -48,7 +62,7 @@
           dot (+ (* nx (double (:x player-look)))
                  (* ny (double (:y player-look)))
                  (* nz (double (:z player-look))))]
-      (> dot 0.5))))  ; cos(60°) = 0.5
+      (> dot (cfg-double :combat.front-cone-dot)))))  ; cos(60°) = 0.5
 
 ;; ---------------------------------------------------------------------------
 ;; Actions
@@ -65,11 +79,13 @@
   (when potion-effects/*potion-effects*
     (potion-effects/apply-potion-effect!
       potion-effects/*potion-effects*
-      player-id :slowness 60 1))
+      player-id :slowness
+      (cfg-int :effect.deactivate-slowness-duration-ticks)
+      (cfg-int :effect.slowness-amplifier)))
   (let [exp (skill-exp player-id)]
     (skill-effects/set-main-cooldown!
-      player-id :light-shield
-      (int (bal/lerp 100.0 60.0 exp))))
+      player-id light-shield-skill-id
+      (cfg-lerp-int :cooldown.ticks exp)))
   (ctx/ctx-send-to-client! ctx-id :light-shield/fx-end {})
   (log/info "LightShield: Deactivated"))
 
@@ -85,7 +101,8 @@
         (when (and pos world-effects/*world-effects*)
           (let [entities (world-effects/find-entities-in-radius
                            world-effects/*world-effects*
-                           world-id (:x pos) (:y pos) (:z pos) 3.0)
+                           world-id (:x pos) (:y pos) (:z pos)
+                           (cfg-double :combat.touch-radius))
                 look-vec (when-let [raycast (resolve 'cn.li.mcmod.platform.raycast/*raycast*)]
                            (when-let [rc-impl @raycast]
                              ((resolve 'cn.li.mcmod.platform.raycast/get-player-look-vector)
@@ -99,7 +116,7 @@
                   (entity-damage/apply-direct-damage!
                     entity-damage/*entity-damage*
                     world-id (:uuid entity)
-                    (bal/lerp 3.0 8.0 exp)
+                    (cfg-lerp :combat.touch-damage exp)
                     :magic))))))))))
 
 (defn light-shield-abort!
@@ -107,7 +124,9 @@
   (when potion-effects/*potion-effects*
     (potion-effects/apply-potion-effect!
       potion-effects/*potion-effects*
-      player-id :slowness 40 1))
+      player-id :slowness
+      (cfg-int :effect.abort-slowness-duration-ticks)
+      (cfg-int :effect.slowness-amplifier)))
   (toggle/remove-toggle! ctx-id :light-shield)
   (ctx/ctx-send-to-client! ctx-id :light-shield/fx-end {}))
 
@@ -119,9 +138,10 @@
   [player-id _attacker-id damage _damage-source]
   (try
     (let [exp (skill-exp player-id)
-          reduction (bal/lerp 0.5 0.8 exp)
+        reduction (cfg-lerp :combat.damage-reduction exp)
           new-damage (* damage (- 1.0 reduction))]
-      (skill-effects/add-skill-exp! player-id :light-shield (* damage 0.0004))
+      (skill-effects/add-skill-exp! player-id light-shield-skill-id
+                    (* damage (cfg-double :progression.exp-absorbed-scale)))
       [(double new-damage) {:absorbed (- damage new-damage)}])
     (catch Exception e
       (log/warn "LightShield reduce-damage failed:" (ex-message e))
@@ -154,11 +174,11 @@
   :pattern        :toggle
   :cooldown       {:mode :manual}
   :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (bal/lerp 200.0 160.0 (skill-exp player-id)))
+                (cfg-lerp :cost.down.cp (skill-exp player-id)))
                           :overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 100.0 70.0 (skill-exp player-id)))}
+                (cfg-lerp :cost.down.overload (skill-exp player-id)))}
                    :tick {:cp (fn [{:keys [player-id]}]
-                                (bal/lerp 12.0 8.0 (skill-exp player-id)))}}
+              (cfg-lerp :cost.tick.cp (skill-exp player-id)))} }
   :actions        {:activate!   light-shield-activate!
                    :deactivate! light-shield-deactivate!
                    :tick!       light-shield-tick!

@@ -35,18 +35,31 @@
     (let [^Gson gson-instance @gson]
       (.fromJson gson-instance reader java.util.Map))))
 
+(defn- apply-numeric-bounds
+  [descriptor value]
+  (let [value (double value)
+        value (if-let [min-val (:min descriptor)]
+                (max (double min-val) value)
+                value)
+        value (if-let [max-val (:max descriptor)]
+                (min (double max-val) value)
+                value)]
+    value))
+
 (defn- coerce-value
   [descriptor raw-value]
   (try
     (case (:type descriptor)
-      :int (cond
-             (number? raw-value) (int raw-value)
-             (string? raw-value) (Integer/parseInt raw-value)
-             :else (:default descriptor))
-      :double (cond
-                (number? raw-value) (double raw-value)
-                (string? raw-value) (Double/parseDouble raw-value)
-                :else (:default descriptor))
+        :int (let [value (cond
+            (number? raw-value) (int raw-value)
+            (string? raw-value) (Integer/parseInt raw-value)
+            :else (:default descriptor))]
+          (int (apply-numeric-bounds descriptor value)))
+        :double (let [value (cond
+          (number? raw-value) (double raw-value)
+          (string? raw-value) (Double/parseDouble raw-value)
+          :else (:default descriptor))]
+        (double (apply-numeric-bounds descriptor value)))
       :boolean (cond
                  (instance? Boolean raw-value) raw-value
                  (string? raw-value) (Boolean/parseBoolean raw-value)

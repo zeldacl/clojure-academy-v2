@@ -4,7 +4,10 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.util.balance :as bal]))
+            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]))
+
+(def ^:private rad-intensify-skill-id :rad-intensify)
 
 (defn skill-exp
   [player-id]
@@ -17,7 +20,10 @@
 
 (defn rate
   [player-id]
-  (bal/lerp 1.4 1.8 (skill-exp player-id)))
+  (skill-config/lerp-double rad-intensify-skill-id :combat.damage-rate (skill-exp player-id)))
+
+(defn mark-duration-ms []
+  (skill-config/tunable-int rad-intensify-skill-id :effect.mark-duration-ms))
 
 (defskill! rad-intensify
   :id :rad-intensify

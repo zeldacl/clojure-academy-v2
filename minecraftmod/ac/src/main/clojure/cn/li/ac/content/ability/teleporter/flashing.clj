@@ -14,7 +14,6 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -25,8 +24,10 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+(def ^:private flashing-skill-id :flashing)
+
 (defn- skill-exp [player-id]
-  (helper/skill-exp player-id :flashing))
+  (helper/skill-exp player-id flashing-skill-id))
 
 ;; ---------------------------------------------------------------------------
 ;; Actions
@@ -43,10 +44,10 @@
     (let [ctx-data    (ctx/get-context ctx-id)
           tick-count  (long (or (get-in ctx-data [:skill-state :tick-counter]) 0))
           exp         (skill-exp player-id)
-          interval    (int (bal/lerp 6.0 3.0 exp))
-          blink-dist  (bal/lerp 0.5 1.5 exp)
-          cp-cost     (bal/lerp 30.0 18.0 exp)
-          ol-cost     (bal/lerp 8.0 4.0 exp)
+          interval    (helper/cfg-lerp-int flashing-skill-id :timing.blink-interval-ticks exp)
+          blink-dist  (helper/cfg-lerp flashing-skill-id :movement.blink-distance exp)
+          cp-cost     (helper/cfg-lerp flashing-skill-id :cost.blink.cp exp)
+          ol-cost     (helper/cfg-lerp flashing-skill-id :cost.blink.overload exp)
           new-tick    (inc tick-count)]
       (ctx/update-context! ctx-id assoc-in [:skill-state :tick-counter] new-tick)
       ;; Blink on interval
@@ -70,7 +71,8 @@
                   (when (helper/teleport-to! player-id world-id dest-x dest-y dest-z)
                     ;; Consume resources manually after blink
                     (skill-effects/perform-resource! player-id ol-cost cp-cost)
-                    (skill-effects/add-skill-exp! player-id :flashing 0.001)
+                    (skill-effects/add-skill-exp! player-id flashing-skill-id
+                                                  (helper/cfg-double flashing-skill-id :progression.exp-blink))
                     (ctx/ctx-send-to-client! ctx-id :flashing/fx-blink
                                              {:from-x (double (:x player-pos))
                                               :from-y dest-y
@@ -84,11 +86,13 @@
 
 (defn flashing-deactivate!
   [{:keys [player-id ctx-id]}]
-  (skill-effects/set-main-cooldown! player-id :flashing 20))
+  (skill-effects/set-main-cooldown! player-id flashing-skill-id
+                                    (helper/cfg-int flashing-skill-id :cooldown.deactivate-ticks)))
 
 (defn flashing-abort!
   [{:keys [player-id ctx-id]}]
-  (skill-effects/set-main-cooldown! player-id :flashing 20))
+  (skill-effects/set-main-cooldown! player-id flashing-skill-id
+                                    (helper/cfg-int flashing-skill-id :cooldown.deactivate-ticks)))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration
@@ -108,7 +112,9 @@
   :overload-consume-speed 0.0
   :pattern        :toggle
   :cost           {:down {:overload (fn [{:keys [player-id]}]
-                                     (bal/lerp 20.0 10.0 (skill-exp player-id)))}}
+                                     (helper/cfg-lerp flashing-skill-id
+                                                      :cost.down.overload
+                                                      (skill-exp player-id)))}}
   :cooldown       {:mode :manual}
   :actions        {:activate!   flashing-activate!
                    :tick!       flashing-tick!

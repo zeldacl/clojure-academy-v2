@@ -16,7 +16,7 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.util.scaling :as scaling]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.server.service.skill-effects :as fx-common]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
@@ -24,24 +24,46 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private affected-entity-difficulty
-  {"minecraft:arrow" 1.0
-   "minecraft:potion" 1.4
-   "minecraft:snowball" 0.1})
+(def ^:private vec-deviation-skill-id :vec-deviation)
 
-(def ^:private excluded-entity-ids
-  #{"minecraft:item"
-    "minecraft:xp_bottle"
-    "minecraft:experience_bottle"})
+(defn- exp01 [exp]
+  (max 0.0 (min 1.0 (double (or exp 0.0)))))
 
-(def ^:private large-fireball-ids
-  #{"minecraft:fireball" "minecraft:large_fireball"})
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double vec-deviation-skill-id field-id))
 
-(def ^:private small-fireball-ids
-  #{"minecraft:small_fireball"})
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double vec-deviation-skill-id field-id (exp01 exp)))
+
+(defn- cfg-string-set [field-id]
+  (set (skill-config/tunable-string-list vec-deviation-skill-id field-id)))
+
+(defn- parse-difficulty-entry [entry]
+  (try
+    (let [entry* (str entry)
+          idx (.lastIndexOf ^String entry* ":")]
+      (when (pos? idx)
+        [(subs entry* 0 idx)
+         (Double/parseDouble (subs entry* (inc idx)))]))
+    (catch Exception _
+      nil)))
+
+(defn- affected-entity-difficulty []
+  (into {}
+        (keep parse-difficulty-entry)
+        (skill-config/tunable-string-list vec-deviation-skill-id :targeting.affected-entity-difficulty)))
+
+(defn- excluded-entity-ids []
+  (cfg-string-set :targeting.excluded-entity-ids))
+
+(defn- large-fireball-ids []
+  (cfg-string-set :targeting.large-fireball-ids))
+
+(defn- small-fireball-ids []
+  (cfg-string-set :targeting.small-fireball-ids))
 
 (defn- skill-exp [player-id]
-  (fx-common/skill-exp player-id :vec-deviation))
+  (fx-common/skill-exp player-id vec-deviation-skill-id))
 
 (defn- current-cp
   [player-id]
@@ -53,7 +75,7 @@
 
 (defn vec-deviation-cost-tick-cp
   [{:keys [player-id]}]
-  (scaling/lerp 13.0 5.0 (skill-exp player-id)))
+  (cfg-lerp :cost.tick.cp (skill-exp player-id)))
 
 (defn- get-player-position
   "Get player position from teleportation protocol."
@@ -69,7 +91,7 @@
 (defn- excluded-entity?
   [entity]
   (let [eid (entity-registry-id entity)]
-    (or (contains? excluded-entity-ids eid)
+    (or (contains? (excluded-entity-ids) eid)
         (:item? entity)
         (:living? entity)
         (:mob? entity))))
@@ -78,7 +100,7 @@
   [entity]
   (let [eid (entity-registry-id entity)]
     (when-not (excluded-entity? entity)
-      (double (get affected-entity-difficulty eid 1.0)))))
+      (double (get (affected-entity-difficulty) eid 1.0)))))
 
 (defn- active-vec-deviation-ctx-id
   [player-id]
@@ -141,7 +163,7 @@
                     y (:y pos)
                     z (:z pos)
                     entities (world-effects/find-entities-in-radius world-effects/*world-effects*
-                                                                    world-id x y z 5.0)
+                                                                    world-id x y z (cfg-double :targeting.radius))
                     visited (get-in ctx-data [:skill-state :vec-deviation-visited] #{})
                     marked (get-in ctx-data [:skill-state :vec-deviation-marked] #{})
                     fresh-entities (remove (fn [entity]
@@ -157,7 +179,7 @@
                                (not marked?)
                                difficulty
                                (toggle/is-toggle-active? (or (ctx/get-context ctx-id) ctx-data) :vec-deviation))
-                      (let [deflect-cost (* (scaling/lerp 15.0 12.0 exp) difficulty)]
+                      (let [deflect-cost (* (cfg-lerp :cost.deflect.cp exp) difficulty)]
                         (if-not (consume-cp! player-id deflect-cost)
                           (do
                             (toggle/deactivate-toggle! ctx-id :vec-deviation)
@@ -166,22 +188,22 @@
                             (when entity-motion/*entity-motion*
                               (entity-motion/set-velocity! entity-motion/*entity-motion*
                                                            world-id entity-uuid 0.0 0.0 0.0))
-                            (when (or (contains? large-fireball-ids eid)
-                                      (contains? small-fireball-ids eid))
+                            (when (or (contains? (large-fireball-ids) eid)
+                                      (contains? (small-fireball-ids) eid))
                               (when entity-motion/*entity-motion*
                                 (entity-motion/discard-entity! entity-motion/*entity-motion* world-id entity-uuid)))
-                            (when (and (contains? large-fireball-ids eid)
+                            (when (and (contains? (large-fireball-ids) eid)
                                        world-effects/*world-effects*)
                               (world-effects/create-explosion! world-effects/*world-effects*
                                                                world-id
                                                                (double (or (:x entity) 0.0))
                                                                (double (or (:y entity) 0.0))
                                                                (double (or (:z entity) 0.0))
-                                                               1.0
+                                                               (cfg-double :combat.fireball-explosion-radius)
                                                                false))
-                            (add-exp! player-id (* 0.001 difficulty))
-                            (let [generic-mark? (and (not (contains? large-fireball-ids eid))
-                                                     (not (contains? small-fireball-ids eid)))]
+                            (add-exp! player-id (* (cfg-double :progression.exp-deflect-scale) difficulty))
+                            (let [generic-mark? (and (not (contains? (large-fireball-ids) eid))
+                                                     (not (contains? (small-fireball-ids) eid)))]
                               (when generic-mark?
                                 (ctx/update-context! ctx-id update-in [:skill-state :vec-deviation-marked] (fnil conj #{}) entity-uuid))
                               (send-fx-stop-entity! ctx-id entity generic-mark?))
@@ -203,17 +225,17 @@
   [player-id original-damage]
   (try
     (if (fx-common/get-player-state player-id)
-      (if (> (double original-damage) 9999.0)
+      (if (> (double original-damage) (cfg-double :combat.damage-ignore-threshold))
         original-damage
-        (let [exp (skill-exp player-id)
-              reduction-rate (scaling/lerp 0.4 0.9 exp)
-              max-consumption (scaling/lerp 15.0 12.0 exp)
+          (let [exp (skill-exp player-id)
+            reduction-rate (cfg-lerp :combat.damage-reduction exp)
+            max-consumption (cfg-lerp :cost.damage.cp exp)
               current-cp (current-cp player-id)
               consumption (min current-cp (double max-consumption))]
           (when (pos? consumption)
             (consume-cp! player-id consumption))
 
-          (add-exp! player-id (* original-damage 0.0006))
+          (add-exp! player-id (* original-damage (cfg-double :progression.exp-damage-scale)))
 
           (when-let [pos (get-player-position player-id)]
             (when-let [ctx-id (active-vec-deviation-ctx-id player-id)]

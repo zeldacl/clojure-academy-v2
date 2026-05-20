@@ -13,7 +13,6 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -24,18 +23,19 @@
 ;; Constants
 ;; ---------------------------------------------------------------------------
 
-(def ^:private min-hold    5)
-(def ^:private max-hold   60)
+(def ^:private threatening-teleport-skill-id :threatening-teleport)
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
 (defn- charge-ratio [hold-ticks]
-  (-> (- (long hold-ticks) min-hold)
+  (let [min-hold (helper/cfg-int threatening-teleport-skill-id :charge.min-ticks)
+        max-hold (helper/cfg-int threatening-teleport-skill-id :charge.max-ticks)]
+    (-> (- (long hold-ticks) min-hold)
       (max 0)
       (/ (double (- max-hold min-hold)))
-      (min 1.0)))
+      (min 1.0))))
 
 (defn- position-behind-entity
   "Return a map {:x :y :z} 1.5 blocks behind entity facing player."
@@ -44,9 +44,11 @@
         dz (- (double (:z player-pos)) (double (:z entity-pos)))
         len (max 1.0e-6 (Math/sqrt (+ (* dx dx) (* dz dz))))
         nx (/ dx len) nz (/ dz len)]
-    {:x (- (double (:x entity-pos)) (* 1.5 nx))
+    {:x (- (double (:x entity-pos)) (* (helper/cfg-double threatening-teleport-skill-id
+                                :movement.behind-offset) nx))
      :y (double (:y entity-pos))
-     :z (- (double (:z entity-pos)) (* 1.5 nz))}))
+     :z (- (double (:z entity-pos)) (* (helper/cfg-double threatening-teleport-skill-id
+                                :movement.behind-offset) nz))}))
 
 ;; ---------------------------------------------------------------------------
 ;; Actions
@@ -59,8 +61,8 @@
 
 (defn threatening-tp-tick!
   [{:keys [player-id ctx-id hold-ticks]}]
-  (let [exp   (helper/skill-exp player-id :threatening-teleport)
-        range (bal/lerp 20.0 40.0 exp)
+    (let [exp   (helper/skill-exp player-id threatening-teleport-skill-id)
+      range (helper/cfg-lerp threatening-teleport-skill-id :targeting.range exp)
         hit   (helper/raycast-entity player-id range)]
     (ctx/update-context! ctx-id assoc :skill-state
                          {:target-uuid (when hit (:entity-uuid hit))
@@ -73,9 +75,11 @@
 (defn threatening-tp-up!
   [{:keys [player-id ctx-id hold-ticks]}]
   (try
-    (let [exp      (helper/skill-exp player-id :threatening-teleport)
+        (let [exp      (helper/skill-exp player-id threatening-teleport-skill-id)
           charge   (charge-ratio (long hold-ticks))
-          damage   (* (bal/lerp 5.0 14.0 exp) (+ 1.0 charge))
+          damage   (* (helper/cfg-lerp threatening-teleport-skill-id :combat.damage exp)
+              (+ 1.0 (* charge (helper/cfg-double threatening-teleport-skill-id
+                          :combat.charge-bonus-multiplier))))
           ctx-data (ctx/get-context ctx-id)
           t-uuid   (get-in ctx-data [:skill-state :target-uuid])]
       (when t-uuid
@@ -90,9 +94,11 @@
               (when (helper/teleport-to! player-id world-id
                                          (:x behind) (:y behind) (:z behind))
                 (helper/deal-magic-damage! player-id world-id t-uuid damage)
-                (skill-effects/add-skill-exp! player-id :threatening-teleport 0.003)
-                (let [cd (int (bal/lerp 35.0 20.0 exp))]
-                  (skill-effects/set-main-cooldown! player-id :threatening-teleport cd))
+                (skill-effects/add-skill-exp! player-id threatening-teleport-skill-id
+                                              (helper/cfg-double threatening-teleport-skill-id
+                                                                 :progression.exp-success))
+                (let [cd (helper/cfg-lerp-int threatening-teleport-skill-id :cooldown.ticks exp)]
+                  (skill-effects/set-main-cooldown! player-id threatening-teleport-skill-id cd))
                 (ctx/ctx-send-to-client! ctx-id :threatening-tp/fx-perform
                                          {:x (:x behind) :y (:y behind) :z (:z behind)})))))))
     (catch Exception e
@@ -120,11 +126,13 @@
   :overload-consume-speed 0.0
   :pattern        :release-cast
   :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (bal/lerp 150.0 100.0
-                                                (helper/skill-exp player-id :threatening-teleport)))
+                                      (helper/cfg-lerp threatening-teleport-skill-id
+                                                       :cost.down.cp
+                                                       (helper/skill-exp player-id threatening-teleport-skill-id)))
                           :overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 60.0 40.0
-                                                (helper/skill-exp player-id :threatening-teleport)))}}
+                                      (helper/cfg-lerp threatening-teleport-skill-id
+                                                       :cost.down.overload
+                                                       (helper/skill-exp player-id threatening-teleport-skill-id)))}}
   :cooldown       {:mode :manual}
   :actions        {:down!  threatening-tp-down!
                    :tick!  threatening-tp-tick!

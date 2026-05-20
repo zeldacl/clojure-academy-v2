@@ -12,7 +12,6 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -23,6 +22,8 @@
 ;; ---------------------------------------------------------------------------
 ;; Actions
 ;; ---------------------------------------------------------------------------
+
+(def ^:private flesh-ripping-skill-id :flesh-ripping)
 
 (defn flesh-ripping-down!
   [{:keys [ctx-id cost-ok?]}]
@@ -36,22 +37,28 @@
 (defn flesh-ripping-up!
   [{:keys [player-id ctx-id]}]
   (try
-    (let [exp    (helper/skill-exp player-id :flesh-ripping)
-          damage (bal/lerp 6.0 16.0 exp)
-          range  (bal/lerp 15.0 25.0 exp)
+        (let [exp    (helper/skill-exp player-id flesh-ripping-skill-id)
+          damage (helper/cfg-lerp flesh-ripping-skill-id :combat.damage exp)
+          range  (helper/cfg-lerp flesh-ripping-skill-id :targeting.range exp)
           hit    (helper/raycast-entity player-id range)]
       (if hit
         (let [world-id (geom/world-id-of player-id)
               e-uuid   (:entity-uuid hit)]
           (helper/deal-magic-damage! player-id world-id e-uuid damage)
           ;; Apply nausea with 30% chance
-          (when (and (< (rand) 0.30) potion/*potion-effects*)
+          (when (and (< (rand) (helper/cfg-probability flesh-ripping-skill-id
+                                                        :effect.nausea-chance))
+                     potion/*potion-effects*)
             (potion/apply-potion-effect!
               potion/*potion-effects*
-              e-uuid :nausea 60 0))
-          (skill-effects/add-skill-exp! player-id :flesh-ripping 0.003)
-          (let [cd (int (bal/lerp 30.0 18.0 exp))]
-            (skill-effects/set-main-cooldown! player-id :flesh-ripping cd))
+              e-uuid :nausea
+              (helper/cfg-int flesh-ripping-skill-id :effect.nausea-duration-ticks)
+              (helper/cfg-int flesh-ripping-skill-id :effect.nausea-amplifier)))
+          (skill-effects/add-skill-exp! player-id flesh-ripping-skill-id
+                                        (helper/cfg-double flesh-ripping-skill-id
+                                                           :progression.exp-hit))
+          (let [cd (helper/cfg-lerp-int flesh-ripping-skill-id :cooldown.ticks exp)]
+            (skill-effects/set-main-cooldown! player-id flesh-ripping-skill-id cd))
           (ctx/ctx-send-to-client! ctx-id :flesh-ripping/fx-perform
                                    {:target-x (:entity-x hit)
                                     :target-y (:entity-y hit)
@@ -82,11 +89,13 @@
   :overload-consume-speed 0.0
   :pattern        :release-cast
   :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (bal/lerp 180.0 130.0
-                                                (helper/skill-exp player-id :flesh-ripping)))
+                                      (helper/cfg-lerp flesh-ripping-skill-id
+                                                       :cost.down.cp
+                                                       (helper/skill-exp player-id flesh-ripping-skill-id)))
                           :overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 70.0 50.0
-                                                (helper/skill-exp player-id :flesh-ripping)))}}
+                                      (helper/cfg-lerp flesh-ripping-skill-id
+                                                       :cost.down.overload
+                                                       (helper/skill-exp player-id flesh-ripping-skill-id)))}}
   :cooldown       {:mode :manual}
   :actions        {:down!  flesh-ripping-down!
                    :tick!  flesh-ripping-tick!

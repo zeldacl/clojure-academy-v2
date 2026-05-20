@@ -13,7 +13,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
@@ -24,22 +24,37 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private mdball-entity-id "my_mod:entity_md_ball")
+(def ^:private scatter-bomb-skill-id :scatter-bomb)
 
 ;; ---------------------------------------------------------------------------
 ;; Constants
 ;; ---------------------------------------------------------------------------
-
-(def ^:private max-balls 6)
-(def ^:private ball-spawn-interval 10)
-(def ^:private ball-spawn-start-tick 20)
-(def ^:private anti-afk-tick 200)
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :scatter-bomb))
+  (skill-effects/skill-exp player-id scatter-bomb-skill-id))
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double scatter-bomb-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int scatter-bomb-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double scatter-bomb-skill-id field-id exp))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int scatter-bomb-skill-id field-id exp))
+
+(defn- beam-config []
+  {:radius          (cfg-double :beam.radius)
+   :query-radius    (cfg-double :beam.query-radius)
+   :step            (cfg-double :beam.step)
+   :max-distance    (cfg-double :beam.max-distance)
+   :visual-distance (cfg-double :beam.visual-distance)})
 
 (defn- enforce-overload-floor!
   [player-id floor-value]
@@ -48,7 +63,9 @@
 (defn- random-cone-dir
   "Random direction within ±45° cone of look direction."
   [look-vec]
-  (let [spread (+ 0.3 (rand 0.5))
+  (let [[spread-min spread-max] (skill-config/tunable-double-list scatter-bomb-skill-id
+                                                                  :projectile.cone-spread)
+        spread (+ spread-min (rand (max 0.0 (- spread-max spread-min))))
         rx (* spread (- (rand 1.0) 0.5))
         ry (* spread (- (rand 1.0) 0.5))
         rz (* spread (- (rand 1.0) 0.5))
@@ -66,7 +83,8 @@
   [{:keys [player-id ctx-id cost-ok?]}]
   (when cost-ok?
     (let [exp (skill-exp player-id)
-          floor (* (bal/lerp 150.0 120.0 exp) 0.8)]
+          floor (* (cfg-lerp :cost.down.overload exp)
+                   (cfg-double :cost.overload-floor-scale))]
       (ctx/update-context! ctx-id assoc :skill-state
                            {:balls        0
                             :hold-ticks   0
@@ -83,18 +101,19 @@
         ;; Enforce overload floor
         (enforce-overload-floor! player-id floor)
         ;; Anti-AFK self-damage at tick 200
-        (when (= ticks anti-afk-tick)
+        (when (= ticks (cfg-int :effect.anti-afk-tick))
           (when entity-damage/*entity-damage*
             (entity-damage/apply-direct-damage!
               entity-damage/*entity-damage*
               (geom/world-id-of player-id)
               player-id
-              6.0
+                (cfg-double :effect.anti-afk-damage)
               :magic)))
         ;; Spawn new ball every N ticks
-        (when (and (>= ticks ball-spawn-start-tick)
-                   (< balls max-balls)
-                   (zero? (mod (- ticks ball-spawn-start-tick) ball-spawn-interval)))
+              (when (and (>= ticks (cfg-int :projectile.spawn-start-tick))
+                 (< balls (cfg-int :projectile.max-balls))
+                 (zero? (mod (- ticks (cfg-int :projectile.spawn-start-tick))
+                     (cfg-int :projectile.spawn-interval-ticks))))
           (let [new-balls (inc balls)]
             (ctx/update-context! ctx-id assoc-in [:skill-state :balls] new-balls)
             (when player
@@ -114,7 +133,7 @@
             eye      (geom/eye-pos player-id)
             look-vec (when raycast/*raycast*
                        (raycast/get-player-look-vector raycast/*raycast* player-id))
-            damage   (bal/lerp 4.0 9.0 exp)]
+            damage   (cfg-lerp :combat.damage exp)]
         (when look-vec
           ;; Each ball settles with a slight delay to preserve projectile cadence.
           (let [base-delay (delayed-projectiles/mdball-near-expire-delay)]
@@ -127,12 +146,14 @@
                  :eye         eye
                  :look-dir    {:x (:x dir) :y (:y dir) :z (:z dir)}
                  :damage      damage
+                   :beam        (beam-config)
                  :delay-ticks (+ base-delay i)}))))
           ;; Gain exp and set cooldown
-          (skill-effects/add-skill-exp! player-id :scatter-bomb (* 0.002 balls))
+                 (skill-effects/add-skill-exp! player-id scatter-bomb-skill-id
+                           (* (cfg-double :progression.exp-per-ball) balls))
           (skill-effects/set-main-cooldown!
-            player-id :scatter-bomb
-            (int (* balls (bal/lerp 30.0 15.0 exp))))
+                   player-id scatter-bomb-skill-id
+                   (int (* balls (cfg-lerp :cooldown.ticks-per-ball exp))))
           (log/debug "ScatterBomb: fired" balls "balls"))))
     (ctx/ctx-send-to-client! ctx-id :scatter-bomb/fx-end {:balls balls})))
 
@@ -160,9 +181,9 @@
   :pattern        :hold-channel
   :cooldown       {:mode :manual}
   :cost           {:down {:overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 150.0 120.0 (skill-exp player-id)))}
+                (cfg-lerp :cost.down.overload (skill-exp player-id)))}
                    :tick {:cp (fn [{:keys [player-id]}]
-                                (bal/lerp 8.0 5.0 (skill-exp player-id)))}}
+              (cfg-lerp :cost.tick.cp (skill-exp player-id)))} }
   :actions        {:down!  scatter-bomb-down!
                    :tick!  scatter-bomb-tick!
                    :up!    scatter-bomb-up!

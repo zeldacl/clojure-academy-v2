@@ -13,7 +13,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
@@ -30,18 +30,31 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
-(defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :jet-engine))
+(def ^:private jet-engine-skill-id :jet-engine)
 
-(def ^:private min-hold  10)
-(def ^:private max-hold  80)
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double jet-engine-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int jet-engine-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double jet-engine-skill-id field-id exp))
+
+(defn- cfg-lerp-int [field-id exp]
+  (skill-config/lerp-int jet-engine-skill-id field-id exp))
+
+(defn- skill-exp [player-id]
+  (skill-effects/skill-exp player-id jet-engine-skill-id))
 
 (defn- charge-ratio [hold-ticks]
-  (-> hold-ticks
+  (let [min-hold (cfg-int :charge.min-ticks)
+        max-hold (cfg-int :charge.max-ticks)]
+    (-> hold-ticks
       (- min-hold)
       (max 0)
       (/ (double (- max-hold min-hold)))
-      (min 1.0)))
+      (min 1.0))))
 
 ;; ---------------------------------------------------------------------------
 ;; Actions
@@ -56,7 +69,7 @@
   [{:keys [ctx-id hold-ticks]}]
   (ctx/update-context! ctx-id assoc-in [:skill-state :ticks] hold-ticks)
   ;; Cancel anti-AFK at max hold
-  (when (>= (long hold-ticks) max-hold)
+  (when (>= (long hold-ticks) (cfg-int :charge.max-ticks))
     (ctx/ctx-send-to-client! ctx-id :jet-engine/fx-charge-max {})))
 
 (defn jet-engine-up!
@@ -64,8 +77,8 @@
   (try
     (let [exp     (skill-exp player-id)
           charge  (charge-ratio (long hold-ticks))
-          base-speed (bal/lerp 1.2 2.8 exp)
-          speed   (* base-speed (+ 1.0 (* 1.5 charge)))
+          base-speed (cfg-lerp :movement.speed exp)
+          speed   (* base-speed (+ 1.0 (* (cfg-double :movement.charge-speed-bonus) charge)))
           world-id (geom/world-id-of player-id)
           look-vec (when raycast/*raycast*
                      (raycast/get-player-look-vector raycast/*raycast* player-id))]
@@ -83,22 +96,22 @@
         ;; Damage nearby entities along path
         (when entity-damage/*entity-damage*
           (let [eye    (geom/eye-pos player-id)
-                damage (bal/lerp 6.0 12.0 exp)]
-            (doseq [step [1 2 3 4]]
+                damage (cfg-lerp :combat.damage exp)]
+            (doseq [step (range 1 (inc (cfg-int :combat.hit-steps)))]
               (let [sx (+ (double (:x eye)) (* step (double (:x look-vec))))
                     sy (+ (double (:y eye)) (* step (double (:y look-vec))))
                     sz (+ (double (:z eye)) (* step (double (:z look-vec))))
                     near-entities (when world-effects/*world-effects*
-                                  (world-effects/find-entities-in-radius
-                                    world-effects/*world-effects*
-                                    world-id sx sy sz 1.5))]
+                                    (world-effects/find-entities-in-radius
+                                      world-effects/*world-effects*
+                                      world-id sx sy sz (cfg-double :combat.hit-radius)))]
                 (doseq [e near-entities]
                   (when (not= (str (:uuid e)) (str player-id))
                     (md-damage/mark-target! player-id (:uuid e))
                     (entity-damage/apply-direct-damage!
                       entity-damage/*entity-damage*
                       world-id (:uuid e) damage :magic)))))))
-        (skill-effects/add-skill-exp! player-id :jet-engine 0.002)
+        (skill-effects/add-skill-exp! player-id jet-engine-skill-id (cfg-double :progression.exp-use))
         (ctx/ctx-send-to-client! ctx-id :jet-engine/fx-launch
                                  {:speed speed
                                   :dx (:x look-vec) :dy (:y look-vec) :dz (:z look-vec)})))
@@ -127,17 +140,17 @@
   :overload-consume-speed 0.0
   :pattern        :release-cast
   :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (bal/lerp 200.0 150.0 (skill-exp player-id)))
+                                      (cfg-lerp :cost.down.cp (skill-exp player-id)))
                           :overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 60.0 40.0 (skill-exp player-id)))}}
+                                      (cfg-lerp :cost.down.overload (skill-exp player-id)))} }
   :cooldown       {:mode :manual}
   :actions        {:down!  jet-engine-down!
                    :tick!  jet-engine-tick!
                    :up!    (fn [{:keys [player-id ctx-id hold-ticks] :as evt}]
                              (let [exp (skill-exp player-id)
-                                   cd  (int (bal/lerp 60.0 35.0 exp))]
+                                   cd  (cfg-lerp-int :cooldown.ticks exp)]
                                (jet-engine-up! evt)
-                               (skill-effects/set-main-cooldown! player-id :jet-engine cd)))
+                               (skill-effects/set-main-cooldown! player-id jet-engine-skill-id cd)))
                    :abort! jet-engine-abort!}
   :fx             {:start  {:topic :jet-engine/fx-start  :payload (fn [_] {})}}
   :prerequisites  [{:skill-id :meltdowner :min-exp 1.0}])

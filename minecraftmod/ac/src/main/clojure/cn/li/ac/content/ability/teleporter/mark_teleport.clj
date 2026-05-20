@@ -15,7 +15,6 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.util.math.vec3 :as vec3]
@@ -24,39 +23,40 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]))
 
-(def ^:private minimum-valid-distance 3.0)
-(def ^:private eye-height 1.6)
+(def ^:private mark-teleport-skill-id :mark-teleport)
 
 (defn- current-cp [player-id]
   (skill-effects/current-cp player-id)
   )
 
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :mark-teleport))
+  (skill-effects/skill-exp player-id mark-teleport-skill-id))
 
 (defn- cp-per-block [exp]
-  (bal/lerp 12.0 4.0 exp))
+  (helper/cfg-lerp mark-teleport-skill-id :cost.up.cp-per-block exp))
 
 (defn- overload-cost [exp]
-  (bal/lerp 40.0 20.0 exp))
+  (helper/cfg-lerp mark-teleport-skill-id :cost.up.overload exp))
 
 (defn- cooldown-ticks [exp]
-  (int (bal/lerp 30.0 0.0 exp)))
+  (helper/cfg-lerp-int mark-teleport-skill-id :cooldown.ticks exp))
 
 (defn- max-distance [exp cp ticks creative?]
-  (let [max-range (bal/lerp 25.0 60.0 exp)
+  (let [max-range (helper/cfg-lerp mark-teleport-skill-id :targeting.range exp)
         cp-limit (if creative?
                    max-range
                    (if (pos? (cp-per-block exp))
                      (/ (double cp) (cp-per-block exp))
                      max-range))]
-    (min (* 2.0 (inc (long ticks)))
+    (min (* (helper/cfg-double mark-teleport-skill-id :targeting.range-per-hold-tick)
+            (inc (long ticks)))
          (min max-range cp-limit))))
 
 (defn- add-exp! [player-id amount]
-  (skill-effects/add-skill-exp! player-id :mark-teleport (double amount)))
+  (skill-effects/add-skill-exp! player-id mark-teleport-skill-id (double amount)))
 
 (defn- build-target-fx-payload
   [target]
@@ -114,7 +114,8 @@
       (let [{:keys [world-id x y z]} player-pos
             creative? (boolean (and player (entity/player-creative? player)))
             dist (max-distance exp cp hold-ticks creative?)
-            start-y (+ (double y) eye-height)
+            start-y (+ (double y) (helper/cfg-double mark-teleport-skill-id
+                                                      :targeting.eye-height))
             hit (when raycast/*raycast*
                   (raycast/raycast-combined raycast/*raycast*
                                             world-id
@@ -159,7 +160,7 @@
   [{:keys [player-id ctx-id player]}]
   (if-let [target (cached-or-resolved-target player-id ctx-id player)]
     (let [distance (double (:distance target))]
-      (if (>= distance minimum-valid-distance)
+      (if (>= distance (helper/cfg-double mark-teleport-skill-id :targeting.min-distance))
         (* distance (cp-per-block (double (or (:exp target) (skill-exp player-id) 0.0))))
         0.0))
     0.0))
@@ -168,7 +169,7 @@
   [{:keys [player-id ctx-id player]}]
   (if-let [target (cached-or-resolved-target player-id ctx-id player)]
     (let [distance (double (:distance target))]
-      (if (>= distance minimum-valid-distance)
+      (if (>= distance (helper/cfg-double mark-teleport-skill-id :targeting.min-distance))
         (overload-cost (double (or (:exp target) (skill-exp player-id) 0.0)))
         0.0))
     0.0))
@@ -205,7 +206,8 @@
       (when (and target teleportation/*teleportation*)
         (let [distance (double (:distance target))
               exp (double (or (:exp target) (skill-exp player-id) 0.0))]
-          (when (and cost-ok? (>= distance minimum-valid-distance))
+          (when (and cost-ok? (>= distance (helper/cfg-double mark-teleport-skill-id
+                                                              :targeting.min-distance)))
             (let [success (teleportation/teleport-player! teleportation/*teleportation*
                                                           player-id
                                                           (:world-id target)
@@ -214,8 +216,10 @@
                                                           (:target-z target))]
               (when success
                 (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
-                (add-exp! player-id (* 0.00018 distance))
-                (skill-effects/set-main-cooldown! player-id :mark-teleport (cooldown-ticks exp))
+                (add-exp! player-id (* (helper/cfg-double mark-teleport-skill-id
+                                                          :progression.exp-per-distance)
+                                       distance))
+                (skill-effects/set-main-cooldown! player-id mark-teleport-skill-id (cooldown-ticks exp))
                 (log/debug "MarkTeleport: Teleported" (int distance) "blocks")))))))))
 
 (defn mark-teleport-on-key-abort
@@ -235,7 +239,8 @@
   :ctrl-id :mark-teleport
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks 20
+  :cooldown-ticks (fn [{:keys [player-id]}]
+                    (cooldown-ticks (skill-exp player-id)))
   :pattern :release-cast
   :cooldown {:mode :manual}
   :cost {:up {:cp mark-teleport-cost-up-cp

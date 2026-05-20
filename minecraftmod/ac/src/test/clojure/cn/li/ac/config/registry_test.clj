@@ -1,5 +1,7 @@
 (ns cn.li.ac.config.registry-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.config :as ability-config]
+            [cn.li.ac.ability.skill-config :as ability-skill-config]
             [cn.li.ac.block.solar-gen.config :as solar-config]
             [cn.li.ac.config.common :as config-common]
             [cn.li.ac.config.gameplay :as gameplay-config]
@@ -30,8 +32,17 @@
                     (fn [domain defaults]
                       (swap! calls conj [:defaults domain defaults]))]
         (is (nil? (registry/init-configs!)))
-        (is (= [[:register config-common/wireless-domain registry/wireless-descriptors]
-                [:defaults config-common/wireless-domain registry/wireless-default-values]
-                [:register config-common/gameplay-domain gameplay-config/descriptors]
-                [:defaults config-common/gameplay-domain gameplay-config/default-values]]
+        (is (= (vec
+                 (concat
+                   [[:register config-common/wireless-domain registry/wireless-descriptors]
+                    [:defaults config-common/wireless-domain registry/wireless-default-values]
+                    [:register config-common/gameplay-domain gameplay-config/descriptors]
+                    [:defaults config-common/gameplay-domain gameplay-config/default-values]
+                    [:register config-common/ability-domain ability-config/descriptors]
+                    [:defaults config-common/ability-domain ability-config/default-values]]
+                   (mapcat (fn [category-id]
+                             (let [domain (ability-skill-config/category-domain category-id)]
+                               [[:register domain (get ability-skill-config/descriptors-by-category category-id)]
+                                [:defaults domain (get ability-skill-config/default-values-by-category category-id)]]))
+                           ability-skill-config/category-ids)))
                @calls))))))

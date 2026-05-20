@@ -59,19 +59,19 @@
                                               {:field :overload :uuid uuid})
           ;; Apply CP consumption
           data1          (if (and (pos? effective-cp) (not creative?))
-                           (rdata/consume-cp res-data effective-cp cfg/*cp-recover-cooldown*)
+                      (rdata/consume-cp res-data effective-cp (cfg/cp-recover-cooldown))
                            res-data)
           ;; Apply overload
           [data2 hit-cap?] (if (pos? effective-ol)
-                              (rdata/add-overload data1 effective-ol cfg/*overload-recover-cooldown*)
+                        (rdata/add-overload data1 effective-ol (cfg/overload-recover-cooldown))
                               [data1 false])
           ;; Growth: add-max-cp grows by consumed CP × rate
           data3          (if (and (pos? effective-cp) (not creative?))
-                           (rdata/grow-max-cp data2 effective-cp cfg/*maxcp-incr-rate* level)
+                      (rdata/grow-max-cp data2 effective-cp (cfg/maxcp-incr-rate) level)
                            data2)
           ;; Growth: add-max-overload grows by overload × rate
           data4          (if (pos? effective-ol)
-                           (rdata/grow-max-overload data3 effective-ol cfg/*maxo-incr-rate* level)
+                      (rdata/grow-max-overload data3 effective-ol (cfg/maxo-incr-rate) level)
                            data3)
           ;; Recalc max after growth
           data5          (recalc-max-for-level data4 level uuid)
@@ -89,9 +89,9 @@
   Returns updated ResourceData map (pure, no events for tick)."
   [res-data uuid]
   (let [cp-speed       (evt/fire-calc-event! evt/CALC-CP-RECOVER-SPEED
-                                              cfg/*cp-recover-speed* {:uuid uuid})
+                                              (cfg/cp-recover-speed) {:uuid uuid})
         ov-speed       (evt/fire-calc-event! evt/CALC-OVERLOAD-RECOVER-SPEED
-                                              cfg/*overload-recover-speed* {:uuid uuid})]
+                                              (cfg/overload-recover-speed) {:uuid uuid})]
     {:data (-> res-data
                (rdata/tick-cp-recovery cp-speed)
                (rdata/tick-overload-recovery ov-speed))

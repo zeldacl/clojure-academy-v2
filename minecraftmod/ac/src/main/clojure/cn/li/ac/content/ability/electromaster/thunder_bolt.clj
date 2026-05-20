@@ -6,12 +6,27 @@
   Cooldown: lerp(120,50) ticks by exp
   Exp: +0.005 effective / +0.003 ineffective"
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :refer [by-exp]]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.effect.geom]
             [cn.li.ac.ability.server.effect.damage]
             [cn.li.ac.ability.server.effect.world]
             [cn.li.ac.ability.server.effect.potion]
             [cn.li.ac.ability.server.effect.fx]))
+
+(def ^:private thunder-bolt-skill-id :thunder-bolt)
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double thunder-bolt-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int thunder-bolt-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double thunder-bolt-skill-id field-id exp))
+
+(defn- evt-lerp [field-id]
+  (fn [{:keys [exp]}]
+    (cfg-lerp field-id (double (or exp 0.0)))))
 
 (defskill! thunder-bolt
   :id          :thunder-bolt
@@ -24,26 +39,31 @@
   :controllable? false
   :ctrl-id     :thunder-bolt
   :pattern     :instant
-  :cost        {:down {:cp       (by-exp 280.0 420.0)
-                       :overload (by-exp 50.0  27.0)}}
-  :cooldown-ticks (by-exp 120 50)
-  :exp         {:effective 0.005 :ineffective 0.003}
+  :cost        {:down {:cp       (evt-lerp :cost.down.cp)
+                       :overload (evt-lerp :cost.down.overload)}}
+  :cooldown-ticks (fn [{:keys [exp]}]
+                    (skill-config/lerp-int thunder-bolt-skill-id
+                                           :cooldown.ticks
+                                           (double (or exp 0.0))))
+  :exp         {:effective (fn [_] (cfg-double :progression.exp-effective))
+                :ineffective (fn [_] (cfg-double :progression.exp-ineffective))}
   :perform     [[:spawn-entity-from-player {:entity-id "my_mod:entity_arc"
                                             :speed 0.0}]
-                [:aim-raycast  {:range 20}]
+                [:aim-raycast  {:range (fn [_] (cfg-double :targeting.range))}]
                 [:spawn-lightning {:at :hit}]
                 [:damage-direct  {:target     :hit
-                                  :amount     (by-exp 10.0 25.0)
+                                  :amount     (evt-lerp :combat.direct-damage)
                                   :damage-type :lightning}]
                 [:damage-aoe     {:center     :hit
-                                  :radius     8.0
-                                  :amount     (by-exp 6.0 15.0)
+                                  :radius     (fn [_] (cfg-double :combat.aoe-radius))
+                                  :amount     (evt-lerp :combat.aoe-damage)
                                   :damage-type :lightning}]
                 [:potion-roll    {:target     :hit
-                                  :chance     0.8
+                                  :chance     (fn [_] (skill-config/probability thunder-bolt-skill-id
+                                                                                 :effect.slowness-chance))
                                   :effect-id  :slowness
-                                  :ticks      40
-                                  :amplifier  3}]
+                                  :ticks      (fn [_] (cfg-int :effect.slowness-duration-ticks))
+                                  :amplifier  (fn [_] (cfg-int :effect.slowness-amplifier))}]
                 [:fx             {:topic   :thunder-bolt/fx-perform
                                   :payload (fn [evt]
                                              {:start (:eye-pos evt)

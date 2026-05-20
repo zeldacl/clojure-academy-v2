@@ -31,13 +31,6 @@
   (alter-var-root #'*nearby-players-fn*      (constantly nearby-players)))
 
 ;; ============================================================================
-;; Config flags
-;; ============================================================================
-
-(defonce ^:dynamic *can-attack-player* true)
-(defonce ^:dynamic *can-destroy-blocks* true)
-
-;; ============================================================================
 ;; Attack pipeline
 ;; ============================================================================
 
@@ -88,7 +81,7 @@
 (defn can-attack-player?
   "Returns true if PvP through abilities is enabled."
   []
-  *can-attack-player*)
+  (cfg/attack-player-enabled?))
 
 (defn can-break-block?
   "Returns true if the ability system allows block breaking.
@@ -96,5 +89,5 @@
   [skill-id]
   (if skill-id
     (let [sk (skill/get-skill skill-id)]
-      (get sk :can-break-blocks *can-destroy-blocks*))
-    *can-destroy-blocks*))
+      (get sk :can-break-blocks (cfg/destroy-blocks-enabled?)))
+    (cfg/destroy-blocks-enabled?)))

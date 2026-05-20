@@ -12,7 +12,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
-            [cn.li.ac.ability.util.balance :as bal]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -24,8 +24,19 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
+(def ^:private mine-ray-luck-skill-id :mine-ray-luck)
+
+(defn- cfg-double [field-id]
+  (skill-config/tunable-double mine-ray-luck-skill-id field-id))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int mine-ray-luck-skill-id field-id))
+
+(defn- cfg-lerp [field-id exp]
+  (skill-config/lerp-double mine-ray-luck-skill-id field-id exp))
+
 (defn- skill-exp [player-id]
-  (skill-effects/skill-exp player-id :mine-ray-luck))
+  (skill-effects/skill-exp player-id mine-ray-luck-skill-id))
 
 ;; ---------------------------------------------------------------------------
 ;; Fortune-aware mining tick
@@ -69,9 +80,12 @@
                 ;; Break with extra drops (fortune: break twice for luck effect)
                 (bm/break-block! bm/*block-manipulation* player-id world-id hx hy hz true)
                 ;; Fortune bonus: randomly drop an extra item stack (33% extra drop chance)
-                (when (< (rand) 0.33)
-                  (bm/break-block! bm/*block-manipulation* player-id world-id hx (- hy 999) hz true))
-                (skill-effects/add-skill-exp! player-id :mine-ray-luck 0.002)
+                (when (< (rand) (skill-config/probability mine-ray-luck-skill-id
+                                                           :effect.extra-drop-chance))
+                  (bm/break-block! bm/*block-manipulation* player-id world-id hx
+                                   (+ hy (cfg-int :effect.extra-drop-y-offset)) hz true))
+                (skill-effects/add-skill-exp! player-id mine-ray-luck-skill-id
+                                              (cfg-double :progression.exp-block))
                 (ctx/update-context! ctx-id assoc :skill-state
                                      {:target-x nil :target-y nil :target-z nil :countdown 0.0}))
               (ctx/update-context! ctx-id assoc :skill-state
@@ -96,8 +110,8 @@
     (let [exp (skill-exp player-id)]
       (mine-ray-luck-tick-impl!
         player-id ctx-id exp
-        (bal/lerp 16.0 22.0 exp)
-        (bal/lerp 0.5 1.0 exp)))
+        (cfg-lerp :targeting.range exp)
+        (cfg-lerp :mining.break-speed exp)))
     (catch Exception e
       (log/warn "MineRayLuck tick! failed:" (ex-message e)))))
 
@@ -127,10 +141,10 @@
   :overload-consume-speed 0.0
   :pattern        :hold-channel
   :cost           {:down {:overload (fn [{:keys [player-id]}]
-                                      (bal/lerp 100.0 70.0 (skill-exp player-id)))}
+                (cfg-lerp :cost.down.overload (skill-exp player-id)))}
                    :tick {:cp (fn [{:keys [player-id]}]
-                                (bal/lerp 22.0 15.0 (skill-exp player-id)))}}
-  :cooldown-ticks 5
+              (cfg-lerp :cost.tick.cp (skill-exp player-id)))} }
+    :cooldown-ticks (fn [_] (cfg-int :cooldown.ticks))
   :actions        {:down!  mine-ray-luck-down!
                    :tick!  mine-ray-luck-tick!
                    :up!    mine-ray-luck-up!

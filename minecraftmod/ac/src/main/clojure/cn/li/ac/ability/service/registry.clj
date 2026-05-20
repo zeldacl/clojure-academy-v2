@@ -3,6 +3,7 @@
 	(:require [cn.li.mcmod.util.log :as log]
 						[cn.li.ac.ability.registry.category :as category]
 						[cn.li.ac.ability.registry.developer-type :as dev-type]
+						[cn.li.ac.ability.skill-config :as skill-config]
 						[cn.li.ac.ability.registry.learning-cost :as lc]
 						[cn.li.ac.ability.registry.skill-schema :as schema]))
 
@@ -107,23 +108,24 @@
 		full))
 
 (defn get-skill [skill-id]
-	(get @skill-registry skill-id))
+	(some-> (get @skill-registry skill-id)
+					skill-config/apply-skill-overrides))
 
 (defn get-skills-for-category [cat-id]
-	(filter #(= (:category-id %) cat-id) (vals @skill-registry)))
+	(filter #(= (:category-id %) cat-id) (map skill-config/apply-skill-overrides (vals @skill-registry))))
 
 (defn list-skills []
-	(vals @skill-registry))
+	(map skill-config/apply-skill-overrides (vals @skill-registry)))
 
 (defn get-controllable-skills-for-category [cat-id]
 	(filter #(and (= (:category-id %) cat-id) (:controllable? %))
-					(vals @skill-registry)))
+					(list-skills)))
 
 (defn get-controllable-skills-at-level [cat-id level]
 	(filter #(and (= (:category-id %) cat-id)
 								(:controllable? %)
 								(= (:level %) level))
-					(vals @skill-registry)))
+					(list-skills)))
 
 (defn can-control? [skill-id]
 	(when-let [s (get-skill skill-id)]
@@ -141,8 +143,11 @@
 		[(:category-id s) (or (:ctrl-id s) skill-id)]))
 
 (defn get-skill-by-controllable [category-id ctrl-id]
-	(some (fn [[sid s]]
+	(some (fn [[sid base]]
+					(let [s (skill-config/apply-skill-overrides base)]
 					(when (and (= (:category-id s) category-id)
+										(:enabled s)
+										(:controllable? s)
 										 (= (or (:ctrl-id s) sid) ctrl-id))
-						sid))
+						sid)))
 				@skill-registry))
