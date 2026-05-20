@@ -132,7 +132,7 @@
 		(when logo-breathe?
 			(comp/add-component! logo (comp/breathe-effect)))
 		(let [path (or override-path
-									 (when logo-path (modid/asset-path logo-path)))]
+									 (when logo-path (modid/namespaced-path logo-path)))]
 			(when path
 					(wh/set-drawtexture! logo path)))))
 
