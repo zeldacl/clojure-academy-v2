@@ -123,7 +123,12 @@
             max-cp  (double (:max-cp d))
             cur-cp  (double (:cur-cp d))
             ratio   (if (pos? max-cp) (/ cur-cp max-cp) 0.0)
-            delta   (* speed 0.0003 max-cp (scaling/lerp 1.0 2.0 ratio))]
+            delta   (* speed
+                       (cfg/cp-recovery-rate-base)
+                       max-cp
+                       (scaling/lerp (cfg/cp-recovery-lerp-start)
+                                     (cfg/cp-recovery-lerp-end)
+                                     ratio))]
         (update d :cur-cp #(min max-cp (+ (double %) delta)))))))
 
 (defn tick-overload-recovery
@@ -144,9 +149,13 @@
           (let [speed   (double recover-speed)
                 max-ol  (double (:max-overload d))
                 cur-ol  (double (:cur-overload d))
-                ratio   (if (pos? max-ol) (/ cur-ol max-ol 2.0) 0.0)
-                delta   (* speed (max (* 0.002 max-ol)
-                                      (* 0.007 max-ol (scaling/lerp 1.0 0.5 ratio))))
+                 ratio   (if (pos? max-ol) (/ cur-ol max-ol (cfg/overload-recovery-ratio-divisor)) 0.0)
+                 delta   (* speed (max (* (cfg/overload-recovery-min-rate) max-ol)
+                                (* (cfg/overload-recovery-active-rate)
+                                  max-ol
+                                  (scaling/lerp (cfg/overload-recovery-lerp-start)
+                                           (cfg/overload-recovery-lerp-end)
+                                           ratio))))
                 new-val (max 0.0 (- cur-ol delta))]
             (assoc d :cur-overload new-val)))))
 
@@ -158,9 +167,13 @@
         (let [speed   (double recover-speed)
               max-ol  (double (:max-overload d))
               cur-ol  (double (:cur-overload d))
-              ratio   (if (pos? max-ol) (/ cur-ol max-ol 2.0) 0.0)
-              delta   (* speed (max (* 0.002 max-ol)
-                                    (* 0.007 max-ol (scaling/lerp 1.0 0.5 ratio))))
+                ratio   (if (pos? max-ol) (/ cur-ol max-ol (cfg/overload-recovery-ratio-divisor)) 0.0)
+                delta   (* speed (max (* (cfg/overload-recovery-min-rate) max-ol)
+                              (* (cfg/overload-recovery-active-rate)
+                                max-ol
+                                (scaling/lerp (cfg/overload-recovery-lerp-start)
+                                          (cfg/overload-recovery-lerp-end)
+                                          ratio))))
               new-val (max 0.0 (- cur-ol delta))]
           (if (zero? new-val)
             (assoc d :cur-overload 0.0 :overload-fine true)
@@ -216,6 +229,7 @@
   [d cur-overload rate level]
   (let [ceiling   (double (cfg/add-overload-ceiling level))
         current   (double (:add-max-overload d 0.0))
-        growth    (max 0.0 (min 10.0 (* (double cur-overload) (double rate))))
+        growth    (max 0.0 (min (cfg/max-overload-growth-per-event)
+              (* (double cur-overload) (double rate))))
         new-val   (min ceiling (+ current growth))]
     (assoc d :add-max-overload new-val)))

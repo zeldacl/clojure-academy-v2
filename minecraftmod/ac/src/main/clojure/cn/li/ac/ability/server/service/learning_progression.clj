@@ -26,7 +26,7 @@
   [ability-data]
   (let [level (:level ability-data)
         cat   (:category-id ability-data)]
-    (and (< level 5)
+    (and (< level (cfg/max-level))
          (some? cat)
          (>= (:level-progress ability-data)
              (level-up-threshold cat ability-data)))))

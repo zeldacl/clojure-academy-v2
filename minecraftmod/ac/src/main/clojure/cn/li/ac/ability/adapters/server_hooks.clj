@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.adapters.server-hooks
   "Server/runtime hook composition for AC ability platform bridge."
-  (:require [cn.li.ac.ability.item-actions :as item-actions]
+  (:require [cn.li.ac.ability.config :as ability-config]
+            [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.registry :as skill]
@@ -197,6 +198,14 @@
    (fn [current-entity-uuid current-pos candidates max-radius]
      (entity-damage-runtime/select-next-reflection-target current-entity-uuid current-pos candidates max-radius))
 
+   :reflection-search-radius
+   (fn []
+     (ability-config/reflection-search-radius))
+
    :compute-reflected-damage
    (fn [current-damage]
-     (entity-damage-runtime/compute-reflected-damage current-damage))})
+     (entity-damage-runtime/compute-reflected-damage current-damage))
+
+   :max-saved-locations
+   (fn []
+     (ability-config/max-saved-locations))})

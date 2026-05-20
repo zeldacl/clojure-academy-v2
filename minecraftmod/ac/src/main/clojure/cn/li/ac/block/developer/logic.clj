@@ -71,7 +71,7 @@
 		(let [state0 (or (platform-be/get-custom-state be) dev-default-state)
 					ticker (inc (long (get state0 :update-ticker 0)))
 					state1 (-> state0 (assoc :update-ticker ticker) (ensure-tier-defaults be))
-					state2 (if (zero? (mod ticker dev-config/validate-interval))
+					state2 (if (zero? (mod ticker (dev-config/validate-interval)))
 									 (let [block-spec (some-> (platform-be/get-block-id be) bdsl/get-block)]
 										 (assoc state1 :structure-valid (boolean (and block-spec (validate-structure level pos block-spec)))))
 									 state1)

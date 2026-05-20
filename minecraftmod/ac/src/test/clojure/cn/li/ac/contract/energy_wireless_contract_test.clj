@@ -19,8 +19,8 @@
       (with-redefs [platform-be/get-custom-state (fn [_] @state*)
                     platform-be/set-custom-state! (fn [_ v] (reset! state* v))]
         (is (= 0.0 (converter-base/set-energy! fake-be -10.0)))
-        (is (= (double converter-config/energy-capacity)
-               (converter-base/set-energy! fake-be (+ converter-config/energy-capacity 500.0))))
+         (is (= (double (converter-config/energy-capacity))
+           (converter-base/set-energy! fake-be (+ (converter-config/energy-capacity) 500.0))))
         (converter-base/set-energy! fake-be 0.0)
         (is (= 0 (.extractEnergy in-cap 200 false)))
         (is (= 150 (.receiveEnergy in-cap 150 false)))

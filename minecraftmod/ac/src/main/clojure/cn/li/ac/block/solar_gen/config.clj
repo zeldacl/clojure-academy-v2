@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.solar-gen.config
-  (:require [cn.li.mcmod.config.registry :as config-reg]))
+  (:require [cn.li.ac.config.common :as config-common]))
 
 (def descriptors
   [{:key :solar-max-energy
@@ -40,7 +40,7 @@
 
 (defn- cfg []
   (merge default-values
-         (config-reg/get-config-values :cn.li.ac/wireless)))
+         (config-common/wireless-devices-config)))
 
 (defn max-energy []
   (:solar-max-energy (cfg)))

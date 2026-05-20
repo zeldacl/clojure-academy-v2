@@ -13,6 +13,14 @@
 
 (def expected-level-count 5)
 
+(defn max-level
+  "Internal structural maximum ability level.
+
+  This is intentionally not a player config descriptor: level arrays, skill
+  levels, progression data, and UI all assume the same structural count."
+  []
+  expected-level-count)
+
 (def default-values
   {:attack-player true
    :destroy-blocks true
@@ -53,10 +61,27 @@
    :overload-recover-speed 1.0
    :maxcp-incr-rate 0.0025
    :maxo-incr-rate 0.0058
+  :cp-recovery-rate-base 0.0003
+  :cp-recovery-lerp-start 1.0
+  :cp-recovery-lerp-end 2.0
+  :overload-recovery-min-rate 0.002
+  :overload-recovery-active-rate 0.007
+  :overload-recovery-lerp-start 1.0
+  :overload-recovery-lerp-end 0.5
+  :overload-recovery-ratio-divisor 2.0
+  :max-overload-growth-per-event 10.0
    :damage-scale 1.0
+  :reflected-damage-multiplier 0.5
+  :reflection-search-radius 10.0
    :runtime-cp-consume-per-tick 1.0
    :runtime-overload-per-tick 0.6
-   :prog-incr-rate 1.0})
+  :prog-incr-rate 1.0
+  :level-threshold-skill-count-multiplier 1.333
+  :level-threshold-all-mastered-discount 0.5
+  :skill-learning-cost-base 3.0
+  :skill-learning-cost-level-square-factor 0.5
+  :level-up-stim-base 5
+  :max-saved-locations 16})
 
 (def descriptors
   [{:key :attack-player
@@ -161,6 +186,69 @@
     :min 0.0
     :default (:maxo-incr-rate default-values)
     :comment "Fraction of overload added to max overload growth."}
+  {:key :cp-recovery-rate-base
+   :path "resource.recovery.cp-rate-base"
+   :section :resource.recovery
+   :type :double
+   :min 0.0
+   :default (:cp-recovery-rate-base default-values)
+   :comment "Base CP recovery coefficient used by the per-tick recovery formula."}
+  {:key :cp-recovery-lerp-start
+   :path "resource.recovery.cp-lerp-start"
+   :section :resource.recovery
+   :type :double
+   :min 0.0
+   :default (:cp-recovery-lerp-start default-values)
+   :comment "CP recovery multiplier when current CP ratio is 0."}
+  {:key :cp-recovery-lerp-end
+   :path "resource.recovery.cp-lerp-end"
+   :section :resource.recovery
+   :type :double
+   :min 0.0
+   :default (:cp-recovery-lerp-end default-values)
+   :comment "CP recovery multiplier when current CP ratio is 1."}
+  {:key :overload-recovery-min-rate
+   :path "resource.recovery.overload-min-rate"
+   :section :resource.recovery
+   :type :double
+   :min 0.0
+   :default (:overload-recovery-min-rate default-values)
+   :comment "Minimum overload recovery coefficient multiplied by max overload."}
+  {:key :overload-recovery-active-rate
+   :path "resource.recovery.overload-active-rate"
+   :section :resource.recovery
+   :type :double
+   :min 0.0
+   :default (:overload-recovery-active-rate default-values)
+   :comment "Active overload recovery coefficient multiplied by max overload and lerp factor."}
+  {:key :overload-recovery-lerp-start
+   :path "resource.recovery.overload-lerp-start"
+   :section :resource.recovery
+   :type :double
+   :min 0.0
+   :default (:overload-recovery-lerp-start default-values)
+   :comment "Overload recovery lerp multiplier at low overload ratio."}
+  {:key :overload-recovery-lerp-end
+   :path "resource.recovery.overload-lerp-end"
+   :section :resource.recovery
+   :type :double
+   :min 0.0
+   :default (:overload-recovery-lerp-end default-values)
+   :comment "Overload recovery lerp multiplier at high overload ratio."}
+  {:key :overload-recovery-ratio-divisor
+   :path "resource.recovery.overload-ratio-divisor"
+   :section :resource.recovery
+   :type :double
+   :min 0.000001
+   :default (:overload-recovery-ratio-divisor default-values)
+   :comment "Divisor applied to current/max overload ratio in the recovery curve."}
+  {:key :max-overload-growth-per-event
+   :path "resource.growth.max-overload-growth-per-event"
+   :section :resource.growth
+   :type :double
+   :min 0.0
+   :default (:max-overload-growth-per-event default-values)
+   :comment "Maximum max-overload growth gained from one overload growth update."}
 
    {:key :damage-scale
     :path "combat.damage-scale"
@@ -169,6 +257,20 @@
     :min 0.0
     :default (:damage-scale default-values)
     :comment "Global ability damage multiplier."}
+    {:key :reflected-damage-multiplier
+     :path "combat.reflected-damage-multiplier"
+     :section :combat
+     :type :double
+     :min 0.0
+     :default (:reflected-damage-multiplier default-values)
+     :comment "Multiplier applied each time reflected damage jumps to the next target."}
+    {:key :reflection-search-radius
+     :path "combat.reflection-search-radius"
+     :section :combat
+     :type :double
+     :min 0.0
+     :default (:reflection-search-radius default-values)
+     :comment "Search radius in blocks for selecting the next reflected damage target."}
 
    {:key :runtime-cp-consume-per-tick
     :path "runtime.cp-consume-per-tick"
@@ -191,7 +293,49 @@
     :type :double
     :min 0.0
     :default (:prog-incr-rate default-values)
-    :comment "Global multiplier applied to ability experience and level progress."}])
+    :comment "Global multiplier applied to ability experience and level progress."}
+     {:key :level-threshold-skill-count-multiplier
+    :path "progression.level-threshold.skill-count-multiplier"
+    :section :progression.level-threshold
+    :type :double
+    :min 0.0
+    :default (:level-threshold-skill-count-multiplier default-values)
+    :comment "Multiplier applied to controllable skill count when computing level-up EXP threshold."}
+     {:key :level-threshold-all-mastered-discount
+    :path "progression.level-threshold.all-mastered-discount"
+    :section :progression.level-threshold
+    :type :double
+    :min 0.0
+    :default (:level-threshold-all-mastered-discount default-values)
+    :comment "Multiplier applied to level-up threshold when all current skills are mastered."}
+     {:key :skill-learning-cost-base
+    :path "progression.learning.skill-cost-base"
+    :section :progression.learning
+    :type :double
+    :min 0.0
+    :default (:skill-learning-cost-base default-values)
+    :comment "Base Developer stim cost for learning a skill."}
+     {:key :skill-learning-cost-level-square-factor
+    :path "progression.learning.skill-cost-level-square-factor"
+    :section :progression.learning
+    :type :double
+    :min 0.0
+    :default (:skill-learning-cost-level-square-factor default-values)
+    :comment "Multiplier for level^2 in the skill learning stim cost formula."}
+     {:key :level-up-stim-base
+    :path "progression.learning.level-up-stim-base"
+    :section :progression.learning
+    :type :int
+    :min 1
+    :default (:level-up-stim-base default-values)
+    :comment "Base Developer stim count multiplied by next level when leveling up."}
+     {:key :max-saved-locations
+    :path "progression.saved-locations.max-count"
+    :section :progression.saved-locations
+    :type :int
+    :min 0
+    :default (:max-saved-locations default-values)
+    :comment "Maximum saved teleport locations per player."}])
 
 (defn- raw-value
   [k]
@@ -225,6 +369,10 @@
 (defn- non-negative-int
   [k]
   (max 0 (int (Math/round (non-negative-double k)))))
+
+(defn- positive-int
+  [k]
+  (max 1 (int (Math/round (positive-double k)))))
 
 (defn- boolean-value
   [k]
@@ -333,16 +481,16 @@
   (get-add-overload level))
 
 (defn max-cp-for-level
-  "Compute max CP for a given ability level (1-5)."
+  "Compute max CP for a given ability level."
   [level]
-  {:pre [(>= level 1) (<= level 5)]}
+  {:pre [(>= level 1) (<= level (max-level))]}
   (+ (get-init-cp level)
      (get-add-cp level)))
 
 (defn max-overload-for-level
-  "Compute max overload for a given ability level (1-5)."
+  "Compute max overload for a given ability level."
   [level]
-  {:pre [(>= level 1) (<= level 5)]}
+  {:pre [(>= level 1) (<= level (max-level))]}
   (+ (get-init-overload level)
      (get-add-overload level)))
 
@@ -364,8 +512,41 @@
 (defn maxo-incr-rate []
   (non-negative-double :maxo-incr-rate))
 
+(defn cp-recovery-rate-base []
+  (non-negative-double :cp-recovery-rate-base))
+
+(defn cp-recovery-lerp-start []
+  (non-negative-double :cp-recovery-lerp-start))
+
+(defn cp-recovery-lerp-end []
+  (non-negative-double :cp-recovery-lerp-end))
+
+(defn overload-recovery-min-rate []
+  (non-negative-double :overload-recovery-min-rate))
+
+(defn overload-recovery-active-rate []
+  (non-negative-double :overload-recovery-active-rate))
+
+(defn overload-recovery-lerp-start []
+  (non-negative-double :overload-recovery-lerp-start))
+
+(defn overload-recovery-lerp-end []
+  (non-negative-double :overload-recovery-lerp-end))
+
+(defn overload-recovery-ratio-divisor []
+  (positive-double :overload-recovery-ratio-divisor))
+
+(defn max-overload-growth-per-event []
+  (non-negative-double :max-overload-growth-per-event))
+
 (defn damage-scale []
   (positive-double :damage-scale))
+
+(defn reflected-damage-multiplier []
+  (non-negative-double :reflected-damage-multiplier))
+
+(defn reflection-search-radius []
+  (non-negative-double :reflection-search-radius))
 
 (defn runtime-cp-consume-per-tick []
   (non-negative-double :runtime-cp-consume-per-tick))
@@ -375,6 +556,24 @@
 
 (defn prog-incr-rate []
   (positive-double :prog-incr-rate))
+
+(defn level-threshold-skill-count-multiplier []
+  (positive-double :level-threshold-skill-count-multiplier))
+
+(defn level-threshold-all-mastered-discount []
+  (non-negative-double :level-threshold-all-mastered-discount))
+
+(defn skill-learning-cost-base []
+  (non-negative-double :skill-learning-cost-base))
+
+(defn skill-learning-cost-level-square-factor []
+  (non-negative-double :skill-learning-cost-level-square-factor))
+
+(defn level-up-stim-base []
+  (positive-int :level-up-stim-base))
+
+(defn max-saved-locations []
+  (non-negative-int :max-saved-locations))
 
 (defn validate-config!
   "Validate currently effective ability configuration values. Getters remain
@@ -391,13 +590,22 @@
             :let [values (raw-value k)]]
       (when-not (and (list-like? values) (every? string? values))
         (swap! errors conj (str (name k) " must be a string list"))))
-    (doseq [k [:cp-recover-speed :overload-recover-speed :damage-scale :prog-incr-rate]
+    (doseq [k [:cp-recover-speed :overload-recover-speed :damage-scale :prog-incr-rate
+               :overload-recovery-ratio-divisor :level-threshold-skill-count-multiplier
+               :level-up-stim-base]
             :let [value (finite-double (raw-value k) 0.0)]]
       (when-not (pos? value)
         (swap! errors conj (str (name k) " must be positive"))))
     (doseq [k [:cp-recover-cooldown :overload-recover-cooldown
                :maxcp-incr-rate :maxo-incr-rate
-               :runtime-cp-consume-per-tick :runtime-overload-per-tick]
+              :runtime-cp-consume-per-tick :runtime-overload-per-tick
+              :cp-recovery-rate-base :cp-recovery-lerp-start :cp-recovery-lerp-end
+              :overload-recovery-min-rate :overload-recovery-active-rate
+              :overload-recovery-lerp-start :overload-recovery-lerp-end
+              :max-overload-growth-per-event :reflected-damage-multiplier
+              :reflection-search-radius :level-threshold-all-mastered-discount
+              :skill-learning-cost-base :skill-learning-cost-level-square-factor
+              :max-saved-locations]
             :let [value (finite-double (raw-value k) -1.0)]]
       (when (neg? value)
         (swap! errors conj (str (name k) " must be non-negative"))))

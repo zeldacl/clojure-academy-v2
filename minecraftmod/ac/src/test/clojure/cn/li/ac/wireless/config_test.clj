@@ -1,6 +1,8 @@
 (ns cn.li.ac.wireless.config-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.config.common :as config-common]
+            [cn.li.ac.item.mat-core :as mat-core]
+            [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
             [cn.li.ac.wireless.config :as wireless-config]
             [cn.li.mcmod.config.registry :as config-reg]))
 
@@ -37,3 +39,43 @@
     (with-redefs [config-reg/get-config-values (fn [_] {:search-max-results 256})]
       (is (= 20.0 (wireless-config/node-search-range)))
       (is (= 256 (wireless-config/max-results))))))
+
+(deftest wireless-performance-paths-are-player-facing-test
+  (testing "wireless core no longer exposes orphan tick.* matrix validate settings"
+    (let [paths (set (map :path wireless-config/descriptors))]
+      (is (contains? paths "performance.node-sync-interval"))
+      (is (contains? paths "performance.matrix-gui-sync-interval"))
+      (is (not (contains? paths "tick.matrix-validate-interval")))
+      (is (not (contains? (set (map :key wireless-config/descriptors))
+                          :matrix-validate-interval))))))
+
+(deftest matrix-stats-formula-uses-wireless-config-test
+  (testing "shared Matrix formula honors wireless config overrides"
+    (with-redefs [config-reg/get-config-values
+                  (fn [domain]
+                    (is (= config-common/wireless-domain domain))
+                    {:matrix-capacity-per-core-level 10
+                     :matrix-bandwidth-factor 20
+                     :matrix-range-base 30.0})]
+      (is (= {:capacity 40
+              :bandwidth 320.0
+              :range 60.0}
+             (matrix-logic/matrix-stats-for-counts
+               4
+               (matrix-logic/required-plate-count))))
+      (is (= {:capacity 0 :bandwidth 0.0 :range 0.0}
+             (matrix-logic/matrix-stats-for-counts 4 0))))))
+
+(deftest matrix-core-tooltip-uses-wireless-config-test
+  (testing "Matrix Core tooltip is derived from the shared config-backed Matrix formula"
+    (with-redefs [config-reg/get-config-values
+                  (fn [domain]
+                    (is (= config-common/wireless-domain domain))
+                    {:matrix-capacity-per-core-level 10
+                     :matrix-bandwidth-factor 20
+                     :matrix-range-base 30.0})]
+      (is (= ["等级: 2"
+              "容量倍率: 20"
+              "带宽倍率: 80"
+              "范围倍率: 42.4"]
+             (mat-core/matrix-core-tooltip 2))))))

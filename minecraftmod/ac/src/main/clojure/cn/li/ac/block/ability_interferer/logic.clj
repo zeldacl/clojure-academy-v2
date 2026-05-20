@@ -109,15 +109,16 @@
 				ticker (inc (get base-state :update-ticker 0))
 				state0 (assoc base-state
 								 :update-ticker ticker
+								 :max-energy (double (interferer-config/max-energy))
 								 :range (clamp-range (:range base-state)))
 				src-id (source-id level pos)
 				prev-uuids (set (:affected-player-uuids state0 []))
 				battery-item (get-in state0 [:inventory battery-slot])]
 			(let [state1 (if (and battery-item (energy/is-energy-item-supported? battery-item))
 								(let [cur-energy (double (:energy state0 0.0))
-										max-energy (double (:max-energy state0 interferer-config/max-energy))
+										max-energy (double (:max-energy state0 (interferer-config/max-energy)))
 										needed (max 0.0 (- max-energy cur-energy))
-										wanted (min needed interferer-config/battery-pull-per-tick)
+										wanted (min needed (interferer-config/battery-pull-per-tick))
 										pulled (double (energy/pull-energy-from-item battery-item wanted false))]
 									(if (pos? pulled)
 										(assoc state0 :energy (+ cur-energy (min pulled wanted)))
@@ -129,8 +130,8 @@
 									(assoc state1 :affected-player-count 0 :affected-player-uuids []))
 								state1)
 				state3 (if (and (:enabled state2 false)
-									 (zero? (mod ticker interferer-config/check-interval)))
-								(let [range (clamp-range (:range state2 interferer-config/default-range))
+									 (zero? (mod ticker (interferer-config/check-interval))))
+									(let [range (clamp-range (:range state2 (interferer-config/default-range)))
 										players (find-players-in-range level pos range)
 										whitelist (set (map str (:whitelist state2 [])))
 										affected-players (remove #(contains? whitelist (player-name %)) players)

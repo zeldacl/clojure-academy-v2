@@ -9,6 +9,7 @@
 						[cn.li.ac.item.constraint-plate :as plate]
 						[cn.li.ac.item.mat-core :as core]
 						[cn.li.ac.wireless.config :as matrix-config]
+						[cn.li.ac.block.wireless-matrix.stats :as matrix-stats]
 						[cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
 						[cn.li.mcmod.util.log :as log])
 	(:import [cn.li.acapi.wireless IWirelessMatrix]))
@@ -99,14 +100,18 @@
 		(get (safe-state ctrl) :core-level 0)
 		0))
 
+(defn required-plate-count []
+	(count @matrix-plate-slot-indexes))
+
+(defn matrix-stats-for-counts
+	"Pure Matrix capacity/bandwidth/range formula shared by capability and GUI preview."
+	[core-level plate-count]
+	(matrix-stats/stats-for-counts (required-plate-count) core-level plate-count))
+
 (defn- matrix-params [be]
 	(let [state (safe-state be)
 				core-lv (int (schema/get-field matrix-schema/unified-matrix-schema state :core-level))]
-		(if (is-working? state)
-			{:capacity (int (* (matrix-config/capacity-per-core-level) core-lv))
-			 :bandwidth (double (* core-lv core-lv (matrix-config/bandwidth-factor)))
-			 :range (double (* (matrix-config/range-base) (Math/sqrt core-lv)))}
-			{:capacity 0 :bandwidth 0.0 :range 0.0})))
+		(matrix-stats-for-counts core-lv (:plate-count state 0))))
 
 (defn- be-str-field [be k]
 	(str (schema/get-field matrix-schema/unified-matrix-schema (safe-state be) k)))

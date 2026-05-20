@@ -881,12 +881,20 @@ tasks.register('verifyAbilitySkillConfigCoverage') {
 
     doLast {
         def skillConfigFile = file('ac/src/main/clojure/cn/li/ac/ability/skill_config.clj')
+        def skillConfigDir = file('ac/src/main/clojure/cn/li/ac/ability/skill_config')
         if (!skillConfigFile.exists()) {
             throw new GradleException("Required ability skill config file not found: ${skillConfigFile}")
         }
+        if (!skillConfigDir.exists()) {
+            throw new GradleException("Required split ability skill config directory not found: ${skillConfigDir}")
+        }
 
+        def skillConfigFiles = [skillConfigFile] + fileTree(skillConfigDir) {
+            include '*.clj'
+        }.files.toList().sort { it.name }
+        def skillConfigText = skillConfigFiles.collect { it.getText('UTF-8') }.join('\n')
         def configured = [] as LinkedHashSet<String>
-        def configMatcher = (skillConfigFile.getText('UTF-8') =~ /\{:id :([a-z0-9-]+)\s+:category-id/)
+        def configMatcher = (skillConfigText =~ /\{:id :([a-z0-9-]+)\s+:category-id/)
         configMatcher.each { match -> configured << match[1] }
 
         def discovered = [] as LinkedHashSet<String>

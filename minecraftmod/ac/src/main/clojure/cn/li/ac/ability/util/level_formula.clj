@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.util.level-formula
-	"Shared formula helpers for ability progression thresholds.")
+	"Shared formula helpers for ability progression thresholds."
+	(:require [cn.li.ac.ability.config :as cfg]))
 
 (defn level-up-threshold
 	"Compute EXP threshold for next level.
@@ -10,7 +11,7 @@
 	- category-rate: category-specific progression multiplier
 	- global-rate: global progression multiplier"
 	[skill-count all-mastered? category-rate global-rate]
-	(let [base (* skill-count 1.333 category-rate global-rate)]
+	(let [base (* skill-count (cfg/level-threshold-skill-count-multiplier) category-rate global-rate)]
 		(if all-mastered?
-			(* base 0.5)
+			(* base (cfg/level-threshold-all-mastered-discount))
 			base)))

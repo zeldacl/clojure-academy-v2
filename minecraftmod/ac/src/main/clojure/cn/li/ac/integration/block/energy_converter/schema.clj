@@ -4,9 +4,14 @@
 
 (def default-state
   {:energy 0.0
-   :max-energy (double ec-config/energy-capacity)
+   :max-energy (double ec-config/default-energy-capacity)
    :wireless-enabled true
-  :wireless-bandwidth (double ec-config/transfer-bandwidth)})
+  :wireless-bandwidth (double ec-config/default-transfer-bandwidth)})
+
+(defn default-state-map []
+  (assoc default-state
+         :max-energy (double (ec-config/energy-capacity))
+         :wireless-bandwidth (double (ec-config/transfer-bandwidth))))
 
 (def energy-converter-gui-schema
   [{:key :energy
@@ -18,7 +23,7 @@
 
    {:key :max-energy
     :type :double
-    :default (double ec-config/energy-capacity)
+    :default (double ec-config/default-energy-capacity)
     :persist? false
     :gui-sync? true
     :gui-coerce double}

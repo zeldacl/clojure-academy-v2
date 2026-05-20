@@ -94,7 +94,7 @@
           bid (when be (platform-be/get-block-id be))]
       (cond
         (wind-pillar-id? bid)
-        (if (< pillars wind-config/max-pillars) (recur (dec y) (inc pillars)) nil)
+        (if (< pillars (wind-config/max-pillars)) (recur (dec y) (inc pillars)) nil)
 
         (wind-base-id? bid)
         {:base-pos check-pos :pillars pillars}
@@ -108,17 +108,17 @@
           bid (when be (platform-be/get-block-id be))]
       (cond
         (wind-pillar-id? bid)
-        (if (< pillars wind-config/max-pillars)
+        (if (< pillars (wind-config/max-pillars))
           (recur (inc y) (inc pillars))
           {:completeness :no-top})
 
         (wind-main-id? bid)
-        (if (and be (sub-id-zero? be) (>= pillars wind-config/min-pillars))
+        (if (and be (sub-id-zero? be) (>= pillars (wind-config/min-pillars)))
           {:completeness :complete :main-pos check-pos :pillars pillars}
           {:completeness :no-top})
 
         :else
-        {:completeness (if (< pillars wind-config/min-pillars) :base-only :no-top)}))))
+        {:completeness (if (< pillars (wind-config/min-pillars)) :base-only :no-top)}))))
 
 (defn- completeness->status [completeness generating?]
   (case completeness
@@ -146,10 +146,10 @@
     (let [state0 (or (platform-be/get-custom-state be) main-default-state)
           ticker (inc (int (get state0 :update-ticker 0)))
           state1 (assoc state0 :update-ticker ticker)]
-      (if (zero? (mod ticker wind-config/structure-update-interval))
+      (if (zero? (mod ticker (wind-config/structure-update-interval)))
         (let [fan? (boolean (fan-item-stack? (get-in state1 [:inventory 0])))
               base-info (find-base-below level p)
-              complete? (and base-info (>= (:pillars base-info 0) wind-config/min-pillars))
+              complete? (and base-info (>= (:pillars base-info 0) (wind-config/min-pillars)))
               obstacle-free? (and complete? (no-obstacle? level p (:direction state1 :north)))
               state2 (assoc state1
                        :fan-installed fan?
@@ -167,7 +167,7 @@
     (let [state0 (or (platform-be/get-custom-state be) base-default-state)
           ticker (inc (int (get state0 :update-ticker 0)))
           state1 (assoc state0 :update-ticker ticker)
-          scan-info (when (zero? (mod ticker wind-config/structure-update-interval))
+          scan-info (when (zero? (mod ticker (wind-config/structure-update-interval)))
                       (find-main-above-from-base level p))
           state2 (if scan-info
                    (let [comp (:completeness scan-info :base-only)
@@ -190,10 +190,11 @@
                         (true? (:fan-installed main-state)))
           gen-speed (if working? (wind-config/calculate-generation-rate (:main-pos-y state2)) 0.0)
           energy-before (double (get state2 :energy 0.0))
-          max-energy (double (get state2 :max-energy wind-config/max-energy-base))
+          max-energy (double (wind-config/max-energy-base))
           energy-after (min max-energy (+ energy-before gen-speed))
           state3 (assoc state2
                    :energy energy-after
+                   :max-energy max-energy
                    :gen-speed (double gen-speed)
                    :status (completeness->status (keyword (:completeness state2 "base-only")) working?))
           state4 (maybe-charge-output-item state3)]
@@ -280,7 +281,7 @@
           bid (when be (platform-be/get-block-id be))]
       (cond
         (wind-pillar-id? bid)
-        (if (< pillars wind-config/max-pillars)
+        (if (< pillars (wind-config/max-pillars))
           (recur (dec y) (inc pillars))
           false)
 

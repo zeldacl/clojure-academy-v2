@@ -6,7 +6,6 @@
             [cn.li.mcmod.gui.events :as events]
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.tech-ui-common :as tech-ui]
-            [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
@@ -90,9 +89,7 @@
   [container minecraft-container _player]
   (let [inv-page (tech-ui/create-rework-page "guis/rework/page_imagfusor.xml")
         inv-window (:window inv-page)
-        wireless-window (wireless-tab/create-wireless-panel {:role :receiver :container container})
-        wireless-page {:id "wireless" :window wireless-window}
-        pages [inv-page wireless-page]
+      pages [inv-page]
         max-e (fn [] (max 1.0 (double (or @(:max-energy container) cfg/max-energy))))
         max-liquid (fn [] (max 1.0 (double (or @(:tank-size container) cfg/tank-size))))]
     (tech-ui/create-tech-screen-container

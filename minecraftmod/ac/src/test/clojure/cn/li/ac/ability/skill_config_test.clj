@@ -1,8 +1,44 @@
 (ns cn.li.ac.ability.skill-config-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.service.registry :as skill-registry]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.common :as config-common]
+            [cn.li.ac.content.ability]
             [cn.li.mcmod.config.registry :as config-reg]))
+
+(def ^:private hidden-descriptor-fragments
+  ["visual-distance"
+   "sync-interval-ticks"
+   "spray-angles"
+   "fallback-width"
+   "fallback-height"
+   "fallback-eye-height"
+   "targeting.eye-height"
+   "scan-step"
+   "spawn-y-offset"
+   "destination-epsilon"
+   "punch-anim-ticks"
+   "effect.extra-drop-y-offset"])
+
+(defn- registered-content-skill-ids
+  []
+  (set (map :id (skill-registry/list-skills))))
+
+(defn- player-configurable-content-skills
+  []
+  (filter (comp nil? namespace :id) (skill-registry/list-skills)))
+
+(defn- player-configurable-content-skill-ids
+  []
+  (set (map :id (player-configurable-content-skills))))
+
+(defn- registered-content-counts-by-category
+  []
+  (into {}
+        (map (fn [[category-id skills]]
+               [category-id (count skills)]))
+        (group-by :category-id (player-configurable-content-skills))))
 
 (defn- with-config-state
   [f]
@@ -17,23 +53,40 @@
         (reset! config-reg/value-registry values)))))
 
 (deftest skill-config-inventory-test
-  (testing "all current content skills are covered by per-skill config"
-    (is (= 38 (count skill-config/all-skill-ids)))
+  (testing "all current player-configurable content skills are covered by per-skill config"
+    (is (= (player-configurable-content-skill-ids)
+      (set skill-config/all-skill-ids)))
     (is (= (count skill-config/all-skill-ids)
            (count (set skill-config/all-skill-ids))))
     (is (= #{:electromaster :meltdowner :teleporter :vecmanip}
            (set skill-config/category-ids)))
-    (is (= {:electromaster 9
-            :meltdowner 11
-            :teleporter 9
-            :vecmanip 9}
+    (is (= (registered-content-counts-by-category)
            (into {}
                  (map (fn [[category-id skills]]
                         [category-id (count skills)]))
                  skill-config/skills-by-category)))))
 
+(deftest structural-course-skills-are-not-player-config-test
+  (testing "generic mind/brain course skills stay content/progression data, not public skill config"
+    (let [course-ids (set (filter namespace (registered-content-skill-ids)))]
+      (is (seq course-ids))
+      (is (not-any? skill-config/skill-configured? course-ids))
+      (is (not-any? #(contains? (set skill-config/all-skill-ids) %) course-ids)))))
+
 (deftest descriptor-default-contract-test
   (testing "each category domain has unique descriptor keys and matching defaults"
+    (let [domains (map config-common/ability-skill-category-domain skill-config/category-ids)]
+      (is (= (count skill-config/category-ids)
+        (count (set skill-config/category-ids))))
+      (is (= (count domains) (count (set domains))))
+      (is (= (set skill-config/category-ids)
+        (set (keys skill-config/descriptors-by-category))))
+      (is (= (set skill-config/category-ids)
+        (set (keys skill-config/default-values-by-category))))
+      (is (= (set domains)
+        (set (keys skill-config/descriptors-by-domain))))
+      (is (= (set domains)
+        (set (keys skill-config/default-values-by-domain)))))
     (doseq [category-id skill-config/category-ids
             :let [domain (config-common/ability-skill-category-domain category-id)
                   descriptors (get skill-config/descriptors-by-category category-id)
@@ -50,6 +103,15 @@
       (is (every? string? (map :path descriptors)))
       (is (every? keyword? (map :type descriptors))))))
 
+(deftest internal-and-fx-descriptors-hidden-test
+  (testing "player-facing descriptors do not expose internal FX/sync/fallback knobs"
+    (let [descriptors (mapcat val skill-config/descriptors-by-category)
+          descriptor-text (fn [{:keys [key path]}]
+                            (str key " " path))]
+      (doseq [fragment hidden-descriptor-fragments]
+        (is (not-any? #(str/includes? (descriptor-text %) fragment) descriptors)
+            (str "Public descriptors should not contain " fragment))))))
+
 (deftest action-tunable-descriptor-contract-test
   (testing "action tunables are included in the electromaster config domain"
     (let [descriptors (get skill-config/descriptors-by-category :electromaster)
@@ -59,7 +121,7 @@
                                (count skill-config/field-definitions))
                             (count (get skill-config/skill-tunable-definitions-by-category
                                         :electromaster)))]
-      (is (= 21 (count (get skill-config/skill-tunable-definitions-by-skill :railgun))))
+      (is (= 20 (count (get skill-config/skill-tunable-definitions-by-skill :railgun))))
       (is (= 10 (count (get skill-config/skill-tunable-definitions-by-skill :thunder-clap))))
       (is (= expected-count (count descriptors)))
       (is (= [60.0 110.0]
@@ -76,27 +138,31 @@
       (is (= :double-list
              (:type (get by-key (skill-config/config-key :railgun :cooldown.manual-ticks))))))))
 
-      (deftest vecmanip-action-tunable-descriptor-contract-test
-        (testing "Vecmanip action tunables are included in the vecmanip config domain"
-          (let [descriptors (get skill-config/descriptors-by-category :vecmanip)
-           defaults (get skill-config/default-values-by-category :vecmanip)
-           by-key (into {} (map (juxt :key identity) descriptors))]
-            (is (pos? (count (get skill-config/skill-tunable-definitions-by-skill :plasma-cannon))))
-            (is (pos? (count (get skill-config/skill-tunable-definitions-by-skill :vec-deviation))))
-            (is (= [80.0 150.0]
-              (get defaults (skill-config/config-key :plasma-cannon :combat.damage))))
-            (is (= [0.0 30.0 45.0 60.0 80.0 -30.0 -45.0 -60.0 -80.0]
-              (get defaults (skill-config/config-key :blood-retrograde :effect.spray-angles))))
-            (is (= ["minecraft:fireball" "minecraft:large_fireball"]
-              (get defaults (skill-config/config-key :vec-deviation :targeting.large-fireball-ids))))
-            (is (= [300.0 160.0]
-              (get defaults (skill-config/config-key :vec-reflection :cost.reflect-entity.cp))))
-            (is (= :string-list
-              (:type (get by-key (skill-config/config-key :vec-deviation
-                       :targeting.excluded-entity-ids)))))
-            (is (= 9
-              (:list-count (get by-key (skill-config/config-key :blood-retrograde
-                        :effect.spray-angles))))))))
+(deftest vecmanip-action-tunable-descriptor-contract-test
+  (testing "Vecmanip action tunables are included in the vecmanip config domain"
+    (let [descriptors (get skill-config/descriptors-by-category :vecmanip)
+          defaults (get skill-config/default-values-by-category :vecmanip)
+          by-key (into {} (map (juxt :key identity) descriptors))]
+      (is (pos? (count (get skill-config/skill-tunable-definitions-by-skill :plasma-cannon))))
+      (is (pos? (count (get skill-config/skill-tunable-definitions-by-skill :vec-deviation))))
+      (is (= [80.0 150.0]
+             (get defaults (skill-config/config-key :plasma-cannon :combat.damage))))
+      (is (= 240
+             (get defaults (skill-config/config-key :plasma-cannon :projectile.max-flight-ticks))))
+      (is (= ["minecraft:fireball" "minecraft:large_fireball"]
+             (get defaults (skill-config/config-key :vec-deviation :targeting.large-fireball-ids))))
+      (is (= [300.0 160.0]
+             (get defaults (skill-config/config-key :vec-reflection :cost.reflect-entity.cp))))
+      (is (= :string-list
+             (:type (get by-key (skill-config/config-key :vec-deviation
+                                                          :targeting.excluded-entity-ids))))))))
+
+(deftest internal-tunable-fallback-test
+  (testing "runtime-only defaults remain available without becoming player descriptors"
+    (is (= 45.0 (skill-config/tunable-double :railgun :beam.visual-distance)))
+    (is (= [0.0 30.0 45.0 60.0 80.0 -30.0 -45.0 -60.0 -80.0]
+           (skill-config/tunable-double-list :blood-retrograde :effect.spray-angles)))
+    (is (= 5 (skill-config/tunable-int :plasma-cannon :projectile.sync-interval-ticks)))))
 
 (deftest default-values-preserve-existing-core-fields-test
   (testing "static defaults mirror current skill specs for core fields"

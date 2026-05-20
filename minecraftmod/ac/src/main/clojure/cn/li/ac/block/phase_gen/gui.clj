@@ -109,12 +109,12 @@
     (events/on-frame (:widget liquid-val)
       (fn [_]
         (let [liq (int (or @(:liquid-amount container) 0))
-              cap (int (max 1 (or @(:tank-size container) phase-config/tank-size)))]
+              cap (int (max 1 (or @(:tank-size container) (phase-config/tank-size))))]
           (comp/set-text! (:text-box liquid-val) (str liq " / " cap " mB")))))
     (events/on-frame (:widget energy-val)
       (fn [_]
         (let [e (int (double (or @(:energy container) 0.0)))
-              cap (int (max 1.0 (double (or @(:max-energy container) phase-config/max-energy))))]
+              cap (int (max 1.0 (double (or @(:max-energy container) (phase-config/max-energy)))))]
           (comp/set-text! (:text-box energy-val) (str e " / " cap " IF")))))
     (events/on-frame (:widget liquid-label)
       (fn [_]
@@ -136,8 +136,8 @@
   (let [inv-page (tech-ui/create-inventory-page "phasegen")
         wireless-window (wireless-tab/create-wireless-panel {:role :generator :container container})
         pages [inv-page {:id "wireless" :window wireless-window}]
-        max-e (fn [] (max 1.0 (double (or @(:max-energy container) phase-config/max-energy))))
-        max-liquid (fn [] (max 1.0 (double (or @(:tank-size container) phase-config/tank-size))))]
+        max-e (fn [] (max 1.0 (double (or @(:max-energy container) (phase-config/max-energy)))))
+        max-liquid (fn [] (max 1.0 (double (or @(:tank-size container) (phase-config/tank-size)))))]
     (tech-ui/create-tech-screen-container
       {:pages pages
        :container container

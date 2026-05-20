@@ -86,10 +86,10 @@
         in-unit (get-in state [:inventory in-slot])
         out-unit (get-in state [:inventory out-slot])
         liquid (int (get state :liquid-amount 0))
-        tank-size (int (get state :tank-size phase-config/tank-size))
+        tank-size (int (get state :tank-size (phase-config/tank-size)))
         can-consume? (and (phase-liquid-unit? in-unit)
                           (pos? (stack-count in-unit))
-                          (<= (+ liquid phase-config/liquid-per-unit) tank-size))
+                          (<= (+ liquid (phase-config/liquid-per-unit)) tank-size))
         can-output? (or (stack-empty? out-unit)
                         (and (empty-matter-unit? out-unit)
                              (< (stack-count out-unit)
@@ -103,7 +103,7 @@
                              (rebuild-stack out-unit add-count))
                            (make-empty-matter-unit add-count))]
         (-> state
-            (assoc :liquid-amount (+ liquid phase-config/liquid-per-unit))
+            (assoc :liquid-amount (+ liquid (phase-config/liquid-per-unit)))
             (assoc-in [:inventory in-slot] new-input)
             (assoc-in [:inventory out-slot] new-output)))
       state)))
@@ -127,14 +127,15 @@
 (defn- calc-generation [state]
   (let [liquid (double (max 0 (int (get state :liquid-amount 0))))
         current-energy (double (get state :energy 0.0))
-        max-energy (double (get state :max-energy phase-config/max-energy))
+        max-energy (double (get state :max-energy (phase-config/max-energy)))
         energy-room (max 0.0 (- max-energy current-energy))
-        max-drain-by-config (double phase-config/liquid-consume-per-tick)
-        max-drain-by-energy (if (pos? phase-config/gen-per-mb)
-                              (/ energy-room phase-config/gen-per-mb)
+        gen-per-mb (double (phase-config/gen-per-mb))
+        max-drain-by-config (double (phase-config/liquid-consume-per-tick))
+        max-drain-by-energy (if (pos? gen-per-mb)
+                  (/ energy-room gen-per-mb)
                               0.0)
         drain (int (Math/floor (max 0.0 (min liquid max-drain-by-config max-drain-by-energy))))
-        gen (* (double drain) phase-config/gen-per-mb)]
+        gen (* (double drain) gen-per-mb)]
     {:drain drain
      :gen gen}))
 
@@ -143,8 +144,8 @@
     (let [state0 (or (platform-be/get-custom-state be) phase-default-state)
           state1 (-> state0
                      (assoc :update-ticker (inc (int (get state0 :update-ticker 0))))
-                     (assoc :tank-size (int (get state0 :tank-size phase-config/tank-size)))
-                     (assoc :max-energy (double (get state0 :max-energy phase-config/max-energy))))
+                     (assoc :tank-size (int (phase-config/tank-size)))
+                     (assoc :max-energy (double (phase-config/max-energy))))
           state2 (convert-phase-unit state1)
           {:keys [drain gen]} (calc-generation state2)
           cur-energy (double (get state2 :energy 0.0))

@@ -17,7 +17,6 @@
             [cn.li.ac.block.metal-former.recipes :as recipes]
             [cn.li.ac.block.metal-former.schema :as former-schema]
             [cn.li.ac.wireless.gui.container.common :as common]
-            [cn.li.ac.wireless.gui.tab :as wireless-tab]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.energy.operations :as energy]))
@@ -122,9 +121,7 @@
   (sync-to-client! container)
   (let [inv-page (tech-ui/create-rework-page "guis/rework/page_metalformer.xml")
         inv-window (:window inv-page)
-        wireless-window (wireless-tab/create-wireless-panel {:role :receiver :container container})
-        wireless-page {:id "wireless" :window wireless-window}
-        pages [inv-page wireless-page]
+      pages [inv-page]
         max-e (fn [] (max 1.0 (double @(:max-energy container))))]
     (tech-ui/create-tech-screen-container
       {:pages pages

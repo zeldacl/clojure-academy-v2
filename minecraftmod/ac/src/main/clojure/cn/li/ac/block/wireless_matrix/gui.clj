@@ -294,16 +294,6 @@
       (core/get-core-level core-item)
       0)))
 
-(defn- calculate-matrix-stats [core-level plate-count]
-  ;; Must match capability implementation in block.clj
-  (if (and (> core-level 0) (= plate-count 3))
-    {:capacity  (int (* 8 core-level))
-     :bandwidth (double (* core-level core-level 60))
-     :range     (double (* 24 (Math/sqrt core-level)))}
-    {:capacity 0
-     :bandwidth 0.0
-     :range 0.0}))
-
 (defn sync-to-client! [container]
   (let [plates   (count-plates container)
         core-lvl (get-core-level container)
@@ -321,7 +311,7 @@
     (when (or (not= core-lvl old-core) (not= plates old-plates))
       (sync-helpers/with-throttled-sync! (:sync-ticker container) 100
         (fn []
-          (let [stats (calculate-matrix-stats core-lvl plates)]
+          (let [stats (matrix-logic/matrix-stats-for-counts core-lvl plates)]
             (reset! (:bandwidth container) (:bandwidth stats))
             (reset! (:range container) (:range stats))
             (sync-helpers/query-matrix-network-capacity! container stats)))))))

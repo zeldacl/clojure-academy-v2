@@ -14,7 +14,7 @@
 
 	(setEnergy [_ energy]
 		(let [state (or (platform-be/get-custom-state be) cat-logic/cat-default-state)
-					max-energy (double (get state :max-energy cat-config/max-energy))
+					max-energy (double (get state :max-energy (cat-config/max-energy)))
 					clamped (-> (double energy) (max 0.0) (min max-energy))]
 			(platform-be/set-custom-state! be (assoc state :energy clamped))
 			(platform-be/set-changed! be)))
@@ -34,7 +34,7 @@
 			(double actual)))
 
 	(getGeneratorBandwidth [_]
-		(double cat-config/generator-bandwidth))
+		(double (cat-config/generator-bandwidth)))
 
 	Object
 	(toString [_]

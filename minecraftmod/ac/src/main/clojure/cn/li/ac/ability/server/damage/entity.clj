@@ -1,7 +1,8 @@
 (ns cn.li.ac.ability.server.damage.entity
   "Pure AC-side rules for entity damage effects.
 
-  Keeps falloff and reflection-chain selection out of forge adapters.")
+  Keeps falloff and reflection-chain selection out of forge adapters."
+  (:require [cn.li.ac.ability.config :as cfg]))
 
 (defn- distance-3d
   [{x1 :x y1 :y z1 :z} {x2 :x y2 :y z2 :z}]
@@ -32,4 +33,4 @@
 
 (defn compute-reflected-damage
   [current-damage]
-  (* current-damage 0.5))
+  (* current-damage (cfg/reflected-damage-multiplier)))

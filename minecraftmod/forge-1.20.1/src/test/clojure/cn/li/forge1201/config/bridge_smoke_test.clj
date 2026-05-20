@@ -3,6 +3,7 @@
   These tests verify that config functions can be called without errors."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.config :as ability]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.common :as config-common]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.forge1201.config.bridge :as bridge]))
@@ -31,6 +32,21 @@
       (is (= "cn.li.ac-ability.toml" (:file-name domain-info)))
       (is (= (set (keys ability/default-values))
              (set (keys (:entries domain-info))))))))
+
+(deftest split-player-config-domains-build-expected-forge-file-names
+  (testing "wireless/ability split domains map to stable player-facing TOML files"
+    (let [domain->file-name @(ns-resolve 'cn.li.forge1201.config.bridge 'domain->file-name)
+          expected {config-common/wireless-domain "cn.li.ac-wireless.toml"
+                    config-common/wireless-devices-domain "cn.li.ac-wireless-devices.toml"
+                    config-common/gameplay-domain "cn.li.ac-gameplay.toml"
+                    config-common/ability-domain "cn.li.ac-ability.toml"
+                    config-common/ability-devices-domain "cn.li.ac-ability-devices.toml"}]
+      (doseq [[domain file-name] expected]
+        (is (= file-name (domain->file-name domain ".toml"))))
+      (doseq [category-id skill-config/category-ids]
+        (is (= (str "cn.li.ac-ability-skills-" (name category-id) ".toml")
+               (domain->file-name (config-common/ability-skill-category-domain category-id)
+                                  ".toml")))))))
 
 (deftest config-storage-is-initialized
   (testing "registered-configs atom exists and is a map"

@@ -21,6 +21,12 @@
     (doseq [{:keys [key default]} cfg/descriptors]
       (is (= default (get cfg/default-values key))))))
 
+(deftest max-level-is-structural-test
+  (testing "max level is an internal structural constant, not a player descriptor"
+    (is (= cfg/expected-level-count (cfg/max-level)))
+    (is (not (contains? (set (keys cfg/default-values)) :max-level)))
+    (is (not (contains? (set (map :key cfg/descriptors)) :max-level)))))
+
 (deftest runtime-config-override-and-fallback-test
   (testing "runtime getters use registry overrides"
     (config-reg/set-config-values!
@@ -33,8 +39,25 @@
       :metal-entities ["custom:metal-entity"]
       :init-cp [10.0 11.0 12.0 13.0 14.0]
       :add-cp [100.0 101.0 102.0 103.0 104.0]
+      :cp-recovery-rate-base 0.01
+      :cp-recovery-lerp-start 0.7
+      :cp-recovery-lerp-end 1.7
+      :overload-recovery-min-rate 0.03
+      :overload-recovery-active-rate 0.04
+      :overload-recovery-lerp-start 0.8
+      :overload-recovery-lerp-end 0.2
+      :overload-recovery-ratio-divisor 3.0
+      :max-overload-growth-per-event 7.0
+      :reflected-damage-multiplier 0.25
+      :reflection-search-radius 24.0
       :runtime-cp-consume-per-tick 3.0
-      :runtime-overload-per-tick 4.0})
+      :runtime-overload-per-tick 4.0
+      :level-threshold-skill-count-multiplier 2.0
+      :level-threshold-all-mastered-discount 0.25
+      :skill-learning-cost-base 4.0
+      :skill-learning-cost-level-square-factor 0.75
+      :level-up-stim-base 6
+      :max-saved-locations 32})
     (is (= 2.5 (cfg/damage-scale)))
     (is (false? (cfg/attack-player-enabled?)))
     (is (false? (cfg/destroy-blocks-enabled?)))
@@ -44,8 +67,25 @@
     (is (= 12.0 (cfg/get-init-cp 3)))
     (is (= 102.0 (cfg/get-add-cp 3)))
     (is (= 114.0 (cfg/max-cp-for-level 3)))
+    (is (= 0.01 (cfg/cp-recovery-rate-base)))
+    (is (= 0.7 (cfg/cp-recovery-lerp-start)))
+    (is (= 1.7 (cfg/cp-recovery-lerp-end)))
+    (is (= 0.03 (cfg/overload-recovery-min-rate)))
+    (is (= 0.04 (cfg/overload-recovery-active-rate)))
+    (is (= 0.8 (cfg/overload-recovery-lerp-start)))
+    (is (= 0.2 (cfg/overload-recovery-lerp-end)))
+    (is (= 3.0 (cfg/overload-recovery-ratio-divisor)))
+    (is (= 7.0 (cfg/max-overload-growth-per-event)))
+    (is (= 0.25 (cfg/reflected-damage-multiplier)))
+    (is (= 24.0 (cfg/reflection-search-radius)))
     (is (= 3.0 (cfg/runtime-cp-consume-per-tick)))
-    (is (= 4.0 (cfg/runtime-overload-per-tick))))
+    (is (= 4.0 (cfg/runtime-overload-per-tick)))
+    (is (= 2.0 (cfg/level-threshold-skill-count-multiplier)))
+    (is (= 0.25 (cfg/level-threshold-all-mastered-discount)))
+    (is (= 4.0 (cfg/skill-learning-cost-base)))
+    (is (= 0.75 (cfg/skill-learning-cost-level-square-factor)))
+    (is (= 6 (cfg/level-up-stim-base)))
+    (is (= 32 (cfg/max-saved-locations))))
   (testing "invalid level lists fall back to defaults"
     (config-reg/set-config-values!
      config-common/ability-domain
@@ -64,7 +104,10 @@
       :normal-metal-blocks [1]
       :cp-recover-speed 0.0
       :damage-scale -1.0
-      :runtime-cp-consume-per-tick -1.0})
+      :runtime-cp-consume-per-tick -1.0
+      :overload-recovery-ratio-divisor 0.0
+      :level-up-stim-base 0
+      :skill-learning-cost-base -1.0})
     (try
       (cfg/validate-config!)
       (is false)
@@ -74,4 +117,7 @@
           (is (some #(= % "normal-metal-blocks must be a string list") errors))
           (is (some #(= % "cp-recover-speed must be positive") errors))
           (is (some #(= % "damage-scale must be positive") errors))
-          (is (some #(= % "runtime-cp-consume-per-tick must be non-negative") errors)))))))
+          (is (some #(= % "runtime-cp-consume-per-tick must be non-negative") errors))
+          (is (some #(= % "overload-recovery-ratio-divisor must be positive") errors))
+          (is (some #(= % "level-up-stim-base must be positive") errors))
+          (is (some #(= % "skill-learning-cost-base must be non-negative") errors)))))))

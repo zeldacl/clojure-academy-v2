@@ -4,6 +4,7 @@
   Allows energy converters to act as wireless generators (provide energy)
   or wireless receivers (receive energy) when linked to wireless nodes."
   (:require [cn.li.ac.wireless.api :as wireless-api]
+            [cn.li.ac.integration.block.energy-converter.config :as ec-config]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessGenerator IWirelessReceiver]))
 
@@ -41,7 +42,7 @@
       ;; Provide energy from internal buffer and deduct the provided amount
       (let [state (get-state-fn)
             current-energy (double (get state :energy 0.0))
-            bandwidth (double (get state :wireless-bandwidth 1000.0))
+            bandwidth (double (ec-config/transfer-bandwidth))
             can-provide (min current-energy bandwidth req)]
         (when (pos? can-provide)
           (set-state-fn (assoc state :energy (- current-energy can-provide))))
@@ -49,7 +50,7 @@
 
     (getGeneratorBandwidth [_]
       (let [state (get-state-fn)]
-        (double (get state :wireless-bandwidth 1000.0))))))
+        (double (ec-config/transfer-bandwidth))))))
 
 ;; ============================================================================
 ;; Wireless Receiver Implementation
@@ -76,16 +77,16 @@
          ;; How much energy we need
          (let [state (get-state-fn)
                current-energy (double (get state :energy 0.0))
-               max-energy (double (get state :max-energy 100000.0))
+               max-energy (double (ec-config/energy-capacity))
                space (- max-energy current-energy)
-               bandwidth (double (get state :wireless-bandwidth 1000.0))]
+               bandwidth (double (ec-config/transfer-bandwidth))]
            (double (min space bandwidth))))
 
        (injectEnergy [_ amt]
          ;; Receive energy into internal buffer
          (let [state (get-state-fn)
                current-energy (double (get state :energy 0.0))
-               max-energy (double (get state :max-energy 100000.0))
+               max-energy (double (ec-config/energy-capacity))
                space (- max-energy current-energy)
                to-inject (min amt space)
                leftover (- amt to-inject)]
@@ -106,7 +107,7 @@
 
        (getReceiverBandwidth [_]
          (let [state (get-state-fn)]
-           (double (get state :wireless-bandwidth 1000.0))))))))
+           (double (ec-config/transfer-bandwidth))))))))
 
 ;; ============================================================================
 ;; Wireless Integration Helpers

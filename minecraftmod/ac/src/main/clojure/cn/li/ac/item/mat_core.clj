@@ -8,6 +8,7 @@
   - Damage 3: Tier 4 (Ultimate)"
   (:require [cn.li.mcmod.item.dsl :as idsl]            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.item :as item]
+            [cn.li.ac.block.wireless-matrix.stats :as matrix-stats]
             [clojure.string :as str]))
 
 ;; ============================================================================
@@ -16,32 +17,35 @@
 
 (def core-tiers
   {:tier-1 {:damage 0
-            :name "基础矩阵核心"
-            :tooltip ["等级: 1"
-                     "容量倍率: 8"
-                     "带宽倍率: 60"
-                     "范围倍率: 24"]}
+            :name "基础矩阵核心"}
    :tier-2 {:damage 1
-            :name "改进矩阵核心"
-            :tooltip ["等级: 2"
-                     "容量倍率: 16"
-                     "带宽倍率: 240"
-                     "范围倍率: 33.9"]}
+            :name "改进矩阵核心"}
    :tier-3 {:damage 2
-            :name "高级矩阵核心"
-            :tooltip ["等级: 3"
-                     "容量倍率: 24"
-                     "带宽倍率: 540"
-                     "范围倍率: 41.6"]}
+            :name "高级矩阵核心"}
    :tier-4 {:damage 3
-            :name "终极矩阵核心"
-            :tooltip ["等级: 4"
-                     "容量倍率: 32"
-                     "带宽倍率: 960"
-                     "范围倍率: 48.0"]}})
+            :name "终极矩阵核心"}})
 
 
 (def ^:private core-item-ids ["mat_core_0" "mat_core_1" "mat_core_2"])
+(def ^:private full-matrix-plate-count 3)
+
+(defn- format-stat
+  [value]
+  (let [d (double value)
+        rounded (Math/round d)]
+    (if (< (Math/abs (- d (double rounded))) 1.0e-9)
+      (str rounded)
+      (format "%.1f" d))))
+
+(defn matrix-core-tooltip
+  "Build config-backed tooltip text for a full Wireless Matrix using `level` core."
+  [level]
+  (let [{:keys [capacity bandwidth range]}
+        (matrix-stats/stats-for-counts full-matrix-plate-count level full-matrix-plate-count)]
+    [(str "等级: " (int level))
+     (str "容量倍率: " (format-stat capacity))
+     (str "带宽倍率: " (format-stat bandwidth))
+     (str "范围倍率: " (format-stat range))]))
 
 (defonce-guard mat-cores-installed?)
 
@@ -100,7 +104,7 @@
         {:max-stack-size 1
          :creative-tab :misc
          :max-damage 0
-         :properties {:tooltip (get-in core-tiers [:tier-1 :tooltip])
+         :properties {:tooltip (matrix-core-tooltip 1)
                       :display-name (get-in core-tiers [:tier-1 :name])
                       :model-texture "mat_core_0"}}))
     (idsl/register-item!
@@ -109,7 +113,7 @@
         {:max-stack-size 1
          :creative-tab :misc
          :max-damage 1
-         :properties {:tooltip (get-in core-tiers [:tier-2 :tooltip])
+         :properties {:tooltip (matrix-core-tooltip 2)
                       :display-name (get-in core-tiers [:tier-2 :name])
                       :model-texture "mat_core_1"}}))
     (idsl/register-item!
@@ -118,7 +122,7 @@
         {:max-stack-size 1
          :creative-tab :misc
          :max-damage 2
-         :properties {:tooltip (get-in core-tiers [:tier-3 :tooltip])
+         :properties {:tooltip (matrix-core-tooltip 3)
                       :display-name (get-in core-tiers [:tier-3 :name])
                       :model-texture "mat_core_2"}}))
     (log/info "Matrix Cores initialized: 3 tiers")))

@@ -53,8 +53,8 @@
 		(let [state0 (or (platform-be/get-custom-state be) cat-default-state)
 					ticker (inc (long (get state0 :update-ticker 0)))
 					energy (double (get state0 :energy 0.0))
-					max-energy (double (get state0 :max-energy cat-config/max-energy))
-					generated (min (double cat-config/generation-per-tick)
+					max-energy (double (cat-config/max-energy))
+					generated (min (double (cat-config/generation-per-tick))
 												 (max 0.0 (- max-energy energy)))
 					energy* (+ energy generated)
 					state1 (-> state0

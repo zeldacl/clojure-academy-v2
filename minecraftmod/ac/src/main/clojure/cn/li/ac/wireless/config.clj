@@ -132,8 +132,8 @@
     :max 1024
     :comment "Advanced node connection capacity."}
    {:key :node-sync-interval
-    :section :tick
-    :path "tick.node-sync-interval"
+    :section :performance
+    :path "performance.node-sync-interval"
     :type :int
     :default 20
     :min 1
@@ -164,21 +164,13 @@
     :max 4096.0
     :comment "Matrix range uses range-base * sqrt(coreLevel)."}
    {:key :matrix-gui-sync-interval
-    :section :tick
-    :path "tick.matrix-gui-sync-interval"
+    :section :performance
+    :path "performance.matrix-gui-sync-interval"
     :type :int
     :default 15
     :min 1
     :max 1200
-    :comment "Ticks between matrix GUI sync broadcasts."}
-   {:key :matrix-validate-interval
-    :section :tick
-    :path "tick.matrix-validate-interval"
-    :type :int
-    :default 20
-    :min 1
-    :max 1200
-    :comment "Ticks between matrix multiblock structure validation passes."}])
+    :comment "Ticks between matrix GUI sync broadcasts."}])
 
 (def default-values
   (into {} (map (juxt :key :default) descriptors)))
@@ -240,6 +232,3 @@
 
 (defn gui-sync-interval []
   (:matrix-gui-sync-interval (cfg)))
-
-(defn validate-interval []
-  (:matrix-validate-interval (cfg)))

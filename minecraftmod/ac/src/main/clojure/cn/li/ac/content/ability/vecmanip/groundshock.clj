@@ -70,6 +70,13 @@
 (defn- init-energy [exp]
   (cfg-lerp :effect.init-energy exp))
 
+(defn- propagation-energy-cost [block-id]
+  (case block-id
+    "minecraft:stone" (cfg-double :effect.energy-cost.stone)
+    "minecraft:grass_block" (cfg-double :effect.energy-cost.grass-block)
+    "minecraft:farmland" (cfg-double :effect.energy-cost.farmland)
+    (cfg-double :effect.energy-cost.default-block)))
+
 (defn- max-iterations [exp]
   (cfg-lerp-int :effect.max-iterations exp))
 
@@ -282,18 +289,18 @@
                       (do
                         (block-manip/set-block! block-manip/*block-manipulation*
                                                 world-id bx by bz "minecraft:cobblestone")
-                        (swap! energy* - 0.4))
+                        (swap! energy* - (propagation-energy-cost block-id)))
 
                       "minecraft:grass_block"
                       (do
                         (block-manip/set-block! block-manip/*block-manipulation*
                                                 world-id bx by bz "minecraft:dirt")
-                        (swap! energy* - 0.2))
+                        (swap! energy* - (propagation-energy-cost block-id)))
 
                       "minecraft:farmland"
-                      (swap! energy* - 0.1)
+                      (swap! energy* - (propagation-energy-cost block-id))
 
-                      (swap! energy* - 0.5))
+                      (swap! energy* - (propagation-energy-cost block-id)))
 
                     (when (< (rand) (cfg-double :breaking.ground-break-probability))
                       (break-with-force! player-id world-id block-x block-y block-z false energy* block-drop-rate broken-blocks*))

@@ -7,6 +7,7 @@
   - Completing development (applying results to ability data)
   - Aborting development"
   (:require [cn.li.ac.ability.model.develop :as dev]
+            [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.service.registry :as skill]
@@ -41,7 +42,7 @@
   [develop-data developer-type current-level]
   (if (dev/developing? develop-data)
     {:develop-data develop-data :error :already-developing}
-    (if (>= current-level 5)
+    (if (>= current-level (cfg/max-level))
       {:develop-data develop-data :error :max-level}
       (let [max-stim (dev/level-up-stims current-level)]
         {:develop-data (dev/start-develop develop-data
