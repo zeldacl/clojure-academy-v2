@@ -98,6 +98,7 @@
   Platform loaders only provide loader-specific MenuType/open-screen shells;
   all AC GUI metadata/container behavior is registered by AC itself."
   []
+  (slot-validators/register-default-slot-validators!)
   (gui-core/register-gui-platform-impl!
     {:safe-tick! safe-tick!
      :safe-validate safe-validate

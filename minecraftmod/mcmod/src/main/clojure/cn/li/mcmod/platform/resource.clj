@@ -35,16 +35,19 @@
 ;; can resolve paths without requiring config.modid. namespace may be nil (use default mod id).
 (def ^:dynamic *resource-location-fn* nil)
 
+(def ^:private default-resource-namespace
+  (or (System/getenv "MOD_ID") "my_mod"))
+
 (defn invoke-resource-location
   "Call the injected resource-location function.
    [path] -> use default namespace (path is the path part).
    [namespace path] -> use given namespace and path.
-   Throws if *resource-location-fn* is not set (ac must set it at init)."
+   Falls back to the platform resource factory when no higher-level helper is installed."
   ([path]
    (if *resource-location-fn*
      (*resource-location-fn* nil path)
-     (throw (ex-info "*resource-location-fn* not set - ac/loader must set cn.li.mcmod.platform.resource/*resource-location-fn* at init" {:path path}))))
+     (create-resource-location default-resource-namespace path)))
   ([namespace path]
    (if *resource-location-fn*
      (*resource-location-fn* namespace path)
-     (throw (ex-info "*resource-location-fn* not set - ac/loader must set at init" {:namespace namespace :path path})))))
+     (create-resource-location (or namespace default-resource-namespace) path))))

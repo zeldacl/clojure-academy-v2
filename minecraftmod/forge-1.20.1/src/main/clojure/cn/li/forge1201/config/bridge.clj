@@ -65,7 +65,7 @@
         ^ForgeConfigSpec$Builder builder (comment-builder builder (:comment descriptor))]
     (case (:type descriptor)
       :int (.defineInRange builder leaf (int default) (int (or min-val Integer/MIN_VALUE)) (int (or max-val Integer/MAX_VALUE)))
-      :double (.defineInRange builder leaf (double default) (double (or min-val Double/MIN_VALUE)) (double (or max-val Double/MAX_VALUE)))
+      :double (.defineInRange builder leaf (double default) (double (or min-val (- Double/MAX_VALUE))) (double (or max-val Double/MAX_VALUE)))
       :boolean (.define builder leaf (boolean default))
       :string (.define builder leaf (str default))
       :string-list (define-list-entry! builder leaf default :string-list)

@@ -10,24 +10,27 @@
   [inventory slot-index x y]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [^ItemStack stack]
-      (let [pred (slot-registry/get-slot-validator :energy)]
-        (and pred (pred stack))))
+      (boolean
+       (let [pred (slot-registry/get-slot-validator :energy)]
+         (and pred (pred stack)))))
     (getMaxStackSize [& _] 1)))
 
 (defn create-plate-slot
   [inventory slot-index x y]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [^ItemStack stack]
-      (let [pred (slot-registry/get-slot-validator :plate)]
-        (and pred (pred stack))))
+      (boolean
+       (let [pred (slot-registry/get-slot-validator :plate)]
+         (and pred (pred stack)))))
     (getMaxStackSize [& _] 1)))
 
 (defn create-core-slot
   [inventory slot-index x y]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [^ItemStack stack]
-      (let [pred (slot-registry/get-slot-validator :core)]
-        (and pred (pred stack))))
+      (boolean
+       (let [pred (slot-registry/get-slot-validator :core)]
+         (and pred (pred stack)))))
     (getMaxStackSize [& _] 1)))
 
 (defn create-output-slot
@@ -52,8 +55,9 @@
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
-      (let [pred (slot-registry/get-slot-validator :energy)]
-        (and (active?-fn) pred (pred stack))))
+      (boolean
+       (let [pred (slot-registry/get-slot-validator :energy)]
+         (and (active?-fn) pred (pred stack)))))
     (mayPickup [_player] (boolean (active?-fn)))
     (getMaxStackSize [& _] 1)))
 
@@ -61,8 +65,9 @@
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
-      (let [pred (slot-registry/get-slot-validator :plate)]
-        (and (active?-fn) pred (pred stack))))
+      (boolean
+       (let [pred (slot-registry/get-slot-validator :plate)]
+         (and (active?-fn) pred (pred stack)))))
     (mayPickup [_player] (boolean (active?-fn)))
     (getMaxStackSize [& _] 1)))
 
@@ -70,8 +75,9 @@
   [inventory slot-index x y active?-fn]
   (proxy [Slot] [inventory (int slot-index) (int x) (int y)]
     (mayPlace [stack]
-      (let [pred (slot-registry/get-slot-validator :core)]
-        (and (active?-fn) pred (pred stack))))
+      (boolean
+       (let [pred (slot-registry/get-slot-validator :core)]
+         (and (active?-fn) pred (pred stack)))))
     (mayPickup [_player] (boolean (active?-fn)))
     (getMaxStackSize [& _] 1)))
 

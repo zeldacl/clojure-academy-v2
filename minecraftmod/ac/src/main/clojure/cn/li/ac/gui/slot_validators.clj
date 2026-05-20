@@ -2,7 +2,11 @@
   "Shared slot validation helpers for all platforms."
   (:require [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.item.constraint-plate :as plate]
-            [cn.li.ac.item.mat-core :as core]))
+            [cn.li.ac.item.mat-core :as core]
+            [cn.li.mcmod.gui.slot-registry :as slot-registry]))
+
+(defonce ^:private default-slot-validators-installed?
+  (atom false))
 
 (defn energy-item-validator
   "Return true if stack is an energy item."
@@ -23,3 +27,13 @@
   "Return false to block insertion into output slots."
   [_stack]
   false)
+
+(defn register-default-slot-validators!
+  "Install AC's standard typed slot validators into the shared slot registry."
+  []
+  (when (compare-and-set! default-slot-validators-installed? false true)
+    (slot-registry/register-slot-validator! :energy energy-item-validator)
+    (slot-registry/register-slot-validator! :plate constraint-plate-validator)
+    (slot-registry/register-slot-validator! :core matrix-core-validator)
+    (slot-registry/register-slot-validator! :output output-slot-validator))
+  nil)

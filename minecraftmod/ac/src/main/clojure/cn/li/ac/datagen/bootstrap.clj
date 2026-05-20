@@ -4,6 +4,7 @@
   AC registers this through mcmod.lifecycle so platform datagen entrypoints do
   not depend on AC business namespaces."
   (:require [cn.li.ac.ability.datagen.registry :as ability-datagen]
+            [cn.li.ac.block.platform-bridge :as block-bridge]
             [cn.li.ac.wireless.datagen.registry :as wireless-datagen]
             [cn.li.ac.energy.datagen.registry :as energy-datagen]))
 
@@ -13,6 +14,9 @@
   Each domain registry populates shared mcmod.datagen.metadata atoms used by
   mc-1.20.1 datagen providers."
   []
+  ;; Blockstate/model providers consult mcmod blockstate hooks at generation time.
+  ;; Install AC overrides here so node multipart and texture rules are applied.
+  (block-bridge/install-blockstate-hooks!)
   (ability-datagen/register-datagen-metadata!)
   (wireless-datagen/register-datagen-metadata!)
   (energy-datagen/register-datagen-metadata!)

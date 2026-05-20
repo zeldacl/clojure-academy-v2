@@ -1,7 +1,8 @@
 (ns cn.li.ac.config.modid
   "Centralized mod-id configuration for easy portability across projects.
    Change MOD-ID here to update mod identification across all modules."
-  (:require [cn.li.mcmod.config :as mcmod-config]))
+  (:require [cn.li.mcmod.config :as mcmod-config]
+            [cn.li.mcmod.platform.resource :as platform-resource]))
 
 (def ^:const MOD-ID
   "The primary mod identifier used across all resource locations, registries,
@@ -16,6 +17,11 @@
   shared configuration state."
   []
   (alter-var-root #'mcmod-config/*mod-id* (constantly MOD-ID))
+  (alter-var-root #'platform-resource/*resource-location-fn*
+                  (constantly (fn [namespace path]
+                                (if namespace
+                                  (mcmod-config/resource-location namespace path)
+                                  (mcmod-config/resource-location path)))))
   nil)
 
 (def resource-location mcmod-config/resource-location)
