@@ -144,29 +144,30 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :blood-retrograde
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:blood-retrograde/fx-start :blood-retrograde/fx-update
-   :blood-retrograde/fx-end :blood-retrograde/fx-perform]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :blood-retrograde/fx-start
-      (level-effects/enqueue-level-effect! :blood-retrograde {:mode :start})
-      :blood-retrograde/fx-update
-      (level-effects/enqueue-level-effect! :blood-retrograde
-        {:mode :update
-         :ticks (long (or (:ticks payload) 0))
-         :charge-ratio (double (or (:charge-ratio payload) 0.0))})
-      :blood-retrograde/fx-end
-      (level-effects/enqueue-level-effect! :blood-retrograde
-        {:mode :end :performed? (boolean (:performed? payload))})
-      :blood-retrograde/fx-perform
-      (level-effects/enqueue-level-effect! :blood-retrograde
-        {:mode :perform
-         :sound-pos (:sound-pos payload)
-         :splashes (:splashes payload)
-         :sprays (:sprays payload)}))))
+(defn init! []
+  (level-effects/register-level-effect! :blood-retrograde
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:blood-retrograde/fx-start :blood-retrograde/fx-update
+     :blood-retrograde/fx-end :blood-retrograde/fx-perform]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :blood-retrograde/fx-start
+        (level-effects/enqueue-level-effect! :blood-retrograde {:mode :start})
+        :blood-retrograde/fx-update
+        (level-effects/enqueue-level-effect! :blood-retrograde
+          {:mode :update
+           :ticks (long (or (:ticks payload) 0))
+           :charge-ratio (double (or (:charge-ratio payload) 0.0))})
+        :blood-retrograde/fx-end
+        (level-effects/enqueue-level-effect! :blood-retrograde
+          {:mode :end :performed? (boolean (:performed? payload))})
+        :blood-retrograde/fx-perform
+        (level-effects/enqueue-level-effect! :blood-retrograde
+          {:mode :perform
+           :sound-pos (:sound-pos payload)
+           :splashes (:splashes payload)
+           :sprays (:sprays payload)}))))
+  nil)

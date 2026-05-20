@@ -28,20 +28,21 @@
 
 (defn- build-plan [_cp _hcp _tick] nil)
 
-(level-effects/register-level-effect! :shift-teleport
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:shift-tp/fx-start :shift-tp/fx-perform :shift-tp/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :shift-tp/fx-start
-      (level-effects/enqueue-level-effect! :shift-teleport {:mode :start})
-      :shift-tp/fx-perform
-      (level-effects/enqueue-level-effect! :shift-teleport
-        {:mode :perform :x (:x payload) :y (:y payload) :z (:z payload)})
-      :shift-tp/fx-end
-      (level-effects/enqueue-level-effect! :shift-teleport {:mode :end})
-      nil)))
+(defn init! []
+  (level-effects/register-level-effect! :shift-teleport
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:shift-tp/fx-start :shift-tp/fx-perform :shift-tp/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :shift-tp/fx-start
+        (level-effects/enqueue-level-effect! :shift-teleport {:mode :start})
+        :shift-tp/fx-perform
+        (level-effects/enqueue-level-effect! :shift-teleport
+          {:mode :perform :x (:x payload) :y (:y payload) :z (:z payload)})
+        :shift-tp/fx-end
+        (level-effects/enqueue-level-effect! :shift-teleport {:mode :end})
+        nil)))
+  nil)

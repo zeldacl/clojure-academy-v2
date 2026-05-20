@@ -14,10 +14,9 @@
       :can-control? true
       :conditions [(constantly true)])
 
-  Both macros resolve to register-category! / register-skill! calls wrapped
-  in a defonce-guarded init so reloading is safe."
-  (:require [cn.li.ac.ability.definition-core :as definition-core]
-            [cn.li.ac.ability.service.registry :as registry]))
+  Macros only declare data. Runtime registration is performed by explicit
+  content bootstrap functions."
+  (:require [cn.li.ac.ability.definition-core :as definition-core]))
 
 ;; ============================================================================
 ;; defcategory
@@ -46,11 +45,12 @@
        (def ~sym skill-map#))))
 
 (defmacro defskill!
-  "Declare and immediately register a skill.
-  Supports :category alias for :category-id and :prereqs map sugar."
+  "Declare a skill map without registration.
+
+  Kept as a legacy spelling for existing content declarations; registration is
+  performed by cn.li.ac.content.ability/init-ability-content!."
   [sym & opts]
   (let [kv-map (apply hash-map opts)
         skill-map (definition-core/build-skill-spec sym kv-map)]
-    `(let [skill-map# ~skill-map
-           registered# (registry/register-skill! skill-map#)]
-       (def ~sym registered#))))
+    `(let [skill-map# (assoc ~skill-map :ac/content-type :skill)]
+       (def ~sym skill-map#))))

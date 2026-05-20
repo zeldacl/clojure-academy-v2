@@ -9,12 +9,21 @@
 	[]
 	(ServerLifecycleHooks/getCurrentServer))
 
+(defonce ^:private spi-registered? (atom false))
+
+(declare install-server-context!)
+
+(defn- register-server-context-spi!
+	[]
+	(when (compare-and-set! spi-registered? false true)
+		(server-context-spi/register-server-context-impl!
+			{:get-current-server get-server
+			 :install! install-server-context!}))
+	nil)
+
 (defn install-server-context!
 	[]
+	(register-server-context-spi!)
 	(when-let [server (get-server)]
 		(server-context-spi/notify-server-available! server))
 	nil)
-
-(server-context-spi/register-server-context-impl!
-	{:get-current-server get-server
-	 :install! install-server-context!})

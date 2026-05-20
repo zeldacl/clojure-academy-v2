@@ -113,26 +113,27 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :vec-accel
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:vec-accel/fx-start :vec-accel/fx-update :vec-accel/fx-perform :vec-accel/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :vec-accel/fx-start
-      (level-effects/enqueue-level-effect! :vec-accel {:mode :start})
-      :vec-accel/fx-update
-      (level-effects/enqueue-level-effect! :vec-accel
-        {:mode :update
-         :charge-ticks (long (or (:charge-ticks payload) 0))
-         :can-perform? (boolean (:can-perform? payload))
-         :look-dir (:look-dir payload)
-         :init-vel (:init-vel payload)})
-      :vec-accel/fx-perform
-      (level-effects/enqueue-level-effect! :vec-accel {:mode :perform})
-      :vec-accel/fx-end
-      (level-effects/enqueue-level-effect! :vec-accel
-        {:mode :end :performed? (boolean (:performed? payload))}))))
+(defn init! []
+  (level-effects/register-level-effect! :vec-accel
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:vec-accel/fx-start :vec-accel/fx-update :vec-accel/fx-perform :vec-accel/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :vec-accel/fx-start
+        (level-effects/enqueue-level-effect! :vec-accel {:mode :start})
+        :vec-accel/fx-update
+        (level-effects/enqueue-level-effect! :vec-accel
+          {:mode :update
+           :charge-ticks (long (or (:charge-ticks payload) 0))
+           :can-perform? (boolean (:can-perform? payload))
+           :look-dir (:look-dir payload)
+           :init-vel (:init-vel payload)})
+        :vec-accel/fx-perform
+        (level-effects/enqueue-level-effect! :vec-accel {:mode :perform})
+        :vec-accel/fx-end
+        (level-effects/enqueue-level-effect! :vec-accel
+          {:mode :end :performed? (boolean (:performed? payload))}))))
+  nil)

@@ -30,20 +30,21 @@
 
 (defn- build-plan [_cp _hcp _tick] nil)
 
-(level-effects/register-level-effect! :penetrate-teleport
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:penetrate-tp/fx-start :penetrate-tp/fx-perform :penetrate-tp/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :penetrate-tp/fx-start
-      (level-effects/enqueue-level-effect! :penetrate-teleport {:mode :start})
-      :penetrate-tp/fx-perform
-      (level-effects/enqueue-level-effect! :penetrate-teleport
-        {:mode :perform :x (:x payload) :y (:y payload) :z (:z payload)})
-      :penetrate-tp/fx-end
-      (level-effects/enqueue-level-effect! :penetrate-teleport {:mode :end})
-      nil)))
+(defn init! []
+  (level-effects/register-level-effect! :penetrate-teleport
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:penetrate-tp/fx-start :penetrate-tp/fx-perform :penetrate-tp/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :penetrate-tp/fx-start
+        (level-effects/enqueue-level-effect! :penetrate-teleport {:mode :start})
+        :penetrate-tp/fx-perform
+        (level-effects/enqueue-level-effect! :penetrate-teleport
+          {:mode :perform :x (:x payload) :y (:y payload) :z (:z payload)})
+        :penetrate-tp/fx-end
+        (level-effects/enqueue-level-effect! :penetrate-teleport {:mode :end})
+        nil)))
+  nil)

@@ -8,8 +8,8 @@
    - Saved locations"
   (:require [cn.li.mc1201.runtime.accessor-registry-core :as core]))
 
-(defonce register-world-accessors!
-  (fn []
+(defn- register-world-accessors-impl!
+  []
     ;; Block query accessors
     (core/register-accessor! :world :get-block-type
       (fn [_ _] nil)
@@ -79,11 +79,18 @@
       (fn [_ _] nil)
       "Delete saved location by identifier.")
 
-    nil))
+    nil)
 
-(def init-world-accessors
-  (try
-    (register-world-accessors!)
-    true
-    (catch Exception e
-      (throw (ex-info "Failed to register world accessors" {} e)))))
+(defonce ^:private world-accessors-registered?
+  (atom false))
+
+(defn register-world-accessors!
+  "Explicitly register world-domain accessors once."
+  []
+  (when (compare-and-set! world-accessors-registered? false true)
+    (try
+      (register-world-accessors-impl!)
+      (catch Throwable t
+        (reset! world-accessors-registered? false)
+        (throw (ex-info "Failed to register world accessors" {} t)))))
+  nil)

@@ -34,19 +34,20 @@
                              col)]))
             beams)}))
 
-(level-effects/register-level-effect! :ray-barrage
-  {:enqueue-fn    enqueue-beam!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:ray-barrage/fx-beam]
-  (fn [_ctx-id channel payload]
-    (when (= channel :ray-barrage/fx-beam)
-      (when-let [beam-end (:beam-end payload)]
-        (let [origin (:origin payload)]
-          (level-effects/enqueue-level-effect! :ray-barrage
-            {:from-x (:x origin) :from-y (:y origin) :from-z (:z origin)
-             :to-x   (:x beam-end) :to-y (:y beam-end) :to-z (:z beam-end)})
-          (client-sounds/queue-sound-effect!
-            {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.4 :pitch (+ 0.9 (rand 0.2))}))))))
+(defn init! []
+  (level-effects/register-level-effect! :ray-barrage
+    {:enqueue-fn    enqueue-beam!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:ray-barrage/fx-beam]
+    (fn [_ctx-id channel payload]
+      (when (= channel :ray-barrage/fx-beam)
+        (when-let [beam-end (:beam-end payload)]
+          (let [origin (:origin payload)]
+            (level-effects/enqueue-level-effect! :ray-barrage
+              {:from-x (:x origin) :from-y (:y origin) :from-z (:z origin)
+               :to-x   (:x beam-end) :to-y (:y beam-end) :to-z (:z beam-end)})
+            (client-sounds/queue-sound-effect!
+              {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.4 :pitch (+ 0.9 (rand 0.2))}))))))
+  nil)

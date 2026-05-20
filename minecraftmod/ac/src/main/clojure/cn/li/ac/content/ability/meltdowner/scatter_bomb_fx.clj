@@ -66,23 +66,24 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :scatter-bomb
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:scatter-bomb/fx-start :scatter-bomb/fx-ball :scatter-bomb/fx-beam :scatter-bomb/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :scatter-bomb/fx-start
-      (level-effects/enqueue-level-effect! :scatter-bomb {:mode :start})
-      :scatter-bomb/fx-ball
-      (level-effects/enqueue-level-effect! :scatter-bomb
-        {:mode :ball :x (:x payload) :y (:y payload) :z (:z payload) :count (:count payload)})
-      :scatter-bomb/fx-beam
-      (level-effects/enqueue-level-effect! :scatter-bomb
-        {:mode :beam :start (:start payload) :end (:end payload)})
-      :scatter-bomb/fx-end
-      (level-effects/enqueue-level-effect! :scatter-bomb {:mode :end})
-      nil)))
+(defn init! []
+  (level-effects/register-level-effect! :scatter-bomb
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:scatter-bomb/fx-start :scatter-bomb/fx-ball :scatter-bomb/fx-beam :scatter-bomb/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :scatter-bomb/fx-start
+        (level-effects/enqueue-level-effect! :scatter-bomb {:mode :start})
+        :scatter-bomb/fx-ball
+        (level-effects/enqueue-level-effect! :scatter-bomb
+          {:mode :ball :x (:x payload) :y (:y payload) :z (:z payload) :count (:count payload)})
+        :scatter-bomb/fx-beam
+        (level-effects/enqueue-level-effect! :scatter-bomb
+          {:mode :beam :start (:start payload) :end (:end payload)})
+        :scatter-bomb/fx-end
+        (level-effects/enqueue-level-effect! :scatter-bomb {:mode :end})
+        nil)))
+  nil)

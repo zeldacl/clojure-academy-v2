@@ -96,23 +96,24 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :mine-ray
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:mine-ray/fx-start :mine-ray/fx-progress :mine-ray/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :mine-ray/fx-start
-      (level-effects/enqueue-level-effect! :mine-ray
-        {:mode :start :variant (:variant payload)})
-      :mine-ray/fx-progress
-      (level-effects/enqueue-level-effect! :mine-ray
-        {:mode :progress
-         :x (:x payload) :y (:y payload) :z (:z payload)
-         :progress (:progress payload)})
-      :mine-ray/fx-end
-      (level-effects/enqueue-level-effect! :mine-ray {:mode :end})
-      nil)))
+(defn init! []
+  (level-effects/register-level-effect! :mine-ray
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:mine-ray/fx-start :mine-ray/fx-progress :mine-ray/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :mine-ray/fx-start
+        (level-effects/enqueue-level-effect! :mine-ray
+          {:mode :start :variant (:variant payload)})
+        :mine-ray/fx-progress
+        (level-effects/enqueue-level-effect! :mine-ray
+          {:mode :progress
+           :x (:x payload) :y (:y payload) :z (:z payload)
+           :progress (:progress payload)})
+        :mine-ray/fx-end
+        (level-effects/enqueue-level-effect! :mine-ray {:mode :end})
+        nil)))
+  nil)

@@ -4,13 +4,15 @@
   Centralizes installer call sequences so platform SPI bootstraps keep only
   adapter creation and platform-specific hook maps/extensions."
   (:require [cn.li.mc1201.bootstrap.installer-core :as core]
+            [cn.li.mc1201.runtime.accessor-registry :as accessor-registry]
             [cn.li.mc1201.platform.item-ops :as item-ops]))
 
 (defn install-platform-core!
   "Install the full shared platform core for adapters that can provide
   all required world/block/entity/item operations through PlatformAdapter."
   [adapter]
-  (core/install-platform-core! adapter))
+  (core/install-platform-core! adapter)
+  (accessor-registry/init-default-accessors!))
 
 (defn install-platform-foundation+hooks!
   "Install shared foundation + adapter-driven protocols and factories,
@@ -31,4 +33,5 @@
   (when world-fns-map
     (core/install-world-fns-only! world-fns-map))
   (when be-fns-map
-    (core/install-be-fns-only! be-fns-map)))
+    (core/install-be-fns-only! be-fns-map))
+  (accessor-registry/init-default-accessors!))

@@ -12,6 +12,11 @@
     (test-contexts/clean-contexts-fixture
      #(ps-fix/clean-player-states-fixture f))))
 
+(use-fixtures :once
+  (fn [f]
+    (effect/init-default-ops!)
+    (f)))
+
 (deftest assoc-state-op-test
   (let [c (ctx/new-server-context "p" :sk "ctx-st")]
     (ctx/register-context! c)

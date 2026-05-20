@@ -122,30 +122,31 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :vec-reflection
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:vec-reflection/fx-start :vec-reflection/fx-end
-   :vec-reflection/fx-reflect-entity :vec-reflection/fx-play]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :vec-reflection/fx-start
-      (level-effects/enqueue-level-effect! :vec-reflection {:mode :start})
-      :vec-reflection/fx-end
-      (level-effects/enqueue-level-effect! :vec-reflection {:mode :end})
-      :vec-reflection/fx-reflect-entity
-      (level-effects/enqueue-level-effect! :vec-reflection
-        {:mode :reflect-entity
-         :x (double (or (:x payload) 0.0))
-         :y (double (or (:y payload) 0.0))
-         :z (double (or (:z payload) 0.0))
-         :reflected? (boolean (:reflected? payload))})
-      :vec-reflection/fx-play
-      (level-effects/enqueue-level-effect! :vec-reflection
-        {:mode :play
-         :x (double (or (:x payload) 0.0))
-         :y (double (or (:y payload) 0.0))
-         :z (double (or (:z payload) 0.0))}))))
+(defn init! []
+  (level-effects/register-level-effect! :vec-reflection
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:vec-reflection/fx-start :vec-reflection/fx-end
+     :vec-reflection/fx-reflect-entity :vec-reflection/fx-play]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :vec-reflection/fx-start
+        (level-effects/enqueue-level-effect! :vec-reflection {:mode :start})
+        :vec-reflection/fx-end
+        (level-effects/enqueue-level-effect! :vec-reflection {:mode :end})
+        :vec-reflection/fx-reflect-entity
+        (level-effects/enqueue-level-effect! :vec-reflection
+          {:mode :reflect-entity
+           :x (double (or (:x payload) 0.0))
+           :y (double (or (:y payload) 0.0))
+           :z (double (or (:z payload) 0.0))
+           :reflected? (boolean (:reflected? payload))})
+        :vec-reflection/fx-play
+        (level-effects/enqueue-level-effect! :vec-reflection
+          {:mode :play
+           :x (double (or (:x payload) 0.0))
+           :y (double (or (:y payload) 0.0))
+           :z (double (or (:z payload) 0.0))}))))
+  nil)

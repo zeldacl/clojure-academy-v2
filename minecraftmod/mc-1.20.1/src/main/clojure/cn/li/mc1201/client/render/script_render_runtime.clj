@@ -11,10 +11,17 @@
 (defonce ^:private scripted-render-enabled?* (atom true))
 (defonce ^:private draw-plan-cache* (atom {}))
 (defonce ^:private renderer-overrides* (atom {}))
-(defonce ^:private config-initialized?
-  (do
-    (render-config/init-descriptors!)
-    true))
+(defonce ^:private config-initialized? (atom false))
+
+(defn- ensure-config-initialized!
+  []
+  (when (compare-and-set! config-initialized? false true)
+    (try
+      (render-config/init-descriptors!)
+      (catch Throwable t
+        (reset! config-initialized? false)
+        (throw t))))
+  nil)
 
 (def ^:private scripted-effect-kinds
   #{:billboard-cross :ring-lines :polyline-arc})
@@ -28,6 +35,7 @@
 
 (defn scripted-render-enabled?
   []
+  (ensure-config-initialized!)
   (and @scripted-render-enabled?*
        (render-config/script-render-enabled?)))
 
@@ -40,12 +48,14 @@
 
 (defn set-renderer-enabled!
   [renderer-id enabled?]
+  (ensure-config-initialized!)
   (when (and (string? renderer-id) (not (empty? renderer-id)))
     (swap! renderer-overrides* assoc renderer-id (boolean enabled?)))
   nil)
 
 (defn clear-renderer-overrides!
   []
+  (ensure-config-initialized!)
   (reset! renderer-overrides* {})
   nil)
 

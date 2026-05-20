@@ -2,12 +2,13 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.registry :as skill]
-            [cn.li.ac.content.ability]))
+            [cn.li.ac.content.ability :as ability-content]))
 
 (def ^:private configured-skill-ids
   skill-config/all-skill-ids)
 
 (deftest configured-skill-specs-contract-test
+  (ability-content/init-ability-content!)
   (is (= 38 (count configured-skill-ids)))
   (is (= (set configured-skill-ids)
          (set (map :id (filter #(skill-config/skill-configured? (:id %))

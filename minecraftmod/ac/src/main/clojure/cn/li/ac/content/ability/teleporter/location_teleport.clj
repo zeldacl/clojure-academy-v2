@@ -280,28 +280,24 @@
   :prerequisites [{:skill-id :penetrate-teleport :min-exp 0.8}
                   {:skill-id :mark-teleport :min-exp 0.8}])
 
-;; ============================================================================
-;; Network handler self-registration (LocationTeleport GUI RPC)
-;; ============================================================================
-
-(net-srv/register-handler catalog/MSG-REQ-SAVED-POS-QUERY
-  (fn [_payload player]
-    (query-location-teleport (uuid/player-uuid player))))
-
-(net-srv/register-handler catalog/MSG-REQ-SAVED-POS-ADD
-  (fn [{:keys [name]} player]
-    (let [uuid (uuid/player-uuid player)
-          result (save-current-location! uuid name)]
-      (merge result (query-location-teleport uuid)))))
-
-(net-srv/register-handler catalog/MSG-REQ-SAVED-POS-REMOVE
-  (fn [{:keys [name]} player]
-    (let [uuid (uuid/player-uuid player)
-          result (delete-saved-location! uuid name)]
-      (merge result (query-location-teleport uuid)))))
-
-(net-srv/register-handler catalog/MSG-REQ-SAVED-POS-PERFORM
-  (fn [{:keys [name]} player]
-    (let [uuid (uuid/player-uuid player)
-          result (perform-location-teleport! uuid name)]
-      (merge result (query-location-teleport uuid)))))
+(defn init!
+  []
+  (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-QUERY
+    (fn [_payload player]
+      (query-location-teleport (uuid/player-uuid player))))
+  (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-ADD
+    (fn [{:keys [name]} player]
+      (let [uuid (uuid/player-uuid player)
+            result (save-current-location! uuid name)]
+        (merge result (query-location-teleport uuid)))))
+  (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-REMOVE
+    (fn [{:keys [name]} player]
+      (let [uuid (uuid/player-uuid player)
+            result (delete-saved-location! uuid name)]
+        (merge result (query-location-teleport uuid)))))
+  (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-PERFORM
+    (fn [{:keys [name]} player]
+      (let [uuid (uuid/player-uuid player)
+            result (perform-location-teleport! uuid name)]
+        (merge result (query-location-teleport uuid)))))
+  nil)

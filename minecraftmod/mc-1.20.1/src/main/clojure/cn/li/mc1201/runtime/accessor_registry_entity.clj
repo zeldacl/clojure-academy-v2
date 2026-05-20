@@ -8,8 +8,8 @@
    - Teleportation"
   (:require [cn.li.mc1201.runtime.accessor-registry-core :as core]))
 
-(defonce register-entity-accessors!
-  (fn []
+(defn- register-entity-accessors-impl!
+  []
     ;; Position & Motion accessors
     (core/register-accessor! :entity :get-entity-pos
       (fn [_] nil)
@@ -86,11 +86,18 @@
       (fn [_] nil)
       "Get all active status effects. Returns collection of effect maps.")
 
-    nil))
+    nil)
 
-(def init-entity-accessors
-  (try
-    (register-entity-accessors!)
-    true
-    (catch Exception e
-      (throw (ex-info "Failed to register entity accessors" {} e)))))
+(defonce ^:private entity-accessors-registered?
+  (atom false))
+
+(defn register-entity-accessors!
+  "Explicitly register entity-domain accessors once."
+  []
+  (when (compare-and-set! entity-accessors-registered? false true)
+    (try
+      (register-entity-accessors-impl!)
+      (catch Throwable t
+        (reset! entity-accessors-registered? false)
+        (throw (ex-info "Failed to register entity accessors" {} t)))))
+  nil)

@@ -3,8 +3,7 @@
 
 	This namespace mirrors `cn.li.ac.ability.dsl` but makes the Phase C split
 	visible in the public architecture."
-	(:require [cn.li.ac.ability.definition-core :as definition-core]
-						[cn.li.ac.ability.service.registry :as registry]))
+	(:require [cn.li.ac.ability.definition-core :as definition-core]))
 
 (defmacro defcategory
 	[sym & opts]
@@ -23,6 +22,5 @@
 (defmacro defskill!
 	[sym & opts]
 	(let [skill-map (definition-core/build-skill-spec sym (apply hash-map opts))]
-		`(let [skill-map# ~skill-map
-					 registered# (registry/register-skill! skill-map#)]
-			 (def ~sym registered#))))
+		`(let [skill-map# (assoc ~skill-map :ac/content-type :skill)]
+			 (def ~sym skill-map#))))

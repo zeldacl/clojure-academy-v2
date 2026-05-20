@@ -142,30 +142,31 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :plasma-cannon
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:plasma-cannon/fx-start :plasma-cannon/fx-update
-   :plasma-cannon/fx-perform :plasma-cannon/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :plasma-cannon/fx-start
-      (level-effects/enqueue-level-effect! :plasma-cannon {:mode :start})
-      :plasma-cannon/fx-update
-      (level-effects/enqueue-level-effect! :plasma-cannon
-        {:mode :update
-         :charge-ticks (long (or (:charge-ticks payload) 0))
-         :fully-charged? (boolean (:fully-charged? payload))
-         :charge-pos (:charge-pos payload)
-         :flight-ticks (long (or (:flight-ticks payload) 0))
-         :state (or (:state payload) :charging)
-         :destination (:destination payload)})
-      :plasma-cannon/fx-perform
-      (level-effects/enqueue-level-effect! :plasma-cannon
-        {:mode :perform :pos (:pos payload)})
-      :plasma-cannon/fx-end
-      (level-effects/enqueue-level-effect! :plasma-cannon
-        {:mode :end :performed? (boolean (:performed? payload))}))))
+(defn init! []
+  (level-effects/register-level-effect! :plasma-cannon
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:plasma-cannon/fx-start :plasma-cannon/fx-update
+     :plasma-cannon/fx-perform :plasma-cannon/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :plasma-cannon/fx-start
+        (level-effects/enqueue-level-effect! :plasma-cannon {:mode :start})
+        :plasma-cannon/fx-update
+        (level-effects/enqueue-level-effect! :plasma-cannon
+          {:mode :update
+           :charge-ticks (long (or (:charge-ticks payload) 0))
+           :fully-charged? (boolean (:fully-charged? payload))
+           :charge-pos (:charge-pos payload)
+           :flight-ticks (long (or (:flight-ticks payload) 0))
+           :state (or (:state payload) :charging)
+           :destination (:destination payload)})
+        :plasma-cannon/fx-perform
+        (level-effects/enqueue-level-effect! :plasma-cannon
+          {:mode :perform :pos (:pos payload)})
+        :plasma-cannon/fx-end
+        (level-effects/enqueue-level-effect! :plasma-cannon
+          {:mode :end :performed? (boolean (:performed? payload))}))))
+  nil)

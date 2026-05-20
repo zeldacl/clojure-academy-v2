@@ -1,8 +1,7 @@
 (ns cn.li.ac.content.ability.generic.brain-course-advanced
   "Generic passive skill: Advanced Brain Course (+1500 CP, +100 overload)."
   (:require [cn.li.ac.ability.passive :as passive]
-            [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.service.registry :as sk]))
+            [cn.li.ac.ability.registry.event :as evt]))
 
 (def ^:private categories [:electromaster :meltdowner :teleporter :vecmanip])
 
@@ -29,20 +28,24 @@
       sid
       (fn [value _event] (+ value 100.0)))))
 
-(doseq [cat-id categories
-        :let [sid (skill-id cat-id)]]
-  (sk/register-skill!
-    {:id sid
-     :category-id cat-id
-     :name-key "ability.skill.generic.brain_course_advanced"
-     :description-key "ability.skill.generic.brain_course_advanced.desc"
-     :icon "textures/abilities/generic/skills/brain_course_advanced.png"
-     :ui-position [115 110]
-     :level 4
-     :controllable? false
-     :ctrl-id :brain-course-advanced
-     :pattern :passive
-     :prerequisites [{:skill-id (brain-course-id cat-id) :min-exp 0.0}]
-     :conditions [{:type :any-skill-level :level 4}]}))
+(def skill-specs
+  (mapv (fn [cat-id]
+          (let [sid (skill-id cat-id)]
+            {:id sid
+             :category-id cat-id
+             :name-key "ability.skill.generic.brain_course_advanced"
+             :description-key "ability.skill.generic.brain_course_advanced.desc"
+             :icon "textures/abilities/generic/skills/brain_course_advanced.png"
+             :ui-position [115 110]
+             :level 4
+             :controllable? false
+             :ctrl-id :brain-course-advanced
+             :pattern :passive
+             :prerequisites [{:skill-id (brain-course-id cat-id) :min-exp 0.0}]
+             :conditions [{:type :any-skill-level :level 4}]
+               :ac/content-type :skill}))
+        categories))
 
-(register-passive-hooks!)
+(defn init!
+  []
+  (register-passive-hooks!))

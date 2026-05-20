@@ -116,23 +116,24 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :storm-wing
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:storm-wing/fx-start :storm-wing/fx-update :storm-wing/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :storm-wing/fx-start
-      (level-effects/enqueue-level-effect! :storm-wing
-        {:mode :start :charge-ticks (long (or (:charge-ticks payload) 70))})
-      :storm-wing/fx-update
-      (level-effects/enqueue-level-effect! :storm-wing
-        {:mode :update
-         :phase (or (:phase payload) :charging)
-         :charge-ticks (long (or (:charge-ticks payload) 0))
-         :charge-ratio (double (or (:charge-ratio payload) 0.0))})
-      :storm-wing/fx-end
-      (level-effects/enqueue-level-effect! :storm-wing {:mode :end}))))
+(defn init! []
+  (level-effects/register-level-effect! :storm-wing
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:storm-wing/fx-start :storm-wing/fx-update :storm-wing/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :storm-wing/fx-start
+        (level-effects/enqueue-level-effect! :storm-wing
+          {:mode :start :charge-ticks (long (or (:charge-ticks payload) 70))})
+        :storm-wing/fx-update
+        (level-effects/enqueue-level-effect! :storm-wing
+          {:mode :update
+           :phase (or (:phase payload) :charging)
+           :charge-ticks (long (or (:charge-ticks payload) 0))
+           :charge-ratio (double (or (:charge-ratio payload) 0.0))})
+        :storm-wing/fx-end
+        (level-effects/enqueue-level-effect! :storm-wing {:mode :end}))))
+  nil)

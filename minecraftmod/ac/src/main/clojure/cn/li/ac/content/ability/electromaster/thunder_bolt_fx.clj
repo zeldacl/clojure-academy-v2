@@ -73,11 +73,12 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :thunder-bolt-strike
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channel! :thunder-bolt/fx-perform
-  (fn [_ctx-id _channel payload]
-    (level-effects/enqueue-level-effect! :thunder-bolt-strike payload)))
+(defn init! []
+  (level-effects/register-level-effect! :thunder-bolt-strike
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channel! :thunder-bolt/fx-perform
+    (fn [_ctx-id _channel payload]
+      (level-effects/enqueue-level-effect! :thunder-bolt-strike payload)))
+  nil)

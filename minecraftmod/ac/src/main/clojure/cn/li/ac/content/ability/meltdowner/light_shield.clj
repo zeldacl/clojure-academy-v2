@@ -147,12 +147,15 @@
       (log/warn "LightShield reduce-damage failed:" (ex-message e))
       [damage nil])))
 
-;; Register damage handler at load time
-(damage-handler/register-toggle-damage-handler!
-  :light-shield-damage
-  :light-shield
-  light-shield-reduce-damage
-  80)
+(defn init!
+  []
+  (md-damage/init!)
+  (damage-handler/register-toggle-damage-handler!
+    :light-shield-damage
+    :light-shield
+    light-shield-reduce-damage
+    80)
+  nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration

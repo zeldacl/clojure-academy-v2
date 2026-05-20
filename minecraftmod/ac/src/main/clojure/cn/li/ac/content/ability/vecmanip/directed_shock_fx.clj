@@ -82,19 +82,20 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(hand-effects/register-hand-effect! :directed-shock
-  {:enqueue-fn   enqueue!
-   :tick-fn      tick!
-   :transform-fn transform})
-
-(fx-registry/register-fx-channels!
-  [:directed-shock/fx-start :directed-shock/fx-perform :directed-shock/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :directed-shock/fx-start
-      (hand-effects/enqueue-hand-effect! :directed-shock {:mode :start})
-      :directed-shock/fx-perform
-      (hand-effects/enqueue-hand-effect! :directed-shock {:mode :perform})
-      :directed-shock/fx-end
-      (hand-effects/enqueue-hand-effect! :directed-shock
-        {:mode :end :performed? (boolean (:performed? payload))}))))
+(defn init! []
+  (hand-effects/register-hand-effect! :directed-shock
+    {:enqueue-fn   enqueue!
+     :tick-fn      tick!
+     :transform-fn transform})
+  (fx-registry/register-fx-channels!
+    [:directed-shock/fx-start :directed-shock/fx-perform :directed-shock/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :directed-shock/fx-start
+        (hand-effects/enqueue-hand-effect! :directed-shock {:mode :start})
+        :directed-shock/fx-perform
+        (hand-effects/enqueue-hand-effect! :directed-shock {:mode :perform})
+        :directed-shock/fx-end
+        (hand-effects/enqueue-hand-effect! :directed-shock
+          {:mode :end :performed? (boolean (:performed? payload))}))))
+  nil)

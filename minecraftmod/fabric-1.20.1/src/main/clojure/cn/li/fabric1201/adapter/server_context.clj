@@ -9,14 +9,26 @@
 
 (defonce ^:private current-server* (atom nil))
 (defonce ^:private installed? (atom false))
+(defonce ^:private spi-registered? (atom false))
+
+(declare install-server-context!)
 
 (defn get-server
   ^MinecraftServer
   []
   @current-server*)
 
+(defn- register-server-context-spi!
+  []
+  (when (compare-and-set! spi-registered? false true)
+    (server-context-spi/register-server-context-impl!
+      {:get-current-server get-server
+       :install! install-server-context!}))
+  nil)
+
 (defn install-server-context!
   []
+  (register-server-context-spi!)
   (when (compare-and-set! installed? false true)
     (.register ServerLifecycleEvents/SERVER_STARTED
                (reify ServerLifecycleEvents$ServerStarted
@@ -28,8 +40,5 @@
                  (onServerStopped [_ _server]
                    (reset! current-server* nil)
                    (server-context-spi/notify-server-unavailable!))))
-    (log/info "Fabric runtime server context installed")))
-
-(server-context-spi/register-server-context-impl!
-  {:get-current-server get-server
-   :install! install-server-context!})
+    (log/info "Fabric runtime server context installed"))
+  nil)

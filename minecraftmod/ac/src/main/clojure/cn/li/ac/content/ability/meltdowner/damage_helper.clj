@@ -48,4 +48,8 @@
     damage-handler
     90))
 
-(ensure-damage-handler!)
+(defn init!
+  "Explicit runtime installer for Meltdowner mark damage handler."
+  []
+  (ensure-damage-handler!)
+  nil)

@@ -19,14 +19,14 @@
 (defn- require-content-core!
   [content-id]
   (when-let [ns-name (content-core-namespace content-id)]
-    (ClojureNamespaceBootstrapInvoker/requireNamespace ns-name)
+    (ClojureNamespaceBootstrapInvoker/requireAndInvoke ns-name "register-lifecycle-hooks!")
     true))
 
 (defn register-content!
   "Best-effort registration of a shared content module through ServiceLoader SPI.
 
-  Content modules provide a ContentInitBootstrap implementation that registers
-  lifecycle hooks into mcmod when discovered. The content id is supplied by the
+  Content modules provide a ContentInitBootstrap implementation that explicitly
+  registers lifecycle hooks into mcmod when discovered. The content id is supplied by the
   platform/datagen caller so mcmod stays content-agnostic."
   [content-id]
   (try

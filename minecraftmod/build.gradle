@@ -243,6 +243,18 @@ tasks.register('verifyArchitectureBoundaries') {
                 scopes: ['forge1201', 'fabric1201'] as Set,
                 pattern: ~/cn\.li\.ac\./,
                 shouldCheckLine: { String line -> !isSkippableLine(line) }
+            ],
+            [
+                rule: 'NO_TOP_LEVEL_LIFECYCLE_OR_CONTENT_REGISTRATION',
+                scopes: ['ac', 'mcmod', 'mc1201', 'forge1201', 'fabric1201'] as Set,
+                pattern: ~/^\((?:lifecycle\/register-|server-context-spi\/register-server-context-impl!|discovery\/bootstrap-default-providers!|config-registry\/init-configs!|ability-runtime\/install-runtime-hooks!)/,
+                shouldCheckLine: { String line -> !isSkippableLine(line) }
+            ],
+            [
+                rule: 'NO_TOP_LEVEL_ABILITY_RUNTIME_REGISTRATION',
+                scopes: ['ac'] as Set,
+                pattern: ~/^\((?:sk\/register-skill!|registry\/register-skill!|skill-registry\/register-skill!|item-actions\/register-|net-srv\/register-handler|damage-handler\/register-|passive\/register-|level-effects\/register-|hand-effects\/register-|fx-registry\/register-)/,
+                shouldCheckLine: { String line -> !isSkippableLine(line) }
             ]
         ]
 

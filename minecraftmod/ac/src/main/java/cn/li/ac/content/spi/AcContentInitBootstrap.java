@@ -7,8 +7,8 @@ import cn.li.mcmod.content.spi.ContentInitBootstrap;
  * Runtime bootstrap provider for AC content registration.
  *
  * <p>The provider lives in the AC module so mcmod remains content-agnostic.
- * It loads the AC Clojure entry namespace, which registers lifecycle hooks into
- * mcmod when required.</p>
+ * It loads the AC Clojure entry namespace, then explicitly invokes the
+ * lifecycle hook registration entrypoint.</p>
  */
 public final class AcContentInitBootstrap implements ContentInitBootstrap {
 
@@ -19,6 +19,6 @@ public final class AcContentInitBootstrap implements ContentInitBootstrap {
 
     @Override
     public void register() {
-        ClojureNamespaceBootstrapInvoker.requireNamespace("cn.li.ac.core");
+        ClojureNamespaceBootstrapInvoker.requireAndInvoke("cn.li.ac.core", "register-lifecycle-hooks!");
     }
 }

@@ -22,8 +22,10 @@
    :methods [[onRightClickBlock [net.minecraftforge.event.entity.player.PlayerInteractEvent$RightClickBlock] void]
      [commonSetup [net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent] void]
      [clientSetup [net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent] void]]))
- 
-(def mod-id modid/*mod-id*)
+
+(defn- current-mod-id
+  []
+  modid/*mod-id*)
 
 (def base-properties
   (delay (bootstrap/create-stone-properties)))
@@ -32,13 +34,13 @@
   (delay (bootstrap/carrier-block-properties @base-properties)))
 
 (def blocks-register
-  (delay (bootstrap/create-blocks-register mod-id)))
+  (delay (bootstrap/create-blocks-register (current-mod-id))))
 
 (def items-register
-  (delay (bootstrap/create-items-register mod-id)))
+  (delay (bootstrap/create-items-register (current-mod-id))))
 
 (def creative-tabs-register
-  (delay (bootstrap/create-creative-tabs-register mod-id)))
+  (delay (bootstrap/create-creative-tabs-register (current-mod-id))))
 
 (defn- aot-compilation?
   []
@@ -56,22 +58,22 @@
 
 ;; BlockEntity types
 (defonce block-entities-register
-  (delay (bootstrap/create-block-entity-types-register mod-id)))
+  (delay (bootstrap/create-block-entity-types-register (current-mod-id))))
 
 (defonce fluid-types-register
-  (delay (bootstrap/create-fluid-types-register mod-id)))
+  (delay (bootstrap/create-fluid-types-register (current-mod-id))))
 
 (defonce fluids-register
-  (delay (bootstrap/create-fluids-register mod-id)))
+  (delay (bootstrap/create-fluids-register (current-mod-id))))
 
 (defonce sounds-register
-  (delay (bootstrap/create-sounds-register mod-id)))
+  (delay (bootstrap/create-sounds-register (current-mod-id))))
 
 (defonce effects-register
-  (delay (bootstrap/create-effects-register mod-id)))
+  (delay (bootstrap/create-effects-register (current-mod-id))))
 
 (defonce particle-types-register
-  (delay (bootstrap/create-particle-types-register mod-id)))
+  (delay (bootstrap/create-particle-types-register (current-mod-id))))
 
 ;; Storage for registered blocks and items (populated during initialization)
 (def registered-blocks registry-state/registered-blocks)
@@ -87,7 +89,7 @@
 
 (defn- build-registration-context
   []
-  {:mod-id mod-id
+  {:mod-id (current-mod-id)
    :blocks-register (force blocks-register)
    :items-register (force items-register)
    :block-entities-register (force block-entities-register)
@@ -175,7 +177,7 @@
      (content-registration/register-core-content! (build-registration-context)))
    (fn []
      (log/info "Registering Forge creative tab...")
-     (creative-tab/register-creative-tab! (force creative-tabs-register) mod-id))
+     (creative-tab/register-creative-tab! (force creative-tabs-register) (current-mod-id)))
    (fn []
      (gui-registry-impl/register-menu-types!))])
 

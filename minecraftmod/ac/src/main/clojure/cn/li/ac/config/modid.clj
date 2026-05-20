@@ -9,7 +9,14 @@
    different mod projects."
   (or (System/getenv "MOD_ID") "my_mod"))
 
-(alter-var-root #'mcmod-config/*mod-id* (constantly MOD-ID))
+(defn install-modid!
+  "Install AC's mod id into the shared mcmod config namespace.
+
+  This is intentionally explicit: requiring this namespace must not mutate
+  shared configuration state."
+  []
+  (alter-var-root #'mcmod-config/*mod-id* (constantly MOD-ID))
+  nil)
 
 (def resource-location mcmod-config/resource-location)
 (def namespaced-path mcmod-config/namespaced-path)

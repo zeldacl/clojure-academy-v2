@@ -203,6 +203,12 @@
             (ctx/ctx-send-to-client! ctx-id :meltdowner/fx-end {:performed? false})
             (log/debug "Meltdowner: beam failed")))))))
 
+(defn init!
+  "Explicit runtime installer for Meltdowner shared damage helper hooks."
+  []
+  (md-damage/init!)
+  nil)
+
 ;; ---------------------------------------------------------------------------
 ;; Skill registration
 ;; ---------------------------------------------------------------------------

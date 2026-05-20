@@ -1,7 +1,7 @@
 (ns cn.li.ac.registry.content-namespaces
   "Centralized content namespace + init registration.
 
-  The `content-load-plan` value is the single source of truth for both:
+  The current content load plan is the single source of truth for both:
   - namespace require order
   - post-require init function execution order"
   (:require [cn.li.ac.registry.discovery :as discovery]
@@ -50,21 +50,31 @@
     :init-fns '[cn.li.ac.terminal.init/init-terminal!]
     :trace-tag :terminal-init}])
 
-(discovery/bootstrap-default-providers! default-phase-plugins)
+(defonce ^:private default-phase-providers-installed?
+  (atom false))
+
+(defn ensure-default-phase-providers!
+  "Register built-in content phase providers once.
+
+  Requiring this namespace must not mutate discovery state; callers opt in by
+  asking for or loading the current plan."
+  []
+  (when (compare-and-set! default-phase-providers-installed? false true)
+    (discovery/bootstrap-default-providers! default-phase-plugins))
+  nil)
 
 (defn register-content-phase-plugin!
   "Public extension point for content phase registration."
   [phase-spec]
+  (ensure-default-phase-providers!)
   (content-phase-spi/declare-content-phase! phase-spec)
   (discovery/discovered-content-phases))
 
 (defn current-content-load-plan
   "Return latest materialized content load plan."
   []
+  (ensure-default-phase-providers!)
   (discovery/discovered-content-phases))
-
-(def content-load-plan
-  (current-content-load-plan))
 
 (defn- trace-tag [{:keys [phase trace-tag]}]
   (or trace-tag (keyword (str (name phase) "-init"))))
@@ -97,7 +107,7 @@
   (let [plan (current-content-load-plan)]
     (log/warn "[CONTENT_TRACE] load-all begin" {:phases (mapv :phase plan)})
     (doseq [phase-spec plan]
-    (require-namespaces! (:namespaces phase-spec)))
+      (require-namespaces! (:namespaces phase-spec)))
     (doseq [phase-spec plan]
-    (run-init-fns! phase-spec))
+      (run-init-fns! phase-spec))
     (log/warn "[CONTENT_TRACE] load-all end")))

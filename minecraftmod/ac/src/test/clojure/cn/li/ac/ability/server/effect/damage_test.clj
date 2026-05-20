@@ -1,9 +1,14 @@
 (ns cn.li.ac.ability.server.effect.damage-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.damage]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
+
+(use-fixtures :once
+  (fn [f]
+    (effect/init-default-ops!)
+    (f)))
 
 (defn- recording-damage [calls]
   (reify entity-damage/IEntityDamage

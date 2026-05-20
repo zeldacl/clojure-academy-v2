@@ -81,18 +81,19 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :mag-movement
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:mag-movement/fx-start :mag-movement/fx-update :mag-movement/fx-end]
-  (fn [_ctx-id channel payload]
-    (let [mode (case channel
-                 :mag-movement/fx-start :start
-                 :mag-movement/fx-update :update
-                 :mag-movement/fx-end :end)]
-      (level-effects/enqueue-level-effect!
-        :mag-movement
-        (assoc payload :mode mode)))))
+(defn init! []
+  (level-effects/register-level-effect! :mag-movement
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:mag-movement/fx-start :mag-movement/fx-update :mag-movement/fx-end]
+    (fn [_ctx-id channel payload]
+      (let [mode (case channel
+                   :mag-movement/fx-start :start
+                   :mag-movement/fx-update :update
+                   :mag-movement/fx-end :end)]
+        (level-effects/enqueue-level-effect!
+          :mag-movement
+          (assoc payload :mode mode)))))
+  nil)

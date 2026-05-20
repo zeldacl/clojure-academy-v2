@@ -170,28 +170,29 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :directed-blastwave
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:directed-blastwave/fx-start :directed-blastwave/fx-update
-   :directed-blastwave/fx-perform :directed-blastwave/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :directed-blastwave/fx-start
-      (level-effects/enqueue-level-effect! :directed-blastwave {:mode :start})
-      :directed-blastwave/fx-update
-      (level-effects/enqueue-level-effect! :directed-blastwave
-        {:mode :update
-         :charge-ticks (long (or (:charge-ticks payload) 0))
-         :punched? (boolean (:punched? payload))})
-      :directed-blastwave/fx-perform
-      (level-effects/enqueue-level-effect! :directed-blastwave
-        {:mode :perform
-         :pos (:pos payload) :look-dir (:look-dir payload)
-         :charge-ticks (long (or (:charge-ticks payload) 0))})
-      :directed-blastwave/fx-end
-      (level-effects/enqueue-level-effect! :directed-blastwave
-        {:mode :end :performed? (boolean (:performed? payload))}))))
+(defn init! []
+  (level-effects/register-level-effect! :directed-blastwave
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:directed-blastwave/fx-start :directed-blastwave/fx-update
+     :directed-blastwave/fx-perform :directed-blastwave/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :directed-blastwave/fx-start
+        (level-effects/enqueue-level-effect! :directed-blastwave {:mode :start})
+        :directed-blastwave/fx-update
+        (level-effects/enqueue-level-effect! :directed-blastwave
+          {:mode :update
+           :charge-ticks (long (or (:charge-ticks payload) 0))
+           :punched? (boolean (:punched? payload))})
+        :directed-blastwave/fx-perform
+        (level-effects/enqueue-level-effect! :directed-blastwave
+          {:mode :perform
+           :pos (:pos payload) :look-dir (:look-dir payload)
+           :charge-ticks (long (or (:charge-ticks payload) 0))})
+        :directed-blastwave/fx-end
+        (level-effects/enqueue-level-effect! :directed-blastwave
+          {:mode :end :performed? (boolean (:performed? payload))}))))
+  nil)

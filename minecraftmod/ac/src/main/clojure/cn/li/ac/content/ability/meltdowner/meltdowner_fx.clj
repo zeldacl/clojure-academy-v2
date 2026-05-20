@@ -142,32 +142,33 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :meltdowner
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:meltdowner/fx-start :meltdowner/fx-update :meltdowner/fx-end
-   :meltdowner/fx-perform :meltdowner/fx-reflect]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :meltdowner/fx-start
-      (level-effects/enqueue-level-effect! :meltdowner {:mode :start})
-      :meltdowner/fx-update
-      (level-effects/enqueue-level-effect! :meltdowner
-        {:mode :update
-         :ticks (long (or (:ticks payload) 0))
-         :charge-ratio (double (or (:charge-ratio payload) 0.0))})
-      :meltdowner/fx-end
-      (level-effects/enqueue-level-effect! :meltdowner
-        {:mode :end :performed? (boolean (:performed? payload))})
-      :meltdowner/fx-perform
-      (level-effects/enqueue-level-effect! :meltdowner
-        {:mode :perform
-         :charge-ticks (int (or (:charge-ticks payload) 20))
-         :beam-length (double (or (:beam-length payload) 30.0))
-         :start (:start payload) :end (:end payload)})
-      :meltdowner/fx-reflect
-      (level-effects/enqueue-level-effect! :meltdowner
-        {:mode :reflect :start (:start payload) :end (:end payload)}))))
+(defn init! []
+  (level-effects/register-level-effect! :meltdowner
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:meltdowner/fx-start :meltdowner/fx-update :meltdowner/fx-end
+     :meltdowner/fx-perform :meltdowner/fx-reflect]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :meltdowner/fx-start
+        (level-effects/enqueue-level-effect! :meltdowner {:mode :start})
+        :meltdowner/fx-update
+        (level-effects/enqueue-level-effect! :meltdowner
+          {:mode :update
+           :ticks (long (or (:ticks payload) 0))
+           :charge-ratio (double (or (:charge-ratio payload) 0.0))})
+        :meltdowner/fx-end
+        (level-effects/enqueue-level-effect! :meltdowner
+          {:mode :end :performed? (boolean (:performed? payload))})
+        :meltdowner/fx-perform
+        (level-effects/enqueue-level-effect! :meltdowner
+          {:mode :perform
+           :charge-ticks (int (or (:charge-ticks payload) 20))
+           :beam-length (double (or (:beam-length payload) 30.0))
+           :start (:start payload) :end (:end payload)})
+        :meltdowner/fx-reflect
+        (level-effects/enqueue-level-effect! :meltdowner
+          {:mode :reflect :start (:start payload) :end (:end payload)}))))
+  nil)

@@ -18,7 +18,9 @@
             [cn.li.mc1201.entity.hooks :as entity-hooks])
   (:import [cn.li.fabric1201.shim FabricBootstrapHelper]))
 
-(def mod-id modid/*mod-id*)
+(defn- current-mod-id
+  []
+  modid/*mod-id*)
 
 (defonce registered-blocks (atom {}))
 (defonce registered-items (atom {}))
@@ -32,7 +34,7 @@
 
 (defn- registration-context
   []
-  {:mod-id mod-id
+  {:mod-id (current-mod-id)
    :registered-blocks registered-blocks
    :registered-items registered-items
    :registered-block-entities registered-block-entities

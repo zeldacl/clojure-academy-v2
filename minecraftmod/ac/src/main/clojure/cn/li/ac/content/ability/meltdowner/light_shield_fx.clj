@@ -56,17 +56,18 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :light-shield
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:light-shield/fx-start :light-shield/fx-end]
-  (fn [_ctx-id channel _payload]
-    (case channel
-      :light-shield/fx-start
-      (level-effects/enqueue-level-effect! :light-shield {:mode :start})
-      :light-shield/fx-end
-      (level-effects/enqueue-level-effect! :light-shield {:mode :end})
-      nil)))
+(defn init! []
+  (level-effects/register-level-effect! :light-shield
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:light-shield/fx-start :light-shield/fx-end]
+    (fn [_ctx-id channel _payload]
+      (case channel
+        :light-shield/fx-start
+        (level-effects/enqueue-level-effect! :light-shield {:mode :start})
+        :light-shield/fx-end
+        (level-effects/enqueue-level-effect! :light-shield {:mode :end})
+        nil)))
+  nil)

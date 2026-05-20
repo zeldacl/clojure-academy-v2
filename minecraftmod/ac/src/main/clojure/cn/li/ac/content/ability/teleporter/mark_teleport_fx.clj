@@ -122,24 +122,25 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :mark-teleport
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:mark-teleport/fx-start :mark-teleport/fx-update :mark-teleport/fx-end :mark-teleport/fx-perform]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :mark-teleport/fx-start
-      (level-effects/enqueue-level-effect! :mark-teleport {:mode :start})
-      :mark-teleport/fx-update
-      (level-effects/enqueue-level-effect! :mark-teleport
-        {:mode :update :target (:target payload)
-         :distance (double (or (:distance payload) 0.0))})
-      :mark-teleport/fx-end
-      (level-effects/enqueue-level-effect! :mark-teleport {:mode :end})
-      :mark-teleport/fx-perform
-      (level-effects/enqueue-level-effect! :mark-teleport
-        {:mode :perform :target (:target payload)
-         :distance (double (or (:distance payload) 0.0))}))))
+(defn init! []
+  (level-effects/register-level-effect! :mark-teleport
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:mark-teleport/fx-start :mark-teleport/fx-update :mark-teleport/fx-end :mark-teleport/fx-perform]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :mark-teleport/fx-start
+        (level-effects/enqueue-level-effect! :mark-teleport {:mode :start})
+        :mark-teleport/fx-update
+        (level-effects/enqueue-level-effect! :mark-teleport
+          {:mode :update :target (:target payload)
+           :distance (double (or (:distance payload) 0.0))})
+        :mark-teleport/fx-end
+        (level-effects/enqueue-level-effect! :mark-teleport {:mode :end})
+        :mark-teleport/fx-perform
+        (level-effects/enqueue-level-effect! :mark-teleport
+          {:mode :perform :target (:target payload)
+           :distance (double (or (:distance payload) 0.0))}))))
+  nil)

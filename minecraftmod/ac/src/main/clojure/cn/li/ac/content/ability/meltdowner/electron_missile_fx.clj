@@ -44,21 +44,22 @@
 (defn- build-plan [_camera-pos _hand-center-pos _tick]
   nil)
 
-(level-effects/register-level-effect! :electron-missile
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:electron-missile/fx-start :electron-missile/fx-fire]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :electron-missile/fx-start
-      (level-effects/enqueue-level-effect! :electron-missile {:mode :start})
-      :electron-missile/fx-fire
-      (level-effects/enqueue-level-effect! :electron-missile
-        {:mode :fire
-         :target-x (:target-x payload)
-         :target-y (:target-y payload)
-         :target-z (:target-z payload)})
-      nil)))
+(defn init! []
+  (level-effects/register-level-effect! :electron-missile
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:electron-missile/fx-start :electron-missile/fx-fire]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :electron-missile/fx-start
+        (level-effects/enqueue-level-effect! :electron-missile {:mode :start})
+        :electron-missile/fx-fire
+        (level-effects/enqueue-level-effect! :electron-missile
+          {:mode :fire
+           :target-x (:target-x payload)
+           :target-y (:target-y payload)
+           :target-z (:target-z payload)})
+        nil)))
+  nil)

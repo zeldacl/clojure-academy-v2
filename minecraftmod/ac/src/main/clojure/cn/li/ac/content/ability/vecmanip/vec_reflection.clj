@@ -321,18 +321,16 @@
             :abort! vec-reflection-on-key-abort}
   :prerequisites [{:skill-id :vec-deviation :min-exp 0.0}])
 
-;; ============================================================================
-;; Self-register damage handler + attack cancel check at load time
-;; ============================================================================
-
-(damage-handler/register-toggle-damage-handler!
-  :vec-reflection-damage
-  :vec-reflection
-  (fn [player-id attacker-id damage _damage-source]
-    (let [[_performed reduced-damage] (reflect-damage player-id attacker-id damage)]
-      [reduced-damage {:handler :vec-reflection}]))
-  60)
-
-(damage-handler/register-attack-cancel-check!
-  :vec-reflection
-  can-cancel-attack?)
+(defn init!
+  []
+  (damage-handler/register-toggle-damage-handler!
+    :vec-reflection-damage
+    :vec-reflection
+    (fn [player-id attacker-id damage _damage-source]
+      (let [[_performed reduced-damage] (reflect-damage player-id attacker-id damage)]
+        [reduced-damage {:handler :vec-reflection}]))
+    60)
+  (damage-handler/register-attack-cancel-check!
+    :vec-reflection
+    can-cancel-attack?)
+  nil)

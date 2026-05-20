@@ -16,4 +16,9 @@ public final class ClojureNamespaceBootstrapInvoker {
     public static void requireNamespace(String namespaceName) {
         REQUIRE.invoke(Clojure.read(namespaceName));
     }
+
+    public static Object requireAndInvoke(String namespaceName, String functionName) {
+        requireNamespace(namespaceName);
+        return Clojure.var(namespaceName, functionName).invoke();
+    }
 }

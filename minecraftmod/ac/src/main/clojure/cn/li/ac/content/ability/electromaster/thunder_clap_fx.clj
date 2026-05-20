@@ -108,24 +108,25 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :thunder-clap
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:thunder-clap/fx-start :thunder-clap/fx-update :thunder-clap/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :thunder-clap/fx-start
-      (level-effects/enqueue-level-effect! :thunder-clap {:mode :start})
-      :thunder-clap/fx-update
-      (level-effects/enqueue-level-effect! :thunder-clap
-        {:mode :update
-         :ticks (long (or (:ticks payload) 0))
-         :charge-ratio (double (or (:charge-ratio payload) 0.0))
-         :target (get payload :target)})
-      :thunder-clap/fx-end
-      (level-effects/enqueue-level-effect! :thunder-clap
-        {:mode :end
-         :performed? (boolean (:performed? payload))}))))
+(defn init! []
+  (level-effects/register-level-effect! :thunder-clap
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:thunder-clap/fx-start :thunder-clap/fx-update :thunder-clap/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :thunder-clap/fx-start
+        (level-effects/enqueue-level-effect! :thunder-clap {:mode :start})
+        :thunder-clap/fx-update
+        (level-effects/enqueue-level-effect! :thunder-clap
+          {:mode :update
+           :ticks (long (or (:ticks payload) 0))
+           :charge-ratio (double (or (:charge-ratio payload) 0.0))
+           :target (get payload :target)})
+        :thunder-clap/fx-end
+        (level-effects/enqueue-level-effect! :thunder-clap
+          {:mode :end
+           :performed? (boolean (:performed? payload))}))))
+  nil)

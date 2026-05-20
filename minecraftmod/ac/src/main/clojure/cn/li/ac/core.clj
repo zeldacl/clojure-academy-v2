@@ -3,6 +3,9 @@
             [cn.li.ac.datagen.bootstrap :as datagen-bootstrap]
             [cn.li.ac.registry.hooks :as hooks]))
 
+(defonce ^:private lifecycle-hooks-registered?
+  (atom false))
+
 (defn- resolve-required
   [var-sym]
   (or (requiring-resolve var-sym)
@@ -21,14 +24,9 @@
   []
   (datagen-bootstrap/register-datagen-metadata!))
 
-;; Phase1.4/Phase2: register content init hook for platform adapters.
-(lifecycle/register-content-init! #'init)
-(lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
-(lifecycle/register-datagen-metadata-init! #'register-datagen-metadata!)
-
 ;; Register client-side initialization callback
 (defn- init-client-renderers
-  "Load renderer namespaces to trigger auto-registration.
+  "Run content-owned client renderer initialization.
   Called by mcmod during client initialization."
   []
   (when-let [install-terminal-hooks!
@@ -36,6 +34,17 @@
     (install-terminal-hooks!))
   (hooks/load-all-client-renderers!))
 
-;; Register the callback with mcmod lifecycle system
-(when-let [register-fn (requiring-resolve 'cn.li.mcmod.lifecycle/register-client-init!)]
-  (register-fn init-client-renderers))
+(defn register-lifecycle-hooks!
+  "Register AC lifecycle hooks with mcmod.
+
+  This is the explicit bootstrap entrypoint used by ServiceLoader and fallback
+  content discovery. Requiring this namespace alone must not mutate lifecycle
+  state."
+  []
+  (when (compare-and-set! lifecycle-hooks-registered? false true)
+    (lifecycle/register-content-init! #'init)
+    (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
+    (lifecycle/register-datagen-metadata-init! #'register-datagen-metadata!)
+    (when-let [register-fn (requiring-resolve 'cn.li.mcmod.lifecycle/register-client-init!)]
+      (register-fn init-client-renderers)))
+  nil)

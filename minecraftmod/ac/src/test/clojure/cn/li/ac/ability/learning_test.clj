@@ -3,7 +3,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.server.service.learning :as lrn]
-            [cn.li.ac.content.ability]))
+            [cn.li.ac.content.ability :as ability-content]))
 
 (def ^:private learn-flow-cases
   [{:skill-id :arc-gen
@@ -15,6 +15,7 @@
 
 (deftest integration-registry-learn-flow-table-test
   (testing "learn + optional level-up event shape across representative skills"
+    (ability-content/init-ability-content!)
     (doseq [{:keys [skill-id category-id]} learn-flow-cases]
       (let [d0 (-> (ad/new-ability-data)
                    (assoc :category-id category-id :level 3 :level-progress 10.0))

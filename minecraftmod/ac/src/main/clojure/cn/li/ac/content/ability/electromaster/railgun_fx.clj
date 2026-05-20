@@ -112,12 +112,13 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :railgun-shot
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:railgun/fx-shot :railgun/fx-reflect]
-  (fn [_ctx-id _channel payload]
-    (level-effects/enqueue-level-effect! :railgun-shot payload)))
+(defn init! []
+  (level-effects/register-level-effect! :railgun-shot
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:railgun/fx-shot :railgun/fx-reflect]
+    (fn [_ctx-id _channel payload]
+      (level-effects/enqueue-level-effect! :railgun-shot payload)))
+  nil)

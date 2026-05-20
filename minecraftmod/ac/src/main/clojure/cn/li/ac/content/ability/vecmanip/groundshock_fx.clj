@@ -43,11 +43,6 @@
 
 (defn- level-build-plan [_camera-pos _hand-center-pos _tick] nil)
 
-(level-effects/register-level-effect! :groundshock
-  {:enqueue-fn    level-enqueue!
-   :tick-fn       level-tick!
-   :build-plan-fn level-build-plan})
-
 ;; ---------------------------------------------------------------------------
 ;; Hand effect: first-person camera shake + punch animation
 ;; ---------------------------------------------------------------------------
@@ -99,30 +94,35 @@
                  (when (or (:active? state) (pos? remaining))
                    (assoc state :perform-ticks 0))))))))
 
-(hand-effects/register-hand-effect! :groundshock
-  {:enqueue-fn   hand-enqueue!
-   :tick-fn      hand-tick!})
-
 ;; ---------------------------------------------------------------------------
 ;; FX channel registration
 ;; ---------------------------------------------------------------------------
 
-(fx-registry/register-fx-channels!
-  [:groundshock/fx-start :groundshock/fx-update :groundshock/fx-perform :groundshock/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :groundshock/fx-start
-      (hand-effects/enqueue-hand-effect! :groundshock {:mode :start})
-      :groundshock/fx-update
-      (hand-effects/enqueue-hand-effect! :groundshock
-        {:mode :update :charge-ticks (long (or (:charge-ticks payload) 0))})
-      :groundshock/fx-perform
-      (do
-        (hand-effects/enqueue-hand-effect! :groundshock {:mode :perform})
-        (level-effects/enqueue-level-effect! :groundshock
-          {:mode :perform
-           :affected-blocks (:affected-blocks payload)
-           :broken-blocks (:broken-blocks payload)}))
-      :groundshock/fx-end
-      (hand-effects/enqueue-hand-effect! :groundshock
-        {:mode :end :performed? (boolean (:performed? payload))}))))
+(defn init! []
+  (level-effects/register-level-effect! :groundshock
+    {:enqueue-fn    level-enqueue!
+     :tick-fn       level-tick!
+     :build-plan-fn level-build-plan})
+  (hand-effects/register-hand-effect! :groundshock
+    {:enqueue-fn   hand-enqueue!
+     :tick-fn      hand-tick!})
+  (fx-registry/register-fx-channels!
+    [:groundshock/fx-start :groundshock/fx-update :groundshock/fx-perform :groundshock/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :groundshock/fx-start
+        (hand-effects/enqueue-hand-effect! :groundshock {:mode :start})
+        :groundshock/fx-update
+        (hand-effects/enqueue-hand-effect! :groundshock
+          {:mode :update :charge-ticks (long (or (:charge-ticks payload) 0))})
+        :groundshock/fx-perform
+        (do
+          (hand-effects/enqueue-hand-effect! :groundshock {:mode :perform})
+          (level-effects/enqueue-level-effect! :groundshock
+            {:mode :perform
+             :affected-blocks (:affected-blocks payload)
+             :broken-blocks (:broken-blocks payload)}))
+        :groundshock/fx-end
+        (hand-effects/enqueue-hand-effect! :groundshock
+          {:mode :end :performed? (boolean (:performed? payload))}))))
+  nil)

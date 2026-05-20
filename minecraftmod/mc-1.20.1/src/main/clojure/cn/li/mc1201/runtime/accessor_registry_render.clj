@@ -12,7 +12,7 @@
 ;; Render Accessor Registrations
 ;; ============================================================================
 
-(defn register-render-accessors!
+(defn- register-render-accessors-impl!
   "Register all render-domain accessors.
    
    This function should be called during mod initialization to populate
@@ -94,10 +94,16 @@
   
   nil)
 
-;; Auto-register on namespace load (optional - can be called explicitly)
-(defonce init-render-accessors
-  (try
-    (register-render-accessors!)
-    true
-    (catch Exception e
-      (throw (ex-info "Failed to register render accessors" {} e)))))
+(defonce ^:private render-accessors-registered?
+  (atom false))
+
+(defn register-render-accessors!
+  "Explicitly register render-domain accessors once."
+  []
+  (when (compare-and-set! render-accessors-registered? false true)
+    (try
+      (register-render-accessors-impl!)
+      (catch Throwable t
+        (reset! render-accessors-registered? false)
+        (throw (ex-info "Failed to register render accessors" {} t)))))
+  nil)

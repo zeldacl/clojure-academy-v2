@@ -1,8 +1,8 @@
 (ns cn.li.ac.registry.hooks
-  "Hook registry system for auto-registration of network handlers and client renderers.
+  "Hook registry system for explicit network handler and client renderer setup.
 
-  Blocks/items/GUIs register their hooks during namespace load, then cn.li.ac.core/init
-  calls all registered hooks during initialization."
+  Blocks/items/GUIs should register hooks from explicit init functions. The AC
+  lifecycle invokes the collected hooks during initialization/client setup."
   (:require [cn.li.mcmod.util.log :as log]))
 
 ;; Unified hook registry state.
@@ -35,13 +35,13 @@
 
 (defn register-network-handler!
   "Register a network handler registration function.
-  Called by block/GUI namespaces during load to register their handlers."
+  Called by block/GUI init functions to register their handlers."
   [handler-fn]
   (swap! hook-registry update :network-handlers dedupe-conj handler-fn))
 
 (defn register-client-renderer!
   "Register a client renderer namespace symbol.
-  Called by block namespaces during load to register their renderers."
+  Called by block init functions to register their renderers."
   [renderer-ns-sym]
   (swap! hook-registry update :client-renderers dedupe-conj renderer-ns-sym))
 

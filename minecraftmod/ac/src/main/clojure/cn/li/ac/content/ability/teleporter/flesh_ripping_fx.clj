@@ -28,23 +28,24 @@
 
 (defn- build-plan [_cp _hcp _tick] nil)
 
-(level-effects/register-level-effect! :flesh-ripping
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:flesh-ripping/fx-start :flesh-ripping/fx-perform :flesh-ripping/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :flesh-ripping/fx-start
-      (level-effects/enqueue-level-effect! :flesh-ripping {:mode :start})
-      :flesh-ripping/fx-perform
-      (level-effects/enqueue-level-effect! :flesh-ripping
-        {:mode :perform
-         :target-x (:target-x payload)
-         :target-y (:target-y payload)
-         :target-z (:target-z payload)})
-      :flesh-ripping/fx-end
-      (level-effects/enqueue-level-effect! :flesh-ripping {:mode :end})
-      nil)))
+(defn init! []
+  (level-effects/register-level-effect! :flesh-ripping
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:flesh-ripping/fx-start :flesh-ripping/fx-perform :flesh-ripping/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :flesh-ripping/fx-start
+        (level-effects/enqueue-level-effect! :flesh-ripping {:mode :start})
+        :flesh-ripping/fx-perform
+        (level-effects/enqueue-level-effect! :flesh-ripping
+          {:mode :perform
+           :target-x (:target-x payload)
+           :target-y (:target-y payload)
+           :target-z (:target-z payload)})
+        :flesh-ripping/fx-end
+        (level-effects/enqueue-level-effect! :flesh-ripping {:mode :end})
+        nil)))
+  nil)

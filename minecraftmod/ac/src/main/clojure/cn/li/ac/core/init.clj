@@ -8,6 +8,7 @@
 (defn init
   "Core init hook invoked by per-version entry classes."
   []
+  (modid/install-modid!)
   (log/info "Initializing core for mod-id=" modid/MOD-ID)
   (config-registry/init-configs!)
   (ability-runtime/install-runtime-hooks!)

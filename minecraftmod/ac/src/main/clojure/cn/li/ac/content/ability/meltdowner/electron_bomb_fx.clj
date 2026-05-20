@@ -73,23 +73,24 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :electron-bomb
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:electron-bomb/fx-spawn :electron-bomb/fx-beam :electron-bomb/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :electron-bomb/fx-spawn
-      (level-effects/enqueue-level-effect! :electron-bomb
-        {:mode :spawn
-         :x (:x payload) :y (:y payload) :z (:z payload)
-         :dx (:dx payload) :dy (:dy payload) :dz (:dz payload)})
-      :electron-bomb/fx-beam
-      (level-effects/enqueue-level-effect! :electron-bomb
-        {:mode :beam :start (:start payload) :end (:end payload)})
-      :electron-bomb/fx-end
-      (level-effects/enqueue-level-effect! :electron-bomb {:mode :end})
-      nil)))
+(defn init! []
+  (level-effects/register-level-effect! :electron-bomb
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:electron-bomb/fx-spawn :electron-bomb/fx-beam :electron-bomb/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :electron-bomb/fx-spawn
+        (level-effects/enqueue-level-effect! :electron-bomb
+          {:mode :spawn
+           :x (:x payload) :y (:y payload) :z (:z payload)
+           :dx (:dx payload) :dy (:dy payload) :dz (:dz payload)})
+        :electron-bomb/fx-beam
+        (level-effects/enqueue-level-effect! :electron-bomb
+          {:mode :beam :start (:start payload) :end (:end payload)})
+        :electron-bomb/fx-end
+        (level-effects/enqueue-level-effect! :electron-bomb {:mode :end})
+        nil)))
+  nil)

@@ -110,30 +110,31 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :vec-deviation
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:vec-deviation/fx-start :vec-deviation/fx-end
-   :vec-deviation/fx-stop-entity :vec-deviation/fx-play]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :vec-deviation/fx-start
-      (level-effects/enqueue-level-effect! :vec-deviation {:mode :start})
-      :vec-deviation/fx-end
-      (level-effects/enqueue-level-effect! :vec-deviation {:mode :end})
-      :vec-deviation/fx-stop-entity
-      (level-effects/enqueue-level-effect! :vec-deviation
-        {:mode :stop-entity
-         :x (double (or (:x payload) 0.0))
-         :y (double (or (:y payload) 0.0))
-         :z (double (or (:z payload) 0.0))
-         :marked? (boolean (:marked? payload))})
-      :vec-deviation/fx-play
-      (level-effects/enqueue-level-effect! :vec-deviation
-        {:mode :play
-         :x (double (or (:x payload) 0.0))
-         :y (double (or (:y payload) 0.0))
-         :z (double (or (:z payload) 0.0))}))))
+(defn init! []
+  (level-effects/register-level-effect! :vec-deviation
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:vec-deviation/fx-start :vec-deviation/fx-end
+     :vec-deviation/fx-stop-entity :vec-deviation/fx-play]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :vec-deviation/fx-start
+        (level-effects/enqueue-level-effect! :vec-deviation {:mode :start})
+        :vec-deviation/fx-end
+        (level-effects/enqueue-level-effect! :vec-deviation {:mode :end})
+        :vec-deviation/fx-stop-entity
+        (level-effects/enqueue-level-effect! :vec-deviation
+          {:mode :stop-entity
+           :x (double (or (:x payload) 0.0))
+           :y (double (or (:y payload) 0.0))
+           :z (double (or (:z payload) 0.0))
+           :marked? (boolean (:marked? payload))})
+        :vec-deviation/fx-play
+        (level-effects/enqueue-level-effect! :vec-deviation
+          {:mode :play
+           :x (double (or (:x payload) 0.0))
+           :y (double (or (:y payload) 0.0))
+           :z (double (or (:z payload) 0.0))}))))
+  nil)

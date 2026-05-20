@@ -25,9 +25,6 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
-;; Ensure radiation damage handler is installed at load time
-(md-damage/ensure-damage-handler!)
-
 (def ^:private mdball-entity-id "my_mod:entity_md_ball")
 (def ^:private electron-missile-skill-id :electron-missile)
 
@@ -147,6 +144,12 @@
 (defn electron-missile-abort!
   [{:keys [ctx-id]}]
   (ctx/update-context! ctx-id assoc :skill-state {:fire-ticker 0 :active? false}))
+
+(defn init!
+  "Explicit runtime installer for Meltdowner shared damage helper hooks."
+  []
+  (md-damage/init!)
+  nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration

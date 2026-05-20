@@ -1,8 +1,8 @@
 (ns cn.li.ac.content.ability-client
   "Client-side ability content bootstrap.
 
-  Requires discovered _fx.clj namespaces so they self-register their FX channels,
-  level effects, and hand effects at load time.
+  Explicitly initializes discovered _fx.clj namespaces so they register their FX
+  channels, level effects, and hand effects only during client FX init.
 
   This namespace must ONLY be required from client-side code paths
   (e.g. platform client entry points), never from dedicated-server code."
@@ -12,27 +12,20 @@
 
 (defonce-guard fx-initialized?)
 
-(defn- require-discovered-fx! []
-  (discovery/bootstrap-default-providers!)
+(defn- init-fx-namespace! [ns-sym]
+  (require ns-sym)
+  (when-let [init-var (ns-resolve ns-sym 'init!)]
+    (when (bound? init-var)
+      (init-var))))
+
+(defn- init-discovered-fx! []
   (doseq [ns-sym (discovery/discovered-fx-namespaces)]
-    (require ns-sym)))
-
-(defonce ^:private discovered-fx-required?
-  (delay
-    (require-discovered-fx!)
-    true))
-
-(defn ensure-discovered-fx-required!
-  "Preserve historical load semantics for callers that only require this namespace."
-  []
-  @discovered-fx-required?)
-
-(ensure-discovered-fx-required!)
+    (init-fx-namespace! ns-sym)))
 
 (defn init-client-fx!
   "Ensure all client FX registrations have been loaded.
   Safe to call multiple times."
   []
   (with-init-guard fx-initialized?
-    (ensure-discovered-fx-required!)
+    (init-discovered-fx!)
     (log/info "Ability client FX content initialized")))

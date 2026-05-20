@@ -1,9 +1,14 @@
 (ns cn.li.ac.ability.server.effect.motion-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.effect.motion]
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]))
+
+(use-fixtures :once
+  (fn [f]
+    (effect/init-default-ops!)
+    (f)))
 
 (defn- recording-player-motion [calls]
   (reify player-motion/IPlayerMotion

@@ -39,23 +39,24 @@
 
 (defn- build-plan [_cp _hcp _tick] nil)
 
-(level-effects/register-level-effect! :flashing
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:flashing/fx-start :flashing/fx-blink :flashing/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :flashing/fx-start
-      (level-effects/enqueue-level-effect! :flashing {:mode :start})
-      :flashing/fx-blink
-      (level-effects/enqueue-level-effect! :flashing
-        {:mode :blink
-         :from-x (:from-x payload)
-         :from-y (:from-y payload)
-         :from-z (:from-z payload)})
-      :flashing/fx-end
-      (level-effects/enqueue-level-effect! :flashing {:mode :end})
-      nil)))
+(defn init! []
+  (level-effects/register-level-effect! :flashing
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:flashing/fx-start :flashing/fx-blink :flashing/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :flashing/fx-start
+        (level-effects/enqueue-level-effect! :flashing {:mode :start})
+        :flashing/fx-blink
+        (level-effects/enqueue-level-effect! :flashing
+          {:mode :blink
+           :from-x (:from-x payload)
+           :from-y (:from-y payload)
+           :from-z (:from-z payload)})
+        :flashing/fx-end
+        (level-effects/enqueue-level-effect! :flashing {:mode :end})
+        nil)))
+  nil)

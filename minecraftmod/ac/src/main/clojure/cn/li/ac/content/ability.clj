@@ -2,10 +2,13 @@
   "Ability content bootstrap.
 
   Categories are declared here.
-  Skills are self-registered by requiring discovered skill namespaces."
+  Skills are declared by discovered skill namespaces and registered only during
+  explicit ability content initialization."
   (:require [cn.li.ac.ability.dsl :refer [defcategory]]
             [cn.li.ac.ability.discovery :as discovery]
             [cn.li.ac.ability.registry.category :as category]
+            [cn.li.ac.ability.service.registry :as skill-registry]
+            [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
@@ -44,30 +47,62 @@
 
 (defonce-guard ability-content-installed?)
 
-(defn- require-discovered-skills! []
-  (discovery/bootstrap-default-providers!)
-  (doseq [ns-sym (discovery/discovered-skill-namespaces)]
-    (require ns-sym)))
-
-(defonce ^:private discovered-skills-required?
-  (delay
-    (require-discovered-skills!)
-    true))
-
-(defn ensure-discovered-skills-required!
-  "Preserve historical load semantics: requiring this namespace should make
-  skill specs available even before the explicit content init phase runs."
+(defn- load-discovered-skill-namespaces!
   []
-  @discovered-skills-required?)
+  (let [skill-namespaces (discovery/discovered-skill-namespaces)]
+    (doseq [ns-sym skill-namespaces]
+      (require ns-sym))
+    skill-namespaces))
 
-(ensure-discovered-skills-required!)
+(defn- skill-spec?
+  [value]
+  (and (map? value)
+       (= :skill (:ac/content-type value))))
+
+(defn- skill-specs-from-value
+  [value]
+  (cond
+    (skill-spec? value)
+    [(dissoc value :ac/content-type)]
+
+    (sequential? value)
+    (->> value
+         (filter skill-spec?)
+         (map #(dissoc % :ac/content-type)))
+
+    :else
+    nil))
+
+(defn- declared-skill-specs
+  [ns-sym]
+  (->> (ns-publics ns-sym)
+       vals
+       (keep #(when (bound? %) (var-get %)))
+       (mapcat skill-specs-from-value)))
+
+(defn- register-declared-skills!
+  [skill-namespaces]
+  (doseq [ns-sym skill-namespaces
+          skill-spec (declared-skill-specs ns-sym)]
+    (skill-registry/register-skill! skill-spec)))
+
+(defn- run-namespace-init!
+  [ns-sym]
+  (when-let [init-var (ns-resolve ns-sym 'init!)]
+    (when-let [init-fn (and (bound? init-var) (var-get init-var))]
+      (when (ifn? init-fn)
+        (init-fn)))))
 
 (defn init-ability-content!
   []
   (with-init-guard ability-content-installed?
     (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
       (category/register-category! (dissoc cat :ac/content-type)))
-    (ensure-discovered-skills-required!)
+    (effect/init-default-ops!)
+    (let [skill-namespaces (load-discovered-skill-namespaces!)]
+      (register-declared-skills! skill-namespaces)
+      (doseq [ns-sym skill-namespaces]
+        (run-namespace-init! ns-sym)))
     ;; Register generic item actions (not skill-specific)
     (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)
     (log/info "Ability content initialized")))

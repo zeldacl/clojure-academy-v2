@@ -271,14 +271,13 @@
        :end {:topic :vec-deviation/fx-end :payload (fn [_] {})}}
   :prerequisites [{:skill-id :vec-accel :min-exp 0.0}])
 
-;; ============================================================================
-;; Self-register damage handler at load time
-;; ============================================================================
-
-(damage-handler/register-toggle-damage-handler!
-  :vec-deviation-damage
-  :vec-deviation
-  (fn [player-id _attacker-id damage _damage-source]
-    (let [reduced-damage (reduce-damage player-id damage)]
-      [reduced-damage {:handler :vec-deviation}]))
-  50)
+(defn init!
+  []
+  (damage-handler/register-toggle-damage-handler!
+    :vec-deviation-damage
+    :vec-deviation
+    (fn [player-id _attacker-id damage _damage-source]
+      (let [reduced-damage (reduce-damage player-id damage)]
+        [reduced-damage {:handler :vec-deviation}]))
+    50)
+  nil)

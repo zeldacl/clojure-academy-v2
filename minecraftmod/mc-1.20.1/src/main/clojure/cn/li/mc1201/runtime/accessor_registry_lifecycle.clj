@@ -12,7 +12,7 @@
 ;; Lifecycle Accessor Registrations
 ;; ============================================================================
 
-(defn register-lifecycle-accessors!
+(defn- register-lifecycle-accessors-impl!
   "Register all lifecycle-domain accessors.
    
    This function should be called during mod initialization to populate
@@ -114,10 +114,16 @@
   
   nil)
 
-;; Auto-register on namespace load (optional - can be called explicitly)
-(def init-lifecycle-accessors
-  (try
-    (register-lifecycle-accessors!)
-    true
-    (catch Exception e
-      (throw (ex-info "Failed to register lifecycle accessors" {} e)))))
+(defonce ^:private lifecycle-accessors-registered?
+  (atom false))
+
+(defn register-lifecycle-accessors!
+  "Explicitly register lifecycle-domain accessors once."
+  []
+  (when (compare-and-set! lifecycle-accessors-registered? false true)
+    (try
+      (register-lifecycle-accessors-impl!)
+      (catch Throwable t
+        (reset! lifecycle-accessors-registered? false)
+        (throw (ex-info "Failed to register lifecycle accessors" {} t)))))
+  nil)

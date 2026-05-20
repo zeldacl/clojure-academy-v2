@@ -85,21 +85,22 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(level-effects/register-level-effect! :mine-detect
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:mine-detect/fx-perform :mine-detect/fx-end]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :mine-detect/fx-perform
-      (level-effects/enqueue-level-effect! :mine-detect
-        {:mode     :perform
-         :ores     (:ores payload)
-         :range    (:range payload)
-         :advanced? (:advanced? payload)})
-      :mine-detect/fx-end
-      (level-effects/enqueue-level-effect! :mine-detect {:mode :end})
-      nil)))
+(defn init! []
+  (level-effects/register-level-effect! :mine-detect
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:mine-detect/fx-perform :mine-detect/fx-end]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :mine-detect/fx-perform
+        (level-effects/enqueue-level-effect! :mine-detect
+          {:mode     :perform
+           :ores     (:ores payload)
+           :range    (:range payload)
+           :advanced? (:advanced? payload)})
+        :mine-detect/fx-end
+        (level-effects/enqueue-level-effect! :mine-detect {:mode :end})
+        nil)))
+  nil)

@@ -36,23 +36,24 @@
         {:ops [{:type :screen-flash
                 :r 200 :g 220 :b 255 :a (min 80 alpha)}]}))))
 
-(level-effects/register-level-effect! :jet-engine
-  {:enqueue-fn    enqueue!
-   :tick-fn       tick!
-   :build-plan-fn build-plan})
-
-(fx-registry/register-fx-channels!
-  [:jet-engine/fx-start :jet-engine/fx-launch :jet-engine/fx-charge-max]
-  (fn [_ctx-id channel payload]
-    (case channel
-      :jet-engine/fx-start
-      (level-effects/enqueue-level-effect! :jet-engine {:mode :start})
-      :jet-engine/fx-launch
-      (level-effects/enqueue-level-effect! :jet-engine
-        {:mode :launch
-         :speed (:speed payload)
-         :dx (:dx payload) :dy (:dy payload) :dz (:dz payload)})
-      :jet-engine/fx-charge-max
-      (client-sounds/queue-sound-effect!
-        {:type :sound :sound-id "my_mod:md.jet_max" :volume 0.5 :pitch 1.2})
-      nil)))
+(defn init! []
+  (level-effects/register-level-effect! :jet-engine
+    {:enqueue-fn    enqueue!
+     :tick-fn       tick!
+     :build-plan-fn build-plan})
+  (fx-registry/register-fx-channels!
+    [:jet-engine/fx-start :jet-engine/fx-launch :jet-engine/fx-charge-max]
+    (fn [_ctx-id channel payload]
+      (case channel
+        :jet-engine/fx-start
+        (level-effects/enqueue-level-effect! :jet-engine {:mode :start})
+        :jet-engine/fx-launch
+        (level-effects/enqueue-level-effect! :jet-engine
+          {:mode :launch
+           :speed (:speed payload)
+           :dx (:dx payload) :dy (:dy payload) :dz (:dz payload)})
+        :jet-engine/fx-charge-max
+        (client-sounds/queue-sound-effect!
+          {:type :sound :sound-id "my_mod:md.jet_max" :volume 0.5 :pitch 1.2})
+        nil)))
+  nil)
