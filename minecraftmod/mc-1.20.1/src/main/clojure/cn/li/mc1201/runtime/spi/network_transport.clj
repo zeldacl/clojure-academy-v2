@@ -4,7 +4,9 @@
 (defonce ^:private transport-impl* (atom nil))
 
 (defn register-transport-impl!
-  [{:keys [send-to-server! send-push-to-client! find-player-by-uuid] :as impl}]
+  [{:keys [send-to-server! send-push-to-client! find-player-by-uuid find-nearby-player-uuids]
+    :or {find-nearby-player-uuids (fn [_source-player-uuid _radius] [])}
+    :as impl}]
   (doseq [[k v] [[:send-to-server! send-to-server!]
                  [:send-push-to-client! send-push-to-client!]
                  [:find-player-by-uuid find-player-by-uuid]]]
@@ -12,7 +14,8 @@
       (throw (ex-info (str "network transport SPI requires " k " fn") {:impl impl :missing k}))))
   (reset! transport-impl* {:send-to-server! send-to-server!
                            :send-push-to-client! send-push-to-client!
-                           :find-player-by-uuid find-player-by-uuid})
+                   :find-player-by-uuid find-player-by-uuid
+                   :find-nearby-player-uuids find-nearby-player-uuids})
   nil)
 
 (defn transport-impl!
@@ -32,3 +35,7 @@
 (defn find-player-by-uuid
   [uuid-str]
   ((:find-player-by-uuid (transport-impl!)) uuid-str))
+
+(defn find-nearby-player-uuids
+  [source-player-uuid radius]
+  ((:find-nearby-player-uuids (transport-impl!)) source-player-uuid radius))

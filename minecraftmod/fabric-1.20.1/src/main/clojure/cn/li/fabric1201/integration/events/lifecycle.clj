@@ -20,7 +20,9 @@
     nil
     (fn []
       (lifecycle-core/on-player-login! player {:load-player-state! runtime-nbt/load-player-state!
-                                               :mark-player-dirty! runtime-sync/mark-player-dirty!}))))
+                                               :mark-player-dirty! runtime-sync/mark-player-dirty!
+                                               :send-sync-now! runtime-network/send-sync-to-client!
+                                               :clear-player-dirty! runtime-sync/clear-player-dirty!}))))
 
 (defn handle-player-logout
   [^ServerPlayer player]
@@ -36,7 +38,10 @@
     "fabric player clone"
     nil
     (fn []
-      (lifecycle-core/on-player-clone! old-player new-player alive {:clone-player-state! runtime-nbt/clone-player-state!}))))
+      (lifecycle-core/on-player-clone! old-player new-player alive {:clone-player-state! runtime-nbt/clone-player-state!
+                                                                     :mark-player-dirty! runtime-sync/mark-player-dirty!
+                                                                     :send-sync-now! runtime-network/send-sync-to-client!
+                                                                     :clear-player-dirty! runtime-sync/clear-player-dirty!}))))
 
 (defn handle-player-death
   [entity]
@@ -59,7 +64,9 @@
                                                   (dimension-id destination)
                                                   {:mark-player-dirty! runtime-sync/mark-player-dirty!
                                                    :tick-sync! runtime-sync/tick-sync!
-                                                   :send-sync-fn runtime-network/send-sync-to-client!}))))
+                                                   :send-sync-fn runtime-network/send-sync-to-client!
+                                                   :send-sync-now! runtime-network/send-sync-to-client!
+                                                   :clear-player-dirty! runtime-sync/clear-player-dirty!}))))
 
 (defn handle-player-tick
   [^MinecraftServer server]

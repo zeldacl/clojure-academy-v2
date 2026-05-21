@@ -28,7 +28,9 @@
 (defn- on-player-login [^PlayerEvent$PlayerLoggedInEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
     (lifecycle-core/on-player-login! p {:load-player-state! runtime-nbt/load-player-state!
-                                        :mark-player-dirty! runtime-sync/mark-player-dirty!})))
+                                        :mark-player-dirty! runtime-sync/mark-player-dirty!
+                                        :send-sync-now! runtime-network/send-sync-to-client!
+                                        :clear-player-dirty! runtime-sync/clear-player-dirty!})))
 
 (defn- on-player-logout [^PlayerEvent$PlayerLoggedOutEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
@@ -37,7 +39,10 @@
 (defn- on-player-clone [^PlayerEvent$Clone evt]
   (when-let [^ServerPlayer oldp (server-player (.getOriginal evt))]
     (when-let [^ServerPlayer newp (server-player (.getEntity evt))]
-      (lifecycle-core/on-player-clone! oldp newp (not (.isWasDeath evt)) {:clone-player-state! runtime-nbt/clone-player-state!}))))
+      (lifecycle-core/on-player-clone! oldp newp (not (.isWasDeath evt)) {:clone-player-state! runtime-nbt/clone-player-state!
+                                                                           :mark-player-dirty! runtime-sync/mark-player-dirty!
+                                                                           :send-sync-now! runtime-network/send-sync-to-client!
+                                                                           :clear-player-dirty! runtime-sync/clear-player-dirty!}))))
 
 (defn- on-player-death [^LivingDeathEvent evt]
   (when-let [^ServerPlayer p (server-player (.getEntity evt))]
@@ -50,7 +55,9 @@
                                                 (dimension-id (.getTo evt))
                                                 {:mark-player-dirty! runtime-sync/mark-player-dirty!
                                                  :tick-sync! runtime-sync/tick-sync!
-                                                 :send-sync-fn runtime-network/send-sync-to-client!})))
+                                                 :send-sync-fn runtime-network/send-sync-to-client!
+                                                 :send-sync-now! runtime-network/send-sync-to-client!
+                                                 :clear-player-dirty! runtime-sync/clear-player-dirty!})))
 
 (defn- on-player-tick [^TickEvent$PlayerTickEvent evt]
   (when (and (= TickEvent$Phase/END (.phase evt))

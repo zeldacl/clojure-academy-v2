@@ -12,6 +12,9 @@
 (defn mark-player-dirty! [uuid]
   (swap! dirty-players conj uuid))
 
+(defn clear-player-dirty! [uuid]
+  (swap! dirty-players disj uuid))
+
 (defn mark-all-dirty! []
   (reset! dirty-players (set (power-runtime/list-player-uuids))))
 

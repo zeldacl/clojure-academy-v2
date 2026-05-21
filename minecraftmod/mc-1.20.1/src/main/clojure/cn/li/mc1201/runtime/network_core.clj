@@ -9,7 +9,12 @@
             [cn.li.mcmod.hooks.core :as network-hooks]
             [cn.li.mcmod.hooks.catalog :as runtime-catalog]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [net.minecraft.server MinecraftServer]
+           [net.minecraft.server.players PlayerList]
+           [net.minecraft.server.level ServerPlayer]))
+
+(def ^:private default-except-local-radius 64.0)
 
 (def ^:private sync-message-specs
   [{:msg-id runtime-catalog/MSG-SYNC-RUNTIME
@@ -56,6 +61,49 @@
   [uuid-str]
   (query-core/get-player-by-uuid (server-context-spi/require-current-server) uuid-str))
 
+(defn- same-dimension?
+  [^ServerPlayer a-player ^ServerPlayer b-player]
+  (= (some-> a-player .level .dimension .location str)
+     (some-> b-player .level .dimension .location str)))
+
+(defn- within-radius?
+  [^ServerPlayer source-player ^ServerPlayer target-player radius]
+  (let [dx (- (.getX target-player) (.getX source-player))
+        dy (- (.getY target-player) (.getY source-player))
+        dz (- (.getZ target-player) (.getZ source-player))
+        distance-sqr (+ (* dx dx) (* dy dy) (* dz dz))]
+    (<= distance-sqr (* radius radius))))
+
+(defn default-find-nearby-player-uuids
+  [source-player-uuid radius]
+  (try
+    (let [^MinecraftServer server (server-context-spi/require-current-server)
+          ^ServerPlayer source-player (query-core/get-player-by-uuid server source-player-uuid)]
+      (if (nil? source-player)
+        []
+        (let [^PlayerList player-list (.getPlayerList server)]
+          (->> (.getPlayers player-list)
+               (filter (fn [^ServerPlayer target-player]
+                       (and (not= (str (.getUUID target-player)) source-player-uuid)
+                            (same-dimension? source-player target-player)
+                            (within-radius? source-player target-player radius))))
+               (map (fn [^ServerPlayer target-player] (str (.getUUID target-player))))
+               (into [])))))
+    (catch Exception e
+      (log/warn "Failed to resolve nearby players for except-local route:" source-player-uuid (ex-message e))
+      [])))
+
+(defn create-except-local-context-sender
+  "Create a context channel sender that broadcasts to nearby players except source player."
+  [find-nearby-player-uuids send-to-client-fn]
+  (fn [ctx-id channel payload]
+    (if-let [source-player-uuid (network-hooks/get-context-player-uuid ctx-id)]
+      (doseq [target-player-uuid (find-nearby-player-uuids source-player-uuid default-except-local-radius)]
+        (send-to-client-fn target-player-uuid
+                           runtime-catalog/MSG-CTX-CHANNEL
+                           {:ctx-id ctx-id :channel channel :payload payload}))
+      (log/debug "Skip except-local send due to missing context owner:" ctx-id))))
+
 (def send-sync-to-client!
   (create-sync-sender transport-spi/find-player-by-uuid transport-spi/send-push-to-client!))
 
@@ -63,17 +111,22 @@
   (create-targeted-client-sender transport-spi/find-player-by-uuid transport-spi/send-push-to-client!))
 
 (defn install-runtime-network-transport!
-  [{:keys [label install-server-context! send-to-server! send-push-to-client! find-player-by-uuid]
+  [{:keys [label install-server-context! send-to-server! send-push-to-client! find-player-by-uuid find-nearby-player-uuids]
     :or {label "runtime network"
          install-server-context! server-context-spi/install-server-context!
          send-to-server! default-send-to-server!
-         find-player-by-uuid default-find-player-by-uuid}}]
+         find-player-by-uuid default-find-player-by-uuid
+         find-nearby-player-uuids default-find-nearby-player-uuids}}]
   (install-server-context!)
   (transport-spi/register-transport-impl! {:send-to-server! send-to-server!
                                            :send-push-to-client! send-push-to-client!
-                                           :find-player-by-uuid find-player-by-uuid})
+                                           :find-player-by-uuid find-player-by-uuid
+                                           :find-nearby-player-uuids find-nearby-player-uuids})
+  (let [send-to-except-local-fn
+        (create-except-local-context-sender find-nearby-player-uuids send-to-client!)]
   (init-runtime-network! {:send-to-server-fn send-to-server!
-                          :send-to-client-fn send-to-client!})
+                          :send-to-client-fn send-to-client!
+                          :send-to-except-local-fn send-to-except-local-fn}))
   (log/info label "runtime network initialized"))
 
 (defn init-runtime-network!
