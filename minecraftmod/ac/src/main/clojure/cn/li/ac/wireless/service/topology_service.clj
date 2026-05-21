@@ -112,9 +112,27 @@
     (world-registry/update-state-value! world-data :net-lookup dissoc old-ssid)
     (world-registry/update-state-value! world-data :net-lookup assoc new-ssid network-item)))
 
+(defn- ssid-available-for-network?
+  [world-data network-item new-ssid]
+  (let [existing (topology-index/get-network-by-ssid world-data new-ssid)]
+    (or (nil? existing)
+        (identical? existing network-item))))
+
 (defn change-network-ssid!
   [network-item new-ssid]
-  (let [old-ssid (network-state/get-ssid network-item)]
-    (reset-network-ssid! network-item new-ssid)
-    (refresh-world-ssid-lookup! network-item old-ssid new-ssid)
-    true))
+  (let [world-data (:world-data network-item)
+        old-ssid (network-state/get-ssid network-item)]
+    (cond
+      (= old-ssid new-ssid)
+      true
+
+      (not (ssid-available-for-network? world-data network-item new-ssid))
+      (do
+        (log/info (format "SSID change rejected: target SSID '%s' already exists" new-ssid))
+        false)
+
+      :else
+      (do
+        (reset-network-ssid! network-item new-ssid)
+        (refresh-world-ssid-lookup! network-item old-ssid new-ssid)
+        true))))

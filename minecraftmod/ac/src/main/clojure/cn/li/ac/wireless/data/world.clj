@@ -168,6 +168,13 @@
       (WiSavedDataWrapper. wi-data (persistence/world-data-to-nbt wi-data)))
     nil))
 
+(defn on-world-tick
+  "Called each server world tick - advance wireless runtime state."
+  [world]
+  (when-let [wi-data (get-world-data-non-create world)]
+    (tick-world-data! wi-data)
+    nil))
+
 (defn on-world-unload
   "Called when world unloads - cleanup."
   [world]
@@ -182,5 +189,6 @@
   (world-lifecycle/register-world-lifecycle-handler!
     {:on-load on-world-load
      :on-unload on-world-unload
-     :on-save on-world-save})
+      :on-save on-world-save
+      :on-tick on-world-tick})
   (log/info "World data system initialized"))

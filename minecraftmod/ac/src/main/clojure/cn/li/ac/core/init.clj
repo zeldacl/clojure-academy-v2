@@ -12,6 +12,8 @@
   (modid/install-modid!)
   (log/info "Initializing core for mod-id=" modid/MOD-ID)
   (block-bridge/install-blockstate-hooks!)
+  (when-let [init-wireless-world-data! (requiring-resolve 'cn.li.ac.wireless.data.world/init-world-data!)]
+    (init-wireless-world-data!))
   (config-registry/init-configs!)
   (ability-runtime/install-runtime-hooks!)
   nil)

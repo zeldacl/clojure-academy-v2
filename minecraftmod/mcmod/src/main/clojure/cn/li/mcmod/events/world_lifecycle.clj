@@ -24,6 +24,7 @@
 (defonce ^:private world-load-handlers (atom []))
 (defonce ^:private world-unload-handlers (atom []))
 (defonce ^:private world-save-handlers (atom []))
+(defonce ^:private world-tick-handlers (atom []))
 
 ;; ============================================================================
 ;; Registration API (called by content code)
@@ -37,6 +38,7 @@
       :on-load   - (fn [world saved-data] ...) called when world loads
       :on-unload - (fn [world] ...) called when world unloads
       :on-save   - (fn [world] saved-data) called before world saves
+      :on-tick   - (fn [world] ...) called each world tick (server side)
 
   Example:
     (register-world-lifecycle-handler!
@@ -50,6 +52,8 @@
     (swap! world-unload-handlers conj on-unload))
   (when-let [on-save (:on-save handler-map)]
     (swap! world-save-handlers conj on-save))
+  (when-let [on-tick (:on-tick handler-map)]
+    (swap! world-tick-handlers conj on-tick))
   nil)
 
 ;; ============================================================================
@@ -106,3 +110,17 @@
           acc)))
     []
     @world-save-handlers))
+
+(defn dispatch-world-tick
+  "Dispatch world tick event to all registered handlers.
+
+  Args:
+    world: World instance
+
+  Called by platform code (forge/fabric) each server world tick."
+  [world]
+  (doseq [handler @world-tick-handlers]
+    (try
+      (handler world)
+      (catch Throwable t
+        (report-handler-error! :tick t)))))

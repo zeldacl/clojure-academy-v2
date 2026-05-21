@@ -11,7 +11,8 @@
             PlayerBlockBreakEvents$Before]
            [net.fabricmc.fabric.api.event.lifecycle.v1 ServerWorldEvents$Load
             ServerWorldEvents$Unload
-            ServerTickEvents$EndTick]
+            ServerTickEvents$EndTick
+            ServerTickEvents$EndWorldTick]
            [net.fabricmc.fabric.api.networking.v1 ServerPlayConnectionEvents$Join
             ServerPlayConnectionEvents$Disconnect]
            [net.fabricmc.fabric.api.entity.event.v1 ServerPlayerEvents$CopyFrom
@@ -21,6 +22,18 @@
            [net.fabricmc.fabric.api.loot.v2 LootTableEvents$Modify]))
 
 (defonce ^:private events-registered? (atom false))
+(defonce ^:private pending-world-save-data (atom {}))
+
+(defn- world-id
+  [world]
+  (str (some-> world .getRegistryKey .getValue)))
+
+(defn- consume-saved-data!
+  [world]
+  (let [wid (world-id world)
+        pending (get @pending-world-save-data wid)]
+    (swap! pending-world-save-data dissoc wid)
+    pending))
 
 (defn handle-block-place-mixin
   "Handle Fabric block placement from BlockItem mixin.
@@ -54,12 +67,22 @@
       (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents/LOAD
                  (reify ServerWorldEvents$Load
                    (onWorldLoad [_ _server world]
-                     (world-lifecycle/dispatch-world-load world nil))))
+                     (world-lifecycle/dispatch-world-load world (consume-saved-data! world)))))
 
       (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents/UNLOAD
                  (reify ServerWorldEvents$Unload
                    (onWorldUnload [_ _server world]
+                     (let [saved (world-lifecycle/dispatch-world-save world)
+                           wid (world-id world)]
+                       (if (seq saved)
+                         (swap! pending-world-save-data assoc wid saved)
+                         (swap! pending-world-save-data dissoc wid)))
                      (world-lifecycle/dispatch-world-unload world))))
+
+      (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents/END_WORLD_TICK
+                 (reify ServerTickEvents$EndWorldTick
+                   (onEndTick [_ world]
+                     (world-lifecycle/dispatch-world-tick world))))
 
       (.register net.fabricmc.fabric.api.loot.v2.LootTableEvents/MODIFY
                  (reify LootTableEvents$Modify

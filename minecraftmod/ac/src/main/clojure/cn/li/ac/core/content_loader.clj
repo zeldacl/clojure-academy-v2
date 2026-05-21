@@ -3,14 +3,23 @@
   (:require [cn.li.ac.gui.platform-adapter :as platform-gui]
             [cn.li.ac.registry.content-namespaces :as content-ns]
             [cn.li.ac.registry.hooks :as hooks]
+            [cn.li.ac.wireless.gui.sync.handler :as wireless-sync-handler]
             [cn.li.ac.wireless.gui.screen-factory :as screen-factory]
+            [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.gui.registry-core :as gui-adapter]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.mcmod.util.log :as log]))
 
+(defn- register-network-edit-helpers!
+  []
+  (state-schema/register-network-helper-fns!
+    {:get-world wireless-sync-handler/get-world
+     :get-tile-at wireless-sync-handler/get-tile-at}))
+
 (defonce runtime-content-loader
   (delay
     (platform-gui/install-into-mcmod!)
+    (register-network-edit-helpers!)
     (content-ns/load-all!)
     (let [gui-ids (gui-adapter/get-all-gui-ids)]
       (log/info "Registering screen factories for GUI IDs:" gui-ids)

@@ -19,4 +19,12 @@
    {:listener-class net.minecraftforge.event.level.BlockEvent$BreakEvent
     :handler 'cn.li.forge1201.integration.events.block/handle-block-break-event}
    {:listener-class net.minecraftforge.event.LootTableLoadEvent
-    :handler 'cn.li.forge1201.integration.events.loot/handle-loot-table-load}])
+    :handler 'cn.li.forge1201.integration.events.loot/handle-loot-table-load}
+     {:listener-class net.minecraftforge.event.level.LevelEvent$Load
+    :handler 'cn.li.forge1201.integration.events.world/handle-world-load}
+     {:listener-class net.minecraftforge.event.level.LevelEvent$Save
+    :handler 'cn.li.forge1201.integration.events.world/handle-world-save}
+     {:listener-class net.minecraftforge.event.level.LevelEvent$Unload
+    :handler 'cn.li.forge1201.integration.events.world/handle-world-unload}
+     {:listener-class net.minecraftforge.event.TickEvent$LevelTickEvent
+    :handler 'cn.li.forge1201.integration.events.world/handle-world-tick}])
