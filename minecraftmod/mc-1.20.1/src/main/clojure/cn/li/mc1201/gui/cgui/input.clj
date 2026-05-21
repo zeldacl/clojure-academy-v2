@@ -56,6 +56,18 @@
         (reset! last-drag-atom now)))
     (cgui-events/emit-widget-event! hit :drag {:x mx :y my})))
 
+(defn focused-editable-textbox?
+  "Returns true when the given tree root has a focused widget with an editable textbox."
+  [root]
+  (when root
+    (let [m @(:metadata root)
+          focus-atom (:cgui-focus m)
+          focus (when focus-atom @focus-atom)]
+      (when focus
+        (when-let [tb (cgui-model/get-widget-component focus :textbox)]
+          (let [st (:state tb)]
+            (boolean (and st (:editable? @st)))))))))
+
 (defn key-input!
   [root key-code scan-code typed-char]
   (when root

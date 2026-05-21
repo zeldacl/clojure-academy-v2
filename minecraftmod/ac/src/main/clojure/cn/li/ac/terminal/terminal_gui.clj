@@ -28,7 +28,8 @@
   (atom {:terminal-installed? false
          :installed-apps #{}
          :available-apps []
-         :loading? false}))
+         :loading? false
+         :page 0}))
 
 ;; ============================================================================
 ;; Network Communication
@@ -96,6 +97,9 @@
    :app-width 151
    :app-height 151})
 
+(def ^:private apps-per-page
+  (* (:columns grid-config) (:rows grid-config)))
+
 (defn- grid-position
   "Calculate grid position for app index."
   [index]
@@ -103,6 +107,44 @@
         col (rem index (:columns grid-config))]
     [(get (:col-x grid-config) col)
      (get (:row-y grid-config) row)]))
+
+(defn- ordered-apps
+  "Stable app ordering for deterministic grid layout across rebuilds."
+  []
+  (->> (app-reg/list-all-apps)
+       (sort-by (fn [app]
+                  [(str (or (:category app) ""))
+                   (str (or (:name app) ""))
+                   (str (or (:id app) ""))]))
+       vec))
+
+(defn- page-count
+  [apps]
+  (max 1 (int (Math/ceil (/ (double (count apps)) (double apps-per-page))))))
+
+(defn- clamp-page
+  [apps page]
+  (let [max-page (dec (page-count apps))]
+    (-> (int (or page 0))
+        (max 0)
+        (min max-page))))
+
+(defn- set-arrow-alpha!
+  [root-widget path alpha]
+  (when-let [w (cgui-core/find-widget root-widget path)]
+    (when-let [dt (comp/get-drawtexture-component w)]
+      (let [a (int (Math/round (* 255.0 (double alpha))))
+            rgb 0x00FFFFFF
+            color (unchecked-int (bit-or (bit-shift-left (bit-and a 0xFF) 24) rgb))]
+        (swap! (:state dt) assoc :color color)))))
+
+(defn- update-arrow-state!
+  [root-widget apps page]
+  (let [max-page (dec (page-count apps))
+        can-up? (> page 0)
+        can-down? (< page max-page)]
+    (set-arrow-alpha! root-widget "arrow_up" (if can-up? 1.0 0.35))
+    (set-arrow-alpha! root-widget "arrow_down" (if can-down? 1.0 0.35))))
 
 (defn- create-app-widget
   "Create a widget for an app using the app_template from XML."
@@ -140,8 +182,15 @@
   (when-let [text-widget (cgui-core/find-widget root-widget "text_appcount")]
     (let [installed-count (count (:installed-apps @terminal-state))
           total-count (count (:available-apps @terminal-state))
-          ;; Get current time (simplified - just show count)
-          text (str installed-count "/" total-count " Applications")]
+          apps (ordered-apps)
+          page (clamp-page apps (:page @terminal-state))
+          total-pages (page-count apps)
+          ;; Keep original count and add page context for terminal grid.
+          text (str installed-count "/" total-count
+                    " Applications  P"
+                    (inc page)
+                    "/"
+                    total-pages)]
       (when-let [tb (comp/get-textbox-component text-widget)]
         (comp/set-text! tb text)))))
 
@@ -195,11 +244,15 @@
         (cgui-core/remove-widget! root-widget old-widget)))
 
     ;; Get all apps
-    (let [all-apps (app-reg/list-all-apps)
-          installed-apps (:installed-apps @terminal-state)]
+    (let [all-apps (ordered-apps)
+          page (clamp-page all-apps (:page @terminal-state))
+          installed-apps (:installed-apps @terminal-state)
+          _ (swap! terminal-state assoc :page page)
+          offset (* page apps-per-page)
+          page-apps (->> all-apps (drop offset) (take apps-per-page))]
 
       ;; Create new app widgets
-      (doseq [[index app] (map-indexed vector (take 9 all-apps))]
+      (doseq [[index app] (map-indexed vector page-apps)]
         (let [installed? (contains? installed-apps (:id app))
               app-widget (create-app-widget app index installed?
                                            (fn [a inst?]
@@ -210,9 +263,32 @@
     ;; Update counters
     (update-app-count! root-widget)
     (update-loading-indicator! root-widget)
+    (update-arrow-state! root-widget (ordered-apps) (:page @terminal-state))
 
     (catch Exception e
       (log/error "Error rebuilding app grid:" (ex-message e)))))
+
+(defn- change-page!
+  [delta root-widget player]
+  (let [apps (ordered-apps)
+        current (:page @terminal-state)
+        next-page (clamp-page apps (+ (int (or current 0)) (int delta)))]
+    (when (not= next-page current)
+      (swap! terminal-state assoc :page next-page)
+      (rebuild-app-grid! root-widget player))))
+
+(defn- bind-navigation-controls!
+  [root-widget player]
+  (when-let [up (cgui-core/find-widget root-widget "arrow_up")]
+    (events/unlisten! up :left-click)
+    (events/on-left-click up
+      (fn [_]
+        (change-page! -1 root-widget player))))
+  (when-let [down (cgui-core/find-widget root-widget "arrow_down")]
+    (events/unlisten! down :left-click)
+    (events/on-left-click down
+      (fn [_]
+        (change-page! 1 root-widget player)))))
 
 (defn create-terminal-gui
   "Create terminal GUI.
@@ -237,6 +313,9 @@
         (do
           ;; Update username
           (update-username! root-widget player)
+
+          ;; Bind terminal page navigation controls from XML arrows.
+          (bind-navigation-controls! root-widget player)
 
           ;; Query terminal state from server
           (query-terminal-state!

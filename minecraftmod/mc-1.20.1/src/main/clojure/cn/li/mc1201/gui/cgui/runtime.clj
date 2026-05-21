@@ -30,3 +30,7 @@
 (defn dispose!
   [_root]
   nil)
+
+(defn focused-editable-textbox?
+  [root]
+  (input/focused-editable-textbox? root))

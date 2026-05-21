@@ -95,6 +95,13 @@
                                {:text (str (:text spec ""))
                                 :color (:color spec 0xFFFFFF)
                                 :scale (:scale spec 1.0)
+                                :font-size (double (:font-size spec 8.0))
+                                :align (:align spec :left)
+                                :height-align (:height-align spec :top)
+                                :x-offset (double (:x-offset spec 0.0))
+                                :y-offset (double (:y-offset spec 0.0))
+                                :z-level (double (:z-level spec 0.0))
+                                :emit? (if (contains? spec :emit?) (:emit? spec) true)
                                 :shadow? (:shadow? spec true)
                                 :masked? (:masked? spec false)
                                 :localized? (boolean (:localized? spec false))
@@ -162,14 +169,23 @@
     widget))
 
 (defn text-box
-  [& {:keys [text color scale shadow? masked?]
-      :or {text "" color 0xFFFFFF scale 1.0 shadow? true masked? false}}]
+  [& {:keys [text color scale font-size align height-align x-offset y-offset z-level emit? shadow? masked? localized?]
+      :or {text "" color 0xFFFFFF scale 1.0 font-size 8.0 align :left height-align :top
+           x-offset 0.0 y-offset 0.0 z-level 0.0 emit? true shadow? true masked? false localized? false}}]
   {::kind :textbox
    :text text
    :color color
    :scale scale
+   :font-size font-size
+   :align align
+   :height-align height-align
+   :x-offset x-offset
+   :y-offset y-offset
+   :z-level z-level
+   :emit? emit?
    :shadow? shadow?
-   :masked? masked?})
+   :masked? masked?
+   :localized? localized?})
 
 (defn set-text! [text-box text]
   (swap! (component-state text-box) assoc :text (str text))

@@ -366,15 +366,31 @@
       (let [content (text-at component-node :content "")
             option-node (x/get-element component-node :option)
             color (parse-color-int (x/get-element option-node :color) 0xFFFFFFFF)
+            font-size (parse/parse-float (text-at option-node :fontSize "8") 8.0)
+            align-str (some-> (text-at option-node :align "LEFT") str/upper-case)
+            align (case align-str "CENTER" :center "RIGHT" :right :left)
+            height-align-str (some-> (text-at component-node :heightAlign "TOP") str/upper-case)
+            height-align (case height-align-str "CENTER" :center "BOTTOM" :bottom :top)
             allow-edit? (boolean (parse/parse-bool (text-at component-node :allowEdit "false")))
             does-echo? (boolean (parse/parse-bool (text-at component-node :doesEcho "false")))
-            localized? (boolean (parse/parse-bool (text-at component-node :localized "false")))]
+            localized? (boolean (parse/parse-bool (text-at component-node :localized "false")))
+            emit? (boolean (parse/parse-bool (text-at component-node :emit "true")))
+            x-offset (parse/parse-float (text-at component-node :xOffset "0") 0.0)
+            y-offset (parse/parse-float (text-at component-node :yOffset "0") 0.0)
+            z-level (parse/parse-float (text-at component-node :zLevel "0") 0.0)]
         (comp/add-component! widget
                              (comp/text-box :text content
                                             :color color
+                                            :font-size font-size
+                                            :align align
+                                            :height-align height-align
                                             :masked? does-echo?
                                             :shadow? false
-                                            :localized? localized?))
+                                            :localized? localized?
+                                            :emit? emit?
+                                            :x-offset x-offset
+                                            :y-offset y-offset
+                                            :z-level z-level))
         (when-let [tb (comp/get-textbox-component widget)]
           (comp/set-editable! tb allow-edit?)))
 

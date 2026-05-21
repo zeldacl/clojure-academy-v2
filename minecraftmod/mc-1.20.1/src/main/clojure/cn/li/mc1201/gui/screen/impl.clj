@@ -115,18 +115,24 @@
             true)))
 
       (keyPressed [key-code scan-code modifiers]
-        (when root
-          (with-cgui-error "CGUI key-input error"
-            #(cgui-rt/key-input! root key-code scan-code (char 0))))
-        (let [^CGuiContainerScreen s this]
-          (.callSuperKeyPressed s key-code scan-code modifiers)))
+        (let [editing? (and root (cgui-rt/focused-editable-textbox? root))]
+          (when root
+            (with-cgui-error "CGUI key-input error"
+              #(cgui-rt/key-input! root key-code scan-code (char 0))))
+          (if editing?
+            true
+            (let [^CGuiContainerScreen s this]
+              (.callSuperKeyPressed s key-code scan-code modifiers)))))
 
       (charTyped [code-point modifiers]
-        (when root
-          (with-cgui-error "CGUI char-input error"
-            #(cgui-rt/key-input! root 0 0 (char code-point))))
-        (let [^CGuiContainerScreen s this]
-          (.callSuperCharTyped s code-point modifiers)))
+        (let [editing? (and root (cgui-rt/focused-editable-textbox? root))]
+          (when root
+            (with-cgui-error "CGUI char-input error"
+              #(cgui-rt/key-input! root 0 0 (char code-point))))
+          (if editing?
+            true
+            (let [^CGuiContainerScreen s this]
+              (.callSuperCharTyped s code-point modifiers)))))
 
       (removed []
         (when root

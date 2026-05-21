@@ -213,12 +213,13 @@
                     (RenderSystem/setShaderColor (float r) (float g) (float b) (float a))
                     (apply-depth-mode! depth-mode write-depth)
                     (blit-scaled-region! gg tex-loc x y w-int h-int u-px v-px src-w src-h z-level tex-atlas-w tex-atlas-h)
-                    (RenderSystem/disableDepthTest)
-                    (RenderSystem/depthFunc GL11/GL_LEQUAL)
-                    (RenderSystem/depthMask true)
-                    (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
                     (catch Exception e
-                      (log/debug "CGUI drawtexture render error:" (.getMessage e))))))
+                      (log/debug "CGUI drawtexture render error:" (.getMessage e)))
+                    (finally
+                      (RenderSystem/disableDepthTest)
+                      (RenderSystem/depthFunc GL11/GL_LEQUAL)
+                      (RenderSystem/depthMask true)
+                      (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
               (.fill gg x y (+ x w-int) (+ y h-int) (unchecked-int (or (:color state) 0xFFFFFF)))))
 
           (kind-matches? kind :textbox)
@@ -233,18 +234,77 @@
                        (apply str (repeat (count raw-text) \*))
                        raw-text)
                 color (unchecked-int (or (:color state) 0xFFFFFF))
-                ^Font font (MinecraftClientAccess/getFont)]
+                font-size (double (or (:font-size state) 8.0))
+                font-scale (/ font-size 8.0)
+                align (or (:align state) :left)
+                height-align (or (:height-align state) :top)
+                x-offset (double (or (:x-offset state) 0.0))
+                y-offset (double (or (:y-offset state) 0.0))
+                z-level (double (or (:z-level state) 0.0))
+                emit? (if (contains? state :emit?) (:emit? state) true)
+                ^Font font (MinecraftClientAccess/getFont)
+                ;; Text pixel width at the target scale
+                text-w (* (double (.width font ^String text)) font-scale)
+                ;; MC default font character height is 8px
+                text-h (* 8.0 font-scale)
+                ;; Horizontal alignment offset within the widget
+                aligned-dx (case align
+                             :center (/ (- (double w-int) text-w) 2.0)
+                             :right  (- (double w-int) text-w)
+                             0.0)
+                ;; Vertical alignment offset within the widget
+                aligned-dy (case height-align
+                             :center (/ (- (double h-int) text-h) 2.0)
+                             :bottom (- (double h-int) text-h)
+                             0.0)
+                ;; Screen-space draw origin
+                text-sx (+ (double x) aligned-dx x-offset)
+                text-sy (+ (double y) aligned-dy y-offset)
+                ^PoseStack ps (.pose gg)]
             (when (seq text)
-              (.drawString gg font ^String text x y color))
+              (let [pushed? (atom false)
+                    scissor-enabled? (atom false)]
+                (try
+                  (.pushPose ps)
+                  (reset! pushed? true)
+                  ;; Z-level offset
+                  (when (not= 0.0 z-level)
+                    (.translate ps 0.0 0.0 z-level))
+                  ;; Scissor clip to widget bounds before scaling
+                  (when emit?
+                    (.enableScissor gg x y (+ x w-int) (+ y h-int))
+                    (reset! scissor-enabled? true))
+                  ;; Translate to draw origin, apply font scale, draw at local (0,0)
+                  (.translate ps text-sx text-sy 0.0)
+                  (.scale ps (float font-scale) (float font-scale) 1.0)
+                  (.drawString gg font ^String text (int 0) (int 0)
+                               color (boolean (:shadow? state)))
+                  (catch Exception e
+                    (log/debug "CGUI textbox render error:" (.getMessage e)))
+                  (finally
+                    (when @scissor-enabled?
+                      (try (.disableScissor gg) (catch Exception _ nil)))
+                    (when @pushed?
+                      (try (.popPose ps) (catch Exception _ nil)))))))
             (when (and (:editable? state)
                        (some-> @(:metadata root) :focused?))
-              (try
-                (let [font (MinecraftClientAccess/getFont)
-                      caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
-                      caret-x (+ x (int (.width font ^String text)))]
-                  (when caret-visible?
-                    (.drawString gg font "|" caret-x y color)))
-                (catch Exception _ nil))))
+              (let [pushed? (atom false)]
+                (try
+                  (let [caret-visible? (< (mod (System/currentTimeMillis) 1000) 500)
+                        caret-local-x (* (double (.width font ^String text)) font-scale)]
+                    (when caret-visible?
+                      (.pushPose ps)
+                      (reset! pushed? true)
+                      (when (not= 0.0 z-level)
+                        (.translate ps 0.0 0.0 z-level))
+                      (.translate ps (+ text-sx caret-local-x) text-sy 0.0)
+                      (.scale ps (float font-scale) (float font-scale) 1.0)
+                      (.drawString gg font "|" (int 0) (int 0)
+                                   color (boolean (:shadow? state)))))
+                  (catch Exception _ nil)
+                  (finally
+                    (when @pushed?
+                      (try (.popPose ps) (catch Exception _ nil))))))))
 
           (kind-matches? kind :progressbar)
           (let [progress (double (or (:progress state) 0.0))

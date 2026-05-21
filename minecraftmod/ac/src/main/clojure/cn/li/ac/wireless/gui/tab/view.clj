@@ -13,8 +13,10 @@
 
 (defn- attach-scroll-buttons! [btn-up btn-down elist]
 	(when (and btn-up elist)
+		(events/unlisten! btn-up :left-click)
 		(events/on-left-click btn-up (fn [_] (comp/list-progress-last! elist))))
 	(when (and btn-down elist)
+		(events/unlisten! btn-down :left-click)
 		(events/on-left-click btn-down (fn [_] (comp/list-progress-next! elist)))))
 
 (defn base-wireless-doc []
@@ -55,6 +57,7 @@
 						name (if connected? (name-fn linked) "Not Connected")]
 				(reset! linked-atom linked)
 				(when icon-connect
+					(events/unlisten! icon-connect :left-click)
 					(wh/set-drawtexture! icon-connect
 														(if connected?
 															(modid/asset-path "textures" "guis/icons/icon_connected.png")

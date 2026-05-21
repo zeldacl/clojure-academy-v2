@@ -88,6 +88,15 @@
        sort
        vec))
 
+(defn- rotate-whitelist
+  [names dir]
+  (let [v (vec (or names []))
+        n (count v)]
+    (cond
+      (<= n 1) v
+      (neg? (int dir)) (vec (concat [(peek v)] (pop v)))
+      :else (vec (concat (subvec v 1) [(first v)])))))
+
 (defn- request-set-whitelist! [container names]
   (let [tile (:tile-entity container)]
     (net-client/send-to-server
@@ -142,6 +151,7 @@
 
   (when-let [switch-btn (cgui-core/find-widget inv-window "panel_config/element_switch/element_btn_switch")]
     (update-switch-texture! switch-btn @(:enabled container))
+    (events/unlisten! switch-btn :left-click)
     (events/on-left-click switch-btn
       (fn [_]
         (request-set-enabled! container (not @(:enabled container)))
@@ -151,16 +161,19 @@
         (update-switch-texture! switch-btn @(:enabled container)))))
 
   (when-let [btn-left (cgui-core/find-widget inv-window "panel_config/element_range/element_btn_left")]
+    (events/unlisten! btn-left :left-click)
     (events/on-left-click btn-left
       (fn [_]
         (request-set-range! container (- @(:range container) 10.0)))))
 
   (when-let [btn-right (cgui-core/find-widget inv-window "panel_config/element_range/element_btn_right")]
+    (events/unlisten! btn-right :left-click)
     (events/on-left-click btn-right
       (fn [_]
         (request-set-range! container (+ @(:range container) 10.0)))))
 
   (when-let [btn-add (cgui-core/find-widget inv-window "panel_whitelist/btn_add")]
+    (events/unlisten! btn-add :left-click)
     (events/on-left-click btn-add
       (fn [_]
         ;; Convenience behavior for current framework: add local player name quickly.
@@ -170,12 +183,31 @@
             (request-set-whitelist! container (conj (vec wl) player-name)))))))
 
   (when-let [btn-remove (cgui-core/find-widget inv-window "panel_whitelist/btn_remove")]
+    (events/unlisten! btn-remove :left-click)
     (events/on-left-click btn-remove
       (fn [_]
         ;; Remove the most recently added entry as a practical fallback UI action.
         (let [wl @(:whitelist container)]
           (when (seq wl)
-            (request-set-whitelist! container (vec (butlast wl)))))))))
+            (request-set-whitelist! container (vec (butlast wl))))))))
+
+  (when-let [btn-up (cgui-core/find-widget inv-window "panel_whitelist/btn_up")]
+    (events/unlisten! btn-up :left-click)
+    (events/on-left-click btn-up
+      (fn [_]
+        (let [wl @(:whitelist container)
+              rotated (rotate-whitelist wl -1)]
+          (when (not= (vec wl) rotated)
+            (request-set-whitelist! container rotated))))))
+
+  (when-let [btn-down (cgui-core/find-widget inv-window "panel_whitelist/btn_down")]
+    (events/unlisten! btn-down :left-click)
+    (events/on-left-click btn-down
+      (fn [_]
+        (let [wl @(:whitelist container)
+              rotated (rotate-whitelist wl 1)]
+          (when (not= (vec wl) rotated)
+            (request-set-whitelist! container rotated)))))))
 
 (defn- create-screen [container minecraft-container _player]
   (sync-to-client! container)
