@@ -24,6 +24,8 @@
 (defonce ^:private vm-wave-circles (atom []))
 (defonce ^:private vm-wave-last-spawn-ms (atom 0))
 (defonce ^:private slot-context-ids (atom {}))
+;; Per-slot last key-tick send timestamp (ms). Limits key-tick messages to ~10/s.
+(defonce ^:private slot-key-tick-ms (atom {}))
 
 (defn- slot-context-key [player-uuid key-idx]
   [player-uuid key-idx])
@@ -332,14 +334,22 @@
 
    :client-on-slot-key-down!
    (fn [player-uuid key-idx]
+     ;; Reset tick throttle so the first key-tick after a key-down is never suppressed.
+     (swap! slot-key-tick-ms dissoc [player-uuid key-idx])
      (send-slot-key-message! catalog/MSG-SLOT-KEY-DOWN player-uuid key-idx))
 
    :client-on-slot-key-tick!
    (fn [player-uuid key-idx]
-     (send-slot-key-message! catalog/MSG-SLOT-KEY-TICK player-uuid key-idx))
+     (let [slot-key [player-uuid key-idx]
+           now-ms   (System/currentTimeMillis)
+           last-ms  (get @slot-key-tick-ms slot-key 0)]
+       (when (>= (- now-ms last-ms) 100)
+         (swap! slot-key-tick-ms assoc slot-key now-ms)
+         (send-slot-key-message! catalog/MSG-SLOT-KEY-TICK player-uuid key-idx))))
 
    :client-on-slot-key-up!
    (fn [player-uuid key-idx]
+     (swap! slot-key-tick-ms dissoc [player-uuid key-idx])
      (send-slot-key-up-message! player-uuid key-idx))
 
    :client-abort-all!

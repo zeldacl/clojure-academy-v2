@@ -14,10 +14,14 @@
   `:tile-entity`, `:player`, `:container-type`, and any GUI-local values. When
   `state` is omitted, the current tile state is read with `common/get-tile-state`."
   [schema tile player container-type & [{:keys [state base]}]]
-  (let [state (or state (common/get-tile-state tile) {})]
+  (let [state (or state (common/get-tile-state tile) {})
+        sync-get (schema-runtime/build-get-sync-data-fn schema)]
     (merge {:tile-entity tile
             :player player
-            :container-type container-type}
+            :container-type container-type
+            :sync-get sync-get
+            :sync-last-sent (atom nil)
+            :sync-has-sent? (atom false)}
            base
            (schema-runtime/build-gui-atoms schema state))))
 

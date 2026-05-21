@@ -145,20 +145,25 @@
 (defn matrix-scripted-tick-fn [level pos _state be]
 	(let [state0 (safe-state be)
 				ticker (inc (get state0 :update-ticker 0))
-				state1 (assoc state0 :update-ticker ticker)]
-		(when (and (zero? (:sub-id state1 0))
-							 (zero? (mod ticker (matrix-config/gui-sync-interval))))
-			(try
-				(when-let [broadcast-fn (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/broadcast-matrix-state)]
-					(let [impl ^IWirelessMatrix (->WirelessMatrixImpl be)
-								payload (-> (schema/schema->sync-payload matrix-schema/unified-matrix-schema state1 pos)
-														(assoc :is-working (is-working? state1)
-																	 :capacity (.getMatrixCapacity impl)
-																	 :bandwidth (.getMatrixBandwidth impl)
-																	 :range (.getMatrixRange impl)))]
-						(broadcast-fn level pos payload)))
-				(catch Exception e
-					(log/debug "Matrix sync skipped:" (ex-message e)))))
+				state1 (assoc state0 :update-ticker ticker)
+				state1 (if (and (zero? (:sub-id state1 0))
+												(zero? (mod ticker (matrix-config/gui-sync-interval))))
+							(try
+								(let [impl ^IWirelessMatrix (->WirelessMatrixImpl be)
+											payload (-> (schema/schema->sync-payload matrix-schema/unified-matrix-schema state1 pos)
+																	(assoc :is-working (is-working? state1)
+																				 :capacity (.getMatrixCapacity impl)
+																				 :bandwidth (.getMatrixBandwidth impl)
+																				 :range (.getMatrixRange impl)))
+											old-payload (::last-broadcast-state state1)]
+									(when (not= payload old-payload)
+										(when-let [broadcast-fn (requiring-resolve 'cn.li.ac.block.wireless-matrix.gui/broadcast-matrix-state)]
+											(broadcast-fn level pos payload)))
+									(assoc state1 ::last-broadcast-state payload))
+								(catch Exception e
+									(log/debug "Matrix sync skipped:" (ex-message e))
+									state1))
+							state1)]
 		(platform-be/set-custom-state! be state1)))
 
 (def matrix-container-fns

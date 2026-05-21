@@ -6,6 +6,7 @@
   proxy and slot/data-slot sync logic lives here."
   (:require [cn.li.mcmod.gui.registry-core :as gui]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
+            [cn.li.mcmod.gui.container.schema :as container-schema]
             [cn.li.mc1201.gui.slots.tabbed :as tabbed-slots]
             [cn.li.mc1201.gui.slots.sync :as slots-sync]
             [cn.li.mcmod.util.log :as log])
@@ -39,7 +40,15 @@
     (before-super-broadcast!))
   (let [^CMenuBridge s this]
     (.callSuperBroadcastChanges s))
-  (gui/safe-sync! clj-container))
+  (let [sync-get (:sync-get clj-container)
+        last-sent (:sync-last-sent clj-container)
+        has-sent? (:sync-has-sent? clj-container)]
+    (if (and sync-get last-sent has-sent?)
+      (let [payload (sync-get clj-container)]
+        (when (container-schema/sync-payload-dirty? last-sent has-sent? payload)
+          (container-schema/cache-sync-payload! last-sent has-sent? payload)
+          (gui/safe-sync! clj-container)))
+      (gui/safe-sync! clj-container))))
 
 (defn- quick-move-stack
   [this clj-container slot-index error-prefix]

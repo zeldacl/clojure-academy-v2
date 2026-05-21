@@ -56,3 +56,14 @@
              (schema/build-sync-packet-payload sample-fields nil {:energy 6})))
       (is (= {:e 0 :enabled false}
              (schema/build-sync-packet-payload sample-fields nil nil))))))
+
+(deftest sync-cache-test
+  (testing "sync payload helpers detect changes and cache the latest value"
+    (let [last-sent (atom nil)
+          has-sent? (atom false)]
+      (is (true? (schema/sync-payload-dirty? last-sent has-sent? {:energy 1})))
+      (schema/cache-sync-payload! last-sent has-sent? {:energy 1})
+      (is (= {:energy 1} @last-sent))
+      (is (true? @has-sent?))
+      (is (false? (schema/sync-payload-dirty? last-sent has-sent? {:energy 1})))
+      (is (true? (schema/sync-payload-dirty? last-sent has-sent? {:energy 2}))))))

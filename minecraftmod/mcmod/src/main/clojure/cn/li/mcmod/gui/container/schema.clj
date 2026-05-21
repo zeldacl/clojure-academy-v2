@@ -81,3 +81,16 @@
                           (init state)
                           close-reset))]
             [pk value]))))
+
+(defn sync-payload-dirty?
+  "Return true when the current payload differs from the cached payload."
+  [last-sent-atom has-sent?-atom payload]
+  (or (not @has-sent?-atom)
+      (not= payload @last-sent-atom)))
+
+(defn cache-sync-payload!
+  "Record a payload as the latest synced snapshot."
+  [last-sent-atom has-sent?-atom payload]
+  (reset! last-sent-atom payload)
+  (reset! has-sent?-atom true)
+  payload)
