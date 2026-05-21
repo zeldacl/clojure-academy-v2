@@ -1,8 +1,10 @@
 (ns cn.li.ac.ability.adapters.client-ui-hooks-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
+            [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.mcmod.hooks.catalog :as catalog]
             [cn.li.mcmod.network.client :as net-client]))
 
@@ -38,3 +40,25 @@
               {:ctx-id "ctx-client-1" :skill-id :railgun :key-idx 0}
               {:ctx-id "ctx-client-1" :key-idx 0}]
              (mapv :payload @sent))))))
+
+(deftest hud-render-data-hidden-when-not-activated-test
+  (let [model {:cp {:cur 50.0 :max 100.0}
+               :overload {:cur 10.0 :max 100.0 :fine true}
+               :active-slots []
+               :activated false}]
+    (is (nil? (hud/build-hud-render-data model 320 180 {})))))
+
+(deftest build-client-overlay-plan-falls-back-when-activated-override-nil-test
+  (with-redefs [ps/get-player-state (fn [_]
+                                      {:resource-data {:activated true
+                                                       :cur-cp 80.0
+                                                       :max-cp 100.0
+                                                       :cur-overload 0.0
+                                                       :max-overload 100.0}
+                                       :cooldown-data {}
+                                       :preset-data {}})
+                client-keybinds/get-activate-hint (fn [_] nil)
+                client-keybinds/get-preset-switch-state (fn [] nil)]
+    (let [plan (client-ui-hooks/build-client-overlay-plan
+                "p1" 320 180 {:activated-override nil :now-ms 1000})]
+      (is (seq (:elements plan))))))

@@ -183,23 +183,24 @@
     (catch Exception _
       (double default))))
 
-(defn- non-negative-double
+    (defn- non-negative-double
   [skill-id field-id]
   (let [default (double (field-default skill-id field-id))
-        value (finite-double (raw-value skill-id field-id) default)]
+        ^double value (finite-double (raw-value skill-id field-id) default)]
     (if (neg? value) default value)))
 
-(defn- positive-double
+    (defn- positive-double
   [skill-id field-id]
   (let [default (double (field-default skill-id field-id))
-        value (finite-double (raw-value skill-id field-id) default)]
+        ^double value (finite-double (raw-value skill-id field-id) default)]
     (if (pos? value) value default)))
 
 (defn- int-in-range
   [skill-id field-id]
   (let [{lower-bound :min upper-bound :max} (field-definition skill-id field-id)
         default (int (field-default skill-id field-id))
-        value (int (Math/round (finite-double (raw-value skill-id field-id) default)))]
+      rounded-input (double (finite-double (raw-value skill-id field-id) default))
+      value (Math/round rounded-input)]
     (cond-> value
       (some? lower-bound) (max lower-bound)
       (some? upper-bound) (min upper-bound))))
@@ -231,7 +232,8 @@
   [skill-id field-id]
   (let [field-def (field-definition skill-id field-id)
         default (int (field-default skill-id field-id))
-        value (int (Math/round (finite-double (raw-value skill-id field-id) default)))]
+      rounded-input (double (finite-double (raw-value skill-id field-id) default))
+      value (Math/round rounded-input)]
     (if (within-bounds? field-def value)
       value
       default)))
@@ -270,7 +272,8 @@
     (if (and (list-like? raw)
              (or (nil? list-count) (= (int list-count) (count raw))))
       (mapv (fn [value default]
-              (let [i (int (Math/round (finite-double value default)))]
+          (let [rounded-input (double (finite-double value default))
+            i (Math/round rounded-input)]
                 (if (within-bounds? field-def i)
                   i
                   (int default))))
@@ -301,7 +304,8 @@
 
 (defn lerp-int
   [skill-id field-id exp]
-  (int (Math/round (double (lerp-double skill-id field-id exp)))))
+  (let [value (double (lerp-double skill-id field-id exp))]
+    (int (Math/round value))))
 
 (defn probability
   [skill-id field-id]

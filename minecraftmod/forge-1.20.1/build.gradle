@@ -280,7 +280,8 @@ tasks.matching { it.name == 'runGametestServer' }.configureEach {
 
 tasks.matching { it.name == 'checkClojure' }.configureEach {
     reflection = 'fail'
-    dependsOn tasks.named('copyClojureClassesToJavaOutput')
+    mustRunAfter tasks.named('copyClojureClassesToJavaOutput')
+    dependsOn tasks.named('cleanMirroredClojureClassesForCompile')
     doFirst {
         def internalFile = file("$buildDir/tmp/checkClojure/internal.txt")
         internalFile.parentFile.mkdirs()
@@ -307,6 +308,8 @@ tasks.matching { it.name == 'checkClojure' }.configureEach {
         namespaces.set(requestedNamespaces)
         logger.lifecycle('[checkClojure] checkNsOnly active, namespaces={}', requestedNamespaces.size())
     } else {
+        def acNamespaces = collectClojureNamespacesFromDirs([project(':ac').file('src/main/clojure')]) as Set
+        namespaces.set(((namespaces.get() as Set) + acNamespaces) as Set)
         logger.lifecycle('[checkClojure] full namespace set active, namespaces={}', (namespaces.get() as Set).size())
     }
 }
@@ -325,16 +328,16 @@ tasks.matching { it.name == 'compileClojure' }.configureEach {
     }
 }
 
-def cljFileToNamespace = { File root, File cljFile ->
+def cljFileToNamespace(File root, File cljFile) {
     def rel = root.toPath().relativize(cljFile.toPath()).toString().replace('\\', '/')
     def nsPath = rel.replaceAll(/\.clj$/, '')
     nsPath = nsPath.replace('/', '.').replace('_', '-')
     return nsPath
 }
 
-def collectMainClojureNamespaces = {
+def collectClojureNamespacesFromDirs(Collection<File> srcDirs) {
     def result = new LinkedHashSet<String>()
-    sourceSets.main.clojure.srcDirs.each { File srcDir ->
+    srcDirs.each { File srcDir ->
         if (srcDir?.isDirectory()) {
             fileTree(srcDir) {
                 include '**/*.clj'
@@ -344,6 +347,13 @@ def collectMainClojureNamespaces = {
         }
     }
     result as List<String>
+}
+
+def collectMainClojureNamespaces = {
+    def srcDirs = [] as LinkedHashSet<File>
+    srcDirs.addAll(sourceSets.main.clojure.srcDirs.findAll { it instanceof File } as Collection<File>)
+    srcDirs.add(project(':ac').file('src/main/clojure'))
+    collectClojureNamespacesFromDirs(srcDirs)
 }
 
 tasks.register('bisectCompileClojure') {

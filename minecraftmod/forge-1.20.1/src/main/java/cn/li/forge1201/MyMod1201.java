@@ -17,17 +17,28 @@ public class MyMod1201 {
         // Load and instantiate the Clojure mod class for both normal run and datagen.
         // Datagen also needs platform registration state for official Forge model providers.
         try {
-            Var warnVar = clojure.lang.RT.var("clojure.core", "*warn-on-reflection*");
-            warnVar.bindRoot(true); 
+            boolean forceReload = Boolean.getBoolean("ac.clj.reload");
+
+            if (forceReload) {
+                Var warnVar = clojure.lang.RT.var("clojure.core", "*warn-on-reflection*");
+                warnVar.bindRoot(true);
+            }
+
             IFn require = Clojure.var("clojure.core", "require");
             Object modNs = Clojure.read("cn.li.forge1201.mod");
-            require.invoke(modNs, Clojure.read(":reload"));
+            if (forceReload) {
+                require.invoke(modNs, Clojure.read(":reload"));
+            } else {
+                require.invoke(modNs);
+            }
 
             Var startFn = (Var) Clojure.var("cn.li.forge1201.mod", "start-forge-mod!");
             if (!startFn.isBound()) {
-                // Retry with full dependency reload for occasional namespace init races.
-                require.invoke(modNs, Clojure.read(":reload-all"));
-                startFn = (Var) Clojure.var("cn.li.forge1201.mod", "start-forge-mod!");
+                if (forceReload) {
+                    // Retry with full dependency reload for occasional namespace init races.
+                    require.invoke(modNs, Clojure.read(":reload-all"));
+                    startFn = (Var) Clojure.var("cn.li.forge1201.mod", "start-forge-mod!");
+                }
             }
 
             if (startFn.isBound()) {

@@ -354,25 +354,27 @@
     (catch Exception _
       (double default))))
 
-(defn- non-negative-double
+    (defn- non-negative-double
   [k]
   (let [default (double (get default-values k))
-        value (finite-double (raw-value k) default)]
+        ^double value (finite-double (raw-value k) default)]
     (if (neg? value) default value)))
 
-(defn- positive-double
+    (defn- positive-double
   [k]
   (let [default (double (get default-values k))
-        value (finite-double (raw-value k) default)]
+        ^double value (finite-double (raw-value k) default)]
     (if (pos? value) value default)))
 
 (defn- non-negative-int
   [k]
-  (max 0 (int (Math/round (non-negative-double k)))))
+  (let [value (double (non-negative-double k))]
+    (max 0 (int (Math/round value)))))
 
 (defn- positive-int
   [k]
-  (max 1 (int (Math/round (positive-double k)))))
+  (let [value (double (positive-double k))]
+    (max 1 (int (Math/round value)))))
 
 (defn- boolean-value
   [k]

@@ -190,7 +190,7 @@
 
 (defn build-client-overlay-plan [player-uuid screen-width screen-height overlay-state]
   (let [player-state (ps/get-player-state player-uuid)
-        activated-override {:value (if (contains? overlay-state :activated-override)
+        activated-override {:value (if (some? (:activated-override overlay-state))
                                      (boolean (:activated-override overlay-state))
                                      (boolean (get-in player-state [:resource-data :activated] false)))}
         hud-model (build-hud-model-from-state player-state activated-override)
