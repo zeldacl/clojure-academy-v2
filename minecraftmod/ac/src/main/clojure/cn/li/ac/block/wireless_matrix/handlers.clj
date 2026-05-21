@@ -22,14 +22,16 @@
 		{:success false}))
 
 (defn handle-init-network [payload player]
-	(with-owner-controller payload player
-		(fn [tile]
-			(let [{:keys [ssid password]} payload]
-				(try
-					{:success (infra/create-network! tile ssid password)}
-					(catch Exception e
-						(log/error "Failed to initialize network:" (ex-message e))
-						{:success false}))))))
+	(let [{:keys [be]} (infra/resolve-world-tile payload player)
+				ctrl (infra/resolve-controller be)
+				{:keys [ssid password]} payload]
+		(if ctrl
+			(try
+				{:success (infra/create-network! ctrl ssid password)}
+				(catch Exception e
+					(log/error "Failed to initialize network:" (ex-message e))
+					{:success false}))
+			{:success false})))
 
 (defn handle-change-ssid [payload player]
 	(with-owner-controller payload player

@@ -3,6 +3,7 @@
 	(:require [cn.li.mcmod.block.state-schema :as schema]
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.mcmod.platform.be :as platform-be]
+						[cn.li.mcmod.platform.entity :as entity]
 						[cn.li.mcmod.platform.item :as pitem]
 						[cn.li.mcmod.gui.slot-schema :as slot-schema]
 						[cn.li.mcmod.platform.world :as world]
@@ -218,7 +219,9 @@
 (defn handle-matrix-place []
 	(fn [{:keys [player world pos]}]
 		(when-let [be (world/world-get-tile-entity* world pos)]
-			(platform-be/set-custom-state! be (assoc (safe-state be) :placer-name (str player))))))
+			(let [player-name (try (entity/player-get-name player)
+													(catch Exception _ (str player)))]
+				(platform-be/set-custom-state! be (assoc (safe-state be) :placer-name (str player-name)))))))
 
 (defn handle-matrix-break []
 	(fn [{:keys [world pos]}]

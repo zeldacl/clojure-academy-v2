@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wireless-matrix.network-infra
 	"Infrastructure access for wireless matrix GUI handlers."
-	(:require [cn.li.mcmod.platform.entity :as entity]
+	(:require [clojure.string :as str]
+						[cn.li.mcmod.platform.entity :as entity]
 						[cn.li.ac.wireless.gui.sync.handler :as net-helpers]
 						[cn.li.ac.wireless.core.capability-resolver :as resolver]
 						[cn.li.ac.wireless.api :as wireless-api]
@@ -27,8 +28,13 @@
 
 (defn owner?
 	[^IWirelessMatrix matrix-cap player]
-	(= (str (.getPlacerName matrix-cap))
-		 (str (entity/player-get-name player))))
+	(let [placer-name (str (.getPlacerName matrix-cap))
+				player-name (str (entity/player-get-name player))]
+		(or (str/blank? placer-name)
+				(= placer-name player-name)
+				;; Backward compatibility for old values like
+				;; "ServerPlayer['name'/...,...]".
+				(str/includes? placer-name (str "'" player-name "'")))))
 
 (defn owner-controller
 	[payload player]

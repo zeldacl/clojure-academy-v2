@@ -9,6 +9,14 @@
   [^Player player]
   (some-> player .getUUID str))
 
+(defn- send-sync-now-for-player!
+  [send-sync-now! uuid]
+  (let [payload (player-hooks/build-sync-payload uuid)]
+    (try
+      (send-sync-now! uuid payload)
+      (catch clojure.lang.ArityException _
+        (send-sync-now! uuid)))))
+
 (defn on-player-login!
   [player {:keys [load-player-state! mark-player-dirty! send-sync-now! clear-player-dirty!]}]
   (when-let [uuid (player-uuid player)]
@@ -18,7 +26,7 @@
     (when mark-player-dirty!
       (mark-player-dirty! uuid))
     (when send-sync-now!
-      (send-sync-now! uuid)
+      (send-sync-now-for-player! send-sync-now! uuid)
       (when clear-player-dirty!
         (clear-player-dirty! uuid)))))
 
@@ -41,7 +49,7 @@
         (when mark-player-dirty!
           (mark-player-dirty! new-uuid))
         (when send-sync-now!
-          (send-sync-now! new-uuid)
+          (send-sync-now-for-player! send-sync-now! new-uuid)
           (when clear-player-dirty!
             (clear-player-dirty! new-uuid)))))))
 
@@ -60,7 +68,7 @@
       (mark-player-dirty! uuid))
     (if send-sync-now!
       (do
-        (send-sync-now! uuid)
+        (send-sync-now-for-player! send-sync-now! uuid)
         (when clear-player-dirty!
           (clear-player-dirty! uuid)))
       (when tick-sync!

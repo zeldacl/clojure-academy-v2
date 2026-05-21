@@ -3,13 +3,14 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle])
   (:import [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload LevelEvent$Save]
-           [net.minecraftforge.event TickEvent$LevelTickEvent TickEvent$Phase]))
+           [net.minecraftforge.event TickEvent$LevelTickEvent TickEvent$Phase]
+           [net.minecraft.world.level Level]))
 
 (defonce ^:private pending-world-save-data (atom {}))
 
 (defn- world-id
-  [level]
-  (str (some-> level .dimension .location)))
+  [^Level level]
+  (str (.location (.dimension level))))
 
 (defn- consume-saved-data!
   [level]

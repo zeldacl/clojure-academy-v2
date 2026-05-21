@@ -23,7 +23,9 @@
 (defn node-range
 	[tile]
 	(try
-		(.getRange ^IWirelessNode tile)
+		(if-let [node-cap (resolver/node-capability tile)]
+			(.getRange ^IWirelessNode node-cap)
+			20.0)
 		(catch Exception _ 20.0)))
 
 (defn available-networks

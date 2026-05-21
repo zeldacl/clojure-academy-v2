@@ -1,5 +1,5 @@
 (ns cn.li.forge1201.runtime.lifecycle-core-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
@@ -46,4 +46,18 @@
     (is (= [[:dirty "new-uuid"]
             [:sync "new-uuid"]
             [:clear "new-uuid"]]
+           @called))))
+
+(deftest login-immediate-sync-two-arity-sender-test
+  (let [called (atom [])]
+    (with-redefs-fn {#'lifecycle-core/player-uuid (fn [_] "p-login")
+                     #'runtime-hooks/on-player-login! (fn [_] nil)
+                     #'runtime-hooks/build-sync-payload (fn [uuid] {:uuid uuid :ability-data {:x 1}})}
+      #(lifecycle-core/on-player-login! :player
+                                        {:mark-player-dirty! (fn [uuid] (swap! called conj [:dirty uuid]))
+                                         :send-sync-now! (fn [uuid payload] (swap! called conj [:sync uuid payload]))
+                                         :clear-player-dirty! (fn [uuid] (swap! called conj [:clear uuid]))}))
+    (is (= [[:dirty "p-login"]
+            [:sync "p-login" {:uuid "p-login" :ability-data {:x 1}}]
+            [:clear "p-login"]]
            @called))))
