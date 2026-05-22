@@ -141,6 +141,7 @@
 
 (def internal-tunable-definitions
   [{:skill-id :directed-shock :id :targeting.eye-height :path "targeting.eye-height" :section-suffix "targeting" :type :double :min 0.0 :default 1.62 :comment "Internal target eye height fallback."}
+   {:skill-id :directed-shock :id :charge.punch-anim-ticks :path "charge.punch-anim-ticks" :section-suffix "charge" :type :int :min 0 :default 6 :comment "Internal punch animation ticks before context termination."}
    {:skill-id :directed-blastwave :id :charge.punch-anim-ticks :path "charge.punch-anim-ticks" :section-suffix "charge" :type :int :min 0 :default 6 :comment "Internal punch animation ticks before termination."}
    {:skill-id :directed-blastwave :id :targeting.eye-height :path "targeting.eye-height" :section-suffix "targeting" :type :double :min 0.0 :default 1.62 :comment "Internal target eye height fallback."}
   {:skill-id :groundshock :id :targeting.horizontal-look-fallback :path "targeting.horizontal-look-fallback" :section-suffix "targeting" :type :boolean :default false :comment "Internal fallback to +Z when horizontal look vector is unavailable."}
