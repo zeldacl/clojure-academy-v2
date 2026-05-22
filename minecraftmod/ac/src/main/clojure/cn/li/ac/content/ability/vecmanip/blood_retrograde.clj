@@ -94,17 +94,23 @@
     (when (and should-release? raycast/*raycast*)
       (raycast/raycast-from-player raycast/*raycast* player-id (cfg-double :targeting.distance) true))))
 
+(defn- release-hit?
+  [player-id ctx-id stage]
+  (boolean (release-hit player-id ctx-id stage)))
+
+(defn blood-retrograde-cost-release-tick
+  [_]
+  0.0)
+
 (defn blood-retrograde-cost-release-cp
   [{:keys [player-id ctx-id]}]
-  (if (or (release-hit player-id ctx-id :tick)
-          (release-hit player-id ctx-id :up))
+  (if (release-hit? player-id ctx-id :up)
     (cp-cost (skill-exp player-id))
     0.0))
 
 (defn blood-retrograde-cost-release-overload
   [{:keys [player-id ctx-id]}]
-  (if (or (release-hit player-id ctx-id :tick)
-          (release-hit player-id ctx-id :up))
+  (if (release-hit? player-id ctx-id :up)
     (overload-cost (skill-exp player-id))
     0.0))
 
@@ -256,27 +262,28 @@
   (ctx/update-context! ctx-id dissoc :skill-state)
   (log/debug "BloodRetrograde aborted"))
 
-(defskill! blood-retrograde
-  :id :blood-retrograde
-  :category-id :vecmanip
-  :name-key "ability.skill.vecmanip.blood_retrograde"
-  :description-key "ability.skill.vecmanip.blood_retrograde.desc"
-  :icon "textures/abilities/vecmanip/skills/blood_retro.png"
-  :ui-position [204 83]
-  :level 4
-  :controllable? true
-  :ctrl-id :blood-retrograde
-  :cp-consume-speed 0.0
-  :overload-consume-speed 0.0
-  :cooldown-ticks 90
-  :pattern :release-cast
-  :cooldown {:mode :manual}
-  :cost {:tick {:cp blood-retrograde-cost-release-cp
-                :overload blood-retrograde-cost-release-overload}
-         :up {:cp blood-retrograde-cost-release-cp
-              :overload blood-retrograde-cost-release-overload}}
-  :actions {:down! blood-retrograde-on-key-down
-            :tick! blood-retrograde-on-key-tick
-            :up! blood-retrograde-on-key-up
-            :abort! blood-retrograde-on-key-abort}
-  :prerequisites [{:skill-id :directed-blastwave :min-exp 0.0}])
+(def blood_retrograde
+  {:ac/content-type :skill
+   :id :blood-retrograde
+   :category-id :vecmanip
+   :name-key "ability.skill.vecmanip.blood_retrograde"
+   :description-key "ability.skill.vecmanip.blood_retrograde.desc"
+   :icon "textures/abilities/vecmanip/skills/blood_retro.png"
+   :ui-position [204 83]
+   :level 4
+   :controllable? true
+   :ctrl-id :blood-retrograde
+   :cp-consume-speed 0.0
+   :overload-consume-speed 0.0
+   :cooldown-ticks 90
+   :pattern :release-cast
+   :cooldown {:mode :manual}
+   :cost {:tick {:cp blood-retrograde-cost-release-tick
+                 :overload blood-retrograde-cost-release-tick}
+          :up {:cp blood-retrograde-cost-release-cp
+               :overload blood-retrograde-cost-release-overload}}
+   :actions {:down! blood-retrograde-on-key-down
+             :tick! blood-retrograde-on-key-tick
+             :up! blood-retrograde-on-key-up
+             :abort! blood-retrograde-on-key-abort}
+   :prerequisites [{:skill-id :directed-blastwave :min-exp 0.0}]})
