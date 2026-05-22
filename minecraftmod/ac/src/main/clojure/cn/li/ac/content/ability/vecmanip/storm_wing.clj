@@ -134,6 +134,30 @@
         (+ (double current) accel)
         (- (double current) accel)))))
 
+(defn- validate-move-direction
+  "Validates and normalizes move direction payload.
+   Returns normalized unit vector or nil if invalid/zero."
+  [payload]
+  (cond
+    (nil? payload) nil  ;; nil = hover mode, valid
+    (not (map? payload))
+    (do (log/warn "StormWing: move-dir payload is not a map:" (type payload)) nil)
+    :else
+    (let [x (double (or (:x payload) 0.0))
+          y (double (or (:y payload) 0.0))
+          z (double (or (:z payload) 0.0))
+          len-sq (+ (* x x) (* y y) (* z z))
+          len (Math/sqrt len-sq)]
+      (cond
+        (Double/isNaN len)
+        (do (log/warn "StormWing: move-dir has NaN") nil)
+        (Double/isInfinite len)
+        (do (log/warn "StormWing: move-dir has Infinity") nil)
+        (> len 1.0e-6)  ;; Non-zero vector
+        {:x (/ x len) :y (/ y len) :z (/ z len)}
+        :else
+        nil))))  ;; Zero vector = hover mode
+
 ;; ============================================================================
 ;; FX helpers
 ;; ============================================================================
@@ -154,7 +178,8 @@
                             :vx 0.0 :vy 0.0 :vz 0.0})
       (fx/send-start! ctx-id :storm-wing/fx-start {:charge-ticks (long charge-needed)}))
     (catch Exception e
-      (log/warn "StormWing key-down failed:" (ex-message e)))))
+      (log/error "StormWing key-down failed:" e)
+      (ctx/update-context! ctx-id dissoc :skill-state))))
 
 (defn storm-wing-on-key-tick
   [{:keys [player-id ctx-id cost-ok?]}]
@@ -187,7 +212,7 @@
               ;; Consume resources
               (if cost-ok?
                 (let [pos (get-player-pos player-id)]
-                  (when pos
+                  (if pos
                     (let [world-id (:world-id pos)
                           px (double (:x pos))
                           py (double (:y pos))
@@ -247,23 +272,34 @@
                                              assoc :vx new-vx :vy new-vy :vz new-vz)
 
                         ;; Grant exp
-                        (add-exp! player-id)
+                        (if-let [exp-result (try (add-exp! player-id) (catch Exception _ nil))]
+                          nil
+                          (log/warn "StormWing: Failed to grant exp to player" player-id))
 
                         ;; FX update
                         (fx/send-update! ctx-id :storm-wing/fx-update
                                         {:phase :flying
                                          :charge-ticks 0
-                                         :charge-ratio 1.0})))))
+                                         :charge-ratio 1.0})))
+                    ;; pos为nil，无法继续飞行，立即终止
+                    (do
+                      (log/warn "StormWing: Player position unavailable, terminating")
+                      (apply-cooldown! player-id exp)
+                      (fx/send-end! ctx-id :storm-wing/fx-end)
+                      (ctx/update-context! ctx-id assoc-in [:skill-state :phase] :terminated))))
 
                 ;; Insufficient resources: terminate
                 (do
                   (apply-cooldown! player-id exp)
                   (fx/send-end! ctx-id :storm-wing/fx-end)
-                  (ctx/update-context! ctx-id assoc-in [:skill-state :phase] :terminated)))
-
-              nil)))))
+                  (ctx/update-context! ctx-id assoc-in [:skill-state :phase] :terminated))))))))
     (catch Exception e
-      (log/warn "StormWing key-tick failed:" (ex-message e)))))
+      (log/error "StormWing key-tick failed:" e)
+      ;; 主动终止技能状态，防止无限飞行
+      (when-let [exp (try (skill-exp player-id) (catch Exception _ 0.0))]
+        (apply-cooldown! player-id exp))
+      (fx/send-end! ctx-id :storm-wing/fx-end)
+      (ctx/update-context! ctx-id assoc-in [:skill-state :phase] :terminated))))
 
 (defn storm-wing-on-key-up
   [{:keys [player-id ctx-id]}]
@@ -273,7 +309,8 @@
       (fx/send-end! ctx-id :storm-wing/fx-end)
       (ctx/update-context! ctx-id dissoc :skill-state))
     (catch Exception e
-      (log/warn "StormWing key-up failed:" (ex-message e)))))
+      (log/error "StormWing key-up failed:" e)
+      (ctx/update-context! ctx-id dissoc :skill-state))))
 
 (defn storm-wing-on-key-abort
   [{:keys [player-id ctx-id]}]
@@ -283,13 +320,15 @@
       (fx/send-end! ctx-id :storm-wing/fx-end)
       (ctx/update-context! ctx-id dissoc :skill-state))
     (catch Exception e
-      (log/warn "StormWing key-abort failed:" (ex-message e)))))
+      (log/error "StormWing key-abort failed:" e)
+      (ctx/update-context! ctx-id dissoc :skill-state))))
 
 (defn storm-wing-on-move-dir
   "Called when client sends updated movement direction via context channel.
   payload: {:x dx :y dy :z dz} world-space unit vector, or nil for no movement."
   [{:keys [ctx-id payload]}]
-  (ctx/update-context! ctx-id assoc-in [:skill-state :move-dir] payload))
+  (let [validated-dir (validate-move-direction payload)]
+    (ctx/update-context! ctx-id assoc-in [:skill-state :move-dir] validated-dir)))
 
 (defskill! storm-wing
   :id :storm-wing
@@ -301,8 +340,8 @@
   :level 3
   :controllable? true
   :ctrl-id :storm-wing
-  :cp-consume-speed 0.0
-  :overload-consume-speed 0.0
+  :cp-consume-speed 1.0
+  :overload-consume-speed 1.0
   :cooldown-ticks 0
   :pattern :release-cast
   :cooldown {:mode :manual}
