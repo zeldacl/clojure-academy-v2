@@ -38,19 +38,17 @@
     (* (Math/sin prog) (cfg-double :movement.max-velocity))))
 
 (defn- get-player-position [player-id]
-  (or (when-let [tp teleportation/*teleportation*]
-        (teleportation/get-player-position tp player-id))
-        (get (skill-effects/get-player-state player-id)
-           :position {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0})))
+  (when-let [tp teleportation/*teleportation*]
+    (teleportation/get-player-position tp player-id)))
 
 (defn- check-ground-raycast [player-id]
   (when raycast/*raycast*
-    (let [pos (get-player-position player-id)
-          world-id (or (:world-id pos) "minecraft:overworld")]
-      (some? (raycast/raycast-blocks raycast/*raycast*
-                                     world-id
-                                     (double (:x pos)) (double (:y pos)) (double (:z pos))
-                                     0 -1 0 (cfg-double :targeting.ground-check-distance))))))
+    (when-let [pos (get-player-position player-id)]
+      (let [world-id (or (:world-id pos) "minecraft:overworld")]
+        (some? (raycast/raycast-blocks raycast/*raycast*
+                                       world-id
+                                       (double (:x pos)) (double (:y pos)) (double (:z pos))
+                                       0 -1 0 (cfg-double :targeting.ground-check-distance)))))))
 
 (defn- compute-init-vel [look-dir charge-ticks]
   (let [look-x   (double (:x look-dir))
@@ -59,7 +57,8 @@
         horiz-len (Math/sqrt (+ (* look-x look-x) (* look-z look-z)))
         safe-h    (max 1.0e-8 horiz-len)
         cur-pitch (Math/atan2 (- look-y) safe-h)
-        new-pitch (+ cur-pitch (cfg-double :movement.pitch-offset-radians))
+        new-pitch (max (- (/ Math/PI 2))
+                       (+ cur-pitch (cfg-double :movement.pitch-offset-radians)))
         cos-p     (Math/cos new-pitch)
         sin-p     (Math/sin new-pitch)
         hx        (/ look-x safe-h)
@@ -86,7 +85,7 @@
                      :overload (fn [{:keys [exp]}] (cfg-lerp :cost.up.overload exp))}}
   :actions
   {:tick!    (fn [{:keys [player-id ctx-id charge-ticks exp]}]
-         (let [can-perform? (or (>= (double (or exp 0.0)) (cfg-double :targeting.groundless-exp-threshold)) (check-ground-raycast player-id))
+         (let [can-perform? (boolean (or (>= (double (or exp 0.0)) (cfg-double :targeting.groundless-exp-threshold)) (check-ground-raycast player-id)))
                      look-dir     (when raycast/*raycast*
                                     (raycast/get-player-look-vector raycast/*raycast* player-id))
                      init-vel     (when look-dir (compute-init-vel look-dir (long (or charge-ticks 0))))]
@@ -95,28 +94,23 @@
                                        :look-dir     look-dir
                                        :init-vel     init-vel
                                        :performed?   false})))
-   :perform! (fn [{:keys [player-id ctx-id exp charge-ticks cost-ok?]}]
+   :perform! (fn [{:keys [player-id ctx-id exp]}]
                (when-let [ctx-data (ctx/get-context ctx-id)]
                  (let [ss           (:skill-state ctx-data)
                        can-perform? (boolean (:can-perform? ss))
-                       charge       (long (or charge-ticks (:charge-ticks ss) 0))]
-                   (if (and can-perform? cost-ok?)
-                     (let [look-dir (or (:look-dir ss)
-                                        (when raycast/*raycast*
-                                          (raycast/get-player-look-vector raycast/*raycast* player-id)))]
-                       (if look-dir
-                         (let [{:keys [x y z]} (compute-init-vel look-dir charge)]
-                           (when player-motion/*player-motion*
-                             (player-motion/set-velocity! player-motion/*player-motion* player-id x y z))
-                           (when teleportation/*teleportation*
-                             (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
-                           (skill-effects/set-main-cooldown! player-id :vec-accel
-                                                             (cfg-lerp-int :cooldown.ticks exp))
-                           (skill-effects/add-skill-exp! player-id :vec-accel (cfg-double :progression.exp-use))
-                           (ctx/update-context! ctx-id update :skill-state merge
-                                                {:performed? true :final-vel {:x x :y y :z z}})
-                           (log/debug "VecAccel launched" x y z))
-                         (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false)))
+                       init-vel     (:init-vel ss)]
+                   (if (and can-perform? init-vel)
+                     (let [{:keys [x y z]} init-vel]
+                       (when player-motion/*player-motion*
+                         (player-motion/set-velocity! player-motion/*player-motion* player-id x y z))
+                       (when teleportation/*teleportation*
+                         (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
+                       (skill-effects/set-main-cooldown! player-id :vec-accel
+                                                         (cfg-lerp-int :cooldown.ticks exp))
+                       (skill-effects/add-skill-exp! player-id :vec-accel (cfg-double :progression.exp-use))
+                       (ctx/update-context! ctx-id update :skill-state merge
+                                            {:performed? true :final-vel {:x x :y y :z z}})
+                       (log/debug "VecAccel launched" x y z))
                      (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false)))))
    :abort!   (fn [{:keys [ctx-id]}]
                (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))}
@@ -131,5 +125,5 @@
        :perform {:topic :vec-accel/fx-perform  :payload (fn [_] {})}
        :end     {:topic :vec-accel/fx-end
                  :payload (fn [{:keys [ctx-id]}]
-                            {:performed? (boolean (:performed? (ctx/get-context ctx-id)))})}}
+                            {:performed? (boolean (get-in (ctx/get-context ctx-id) [:skill-state :performed?]))})}}
   :prerequisites [{:skill-id :directed-shock :min-exp 0.0}])
