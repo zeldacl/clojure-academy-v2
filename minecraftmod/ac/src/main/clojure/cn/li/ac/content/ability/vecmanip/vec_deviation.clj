@@ -15,6 +15,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
@@ -166,6 +167,9 @@
                                                                     world-id x y z (cfg-double :targeting.radius))
                     visited (get-in ctx-data [:skill-state :vec-deviation-visited] #{})
                     marked (get-in ctx-data [:skill-state :vec-deviation-marked] #{})
+                    dual-active? (arbitration/dual-active? player-id)
+                    arbitration-allowed? (or (not dual-active?)
+                                             (arbitration/skill-allowed-in-dual-active? :vec-deviation))
                     fresh-entities (remove (fn [entity]
                                              (contains? visited (:uuid entity)))
                                            entities)]
@@ -185,29 +189,31 @@
                             (toggle/deactivate-toggle! ctx-id :vec-deviation)
                             (log/info "VecDeviation: Deactivated (insufficient deflect CP)"))
                           (do
-                            (when entity-motion/*entity-motion*
-                              (entity-motion/set-velocity! entity-motion/*entity-motion*
-                                                           world-id entity-uuid 0.0 0.0 0.0))
-                            (when (or (contains? (large-fireball-ids) eid)
-                                      (contains? (small-fireball-ids) eid))
+                            (when (and arbitration-allowed?
+                                       (arbitration/claim-projectile! player-id :vec-deviation entity-uuid))
                               (when entity-motion/*entity-motion*
-                                (entity-motion/discard-entity! entity-motion/*entity-motion* world-id entity-uuid)))
-                            (when (and (contains? (large-fireball-ids) eid)
-                                       world-effects/*world-effects*)
-                              (world-effects/create-explosion! world-effects/*world-effects*
-                                                               world-id
-                                                               (double (or (:x entity) 0.0))
-                                                               (double (or (:y entity) 0.0))
-                                                               (double (or (:z entity) 0.0))
-                                                               (cfg-double :combat.fireball-explosion-radius)
-                                                               false))
-                            (add-exp! player-id (* (cfg-double :progression.exp-deflect-scale) difficulty))
-                            (let [generic-mark? (and (not (contains? (large-fireball-ids) eid))
-                                                     (not (contains? (small-fireball-ids) eid)))]
-                              (when generic-mark?
-                                (ctx/update-context! ctx-id update-in [:skill-state :vec-deviation-marked] (fnil conj #{}) entity-uuid))
-                              (send-fx-stop-entity! ctx-id entity generic-mark?))
-                            (log/debug "VecDeviation: Deflected entity" entity-uuid "difficulty" difficulty))))))
+                                (entity-motion/set-velocity! entity-motion/*entity-motion*
+                                                             world-id entity-uuid 0.0 0.0 0.0))
+                              (when (or (contains? (large-fireball-ids) eid)
+                                        (contains? (small-fireball-ids) eid))
+                                (when entity-motion/*entity-motion*
+                                  (entity-motion/discard-entity! entity-motion/*entity-motion* world-id entity-uuid)))
+                              (when (and (contains? (large-fireball-ids) eid)
+                                         world-effects/*world-effects*)
+                                (world-effects/create-explosion! world-effects/*world-effects*
+                                                                 world-id
+                                                                 (double (or (:x entity) 0.0))
+                                                                 (double (or (:y entity) 0.0))
+                                                                 (double (or (:z entity) 0.0))
+                                                                 (cfg-double :combat.fireball-explosion-radius)
+                                                                 false))
+                              (add-exp! player-id (* (cfg-double :progression.exp-deflect-scale) difficulty))
+                              (let [generic-mark? (and (not (contains? (large-fireball-ids) eid))
+                                                       (not (contains? (small-fireball-ids) eid)))]
+                                (when generic-mark?
+                                  (ctx/update-context! ctx-id update-in [:skill-state :vec-deviation-marked] (fnil conj #{}) entity-uuid))
+                                (send-fx-stop-entity! ctx-id entity generic-mark?))
+                              (log/debug "VecDeviation: Deflected entity" entity-uuid "difficulty" difficulty)))))))
                 (let [visited-ids (into #{} (keep :uuid entities))]
                   (ctx/update-context! ctx-id update-in [:skill-state :vec-deviation-visited] (fnil into #{}) visited-ids)))))))))
     (catch Exception e

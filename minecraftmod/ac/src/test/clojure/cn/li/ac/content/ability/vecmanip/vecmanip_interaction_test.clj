@@ -1,0 +1,42 @@
+(ns cn.li.ac.content.ability.vecmanip.vecmanip-interaction-test
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]))
+
+(defn- reset-fixture [f]
+  (reset! @#'cn.li.ac.content.ability.vecmanip.arbitration/projectile-locks
+          {:tick -1 :owners {}})
+  (f)
+  (reset! @#'cn.li.ac.content.ability.vecmanip.arbitration/projectile-locks
+          {:tick -1 :owners {}}))
+
+(use-fixtures :each reset-fixture)
+
+(deftest arbitration-priority-defaults-to-reflection-test
+  (with-redefs [skill-config/tunable-string-list
+                (fn [_skill-id _field-id] [])]
+    (is (= :vec-reflection (arbitration/preferred-skill-id)))
+    (is (true? (arbitration/skill-allowed-in-dual-active? :vec-reflection)))
+    (is (false? (arbitration/skill-allowed-in-dual-active? :vec-deviation)))))
+
+(deftest arbitration-priority-config-switches-to-deviation-test
+  (with-redefs [skill-config/tunable-string-list
+                (fn [_skill-id _field-id] ["deviation-first"])]
+    (is (= :vec-deviation (arbitration/preferred-skill-id)))
+    (is (true? (arbitration/skill-allowed-in-dual-active? :vec-deviation)))
+    (is (false? (arbitration/skill-allowed-in-dual-active? :vec-reflection)))))
+
+(deftest same-projectile-same-tick-is-claimed-by-one-skill-only-test
+  (with-redefs [cn.li.ac.content.ability.vecmanip.arbitration/current-tick (fn [] 42)]
+    (is (true? (arbitration/claim-projectile! "p1" :vec-reflection "arrow-1")))
+    (is (false? (arbitration/claim-projectile! "p1" :vec-deviation "arrow-1")))
+    ;; same skill can re-enter on same tick
+    (is (true? (arbitration/claim-projectile! "p1" :vec-reflection "arrow-1")))))
+
+(deftest same-projectile-can-be-reclaimed-on-next-tick-test
+  (let [tick* (atom 100)]
+    (with-redefs [cn.li.ac.content.ability.vecmanip.arbitration/current-tick (fn [] @tick*)]
+      (is (true? (arbitration/claim-projectile! "p1" :vec-reflection "arrow-1")))
+      (is (false? (arbitration/claim-projectile! "p1" :vec-deviation "arrow-1")))
+      (swap! tick* inc)
+      (is (true? (arbitration/claim-projectile! "p1" :vec-deviation "arrow-1"))))))

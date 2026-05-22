@@ -32,6 +32,7 @@
          :get-active-damage-handlers (fn [] [])
          :process-damage-interception (fn [_ _ damage _] damage)
          :should-cancel-attack-interception? (fn [_ _ _ _] false)
+         :run-attack-precheck-side-effects! (fn [_ _ _ _] false)
          :resolve-item-use-action (fn [_] nil)
          :on-runtime-item-action! noop
          :build-item-use-plan (fn [_ _ _ _] nil)
@@ -207,6 +208,10 @@
 (defn should-cancel-attack-interception?
   [player-id attacker-id damage damage-source]
   ((:should-cancel-attack-interception? @runtime-hooks) player-id attacker-id damage damage-source))
+
+(defn run-attack-precheck-side-effects!
+  [player-id attacker-id damage damage-source]
+  ((:run-attack-precheck-side-effects! @runtime-hooks) player-id attacker-id damage damage-source))
 
 (defn resolve-item-use-action
   [item-id]

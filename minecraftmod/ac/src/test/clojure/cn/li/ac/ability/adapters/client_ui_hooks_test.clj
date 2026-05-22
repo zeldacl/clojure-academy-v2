@@ -1,12 +1,22 @@
 (ns cn.li.ac.ability.adapters.client-ui-hooks-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
             [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.mcmod.hooks.catalog :as catalog]
             [cn.li.mcmod.network.client :as net-client]))
+
+(defn- reset-ui-state! [f]
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles [])
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0)
+  (f)
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles [])
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0))
+
+(use-fixtures :each reset-ui-state!)
 
 (deftest client-slot-key-hooks-create-context-once-and-send-input-messages-test
   (let [sent (atom [])
@@ -62,3 +72,24 @@
     (let [plan (client-ui-hooks/build-client-overlay-plan
                 "p1" 320 180 {:activated-override nil :now-ms 1000})]
       (is (seq (:elements plan))))))
+
+(deftest build-client-overlay-plan-renders-reflection-crosshair-and-vm-wave-test
+  (with-redefs [ps/get-player-state (fn [_]
+                                      {:resource-data {:activated true
+                                                       :cur-cp 80.0
+                                                       :max-cp 100.0
+                                                       :cur-overload 0.0
+                                                       :max-overload 100.0}
+                                       :cooldown-data {}
+                                       :preset-data {}})
+                ctx/get-all-contexts (fn []
+                                       {"ctx-reflection" {:player-uuid "p1"
+                                                           :skill-state {:toggle {:vec-reflection {:active true}
+                                                                                  :vec-deviation {:active true}}}}})
+                client-keybinds/get-activate-hint (fn [_] nil)
+                client-keybinds/get-preset-switch-state (fn [] nil)]
+    (let [plan (client-ui-hooks/build-client-overlay-plan
+                "p1" 320 180 {:now-ms 1000})
+          kinds (mapv :kind (:elements plan))]
+      (is (= 1 (count (filter #{:vec-reflection-crosshair} kinds))))
+      (is (some #{:blit-texture} kinds)))))

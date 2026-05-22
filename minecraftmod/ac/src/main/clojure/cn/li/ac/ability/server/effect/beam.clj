@@ -117,6 +117,7 @@
     :step             0.9    grid sampling step for block-break pass
     :max-distance     50.0   hard beam distance cap
     :visual-distance  45.0   FX beam end cap (slightly shorter than damage range)
+    :trace-pos        nil    optional trace origin; defaults to eye position
     :damage           0.0    base entity damage
     :damage-type      :magic
     :block-energy     0.0    energy budget for block breaking (0 = disabled)
@@ -125,10 +126,11 @@
 
   Result: evt with :beam-result {:performed? :reflection-hit? :normal-hit-count :visual-distance}"
   [evt {:keys [radius query-radius step max-distance visual-distance
-               damage damage-type block-energy break-blocks? fx-topic]}]
+         damage damage-type block-energy break-blocks? fx-topic trace-pos]}]
   (let [player-id     (:player-id evt)
         world-id      (:world-id evt)
         eye           (or (:eye-pos evt) (geom/eye-pos player-id))
+      trace         (or trace-pos eye)
         look          (:look-dir evt)
         reflect-can?  (:reflect-can-fn evt)
         reflect-shot! (:reflect-shot-fn evt)]
@@ -144,18 +146,20 @@
             vd       (double (or visual-distance 45.0))
             dmg      (double (or damage 0.0))
             benergy  (double (or block-energy 0.0))
-            candidates (beam-candidates player-id world-id eye dir md qr r)
+            candidates (beam-candidates player-id world-id trace dir md qr r)
             step-result
             (fn [{:keys [stop? reflection-distance reflection-hit? normal-hit-count hit-uuids] :as acc}
                  {:keys [uuid x y z radial-dist]}]
               (if stop?
                 (reduced acc)
                 (if (and reflect-can? (reflect-can? uuid))
-                  (let [dist     (geom/vdist eye {:x x :y y :z z})
-                        hit?     (boolean (and reflect-shot! (reflect-shot! uuid)))]
+                  (let [dist (geom/vdist trace {:x x :y y :z z})]
+                    ;; Always flag reflection-hit? = true when a reflector is found
+                    ;; (mirrors original: hitEntity = true unconditionally in the callback).
+                    (when reflect-shot! (reflect-shot! uuid))
                     (reduced {:stop?               true
                               :reflection-distance dist
-                              :reflection-hit?     hit?
+                              :reflection-hit?     true
                               :normal-hit-count    normal-hit-count
                               :hit-uuids           hit-uuids}))
                   (do
@@ -179,7 +183,7 @@
             visual-dist  (min vd (double (or (:reflection-distance result) vd)))
             end-pos      (geom/v+ eye (geom/v* dir visual-dist))]
         (when (and break-blocks? (pos? benergy))
-          (break-blocks! player-id world-id eye dir block-dist benergy r st))
+          (break-blocks! player-id world-id trace dir block-dist benergy r st))
         (when fx-topic
           (ctx/ctx-send-to-client! (:ctx-id evt) fx-topic
                                    {:mode         :perform

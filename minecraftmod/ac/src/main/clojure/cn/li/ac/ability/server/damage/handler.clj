@@ -73,6 +73,10 @@
   ;; keyword → (fn [player-id attacker-id damage] → boolean)
   (atom {}))
 
+(defonce ^:private attack-precheck-side-effects
+  ;; keyword → (fn [player-id attacker-id damage damage-source] → any)
+  (atom {}))
+
 (defn register-attack-cancel-check!
   "Register a predicate that decides whether an attack should be cancelled.
   Content skills call this at load time."
@@ -91,3 +95,29 @@
                 (log/warn "Attack cancel check failed:" (ex-message e))
                 false)))
           @attack-cancel-checks)))
+
+(defn register-attack-precheck-side-effect!
+  "Register a side-effect callback executed during attack precheck.
+  This is used when a platform event cancels attack before damage-stage handlers run.
+
+  side-effect-fn signature:
+  (fn [player-id attacker-id damage damage-source] -> any)
+  "
+  [effect-id side-effect-fn]
+  (swap! attack-precheck-side-effects assoc effect-id side-effect-fn)
+  nil)
+
+(defn run-attack-precheck-side-effects!
+  "Run all registered precheck side-effects.
+  Returns true if at least one callback completed without exception."
+  [player-id attacker-id damage damage-source]
+  (boolean
+    (seq
+      (keep (fn [[effect-id effect-fn]]
+              (try
+                (effect-fn player-id attacker-id damage damage-source)
+                effect-id
+                (catch Exception e
+                  (log/warn "Attack precheck side-effect failed:" effect-id (ex-message e))
+                  nil)))
+            @attack-precheck-side-effects))))

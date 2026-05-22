@@ -8,17 +8,16 @@
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
-            [cn.li.ac.ability.server.network :as ability-network]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.server.service.resource :as svc-res]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.state.store :as ability-store]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.ac.util.init-guard :refer [with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce-guard lifecycle-subscriptions-registered?)
+(defonce ^:private lifecycle-subscriptions-registered? (atom false))
 
 (defn install-store!
   []
@@ -168,6 +167,10 @@
    :should-cancel-attack-interception?
    (fn [player-id attacker-id damage damage-source]
      (damage-handler/should-cancel-attack? player-id attacker-id damage damage-source))
+
+   :run-attack-precheck-side-effects!
+   (fn [player-id attacker-id damage damage-source]
+     (damage-handler/run-attack-precheck-side-effects! player-id attacker-id damage damage-source))
 
    :resolve-item-use-action
    (fn [item-id]

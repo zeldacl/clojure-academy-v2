@@ -19,12 +19,17 @@
     (resolve-level-fn server world-id)))
 
 (defn create-world-effects
-  [server-fn {:keys [resolve-level-fn spawn-lightning-fn create-explosion-fn get-entities-in-aabb-fn resolve-entity-id-fn block-id-fn]
+  [server-fn {:keys [resolve-level-fn spawn-lightning-fn create-explosion-fn spawn-projectile-fn get-entities-in-aabb-fn resolve-entity-id-fn block-id-fn get-entity-by-uuid-fn]
               :or {resolve-level-fn query-core/resolve-level-strict
+                   get-entity-by-uuid-fn query-core/get-entity-by-uuid
                    resolve-entity-id-fn (fn [^Entity entity] (str (.getDescriptionId (.getType entity))))
                    block-id-fn (fn [^Block block _block-state] (str (.getDescriptionId block)))}}]
   (let [spawn-lightning! (or spawn-lightning-fn (fn [_level _x _y _z] false))
         create-explosion! (or create-explosion-fn (fn [_level _x _y _z _radius _fire?] false))
+        spawn-projectile! (or spawn-projectile-fn
+                              (fn [level projectile-spec]
+                                (core/spawn-projectile-in-level!
+                                  level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn)))
         get-entities-in-aabb (or get-entities-in-aabb-fn (fn [_level _aabb] []))]
     (reify pwe/IWorldEffects
       (spawn-lightning! [_ world-id x y z]
@@ -43,6 +48,14 @@
           (catch Exception e
             (log/warn "Failed to create explosion:" (ex-message e))
             false)))
+      (spawn-projectile! [_ world-id projectile-spec]
+        (try
+          (when-let [^MinecraftServer server (server-fn)]
+            (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+              (spawn-projectile! level projectile-spec)))
+          (catch Exception e
+            (log/warn "Failed to spawn projectile:" (ex-message e))
+            {:success? false})))
       (find-entities-in-radius [_ world-id x y z radius]
         (try
           (when-let [^MinecraftServer server (server-fn)]

@@ -18,6 +18,8 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.entity-motion :as entity-motion]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -47,10 +49,11 @@
 (defn- item-charge-ticks [] (cfg-int :charge.item-charge-ticks))
 (defn- reflection-distance [] (cfg-double :reflection.distance))
 (defn- reflection-damage [] (cfg-double :reflection.damage))
-(defn- railgun-exp-gain [reflection-hit?]
-  (cfg-double (if reflection-hit?
-                :progression.exp-reflection-hit
-                :progression.exp-hit)))
+(defn- railgun-exp-gain [hit? reflection-hit?]
+  ;; Original: hitEntity (normal OR reflection hit) → 0.01, miss → 0.005
+  (if (or hit? reflection-hit?)
+    (cfg-double :progression.exp-reflection-hit)
+    (cfg-double :progression.exp-hit)))
 (defn- railgun-cooldown-ticks [exp]
   (cfg-lerp-int :cooldown.manual-ticks exp))
 
@@ -60,6 +63,9 @@
 
 (defn- skill-exp [player-id]
   (skill-effects/skill-exp player-id :railgun))
+
+(defn- body-pos [player-id]
+  (geom/body-pos player-id))
 
 (defn- accepted-item-in-hand? [player]
   (when player
@@ -76,9 +82,17 @@
 
 (defn register-coin-throw!
   "Register a railgun coin throw window.
-  Called from the platform item-action hook when a coin is used in ability mode."
+  Called from the platform item-action hook when a coin is used in ability mode.
+  If the player is currently in item-charge mode, that charge is aborted first
+  (mirrors original informThrowCoin → onKeyAbort() behavior)."
   [player-id payload]
   (let [now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
+    ;; Abort any in-progress item charge so the coin QTE takes priority.
+    (doseq [[ctx-id ctx-data] (ctx/get-all-contexts)]
+      (when (and (= (:player-uuid ctx-data) player-id)
+                 (= :item-charge (get-in ctx-data [:skill-state :mode])))
+        (ctx/update-context! ctx-id assoc :skill-state
+                             {:fired false :mode :item-charge-cancelled :charge-ticks 0})))
     (skill-effects/assoc-player-path!
       player-id
       [:runtime :railgun :coin-window]
@@ -90,16 +104,33 @@
 (defn- clear-coin-window! [player-id]
   (skill-effects/update-player-path! player-id [:runtime :railgun] dissoc :coin-window))
 
+(defn- discard-nearby-coin-entity!
+  "Kills the EntityCoinThrowing entity that was spawned near the player for the QTE."
+  [player-id]
+  (when (and world-effects/*world-effects* entity-motion/*entity-motion*)
+    (let [pos (geom/eye-pos player-id)
+          world-id (geom/world-id-of player-id)]
+      (when (and pos world-id)
+        (doseq [ent (world-effects/find-entities-in-radius
+                      world-effects/*world-effects*
+                      world-id (:x pos) (:y pos) (:z pos) 4.0)]
+          (when (= "entity_coin_throwing" (:type ent))
+            (entity-motion/discard-entity! entity-motion/*entity-motion*
+                                           world-id (:uuid ent))))))))
+
 (defn- coin-progress [coin-window now-ms]
   (let [elapsed (- (long now-ms) (long (:start-ms coin-window)))
         window  (max 1 (long (:window-ms coin-window)))]
     (double (/ (max 0 elapsed) window))))
 
 (defn- qte-status [p]
-  {:has-window? true
-   :progress    p
-  :active?     (>= p (coin-active-threshold))
-  :perform?    (>= p (coin-perform-threshold))})
+  ;; Progress > 1.0 means the window has expired; treat as no window.
+  (if (> (double p) 1.0)
+    {:has-window? false :active? false :perform? false :progress (double p)}
+    {:has-window? true
+     :progress    (double p)
+     :active?     (>= (double p) (coin-active-threshold))
+     :perform?    (>= (double p) (coin-perform-threshold))}))
 
 (defn- consume-coin-qte-window! [player-id now-ms]
   (let [win (skill-effects/player-path player-id [:runtime :railgun :coin-window])]
@@ -121,7 +152,7 @@
 
 (defn- toggle-active? [player-id skill-id]
   (some (fn [[_ ctx-data]]
-          (and (= (:player-id ctx-data) player-id)
+          (and (= (:player-uuid ctx-data) player-id)
                (toggle/is-toggle-active? ctx-data skill-id)))
         (ctx/get-all-contexts)))
 
@@ -133,6 +164,13 @@
                            (cfg-lerp :reflection.cp-consumption-per-damage exp))
             current-cp (get-in state [:resource-data :cur-cp] 0.0)]
         (>= (double current-cp) (double consumption))))))
+
+(defn- vec-reflection-consume-cp! [target-player-id incoming-damage]
+  (when-let [state (skill-effects/get-player-state target-player-id)]
+    (let [exp        (get-in state [:ability-data :skills :vec-reflection :exp] 0.0)
+          consumption (* (double incoming-damage)
+                         (cfg-lerp :reflection.cp-consumption-per-damage exp))]
+      (skill-effects/perform-resource! target-player-id 0.0 (double consumption) false))))
 
 (defn- perform-reflection-shot!
   "Fire a secondary shot from the reflector player's perspective.
@@ -174,6 +212,7 @@
   [player-id ctx-id exp]
   (let [world-id  (geom/world-id-of player-id)
         eye       (geom/eye-pos player-id)
+        trace-pos (body-pos player-id)
         look-vec  (when raycast/*raycast*
                     (raycast/get-player-look-vector raycast/*raycast* player-id))]
     (if-not look-vec
@@ -184,9 +223,12 @@
                         :ctx-id          ctx-id
                         :world-id        world-id
                         :eye-pos         eye
+                        :trace-pos       trace-pos
                         :look-dir        look-vec
                         :reflect-can-fn  (fn [uuid] (vec-reflection-can-reflect? uuid damage))
-                        :reflect-shot-fn (fn [uuid] (perform-reflection-shot! ctx-id uuid))}
+                        :reflect-shot-fn (fn [uuid]
+                                           (vec-reflection-consume-cp! uuid damage)
+                                           (perform-reflection-shot! ctx-id uuid))}
                        [:beam {:radius          (cfg-double :beam.radius)
                                :query-radius    (cfg-double :beam.query-radius)
                                :step            (cfg-double :beam.step)
@@ -251,21 +293,24 @@
         qte    (consume-coin-qte-window! player-id now-ms)]
     (cond
       (:perform? qte)
-      (if cost-ok?
-        (let [{:keys [performed? reflection-hit? normal-hit-count hit-uuids]} (perform-main-shot! player-id ctx-id exp)]
-          (when performed?
-            (skill-effects/add-skill-exp! player-id :railgun (railgun-exp-gain reflection-hit?))
-            (when (and (pos? (long (or normal-hit-count 0)))
-                       (creeper-hit? (geom/world-id-of player-id) hit-uuids))
-              (ach-dispatcher/trigger-custom-event! player-id "electromaster.attack_creeper"))
-            (skill-effects/set-main-cooldown! player-id :railgun
-                                              (railgun-cooldown-ticks exp))
-            (ctx/update-context! ctx-id assoc :skill-state
-                                 {:fired       true
-                                  :mode        :performed
-                                  :hit-count   normal-hit-count}))
-          (log/debug "Railgun coin-QTE perform" player-id))
-        (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :coin-qte-no-resource}))
+      (do
+        ;; Kill the coin entity unconditionally (mirrors coin.setDead() before performServer).
+        (discard-nearby-coin-entity! player-id)
+        (if cost-ok?
+          (let [{:keys [performed? reflection-hit? normal-hit-count hit-uuids]} (perform-main-shot! player-id ctx-id exp)]
+            (when performed?
+              (skill-effects/add-skill-exp! player-id :railgun (railgun-exp-gain (pos? (long (or normal-hit-count 0))) reflection-hit?))
+              (when (and (pos? (long (or normal-hit-count 0)))
+                         (creeper-hit? (geom/world-id-of player-id) hit-uuids))
+                (ach-dispatcher/trigger-custom-event! player-id "electromaster.attack_creeper"))
+              (skill-effects/set-main-cooldown! player-id :railgun
+                                                (railgun-cooldown-ticks exp))
+              (ctx/update-context! ctx-id assoc :skill-state
+                                   {:fired       true
+                                    :mode        :performed
+                                    :hit-count   normal-hit-count}))
+            (log/debug "Railgun coin-QTE perform" player-id))
+          (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :coin-qte-no-resource})))
 
       (:has-window? qte)
       (do
@@ -299,7 +344,7 @@
                         {:keys [performed? reflection-hit? normal-hit-count hit-uuids]}
                         (perform-main-shot! player-id ctx-id exp)]
                     (when performed?
-                      (skill-effects/add-skill-exp! player-id :railgun (railgun-exp-gain reflection-hit?))
+                      (skill-effects/add-skill-exp! player-id :railgun (railgun-exp-gain (pos? (long (or normal-hit-count 0))) reflection-hit?))
                       (when (and (pos? (long (or normal-hit-count 0)))
                                  (creeper-hit? (geom/world-id-of player-id) hit-uuids))
                         (ach-dispatcher/trigger-custom-event! player-id "electromaster.attack_creeper"))

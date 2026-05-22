@@ -4,7 +4,7 @@
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.sounds SoundSource SoundEvent]
-           [net.minecraft.world.entity Entity LivingEntity]
+           [net.minecraft.world.entity Entity EntityType LivingEntity]
            [net.minecraft.world.entity.item ItemEntity]
            [net.minecraft.world.entity.monster Monster]
            [net.minecraft.world.entity.projectile Projectile]
@@ -87,3 +87,36 @@
                     (+ x radius) (+ y radius) (+ z radius))
         entities (get-entities-fn level aabb)]
     (mapv #(entity->map % resolve-entity-id-fn) entities)))
+
+(defn spawn-projectile-in-level!
+  [^Level level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn]
+  (let [{:keys [entity-id x y z vx vy vz owner-uuid]} projectile-spec]
+    (try
+      (let [^EntityType entity-type (.get BuiltInRegistries/ENTITY_TYPE (ResourceLocation. (str entity-id)))]
+        (if-not entity-type
+          {:success? false}
+          (if-let [^Entity entity (.create entity-type level)]
+            (do
+              (.moveTo entity
+                       (double (or x 0.0))
+                       (double (or y 0.0))
+                       (double (or z 0.0))
+                       (.getYRot entity)
+                       (.getXRot entity))
+              (when (instance? Projectile entity)
+                (when-let [owner (when (and owner-uuid get-entity-by-uuid-fn)
+                                   (get-entity-by-uuid-fn level owner-uuid))]
+                  (.setOwner ^Projectile entity owner)))
+              (.setDeltaMovement entity
+                                 (double (or vx 0.0))
+                                 (double (or vy 0.0))
+                                 (double (or vz 0.0)))
+              (if (.addFreshEntity level entity)
+                {:success? true
+                 :uuid (str (.getUUID entity))
+                 :entity-id (or (when resolve-entity-id-fn (resolve-entity-id-fn entity))
+                                (str entity-id))}
+                {:success? false}))
+            {:success? false})))
+      (catch Exception _
+        {:success? false}))))

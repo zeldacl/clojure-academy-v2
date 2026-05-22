@@ -21,6 +21,16 @@
     - fire?: boolean, whether to set blocks on fire
     Returns: true if successful, false otherwise")
 
+  (spawn-projectile! [this world-id projectile-spec]
+    "Spawn a projectile entity in world.
+    - world-id: string (dimension identifier)
+    - projectile-spec: map
+      {:entity-id string
+       :x double :y double :z double
+       :vx double :vy double :vz double
+       :owner-uuid string?}
+    Returns: {:success? boolean :uuid string? :entity-id string?}")
+
   (find-entities-in-radius [this world-id x y z radius]
     "Find all living entities within radius of position.
     - world-id: string (dimension identifier)

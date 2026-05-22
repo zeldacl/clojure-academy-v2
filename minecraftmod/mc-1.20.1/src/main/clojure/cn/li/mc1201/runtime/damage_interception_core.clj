@@ -40,12 +40,16 @@
     (let [^ServerPlayer player entity
           player-id (str (.getUUID player))
           original-damage (double amount)
-          attacker-id (attacker-id damage-source)]
+          attacker-id (attacker-id damage-source)
+          allow? (should-allow-attack?
+                   player-id attacker-id original-damage damage-source)]
+      (when-not allow?
+        (damage-hooks/run-attack-precheck-side-effects!
+          player-id attacker-id original-damage damage-source))
       {:player-id player-id
        :attacker-id attacker-id
        :original-damage original-damage
-       :allow? (should-allow-attack?
-                 player-id attacker-id original-damage damage-source)})))
+       :allow? allow?})))
 
 (defn process-damage
   [player-id attacker-id original-damage damage-source]

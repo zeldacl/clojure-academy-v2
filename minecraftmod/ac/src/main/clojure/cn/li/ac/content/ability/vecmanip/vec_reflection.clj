@@ -4,6 +4,7 @@
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.content.ability.fx-helpers :as fx]
+            [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
@@ -17,7 +18,8 @@
 
 (def ^:private vec-reflection-skill-id :vec-reflection)
 
-(defonce ^:private reflecting-players (atom #{}))
+(defonce ^:private reflecting-pairs (atom #{}))
+(defonce ^:private reflection-depths (atom {}))
 
 (defn- exp01 [exp]
   (max 0.0 (min 1.0 (double (or exp 0.0)))))
@@ -30,6 +32,9 @@
 
 (defn- cfg-string-set [field-id]
   (set (skill-config/tunable-string-list vec-reflection-skill-id field-id)))
+
+(defn- cfg-int [field-id]
+  (skill-config/tunable-int vec-reflection-skill-id field-id))
 
 (defn- parse-difficulty-entry [entry]
   (try
@@ -48,6 +53,17 @@
 
 (defn- excluded-entity-ids []
   (cfg-string-set :targeting.excluded-entity-ids))
+
+(defn- large-fireball-ids []
+  (cfg-string-set :targeting.large-fireball-ids))
+
+(defn- small-fireball-ids []
+  (cfg-string-set :targeting.small-fireball-ids))
+
+(defn- fireball-entity?
+  [entity-id]
+  (or (contains? (large-fireball-ids) entity-id)
+      (contains? (small-fireball-ids) entity-id)))
 
 (defn- skill-exp [player-id]
   (fx-common/skill-exp player-id vec-reflection-skill-id))
@@ -76,17 +92,62 @@
 (defn- entity-registry-id [entity]
   (or (:entity-id entity) (:type entity) ""))
 
-(defn- excluded-entity? [entity]
+(defn- affect-difficulty-with-snapshot [entity excluded-ids difficulty-map]
   (let [eid (entity-registry-id entity)]
-    (or (contains? (excluded-entity-ids) eid)
-        (:item? entity)
-        (:living? entity)
-        (:mob? entity))))
+    (when-not (or (contains? excluded-ids eid)
+                  (:item? entity)
+                  (:living? entity)
+                  (:mob? entity))
+      (double (get difficulty-map eid 1.0)))))
 
-(defn- affect-difficulty [entity]
-  (let [eid (entity-registry-id entity)]
-    (when-not (excluded-entity? entity)
-      (double (get (affected-entity-difficulty) eid 1.0)))))
+(defn- now-ms []
+  (System/currentTimeMillis))
+
+(defn- visited-ttl-ms []
+  (* 50 (long (max 1 (cfg-int :tracking.visited-ttl-ticks)))))
+
+(defn- visited-max-size []
+  (int (max 16 (cfg-int :tracking.visited-max-size))))
+
+(defn- max-reflections []
+  (int (max 1 (cfg-int :combat.max-reflections))))
+
+(defn- pair-key [player-id attacker-id]
+  (let [a (str (or player-id ""))
+        b (str (or attacker-id ""))]
+    (if (neg? (compare a b))
+      [a b]
+      [b a])))
+
+(defn- normalize-visited-map [visited now]
+  (cond
+    (map? visited)
+    (into {}
+          (keep (fn [[k v]]
+                  (when k
+                    [(str k) (long (if (number? v) v now))])))
+          visited)
+
+    (set? visited)
+    (into {}
+          (map (fn [uuid] [(str uuid) now]))
+          visited)
+
+    :else
+    {}))
+
+(defn- prune-visited-map [visited now ttl-ms max-size]
+  (let [cutoff (- now (long ttl-ms))
+        alive (into {}
+                    (filter (fn [[_uuid ts]]
+                              (>= (long ts) cutoff)))
+                    visited)]
+    (if (<= (count alive) max-size)
+      alive
+      (->> alive
+           (sort-by (fn [[_uuid ts]] (long ts)) >)
+           (take max-size)
+           (into {})))))
 
 (defn- active-vec-reflection-ctx-id
   [player-id]
@@ -108,7 +169,8 @@
                                           (* 0.6 (double (or (:eye-height entity)
                                                              (:height entity)
                                                              0.0)))))
-                            :z (double (or (:z entity) 0.0))}))
+                            :z (double (or (:z entity) 0.0))
+                            :reflected? true}))
 
 (defn- send-fx-play! [ctx-id pos]
   (ctx/ctx-send-to-client! ctx-id :vec-reflection/fx-play
@@ -141,13 +203,13 @@
         (if is-active?
           (do
             (toggle/remove-toggle! ctx-id :vec-reflection)
-            (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-visited)
+            (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-visited :vec-reflection-visited-map)
             (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-overload-keep)
             (fx/send-end! ctx-id :vec-reflection/fx-end)
             (log/info "VecReflection: Deactivated"))
           (do
             (toggle/activate-toggle! ctx-id :vec-reflection)
-            (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-visited] #{})
+            (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-visited-map] {})
             (let [overload-keep (cfg-lerp :cost.overload-keep exp)]
               (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-overload-keep] overload-keep)
               (enforce-overload-floor! player-id overload-keep))
@@ -156,43 +218,54 @@
     (catch Exception e
       (log/warn "VecReflection key-down failed:" (ex-message e)))))
 
-(defn vec-reflection-on-key-tick
-  "Tick handler - consume resources and reflect nearby projectiles."
-  [{:keys [player-id ctx-id cost-ok?]}]
-  (try
-    (when-let [ctx-data (ctx/get-context ctx-id)]
-      (when (toggle/is-toggle-active? ctx-data :vec-reflection)
-        (let [exp (skill-exp player-id)
-              overload-keep (get-in ctx-data [:skill-state :vec-reflection-overload-keep] 0.0)]
-          (toggle/update-toggle-tick! ctx-id :vec-reflection)
+(defn- vec-reflection-on-key-tick-body
+  [player-id ctx-id cost-ok?]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
+    (when (toggle/is-toggle-active? ctx-data :vec-reflection)
+      (let [exp (skill-exp player-id)
+            overload-keep (get-in ctx-data [:skill-state :vec-reflection-overload-keep] 0.0)]
+        (toggle/update-toggle-tick! ctx-id :vec-reflection)
+        (enforce-overload-floor! player-id overload-keep)
 
-          (enforce-overload-floor! player-id overload-keep)
-          (when-not cost-ok?
-            (toggle/deactivate-toggle! ctx-id :vec-reflection)
-            (fx/send-end! ctx-id :vec-reflection/fx-end)
-            (log/info "VecReflection: Deactivated (insufficient CP)"))
+        (when-not cost-ok?
+          (toggle/deactivate-toggle! ctx-id :vec-reflection)
+          (fx/send-end! ctx-id :vec-reflection/fx-end)
+          (log/info "VecReflection: Deactivated (insufficient CP)"))
 
-          (when (and cost-ok? (toggle/is-toggle-active? (or (ctx/get-context ctx-id) ctx-data) :vec-reflection))
-            (when-let [pos (get-player-position player-id)]
-              (when world-effects/*world-effects*
-                (let [world-id (:world-id pos)
-                      x (:x pos)
-                      y (:y pos)
-                      z (:z pos)
-                      entities (world-effects/find-entities-in-radius world-effects/*world-effects*
-                                                                      world-id x y z (cfg-double :targeting.radius))
-                      visited (get-in ctx-data [:skill-state :vec-reflection-visited] #{})
-                      fresh-entities (remove (fn [entity]
-                                               (contains? visited (:uuid entity)))
-                                             entities)]
-                  (doseq [entity fresh-entities]
-                    (let [entity-id (:uuid entity)
-                          difficulty (affect-difficulty entity)]
-                      (when (and entity-id
-                                 (not= entity-id player-id)
-                                 difficulty)
-                        (when-let [look-vec (and raycast/*raycast*
-                                                 (raycast/get-player-look-vector raycast/*raycast* player-id))]
+        (when (and cost-ok?
+                   (toggle/is-toggle-active? (or (ctx/get-context ctx-id) ctx-data) :vec-reflection))
+          (when-let [pos (get-player-position player-id)]
+            (when world-effects/*world-effects*
+              (let [world-id (:world-id pos)
+                    x (:x pos)
+                    y (:y pos)
+                    z (:z pos)
+                    now (now-ms)
+                    ttl-ms (visited-ttl-ms)
+                    max-size (visited-max-size)
+                    excluded-ids (excluded-entity-ids)
+                    difficulty-map (affected-entity-difficulty)
+                    dual-active? (arbitration/dual-active? player-id)
+                    arbitration-allowed? (or (not dual-active?)
+                                             (arbitration/skill-allowed-in-dual-active? :vec-reflection))
+                    entities (world-effects/find-entities-in-radius world-effects/*world-effects*
+                                                                    world-id x y z (cfg-double :targeting.radius))
+                    visited (normalize-visited-map
+                             (or (get-in ctx-data [:skill-state :vec-reflection-visited-map])
+                                 (get-in ctx-data [:skill-state :vec-reflection-visited]))
+                             now)
+                    fresh-entities (remove (fn [entity]
+                                             (contains? visited (str (:uuid entity))))
+                                           entities)]
+                (doseq [entity fresh-entities]
+                  (let [entity-id (:uuid entity)
+                        eid (entity-registry-id entity)
+                        difficulty (affect-difficulty-with-snapshot entity excluded-ids difficulty-map)]
+                    (when (and entity-id (not= entity-id player-id) difficulty)
+                      (when-let [look-vec (and raycast/*raycast*
+                                               (raycast/get-player-look-vector raycast/*raycast* player-id))]
+                        (when (and arbitration-allowed?
+                                   (arbitration/claim-projectile! player-id :vec-reflection entity-id))
                           (let [entity-vel (when entity-motion/*entity-motion*
                                              (entity-motion/get-velocity entity-motion/*entity-motion*
                                                                          world-id
@@ -210,15 +283,48 @@
                                 (fx/send-end! ctx-id :vec-reflection/fx-end)
                                 (log/info "VecReflection: Deactivated (insufficient reflect CP)"))
                               (do
-                                (when entity-motion/*entity-motion*
-                                  (entity-motion/set-velocity! entity-motion/*entity-motion*
-                                                               world-id
-                                                               entity-id vel-x vel-y vel-z))
+                                (if (and world-effects/*world-effects*
+                                         (fireball-entity? eid))
+                                  (let [spawn-result (world-effects/spawn-projectile! world-effects/*world-effects*
+                                                                                    world-id
+                                                                                    {:entity-id eid
+                                                                                     :x (double (or (:x entity) 0.0))
+                                                                                     :y (double (or (:y entity) 0.0))
+                                                                                     :z (double (or (:z entity) 0.0))
+                                                                                     :vx vel-x
+                                                                                     :vy vel-y
+                                                                                     :vz vel-z
+                                                                                     :owner-uuid player-id})
+                                        spawned? (boolean (:success? spawn-result))]
+                                    (when (and spawned? entity-motion/*entity-motion*)
+                                      (entity-motion/discard-entity! entity-motion/*entity-motion* world-id entity-id))
+                                    (when (and (not spawned?) entity-motion/*entity-motion*)
+                                      (entity-motion/set-velocity! entity-motion/*entity-motion*
+                                                                   world-id
+                                                                   entity-id vel-x vel-y vel-z)))
+                                  (when entity-motion/*entity-motion*
+                                    (entity-motion/set-velocity! entity-motion/*entity-motion*
+                                                                 world-id
+                                                                 entity-id vel-x vel-y vel-z)))
                                 (add-exp! player-id (* difficulty (cfg-double :progression.exp-reflect-entity-scale)))
                                 (send-fx-reflect-entity! ctx-id entity)
-                                (log/debug "VecReflection: Reflected entity" entity-id))))))))
-                  (let [visited-ids (into #{} (keep :uuid entities))]
-                    (ctx/update-context! ctx-id update-in [:skill-state :vec-reflection-visited] (fnil into #{}) visited-ids)))))))))
+                                (log/debug "VecReflection: Reflected entity" entity-id)))))))))
+                (let [visited-with-current (reduce (fn [acc entity]
+                                                     (if-let [uuid (:uuid entity)]
+                                                       (assoc acc (str uuid) now)
+                                                       acc))
+                                                   visited
+                                                   entities)
+                      pruned (prune-visited-map visited-with-current now ttl-ms max-size)]
+                  (ctx/update-context! ctx-id assoc-in [:skill-state :vec-reflection-visited-map] pruned)
+                  ;; keep old key cleaned to avoid stale accumulation after migration
+                  (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-visited))))))))))
+
+(defn vec-reflection-on-key-tick
+  "Tick handler - consume resources and reflect nearby projectiles."
+  [{:keys [player-id ctx-id cost-ok?]}]
+  (try
+    (vec-reflection-on-key-tick-body player-id ctx-id cost-ok?)
     (catch Exception e
       (log/warn "VecReflection key-tick failed:" (ex-message e)))))
 
@@ -232,7 +338,7 @@
   [{:keys [ctx-id]}]
   (try
     (toggle/remove-toggle! ctx-id :vec-reflection)
-    (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-visited)
+    (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-visited :vec-reflection-visited-map)
     (ctx/update-context! ctx-id update-in [:skill-state] dissoc :vec-reflection-overload-keep)
     (fx/send-end! ctx-id :vec-reflection/fx-end)
     (log/debug "VecReflection aborted")
@@ -244,18 +350,24 @@
   Returns tuple [performed? reduced-damage]."
   [player-id attacker-id original-damage]
   (try
-    (if (contains? @reflecting-players player-id)
+    (let [pair (pair-key player-id attacker-id)]
+    (if (contains? @reflecting-pairs pair)
       [false original-damage]
       (do
-        (swap! reflecting-players conj player-id)
+        (swap! reflecting-pairs conj pair)
+        (swap! reflection-depths update pair (fnil inc 0))
         (try
           (if-let [state (fx-common/get-player-state player-id)]
-            (let [exp (skill-exp player-id)
-                  reflect-multiplier (cfg-lerp :combat.damage-multiplier exp)
+            (let [depth (max 0 (dec (get @reflection-depths pair 1)))
+                  exp (skill-exp player-id)
+                  max-depth (max-reflections)
+                  reflect-multiplier (* (cfg-lerp :combat.damage-multiplier exp)
+                                        (Math/pow 0.5 (double depth)))
                   reflected-damage (* original-damage reflect-multiplier)
                   consumption (* original-damage (cfg-lerp :cost.damage.cp exp))
                   current-cp (current-cp player-id)]
-              (if (and (>= current-cp consumption)
+              (if (and (< depth max-depth)
+                       (>= current-cp consumption)
                        (>= reflected-damage (cfg-double :combat.min-reflected-damage)))
                 (do
                   (consume-cp! player-id consumption)
@@ -276,7 +388,15 @@
                 [false original-damage]))
             [false original-damage])
           (finally
-            (swap! reflecting-players disj player-id)))))
+            (swap! reflecting-pairs disj pair)
+            (swap! reflection-depths
+                   (fn [m]
+                     (if-let [v (get m pair)]
+                       (let [nv (dec (long v))]
+                         (if (pos? nv)
+                           (assoc m pair nv)
+                           (dissoc m pair)))
+                       m))))))))
     (catch Exception e
       (log/warn "VecReflection reflect-damage failed:" (ex-message e))
       [false original-damage])))
@@ -299,6 +419,14 @@
     (catch Exception e
       (log/warn "VecReflection can-cancel-attack failed:" (ex-message e))
       false)))
+
+(defn- on-precheck-cancel-side-effect!
+  "Run reflection side-effects during precheck cancel path so platforms
+  without mutable hurt-stage hooks still execute reflection behavior."
+  [player-id attacker-id original-damage _damage-source]
+  (when (can-cancel-attack? player-id attacker-id original-damage)
+    (reflect-damage player-id attacker-id original-damage)
+    true))
 
 (defskill! vec-reflection
   :id :vec-reflection
@@ -333,4 +461,7 @@
   (damage-handler/register-attack-cancel-check!
     :vec-reflection
     can-cancel-attack?)
+  (damage-handler/register-attack-precheck-side-effect!
+    :vec-reflection
+    on-precheck-cancel-side-effect!)
   nil)

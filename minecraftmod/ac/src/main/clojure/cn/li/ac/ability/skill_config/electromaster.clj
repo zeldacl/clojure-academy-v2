@@ -20,8 +20,8 @@
    {:skill-id :railgun :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [200.0 450.0] :comment "Railgun item-charge tick-stage CP cost lerp endpoints."}
    {:skill-id :railgun :id :cost.tick.overload :path "cost.tick.overload" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [180.0 120.0] :comment "Railgun item-charge tick-stage overload cost lerp endpoints."}
    {:skill-id :railgun :id :cooldown.manual-ticks :path "cooldown.manual-ticks" :section-suffix "cooldown" :type :double-list :min 1.0 :list-count 2 :default [300.0 160.0] :comment "Railgun manual cooldown lerp endpoints applied after a successful shot."}
-   {:skill-id :railgun :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.005 :comment "Railgun skill exp gained for a normal successful hit."}
-   {:skill-id :railgun :id :progression.exp-reflection-hit :path "progression.exp-reflection-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.01 :comment "Railgun skill exp gained when a shot is reflected by vec-reflection."}
+   {:skill-id :railgun :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.005 :comment "Railgun skill exp gained when the shot hits nothing (miss)."}
+   {:skill-id :railgun :id :progression.exp-reflection-hit :path "progression.exp-reflection-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.01 :comment "Railgun skill exp gained when any entity is hit (normal or reflection)."}
 
    {:skill-id :thunder-clap :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 40.0 :comment "ThunderClap aim raycast range."}
    {:skill-id :thunder-clap :id :charge.min-ticks :path "charge.min-ticks" :section-suffix "charge" :type :int :min 1 :default 40 :comment "Minimum held ticks required for ThunderClap to perform."}

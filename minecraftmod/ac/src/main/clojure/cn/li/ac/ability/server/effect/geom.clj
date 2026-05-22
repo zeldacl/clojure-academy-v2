@@ -20,6 +20,13 @@
      :y (+ (double (or (:y pos) 64.0)) 1.62)
      :z (double (or (:z pos) 0.0))}))
 
+(defn body-pos
+  [player-id]
+  (let [pos (get-in (ps/get-player-state player-id) [:position])]
+    {:x (double (or (:x pos) 0.0))
+     :y (double (or (:y pos) 64.0))
+     :z (double (or (:z pos) 0.0))}))
+
 ;; ---------------------------------------------------------------------------
 ;; 3-D vector math re-exported from shared vec3 helpers
 ;; ---------------------------------------------------------------------------
