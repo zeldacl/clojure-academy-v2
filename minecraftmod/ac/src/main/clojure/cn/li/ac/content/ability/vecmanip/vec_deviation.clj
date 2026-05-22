@@ -136,14 +136,21 @@
 ;; ============================================================================
 
 (defn vec-deviation-activate!
-  [{:keys [ctx-id]}]
-  (ctx/update-context! ctx-id assoc-in [:skill-state :vec-deviation-visited] #{})
-  (ctx/update-context! ctx-id assoc-in [:skill-state :vec-deviation-marked] #{})
-  (log/info "VecDeviation: Activated"))
+  [{:keys [player-id ctx-id]}]
+  (let [exp             (skill-exp player-id)
+        activ-overload  (cfg-lerp :cost.activation.overload exp)
+        cur-overload    (fx-common/player-path player-id [:resource-data :cur-overload] 0.0)
+        overload-floor  (+ (double cur-overload) activ-overload)]
+    (fx-common/perform-resource! player-id activ-overload 0.0 false)
+    (ctx/update-context! ctx-id assoc-in [:skill-state :vec-deviation-visited] #{})
+    (ctx/update-context! ctx-id assoc-in [:skill-state :vec-deviation-marked] #{})
+    (ctx/update-context! ctx-id assoc-in [:skill-state :vec-deviation-overload-floor] overload-floor)
+    (log/info "VecDeviation: Activated")))
 
 (defn vec-deviation-deactivate!
   [{:keys [ctx-id]}]
-  (ctx/update-context! ctx-id update :skill-state dissoc :vec-deviation-visited :vec-deviation-marked)
+  (ctx/update-context! ctx-id update :skill-state dissoc
+                       :vec-deviation-visited :vec-deviation-marked :vec-deviation-overload-floor)
   (log/info "VecDeviation: Deactivated"))
 
 (defn vec-deviation-tick!
@@ -157,6 +164,9 @@
           (toggle/deactivate-toggle! ctx-id :vec-deviation)
           (log/info "VecDeviation: Deactivated (insufficient CP)"))
         (when (and active? cost-ok?)
+          ;; Edit D: enforce overload floor while skill is active
+          (when-let [floor (get-in ctx-data [:skill-state :vec-deviation-overload-floor])]
+            (fx-common/enforce-overload-floor! player-id floor))
           (when-let [pos (get-player-position player-id)]
             (when world-effects/*world-effects*
               (let [world-id (:world-id pos)
@@ -183,46 +193,48 @@
                                (not marked?)
                                difficulty
                                (toggle/is-toggle-active? (or (ctx/get-context ctx-id) ctx-data) :vec-deviation))
-                      (let [deflect-cost (* (cfg-lerp :cost.deflect.cp exp) difficulty)]
-                        (if-not (consume-cp! player-id deflect-cost)
-                          (do
-                            (toggle/deactivate-toggle! ctx-id :vec-deviation)
-                            (log/info "VecDeviation: Deactivated (insufficient deflect CP)"))
-                          (do
-                            (when (and arbitration-allowed?
-                                       (arbitration/claim-projectile! player-id :vec-deviation entity-uuid))
-                              (when entity-motion/*entity-motion*
-                                (entity-motion/set-velocity! entity-motion/*entity-motion*
-                                                             world-id entity-uuid 0.0 0.0 0.0))
-                              (when (or (contains? (large-fireball-ids) eid)
-                                        (contains? (small-fireball-ids) eid))
-                                (when entity-motion/*entity-motion*
-                                  (entity-motion/discard-entity! entity-motion/*entity-motion* world-id entity-uuid)))
-                              (when (and (contains? (large-fireball-ids) eid)
-                                         world-effects/*world-effects*)
-                                (world-effects/create-explosion! world-effects/*world-effects*
-                                                                 world-id
-                                                                 (double (or (:x entity) 0.0))
-                                                                 (double (or (:y entity) 0.0))
-                                                                 (double (or (:z entity) 0.0))
-                                                                 (cfg-double :combat.fireball-explosion-radius)
-                                                                 false))
-                              (add-exp! player-id (* (cfg-double :progression.exp-deflect-scale) difficulty))
-                              (let [generic-mark? (and (not (contains? (large-fireball-ids) eid))
-                                                       (not (contains? (small-fireball-ids) eid)))]
-                                (when generic-mark?
-                                  (ctx/update-context! ctx-id update-in [:skill-state :vec-deviation-marked] (fnil conj #{}) entity-uuid))
-                                (send-fx-stop-entity! ctx-id entity generic-mark?))
-                              (log/debug "VecDeviation: Deflected entity" entity-uuid "difficulty" difficulty)))))))
+                      ;; Edit E: fix Bug1 (no * difficulty), Bug2 (force-consume), Bug3 (consume after claim)
+                      (let [base-cost   (cfg-lerp :cost.deflect.cp exp)
+                            avail-cp    (current-cp player-id)
+                            actual-cost (min avail-cp base-cost)]
+                        (when (and arbitration-allowed?
+                                   (arbitration/claim-projectile! player-id :vec-deviation entity-uuid))
+                          ;; Consume only after arbitration succeeds; cap to available CP (force-consume semantics)
+                          (when (pos? actual-cost)
+                            (fx-common/perform-resource! player-id 0.0 actual-cost false))
+                          (when entity-motion/*entity-motion*
+                            (entity-motion/set-velocity! entity-motion/*entity-motion*
+                                                         world-id entity-uuid 0.0 0.0 0.0))
+                          (when (or (contains? (large-fireball-ids) eid)
+                                    (contains? (small-fireball-ids) eid))
+                            (when entity-motion/*entity-motion*
+                              (entity-motion/discard-entity! entity-motion/*entity-motion* world-id entity-uuid)))
+                          (when (and (contains? (large-fireball-ids) eid)
+                                     world-effects/*world-effects*)
+                            (world-effects/create-explosion! world-effects/*world-effects*
+                                                             world-id
+                                                             (double (or (:x entity) 0.0))
+                                                             (double (or (:y entity) 0.0))
+                                                             (double (or (:z entity) 0.0))
+                                                             (cfg-double :combat.fireball-explosion-radius)
+                                                             false))
+                          (add-exp! player-id (* (cfg-double :progression.exp-deflect-scale) difficulty))
+                          (let [generic-mark? (and (not (contains? (large-fireball-ids) eid))
+                                                   (not (contains? (small-fireball-ids) eid)))]
+                            (when generic-mark?
+                              (ctx/update-context! ctx-id update-in [:skill-state :vec-deviation-marked] (fnil conj #{}) entity-uuid))
+                            (send-fx-stop-entity! ctx-id entity generic-mark?))
+                          (log/debug "VecDeviation: Deflected entity" entity-uuid "difficulty" difficulty))))))
                 (let [visited-ids (into #{} (keep :uuid entities))]
-                  (ctx/update-context! ctx-id update-in [:skill-state :vec-deviation-visited] (fnil into #{}) visited-ids)))))))))
+                  (ctx/update-context! ctx-id update-in [:skill-state :vec-deviation-visited] (fnil into #{}) visited-ids))))))))
     (catch Exception e
       (log/warn "VecDeviation tick! failed:" (ex-message e)))))
 
 (defn vec-deviation-abort!
   [{:keys [ctx-id]}]
   (toggle/remove-toggle! ctx-id :vec-deviation)
-  (ctx/update-context! ctx-id update :skill-state dissoc :vec-deviation-visited :vec-deviation-marked))
+  (ctx/update-context! ctx-id update :skill-state dissoc
+                       :vec-deviation-visited :vec-deviation-marked :vec-deviation-overload-floor))
 
 ;; Damage reduction handler (called from damage event system)
 (defn reduce-damage
