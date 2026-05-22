@@ -39,18 +39,28 @@
 (defn- cfg-lerp-int [field-id exp]
   (skill-config/lerp-int directed-blastwave-skill-id field-id (exp01 exp)))
 
+(defn- player-body-pos [player-id]
+  (geom/body-pos player-id))
+
+(defn- terminate-with-end!
+  [ctx-id performed?]
+  (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? performed?})
+  (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] performed?)
+  (ctx/update-context! ctx-id dissoc :skill-state)
+  (ctx/terminate-context! ctx-id nil))
+
 (defn- hit-pos-from-trace [player-id trace]
-  (let [eye  (geom/eye-pos player-id)
-        look (or (when raycast/*raycast*
+  (let [look (or (when raycast/*raycast*
                    (raycast/get-player-look-vector raycast/*raycast* player-id))
                  {:x 0.0 :y 0.0 :z 1.0})]
     (cond
       (nil? trace)
-      (geom/v+ eye (geom/v* (geom/vnorm look) (cfg-double :targeting.raycast-distance)))
+      (geom/v+ (player-body-pos player-id)
+               (geom/v* (geom/vnorm look) (cfg-double :targeting.raycast-distance)))
       (= :block (:hit-type trace))
-      {:x (Math/floor (double (or (:x trace) 0.0)))
-       :y (Math/floor (double (or (:y trace) 0.0)))
-       :z (Math/floor (double (or (:z trace) 0.0)))}
+      {:x (double (int (Math/round (double (or (:x trace) 0.0)))))
+       :y (double (int (Math/round (double (or (:y trace) 0.0)))))
+       :z (double (int (Math/round (double (or (:z trace) 0.0)))))}
       (= :entity (:hit-type trace))
       {:x (double (or (:x trace) 0.0))
         :y (+ (double (or (:y trace) 0.0)) (double (or (:eye-height trace) (cfg-double :targeting.eye-height))))
@@ -69,6 +79,14 @@
         d1 (geom/vnorm {:x (:x d0) :y (- (:y d0) (cfg-double :movement.knockback-y-adjust)) :z (:z d0)})]
     (geom/v* d1 (cfg-double :movement.knockback-scale))))
 
+    (defn- push-impulse [player-id entity]
+      (let [player-pos (player-body-pos player-id)
+        target-pos {:x (double (or (:x entity) 0.0))
+              :y (double (or (:y entity) 0.0))
+              :z (double (or (:z entity) 0.0))}
+        d0 (geom/vnorm (geom/v- target-pos player-pos))]
+      (geom/v* d0 0.24)))
+
 (defn- break-hardness [exp]
   (let [[low-cap mid-cap high-cap] (cfg-double-list :breaking.hardness-caps)]
     (cond (< (double exp) (cfg-double :breaking.hardness-low-threshold)) low-cap
@@ -77,9 +95,9 @@
 
 (defn- break-nearby-blocks! [player-id world-id pos exp]
   (when block-manip/*block-manipulation*
-    (let [x0        (int (Math/floor (double (:x pos))))
-          y0        (int (Math/floor (double (:y pos))))
-          z0        (int (Math/floor (double (:z pos))))
+    (let [x0        (int (Math/round (double (:x pos))))
+          y0        (int (Math/round (double (:y pos))))
+          z0        (int (Math/round (double (:z pos))))
           hard-cap  (break-hardness exp)
           p-break   (cfg-lerp :breaking.break-probability exp)
           p-drop    (cfg-lerp :breaking.drop-probability exp)
@@ -122,66 +140,71 @@
   {:down!  (fn [{:keys [ctx-id]}]
              (ctx/update-context! ctx-id assoc :skill-state
                                   {:charge-ticks 0 :punched? false
-                                   :punch-ticks 0  :performed? false})
+                                   :punch-ticks 0 :performed? false})
              (fx/send-start! ctx-id :directed-blastwave/fx-start)
              (fx/send-update! ctx-id :directed-blastwave/fx-update
                               {:charge-ticks 0 :punched? false}))
    :tick!  (fn [{:keys [ctx-id]}]
              (when-let [ctx-data (ctx/get-context ctx-id)]
-               (let [ss           (:skill-state ctx-data)
-                     next-charge  (inc (long (or (:charge-ticks ss) 0)))
-                     punched?     (boolean (:punched? ss))
-                     next-punch   (if punched? (inc (long (or (:punch-ticks ss) 0))) 0)]
+               (let [ss          (:skill-state ctx-data)
+                     next-charge (inc (long (or (:charge-ticks ss) 0)))
+                     punched?    (boolean (:punched? ss))
+                     next-punch  (if punched? (inc (long (or (:punch-ticks ss) 0))) 0)]
                  (ctx/update-context! ctx-id assoc-in [:skill-state :charge-ticks] next-charge)
-                 (ctx/update-context! ctx-id assoc-in [:skill-state :punch-ticks]  next-punch)
+                 (ctx/update-context! ctx-id assoc-in [:skill-state :punch-ticks] next-punch)
                  (fx/send-update! ctx-id :directed-blastwave/fx-update
-                          {:charge-ticks (long (max 0 next-charge))
-                           :punched? punched?})
+                                  {:charge-ticks (long (max 0 next-charge))
+                                   :punched? punched?})
                  (cond
                    (>= next-charge (cfg-int :charge.max-tolerant-ticks))
-                   (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? false})
-                     (ctx/terminate-context! ctx-id nil))
+                   (terminate-with-end! ctx-id false)
                    (and punched? (> next-punch (cfg-int :charge.punch-anim-ticks)))
-                   (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? true})
-                     (ctx/terminate-context! ctx-id nil))))))
+                   (terminate-with-end! ctx-id true)))))
    :up!    (fn [{:keys [player-id ctx-id exp cost-ok?]}]
              (when-let [ctx-data (ctx/get-context ctx-id)]
                (let [charge-ticks (long (or (get-in ctx-data [:skill-state :charge-ticks]) 0))
-                   exp*         (exp01 exp)]
-                 (if (and (> charge-ticks (cfg-int :charge.min-ticks)) (< charge-ticks (cfg-int :charge.max-accepted-ticks)))
+                     exp*         (exp01 exp)]
+                 (if (and (> charge-ticks (cfg-int :charge.min-ticks))
+                          (< charge-ticks (cfg-int :charge.max-accepted-ticks)))
                    (if-not cost-ok?
-                     (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? false})
-                         (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))
-                     (let [world-id   (geom/world-id-of player-id)
-                           trace      (when raycast/*raycast*
-                                        (raycast/raycast-from-player raycast/*raycast*
-                                                                     player-id (cfg-double :targeting.raycast-distance) true))
-                           hit-pos    (hit-pos-from-trace player-id trace)
-                           look       (when raycast/*raycast*
-                                        (raycast/get-player-look-vector raycast/*raycast* player-id))
-                           entities   (if world-effects/*world-effects*
-                                        (->> (world-effects/find-entities-in-radius
-                                               world-effects/*world-effects*
-                                               world-id (:x hit-pos) (:y hit-pos) (:z hit-pos)
-                                               (cfg-double :combat.aoe-radius))
-                                             (remove #(= (:uuid %) player-id))
-                                             vec)
-                                        [])
-                           damage     (cfg-lerp :combat.damage exp*)]
+                     (terminate-with-end! ctx-id false)
+                     (let [world-id (geom/world-id-of player-id)
+                           trace (when raycast/*raycast*
+                                   (raycast/raycast-from-player raycast/*raycast*
+                                                                player-id
+                                                                (cfg-double :targeting.raycast-distance)
+                                                                true))
+                           hit-pos (hit-pos-from-trace player-id trace)
+                           look (when raycast/*raycast*
+                                  (raycast/get-player-look-vector raycast/*raycast* player-id))
+                           entities (if world-effects/*world-effects*
+                                      (->> (world-effects/find-entities-in-radius
+                                            world-effects/*world-effects*
+                                            world-id (:x hit-pos) (:y hit-pos) (:z hit-pos)
+                                            (cfg-double :combat.aoe-radius))
+                                           (remove #(= (:uuid %) player-id))
+                                           vec)
+                                      [])
+                           damage (cfg-lerp :combat.damage exp*)]
                        (doseq [entity entities]
                          (when entity-damage/*entity-damage*
                            (entity-damage/apply-direct-damage!
                             entity-damage/*entity-damage* world-id (:uuid entity) damage :generic))
-                         (let [impulse (knockback-impulse player-id entity)]
+                         (let [knockback (knockback-impulse player-id entity)
+                               push (push-impulse player-id entity)]
+                           (when entity-motion/*entity-motion*
+                             (entity-motion/set-velocity!
+                              entity-motion/*entity-motion* world-id (:uuid entity)
+                              (:x knockback) (:y knockback) (:z knockback)))
                            (when entity-motion/*entity-motion*
                              (entity-motion/add-velocity!
                               entity-motion/*entity-motion* world-id (:uuid entity)
-                              (:x impulse) (:y impulse) (:z impulse)))))
+                              (:x push) (:y push) (:z push)))))
                        (break-nearby-blocks! player-id world-id hit-pos exp*)
                        (fx/send-perform! ctx-id :directed-blastwave/fx-perform
-                                        {:pos hit-pos
-                                         :look-dir (or look {:x 0.0 :y 0.0 :z 1.0})
-                                         :charge-ticks (long (max 0 charge-ticks))})
+                                         {:pos hit-pos
+                                          :look-dir (or look {:x 0.0 :y 0.0 :z 1.0})
+                                          :charge-ticks (long (max 0 charge-ticks))})
                        (ctx/update-context! ctx-id update :skill-state assoc
                                             :punched? true :punch-ticks 0 :performed? true)
                        (skill-effects/set-main-cooldown!
@@ -192,9 +215,7 @@
                                                         (cfg-double :progression.exp-miss)))
                        (log/info "DirectedBlastwave executed" "charge" charge-ticks
                                  "entities" (count entities))))
-                   (do (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? false})
-                       (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] false))))))
+                   (terminate-with-end! ctx-id false)))))
    :abort! (fn [{:keys [ctx-id]}]
-                 (fx/send-end! ctx-id :directed-blastwave/fx-end {:performed? false})
-             (ctx/update-context! ctx-id dissoc :skill-state))}
+             (terminate-with-end! ctx-id false))}
   :prerequisites [{:skill-id :groundshock :min-exp 0.0}])

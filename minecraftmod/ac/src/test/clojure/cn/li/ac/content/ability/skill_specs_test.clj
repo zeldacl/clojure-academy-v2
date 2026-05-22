@@ -34,6 +34,13 @@
     (is (contains? (:cost (skill/get-skill :arc-gen)) :down))
     (is (= :manual (get-in (skill/get-skill :flashing) [:cooldown :mode])))
     (is (contains? (skill/get-skill :shift-teleport) :perform))
+    (let [blastwave (skill/get-skill :directed-blastwave)]
+      (is (some? blastwave))
+      (is (= :manual (get-in blastwave [:cooldown :mode])))
+      (is (fn? (get-in blastwave [:cost :up :cp])))
+      (is (fn? (get-in blastwave [:cost :up :overload])))
+      (is (= #{:down! :tick! :up! :abort!}
+             (set (keys (:actions blastwave))))))
     ;; vec-deviation is a toggle skill; it may not declare any perform-stage
     ;; payload in :perform/:ops, so just assert it's still a registered spec.
     (is (some? (skill/get-skill :vec-deviation)))))

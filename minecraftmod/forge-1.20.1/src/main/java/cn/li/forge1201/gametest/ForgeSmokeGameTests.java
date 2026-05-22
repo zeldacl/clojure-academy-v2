@@ -367,6 +367,32 @@ public final class ForgeSmokeGameTests {
         helper.succeed();
     }
 
+    @GameTest(templateNamespace = "minecraft", template = "empty", batch = "ac_smoke")
+    public static void directedBlastwaveRegistrationSmoke(GameTestHelper helper) {
+        String hooksNs = "cn.li.mcmod.hooks.core";
+        ClojureInterop.requireNamespace(hooksNs);
+
+        Object skillsObj = ClojureInterop.invoke(hooksNs, "get-skills-for-category", kw("vecmanip"));
+        helper.assertTrue(skillsObj instanceof Iterable,
+            "Expected vecmanip skills to be exposed through runtime hooks");
+
+        boolean foundDirectedBlastwave = false;
+        boolean foundPerformFn = false;
+        for (Object skillObj : (Iterable<?>) skillsObj) {
+            if (skillObj instanceof Map<?, ?> skillMap && kw("directed-blastwave").equals(skillMap.get(kw("id")))) {
+                foundDirectedBlastwave = true;
+                foundPerformFn = skillMap.containsKey(kw("perform"));
+                break;
+            }
+        }
+
+        helper.assertTrue(foundDirectedBlastwave,
+            "Expected DirectedBlastwave skill to be registered under vecmanip category");
+        helper.assertTrue(foundPerformFn,
+            "Expected DirectedBlastwave skill spec to expose perform handler");
+        helper.succeed();
+    }
+
     @GameTest(templateNamespace = "minecraft", template = "empty", batch = "ac_worldgen")
     public static void phaseLiquidPoolUsesImagPhaseBlock(GameTestHelper helper) {
         assertPhaseLiquidPoolUsesImagPhase(helper);
