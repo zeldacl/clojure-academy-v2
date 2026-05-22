@@ -11,7 +11,7 @@
 	[]
 	(with-init-guard hooks-installed?
 		(energy-integration/register-energy-integration-hooks!
-			{:forge-energy-conversion-rate (fn [] (double config/rf-conversion-ratio))
-			 :ic2-energy-conversion-rate (fn [] (double config/eu-conversion-ratio))})
+			{:forge-energy-conversion-rate (fn [] (double (config/rf-conversion-ratio)))
+			 :ic2-energy-conversion-rate (fn [] (double (config/eu-conversion-ratio)))})
 		(log/info "AC energy integration hooks installed"))
 	nil)

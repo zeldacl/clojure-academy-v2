@@ -42,6 +42,16 @@
               :width double :height double :eye-height double
               :type string}")
 
+  (find-entities-in-aabb [this world-id min-x min-y min-z max-x max-y max-z]
+    "Find all living entities within an axis-aligned bounding box.
+    - world-id: string (dimension identifier)
+    - min/max coordinates: double bounds
+    Returns: seq of entity maps
+             {:uuid string
+              :x double :y double :z double
+              :width double :height double :eye-height double
+              :type string}")
+
   (find-blocks-in-radius [this world-id x y z radius block-predicate]
     "Find all blocks within radius matching predicate.
     - world-id: string (dimension identifier)

@@ -315,6 +315,32 @@ public final class ForgeSmokeGameTests {
         helper.succeed();
     }
 
+    @GameTest(templateNamespace = "minecraft", template = "empty", batch = "ac_smoke")
+    public static void groundshockRegistrationSmoke(GameTestHelper helper) {
+        String hooksNs = "cn.li.mcmod.hooks.core";
+        ClojureInterop.requireNamespace(hooksNs);
+
+        Object skillsObj = ClojureInterop.invoke(hooksNs, "get-skills-for-category", kw("vecmanip"));
+        helper.assertTrue(skillsObj instanceof Iterable,
+            "Expected vecmanip skills to be exposed through runtime hooks");
+
+        boolean foundGroundshock = false;
+        boolean foundPerformFn = false;
+        for (Object skillObj : (Iterable<?>) skillsObj) {
+            if (skillObj instanceof Map<?, ?> skillMap && kw("groundshock").equals(skillMap.get(kw("id")))) {
+                foundGroundshock = true;
+                foundPerformFn = skillMap.containsKey(kw("perform"));
+                break;
+            }
+        }
+
+        helper.assertTrue(foundGroundshock,
+            "Expected Groundshock skill to be registered under vecmanip category");
+        helper.assertTrue(foundPerformFn,
+            "Expected Groundshock skill spec to expose perform handler");
+        helper.succeed();
+    }
+
     @GameTest(templateNamespace = "minecraft", template = "empty", batch = "ac_worldgen")
     public static void phaseLiquidPoolUsesImagPhaseBlock(GameTestHelper helper) {
         assertPhaseLiquidPoolUsesImagPhase(helper);

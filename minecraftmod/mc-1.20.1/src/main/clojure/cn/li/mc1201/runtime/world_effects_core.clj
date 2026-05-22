@@ -88,6 +88,12 @@
         entities (get-entities-fn level aabb)]
     (mapv #(entity->map % resolve-entity-id-fn) entities)))
 
+(defn entities-in-aabb
+  [^Level level min-x min-y min-z max-x max-y max-z get-entities-fn resolve-entity-id-fn]
+  (let [aabb (AABB. min-x min-y min-z max-x max-y max-z)
+        entities (get-entities-fn level aabb)]
+    (mapv #(entity->map % resolve-entity-id-fn) entities)))
+
 (defn spawn-projectile-in-level!
   [^Level level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn]
   (let [{:keys [entity-id x y z vx vy vz owner-uuid]} projectile-spec]

@@ -25,6 +25,7 @@
             [cn.li.mcmod.platform.player-motion :as player-motion]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -46,6 +47,9 @@
 (defn- cfg-lerp-int [field-id exp]
   (skill-config/lerp-int groundshock-skill-id field-id (exp01 exp)))
 
+(defn- cfg-boolean [field-id]
+  (skill-config/tunable-boolean groundshock-skill-id field-id))
+
 (defn- horizontal-look [player-id]
   (when-let [look-vec (and raycast/*raycast*
                            (raycast/get-player-look-vector raycast/*raycast* player-id))]
@@ -55,6 +59,11 @@
           length (geom/vlen flat)]
       (when (> length 1.0e-6)
         (geom/vnorm flat)))))
+
+(defn- horizontal-look-with-fallback [player-id]
+  (or (horizontal-look player-id)
+      (when (cfg-boolean :targeting.horizontal-look-fallback)
+        {:x 0.0 :y 0.0 :z 1.0})))
 
 (defn- perpendicular [flat-dir]
   {:x (- (double (:z flat-dir)))
@@ -114,15 +123,8 @@
 (defn- get-player-position
   "Get player position from teleportation protocol."
   [player-id]
-  (or (when-let [teleportation (resolve 'cn.li.mcmod.platform.teleportation/*teleportation*)]
-        (when-let [tp-impl @teleportation]
-          ((resolve 'cn.li.mcmod.platform.teleportation/get-player-position) tp-impl player-id)))
-      (skill-effects/player-path player-id
-                                 :position
-                                 {:world-id "minecraft:overworld"
-                                  :x 0.0
-                                  :y 64.0
-                                  :z 0.0})))
+  (when teleportation/*teleportation*
+    (teleportation/get-player-position teleportation/*teleportation* player-id)))
 
 (defn- entity-overlaps-shock-box?
   [entity bx by bz]
@@ -198,34 +200,29 @@
       (log/warn "Groundshock key-tick failed:" (ex-message e)))))
 
 (defn- affect-entities!
-  [player-id world-id bx by bz damage y-speed affected-entities*]
-  (when world-effects/*world-effects*
-    (doseq [entity (world-effects/find-entities-in-radius world-effects/*world-effects*
-                                                          world-id
-                                                          (+ (double bx) 0.5)
-                                                          (+ (double by) 1.0)
-                                                          (+ (double bz) 0.5)
-                                                          (cfg-double :combat.entity-search-radius))]
-      (let [entity-id (:uuid entity)]
-        (when (and entity-id
-                   (not= entity-id player-id)
-                   (not (contains? @affected-entities* entity-id))
-                   (entity-overlaps-shock-box? entity bx by bz))
-          (when entity-damage/*entity-damage*
-            (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
-                                                world-id
-                                                entity-id
-                                                damage
-                                                :generic))
-          (when entity-motion/*entity-motion*
-            (entity-motion/add-velocity! entity-motion/*entity-motion*
-                                         world-id
-                                         entity-id
-                                         0.0
-                                         y-speed
-                                         0.0))
-          (swap! affected-entities* conj entity-id)
-          (add-exp! player-id (cfg-double :progression.exp-entity)))))))
+  [player-id world-id bx by bz damage y-speed candidate-entities affected-entities*]
+  (doseq [entity candidate-entities]
+    (let [entity-id (:uuid entity)]
+      (when (and entity-id
+                 (not= entity-id player-id)
+                 (true? (:living? entity))
+                 (not (contains? @affected-entities* entity-id))
+                 (entity-overlaps-shock-box? entity bx by bz))
+        (when entity-damage/*entity-damage*
+          (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
+                                              world-id
+                                              entity-id
+                                              damage
+                                              :generic))
+        (when entity-motion/*entity-motion*
+          (entity-motion/add-velocity! entity-motion/*entity-motion*
+                                       world-id
+                                       entity-id
+                                       0.0
+                                       y-speed
+                                       0.0))
+        (swap! affected-entities* conj entity-id)
+        (add-exp! player-id (cfg-double :progression.exp-entity))))))
 
 (defn- propagation-positions [perp]
   [[{:x 0.0 :y 0.0 :z 0.0} 1.0]
@@ -259,6 +256,7 @@
         y-speed (launch-y-speed exp)
         block-drop-rate (drop-rate exp)
         max-iter (max-iterations exp)
+        entity-search-radius (cfg-double :combat.entity-search-radius)
         affected-blocks* (atom #{})
         affected-entities* (atom #{})
         broken-blocks* (atom #{})
@@ -272,7 +270,16 @@
          :broken-blocks (finalize-broken-blocks @broken-blocks*)}
         (let [block-x (int (Math/floor x))
               block-y (int (Math/floor start-y))
-              block-z (int (Math/floor z))]
+              block-z (int (Math/floor z))
+              candidate-entities (when world-effects/*world-effects*
+                                   (world-effects/find-entities-in-aabb world-effects/*world-effects*
+                                     world-id
+                                     (- x (+ entity-search-radius 3.0))
+                                     (- block-y 2.0)
+                                     (- z (+ entity-search-radius 3.0))
+                                     (+ x (+ entity-search-radius 3.0))
+                                     (+ block-y 4.0)
+                                     (+ z (+ entity-search-radius 3.0))))]
           (doseq [[delta prob] (propagation-positions perp)]
             (when (< (rand) prob)
               (let [bx (int (Math/floor (+ x (:x delta))))
@@ -306,7 +313,7 @@
                       (break-with-force! player-id world-id block-x block-y block-z false energy* block-drop-rate broken-blocks*))
 
                     (let [before-entities (count @affected-entities*)]
-                      (affect-entities! player-id world-id bx by bz damage y-speed affected-entities*)
+                      (affect-entities! player-id world-id bx by bz damage y-speed candidate-entities affected-entities*)
                       (swap! energy* - (double (- (count @affected-entities*) before-entities))))))))
 
             (doseq [dy (range 1 4)]
@@ -349,8 +356,8 @@
             (do
               (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
               (log/debug "Groundshock perform failed: insufficient resource"))
-            (when-let [pos (get-player-position player-id)]
-              (if-let [flat-dir (horizontal-look player-id)]
+            (if-let [pos (get-player-position player-id)]
+              (if-let [flat-dir (horizontal-look-with-fallback player-id)]
                 (let [world-id (or (:world-id pos) "minecraft:overworld")
                       start-x (double (:x pos))
                       start-y (dec (double (:y pos)))
@@ -371,7 +378,10 @@
                   (log/info "Groundshock: Affected" affected-count "blocks/entities"))
                 (do
                   (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
-                  (log/debug "Groundshock: Missing horizontal look vector")))))
+                  (log/debug "Groundshock: Missing horizontal look vector")))
+              (do
+                (fx/send-end! ctx-id :groundshock/fx-end {:performed? false})
+                (log/debug "Groundshock: Missing player position"))))
 
           ;; Invalid conditions
           (do

@@ -68,6 +68,18 @@
           (catch Exception e
             (log/warn "Failed to find entities:" (ex-message e))
             [])))
+      (find-entities-in-aabb [_ world-id min-x min-y min-z max-x max-y max-z]
+        (try
+          (when-let [^MinecraftServer server (server-fn)]
+            (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+              (core/entities-in-aabb
+                level
+                min-x min-y min-z max-x max-y max-z
+                get-entities-in-aabb
+                resolve-entity-id-fn)))
+          (catch Exception e
+            (log/warn "Failed to find entities in AABB:" (ex-message e))
+            [])))
       (find-blocks-in-radius [_ world-id x y z radius block-predicate]
         (try
           (when-let [^MinecraftServer server (server-fn)]
