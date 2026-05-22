@@ -88,8 +88,13 @@
                                                                                   :vec-deviation {:active true}}}}})
                 client-keybinds/get-activate-hint (fn [_] nil)
                 client-keybinds/get-preset-switch-state (fn [] nil)]
-    (let [plan (client-ui-hooks/build-client-overlay-plan
+      (do
+        ;; Pre-seed a wave circle born 100ms ago so alpha>0 at now-ms=1000
+        (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles
+                [{:x 160.0 :y 90.0 :born-ms 900 :life-ms 600
+                  :start-size 10.0 :end-size 50.0 :seed 0.0}])
+        (let [plan (client-ui-hooks/build-client-overlay-plan
                 "p1" 320 180 {:now-ms 1000})
           kinds (mapv :kind (:elements plan))]
       (is (= 1 (count (filter #{:vec-reflection-crosshair} kinds))))
-      (is (some #{:blit-texture} kinds)))))
+          (is (some #{:blit-texture} kinds))))))

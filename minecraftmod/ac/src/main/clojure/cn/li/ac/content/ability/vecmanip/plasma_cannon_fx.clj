@@ -19,7 +19,7 @@
     (case mode
       :start
       (do
-        (reset! effect-state {:active? true :charge-ticks 0 :charge-pos nil
+        (reset! effect-state {:active? true :charge-ticks 0 :charge-pos (:charge-pos payload)
                               :flight-ticks 0 :state :charging :destination nil
                               :performed? false})
         (client-sounds/queue-sound-effect!
@@ -70,7 +70,7 @@
            (when st
              (if (:active? st)
                (let [ticks (inc (long (or (:ticks st) 0)))]
-                 (when (zero? (mod ticks 10))
+                 (when (and (pos? ticks) (zero? (mod ticks 10)))
                    (client-sounds/queue-sound-effect!
                      {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
                  (let [cp (:charge-pos st)]
@@ -153,7 +153,7 @@
     (fn [_ctx-id channel payload]
       (case channel
         :plasma-cannon/fx-start
-        (level-effects/enqueue-level-effect! :plasma-cannon {:mode :start})
+        (level-effects/enqueue-level-effect! :plasma-cannon {:mode :start :charge-pos (:charge-pos payload)})
         :plasma-cannon/fx-update
         (level-effects/enqueue-level-effect! :plasma-cannon
           {:mode :update

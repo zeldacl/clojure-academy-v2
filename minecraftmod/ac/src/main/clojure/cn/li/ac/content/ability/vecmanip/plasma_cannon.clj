@@ -150,6 +150,7 @@
         (doseq [entity entities]
           (when-not (= (:uuid entity) player-id)
             (when entity-damage/*entity-damage*
+              ;; TODO: use apply-damage-bypass-immunity! once protocol is extended (Bug 4)
               (entity-damage/apply-direct-damage! entity-damage/*entity-damage*
                                                   world-id
                                                   (:uuid entity)
@@ -159,8 +160,7 @@
     (when world-effects/*world-effects*
       (world-effects/create-explosion! world-effects/*world-effects*
                                        world-id tx ty tz radius false))
-    ;; Grant experience on successful cast
-    (add-exp! player-id (cfg-double :progression.exp-use))
+    ;; Note: Experience is now granted in key-up (on fire), not here
     (log/info "PlasmaCannon: Exploded at" [tx ty tz]
               "radius:" (int radius) "damage:" (int dmg))))
 
@@ -211,7 +211,10 @@
           (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
           (ctx/terminate-context! ctx-id nil)
           (log/debug "PlasmaCannon: Not enough resources to activate"))
-        (do
+        (let [pos      (get-player-position player-id)
+              spawn-pos {:x (double (:x pos))
+                         :y (+ (double (:y pos)) (cfg-double :projectile.spawn-y-offset))
+                         :z (double (:z pos))}]
           (ctx/update-context! ctx-id assoc :skill-state
                                {:state        :charging
                                 :charge-ticks  0
@@ -219,9 +222,11 @@
                                 :overload-keep (overload-keep exp)
                                 :sync-ticks    0
                                 :flight-ticks  0
-                                :charge-pos    nil
+                                :charge-pos    spawn-pos
                                 :destination   nil})
           (fx/send-start! ctx-id :plasma-cannon/fx-start)
+          (fx/send-update! ctx-id :plasma-cannon/fx-update
+                           {:state :charging :charge-pos spawn-pos :charge-ticks 0 :fully-charged? false})
           (log/debug "PlasmaCannon: Charge started, need" ct "ticks"))))
     (catch Exception e
       (log/warn "PlasmaCannon key-down failed:" (ex-message e)))))
@@ -242,8 +247,11 @@
           :charging
           (let [charge-ticks (long (or (:charge-ticks skill-state) 0))
                 charge-time  (long (or (:charge-time skill-state) (charge-time (get-skill-exp player-id))))
-                next-ticks   (inc charge-ticks)]
-            (if-not cost-ok?
+                next-ticks   (inc charge-ticks)
+                exp          (get-skill-exp player-id)
+                cp-amount    (cp-per-tick exp)
+                {:keys [success?]} (skill-effects/perform-resource! player-id 0.0 cp-amount)]
+            (if-not success?
               ;; Out of CP: abort (original: terminate())
               (do
                 (fx/send-end! ctx-id :plasma-cannon/fx-end {:performed? false})
@@ -326,6 +334,8 @@
                 spawn-pos {:x (double (:x pos))
                            :y (+ (double (:y pos)) (cfg-double :projectile.spawn-y-offset))
                            :z (double (:z pos))}]
+            ;; Grant experience on successful cast (moved from do-explode! to fire-time)
+            (add-exp! player-id (cfg-double :progression.exp-use))
             ;; Set cooldown (original: ctx.setCooldown in s_perform)
             (apply-cooldown! player-id exp)
             ;; Transition to :go state
@@ -370,8 +380,7 @@
   :cooldown-ticks 1000
   :pattern :charge-window
   :cooldown {:mode :manual}
-  :cost {:down {:overload plasma-cannon-cost-down-overload}
-         :tick {:cp plasma-cannon-cost-tick-cp}}
+  :cost {:down {:overload plasma-cannon-cost-down-overload}}
   :actions {:down! plasma-cannon-on-key-down
             :tick! plasma-cannon-on-key-tick
             :up! plasma-cannon-on-key-up

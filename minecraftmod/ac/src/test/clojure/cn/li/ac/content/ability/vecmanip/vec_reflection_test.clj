@@ -63,8 +63,8 @@
                 cn.li.ac.ability.server.service.skill-effects/get-player-state (fn [_] {:ok true})]
     ;; damage=2 -> consumption=4, current-cp=3 => false
     (is (false? (vr/can-cancel-attack? "p" "a" 2.0)))
-    (with-redefs [cn.li.ac.content.ability.vecmanip.vec-reflection/current-cp (fn [_] 10.0)]
-      ;; damage=6 -> reflected=6 >= min(5) and cp enough => true
+      (with-redefs [cn.li.ac.content.ability.vecmanip.vec-reflection/current-cp (fn [_] 15.0)]
+        ;; damage=6 -> consumption=12, current-cp=15 >= 12, reflected=6 >= min(5) => true
       (is (true? (vr/can-cancel-attack? "p" "a" 6.0))))))
 
 (deftest visited-map-prune-ttl-and-max-size-test

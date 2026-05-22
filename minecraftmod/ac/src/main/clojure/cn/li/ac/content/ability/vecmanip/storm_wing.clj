@@ -134,7 +134,7 @@
         (+ (double current) accel)
         (- (double current) accel)))))
 
-(defn- validate-move-direction
+(defn validate-move-direction
   "Validates and normalizes move direction payload.
    Returns normalized unit vector or nil if invalid/zero."
   [payload]

@@ -14,11 +14,11 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defn- reset-state! [f]
-  (let [player-states-val @player-state/player-states
-        context-registry-val @#'cn.li.ac.ability.service.dispatcher/context-registry
-        item-action-registry-val @#'cn.li.ac.ability.item-actions/item-action-registry
-        action-handlers-val @#'cn.li.ac.ability.item-actions/action-handlers
-        item-entity-spawns-val @#'cn.li.ac.ability.item-actions/item-entity-spawns]
+    (let [player-states-val @player-state/player-states
+      context-registry-val @@#'cn.li.ac.ability.service.dispatcher/context-registry
+      item-action-registry-val @@#'cn.li.ac.ability.item-actions/item-action-registry
+      action-handlers-val @@#'cn.li.ac.ability.item-actions/action-handlers
+      item-entity-spawns-val @@#'cn.li.ac.ability.item-actions/item-entity-spawns]
     (try
       (reset! player-state/player-states {})
       (reset! @#'cn.li.ac.ability.service.dispatcher/context-registry {})

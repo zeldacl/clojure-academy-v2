@@ -115,8 +115,8 @@
     (seq
       (keep (fn [[effect-id effect-fn]]
               (try
-                (effect-fn player-id attacker-id damage damage-source)
-                effect-id
+                 (when (effect-fn player-id attacker-id damage damage-source)
+                   effect-id)
                 (catch Exception e
                   (log/warn "Attack precheck side-effect failed:" effect-id (ex-message e))
                   nil)))

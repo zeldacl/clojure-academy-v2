@@ -47,7 +47,7 @@
                 (assoc-in [:ability-data :skills :railgun :exp] 0.5)))
           (is (true? (railgun/register-coin-throw!
                        player-id
-                       {:timestamp-ms (- now-ms 10000)})))
+                       {:timestamp-ms (- now-ms 750)})))
           (let [spec (skill-registry/get-skill :railgun)
                 down-cp (get-in spec [:cost :down :cp])
                 down-overload (get-in spec [:cost :down :overload])]

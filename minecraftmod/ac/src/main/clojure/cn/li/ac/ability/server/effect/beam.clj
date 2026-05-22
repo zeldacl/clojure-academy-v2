@@ -22,10 +22,9 @@
   :forward-dist and :radial-dist, sorted nearest-first."
   [player-id world-id start-pos dir max-distance query-radius radius]
   (when world-effects/*world-effects*
-    (let [mid-pos (geom/v+ start-pos (geom/v* dir (/ (double max-distance) 2.0)))]
       (->> (world-effects/find-entities-in-radius world-effects/*world-effects*
                                                    world-id
-                                                   (:x mid-pos) (:y mid-pos) (:z mid-pos)
+                                                   (:x start-pos) (:y start-pos) (:z start-pos)
                                                    (double query-radius))
            (remove (fn [{:keys [uuid]}] (= uuid player-id)))
            (map (fn [{:keys [x y z] :as target}]
@@ -39,7 +38,7 @@
                           (<= (double radial-dist) (* (double radius) 1.2)))))
            (sort-by (fn [{:keys [x y z]}]
                       (geom/vdist-sq start-pos {:x x :y y :z z})))
-           vec))))
+            vec)))
 
 (defn- break-blocks!
   "Advance a cylindrical beam along dir, breaking blocks that can be broken

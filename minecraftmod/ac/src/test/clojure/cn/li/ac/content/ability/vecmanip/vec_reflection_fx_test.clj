@@ -16,11 +16,11 @@
 (deftest enqueue-reflect-entity-requires-reflected-flag-test
   (is (nil? (@#'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/enqueue!
              {:mode :reflect-entity :x 1.0 :y 2.0 :z 3.0 :reflected? false})))
-  (is (empty? @#'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/wave-effects))
+  (is (empty? @@#'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/wave-effects))
   (@#'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/enqueue!
    {:mode :reflect-entity :x 1.0 :y 2.0 :z 3.0 :reflected? true})
-  (is (= 1 (count @#'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/wave-effects)))
-  (is (= 3.0 (:z (first @#'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/wave-effects)))))
+  (is (= 1 (count @@#'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/wave-effects)))
+  (is (= 3.0 (:z (first @@#'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/wave-effects)))))
 
 (deftest init-registers-reflected-flag-through-fx-channel-handler-test
   (let [registered-effect (atom nil)
