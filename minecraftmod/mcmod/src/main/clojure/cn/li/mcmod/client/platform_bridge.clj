@@ -5,6 +5,9 @@
 (defonce ^:private ^:dynamic *slot-key-down-fn* nil)
 (defonce ^:private ^:dynamic *slot-key-tick-fn* nil)
 (defonce ^:private ^:dynamic *slot-key-up-fn* nil)
+(defonce ^:private ^:dynamic *movement-key-down-fn* nil)
+(defonce ^:private ^:dynamic *movement-key-tick-fn* nil)
+(defonce ^:private ^:dynamic *movement-key-up-fn* nil)
 (defonce ^:private ^:dynamic *open-skill-tree-screen-fn* nil)
 (defonce ^:private ^:dynamic *open-preset-editor-screen-fn* nil)
 (defonce ^:private ^:dynamic *open-location-teleport-screen-fn* nil)
@@ -15,6 +18,9 @@
 	[{:keys [slot-key-down
 					 slot-key-tick
 					 slot-key-up
+					 movement-key-down
+					 movement-key-tick
+					 movement-key-up
 					 open-skill-tree-screen
 					 open-preset-editor-screen
 					 open-location-teleport-screen
@@ -23,6 +29,9 @@
 	(alter-var-root #'*slot-key-down-fn* (constantly slot-key-down))
 	(alter-var-root #'*slot-key-tick-fn* (constantly slot-key-tick))
 	(alter-var-root #'*slot-key-up-fn* (constantly slot-key-up))
+	(alter-var-root #'*movement-key-down-fn* (constantly movement-key-down))
+	(alter-var-root #'*movement-key-tick-fn* (constantly movement-key-tick))
+	(alter-var-root #'*movement-key-up-fn* (constantly movement-key-up))
 	(alter-var-root #'*open-skill-tree-screen-fn* (constantly open-skill-tree-screen))
 	(alter-var-root #'*open-preset-editor-screen-fn* (constantly open-preset-editor-screen))
 	(alter-var-root #'*open-location-teleport-screen-fn* (constantly open-location-teleport-screen))
@@ -47,6 +56,24 @@
 	(if *slot-key-up-fn*
 		(*slot-key-up-fn* player-uuid key-idx)
 		(log/debug "Client bridge slot-key-up not available")))
+
+(defn on-movement-key-down!
+	[player-uuid movement-key]
+	(if *movement-key-down-fn*
+		(*movement-key-down-fn* player-uuid movement-key)
+		(log/debug "Client bridge movement-key-down not available")))
+
+(defn on-movement-key-tick!
+	[player-uuid movement-key]
+	(if *movement-key-tick-fn*
+		(*movement-key-tick-fn* player-uuid movement-key)
+		(log/debug "Client bridge movement-key-tick not available")))
+
+(defn on-movement-key-up!
+	[player-uuid movement-key]
+	(if *movement-key-up-fn*
+		(*movement-key-up-fn* player-uuid movement-key)
+		(log/debug "Client bridge movement-key-up not available")))
 
 (defn open-skill-tree-screen!
 	([player-uuid]

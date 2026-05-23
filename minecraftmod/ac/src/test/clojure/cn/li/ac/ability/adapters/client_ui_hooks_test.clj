@@ -134,3 +134,29 @@
           kinds (mapv :kind (:elements plan))]
       (is (= 1 (count (filter #{:vec-reflection-crosshair} kinds))))
           (is (some #{:blit-texture} kinds))))))
+
+(deftest movement-key-hooks-route-to-flashing-channel-test
+  (let [sent (atom [])
+        hooks (client-ui-hooks/runtime-client-ui-hooks)]
+    (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :flashing)
+                  ctx-mgr/activate-context! (fn [_ _] {:id "ctx-flashing"})
+                  net-client/send-to-server
+                  (fn
+                    ([msg-id payload]
+                     (swap! sent conj {:msg-id msg-id :payload payload}))
+                    ([msg-id payload _callback]
+                     (swap! sent conj {:msg-id msg-id :payload payload})))]
+      ((:client-on-slot-key-down! hooks) "p1" 0)
+      ((:client-on-movement-key-down! hooks) "p1" :forward)
+      ((:client-on-movement-key-tick! hooks) "p1" :forward)
+      ((:client-on-movement-key-up! hooks) "p1" :forward)
+      (is (= [catalog/MSG-SLOT-KEY-DOWN
+              catalog/MSG-CTX-CHANNEL
+              catalog/MSG-CTX-CHANNEL
+              catalog/MSG-CTX-CHANNEL]
+             (mapv :msg-id @sent)))
+      (is (= [{:ctx-id "ctx-flashing" :skill-id :flashing :key-idx 0}
+              {:ctx-id "ctx-flashing" :channel :flashing/move-down :payload {:key :forward}}
+              {:ctx-id "ctx-flashing" :channel :flashing/move-tick :payload {:key :forward}}
+              {:ctx-id "ctx-flashing" :channel :flashing/move-up :payload {:key :forward}}]
+             (mapv :payload @sent))))))

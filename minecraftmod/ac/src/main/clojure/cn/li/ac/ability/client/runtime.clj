@@ -18,6 +18,18 @@
   [player-uuid key-idx]
   (client-bridge/on-slot-key-up! player-uuid key-idx))
 
+(defn on-movement-key-down!
+  [player-uuid movement-key]
+  (client-bridge/on-movement-key-down! player-uuid movement-key))
+
+(defn on-movement-key-tick!
+  [player-uuid movement-key]
+  (client-bridge/on-movement-key-tick! player-uuid movement-key))
+
+(defn on-movement-key-up!
+  [player-uuid movement-key]
+  (client-bridge/on-movement-key-up! player-uuid movement-key))
+
 (defn railgun-charge-visual-state
   [player-uuid]
   (power-runtime/client-railgun-charge-visual-state player-uuid))

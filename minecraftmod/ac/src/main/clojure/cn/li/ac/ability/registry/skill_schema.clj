@@ -120,7 +120,7 @@
            {:message "Skill :aim must be a map or nil" :skill-id id :value aim})
   (assert! (or (nil? exp) (map? exp))
            {:message "Skill :exp must be a map or nil" :skill-id id :value exp})
-  (doseq [k [:targeting :transitions :exp-policy :cooldown-policy :state]]
+  (doseq [k [:targeting :transitions :exp-policy :cooldown-policy :input-policy :state]]
     (when (contains? spec k)
       (assert! (map? (get spec k))
                {:message "Skill policy fields must be maps"

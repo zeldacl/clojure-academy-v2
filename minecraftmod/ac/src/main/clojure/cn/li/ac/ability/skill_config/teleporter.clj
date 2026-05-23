@@ -11,12 +11,15 @@
    {:skill-id :space-fluct :id :critical.level2-probability :path "critical.level2-probability" :section-suffix "critical" :type :double-list :min 0.0 :max 1.0 :list-count 2 :default [0.01 0.03] :comment "SpaceFluct passive contribution to level-2 critical probability."}
    {:skill-id :space-fluct :id :progression.exp-critical :path "progression.exp-critical" :section-suffix "progression" :type :double :min 0.0 :default 0.0001 :comment "SpaceFluct exp gained when a teleporter critical attack occurs."}
 
-   {:skill-id :flashing :id :movement.blink-distance :path "movement.blink-distance" :section-suffix "movement" :type :double-list :min 0.0 :list-count 2 :default [0.5 1.5] :comment "Flashing blink distance per interval."}
+  {:skill-id :flashing :id :movement.blink-distance :path "movement.blink-distance" :section-suffix "movement" :type :double-list :min 0.0 :list-count 2 :default [12.0 18.0] :comment "Flashing blink distance per execute."}
    {:skill-id :flashing :id :timing.blink-interval-ticks :path "timing.blink-interval-ticks" :section-suffix "timing" :type :double-list :min 1.0 :list-count 2 :default [6.0 3.0] :comment "Flashing blink interval in ticks."}
-   {:skill-id :flashing :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [20.0 10.0] :comment "Flashing activation overload cost."}
-   {:skill-id :flashing :id :cost.blink.cp :path "cost.blink.cp" :section-suffix "cost.blink" :type :double-list :min 0.0 :list-count 2 :default [30.0 18.0] :comment "Flashing manual CP cost per blink."}
-   {:skill-id :flashing :id :cost.blink.overload :path "cost.blink.overload" :section-suffix "cost.blink" :type :double-list :min 0.0 :list-count 2 :default [8.0 4.0] :comment "Flashing manual overload cost per blink."}
-   {:skill-id :flashing :id :cooldown.deactivate-ticks :path "cooldown.deactivate-ticks" :section-suffix "cooldown" :type :int :min 0 :default 20 :comment "Flashing manual cooldown applied on deactivate/abort."}
+  {:skill-id :flashing :id :timing.max-active-ticks :path "timing.max-active-ticks" :section-suffix "timing" :type :double-list :min 1.0 :list-count 2 :default [60.0 150.0] :comment "Flashing max active duration before auto-terminate."}
+  {:skill-id :flashing :id :timing.post-blink-fall-protect-ticks :path "timing.post-blink-fall-protect-ticks" :section-suffix "timing" :type :double-list :min 0.0 :list-count 2 :default [40.0 40.0] :comment "Flashing post-blink fall-protection ticks."}
+  {:skill-id :flashing :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [250.0 180.0] :comment "Flashing activation overload cost."}
+  {:skill-id :flashing :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [80.0 60.0] :comment "Flashing activation CP cost."}
+  {:skill-id :flashing :id :cost.blink.cp :path "cost.blink.cp" :section-suffix "cost.blink" :type :double-list :min 0.0 :list-count 2 :default [13.0 6.0] :comment "Flashing manual CP cost per blink."}
+  {:skill-id :flashing :id :cost.blink.overload :path "cost.blink.overload" :section-suffix "cost.blink" :type :double-list :min 0.0 :list-count 2 :default [0.0 0.0] :comment "Flashing manual overload cost per blink."}
+  {:skill-id :flashing :id :cooldown.deactivate-ticks :path "cooldown.deactivate-ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [900.0 400.0] :comment "Flashing cooldown applied on deactivate/abort."}
    {:skill-id :flashing :id :progression.exp-blink :path "progression.exp-blink" :section-suffix "progression" :type :double :min 0.0 :default 0.001 :comment "Flashing exp gained per successful blink."}
 
   {:skill-id :flesh-ripping :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [6.0 14.0] :comment "FleshRipping entity raycast range."}

@@ -3,6 +3,8 @@
   (:require [cn.li.mc1201.client.i18n :as i18n]
             [cn.li.mc1201.client.render.pose :as pose-impl]
             [cn.li.mc1201.client.render.buffer :as buffer-impl]
+            [cn.li.mc1201.client.screen.host :as screen-host]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.client.render.pose :as pose]
@@ -76,11 +78,25 @@
             (BlockEntityRendererImpl.))))
       (log/info (str "Fabric BER registered for tile-id " tile-id)))))
 
+(defn- init-ac-client-bridge!
+  []
+  (client-bridge/install-client-bridge!
+    {:open-skill-tree-screen screen-host/open-skill-tree-screen!
+     :open-preset-editor-screen screen-host/open-preset-editor-screen!
+     :open-location-teleport-screen screen-host/open-location-teleport-screen!
+     :slot-key-down runtime-bridge/on-slot-key-down!
+     :slot-key-tick runtime-bridge/on-slot-key-tick!
+     :slot-key-up runtime-bridge/on-slot-key-up!
+     :movement-key-down runtime-bridge/on-movement-key-down!
+     :movement-key-tick runtime-bridge/on-movement-key-tick!
+     :movement-key-up runtime-bridge/on-movement-key-up!}))
+
 (defn init-client
   "Initialize client-side systems for Fabric 1.20.1."
   []
   (log/info "Initializing Fabric 1.20.1 client-side systems")
   (init-render-bindings!)
+  (init-ac-client-bridge!)
   (i18n/install-client-i18n!)
   (register-renderers)
   (FabricClientRenderSetup/registerEntityRenderers)
@@ -88,5 +104,6 @@
   (overlay-renderer/init!)
   (hand-effect-renderer/init!)
   (level-effect-renderer/init!)
+  (screen-host/init!)
   (runtime-bridge/init!)
   (log/info "Fabric client initialization complete"))

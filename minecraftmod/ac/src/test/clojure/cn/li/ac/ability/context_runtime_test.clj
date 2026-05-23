@@ -4,6 +4,7 @@
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.registry :as skill-reg]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
@@ -58,3 +59,31 @@
   (testing "missing/other mode uses default auto cooldown"
     (is (true? (rt/should-apply-main-cooldown? {:cooldown {:mode :default}})))
     (is (true? (rt/should-apply-main-cooldown? {})))))
+
+(deftest key-up-termination-policy-helper-test
+  (testing "default policy terminates context on key-up"
+    (is (true? (rt/should-terminate-context-on-key-up? {}))))
+  (testing "skill can opt-out via input-policy"
+    (is (false? (rt/should-terminate-context-on-key-up?
+                  {:input-policy {:terminate-on-key-up? false}})))
+    (is (true? (rt/should-terminate-context-on-key-up?
+                 {:input-policy {:terminate-on-key-up? true}})))))
+
+(deftest key-up-can-keep-context-alive-when-policy-disables-termination-test
+  (let [uuid "test-player-sticky"
+        _ (seed-player-state! uuid)
+        c (-> (ctx/new-server-context uuid :arc-gen "ctx-sticky")
+              (assoc :input-state :active))]
+    (ctx/register-context! c)
+    (with-redefs [skill-reg/get-skill (fn [_]
+                                        {:id :arc-gen
+                                         :ctrl-id :arc-gen
+                                         :cooldown {:mode :manual}
+                                         :input-policy {:terminate-on-key-up? false}})]
+      (is (true? (rt/handle-key-up! "ctx-sticky" {:ctx-id "ctx-sticky" :skill-id :arc-gen}))
+          "key-up should be handled")
+      (let [updated (ctx/get-context "ctx-sticky")]
+        (is (= ctx/STATUS-ALIVE (:status updated))
+            "context remains alive when termination policy is disabled")
+        (is (= :idle (:input-state updated))
+            "input state resets to :idle so subsequent key-down can reactivate")))))

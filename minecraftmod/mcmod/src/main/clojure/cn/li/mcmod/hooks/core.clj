@@ -96,6 +96,9 @@
          :client-on-slot-key-down! noop
          :client-on-slot-key-tick! noop
          :client-on-slot-key-up! noop
+         :client-on-movement-key-down! noop
+         :client-on-movement-key-tick! noop
+         :client-on-movement-key-up! noop
          :client-on-slot-wheel! noop
          :client-abort-all! noop
          :client-tick! noop
@@ -523,6 +526,18 @@
 (defn client-on-slot-key-up!
   [player-uuid key-idx]
   ((:client-on-slot-key-up! @runtime-hooks) player-uuid key-idx))
+
+(defn client-on-movement-key-down!
+  [player-uuid movement-key]
+  ((:client-on-movement-key-down! @runtime-hooks) player-uuid movement-key))
+
+(defn client-on-movement-key-tick!
+  [player-uuid movement-key]
+  ((:client-on-movement-key-tick! @runtime-hooks) player-uuid movement-key))
+
+(defn client-on-movement-key-up!
+  [player-uuid movement-key]
+  ((:client-on-movement-key-up! @runtime-hooks) player-uuid movement-key))
 
 (defn client-on-slot-wheel!
   [player-uuid key-idx delta]

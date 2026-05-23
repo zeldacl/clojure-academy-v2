@@ -74,6 +74,12 @@
   [skill-spec]
   (not= :manual (get-in skill-spec [:cooldown :mode])))
 
+(defn should-terminate-context-on-key-up?
+  "Pure policy helper: by default key-up terminates context.
+  Skills can opt out via {:input-policy {:terminate-on-key-up? false}}."
+  [skill-spec]
+  (not (false? (get-in skill-spec [:input-policy :terminate-on-key-up?]))))
+
 (defn handle-key-down!
   ([ctx-id payload]
    (handle-key-down! ctx-id payload nil))
@@ -111,11 +117,13 @@
          (dispatch-skill-callback! released-ctx :on-key-up evt/EVT-CONTEXT-KEY-UP payload)
          (evt/fire-ability-event!
            (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))
-        (let [latest-ctx (ctx/get-context ctx-id)
-            spec (skill/get-skill (:skill-id latest-ctx))]
-          (when (should-apply-main-cooldown? spec)
-             (apply-main-cooldown! released-ctx)))
-         (ctx/terminate-context! ctx-id terminate-fn)
+         (let [latest-ctx (ctx/get-context ctx-id)
+               spec (skill/get-skill (:skill-id latest-ctx))]
+           (when (should-apply-main-cooldown? spec)
+             (apply-main-cooldown! released-ctx))
+           (if (should-terminate-context-on-key-up? spec)
+             (ctx/terminate-context! ctx-id terminate-fn)
+             (set-input-state! ctx-id INPUT-IDLE)))
          true)))))
 
 (defn handle-key-abort!

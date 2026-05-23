@@ -393,6 +393,28 @@ public final class ForgeSmokeGameTests {
         helper.succeed();
     }
 
+    @GameTest(templateNamespace = "minecraft", template = "empty", batch = "ac_smoke")
+    public static void flashingRegistrationSmoke(GameTestHelper helper) {
+        String hooksNs = "cn.li.mcmod.hooks.core";
+        ClojureInterop.requireNamespace(hooksNs);
+
+        Object skillsObj = ClojureInterop.invoke(hooksNs, "get-skills-for-category", kw("teleporter"));
+        helper.assertTrue(skillsObj instanceof Iterable,
+            "Expected teleporter skills to be exposed through runtime hooks");
+
+        boolean foundFlashing = false;
+        for (Object skillObj : (Iterable<?>) skillsObj) {
+            if (skillObj instanceof Map<?, ?> skillMap && kw("flashing").equals(skillMap.get(kw("id")))) {
+                foundFlashing = true;
+                break;
+            }
+        }
+
+        helper.assertTrue(foundFlashing,
+            "Expected Flashing skill to be registered under teleporter category");
+        helper.succeed();
+    }
+
     @GameTest(templateNamespace = "minecraft", template = "empty", batch = "ac_worldgen")
     public static void phaseLiquidPoolUsesImagPhaseBlock(GameTestHelper helper) {
         assertPhaseLiquidPoolUsesImagPhase(helper);

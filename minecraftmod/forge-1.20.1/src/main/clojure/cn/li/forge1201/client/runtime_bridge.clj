@@ -63,6 +63,15 @@
 (defn on-slot-key-up! [player-uuid key-idx]
   (power-runtime/client-on-slot-key-up! player-uuid key-idx))
 
+(defn on-movement-key-down! [player-uuid movement-key]
+  (power-runtime/client-on-movement-key-down! player-uuid movement-key))
+
+(defn on-movement-key-tick! [player-uuid movement-key]
+  (power-runtime/client-on-movement-key-tick! player-uuid movement-key))
+
+(defn on-movement-key-up! [player-uuid movement-key]
+  (power-runtime/client-on-movement-key-up! player-uuid movement-key))
+
 (defn abort-all! []
   (power-runtime/client-abort-all!))
 

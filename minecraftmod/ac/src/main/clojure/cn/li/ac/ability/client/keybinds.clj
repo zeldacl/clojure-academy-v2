@@ -119,8 +119,15 @@
 ;; State tracking for key transitions
 (defonce ^:private key-states
   (atom {:skill-keys [false false false false]
+         :movement-keys {:forward false
+                         :back false
+                         :left false
+                         :right false}
          :gui-keys {:skill-tree false
                     :preset-editor false}}))
+
+(def ^:private movement-keys
+  [:forward :back :left :right])
 
 (defn- activated?
   [player-uuid]
@@ -205,6 +212,24 @@
     ;; Update state
     (swap! key-states assoc-in [:gui-keys gui-type] is-down)))
 
+(defn on-movement-key-event
+  "Handle movement key state transitions and forward them to runtime bridge."
+  [movement-key is-down]
+  (let [was-down (get-in @key-states [:movement-keys movement-key])]
+    (when-let [player-uuid (get-client-player-uuid)]
+      (cond
+        (and (not was-down) is-down)
+        (runtime/on-movement-key-down! player-uuid movement-key)
+
+        (and was-down is-down)
+        (runtime/on-movement-key-tick! player-uuid movement-key)
+
+        (and was-down (not is-down))
+        (runtime/on-movement-key-up! player-uuid movement-key)
+
+        :else nil))
+    (swap! key-states assoc-in [:movement-keys movement-key] is-down)))
+
 (defn trigger-mode-switch!
   "V key short-press handler. Delegates to the active activate handler.
   If no handler matches, falls through to default toggle."
@@ -235,6 +260,10 @@
   (doseq [idx (range 4)]
     (on-skill-key-event idx (key-state-fn [:skill idx])))
 
+  ;; Poll movement keys (W/A/S/D)
+  (doseq [movement-key movement-keys]
+    (on-movement-key-event movement-key (key-state-fn [:movement movement-key])))
+
   ;; Poll GUI keys
   (on-gui-key-event :skill-tree (key-state-fn [:gui :skill-tree]))
   (on-gui-key-event :preset-editor (key-state-fn [:gui :preset-editor])))
@@ -243,6 +272,10 @@
   "Reset all key states. Called on disconnect or dimension change."
   []
   (reset! key-states {:skill-keys [false false false false]
+                      :movement-keys {:forward false
+                                      :back false
+                                      :left false
+                                      :right false}
                       :gui-keys {:skill-tree false
                                  :preset-editor false}})
   (clear-all-key-groups!))

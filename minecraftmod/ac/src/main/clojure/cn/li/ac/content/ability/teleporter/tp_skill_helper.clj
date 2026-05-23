@@ -135,6 +135,40 @@
         (teleportation/reset-fall-damage! teleportation/*teleportation* player-id))
       result)))
 
+(defn reset-fall-damage!
+  "Reset player's fall damage state. Returns true on success."
+  [player-id]
+  (when teleportation/*teleportation*
+    (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)))
+
+(defn raycast-combined
+  "Raycast from world position and direction, returning first hit map or nil."
+  [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
+  (when raycast/*raycast*
+    (raycast/raycast-combined raycast/*raycast*
+                              world-id
+                              (double start-x)
+                              (double start-y)
+                              (double start-z)
+                              (double dir-x)
+                              (double dir-y)
+                              (double dir-z)
+                              (double max-distance))))
+
+(defn raycast-blocks
+  "Raycast blocks from world position and direction, returning block hit or nil."
+  [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
+  (when raycast/*raycast*
+    (raycast/raycast-blocks raycast/*raycast*
+                            world-id
+                            (double start-x)
+                            (double start-y)
+                            (double start-z)
+                            (double dir-x)
+                            (double dir-y)
+                            (double dir-z)
+                            (double max-distance))))
+
 ;; ---------------------------------------------------------------------------
 ;; Entity raycast helper
 ;; ---------------------------------------------------------------------------

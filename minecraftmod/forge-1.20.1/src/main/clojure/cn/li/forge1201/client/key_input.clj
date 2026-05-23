@@ -150,6 +150,17 @@
     (when-let [^KeyMapping key (nth @skill-keys key-idx nil)]
       (.isDown key))))
 
+(defn- movement-key-down?
+  [movement-key]
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    (let [^Options opts (.options mc)]
+      (case movement-key
+        :forward (.isDown (.keyUp opts))
+        :back (.isDown (.keyDown opts))
+        :left (.isDown (.keyLeft opts))
+        :right (.isDown (.keyRight opts))
+        false))))
+
 (defn- on-mouse-scroll! [^InputEvent$MouseScrollingEvent event]
   (let [delta (double (.getScrollDelta event))
         scheme @key-scheme
@@ -181,6 +192,7 @@
         (case (first key-id)
           :skill (let [idx (second key-id)]
                    (skill-key-down? scheme idx))
+          :movement (movement-key-down? (second key-id))
           :gui (when-let [^KeyMapping key (get @gui-keys (second key-id))] (.isDown key))
           false))
       get-player-uuid)))

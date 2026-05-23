@@ -94,6 +94,25 @@
                                     :channel :penetrate-tp/set-distance
                                     :payload {:delta (double delta)}})))))
 
+(defn- active-flashing-context-ids
+  [player-uuid]
+  (->> @slot-context-ids
+       (keep (fn [[[slot-player-uuid _] ctx-id]]
+               (when (= slot-player-uuid player-uuid)
+                 (let [ctx-data (ctx/get-context ctx-id)]
+                   (when (= :flashing (:skill-id ctx-data))
+                     ctx-id)))))
+       distinct
+       vec))
+
+(defn- send-flashing-movement-message!
+  [player-uuid channel movement-key]
+  (doseq [ctx-id (active-flashing-context-ids player-uuid)]
+    (net-client/send-to-server catalog/MSG-CTX-CHANNEL
+                               {:ctx-id ctx-id
+                                :channel channel
+                                :payload {:key movement-key}})))
+
 (defn- vec-reflection-active?
   [player-uuid]
   (boolean
@@ -366,6 +385,18 @@
    (fn [player-uuid key-idx]
      (swap! slot-key-tick-ms dissoc [player-uuid key-idx])
      (send-slot-key-up-message! player-uuid key-idx))
+
+   :client-on-movement-key-down!
+   (fn [player-uuid movement-key]
+     (send-flashing-movement-message! player-uuid :flashing/move-down movement-key))
+
+   :client-on-movement-key-tick!
+   (fn [player-uuid movement-key]
+     (send-flashing-movement-message! player-uuid :flashing/move-tick movement-key))
+
+   :client-on-movement-key-up!
+   (fn [player-uuid movement-key]
+     (send-flashing-movement-message! player-uuid :flashing/move-up movement-key))
 
    :client-on-slot-wheel!
    (fn [player-uuid key-idx delta]

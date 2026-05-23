@@ -13,6 +13,7 @@
 
 (defonce ^:private tick-listener-registered? (atom false))
 (defonce ^:private raw-v-state (atom (mode-switch/initial-state)))
+(defonce ^:private raw-n-state (atom {:was-down false}))
 
 (defn- get-player-uuid []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
@@ -27,6 +28,58 @@
   (when-let [^Minecraft mc (Minecraft/getInstance)]
     (let [window (.getWindow (.getWindow mc))]
       (= GLFW/GLFW_PRESS (GLFW/glfwGetKey window GLFW/GLFW_KEY_V)))))
+
+(defn- poll-key-down?
+  [key-code]
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    (let [window (.getWindow (.getWindow mc))]
+      (= GLFW/GLFW_PRESS (GLFW/glfwGetKey window key-code)))))
+
+(defn- skill-key-down?
+  [key-idx]
+  ;; Keep parity with Forge alternative scheme: Z/X/C/B
+  (case (int key-idx)
+    0 (boolean (poll-key-down? GLFW/GLFW_KEY_Z))
+    1 (boolean (poll-key-down? GLFW/GLFW_KEY_X))
+    2 (boolean (poll-key-down? GLFW/GLFW_KEY_C))
+    3 (boolean (poll-key-down? GLFW/GLFW_KEY_B))
+    false))
+
+(defn- movement-key-down?
+  [movement-key]
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    (let [opts (.options mc)]
+      (case movement-key
+        :forward (.isDown (.keyUp opts))
+        :back (.isDown (.keyDown opts))
+        :left (.isDown (.keyLeft opts))
+        :right (.isDown (.keyRight opts))
+        false))))
+
+(defn- gui-key-down?
+  [gui-key]
+  (case gui-key
+    :skill-tree (boolean (poll-key-down? GLFW/GLFW_KEY_GRAVE_ACCENT))
+    :preset-editor (boolean (poll-key-down? GLFW/GLFW_KEY_G))
+    false))
+
+(defn on-slot-key-down! [player-uuid key-idx]
+  (power-runtime/client-on-slot-key-down! player-uuid key-idx))
+
+(defn on-slot-key-tick! [player-uuid key-idx]
+  (power-runtime/client-on-slot-key-tick! player-uuid key-idx))
+
+(defn on-slot-key-up! [player-uuid key-idx]
+  (power-runtime/client-on-slot-key-up! player-uuid key-idx))
+
+(defn on-movement-key-down! [player-uuid movement-key]
+  (power-runtime/client-on-movement-key-down! player-uuid movement-key))
+
+(defn on-movement-key-tick! [player-uuid movement-key]
+  (power-runtime/client-on-movement-key-tick! player-uuid movement-key))
+
+(defn on-movement-key-up! [player-uuid movement-key]
+  (power-runtime/client-on-movement-key-up! player-uuid movement-key))
 
 (defn- tick-mode-switch! []
   (let [now (System/nanoTime)
@@ -45,9 +98,29 @@
              (overlay-state/set-client-activated! (not cur-activated))
              (power-runtime/client-trigger-mode-switch! uuid))))})))
 
+(defn- tick-preset-switch! []
+  (let [is-down (boolean (poll-key-down? GLFW/GLFW_KEY_N))
+        was-down (boolean (:was-down @raw-n-state))]
+    (when (and (not was-down) is-down)
+      (when-let [uuid (get-player-uuid)]
+        (power-runtime/client-trigger-preset-switch! uuid)))
+    (swap! raw-n-state assoc :was-down is-down)))
+
+(defn- tick-ability-keys! []
+  (power-runtime/client-tick-keys!
+    (fn [key-id]
+      (case (first key-id)
+        :skill (skill-key-down? (second key-id))
+        :movement (movement-key-down? (second key-id))
+        :gui (gui-key-down? (second key-id))
+        false))
+    get-player-uuid))
+
 (defn tick-client!
   []
   (tick-mode-switch!)
+  (tick-preset-switch!)
+  (tick-ability-keys!)
   (particle/tick-particles!)
   (sound/tick-sounds!)
   (power-runtime/client-tick!))
