@@ -63,16 +63,16 @@
    {:skill-id :shift-teleport :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [25.0 15.0] :comment "ShiftTeleport cooldown ticks."}
    {:skill-id :shift-teleport :id :progression.exp-success :path "progression.exp-success" :section-suffix "progression" :type :double :min 0.0 :default 0.002 :comment "ShiftTeleport exp gained on success."}
 
-   {:skill-id :threatening-teleport :id :charge.min-ticks :path "charge.min-ticks" :section-suffix "charge" :type :int :min 0 :default 5 :comment "ThreateningTeleport minimum hold ticks."}
-   {:skill-id :threatening-teleport :id :charge.max-ticks :path "charge.max-ticks" :section-suffix "charge" :type :int :min 1 :default 60 :comment "ThreateningTeleport charge reference ticks."}
-   {:skill-id :threatening-teleport :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [20.0 40.0] :comment "ThreateningTeleport entity raycast range."}
-   {:skill-id :threatening-teleport :id :movement.behind-offset :path "movement.behind-offset" :section-suffix "movement" :type :double :min 0.0 :default 1.5 :comment "ThreateningTeleport destination offset behind target."}
-   {:skill-id :threatening-teleport :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [5.0 14.0] :comment "ThreateningTeleport base magic damage."}
-   {:skill-id :threatening-teleport :id :combat.charge-bonus-multiplier :path "combat.charge-bonus-multiplier" :section-suffix "combat" :type :double :min 0.0 :default 1.0 :comment "ThreateningTeleport additional full-charge damage multiplier."}
-   {:skill-id :threatening-teleport :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [150.0 100.0] :comment "ThreateningTeleport down-stage CP cost."}
-   {:skill-id :threatening-teleport :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [60.0 40.0] :comment "ThreateningTeleport down-stage overload cost."}
-   {:skill-id :threatening-teleport :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [35.0 20.0] :comment "ThreateningTeleport cooldown ticks."}
-   {:skill-id :threatening-teleport :id :progression.exp-success :path "progression.exp-success" :section-suffix "progression" :type :double :min 0.0 :default 0.003 :comment "ThreateningTeleport exp gained on success."}])
+  {:skill-id :threatening-teleport :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [8.0 15.0] :comment "ThreateningTeleport raycast range."}
+  {:skill-id :threatening-teleport :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [3.0 6.0] :comment "ThreateningTeleport base magic damage."}
+  {:skill-id :threatening-teleport :id :cost.up.cp :path "cost.up.cp" :section-suffix "cost.up" :type :double-list :min 0.0 :list-count 2 :default [35.0 100.0] :comment "ThreateningTeleport up-stage CP cost."}
+  {:skill-id :threatening-teleport :id :cost.up.overload :path "cost.up.overload" :section-suffix "cost.up" :type :double-list :min 0.0 :list-count 2 :default [18.0 10.0] :comment "ThreateningTeleport up-stage overload cost."}
+  {:skill-id :threatening-teleport :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [30.0 15.0] :comment "ThreateningTeleport cooldown ticks."}
+  {:skill-id :threatening-teleport :id :progression.exp-base :path "progression.exp-base" :section-suffix "progression" :type :double :min 0.0 :default 0.003 :comment "ThreateningTeleport base exp per execute."}
+  {:skill-id :threatening-teleport :id :progression.exp-hit-factor :path "progression.exp-hit-factor" :section-suffix "progression" :type :double :min 0.0 :default 1.0 :comment "ThreateningTeleport exp multiplier for hit execute."}
+  {:skill-id :threatening-teleport :id :progression.exp-miss-factor :path "progression.exp-miss-factor" :section-suffix "progression" :type :double :min 0.0 :default 0.2 :comment "ThreateningTeleport exp multiplier for miss execute."}
+  {:skill-id :threatening-teleport :id :interaction.drop-prob.hit :path "interaction.drop-prob.hit" :section-suffix "interaction" :type :double :min 0.0 :max 1.0 :default 0.3 :comment "ThreateningTeleport drop probability when target is hit."}
+  {:skill-id :threatening-teleport :id :interaction.drop-prob.miss :path "interaction.drop-prob.miss" :section-suffix "interaction" :type :double :min 0.0 :max 1.0 :default 1.0 :comment "ThreateningTeleport drop probability when no target is hit."}])
 
 (def internal-tunable-definitions
   [{:skill-id :mark-teleport :id :targeting.eye-height :path "targeting.eye-height" :section-suffix "targeting" :type :double :min 0.0 :default 1.6 :comment "Internal raycast origin eye height."}

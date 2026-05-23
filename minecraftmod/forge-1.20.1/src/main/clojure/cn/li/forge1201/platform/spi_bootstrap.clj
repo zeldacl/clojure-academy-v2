@@ -13,6 +13,7 @@
             [cn.li.forge1201.integration.side :as side])
   (:import [cn.li.mc1201.runtime BlockRegistryShared ItemInventoryShared ItemPlayerOpsShared ItemRegistryShared ParticleEntityShared RuntimeAccessShared]
            [net.minecraft.core BlockPos]
+           [net.minecraft.world.entity.item ItemEntity]
            [net.minecraft.world.level Level]
            [net.minecraft.world.level.block.state BlockState]
            [net.minecraft.world.phys BlockHitResult]))
@@ -72,6 +73,25 @@
     (player-container-menu [_ player] (RuntimeAccessShared/getPlayerContainerMenu player))
     (count-player-item-by-id [_ player item-id] (ItemPlayerOpsShared/countPlayerItemById player (str item-id)))
     (consume-player-item-by-id! [_ player item-id amount] (ItemPlayerOpsShared/consumePlayerItemById player (str item-id) (int (or amount 0))))
+    (drop-player-main-hand-item-at! [_ player amount x y z]
+      (let [n (int (max 0 (or amount 0)))]
+        (cond
+          (nil? player) false
+          (zero? n) true
+          (boolean (.isCreative player)) true
+          :else
+          (let [stack (.getMainHandItem player)]
+            (if (or (nil? stack)
+                    (.isEmpty stack)
+                    (< (int (.getCount stack)) n))
+              false
+              (let [drop-stack (.copy stack)
+                    level ^Level (RuntimeAccessShared/getEntityLevel player)]
+                (.setCount drop-stack n)
+                (.shrink stack n)
+                (if (or (nil? level) (.isClientSide level))
+                  true
+                  (boolean (.addFreshEntity level (ItemEntity. level (double x) (double y) (double z) drop-stack))))))))))
     (give-player-item-stack! [_ player stack] (ItemPlayerOpsShared/givePlayerItemStack player stack))
     (spawn-entity-by-id! [_ player entity-id speed] (ParticleEntityShared/spawnEntityByIdFromPlayer player (str entity-id) (float (or speed 1.0))))
     (raytrace-block [_ player reach fluid-source-only?] (raytrace-block-map player reach fluid-source-only?))

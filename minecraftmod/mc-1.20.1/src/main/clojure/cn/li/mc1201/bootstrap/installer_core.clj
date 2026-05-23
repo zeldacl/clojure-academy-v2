@@ -206,6 +206,8 @@
                                                                  (do
                                                                    (ru/inst stack "shrink" n)
                                                                    true))))))
+                       :player-drop-main-hand-item-at! (fn [this amount x y z]
+                                                         (player-ops/drop-player-main-hand-item-at! adapter this amount x y z))
                        :player-count-item-by-id (fn [this item-id] (player-ops/count-player-item-by-id adapter this item-id))
                        :player-consume-item-by-id! (fn [this item-id amount] (player-ops/consume-player-item-by-id! adapter this item-id amount))
                        :player-give-item-stack! (fn [this stack] (player-ops/give-player-item-stack! adapter this stack))

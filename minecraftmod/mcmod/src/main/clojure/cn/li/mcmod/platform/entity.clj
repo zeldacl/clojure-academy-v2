@@ -34,6 +34,10 @@
   (player-consume-main-hand-item! [player amount]
     "Consume amount from main-hand item unless creative. Returns true when consumed/allowed")
 
+  (player-drop-main-hand-item-at! [player amount x y z]
+    "Consume amount from main-hand item and spawn dropped item at world coordinates.
+    Returns true when operation succeeds or is bypassed in creative mode")
+
   (player-count-item-by-id [player item-id]
     "Count all items with registry id `item-id` in player's inventory. Returns int.")
 

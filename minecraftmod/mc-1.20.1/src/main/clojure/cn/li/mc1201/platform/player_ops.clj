@@ -5,6 +5,7 @@
   (player-container-menu [this player])
   (count-player-item-by-id [this player item-id])
   (consume-player-item-by-id! [this player item-id amount])
+  (drop-player-main-hand-item-at! [this player amount x y z])
   (give-player-item-stack! [this player stack])
   (spawn-entity-by-id! [this player entity-id speed])
   (raytrace-block [this player reach fluid-source-only?]))

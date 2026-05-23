@@ -14,6 +14,7 @@
   (player-get-main-hand-item-id [_] nil)
   (player-get-main-hand-item-count [_] 0)
   (player-consume-main-hand-item! [_ _amount] false)
+  (player-drop-main-hand-item-at! [_ _amount _x _y _z] false)
   (player-count-item-by-id [_ _item-id] 0)
   (player-consume-item-by-id! [_ _item-id _amount] false)
   (player-give-item-stack! [_ _item-stack] false)

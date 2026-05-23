@@ -185,7 +185,7 @@
               :trigger-key {:kind :level-change :category :teleporter :level 5}} {})
    (base-ach {:id "teleporter.threatening_teleport" :tab :teleporter :parent "teleporter.lv1" :icon "my_mod:threatening_teleport"
               :criteria (custom-criterion "teleporter.threatening_teleport")
-              :trigger-key {:kind :skill-perform :skill-id :threatening-teleport}} {})
+              :trigger-key {:kind :custom :event-id "teleporter.threatening_teleport"}} {})
    (base-ach {:id "teleporter.critical_attack" :tab :teleporter :parent "teleporter.threatening_teleport" :icon "my_mod:dim_folding_theorem"
               :criteria (custom-criterion "teleporter.critical_attack")
               :trigger-key {:kind :custom :event-id "teleporter.critical_attack"}} {})

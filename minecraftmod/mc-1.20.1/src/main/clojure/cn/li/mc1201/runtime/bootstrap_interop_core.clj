@@ -150,6 +150,30 @@
         true)
       (catch Throwable _ false))))
 
+(defn drop-player-main-hand-item-at
+  [player amount x y z]
+  (let [n (int (max 0 (or amount 0)))]
+    (cond
+      (nil? player) false
+      (zero? n) true
+      (boolean (ru/inst player "isCreative")) true
+      :else
+      (try
+        (let [stack (ru/player-main-hand-stack player)]
+          (if (or (stack-empty? stack)
+                  (< (int (ru/inst stack "getCount")) n))
+            false
+            (let [drop-stack (ru/inst stack "copy")
+                  level (player-level player)]
+              (ru/inst drop-stack "setCount" n)
+              (ru/inst stack "shrink" n)
+              (if (or (nil? level) (world-client-side? level))
+                true
+                (let [item-entity-cls (ru/class-noinit "net.minecraft.world.entity.item.ItemEntity")
+                      entity (ru/ctor item-entity-cls level (double x) (double y) (double z) drop-stack)]
+                  (boolean (ru/inst level "addFreshEntity" entity)))))))
+        (catch Throwable _ false)))))
+
 (defn spawn-entity-by-id-from-player [player entity-id speed]
   (if (or (nil? player) (nil? entity-id) (= "" (str entity-id)))
     false
