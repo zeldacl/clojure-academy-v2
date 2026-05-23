@@ -7,17 +7,65 @@
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.potion-effects :as potion]))
 
+(defn- make-context-mocks [initial-ctx]
+  (let [ctx* (atom initial-ctx)]
+    {:ctx* ctx*
+     :get-context (fn [_] @ctx*)
+     :update-context! (fn [_ f & args]
+                        (swap! ctx* #(when % (apply f % args))))}))
+
+(deftest flesh-ripping-tick-caches-trace-and-sends-update-fx-test
+  (let [{:keys [ctx* update-context!]} (make-context-mocks {:skill-state {}})
+        fx-calls* (atom [])]
+    (with-redefs [ctx/update-context! update-context!
+                  helper/skill-exp (fn [_ _] 0.5)
+                  helper/cfg-lerp (fn [_ field _]
+                                    (case field
+                                      :targeting.range 12.0
+                                      0.0))
+                  helper/raycast-entity (fn [_ _]
+                                          {:entity-uuid "target-1"
+                                           :entity-x 1.0
+                                           :entity-y 2.0
+                                           :entity-z 3.0})
+                  geom/world-id-of (fn [_] "minecraft:overworld")
+                  ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
+                                            (swap! fx-calls* conj [channel payload])
+                                            nil)]
+      (flesh/flesh-ripping-tick! {:player-id "p1" :ctx-id "ctx-0" :hold-ticks 7}))
+
+    (is (= 7 (get-in @ctx* [:skill-state :hold-ticks])))
+    (is (= {:world-id "minecraft:overworld"
+            :hit? true
+            :target-uuid "target-1"
+            :target-x 1.0
+            :target-y 2.0
+            :target-z 3.0}
+           (get-in @ctx* [:skill-state :trace])))
+    (is (= [[:flesh-ripping/fx-update {:target-x 1.0
+                                       :target-y 2.0
+                                       :target-z 3.0
+                                       :hit? true
+                                       :target-uuid "target-1"}]]
+           @fx-calls*))))
+
 (deftest flesh-ripping-hit-critical-emits-crit-fx-test
-  (let [exp-calls* (atom [])
+  (let [{:keys [get-context]} (make-context-mocks {:skill-state {:trace {:world-id "minecraft:overworld"
+                                                                         :hit? true
+                                                                         :target-uuid "target-1"
+                                                                         :target-x 1.0
+                                                                         :target-y 2.0
+                                                                         :target-z 3.0}}})
+        exp-calls* (atom [])
         cooldown-calls* (atom [])
         fx-calls* (atom [])
         potion-calls* (atom [])
         damage-calls* (atom [])]
-    (with-redefs [helper/skill-exp (fn [_ _] 0.5)
+    (with-redefs [ctx/get-context get-context
+                  helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
                                     (case field
                                       :combat.damage 8.0
-                                      :targeting.range 15.0
                                       :cooldown.ticks 20.0
                                       0.0))
                   helper/cfg-lerp-int (fn [& _] 20)
@@ -31,12 +79,6 @@
                                      :effect.nausea-duration-ticks 60
                                      :effect.nausea-amplifier 0
                                      0))
-                  helper/raycast-entity (fn [_ _]
-                                          {:entity-uuid "target-1"
-                                           :entity-x 1.0
-                                           :entity-y 2.0
-                                           :entity-z 3.0})
-                  geom/world-id-of (fn [_] "minecraft:overworld")
                   helper/deal-magic-damage! (fn [_ world-id target-uuid damage]
                                               (swap! damage-calls* conj [world-id target-uuid damage])
                                               {:critical? true
@@ -57,7 +99,7 @@
                                             nil)
                   rand (fn [] 0.0)]
       (binding [potion/*potion-effects* :mock]
-        (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-1"})))
+        (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-1" :cost-ok? true})))
 
     (is (= [["minecraft:overworld" "target-1" 8.0]] @damage-calls*))
     (is (= [["target-1" :nausea 60 0]] @potion-calls*))
@@ -71,24 +113,58 @@
                                       :skill-id :flesh-ripping}]
             [:flesh-ripping/fx-perform {:target-x 1.0
                                         :target-y 2.0
-                                        :target-z 3.0}]]
+                                        :target-z 3.0
+                                        :hit? true
+                                        :target-uuid "target-1"}]]
            @fx-calls*))))
+
+(deftest flesh-ripping-up-cost-fail-has-no-side-effects-test
+  (let [{:keys [get-context]} (make-context-mocks {:skill-state {:trace {:world-id "minecraft:overworld"
+                                                                         :hit? true
+                                                                         :target-uuid "target-1"
+                                                                         :target-x 1.0
+                                                                         :target-y 2.0
+                                                                         :target-z 3.0}}})
+        damage-calls* (atom 0)
+        exp-calls* (atom 0)
+        cooldown-calls* (atom 0)
+        fx-calls* (atom 0)]
+    (with-redefs [ctx/get-context get-context
+                  helper/skill-exp (fn [_ _] 0.5)
+                  helper/cfg-lerp (fn [_ _ _] 0.0)
+                  helper/deal-magic-damage! (fn [& _] (swap! damage-calls* inc))
+                  skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
+                  skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
+                  ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc))]
+      (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-2" :cost-ok? false}))
+
+    (is (= 0 @damage-calls*))
+    (is (= 0 @exp-calls*))
+    (is (= 0 @cooldown-calls*))
+    (is (= 0 @fx-calls*))))
 
 (deftest flesh-ripping-miss-has-no-side-effects-test
   (let [exp-calls* (atom 0)
         cooldown-calls* (atom 0)
         fx-calls* (atom 0)
         damage-calls* (atom 0)]
-    (with-redefs [helper/skill-exp (fn [_ _] 0.5)
+    (with-redefs [ctx/get-context (fn [_] {:skill-state {:trace nil}})
+                  helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ _ _] 0.0)
                   helper/raycast-entity (fn [_ _] nil)
                   helper/deal-magic-damage! (fn [& _] (swap! damage-calls* inc))
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc))
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc))]
-      (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-2"}))
+      (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-3" :cost-ok? true}))
 
     (is (= 0 @damage-calls*))
     (is (= 0 @exp-calls*))
     (is (= 0 @cooldown-calls*))
     (is (= 0 @fx-calls*))))
+
+(deftest flesh-ripping-abort-clears-skill-state-test
+  (let [{:keys [ctx* update-context!]} (make-context-mocks {:skill-state {:hold-ticks 3 :trace {:hit? true}}})]
+    (with-redefs [ctx/update-context! update-context!]
+      (flesh/flesh-ripping-abort! {:ctx-id "ctx-4"}))
+    (is (nil? (:skill-state @ctx*)))))

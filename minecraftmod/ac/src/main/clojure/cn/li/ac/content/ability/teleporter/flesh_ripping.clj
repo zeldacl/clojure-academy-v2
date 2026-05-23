@@ -25,35 +25,56 @@
 
 (def ^:private flesh-ripping-skill-id :flesh-ripping)
 
+(defn- build-trace
+  [player-id exp]
+  (let [range (helper/cfg-lerp flesh-ripping-skill-id :targeting.range exp)
+        hit (helper/raycast-entity player-id range)]
+    (when hit
+      {:world-id (geom/world-id-of player-id)
+       :hit? true
+       :target-uuid (:entity-uuid hit)
+       :target-x (:entity-x hit)
+       :target-y (:entity-y hit)
+       :target-z (:entity-z hit)})))
+
 (defn flesh-ripping-down!
-  [{:keys [ctx-id cost-ok?]}]
-  (when cost-ok?
-    (ctx/update-context! ctx-id assoc :skill-state {:ticks 0})))
+  [{:keys [ctx-id]}]
+  (ctx/update-context! ctx-id assoc :skill-state {:hold-ticks 0
+                                                  :trace nil}))
 
 (defn flesh-ripping-tick!
-  [{:keys [ctx-id hold-ticks]}]
-  (ctx/update-context! ctx-id assoc-in [:skill-state :ticks] hold-ticks))
+  [{:keys [player-id ctx-id hold-ticks]}]
+  (let [exp (helper/skill-exp player-id flesh-ripping-skill-id)
+        trace (build-trace player-id exp)]
+    (ctx/update-context! ctx-id assoc :skill-state {:hold-ticks (long hold-ticks)
+                                                    :trace trace})
+    (when trace
+      (ctx/ctx-send-to-client! ctx-id :flesh-ripping/fx-update
+                               {:target-x (:target-x trace)
+                                :target-y (:target-y trace)
+                                :target-z (:target-z trace)
+                                :hit? (:hit? trace)
+                                :target-uuid (:target-uuid trace)}))))
 
 (defn flesh-ripping-up!
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id ctx-id cost-ok?]}]
   (try
     (let [exp (helper/skill-exp player-id flesh-ripping-skill-id)
           damage (helper/cfg-lerp flesh-ripping-skill-id :combat.damage exp)
-          range (helper/cfg-lerp flesh-ripping-skill-id :targeting.range exp)
-          hit (helper/raycast-entity player-id range)]
-      (if hit
-        (let [world-id (geom/world-id-of player-id)
-              e-uuid (:entity-uuid hit)
+          trace (or (get-in (ctx/get-context ctx-id) [:skill-state :trace])
+                    (build-trace player-id exp))]
+      (if (and cost-ok? trace)
+        (let [world-id (:world-id trace)
+              e-uuid (:target-uuid trace)
               damage-result (helper/deal-magic-damage! player-id world-id e-uuid damage)]
           (when (:critical? damage-result)
             (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
-                                     {:x (:entity-x hit)
-                                      :y (:entity-y hit)
-                                      :z (:entity-z hit)
+                                     {:x (:target-x trace)
+                                      :y (:target-y trace)
+                                      :z (:target-z trace)
                                       :crit-level (:crit-level damage-result)
                                       :target-uuid e-uuid
                                       :skill-id flesh-ripping-skill-id}))
-          ;; Apply nausea with 30% chance
           (when (and (< (rand) (helper/cfg-probability flesh-ripping-skill-id
                                                         :effect.nausea-chance))
                      potion/*potion-effects*)
@@ -68,10 +89,12 @@
           (let [cd (helper/cfg-lerp-int flesh-ripping-skill-id :cooldown.ticks exp)]
             (skill-effects/set-main-cooldown! player-id flesh-ripping-skill-id cd))
           (ctx/ctx-send-to-client! ctx-id :flesh-ripping/fx-perform
-                                   {:target-x (:entity-x hit)
-                                    :target-y (:entity-y hit)
-                                    :target-z (:entity-z hit)}))
-        (log/debug "FleshRipping: no entity in range")))
+                                   {:target-x (:target-x trace)
+                                    :target-y (:target-y trace)
+                                    :target-z (:target-z trace)
+                                    :hit? true
+                                    :target-uuid e-uuid}))
+        (log/debug "FleshRipping: no entity in range or cost failed")))
     (catch Exception e
       (log/warn "FleshRipping up! failed:" (ex-message e)))))
 
@@ -83,7 +106,7 @@
 ;; Skill registration
 ;; ---------------------------------------------------------------------------
 
-(defskill! flesh-ripping
+(defskill! flesh-ripping-skill
   :id             :flesh-ripping
   :category-id    :teleporter
   :name-key       "ability.skill.teleporter.flesh_ripping"
@@ -96,20 +119,21 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :pattern        :release-cast
-  :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (helper/cfg-lerp flesh-ripping-skill-id
-                                                       :cost.down.cp
-                                                       (helper/skill-exp player-id flesh-ripping-skill-id)))
-                          :overload (fn [{:keys [player-id]}]
-                                      (helper/cfg-lerp flesh-ripping-skill-id
-                                                       :cost.down.overload
-                                                       (helper/skill-exp player-id flesh-ripping-skill-id)))}}
+  :cost           {:up {:cp       (fn [{:keys [player-id]}]
+                                    (helper/cfg-lerp flesh-ripping-skill-id
+                                                     :cost.up.cp
+                                                     (helper/skill-exp player-id flesh-ripping-skill-id)))
+                      :overload (fn [{:keys [player-id]}]
+                                  (helper/cfg-lerp flesh-ripping-skill-id
+                                                   :cost.up.overload
+                                                   (helper/skill-exp player-id flesh-ripping-skill-id)))}}
   :cooldown       {:mode :manual}
   :actions        {:down!  flesh-ripping-down!
                    :tick!  flesh-ripping-tick!
                    :up!    flesh-ripping-up!
                    :abort! flesh-ripping-abort!}
   :fx             {:start {:topic :flesh-ripping/fx-start :payload (fn [_] {})}
+                   :update {:topic :flesh-ripping/fx-update :payload (fn [_] {})}
                    :end   {:topic :flesh-ripping/fx-end   :payload (fn [_] {})}}
   :prerequisites  [{:skill-id :mark-teleport :min-exp 0.5}
                    {:skill-id :penetrate-teleport :min-exp 0.5}])

@@ -19,15 +19,15 @@
    {:skill-id :flashing :id :cooldown.deactivate-ticks :path "cooldown.deactivate-ticks" :section-suffix "cooldown" :type :int :min 0 :default 20 :comment "Flashing manual cooldown applied on deactivate/abort."}
    {:skill-id :flashing :id :progression.exp-blink :path "progression.exp-blink" :section-suffix "progression" :type :double :min 0.0 :default 0.001 :comment "Flashing exp gained per successful blink."}
 
-   {:skill-id :flesh-ripping :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [15.0 25.0] :comment "FleshRipping entity raycast range."}
-   {:skill-id :flesh-ripping :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [6.0 16.0] :comment "FleshRipping magic damage."}
-   {:skill-id :flesh-ripping :id :effect.nausea-chance :path "effect.nausea-chance" :section-suffix "effect" :type :double :min 0.0 :max 1.0 :default 0.30 :comment "FleshRipping nausea application probability."}
-   {:skill-id :flesh-ripping :id :effect.nausea-duration-ticks :path "effect.nausea-duration-ticks" :section-suffix "effect" :type :int :min 0 :default 60 :comment "FleshRipping nausea duration in ticks."}
+  {:skill-id :flesh-ripping :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [6.0 14.0] :comment "FleshRipping entity raycast range."}
+  {:skill-id :flesh-ripping :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [5.0 12.0] :comment "FleshRipping magic damage."}
+  {:skill-id :flesh-ripping :id :effect.nausea-chance :path "effect.nausea-chance" :section-suffix "effect" :type :double :min 0.0 :max 1.0 :default 0.05 :comment "FleshRipping nausea application probability."}
+  {:skill-id :flesh-ripping :id :effect.nausea-duration-ticks :path "effect.nausea-duration-ticks" :section-suffix "effect" :type :int :min 0 :default 100 :comment "FleshRipping nausea duration in ticks."}
    {:skill-id :flesh-ripping :id :effect.nausea-amplifier :path "effect.nausea-amplifier" :section-suffix "effect" :type :int :min 0 :default 0 :comment "FleshRipping nausea amplifier."}
-   {:skill-id :flesh-ripping :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [180.0 130.0] :comment "FleshRipping down-stage CP cost."}
-   {:skill-id :flesh-ripping :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [70.0 50.0] :comment "FleshRipping down-stage overload cost."}
-   {:skill-id :flesh-ripping :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [30.0 18.0] :comment "FleshRipping cooldown ticks."}
-   {:skill-id :flesh-ripping :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.003 :comment "FleshRipping exp gained per hit."}
+  {:skill-id :flesh-ripping :id :cost.up.cp :path "cost.up.cp" :section-suffix "cost.up" :type :double-list :min 0.0 :list-count 2 :default [130.0 270.0] :comment "FleshRipping up-stage CP cost."}
+  {:skill-id :flesh-ripping :id :cost.up.overload :path "cost.up.overload" :section-suffix "cost.up" :type :double-list :min 0.0 :list-count 2 :default [60.0 50.0] :comment "FleshRipping up-stage overload cost."}
+  {:skill-id :flesh-ripping :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [90.0 40.0] :comment "FleshRipping cooldown ticks."}
+  {:skill-id :flesh-ripping :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.005 :comment "FleshRipping exp gained per hit."}
 
    {:skill-id :mark-teleport :id :targeting.min-distance :path "targeting.min-distance" :section-suffix "targeting" :type :double :min 0.0 :default 3.0 :comment "MarkTeleport minimum valid teleport distance."}
    {:skill-id :mark-teleport :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [25.0 60.0] :comment "MarkTeleport maximum range."}

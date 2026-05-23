@@ -94,7 +94,7 @@
         dy (- (double (:y p1)) (double y))
         dz (- (double (:z p1)) (double z))
         axis-step (fn [p d mn mx tmin tmax]
-                    (if (< (Math/abs d) 1.0e-9)
+                    (if (< (Math/abs (double d)) 1.0e-9)
                       (if (or (< p mn) (> p mx)) nil [tmin tmax])
                       (let [inv (/ 1.0 d)
                             t1 (* (- mn p) inv)

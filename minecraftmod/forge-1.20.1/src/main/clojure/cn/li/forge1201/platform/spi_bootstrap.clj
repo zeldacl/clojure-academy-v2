@@ -14,7 +14,9 @@
   (:import [cn.li.mc1201.runtime BlockRegistryShared ItemInventoryShared ItemPlayerOpsShared ItemRegistryShared ParticleEntityShared RuntimeAccessShared]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.entity.item ItemEntity]
+           [net.minecraft.world.entity.player Player]
            [net.minecraft.world.level Level]
+           [net.minecraft.world.item ItemStack]
            [net.minecraft.world.level.block.state BlockState]
            [net.minecraft.world.phys BlockHitResult]))
 
@@ -78,14 +80,14 @@
         (cond
           (nil? player) false
           (zero? n) true
-          (boolean (.isCreative player)) true
+          (boolean (.isCreative ^Player player)) true
           :else
-          (let [stack (.getMainHandItem player)]
+          (let [^ItemStack stack (.getMainHandItem ^Player player)]
             (if (or (nil? stack)
                     (.isEmpty stack)
                     (< (int (.getCount stack)) n))
               false
-              (let [drop-stack (.copy stack)
+              (let [^ItemStack drop-stack (.copy stack)
                     level ^Level (RuntimeAccessShared/getEntityLevel player)]
                 (.setCount drop-stack n)
                 (.shrink stack n)
