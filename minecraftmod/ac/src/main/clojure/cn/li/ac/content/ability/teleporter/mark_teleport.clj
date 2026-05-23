@@ -10,7 +10,7 @@
   - Minimum valid distance: 3 blocks
   - Missed raycasts still target look-direction endpoint
   - Release teleports, dismounts riding entities, resets fall damage
-  - Experience gain: 0.00018 脳 distance
+  - Experience gain: 0.00018 * distance
   - Client-side destination marker with looping teleport particles and execute sound
 
   No Minecraft imports."
@@ -203,6 +203,10 @@
                      (when (get-in ctx [:skill-state :has-target])
                        (select-keys (:skill-state ctx)
                                     [:world-id :target-x :target-y :target-z :distance :exp])))]
+      (if target
+        (ctx/update-context! ctx-id update :skill-state merge
+                             (assoc target :hold-ticks hold-ticks :has-target true))
+        (ctx/update-context! ctx-id assoc :skill-state {:hold-ticks hold-ticks :has-target false}))
       (when (and target teleportation/*teleportation*)
         (let [distance (double (:distance target))
               exp (double (or (:exp target) (skill-exp player-id) 0.0))]
@@ -215,6 +219,13 @@
                                                           (:target-y target)
                                                           (:target-z target))]
               (when success
+                (ctx/ctx-send-to-client! ctx-id
+                                         :mark-teleport/fx-perform
+                                         (merge {:mode :perform
+                                                 :skill-id mark-teleport-skill-id
+                                                 :player-id player-id
+                                                 :ctx-id ctx-id}
+                                                (or (build-target-fx-payload target) {})))
                 (teleportation/reset-fall-damage! teleportation/*teleportation* player-id)
                 (add-exp! player-id (* (helper/cfg-double mark-teleport-skill-id
                                                           :progression.exp-per-distance)
@@ -228,34 +239,33 @@
   (ctx/update-context! ctx-id dissoc :skill-state)
   (log/debug "MarkTeleport aborted"))
 
-(defskill! mark-teleport
-  :id :mark-teleport
-  :category-id :teleporter
-  :name-key "ability.skill.teleporter.mark_teleport"
-  :description-key "ability.skill.teleporter.mark_teleport.desc"
-  :icon "textures/abilities/teleporter/skills/mark_teleport.png"
-  :level 2
-  :controllable? true
-  :ctrl-id :mark-teleport
-  :cp-consume-speed 0.0
-  :overload-consume-speed 0.0
-  :cooldown-ticks (fn [{:keys [player-id]}]
-                    (cooldown-ticks (skill-exp player-id)))
-  :pattern :release-cast
-  :cooldown {:mode :manual}
-  :cost {:up {:cp mark-teleport-cost-up-cp
-              :overload mark-teleport-cost-up-overload
-              :creative? mark-teleport-cost-creative?}}
-  :actions {:down! mark-teleport-on-key-down
-            :tick! mark-teleport-on-key-tick
-            :up! mark-teleport-on-key-up
-            :abort! mark-teleport-on-key-abort}
-  :fx {:start {:topic :mark-teleport/fx-start
-               :payload (fn [_] {})}
-       :update {:topic :mark-teleport/fx-update
-                :payload mark-teleport-fx-update-payload}
-       :perform {:topic :mark-teleport/fx-perform
-                 :payload mark-teleport-fx-perform-payload}
-       :end {:topic :mark-teleport/fx-end
-             :payload (fn [_] {})}}
-  :prerequisites [{:skill-id :threatening-teleport :min-exp 0.4}])
+(def mark-teleport-skill
+  {:id :mark-teleport
+   :category-id :teleporter
+   :name-key "ability.skill.teleporter.mark_teleport"
+   :description-key "ability.skill.teleporter.mark_teleport.desc"
+   :icon "textures/abilities/teleporter/skills/mark_teleport.png"
+   :level 2
+   :controllable? true
+   :ctrl-id :mark-teleport
+   :cp-consume-speed 0.0
+   :overload-consume-speed 0.0
+   :cooldown-ticks (fn [{:keys [player-id]}]
+                     (cooldown-ticks (skill-exp player-id)))
+   :pattern :release-cast
+   :cooldown {:mode :manual}
+   :cost {:up {:cp mark-teleport-cost-up-cp
+               :overload mark-teleport-cost-up-overload
+               :creative? mark-teleport-cost-creative?}}
+   :actions {:down! mark-teleport-on-key-down
+             :tick! mark-teleport-on-key-tick
+             :up! mark-teleport-on-key-up
+             :abort! mark-teleport-on-key-abort}
+   :fx {:start {:topic :mark-teleport/fx-start
+                :payload (fn [_] {})}
+        :update {:topic :mark-teleport/fx-update
+                 :payload mark-teleport-fx-update-payload}
+        :end {:topic :mark-teleport/fx-end
+              :payload (fn [_] {})}}
+   :prerequisites [{:skill-id :threatening-teleport :min-exp 0.4}]
+   :ac/content-type :skill})
