@@ -88,21 +88,36 @@
             lvl))
         [0 1 2]))
 
-(defn- apply-teleporter-crit
+(defn- calc-teleporter-crit
   [player-id base-damage]
   (if-let [crit-level (roll-crit-level player-id)]
     (let [crit-rates (cfg-double-list :dim-folding-theorem :critical.damage-multipliers)
-          scaled (* base-damage (nth crit-rates crit-level 1.0))]
-      (skill-effects/add-skill-exp! player-id :dim-folding-theorem
-                                    (* (cfg-double :dim-folding-theorem :progression.exp-per-crit-level)
-                                       (inc crit-level)))
-      (skill-effects/add-skill-exp! player-id :space-fluct
-                                    (cfg-double :space-fluct :progression.exp-critical))
-      (ach-dispatcher/trigger-custom-event! player-id "teleporter.critical_attack")
-      (when (= crit-level 2)
-        (ach-dispatcher/trigger-custom-event! player-id "teleporter.mastery"))
-      {:damage scaled :crit-level crit-level})
-    {:damage base-damage :crit-level nil}))
+          crit-rate (double (nth crit-rates crit-level 1.0))
+          final-damage (* (double base-damage) crit-rate)
+          events (cond-> ["teleporter.critical_attack"]
+                   (= crit-level 2) (conj "teleporter.mastery"))]
+      {:damage-before (double base-damage)
+       :damage-after (double final-damage)
+       :crit-level crit-level
+       :crit-rate crit-rate
+       :critical? true
+       :events events})
+    {:damage-before (double base-damage)
+     :damage-after (double base-damage)
+     :crit-level nil
+     :crit-rate 1.0
+     :critical? false
+     :events []}))
+
+(defn- apply-teleporter-crit-side-effects!
+  [player-id crit-level events]
+  (skill-effects/add-skill-exp! player-id :dim-folding-theorem
+                                (* (cfg-double :dim-folding-theorem :progression.exp-per-crit-level)
+                                   (inc crit-level)))
+  (skill-effects/add-skill-exp! player-id :space-fluct
+                                (cfg-double :space-fluct :progression.exp-critical))
+  (doseq [event-id events]
+    (ach-dispatcher/trigger-custom-event! player-id event-id)))
 
 ;; ---------------------------------------------------------------------------
 ;; Teleport helpers
@@ -147,8 +162,14 @@
        entity-damage/*entity-damage*
        world-id entity-uuid (double damage) :magic)))
   ([attacker-id world-id entity-uuid damage]
-   (let [{:keys [damage]} (apply-teleporter-crit attacker-id (double damage))]
-     (deal-magic-damage! world-id entity-uuid damage))))
+   (let [crit-result (calc-teleporter-crit attacker-id (double damage))
+         applied? (deal-magic-damage! world-id entity-uuid (:damage-after crit-result))]
+     (when (and applied? (:critical? crit-result))
+       (apply-teleporter-crit-side-effects!
+         attacker-id
+         (:crit-level crit-result)
+         (:events crit-result)))
+     (assoc crit-result :applied? (boolean applied?)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Look direction helper

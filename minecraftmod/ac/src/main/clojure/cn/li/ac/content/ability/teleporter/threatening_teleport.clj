@@ -146,21 +146,29 @@
               drop? (should-drop? attacked?)
               consumed? (consume-or-drop-main-hand-item! player trace drop?)]
           (when consumed?
-            (when attacked?
-              (helper/deal-magic-damage! player-id world-id target-uuid damage))
-            (skill-effects/add-skill-exp! player-id threatening-teleport-skill-id (exp-gain attacked?))
-            (let [cd (helper/cfg-lerp-int threatening-teleport-skill-id :cooldown.ticks exp)]
-              (skill-effects/set-main-cooldown! player-id threatening-teleport-skill-id cd))
-            (ach-dispatcher/trigger-custom-event! player-id "teleporter.threatening_teleport")
-            (ctx/ctx-send-to-client! ctx-id :threatening-tp/fx-perform
-                                     {:start-x (:start-x trace)
-                                      :start-y (:start-y trace)
-                                      :start-z (:start-z trace)
-                                      :drop-x (:drop-x trace)
-                                      :drop-y (:drop-y trace)
-                                      :drop-z (:drop-z trace)
-                                      :attacked? attacked?
-                                      :dropped? drop?})))))
+            (let [damage-result (when attacked?
+                                  (helper/deal-magic-damage! player-id world-id target-uuid damage))]
+              (when (:critical? damage-result)
+                (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
+                                         {:x (:drop-x trace)
+                                          :y (:drop-y trace)
+                                          :z (:drop-z trace)
+                                          :crit-level (:crit-level damage-result)
+                                          :target-uuid target-uuid
+                                          :skill-id threatening-teleport-skill-id}))
+              (skill-effects/add-skill-exp! player-id threatening-teleport-skill-id (exp-gain attacked?))
+              (let [cd (helper/cfg-lerp-int threatening-teleport-skill-id :cooldown.ticks exp)]
+                (skill-effects/set-main-cooldown! player-id threatening-teleport-skill-id cd))
+              (ach-dispatcher/trigger-custom-event! player-id "teleporter.threatening_teleport")
+              (ctx/ctx-send-to-client! ctx-id :threatening-tp/fx-perform
+                                       {:start-x (:start-x trace)
+                                        :start-y (:start-y trace)
+                                        :start-z (:start-z trace)
+                                        :drop-x (:drop-x trace)
+                                        :drop-y (:drop-y trace)
+                                        :drop-z (:drop-z trace)
+                                        :attacked? attacked?
+                                        :dropped? drop?}))))))
     (catch Exception e
       (log/warn "ThreateningTeleport up! failed:" (ex-message e)))))
 

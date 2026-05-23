@@ -37,14 +37,22 @@
 (defn flesh-ripping-up!
   [{:keys [player-id ctx-id]}]
   (try
-        (let [exp    (helper/skill-exp player-id flesh-ripping-skill-id)
+    (let [exp (helper/skill-exp player-id flesh-ripping-skill-id)
           damage (helper/cfg-lerp flesh-ripping-skill-id :combat.damage exp)
-          range  (helper/cfg-lerp flesh-ripping-skill-id :targeting.range exp)
-          hit    (helper/raycast-entity player-id range)]
+          range (helper/cfg-lerp flesh-ripping-skill-id :targeting.range exp)
+          hit (helper/raycast-entity player-id range)]
       (if hit
         (let [world-id (geom/world-id-of player-id)
-              e-uuid   (:entity-uuid hit)]
-          (helper/deal-magic-damage! player-id world-id e-uuid damage)
+              e-uuid (:entity-uuid hit)
+              damage-result (helper/deal-magic-damage! player-id world-id e-uuid damage)]
+          (when (:critical? damage-result)
+            (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
+                                     {:x (:entity-x hit)
+                                      :y (:entity-y hit)
+                                      :z (:entity-z hit)
+                                      :crit-level (:crit-level damage-result)
+                                      :target-uuid e-uuid
+                                      :skill-id flesh-ripping-skill-id}))
           ;; Apply nausea with 30% chance
           (when (and (< (rand) (helper/cfg-probability flesh-ripping-skill-id
                                                         :effect.nausea-chance))

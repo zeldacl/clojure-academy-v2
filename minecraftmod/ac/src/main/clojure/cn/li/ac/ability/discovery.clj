@@ -74,6 +74,7 @@
 		:fx-namespaces
 		'[cn.li.ac.content.ability.teleporter.mark-teleport-fx
 			cn.li.ac.content.ability.teleporter.threatening-teleport-fx
+			cn.li.ac.content.ability.teleporter.teleporter-crit-fx
 			cn.li.ac.content.ability.teleporter.penetrate-teleport-fx
 			cn.li.ac.content.ability.teleporter.flesh-ripping-fx
 			cn.li.ac.content.ability.teleporter.shift-teleport-fx

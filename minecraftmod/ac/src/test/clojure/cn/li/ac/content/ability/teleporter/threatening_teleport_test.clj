@@ -80,7 +80,8 @@
         fx-calls* (atom [])
         ach-calls* (atom [])
         consume-calls* (atom 0)
-        drop-calls* (atom [])]
+        drop-calls* (atom [])
+        crit-fx-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
                   helper/skill-exp (fn [_ _] 0.5)
                   helper/cfg-lerp (fn [_ field _]
@@ -110,13 +111,19 @@
                                                           (swap! drop-calls* conj [amount x y z])
                                                           true)
                   helper/deal-magic-damage! (fn [_ world-id target-uuid damage]
-                                              (swap! damage-calls* conj [world-id target-uuid damage]))
+                                              (swap! damage-calls* conj [world-id target-uuid damage])
+                                              {:critical? true
+                                               :crit-level 1
+                                               :damage-after damage
+                                               :applied? true})
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp-calls* conj [player-id skill-id amount]))
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
                   ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
-                                            (swap! fx-calls* conj [channel payload]))
+                                            (swap! fx-calls* conj [channel payload])
+                                            (when (= channel :teleporter/fx-crit-hit)
+                                              (swap! crit-fx-calls* conj payload)))
                   ach-dispatcher/trigger-custom-event! (fn [player-id event-id]
                                                          (swap! ach-calls* conj [player-id event-id]))
                   rand (fn [] 0.0)]
@@ -128,5 +135,16 @@
     (is (= [["p1" :threatening-teleport 0.003]] @exp-calls*))
     (is (= [["p1" :threatening-teleport 22]] @cooldown-calls*))
     (is (= [["p1" "teleporter.threatening_teleport"]] @ach-calls*))
-    (is (= :threatening-tp/fx-perform (ffirst @fx-calls*)))
-    (is (= true (get-in (second (first @fx-calls*)) [:attacked?] false)))))
+    (let [perform-payload (some (fn [[ch payload]]
+                                  (when (= ch :threatening-tp/fx-perform)
+                                    payload))
+                                @fx-calls*)]
+      (is (some? perform-payload))
+      (is (= true (get perform-payload :attacked? false))))
+    (is (= [{:x 4.0
+             :y 5.0
+             :z 6.0
+             :crit-level 1
+             :target-uuid "enemy"
+             :skill-id :threatening-teleport}]
+           @crit-fx-calls*))))

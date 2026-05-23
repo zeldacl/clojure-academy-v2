@@ -20,6 +20,7 @@
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.block-manipulation :as bm]
             [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -49,6 +50,97 @@
             (double (:z look-vec))
             (double max-range)))))))
 
+(defn- segment-intersects-aabb?
+  "Return true when segment p0->p1 intersects axis-aligned box {min,max}."
+  [{:keys [x y z]} p1 {:keys [min-x min-y min-z max-x max-y max-z]}]
+  (let [dx (- (double (:x p1)) (double x))
+        dy (- (double (:y p1)) (double y))
+        dz (- (double (:z p1)) (double z))
+        axis-step (fn [p d mn mx tmin tmax]
+                    (if (< (Math/abs d) 1.0e-9)
+                      (if (or (< p mn) (> p mx)) nil [tmin tmax])
+                      (let [inv (/ 1.0 d)
+                            t1 (* (- mn p) inv)
+                            t2 (* (- mx p) inv)
+                            lo (min t1 t2)
+                            hi (max t1 t2)
+                            ntmin (max tmin lo)
+                            ntmax (min tmax hi)]
+                        (when (<= ntmin ntmax)
+                          [ntmin ntmax]))))]
+    (when-let [[tmin tmax] (axis-step (double x) dx (double min-x) (double max-x) 0.0 1.0)]
+      (when-let [[tmin tmax] (axis-step (double y) dy (double min-y) (double max-y) tmin tmax)]
+        (when-let [[_ _] (axis-step (double z) dz (double min-z) (double max-z) tmin tmax)]
+          true)))))
+
+(defn- entity-aabb
+  [entity]
+  (let [x (double (:x entity))
+        y (double (:y entity))
+        z (double (:z entity))
+        half-w (/ (double (or (:width entity) 0.6)) 2.0)
+        h (double (or (:height entity) 1.8))]
+    {:min-x (- x half-w)
+     :max-x (+ x half-w)
+     :min-y y
+     :max-y (+ y h)
+     :min-z (- z half-w)
+     :max-z (+ z half-w)}))
+
+(defn- point-line-distance-sq
+  [{sx :x sy :y sz :z} {ex :x ey :y ez :z} {px :x py :y pz :z}]
+  (let [vx (- (double ex) (double sx))
+        vy (- (double ey) (double sy))
+        vz (- (double ez) (double sz))
+        wx (- (double px) (double sx))
+        wy (- (double py) (double sy))
+        wz (- (double pz) (double sz))
+        len-sq (+ (* vx vx) (* vy vy) (* vz vz))
+        t (if (pos? len-sq)
+            (max 0.0 (min 1.0 (/ (+ (* wx vx) (* wy vy) (* wz vz)) len-sq)))
+            0.0)
+        qx (+ (double sx) (* vx t))
+        qy (+ (double sy) (* vy t))
+        qz (+ (double sz) (* vz t))
+        dx (- (double px) qx)
+        dy (- (double py) qy)
+        dz (- (double pz) qz)]
+    (+ (* dx dx) (* dy dy) (* dz dz))))
+
+(defn- line-targets
+  "Return entities intersecting segment eye->destination in stable near-to-far order."
+  [player-id world-id eye-pos dest-pos]
+  (if-not (and world-effects/*world-effects* eye-pos dest-pos)
+    []
+    (let [min-x (min (double (:x eye-pos)) (double (:x dest-pos)))
+          min-y (min (double (:y eye-pos)) (double (:y dest-pos)))
+          min-z (min (double (:z eye-pos)) (double (:z dest-pos)))
+          max-x (max (double (:x eye-pos)) (double (:x dest-pos)))
+          max-y (max (double (:y eye-pos)) (double (:y dest-pos)))
+          max-z (max (double (:z eye-pos)) (double (:z dest-pos)))
+          candidates (world-effects/find-entities-in-aabb
+                       world-effects/*world-effects*
+                       world-id
+                       min-x min-y min-z
+                       max-x max-y max-z)]
+      (->> candidates
+           (filter (fn [entity]
+                     (let [uuid (str (:uuid entity))]
+                       (and (seq uuid)
+                            (not= uuid (str player-id))
+                            (segment-intersects-aabb? eye-pos dest-pos (entity-aabb entity))))))
+           (sort-by (fn [entity]
+                      (point-line-distance-sq eye-pos dest-pos
+                                              {:x (:x entity) :y (:y entity) :z (:z entity)})))
+           (reduce (fn [acc entity]
+                     (let [uuid (str (:uuid entity))]
+                       (if (contains? (:seen acc) uuid)
+                         acc
+                         {:seen (conj (:seen acc) uuid)
+                          :entities (conj (:entities acc) entity)})))
+                   {:seen #{} :entities []})
+           :entities))))
+
 ;; ---------------------------------------------------------------------------
 ;; Actions
 ;; ---------------------------------------------------------------------------
@@ -70,10 +162,31 @@
           target  (raycast-block-target player-id range)]
       (if target
         (let [world-id (geom/world-id-of player-id)
+              eye-y    (+ (double (:y (helper/player-position player-id)))
+                          (helper/cfg-double shift-teleport-skill-id :targeting.eye-height))
+              eye-pos  {:x (double (:x (helper/player-position player-id)))
+                        :y eye-y
+                        :z (double (:z (helper/player-position player-id)))}
+              line-end {:x (+ (double (:x target)) 0.5)
+                        :y (+ (double (:y target)) 0.5)
+                        :z (+ (double (:z target)) 0.5)}
+              entities (line-targets player-id world-id eye-pos line-end)
               dest-x   (+ (double (:x target)) 0.5)
               dest-y   (double (:y target))
-              dest-z   (+ (double (:z target)) 0.5)]
+              dest-z   (+ (double (:z target)) 0.5)
+              damage   (helper/cfg-lerp shift-teleport-skill-id :combat.damage exp)]
           (when (helper/teleport-to! player-id world-id dest-x dest-y dest-z)
+            (doseq [entity entities]
+              (let [target-uuid (str (:uuid entity))
+                    damage-result (helper/deal-magic-damage! player-id world-id target-uuid damage)]
+                (when (:critical? damage-result)
+                  (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
+                                           {:x (double (:x entity))
+                                            :y (double (:y entity))
+                                            :z (double (:z entity))
+                                            :crit-level (:crit-level damage-result)
+                                            :target-uuid target-uuid
+                                            :skill-id shift-teleport-skill-id}))))
             (skill-effects/add-skill-exp! player-id shift-teleport-skill-id
                                           (helper/cfg-double shift-teleport-skill-id
                                                              :progression.exp-success))

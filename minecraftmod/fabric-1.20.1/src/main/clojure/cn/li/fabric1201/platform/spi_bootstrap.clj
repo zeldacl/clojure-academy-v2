@@ -80,6 +80,8 @@
     (player-container-menu [_ player] (ru/field player "containerMenu"))
     (count-player-item-by-id [_ player item-id] (bootstrap-core/count-player-item-by-id player item-id))
     (consume-player-item-by-id! [_ player item-id amount] (bootstrap-core/consume-player-item-by-id! player item-id amount))
+    (drop-player-main-hand-item-at! [_ player amount x y z]
+      (bootstrap-core/drop-player-main-hand-item-at player amount x y z))
     (give-player-item-stack! [_ player stack] (bootstrap-core/give-player-item-stack player stack))
     (spawn-entity-by-id! [_ player entity-id speed] (bootstrap-core/spawn-entity-by-id-from-player player entity-id speed))
     (raytrace-block [_ player reach fluid-source-only?] (bootstrap-core/raytrace-block-map player reach fluid-source-only?))

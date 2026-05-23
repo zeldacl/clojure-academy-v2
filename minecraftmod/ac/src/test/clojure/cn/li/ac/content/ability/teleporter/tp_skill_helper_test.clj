@@ -100,6 +100,8 @@
 
 (deftest deal-magic-damage-crit-branch-test
   (let [last-damage (atom nil)
+        exp-calls (atom [])
+        events (atom [])
         attacker "att"
         attacker-ad (-> (ad/new-ability-data)
                         (ad/learn-skill :dim-folding-theorem)
@@ -117,9 +119,58 @@
       (ps/set-player-state! attacker {:ability-data attacker-ad})
       (binding [entity-damage/*entity-damage* stub]
         (with-redefs [rand (fn [] 0.0)
-                      skill-effects/add-skill-exp! (fn [_ _ _] nil)
-                      ach-dispatcher/trigger-custom-event! (fn [_ _] nil)]
-          (h/deal-magic-damage! attacker "w" "victim" 10.0)))
+                      skill-effects/add-skill-exp! (fn [pid sid amount]
+                                                     (swap! exp-calls conj [pid sid amount])
+                                                     nil)
+                      ach-dispatcher/trigger-custom-event! (fn [pid event-id]
+                                                             (swap! events conj [pid event-id])
+                                                             nil)]
+          (let [result (h/deal-magic-damage! attacker "w" "victim" 10.0)]
+            (is (= true (:critical? result)))
+            (is (= 0 (:crit-level result)))
+            (is (= 1.3 (double (:crit-rate result))))
+            (is (= 10.0 (double (:damage-before result))))
+            (is (= 13.0 (double (:damage-after result))))
+            (is (= true (:applied? result)))
+            (is (= ["teleporter.critical_attack"] (:events result))))))
       (is (= 13.0 (double @last-damage)))
+      (is (= [["att" :dim-folding-theorem 0.005]
+              ["att" :space-fluct 1.0E-4]]
+             @exp-calls))
+      (is (= [["att" "teleporter.critical_attack"]]
+             @events))
+      (finally
+        (reset! ps/player-states {})))))
+
+(deftest deal-magic-damage-non-crit-branch-test
+  (let [last-damage (atom nil)
+        attacker "att"
+        attacker-ad (-> (ad/new-ability-data)
+                        (ad/learn-skill :dim-folding-theorem)
+                        (ad/learn-skill :space-fluct)
+                        (ad/set-skill-exp :dim-folding-theorem 1.0)
+                        (ad/set-skill-exp :space-fluct 1.0))
+        stub (reify entity-damage/IEntityDamage
+               (apply-direct-damage! [_ _ _ dmg _]
+                 (reset! last-damage dmg)
+                 true)
+               (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] ())
+               (apply-reflection-damage! [_ _ _ _ _ _ _] ()))]
+    (reset! ps/player-states {})
+    (try
+      (ps/set-player-state! attacker {:ability-data attacker-ad})
+      (binding [entity-damage/*entity-damage* stub]
+        (with-redefs [rand (fn [] 1.0)
+                      skill-effects/add-skill-exp! (fn [& _] (is false "no exp on non-crit"))
+                      ach-dispatcher/trigger-custom-event! (fn [& _] (is false "no achievement event on non-crit"))]
+          (let [result (h/deal-magic-damage! attacker "w" "victim" 10.0)]
+            (is (= false (:critical? result)))
+            (is (nil? (:crit-level result)))
+            (is (= 1.0 (double (:crit-rate result))))
+            (is (= 10.0 (double (:damage-before result))))
+            (is (= 10.0 (double (:damage-after result))))
+            (is (= true (:applied? result)))
+            (is (= [] (:events result))))))
+      (is (= 10.0 (double @last-damage)))
       (finally
         (reset! ps/player-states {})))))
