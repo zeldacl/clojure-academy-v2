@@ -1,16 +1,15 @@
 (ns cn.li.ac.content.ability.teleporter.shift-teleport
-  "ShiftTeleport skill - teleport to target location while transporting a held item.
+  "ShiftTeleport skill - teleport to target location while transporting a held block.
 
   Pattern: :release-cast
-  Mechanic: Teleport player to look target. If player is holding a block item,
-            also place that block at the destination offset (cosmetic shift mechanic).
-            The block consumption is handled via bm/consume-player-item (if supported),
-            otherwise the block is placed without consuming.
-  Range: lerp(20, 35, exp)
-  CP cost: lerp(120, 80, exp)
-  Overload: lerp(50, 35, exp)
-  Cooldown: lerp(25, 15, exp) ticks
-  Exp: +0.002 per success
+  Mechanic: Resolve look target, place held block on the hit face when possible,
+            fallback to dropping one held item at target point, then teleport and
+            apply line-hit magic damage.
+  Range: lerp(25, 35, exp)
+  CP cost (up): lerp(260, 320, exp)
+  Overload (up): lerp(40, 30, exp)
+  Cooldown: lerp(100, 60, exp) ticks
+  Exp: (1 + hit-count) * exp-base
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
@@ -18,7 +17,7 @@
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
-            [cn.li.mcmod.platform.block-manipulation :as bm]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -29,26 +28,64 @@
 
 (def ^:private shift-teleport-skill-id :shift-teleport)
 
-(defn- raycast-block-target
-  "Raycast for block target at given range, returns {:x :y :z} or nil."
+(def ^:private face-offsets
+  {:up [0 1 0]
+   :down [0 -1 0]
+   :north [0 0 -1]
+   :south [0 0 1]
+   :west [-1 0 0]
+   :east [1 0 0]})
+
+(defn- floor-int [x]
+  (int (Math/floor (double x))))
+
+(defn- hand-placeable-block?
+  [player]
+  (boolean (and player (entity/player-main-hand-placeable-block? player))))
+
+(defn- resolve-target
   [player-id max-range]
   (when raycast/*raycast*
     (let [player-pos (helper/player-position player-id)
-          look-vec   (helper/player-look-vec player-id)]
+          look-vec (helper/player-look-vec player-id)]
       (when (and player-pos look-vec)
         (let [world-id (geom/world-id-of player-id)
-              eye-x (+ (double (:x player-pos)) 0.0)
+              eye-x (double (:x player-pos))
               eye-y (+ (double (:y player-pos))
                        (helper/cfg-double shift-teleport-skill-id :targeting.eye-height))
-              eye-z (+ (double (:z player-pos)) 0.0)]
-          (raycast/raycast-blocks
-            raycast/*raycast*
-            world-id
-            eye-x eye-y eye-z
-            (double (:x look-vec))
-            (double (:y look-vec))
-            (double (:z look-vec))
-            (double max-range)))))))
+              eye-z (double (:z player-pos))
+              hit (raycast/raycast-blocks
+                    raycast/*raycast*
+                    world-id
+                    eye-x eye-y eye-z
+                    (double (:x look-vec))
+                    (double (:y look-vec))
+                    (double (:z look-vec))
+                    (double max-range))
+              face (or (:face hit) :down)
+              [ox oy oz] (get face-offsets face [0 -1 0])
+              hit-x (if hit (double (:x hit)) (+ eye-x (* (double (:x look-vec)) (double max-range))))
+              hit-y (if hit (double (:y hit)) (+ eye-y (* (double (:y look-vec)) (double max-range))))
+              hit-z (if hit (double (:z hit)) (+ eye-z (* (double (:z look-vec)) (double max-range))))
+              bx (if hit (int (:x hit)) (floor-int hit-x))
+              by (if hit (int (:y hit)) (floor-int hit-y))
+              bz (if hit (int (:z hit)) (floor-int hit-z))
+              place-x (+ bx ox)
+              place-y (+ by oy)
+              place-z (+ bz oz)]
+          {:world-id world-id
+           :eye-pos {:x eye-x :y eye-y :z eye-z}
+           :drop-x (+ (double place-x) 0.5)
+           :drop-y (double place-y)
+           :drop-z (+ (double place-z) 0.5)
+           :dest-x (+ (double place-x) 0.5)
+           :dest-y (double place-y)
+           :dest-z (+ (double place-z) 0.5)
+           :place-x place-x
+           :place-y place-y
+           :place-z place-z
+           :face face
+           :target-hit? (boolean hit)})))))
 
 (defn- segment-intersects-aabb?
   "Return true when segment p0->p1 intersects axis-aligned box {min,max}."
@@ -141,6 +178,51 @@
                    {:seen #{} :entities []})
            :entities))))
 
+(defn- build-trace
+  [player-id]
+  (let [exp (helper/skill-exp player-id shift-teleport-skill-id)
+        range (helper/cfg-lerp shift-teleport-skill-id :targeting.range exp)
+        target (resolve-target player-id range)]
+    (when target
+      (let [line-end {:x (:dest-x target)
+                      :y (+ (:dest-y target) 0.5)
+                      :z (:dest-z target)}
+            entities (line-targets player-id
+                                   (:world-id target)
+                                   (:eye-pos target)
+                                   line-end)]
+        (assoc target
+               :range range
+               :exp exp
+               :entities entities)))))
+
+(defn- try-place-or-drop!
+  [player trace]
+  (let [place-result (entity/player-place-main-hand-block-at-hit!
+                       player
+                       (:world-id trace)
+                       (:place-x trace)
+                       (:place-y trace)
+                       (:place-z trace)
+                       (:face trace))
+        placed? (boolean (:placed? place-result))
+        creative? (boolean (entity/player-creative? player))
+        dropped? (boolean
+                   (and (not placed?)
+                        (entity/player-drop-main-hand-item-at! player
+                                                               1
+                                                               (:drop-x trace)
+                                                               (:drop-y trace)
+                                                               (:drop-z trace))))
+        consumed? (boolean
+                    (or creative?
+                        (not placed?)
+                        (entity/player-consume-main-hand-item! player 1)))]
+    {:placed? placed?
+     :dropped? dropped?
+    :consumed? consumed?
+     :executed? (and consumed? (or placed? dropped?))}))
+
 ;; ---------------------------------------------------------------------------
 ;; Actions
 ;; ---------------------------------------------------------------------------
@@ -148,53 +230,76 @@
 (defn shift-tp-down!
   [{:keys [ctx-id cost-ok?]}]
   (when cost-ok?
-    (ctx/update-context! ctx-id assoc :skill-state {:ticks 0})))
+    (ctx/update-context! ctx-id assoc :skill-state {:hold-ticks 0 :trace nil :hand-valid? true})))
 
 (defn shift-tp-tick!
-  [{:keys [ctx-id hold-ticks]}]
-  (ctx/update-context! ctx-id assoc-in [:skill-state :ticks] hold-ticks))
+  [{:keys [player-id player ctx-id hold-ticks]}]
+  (let [hand-valid? (hand-placeable-block? player)
+        trace (when hand-valid? (build-trace player-id))]
+    (ctx/update-context! ctx-id assoc :skill-state {:hold-ticks hold-ticks
+                                                    :hand-valid? hand-valid?
+                                                    :trace trace})
+    (when trace
+      (ctx/ctx-send-to-client! ctx-id :shift-tp/fx-update
+                               {:x (:dest-x trace)
+                                :y (:dest-y trace)
+                                :z (:dest-z trace)
+                                :target-count (count (:entities trace))
+                                :target-hit? (:target-hit? trace)
+                                :hand-valid? hand-valid?}))))
 
 (defn shift-tp-up!
-  [{:keys [player-id ctx-id]}]
+  [{:keys [player-id player ctx-id cost-ok?]}]
   (try
-        (let [exp     (helper/skill-exp player-id shift-teleport-skill-id)
-          range   (helper/cfg-lerp shift-teleport-skill-id :targeting.range exp)
-          target  (raycast-block-target player-id range)]
-      (if target
-        (let [world-id (geom/world-id-of player-id)
-              eye-y    (+ (double (:y (helper/player-position player-id)))
-                          (helper/cfg-double shift-teleport-skill-id :targeting.eye-height))
-              eye-pos  {:x (double (:x (helper/player-position player-id)))
-                        :y eye-y
-                        :z (double (:z (helper/player-position player-id)))}
-              line-end {:x (+ (double (:x target)) 0.5)
-                        :y (+ (double (:y target)) 0.5)
-                        :z (+ (double (:z target)) 0.5)}
-              entities (line-targets player-id world-id eye-pos line-end)
-              dest-x   (+ (double (:x target)) 0.5)
-              dest-y   (double (:y target))
-              dest-z   (+ (double (:z target)) 0.5)
-              damage   (helper/cfg-lerp shift-teleport-skill-id :combat.damage exp)]
-          (when (helper/teleport-to! player-id world-id dest-x dest-y dest-z)
-            (doseq [entity entities]
-              (let [target-uuid (str (:uuid entity))
-                    damage-result (helper/deal-magic-damage! player-id world-id target-uuid damage)]
-                (when (:critical? damage-result)
-                  (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
-                                           {:x (double (:x entity))
-                                            :y (double (:y entity))
-                                            :z (double (:z entity))
-                                            :crit-level (:crit-level damage-result)
-                                            :target-uuid target-uuid
-                                            :skill-id shift-teleport-skill-id}))))
-            (skill-effects/add-skill-exp! player-id shift-teleport-skill-id
-                                          (helper/cfg-double shift-teleport-skill-id
-                                                             :progression.exp-success))
-            (let [cd (helper/cfg-lerp-int shift-teleport-skill-id :cooldown.ticks exp)]
-              (skill-effects/set-main-cooldown! player-id shift-teleport-skill-id cd))
-            (ctx/ctx-send-to-client! ctx-id :shift-tp/fx-perform
-                                     {:x dest-x :y dest-y :z dest-z})))
-        (log/debug "ShiftTeleport: no block target")))
+    (let [ctx-data (ctx/get-context ctx-id)
+          hand-valid? (hand-placeable-block? player)
+          trace (or (get-in ctx-data [:skill-state :trace])
+                    (when hand-valid? (build-trace player-id)))]
+      (when (and cost-ok? hand-valid? trace)
+        (let [place-drop-result (try-place-or-drop! player trace)
+              damage (helper/cfg-lerp shift-teleport-skill-id :combat.damage (:exp trace))]
+          (when (and (:executed? place-drop-result)
+                     (helper/teleport-to! player-id
+                                          (:world-id trace)
+                                          (:dest-x trace)
+                                          (:dest-y trace)
+                                          (:dest-z trace)))
+            (let [hit-count
+                  (reduce (fn [n entity]
+                            (let [target-uuid (str (:uuid entity))
+                                  damage-result (helper/deal-magic-damage! player-id
+                                                                           (:world-id trace)
+                                                                           target-uuid
+                                                                           damage)]
+                              (when (:critical? damage-result)
+                                (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
+                                                         {:x (double (:x entity))
+                                                          :y (double (:y entity))
+                                                          :z (double (:z entity))
+                                                          :crit-level (:crit-level damage-result)
+                                                          :target-uuid target-uuid
+                                                          :skill-id shift-teleport-skill-id}))
+                              (inc n)))
+                          0
+                          (:entities trace))
+                  exp-base (helper/cfg-double shift-teleport-skill-id :progression.exp-base)]
+              (skill-effects/add-skill-exp! player-id
+                                            shift-teleport-skill-id
+                                            (* (double exp-base) (double (inc hit-count))))
+              (let [cd (helper/cfg-lerp-int shift-teleport-skill-id :cooldown.ticks (:exp trace))]
+                (skill-effects/set-main-cooldown! player-id shift-teleport-skill-id cd))
+              (ctx/ctx-send-to-client! ctx-id :shift-tp/fx-perform
+                                       {:from-x (get-in trace [:eye-pos :x])
+                                        :from-y (get-in trace [:eye-pos :y])
+                                        :from-z (get-in trace [:eye-pos :z])
+                                        :x (:dest-x trace)
+                                        :y (:dest-y trace)
+                                        :z (:dest-z trace)
+                                        :target-count (count (:entities trace))
+                                        :placed? (:placed? place-drop-result)
+                                        :dropped? (:dropped? place-drop-result)})))))
+      (when-not trace
+        (log/debug "ShiftTeleport: failed to resolve trace target")))
     (catch Exception e
       (log/warn "ShiftTeleport up! failed:" (ex-message e)))))
 
@@ -219,19 +324,20 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :pattern        :release-cast
-  :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (helper/cfg-lerp shift-teleport-skill-id
-                                                       :cost.down.cp
-                                                       (helper/skill-exp player-id shift-teleport-skill-id)))
-                          :overload (fn [{:keys [player-id]}]
-                                      (helper/cfg-lerp shift-teleport-skill-id
-                                                       :cost.down.overload
-                                                       (helper/skill-exp player-id shift-teleport-skill-id)))}}
+  :cost           {:up {:cp       (fn [{:keys [player-id]}]
+                                    (helper/cfg-lerp shift-teleport-skill-id
+                                                     :cost.up.cp
+                                                     (helper/skill-exp player-id shift-teleport-skill-id)))
+                        :overload (fn [{:keys [player-id]}]
+                                    (helper/cfg-lerp shift-teleport-skill-id
+                                                     :cost.up.overload
+                                                     (helper/skill-exp player-id shift-teleport-skill-id)))}}
   :cooldown       {:mode :manual}
   :actions        {:down!  shift-tp-down!
                    :tick!  shift-tp-tick!
                    :up!    shift-tp-up!
                    :abort! shift-tp-abort!}
   :fx             {:start {:topic :shift-tp/fx-start :payload (fn [_] {})}
+                   :update {:topic :shift-tp/fx-update :payload (fn [_] {})}
                    :end   {:topic :shift-tp/fx-end   :payload (fn [_] {})}}
   :prerequisites  [{:skill-id :location-teleport :min-exp 0.5}])

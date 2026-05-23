@@ -177,6 +177,22 @@
           server-player-cls (class-access/server-player-class adapter)
           inventory-cls (class-access/inventory-class adapter)
           menu-cls (class-access/menu-class adapter)
+          block-cls (ru/class-noinit "net.minecraft.world.level.block.Block")
+          blocks-cls (ru/class-noinit "net.minecraft.world.level.block.Blocks")
+          block-pos-cls (ru/class-noinit "net.minecraft.core.BlockPos")
+          air-block (.get (.getField blocks-cls "AIR") nil)
+          block-item-info (fn [this]
+                            (try
+                              (let [stack (ru/player-main-hand-stack this)]
+                                (when-not (ru/stack-empty? stack)
+                                  (let [item (ru/inst stack "getItem")
+                                        block (ru/static block-cls "byItem" item)
+                                        placeable? (boolean (and block (not= block air-block)))
+                                        item-id (item-ops/item-registry-name adapter item)]
+                                    {:placeable? placeable?
+                                     :item-id item-id})))
+                              (catch Throwable _
+                                nil)))
           player-impl {:entity-distance-to-sqr (fn [this x y z]
                                                  (ru/inst this "distanceToSqr" (double x) (double y) (double z)))
                        :player-get-level (fn [this] (player-ops/player-level adapter this))
@@ -193,6 +209,29 @@
                                                             (if (ru/stack-empty? stack)
                                                               0
                                                               (int (ru/inst stack "getCount")))))
+                       :player-main-hand-placeable-block? (fn [this]
+                                                           (boolean (:placeable? (block-item-info this))))
+                           :player-place-main-hand-block-at-hit! (fn [this _world-id x y z face]
+                                                              (let [px (int x)
+                                                                    py (int y)
+                                                                    pz (int z)
+                                                                    base-result {:placed? false
+                                                                                 :fallback-drop? true
+                                                                                 :pos {:x px :y py :z pz}
+                                                                                 :face face}]
+                                                                (try
+                                                                  (if-let [{:keys [placeable? item-id]} (block-item-info this)]
+                                                                    (if-not (and placeable? (seq item-id))
+                                                                      base-result
+                                                                      (let [level (player-ops/player-level adapter this)
+                                                                            pos (ru/ctor block-pos-cls px py pz)
+                                                                            placed? (boolean (world-block-ops/world-place-block-by-id adapter level item-id pos 3))]
+                                                                        (assoc base-result
+                                                                               :placed? placed?
+                                                                               :fallback-drop? (not placed?))))
+                                                                    base-result)
+                                                                  (catch Throwable _
+                                                                    base-result))))
                        :player-consume-main-hand-item! (fn [this amount]
                                                          (let [n (int (max 0 (or amount 0)))]
                                                            (cond

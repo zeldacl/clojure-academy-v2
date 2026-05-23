@@ -57,12 +57,12 @@
    {:skill-id :penetrate-teleport :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [40.0 25.0] :comment "PenetrateTeleport cooldown ticks."}
    {:skill-id :penetrate-teleport :id :progression.exp-success :path "progression.exp-success" :section-suffix "progression" :type :double :min 0.0 :default 0.003 :comment "PenetrateTeleport exp gained on success."}
 
-   {:skill-id :shift-teleport :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [20.0 35.0] :comment "ShiftTeleport block target range."}
+  {:skill-id :shift-teleport :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [25.0 35.0] :comment "ShiftTeleport block target range."}
   {:skill-id :shift-teleport :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [15.0 35.0] :comment "ShiftTeleport line-hit magic damage."}
-   {:skill-id :shift-teleport :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [120.0 80.0] :comment "ShiftTeleport down-stage CP cost."}
-   {:skill-id :shift-teleport :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [50.0 35.0] :comment "ShiftTeleport down-stage overload cost."}
-   {:skill-id :shift-teleport :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [25.0 15.0] :comment "ShiftTeleport cooldown ticks."}
-   {:skill-id :shift-teleport :id :progression.exp-success :path "progression.exp-success" :section-suffix "progression" :type :double :min 0.0 :default 0.002 :comment "ShiftTeleport exp gained on success."}
+  {:skill-id :shift-teleport :id :cost.up.cp :path "cost.up.cp" :section-suffix "cost.up" :type :double-list :min 0.0 :list-count 2 :default [260.0 320.0] :comment "ShiftTeleport up-stage CP cost."}
+  {:skill-id :shift-teleport :id :cost.up.overload :path "cost.up.overload" :section-suffix "cost.up" :type :double-list :min 0.0 :list-count 2 :default [40.0 30.0] :comment "ShiftTeleport up-stage overload cost."}
+  {:skill-id :shift-teleport :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [100.0 60.0] :comment "ShiftTeleport cooldown ticks."}
+  {:skill-id :shift-teleport :id :progression.exp-base :path "progression.exp-base" :section-suffix "progression" :type :double :min 0.0 :default 0.002 :comment "ShiftTeleport base exp coefficient for (1 + hit-count)."}
 
   {:skill-id :threatening-teleport :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [8.0 15.0] :comment "ThreateningTeleport raycast range."}
   {:skill-id :threatening-teleport :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [3.0 6.0] :comment "ThreateningTeleport base magic damage."}

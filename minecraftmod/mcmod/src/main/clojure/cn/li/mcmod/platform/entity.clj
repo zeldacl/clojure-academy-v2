@@ -31,6 +31,13 @@
   (player-get-main-hand-item-count [player]
     "Return stack count of player's main-hand item. Returns 0 when empty")
 
+  (player-main-hand-placeable-block? [player]
+    "Return true when player's main-hand item is a placeable block item.")
+
+  (player-place-main-hand-block-at-hit! [player world-id x y z face]
+    "Try place one block from main hand at resolved target position.
+    Returns {:placed? boolean :fallback-drop? boolean :pos {:x int :y int :z int} :face keyword}.")
+
   (player-consume-main-hand-item! [player amount]
     "Consume amount from main-hand item unless creative. Returns true when consumed/allowed")
 
