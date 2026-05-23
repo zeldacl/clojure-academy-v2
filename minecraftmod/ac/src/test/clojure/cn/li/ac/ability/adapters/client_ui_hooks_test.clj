@@ -3,6 +3,7 @@
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
             [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.service.player-state :as ps]
@@ -12,9 +13,13 @@
 (defn- reset-ui-state! [f]
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles [])
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0)
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {})
   (f)
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles [])
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0))
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0)
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {}))
 
 (use-fixtures :each reset-ui-state!)
 
@@ -57,6 +62,37 @@
                :active-slots []
                :activated false}]
     (is (nil? (hud/build-hud-render-data model 320 180 {})))))
+
+(deftest client-slot-wheel-sends-ctx-channel-only-for-penetrate-with-active-context-test
+  (let [sent (atom [])
+        hooks (client-ui-hooks/runtime-client-ui-hooks)]
+    (with-redefs [client-keybinds/get-skill-id-for-slot-public
+                  (fn [_ key-idx]
+                    (case key-idx
+                      0 :penetrate-teleport
+                      1 :railgun
+                      nil))
+                  ctx-mgr/activate-context!
+                  (fn [_ _] {:id "ctx-penetrate"})
+                  gameplay/use-mouse-wheel-enabled? (fn [] true)
+                  net-client/send-to-server
+                  (fn
+                    ([msg-id payload]
+                     (swap! sent conj {:msg-id msg-id :payload payload}))
+                    ([msg-id payload _callback]
+                     (swap! sent conj {:msg-id msg-id :payload payload})))]
+      ((:client-on-slot-key-down! hooks) "p1" 0)
+      ((:client-on-slot-wheel! hooks) "p1" 0 2.0)
+      ((:client-on-slot-wheel! hooks) "p1" 1 2.0)
+      (with-redefs [gameplay/use-mouse-wheel-enabled? (fn [] false)]
+        ((:client-on-slot-wheel! hooks) "p1" 0 1.0))
+      (is (= [{:msg-id catalog/MSG-SLOT-KEY-DOWN
+               :payload {:ctx-id "ctx-penetrate" :skill-id :penetrate-teleport :key-idx 0}}
+              {:msg-id catalog/MSG-CTX-CHANNEL
+               :payload {:ctx-id "ctx-penetrate"
+                         :channel :penetrate-tp/set-distance
+                         :payload {:delta 2.0}}}]
+             @sent)))))
 
 (deftest build-client-overlay-plan-falls-back-when-activated-override-nil-test
   (with-redefs [ps/get-player-state (fn [_]

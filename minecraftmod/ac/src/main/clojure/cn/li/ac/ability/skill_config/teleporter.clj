@@ -50,12 +50,11 @@
    {:skill-id :location-teleport :id :progression.exp-short :path "progression.exp-short" :section-suffix "progression" :type :double :min 0.0 :default 0.015 :comment "LocationTeleport exp for short-distance travel."}
    {:skill-id :location-teleport :id :progression.exp-long :path "progression.exp-long" :section-suffix "progression" :type :double :min 0.0 :default 0.03 :comment "LocationTeleport exp for long-distance travel."}
 
-   {:skill-id :penetrate-teleport :id :targeting.max-depth :path "targeting.max-depth" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [3.0 6.0] :comment "PenetrateTeleport maximum penetration depth."}
-   {:skill-id :penetrate-teleport :id :targeting.scan-distance :path "targeting.scan-distance" :section-suffix "targeting" :type :double :min 0.0 :default 30.0 :comment "PenetrateTeleport wall scan distance."}
-   {:skill-id :penetrate-teleport :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [200.0 140.0] :comment "PenetrateTeleport down-stage CP cost."}
-   {:skill-id :penetrate-teleport :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [80.0 55.0] :comment "PenetrateTeleport down-stage overload cost."}
-   {:skill-id :penetrate-teleport :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [40.0 25.0] :comment "PenetrateTeleport cooldown ticks."}
-   {:skill-id :penetrate-teleport :id :progression.exp-success :path "progression.exp-success" :section-suffix "progression" :type :double :min 0.0 :default 0.003 :comment "PenetrateTeleport exp gained on success."}
+  {:skill-id :penetrate-teleport :id :targeting.max-distance :path "targeting.max-distance" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [10.0 35.0] :comment "PenetrateTeleport max requested distance."}
+  {:skill-id :penetrate-teleport :id :cost.up.cp-per-block :path "cost.up.cp-per-block" :section-suffix "cost.up" :type :double-list :min 0.0 :list-count 2 :default [14.0 9.0] :comment "PenetrateTeleport CP cost per teleported block."}
+  {:skill-id :penetrate-teleport :id :cost.up.overload :path "cost.up.overload" :section-suffix "cost.up" :type :double-list :min 0.0 :list-count 2 :default [80.0 50.0] :comment "PenetrateTeleport up-stage overload cost."}
+  {:skill-id :penetrate-teleport :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [50.0 30.0] :comment "PenetrateTeleport cooldown ticks."}
+  {:skill-id :penetrate-teleport :id :progression.exp-per-distance :path "progression.exp-per-distance" :section-suffix "progression" :type :double :min 0.0 :default 0.00014 :comment "PenetrateTeleport exp gained per teleported block."}
 
   {:skill-id :shift-teleport :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [25.0 35.0] :comment "ShiftTeleport block target range."}
   {:skill-id :shift-teleport :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [15.0 35.0] :comment "ShiftTeleport line-hit magic damage."}
@@ -77,5 +76,5 @@
 
 (def internal-tunable-definitions
   [{:skill-id :mark-teleport :id :targeting.eye-height :path "targeting.eye-height" :section-suffix "targeting" :type :double :min 0.0 :default 1.6 :comment "Internal raycast origin eye height."}
-   {:skill-id :penetrate-teleport :id :targeting.scan-step :path "targeting.scan-step" :section-suffix "targeting" :type :double :min 0.001 :default 0.5 :comment "Internal wall scan step in blocks."}
+  {:skill-id :penetrate-teleport :id :targeting.scan-step :path "targeting.scan-step" :section-suffix "targeting" :type :double :min 0.001 :default 0.8 :comment "Internal wall scan step in blocks."}
    {:skill-id :shift-teleport :id :targeting.eye-height :path "targeting.eye-height" :section-suffix "targeting" :type :double :min 0.0 :default 1.6 :comment "Internal raycast eye height."}])

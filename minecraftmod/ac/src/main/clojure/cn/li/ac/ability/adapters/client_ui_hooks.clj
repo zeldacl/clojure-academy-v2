@@ -13,6 +13,7 @@
             [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.hooks.catalog :as catalog]
@@ -78,6 +79,20 @@
   (net-client/send-to-server catalog/MSG-CTX-CHANNEL {:ctx-id ctx-id
                                                       :channel channel
                                                       :payload payload}))
+
+(defn- send-slot-wheel-message!
+  [player-uuid key-idx delta]
+  (when (and (gameplay/use-mouse-wheel-enabled?)
+             (number? delta)
+             (not (zero? (double delta))))
+    (let [slot-key (slot-context-key player-uuid key-idx)
+          ctx-id (get @slot-context-ids slot-key)
+          skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
+      (when (and ctx-id (= skill-id :penetrate-teleport))
+        (net-client/send-to-server catalog/MSG-CTX-CHANNEL
+                                   {:ctx-id ctx-id
+                                    :channel :penetrate-tp/set-distance
+                                    :payload {:delta (double delta)}})))))
 
 (defn- vec-reflection-active?
   [player-uuid]
@@ -320,7 +335,7 @@
      (ctx/get-context ctx-id))
 
    :client-terminate-context!
-   (fn [ctx-id reason]
+   (fn [ctx-id _reason]
      (remove-slot-context! ctx-id)
      (ctx/terminate-context! ctx-id nil))
 
@@ -351,6 +366,10 @@
    (fn [player-uuid key-idx]
      (swap! slot-key-tick-ms dissoc [player-uuid key-idx])
      (send-slot-key-up-message! player-uuid key-idx))
+
+   :client-on-slot-wheel!
+   (fn [player-uuid key-idx delta]
+     (send-slot-wheel-message! player-uuid key-idx delta))
 
    :client-abort-all!
    (fn []

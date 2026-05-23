@@ -96,6 +96,7 @@
          :client-on-slot-key-down! noop
          :client-on-slot-key-tick! noop
          :client-on-slot-key-up! noop
+         :client-on-slot-wheel! noop
          :client-abort-all! noop
          :client-tick! noop
          :client-tick-hand-effects! noop
@@ -522,6 +523,10 @@
 (defn client-on-slot-key-up!
   [player-uuid key-idx]
   ((:client-on-slot-key-up! @runtime-hooks) player-uuid key-idx))
+
+(defn client-on-slot-wheel!
+  [player-uuid key-idx delta]
+  ((:client-on-slot-wheel! @runtime-hooks) player-uuid key-idx delta))
 
 (defn client-abort-all!
   []

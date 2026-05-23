@@ -12,7 +12,7 @@
            [com.mojang.blaze3d.platform InputConstants$Type]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
-           [net.minecraftforge.client.event InputEvent$Key]
+           [net.minecraftforge.client.event InputEvent$Key InputEvent$MouseScrollingEvent]
            [org.lwjgl.glfw GLFW]))
 
 (defonce ^:private skill-keys (atom []))
@@ -20,6 +20,7 @@
 (defonce ^:private mode-switch-state (atom {:was-down false :down-at-ns nil :pending-clicks 0}))
 (defonce ^:private raw-v-state (atom (mode-switch/initial-state)))
 (defonce ^:private raw-v-listener-registered? (atom false))
+(defonce ^:private mouse-scroll-listener-registered? (atom false))
 
 ;; Key scheme: :original (LMB/RMB/R/F) or :alternative (Z/X/C/B)
 (defonce ^:private key-scheme (atom :alternative))
@@ -142,6 +143,25 @@
         3 (when-let [^KeyMapping key (nth @skill-keys 3 nil)] (.isDown key))
         false))))
 
+(defn- skill-key-down?
+  [scheme key-idx]
+  (if (= scheme :original)
+    (boolean (original-scheme-skill-down? key-idx))
+    (when-let [^KeyMapping key (nth @skill-keys key-idx nil)]
+      (.isDown key))))
+
+(defn- on-mouse-scroll! [^InputEvent$MouseScrollingEvent event]
+  (let [delta (double (.getScrollDelta event))
+        scheme @key-scheme
+        activated? (boolean @overlay-state/client-activated-overlay)]
+    (when (and activated?
+               (not (current-screen-open?))
+               (not (zero? delta)))
+      (when-let [uuid (get-player-uuid)]
+        (doseq [idx (range (count @skill-keys))]
+          (when (skill-key-down? scheme idx)
+            (power-runtime/client-on-slot-wheel! uuid idx delta)))))))
+
 (defn tick-input! []
   (let [scheme @key-scheme
         activated? (boolean @overlay-state/client-activated-overlay)]
@@ -160,9 +180,7 @@
       (fn [key-id]
         (case (first key-id)
           :skill (let [idx (second key-id)]
-                   (if (= scheme :original)
-                     (boolean (original-scheme-skill-down? idx))
-                     (when-let [^KeyMapping key (nth @skill-keys idx nil)] (.isDown key))))
+                   (skill-key-down? scheme idx))
           :gui (when-let [^KeyMapping key (get @gui-keys (second key-id))] (.isDown key))
           false))
       get-player-uuid)))
@@ -174,4 +192,9 @@
                   EventPriority/NORMAL false InputEvent$Key
                   (reify java.util.function.Consumer
                     (accept [_ evt] (on-raw-key-input! evt)))))
+  (when (compare-and-set! mouse-scroll-listener-registered? false true)
+    (.addListener (MinecraftForge/EVENT_BUS)
+                  EventPriority/NORMAL false InputEvent$MouseScrollingEvent
+                  (reify java.util.function.Consumer
+                    (accept [_ evt] (on-mouse-scroll! evt)))))
   (log/info "Client key input initialized"))
