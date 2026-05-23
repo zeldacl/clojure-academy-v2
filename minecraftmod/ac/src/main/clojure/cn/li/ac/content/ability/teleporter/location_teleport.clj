@@ -15,6 +15,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.util.math.vec3 :as vec3]
@@ -69,6 +70,15 @@
 (defn- consume-resource! [player-id overload cp]
   (boolean (:success? (skill-effects/perform-resource! player-id overload cp false))))
 
+(defn- can-consume-resource?
+  [player-id overload cp]
+  (if-let [state (skill-effects/get-player-state player-id)]
+    (boolean (rdata/can-perform? (:resource-data state)
+                                 (double overload)
+                                 (double cp)
+                                 false))
+    false))
+
 (defn- current-pos [player-id]
   (when teleportation/*teleportation*
     (teleportation/get-player-position teleportation/*teleportation* player-id)))
@@ -83,11 +93,10 @@
         dist (vec3/euclidean-distance (:x cur-pos) (:y cur-pos) (:z cur-pos)
                     (:x loc) (:y loc) (:z loc))
         cp (compute-cp-cost exp dist cross-dim?)
+  overload (helper/cfg-double location-teleport-skill-id
+            :cost.perform.overload)
         no-exp? (and cross-dim? (not (can-cross-dimension? exp)))
-        no-cp? (let [cur-cp (skill-effects/current-cp player-id)]
-                 (< cur-cp (+ (helper/cfg-double location-teleport-skill-id
-                                                 :cost.perform.overload)
-                              cp))) ]
+  no-cp? (not (can-consume-resource? player-id overload cp))]
     (assoc loc
            :distance dist
            :cp-cost cp
@@ -111,11 +120,25 @@
                        locations)]
       {:success? true
        :exp exp
+       :limits {:cross-dimension-exp-threshold
+                (helper/cfg-double location-teleport-skill-id
+                                   :targeting.cross-dimension-exp-threshold)
+                :max-location-name-length
+                (helper/cfg-int location-teleport-skill-id
+                                :ui.max-location-name-length)}
        :current-pos pos
        :locations with-stats})
     (catch Exception e
       (log/warn "LocationTeleport query failed:" (ex-message e))
-      {:success? false :error :query-failed :locations []})))
+      {:success? false
+       :error :query-failed
+       :limits {:cross-dimension-exp-threshold
+                (helper/cfg-double location-teleport-skill-id
+                                   :targeting.cross-dimension-exp-threshold)
+                :max-location-name-length
+                (helper/cfg-int location-teleport-skill-id
+                                :ui.max-location-name-length)}
+       :locations []})))
 
 (defn save-current-location!
   "Save player's current position with a provided name. Returns result map."
@@ -127,7 +150,7 @@
         {:success? false :error :invalid-name}
 
         (not saved-locations/*saved-locations*)
-        {:success? false :error :saved-locations-unavailable}
+        {:success? false :error :service-unavailable}
 
         :else
         (if-let [pos (current-pos player-id)]
@@ -152,8 +175,14 @@
   [player-id location-name]
   (try
     (let [name* (norm-name location-name)]
-      (if (or (clojure.string/blank? name*) (not saved-locations/*saved-locations*))
+      (cond
+        (str/blank? name*)
         {:success? false :error :invalid-name}
+
+        (not saved-locations/*saved-locations*)
+        {:success? false :error :service-unavailable}
+
+        :else
         {:success? (boolean (saved-locations/delete-location!
                               saved-locations/*saved-locations*
                               player-id
@@ -162,6 +191,17 @@
     (catch Exception e
       (log/warn "LocationTeleport delete failed:" (ex-message e))
       {:success? false :error :delete-failed})))
+
+(defn- action-response
+  [op action snapshot]
+  {:action (assoc action :op op)
+   :snapshot snapshot})
+
+(defn- response-for
+  [op action-fn player-id]
+  (let [action (action-fn)
+        snapshot (query-location-teleport player-id)]
+    (action-response op action snapshot)))
 
 (defn perform-location-teleport!
   "Perform teleport to a saved location by name.
@@ -284,20 +324,28 @@
   []
   (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-QUERY
     (fn [_payload player]
-      (query-location-teleport (uuid/player-uuid player))))
+      (let [player-id (uuid/player-uuid player)
+            snapshot (query-location-teleport player-id)]
+        (action-response :query
+                         {:success? (boolean (:success? snapshot))
+                          :error (:error snapshot)}
+                         snapshot))))
   (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-ADD
     (fn [{:keys [name]} player]
-      (let [uuid (uuid/player-uuid player)
-            result (save-current-location! uuid name)]
-        (merge result (query-location-teleport uuid)))))
+      (let [player-id (uuid/player-uuid player)]
+        (response-for :add
+                      #(save-current-location! player-id name)
+                      player-id))))
   (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-REMOVE
     (fn [{:keys [name]} player]
-      (let [uuid (uuid/player-uuid player)
-            result (delete-saved-location! uuid name)]
-        (merge result (query-location-teleport uuid)))))
+      (let [player-id (uuid/player-uuid player)]
+        (response-for :remove
+                      #(delete-saved-location! player-id name)
+                      player-id))))
   (net-srv/register-handler catalog/MSG-REQ-SAVED-POS-PERFORM
     (fn [{:keys [name]} player]
-      (let [uuid (uuid/player-uuid player)
-            result (perform-location-teleport! uuid name)]
-        (merge result (query-location-teleport uuid)))))
+      (let [player-id (uuid/player-uuid player)]
+        (response-for :perform
+                      #(perform-location-teleport! player-id name)
+                      player-id))))
   nil)

@@ -7,7 +7,7 @@
     - Last row: [Add current location] with text input
   - Right info panel (x=220, y=10, w=90, h=220): hover info (dim, coords, cp)"
   (:require [cn.li.ac.ability.client.api :as api]
-            [cn.li.ac.ability.client.effects.sounds :as sounds]
+            [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [clojure.string :as str]))
 
 ;; ============================================================================
@@ -21,7 +21,11 @@
          :selected nil    ;; index of hovered location (int or nil)
          :add-mode? false
          :add-text ""
+         :pending-op nil
+         :last-error nil
          :exp 0.0
+         :limits {:cross-dimension-exp-threshold 0.8
+                  :max-location-name-length 16}
          :current-pos nil}))
 
 ;; ============================================================================
@@ -59,6 +63,13 @@
   (and (>= mx x) (< mx (+ x w))
        (>= my y) (< my (+ y h))))
 
+(defn- action-of [resp]
+  (or (:action resp) {:success? (boolean (:success? resp))
+                      :error (:error resp)}))
+
+(defn- snapshot-of [resp]
+  (or (:snapshot resp) resp))
+
 ;; ============================================================================
 ;; Public API: lifecycle
 ;; ============================================================================
@@ -67,16 +78,22 @@
   "Called by platform bridge when server push opens the screen.
   `player-uuid` is the local player. `payload` is the initial query result."
   [player-uuid payload]
-  (reset! screen-state
-          {:open? true
-           :player-uuid player-uuid
-           :locations (vec (:locations payload []))
-           :selected nil
-           :add-mode? false
-           :add-text ""
-           :exp (double (or (:exp payload) 0.0))
-           :current-pos (:current-pos payload)})
-  {:command :open-screen})
+  (let [snapshot (snapshot-of payload)]
+    (reset! screen-state
+            {:open? true
+             :player-uuid player-uuid
+             :locations (vec (:locations snapshot []))
+             :selected nil
+             :add-mode? false
+             :add-text ""
+             :pending-op nil
+             :last-error nil
+             :exp (double (or (:exp snapshot) 0.0))
+             :limits (merge {:cross-dimension-exp-threshold 0.8
+                             :max-location-name-length 16}
+                            (:limits snapshot))
+             :current-pos (:current-pos snapshot)})
+    {:command :open-screen}))
 
 (defn close-screen! []
   (swap! screen-state assoc :open? false))
@@ -85,26 +102,34 @@
   "Apply server query payload to existing screen state (used before screen opens)."
   [payload]
   (when payload
-    (swap! screen-state assoc
-           :locations (vec (:locations payload []))
-           :exp (double (or (:exp payload) 0.0))
-           :current-pos (:current-pos payload))))
+    (let [snapshot (snapshot-of payload)]
+      (swap! screen-state assoc
+             :locations (vec (:locations snapshot []))
+             :exp (double (or (:exp snapshot) 0.0))
+             :limits (merge {:cross-dimension-exp-threshold 0.8
+                             :max-location-name-length 16}
+                            (:limits snapshot))
+             :current-pos (:current-pos snapshot)))))
+
+(declare apply-query-response!)
 
 (defn- refresh-locations! []
   (api/req-location-teleport-query!
     (fn [resp]
-      (when (:success? resp)
-        (swap! screen-state assoc
-               :locations (vec (:locations resp []))
-               :exp (double (or (:exp resp) 0.0))
-               :current-pos (:current-pos resp))))))
+      (let [action (action-of resp)
+            snapshot (snapshot-of resp)]
+        (when (:success? action)
+          (apply-query-response! snapshot))))))
 
 (defn- apply-query-response! [resp]
-  (when (seq (:locations resp))
+  (let [snapshot (snapshot-of resp)]
     (swap! screen-state assoc
-           :locations (vec (:locations resp []))
-           :exp (double (or (:exp resp) 0.0))
-           :current-pos (:current-pos resp))))
+           :locations (vec (:locations snapshot []))
+           :exp (double (or (:exp snapshot) 0.0))
+           :limits (merge {:cross-dimension-exp-threshold 0.8
+                           :max-location-name-length 16}
+                          (:limits snapshot))
+           :current-pos (:current-pos snapshot))))
 
 ;; ============================================================================
 ;; Draw ops builder
@@ -154,7 +179,7 @@
 
 (defn- info-panel-ops
   "Build draw ops for the right info panel based on hovered row."
-  [hovered-loc current-pos]
+  [hovered-loc current-pos threshold]
   (let [lines (if hovered-loc
                 (cond-> [(str "Dim: " (or (:world-id hovered-loc) "?"))
                          (format "X: %.0f" (double (or (:x hovered-loc) 0)))
@@ -162,7 +187,7 @@
                          (format "Z: %.0f" (double (or (:z hovered-loc) 0)))]
                   (:cp-cost hovered-loc) (conj (format "CP: %.0f" (double (:cp-cost hovered-loc))))
                   (and (:cross-dimension? hovered-loc) (not (:can-perform? hovered-loc true)))
-                  (conj "Need exp > 0.8")
+                  (conj (format "Need exp > %.2f" (double threshold)))
                   (:distance hovered-loc) (conj (format "Dist: %.0f" (double (:distance hovered-loc)))))
                 (if current-pos
                   [(str "Dim: " (or (:world-id current-pos) "?"))
@@ -181,19 +206,25 @@
 (defn build-draw-ops
   "Build all draw ops for the current frame. Called from render loop."
   [mx my]
-  (let [{:keys [locations selected add-text current-pos]} @screen-state
+  (let [{:keys [locations selected add-text current-pos limits last-error pending-op]} @screen-state
         hovered-loc (when (and selected (< selected (count locations)))
                       (nth locations selected))
         loc-ops (mapcat #(location-row-ops %1 %2 mx my) (range (count locations)) locations)
         add-idx (count locations)
         add-ops (add-row-ops add-idx add-text mx my)
-        info-ops (info-panel-ops hovered-loc current-pos)
+        info-ops (info-panel-ops hovered-loc current-pos (:cross-dimension-exp-threshold limits))
+        status-op (when pending-op
+                    {:kind :text :text (str "Pending: " (name pending-op))
+                     :x (+ panel-x 120) :y (- panel-y 12) :color color-text-dim})
+        error-op (when last-error
+                   {:kind :text :text (str "Error: " (name last-error))
+                    :x (+ panel-x 4) :y (+ panel-y panel-h -12) :color color-err})
         title-op {:kind :text :text "Location Teleport" :x (+ panel-x 4) :y (- panel-y 12) :color color-text-normal}]
-    (concat [title-op
-             {:kind :fill :x panel-x :y panel-y :w panel-w :h panel-h :color color-bg}]
+      (concat (keep identity [title-op status-op error-op
+                  {:kind :fill :x panel-x :y panel-y :w panel-w :h panel-h :color color-bg}])
             loc-ops
             add-ops
-            info-ops)))
+          info-ops)))
 
 ;; ============================================================================
 ;; Interaction
@@ -210,75 +241,91 @@
 (defn handle-screen-click!
   "Handle mouse click. Returns truthy if click was consumed."
   [mx my]
-  (let [{:keys [locations add-text]} @screen-state
-        n (count locations)
-        ;; Check location rows
-        loc-result
-        (loop [i 0]
-          (when (< i n)
-            (let [loc (nth locations i)
-                  ry (row-y i)
-                  can? (:can-perform? loc true)
-                  btn-remove-x (+ panel-x panel-w -30)
-                  btn-tele-x   (+ panel-x panel-w -62)
-                  btn-y        (+ ry 6)
-                  btn-h        16]
+  (let [{:keys [locations add-text pending-op]} @screen-state
+        n (count locations)]
+    (if pending-op
+      true
+      (let [loc-result
+            (loop [i 0]
+              (when (< i n)
+                (let [loc (nth locations i)
+                      ry (row-y i)
+                      can? (:can-perform? loc true)
+                      btn-remove-x (+ panel-x panel-w -30)
+                      btn-tele-x (+ panel-x panel-w -62)
+                      btn-y (+ ry 6)
+                      btn-h 16]
+                  (cond
+                    (and can? (point-in? mx my btn-tele-x btn-y 30 btn-h))
+                    (do
+                      (swap! screen-state assoc :pending-op :perform :last-error nil)
+                      (api/req-location-teleport-perform!
+                        (:name loc)
+                        (fn [resp]
+                          (let [action (action-of resp)
+                                snapshot (snapshot-of resp)]
+                            (apply-query-response! snapshot)
+                            (if (:success? action)
+                              (do
+                                (fx-registry/dispatch-fx-channel!
+                                  nil
+                                  :location-teleport/fx-perform-success
+                                  action)
+                                (swap! screen-state assoc :pending-op nil :last-error nil)
+                                (close-screen!))
+                              (swap! screen-state assoc :pending-op nil :last-error (:error action))))))
+                      true)
+
+                    (point-in? mx my btn-remove-x btn-y 28 btn-h)
+                    (do
+                      (swap! screen-state assoc :pending-op :remove :last-error nil)
+                      (api/req-location-teleport-remove!
+                        (:name loc)
+                        (fn [resp]
+                          (let [action (action-of resp)
+                                snapshot (snapshot-of resp)]
+                            (apply-query-response! snapshot)
+                            (swap! screen-state assoc :pending-op nil :last-error (when-not (:success? action)
+                                                                                    (:error action))))))
+                      true)
+
+                    :else
+                    (recur (inc i))))))]
+        (or loc-result
+            (let [add-idx n
+                  ry (row-y add-idx)
+                  btn-x (+ panel-x panel-w -60)
+                  btn-y (+ ry 6)]
               (cond
-                ;; Teleport button
-                (and can? (point-in? mx my btn-tele-x btn-y 30 btn-h))
+                (and (not (str/blank? add-text))
+                     (point-in? mx my btn-x btn-y 56 16))
                 (do
-                   ;; Original: close screen and play sound immediately before server responds
-                   (close-screen!)
-                   (sounds/queue-sound-effect!
-                     {:type :sound
-                      :sound-id "my_mod:tp.tp"
-                      :volume 0.5
-                      :pitch 1.0})
-                   (api/req-location-teleport-perform!
-                     (:name loc)
-                     (fn [_resp] nil))
+                  (swap! screen-state assoc :pending-op :add :last-error nil)
+                  (api/req-location-teleport-add!
+                    add-text
+                    (fn [resp]
+                      (let [action (action-of resp)
+                            snapshot (snapshot-of resp)]
+                        (swap! screen-state assoc :add-text "")
+                        (apply-query-response! snapshot)
+                        (swap! screen-state assoc :pending-op nil :last-error (when-not (:success? action)
+                                                                                (:error action))))))
                   true)
-                ;; Remove button
-                (point-in? mx my btn-remove-x btn-y 28 btn-h)
+
+                (point-in? mx my panel-x ry panel-w row-h)
                 (do
-                  (api/req-location-teleport-remove!
-                    (:name loc)
-                     (fn [resp]
-                       (or (apply-query-response! resp)
-                           (refresh-locations!))))
+                  (swap! screen-state assoc :add-mode? true)
                   true)
-                :else
-                (recur (inc i))))))]
-    (or loc-result
-        ;; Check add row
-        (let [add-idx n
-              ry (row-y add-idx)
-              btn-x (+ panel-x panel-w -60)
-              btn-y (+ ry 6)]
-          (cond
-            ;; Save button
-            (and (not (str/blank? add-text))
-                 (point-in? mx my btn-x btn-y 56 16))
-            (do
-              (api/req-location-teleport-add!
-                add-text
-                (fn [_resp]
-                   (swap! screen-state assoc :add-text "")
-                   (or (apply-query-response! _resp)
-                       (refresh-locations!))))
-              true)
-            ;; Row click - enter add mode / start typing
-            (point-in? mx my panel-x ry panel-w row-h)
-            (do
-              (swap! screen-state assoc :add-mode? true)
-              true)
-            :else nil)))))
+
+                :else nil)))))))
+
 
 (defn handle-char-typed!
   "Handle a character typed while screen is open. Called by platform if supported."
   [ch]
-  (let [{:keys [add-mode? add-text]} @screen-state]
-    (when add-mode?
+  (let [{:keys [add-mode? add-text pending-op limits]} @screen-state
+        max-len (long (or (:max-location-name-length limits) 16))]
+    (when (and add-mode? (nil? pending-op))
       (cond
         (= (int ch) 8) ;; backspace
         (when (seq add-text)
@@ -287,11 +334,14 @@
         (= ch \newline)
         (when (not (str/blank? add-text))
           (let [name add-text]
-            (swap! screen-state assoc :add-text "")
+            (swap! screen-state assoc :add-text "" :pending-op :add :last-error nil)
             (api/req-location-teleport-add!
               name
               (fn [resp]
-                (or (apply-query-response! resp)
-                    (refresh-locations!))))))
-        (and (>= (int ch) 32) (<= (count add-text) 15))
+                (let [action (action-of resp)
+                      snapshot (snapshot-of resp)]
+                  (apply-query-response! snapshot)
+                  (swap! screen-state assoc :pending-op nil :last-error (when-not (:success? action)
+                                                                          (:error action))))))))
+        (and (>= (int ch) 32) (< (count add-text) max-len))
         (swap! screen-state update :add-text #(str % ch))))))

@@ -72,7 +72,8 @@
 			cn.li.ac.content.ability.teleporter.dim-folding-theorem
 			cn.li.ac.content.ability.teleporter.space-fluct]
 		:fx-namespaces
-		'[cn.li.ac.content.ability.teleporter.mark-teleport-fx
+		'[cn.li.ac.content.ability.teleporter.location-teleport-fx
+			cn.li.ac.content.ability.teleporter.mark-teleport-fx
 			cn.li.ac.content.ability.teleporter.threatening-teleport-fx
 			cn.li.ac.content.ability.teleporter.teleporter-crit-fx
 			cn.li.ac.content.ability.teleporter.penetrate-teleport-fx
