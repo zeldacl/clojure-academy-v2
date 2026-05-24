@@ -53,9 +53,9 @@
   (try
     (let [cost-ok? (apply-cost! spec :down evt)
           evt* (assoc evt :cost-ok? cost-ok?)]
-      (call-action! spec :perform! evt*)
-      (run-stage-ops! spec evt* :perform)
       (when cost-ok?
+        (call-action! spec :perform! evt*)
+        (run-stage-ops! spec evt* :perform)
         (emit-fx! spec evt* :perform)
         (skill-effects/gain-exp! spec evt*)
         (skill-effects/apply-cooldown! spec evt*))

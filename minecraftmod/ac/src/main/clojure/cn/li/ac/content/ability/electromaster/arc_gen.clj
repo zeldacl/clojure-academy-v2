@@ -13,7 +13,7 @@
   Exp gain:
   - Hit entity: 0.0048 + 0.0024 * exp
   - Hit block: 0.0018 + 0.0009 * exp
-  - Miss: 0.001
+  - Miss: none
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
@@ -22,13 +22,15 @@
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.effect.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
+            [cn.li.mcmod.platform.potion-effects :as potion-effects]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private arc-entity-id "my_mod:entity_arc")
 (def ^:private arc-gen-skill-id :arc-gen)
+(def ^:private fish-item-id "minecraft:cooked_cod")
 
 ;; ---------------------------------------------------------------------------
 ;; Helpers
@@ -61,18 +63,25 @@
                                 "minecraft:fire")))))
 
 (defn- try-fishing!
-  "Attempt to spawn fishing hook if hitting water."
-  [world-id x y z probability player-id]
+  "Attempt to reward cooked fish when Arc-Gen strikes water."
+  [world-id x y z probability player]
   (when (and block-manip/*block-manipulation*
              (< (rand) probability))
     (when (block-manip/liquid-block? block-manip/*block-manipulation*
                                      world-id x y z)
-      (log/debug "Arc Gen: fishing triggered at" x y z))))
+      (when-let [fish-stack (pitem/create-item-stack-by-id fish-item-id 1)]
+        (entity/player-give-item-stack! player fish-stack)
+        (log/debug "Arc Gen: fishing reward granted at" x y z)))))
 
 (defn- apply-stun!
   "Apply stun effect to entity (slowness + weakness)."
-  [world-id entity-uuid]
-  (log/debug "Arc Gen: stun effect applied to" entity-uuid))
+  [_world-id entity-uuid]
+  (when (and potion-effects/*potion-effects* entity-uuid)
+    (potion-effects/apply-potion-effect! potion-effects/*potion-effects*
+                                         entity-uuid :slowness 40 1)
+    (potion-effects/apply-potion-effect! potion-effects/*potion-effects*
+                                         entity-uuid :weakness 40 1)
+    (log/debug "Arc Gen: stun effect applied to" entity-uuid)))
 
 ;; ---------------------------------------------------------------------------
 ;; Action
@@ -93,8 +102,6 @@
           look-vec      (when raycast/*raycast*
                           (raycast/get-player-look-vector raycast/*raycast* player-id))]
       (when look-vec
-        (when player
-          (entity/player-spawn-entity-by-id! player arc-entity-id 0.0))
         (let [hit-result (when raycast/*raycast*
                            (raycast/raycast-combined raycast/*raycast*
                                                      world-id
@@ -133,19 +140,21 @@
             (let [block-x (int (:block-x hit-result))
                   block-y (int (:block-y hit-result))
                   block-z (int (:block-z hit-result))]
-              (try-ignite-block! world-id block-x block-y block-z ignite-prob)
-              (try-fishing! world-id block-x block-y block-z fish-prob player-id)
+              (if (and block-manip/*block-manipulation*
+                   (block-manip/liquid-block? block-manip/*block-manipulation*
+                                world-id block-x block-y block-z))
+              (try-fishing! world-id block-x block-y block-z fish-prob player)
+              (try-ignite-block! world-id block-x block-y block-z ignite-prob))
               (skill-effects/add-skill-exp! player-id arc-gen-skill-id
                                             (cfg-progression :progression.exp-block exp)))
 
             :else
-            (skill-effects/add-skill-exp! player-id arc-gen-skill-id
-                                          (cfg-double :progression.exp-miss))))))
+            nil))))
     (catch Exception e
       (log/warn "Arc Gen perform! failed:" (ex-message e)))))
 
 (defn arc-gen-perform!
-  [{:keys [player-id ctx-id] :as evt}]
+  [evt]
   (perform-arc-gen! evt))
 
 ;; ---------------------------------------------------------------------------

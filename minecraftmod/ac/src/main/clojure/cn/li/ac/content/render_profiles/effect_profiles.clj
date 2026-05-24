@@ -33,8 +33,10 @@
     :state {:layer :lines
 	    :blend :alpha}
     :params {:segments 20
-	     :length 20.0
-	     :wiggle-amp 0.1
+       :length 15.0
+       :show-wiggle 0.2
+       :hide-wiggle 0.2
+       :wiggle-amp 0.5
 	     :wiggle-freq 7.0
 	     :color-a [110 190 255]
 	     :color-b [200 230 255]}}

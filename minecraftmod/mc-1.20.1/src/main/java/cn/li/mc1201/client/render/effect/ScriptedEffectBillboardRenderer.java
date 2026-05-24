@@ -17,10 +17,12 @@ import org.joml.Matrix4f;
 public final class ScriptedEffectBillboardRenderer<T extends Entity> extends EntityRenderer<T> {
     private static final String SCRIPT_RENDER_RUNTIME_NS = "cn.li.mc1201.client.render.script-render-runtime";
     private static final float ARC_DEFAULT_LENGTH = 20.0F;
-    private static final float ARC_SHOW_WIGGLE = 0.2F;
-    private static final float ARC_HIDE_WIGGLE = 0.2F;
-    private static final float ARC_TEX_WIGGLE = 0.5F;
-    private static final int ARC_SEGMENTS = 20;
+    private static final float ARC_DEFAULT_SHOW_WIGGLE = 0.2F;
+    private static final float ARC_DEFAULT_HIDE_WIGGLE = 0.2F;
+    private static final float ARC_DEFAULT_WIGGLE_AMP = 0.5F;
+    private static final float ARC_DEFAULT_WIGGLE_FREQ = 7.0F;
+    private static final int ARC_DEFAULT_SEGMENTS = 20;
+    private static final int ARC_MAX_SEGMENTS = 80;
 
     static {
         try {
@@ -43,6 +45,28 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         return kindObj == null ? "" : kindObj.toString();
     }
 
+    private static float drawPlanParamFloat(String rendererId, String paramKey, float defaultValue) {
+        Object value = ClojureInterop.invoke(
+                SCRIPT_RENDER_RUNTIME_NS,
+                "draw-plan-param-double",
+                rendererId,
+                paramKey,
+                (double) defaultValue
+        );
+        return value instanceof Number number ? number.floatValue() : defaultValue;
+    }
+
+    private static int drawPlanParamInt(String rendererId, String paramKey, int defaultValue) {
+        Object value = ClojureInterop.invoke(
+                SCRIPT_RENDER_RUNTIME_NS,
+                "draw-plan-param-int",
+                rendererId,
+                paramKey,
+                defaultValue
+        );
+        return value instanceof Number number ? number.intValue() : defaultValue;
+    }
+
     @Override
     public void render(T entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
@@ -54,7 +78,7 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
 
         switch (kind) {
             case "ring-lines" -> renderRingLines(entity, partialTick, poseStack, bufferSource);
-            case "polyline-arc" -> renderPolylineArc(entity, partialTick, poseStack, bufferSource);
+            case "polyline-arc" -> renderPolylineArc(entity, spec, rendererId, partialTick, poseStack, bufferSource);
             case "billboard-cross" -> renderBillboardCross(entity, spec, partialTick, poseStack, bufferSource);
             default -> throw new IllegalArgumentException("Unsupported draw-plan kind for effect rendererId="
                     + rendererId + ": " + kind);
@@ -126,15 +150,24 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
     }
 
     private void renderPolylineArc(T entity,
+                                   ScriptedEffectSpec spec,
+                                   String rendererId,
                                    float partialTick,
                                    PoseStack poseStack,
                                    MultiBufferSource bufferSource) {
-        float life = 20.0F;
+        float life = Math.max(1.0F, spec == null ? 20.0F : spec.getLifeTicks());
         float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
         float progress = Mth.clamp(age / life, 0.0F, 1.0F);
 
-        float showFactor = Mth.clamp(progress / 0.2F, 0.0F, 1.0F);
-        float hideFactor = Mth.clamp((1.0F - progress) / 0.2F, 0.0F, 1.0F);
+        int segments = Mth.clamp(drawPlanParamInt(rendererId, "segments", ARC_DEFAULT_SEGMENTS), 2, ARC_MAX_SEGMENTS);
+        float length = Math.max(0.1F, drawPlanParamFloat(rendererId, "length", ARC_DEFAULT_LENGTH));
+        float showWiggle = Math.max(0.0F, drawPlanParamFloat(rendererId, "show-wiggle", ARC_DEFAULT_SHOW_WIGGLE));
+        float hideWiggle = Math.max(0.0F, drawPlanParamFloat(rendererId, "hide-wiggle", ARC_DEFAULT_HIDE_WIGGLE));
+        float wiggleAmp = Math.max(0.0F, drawPlanParamFloat(rendererId, "wiggle-amp", ARC_DEFAULT_WIGGLE_AMP));
+        float wiggleFreq = Math.max(0.0F, drawPlanParamFloat(rendererId, "wiggle-freq", ARC_DEFAULT_WIGGLE_FREQ));
+
+        float showFactor = Mth.clamp(progress / showWiggle, 0.0F, 1.0F);
+        float hideFactor = Mth.clamp((1.0F - progress) / hideWiggle, 0.0F, 1.0F);
         float alpha = Math.min(showFactor, hideFactor);
         if (alpha <= 0.01F) {
             return;
@@ -155,14 +188,14 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         float prevZ = 0.0F;
 
         int a = (int) (255.0F * alpha);
-        for (int i = 1; i <= ARC_SEGMENTS; i++) {
-            float t = (float) i / (float) ARC_SEGMENTS;
-            float z = ARC_DEFAULT_LENGTH * t;
+        for (int i = 1; i <= segments; i++) {
+            float t = (float) i / (float) segments;
+            float z = length * t;
 
-            float wave = (entity.getId() * 0.37F) + age * 0.35F + t * 7.0F;
-            float phaseAmp = ARC_SHOW_WIGGLE * (1.0F - progress) + ARC_HIDE_WIGGLE * progress;
-            float wiggleX = (float) Math.sin(wave) * ARC_TEX_WIGGLE * phaseAmp;
-            float wiggleY = (float) Math.cos(wave * 1.17F) * ARC_TEX_WIGGLE * phaseAmp * 0.6F;
+            float wave = (entity.getId() * 0.37F) + age * 0.35F + t * wiggleFreq;
+            float phaseAmp = showWiggle * (1.0F - progress) + hideWiggle * progress;
+            float wiggleX = (float) Math.sin(wave) * wiggleAmp * phaseAmp;
+            float wiggleY = (float) Math.cos(wave * 1.17F) * wiggleAmp * phaseAmp * 0.6F;
 
             float x = wiggleX;
             float y = wiggleY;

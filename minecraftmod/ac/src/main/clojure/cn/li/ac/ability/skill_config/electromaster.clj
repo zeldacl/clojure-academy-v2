@@ -45,7 +45,6 @@
    {:skill-id :arc-gen :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [15.0 5.0] :comment "Arc Gen cooldown lerp endpoints."}
    {:skill-id :arc-gen :id :progression.exp-entity :path "progression.exp-entity" :section-suffix "progression" :type :double-list :min 0.0 :list-count 2 :default [0.0048 0.0024] :comment "Arc Gen entity-hit exp formula [base, exp-scale]."}
    {:skill-id :arc-gen :id :progression.exp-block :path "progression.exp-block" :section-suffix "progression" :type :double-list :min 0.0 :list-count 2 :default [0.0018 0.0009] :comment "Arc Gen block-hit exp formula [base, exp-scale]."}
-   {:skill-id :arc-gen :id :progression.exp-miss :path "progression.exp-miss" :section-suffix "progression" :type :double :min 0.0 :default 0.001 :comment "Arc Gen exp gained on miss."}
 
    {:skill-id :body-intensify :id :charge.min-ticks :path "charge.min-ticks" :section-suffix "charge" :type :int :min 1 :default 10 :comment "BodyIntensify minimum charge ticks required to perform."}
    {:skill-id :body-intensify :id :charge.max-ticks :path "charge.max-ticks" :section-suffix "charge" :type :int :min 1 :default 40 :comment "BodyIntensify maximum effective charge ticks."}
