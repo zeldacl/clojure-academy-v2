@@ -90,3 +90,25 @@
         parsed (xml/parse (io/input-stream res))
         paths (set (collect-widget-paths parsed))]
     (is (every? paths developer-widget-path-contract))))
+
+(def ^:private interferer-widget-path-contract
+  #{"main"
+    "main/panel_whitelist"
+    "main/panel_whitelist/btn_add"
+    "main/panel_whitelist/btn_remove"
+    "main/panel_whitelist/btn_up"
+    "main/panel_whitelist/btn_down"
+    "main/panel_whitelist/zone_whitelist"
+    "main/panel_whitelist/zone_whitelist/element"
+    "main/panel_whitelist/zone_whitelist/element/element_name"
+    "main/panel_config"
+    "main/panel_config/element_switch"
+    "main/panel_config/element_switch/element_btn_switch"
+    "main/panel_config/element_range"
+    "main/panel_config/element_range/element_text_range"})
+
+(deftest page-interfere-widget-path-contract-test
+  (let [res (io/resource "assets/my_mod/guis/rework/page_interfere.xml")
+        parsed (xml/parse (io/input-stream res))
+        paths (set (collect-widget-paths parsed))]
+    (is (every? paths interferer-widget-path-contract))))

@@ -1,7 +1,6 @@
 (ns cn.li.ac.block.ability-interferer.gui
   "CLIENT-ONLY: Ability Interferer GUI"
   (:require [clojure.string :as str]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
@@ -9,7 +8,6 @@
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.block.ability-interferer.config :as cfg]
             [cn.li.ac.config.modid :as modid]
@@ -48,11 +46,30 @@
   (when-let [edit-atom (:whitelist-edit container)]
     (reset! edit-atom (str/join "," (or @(:whitelist container) [])))))
 
+(defn- clear-pending-state!
+  [container]
+  (when-let [pending-range (:pending-range container)]
+    (reset! pending-range nil))
+  (when-let [pending-enabled (:pending-enabled container)]
+    (reset! pending-enabled nil)))
+
+(defn- refresh-whitelist-view!
+  [container]
+  (when-let [refresh* (:refresh-whitelist-view container)]
+    (when-let [f @refresh*]
+      (f))))
+
+(defn- after-sync-or-apply!
+  [container _data]
+  (sync-whitelist-edit! container)
+  (clear-pending-state! container)
+  (refresh-whitelist-view! container))
+
 (def ^:private interferer-sync
   (gui-sync/schema-sync-fns interferer-schema/ability-interferer-schema
-                            {:after-sync! sync-whitelist-edit!
-                             :after-apply! (fn [container _data]
-                                             (sync-whitelist-edit! container))}))
+                            {:after-sync! (fn [container]
+                                            (after-sync-or-apply! container nil))
+                             :after-apply! after-sync-or-apply!}))
 
 (defn- create-container [tile player]
   (let [state (or (common/get-tile-state tile) {})]
@@ -61,7 +78,13 @@
                                       player
                                       interferer-gui-type
                                       {:state state
-                                       :base {:whitelist-edit (atom (str/join "," (get state :whitelist [])))}})))
+                  :base {:whitelist-edit (atom (str/join "," (get state :whitelist [])))
+                    :focused-whitelist-name (atom nil)
+                    :whitelist-scroll-index (atom 0)
+                    :pending-range (atom nil)
+                    :pending-enabled (atom nil)
+                        :add-input-widget (atom nil)
+                    :refresh-whitelist-view (atom nil)}})))
 
 (defn- get-slot-count [_container]
   (slot-registry/get-slot-count interferer-slot-schema-id))
@@ -79,24 +102,6 @@
 
 (defn- still-valid? [_container _player] true)
 
-(defn- parse-whitelist
-  [s]
-  (->> (str/split (str s) #",")
-       (map str/trim)
-       (remove str/blank?)
-       distinct
-       sort
-       vec))
-
-(defn- rotate-whitelist
-  [names dir]
-  (let [v (vec (or names []))
-        n (count v)]
-    (cond
-      (<= n 1) v
-      (neg? (int dir)) (vec (concat [(peek v)] (pop v)))
-      :else (vec (concat (subvec v 1) [(first v)])))))
-
 (defn- request-set-whitelist! [container names]
   (let [tile (:tile-entity container)]
     (net-client/send-to-server
@@ -107,18 +112,20 @@
 (defn- request-set-range! [container new-range]
   (let [tile (:tile-entity container)
         r (cfg/clamp-range new-range)]
+    (when-let [pending-range (:pending-range container)]
+      (reset! pending-range r))
     (net-client/send-to-server
       (msg :change-range)
-      (assoc (net-helpers/tile-pos-payload tile) :range r))
-    (reset! (:range container) r)))
+      (assoc (net-helpers/tile-pos-payload tile) :range r))))
 
 (defn- request-set-enabled! [container v]
   (let [tile (:tile-entity container)
         enabled? (boolean v)]
+    (when-let [pending-enabled (:pending-enabled container)]
+      (reset! pending-enabled enabled?))
     (net-client/send-to-server
       (msg :toggle-enabled)
-      (assoc (net-helpers/tile-pos-payload tile) :enabled enabled?))
-    (reset! (:enabled container) enabled?)))
+      (assoc (net-helpers/tile-pos-payload tile) :enabled enabled?))))
 
 (def ^:private sync-to-client! (:sync-to-client! interferer-sync))
 (def ^:private get-sync-data (:get-sync-data interferer-sync))
@@ -139,75 +146,205 @@
         (modid/asset-path "textures" "guis/button/button_switch_on.png")
         (modid/asset-path "textures" "guis/button/button_switch_off.png")))))
 
+(defn- effective-range
+  [container]
+  (if-let [pending-range (:pending-range container)]
+    (or @pending-range @(:range container))
+    @(:range container)))
+
+(defn- effective-enabled
+  [container]
+  (if-let [pending-enabled (:pending-enabled container)]
+    (if (nil? @pending-enabled)
+      @(:enabled container)
+      @pending-enabled)
+    @(:enabled container)))
+
+(defn- visible-whitelist-window
+  [names scroll-index window-size]
+  (let [v (vec (or names []))
+        total (count v)
+        window-size (max 1 (int window-size))
+        max-scroll (max 0 (- total window-size))
+        start (-> (int (or scroll-index 0)) (max 0) (min max-scroll))
+        end (min total (+ start window-size))]
+    {:start start
+     :max-scroll max-scroll
+     :names (if (< start end) (subvec v start end) [])}))
+
+(defn- whitelist-window-size
+  []
+  4)
+
+(defn- normalize-add-name
+  [raw]
+  (let [n (str/trim (str raw))]
+    (when-not (str/blank? n)
+      n)))
+
+(defn- add-whitelist-name
+  [names raw-name]
+  (let [name (normalize-add-name raw-name)
+        current (vec (or names []))]
+    (if (or (nil? name) (some #(= % name) current))
+      current
+      (-> (conj current name)
+          distinct
+          sort
+          vec))))
+
+(defn- remove-focused-whitelist-name
+  [names focused-name]
+  (let [v (vec (or names []))]
+    (if (str/blank? (str focused-name))
+      v
+      (vec (remove #(= % focused-name) v)))))
+
+(defn- cleanup-whitelist-elements!
+  [zone template-id]
+  (doseq [child (cgui-core/get-widgets zone)]
+    (let [name (cgui-core/get-name child)]
+      (when (and (not= name template-id)
+                 (true? (get @(:metadata child) :interferer-whitelist-item?)))
+        (cgui-core/remove-widget! zone child)))))
+
+(defn- rebuild-whitelist-zone!
+  [inv-window container]
+  (when-let [zone (cgui-core/find-widget inv-window "panel_whitelist/zone_whitelist")]
+    (when-let [template (cgui-core/find-widget inv-window "panel_whitelist/zone_whitelist/element")]
+      (cgui-core/set-visible! template false)
+      (cleanup-whitelist-elements! zone (cgui-core/get-name template))
+      (let [all-names (vec (or @(:whitelist container) []))
+            scroll-atom (:whitelist-scroll-index container)
+            focused-atom (:focused-whitelist-name container)
+            {:keys [start names]} (visible-whitelist-window all-names @scroll-atom (whitelist-window-size))
+            item-height (max 16 (int (second (cgui-core/get-size template))))]
+        (reset! scroll-atom start)
+        (when (and (some? @focused-atom)
+                   (not (some #(= % @focused-atom) all-names)))
+          (reset! focused-atom nil))
+        (doseq [[idx player-name] (map-indexed vector names)]
+          (let [item (cgui-core/copy-widget template)
+                y (* idx item-height)]
+            (swap! (:metadata item) assoc :interferer-whitelist-item? true)
+            (cgui-core/set-visible! item true)
+            (cgui-core/set-pos! item 0 y)
+            (when-let [name-widget (cgui-core/find-widget item "element_name")]
+              (when-let [tb (comp/get-textbox-component name-widget)]
+                (comp/set-text! tb player-name)))
+            (when-let [dt (comp/get-drawtexture-component item)]
+              (events/on-frame item
+                (fn [_]
+                  (swap! (:state dt) update :color
+                         (fn [_]
+                           (if (= player-name @focused-atom)
+                             0xFFFFFFFF
+                             0xB3FFFFFF))))))
+            (events/on-left-click item
+              (fn [_]
+                (reset! focused-atom player-name)))
+            (cgui-core/add-widget! zone item)))))))
+
+(defn- close-add-input-widget!
+  [panel container]
+  (when-let [input-widget* (:add-input-widget container)]
+    (when-let [w @input-widget*]
+      (cgui-core/remove-widget! panel w)
+      (reset! input-widget* nil))))
+
+(defn- open-add-input-widget!
+  [panel container]
+  (close-add-input-widget! panel container)
+  (let [box (cgui-core/create-widget :name "interferer_whitelist_input" :pos [50 5] :size [56 10])
+        tb (comp/text-box :text "" :color 0xFFFFFFFF :scale 0.8)
+        tb-native (comp/add-component! box tb)]
+    (comp/set-editable! tb-native true)
+    (events/on-confirm-input tb-native
+      (fn [new-text]
+        (let [merged (add-whitelist-name @(:whitelist container) new-text)]
+          (when (not= merged (vec @(:whitelist container)))
+            (request-set-whitelist! container merged))
+          (close-add-input-widget! panel container))))
+    (events/on-lost-focus box
+      (fn [_]
+        (close-add-input-widget! panel container)))
+    (cgui-core/add-widget! panel box)
+    (when-let [input-widget* (:add-input-widget container)]
+      (reset! input-widget* box))))
+
 (defn- wire-xml-controls!
   [inv-window container]
   (when-let [range-text (cgui-core/find-widget inv-window "panel_config/element_range/element_text_range")]
     (when-let [tb (comp/get-textbox-component range-text)]
-      (comp/set-text! tb (format "%.0f" (double @(:range container)))))
+      (comp/set-text! tb (format "%.0f" (double (effective-range container)))))
     (events/on-frame range-text
       (fn [_]
         (when-let [tb (comp/get-textbox-component range-text)]
-          (comp/set-text! tb (format "%.0f" (double @(:range container))))))))
+          (comp/set-text! tb (format "%.0f" (double (effective-range container))))))))
 
   (when-let [switch-btn (cgui-core/find-widget inv-window "panel_config/element_switch/element_btn_switch")]
-    (update-switch-texture! switch-btn @(:enabled container))
+    (update-switch-texture! switch-btn (effective-enabled container))
     (events/unlisten! switch-btn :left-click)
     (events/on-left-click switch-btn
       (fn [_]
-        (request-set-enabled! container (not @(:enabled container)))
-        (update-switch-texture! switch-btn @(:enabled container))))
+        (request-set-enabled! container (not (effective-enabled container)))
+        (update-switch-texture! switch-btn (effective-enabled container))))
     (events/on-frame switch-btn
       (fn [_]
-        (update-switch-texture! switch-btn @(:enabled container)))))
+        (update-switch-texture! switch-btn (effective-enabled container)))))
 
   (when-let [btn-left (cgui-core/find-widget inv-window "panel_config/element_range/element_btn_left")]
     (events/unlisten! btn-left :left-click)
     (events/on-left-click btn-left
       (fn [_]
-        (request-set-range! container (- @(:range container) 10.0)))))
+        (request-set-range! container (- (effective-range container) 10.0)))))
 
   (when-let [btn-right (cgui-core/find-widget inv-window "panel_config/element_range/element_btn_right")]
     (events/unlisten! btn-right :left-click)
     (events/on-left-click btn-right
       (fn [_]
-        (request-set-range! container (+ @(:range container) 10.0)))))
+        (request-set-range! container (+ (effective-range container) 10.0)))))
 
   (when-let [btn-add (cgui-core/find-widget inv-window "panel_whitelist/btn_add")]
     (events/unlisten! btn-add :left-click)
     (events/on-left-click btn-add
       (fn [_]
-        ;; Convenience behavior for current framework: add local player name quickly.
-          (let [player-name (some-> (:player container) entity/player-get-name str)
-              wl (set @(:whitelist container))]
-          (when-not (or (str/blank? player-name) (contains? wl player-name))
-            (request-set-whitelist! container (conj (vec wl) player-name)))))))
+        (when-let [panel (cgui-core/find-widget inv-window "panel_whitelist")]
+          (open-add-input-widget! panel container)))))
 
   (when-let [btn-remove (cgui-core/find-widget inv-window "panel_whitelist/btn_remove")]
     (events/unlisten! btn-remove :left-click)
     (events/on-left-click btn-remove
       (fn [_]
-        ;; Remove the most recently added entry as a practical fallback UI action.
-        (let [wl @(:whitelist container)]
-          (when (seq wl)
-            (request-set-whitelist! container (vec (butlast wl))))))))
+        (let [focused @(:focused-whitelist-name container)
+              wl @(:whitelist container)
+              updated (remove-focused-whitelist-name wl focused)]
+          (when (not= (vec wl) updated)
+            (request-set-whitelist! container updated))))))
 
   (when-let [btn-up (cgui-core/find-widget inv-window "panel_whitelist/btn_up")]
     (events/unlisten! btn-up :left-click)
     (events/on-left-click btn-up
       (fn [_]
-        (let [wl @(:whitelist container)
-              rotated (rotate-whitelist wl -1)]
-          (when (not= (vec wl) rotated)
-            (request-set-whitelist! container rotated))))))
+        (let [all-names (vec (or @(:whitelist container) []))
+              scroll-atom (:whitelist-scroll-index container)
+              max-scroll (max 0 (- (count all-names) (whitelist-window-size)))]
+          (swap! scroll-atom #(max 0 (min max-scroll (dec (int %)))))
+          (rebuild-whitelist-zone! inv-window container)))))
 
   (when-let [btn-down (cgui-core/find-widget inv-window "panel_whitelist/btn_down")]
     (events/unlisten! btn-down :left-click)
     (events/on-left-click btn-down
       (fn [_]
-        (let [wl @(:whitelist container)
-              rotated (rotate-whitelist wl 1)]
-          (when (not= (vec wl) rotated)
-            (request-set-whitelist! container rotated)))))))
+        (let [all-names (vec (or @(:whitelist container) []))
+              scroll-atom (:whitelist-scroll-index container)
+              max-scroll (max 0 (- (count all-names) (whitelist-window-size)))]
+          (swap! scroll-atom #(max 0 (min max-scroll (inc (int %)))))
+          (rebuild-whitelist-zone! inv-window container)))))
+
+  (when-let [refresh* (:refresh-whitelist-view container)]
+    (reset! refresh* #(rebuild-whitelist-zone! inv-window container)))
+  (rebuild-whitelist-zone! inv-window container))
 
 (defn- create-screen [container minecraft-container _player]
   (sync-to-client! container)
@@ -232,16 +369,11 @@
                                          [(tech-ui/hist-buffer (fn [] (double @(:energy container))) max-e)]
                                          0)
                y1 (tech-ui/add-sepline info-area "Interferer" y0)
-               y2 (tech-ui/add-property info-area "enabled" (fn [] (if @(:enabled container) "ON" "OFF")) y1)
-               y3 (tech-ui/add-property info-area "range" (fn [] (format "%.0f" (double @(:range container)))) y2)
+               y2 (tech-ui/add-property info-area "enabled" (fn [] (if (effective-enabled container) "ON" "OFF")) y1)
+                 y3 (tech-ui/add-property info-area "range" (fn [] (format "%.0f" (double (effective-range container)))) y2)
                y4 (tech-ui/add-property info-area "affected" (fn [] (str @(:affected-player-count container))) y3)
                y5 (tech-ui/add-property info-area "owner" (fn [] @(:placer-name container)) y4)]
-           (tech-ui/add-property info-area "whitelist" wl-text y5
-                                  :editable? true
-                                  :on-change (fn [new-text]
-                                               (let [names (parse-whitelist new-text)]
-                                                 (reset! (:whitelist-edit container) (str new-text))
-                                                 (request-set-whitelist! container names))))))})))
+               (tech-ui/add-property info-area "whitelist" wl-text y5)))})))
 
 (defn- interferer-container?
   [container]
@@ -250,11 +382,11 @@
        (contains? container :tile-entity)
        (contains? container :energy)))
 
-(defonce-guard ability-interferer-gui-installed?)
+(defonce ^:private ability-interferer-gui-installed? (atom false))
 
 (defn init-ability-interferer-gui!
   []
-  (with-init-guard ability-interferer-gui-installed?
+  (when (compare-and-set! ability-interferer-gui-installed? false true)
     (slot-schema/register-slot-schema!
       {:schema-id interferer-slot-schema-id
        :slots [{:id :battery :type :energy :x 139 :y 25}]})

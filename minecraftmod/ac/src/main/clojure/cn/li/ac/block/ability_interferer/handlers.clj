@@ -11,6 +11,15 @@
 
 (defn- msg [action] (msg-registry/msg :ability-interferer action))
 
+(defn- normalize-whitelist
+	[names]
+	(->> names
+			 (map #(str/trim (str %)))
+			 (remove str/blank?)
+			 distinct
+			 sort
+			 vec))
+
 (defn- handle-get-status [payload player]
 	(let [world (net-helpers/get-world player)
 				tile (net-helpers/get-tile-at world payload)]
@@ -62,12 +71,7 @@
 				names (:whitelist payload)]
 		(if (and tile (sequential? names))
 			(let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
-						cleaned (->> names
-												 (map #(str/trim (str %)))
-												 (remove str/blank?)
-												 distinct
-												 sort
-												 vec)
+						cleaned (normalize-whitelist names)
 						state' (assoc state :whitelist cleaned)]
 				(platform-be/set-custom-state! tile state')
 				(platform-be/set-changed! tile)
@@ -78,13 +82,12 @@
 	(let [world (net-helpers/get-world player)
 				tile (net-helpers/get-tile-at world payload)
 				player-name (:player-name payload)]
-		(if (and tile player-name)
+		(if (and tile (not (str/blank? (str player-name))))
 			(let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
 						whitelist (:whitelist state [])
-						new-whitelist (if (some #(= % player-name) whitelist)
-														whitelist
-														(conj whitelist player-name))]
+						new-whitelist (normalize-whitelist (conj (vec whitelist) player-name))]
 				(platform-be/set-custom-state! tile (assoc state :whitelist new-whitelist))
+				(platform-be/set-changed! tile)
 				{:success true :whitelist new-whitelist})
 			{:success false})))
 
@@ -92,11 +95,12 @@
 	(let [world (net-helpers/get-world player)
 				tile (net-helpers/get-tile-at world payload)
 				player-name (:player-name payload)]
-		(if (and tile player-name)
+		(if (and tile (not (str/blank? (str player-name))))
 			(let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
 						whitelist (:whitelist state [])
-						new-whitelist (vec (remove #(= % player-name) whitelist))]
+						new-whitelist (normalize-whitelist (remove #(= % player-name) whitelist))]
 				(platform-be/set-custom-state! tile (assoc state :whitelist new-whitelist))
+				(platform-be/set-changed! tile)
 				{:success true :whitelist new-whitelist})
 			{:success false})))
 
