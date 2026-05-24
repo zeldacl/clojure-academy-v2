@@ -28,7 +28,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private mag-movement-skill-id :mag-movement)
-(def ^:private arc-entity-id "my_mod:entity_arc")
+(def ^:private default-eye-height 1.62)
 
 (defn- cfg-double [field-id]
   (skill-config/tunable-double mag-movement-skill-id field-id))
@@ -53,13 +53,13 @@
       (str "minecraft:" (subs id (count "entity.minecraft.")))
       :else id)))
 
-(defn- is-metal-block? [block-id exp]
+(defn- is-metal-block? [block-id]
   (let [id      (normalize-id block-id)
         normal? (ability-config/is-normal-metal-block? id)
-        weak?   (ability-config/is-weak-metal-block? id)
-        metal?  (or normal? weak?)]
-    (and (if (< (double exp) (cfg-double :targeting.weak-metal-exp-threshold)) metal? true)
-         (or weak? metal?))))
+    weak?   (ability-config/is-weak-metal-block? id)]
+  ;; Source parity: MagMovement accepts any configured metal block.
+  ;; The weak-metal exp threshold is intentionally a no-op for this skill.
+  (boolean (and id (or normal? weak?)))))
 
 (defn- is-metal-entity? [entity-type]
   (ability-config/is-metal-entity? (normalize-id entity-type)))
@@ -91,10 +91,11 @@
       (when matched
         (assoc skill-state
                :target-x (double (:x matched))
-               :target-y (+ (double (:y matched)) 1.0)
+               :target-y (+ (double (:y matched))
+                            (double (or (:eye-height matched) default-eye-height)))
                :target-z (double (:z matched)))))))
 
-(defn- resolve-target [player-id exp]
+(defn- resolve-target [player-id]
   (when-let [look (when raycast/*raycast*
                     (raycast/get-player-look-vector raycast/*raycast* player-id))]
     (let [eye      (geom/eye-pos player-id)
@@ -109,12 +110,12 @@
       (case (:hit-type hit)
         :block
         (let [block-id (normalize-id (:block-id hit))]
-          (when (is-metal-block? block-id exp)
+          (when (is-metal-block? block-id)
             {:target-kind     :block
              :target-world-id world-id
-             :target-x        (+ 0.5 (double (:x hit)))
-             :target-y        (+ 0.5 (double (:y hit)))
-             :target-z        (+ 0.5 (double (:z hit)))
+             :target-x        (double (:x hit))
+             :target-y        (double (:y hit))
+             :target-z        (double (:z hit))
              :target-block-id block-id}))
         :entity
         (let [entity-type (normalize-id (:type hit))]
@@ -124,7 +125,8 @@
              :target-entity-uuid (:uuid hit)
              :target-entity-type entity-type
              :target-x           (double (:x hit))
-             :target-y           (+ (double (:y hit)) 1.0)
+             :target-y           (+ (double (:y hit))
+                                    (double (or (:eye-height hit) default-eye-height)))
              :target-z           (double (:z hit))}))
         nil))))
 
@@ -143,52 +145,64 @@
 ;; Actions
 ;; ---------------------------------------------------------------------------
 
-(defn- finish-movement! [player-id skill-state evt]
-  (when skill-state
-    (let [{:keys [x y z]} (player-pos player-id)
-          traveled        (geom/vdist {:x x :y y :z z}
-                                      {:x (:start-x skill-state)
-                                       :y (:start-y skill-state)
-                                       :z (:start-z skill-state)})]
-      (skill-effects/add-skill-exp! player-id mag-movement-skill-id
-                                    (max (cfg-double :progression.exp-min)
-                                         (* (cfg-double :progression.exp-distance-scale) traveled))))
-    (effect/run-op! evt [:reset-fall-damage nil])
-    (effect/run-op! evt [:fx {:topic :mag-movement/fx-end
-                              :payload {:mode :end}}])))
+(defn- finalize-and-terminate!
+  [{:keys [player-id ctx-id] :as evt} {:keys [grant-exp?] :or {grant-exp? true}}]
+  (when-let [ctx-data (ctx/get-context ctx-id)]
+    (let [skill-state (:skill-state ctx-data)
+          finalized? (boolean (get-in ctx-data [:skill-state :finalized?]))
+          should-finalize? (and skill-state (not finalized?))]
+      (when should-finalize?
+        (ctx/update-context! ctx-id assoc-in [:skill-state :finalized?] true)
+        (when (and grant-exp?
+                   (:has-target skill-state)
+                   (number? (:start-x skill-state))
+                   (number? (:start-y skill-state))
+                   (number? (:start-z skill-state)))
+          (let [{:keys [x y z]} (player-pos player-id)
+                traveled (geom/vdist {:x x :y y :z z}
+                                    {:x (double (:start-x skill-state))
+                                     :y (double (:start-y skill-state))
+                                     :z (double (:start-z skill-state))})]
+            (skill-effects/add-skill-exp! player-id mag-movement-skill-id
+                                          (max (cfg-double :progression.exp-min)
+                                               (* (cfg-double :progression.exp-distance-scale) traveled)))))
+        (effect/run-op! evt [:reset-fall-damage nil])
+        (effect/run-op! evt [:fx {:topic :mag-movement/fx-end
+                                  :payload {:mode :end}}]))
+        (ctx/update-context! ctx-id dissoc :skill-state)
+        (ctx/terminate-context! ctx-id nil))))
 
-(defn- on-down! [{:keys [player-id ctx-id cost-ok? exp] :as evt}]
-  (if-not cost-ok?
-    (do (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
-        (log/debug "MagMovement: insufficient resource for activation"))
-    (let [state-pos (player-pos player-id)]
-      (if-let [{:keys [target-x target-y target-z] :as target-state}
-               (resolve-target player-id (double (or exp 0.0)))]
-        (let [velocity-now (when player-motion/*player-motion*
-                             (player-motion/get-velocity player-motion/*player-motion* player-id))]
-          (ctx/update-context! ctx-id assoc :skill-state
-                               (merge target-state
-                                      {:has-target true
-                                       :movement-ticks 0
-                                       :overload-floor (cfg-lerp :cost.down.overload (double (or exp 0.0)))
-                                       :start-x        (double (:x state-pos))
-                                       :start-y        (double (:y state-pos))
-                                       :start-z        (double (:z state-pos))
-                                       :motion-x       (double (or (:x velocity-now) 0.0))
-                                       :motion-y       (double (or (:y velocity-now) 0.0))
-                                       :motion-z       (double (or (:z velocity-now) 0.0))}))
-          (effect/run-op! evt [:fx {:topic :mag-movement/fx-start
-                                    :payload {:mode :start}}])
-          (when-let [player (:player evt)]
-            (entity/player-spawn-entity-by-id! player arc-entity-id 0.0))
-          (effect/run-op! evt [:fx {:topic   :mag-movement/fx-update
-                                    :payload {:mode   :update
-                                              :target {:x (double target-x)
-                                                       :y (double target-y)
-                                                       :z (double target-z)}}}])
-          (log/debug "MagMovement started" (:target-kind target-state)))
-        (do (ctx/update-context! ctx-id assoc :skill-state {:has-target false})
-            (log/debug "MagMovement: no valid magnetic target"))))))
+(defn- on-down! [{:keys [player-id exp] :as evt}]
+  (let [ctx-id (:ctx-id evt)
+        state-pos (player-pos player-id)]
+    (if-let [{:keys [target-x target-y target-z] :as target-state}
+             (resolve-target player-id)]
+      (let [velocity-now (when player-motion/*player-motion*
+                           (player-motion/get-velocity player-motion/*player-motion* player-id))]
+        (ctx/update-context! ctx-id assoc :skill-state
+                             (merge target-state
+                                    {:has-target true
+                                     :finalized? false
+                                     :movement-ticks 0
+                                     :overload-floor (cfg-lerp :cost.down.overload (double (or exp 0.0)))
+                                     :start-x (double (:x state-pos))
+                                     :start-y (double (:y state-pos))
+                                     :start-z (double (:z state-pos))
+                                     :motion-x (double (or (:x velocity-now) 0.0))
+                                     :motion-y (double (or (:y velocity-now) 0.0))
+                                     :motion-z (double (or (:z velocity-now) 0.0))}))
+        (effect/run-op! evt [:fx {:topic :mag-movement/fx-start
+                                  :payload {:mode :start}}])
+        (effect/run-op! evt [:fx {:topic   :mag-movement/fx-update
+                                  :payload {:mode   :update
+                                            :target {:x (double target-x)
+                                                     :y (double target-y)
+                                                     :z (double target-z)}}}])
+        (log/debug "MagMovement started" (:target-kind target-state)))
+      (do
+        (ctx/update-context! ctx-id assoc :skill-state {:has-target false :finalized? false})
+        (log/debug "MagMovement: no valid magnetic target")
+        (finalize-and-terminate! evt {:grant-exp? false})))))
 
 (defn- on-tick! [{:keys [player-id ctx-id cost-ok?] :as evt}]
   (when-let [ctx (ctx/get-context ctx-id)]
@@ -199,15 +213,13 @@
                               (update-entity-target skill-state)
                               skill-state)]
           (if-not updated-state
-            (do (finish-movement! player-id skill-state evt)
-                (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false))
+            (finalize-and-terminate! evt {:grant-exp? true})
             (let [movement-ticks (inc (int (:movement-ticks updated-state)))]
               (ctx/update-context! ctx-id assoc :skill-state
                                    (assoc updated-state :movement-ticks movement-ticks))
               (effect/run-op! evt [:overload-floor {:floor (:overload-floor updated-state)}])
               (if-not cost-ok?
-                (do (finish-movement! player-id updated-state evt)
-                    (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false))
+                (finalize-and-terminate! evt {:grant-exp? true})
                 (let [p         (player-pos player-id)
                       tx        (double (:target-x updated-state))
                       ty        (double (:target-y updated-state))
@@ -242,31 +254,27 @@
                   (ctx/update-context! ctx-id assoc-in [:skill-state :motion-x] next-x)
                   (ctx/update-context! ctx-id assoc-in [:skill-state :motion-y] next-y)
                   (ctx/update-context! ctx-id assoc-in [:skill-state :motion-z] next-z)
-                  (when (and (:player evt)
-                             (zero? (mod movement-ticks 6)))
-                    (entity/player-spawn-entity-by-id! (:player evt) arc-entity-id 0.0))
                   (effect/run-op! evt [:fx {:topic   :mag-movement/fx-update
                                             :payload {:mode   :update
                                                       :target {:x tx :y ty :z tz}}}])
                   (when (zero? (mod movement-ticks 10))
                     (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))
 
-(defn- on-up! [{:keys [player-id ctx-id] :as evt}]
+(defn- on-up! [{:keys [ctx-id] :as evt}]
   (when-let [ctx (ctx/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           has-target  (:has-target skill-state)]
       (when has-target
-        (finish-movement! player-id skill-state evt)
-        (ctx/update-context! ctx-id assoc-in [:skill-state :has-target] false)
+        (finalize-and-terminate! evt {:grant-exp? true})
         (log/debug "MagMovement completed: ticks" (:movement-ticks skill-state))))))
 
-(defn- on-abort! [{:keys [player-id ctx-id] :as evt}]
-  (when-let [ctx (ctx/get-context ctx-id)]
-    (finish-movement! player-id (:skill-state ctx) evt))
-  (ctx/update-context! ctx-id dissoc :skill-state)
+(defn- on-abort! [{:keys [_player-id _ctx-id] :as evt}]
+  (finalize-and-terminate! evt {:grant-exp? true})
   (log/debug "MagMovement aborted"))
 
-(defskill! mag-movement
+(declare mag-movement-skill)
+
+(defskill! mag-movement-skill
   :id              :mag-movement
   :category-id     :electromaster
   :name-key        "ability.skill.electromaster.mag_movement"
@@ -279,7 +287,7 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks  (fn [_] (cfg-int :cooldown.ticks))
-  :pattern         :charge-window
+  :pattern         :hold-channel
   :cooldown        {:mode :manual}
   :cost {:down {:overload   (fn [{:keys [exp]}]
                               (cfg-lerp :cost.down.overload (double (or exp 0.0))))
@@ -291,6 +299,8 @@
   :actions {:down!  on-down!
             :tick!  on-tick!
             :up!    on-up!
-            :abort! on-abort!}
+            :abort! on-abort!
+            :cost-fail! (fn [{:keys [cost-stage] :as evt}]
+                          (finalize-and-terminate! evt {:grant-exp? (not= cost-stage :down)}))}
   :prerequisites [{:skill-id :arc-gen         :min-exp 0.0}
                   {:skill-id :current-charging :min-exp 0.7}])
