@@ -45,3 +45,48 @@
 
 (deftest cgui-xml-migration-resources-test
   (is (true? (verification-ok?))))
+
+(def ^:private developer-widget-path-contract
+  #{"main"
+    "main/parent_left"
+    "main/parent_left/panel_ability"
+    "main/parent_left/panel_ability/btn_upgrade"
+    "main/parent_left/panel_machine"
+    "main/parent_left/panel_machine/button_wireless"
+    "main/parent_left/panel_machine/button_wireless/text_nodename"
+    "main/parent_left/panel_machine/progress_power"
+    "main/parent_left/panel_machine/progress_syncrate"
+    "main/parent_right"
+    "main/parent_right/area"})
+
+(defn- widget-node? [node]
+  (and (map? node)
+       (= :Widget (:tag node))
+       (string? (get-in node [:attrs :name]))))
+
+(defn- widget-children [node]
+  (->> (:content node)
+       (filter map?)))
+
+(defn- collect-widget-paths
+  ([node]
+   (collect-widget-paths node nil))
+  ([node parent-path]
+   (let [this-name (when (widget-node? node)
+                     (get-in node [:attrs :name]))
+         this-path (when this-name
+                     (if parent-path
+                       (str parent-path "/" this-name)
+                       this-name))
+         child-parent (or this-path parent-path)
+         child-paths (mapcat #(collect-widget-paths % child-parent)
+                             (widget-children node))]
+     (if this-path
+       (cons this-path child-paths)
+       child-paths))))
+
+(deftest page-developer-widget-path-contract-test
+  (let [res (io/resource "assets/my_mod/guis/rework/page_developer.xml")
+        parsed (xml/parse (io/input-stream res))
+        paths (set (collect-widget-paths parsed))]
+    (is (every? paths developer-widget-path-contract))))
