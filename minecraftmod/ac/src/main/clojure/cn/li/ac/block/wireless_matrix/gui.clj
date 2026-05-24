@@ -25,7 +25,8 @@
   - Dynamic SSID/password display (owner can edit after init)
   - Initialization form for owner to create network"
   
-  (:require [cn.li.mcmod.gui.cgui-core :as cgui-core]
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.gui.components :as comp]
@@ -49,6 +50,7 @@
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.position :as pos])
   (:import [cn.li.acapi.wireless IWirelessMatrix]))
@@ -121,6 +123,34 @@
 (defn network-initialized? [data]
   ;; Check if network is initialized
   (:initialized data))
+
+(defn matrix-info-area-policy
+  "Return Matrix info-area interaction policy.
+
+  Keys:
+  - :show-init?          show initialization form
+  - :show-noinit?        show not-initialized message only
+  - :editable-ssid?      whether SSID is editable
+  - :editable-password?  whether password is editable"
+  [initialized? is-owner?]
+  (cond
+    initialized?
+    {:show-init? false
+     :show-noinit? false
+     :editable-ssid? is-owner?
+     :editable-password? is-owner?}
+
+    is-owner?
+    {:show-init? true
+     :show-noinit? false
+     :editable-ssid? false
+     :editable-password? false}
+
+    :else
+    {:show-init? false
+     :show-noinit? true
+     :editable-ssid? false
+     :editable-password? false}))
 
 
 
@@ -301,7 +331,7 @@
 (defn sync-to-client! [container]
   (let [plates   (count-plates container)
         core-lvl (get-core-level container)
-        working? (> core-lvl 0)
+  working? (matrix-logic/is-working? {:core-level core-lvl :plate-count plates})
         old-plates @(:plate-count container)
         old-core @(:core-level container)]
     ;; Only update if values changed
@@ -402,6 +432,10 @@
   [info-area tile player data]
   (try
     (let [placer (try (.getPlacerName ^ IWirelessMatrix tile) (catch Exception _ (:owner data)))
+          player-name (try (some-> player entity/player-get-name str) (catch Exception _ ""))
+          is-owner? (and (not (str/blank? (str placer)))
+                         (= (str placer) player-name))
+          policy (matrix-info-area-policy (boolean (network-initialized? data)) is-owner?)
           cap (:max-capacity data)
           range (:range data)
           bandwidth (:bandwidth data)]
@@ -422,47 +456,49 @@
                                     y)]
         (if (network-initialized? data)
           (let [y (tech-ui/add-sepline info-area "wireless_info" y)
-                ;; Always show editable fields; server enforces owner-only writes.
                 y (tech-ui/add-property
                     info-area "ssid" (:ssid data) y
-                    :editable? true
+                    :editable? (:editable-ssid? policy)
                     :on-change (fn [new-ssid]
                                 (send-change-ssid tile new-ssid)))
                 y (tech-ui/add-sepline info-area "change_pass" y)
                 y (tech-ui/add-property
                     info-area "password" (:password data) y
-                    :editable? true
+                    :editable? (:editable-password? policy)
                     :masked? true
                     :on-change (fn [new-pass]
                                 (send-change-password tile new-pass)))]
             y)
-          (let [ssid-cell (atom nil)
-                pass-cell (atom nil)
-                ;; Always show init form; server enforces owner-only init.
-                y (tech-ui/add-sepline info-area "wireless_init" y)
-                y (tech-ui/add-property info-area "ssid" "" y
-                                        :editable? true
-                                        :color-change? false
-                                        :content-cell ssid-cell)
-                y (tech-ui/add-property info-area "password" "" y
-                                        :editable? true
-                                        :masked? true
-                                        :color-change? false
-                                        :content-cell pass-cell)
-                y (+ y 1)
-                y (tech-ui/add-button
-                    info-area "INIT"
-                    (fn []
-                      (let [ssid (if-let [tb @ssid-cell] (comp/get-text tb) "")
-                            pass (if-let [tb @pass-cell] (comp/get-text tb) "")]
-                        (send-init-network tile ssid pass
-                          (fn [success]
-                            (when success
-                              (send-gather-info tile
-                                (fn [new-data]
-                                  (rebuild-info-area! info-area tile player new-data))))))))
-                    y)]
-            y))))
+          (if (:show-init? policy)
+            (let [ssid-cell (atom nil)
+                  pass-cell (atom nil)
+                  y (tech-ui/add-sepline info-area "wireless_init" y)
+                  y (tech-ui/add-property info-area "ssid" "" y
+                                          :editable? true
+                                          :color-change? false
+                                          :content-cell ssid-cell)
+                  y (tech-ui/add-property info-area "password" "" y
+                                          :editable? true
+                                          :masked? true
+                                          :color-change? false
+                                          :content-cell pass-cell)
+                  y (+ y 1)
+                  y (tech-ui/add-button
+                      info-area "INIT"
+                      (fn []
+                        (let [ssid (if-let [tb @ssid-cell] (comp/get-text tb) "")
+                              pass (if-let [tb @pass-cell] (comp/get-text tb) "")]
+                          (send-init-network tile ssid pass
+                            (fn [success]
+                              (when success
+                                (send-gather-info tile
+                                  (fn [new-data]
+                                    (rebuild-info-area! info-area tile player new-data))))))))
+                      y)]
+              y)
+            (if (:show-noinit? policy)
+              (tech-ui/add-sepline info-area "wireless_noinit" y)
+              y)))))
     (catch Exception e
       (log/error "Error rebuilding info area:"(ex-message e)))))
 

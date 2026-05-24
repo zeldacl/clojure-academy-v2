@@ -9,6 +9,19 @@
 (defn- msg [action]
 	(msg-registry/msg :matrix action))
 
+(defn- payload-pos
+	[payload]
+	(select-keys payload [:pos-x :pos-y :pos-z]))
+
+(defn- fail
+	[action payload owner-check reason]
+	(log/warn "Matrix handler rejected"
+			  {:action action
+			   :owner-check owner-check
+			   :pos (payload-pos payload)
+			   :reason reason})
+	{:success false})
+
 (defn handle-gather-info [payload player]
 	(let [{:keys [be]} (infra/resolve-world-tile payload player)
 				ctrl (infra/resolve-controller be)
@@ -16,44 +29,42 @@
 				network (infra/wireless-network ctrl)]
 		(presenter/gather-info-response network cap)))
 
-(defn- with-owner-controller [payload player f]
+(defn- with-owner-controller [action payload player f]
 	(if-let [{:keys [ctrl]} (infra/owner-controller payload player)]
 		(f ctrl)
-		{:success false}))
+		(fail action payload false :not-owner)))
 
 (defn handle-init-network [payload player]
-	(let [{:keys [be]} (infra/resolve-world-tile payload player)
-				ctrl (infra/resolve-controller be)
-				{:keys [ssid password]} payload]
-		(if ctrl
-			(try
-				{:success (infra/create-network! ctrl ssid password)}
-				(catch Exception e
-					(log/error "Failed to initialize network:" (ex-message e))
-					{:success false}))
-			{:success false})))
+	(with-owner-controller :init payload player
+		(fn [tile]
+			(let [{:keys [ssid password]} payload]
+				(try
+					{:success (infra/create-network! tile ssid password)}
+					(catch Exception e
+						(log/error "Failed to initialize network:" {:action :init :owner-check true :pos (payload-pos payload)} (ex-message e))
+						(fail :init payload true :exception)))))))
 
 (defn handle-change-ssid [payload player]
-	(with-owner-controller payload player
+	(with-owner-controller :change-ssid payload player
 		(fn [tile]
 			(if-let [network (infra/wireless-network tile)]
 				(try
 					{:success (infra/change-ssid! network (:new-ssid payload))}
 					(catch Exception e
-						(log/error "Failed to change SSID:" (ex-message e))
-						{:success false}))
-				{:success false}))))
+						(log/error "Failed to change SSID:" {:action :change-ssid :owner-check true :pos (payload-pos payload)} (ex-message e))
+						(fail :change-ssid payload true :exception)))
+				(fail :change-ssid payload true :network-not-found)))))
 
 (defn handle-change-password [payload player]
-	(with-owner-controller payload player
+	(with-owner-controller :change-password payload player
 		(fn [tile]
 			(if-let [network (infra/wireless-network tile)]
 				(try
 					{:success (infra/change-password! network (:new-password payload))}
 					(catch Exception e
-						(log/error "Failed to change password:" (ex-message e))
-						{:success false}))
-				{:success false}))))
+						(log/error "Failed to change password:" {:action :change-password :owner-check true :pos (payload-pos payload)} (ex-message e))
+						(fail :change-password payload true :exception)))
+				(fail :change-password payload true :network-not-found)))))
 
 (defn register-network-handlers! []
 	(net-server/register-handler (msg :gather-info) handle-gather-info)

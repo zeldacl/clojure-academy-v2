@@ -29,8 +29,14 @@
     (testing "blank owner remains permissive"
       (is (true? (infra/owner? (matrix-cap-with-owner "") :player))))
 
+    (testing "whitespace-only owner remains permissive"
+      (is (true? (infra/owner? (matrix-cap-with-owner "   ") :player))))
+
     (testing "different owner is rejected"
-      (is (false? (infra/owner? (matrix-cap-with-owner "bob") :player))))))
+      (is (false? (infra/owner? (matrix-cap-with-owner "bob") :player))))
+
+    (testing "owner comparison is case-sensitive"
+      (is (false? (infra/owner? (matrix-cap-with-owner "Alice") :player))))))
 
 (deftest handle-matrix-place-persists-canonical-player-name
   (let [saved-state (atom nil)
