@@ -13,6 +13,7 @@
 (defonce ^:private ^:dynamic *open-location-teleport-screen-fn* nil)
 (defonce ^:private ^:dynamic *open-terminal-screen-fn* nil)
 (defonce ^:private ^:dynamic *open-simple-gui-fn* nil)
+(defonce ^:private ^:dynamic *play-intensify-local-effect-fn* nil)
 
 (defn install-client-bridge!
 	[{:keys [slot-key-down
@@ -25,7 +26,8 @@
 					 open-preset-editor-screen
 					 open-location-teleport-screen
 					 open-terminal-screen
-					 open-simple-gui]}]
+					 open-simple-gui
+					 play-intensify-local-effect]}]
 	(alter-var-root #'*slot-key-down-fn* (constantly slot-key-down))
 	(alter-var-root #'*slot-key-tick-fn* (constantly slot-key-tick))
 	(alter-var-root #'*slot-key-up-fn* (constantly slot-key-up))
@@ -37,6 +39,7 @@
 	(alter-var-root #'*open-location-teleport-screen-fn* (constantly open-location-teleport-screen))
 	(alter-var-root #'*open-terminal-screen-fn* (constantly open-terminal-screen))
 	(alter-var-root #'*open-simple-gui-fn* (constantly open-simple-gui))
+	(alter-var-root #'*play-intensify-local-effect-fn* (constantly play-intensify-local-effect))
 	nil)
 
 (defn on-slot-key-down!
@@ -108,3 +111,9 @@
 	(if *open-simple-gui-fn*
 		(*open-simple-gui-fn* gui-widget title)
 		(log/debug "Client bridge simple GUI not available")))
+
+(defn play-intensify-local-effect!
+	[]
+	(if *play-intensify-local-effect-fn*
+		(*play-intensify-local-effect-fn*)
+		(log/debug "Client bridge play-intensify-local-effect not available")))

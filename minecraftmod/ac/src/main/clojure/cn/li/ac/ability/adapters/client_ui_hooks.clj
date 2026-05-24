@@ -80,6 +80,45 @@
          :coin-progress ratio
          :charge-ratio ratio}))))
 
+(defn- find-player-context
+  [player-uuid skill-id]
+  (some (fn [ctx-data]
+          (when (= skill-id (:skill-id ctx-data))
+            ctx-data))
+        (ctx/get-all-contexts-for-player player-uuid)))
+
+(defn- hold-ticks-from-context
+  [ctx-data]
+  (max 0 (long (or (get-in ctx-data [:skill-state :hold-ticks])
+                   (:hold-ticks ctx-data)
+                   0))))
+
+(defn- body-intensify-visual-state
+  [player-uuid]
+  (let [ctx-data (find-player-context player-uuid :body-intensify)
+        hold-ticks (hold-ticks-from-context ctx-data)
+        max-ticks (max 1 (long (skill-config/tunable-int :body-intensify :charge.max-time)))]
+    {:active? (boolean ctx-data)
+     :charge-ticks hold-ticks
+     :charge-ratio (max 0.0 (min 1.0 (/ (double hold-ticks) (double max-ticks))))}))
+
+(defn- current-charging-visual-state
+  [player-uuid]
+  (let [ctx-data (find-player-context player-uuid :current-charging)
+        skill-state (:skill-state ctx-data)
+        charge-ticks (max 0 (long (or (:charge-ticks skill-state)
+                                      (:hold-ticks skill-state)
+                                      0)))
+        item? (boolean (:is-item skill-state))
+        good? (boolean (:good? skill-state))
+        max-ticks (max 1 (long (skill-config/tunable-int :body-intensify :charge.max-time)))]
+    {:active? (boolean ctx-data)
+     :blending? false
+     :is-item item?
+     :good? good?
+     :charge-ticks charge-ticks
+     :charge-ratio (max 0.0 (min 1.0 (/ (double charge-ticks) (double max-ticks))))}))
+
 (defn- slot-context-key [player-uuid key-idx]
   [player-uuid key-idx])
 
@@ -612,6 +651,14 @@
    :client-charge-coin-visual-state
    (fn [player-uuid]
      (charge-coin-visual-state player-uuid))
+
+   :client-body-intensify-charge-visual-state
+   (fn [player-uuid]
+     (body-intensify-visual-state player-uuid))
+
+   :client-current-charging-visual-state
+   (fn [player-uuid]
+     (current-charging-visual-state player-uuid))
 
    :client-trigger-mode-switch!
    (fn [player-uuid]

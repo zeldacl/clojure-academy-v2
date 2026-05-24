@@ -137,6 +137,58 @@
         (is (= 0.0 (:coin-progress visual)))
         (is (= 0.5 (:charge-ratio visual)))))))
 
+(deftest body-intensify-charge-visual-state-default-and-active-test
+  (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
+    (with-redefs [skill-config/tunable-int (fn [skill-id field-id]
+                                              (case [skill-id field-id]
+                                                [:body-intensify :charge.max-time] 40
+                                                1))
+                  ctx/get-all-contexts-for-player (fn [_] [])]
+      (let [visual ((:client-body-intensify-charge-visual-state hooks) "p1")]
+        (is (false? (:active? visual)))
+        (is (= 0 (:charge-ticks visual)))
+        (is (= 0.0 (:charge-ratio visual)))))
+    (with-redefs [skill-config/tunable-int (fn [skill-id field-id]
+                                              (case [skill-id field-id]
+                                                [:body-intensify :charge.max-time] 40
+                                                1))
+                  ctx/get-all-contexts-for-player (fn [_]
+                                                    [{:skill-id :body-intensify
+                                                      :skill-state {:hold-ticks 20}}])]
+      (let [visual ((:client-body-intensify-charge-visual-state hooks) "p1")]
+        (is (true? (:active? visual)))
+        (is (= 20 (:charge-ticks visual)))
+        (is (= 0.5 (:charge-ratio visual)))))))
+
+(deftest current-charging-visual-state-default-and-active-test
+  (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
+    (with-redefs [skill-config/tunable-int (fn [skill-id field-id]
+                                              (case [skill-id field-id]
+                                                [:body-intensify :charge.max-time] 40
+                                                1))
+                  ctx/get-all-contexts-for-player (fn [_] [])]
+      (let [visual ((:client-current-charging-visual-state hooks) "p1")]
+        (is (false? (:active? visual)))
+        (is (false? (:is-item visual)))
+        (is (false? (:good? visual)))
+        (is (= 0 (:charge-ticks visual)))
+        (is (= 0.0 (:charge-ratio visual)))))
+    (with-redefs [skill-config/tunable-int (fn [skill-id field-id]
+                                              (case [skill-id field-id]
+                                                [:body-intensify :charge.max-time] 40
+                                                1))
+                  ctx/get-all-contexts-for-player (fn [_]
+                                                    [{:skill-id :current-charging
+                                                      :skill-state {:charge-ticks 30
+                                                                    :is-item true
+                                                                    :good? true}}])]
+      (let [visual ((:client-current-charging-visual-state hooks) "p1")]
+        (is (true? (:active? visual)))
+        (is (true? (:is-item visual)))
+        (is (true? (:good? visual)))
+        (is (= 30 (:charge-ticks visual)))
+        (is (= 0.75 (:charge-ratio visual)))))))
+
 (deftest build-client-overlay-plan-falls-back-when-activated-override-nil-test
   (with-redefs [ps/get-player-state (fn [_]
                                       {:resource-data {:activated true

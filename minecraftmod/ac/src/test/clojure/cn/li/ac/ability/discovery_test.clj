@@ -19,4 +19,5 @@
 (deftest fallback-electromaster-fx-includes-arc-gen-fx-test
   (with-redefs [scanner/discover-ability-providers (fn [] [])]
     (let [fx-ns (set (discovery/discovered-fx-namespaces))]
-      (is (contains? fx-ns 'cn.li.ac.content.ability.electromaster.arc-gen-fx)))))
+      (is (contains? fx-ns 'cn.li.ac.content.ability.electromaster.arc-gen-fx))
+      (is (contains? fx-ns 'cn.li.ac.content.ability.electromaster.body-intensify-fx)))))

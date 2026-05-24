@@ -33,6 +33,7 @@
 		:fx-namespaces
 		'[cn.li.ac.content.ability.electromaster.railgun-fx
 			cn.li.ac.content.ability.electromaster.arc-gen-fx
+			cn.li.ac.content.ability.electromaster.body-intensify-fx
 			cn.li.ac.content.ability.electromaster.mag-movement-fx
 			cn.li.ac.content.ability.electromaster.thunder-bolt-fx
 			cn.li.ac.content.ability.electromaster.thunder-clap-fx

@@ -56,6 +56,24 @@
 (defn- enforce-overload-floor! [player-id floor-value]
   (skill-effects/enforce-overload-floor! player-id floor-value))
 
+(defn- select-random-effects
+  "Pick effects based on probability budget.
+
+  The nth successful roll picks the nth effect from the shuffled pool,
+  matching the legacy sequential-pick behavior without skipping index 0."
+  [effects probability]
+  (loop [p (double probability)
+         picked-index 0
+         selected []]
+    (if (<= p 0.0)
+      selected
+      (if (< (rand) p)
+        (let [selected* (if-let [effect-entry (nth effects picked-index nil)]
+                          (conj selected effect-entry)
+                          selected)]
+          (recur (- p 1.0) (inc picked-index) selected*))
+        (recur (- p 1.0) picked-index selected)))))
+
 (defn- apply-body-intensify-buffs! [player-id charge-ticks exp]
   (when potion-effects/*potion-effects*
     (let [prob            (get-probability charge-ticks)
@@ -63,20 +81,14 @@
           hunger-duration (get-hunger-buff-time charge-ticks)
           level           (get-buff-level charge-ticks)
           shuffled        (vec (shuffle (base-effects)))]
-      (loop [p prob picked 0]
-        (when (> p 0.0)
-          (let [roll (rand)]
-            (if (< roll p)
-              (let [next-picked (inc picked)]
-                (when-let [{:keys [effect max-amplifier]} (nth shuffled next-picked nil)]
-                  (potion-effects/apply-potion-effect!
-                   potion-effects/*potion-effects*
-                   player-id effect duration (min level max-amplifier)))
-                (recur (- p 1.0) next-picked))
-              (recur (- p 1.0) picked)))))
+      (doseq [{:keys [effect max-amplifier]}
+              (select-random-effects shuffled prob)]
+        (potion-effects/apply-potion-effect!
+         potion-effects/*potion-effects*
+         player-id effect duration (min level max-amplifier)))
       (potion-effects/apply-potion-effect!
        potion-effects/*potion-effects*
-        player-id :hunger hunger-duration (cfg-int :effect.hunger-amplifier)))))
+             player-id :hunger hunger-duration (cfg-int :effect.hunger-amplifier)))))
 
 (defskill! body-intensify
   :id          :body-intensify
