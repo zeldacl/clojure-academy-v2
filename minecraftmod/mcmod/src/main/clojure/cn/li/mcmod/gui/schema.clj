@@ -18,7 +18,7 @@
   [validate-fn close-fn button-click-fn text-input-fn])
 
 (defrecord SlotOperations
-  [slot-count-fn slot-get-fn slot-set-fn slot-can-place-fn slot-changed-fn])
+  [slot-count-fn slot-get-fn slot-set-fn slot-can-place-fn slot-changed-fn quick-move-fn])
 
 (defrecord Layout
   [title width height slots buttons labels background])

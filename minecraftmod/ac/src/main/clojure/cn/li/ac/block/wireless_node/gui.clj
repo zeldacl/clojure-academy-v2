@@ -38,6 +38,7 @@
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
+            [cn.li.ac.block.wireless-node.owner :as node-owner]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.mcmod.gui.animation :as anim]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -69,7 +70,7 @@
       wireless-node-id
       {:inventory-pred inventory-pred
        :rules [{:accept? energy-stub/is-energy-item-supported?
-                :slot-ids [:input]}]})))
+                :slot-ids [:input :output]}]})))
 
 (defn- msg
   "Generate message ID for node actions (must match server DSL / underscores)."
@@ -179,12 +180,12 @@
 
 (defn get-owner [container]
   (let [tile (:tile-entity container)]
-    (:placer-name (tile-state tile))))
+    (node-owner/owner-name (tile-state tile))))
 
 (defn can-place-item? [_container slot-index item-stack]
   (case (slot-registry/get-slot-type-for-index node-slot-schema-id slot-index)
     :energy (energy-stub/is-energy-item-supported? item-stack)
-    :output false
+    :output (energy-stub/is-energy-item-supported? item-stack)
     false))
 
 (defn get-slot-item [container slot-index]
@@ -307,6 +308,12 @@
     (sync-field-mappings)
     "node"))
 
+(defn node-info-area-policy
+  "Compute editable policy for node info-area fields."
+  [is-owner?]
+  {:editable-node-name? (boolean is-owner?)
+   :editable-password? (boolean is-owner?)})
+
 ;; Removed extract-position wrapper - use sync-helpers/extract-position directly
 
 ;; ============================================================================
@@ -324,7 +331,8 @@
   (try
     (let [tile (:tile-entity container)
           owner-name (get-owner container)
-          is-owner? (= owner-name (entity/player-get-name player))]
+          is-owner? (node-owner/owner-authorized? owner-name player)
+          policy (node-info-area-policy is-owner?)]
 
       (tech-ui/reset-info-area! info-area)
 
@@ -348,7 +356,7 @@
                                     y)
             y (tech-ui/add-property info-area "Owner" owner-name y)]
 
-        (if is-owner?
+        (if (:editable-node-name? policy)
           (let [y (tech-ui/add-property
                     info-area "Node Name" @(:ssid container) y
                     :editable? true
@@ -359,7 +367,7 @@
                                          :node-name new-name))))
                 y (tech-ui/add-property
                     info-area "Password" @(:password container) y
-                    :editable? true
+                  :editable? (:editable-password? policy)
                     :masked? true
                     :on-change (fn [new-pass]
                                 (net-client/send-to-server
@@ -489,7 +497,8 @@
               :slot-get-fn get-slot-item
               :slot-set-fn set-slot-item!
               :slot-can-place-fn can-place-item?
-              :slot-changed-fn slot-changed!}))
+              :slot-changed-fn slot-changed!
+              :quick-move-fn quick-move-stack}))
     (log/info "Wireless Node GUI module initialized")))
 
 ;; ============================================================================

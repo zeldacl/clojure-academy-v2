@@ -16,6 +16,24 @@
 (def slot-can-place? dispatcher/slot-can-place?)
 (def slot-changed! dispatcher/slot-changed!)
 
+(defn- player-inventory-start-for
+  [container]
+  (if-let [gui-id (some-> container dispatcher/get-container-type metadata/get-gui-id-for-type)]
+    (let [[main-start _] (or (metadata/get-slot-range gui-id :player-main) [0 -1])
+          [hotbar-start _] (or (metadata/get-slot-range gui-id :player-hotbar) [0 -1])
+          starts (filter #(and (integer? %) (<= 0 %)) [main-start hotbar-start])]
+      (if (seq starts) (apply min starts) 0))
+    0))
+
+(defn execute-quick-move-forge
+  "Bridge mcmod quick-move callback to AC dispatcher.
+
+  menu/slot/stack are accepted for compatibility with platform callback shape.
+  The dispatcher needs only container + slot-index + player inventory start."
+  [_menu container slot-index _slot _stack]
+  (let [player-inventory-start (player-inventory-start-for container)]
+    (dispatcher/safe-execute-quick-move container slot-index player-inventory-start)))
+
 (def get-container-type dispatcher/get-container-type)
 
 (defn get-gui-id-for-container

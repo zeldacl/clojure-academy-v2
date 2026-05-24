@@ -267,6 +267,28 @@
       (log/error "Error in slot changed notification:"(ex-message e))
       nil)))
 
+(defn execute-quick-move
+  "Dispatch quick-move/shift-click to the GUI's registered quick-move function.
+
+  Returns the handler result when implemented, else nil."
+  [container slot-index player-inventory-start]
+  (try
+    (when-let [cfg (gui-registry/get-config-by-container container)]
+      (when-let [f (slot-value cfg :quick-move-fn)]
+        (f container slot-index player-inventory-start)))
+    (catch Exception e
+      (log/error "Error executing quick move:" (ex-message e))
+      nil)))
+
+(defn safe-execute-quick-move
+  "Safe wrapper for execute-quick-move." 
+  [container slot-index player-inventory-start]
+  (try
+    (execute-quick-move container slot-index player-inventory-start)
+    (catch Exception e
+      (log/error "Error in safe quick move:" (ex-message e))
+      nil)))
+
 ;; ============================================================================
 ;; Design Notes
 ;; ============================================================================;

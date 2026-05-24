@@ -6,12 +6,13 @@
 
 (defn slot-operations
   "Build the standard slot operation map used by block containers."
-  [{:keys [slot-count-fn slot-get-fn slot-set-fn slot-can-place-fn slot-changed-fn]}]
+  [{:keys [slot-count-fn slot-get-fn slot-set-fn slot-can-place-fn slot-changed-fn quick-move-fn]}]
   {:slot-count-fn slot-count-fn
    :slot-get-fn slot-get-fn
    :slot-set-fn slot-set-fn
    :slot-can-place-fn slot-can-place-fn
-   :slot-changed-fn slot-changed-fn})
+   :slot-changed-fn slot-changed-fn
+   :quick-move-fn quick-move-fn})
 
 (defn create-block-gui-spec
   "Create a standard block GUI spec.

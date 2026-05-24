@@ -11,6 +11,7 @@
   schema metadata, tests, and external callers."
   (:require [cn.li.ac.block.wireless-node.capability :as node-capability]
             [cn.li.ac.block.wireless-node.inventory :as node-inventory]
+            [cn.li.ac.block.wireless-node.owner :as node-owner]
             [cn.li.ac.block.wireless-node.state :as node-state]
             [cn.li.ac.block.wireless-node.tick :as node-tick]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -77,7 +78,7 @@
   (fn [event-data]
     (log/info "Placing Wireless Node (" (name node-type) ")")
     (let [{:keys [player world pos]} event-data
-          player-name (str player)
+          player-name (node-owner/player-name player)
           be          (platform-world/world-get-tile-entity* world pos)]
       (when be
         (let [state (or (platform-be/get-custom-state be) node-state/node-default-state)]

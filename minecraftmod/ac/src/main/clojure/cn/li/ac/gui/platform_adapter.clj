@@ -109,6 +109,7 @@
      :slot-set-item! slot-set-item!
      :slot-changed! slot-changed!
      :slot-can-place? slot-can-place?
+      :execute-quick-move-forge dispatcher-api/execute-quick-move-forge
      :get-container-type get-container-type
      :get-gui-id-for-container get-gui-id-for-container})
   nil)

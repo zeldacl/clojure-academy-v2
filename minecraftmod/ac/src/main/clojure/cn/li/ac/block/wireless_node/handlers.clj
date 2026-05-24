@@ -6,11 +6,11 @@
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.ac.block.wireless-node.network-infra :as infra]
+            [cn.li.ac.block.wireless-node.owner :as node-owner]
             [cn.li.ac.block.wireless-node.network-presenter :as presenter]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -38,10 +38,8 @@
 
 (defn- owner-authorized?
   [tile player]
-  (let [owner (str (get (or (platform-be/get-custom-state tile) {}) :placer-name ""))
-        player-name (str (entity/player-get-name player))]
-    (or (str/blank? owner)
-        (= owner player-name))))
+  (let [owner (node-owner/owner-name (platform-be/get-custom-state tile))]
+    (node-owner/owner-authorized? owner player)))
 
 (defn- with-owner-authorization
   [payload player handler-fn]

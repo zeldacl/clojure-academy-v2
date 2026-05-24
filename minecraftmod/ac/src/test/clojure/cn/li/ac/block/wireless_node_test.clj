@@ -1,11 +1,15 @@
 (ns cn.li.ac.block.wireless-node-test
   "Unit tests for wireless node pure logic."
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.energy.operations :as energy]
+            [cn.li.ac.block.wireless-node.gui :as node-gui]
             [cn.li.ac.block.wireless-node.inventory :as node-inventory]
             [cn.li.ac.block.wireless-node.logic :as wnode]
+            [cn.li.ac.block.wireless-node.owner :as node-owner]
             [cn.li.ac.block.wireless-node.network-infra :as node-infra]
             [cn.li.ac.block.wireless-node.state :as node-state]
             [cn.li.ac.wireless.config :as node-config]
+            [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.ac.wireless.core.capability-resolver :as resolver])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
@@ -73,3 +77,32 @@
     (testing "falls back to default range when capability is absent"
       (with-redefs [resolver/node-capability (fn [_] nil)]
         (is (= 20.0 (node-infra/node-range :tile)))))))
+
+(deftest owner-authorization-compatibility-test
+  (testing "blank owner keeps compatibility and allows edits"
+    (is (true? (node-owner/owner-authorized? "" :player))))
+
+  (testing "exact player name matches owner"
+    (with-redefs [node-owner/player-name (fn [_] "alice")]
+      (is (true? (node-owner/owner-authorized? "alice" :player)))
+      (is (false? (node-owner/owner-authorized? "bob" :player)))))
+
+  (testing "legacy serialized owner containing quoted player name is accepted"
+    (with-redefs [node-owner/player-name (fn [_] "alice")]
+      (is (true? (node-owner/owner-authorized? "ServerPlayer['alice'/1, l='world']" :player)))
+      (is (false? (node-owner/owner-authorized? "ServerPlayer['bob'/1, l='world']" :player))))))
+
+(deftest node-gui-slot-placement-policy-test
+  (with-redefs [slot-registry/get-slot-type-for-index (fn [_ idx]
+                                                         (case idx
+                                                           0 :energy
+                                                           1 :output
+                                                           :unknown))
+                energy/is-energy-item-supported? (fn [item] (= item :energy-item))]
+    (testing "input slot accepts energy items only"
+      (is (true? (node-gui/can-place-item? nil 0 :energy-item)))
+      (is (false? (node-gui/can-place-item? nil 0 :ordinary-item))))
+
+    (testing "output slot now accepts energy items only"
+      (is (true? (node-gui/can-place-item? nil 1 :energy-item)))
+      (is (false? (node-gui/can-place-item? nil 1 :ordinary-item))))))

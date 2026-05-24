@@ -79,7 +79,8 @@
                            :slot-get-fn (:slot-get-fn slot-operations-opts)
                            :slot-set-fn (:slot-set-fn slot-operations-opts)
                            :slot-can-place-fn (:slot-can-place-fn slot-operations-opts)
-                           :slot-changed-fn (:slot-changed-fn slot-operations-opts)})
+                           :slot-changed-fn (:slot-changed-fn slot-operations-opts)
+                           :quick-move-fn (:quick-move-fn slot-operations-opts)})
 
         layout (schema/map->Layout
            {:title (or (:title layout-opts) (:title options) "GUI")

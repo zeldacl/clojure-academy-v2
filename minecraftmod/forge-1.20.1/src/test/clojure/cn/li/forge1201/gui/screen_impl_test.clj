@@ -21,3 +21,10 @@
          {:current-tab-atom (atom "inv")}))
     (is (not (#'screen-impl/slots-enabled-for-click?
               {:current-tab-atom (atom "stats")})))))
+
+    (deftest quick-move-tab-gate-follows-slot-visibility-test
+      (testing "screen bridge quick-move gate allows inventory tab and blocks non-inventory tabs"
+        (is (#'screen-impl/slots-enabled-for-click?
+          {:current-tab-atom (atom "inv")}))
+        (is (not (#'screen-impl/slots-enabled-for-click?
+            {:current-tab-atom (atom "wireless")})))))

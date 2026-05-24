@@ -1,5 +1,5 @@
 (ns cn.li.mcmod.gui.spec-test
-  (:require [clojure.test :refer :all]
+        (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.gui.spec :as gui-spec]))
 
 (deftest create-block-gui-spec-test
@@ -27,7 +27,8 @@
                   :slot-get-fn ::slot-get
                   :slot-set-fn ::slot-set
                   :slot-can-place-fn ::slot-can-place
-                  :slot-changed-fn ::slot-changed})]
+                  :slot-changed-fn ::slot-changed
+                  :quick-move-fn ::quick-move})]
       (is (= "test-block-gui" (:id spec)))
       (is (= 99 (:gui-id spec)))
       (is (= {:display-name "Test Block GUI"
@@ -57,6 +58,7 @@
               :slot-get-fn ::slot-get
               :slot-set-fn ::slot-set
               :slot-can-place-fn ::slot-can-place
-              :slot-changed-fn ::slot-changed}
+              :slot-changed-fn ::slot-changed
+              :quick-move-fn ::quick-move}
              (select-keys (:slot-operations spec)
-                          [:slot-count-fn :slot-get-fn :slot-set-fn :slot-can-place-fn :slot-changed-fn]))))))
+                          [:slot-count-fn :slot-get-fn :slot-set-fn :slot-can-place-fn :slot-changed-fn :quick-move-fn]))))))

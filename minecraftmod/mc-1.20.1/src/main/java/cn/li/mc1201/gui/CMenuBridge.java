@@ -6,6 +6,7 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * Shared menu bridge exposing protected AbstractContainerMenu APIs as public
@@ -34,5 +35,9 @@ public abstract class CMenuBridge extends AbstractContainerMenu {
 
     public void callSuperClicked(int slotIndex, int button, ClickType clickType, Player player) {
         super.clicked(slotIndex, button, clickType, player);
+    }
+
+    public boolean callSuperMoveItemStackTo(ItemStack stack, int startIndex, int endIndex, boolean reverseDirection) {
+        return super.moveItemStackTo(stack, startIndex, endIndex, reverseDirection);
     }
 }

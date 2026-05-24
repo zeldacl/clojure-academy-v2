@@ -51,12 +51,48 @@
       (gui/safe-sync! clj-container))))
 
 (defn- quick-move-stack
-  [this clj-container slot-index error-prefix]
+  [this clj-container player slot-index error-prefix]
   (try
     (let [^Slot slot (.getSlot ^AbstractContainerMenu this slot-index)]
       (if (and slot (.hasItem slot))
-        (let [^ItemStack stack (.getItem slot)]
-          (gui/execute-quick-move-forge this clj-container slot-index slot stack))
+        (let [^ItemStack stack (.getItem slot)
+              moved (.copy stack)
+              gui-id (gui/get-gui-id-for-container clj-container)
+              [tile-start tile-end] (if gui-id
+                                      (gui/get-slot-range gui-id :tile)
+                                      [0 -1])
+              [player-main-start player-main-end] (if gui-id
+                                                    (gui/get-slot-range gui-id :player-main)
+                                                    [0 -1])
+              [player-hotbar-start player-hotbar-end] (if gui-id
+                                                        (gui/get-slot-range gui-id :player-hotbar)
+                                                        [0 -1])
+              player-start (if (and (<= 0 player-main-start) (<= 0 player-hotbar-start))
+                             (min player-main-start player-hotbar-start)
+                             player-main-start)
+              player-end (max player-main-end player-hotbar-end)
+              tile-end-exclusive (inc tile-end)
+              player-end-exclusive (inc player-end)
+              moved? (cond
+                       (and (<= tile-start slot-index) (<= slot-index tile-end)
+                            (<= 0 player-start) (<= player-start player-end))
+                       (.callSuperMoveItemStackTo ^CMenuBridge this stack player-start player-end-exclusive true)
+
+                       (and (<= player-start slot-index) (<= slot-index player-end)
+                            (<= 0 tile-start) (<= tile-start tile-end))
+                       (.callSuperMoveItemStackTo ^CMenuBridge this stack tile-start tile-end-exclusive false)
+
+                       :else false)]
+          (if-not moved?
+            ItemStack/EMPTY
+            (if (= (.getCount stack) (.getCount moved))
+              ItemStack/EMPTY
+              (do
+                (if (.isEmpty stack)
+                  (.setByPlayer slot ItemStack/EMPTY)
+                  (.setChanged slot))
+                (.onTake slot player stack)
+                moved))))
         ItemStack/EMPTY))
     (catch Exception e
       (log/error error-prefix (.getMessage e))
@@ -89,6 +125,12 @@
       :forge-1.20.1 {}
       {})
     opts)))
+
+(defn quick-move-allowed?
+  "Return true when quick-move/shift-click is allowed for the current tab state."
+  [menu clj-container]
+  (or (not (tabbed/tabbed-container? clj-container))
+      (tabbed/slots-active-for-menu? menu clj-container)))
 
 (defn create-menu-proxy
   "Create a CMenuBridge proxy around a Clojure container.
@@ -141,10 +183,9 @@
                      (.callSuperClicked s slot-index button click-type player))))
 
                (quickMoveStack [player slot-index]
-                 (if (and (tabbed/tabbed-container? clj-container)
-                          (not (tabbed/slots-active-for-menu? this clj-container)))
+                 (if-not (quick-move-allowed? this clj-container)
                    ItemStack/EMPTY
-                   (quick-move-stack this clj-container slot-index quick-move-error-prefix)))
+                   (quick-move-stack this clj-container player slot-index quick-move-error-prefix)))
 
                (canTakeItemForPickAll [_stack _slot] true)
                (canDragTo [_slot] true))]
