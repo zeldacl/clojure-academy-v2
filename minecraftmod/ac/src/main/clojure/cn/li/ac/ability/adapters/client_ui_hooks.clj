@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
+            [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.model.preset :as preset-data]
@@ -103,21 +104,48 @@
      :charge-ratio (max 0.0 (min 1.0 (/ (double hold-ticks) (double max-ticks))))}))
 
 (defn- current-charging-visual-state
-  [player-uuid]
-  (let [ctx-data (find-player-context player-uuid :current-charging)
-        skill-state (:skill-state ctx-data)
-        charge-ticks (max 0 (long (or (:charge-ticks skill-state)
-                                      (:hold-ticks skill-state)
-                                      0)))
-        item? (boolean (:is-item skill-state))
-        good? (boolean (:good? skill-state))
-        max-ticks (max 1 (long (skill-config/tunable-int :body-intensify :charge.max-time)))]
-    {:active? (boolean ctx-data)
-     :blending? false
-     :is-item item?
-     :good? good?
-     :charge-ticks charge-ticks
-     :charge-ratio (max 0.0 (min 1.0 (/ (double charge-ticks) (double max-ticks))))}))
+  [_player-uuid]
+  (current-charging-fx/current-state))
+
+(defn- current-charging-overlay-elements
+  [screen-width screen-height]
+  (let [{:keys [active? blending? is-item good? charge-ticks charge-ratio]} (current-charging-fx/current-state)
+        visible? (or active? blending? (pos? (long (or charge-ticks 0))))]
+    (when visible?
+      (let [bar-width 140
+            bar-height 8
+            x (int (/ (- screen-width bar-width) 2))
+            y (- screen-height 34)
+            fill-width (max 2 (int (* bar-width (double (or charge-ratio 0.0)))))
+            accent (if good?
+                     {:r 90 :g 210 :b 255 :a 200}
+                     {:r 255 :g 190 :b 90 :a 200})
+            backdrop (if is-item
+                       {:r 12 :g 24 :b 48 :a 150}
+                       {:r 8 :g 18 :b 36 :a 150})]
+        [{:kind :fullscreen-fill
+          :color {:r 8 :g 18 :b 32 :a (if active? 110 55)}}
+         {:kind :fill
+          :x x :y y :w bar-width :h bar-height
+          :color backdrop}
+         {:kind :fill
+          :x x :y y :w fill-width :h bar-height
+          :color accent}
+         {:kind :text
+          :x (- (int (/ screen-width 2)) 55)
+          :y (- y 12)
+          :text (if is-item "Current Charging - Item" "Current Charging - Block")
+          :color {:r 255 :g 255 :b 255 :a 240}}
+         {:kind :fill
+          :x (- (int (/ screen-width 2)) 2)
+          :y (- (int (/ screen-height 2)) 8)
+          :w 4 :h 16
+          :color {:r 120 :g 220 :b 255 :a (if active? 200 120)}}
+         {:kind :fill
+          :x (- (int (/ screen-width 2)) 8)
+          :y (- (int (/ screen-height 2)) 2)
+          :w 16 :h 4
+          :color {:r 120 :g 220 :b 255 :a (if active? 200 120)}}]))))
 
 (defn- slot-context-key [player-uuid key-idx]
   [player-uuid key-idx])
@@ -326,6 +354,7 @@
                          :preset-state preset-state
                          :now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis))))
         base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
+        current-charging-elements (current-charging-overlay-elements screen-width screen-height)
         reflection-active? (vec-reflection-active? player-uuid)
         deviation-active? (vec-deviation-active? player-uuid)
         vm-wave-active? (or reflection-active? deviation-active?)
@@ -339,7 +368,7 @@
                      :y (int (/ screen-height 2))
                      :phase phase
                      :intensity 1.0})]
-    {:elements (vec (concat base-elements vm-wave (keep identity [crosshair])))}))
+    {:elements (vec (concat base-elements current-charging-elements vm-wave (keep identity [crosshair])))}))
 
 (defn- on-context-channel-push! [{:keys [ctx-id channel payload]}]
   (fx-registry/dispatch-fx-channel! ctx-id channel payload)

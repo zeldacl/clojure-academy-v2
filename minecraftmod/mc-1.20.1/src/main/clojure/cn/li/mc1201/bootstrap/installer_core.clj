@@ -40,7 +40,7 @@
         (reify player-feedback/IPlayerFeedback
           (send-player-feedback! [_ player-uuid {:keys [message args translate?]}]
             (try
-              (when-let [player (network-transport-spi/find-player-by-uuid player-uuid)]
+              (when-let [^net.minecraft.server.level.ServerPlayer player (network-transport-spi/find-player-by-uuid player-uuid)]
                 (let [argv (object-array (mapv str (or args [])))
                       component (if translate?
                                   (Component/translatable (str message) argv)

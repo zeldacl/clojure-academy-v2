@@ -3,6 +3,7 @@
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
             [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.service.dispatcher :as ctx]
@@ -162,32 +163,47 @@
 
 (deftest current-charging-visual-state-default-and-active-test
   (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
-    (with-redefs [skill-config/tunable-int (fn [skill-id field-id]
-                                              (case [skill-id field-id]
-                                                [:body-intensify :charge.max-time] 40
-                                                1))
-                  ctx/get-all-contexts-for-player (fn [_] [])]
+    (with-redefs [current-charging-fx/current-state
+                  (fn [] {:active? false
+                          :blending? false
+                          :is-item false
+                          :good? false
+                          :charge-ticks 0
+                          :charge-ratio 0.0})]
       (let [visual ((:client-current-charging-visual-state hooks) "p1")]
         (is (false? (:active? visual)))
         (is (false? (:is-item visual)))
         (is (false? (:good? visual)))
         (is (= 0 (:charge-ticks visual)))
         (is (= 0.0 (:charge-ratio visual)))))
-    (with-redefs [skill-config/tunable-int (fn [skill-id field-id]
-                                              (case [skill-id field-id]
-                                                [:body-intensify :charge.max-time] 40
-                                                1))
-                  ctx/get-all-contexts-for-player (fn [_]
-                                                    [{:skill-id :current-charging
-                                                      :skill-state {:charge-ticks 30
-                                                                    :is-item true
-                                                                    :good? true}}])]
+    (with-redefs [current-charging-fx/current-state
+                  (fn [] {:active? true
+                          :blending? false
+                          :is-item true
+                          :good? true
+                          :charge-ticks 30
+                          :charge-ratio 0.75})]
       (let [visual ((:client-current-charging-visual-state hooks) "p1")]
         (is (true? (:active? visual)))
         (is (true? (:is-item visual)))
         (is (true? (:good? visual)))
         (is (= 30 (:charge-ticks visual)))
         (is (= 0.75 (:charge-ratio visual)))))))
+
+(deftest current-charging-overlay-elements-render-hud-state-test
+  (with-redefs [current-charging-fx/current-state
+                (fn [] {:active? true
+                        :blending? false
+                        :is-item false
+                        :good? true
+                        :charge-ticks 20
+                        :charge-ratio 0.5})]
+    (let [elements ((var-get #'cn.li.ac.ability.adapters.client-ui-hooks/current-charging-overlay-elements)
+                    320 180)
+          kinds (mapv :kind elements)]
+      (is (some #{:fullscreen-fill} kinds))
+      (is (some #{:text} kinds))
+      (is (>= (count (filter #{:fill} kinds)) 3)))))
 
 (deftest build-client-overlay-plan-falls-back-when-activated-override-nil-test
   (with-redefs [ps/get-player-state (fn [_]
