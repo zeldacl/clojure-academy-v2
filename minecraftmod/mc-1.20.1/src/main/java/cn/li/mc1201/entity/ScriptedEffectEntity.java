@@ -18,9 +18,16 @@ import java.util.List;
 import java.util.UUID;
 
 public class ScriptedEffectEntity extends Entity {
+    private static final int COIN_MAX_LIFE = 120;
     private UUID ownerUuid;
     private int age;
     private final List<ArcData> activeArcs = new ArrayList<>();
+    private boolean coinStateInitialized;
+    private double coinCurrentY;
+    private double coinVelY;
+    private double coinStartY;
+    private double coinMaxY;
+    private double coinInitVel = 0.92D;
 
     public ScriptedEffectEntity(EntityType<? extends ScriptedEffectEntity> entityType, Level level) {
         super(entityType, level);
@@ -59,6 +66,12 @@ public class ScriptedEffectEntity extends Entity {
             ownerUuid = tag.getUUID("owner");
         }
         age = tag.getInt("age");
+        coinStateInitialized = tag.getBoolean("coinStateInitialized");
+        coinCurrentY = tag.getDouble("coinCurrentY");
+        coinVelY = tag.getDouble("coinVelY");
+        coinStartY = tag.getDouble("coinStartY");
+        coinMaxY = tag.getDouble("coinMaxY");
+        coinInitVel = tag.contains("coinInitVel") ? tag.getDouble("coinInitVel") : 0.92D;
         activeArcs.clear();
     }
 
@@ -68,6 +81,79 @@ public class ScriptedEffectEntity extends Entity {
             tag.putUUID("owner", ownerUuid);
         }
         tag.putInt("age", age);
+        tag.putBoolean("coinStateInitialized", coinStateInitialized);
+        tag.putDouble("coinCurrentY", coinCurrentY);
+        tag.putDouble("coinVelY", coinVelY);
+        tag.putDouble("coinStartY", coinStartY);
+        tag.putDouble("coinMaxY", coinMaxY);
+        tag.putDouble("coinInitVel", coinInitVel);
+    }
+
+    private static double clamp01(double v) {
+        if (v < 0.0D) {
+            return 0.0D;
+        }
+        if (v > 1.0D) {
+            return 1.0D;
+        }
+        return v;
+    }
+
+    private boolean tickCoinThrowing(ScriptedEffectSpec spec, Player owner) {
+        if (owner == null) {
+            this.coinStateInitialized = false;
+            return false;
+        }
+
+        double gravity = spec.getDoubleParam("gravity", 0.06D);
+        double initVel = spec.getDoubleParam("init-vel", 0.92D);
+
+        if (!this.coinStateInitialized) {
+            this.coinStateInitialized = true;
+            this.coinStartY = owner.getY();
+            this.coinCurrentY = this.coinStartY;
+            this.coinInitVel = initVel;
+            this.coinVelY = owner.getDeltaMovement().y + initVel;
+            this.coinMaxY = this.coinCurrentY;
+        }
+
+        this.coinVelY -= gravity;
+        this.coinCurrentY += this.coinVelY;
+        this.coinMaxY = Math.max(this.coinMaxY, this.coinCurrentY);
+        this.setPos(owner.getX(), this.coinCurrentY, owner.getZ());
+
+        if ((this.coinCurrentY < owner.getY() && this.coinVelY < 0.0D) || this.tickCount > COIN_MAX_LIFE) {
+            this.coinStateInitialized = false;
+            this.discard();
+            return true;
+        }
+
+        return false;
+    }
+
+    public boolean hasCoinProgress() {
+        ScriptedEffectSpec spec = getSpec();
+        if (spec == null) {
+            return false;
+        }
+        return "coin-throwing".equals(normalizeHook(spec.getEffectHook())) && this.coinStateInitialized;
+    }
+
+    public double getCoinProgress() {
+        if (!hasCoinProgress()) {
+            return 0.0D;
+        }
+
+        Player owner = getOwnerPlayer();
+        if (owner == null) {
+            return 0.0D;
+        }
+
+        if (this.coinVelY > 0.0D) {
+            return ((this.coinInitVel - this.coinVelY) / this.coinInitVel) * 0.5D;
+        }
+
+        return Math.min(1.0D, 0.5D + ((this.coinMaxY - this.coinCurrentY) / (this.coinMaxY - this.coinStartY)) * 0.5D);
     }
 
     @Override
@@ -81,8 +167,17 @@ public class ScriptedEffectEntity extends Entity {
             setPos(owner.getX(), owner.getY() + 1.0, owner.getZ());
         }
 
-        if (level().isClientSide() && level() instanceof ClientLevel clientLevel) {
+        boolean discardedByCoinPhysics = false;
+        if (spec != null && "coin-throwing".equals(effectHook)) {
+            discardedByCoinPhysics = tickCoinThrowing(spec, owner);
+        }
+
+        if (!discardedByCoinPhysics && level().isClientSide() && level() instanceof ClientLevel clientLevel) {
             ScriptedEffectHooks.resolve(effectHook).onClientTick(this, clientLevel);
+        }
+
+        if (discardedByCoinPhysics) {
+            return;
         }
 
         age++;

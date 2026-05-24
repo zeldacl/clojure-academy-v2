@@ -23,9 +23,12 @@
     (item-actions/register-item-entity-spawn! "ac:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
     (let [build-plan (:build-item-use-plan (server-hooks/runtime-server-hooks))
           plan (build-plan "p1" "ac:coin" true :server)]
-      (is (= [{:kind :consume-item :count 1 :unless-instabuild? true}
-              {:kind :domain-action :action :railgun-coin-throw :payload {}}
-              {:kind :spawn-scripted-effect :entity-id "entity_coin_throwing" :speed 0.0}]
-             (:server-actions plan)))
+          (is (= {:kind :consume-item :count 1 :unless-instabuild? true}
+            (first (:server-actions plan))))
+          (is (= :domain-action (:kind (second (:server-actions plan)))))
+          (is (= :railgun-coin-throw (:action (second (:server-actions plan)))))
+          (is (number? (get-in plan [:server-actions 1 :payload :timestamp-ms])))
+          (is (= {:kind :spawn-scripted-effect :entity-id "entity_coin_throwing" :speed 0.0}
+            (nth (:server-actions plan) 2)))
       (is (= [{:kind :notify-local-effect}] (:client-actions plan)))
       (is (true? (:consume? plan))))))

@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.service.registry :as skill]
@@ -15,18 +16,69 @@
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.hooks.catalog :as catalog]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce-guard client-push-handlers-registered?)
+(defonce ^:private client-push-handlers-registered? (atom false))
 (defonce ^:private vm-wave-circles (atom []))
 (defonce ^:private vm-wave-last-spawn-ms (atom 0))
 (defonce ^:private slot-context-ids (atom {}))
 ;; Per-slot last key-tick send timestamp (ms). Limits key-tick messages to ~10/s.
 (defonce ^:private slot-key-tick-ms (atom {}))
+(defonce ^:private charge-coin-state (atom {}))
+
+(defn- now-ms [] (System/currentTimeMillis))
+
+(defn- railgun-charge-item-max-ticks []
+  (skill-config/tunable-int :railgun :charge.item-charge-ticks))
+
+(defn- railgun-coin-active-threshold []
+  (skill-config/tunable-double :railgun :qte.coin-active-threshold))
+
+(defn- railgun-coin-window-ms []
+  (skill-config/tunable-int :railgun :qte.coin-window-ms))
+
+(defn- notify-charge-coin-throw!
+  [player-uuid]
+  (swap! charge-coin-state assoc player-uuid
+         {:start-ms (now-ms)
+          :window-ms (max 1 (long (railgun-coin-window-ms)))}))
+
+(defn- charge-coin-visual-state
+  [player-uuid]
+  (let [contexts (ctx/get-all-contexts-for-player player-uuid)
+        railgun-ctx (some (fn [ctx-data]
+                            (when (= :railgun (:skill-id ctx-data))
+                              ctx-data))
+                          contexts)
+        skill-state (:skill-state railgun-ctx)
+        mode (:mode skill-state)
+        charge-ticks (max 0 (int (or (:charge-ticks skill-state) 0)))
+        max-charge-ticks (max 1 (int (railgun-charge-item-max-ticks)))]
+    (if (= mode :item-charge)
+      {:active? true
+       :charge-ticks charge-ticks
+       :coin-active? false
+       :coin-progress 0.0
+       :charge-ratio (max 0.0 (min 1.0 (- 1.0 (/ (double charge-ticks) max-charge-ticks))))}
+      (let [{:keys [start-ms window-ms]} (get @charge-coin-state player-uuid)
+            has-window? (and start-ms window-ms)
+            elapsed (if has-window? (- (long (now-ms)) (long start-ms)) 0)
+            progress (if has-window?
+                       (/ (double (max 0 elapsed)) (double (max 1 (long window-ms))))
+                       0.0)
+            active-window? (and has-window? (<= progress 1.0))
+            ratio (max 0.0 (min 1.0 progress))
+            coin-active? (and active-window? (>= ratio (railgun-coin-active-threshold)))]
+        (when (and has-window? (not active-window?))
+          (swap! charge-coin-state dissoc player-uuid))
+        {:active? active-window?
+         :charge-ticks 0
+         :coin-active? coin-active?
+         :coin-progress ratio
+         :charge-ratio ratio}))))
 
 (defn- slot-context-key [player-uuid key-idx]
   [player-uuid key-idx])
@@ -37,14 +89,6 @@
            (into {}
                  (remove (fn [[_slot-key active-ctx-id]]
                            (= active-ctx-id ctx-id))
-                         m)))))
-
-(defn- clear-player-slot-contexts! [player-uuid]
-  (swap! slot-context-ids
-         (fn [m]
-           (into {}
-                 (remove (fn [[[slot-player-uuid _key-idx] _ctx-id]]
-                           (= slot-player-uuid player-uuid))
                          m)))))
 
 (defn- context-id-for-slot!
@@ -264,7 +308,7 @@
 
 (defn register-client-push-handlers!
   []
-  (with-init-guard client-push-handlers-registered?
+  (when (compare-and-set! client-push-handlers-registered? false true)
     (net-client/register-push-handler! catalog/MSG-SYNC-RUNTIME
       (fn [{:keys [uuid ability-data]}]
         (when (and uuid ability-data)
@@ -557,6 +601,14 @@
    :client-register-push-handlers!
    (fn []
      (register-client-push-handlers!))
+
+   :client-notify-charge-coin-throw!
+   (fn [player-uuid]
+     (notify-charge-coin-throw! player-uuid))
+
+   :client-charge-coin-visual-state
+   (fn [player-uuid]
+     (charge-coin-visual-state player-uuid))
 
    :client-trigger-mode-switch!
    (fn [player-uuid]

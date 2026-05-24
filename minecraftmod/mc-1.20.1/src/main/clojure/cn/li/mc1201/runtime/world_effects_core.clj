@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.runtime.world-effects-core
   "Shared Minecraft-side world effects helpers (no loader API imports)."
-  (:import [net.minecraft.core BlockPos]
+  (:import [cn.li.mc1201.entity ScriptedEffectEntity]
+           [net.minecraft.core BlockPos]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.sounds SoundSource SoundEvent]
@@ -13,7 +14,12 @@
 
 (defn entity->map
   [^Entity entity resolve-entity-id-fn]
-  (let [^Vec3 pos (.position entity)]
+  (let [^Vec3 pos (.position entity)
+        scripted? (instance? ScriptedEffectEntity entity)
+        ^ScriptedEffectEntity scripted-entity (when scripted? entity)
+        age-ticks (when scripted? (.getAgeTicks scripted-entity))
+        coin-progress (when (and scripted? (.hasCoinProgress scripted-entity))
+                        (.getCoinProgress scripted-entity))]
     {:uuid (str (.getUUID entity))
      :x (.x pos)
      :y (.y pos)
@@ -28,7 +34,9 @@
      :living? (instance? LivingEntity entity)
      :mob? (instance? Monster entity)
      :item? (instance? ItemEntity entity)
-     :projectile? (instance? Projectile entity)}))
+    :projectile? (instance? Projectile entity)
+    :age-ticks age-ticks
+    :coin-progress coin-progress}))
 
 (defn find-blocks-in-radius-in-level
   [^Level level x y z radius block-predicate block-id-fn]

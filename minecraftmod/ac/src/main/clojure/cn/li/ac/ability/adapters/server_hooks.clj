@@ -184,8 +184,11 @@
    (fn [_player-uuid item-id _activated? _side]
      (when-let [action (item-actions/resolve-item-action item-id)]
        (let [entity-spawn (item-actions/get-item-entity-spawn item-id)
+             domain-payload (if (= action :railgun-coin-throw)
+                              {:timestamp-ms (System/currentTimeMillis)}
+                              {})
              server-actions (cond-> [{:kind :consume-item :count 1 :unless-instabuild? true}
-                                     {:kind :domain-action :action action :payload {}}]
+                                     {:kind :domain-action :action action :payload domain-payload}]
                               entity-spawn (conj {:kind :spawn-scripted-effect
                                                   :entity-id (:entity-id entity-spawn)
                                                   :speed (double (or (:speed entity-spawn) 0.0))}))]

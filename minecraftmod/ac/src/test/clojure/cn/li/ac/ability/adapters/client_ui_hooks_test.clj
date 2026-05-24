@@ -3,6 +3,7 @@
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
             [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
@@ -15,11 +16,13 @@
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0)
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {})
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/charge-coin-state {})
   (f)
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles [])
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0)
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {}))
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {})
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/charge-coin-state {}))
 
 (use-fixtures :each reset-ui-state!)
 
@@ -94,6 +97,46 @@
                          :payload {:delta 2.0}}}]
              @sent)))))
 
+(deftest charge-coin-hooks-notify-and-visual-state-test
+  (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
+    (with-redefs [skill-config/tunable-int (fn [skill-id field-id]
+                                                               (case [skill-id field-id]
+                                                                 [:railgun :qte.coin-window-ms] 1000
+                                                                 [:railgun :charge.item-charge-ticks] 20
+                                                                 1))
+                  skill-config/tunable-double (fn [skill-id field-id]
+                                                                  (case [skill-id field-id]
+                                                                    [:railgun :qte.coin-active-threshold] 0.6
+                                                                    0.0))
+                  ctx/get-all-contexts-for-player (fn [_] [])]
+      ((:client-notify-charge-coin-throw! hooks) "p1")
+      (let [visual ((:client-charge-coin-visual-state hooks) "p1")]
+        (is (true? (:active? visual)))
+        (is (false? (:coin-active? visual)))
+        (is (number? (:coin-progress visual)))
+        (is (number? (:charge-ratio visual)))))))
+
+(deftest charge-coin-visual-state-prefers-item-charge-context-test
+  (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
+    (with-redefs [skill-config/tunable-int (fn [skill-id field-id]
+                                                               (case [skill-id field-id]
+                                                                 [:railgun :qte.coin-window-ms] 1000
+                                                                 [:railgun :charge.item-charge-ticks] 20
+                                                                 1))
+                  skill-config/tunable-double (fn [skill-id field-id]
+                                                                  (case [skill-id field-id]
+                                                                    [:railgun :qte.coin-active-threshold] 0.6
+                                                                    0.0))
+                  ctx/get-all-contexts-for-player (fn [_]
+                                                    [{:skill-id :railgun
+                                                      :skill-state {:mode :item-charge :charge-ticks 10}}])]
+      (let [visual ((:client-charge-coin-visual-state hooks) "p1")]
+        (is (true? (:active? visual)))
+        (is (= 10 (:charge-ticks visual)))
+        (is (false? (:coin-active? visual)))
+        (is (= 0.0 (:coin-progress visual)))
+        (is (= 0.5 (:charge-ratio visual)))))))
+
 (deftest build-client-overlay-plan-falls-back-when-activated-override-nil-test
   (with-redefs [ps/get-player-state (fn [_]
                                       {:resource-data {:activated true
@@ -140,6 +183,9 @@
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :flashing)
                   ctx-mgr/activate-context! (fn [_ _] {:id "ctx-flashing"})
+                  ctx/get-context (fn [ctx-id]
+                                    (when (= ctx-id "ctx-flashing")
+                                      {:id "ctx-flashing" :skill-id :flashing}))
                   net-client/send-to-server
                   (fn
                     ([msg-id payload]

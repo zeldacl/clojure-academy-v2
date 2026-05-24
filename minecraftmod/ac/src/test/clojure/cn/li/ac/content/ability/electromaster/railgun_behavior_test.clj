@@ -3,7 +3,6 @@
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.server.effect.beam]
             [cn.li.ac.ability.server.effect.core :as effect]
-            [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.player-state :as player-state]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
@@ -75,20 +74,43 @@
         (is (not-any? #(= :damage (first %)) @calls))))))
 
 (deftest coin-throw-aborts-item-charge-and-opens-window-test
-  (let [updates (atom [])]
-    (player-state/set-player-state! "p1" (player-state/fresh-state))
+  (player-state/set-player-state! "p1" (player-state/fresh-state))
     (ctx/register-context! {:id "ctx-1"
                             :player-uuid "p1"
                             :skill-id :railgun
                             :status ctx/STATUS-ALIVE
                             :skill-state {:mode :item-charge :charge-ticks 3 :fired false}})
-    (with-redefs [skill-effects/assoc-player-path! (fn [player-id path value]
-                                                      (swap! updates conj [:assoc player-id path value])
-                                                      true)
-                  log/debug (fn [& _])]
+    (with-redefs [log/debug (fn [& _])]
       (is (true? (railgun/register-coin-throw! "p1" {:timestamp-ms 12345})))
-      (is (= 1 (count @updates)))
-      (is (= [:assoc "p1" [:runtime :railgun :coin-window]
-              {:start-ms 12345 :window-ms 1000 :source :coin-item}]
-             (first @updates)))
-      (is (= :item-charge-cancelled (get-in (ctx/get-context "ctx-1") [:skill-state :mode]))))))
+      (is (= :item-charge-cancelled (get-in (ctx/get-context "ctx-1") [:skill-state :mode])))))
+
+(deftest coin-progress-threshold-status-test
+  (let [below (#'railgun/qte-status 0.59)
+        active (#'railgun/qte-status 0.6)
+    edge (#'railgun/qte-status 0.7)
+    perform (#'railgun/qte-status 0.71)]
+    (is (true? (:has-window? below)))
+    (is (false? (:active? below)))
+    (is (false? (:perform? below)))
+
+    (is (true? (:active? active)))
+    (is (false? (:perform? active)))
+
+  (is (true? (:active? edge)))
+  (is (false? (:perform? edge)))
+
+    (is (true? (:active? perform)))
+    (is (true? (:perform? perform)))))
+
+(deftest read-coin-qte-status-skips-already-judged-coin-test
+  (player-state/set-player-state! "p1" (player-state/fresh-state))
+  (railgun/register-coin-throw! "p1" {:timestamp-ms 42})
+  (swap! player-state/player-states assoc-in ["p1" :runtime :railgun :coin-judged-uuid] "coin-1")
+  (with-redefs [world-effects/*world-effects* :mock-world
+                world-effects/find-entities-in-radius (fn [& _]
+                                                        [{:type "entity_coin_throwing" :uuid "coin-1" :coin-progress 0.95}])
+                railgun/coin-candidates (fn [_]
+                                         [{:type "entity_coin_throwing" :uuid "coin-1" :coin-progress 0.95}])]
+    (let [status (#'railgun/read-coin-qte-status "p1")]
+      (is (false? (:has-window? status)))
+      (is (false? (:perform? status))))))

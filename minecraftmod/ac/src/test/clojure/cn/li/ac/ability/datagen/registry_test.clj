@@ -5,6 +5,7 @@
             [cn.li.mcmod.datagen.metadata :as metadata]))
 
 (deftest register-datagen-metadata-populates-ability-translations
+       (cn.li.ac.ability.item-actions/reset-item-action-registries!)
   (ability-content/init-ability-content!)
   (reset! metadata/translations {:en_us {} :zh_cn {}})
 

@@ -43,7 +43,6 @@
 (defn- cfg-lerp-int [field-id exp]
   (skill-config/lerp-int railgun-skill-id field-id exp))
 
-(defn- coin-window-ms [] (cfg-int :qte.coin-window-ms))
 (defn- coin-active-threshold [] (cfg-double :qte.coin-active-threshold))
 (defn- coin-perform-threshold [] (cfg-double :qte.coin-perform-threshold))
 (defn- item-charge-ticks [] (cfg-int :charge.item-charge-ticks))
@@ -81,32 +80,25 @@
 ;; ---------------------------------------------------------------------------
 
 (defn register-coin-throw!
-  "Register a railgun coin throw window.
+  "Register a railgun coin throw state.
   Called from the platform item-action hook when a coin is used in ability mode.
   If the player is currently in item-charge mode, that charge is aborted first
   (mirrors original informThrowCoin → onKeyAbort() behavior)."
   [player-id payload]
-  (let [now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
+  (let [_now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
     ;; Abort any in-progress item charge so the coin QTE takes priority.
     (doseq [[ctx-id ctx-data] (ctx/get-all-contexts)]
       (when (and (= (:player-uuid ctx-data) player-id)
                  (= :item-charge (get-in ctx-data [:skill-state :mode])))
         (ctx/update-context! ctx-id assoc :skill-state
                              {:fired false :mode :item-charge-cancelled :charge-ticks 0})))
-    (skill-effects/assoc-player-path!
-      player-id
-      [:runtime :railgun :coin-window]
-      {:start-ms  now-ms
-       :window-ms (coin-window-ms)
-       :source    :coin-item})
+    ;; New coin throw resets one-shot judgement lock.
+    (skill-effects/update-player-path! player-id [:runtime :railgun] dissoc :coin-judged-uuid)
     true))
 
-(defn- clear-coin-window! [player-id]
-  (skill-effects/update-player-path! player-id [:runtime :railgun] dissoc :coin-window))
-
-(defn- discard-nearby-coin-entity!
-  "Kills the EntityCoinThrowing entity that was spawned near the player for the QTE."
-  [player-id]
+(defn- discard-coin-entity!
+  "Kills a specific coin entity by UUID. Falls back to nearby cleanup when UUID is nil."
+  [player-id coin-uuid]
   (when (and world-effects/*world-effects* entity-motion/*entity-motion*)
     (let [pos (geom/eye-pos player-id)
           world-id (geom/world-id-of player-id)]
@@ -114,37 +106,52 @@
         (doseq [ent (world-effects/find-entities-in-radius
                       world-effects/*world-effects*
                       world-id (:x pos) (:y pos) (:z pos) 4.0)]
-          (when (= "entity_coin_throwing" (:type ent))
+          (when (and (= "entity_coin_throwing" (:type ent))
+                     (or (nil? coin-uuid)
+                         (= coin-uuid (:uuid ent))))
             (entity-motion/discard-entity! entity-motion/*entity-motion*
                                            world-id (:uuid ent))))))))
 
-(defn- coin-progress [coin-window now-ms]
-  (let [elapsed (- (long now-ms) (long (:start-ms coin-window)))
-        window  (max 1 (long (:window-ms coin-window)))]
-    (double (/ (max 0 elapsed) window))))
-
 (defn- qte-status [p]
-  ;; Progress > 1.0 means the window has expired; treat as no window.
-  (if (> (double p) 1.0)
-    {:has-window? false :active? false :perform? false :progress (double p)}
+  (let [progress (double (max 0.0 (min 1.0 (or p 0.0))))]
     {:has-window? true
-     :progress    (double p)
-     :active?     (>= (double p) (coin-active-threshold))
-     :perform?    (>= (double p) (coin-perform-threshold))}))
+     :progress    progress
+     :active?     (>= progress (coin-active-threshold))
+     :perform?    (> progress (coin-perform-threshold))}))
 
-(defn- consume-coin-qte-window! [player-id now-ms]
-  (let [win (skill-effects/player-path player-id [:runtime :railgun :coin-window])]
-    (if-not win
-      {:has-window? false :active? false :perform? false :progress 0.0}
-      (let [p (coin-progress win now-ms)]
-        (clear-coin-window! player-id)
-        (qte-status p)))))
+(defn- coin-candidates [entities]
+  (->> entities
+       (filter #(= "entity_coin_throwing" (:type %)))
+       (sort-by (fn [ent] (double (or (:coin-progress ent) 0.0))) >)))
 
-(defn- peek-coin-qte-window [player-id now-ms]
-  (let [win (skill-effects/player-path player-id [:runtime :railgun :coin-window])]
-    (if-not win
-      {:has-window? false :active? false :perform? false :progress 0.0}
-      (qte-status (coin-progress win now-ms)))))
+(defn- coin-judged-uuid [player-id]
+  (skill-effects/player-path player-id [:runtime :railgun :coin-judged-uuid]))
+
+(defn- mark-coin-judged! [player-id coin-uuid]
+  (when (some? coin-uuid)
+    (skill-effects/assoc-player-path! player-id [:runtime :railgun :coin-judged-uuid] coin-uuid)))
+
+(defn- read-coin-qte-status [player-id]
+  (if-not world-effects/*world-effects*
+    {:has-window? false :active? false :perform? false :progress 0.0}
+    (let [pos (geom/eye-pos player-id)
+          world-id (geom/world-id-of player-id)
+          entities (when (and pos world-id)
+                     (world-effects/find-entities-in-radius
+                      world-effects/*world-effects*
+                      world-id (:x pos) (:y pos) (:z pos) 4.0))
+          judged-uuid (coin-judged-uuid player-id)
+          candidates (coin-candidates entities)
+          coin (some (fn [ent]
+                       (when (not= judged-uuid (:uuid ent)) ent))
+                     candidates)]
+      (if coin
+        (assoc (qte-status (double (or (:coin-progress coin) 0.0)))
+               :coin-uuid (:uuid coin))
+        (do
+          ;; Clear stale lock when all coins are gone.
+          (skill-effects/update-player-path! player-id [:runtime :railgun] dissoc :coin-judged-uuid)
+          {:has-window? false :active? false :perform? false :progress 0.0})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Vec-reflection interaction
@@ -238,8 +245,17 @@
                                :damage-type     :magic
                                :break-blocks?   true
                                :block-energy    (cfg-lerp :beam.block-energy exp)
-                               :fx-topic        :railgun/fx-shot}])]
-        (or (:beam-result result) {:performed? false})))))
+                               :fx-topic        :railgun/fx-shot}])
+            beam-result (or (:beam-result result) {:performed? false})]
+        (when (and (:performed? beam-result) world-effects/*world-effects*)
+          (world-effects/play-sound! world-effects/*world-effects*
+                                     world-id
+                                     (:x eye) (:y eye) (:z eye)
+                                     "my_mod:em.railgun"
+                                     :ambient
+                                     0.5
+                                     1.0))
+        beam-result))))
 
 (defn- creeper-hit?
   [world-id hit-uuids]
@@ -264,11 +280,11 @@
   (boolean (and player (entity/player-creative? player))))
 
 (defn- down-cost-cp        [{:keys [player-id]}]
-  (let [qte (peek-coin-qte-window player-id (System/currentTimeMillis))]
+  (let [qte (read-coin-qte-status player-id)]
     (if (:perform? qte) (cfg-lerp :cost.down.cp (skill-exp player-id)) 0.0)))
 
 (defn- down-cost-overload  [{:keys [player-id]}]
-  (let [qte (peek-coin-qte-window player-id (System/currentTimeMillis))]
+  (let [qte (read-coin-qte-status player-id)]
     (if (:perform? qte) (cfg-lerp :cost.down.overload (skill-exp player-id)) 0.0)))
 
 (defn- tick-cost-cp        [{:keys [player-id ctx-id player]}]
@@ -289,13 +305,13 @@
   "Coin-QTE path fires immediately; otherwise starts 20-tick iron-item charge."
   [{:keys [player-id ctx-id player cost-ok?]}]
   (let [exp    (skill-exp player-id)
-        now-ms (System/currentTimeMillis)
-        qte    (consume-coin-qte-window! player-id now-ms)]
+        qte    (read-coin-qte-status player-id)]
     (cond
       (:perform? qte)
       (do
+        (mark-coin-judged! player-id (:coin-uuid qte))
         ;; Kill the coin entity unconditionally (mirrors coin.setDead() before performServer).
-        (discard-nearby-coin-entity! player-id)
+        (discard-coin-entity! player-id (:coin-uuid qte))
         (if cost-ok?
           (let [{:keys [performed? reflection-hit? normal-hit-count hit-uuids]} (perform-main-shot! player-id ctx-id exp)]
             (when performed?
@@ -314,6 +330,7 @@
 
       (:has-window? qte)
       (do
+        (mark-coin-judged! player-id (:coin-uuid qte))
         (ctx/update-context! ctx-id assoc :skill-state {:fired false :mode :coin-qte-miss})
         (log/debug "Railgun coin-QTE miss" player-id (:progress qte)))
 

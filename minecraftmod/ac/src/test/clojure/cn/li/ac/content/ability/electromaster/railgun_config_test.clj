@@ -36,8 +36,7 @@
   (testing "railgun cost functions exposed through the public skill spec read action tunables"
     (with-test-state
       (fn []
-        (let [player-id "railgun-config-test-player"
-              now-ms (System/currentTimeMillis)]
+        (let [player-id "railgun-config-test-player"]
           (seed-electromaster-config!
             {(skill-config/config-key :railgun :cost.down.cp) [1000.0 2000.0]
              (skill-config/config-key :railgun :cost.down.overload) [300.0 100.0]})
@@ -45,13 +44,15 @@
             player-id
             (-> (player-state/fresh-state)
                 (assoc-in [:ability-data :skills :railgun :exp] 0.5)))
-          (is (true? (railgun/register-coin-throw!
-                       player-id
-                       {:timestamp-ms (- now-ms 750)})))
-          (let [spec (skill-registry/get-skill :railgun)
-                down-cp (get-in spec [:cost :down :cp])
-                down-overload (get-in spec [:cost :down :overload])]
-            (is (fn? down-cp))
-            (is (fn? down-overload))
-            (is (= 1500.0 (down-cp {:player-id player-id})))
-            (is (= 200.0 (down-overload {:player-id player-id})))))))))
+          (with-redefs [railgun/read-coin-qte-status (fn [_]
+                                                        {:has-window? true
+                                                         :active? true
+                                                         :perform? true
+                                                         :progress 0.75})]
+            (let [spec (skill-registry/get-skill :railgun)
+                  down-cp (get-in spec [:cost :down :cp])
+                  down-overload (get-in spec [:cost :down :overload])]
+              (is (fn? down-cp))
+              (is (fn? down-overload))
+              (is (= 1500.0 (down-cp {:player-id player-id})))
+              (is (= 200.0 (down-overload {:player-id player-id}))))))))))
