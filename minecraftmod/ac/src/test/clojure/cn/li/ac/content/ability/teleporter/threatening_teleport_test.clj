@@ -114,6 +114,9 @@
                                               (swap! damage-calls* conj [world-id target-uuid damage])
                                               {:critical? true
                                                :crit-level 1
+                                               :crit-rate 1.6
+                                               :message-key "ability.teleporter.critical_hit"
+                                               :message-args ["x1.6"]
                                                :damage-after damage
                                                :applied? true})
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
@@ -145,6 +148,55 @@
              :y 5.0
              :z 6.0
              :crit-level 1
+             :crit-rate 1.6
+             :message-key "ability.teleporter.critical_hit"
+             :message-args ["x1.6"]
              :target-uuid "enemy"
              :skill-id :threatening-teleport}]
            @crit-fx-calls*))))
+
+(deftest threatening-tp-up-critical-but-not-applied-skips-crit-fx-test
+  (let [{:keys [get-context]} (make-context-mocks {:skill-state {:trace {:world-id "minecraft:overworld"
+                                                                          :start-x 1.0 :start-y 2.0 :start-z 3.0
+                                                                          :drop-x 4.0 :drop-y 5.0 :drop-z 6.0
+                                                                          :attacked? true
+                                                                          :target-uuid "enemy"}}})
+        fx-calls* (atom [])
+        crit-fx-calls* (atom [])]
+    (with-redefs [ctx/get-context get-context
+                  helper/skill-exp (fn [_ _] 0.5)
+                  helper/cfg-lerp (fn [_ field _]
+                                    (case field
+                                      :combat.damage 4.0
+                                      :targeting.range 10.0
+                                      0.0))
+                  helper/cfg-lerp-int (fn [_ _ _] 22)
+                  helper/cfg-double (fn [_ field]
+                                      (case field
+                                        :progression.exp-base 0.003
+                                        :progression.exp-hit-factor 1.0
+                                        :progression.exp-miss-factor 0.2
+                                        0.0))
+                  helper/cfg-probability (fn [_ field]
+                                           (case field
+                                             :interaction.drop-prob.hit 0.3
+                                             :interaction.drop-prob.miss 1.0
+                                             0.0))
+                  entity/player-get-main-hand-item-count (fn [_] 1)
+                  entity/player-drop-main-hand-item-at! (fn [& _] true)
+                  helper/deal-magic-damage! (fn [& _]
+                                              {:critical? true
+                                               :crit-level 1
+                                               :applied? false})
+                  skill-effects/add-skill-exp! (fn [& _] nil)
+                  skill-effects/set-main-cooldown! (fn [& _] nil)
+                  ach-dispatcher/trigger-custom-event! (fn [& _] nil)
+                  ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
+                                            (swap! fx-calls* conj [channel payload])
+                                            (when (= channel :teleporter/fx-crit-hit)
+                                              (swap! crit-fx-calls* conj payload)))
+                  rand (fn [] 0.0)]
+      (tt/threatening-tp-up! {:player-id "p1" :ctx-id "ctx-4" :player :player :cost-ok? true}))
+
+    (is (empty? @crit-fx-calls*))
+    (is (some (fn [[channel _]] (= channel :threatening-tp/fx-perform)) @fx-calls*))))

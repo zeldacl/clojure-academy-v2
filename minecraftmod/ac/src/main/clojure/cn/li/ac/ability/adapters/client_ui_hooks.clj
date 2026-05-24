@@ -253,6 +253,9 @@
         activation-indicator (some-> (:activation-indicator hud-render-data)
                                      (assoc :kind :activation-indicator)
                                      (dissoc :type))
+      combat-notice (some-> (:combat-notice hud-render-data)
+            (assoc :kind :text)
+            (dissoc :type))
         skill-slots (mapv (fn [slot] (-> slot (assoc :kind :skill-slot) (dissoc :type)))
                           (or (:skill-slots hud-render-data) []))
         preset-indicator (some-> (:preset-indicator hud-render-data)
@@ -265,7 +268,7 @@
                            (when (> pct 0.8)
                              {:kind :overload-pulse
                               :intensity (* (- pct 0.8) 5.0)})))]
-    (vec (concat (keep identity [cp-bar overload-bar activation-indicator preset-indicator overload-pulse])
+                (vec (concat (keep identity [cp-bar overload-bar activation-indicator combat-notice preset-indicator overload-pulse])
                  skill-slots))))
 
 (defn build-client-overlay-plan [player-uuid screen-width screen-height overlay-state]

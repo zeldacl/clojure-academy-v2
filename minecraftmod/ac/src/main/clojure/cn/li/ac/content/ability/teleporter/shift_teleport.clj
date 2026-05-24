@@ -271,12 +271,15 @@
                                                                            (:world-id trace)
                                                                            target-uuid
                                                                            damage)]
-                              (when (:critical? damage-result)
+                              (when (helper/crit-applied? damage-result)
                                 (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
                                                          {:x (double (:x entity))
                                                           :y (double (:y entity))
                                                           :z (double (:z entity))
                                                           :crit-level (:crit-level damage-result)
+                                                          :crit-rate (:crit-rate damage-result)
+                                                          :message-key (:message-key damage-result)
+                                                          :message-args (:message-args damage-result)
                                                           :target-uuid target-uuid
                                                           :skill-id shift-teleport-skill-id}))
                               (inc n)))

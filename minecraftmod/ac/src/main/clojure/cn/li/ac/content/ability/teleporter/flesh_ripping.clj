@@ -67,12 +67,15 @@
         (let [world-id (:world-id trace)
               e-uuid (:target-uuid trace)
               damage-result (helper/deal-magic-damage! player-id world-id e-uuid damage)]
-          (when (:critical? damage-result)
+          (when (helper/crit-applied? damage-result)
             (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
                                      {:x (:target-x trace)
                                       :y (:target-y trace)
                                       :z (:target-z trace)
                                       :crit-level (:crit-level damage-result)
+                                      :crit-rate (:crit-rate damage-result)
+                                      :message-key (:message-key damage-result)
+                                      :message-args (:message-args damage-result)
                                       :target-uuid e-uuid
                                       :skill-id flesh-ripping-skill-id}))
           (when (and (< (rand) (helper/cfg-probability flesh-ripping-skill-id

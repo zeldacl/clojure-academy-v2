@@ -2,6 +2,7 @@
   "Datagen registry for ability domain: achievements and recipes.
    Registers metadata during datagen phase for inclusion in JSON outputs."
   (:require [clojure.string :as str]
+            [cn.li.ac.ability.datagen.teleporter-translations :as teleporter-translations]
             [cn.li.ac.achievement.registry :as achievement-registry]
             [cn.li.ac.achievement.data :as achievement-data]
             [cn.li.ac.ability.registry.category :as category-registry]
@@ -22,6 +23,7 @@
   []
   (let [categories (category-registry/get-all-categories)
         skills (skill-registry/list-skills)
+      teleporter-translation-map (teleporter-translations/translation-map)
         category-name-entries
         (into {}
               (keep (fn [{:keys [id name-key]}]
@@ -40,10 +42,11 @@
                       (when (and (keyword? id) (string? description-key))
                         [description-key (str "Ability skill: " (title-case-id id))])))
               skills)
-        en (merge category-name-entries skill-name-entries skill-desc-entries)]
-    ;; Use EN fallback for zh_cn so key lookup is never missing in generated lang.
-    {:en_us en
-     :zh_cn en}))
+            en (merge category-name-entries skill-name-entries skill-desc-entries
+                          (:en_us teleporter-translation-map))
+            zh (merge en (:zh_cn teleporter-translation-map))]
+      {:en_us en
+       :zh_cn zh}))
 
 (defn register-datagen-metadata!
   "Register ability domain's datagen content into shared metadata registry.

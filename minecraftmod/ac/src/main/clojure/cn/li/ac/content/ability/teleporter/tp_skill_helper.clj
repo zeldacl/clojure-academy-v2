@@ -10,11 +10,18 @@
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.mcmod.platform.player-feedback :as player-feedback]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.util.log :as log]))
+
+(def ^:private teleporter-critical-hit-message-key "ability.teleporter.critical_hit")
+
+(defn- crit-rate-label
+  [crit-rate]
+  (format "x%.1f" (double crit-rate)))
 
 ;; ---------------------------------------------------------------------------
 ;; Exp accessors
@@ -101,21 +108,33 @@
        :crit-level crit-level
        :crit-rate crit-rate
        :critical? true
+       :message-key teleporter-critical-hit-message-key
+       :message-args [(crit-rate-label crit-rate)]
        :events events})
     {:damage-before (double base-damage)
      :damage-after (double base-damage)
      :crit-level nil
      :crit-rate 1.0
      :critical? false
+     :message-key nil
+     :message-args []
      :events []}))
 
+(defn crit-applied?
+  "Return true when a teleporter crit both rolled and successfully applied damage."
+  [damage-result]
+  (boolean (and (:critical? damage-result)
+                (:applied? damage-result))))
+
 (defn- apply-teleporter-crit-side-effects!
-  [player-id crit-level events]
+  [player-id crit-level events {:keys [message-key message-args]}]
   (skill-effects/add-skill-exp! player-id :dim-folding-theorem
                                 (* (cfg-double :dim-folding-theorem :progression.exp-per-crit-level)
                                    (inc crit-level)))
   (skill-effects/add-skill-exp! player-id :space-fluct
                                 (cfg-double :space-fluct :progression.exp-critical))
+  (when message-key
+    (player-feedback/send-chat-message! player-id message-key message-args true))
   (doseq [event-id events]
     (ach-dispatcher/trigger-custom-event! player-id event-id)))
 
@@ -202,7 +221,8 @@
        (apply-teleporter-crit-side-effects!
          attacker-id
          (:crit-level crit-result)
-         (:events crit-result)))
+         (:events crit-result)
+         crit-result))
      (assoc crit-result :applied? (boolean applied?)))))
 
 ;; ---------------------------------------------------------------------------

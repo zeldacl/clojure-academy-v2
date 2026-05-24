@@ -83,6 +83,9 @@
                                               (swap! damage-calls* conj [world-id target-uuid damage])
                                               {:critical? true
                                                :crit-level 2
+                                               :crit-rate 2.6
+                                               :message-key "ability.teleporter.critical_hit"
+                                               :message-args ["x2.6"]
                                                :damage-after damage
                                                :applied? true})
                   potion/apply-potion-effect! (fn [_ target-id effect duration amplifier]
@@ -109,9 +112,59 @@
                                       :y 2.0
                                       :z 3.0
                                       :crit-level 2
+                                      :crit-rate 2.6
+                                      :message-key "ability.teleporter.critical_hit"
+                                      :message-args ["x2.6"]
                                       :target-uuid "target-1"
                                       :skill-id :flesh-ripping}]
             [:flesh-ripping/fx-perform {:target-x 1.0
+                                        :target-y 2.0
+                                        :target-z 3.0
+                                        :hit? true
+                                        :target-uuid "target-1"}]]
+           @fx-calls*))))
+
+(deftest flesh-ripping-critical-but-not-applied-skips-crit-fx-test
+  (let [{:keys [get-context]} (make-context-mocks {:skill-state {:trace {:world-id "minecraft:overworld"
+                                                                         :hit? true
+                                                                         :target-uuid "target-1"
+                                                                         :target-x 1.0
+                                                                         :target-y 2.0
+                                                                         :target-z 3.0}}})
+        fx-calls* (atom [])]
+    (with-redefs [ctx/get-context get-context
+                  helper/skill-exp (fn [_ _] 0.5)
+                  helper/cfg-lerp (fn [_ field _]
+                                    (case field
+                                      :combat.damage 8.0
+                                      :cooldown.ticks 20.0
+                                      0.0))
+                  helper/cfg-lerp-int (fn [& _] 20)
+                  helper/cfg-double (fn [_ field]
+                                      (case field
+                                        :progression.exp-hit 0.003
+                                        0.0))
+                  helper/cfg-probability (fn [_ _] 1.0)
+                  helper/cfg-int (fn [_ field]
+                                   (case field
+                                     :effect.nausea-duration-ticks 60
+                                     :effect.nausea-amplifier 0
+                                     0))
+                  helper/deal-magic-damage! (fn [& _]
+                                              {:critical? true
+                                               :crit-level 2
+                                               :applied? false})
+                  potion/apply-potion-effect! (fn [& _] true)
+                  skill-effects/add-skill-exp! (fn [& _] nil)
+                  skill-effects/set-main-cooldown! (fn [& _] nil)
+                  ctx/ctx-send-to-client! (fn [_ctx-id channel payload]
+                                            (swap! fx-calls* conj [channel payload])
+                                            nil)
+                  rand (fn [] 0.0)]
+      (binding [potion/*potion-effects* :mock]
+        (flesh/flesh-ripping-up! {:player-id "p1" :ctx-id "ctx-1b" :cost-ok? true})))
+
+    (is (= [[:flesh-ripping/fx-perform {:target-x 1.0
                                         :target-y 2.0
                                         :target-z 3.0
                                         :hit? true

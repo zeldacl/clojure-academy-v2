@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.teleporter-crit-fx
   "Client FX for teleporter critical hits shared across teleporter attack skills."
   (:require [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
@@ -24,6 +25,13 @@
           y (double (or (:y payload) 0.0))
           z (double (or (:z payload) 0.0))]
       (swap! fx-state update :ttl inc)
+      (when (:message-key payload)
+        (combat-notice/show-notice!
+          :teleporter-crit
+          {:message-key (:message-key payload)
+           :args (:message-args payload)
+           :duration-ms 1500
+           :color [255 226 120]}))
       (client-particles/queue-particle-effect!
         {:type :particle :particle-type :portal
          :x x :y (+ y 0.4) :z z
@@ -61,6 +69,9 @@
            :y (:y payload)
            :z (:z payload)
            :crit-level (:crit-level payload)
+            :crit-rate (:crit-rate payload)
+            :message-key (:message-key payload)
+            :message-args (:message-args payload)
            :target-uuid (:target-uuid payload)
            :skill-id (:skill-id payload)})
         nil)))

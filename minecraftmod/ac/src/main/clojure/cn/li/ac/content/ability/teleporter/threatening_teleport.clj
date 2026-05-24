@@ -148,12 +148,15 @@
           (when consumed?
             (let [damage-result (when attacked?
                                   (helper/deal-magic-damage! player-id world-id target-uuid damage))]
-              (when (:critical? damage-result)
+              (when (helper/crit-applied? damage-result)
                 (ctx/ctx-send-to-client! ctx-id :teleporter/fx-crit-hit
                                          {:x (:drop-x trace)
                                           :y (:drop-y trace)
                                           :z (:drop-z trace)
                                           :crit-level (:crit-level damage-result)
+                                          :crit-rate (:crit-rate damage-result)
+                                          :message-key (:message-key damage-result)
+                                          :message-args (:message-args damage-result)
                                           :target-uuid target-uuid
                                           :skill-id threatening-teleport-skill-id}))
               (skill-effects/add-skill-exp! player-id threatening-teleport-skill-id (exp-gain attacked?))

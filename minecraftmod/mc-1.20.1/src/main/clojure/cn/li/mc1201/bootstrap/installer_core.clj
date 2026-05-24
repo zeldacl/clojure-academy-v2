@@ -3,6 +3,7 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.platform.player-feedback :as player-feedback]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.platform.resource :as resource]
             [cn.li.mcmod.platform.world :as world]
@@ -11,8 +12,10 @@
             [cn.li.mc1201.platform.class-access :as class-access]
             [cn.li.mc1201.platform.item-ops :as item-ops]
             [cn.li.mc1201.platform.player-ops :as player-ops]
+            [cn.li.mc1201.runtime.spi.network-transport :as network-transport-spi]
             [cn.li.mc1201.platform.world-block-ops :as world-block-ops]
-            [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops]))
+            [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops])
+  (:import [net.minecraft.network.chat Component]))
 
 (defonce ^:private item-protocols-installed? (atom false))
 (defonce ^:private pos-installed? (atom false))
@@ -24,9 +27,32 @@
 (defonce ^:private be-fns-installed? (atom false))
 (defonce ^:private world-fns-installed? (atom false))
 (defonce ^:private block-state-protocols-installed? (atom false))
+(defonce ^:private player-feedback-installed? (atom false))
 
 (declare install-item-protocols-only!)
 (declare install-item-factories-only!)
+
+(defn- install-player-feedback! []
+  (when (compare-and-set! player-feedback-installed? false true)
+    (alter-var-root
+      #'player-feedback/*player-feedback*
+      (constantly
+        (reify player-feedback/IPlayerFeedback
+          (send-player-feedback! [_ player-uuid {:keys [message args translate?]}]
+            (try
+              (when-let [player (network-transport-spi/find-player-by-uuid player-uuid)]
+                (let [argv (object-array (mapv str (or args [])))
+                      component (if translate?
+                                  (Component/translatable (str message) argv)
+                                  (Component/literal (if (seq args)
+                                                       (apply format (str message) args)
+                                                       (str message))))]
+                  (.sendSystemMessage player component)
+                  true))
+              (catch Throwable t
+                (log/warn "Failed to send player feedback" player-uuid (ex-message t))
+                false))))))
+    (log/info "mc1201 player feedback installed")))
 
 (defn install-block-state-protocol-only!
   "Install only BlockState protocol extensions (no Level extensions)."
@@ -349,6 +375,7 @@
   (install-item! adapter)
   (install-world! adapter)
   (install-entity-protocols-only! adapter)
+  (install-player-feedback!)
   (install-resource-factory!)
   (log/info "mc1201 shared installer initialized"))
 

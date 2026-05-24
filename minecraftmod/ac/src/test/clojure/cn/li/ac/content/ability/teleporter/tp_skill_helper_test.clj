@@ -5,6 +5,7 @@
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as h]
+            [cn.li.mcmod.platform.player-feedback :as player-feedback]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
@@ -98,10 +99,17 @@
       (is (true? (h/deal-magic-damage! "world" "e1" 5.5)))
       (is (= ["world" "e1" 5.5 :magic] @last-args)))))
 
+(deftest crit-applied-gates-on-both-critical-and-applied-test
+  (is (true? (h/crit-applied? {:critical? true :applied? true})))
+  (is (false? (h/crit-applied? {:critical? true :applied? false})))
+  (is (false? (h/crit-applied? {:critical? false :applied? true})))
+  (is (false? (h/crit-applied? nil))))
+
 (deftest deal-magic-damage-crit-branch-test
   (let [last-damage (atom nil)
         exp-calls (atom [])
         events (atom [])
+  feedback-calls (atom [])
         attacker "att"
         attacker-ad (-> (ad/new-ability-data)
                         (ad/learn-skill :dim-folding-theorem)
@@ -122,6 +130,9 @@
                       skill-effects/add-skill-exp! (fn [pid sid amount]
                                                      (swap! exp-calls conj [pid sid amount])
                                                      nil)
+                      player-feedback/send-chat-message! (fn [pid message args translate?]
+                                                          (swap! feedback-calls conj [pid message args translate?])
+                                                          true)
                       ach-dispatcher/trigger-custom-event! (fn [pid event-id]
                                                              (swap! events conj [pid event-id])
                                                              nil)]
@@ -132,11 +143,15 @@
             (is (= 10.0 (double (:damage-before result))))
             (is (= 13.0 (double (:damage-after result))))
             (is (= true (:applied? result)))
+                 (is (= "ability.teleporter.critical_hit" (:message-key result)))
+                 (is (= ["x1.3"] (:message-args result)))
             (is (= ["teleporter.critical_attack"] (:events result))))))
       (is (= 13.0 (double @last-damage)))
       (is (= [["att" :dim-folding-theorem 0.005]
               ["att" :space-fluct 1.0E-4]]
              @exp-calls))
+                (is (= [["att" "ability.teleporter.critical_hit" ["x1.3"] true]]
+                  @feedback-calls))
       (is (= [["att" "teleporter.critical_attack"]]
              @events))
       (finally
@@ -172,5 +187,119 @@
             (is (= true (:applied? result)))
             (is (= [] (:events result))))))
       (is (= 10.0 (double @last-damage)))
+      (finally
+        (reset! ps/player-states {})))))
+
+(deftest deal-magic-damage-level2-crit-branch-test
+  (let [last-damage (atom nil)
+        exp-calls (atom [])
+        events (atom [])
+        attacker "att"
+        attacker-ad (-> (ad/new-ability-data)
+                        (ad/learn-skill :dim-folding-theorem)
+                        (ad/learn-skill :space-fluct)
+                        (ad/set-skill-exp :dim-folding-theorem 1.0)
+                        (ad/set-skill-exp :space-fluct 1.0))
+        stub (reify entity-damage/IEntityDamage
+               (apply-direct-damage! [_ _ _ dmg _]
+                 (reset! last-damage dmg)
+                 true)
+               (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] ())
+               (apply-reflection-damage! [_ _ _ _ _ _ _] ()))]
+    (reset! ps/player-states {})
+    (try
+      (ps/set-player-state! attacker {:ability-data attacker-ad})
+      (binding [entity-damage/*entity-damage* stub]
+        (with-redefs [rand (fn [] 0.0)
+                      h/cfg-lerp (fn [_ field _]
+                                   (case field
+                                     :critical.level0-probability 0.0
+                                     :critical.level1-probability 0.0
+                                     :critical.level2-probability 1.0
+                                     0.0))
+                      h/cfg-double-list (fn [_ _] [1.3 1.6 2.6])
+                      skill-effects/add-skill-exp! (fn [pid sid amount]
+                                                     (swap! exp-calls conj [pid sid amount])
+                                                     nil)
+                      player-feedback/send-chat-message! (fn [& _] true)
+                      ach-dispatcher/trigger-custom-event! (fn [pid event-id]
+                                                             (swap! events conj [pid event-id])
+                                                             nil)]
+          (let [result (h/deal-magic-damage! attacker "w" "victim" 10.0)]
+            (is (= true (:critical? result)))
+            (is (= 2 (:crit-level result)))
+            (is (= 2.6 (double (:crit-rate result))))
+            (is (= ["teleporter.critical_attack" "teleporter.mastery"]
+                   (:events result))))))
+      (is (= 26.0 (double @last-damage)))
+      (is (= [["att" :dim-folding-theorem 0.015]
+              ["att" :space-fluct 1.0E-4]]
+             @exp-calls))
+      (is (= [["att" "teleporter.critical_attack"]
+              ["att" "teleporter.mastery"]]
+             @events))
+      (finally
+        (reset! ps/player-states {})))))
+
+(deftest deal-magic-damage-unlearned-passives-never-crit-test
+  (let [last-damage (atom nil)
+        attacker "att"
+        attacker-ad (ad/new-ability-data)
+        stub (reify entity-damage/IEntityDamage
+               (apply-direct-damage! [_ _ _ dmg _]
+                 (reset! last-damage dmg)
+                 true)
+               (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] ())
+               (apply-reflection-damage! [_ _ _ _ _ _ _] ()))]
+    (reset! ps/player-states {})
+    (try
+      (ps/set-player-state! attacker {:ability-data attacker-ad})
+      (binding [entity-damage/*entity-damage* stub]
+        (with-redefs [rand (fn [] 0.0)
+                      skill-effects/add-skill-exp! (fn [& _] (is false "no exp when passives unlearned"))
+                      player-feedback/send-chat-message! (fn [& _] (is false "no feedback when passives unlearned"))
+                      ach-dispatcher/trigger-custom-event! (fn [& _] (is false "no events when passives unlearned"))]
+          (let [result (h/deal-magic-damage! attacker "w" "victim" 10.0)]
+            (is (= false (:critical? result)))
+            (is (nil? (:crit-level result)))
+            (is (= 1.0 (double (:crit-rate result)))))))
+      (is (= 10.0 (double @last-damage)))
+      (finally
+        (reset! ps/player-states {})))))
+
+(deftest deal-magic-damage-critical-not-applied-has-no-side-effects-test
+  (let [exp-calls (atom [])
+        feedback-calls (atom [])
+        events (atom [])
+        attacker "att"
+        attacker-ad (-> (ad/new-ability-data)
+                        (ad/learn-skill :dim-folding-theorem)
+                        (ad/learn-skill :space-fluct)
+                        (ad/set-skill-exp :dim-folding-theorem 1.0)
+                        (ad/set-skill-exp :space-fluct 1.0))
+        stub (reify entity-damage/IEntityDamage
+               (apply-direct-damage! [_ _ _ _ _] false)
+               (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] ())
+               (apply-reflection-damage! [_ _ _ _ _ _ _] ()))]
+    (reset! ps/player-states {})
+    (try
+      (ps/set-player-state! attacker {:ability-data attacker-ad})
+      (binding [entity-damage/*entity-damage* stub]
+        (with-redefs [rand (fn [] 0.0)
+                      skill-effects/add-skill-exp! (fn [pid sid amount]
+                                                     (swap! exp-calls conj [pid sid amount])
+                                                     nil)
+                      player-feedback/send-chat-message! (fn [pid message args translate?]
+                                                          (swap! feedback-calls conj [pid message args translate?])
+                                                          true)
+                      ach-dispatcher/trigger-custom-event! (fn [pid event-id]
+                                                             (swap! events conj [pid event-id])
+                                                             nil)]
+          (let [result (h/deal-magic-damage! attacker "w" "victim" 10.0)]
+            (is (= true (:critical? result)))
+            (is (= false (:applied? result))))))
+      (is (empty? @exp-calls))
+      (is (empty? @feedback-calls))
+      (is (empty? @events))
       (finally
         (reset! ps/player-states {})))))

@@ -55,6 +55,9 @@
                                               (swap! damage-calls* conj [world-id entity-uuid damage])
                                               {:critical? (= entity-uuid "enemy-1")
                                                :crit-level 1
+                                               :crit-rate (if (= entity-uuid "enemy-1") 1.6 1.0)
+                                               :message-key (when (= entity-uuid "enemy-1") "ability.teleporter.critical_hit")
+                                               :message-args (when (= entity-uuid "enemy-1") ["x1.6"])
                                                :damage-after damage
                                                :applied? true})
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
@@ -77,7 +80,74 @@
     (is (= [["p1" :shift-teleport 0.006]] @exp-calls*))
     (is (= [["p1" :shift-teleport 18]] @cooldown-calls*))
     (is (= :teleporter/fx-crit-hit (first (first @fx-calls*))))
+    (is (= {:x 12.0
+        :y 64.9
+        :z 13.4
+        :crit-level 1
+        :crit-rate 1.6
+        :message-key "ability.teleporter.critical_hit"
+        :message-args ["x1.6"]
+        :target-uuid "enemy-1"
+        :skill-id :shift-teleport}
+         (second (first @fx-calls*))))
     (is (= :shift-tp/fx-perform (first (second @fx-calls*))))))
+
+(deftest shift-tp-up-critical-but-not-applied-skips-crit-fx-test
+  (let [fx-calls* (atom [])]
+    (with-redefs [helper/skill-exp (fn [_ _] 0.5)
+                  helper/cfg-lerp (fn [_ field _]
+                                    (case field
+                                      :targeting.range 25.0
+                                      :combat.damage 20.0
+                                      :cost.up.cp 260.0
+                                      :cost.up.overload 40.0
+                                      :cooldown.ticks 18.0
+                                      0.0))
+                  helper/cfg-double (fn [_ field]
+                                      (case field
+                                        :targeting.eye-height 1.6
+                                        :progression.exp-base 0.002
+                                        0.0))
+                  helper/cfg-lerp-int (fn [& _] 18)
+                  helper/player-position (fn [_] {:x 1.0 :y 64.0 :z 3.0})
+                  helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  geom/world-id-of (fn [_] "minecraft:overworld")
+                  raycast/raycast-blocks (fn [& _] {:x 20 :y 64 :z 21 :face :up})
+                  world-effects/find-entities-in-aabb (fn [& _]
+                                                        [{:uuid "enemy-1" :x 12.0 :y 64.9 :z 13.4 :width 0.6 :height 1.8}])
+                  entity/player-main-hand-placeable-block? (fn [_] true)
+                  entity/player-creative? (fn [_] false)
+                  entity/player-drop-main-hand-item-at! (fn [& _] false)
+                  entity/player-place-main-hand-block-at-hit! (fn [& _]
+                                                                {:placed? true
+                                                                 :fallback-drop? false
+                                                                 :pos {:x 20 :y 64 :z 21}
+                                                                 :face :up})
+                  entity/player-consume-main-hand-item! (fn [& _] true)
+                  helper/teleport-to! (fn [& _] true)
+                  helper/deal-magic-damage! (fn [& _]
+                                              {:critical? true
+                                               :crit-level 1
+                                               :applied? false})
+                  skill-effects/add-skill-exp! (fn [& _] nil)
+                  skill-effects/set-main-cooldown! (fn [& _] nil)
+                  ctx/ctx-send-to-client! (fn [_ctx-id ch payload]
+                                            (swap! fx-calls* conj [ch payload])
+                                            nil)]
+      (binding [raycast/*raycast* :mock
+                world-effects/*world-effects* :mock]
+        (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-1b" :player :player :cost-ok? true})))
+
+    (is (= [[:shift-tp/fx-perform {:from-x 1.0
+                                   :from-y 65.6
+                                   :from-z 3.0
+                                   :x 20.5
+                                   :y 65.0
+                                   :z 21.5
+                                   :target-count 1
+                                   :placed? true
+                                   :dropped? false}]]
+           @fx-calls*))))
 
 (deftest shift-tp-up-cost-fail-no-side-effects-test
   (let [exp-calls* (atom 0)

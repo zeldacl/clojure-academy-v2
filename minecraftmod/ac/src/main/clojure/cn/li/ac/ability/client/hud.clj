@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.client.hud
   "HUD render data builder (AC layer - no Minecraft imports)."
   (:require [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.client.delegate-state :as dstate]
             [cn.li.ac.ability.service.dispatcher :as ctx]))
@@ -84,20 +85,39 @@
    :activated (:activated model)
    :hint activate-hint})
 
+(defn- build-combat-notice-data
+  [now-ms]
+  (when-let [{:keys [text color alpha]} (combat-notice/active-notice :teleporter-crit now-ms)]
+    {:type :combat-notice
+     :x 120
+     :y 26
+     :text text
+     :color {:a (int (* 255.0 (double alpha)))
+             :r (int (nth color 0 255))
+             :g (int (nth color 1 255))
+             :b (int (nth color 2 255))}}))
+
 (defn build-hud-render-data
   "Main function to build complete HUD render data. Called by forge layer."
   [hud-model screen-width screen-height cooldown-data
    & {:keys [player-uuid activate-hint preset-state now-ms]}]
-  (when (and hud-model (:activated hud-model))
-    {:cp-bar (build-cp-bar-render-data hud-model)
-     :overload-bar (build-overload-bar-render-data hud-model now-ms)
-     :skill-slots (build-skill-slot-render-data hud-model screen-width screen-height
-                                                 cooldown-data player-uuid)
-     :activation-indicator (build-activation-indicator-data hud-model activate-hint)
-     :preset-indicator (when preset-state
-                         (let [now (System/currentTimeMillis)]
-                           (when (> (:show-until-ms preset-state 0) now)
-                             {:type    :preset-indicator
-                              :current (:current-preset preset-state 0)
-                              :total   4
-                              :fade    (/ (double (- (:show-until-ms preset-state) now)) 2000.0)})))}))
+  (let [combat-notice (build-combat-notice-data now-ms)
+        preset-indicator (when preset-state
+                           (let [now (System/currentTimeMillis)]
+                             (when (> (:show-until-ms preset-state 0) now)
+                               {:type    :preset-indicator
+                                :current (:current-preset preset-state 0)
+                                :total   4
+                                :fade    (/ (double (- (:show-until-ms preset-state) now)) 2000.0)})))]
+    (when (and hud-model (or (:activated hud-model) combat-notice preset-indicator))
+      {:cp-bar (when (:activated hud-model)
+                 (build-cp-bar-render-data hud-model))
+       :overload-bar (when (:activated hud-model)
+                       (build-overload-bar-render-data hud-model now-ms))
+       :skill-slots (when (:activated hud-model)
+                      (build-skill-slot-render-data hud-model screen-width screen-height
+                                                    cooldown-data player-uuid))
+       :activation-indicator (when (:activated hud-model)
+                               (build-activation-indicator-data hud-model activate-hint))
+       :combat-notice combat-notice
+       :preset-indicator preset-indicator})))

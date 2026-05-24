@@ -1,4 +1,29 @@
 (ns cn.li.ac.ability.client.hud-test
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.combat-notice :as combat-notice]
+            [cn.li.ac.ability.client.hud :as hud]))
+
+(defn- reset-notice-fixture [f]
+  (combat-notice/reset-notices!)
+  (f)
+  (combat-notice/reset-notices!))
+
+(use-fixtures :each reset-notice-fixture)
+
+(deftest build-hud-render-data-includes-combat-notice-when-inactive-test
+  (combat-notice/show-notice!
+    :teleporter-crit
+    {:text "Critical Hit x1.6"
+     :duration-ms 2000
+     :color [255 226 120]})
+  (let [render-data (hud/build-hud-render-data {:activated false
+                                                :cp {:cur 0.0 :max 1.0}
+                                                :overload {:cur 0.0 :max 1.0 :fine true}
+                                                :active-slots []}
+                                               320 180 {}
+                                               :now-ms (System/currentTimeMillis))]
+    (is (some? render-data))
+    (is (= "Critical Hit x1.6" (get-in render-data [:combat-notice :text])))))(ns cn.li.ac.ability.client.hud-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.service.registry :as skill]
