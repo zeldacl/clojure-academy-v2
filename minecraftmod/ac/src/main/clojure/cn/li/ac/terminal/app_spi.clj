@@ -3,7 +3,7 @@
    
    Terminal apps can still be registered as plain maps, but this namespace
    also allows richer protocol-based implementations for future expansion."
-  (:require [clojure.string :as str]))
+  )
 
 (defprotocol TerminalApp
   "Protocol for terminal applications. Implementations can expose app metadata

@@ -4,13 +4,13 @@
 						[cn.li.mcmod.block.tile-logic :as tile-logic]
 						[cn.li.mcmod.platform.capability :as platform-cap]
 						[cn.li.ac.registry.hooks :as hooks]
-						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+						[cn.li.ac.util.init-guard :refer [with-init-guard]]
 						[cn.li.ac.config.modid :as modid]
 						[cn.li.ac.block.developer.handlers :as dev-handlers]
 						[cn.li.mcmod.util.log :as log])
 	(:import [cn.li.acapi.wireless IWirelessReceiver]))
 
-(defonce-guard developer-installed?)
+(defonce ^:private developer-installed? (atom false))
 
 (def developer-default-multiblock-positions
 	[[0 0 0]

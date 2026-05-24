@@ -4,7 +4,7 @@
   Loaded with content init; uses `unified-developer-schema` for container atoms/sync.
   GUI close clears tile session (`TileDeveloper` unuse / onGuiClosed)."
   (:require [clojure.string :as str]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.ac.util.init-guard :refer [with-init-guard]]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.gui.cgui-screen :as cgui-screen]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
@@ -179,7 +179,7 @@
        (contains? container :tile-entity)
        (= :developer (:container-type container))))
 
-(defonce-guard developer-gui-installed?)
+(defonce ^:private developer-gui-installed? (atom false))
 
 (defn init-developer-gui!
   []

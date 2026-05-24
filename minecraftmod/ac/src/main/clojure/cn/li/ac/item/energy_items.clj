@@ -10,9 +10,8 @@
 (defn- open-portable-developer!
   [{:keys [player side]}]
   (when (= side :client)
-    ;; Keep placeholder behavior minimal while preserving the original right-click intent.
-    (when-let [open-fn (requiring-resolve 'cn.li.ac.terminal.terminal-gui/open-terminal)]
-      (open-fn player)))
+    (when-let [open-fn (requiring-resolve 'cn.li.ac.terminal.apps.skill-tree/open-skill-tree-gui)]
+      (open-fn player {:developer-type :portable})))
   {:consume? true})
 
 (defn init-energy-items!

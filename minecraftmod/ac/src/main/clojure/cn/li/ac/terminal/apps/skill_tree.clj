@@ -13,11 +13,13 @@
 
 (defn open-skill-tree-gui
   "Open the skill tree GUI for a player."
-  [player]
+  ([player]
+   (open-skill-tree-gui player nil))
+  ([player learn-context]
   (log/info "Opening skill tree from terminal for player:" (entity/player-get-name player))
   ;; Reuse existing skill tree screen via platform bridge
   (let [uuid-str (uuid/player-uuid player)]
-    (client-bridge/open-skill-tree-screen! uuid-str)))
+    (client-bridge/open-skill-tree-screen! uuid-str learn-context))))
 
 ;; ============================================================================
 ;; App Registration
