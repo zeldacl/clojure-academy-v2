@@ -19,6 +19,13 @@
       (map str/capitalize)
       (str/join " "))))
 
+(defn- explicit-skill-translations
+  [skills locale]
+  (into {}
+        (mapcat (fn [{:keys [translations]}]
+                  (seq (get translations locale {}))))
+        skills))
+
 (defn- ability-translation-map
   []
   (let [categories (category-registry/get-all-categories)
@@ -42,9 +49,16 @@
                       (when (and (keyword? id) (string? description-key))
                         [description-key (str "Ability skill: " (title-case-id id))])))
               skills)
-            en (merge category-name-entries skill-name-entries skill-desc-entries
-                          (:en_us teleporter-translation-map))
-            zh (merge en (:zh_cn teleporter-translation-map))]
+        explicit-en (explicit-skill-translations skills :en_us)
+        explicit-zh (explicit-skill-translations skills :zh_cn)
+        en (merge category-name-entries
+                  skill-name-entries
+                  skill-desc-entries
+                  explicit-en
+                  (:en_us teleporter-translation-map))
+        zh (merge en
+                  explicit-zh
+                  (:zh_cn teleporter-translation-map))]
       {:en_us en
        :zh_cn zh}))
 

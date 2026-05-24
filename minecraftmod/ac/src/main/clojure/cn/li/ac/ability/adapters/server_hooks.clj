@@ -32,9 +32,7 @@
        (when (and uuid new-level)
          (ps/update-resource-data! uuid
                                    (fn [rd]
-                                     (-> rd
-                                         (rdata/reset-add-max)
-                                         (rdata/recalc-max-values new-level)))))))
+                                     (svc-res/recalc-max-for-level rd new-level uuid))))))
     (evt/subscribe-ability-event!
      evt/EVT-SKILL-LEARN
      (fn [{:keys [uuid]}]

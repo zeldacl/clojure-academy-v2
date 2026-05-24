@@ -85,7 +85,7 @@
       (let [skill-id (:skill-id action-data)
             {:keys [data event]} (learning/learn-skill ability-data uuid skill-id)
             level    (:level data)
-            new-res  (rdata/recalc-max-values resource-data level)]
+        new-res  (svc-res/recalc-max-for-level resource-data level uuid)]
         {:ability-data  data
          :resource-data new-res
          :events        (if event [event] [])

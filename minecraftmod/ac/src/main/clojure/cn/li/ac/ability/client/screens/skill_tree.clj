@@ -4,7 +4,8 @@
             [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.ability.server.service.learning :as learning]
             [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.service.player-state :as ps]))
+            [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.mcmod.i18n :as i18n]))
 
 ;; Screen state (no Minecraft imports)
 (defonce ^:private screen-state
@@ -13,6 +14,12 @@
          :learn-context nil}))
 
 (def ^:private max-progress-segments 24)
+
+(defn- translate-field
+  [spec text-key fallback]
+  (if-let [key-name (get spec text-key)]
+    (i18n/translate key-name)
+    fallback))
 
 ;; ============================================================================
 ;; Layout Calculations (Pure Functions)
@@ -84,14 +91,17 @@
                      (:level ability-data)
                      developer-type)
         skill-exp (double (or (adata/get-skill-exp ability-data skill-id) 0.0))
-        progress (double (max 0.0 (min 1.0 skill-exp)))]
+          progress (double (max 0.0 (min 1.0 skill-exp)))]
     {:x x
      :y y
      :learned learned?
      :can-learn (:pass? conditions)
      :conditions (:failures conditions)
      :skill-id skill-id
-     :skill-name (or (:name skill) (:name-key skill) (name skill-id))
+        :skill-name (or (:name skill)
+                  (translate-field skill :name-key (name skill-id))
+                  (name skill-id))
+        :skill-description (translate-field skill :description-key "")
      :skill-icon (skill/get-skill-icon-path skill-id)
      :skill-level (:level skill)
      :exp progress
@@ -103,7 +113,9 @@
   (let [ability-data (:ability-data player-state)
         resource-data (:resource-data player-state)
         category (:category ability-data)]
-    {:category-name (or (:name category) "Unknown")
+    {:category-name (or (:name category)
+                        (translate-field category :name-key "Unknown")
+                        "Unknown")
      :level (:level ability-data)
      :cp {:cur (:cur-cp resource-data)
           :max (:max-cp resource-data)}
@@ -279,12 +291,13 @@
           hover-node (when hover-id
                        (first (filter #(= (:skill-id %) hover-id) (:skill-nodes render-data))))
           tooltip (when hover-node
-                    [{:kind :fill :x 230 :y 8 :w 180 :h 54 :color 0xC0202020}
+                    [{:kind :fill :x 230 :y 8 :w 180 :h 68 :color 0xC0202020}
                      {:kind :text :x 236 :y 14 :text (str (:skill-name hover-node)) :color 0xFFFFFFFF}
-                     {:kind :text :x 236 :y 28 :text (format "Progress: %d%%"
+                     {:kind :text :x 236 :y 28 :text (str (:skill-description hover-node)) :color 0xFFDDDDDD}
+                     {:kind :text :x 236 :y 42 :text (format "Progress: %d%%"
                                                              (int (Math/round (* 100.0 (double (:exp hover-node))))))
                       :color 0xFFDDDDDD}
-                     {:kind :text :x 236 :y 42 :text (if (:learned hover-node) "Learned" "Not learned")
+                     {:kind :text :x 236 :y 56 :text (if (:learned hover-node) "Learned" "Not learned")
                       :color (if (:learned hover-node) 0xFF88FF88 0xFFFF8888)}])]
       (vec (concat header level-up connection-ops nodes tooltip)))
     []))

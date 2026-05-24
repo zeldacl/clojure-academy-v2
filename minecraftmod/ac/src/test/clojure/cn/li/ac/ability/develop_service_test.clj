@@ -6,7 +6,8 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.ability.server.service.develop :as develop]
-            [cn.li.ac.ability.server.service.learning :as learning]))
+            [cn.li.ac.ability.server.service.learning :as learning]
+            [cn.li.ac.ability.server.service.resource :as resource]))
 
 (deftest start-skill-learning-guards-test
   (let [developing (assoc (dev/new-develop-data) :state :developing)]
@@ -59,14 +60,16 @@
                                          (is (= :s1 sid))
                                          {:data (adata/learn-skill d sid)
                                           :event {:event/type :ability/skill-learn :uuid uuid :skill-id sid}})
-                  rdata/recalc-max-values (fn [d level]
-                                            (assoc d :max-cp (+ (:max-cp d) level)))]
+          resource/recalc-max-for-level (fn [d level uuid]
+                      (is (= "u1" uuid))
+                      (assoc d :max-cp (+ (:max-cp d) level 10.0)))]
       (let [{:keys [ability-data resource-data events develop-data]}
             (develop/apply-completion develop-data ability-data resource-data "u1")]
         (is (contains? (:learned-skills ability-data) :s1))
         (is (= 1 (count events)))
         (is (= :ability/skill-learn (:event/type (first events))))
-        (is (number? (:max-cp resource-data)))
+      (is (= (+ (:max-cp (rdata/new-resource-data)) 11.0)
+           (:max-cp resource-data)))
         (is (= :idle (:state develop-data)))))))
 
 (deftest apply-completion-level-up-and-fallback-test
