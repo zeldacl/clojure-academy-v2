@@ -41,7 +41,9 @@
           (is (number? (get-in plan [:server-actions 1 :payload :timestamp-ms])))
           (is (= {:kind :spawn-scripted-effect :entity-id "entity_coin_throwing" :speed 0.0}
             (nth (:server-actions plan) 2)))
-      (is (= [{:kind :notify-local-effect}] (:client-actions plan)))
+      (is (= [{:kind :notify-local-effect
+               :event-key :ac/charge-coin-throw}]
+             (:client-actions plan)))
       (is (true? (:consume? plan))))))
 
 (deftest level-change-event-uses-service-recalc-path-test
@@ -64,3 +66,42 @@
                          :recalc-uuid "u-level"
                          :from :svc-res}}
              @updated)))))
+
+(deftest overload-event-aborts-player-contexts-test
+  (let [aborted (atom [])]
+    (with-redefs [cn.li.ac.ability.server.service.context-mgr/abort-player-contexts!
+                  (fn [uuid]
+                    (swap! aborted conj uuid)
+                    nil)]
+      (server-hooks/register-lifecycle-subscriptions!)
+      (evt/fire-ability-event! (evt/make-overload-event "u-overload"))
+      (is (= ["u-overload"] @aborted)))))
+
+      (deftest category-change-event-aborts-deactivates-and-recalculates-test
+        (let [aborted (atom [])
+         updates (atom [])
+         recalc-calls (atom [])]
+          (with-redefs [cn.li.ac.ability.server.service.context-mgr/abort-player-contexts!
+              (fn [uuid]
+                (swap! aborted conj uuid)
+                nil)
+              ps/get-player-state (fn [_]
+                     {:ability-data {:level 4}})
+                  ps/update-resource-data! (fn [uuid updater & args]
+                                             (swap! updates conj [uuid (apply updater {:activated true
+                                                                                       :cur-cp 10.0
+                                                                                       :max-cp 20.0}
+                                                                          args)])
+                     nil)
+              svc-res/recalc-max-for-level (fn [rd level uuid]
+                    (swap! recalc-calls conj [level uuid rd])
+                    (assoc rd :recalc-level level))]
+            (server-hooks/register-lifecycle-subscriptions!)
+            (evt/fire-ability-event! (evt/make-category-change-event "u-category" :old :new))
+            (is (= ["u-category"] @aborted))
+            (is (= [4 "u-category" {:activated true :cur-cp 10.0 :max-cp 20.0}]
+              (first @recalc-calls)))
+            (is (= ["u-category" false]
+              [(ffirst @updates) (get-in (first @updates) [1 :activated])]))
+            (is (= ["u-category" 4]
+              [(first (second @updates)) (get-in (second @updates) [1 :recalc-level])])))))

@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.ability-interferer.gui-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.block.ability-interferer.gui]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.wireless.gui.sync.handler :as sync-handler]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.network.client :as net-client]))
@@ -40,8 +41,9 @@
                    :range (atom 10.0)
                    :pending-range (atom nil)}]
     (with-redefs [sync-handler/tile-pos-payload (fn [_] {:pos-x 1 :pos-y 2 :pos-z 3})
-                  net-client/send-to-server (fn [msg-id payload]
-                                              (swap! calls conj [msg-id payload]))]
+            msg-registry/msg (fn [_ action] [:ability-interferer action])
+            net-client/send-to-server (fn [msg-id payload]
+                          (swap! calls conj [msg-id payload]))]
       ((pv 'request-set-range!) container 42.0)
       (is (= 10.0 @(:range container)))
       (is (= 42.0 @(:pending-range container)))
@@ -54,8 +56,9 @@
                    :enabled (atom false)
                    :pending-enabled (atom nil)}]
     (with-redefs [sync-handler/tile-pos-payload (fn [_] {:pos-x 1 :pos-y 2 :pos-z 3})
-                  net-client/send-to-server (fn [msg-id payload]
-                                              (swap! calls conj [msg-id payload]))]
+            msg-registry/msg (fn [_ action] [:ability-interferer action])
+            net-client/send-to-server (fn [msg-id payload]
+                          (swap! calls conj [msg-id payload]))]
       ((pv 'request-set-enabled!) container true)
       (is (false? @(:enabled container)))
       (is (true? @(:pending-enabled container)))

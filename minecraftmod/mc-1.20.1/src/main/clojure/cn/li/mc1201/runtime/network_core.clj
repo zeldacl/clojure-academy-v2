@@ -101,7 +101,8 @@
   [find-nearby-player-uuids send-to-client-fn]
   (fn [ctx-id channel payload]
     (if-let [source-player-uuid (network-hooks/get-context-player-uuid ctx-id)]
-      (doseq [target-player-uuid (find-nearby-player-uuids source-player-uuid default-except-local-radius)]
+      (doseq [target-player-uuid (remove #{source-player-uuid}
+                                          (find-nearby-player-uuids source-player-uuid default-except-local-radius))]
         (send-to-client-fn target-player-uuid
                            (msg-id :ctx-channel)
                            {:ctx-id ctx-id :channel channel :payload payload}))

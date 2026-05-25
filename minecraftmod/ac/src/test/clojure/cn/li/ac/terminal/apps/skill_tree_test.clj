@@ -10,14 +10,16 @@
     (let [calls (atom [])]
       (with-redefs [uuid/player-uuid (fn [_] "player-uuid-1")
                     entity/player-get-name (fn [_] "Tester")
-                    client-bridge/open-skill-tree-screen!
-                    (fn [player-uuid learn-context]
-                      (swap! calls conj {:player-uuid player-uuid
-                                         :learn-context learn-context}))]
+                    client-bridge/open-screen!
+                    (fn [screen-id payload]
+                      (swap! calls conj {:screen-id screen-id
+                                         :payload payload}))]
         (skill-tree/open-skill-tree-gui :player-1 {:developer-type :portable})
         (skill-tree/open-skill-tree-gui :player-2)
-        (is (= [{:player-uuid "player-uuid-1"
-                 :learn-context {:developer-type :portable}}
-                {:player-uuid "player-uuid-1"
-                 :learn-context nil}]
+        (is (= [{:screen-id :ac/skill-tree
+                 :payload {:player-uuid "player-uuid-1"
+                           :learn-context {:developer-type :portable}}}
+                {:screen-id :ac/skill-tree
+                 :payload {:player-uuid "player-uuid-1"
+                           :learn-context nil}}]
                @calls))))))

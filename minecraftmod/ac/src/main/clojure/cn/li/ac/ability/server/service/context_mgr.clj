@@ -12,6 +12,9 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.server.service.context-transport :as transport]
+            [cn.li.ac.ability.domain.skill :as skill-domain]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.util.log :as log]))
@@ -44,6 +47,16 @@
 ;; Server-side: respond to BEGIN-LINK
 ;; ============================================================================
 
+(defn can-establish-skill-context?
+  "Return true when a learned skill is enabled, controllable, and usable now."
+  [ability-data resource-data skill-id]
+  (boolean
+   (and ability-data
+        resource-data
+        (adata/is-learned? ability-data skill-id)
+        (rdata/can-use-ability? resource-data)
+        (skill-domain/controllable? (skill-registry/get-skill skill-id)))))
+
 (defn establish-context!
   "Called on the SERVER upon receiving MSG-CTX-BEGIN-LINK.
   Validates the skill for the player, creates server-side context, sends ESTABLISH."
@@ -53,12 +66,11 @@
         rd        (:resource-data state)]
     (if-not (and ad rd)
       (log/warn "establish-context!: no player state for" player-uuid)
-      ;; Basic check: skill is learned and ability usable
-      (if-not (and (get-in ad [:learned-skills skill-id])
-                   (rdata/can-use-ability? rd))
+      (if-not (can-establish-skill-context? ad rd skill-id)
         (do
           (log/debug "establish-context! rejected: conditions not met" player-uuid skill-id)
-          (transport/send-to-client! player-uuid catalog/MSG-CTX-TERMINATE {:ctx-id client-ctx-id}))
+          (transport/send-to-client! player-uuid catalog/MSG-CTX-TERMINATE {:ctx-id client-ctx-id})
+          nil)
         (let [server-ctx (ctx/new-server-context player-uuid skill-id client-ctx-id)]
           (ctx/register-context! server-ctx)
           (transport/send-to-client! player-uuid catalog/MSG-CTX-ESTABLISH
@@ -102,4 +114,5 @@
   "Call once per second (or per server tick with rate limiting).
   Checks keepalive timeouts on all live ALIVE contexts."
   []
-  (ctx/check-keepalive-timeout! send-terminated!))
+  (ctx/check-keepalive-timeout! send-terminated!)
+  (ctx/purge-terminated-contexts!))

@@ -4,7 +4,8 @@
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.content.ability.electromaster.current-charging :as current-charging]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.mcmod.platform.entity :as entity]))
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.platform.runtime-interop :as interop]))
 
 (defn- skill-actions []
   (:actions (var-get (ns-resolve 'cn.li.ac.content.ability.electromaster.current-charging
@@ -112,6 +113,11 @@
                                                            :ray-end {:x 1.0 :y 2.0 :z 3.0}})
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/enforce-overload-floor! (fn [& _] nil)
+                  interop/*runtime-interop* :mock
+                  interop/get-player-view (fn [_ _]
+                                            {:world-id "minecraft:overworld"
+                                             :x 0.0 :y 64.0 :z 0.0
+                                             :look-x 1.0 :look-y 0.0 :look-z 0.0})
                   entity/player-spawn-entity-by-id! (fn [player eid yaw]
                                                       (swap! spawned* conj [player eid yaw])
                                                       true)

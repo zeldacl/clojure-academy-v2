@@ -168,9 +168,9 @@
                                                (* (cfg-double :progression.exp-distance-scale) traveled)))))
         (effect/run-op! evt [:reset-fall-damage nil])
         (effect/run-op! evt [:fx {:topic :mag-movement/fx-end
-                                  :payload {:mode :end}}]))
+                                  :payload {:mode :end}}])
         (ctx/update-context! ctx-id dissoc :skill-state)
-        (ctx/terminate-context! ctx-id nil))))
+        (ctx/terminate-context! ctx-id nil)))))
 
 (defn- on-down! [{:keys [player-id exp] :as evt}]
   (let [ctx-id (:ctx-id evt)

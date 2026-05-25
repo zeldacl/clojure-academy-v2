@@ -46,12 +46,18 @@
      evt/EVT-CATEGORY-CHANGE
      (fn [{:keys [uuid]}]
        (when uuid
+         (ctx-mgr/abort-player-contexts! uuid)
          (ps/update-resource-data! uuid rdata/set-activated false)
          (when-let [state (ps/get-player-state uuid)]
            (let [level (get-in state [:ability-data :level] 1)]
              (ps/update-resource-data! uuid
                                        (fn [rd]
                                          (svc-res/recalc-max-for-level rd level uuid))))))))
+    (evt/subscribe-ability-event!
+     evt/EVT-OVERLOAD
+     (fn [{:keys [uuid]}]
+       (when uuid
+         (ctx-mgr/abort-player-contexts! uuid))))
     (log/info "Ability lifecycle event subscriptions registered")))
 
 (defn runtime-server-hooks

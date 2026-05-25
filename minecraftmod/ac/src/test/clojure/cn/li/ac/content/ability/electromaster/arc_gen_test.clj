@@ -118,7 +118,7 @@
       (arc/arc-gen-perform! {:player-id "p3" :ctx-id "ctx-3" :player {:id "player-obj"}})
       (is (= 2 (count @potion-calls*)))
       (is (= #{:slowness :weakness}
-             (set (map #(nth % 3) @potion-calls*)))))))
+              (set (map #(nth % 2) @potion-calls*)))))))
 
 (deftest miss-range-drives-fx-end-and-no-entity-arc-spawn-test
   (let [fx-calls* (atom [])

@@ -79,3 +79,47 @@
       (is (= 1 (count @cost-fail-calls*)))
       (is (= :down (:cost-stage (first @cost-fail-calls*))))
       (is (= [["ctx-fail" nil]] @terminate-calls*)))))
+
+(deftest instant-on-down-success-runs-cost-action-stage-fx-exp-cooldown-in-order-test
+  (let [order (atom [])]
+    (effect/register-op! test-op-key
+                         (fn [evt _]
+                           (swap! order conj :stage)
+                           evt))
+    (with-redefs [skill-effects/apply-cost! (fn [_ _ _]
+                                              (swap! order conj :cost)
+                                              true)
+                  skill-effects/emit-fx! (fn [_ _ _]
+                                           (swap! order conj :fx)
+                                           nil)
+                  skill-effects/gain-exp! (fn [_ _]
+                                            (swap! order conj :exp)
+                                            nil)
+                  skill-effects/apply-cooldown! (fn [_ _]
+                                                  (swap! order conj :cooldown)
+                                                  nil)
+                  ctx/terminate-context! (fn [_ctx-id _terminate-fn]
+                                           (swap! order conj :terminate)
+                                           nil)]
+      (patterns/instant-on-down!
+        {:actions {:perform! (fn [_] (swap! order conj :action))}
+         :perform [[test-op-key {}]]}
+        {:ctx-id "ctx-order" :player-id "p1"})
+      (is (= [:cost :action :stage :fx :exp :cooldown :terminate] @order)))))
+
+(deftest hold-channel-tick-cost-fail-runs-cost-fail-and-terminates-test
+  (let [calls (atom [])]
+    (with-redefs [skill-effects/apply-cost! (fn [_ _ _]
+                                              (swap! calls conj :cost)
+                                              false)
+                  skill-effects/emit-fx! (fn [_ _ _]
+                                           (swap! calls conj :fx)
+                                           nil)
+                  ctx/terminate-context! (fn [ctx-id terminate-fn]
+                                           (swap! calls conj [:terminate ctx-id terminate-fn])
+                                           nil)]
+      (patterns/hold-channel-on-tick!
+        {:actions {:tick! (fn [_] (swap! calls conj :tick))
+                   :cost-fail! (fn [evt] (swap! calls conj [:cost-fail (:cost-stage evt)]))}}
+        {:ctx-id "ctx-channel" :player-id "p1"})
+      (is (= [:cost [:cost-fail :tick] [:terminate "ctx-channel" nil]] @calls)))))

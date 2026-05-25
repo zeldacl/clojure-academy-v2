@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.block.wireless-matrix.gui :as gui]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.mcmod.platform.item :as pitem]
             [cn.li.ac.item.mat-core :as core]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]))
@@ -24,6 +25,7 @@
       (with-redefs [slot-schema/slot-indexes-by-type (fn [_ _] [0 1 2])
                     slot-schema/slot-index (fn [_ _] 3)
                     gui/get-slot-item (fn [c i] (get (:inventory c) i))
+                    pitem/item-is-empty? nil?
                     core/is-mat-core? (fn [item] (= item :core))
                     core/get-core-level (fn [_] 1)
                     sync-helpers/with-throttled-sync! (fn [_ _ f] (f))
@@ -39,6 +41,7 @@
       (with-redefs [slot-schema/slot-indexes-by-type (fn [_ _] (range required))
                     slot-schema/slot-index (fn [_ _] required)
                     gui/get-slot-item (fn [c i] (get (:inventory c) i))
+                    pitem/item-is-empty? nil?
                     core/is-mat-core? (fn [item] (= item :core))
                     core/get-core-level (fn [_] 1)
                     sync-helpers/with-throttled-sync! (fn [_ _ f] (f))
@@ -53,6 +56,7 @@
     (with-redefs [slot-schema/slot-indexes-by-type (fn [_ _] [0 1 2])
             slot-schema/slot-index (fn [_ _] 3)
             gui/get-slot-item (fn [c i] (get (:inventory c) i))
+            pitem/item-is-empty? nil?
             core/is-mat-core? (fn [item] (= item :core))
             core/get-core-level (fn [_] 2)
                   sync-helpers/with-throttled-sync! (fn [_ _ f] (f))

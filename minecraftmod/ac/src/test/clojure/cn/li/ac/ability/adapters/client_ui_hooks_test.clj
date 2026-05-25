@@ -13,6 +13,7 @@
             [cn.li.mcmod.network.client :as net-client]))
 
 (defn- reset-ui-state! [f]
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/client-push-handlers-registered? false)
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles [])
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0)
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
@@ -23,7 +24,8 @@
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0)
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/charge-coin-state {}))
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/charge-coin-state {})
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/client-push-handlers-registered? false))
 
 (use-fixtures :each reset-ui-state!)
 
@@ -97,6 +99,22 @@
                          :channel :penetrate-tp/set-distance
                          :payload {:delta 2.0}}}]
              @sent)))))
+
+          (deftest client-terminated-push-clears-slot-context-and-terminates-local-context-test
+            (let [handlers (atom {})
+            terminated (atom [])]
+              (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids
+                {[(str "p1") 0] "ctx-dead"})
+              (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
+                            (swap! handlers assoc msg-id handler-fn)
+                            nil)
+                ctx/terminate-context! (fn [ctx-id terminate-fn]
+                       (swap! terminated conj [ctx-id terminate-fn])
+                       nil)]
+                (client-ui-hooks/register-client-push-handlers!)
+                ((get @handlers catalog/MSG-CTX-TERMINATED) {:ctx-id "ctx-dead"})
+                (is (empty? @@#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids))
+                (is (= [["ctx-dead" nil]] @terminated)))))
 
 (deftest charge-coin-hooks-notify-and-visual-state-test
   (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
@@ -243,7 +261,7 @@
         (let [plan (client-ui-hooks/build-client-overlay-plan
                 "p1" 320 180 {:now-ms 1000})
           kinds (mapv :kind (:elements plan))]
-      (is (= 1 (count (filter #{:vec-reflection-crosshair} kinds))))
+      (is (= 1 (count (filter #{:content-crosshair} kinds))))
           (is (some #{:blit-texture} kinds))))))
 
 (deftest movement-key-hooks-route-to-flashing-channel-test

@@ -133,24 +133,31 @@
   - :editable-ssid?      whether SSID is editable
   - :editable-password?  whether password is editable"
   [initialized? is-owner?]
-  (cond
-    initialized?
-    {:show-init? false
-     :show-noinit? false
-     :editable-ssid? is-owner?
-     :editable-password? is-owner?}
+  (let [owner? (true? is-owner?)]
+    (cond
+      (true? initialized?)
+      {:show-init? false
+       :show-noinit? false
+       :editable-ssid? owner?
+       :editable-password? owner?}
 
-    is-owner?
-    {:show-init? true
-     :show-noinit? false
-     :editable-ssid? false
-     :editable-password? false}
+      (and (or (false? initialized?) (nil? initialized?)) owner?)
+      {:show-init? true
+       :show-noinit? false
+       :editable-ssid? false
+       :editable-password? false}
 
-    :else
-    {:show-init? false
-     :show-noinit? true
-     :editable-ssid? false
-     :editable-password? false}))
+      (or (false? initialized?) (nil? initialized?))
+      {:show-init? false
+       :show-noinit? true
+       :editable-ssid? false
+       :editable-password? false}
+
+      :else
+      {:show-init? false
+       :show-noinit? false
+       :editable-ssid? false
+       :editable-password? false})))
 
 
 

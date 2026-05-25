@@ -5,10 +5,12 @@
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.registry.skill :as skill-reg]
+            [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.model.cooldown :as cd]
+            [cn.li.ac.ability.server.dispatch :as skill-rt]
             [cn.li.ac.ability.server.service.context-runtime :as rt]
             [cn.li.ac.ability.server.service.cooldown :as cd-svc]))
 
@@ -87,3 +89,29 @@
             "context remains alive when termination policy is disabled")
         (is (= :idle (:input-state updated))
             "input state resets to :idle so subsequent key-down can reactivate")))))
+
+(deftest key-input-lifecycle-dispatches-distinct-callback-keys-test
+  (let [uuid "test-player-callbacks"
+        _ (seed-player-state! uuid)
+        ctx-id "ctx-callbacks"
+        c (ctx/new-server-context uuid :arc-gen ctx-id)
+        callback-keys (atom [])
+        terminated (atom [])]
+    (ctx/register-context! c)
+    (with-redefs [skill-reg/get-skill (fn [_]
+                                        {:id :arc-gen
+                                         :pattern :hold-channel
+                                         :cooldown {:mode :manual}
+                                         :input-policy {:terminate-on-key-up? false}})
+                  skill-rt/can-handle? (constantly true)
+                  skill-rt/dispatch! (fn [_spec cb-key _evt]
+                                       (swap! callback-keys conj cb-key)
+                                       true)
+                  evt/fire-ability-event! (fn [_] nil)]
+      (is (true? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
+      (is (true? (rt/handle-key-tick! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
+      (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
+      (is (true? (rt/handle-key-abort! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
+      (is (= [:on-key-down :on-key-tick :on-key-up :on-key-abort] @callback-keys))
+      (is (= [ctx-id] @terminated))
+      (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id)))))))

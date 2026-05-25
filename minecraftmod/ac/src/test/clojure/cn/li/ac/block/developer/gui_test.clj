@@ -16,6 +16,8 @@
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
+            [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- widget-tree []
@@ -61,7 +63,7 @@
         :world :client-world
         :pos [10 20 30]
         :sneaking false})
-      (is (= [[{:player :player-1 :world :client-world :pos [10 20 30] :sneaking false}
+      (is (= [[:player-1
                :developer
                :client-world
                [10 20 30]]]
@@ -87,22 +89,28 @@
                   developer-domain/min-for-level (fn [_] :normal)
                   developer-domain/gte? (fn [_ _] true)
                   net-helpers/tile-pos-payload (fn [_] {:x 12 :y 34 :z 56})
-                  client-bridge/open-skill-tree-screen!
-                  (fn [player-uuid learn-context]
-                    (swap! calls conj {:kind :open :player-uuid player-uuid :learn-context learn-context}))]
+                  client-bridge/open-screen!
+                  (fn [screen-id payload]
+                    (swap! calls conj {:kind :open :screen-id screen-id :payload payload}))]
       (developer-panel/attach-classic-developer-bindings!
        root
        {:player :player-1
-        :tile-entity :tile-1}
+        :tile-entity :tile-1
+        :energy (atom 0.0)
+        :max-energy (atom 50000.0)
+        :is-developing (atom false)
+        :wireless-bandwidth (atom 1000.0)
+        :wireless-inject-last-tick (atom 0.0)}
         {:switch-wireless-tab! nil})
       (is (= 1 (count (filter #(= :learn (:kind %)) @calls))))
       (let [{:keys [handler]} (first @calls)]
         (handler {:x 1 :y 2})
         (is (= [{:kind :learn :handler handler}
                 {:kind :open
-                 :player-uuid "player-uuid"
-                 :learn-context {:x 12 :y 34 :z 56
-                                 :developer-type :advanced}}]
+                 :screen-id :ac/skill-tree
+                 :payload {:player-uuid "player-uuid"
+                           :learn-context {:x 12 :y 34 :z 56
+                                           :developer-type :advanced}}}]
                @calls))))))
 
 (deftest developer-panel-upgrade-button-respects-category-state-test
@@ -117,6 +125,8 @@
                   developer-domain/developer-type-for-block-id (fn [_] :advanced)
                   developer-domain/min-for-level (fn [_] :normal)
                   developer-domain/gte? (fn [_ _] true)
+                  msg-registry/msg (fn [domain action] [domain action])
+                  net-client/send-to-server (fn [& _] nil)
                   player-state/get-player-state (fn [_]
                                                   {:ability-data {:category-id :electromaster
                                                                   :level 2
@@ -157,7 +167,9 @@
                                                                   :level-progress 0.0}})
                   category/get-category (fn [_] nil)
                   net-helpers/tile-pos-payload (fn [_] {:pos-x 1 :pos-y 2 :pos-z 3})
-                  client-bridge/open-skill-tree-screen!
+                  msg-registry/msg (fn [domain action] [domain action])
+                  net-client/send-to-server (fn [& _] nil)
+                  client-bridge/open-screen!
                   (fn [& args]
                     (swap! open-calls conj {:open args}))]
       (developer-panel/attach-classic-developer-bindings!

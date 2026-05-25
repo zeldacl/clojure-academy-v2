@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.service.dispatcher
 	"Canonical AC context/dispatcher service implementation."
 	(:require [cn.li.ac.ability.registry.event :as evt]
+						[clojure.string :as str]
 						[cn.li.mcmod.util.log :as log]))
 
 (def STATUS-CONSTRUCTED :constructed)
@@ -18,6 +19,46 @@
 (defonce ^:private route-fns (atom {:to-server nil :to-client nil :to-except-local nil}))
 (defonce ^:private client-id-counter (atom 0))
 (defonce ^:private server-id-counter (atom 0))
+(defonce ^:private lifecycle-counters (atom {}))
+
+(def ^:private DEFAULT-TERMINATED-CONTEXT-GRACE-MS 1000)
+(def ^:private DEFAULT-KEEPALIVE-TIMEOUT-MS 1500)
+
+(defn- positive-long-prop
+	[prop-key default-value]
+	(let [raw (System/getProperty prop-key)]
+		(if (and raw (not (str/blank? raw)))
+			(try
+				(let [parsed (Long/parseLong raw)]
+					(if (pos? parsed) parsed default-value))
+				(catch Exception _ default-value))
+			default-value)))
+
+(defn keepalive-timeout-ms
+	"Server-side keepalive timeout threshold in milliseconds.
+	Configurable through -Dac.ctx.keepalive-timeout-ms (default 1500)."
+	[]
+	(positive-long-prop "ac.ctx.keepalive-timeout-ms" DEFAULT-KEEPALIVE-TIMEOUT-MS))
+
+(defn reset-lifecycle-counters!
+	[]
+	(reset! lifecycle-counters {})
+	nil)
+
+(defn lifecycle-counters-snapshot
+	[]
+	@lifecycle-counters)
+
+(defn- record-lifecycle-event!
+	[reason]
+	(swap! lifecycle-counters update reason (fnil inc 0))
+	nil)
+
+(defn terminated-context-grace-ms
+	"Grace window before terminated contexts are purged from registry.
+	Configurable through -Dac.ctx.terminated-grace-ms (default 1000)."
+	[]
+	(positive-long-prop "ac.ctx.terminated-grace-ms" DEFAULT-TERMINATED-CONTEXT-GRACE-MS))
 
 (declare register-context!)
 
@@ -25,13 +66,13 @@
 	(let [id (str "cid-" (swap! client-id-counter inc))]
 		{:id id :server-id nil :player-uuid player-uuid :skill-id skill-id
 		 :status STATUS-CONSTRUCTED :input-state :idle :message-buffer []
-		 :listeners {} :last-keepalive-ms nil}))
+		 :listeners {} :last-keepalive-ms nil :terminated-at-ms nil}))
 
 (defn new-server-context [player-uuid skill-id client-id]
 	(let [sid (str "sid-" (swap! server-id-counter inc))]
 		{:id client-id :server-id sid :player-uuid player-uuid :skill-id skill-id
 		 :status STATUS-ALIVE :input-state :idle :message-buffer []
-		 :listeners {} :last-keepalive-ms (System/currentTimeMillis)}))
+		 :listeners {} :last-keepalive-ms (System/currentTimeMillis) :terminated-at-ms nil}))
 
 (defn start-context!
 	[player-uuid skill-id]
@@ -67,7 +108,7 @@
 		(when (status-valid-transition? (:status ctx) STATUS-ALIVE)
 			(update-context! ctx-id (fn [c]
 															 (let [buffer (:message-buffer c)
-																		 alive-ctx (assoc c :status STATUS-ALIVE :server-id server-id :message-buffer [] :last-keepalive-ms (System/currentTimeMillis))]
+																					 alive-ctx (assoc c :status STATUS-ALIVE :server-id server-id :message-buffer [] :last-keepalive-ms (System/currentTimeMillis) :terminated-at-ms nil)]
 																 (when (and flush-fn (seq buffer))
 																	 (doseq [msg buffer] (flush-fn msg)))
 																 alive-ctx)))
@@ -76,7 +117,7 @@
 (defn terminate-context! [ctx-id send-terminated-fn]
 	(when-let [ctx (get-context ctx-id)]
 		(when (not= (:status ctx) STATUS-TERMINATED)
-			(update-context! ctx-id assoc :status STATUS-TERMINATED)
+			(update-context! ctx-id assoc :status STATUS-TERMINATED :terminated-at-ms (System/currentTimeMillis))
 			(when send-terminated-fn (send-terminated-fn ctx-id))
 			(log/debug "Context terminated:" ctx-id))))
 
@@ -84,7 +125,6 @@
 	(doseq [ctx (get-all-contexts-for-player player-uuid)]
 		(terminate-context! (:id ctx) send-terminated-fn)))
 
-(def ^:private KEEPALIVE-TIMEOUT-MS 1500)
 (defn update-keepalive! [ctx-id]
 	(update-context! ctx-id assoc :last-keepalive-ms (System/currentTimeMillis)))
 (defn check-keepalive-timeout! [send-terminated-fn]
@@ -92,16 +132,32 @@
 		(doseq [[ctx-id ctx] @context-registry]
 			(when (and (= (:status ctx) STATUS-ALIVE)
 								 (:last-keepalive-ms ctx)
-								 (> (- now (:last-keepalive-ms ctx)) KEEPALIVE-TIMEOUT-MS))
+								 (> (- now (:last-keepalive-ms ctx)) (keepalive-timeout-ms)))
 				(log/debug "Context keepalive timeout:" ctx-id)
+				(record-lifecycle-event! :timeout-terminated)
 				(terminate-context! ctx-id send-terminated-fn)))))
+
+(defn purge-terminated-contexts!
+	"Remove terminated contexts after a short grace window so client/server
+	observers can still read final status immediately after termination."
+	[]
+	(let [now (System/currentTimeMillis)]
+		(swap! context-registry
+				 (fn [registry]
+					 (into {}
+								 (remove (fn [[_ctx-id ctx-map]]
+											 (and (= (:status ctx-map) STATUS-TERMINATED)
+														 (:terminated-at-ms ctx-map)
+															 (>= (- now (:terminated-at-ms ctx-map)) (terminated-context-grace-ms)))))
+								 registry)))))
 
 (defn ctx-buffer-or-send! [ctx-id msg send-fn]
 	(let [ctx (get-context ctx-id)]
 		(when ctx
-			(if (= (:status ctx) STATUS-CONSTRUCTED)
-				(update-context! ctx-id update :message-buffer conj msg)
-				(when send-fn (send-fn msg))))))
+			(case (:status ctx)
+				:constructed (update-context! ctx-id update :message-buffer conj msg)
+				:alive (when send-fn (send-fn msg))
+				nil))))
 
 (defn ctx-send-to-local! [ctx-id channel msg]
 	(when-let [ctx (get-context ctx-id)]

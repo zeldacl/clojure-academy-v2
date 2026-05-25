@@ -7,6 +7,7 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.wireless.api :as wireless-api]
+            [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.network.server :as net-server]))
 
 (deftest handle-get-status-defaults-without-tile-test
@@ -117,7 +118,7 @@
                                          :password "pw"
                                          :need-auth? false}
                                         :player)))
-        (is (= [[:recv :node "pw" false]] @link-calls)))))
+        (is (= [[:node :recv "pw" false]] @link-calls)))))
 
   (testing "connect failure without node payload"
     (with-redefs [sync-handler/get-world (fn [_] :world)
@@ -137,6 +138,7 @@
 (deftest register-network-handlers-registers-all-actions-test
   (let [calls (atom [])]
     (with-redefs [net-server/register-handler (fn [msg-id _handler]
-                                                (swap! calls conj msg-id))]
+                          (swap! calls conj msg-id))
+            msg-registry/msg (fn [_ action] [:developer action])]
       (handlers/register-network-handlers!)
       (is (= 6 (count @calls))))))

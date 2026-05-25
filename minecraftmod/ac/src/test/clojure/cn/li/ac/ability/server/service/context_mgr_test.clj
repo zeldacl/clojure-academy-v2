@@ -5,21 +5,30 @@
             [cn.li.ac.ability.server.service.context-mgr :as cm]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.messages :as catalog]))
 
 (defn- reset-fixture [f]
-  (test-contexts/clean-contexts-fixture
-   #(test-player/clean-player-states-fixture
-     (fn []
-       (cm/register-send-fns! {:to-client nil :to-server nil})
-       (f)
-       (cm/register-send-fns! {:to-client nil :to-server nil})))))
+  (let [saved-skills @skill-registry/skill-registry]
+    (test-contexts/clean-contexts-fixture
+     #(test-player/clean-player-states-fixture
+       (fn []
+         (cm/register-send-fns! {:to-client nil :to-server nil})
+         (try
+           (f)
+           (finally
+             (reset! skill-registry/skill-registry saved-skills)
+             (cm/register-send-fns! {:to-client nil :to-server nil}))))))))
 
 (use-fixtures :each reset-fixture)
 
 (defn- seed-player! [uuid skill-kw]
+  (skill-registry/register-skill! {:id skill-kw
+                                   :category-id :electromaster
+                                   :level 1
+                                   :pattern :passive})
   (let [ability-data (-> (ad/new-ability-data)
                          (ad/learn-skill skill-kw))
         resource-data (assoc (rd/new-resource-data) :activated true)]
@@ -69,3 +78,49 @@
       (is (= "ctx-9" (:ctx-id p)))
       (is (= :fx (:channel p)))
       (is (= {:k 1} (:payload p))))))
+
+(deftest tick-context-manager-purges-old-terminated-contexts-test
+  (let [old-ts (- (System/currentTimeMillis) 5000)
+        fresh-ts (System/currentTimeMillis)
+        old-ctx-id "ctx-old-terminated"
+        fresh-ctx-id "ctx-fresh-terminated"]
+    (ctx/register-context! (assoc (ctx/new-server-context "p-old" :arc-gen old-ctx-id)
+                                  :status ctx/STATUS-TERMINATED
+                                  :terminated-at-ms old-ts))
+    (ctx/register-context! (assoc (ctx/new-server-context "p-fresh" :arc-gen fresh-ctx-id)
+                                  :status ctx/STATUS-TERMINATED
+                                  :terminated-at-ms fresh-ts))
+    (cm/tick-context-manager!)
+    (is (nil? (ctx/get-context old-ctx-id)))
+    (is (some? (ctx/get-context fresh-ctx-id)))))
+
+(deftest tick-context-manager-terminates-expired-alive-context-test
+  (let [ctx-id "ctx-timeout"
+        terminated (atom [])]
+    (ctx/register-context! (assoc (ctx/new-server-context "p-timeout" :arc-gen ctx-id)
+                                  :last-keepalive-ms (- (System/currentTimeMillis) 5000)))
+    (cm/register-send-fns! {:to-client (fn [_uuid msg-id payload]
+                                         (when (= catalog/MSG-CTX-TERMINATE msg-id)
+                                           (swap! terminated conj (:ctx-id payload))))
+                            :to-server nil})
+    (cm/tick-context-manager!)
+    (is (= [ctx-id] @terminated))
+    (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))
+
+(deftest dispatcher-timing-can-be-overridden-via-system-properties-test
+  (let [keepalive-key "ac.ctx.keepalive-timeout-ms"
+        grace-key "ac.ctx.terminated-grace-ms"
+        old-keepalive (System/getProperty keepalive-key)
+        old-grace (System/getProperty grace-key)]
+    (try
+      (System/setProperty keepalive-key "42")
+      (System/setProperty grace-key "84")
+      (is (= 42 (ctx/keepalive-timeout-ms)))
+      (is (= 84 (ctx/terminated-context-grace-ms)))
+      (finally
+        (if (some? old-keepalive)
+          (System/setProperty keepalive-key old-keepalive)
+          (System/clearProperty keepalive-key))
+        (if (some? old-grace)
+          (System/setProperty grace-key old-grace)
+          (System/clearProperty grace-key))))))

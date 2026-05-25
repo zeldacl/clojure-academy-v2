@@ -5,6 +5,9 @@
   [f]
   (doseq [ctx-id (keys (ctx/get-all-contexts))]
     (ctx/remove-context! ctx-id))
+  (ctx/reset-lifecycle-counters!)
+  (ctx/register-route-fns! {:to-server nil :to-client nil :to-except-local nil})
   (f)
   (doseq [ctx-id (keys (ctx/get-all-contexts))]
-    (ctx/remove-context! ctx-id)))
+    (ctx/remove-context! ctx-id))
+  (ctx/register-route-fns! {:to-server nil :to-client nil :to-except-local nil}))

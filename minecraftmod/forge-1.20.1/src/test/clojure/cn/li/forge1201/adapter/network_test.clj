@@ -40,7 +40,7 @@
 (deftest except-local-sender-broadcasts-to-nearby-players-test
   (let [sent (atom [])
         sender (network/create-except-local-context-sender
-                 (fn [_source-player-uuid _radius] ["near-1" "near-2"])
+                 (fn [_source-player-uuid _radius] ["source-player" "near-1" "near-2"])
                  (fn [target-uuid msg-id payload]
                    (swap! sent conj [target-uuid msg-id payload])))]
     (with-redefs [runtime-hooks/get-context-player-uuid (fn [_ctx-id] "source-player")]

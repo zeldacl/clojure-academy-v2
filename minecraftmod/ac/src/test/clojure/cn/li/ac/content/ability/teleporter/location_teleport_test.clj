@@ -6,12 +6,12 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.network.server :as net-srv]
-            [cn.li.mcmod.platform.saved-locations :as saved-locations]
+            [cn.li.mcmod.platform.named-position-store :as position-store]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
 
-(defn- memory-saved-locations
+(defn- memory-position-store
   [store]
-  (reify saved-locations/ISavedLocations
+  (reify position-store/INamedPositionStore
     (save-location! [_ player-uuid location-name world-id x y z]
       (swap! store assoc-in [player-uuid location-name]
              {:name location-name
@@ -49,7 +49,7 @@
         player-id "player-a"
         current-pos {:world-id "minecraft:overworld" :x 10.0 :y 64.0 :z -2.5}
         long-name "home-base-name-that-is-too-long"]
-    (binding [saved-locations/*saved-locations* (memory-saved-locations store)
+    (binding [position-store/*named-position-store* (memory-position-store store)
               teleportation/*teleportation* (teleportation-at current-pos)]
       (testing "saving trims names to the upstream 16 character UI limit"
         (is (= {:success? true :name "home-base-name-t"}
@@ -57,7 +57,7 @@
         (is (= {:name "home-base-name-t"
                 :world-id "minecraft:overworld"
                 :x 10.0 :y 64.0 :z -2.5}
-               (saved-locations/get-location saved-locations/*saved-locations* player-id "home-base-name-t"))))
+               (position-store/get-location position-store/*named-position-store* player-id "home-base-name-t"))))
       (testing "query includes saved locations with same-dimension perform stats"
         (with-redefs [skill-effects/skill-exp (fn [_ _] 1.0)
                       skill-effects/current-cp (fn [_] 100000.0)
@@ -77,14 +77,14 @@
       (testing "delete removes the saved location"
         (is (= {:success? true :name "home-base-name-t"}
                (loc-tp/delete-saved-location! player-id "home-base-name-that-is-too-long")))
-        (is (empty? (saved-locations/list-locations saved-locations/*saved-locations* player-id)))))))
+        (is (empty? (position-store/list-locations position-store/*named-position-store* player-id)))))))
 
       (deftest save-current-location-enforces-ac-max-location-policy-test
         (let [store (atom {"player-limit" {"home" {:name "home"
                        :world-id "minecraft:overworld"
                        :x 0.0 :y 64.0 :z 0.0}}})
          current-pos {:world-id "minecraft:overworld" :x 10.0 :y 65.0 :z 2.0}]
-          (binding [saved-locations/*saved-locations* (memory-saved-locations store)
+          (binding [position-store/*named-position-store* (memory-position-store store)
           teleportation/*teleportation* (teleportation-at current-pos)]
             (with-redefs [ability-config/max-saved-locations (fn [] 1)]
          (testing "new names are rejected when the AC configured limit is reached"
@@ -92,13 +92,13 @@
               :error :location-limit-reached
               :max-locations 1}
              (loc-tp/save-current-location! "player-limit" "mine")))
-           (is (nil? (saved-locations/get-location saved-locations/*saved-locations*
+           (is (nil? (position-store/get-location position-store/*named-position-store*
                       "player-limit" "mine"))))
          (testing "overwriting an existing saved location is still allowed"
            (is (= {:success? true :name "home"}
              (loc-tp/save-current-location! "player-limit" "home")))
            (is (= current-pos
-             (select-keys (saved-locations/get-location saved-locations/*saved-locations*
+             (select-keys (position-store/get-location position-store/*named-position-store*
                           "player-limit" "home")
                 [:world-id :x :y :z]))))))))
 
@@ -107,7 +107,7 @@
                                             :world-id "minecraft:the_nether"
                                             :x 0.0 :y 80.0 :z 0.0}}})
         current-pos {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}]
-    (binding [saved-locations/*saved-locations* (memory-saved-locations store)
+    (binding [position-store/*named-position-store* (memory-position-store store)
               teleportation/*teleportation* (teleportation-at current-pos)]
       (testing "low exp marks cross-dimension destination unavailable"
         (with-redefs [skill-effects/skill-exp (fn [_ _] 0.8)
@@ -139,7 +139,7 @@
                         :world-id "minecraft:overworld"
                         :x 3.0 :y 65.0 :z 7.0}}})
              current-pos {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}]
-              (binding [saved-locations/*saved-locations* (memory-saved-locations store)
+              (binding [position-store/*named-position-store* (memory-position-store store)
               teleportation/*teleportation* (teleportation-at current-pos)]
                 (with-redefs [skill-effects/skill-exp (fn [_ _] 1.0)
                     skill-effects/get-player-state (fn [_]

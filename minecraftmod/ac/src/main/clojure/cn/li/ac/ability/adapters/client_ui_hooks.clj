@@ -77,7 +77,8 @@
   [player-uuid]
   (let [contexts (ctx/get-all-contexts-for-player player-uuid)
         railgun-ctx (some (fn [ctx-data]
-                            (when (= :railgun (:skill-id ctx-data))
+                            (when (and (= :railgun (:skill-id ctx-data))
+                                       (ctx/active-context? ctx-data))
                               ctx-data))
                           contexts)
         skill-state (:skill-state railgun-ctx)
@@ -101,16 +102,17 @@
             coin-active? (and active-window? (>= ratio (railgun-coin-active-threshold)))]
         (when (and has-window? (not active-window?))
           (swap! charge-coin-state dissoc player-uuid))
-        {:active? active-window?
+        {:active? (boolean active-window?)
          :charge-ticks 0
-         :coin-active? coin-active?
+         :coin-active? (boolean coin-active?)
          :coin-progress ratio
          :charge-ratio ratio}))))
 
 (defn- find-player-context
   [player-uuid skill-id]
   (some (fn [ctx-data]
-          (when (= skill-id (:skill-id ctx-data))
+          (when (and (= skill-id (:skill-id ctx-data))
+                     (ctx/active-context? ctx-data))
             ctx-data))
         (ctx/get-all-contexts-for-player player-uuid)))
 
@@ -237,7 +239,8 @@
        (keep (fn [[[slot-player-uuid _] ctx-id]]
                (when (= slot-player-uuid player-uuid)
                  (let [ctx-data (ctx/get-context ctx-id)]
-                   (when (= :flashing (:skill-id ctx-data))
+                   (when (and (= :flashing (:skill-id ctx-data))
+                              (ctx/active-context? ctx-data))
                      ctx-id)))))
        distinct
        vec))
@@ -254,7 +257,8 @@
   [player-uuid]
   (boolean
     (some (fn [[_ctx-id ctx-data]]
-            (and (= (:player-uuid ctx-data) player-uuid)
+              (and (= (:player-uuid ctx-data) player-uuid)
+                (ctx/active-context? ctx-data)
                  (toggle/is-toggle-active? ctx-data :vec-reflection)))
           (ctx/get-all-contexts))))
 
@@ -262,7 +266,8 @@
   [player-uuid]
   (boolean
     (some (fn [[_ctx-id ctx-data]]
-            (and (= (:player-uuid ctx-data) player-uuid)
+              (and (= (:player-uuid ctx-data) player-uuid)
+                (ctx/active-context? ctx-data)
                  (toggle/is-toggle-active? ctx-data :vec-deviation)))
           (ctx/get-all-contexts))))
 

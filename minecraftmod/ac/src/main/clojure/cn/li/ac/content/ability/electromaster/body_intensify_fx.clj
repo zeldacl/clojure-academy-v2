@@ -4,7 +4,7 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
-(def ^:private activate-sound-id "academy:ability.electromaster.body_intensify")
+(def ^:private activate-sound-id "my_mod:em.intensify_activate")
 (def ^:private local-scripted-effect-key :mcmod/spawn-local-scripted-effect)
 (def ^:private intensify-effect-id "intensify_effect")
 

@@ -3,6 +3,7 @@
   (:require [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
            [net.minecraft.client Minecraft]
+           [net.minecraft.client.multiplayer ClientLevel]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.core BlockPos]
            [net.minecraft.core.registries BuiltInRegistries]
@@ -12,6 +13,7 @@
            [net.minecraft.tags BlockTags]
            [net.minecraft.world.entity.player Abilities]
            [net.minecraft.world.level.block Block]
+           [net.minecraft.world.level.block.state BlockState]
            [net.minecraft.world.phys Vec3]))
 
 (def ^:private full-bright-uv2 15728880)
@@ -58,17 +60,17 @@
      :z (+ base-z (* (.-z look) 0.35) (* right-z 0.22))}))
 
 (defn- block-id-at
-  [level bx by bz]
+  [^ClientLevel level bx by bz]
   (let [pos (BlockPos. (int bx) (int by) (int bz))
-        block-state (.getBlockState level pos)
+        ^BlockState block-state (.getBlockState level pos)
         ^Block block (.getBlock block-state)
         key (.getKey BuiltInRegistries/BLOCK block)]
     (when key (str key))))
 
 (defn- harvest-level-at
-  [level bx by bz]
+  [^ClientLevel level bx by bz]
   (let [pos (BlockPos. (int bx) (int by) (int bz))
-        block-state (.getBlockState level pos)]
+        ^BlockState block-state (.getBlockState level pos)]
     (cond
       (.is block-state BlockTags/NEEDS_DIAMOND_TOOL) 3
       (.is block-state BlockTags/NEEDS_IRON_TOOL) 2

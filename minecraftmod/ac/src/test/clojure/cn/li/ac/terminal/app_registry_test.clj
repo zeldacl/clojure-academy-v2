@@ -4,6 +4,8 @@
             [cn.li.ac.terminal.app-manifest :as manifest]
             [cn.li.ac.terminal.init :as terminal-init]
             [cn.li.ac.terminal.apps.skill-tree :as skill-tree]
+            [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- clean-registry [f]
@@ -29,15 +31,20 @@
                   (fn [] '[cn.li.ac.terminal.apps.skill-tree/init-skill-tree-app!])
                   requiring-resolve
                   (fn [sym]
-                    (when (= sym 'cn.li.ac.terminal.apps.skill-tree/init-skill-tree-app!)
-                      skill-tree/init-skill-tree-app!))
-                  client-bridge/open-skill-tree-screen!
-                  (fn [player-uuid learn-context]
-                    (swap! launches conj {:player-uuid player-uuid
-                                          :learn-context learn-context}))]
+                    (case sym
+                      cn.li.ac.terminal.apps.skill-tree/init-skill-tree-app! skill-tree/init-skill-tree-app!
+                      cn.li.ac.terminal.apps.skill-tree/open-skill-tree-gui skill-tree/open-skill-tree-gui
+                      nil))
+                  uuid/player-uuid (fn [_] "player-uuid-1")
+                  entity/player-get-name (fn [_] "Player One")
+                  client-bridge/open-screen!
+                  (fn [screen-id payload]
+                    (swap! launches conj {:screen-id screen-id
+                                          :payload payload}))]
       (terminal-init/register-apps!)
       (is (some? (reg/get-app :skill-tree)))
       (is (true? (reg/launch-app :skill-tree :player-1)))
-      (is (= [{:player-uuid :player-1
-               :learn-context nil}]
+      (is (= [{:screen-id :ac/skill-tree
+           :payload {:player-uuid "player-uuid-1"
+                         :learn-context nil}}]
              @launches)))))
