@@ -4,7 +4,7 @@
 	 The actual implementation now lives in:
 	 - cn.li.mcmod.block.dsl-properties
 	 - cn.li.mcmod.block.dsl-multiblock
-	 - cn.li.mcmod.block.dsl-presets
+	 - cn.li.mcmod.block.dsl-templates
 	 - cn.li.mcmod.block.dsl-validators
 	 - cn.li.mcmod.block.dsl-core
 	 - cn.li.mcmod.block.query
@@ -13,7 +13,7 @@
 	 implementation details remain in the focused modules above."
 	(:require [cn.li.mcmod.block.dsl-properties :as props]
 						[cn.li.mcmod.block.dsl-multiblock :as mb]
-						[cn.li.mcmod.block.dsl-presets :as presets]
+						[cn.li.mcmod.block.dsl-templates :as templates]
 						[cn.li.mcmod.block.dsl-validators :as validators]
 						[cn.li.mcmod.block.dsl-core :as core]
 						[cn.li.mcmod.block.query :as q]))
@@ -66,14 +66,14 @@
 (defonce get-block core/get-block)
 (defonce get-block-properties core/get-block-properties)
 
-(defonce ore-preset presets/ore-preset)
-(defonce wood-preset presets/wood-preset)
-(defonce metal-preset presets/metal-preset)
-(defonce glass-preset presets/glass-preset)
-(defonce light-block-preset presets/light-block-preset)
-(defonce multi-block-preset presets/multi-block-preset)
-(defonce irregular-multi-block-preset presets/irregular-multi-block-preset)
-(defonce merge-presets presets/merge-presets)
+(defonce ore-template templates/ore-template)
+(defonce wood-template templates/wood-template)
+(defonce metal-template templates/metal-template)
+(defonce glass-template templates/glass-template)
+(defonce light-block-template templates/light-block-template)
+(defonce multi-block-template templates/multi-block-template)
+(defonce irregular-multi-block-template templates/irregular-multi-block-template)
+(defonce merge-templates templates/merge-templates)
 
 (def validate-block-spec validators/validate-block-spec)
 

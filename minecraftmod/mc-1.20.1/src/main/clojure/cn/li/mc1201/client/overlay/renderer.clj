@@ -91,8 +91,8 @@
               (draw-segment! (max bar-start cutout-end) bar-end))
             (draw-segment! bar-start bar-end)))))))
 
-(defn- render-skill-slot!
-  [^GuiGraphics graphics {:keys [x y key-label skill-icon skill-name in-cooldown cooldown-seconds visual-state alpha glow-color sin-effect?]}]
+(defn- render-content-slot!
+  [^GuiGraphics graphics {:keys [x y key-label content-icon content-label disabled? status-seconds visual-state alpha glow-color sin-effect?]}]
   (let [effective-alpha (double (or alpha 1.0))
         bg-color (case visual-state
                    :charge (rgb-vec->argb (or glow-color [255 173 55]) (* 0.4 effective-alpha))
@@ -109,16 +109,16 @@
         (.fill graphics (dec x) y x (+ y 20) (unchecked-int border-color))
         (.fill graphics (+ x 20) y (+ x 21) (+ y 20) (unchecked-int border-color)))))
   (draw-string! graphics (str key-label) (+ x 2) (+ y 2) 0xFFFFFF)
-  (when skill-icon
-    (when-let [icon-loc (ResourceLocation/tryParse (normalize-texture-path skill-icon))]
+  (when content-icon
+    (when-let [icon-loc (ResourceLocation/tryParse (normalize-texture-path content-icon))]
       (.blit graphics icon-loc (+ x 25) y 0 0 16 16 16 16)))
-  (draw-string! graphics (str skill-name) (+ x 45) (+ y 6) 0xFFFFFF)
-  (when in-cooldown
+  (draw-string! graphics (str content-label) (+ x 45) (+ y 6) 0xFFFFFF)
+  (when disabled?
     (.fill graphics x y (+ x 20) (+ y 20) -1073741824)
-    (when (pos? cooldown-seconds)
-      (draw-string! graphics (format "%.1fs" cooldown-seconds) (+ x 3) (+ y 10) 0xFFFFFF))))
+    (when (pos? status-seconds)
+      (draw-string! graphics (format "%.1fs" status-seconds) (+ x 3) (+ y 10) 0xFFFFFF))))
 
-(defn- render-vec-reflection-crosshair!
+(defn- render-crosshair-marker!
   [^GuiGraphics graphics {:keys [x y phase intensity]}]
   (let [cx (int (or x 0))
         cy (int (or y 0))
@@ -140,7 +140,7 @@
             ry (+ cy (int (Math/round (* radius (Math/sin a)))))]
         (.fill graphics (dec rx) (dec ry) (inc rx) (inc ry) ring-color)))))
 
-(defn- render-preset-indicator!
+(defn- render-selection-indicator!
   [^GuiGraphics graphics {:keys [x y current total fade]}]
   (let [square-size 8
         gap 3
@@ -181,9 +181,9 @@
                             (draw-string! graphics "*" (:x element) (:y element) 0x00FF00)
                             (when-let [hint (:hint element)]
                               (draw-string! graphics (str hint) (+ (:x element) 12) (:y element) 0xCCCCCC)))
-    :skill-slot (render-skill-slot! graphics element)
-    :vec-reflection-crosshair (render-vec-reflection-crosshair! graphics element)
-    :preset-indicator (render-preset-indicator! graphics element)
+    :content-slot (render-content-slot! graphics element)
+    :content-crosshair (render-crosshair-marker! graphics element)
+    :selection-indicator (render-selection-indicator! graphics element)
     :blit-texture (render-blit-texture! graphics element)
     :overload-pulse (let [intensity (double (or (:intensity element) 0.0))
                           alpha (int (* 40 intensity))]

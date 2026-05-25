@@ -92,7 +92,7 @@
 ;; IC2 conversion rates
 
 (def ^:private default-eu-conversion-rate
-  "Default conversion rate: 1 IF = 1 EU (same as original 1.12 implementation)"
+  "Default conversion rate: 1 content energy unit = 1 EU."
   1.0)
 
 (defn eu-conversion-rate
@@ -101,25 +101,25 @@
   (double (or (energy-integration/ic2-energy-conversion-rate)
               default-eu-conversion-rate)))
 
-(defn if-to-eu
-  "Convert IF (Imaginary Energy) to EU (Energy Units).
+(defn content-to-eu
+  "Convert content energy units to EU (Energy Units).
 
   Args:
-    if-amount - Amount in IF
+    content-amount - Amount in content energy units
 
   Returns:
     Amount in EU"
-  [if-amount]
-  (* if-amount (eu-conversion-rate)))
+  [content-amount]
+  (* content-amount (eu-conversion-rate)))
 
-(defn eu-to-if
-  "Convert EU (Energy Units) to IF (Imaginary Energy).
+(defn eu-to-content
+  "Convert EU (Energy Units) to content energy units.
 
   Args:
     eu-amount - Amount in EU
 
   Returns:
-    Amount in IF"
+    Amount in content energy units"
   [eu-amount]
   (/ eu-amount (eu-conversion-rate)))
 
@@ -128,7 +128,7 @@
 (defn- create-ic2-energy-sink
   "Create an IC2 IEnergySink implementation that wraps an IEnergyCapable.
 
-  This allows IC2 machines to push EU into AC energy converters.
+  This allows IC2 machines to push EU into descriptor-declared content endpoints.
 
   Args:
     energy-capable - The IEnergyCapable implementation
@@ -146,13 +146,13 @@
                                 (let [current (.getEnergyStored ec)
                                       max-energy (.getMaxEnergyStored ec)
                                       space (- max-energy current)]
-                                  (double (if-to-eu space))))
+                                  (double (content-to-eu space))))
          "getSinkTier" (fn [_] (int tier))
          "injectEnergy" (fn [^objects args]
                            (let [amount (double (aget args 1))
-                                 if-amount (eu-to-if amount)
-                                 received (.receiveEnergy ec (int if-amount) false)
-                                 eu-received (if-to-eu received)]
+                                 content-amount (eu-to-content amount)
+                                 received (.receiveEnergy ec (int content-amount) false)
+                                 eu-received (content-to-eu received)]
                              (double (- amount eu-received))))
          "acceptsEnergyFrom" (fn [_] true)}
         "IC2 IEnergySink"))
@@ -163,7 +163,7 @@
 (defn- create-ic2-energy-source
   "Create an IC2 IEnergySource implementation that wraps an IEnergyCapable.
 
-  This allows IC2 machines to pull EU from AC energy converters.
+  This allows IC2 machines to pull EU from descriptor-declared content endpoints.
 
   Args:
     energy-capable - The IEnergyCapable implementation
@@ -178,11 +178,11 @@
       (create-interface-proxy
         iface
         {"getOfferedEnergy" (fn [_]
-                               (double (if-to-eu (.getEnergyStored ec))))
+                               (double (content-to-eu (.getEnergyStored ec))))
          "drawEnergy" (fn [^objects args]
                          (let [amount (double (aget args 0))
-                               if-amount (eu-to-if amount)]
-                           (.extractEnergy ec (int if-amount) false)
+                                 content-amount (eu-to-content amount)]
+                               (.extractEnergy ec (int content-amount) false)
                            nil))
          "getSourceTier" (fn [_] (int tier))
          "emitsEnergyTo" (fn [_] true)}
@@ -195,36 +195,37 @@
   "Get IC2 energy capability for a block entity.
 
   This is called by the capability bridge when IC2 queries for energy
-  capabilities on our energy converter blocks.
+  capabilities on descriptor-declared content endpoints.
 
   Args:
     be - The block entity
     side - The side being queried (or nil for any side)
-    mode - Converter mode ('import-fe' or 'export-fe')
+    mode - Content-declared transfer mode ('import' or 'export')
 
   Returns:
     IC2 energy interface (IEnergySink or IEnergySource) or nil"
   [be _side mode]
   (try
-    ;; Get the AC energy capability first
-    (when-let [ac-energy-cap (cap-call 'cn.li.mcmod.platform.capability/get-capability be :energy-converter nil)]
-      (when (cap-call 'cn.li.mcmod.platform.capability/is-present? ac-energy-cap)
-        (let [ac-energy (cap-call 'cn.li.mcmod.platform.capability/or-else ac-energy-cap nil)
+    ;; Get the content energy capability first. Descriptor-specific binding is
+    ;; handled by the content module before this optional integration is used.
+    (when-let [content-energy-cap (cap-call 'cn.li.mcmod.platform.capability/get-capability be :content-energy nil)]
+      (when (cap-call 'cn.li.mcmod.platform.capability/is-present? content-energy-cap)
+        (let [content-energy (cap-call 'cn.li.mcmod.platform.capability/or-else content-energy-cap nil)
               tier 2] ;; Default to tier 2 (Medium Voltage, 128 EU/t)
-          (when ac-energy
+          (when content-energy
             ;; Create appropriate IC2 interface based on mode
             (case mode
-              "import-fe" (create-ic2-energy-sink ac-energy tier)
-              "export-fe" (create-ic2-energy-source ac-energy tier)
+              "import" (create-ic2-energy-sink content-energy tier)
+              "export" (create-ic2-energy-source content-energy tier)
               nil)))))
     (catch Exception e
       (log/error "Error creating IC2 capability:" (ex-message e))
       nil)))
 
 (defn register-ic2-capability!
-  "Register IC2 energy capability for energy converter blocks.
+  "Register IC2 energy capability for descriptor-declared content endpoints.
 
-  This allows IC2 machines to interact with AC converters using EU.
+  This allows IC2 machines to interact with content-provided energy endpoints using EU.
 
   Returns:
     true if successful, false if IC2 not available"
@@ -236,7 +237,7 @@
       ;; We'll need to handle EnergyTileLoadEvent/UnloadEvent in the tile entity
 
       (log/info "IC2 integration available - EU conversion enabled")
-      (log/info (format "Conversion rate: 1 IF = %.1f EU" (eu-conversion-rate)))
+      (log/info (format "Conversion rate: 1 content energy unit = %.1f EU" (eu-conversion-rate)))
       true
       (catch Exception e
         (log/error "Failed to register IC2 capability:" (ex-message e))

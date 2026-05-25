@@ -1,37 +1,48 @@
 (ns cn.li.mcmod.gui.message.dsl
-  "Message DSL helpers shared by AC wireless GUI."
+  "Message DSL helpers for content-owned GUI message catalogs."
   (:require [clojure.string :as str]))
 
-(defn- action->token
-  [action]
-  (-> (name action)
+(def ^:private default-prefix "content")
+
+(def ^:private message-id-pattern
+  #"[a-z0-9_]+_[a-z0-9_]+_[a-z0-9_]+")
+
+(defn- segment->token
+  [segment]
+  (-> (name segment)
       (str/replace "-" "_")))
 
 (defn message-id
-  "Build message id with a stable prefix.
+  "Build a message id with a stable caller-owned prefix.
 
-  Current format: wireless_<domain>_<action>.
-  Both domain and action are normalized to underscore tokens."
-  [domain action]
-  (str "wireless_" (action->token domain) "_" (action->token action)))
+  Format: <prefix>_<domain>_<action>.
+  Prefix, domain, and action are normalized to underscore tokens."
+  ([domain action]
+   (message-id default-prefix domain action))
+  ([prefix domain action]
+   (str (segment->token prefix) "_" (segment->token domain) "_" (segment->token action))))
 
 (defn build-domain-spec
   "Build message spec for a domain and validate duplicate actions early."
-  [domain actions]
-  (let [dupes (->> actions frequencies (keep (fn [[k n]] (when (> n 1) k))))]
-    (when (seq dupes)
-      (throw (ex-info "Duplicate actions in domain"
-                      {:domain domain :duplicate-actions (vec dupes)})))
-    {:domain domain
-     :messages (into {}
-                     (map (fn [action]
-                            [action (message-id domain action)]))
-                     actions)
-     :specs (mapv (fn [action]
-                    {:domain domain
-                     :action action
-                     :msg-id (message-id domain action)})
-                  actions)}))
+  ([domain actions]
+   (build-domain-spec default-prefix domain actions))
+  ([prefix domain actions]
+   (let [dupes (->> actions frequencies (keep (fn [[k n]] (when (> n 1) k))))]
+     (when (seq dupes)
+       (throw (ex-info "Duplicate actions in domain"
+                       {:domain domain :duplicate-actions (vec dupes)})))
+     {:prefix prefix
+      :domain domain
+      :messages (into {}
+                      (map (fn [action]
+                             [action (message-id prefix domain action)]))
+                      actions)
+      :specs (mapv (fn [action]
+                     {:prefix prefix
+                      :domain domain
+                      :action action
+                      :msg-id (message-id prefix domain action)})
+                   actions)})))
 
 (defn build-catalog
   "Merge domain specs and validate global message-id uniqueness and format."
@@ -44,13 +55,13 @@
                                msg-id))))
         invalid-ids (->> all-specs
                          (remove (fn [{:keys [msg-id]}]
-                                   (boolean (re-matches #"wireless_[a-z0-9_]+_[a-z0-9_]+" msg-id))))
+                                   (boolean (re-matches message-id-pattern msg-id))))
                          (mapv :msg-id))]
     (when (seq dup-ids)
-      (throw (ex-info "Duplicate wireless message ids"
+      (throw (ex-info "Duplicate message ids"
                       {:duplicate-msg-ids (vec dup-ids)})))
     (when (seq invalid-ids)
-      (throw (ex-info "Invalid wireless message ids"
+      (throw (ex-info "Invalid message ids"
                       {:invalid-msg-ids invalid-ids})))
     {:domains (into {}
                     (map (fn [domain-spec]
@@ -65,7 +76,7 @@
 (defn msg-id
   [catalog domain action]
   (or (get-in catalog [:domains domain action])
-      (throw (ex-info "Unknown wireless message"
+      (throw (ex-info "Unknown GUI message"
                       {:domain domain :action action}))))
 
 (defn find-by-msg-id

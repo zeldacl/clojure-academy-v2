@@ -18,8 +18,8 @@
         scripted? (instance? ScriptedEffectEntity entity)
         ^ScriptedEffectEntity scripted-entity (when scripted? entity)
         age-ticks (when scripted? (.getAgeTicks scripted-entity))
-        coin-progress (when (and scripted? (.hasCoinProgress scripted-entity))
-                        (.getCoinProgress scripted-entity))]
+        motion-progress (when (and scripted? (.hasMotionProgress scripted-entity))
+              (.getMotionProgress scripted-entity))]
     {:uuid (str (.getUUID entity))
      :x (.x pos)
      :y (.y pos)
@@ -36,7 +36,7 @@
      :item? (instance? ItemEntity entity)
     :projectile? (instance? Projectile entity)
     :age-ticks age-ticks
-    :coin-progress coin-progress}))
+    :motion-progress motion-progress}))
 
 (defn find-blocks-in-radius-in-level
   [^Level level x y z radius block-predicate block-id-fn]

@@ -14,6 +14,8 @@
 (defonce ^:private tick-listener-registered? (atom false))
 (defonce ^:private raw-v-state (atom (mode-switch/initial-state)))
 (defonce ^:private raw-n-state (atom {:was-down false}))
+(def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
+(def ^:private cycle-selection-input-id :content/cycle-selection)
 
 (defn- get-player-uuid []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
@@ -23,6 +25,13 @@
 (defn- current-screen-open? []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
     (some? (.-screen mc))))
+
+(defn- emit-keyboard-input!
+  [input-id player-uuid event]
+  (power-runtime/emit-client-input! input-id
+                                    {:player-uuid player-uuid}
+                                    {:source :keyboard
+                                     :event event}))
 
 (defn- poll-v-key-down? []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
@@ -35,7 +44,7 @@
     (let [window (.getWindow (.getWindow mc))]
       (= GLFW/GLFW_PRESS (GLFW/glfwGetKey window key-code)))))
 
-(defn- skill-key-down?
+(defn- slot-key-down?
   [key-idx]
   ;; Keep parity with Forge alternative scheme: Z/X/C/B
   (case (int key-idx)
@@ -59,8 +68,8 @@
 (defn- gui-key-down?
   [gui-key]
   (case gui-key
-    :skill-tree (boolean (poll-key-down? GLFW/GLFW_KEY_GRAVE_ACCENT))
-    :preset-editor (boolean (poll-key-down? GLFW/GLFW_KEY_G))
+    :primary (boolean (poll-key-down? GLFW/GLFW_KEY_GRAVE_ACCENT))
+    :secondary (boolean (poll-key-down? GLFW/GLFW_KEY_G))
     false))
 
 (defn on-slot-key-down! [player-uuid key-idx]
@@ -96,31 +105,31 @@
          (when-let [uuid (get-player-uuid)]
           (let [cur-activated (power-runtime/runtime-activated? uuid)]
              (overlay-state/set-client-activated! (not cur-activated))
-             (power-runtime/client-trigger-mode-switch! uuid))))})))
+           (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press))))})))
 
-(defn- tick-preset-switch! []
+(defn- tick-cycle-selection! []
   (let [is-down (boolean (poll-key-down? GLFW/GLFW_KEY_N))
         was-down (boolean (:was-down @raw-n-state))]
     (when (and (not was-down) is-down)
       (when-let [uuid (get-player-uuid)]
-        (power-runtime/client-trigger-preset-switch! uuid)))
+        (emit-keyboard-input! cycle-selection-input-id uuid :press)))
     (swap! raw-n-state assoc :was-down is-down)))
 
-(defn- tick-ability-keys! []
+(defn- tick-content-keys! []
   (power-runtime/client-tick-keys!
     (fn [key-id]
       (case (first key-id)
-        :skill (skill-key-down? (second key-id))
+        :slot (slot-key-down? (second key-id))
         :movement (movement-key-down? (second key-id))
-        :gui (gui-key-down? (second key-id))
+        :screen (gui-key-down? (second key-id))
         false))
     get-player-uuid))
 
 (defn tick-client!
   []
   (tick-mode-switch!)
-  (tick-preset-switch!)
-  (tick-ability-keys!)
+  (tick-cycle-selection!)
+  (tick-content-keys!)
   (particle/tick-particles!)
   (sound/tick-sounds!)
   (power-runtime/client-tick!))

@@ -1,14 +1,14 @@
-(ns cn.li.mcmod.block.dsl-presets
-  "Block preset templates for common patterns.
+(ns cn.li.mcmod.block.dsl-templates
+  "Block template helpers for common data shapes.
    Provides convenient builders for ore blocks, wood, metal, multiblocks, etc."
   (:require [cn.li.mcmod.block.dsl-multiblock :as mb]))
 
 ;; ============================================================================
-;; Simple Material Presets
+;; Simple Material Templates
 ;; ============================================================================
 
-(defn ore-preset
-  "Create an ore block preset with common properties"
+(defn ore-template
+  "Create an ore block template with common properties"
   [harvest-level]
   {:material :stone
    :hardness 3.0
@@ -18,8 +18,8 @@
    :harvest-level harvest-level
    :sounds :stone})
 
-(defn wood-preset
-  "Create a wood block preset with common properties"
+(defn wood-template
+  "Create a wood block template with common properties"
   []
   {:material :wood
    :hardness 2.0
@@ -29,8 +29,8 @@
    :harvest-level 0
    :sounds :wood})
 
-(defn metal-preset
-  "Create a metal block preset with common properties"
+(defn metal-template
+  "Create a metal block template with common properties"
   [harvest-level]
   {:material :metal
    :hardness 5.0
@@ -40,8 +40,8 @@
    :harvest-level harvest-level
    :sounds :metal})
 
-(defn glass-preset
-  "Create a glass block preset with common properties"
+(defn glass-template
+  "Create a glass block template with common properties"
   []
   {:material :glass
    :hardness 0.3
@@ -49,8 +49,8 @@
    :requires-tool false
    :sounds :glass})
 
-(defn light-block-preset
-  "Create a light-emitting block preset"
+(defn light-block-template
+  "Create a light-emitting block template"
   [light-level]
   {:material :glass
    :hardness 1.0
@@ -59,13 +59,13 @@
    :sounds :glass})
 
 ;; ============================================================================
-;; Multi-block Presets
+;; Multi-block Templates
 ;; ============================================================================
 
-(defn multi-block-preset
-  "Create a regular multi-block preset
+(defn multi-block-template
+  "Create a regular multi-block template.
    size: {:width 2 :height 3 :depth 2}
-   Example: (multi-block-preset {:width 3 :height 4 :depth 3})"
+   Example: (multi-block-template {:width 3 :height 4 :depth 3})"
   [size & additional-options]
   (merge
     {:multi-block? true
@@ -78,10 +78,10 @@
      :harvest-tool :pickaxe}
     (apply merge additional-options)))
 
-(defn irregular-multi-block-preset
-  "Create an irregular multi-block preset with custom positions
+(defn irregular-multi-block-template
+  "Create an irregular multi-block template with custom positions.
    positions: [{:x 0 :y 0 :z 0} {:x 1 :y 0 :z 0} {:x 0 :y 1 :z 0} ...]
-   Example: (irregular-multi-block-preset [{:x 0 :y 0 :z 0} {:x 1 :y 1 :z 0}])"
+   Example: (irregular-multi-block-template [{:x 0 :y 0 :z 0} {:x 1 :y 1 :z 0}])"
   [positions & additional-options]
   (merge
     {:multi-block? true
@@ -95,10 +95,10 @@
     (apply merge additional-options)))
 
 ;; ============================================================================
-;; Preset Combination
+;; Template Combination
 ;; ============================================================================
 
-(defn merge-presets
-  "Merge multiple presets with options"
-  [& preset-and-options]
-  (apply merge preset-and-options))
+(defn merge-templates
+  "Merge multiple templates with options"
+  [& template-and-options]
+  (apply merge template-and-options))

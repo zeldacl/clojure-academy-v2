@@ -44,7 +44,7 @@
   "Create a normalized FluidSpec map.
 
   Required keys:
-  - id (string): DSL id, e.g. \"imag-phase\"
+  - id (string): DSL id, e.g. \"content-fluid\"
 
   Optional keys:
   - registry-name

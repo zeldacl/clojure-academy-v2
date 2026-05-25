@@ -11,7 +11,7 @@
   (:import [net.fabricmc.fabric.api.datagen.v1 FabricDataGenerator$Pack FabricDataGenerator$Pack$Factory]))
 
 (def ^:private blockstate-provider-name
-  "AcademyCraft Fabric Blockstate Provider")
+  "Fabric Blockstate Provider")
 
 (defn- create-provider
   [provider output]

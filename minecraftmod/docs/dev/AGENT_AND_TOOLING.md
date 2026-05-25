@@ -18,7 +18,11 @@
 - **本地运行**：`cmd /c .\gradlew.bat :forge-1.20.1:runClient` / `:forge-1.20.1:runServer` / `:forge-1.20.1:runData`
 - **快速编译**：`cmd /c .\gradlew.bat :ac:compileClojure`、`:mcmod:compileClojure`、`:forge-1.20.1:compileClojure`
 - **测试与验证入口**：
+  - `cmd /c .\gradlew.bat :mcmod:compileClojure :ac:compileClojure :forge-1.20.1:compileJava :forge-1.20.1:compileClojure :fabric-1.20.1:compileJava :fabric-1.20.1:compileClojure -x :forge-1.20.1:processResources -x :fabric-1.20.1:processResources`（Windows 上优先用于源码级边界重构验证；规避 stale resource file lock 噪音）
   - `cmd /c .\gradlew.bat verifyArchitectureBoundaries`
+  - `cmd /c .\gradlew.bat verifyNonAcNoBusinessRuntimeHookApis`
+  - `cmd /c .\gradlew.bat verifyNonAcNoBusinessSemanticResidue`
+  - `cmd /c .\gradlew.bat verifyCleanupResidueGuards`
   - `cmd /c .\gradlew.bat unitTestCompile`
   - `cmd /c .\gradlew.bat runAcUnitTests`（执行 `ac` 的 `clojure.test`，入口为 `:ac:runAcClojureTests` / `cn.li.ac.test-runner`；可选 `"-Dac.test.only=cn.li.ac.foo-test,cn.li.ac.bar-test"`；输出慢测试 namespace Top 10）
   - `cmd /c .\gradlew.bat runMcmodUnitTests`（执行 `mcmod` 的 `clojure.test`，入口为 `:mcmod:runMcmodClojureTests` / `cn.li.mcmod.test-runner`；可选 `"-Dmcmod.test.only=cn.li.mcmod.foo-test,cn.li.mcmod.bar-test"`；输出慢测试 namespace Top 10）
@@ -42,6 +46,15 @@
   - `-PcompileNsOnly=<ns1,ns2>` / `-PcheckNsOnly=<ns1,ns2>` / `-PcheckNsFile=<path>`
 
 ## 模块边界与依赖红线
+
+### 严格业务下沉边界（2026-05-25）
+
+- 非 Minecraft / Forge / Fabric 原生概念一律视为业务语义；业务语义只允许出现在现有 `ac` 模块。
+- `mcmod` 只保存中性协议、descriptor registry 与 host-readable envelope；不得通过“通用命名 + 业务默认值/示例/测试夹具”的方式规避边界。
+- `mc-1.20.1` 只执行 Minecraft-native host primitive 与 opaque descriptor；不得硬编码内容 ID、内容 NBT key、内容 UI key、内容 worldgen/sound/render 默认值。
+- `forge-1.20.1` / `fabric-1.20.1` 只做 Loader glue、事件绑定与原生 API 适配；不得直接识别或分支处理具体内容业务。
+- 禁止新增 `ac-mc-*`、`ac-forge-*`、`ac-fabric-*`、`content-version-*` 或等价 source set/adapter 逃生口。若业务逻辑无法表达为中性 descriptor / opcode / context，则继续拆分；仍不能表达的功能本轮下线。
+- 内容初始化必须通过 ServiceLoader discovery 或 `mcmod` 中性 registry；平台不得硬编码单个内容模块。
 
 - **`mcmod`**：平台无关协议、DSL、元数据与基础运行时；禁止引入 `net.minecraft.*` 与 Loader API。
 - **`ac`**：业务内容层（能力、无线、GUI 业务逻辑等）；禁止直接引用 Forge/Fabric/Minecraft API。
@@ -166,9 +179,15 @@
 ## 平台层去业务化回归守卫
 
 - 执行：`cmd /c .\gradlew.bat verifyPlatformNoBusinessHookIds`
+- 执行：`cmd /c .\gradlew.bat verifyNonAcNoBusinessRuntimeHookApis`
+- 执行：`cmd /c .\gradlew.bat verifyNonAcNoBusinessSemanticResidue`
+- 聚合执行：`cmd /c .\gradlew.bat verifyCleanupResidueGuards`
 - 规则：
   - 平台 hook 适配文件不得出现来自业务实体定义中的 hook-id 字面量。
   - 若任务失败，需把业务 hook-id -> impl-key 映射迁回业务内容层（如 `ac`），共享/平台层只保留通用 resolver 或 impl-key -> 实现映射。
+  - 用户态 hook/request API 名、skill/preset/cooldown/ability 等业务术语、AC NBT/wire/gui/worldgen/render fixture、无线/终端/铁路炮/虚相等内容名不得出现在 `mcmod`、`mc-1.20.1`、`forge-1.20.1`、`fabric-1.20.1` main 源码或资源元数据中。
+  - `mcmod` 可暴露中性 descriptor / opcode / envelope；具体业务 key、NBT key、payload key、screen key、integration target 与 smoke manifest 必须由 `ac` 注册。
+  - Guard 误报优先通过中性示例/注释/fixture 清理解决；只有 Minecraft/Forge/Fabric 原生术语（如 Forge `capability`、动画 `phase`、GUI `imageWidth`）才允许保留。
 
 ## Runtime message 边界
 

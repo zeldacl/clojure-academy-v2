@@ -1,25 +1,14 @@
 (ns cn.li.mc1201.client.request.bridge
-  "Provides screen-facing request functions for runtime operations."
+  "Provides a neutral client request dispatch helper for runtime operations."
   (:require [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log]))
 
-(defn learn-skill! [skill-id cb]
-  (power-runtime/client-req-learn-skill! skill-id nil cb))
-
-(defn learn-node! [node-id cb]
-  (power-runtime/client-req-learn-skill! node-id nil cb))
-
-(defn level-up! [cb]
-  (power-runtime/client-req-level-up! cb))
-
-(defn set-activated! [v cb]
-  (power-runtime/client-req-set-activated! v cb))
-
-(defn set-preset-slot! [preset-idx key-idx cat-id ctrl-id cb]
-  (power-runtime/client-req-set-preset-slot! preset-idx key-idx cat-id ctrl-id cb))
-
-(defn switch-preset! [preset-idx cb]
-  (power-runtime/client-req-switch-preset! preset-idx cb))
+(defn dispatch!
+  "Dispatch an opaque content action from a client UI/request host."
+  ([action-id payload]
+   (dispatch! action-id payload nil))
+  ([action-id payload callback]
+   (power-runtime/dispatch-action! action-id {:callback callback} payload)))
 
 (defn init! []
   (log/info "Client request bridge initialized"))

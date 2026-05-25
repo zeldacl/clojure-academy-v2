@@ -148,25 +148,25 @@
 ;; ============================================================================
 
 (defn create-jei-plugin
-  "Create a JEI plugin instance for AC integration (Forge).
+  "Create a JEI plugin instance for descriptor-provided content integration (Forge).
 
   This returns an IModPlugin implementation that JEI will discover
   via the @JEIPlugin annotation in the Java wrapper class."
   []
   (reify IModPlugin
     (getPluginUid [_]
-      (ResourceLocation. mod-config/*mod-id* "jei_plugin"))
+      (ResourceLocation. mod-config/*mod-id* "content_plugin"))
 
     (registerCategories [_ registration]
-      (log/info "Registering JEI categories for AcademyCraft...")
+      (log/info "Registering JEI categories for content descriptors...")
       (register-categories registration))
 
     (registerRecipes [_ registration]
-      (log/info "Registering JEI recipes for AcademyCraft...")
+      (log/info "Registering JEI recipes for content descriptors...")
       (register-recipes registration))
 
     (registerRecipeCatalysts [_ registration]
-      (log/info "Registering JEI catalysts for AcademyCraft...")
+      (log/info "Registering JEI catalysts for content descriptors...")
       (register-catalysts registration))))
 
 (defn init-jei!

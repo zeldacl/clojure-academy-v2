@@ -28,7 +28,7 @@
                       (constantly imc-dispatch/dispatch-event!))
       ;; Register custom advancement triggers.
       (ModTriggers/init)
-      ;; Ensure AC content init is registered through the generic content SPI.
-      (content/register-content! "ac")
+      ;; Ensure discovered content init providers are registered through the generic content SPI.
+      (content/register-all-content!)
       (lifecycle/run-content-init!)
       (achievement-bridge/init!))))

@@ -310,12 +310,12 @@
             :property-key :effect
             :label "scripted-effect"
             :catalog-impl-key-fn #(hook-resolver/resolve-impl-key :effect %)
-            :impl-key->hook-class {:intensify-arcs "cn.li.mc1201.entity.hook.effect.IntensifyArcsEffectHook"
+            :impl-key->hook-class {:tiered-arcs "cn.li.mc1201.entity.hook.effect.TieredArcsEffectHook"
                                    :owner-offset "cn.li.mc1201.entity.hook.effect.OwnerOffsetEffectHook"
                                    :generic-arc "cn.li.mc1201.entity.hook.effect.GenericArcEffectHook"
-                                   :md-ball "cn.li.mc1201.entity.hook.effect.MdBallEffectHook"
+                                   :owner-orbit "cn.li.mc1201.entity.hook.effect.OwnerOrbitEffectHook"
                                    :noop "cn.li.mc1201.entity.hook.effect.NoopEffectHook"
-                                   :coin-throwing "cn.li.mc1201.entity.hook.effect.CoinThrowingEffectHook"}
+                                   :vertical-ballistic "cn.li.mc1201.entity.hook.effect.NoopEffectHook"}
             :conflict-mode :by-hook-id
             :installed?-atom (:effect scripted-hook-install-state)
             :register-fn ScriptedEntitySpecAccess/registerScriptedEffectHookClass

@@ -8,6 +8,7 @@
             [cn.li.mc1201.runtime.spi.server-context :as server-context-spi]
             [cn.li.mcmod.hooks.core :as network-hooks]
             [cn.li.mcmod.hooks.messages :as messages]
+            [cn.li.mcmod.content.registry :as content-registry]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
@@ -19,24 +20,23 @@
 (defn- msg-id [message-key]
   (messages/msg-id message-key))
 
-(def ^:private sync-message-specs
-  [{:message-key :sync-runtime
-    :payload-key :ability-data}
-   {:message-key :sync-resource
-    :payload-key :resource-data}
-   {:message-key :sync-cooldown
-    :payload-key :cooldown-data}
-   {:message-key :sync-preset
-    :payload-key :preset-data}])
-
 (declare init-runtime-network!)
+
+(defn- sync-message-descriptors
+  []
+  (->> (content-registry/list-descriptors :sync)
+       (sort-by (juxt #(long (or (:order %) 0)) (comp str :id)))))
+
+(defn- sync-message-payload
+  [uuid runtime-payload {:keys [message-id message-key payload-key]}]
+  (when (and (or message-id message-key) payload-key)
+    {:msg-id (or message-id (msg-id message-key))
+     :payload {:uuid uuid
+               payload-key (get runtime-payload payload-key)}}))
 
 (defn sync-message-payloads
   [uuid payload]
-  (for [{:keys [message-key payload-key]} sync-message-specs]
-    {:msg-id (msg-id message-key)
-     :payload {:uuid uuid
-               payload-key (get payload payload-key)}}))
+  (keep #(sync-message-payload uuid payload %) (sync-message-descriptors)))
 
 (defn create-targeted-client-sender
   "Create a player-targeted send fn from player lookup + push transport functions."

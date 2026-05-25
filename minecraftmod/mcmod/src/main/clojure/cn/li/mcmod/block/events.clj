@@ -2,7 +2,7 @@
   "Runtime event helpers for block specs.
 
   Kept separate from `cn.li.mcmod.block.dsl` so the public DSL surface remains
-  focused on declarations, presets, validation, and query helpers."
+  focused on declarations, templates, validation, and query helpers."
   (:require [cn.li.mcmod.block.dsl-multiblock :as mb]
             [cn.li.mcmod.util.log :as log]))
 

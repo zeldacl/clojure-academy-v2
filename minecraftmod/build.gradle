@@ -2149,8 +2149,7 @@ tasks.register('verifyWirelessGuiTabApi') {
             'cn.li.ac.wireless.gui.state.sync',
             'cn.li.ac.wireless.gui.events.bus',
             'cn.li.ac.wireless.gui.events.handlers',
-            'cn.li.ac.wireless.gui.component.tabs',
-            'cn.li.ac.testing'
+            'cn.li.ac.wireless.gui.component.tabs'
         ]
         fileTree('ac/src/main/clojure') {
             include '**/*.clj'
@@ -2243,12 +2242,17 @@ tasks.register('verifyTerminalBridgeInitOrchestration') {
         def acBridge = file('ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj')
         def terminalGui = file('ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj')
         def mcmodUi = file('mcmod/src/main/clojure/cn/li/mcmod/platform/ui.clj')
-        def forgeBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/terminal_screen_bridge.clj')
+        def forgeInit = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/init.clj')
+        def forgeCguiBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/cgui_screen_bridge.clj')
+        def deletedForgeTerminalBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/terminal_screen_bridge.clj')
 
-        [acCore, acBridge, terminalGui, mcmodUi, forgeBridge].each { f ->
+        [acCore, acBridge, terminalGui, mcmodUi, forgeInit, forgeCguiBridge].each { f ->
             if (!f.exists()) {
                 violations << "Required terminal bridge file missing: ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
             }
+        }
+        if (deletedForgeTerminalBridge.exists()) {
+            violations << 'forge terminal-specific screen bridge must stay deleted; Forge must use the generic CGui screen bridge'
         }
 
         if (acCore.exists()) {
@@ -2290,13 +2294,25 @@ tasks.register('verifyTerminalBridgeInitOrchestration') {
                 violations << 'mcmod platform UI bridge must stay platform-neutral and AC-free'
             }
         }
-        if (forgeBridge.exists()) {
-            def text = forgeBridge.getText('UTF-8')
-            if (!text.contains('platform-ui/create-widget') || !text.contains(':ac/terminal-gui')) {
-                violations << 'forge terminal screen bridge must obtain the terminal widget through generic platform-ui/create-widget'
+        if (forgeInit.exists()) {
+            def text = forgeInit.getText('UTF-8')
+            if (!text.contains('client-bridge/install-client-bridge!') || !text.contains(':open-simple-gui cgui-screen-bridge/open-simple-gui!')) {
+                violations << 'forge client init must expose generic CGui opening through the installed client bridge'
+            }
+            if (text.contains(':ac/terminal')) {
+                violations << 'forge client init must not hardcode AC terminal screen keys'
+            }
+        }
+        if (forgeCguiBridge.exists()) {
+            def text = forgeCguiBridge.getText('UTF-8')
+            if (!text.contains('defn open-simple-gui!') || !text.contains('cgui-rt/render-tree!')) {
+                violations << 'forge CGui screen bridge must provide generic simple CGui screen hosting'
             }
             if (text.contains('cn.li.ac.')) {
-                violations << 'forge terminal screen bridge must not import AC terminal internals directly'
+                violations << 'forge CGui screen bridge must not import AC terminal internals directly'
+            }
+            if (text.contains(':ac/terminal')) {
+                violations << 'forge CGui screen bridge must not hardcode AC terminal screen keys'
             }
         }
 
@@ -2304,7 +2320,7 @@ tasks.register('verifyTerminalBridgeInitOrchestration') {
             throw new GradleException("Terminal bridge initialization guard failed:\n - ${violations.join('\n - ')}")
         }
 
-        logger.lifecycle('[verifyTerminalBridgeInitOrchestration] passed. Terminal widget factories are installed by AC client init and consumed by the generic platform UI bridge.')
+        logger.lifecycle('[verifyTerminalBridgeInitOrchestration] passed. Terminal widget factories stay AC-owned and Forge consumes only the generic CGui screen bridge.')
     }
 }
 
@@ -2688,7 +2704,231 @@ tasks.register('verifyLoaderEntrypointNames') {
     }
 }
 
+tasks.register('verifyNoContentVersionAdapters') {
+    group = 'verification'
+    description = 'Verify AC content is not moved into version/loader-specific adapter modules or source sets.'
+
+    doLast {
+        def violations = []
+        def contentPrefix = 'a' + 'c-'
+        def versionPrefix = 'content' + '-version-'
+        def forbiddenName = java.util.regex.Pattern.compile(
+            "(?i)(^|[^a-z0-9])(" +
+                java.util.regex.Pattern.quote(contentPrefix) + "(mc|forge|fabric)-|" +
+                java.util.regex.Pattern.quote(versionPrefix) +
+            ")")
+
+        def buildFiles = [file('settings.gradle'), file('build.gradle')]
+        buildFiles.addAll(fileTree('gradle') {
+            include '**/*.gradle', '**/*.gradle.kts'
+            exclude '**/build/**', '**/.gradle/**'
+        }.files)
+
+        buildFiles.findAll { it.exists() }.each { File f ->
+            def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            f.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                if (forbiddenName.matcher(line).find()) {
+                    violations << "${rel}:${idx + 1}: ${line.trim()}"
+                }
+            }
+        }
+
+        project.rootDir.listFiles()?.findAll { it.directory }?.each { File dir ->
+            if (forbiddenName.matcher(dir.name).find()) {
+                violations << "top-level directory: ${dir.name}"
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Content/version adapter escape hatch is forbidden:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyNoContentVersionAdapters] passed. No content-owned version/loader adapter modules detected.')
+    }
+}
+
+tasks.register('verifyNoHardcodedContentBootstrap') {
+    group = 'verification'
+    description = 'Verify shared/platform init paths discover content instead of hardcoding one content id.'
+
+    doLast {
+        def violations = []
+        def forbiddenPatterns = [
+            ~/register-content!\s+"[^"]+"/,
+            ~/ensure-content-loaded!\s+"[^"]+"/
+        ]
+
+        fileTree('.') {
+            include 'mcmod/src/main/**/*.clj', 'mcmod/src/main/**/*.java'
+            include 'mc-1.20.1/src/main/**/*.clj', 'mc-1.20.1/src/main/**/*.java'
+            include 'forge-1.20.1/src/main/**/*.clj', 'forge-1.20.1/src/main/**/*.java'
+            include 'fabric-1.20.1/src/main/**/*.clj', 'fabric-1.20.1/src/main/**/*.java'
+            exclude '**/build/**', '**/.gradle/**'
+        }.files.each { File f ->
+            def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            f.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                forbiddenPatterns.each { pattern ->
+                    if (pattern.matcher(line).find()) {
+                        violations << "${rel}:${idx + 1}: ${line.trim()}"
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Shared/platform content bootstrap must use discovery/all-content registration:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyNoHardcodedContentBootstrap] passed. Shared/platform init uses content discovery.')
+    }
+}
+
+tasks.register('verifyNonAcNoBusinessRuntimeHookApis') {
+    group = 'verification'
+    description = 'Verify mcmod/shared/platform source does not reintroduce AC-owned runtime hook/request API names.'
+
+    doLast {
+        def scannedFiles = fileTree('.') {
+            include 'mcmod/src/main/**/*.clj', 'mcmod/src/main/**/*.cljc', 'mcmod/src/main/**/*.java', 'mcmod/src/main/**/*.json', 'mcmod/src/main/**/*.edn', 'mcmod/src/main/**/*.toml', 'mcmod/src/main/**/*.properties'
+            include 'mc-1.20.1/src/main/**/*.clj', 'mc-1.20.1/src/main/**/*.cljc', 'mc-1.20.1/src/main/**/*.java', 'mc-1.20.1/src/main/**/*.json', 'mc-1.20.1/src/main/**/*.edn', 'mc-1.20.1/src/main/**/*.toml', 'mc-1.20.1/src/main/**/*.properties'
+            include 'forge-1.20.1/src/main/**/*.clj', 'forge-1.20.1/src/main/**/*.cljc', 'forge-1.20.1/src/main/**/*.java', 'forge-1.20.1/src/main/**/*.json', 'forge-1.20.1/src/main/**/*.edn', 'forge-1.20.1/src/main/**/*.toml', 'forge-1.20.1/src/main/**/*.properties'
+            include 'fabric-1.20.1/src/main/**/*.clj', 'fabric-1.20.1/src/main/**/*.cljc', 'fabric-1.20.1/src/main/**/*.java', 'fabric-1.20.1/src/main/**/*.json', 'fabric-1.20.1/src/main/**/*.edn', 'fabric-1.20.1/src/main/**/*.toml', 'fabric-1.20.1/src/main/**/*.properties'
+            exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+        }.files.findAll { it.isFile() }
+
+        def forbiddenTokens = [
+            'get-skills-for-category',
+            'client-get-skill-by-controllable',
+            'client-update-ability-data!',
+            'client-update-resource-data!',
+            'client-update-cooldown-data!',
+            'client-update-preset-data!',
+            'client-req-learn-skill!',
+            'client-req-level-up!',
+            'client-req-set-activated!',
+            'client-req-set-preset-slot!',
+            'client-req-switch-preset!',
+            'client-trigger-mode-switch!',
+            'client-trigger-preset-switch!',
+            'learn-skill!',
+            'learn-node!',
+            'level-up!',
+            'set-preset-slot!',
+            'switch-preset!'
+        ]
+
+        def violations = []
+        scannedFiles.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                forbiddenTokens.each { token ->
+                    if (line.contains(token)) {
+                        violations << "${rel}:${idx + 1}: ${token}"
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Non-AC layers contain AC-owned runtime hook/request API names:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyNonAcNoBusinessRuntimeHookApis] passed. AC-owned hook/request APIs are absent from mcmod/shared/platform source.')
+    }
+}
+
+tasks.register('verifyNonAcNoBusinessSemanticResidue') {
+    group = 'verification'
+    description = 'Verify mcmod/shared/platform main sources do not contain AC gameplay semantic residue.'
+
+    doLast {
+        def scannedFiles = fileTree('.') {
+            include 'mcmod/src/main/**/*.clj', 'mcmod/src/main/**/*.cljc', 'mcmod/src/main/**/*.java', 'mcmod/src/main/**/*.json', 'mcmod/src/main/**/*.edn'
+            include 'mc-1.20.1/src/main/**/*.clj', 'mc-1.20.1/src/main/**/*.cljc', 'mc-1.20.1/src/main/**/*.java', 'mc-1.20.1/src/main/**/*.json', 'mc-1.20.1/src/main/**/*.edn'
+            include 'forge-1.20.1/src/main/**/*.clj', 'forge-1.20.1/src/main/**/*.cljc', 'forge-1.20.1/src/main/**/*.java', 'forge-1.20.1/src/main/**/*.json', 'forge-1.20.1/src/main/**/*.edn'
+            include 'fabric-1.20.1/src/main/**/*.clj', 'fabric-1.20.1/src/main/**/*.cljc', 'fabric-1.20.1/src/main/**/*.java', 'fabric-1.20.1/src/main/**/*.json', 'fabric-1.20.1/src/main/**/*.edn'
+            exclude '**/build/**', '**/.gradle/**', '**/bin/**'
+        }.files.findAll { it.isFile() }
+
+        def literalTokens = [
+            'AcademyCraft',
+            'Academy',
+            'academycraft',
+            'academy',
+            ':ac/',
+            'key.ac.',
+            'ac_ability_state',
+            'SavedLocations',
+            'saved-locations',
+            'matter_unit',
+            'phase-liquid',
+            'imag_phase',
+            'railgun',
+            'Data Terminal',
+            'mods.academycraft',
+            'Imaginary Energy',
+            'Internal Flux',
+            'wireless',
+            'Wireless',
+            'intensify-arcs',
+            'IntensifyArcsEffectHook',
+            'md-ball',
+            'MdBallEffectHook',
+            'coin-throwing',
+            'CoinThrowingEffectHook',
+            'coin-progress'
+        ]
+
+        def semanticPatterns = [
+            ~/\bskill\b/,
+            ~/\bpreset\b/,
+            ~/\bcooldown\b/,
+            ~/\bability\b/,
+            ~/learn-skill/,
+            ~/level-up/,
+            ~/ability-data/,
+            ~/resource-data/,
+            ~/cooldown-data/,
+            ~/preset-data/,
+            ~/terminal[_-]screen[_-]bridge/,
+            ~/saved[_-]locations/,
+            ~/PhaseLiquidPoolFeature/,
+            ~/MatterUnitItemDecorator/,
+            ~/ImagFusorSupport/,
+            ~/MetalFormerSupport/,
+            ~/crafttweaker-(add|remove)-(fusor|former)/
+        ]
+
+        def violations = []
+        scannedFiles.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                literalTokens.each { token ->
+                    if (line.contains(token)) {
+                        violations << "${rel}:${idx + 1}: ${token}"
+                    }
+                }
+                semanticPatterns.each { pattern ->
+                    if (pattern.matcher(line).find()) {
+                        violations << "${rel}:${idx + 1}: ${pattern.pattern()}"
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Non-AC layers contain AC gameplay semantic residue:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyNonAcNoBusinessSemanticResidue] passed. AC gameplay semantics stay in AC content source.')
+    }
+}
+
 def cleanupResidueGuardTaskNames = [
+    'verifyNoContentVersionAdapters',
+    'verifyNoHardcodedContentBootstrap',
+    'verifyNonAcNoBusinessRuntimeHookApis',
+    'verifyNonAcNoBusinessSemanticResidue',
     'verifyAcPlayerUuidSsoT',
     'verifyGameplayConfigContractSsoT',
     'verifyAbilityConfigContractSsoT',

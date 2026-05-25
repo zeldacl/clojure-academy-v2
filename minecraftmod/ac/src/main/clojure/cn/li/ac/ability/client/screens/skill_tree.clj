@@ -259,7 +259,7 @@
                      :else 0xAA444444)]
     [{:kind :fill :x x :y y :w 20 :h 20 :color base-color}
      {:kind :icon-or-fill :x (+ x 2) :y (+ y 2) :w 16 :h 16 :texture skill-icon :fallback-color 0xFF2A2A2A}
-     {:kind :skill-progress-ring
+    {:kind :progress-ring
       :x x :y y :size 20
       :segments max-progress-segments
       :filled-segments (int (max 0 (min max-progress-segments progress-segments)))

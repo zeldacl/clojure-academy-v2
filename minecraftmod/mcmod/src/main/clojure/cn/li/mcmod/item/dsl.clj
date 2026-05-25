@@ -161,17 +161,17 @@
    :protection protection
    :toughness toughness})
 
-;; Preset: basic item
-(defn basic-item-preset
-  "Create a basic item preset"
+;; Template: basic item
+(defn basic-item-template
+  "Create a basic item template"
   []
   {:max-stack-size 64
    :creative-tab :misc
    :rarity :common})
 
-;; Preset: tool item
-(defn tool-preset
-  "Create a tool item preset"
+;; Template: tool item
+(defn tool-template
+  "Create a tool item template"
   [tier durability attack-damage attack-speed]
   {:max-stack-size 1
    :creative-tab :tools
@@ -186,27 +186,27 @@
                      :gold 22
                      10)})
 
-;; Preset: food item
-(defn food-preset
-  "Create a food item preset"
+;; Template: food item
+(defn food-template
+  "Create a food item template"
   [nutrition saturation]
   {:max-stack-size 64
    :creative-tab :food
    :food-properties (food-properties nutrition saturation)})
 
-;; Preset: rare item
-(defn rare-item-preset
-  "Create a rare item preset"
+;; Template: rare item
+(defn rare-item-template
+  "Create a rare item template"
   [rarity]
   {:max-stack-size 1
    :creative-tab :misc
    :rarity rarity})
 
-;; Helper: merge presets
-(defn merge-presets
-  "Merge multiple presets with options"
-  [& preset-and-options]
-  (apply merge preset-and-options))
+;; Helper: merge templates
+(defn merge-templates
+  "Merge multiple templates with options"
+  [& template-and-options]
+  (apply merge template-and-options))
 
 ;; Multimethod for version-specific item creation
 (def ^:dynamic *forge-version* nil)

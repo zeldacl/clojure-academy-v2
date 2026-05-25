@@ -16,7 +16,7 @@
 
    Call this during data generation phase."
   [generator _exfile-helper]
-  (setup-common/ensure-content-loaded! "ac")
+  (setup-common/ensure-content-loaded!)
   (let [pack (.createPack ^net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator generator)]
     (provider-registration/register-providers!
       :fabric-1.20.1

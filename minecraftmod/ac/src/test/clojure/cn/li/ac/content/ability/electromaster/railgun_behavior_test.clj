@@ -108,9 +108,9 @@
   (swap! player-state/player-states assoc-in ["p1" :runtime :railgun :coin-judged-uuid] "coin-1")
   (with-redefs [world-effects/*world-effects* :mock-world
                 world-effects/find-entities-in-radius (fn [& _]
-                                                        [{:type "entity_coin_throwing" :uuid "coin-1" :coin-progress 0.95}])
+                                                        [{:type "entity_coin_throwing" :uuid "coin-1" :motion-progress 0.95}])
                 railgun/coin-candidates (fn [_]
-                                         [{:type "entity_coin_throwing" :uuid "coin-1" :coin-progress 0.95}])]
+                                         [{:type "entity_coin_throwing" :uuid "coin-1" :motion-progress 0.95}])]
     (let [status (#'railgun/read-coin-qte-status "p1")]
       (is (false? (:has-window? status)))
       (is (false? (:perform? status))))))

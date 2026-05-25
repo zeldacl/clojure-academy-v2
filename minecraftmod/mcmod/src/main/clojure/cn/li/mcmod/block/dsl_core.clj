@@ -226,7 +226,7 @@
   "Define a controller+part multi-block with shared options.
    
    Example:
-   (defmultiblock wireless-matrix
+   (defmultiblock example-machine
      :multi-block {:positions [[0 0 1] [1 0 1] ...]}
      :common {:physical {:material :stone :hardness 3.0}}
      :controller {:registry-name \"matrix\" :events {:on-place ...}}
@@ -280,7 +280,7 @@
 ;; ============================================================================
 
 (def ^:private built-in-templates
-  {:wireless-node {:physical {:material :metal
+  {:content-node {:physical {:material :metal
                               :hardness 3.0
                               :resistance 8.0
                               :requires-tool true

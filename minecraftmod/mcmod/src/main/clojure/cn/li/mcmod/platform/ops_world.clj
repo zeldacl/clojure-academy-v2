@@ -7,18 +7,18 @@
   - Block Entity (Tile Entity) utilities (IBlockEntity + helpers)
   - World-level effects (lightning, explosions, particle queries)
   - Line-of-sight/block finding (IRaycast)
-  - Policy-free named world-position storage (ISavedLocations)"
+  - Policy-free named world-position storage (INamedPositionStore)"
   (:require
     [cn.li.mcmod.platform.world :as world]
     [cn.li.mcmod.platform.block-manipulation :as block-manipulation]
     [cn.li.mcmod.platform.be :as be]
     [cn.li.mcmod.platform.world-effects :as world-effects]
     [cn.li.mcmod.platform.raycast :as raycast]
-    [cn.li.mcmod.platform.saved-locations :as saved-locations]))
+    [cn.li.mcmod.platform.named-position-store :as named-position-store]))
 
 (def IWorldAccess world/IWorldAccess)
 (def IBlockManipulation block-manipulation/IBlockManipulation)
 (def IBlockEntity be/IBlockEntity)
 (def IWorldEffects world-effects/IWorldEffects)
 (def IRaycast raycast/IRaycast)
-(def ISavedLocations saved-locations/ISavedLocations)
+(def INamedPositionStore named-position-store/INamedPositionStore)

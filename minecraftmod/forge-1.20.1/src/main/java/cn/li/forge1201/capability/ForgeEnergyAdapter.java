@@ -4,24 +4,23 @@ import cn.li.mcmod.energy.IEnergyCapable;
 import net.minecraftforge.energy.IEnergyStorage;
 
 /**
- * Adapter that wraps AcademyCraft's IEnergyCapable and exposes it as Forge's IEnergyStorage.
- * This allows external mods using Forge Energy to interact with AC energy converters.
+ * Adapter that wraps a content IEnergyCapable and exposes it as Forge's IEnergyStorage.
+ * This allows external mods using Forge Energy to interact with content energy endpoints.
  *
- * Conversion: IF (Imaginary Energy) ↔ FE (Forge Energy)
- * Conversion rate is configurable (default: 1 IF = 4 FE)
+ * Conversion: content energy unit ↔ FE (Forge Energy).
  */
 public class ForgeEnergyAdapter implements IEnergyStorage {
-    private final IEnergyCapable acEnergy;
+    private final IEnergyCapable contentEnergy;
     private final double conversionRate;
 
     /**
-     * Create a Forge Energy adapter for an AC energy capable block.
+     * Create a Forge Energy adapter for a content energy capable block.
      *
-     * @param acEnergy The AC energy capable implementation
-     * @param conversionRate Conversion rate (1 IF = X FE)
+     * @param contentEnergy The content energy capable implementation
+     * @param conversionRate Conversion rate (1 content energy unit = X FE)
      */
-    public ForgeEnergyAdapter(IEnergyCapable acEnergy, double conversionRate) {
-        this.acEnergy = acEnergy;
+    public ForgeEnergyAdapter(IEnergyCapable contentEnergy, double conversionRate) {
+        this.contentEnergy = contentEnergy;
         this.conversionRate = conversionRate;
     }
 
@@ -31,12 +30,11 @@ public class ForgeEnergyAdapter implements IEnergyStorage {
             return 0;
         }
 
-        // Convert FE → IF
-        double ifAmount = maxReceive / conversionRate;
-        int ifReceived = acEnergy.receiveEnergy((int) ifAmount, simulate);
+        double contentAmount = maxReceive / conversionRate;
+        int contentReceived = contentEnergy.receiveEnergy((int) contentAmount, simulate);
 
         // Convert back to FE for return value
-        return (int) (ifReceived * conversionRate);
+        return (int) (contentReceived * conversionRate);
     }
 
     @Override
@@ -45,35 +43,32 @@ public class ForgeEnergyAdapter implements IEnergyStorage {
             return 0;
         }
 
-        // Convert FE → IF
-        double ifAmount = maxExtract / conversionRate;
-        int ifExtracted = acEnergy.extractEnergy((int) ifAmount, simulate);
+        double contentAmount = maxExtract / conversionRate;
+        int contentExtracted = contentEnergy.extractEnergy((int) contentAmount, simulate);
 
         // Convert back to FE for return value
-        return (int) (ifExtracted * conversionRate);
+        return (int) (contentExtracted * conversionRate);
     }
 
     @Override
     public int getEnergyStored() {
-        // Convert IF → FE
-        int ifStored = acEnergy.getEnergyStored();
-        return (int) (ifStored * conversionRate);
+        int contentStored = contentEnergy.getEnergyStored();
+        return (int) (contentStored * conversionRate);
     }
 
     @Override
     public int getMaxEnergyStored() {
-        // Convert IF → FE
-        int ifMax = acEnergy.getMaxEnergyStored();
-        return (int) (ifMax * conversionRate);
+        int contentMax = contentEnergy.getMaxEnergyStored();
+        return (int) (contentMax * conversionRate);
     }
 
     @Override
     public boolean canExtract() {
-        return acEnergy.canExtract();
+        return contentEnergy.canExtract();
     }
 
     @Override
     public boolean canReceive() {
-        return acEnergy.canReceive();
+        return contentEnergy.canReceive();
     }
 }

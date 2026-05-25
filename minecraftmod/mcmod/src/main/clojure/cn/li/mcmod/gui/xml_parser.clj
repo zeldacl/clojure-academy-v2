@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.gui.xml-parser
   "XML Layout Parser - Converts XML GUI layouts to DSL specifications
 
-  This parser reads XML files (inspired by AcademyCraft's CGUIDocument format)
+  This parser reads XML files (inspired by component-oriented GUI documents)
   and converts them into Clojure GUI DSL specifications.
 
   XML Format:
@@ -254,7 +254,7 @@
   "Resolve GUI layout path from mod namespace format
   
   Args:
-  - layout-name: Short name like 'page_wireless_node'
+  - layout-name: Short name like 'page_content_node'
   
   Returns: Full resource path"
   [layout-name]
@@ -486,8 +486,8 @@
 ;; ============================================================================
 
 (comment
-  ;; Load wireless node GUI from XML
-  (def node-spec (load-gui-from-xml "wireless-node-gui" "page_wireless_node"))
+  ;; Load a content-provided node GUI from XML
+  (def node-spec (load-gui-from-xml "content-node-gui" "page_content_node"))
   
   ;; Inspect parsed spec
   (keys node-spec)

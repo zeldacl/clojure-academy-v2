@@ -15,12 +15,14 @@
            [net.minecraftforge.client.event InputEvent$Key InputEvent$MouseScrollingEvent]
            [org.lwjgl.glfw GLFW]))
 
-(defonce ^:private skill-keys (atom []))
-(defonce ^:private gui-keys (atom {}))
+(defonce ^:private slot-keys (atom []))
+(defonce ^:private screen-keys (atom {}))
 (defonce ^:private mode-switch-state (atom {:was-down false :down-at-ns nil :pending-clicks 0}))
 (defonce ^:private raw-v-state (atom (mode-switch/initial-state)))
 (defonce ^:private raw-v-listener-registered? (atom false))
 (defonce ^:private mouse-scroll-listener-registered? (atom false))
+(def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
+(def ^:private cycle-selection-input-id :content/cycle-selection)
 
 ;; Key scheme: :original (LMB/RMB/R/F) or :alternative (Z/X/C/B)
 (defonce ^:private key-scheme (atom :alternative))
@@ -33,6 +35,13 @@
 (defn- current-screen-open? []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
     (some? (.screen mc))))
+
+(defn- emit-keyboard-input!
+  [input-id player-uuid event]
+  (power-runtime/emit-client-input! input-id
+                                    {:player-uuid player-uuid}
+                                    {:source :keyboard
+                                     :event event}))
 
 (defn- on-raw-key-input! [^InputEvent$Key event]
   (let [key (.getKey event)
@@ -49,9 +58,9 @@
         :on-short-up
         (fn []
           (when-let [uuid (get-player-uuid)]
-            (let [cur-activated (boolean (get-in (power-runtime/get-player-state uuid) [:resource-data :activated]))]
+            (let [cur-activated (power-runtime/runtime-activated? uuid)]
               (overlay-state/set-client-activated! (not cur-activated))
-              (power-runtime/client-trigger-mode-switch! uuid))))}))))
+              (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press))))}))))
 
 (defn- consume-click-count [^KeyMapping key]
   (loop [n 0]
@@ -70,41 +79,41 @@
 
 (defn get-key-scheme [] @key-scheme)
 
-(defn- create-original-skill-keys [category]
+(defn- create-original-slot-keys [category]
   ;; Original scheme uses raw GLFW polling for mouse/keyboard,
   ;; not KeyMappings, because LMB/RMB conflict with vanilla.
   ;; We still create KeyMappings for R and F but use raw polling for mouse.
-  [(create-key-mapping "key.ac.skill.0" GLFW/GLFW_KEY_UNKNOWN category)  ;; LMB - polled via GLFW
-   (create-key-mapping "key.ac.skill.1" GLFW/GLFW_KEY_UNKNOWN category)  ;; RMB - polled via GLFW
-   (create-key-mapping "key.ac.skill.2" GLFW/GLFW_KEY_R category)
-   (create-key-mapping "key.ac.skill.3" GLFW/GLFW_KEY_F category)])
+  [(create-key-mapping "key.content.slot.0" GLFW/GLFW_KEY_UNKNOWN category)  ;; LMB - polled via GLFW
+   (create-key-mapping "key.content.slot.1" GLFW/GLFW_KEY_UNKNOWN category)  ;; RMB - polled via GLFW
+   (create-key-mapping "key.content.slot.2" GLFW/GLFW_KEY_R category)
+   (create-key-mapping "key.content.slot.3" GLFW/GLFW_KEY_F category)])
 
-(defn- create-alternative-skill-keys [category]
-  [(create-key-mapping "key.ac.skill.0" GLFW/GLFW_KEY_Z category)
-   (create-key-mapping "key.ac.skill.1" GLFW/GLFW_KEY_X category)
-   (create-key-mapping "key.ac.skill.2" GLFW/GLFW_KEY_C category)
-   (create-key-mapping "key.ac.skill.3" GLFW/GLFW_KEY_B category)])
+(defn- create-alternative-slot-keys [category]
+  [(create-key-mapping "key.content.slot.0" GLFW/GLFW_KEY_Z category)
+   (create-key-mapping "key.content.slot.1" GLFW/GLFW_KEY_X category)
+   (create-key-mapping "key.content.slot.2" GLFW/GLFW_KEY_C category)
+   (create-key-mapping "key.content.slot.3" GLFW/GLFW_KEY_B category)])
 
 (defn register-keybinds! []
-  (let [category "key.categories.ac.ability"
+  (let [category "key.categories.content.actions"
         scheme @key-scheme]
-    (reset! skill-keys
+    (reset! slot-keys
             (if (= scheme :original)
-              (create-original-skill-keys category)
-              (create-alternative-skill-keys category)))
-    (reset! gui-keys
+              (create-original-slot-keys category)
+              (create-alternative-slot-keys category)))
+    (reset! screen-keys
             (merge
-             {:skill-tree (create-key-mapping "key.ac.open_skill_tree" GLFW/GLFW_KEY_GRAVE_ACCENT category)
-              :preset-editor (create-key-mapping "key.ac.open_preset_editor" GLFW/GLFW_KEY_G category)
-              :mode-switch (create-key-mapping "key.ac.mode_switch" GLFW/GLFW_KEY_V category)}
-             ;; Preset switch key: C if original scheme (slot keys don't use C), N if alternative
+             {:primary (create-key-mapping "key.content.open_primary_screen" GLFW/GLFW_KEY_GRAVE_ACCENT category)
+              :secondary (create-key-mapping "key.content.open_secondary_screen" GLFW/GLFW_KEY_G category)
+              :mode-toggle (create-key-mapping "key.content.mode_toggle" GLFW/GLFW_KEY_V category)}
+             ;; Cycle key: C if original scheme (slot keys don't use C), N if alternative
              (if (= scheme :original)
-               {:preset-switch (create-key-mapping "key.ac.preset_switch" GLFW/GLFW_KEY_C category)}
-               {:preset-switch (create-key-mapping "key.ac.preset_switch" GLFW/GLFW_KEY_N category)})))
-    (log/info "Client key bindings created" {:scheme scheme :slot-count (count @skill-keys)})))
+               {:cycle-selection (create-key-mapping "key.content.cycle_selection" GLFW/GLFW_KEY_C category)}
+               {:cycle-selection (create-key-mapping "key.content.cycle_selection" GLFW/GLFW_KEY_N category)})))
+    (log/info "Client key bindings created" {:scheme scheme :slot-count (count @slot-keys)})))
 
-(defn get-skill-keys [] @skill-keys)
-(defn get-gui-keys [] (vals @gui-keys))
+(defn get-slot-keys [] @slot-keys)
+(defn get-screen-keys [] (vals @screen-keys))
 
 (defn- get-player-uuid []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
@@ -131,7 +140,7 @@
       (reset! override-active? need-override?)
       (log/info "Control override" {:active need-override?}))))
 
-(defn- original-scheme-skill-down?
+(defn- original-scheme-slot-down?
   "Poll raw GLFW state for original key scheme (LMB/RMB/R/F)."
   [key-idx]
   (when-let [^Minecraft mc (Minecraft/getInstance)]
@@ -139,15 +148,15 @@
       (case (int key-idx)
         0 (= GLFW/GLFW_PRESS (GLFW/glfwGetMouseButton window GLFW/GLFW_MOUSE_BUTTON_LEFT))
         1 (= GLFW/GLFW_PRESS (GLFW/glfwGetMouseButton window GLFW/GLFW_MOUSE_BUTTON_RIGHT))
-        2 (when-let [^KeyMapping key (nth @skill-keys 2 nil)] (.isDown key))
-        3 (when-let [^KeyMapping key (nth @skill-keys 3 nil)] (.isDown key))
+        2 (when-let [^KeyMapping key (nth @slot-keys 2 nil)] (.isDown key))
+        3 (when-let [^KeyMapping key (nth @slot-keys 3 nil)] (.isDown key))
         false))))
 
-(defn- skill-key-down?
+(defn- slot-key-down?
   [scheme key-idx]
   (if (= scheme :original)
-    (boolean (original-scheme-skill-down? key-idx))
-    (when-let [^KeyMapping key (nth @skill-keys key-idx nil)]
+    (boolean (original-scheme-slot-down? key-idx))
+    (when-let [^KeyMapping key (nth @slot-keys key-idx nil)]
       (.isDown key))))
 
 (defn- movement-key-down?
@@ -169,8 +178,8 @@
                (not (current-screen-open?))
                (not (zero? delta)))
       (when-let [uuid (get-player-uuid)]
-        (doseq [idx (range (count @skill-keys))]
-          (when (skill-key-down? scheme idx)
+        (doseq [idx (range (count @slot-keys))]
+          (when (slot-key-down? scheme idx)
             (power-runtime/client-on-slot-wheel! uuid idx delta)))))))
 
 (defn tick-input! []
@@ -181,19 +190,19 @@
     ;; Suppress vanilla keys when override is active
     (when @override-active?
       (suppress-vanilla-keys!))
-    ;; Handle preset switch key
-    (when-let [^KeyMapping preset-key (get @gui-keys :preset-switch)]
-      (when (.consumeClick preset-key)
+    ;; Handle cycle-selection key
+    (when-let [^KeyMapping cycle-key (get @screen-keys :cycle-selection)]
+      (when (.consumeClick cycle-key)
         (when-let [uuid (get-player-uuid)]
-          (power-runtime/client-trigger-preset-switch! uuid))))
-    ;; Tick skill keys
+          (emit-keyboard-input! cycle-selection-input-id uuid :press))))
+    ;; Tick content slot keys
     (power-runtime/client-tick-keys!
       (fn [key-id]
         (case (first key-id)
-          :skill (let [idx (second key-id)]
-                   (skill-key-down? scheme idx))
+          :slot (let [idx (second key-id)]
+                  (slot-key-down? scheme idx))
           :movement (movement-key-down? (second key-id))
-          :gui (when-let [^KeyMapping key (get @gui-keys (second key-id))] (.isDown key))
+          :screen (when-let [^KeyMapping key (get @screen-keys (second key-id))] (.isDown key))
           false))
       get-player-uuid)))
 

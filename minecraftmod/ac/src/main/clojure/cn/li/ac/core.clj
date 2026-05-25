@@ -1,7 +1,8 @@
 (ns cn.li.ac.core
   (:require [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.ac.datagen.bootstrap :as datagen-bootstrap]
-            [cn.li.ac.registry.hooks :as hooks]))
+            [cn.li.ac.registry.hooks :as hooks]
+            [cn.li.ac.testing.smoke-manifest :as smoke-manifest]))
 
 (defonce ^:private lifecycle-hooks-registered?
   (atom false))
@@ -42,6 +43,7 @@
   state."
   []
   (when (compare-and-set! lifecycle-hooks-registered? false true)
+    (smoke-manifest/register!)
     (lifecycle/register-content-init! #'init)
     (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
     (lifecycle/register-datagen-metadata-init! #'register-datagen-metadata!)

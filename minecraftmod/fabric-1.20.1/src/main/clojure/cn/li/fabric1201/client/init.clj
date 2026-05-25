@@ -78,21 +78,11 @@
             (BlockEntityRendererImpl.))))
       (log/info (str "Fabric BER registered for tile-id " tile-id)))))
 
-(defn- init-ac-client-bridge!
+(defn- init-content-client-bridge!
   []
   (client-bridge/install-client-bridge!
     {:open-screen (fn [screen-key payload]
-                    (case screen-key
-                      :ac/skill-tree
-                      (screen-host/open-managed-screen! screen-key payload)
-
-                      :ac/preset-editor
-                      (screen-host/open-managed-screen! screen-key payload)
-
-                      :ac/saved-position
-                      (screen-host/open-managed-screen! screen-key payload)
-
-                      (log/debug "Unhandled client screen key" screen-key payload)))
+                    (screen-host/open-managed-screen! screen-key payload))
      :slot-key-down runtime-bridge/on-slot-key-down!
      :slot-key-tick runtime-bridge/on-slot-key-tick!
      :slot-key-up runtime-bridge/on-slot-key-up!
@@ -105,7 +95,7 @@
   []
   (log/info "Initializing Fabric 1.20.1 client-side systems")
   (init-render-bindings!)
-  (init-ac-client-bridge!)
+  (init-content-client-bridge!)
   (i18n/install-client-i18n!)
   (register-renderers)
   (FabricClientRenderSetup/registerEntityRenderers)

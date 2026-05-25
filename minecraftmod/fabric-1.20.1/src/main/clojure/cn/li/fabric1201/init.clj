@@ -19,5 +19,5 @@
   (init-common/init-from-java!
    :fabric-1.20.1
    (fn []
-     (content/register-content! "ac")
+     (content/register-all-content!)
      (lifecycle/run-content-init!))))

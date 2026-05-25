@@ -49,8 +49,8 @@
 	"Define a sound event.
 
 	Supports two forms:
-	1) Map form: (defsound {:id \"em.arc_strong\" ...})
-	2) Symbol form: (defsound em-arc-strong :id \"em.arc_strong\" ...)
+	1) Map form: (defsound {:id \"content.event_strong\" ...})
+	2) Symbol form: (defsound content-event-strong :id \"content.event_strong\" ...)
 	"
 	[sound-name & options]
 	(if (map? sound-name)

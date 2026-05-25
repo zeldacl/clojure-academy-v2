@@ -85,8 +85,8 @@
   "Define and register a slot schema.
 
   Example:
-  (defslot-schema wireless-matrix
-    :schema-id :wireless-matrix
+  (defslot-schema example-processor
+    :schema-id :example-processor
     :slots [{:id :plate-a :type :plate :x 0 :y 0}])"
   [schema-name & options]
   (let [options-map (apply hash-map options)

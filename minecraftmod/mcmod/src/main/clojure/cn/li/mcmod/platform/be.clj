@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.platform.be
 	"Platform-neutral utilities for interacting with ScriptedBlockEntity.
 
-	ac code should use these functions instead of calling Java interop directly.
+	Content code should use these functions instead of calling Java interop directly.
 	Platform implementations must bind *be-capability-slot-fn* during init so
 	that get-capability-slot can retrieve Forge Capability objects by key."
 	(:require [cn.li.mcmod.util.log :as log]

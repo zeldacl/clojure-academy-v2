@@ -19,7 +19,7 @@
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.forge1201.client.key-input :as key-input]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
-            [cn.li.forge1201.client.terminal-screen-bridge :as terminal-screen-bridge]
+            [cn.li.forge1201.client.cgui-screen-bridge :as cgui-screen-bridge]
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.forge1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
@@ -140,25 +140,12 @@
                   (tesr-impl/new-renderer))))
             (log/info (str "  BER registered for tile-id " tile-id))))))))
 
-(defn- init-ac-client-bridge!
+(defn- init-content-client-bridge!
   []
   (client-bridge/install-client-bridge!
     {:open-screen (fn [screen-key payload]
-                    (case screen-key
-                      :ac/skill-tree
-                      (screen-host/open-managed-screen! screen-key payload)
-
-                      :ac/preset-editor
-                      (screen-host/open-managed-screen! screen-key payload)
-
-                      :ac/saved-position
-                      (screen-host/open-managed-screen! screen-key payload)
-
-                      :ac/terminal
-                      (terminal-screen-bridge/open-terminal-screen! (:player payload))
-
-                      (log/debug "Unhandled client screen key" screen-key payload)))
-     :open-simple-gui terminal-screen-bridge/open-simple-gui!
+                    (screen-host/open-managed-screen! screen-key payload))
+    :open-simple-gui cgui-screen-bridge/open-simple-gui!
      :slot-key-down runtime-bridge/on-slot-key-down!
      :slot-key-tick runtime-bridge/on-slot-key-tick!
      :slot-key-up runtime-bridge/on-slot-key-up!
@@ -182,8 +169,8 @@
   [^RegisterKeyMappingsEvent event]
   ;; Ensure mappings are created even if this event fires before client setup enqueueWork.
   (key-input/register-keybinds!)
-  (let [all-keys (concat (key-input/get-skill-keys)
-                         (key-input/get-gui-keys))]
+  (let [all-keys (concat (key-input/get-slot-keys)
+                         (key-input/get-screen-keys))]
     (doseq [^KeyMapping key all-keys]
       (.register event key))
     (log/info "Registered runtime key mappings:" (count all-keys))))
@@ -197,7 +184,7 @@
 
   ;; Bind client-side rendering implementations first
   (init-render-bindings!)
-  (init-ac-client-bridge!)
+  (init-content-client-bridge!)
 
   ;; Then register renderers
   (register-renderers)
@@ -208,7 +195,7 @@
   (runtime-bridge/init!)
   (overlay-renderer/init!)
   (screen-host/init!)
-  (terminal-screen-bridge/init!)
+  (cgui-screen-bridge/init!)
   (particle/init!)
   (sound/init!)
   (hand-effect-renderer/init!)

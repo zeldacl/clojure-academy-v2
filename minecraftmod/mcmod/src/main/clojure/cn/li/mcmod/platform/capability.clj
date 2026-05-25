@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.platform.capability
   "Platform-neutral Capability declaration registry.
 
-  ac code calls declare-capability! to register a capability type and its
+  Content code calls declare-capability! to register a capability type and its
   handler factory. forge/fabric platform implementations bind
   *declare-capability-impl* to perform the platform-specific slot assignment.")
 
@@ -15,7 +15,7 @@
 ;; ============================================================================
 
 ; Map of keyword → {:java-type Class :handler-factory-fn (fn [be side] handler)}
-; Populated by declare-capability! calls from ac namespaces at load time.
+; Populated by declare-capability! calls from content namespaces at load time.
 (defonce capability-type-registry (atom {}))
 
 ;; ============================================================================
@@ -38,7 +38,7 @@
   "Register a capability type with this mod.
 
   Parameters:
-  - key             keyword  e.g. :wireless-node
+  - key             keyword  e.g. :content-node
   - java-type       Class    the Java interface class for this capability
   - handler-factory (fn [be side] handler)  creates the capability handler
                     for a given ScriptedBlockEntity instance

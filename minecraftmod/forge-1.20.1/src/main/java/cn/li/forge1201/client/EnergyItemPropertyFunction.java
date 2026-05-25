@@ -9,7 +9,7 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * Item model predicate for energy ratio (0–1) from NBT {@code energy}/{@code maxEnergy}.
- * Used with generated item model overrides (AcademyCraft-style portable developer).
+ * Used with generated content item model overrides.
  */
 public enum EnergyItemPropertyFunction implements ItemPropertyFunction {
     INSTANCE;

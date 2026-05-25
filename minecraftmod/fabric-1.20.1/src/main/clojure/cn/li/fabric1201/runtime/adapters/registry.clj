@@ -9,7 +9,7 @@
             [cn.li.fabric1201.runtime.raycast :as runtime-raycast]
             [cn.li.fabric1201.runtime.world-effects :as runtime-world-effects]
             [cn.li.fabric1201.runtime.teleportation :as runtime-teleportation]
-            [cn.li.fabric1201.runtime.saved-locations :as runtime-saved-locations]
+            [cn.li.fabric1201.runtime.named-position-store :as runtime-position-store]
             [cn.li.fabric1201.runtime.potion-effects :as runtime-potion-effects]
             [cn.li.fabric1201.runtime.interop :as runtime-interop]
             [cn.li.fabric1201.runtime.block-manipulation :as runtime-block-manipulation]
@@ -27,7 +27,7 @@
    (adapter-registry/step :raycast runtime-raycast/install-raycast!)
    (adapter-registry/step :world-effects runtime-world-effects/install-world-effects!)
    (adapter-registry/step :teleportation runtime-teleportation/install-teleportation!)
-   (adapter-registry/step :saved-locations runtime-saved-locations/install-saved-locations!)
+  (adapter-registry/step :named-position-store runtime-position-store/install-named-position-store!)
    (adapter-registry/step :potion-effects runtime-potion-effects/install-potion-effects!)
    (adapter-registry/step :runtime-interop runtime-interop/install-runtime-interop!)
    (adapter-registry/step :block-manipulation runtime-block-manipulation/install-block-manipulation!)

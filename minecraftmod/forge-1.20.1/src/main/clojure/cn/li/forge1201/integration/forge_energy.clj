@@ -1,7 +1,8 @@
 (ns cn.li.forge1201.integration.forge-energy
-  "Forge Energy integration for RF converters (rf-input/rf-output)."
+  "Forge Energy integration for descriptor-declared content endpoints."
   (:require [cn.li.mcmod.platform.capability :as platform-cap]
             [cn.li.mcmod.platform.energy-integration :as energy-integration]
+            [cn.li.mcmod.content.registry :as content-registry]
             [cn.li.mcmod.block.tile-logic :as tile-logic]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.energy IEnergyCapable]
@@ -16,28 +17,50 @@
   [^IEnergyCapable energy-capable conversion-rate]
   (ForgeEnergyAdapter. energy-capable (double conversion-rate)))
 
+(defn- forge-energy-descriptors
+  []
+  (filter #(= :forge-energy-capability (:kind %))
+          (content-registry/list-descriptors :integration)))
+
+(defn- source-capability-key
+  [descriptor]
+  (get-in descriptor [:source :capability-key]))
+
+(defn- target-capability-key
+  [descriptor]
+  (or (get-in descriptor [:target :capability-key]) :forge-energy))
+
+(defn- target-tile-ids
+  [descriptor]
+  (vec (or (get-in descriptor [:target :tile-ids]) [])))
+
+(defn- content-energy-capability
+  [be descriptor]
+  (when-let [capability-key (source-capability-key descriptor)]
+    (when-let [content-energy-cap (platform-cap/get-capability be capability-key nil)]
+      (when (platform-cap/is-present? content-energy-cap)
+        (platform-cap/or-else content-energy-cap nil)))))
+
 (defn- get-forge-energy-capability
   [be _side]
   (try
-    (when-let [ac-energy-cap (platform-cap/get-capability be :energy-converter nil)]
-      (when (platform-cap/is-present? ac-energy-cap)
-        (let [ac-energy (platform-cap/or-else ac-energy-cap nil)]
-          (when ac-energy
-            (create-forge-energy-adapter ac-energy (fe-conversion-rate))))))
+    (some (fn [descriptor]
+            (when-let [content-energy (content-energy-capability be descriptor)]
+              (create-forge-energy-adapter content-energy (fe-conversion-rate))))
+          (forge-energy-descriptors))
     (catch Exception e
       (log/error "Error creating Forge Energy capability:" (ex-message e))
       nil)))
 
 (defn register-forge-energy-capability!
   []
-  ;; Declare Forge capability bridge key.
-  (platform-cap/declare-capability! :forge-energy IEnergyStorage get-forge-energy-capability)
-
-  ;; Only RF converters should expose Forge Energy externally.
-  (tile-logic/register-tile-capability! "rf-input" :forge-energy)
-  (tile-logic/register-tile-capability! "rf-output" :forge-energy)
-
-  (log/info "Forge Energy converter bridge enabled for rf-input/rf-output")
+  (let [descriptors (vec (forge-energy-descriptors))]
+    (doseq [capability-key (distinct (map target-capability-key descriptors))]
+      (platform-cap/declare-capability! capability-key IEnergyStorage get-forge-energy-capability))
+    (doseq [descriptor descriptors
+            tile-id (target-tile-ids descriptor)]
+      (tile-logic/register-tile-capability! tile-id (target-capability-key descriptor)))
+    (log/info "Forge Energy descriptor bridge enabled" {:descriptor-count (count descriptors)}))
   true)
 
 (defn init-forge-energy!

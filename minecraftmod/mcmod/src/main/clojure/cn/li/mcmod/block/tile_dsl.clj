@@ -135,11 +135,11 @@ Enforces:
   "Define and register a tile spec.
 
   Example:
-  (deftile wireless-node-tile
-    :id \"wireless-node\"
+  (deftile content-node-tile
+    :id \"content-node\"
     :impl :scripted
-    :blocks [\"wireless-node-basic\" \"wireless-node-standard\"]
-    :tile-kind :wireless-node
+    :blocks [\"content-node-basic\" \"content-node-standard\"]
+    :tile-kind :content-node
     :tick-fn my-tick
     :read-nbt-fn my-read
     :write-nbt-fn my-write)"

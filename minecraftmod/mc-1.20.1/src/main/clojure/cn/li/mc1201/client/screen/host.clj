@@ -28,7 +28,7 @@
     :icon-or-fill (if-let [loc (some-> (:texture op) normalize-texture-path ResourceLocation/tryParse)]
                     (.blit graphics loc (:x op) (:y op) 0 0 (:w op) (:h op) (:w op) (:h op))
                     (.fill graphics (:x op) (:y op) (+ (:x op) (:w op)) (+ (:y op) (:h op)) (:fallback-color op)))
-    :skill-progress-ring
+    :progress-ring
     (let [segments (max 1 (int (or (:segments op) 24)))
           filled (int (max 0 (min segments (or (:filled-segments op) 0))))
           x (double (:x op))

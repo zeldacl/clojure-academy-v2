@@ -35,7 +35,7 @@
   without knowing specific command names.
 
   Returns:
-    Sequence of command ID strings (e.g., [\"acach\" \"aim\" \"aimp\"])"
+     Sequence of command ID strings (e.g., [\"content-command\" \"admin-action\"])"
   []
   (when-let [registry (resolve-command-registry)]
     (keys registry)))

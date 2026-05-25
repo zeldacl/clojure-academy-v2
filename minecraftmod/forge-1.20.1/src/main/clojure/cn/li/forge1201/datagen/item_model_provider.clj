@@ -7,10 +7,9 @@
 
    优势：数据不分散，直接从item定义提取，单一信息源
 
-   AcademyCraft-style energy tiers (e.g. developer_portable): optional
-   :item-model-energy-levels in :properties — generates base + _half/_full
-   sibling models and overrides on predicate <modid>:energy (see client
-   `energy-item-model-properties`)."
+  Optional :item-model-energy-levels in :properties generates base + tiered
+  sibling models and overrides on predicate <modid>:energy (see client
+  `energy-item-model-properties`)."
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mc1201.datagen.resource-location :as rl]
             [cn.li.mc1201.datagen.item-model-provider-core :as item-model-core])

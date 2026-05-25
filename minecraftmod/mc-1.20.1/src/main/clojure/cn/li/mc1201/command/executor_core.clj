@@ -44,13 +44,13 @@
           ^Advancement advancement (.getAdvancement advancement-manager resource-loc)]
       (if-not advancement
         (do
-          (send-feedback-fn "command.academy.acach.not_found" true [advancement-id] true)
+          (send-feedback-fn "command.mcmod.grant_advancement.not_found" true [advancement-id] true)
           {:success? false :message "Advancement not found"})
         (let [player-advancements (.getAdvancements player)
               ^AdvancementProgress progress (.getOrStartProgress player-advancements advancement)]
           (doseq [criterion (.getRemainingCriteria progress)]
             (.award player-advancements advancement criterion))
-          (send-feedback-fn "command.academy.acach.success" true
+          (send-feedback-fn "command.mcmod.grant_advancement.success" true
                             [advancement-id (.getName (.getGameProfile player))] false)
           {:success? true})))
     (catch Exception e

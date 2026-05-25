@@ -39,3 +39,21 @@
       nil))
   nil)
 
+(defn available-content-ids
+  "Return content ids visible through the ContentInitBootstrap ServiceLoader."
+  []
+  (vec (ContentInitBootstraps/availableContentIds)))
+
+(defn register-all-content!
+  "Best-effort registration of every content module discovered through ServiceLoader."
+  []
+  (try
+    (let [registered (ContentInitBootstraps/registerAll)]
+      (when (zero? registered)
+        (println "[my_mod] WARNING: no content bootstrap providers found")))
+    (catch Throwable t
+      (println "[my_mod] WARNING: ContentInitBootstraps/registerAll() failed:"
+               (ex-message t))
+      nil))
+  nil)
+

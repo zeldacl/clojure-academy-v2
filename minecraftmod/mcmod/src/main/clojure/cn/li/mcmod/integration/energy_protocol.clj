@@ -2,7 +2,7 @@
   "Platform-neutral energy protocols for external mod integration.
 
   These protocols abstract external energy systems (Forge Energy, IC2 EU, etc.)
-  so that AC code can work with them without importing platform-specific classes.")
+  so that content code can work with them without importing platform-specific classes.")
 
 (defprotocol IExternalEnergyProvider
   "Protocol for blocks that can provide energy to external systems."

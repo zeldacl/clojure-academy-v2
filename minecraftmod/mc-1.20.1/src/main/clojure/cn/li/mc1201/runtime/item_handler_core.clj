@@ -120,8 +120,8 @@
      :plan nil}
     (let [player-uuid (str (.getUUID player))
           item-id (get-item-id stack)
-          ability-activated? (hooks-core/runtime-activated? player-uuid)
-          plan (hooks-core/build-item-use-plan player-uuid item-id ability-activated? side)]
+          runtime-activated? (hooks-core/runtime-activated? player-uuid)
+          plan (hooks-core/build-item-use-plan player-uuid item-id runtime-activated? side)]
       (dispatch-dsl-item-use! player item-id hand stack side)
       (run-plan-actions! player hand stack side player-uuid plan opts)
       {:consume? (or (:consume? plan)

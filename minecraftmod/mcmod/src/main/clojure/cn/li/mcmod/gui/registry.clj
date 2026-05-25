@@ -6,7 +6,7 @@
 
 Structure:
 - :by-id       {string-id -> GuiSpec}
-- :by-gui-id   {int-gui-id -> GuiSpec} (wireless/platform-visible GUIs only)"}
+- :by-gui-id   {int-gui-id -> GuiSpec} (platform-visible GUIs only)"}
   gui-registry
   (atom {:by-id {} :by-gui-id {}}))
 

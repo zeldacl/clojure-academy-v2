@@ -3,7 +3,7 @@
 
    This namespace hosts:
    - IGuiHandler protocol
-   - WirelessGuiHandler record implementation
+  - RegistryGuiHandler record implementation
 
    Container state atoms now live in `cn.li.mcmod.gui.container-state`.
    Platform adapters and game content should not re-implement these building blocks."
@@ -33,7 +33,7 @@
   (gui-registry/has-gui-id? gui-id))
 
 ;; Default handler implementation (driven by GUI config stored in `gui-registry`).
-(defrecord WirelessGuiHandler []
+(defrecord RegistryGuiHandler []
   IGuiHandler
   (get-server-container [_ gui-id player world pos]
     (let [tile-entity (pworld/world-get-tile-entity* world pos)
@@ -83,4 +83,4 @@
   "Get the global GUI handler instance."
   []
   (or @gui-handler
-      (reset! gui-handler (->WirelessGuiHandler))))
+      (reset! gui-handler (->RegistryGuiHandler))))

@@ -28,27 +28,27 @@
 
 (defn ensure-content-loaded!
   "Datagen runs outside normal mod init.
-   We need gameplay DSL registries populated (blocks/items/gui metadata)
-   and gameplay blockstate hooks installed, but this shared layer must not
+   We need content DSL registries populated (blocks/items/gui metadata)
+   and content blockstate hooks installed, but this shared layer must not
    depend on concrete content namespaces at compile time.
 
    This function uses mcmod indirection to:
-   - load the content bootstrap provider so it can register lifecycle init
+   - load discovered content bootstrap providers so they can register lifecycle init
    - run content init (installs hooks, binds mod-id, etc.)
    - activate runtime content (loads all DSL namespaces; fills registry metadata)
-  - run content-owned datagen metadata hooks
+   - run content-owned datagen metadata hooks
 
    Called by both Forge and Fabric datagen entry points.
    Note: Uses cn.li.mcmod.config/*mod-id* for logging, so modid binding
    must be set up before calling this function."
-  [content-id]
+  []
   (try
-    (mc-content/register-content! content-id)
+    (mc-content/register-all-content!)
     (run-init-pipeline!)
     (let [initial (snapshot-counts)]
       (when-not (populated? initial)
         (println (str "[" modid/*mod-id* "] WARNING: datagen metadata still empty after SPI bootstrap, "
-                      "content-id=" content-id " counts=" initial))))
+                      "counts=" initial))))
     (catch Throwable t
-      (println (str "[" modid/*mod-id* "] WARNING: failed to load gameplay content for datagen: "
+      (println (str "[" modid/*mod-id* "] WARNING: failed to load content for datagen: "
                     (ex-message t))))))

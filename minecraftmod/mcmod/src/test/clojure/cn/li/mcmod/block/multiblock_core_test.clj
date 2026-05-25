@@ -17,7 +17,7 @@
   (->BlockPosStub x y z))
 
 (defn- controller-parts-opts []
-  (merge (bdsl/multi-block-preset {:width 2 :height 1 :depth 1})
+  (merge (bdsl/multi-block-template {:width 2 :height 1 :depth 1})
          {:multiblock-mode :controller-parts
           :controller-block-id "ctl-test"
           :part-block-id "part-test"}))

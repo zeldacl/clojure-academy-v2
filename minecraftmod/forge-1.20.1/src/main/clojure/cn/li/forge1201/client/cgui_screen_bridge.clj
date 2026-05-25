@@ -1,18 +1,12 @@
-(ns cn.li.forge1201.client.terminal-screen-bridge
-  "CLIENT-ONLY screen bridge for terminal GUI (Forge layer)."
-  (:require [cn.li.mcmod.platform.ui :as platform-ui]
-            [cn.li.mc1201.gui.cgui.runtime :as cgui-rt]
+(ns cn.li.forge1201.client.cgui-screen-bridge
+  "CLIENT-ONLY generic CGui screen bridge (Forge layer)."
+  (:require [cn.li.mc1201.gui.cgui.runtime :as cgui-rt]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens Screen]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.network.chat Component]
            [net.minecraft.client Minecraft]))
-
-
-;; ============================================================================
-;; Simple CGui Screen Host
-;; ============================================================================
 
 (defn- render-cgui-screen!
   [^Screen screen-this ^GuiGraphics graphics gui-widget left top partial-tick log-label]
@@ -77,24 +71,8 @@
       (log/error "Error disposing" log-label ":" (.getMessage e)))))
 
 (defn- create-cgui-screen
-  "Create a Minecraft Screen host for a simple CGui widget tree."
-  [gui-widget title {:keys [log-label]}]
-  (let [left (atom 0)
-        top (atom 0)
-        resolved-log-label (or log-label title)]
-    (proxy [Screen] [(Component/literal title)]
-      (render [^GuiGraphics graphics mouse-x mouse-y partial-tick]
-        (render-cgui-screen! this graphics gui-widget left top partial-tick resolved-log-label))
-
-      (mouseClicked [mouse-x mouse-y button]
-        (mouse-click-cgui! gui-widget left top mouse-x mouse-y button resolved-log-label))
-
-      (removed []
-        (dispose-cgui-screen! gui-widget resolved-log-label)))))
-
-(defn- create-interactive-cgui-screen
-  "Create a Minecraft Screen host for CGui trees that need drag and keyboard input."
-  [gui-widget title {:keys [log-label]}]
+  "Create a Minecraft Screen host for a CGui widget tree."
+  [gui-widget title {:keys [log-label interactive?]}]
   (let [left (atom 0)
         top (atom 0)
         resolved-log-label (or log-label title)]
@@ -106,47 +84,25 @@
         (mouse-click-cgui! gui-widget left top mouse-x mouse-y button resolved-log-label))
 
       (mouseDragged [mouse-x mouse-y button drag-x drag-y]
-        (mouse-drag-cgui! gui-widget left top mouse-x mouse-y resolved-log-label))
+        (if interactive?
+          (mouse-drag-cgui! gui-widget left top mouse-x mouse-y resolved-log-label)
+          false))
 
       (keyPressed [key-code scan-code modifiers]
-        (key-press-cgui! gui-widget key-code scan-code resolved-log-label))
+        (if interactive?
+          (key-press-cgui! gui-widget key-code scan-code resolved-log-label)
+          false))
 
       (charTyped [code-point modifiers]
-        (char-typed-cgui! gui-widget code-point resolved-log-label))
+        (if interactive?
+          (char-typed-cgui! gui-widget code-point resolved-log-label)
+          false))
 
       (removed []
         (dispose-cgui-screen! gui-widget resolved-log-label)))))
 
-;; ============================================================================
-;; Terminal Screen
-;; ============================================================================
-
-(defn- create-terminal-screen
-  "Create a Minecraft Screen that renders the terminal CGui."
-  [player]
-  (create-interactive-cgui-screen
-     (or (platform-ui/create-widget :ac/terminal-gui {:player player})
-       (cgui-core/create-widget :size [640 785]))
-   "Data Terminal"
-   {:log-label "terminal screen"}))
-
-;; ============================================================================
-;; Screen Opening Functions
-;; ============================================================================
-
-(defn open-terminal-screen!
-  "Open terminal screen. Called by AC layer via item right-click."
-  [player]
-  (try
-    (log/info "Opening terminal screen for player:" player)
-    (let [^Minecraft mc (Minecraft/getInstance)]
-      (.setScreen mc (create-terminal-screen player)))
-    (catch Exception e
-      (log/error "Failed to open terminal screen:" (.getMessage e))
-      (log/error "Exception:" e))))
-
 (defn open-simple-gui!
-  "Open a simple CGui screen (for apps like About, Tutorial, etc).
+  "Open a simple CGui screen.
 
   Args:
   - gui-widget: CGui widget tree
@@ -162,6 +118,6 @@
       (log/error "Exception:" e))))
 
 (defn init!
-  "Initialize terminal screen bridge."
+  "Initialize CGui screen bridge."
   []
-  (log/info "Terminal screen bridge initialized"))
+  (log/info "CGui screen bridge initialized"))

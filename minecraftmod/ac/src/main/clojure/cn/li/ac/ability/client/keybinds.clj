@@ -258,15 +258,15 @@
   [key-state-fn]
   ;; Poll skill keys (Z, X, C, V)
   (doseq [idx (range 4)]
-    (on-skill-key-event idx (key-state-fn [:skill idx])))
+    (on-skill-key-event idx (key-state-fn [:slot idx])))
 
   ;; Poll movement keys (W/A/S/D)
   (doseq [movement-key movement-keys]
     (on-movement-key-event movement-key (key-state-fn [:movement movement-key])))
 
   ;; Poll GUI keys
-  (on-gui-key-event :skill-tree (key-state-fn [:gui :skill-tree]))
-  (on-gui-key-event :preset-editor (key-state-fn [:gui :preset-editor])))
+  (on-gui-key-event :skill-tree (key-state-fn [:screen :primary]))
+  (on-gui-key-event :preset-editor (key-state-fn [:screen :secondary])))
 
 (defn reset-all-keys!
   "Reset all key states. Called on disconnect or dimension change."

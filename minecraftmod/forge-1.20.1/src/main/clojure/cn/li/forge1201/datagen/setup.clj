@@ -8,8 +8,7 @@
             [cn.li.forge1201.datagen.provider-factory :as provider-factory]
             [cn.li.mc1201.datagen.provider-registration :as provider-registration]
             [cn.li.mc1201.datagen.setup-common :as setup-common])
-  (:import [net.minecraftforge.data.event GatherDataEvent]
-           [net.minecraft.data DataGenerator]))
+  (:import [net.minecraftforge.data.event GatherDataEvent]))
 
 ;; ============================================================================
 ;; EventBusSubscriber Configuration
@@ -32,8 +31,8 @@
   [^GatherDataEvent event]
   (let [generator (.getGenerator event)
         exfile-helper (.getExistingFileHelper event)]
-    ;; Ensure AC content registries are loaded before providers query metadata.
-    (setup-common/ensure-content-loaded! "ac")
+    ;; Ensure discovered content registries are loaded before providers query metadata.
+    (setup-common/ensure-content-loaded!)
 
     (provider-registration/register-providers!
       :forge-1.20.1

@@ -19,7 +19,7 @@
 
 (deftest hook-id-to-impl-key-test
   (is (= :owner-offset (hook-catalog/effect-impl-key :diamond-shield)))
-  (is (= :coin-throwing (hook-catalog/effect-impl-key "coin-throwing")))
+  (is (= :vertical-ballistic (hook-catalog/effect-impl-key "vertical-ballistic")))
   (is (= :owner-follow (hook-catalog/ray-impl-key :railgun-fx)))
   (is (= :owner-follow (hook-catalog/ray-impl-key "mine-ray-basic")))
   (is (= :owner-follow-marker (hook-catalog/marker-impl-key :tp-marking)))

@@ -12,14 +12,14 @@
             [cn.li.mc1201.runtime.adapter-support :as adapter-support]
             [cn.li.mc1201.runtime.interop-core :as interop-core]
             [cn.li.mc1201.runtime.teleportation-core :as teleportation-core]
-            [cn.li.mc1201.runtime.saved-locations-core :as saved-locations-core]
+            [cn.li.mc1201.runtime.named-position-store-core :as position-store-core]
             [cn.li.mc1201.runtime.potion-effects-core :as potion-effects-core]
             [cn.li.mc1201.runtime.player-motion-core :as player-motion-core]
             [cn.li.mc1201.runtime.entity-motion-core :as entity-motion-core]
             [cn.li.mc1201.runtime.raycast-core :as raycast-core]
             [cn.li.mc1201.runtime.entity-query-core :as entity-query-core]
             [cn.li.mcmod.platform.teleportation :as ptp]
-            [cn.li.mcmod.platform.saved-locations :as psl]
+            [cn.li.mcmod.platform.named-position-store :as position-store]
             [cn.li.mcmod.platform.potion-effects :as ppe]
             [cn.li.mcmod.platform.player-motion :as pm]
             [cn.li.mcmod.platform.entity-motion :as pem]
@@ -51,10 +51,10 @@
                           #(install-bound-adapter! #'ptp/*teleportation*
                                                    teleportation-core/create-teleportation
                                                    "Forge teleportation"))
-   (adapter-registry/step :saved-locations
-                          #(install-bound-adapter! #'psl/*saved-locations*
-                                                   saved-locations-core/create-saved-locations
-                                                   "Forge saved locations"))
+  (adapter-registry/step :named-position-store
+                  #(install-bound-adapter! #'position-store/*named-position-store*
+                                  position-store-core/create-named-position-store
+                                  "Forge named position store"))
    (adapter-registry/step :player-motion
                           #(install-bound-adapter! #'pm/*player-motion*
                                                    player-motion-core/create-player-motion

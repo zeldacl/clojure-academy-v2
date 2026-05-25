@@ -22,15 +22,15 @@
   code to wrap it in their respective interface implementations.
   
   Args:
-    ac-energy: IEnergyCapable implementation (AcademyCraft energy)
-    conversion-rate: Conversion rate (FE per 1 IF, e.g., 4.0)
+    content-energy: IEnergyCapable implementation supplied by content
+    conversion-rate: Conversion rate (external units per 1 internal unit, e.g., 4.0)
     direction: Optional direction filtering (:receive, :extract, or nil for both)
   
   Returns:
-    State map with {:ac-energy, :conversion-rate, :direction}"
-  [^IEnergyCapable ac-energy conversion-rate & {:keys [direction]}]
+    State map with {:content-energy, :conversion-rate, :direction}"
+  [^IEnergyCapable content-energy conversion-rate & {:keys [direction]}]
   (when (energy-conversion/validate-conversion-rate conversion-rate)
-    {:ac-energy ac-energy
+    {:content-energy content-energy
      :conversion-rate (double conversion-rate)
      :direction direction}))
 
@@ -41,7 +41,7 @@
 (defn get-energy-stored
   "Get current stored energy converted to target units.
   
-  Converts from IF (Imaginary Energy) to FE (Forge Energy).
+  Converts from content internal units to FE (Forge Energy).
   
   Args:
     state: Adapter state map
@@ -49,15 +49,15 @@
   Returns:
     Energy stored in FE, as integer"
   [state]
-  (when-let [ac-energy (:ac-energy state)]
-    (let [if-stored (.getEnergyStored ^IEnergyCapable ac-energy)
+  (when-let [content-energy (:content-energy state)]
+    (let [content-stored (.getEnergyStored ^IEnergyCapable content-energy)
           conversion-rate (:conversion-rate state 1.0)]
-      (energy-conversion/if-to-fe if-stored :rate conversion-rate))))
+      (energy-conversion/content-to-fe content-stored :rate conversion-rate))))
 
 (defn get-max-energy-stored
   "Get maximum energy capacity converted to target units.
   
-  Converts from IF (Imaginary Energy) to FE (Forge Energy).
+  Converts from content internal units to FE (Forge Energy).
   
   Args:
     state: Adapter state map
@@ -65,10 +65,10 @@
   Returns:
     Maximum energy capacity in FE, as integer"
   [state]
-  (when-let [ac-energy (:ac-energy state)]
-    (let [if-max (.getMaxEnergyStored ^IEnergyCapable ac-energy)
+  (when-let [content-energy (:content-energy state)]
+    (let [content-max (.getMaxEnergyStored ^IEnergyCapable content-energy)
           conversion-rate (:conversion-rate state 1.0)]
-      (energy-conversion/if-to-fe if-max :rate conversion-rate))))
+      (energy-conversion/content-to-fe content-max :rate conversion-rate))))
 
 (defn can-receive?
   "Check if adapter can receive energy.
@@ -79,8 +79,8 @@
   Returns:
     true if can receive, false otherwise"
   [state]
-  (when-let [ac-energy (:ac-energy state)]
-    (.canReceive ^IEnergyCapable ac-energy)))
+  (when-let [content-energy (:content-energy state)]
+    (.canReceive ^IEnergyCapable content-energy)))
 
 (defn can-extract?
   "Check if adapter can extract energy.
@@ -91,8 +91,8 @@
   Returns:
     true if can extract, false otherwise"
   [state]
-  (when-let [ac-energy (:ac-energy state)]
-    (.canExtract ^IEnergyCapable ac-energy)))
+  (when-let [content-energy (:content-energy state)]
+    (.canExtract ^IEnergyCapable content-energy)))
 
 ;; ============================================================================
 ;; Energy Transfer Functions (Platform-Agnostic)
@@ -101,7 +101,7 @@
 (defn receive-energy
   "Receive energy from external source, converting units as needed.
   
-  Converts from FE (Forge Energy) to IF (Imaginary Energy).
+  Converts from FE (Forge Energy) to content internal units.
   Respects the adapter's direction constraints.
   
   Args:
@@ -113,17 +113,17 @@
     Amount of FE actually received (or would be received if simulated), as integer"
   [state max-receive simulate]
   (when (and (can-receive? state) (not= :extract (:direction state)))
-    (let [ac-energy (:ac-energy state)
+        (let [content-energy (:content-energy state)
           conversion-rate (:conversion-rate state 1.0)
-          if-amount (energy-conversion/fe-to-if max-receive :rate conversion-rate)
-          if-received (.receiveEnergy ^IEnergyCapable ac-energy (int if-amount) simulate)
-          fe-received (energy-conversion/if-to-fe if-received :rate conversion-rate)]
+          content-amount (energy-conversion/fe-to-content max-receive :rate conversion-rate)
+          content-received (.receiveEnergy ^IEnergyCapable content-energy (int content-amount) simulate)
+          fe-received (energy-conversion/content-to-fe content-received :rate conversion-rate)]
       (int fe-received))))
 
 (defn extract-energy
   "Extract energy to external consumer, converting units as needed.
   
-  Converts from FE (Forge Energy) to IF (Imaginary Energy).
+  Converts from FE (Forge Energy) to content internal units.
   Respects the adapter's direction constraints.
   
   Args:
@@ -135,11 +135,11 @@
     Amount of FE actually extracted (or would be extracted if simulated), as integer"
   [state max-extract simulate]
   (when (and (can-extract? state) (not= :receive (:direction state)))
-    (let [ac-energy (:ac-energy state)
+        (let [content-energy (:content-energy state)
           conversion-rate (:conversion-rate state 1.0)
-          if-amount (energy-conversion/fe-to-if max-extract :rate conversion-rate)
-          if-extracted (.extractEnergy ^IEnergyCapable ac-energy (int if-amount) simulate)
-          fe-extracted (energy-conversion/if-to-fe if-extracted :rate conversion-rate)]
+          content-amount (energy-conversion/fe-to-content max-extract :rate conversion-rate)
+          content-extracted (.extractEnergy ^IEnergyCapable content-energy (int content-amount) simulate)
+          fe-extracted (energy-conversion/content-to-fe content-extracted :rate conversion-rate)]
       (int fe-extracted))))
 
 ;; ============================================================================
@@ -185,7 +185,7 @@
     Boolean - true if valid, false otherwise"
   [state]
   (when (map? state)
-    (and (some? (:ac-energy state))
+    (and (some? (:content-energy state))
          (number? (:conversion-rate state))
          (energy-conversion/validate-conversion-rate (:conversion-rate state)))))
 

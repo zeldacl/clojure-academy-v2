@@ -3,9 +3,11 @@
 
 (def ^:private registry (atom {}))
 
+(def ^:private message-prefix "wireless")
+
 (defn register-block-messages!
   [domain actions]
-  (let [spec (msg-dsl/build-domain-spec domain actions)]
+  (let [spec (msg-dsl/build-domain-spec message-prefix domain actions)]
     (swap! registry assoc domain spec)
     spec))
 

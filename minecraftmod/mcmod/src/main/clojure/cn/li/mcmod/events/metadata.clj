@@ -102,13 +102,13 @@
   falls back to a reverse lookup over all registered blocks, matching the
   explicit :registry-name field on the BlockSpec. This handles blocks whose
   DSL symbol name differs from their Minecraft registry path (e.g.
-  wireless-node-advanced / \"node_advanced\").
+  content-node-advanced / \"node_advanced\").
 
   Args:
     registry-name: String - Minecraft registry name (e.g., \"node_advanced\")
 
   Returns:
-    String - DSL block identifier (e.g., \"wireless-node-advanced\"), or nil if not found"
+    String - DSL block identifier (e.g., \"content-node-advanced\"), or nil if not found"
   [registry-name]
   (when registry-name
     (let [potential-id (str/replace registry-name #"_" "-")]
@@ -205,7 +205,7 @@
   event-type-keyword examples:
     :player/logged-in  :player/logged-out  :player/respawn  :player/clone
     :player/tick       :player/death
-    :ability/tick      (server tick for runtime resource recovery)"}
+    :content/tick      (server tick for content runtime work)"}
   (atom {}))
 
 (defn register-player-event-handler!
@@ -213,7 +213,7 @@
   Only one handler per event-type is supported (latest registration wins).
 
   Args:
-    event-type: Keyword – e.g. :player/tick, :ability/tick
+    event-type: Keyword – e.g. :player/tick, :content/tick
     handler-fn: (fn [ctx]) where ctx is a platform-neutral event map"
   [event-type handler-fn]
   (when handler-fn

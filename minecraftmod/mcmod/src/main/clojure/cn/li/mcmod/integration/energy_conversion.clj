@@ -2,7 +2,7 @@
   "Platform-neutral energy conversion definitions.
 
   This namespace defines conversion formulas between different energy systems:
-  - IF (Imaginary Energy) - AcademyCraft's internal energy unit
+  - content energy unit - content-owned internal energy unit
   - FE (Forge Energy) - Forge mod's energy standard
   - EU (Energy Units) - Industrial Craft 2's energy standard
 
@@ -16,78 +16,76 @@
 ;; Conversion Rate Configuration
 ;; ============================================================================
 
-(def ^:const default-fe-to-if-rate
-  "Default Forge Energy to Imaginary Energy conversion rate.
+(def ^:const default-fe-to-content-rate
+  "Default Forge Energy to content energy conversion rate.
   
-  1 FE (Forge Energy) = X IF (Imaginary Energy)
+  1 FE (Forge Energy) = X content energy units.
   
-  Historical note: Minecraft 1.20.1 uses 1 IF = 4 FE as default.
-  This constant defines the reverse: FE per 1 IF.
+  This constant defines the external rate: FE per 1 content energy unit.
   
-  Default: 4.0 (1 IF = 4 FE; equivalently, 1 FE = 0.25 IF)"
+  Default: 4.0 (1 content energy unit = 4 FE)."
   4.0)
 
-(def ^:const default-eu-to-if-rate
-  "Default IC2 Energy Unit to Imaginary Energy conversion rate.
+(def ^:const default-eu-to-content-rate
+  "Default IC2 Energy Unit to content energy conversion rate.
   
-  1 EU (Energy Unit) = X IF (Imaginary Energy)
+  1 EU (Energy Unit) = X content energy units.
   
-  Historical note: Early AcademyCraft versions used 1 IF = 1 EU.
-  This constant defines the rate: EU per 1 IF.
+  This constant defines the rate: EU per 1 content energy unit.
   
-  Default: 1.0 (1 IF = 1 EU)"
+  Default: 1.0 (1 content energy unit = 1 EU)."
   1.0)
 
 ;; ============================================================================
 ;; Conversion Functions (Pure Arithmetic)
 ;; ============================================================================
 
-(defn if-to-fe
-  "Convert Imaginary Energy to Forge Energy.
+(defn content-to-fe
+  "Convert content energy units to Forge Energy.
   
   Args:
-    if-amount: Amount in IF (Imaginary Energy)
-    fe-rate: Conversion rate (FE per 1 IF) - use default-fe-to-if-rate if nil
+    content-amount: Amount in content energy units
+    fe-rate: Conversion rate (FE per 1 content energy unit) - use default-fe-to-content-rate if nil
   
   Returns:
     Amount in FE (Forge Energy), as integer"
-  [if-amount & {:keys [rate] :or {rate default-fe-to-if-rate}}]
-  (int (* (double if-amount) (double rate))))
+  [content-amount & {:keys [rate] :or {rate default-fe-to-content-rate}}]
+  (int (* (double content-amount) (double rate))))
 
-(defn fe-to-if
-  "Convert Forge Energy to Imaginary Energy.
+(defn fe-to-content
+  "Convert Forge Energy to content energy units.
   
   Args:
     fe-amount: Amount in FE (Forge Energy)
-    fe-rate: Conversion rate (FE per 1 IF) - use default-fe-to-if-rate if nil
+    fe-rate: Conversion rate (FE per 1 content energy unit) - use default-fe-to-content-rate if nil
   
   Returns:
-    Amount in IF (Imaginary Energy), as integer"
-  [fe-amount & {:keys [rate] :or {rate default-fe-to-if-rate}}]
+    Amount in content energy units, as integer"
+  [fe-amount & {:keys [rate] :or {rate default-fe-to-content-rate}}]
   (int (/ (double fe-amount) (double rate))))
 
-(defn if-to-eu
-  "Convert Imaginary Energy to IC2 Energy Units.
+(defn content-to-eu
+  "Convert content energy units to IC2 Energy Units.
   
   Args:
-    if-amount: Amount in IF (Imaginary Energy)
-    eu-rate: Conversion rate (EU per 1 IF) - use default-eu-to-if-rate if nil
+    content-amount: Amount in content energy units
+    eu-rate: Conversion rate (EU per 1 content energy unit) - use default-eu-to-content-rate if nil
   
   Returns:
     Amount in EU (Energy Units), as double"
-  [if-amount & {:keys [rate] :or {rate default-eu-to-if-rate}}]
-  (* (double if-amount) (double rate)))
+  [content-amount & {:keys [rate] :or {rate default-eu-to-content-rate}}]
+  (* (double content-amount) (double rate)))
 
-(defn eu-to-if
-  "Convert IC2 Energy Units to Imaginary Energy.
+(defn eu-to-content
+  "Convert IC2 Energy Units to content energy units.
   
   Args:
     eu-amount: Amount in EU (Energy Units)
-    eu-rate: Conversion rate (EU per 1 IF) - use default-eu-to-if-rate if nil
+    eu-rate: Conversion rate (EU per 1 content energy unit) - use default-eu-to-content-rate if nil
   
   Returns:
-    Amount in IF (Imaginary Energy), as double"
-  [eu-amount & {:keys [rate] :or {rate default-eu-to-if-rate}}]
+    Amount in content energy units, as double"
+  [eu-amount & {:keys [rate] :or {rate default-eu-to-content-rate}}]
   (/ (double eu-amount) (double rate)))
 
 ;; ============================================================================

@@ -33,26 +33,8 @@
 (defn spawn-local-scripted-effect! [effect-id]
   (ScriptedEffectSpawner/spawnLocal effect-id))
 
-(defn notify-charge-coin-throw-client! [player-uuid]
-  (power-runtime/client-notify-visual-event! :ac/charge-coin-throw {:player-uuid player-uuid}))
-
-(defn notify-railgun-coin-throw-client! [player-uuid]
-  (notify-charge-coin-throw-client! player-uuid))
-
-(defn charge-coin-visual-state [player-uuid]
-  (power-runtime/client-visual-state :ac/charge-coin {:player-uuid player-uuid}))
-
-(defn railgun-charge-visual-state [player-uuid]
-  (charge-coin-visual-state player-uuid))
-
 (defn slot-visual-state [player-uuid key-idx]
   (power-runtime/client-slot-visual-state player-uuid key-idx))
-
-(defn body-intensify-charge-visual-state []
-  (power-runtime/client-visual-state :ac/body-intensify-charge {}))
-
-(defn current-charging-visual-state []
-  (power-runtime/client-visual-state :ac/current-charging {}))
 
 (defn on-slot-key-down! [player-uuid key-idx]
   (power-runtime/client-on-slot-key-down! player-uuid key-idx))

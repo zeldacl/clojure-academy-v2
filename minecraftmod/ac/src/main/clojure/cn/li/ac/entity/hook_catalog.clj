@@ -5,15 +5,15 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private effect-hook->impl-key
-  {"intensify-arcs" :intensify-arcs
+  {"intensify-arcs" :tiered-arcs
    "diamond-shield" :owner-offset
    "md-shield" :owner-offset
    "surround-arc" :owner-offset
    "generic-arc" :generic-arc
-   "md-ball" :md-ball
+  "md-ball" :owner-orbit
    "ripple-mark" :noop
    "blood-splash" :noop
-   "coin-throwing" :coin-throwing})
+  "vertical-ballistic" :vertical-ballistic})
 
 (def ^:private ray-hook->impl-key
   {"mine-ray-basic" :owner-follow

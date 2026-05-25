@@ -13,14 +13,16 @@
 (def expected-matrix-actions
   #{:gather-info :init :change-ssid :change-password :sync-state})
 
+(def ^:private wireless-prefix "wireless")
+
 (deftest message-id-format-test
-  (is (= "wireless_node_get_status" (msg-dsl/message-id :node :get-status)))
-  (is (= "wireless_matrix_gather_info" (msg-dsl/message-id :matrix :gather-info)))
-  (is (= "wireless_wind_gen_get_status_main" (msg-dsl/message-id :wind-gen :get-status-main))))
+  (is (= "wireless_node_get_status" (msg-dsl/message-id wireless-prefix :node :get-status)))
+  (is (= "wireless_matrix_gather_info" (msg-dsl/message-id wireless-prefix :matrix :gather-info)))
+  (is (= "wireless_wind_gen_get_status_main" (msg-dsl/message-id wireless-prefix :wind-gen :get-status-main))))
 
 (deftest domain-spec-validation-test
   (testing "build-domain-spec constructs expected map"
-    (let [spec (msg-dsl/build-domain-spec :demo [:alpha :beta])]
+    (let [spec (msg-dsl/build-domain-spec wireless-prefix :demo [:alpha :beta])]
       (is (= :demo (:domain spec)))
       (is (= "wireless_demo_alpha" (get-in spec [:messages :alpha])))
       (is (= 2 (count (:specs spec))))))
@@ -28,7 +30,7 @@
     (is (thrown-with-msg?
           clojure.lang.ExceptionInfo
           #"Duplicate actions"
-          (msg-dsl/build-domain-spec :dup [:x :x])))))
+          (msg-dsl/build-domain-spec wireless-prefix :dup [:x :x])))))
 
 (deftest catalog-validation-test
   (testing "cross-domain duplicate message ids are rejected"
@@ -40,7 +42,7 @@
               :specs [{:domain :y :action :b :msg-id "wireless_collision_id"}]}]
       (is (thrown-with-msg?
             clojure.lang.ExceptionInfo
-            #"Duplicate wireless message ids"
+            #"Duplicate message ids"
             (msg-dsl/build-catalog [s1 s2])))))
   (testing "naming format is enforced"
     (let [bad {:domain :z
@@ -48,7 +50,7 @@
                :specs [{:domain :z :action :a :msg-id "UPPERCASE_ID"}]}]
       (is (thrown-with-msg?
             clojure.lang.ExceptionInfo
-            #"Invalid wireless message ids"
+            #"Invalid message ids"
             (msg-dsl/build-catalog [bad]))))))
 
 (deftest wireless-message-integration-test

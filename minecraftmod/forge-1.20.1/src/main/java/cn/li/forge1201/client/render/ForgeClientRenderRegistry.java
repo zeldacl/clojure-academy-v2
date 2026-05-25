@@ -18,10 +18,8 @@ import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
 import cn.li.mc1201.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.item.Item;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterItemDecorationsEvent;
 import net.minecraftforge.client.event.RegisterShadersEvent;
@@ -97,10 +95,7 @@ public final class ForgeClientRenderRegistry {
     }
 
     public static void registerItemDecorations(RegisterItemDecorationsEvent event) {
-        Item matterUnit = BuiltInRegistries.ITEM.get(new ResourceLocation(MyMod1201.MODID, "matter_unit"));
-        if (matterUnit != null) {
-            event.register(matterUnit, MatterUnitItemDecorator.INSTANCE);
-        }
+        // Content-specific item decorators are registered by descriptor-driven client hooks.
     }
 
     public static void registerShaders(RegisterShadersEvent event) throws IOException {

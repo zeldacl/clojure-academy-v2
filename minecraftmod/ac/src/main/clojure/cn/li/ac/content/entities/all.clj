@@ -87,7 +87,7 @@
          :update-interval 1
          :properties {:effect {:life-ticks 120
                                :follow-owner? false
-                               :hook :coin-throwing
+                               :hook :vertical-ballistic
                                :hook-params {:gravity 0.06
                                              :init-vel 0.92}}}}))
 

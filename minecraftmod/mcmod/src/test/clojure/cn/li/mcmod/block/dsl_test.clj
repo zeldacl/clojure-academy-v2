@@ -90,7 +90,7 @@
 (deftest all-multi-block-positions-with-factory-test
   (binding [pos/*position-factory* (fn [x y z] (->BlockPosStub x y z))]
     (let [spec (bdsl/create-block-spec "mb"
-                                       (bdsl/multi-block-preset {:width 2 :height 1 :depth 1}))
+                                       (bdsl/multi-block-template {:width 2 :height 1 :depth 1}))
           master (pos/create-block-pos 10 20 30)
           ps (bdsl/all-multi-block-positions master spec)]
       (is (= 2 (count ps)))
@@ -103,7 +103,7 @@
     (binding [pos/*position-factory* (fn [x y z] (->BlockPosStub x y z))
               world/*world-get-block-state-fn* (constantly nil)]
       (let [spec (bdsl/create-block-spec "empty-mb"
-                                         (bdsl/multi-block-preset {:width 1 :height 1 :depth 1}))]
+                                         (bdsl/multi-block-template {:width 1 :height 1 :depth 1}))]
         (is (true? (bdsl/can-place-multi-block? :fake-world (pos/create-block-pos 0 0 0) spec))))))
   (testing "blocked cell fails placement"
     (binding [pos/*position-factory* (fn [x y z] (->BlockPosStub x y z))
@@ -112,23 +112,23 @@
                 (when (= [1 0 0] [(pos/pos-x p) (pos/pos-y p) (pos/pos-z p)])
                   :blocked))]
       (let [spec (bdsl/create-block-spec "blocked-mb"
-                                         (bdsl/multi-block-preset {:width 2 :height 1 :depth 1}))]
+                                         (bdsl/multi-block-template {:width 2 :height 1 :depth 1}))]
         (is (false? (bdsl/can-place-multi-block? :fake-world (pos/create-block-pos 0 0 0) spec)))))))
 
-(deftest preset-and-merge-helpers-test
-  (is (= 2 (:harvest-level (bdsl/ore-preset 2))))
-  (is (= :wood (:material (bdsl/wood-preset))))
-  (is (= 3 (:harvest-level (bdsl/metal-preset 3))))
-  (is (= :glass (:material (bdsl/glass-preset))))
-  (is (= 15 (:light-level (bdsl/light-block-preset 15))))
-  (is (true? (:multi-block? (bdsl/multi-block-preset {:width 2 :height 1 :depth 1}))))
-  (is (vector? (:multi-block-positions (bdsl/irregular-multi-block-preset [{:x 1 :y 0 :z 0} {:x 0 :y 0 :z 0}]))))
+(deftest template-and-merge-helpers-test
+  (is (= 2 (:harvest-level (bdsl/ore-template 2))))
+  (is (= :wood (:material (bdsl/wood-template))))
+  (is (= 3 (:harvest-level (bdsl/metal-template 3))))
+  (is (= :glass (:material (bdsl/glass-template))))
+  (is (= 15 (:light-level (bdsl/light-block-template 15))))
+  (is (true? (:multi-block? (bdsl/multi-block-template {:width 2 :height 1 :depth 1}))))
+  (is (vector? (:multi-block-positions (bdsl/irregular-multi-block-template [{:x 1 :y 0 :z 0} {:x 0 :y 0 :z 0}]))))
   (is (pos? (count (bdsl/create-l-shape 2 2))))
   (is (pos? (count (bdsl/create-t-shape 3 2))))
   (is (pos? (count (bdsl/create-cross-shape 1))))
   (is (pos? (count (bdsl/create-pyramid-shape 3 2))))
   (is (pos? (count (bdsl/create-hollow-cube 2))))
-  (is (= :stone (:material (bdsl/merge-presets (bdsl/wood-preset) {:material :stone})))))
+  (is (= :stone (:material (bdsl/merge-templates (bdsl/wood-template) {:material :stone})))))
 
 (deftest interaction-handlers-test
   ;; Handler fns are read from top-level keys on the spec map by block event helpers.
@@ -151,7 +151,7 @@
 
 (deftest get-block-properties-test
   (let [spec (bdsl/create-block-spec "props"
-                                     (merge (bdsl/metal-preset 2)
+              (merge (bdsl/metal-template 2)
                                             {:light-level 9}))]
     (is (= :metal (:material (bdsl/get-block-properties spec))))
     (is (= 9 (:light-level (bdsl/get-block-properties spec))))

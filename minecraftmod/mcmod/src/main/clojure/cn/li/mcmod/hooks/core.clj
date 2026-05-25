@@ -2,7 +2,8 @@
   "Platform-neutral bridge for power runtime lifecycle hooks.
 
   forge/fabric adapters invoke these functions from platform events.
-  ac registers concrete handlers during core initialization.")
+  content modules register concrete handlers during core initialization."
+  (:require [cn.li.mcmod.content.registry :as content-registry]))
 
 (def ^:private noop
   (fn [& _] nil))
@@ -41,25 +42,14 @@
          :select-reflection-target (fn [_ _ _ _] nil)
          :compute-reflected-damage identity
          :reflection-search-radius (fn [] 0.0)
-         :get-skills-for-category (fn [_cat-id] [])
-         :client-get-skill-by-controllable (fn [_ _] nil)
          :client-new-context (fn [_ _] nil)
          :client-register-context! noop
          :client-get-context (fn [_] nil)
          :client-terminate-context! noop
          :client-transition-to-alive! noop
          :client-send-context-local! noop
-         :client-update-ability-data! noop
-         :client-update-resource-data! noop
-         :client-update-cooldown-data! noop
-         :client-update-preset-data! noop
          :client-build-overlay-plan (fn [_ _ _ _] nil)
          :client-build-hud-render-data (fn [_ _ _ _] nil)
-         :client-req-learn-skill! noop
-         :client-req-level-up! noop
-         :client-req-set-activated! noop
-         :client-req-set-preset-slot! noop
-         :client-req-switch-preset! noop
          :client-open-managed-screen! (fn [_ _] nil)
          :client-build-managed-screen-draw-ops (fn [_ _ _] [])
          :client-build-managed-screen-render-data (fn [_] nil)
@@ -70,8 +60,6 @@
          :client-poll-particle-effects (fn [] [])
          :client-poll-sound-effects (fn [] [])
          :client-tick-keys! noop
-         :client-trigger-mode-switch! noop
-         :client-trigger-preset-switch! noop
          :client-active-contexts (fn [] {})
          :client-latest-sync (fn [_] nil)
          :client-register-push-handlers! noop
@@ -99,6 +87,51 @@
   [hooks]
   (swap! runtime-hooks merge hooks)
   nil)
+
+(defn register-action!
+  "Register a content-owned action descriptor through the neutral registry."
+  [descriptor]
+  (content-registry/register-action! descriptor))
+
+(defn dispatch-action!
+  "Dispatch a content action by opaque id with host-provided context/payload."
+  [action-id context payload]
+  (content-registry/dispatch-action! action-id context payload))
+
+(defn register-sync-descriptor!
+  "Register a content-owned sync descriptor through the neutral registry."
+  [descriptor]
+  (content-registry/register-sync-descriptor! descriptor))
+
+(defn list-sync-descriptors
+  "List content-owned sync descriptors known to the neutral registry."
+  []
+  (content-registry/list-sync-descriptors))
+
+(defn apply-sync!
+  "Apply a sync descriptor by opaque id with host-provided context/payload."
+  [sync-id context payload]
+  (content-registry/apply-sync! sync-id context payload))
+
+(defn register-player-persistence-descriptor!
+  "Register a content-owned player persistence descriptor."
+  [descriptor]
+  (content-registry/register-player-persistence-descriptor! descriptor))
+
+(defn list-player-persistence-descriptors
+  "List player persistence descriptors known to the neutral registry."
+  []
+  (content-registry/list-player-persistence-descriptors))
+
+(defn register-client-input-descriptor!
+  "Register a content-owned client input descriptor through the neutral registry."
+  [descriptor]
+  (content-registry/register-client-input-descriptor! descriptor))
+
+(defn emit-client-input!
+  "Emit a neutral client input event by opaque id."
+  [input-id context payload]
+  (content-registry/emit-client-input! input-id context payload))
 
 (defn on-player-login!
   [player-uuid]
@@ -233,19 +266,9 @@
   []
   ((:reflection-search-radius @runtime-hooks)))
 
-(defn get-skills-for-category
-  "Returns all skill specs registered for the given category-id keyword.
-  Returns [] if no skills registered or hook not installed."
-  [cat-id]
-  ((:get-skills-for-category @runtime-hooks) cat-id))
-
-(defn client-get-skill-by-controllable
-  [cat-id ctrl-id]
-  ((:client-get-skill-by-controllable @runtime-hooks) cat-id ctrl-id))
-
 (defn client-new-context
-  [player-uuid skill-id]
-  ((:client-new-context @runtime-hooks) player-uuid skill-id))
+  [player-uuid context-id]
+  ((:client-new-context @runtime-hooks) player-uuid context-id))
 
 (defn client-register-context!
   [ctx]
@@ -267,49 +290,13 @@
   [ctx-id channel payload]
   ((:client-send-context-local! @runtime-hooks) ctx-id channel payload))
 
-(defn client-update-ability-data!
-  [player-uuid ability-data]
-  ((:client-update-ability-data! @runtime-hooks) player-uuid ability-data))
-
-(defn client-update-resource-data!
-  [player-uuid resource-data]
-  ((:client-update-resource-data! @runtime-hooks) player-uuid resource-data))
-
-(defn client-update-cooldown-data!
-  [player-uuid cooldown-data]
-  ((:client-update-cooldown-data! @runtime-hooks) player-uuid cooldown-data))
-
-(defn client-update-preset-data!
-  [player-uuid preset-data]
-  ((:client-update-preset-data! @runtime-hooks) player-uuid preset-data))
-
 (defn client-build-overlay-plan
   [player-uuid screen-width screen-height overlay-state]
   ((:client-build-overlay-plan @runtime-hooks) player-uuid screen-width screen-height overlay-state))
 
 (defn client-build-hud-render-data
-  [hud-model screen-width screen-height cooldown-data]
-  ((:client-build-hud-render-data @runtime-hooks) hud-model screen-width screen-height cooldown-data))
-
-(defn client-req-learn-skill!
-  [skill-id extra callback]
-  ((:client-req-learn-skill! @runtime-hooks) skill-id extra callback))
-
-(defn client-req-level-up!
-  [callback]
-  ((:client-req-level-up! @runtime-hooks) callback))
-
-(defn client-req-set-activated!
-  [activated callback]
-  ((:client-req-set-activated! @runtime-hooks) activated callback))
-
-(defn client-req-set-preset-slot!
-  [preset-idx key-idx cat-id ctrl-id callback]
-  ((:client-req-set-preset-slot! @runtime-hooks) preset-idx key-idx cat-id ctrl-id callback))
-
-(defn client-req-switch-preset!
-  [preset-idx callback]
-  ((:client-req-switch-preset! @runtime-hooks) preset-idx callback))
+  [hud-model screen-width screen-height render-state]
+  ((:client-build-hud-render-data @runtime-hooks) hud-model screen-width screen-height render-state))
 
 (defn client-open-managed-screen!
   [screen-key payload]
@@ -350,14 +337,6 @@
 (defn client-tick-keys!
   [key-state-fn get-player-uuid-fn]
   ((:client-tick-keys! @runtime-hooks) key-state-fn get-player-uuid-fn))
-
-(defn client-trigger-mode-switch!
-  [player-uuid]
-  ((:client-trigger-mode-switch! @runtime-hooks) player-uuid))
-
-(defn client-trigger-preset-switch!
-  [player-uuid]
-  ((:client-trigger-preset-switch! @runtime-hooks) player-uuid))
 
 (defn client-active-contexts
   []

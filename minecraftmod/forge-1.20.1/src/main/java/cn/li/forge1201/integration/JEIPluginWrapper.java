@@ -2,6 +2,7 @@ package cn.li.forge1201.integration;
 
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
+import cn.li.forge1201.MyMod1201;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
@@ -17,7 +18,7 @@ import net.minecraft.resources.ResourceLocation;
  */
 @JeiPlugin
 public class JEIPluginWrapper implements IModPlugin {
-    private static final ResourceLocation PLUGIN_UID = new ResourceLocation("academycraft", "jei_plugin");
+    private static final ResourceLocation PLUGIN_UID = new ResourceLocation(MyMod1201.MODID, "content_plugin");
 
     private IModPlugin clojurePlugin;
 

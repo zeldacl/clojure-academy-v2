@@ -1,7 +1,6 @@
 (ns cn.li.forge1201.runtime.item-handler
   "Item use event handler for runtime-driven items (Forge layer)."
     (:require [cn.li.mc1201.runtime.event.item-use :as item-use]
-              [cn.li.mcmod.client.platform-bridge :as client-bridge]
               [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickItem]
            [net.minecraftforge.event.entity.living LivingEntityUseItemEvent$Finish]
@@ -34,9 +33,7 @@
                             hand
                             stack
                             side
-                            {:open-screen-fn (fn [^Player p _player-uuid]
-                                               (client-bridge/open-screen! :ac/skill-tree
-                                                                           {:player-uuid (str (.getUUID p))}))}
+                            {}
                             "Forge")]
     (when consume?
       (.setCancellationResult event InteractionResult/CONSUME)

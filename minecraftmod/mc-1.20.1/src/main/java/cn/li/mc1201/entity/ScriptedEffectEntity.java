@@ -18,16 +18,16 @@ import java.util.List;
 import java.util.UUID;
 
 public class ScriptedEffectEntity extends Entity {
-    private static final int COIN_MAX_LIFE = 120;
+    private static final int BALLISTIC_MAX_LIFE = 120;
     private UUID ownerUuid;
     private int age;
     private final List<ArcData> activeArcs = new ArrayList<>();
-    private boolean coinStateInitialized;
-    private double coinCurrentY;
-    private double coinVelY;
-    private double coinStartY;
-    private double coinMaxY;
-    private double coinInitVel = 0.92D;
+    private boolean ballisticStateInitialized;
+    private double ballisticCurrentY;
+    private double ballisticVelY;
+    private double ballisticStartY;
+    private double ballisticMaxY;
+    private double ballisticInitVel = 0.92D;
 
     public ScriptedEffectEntity(EntityType<? extends ScriptedEffectEntity> entityType, Level level) {
         super(entityType, level);
@@ -66,12 +66,12 @@ public class ScriptedEffectEntity extends Entity {
             ownerUuid = tag.getUUID("owner");
         }
         age = tag.getInt("age");
-        coinStateInitialized = tag.getBoolean("coinStateInitialized");
-        coinCurrentY = tag.getDouble("coinCurrentY");
-        coinVelY = tag.getDouble("coinVelY");
-        coinStartY = tag.getDouble("coinStartY");
-        coinMaxY = tag.getDouble("coinMaxY");
-        coinInitVel = tag.contains("coinInitVel") ? tag.getDouble("coinInitVel") : 0.92D;
+        ballisticStateInitialized = tag.getBoolean("motionStateInitialized");
+        ballisticCurrentY = tag.getDouble("motionCurrentY");
+        ballisticVelY = tag.getDouble("motionVelY");
+        ballisticStartY = tag.getDouble("motionStartY");
+        ballisticMaxY = tag.getDouble("motionMaxY");
+        ballisticInitVel = tag.contains("motionInitVel") ? tag.getDouble("motionInitVel") : 0.92D;
         activeArcs.clear();
     }
 
@@ -81,12 +81,12 @@ public class ScriptedEffectEntity extends Entity {
             tag.putUUID("owner", ownerUuid);
         }
         tag.putInt("age", age);
-        tag.putBoolean("coinStateInitialized", coinStateInitialized);
-        tag.putDouble("coinCurrentY", coinCurrentY);
-        tag.putDouble("coinVelY", coinVelY);
-        tag.putDouble("coinStartY", coinStartY);
-        tag.putDouble("coinMaxY", coinMaxY);
-        tag.putDouble("coinInitVel", coinInitVel);
+        tag.putBoolean("motionStateInitialized", ballisticStateInitialized);
+        tag.putDouble("motionCurrentY", ballisticCurrentY);
+        tag.putDouble("motionVelY", ballisticVelY);
+        tag.putDouble("motionStartY", ballisticStartY);
+        tag.putDouble("motionMaxY", ballisticMaxY);
+        tag.putDouble("motionInitVel", ballisticInitVel);
     }
 
     private static double clamp01(double v) {
@@ -99,31 +99,31 @@ public class ScriptedEffectEntity extends Entity {
         return v;
     }
 
-    private boolean tickCoinThrowing(ScriptedEffectSpec spec, Player owner) {
+    private boolean tickVerticalBallisticMotion(ScriptedEffectSpec spec, Player owner) {
         if (owner == null) {
-            this.coinStateInitialized = false;
+            this.ballisticStateInitialized = false;
             return false;
         }
 
         double gravity = spec.getDoubleParam("gravity", 0.06D);
         double initVel = spec.getDoubleParam("init-vel", 0.92D);
 
-        if (!this.coinStateInitialized) {
-            this.coinStateInitialized = true;
-            this.coinStartY = owner.getY();
-            this.coinCurrentY = this.coinStartY;
-            this.coinInitVel = initVel;
-            this.coinVelY = owner.getDeltaMovement().y + initVel;
-            this.coinMaxY = this.coinCurrentY;
+        if (!this.ballisticStateInitialized) {
+            this.ballisticStateInitialized = true;
+            this.ballisticStartY = owner.getY();
+            this.ballisticCurrentY = this.ballisticStartY;
+            this.ballisticInitVel = initVel;
+            this.ballisticVelY = owner.getDeltaMovement().y + initVel;
+            this.ballisticMaxY = this.ballisticCurrentY;
         }
 
-        this.coinVelY -= gravity;
-        this.coinCurrentY += this.coinVelY;
-        this.coinMaxY = Math.max(this.coinMaxY, this.coinCurrentY);
-        this.setPos(owner.getX(), this.coinCurrentY, owner.getZ());
+        this.ballisticVelY -= gravity;
+        this.ballisticCurrentY += this.ballisticVelY;
+        this.ballisticMaxY = Math.max(this.ballisticMaxY, this.ballisticCurrentY);
+        this.setPos(owner.getX(), this.ballisticCurrentY, owner.getZ());
 
-        if ((this.coinCurrentY < owner.getY() && this.coinVelY < 0.0D) || this.tickCount > COIN_MAX_LIFE) {
-            this.coinStateInitialized = false;
+        if ((this.ballisticCurrentY < owner.getY() && this.ballisticVelY < 0.0D) || this.tickCount > BALLISTIC_MAX_LIFE) {
+            this.ballisticStateInitialized = false;
             this.discard();
             return true;
         }
@@ -131,16 +131,16 @@ public class ScriptedEffectEntity extends Entity {
         return false;
     }
 
-    public boolean hasCoinProgress() {
+    public boolean hasMotionProgress() {
         ScriptedEffectSpec spec = getSpec();
         if (spec == null) {
             return false;
         }
-        return "coin-throwing".equals(normalizeHook(spec.getEffectHook())) && this.coinStateInitialized;
+        return "vertical-ballistic".equals(normalizeHook(spec.getEffectHook())) && this.ballisticStateInitialized;
     }
 
-    public double getCoinProgress() {
-        if (!hasCoinProgress()) {
+    public double getMotionProgress() {
+        if (!hasMotionProgress()) {
             return 0.0D;
         }
 
@@ -149,11 +149,11 @@ public class ScriptedEffectEntity extends Entity {
             return 0.0D;
         }
 
-        if (this.coinVelY > 0.0D) {
-            return ((this.coinInitVel - this.coinVelY) / this.coinInitVel) * 0.5D;
+        if (this.ballisticVelY > 0.0D) {
+            return ((this.ballisticInitVel - this.ballisticVelY) / this.ballisticInitVel) * 0.5D;
         }
 
-        return Math.min(1.0D, 0.5D + ((this.coinMaxY - this.coinCurrentY) / (this.coinMaxY - this.coinStartY)) * 0.5D);
+        return Math.min(1.0D, 0.5D + ((this.ballisticMaxY - this.ballisticCurrentY) / (this.ballisticMaxY - this.ballisticStartY)) * 0.5D);
     }
 
     @Override
@@ -167,16 +167,16 @@ public class ScriptedEffectEntity extends Entity {
             setPos(owner.getX(), owner.getY() + 1.0, owner.getZ());
         }
 
-        boolean discardedByCoinPhysics = false;
-        if (spec != null && "coin-throwing".equals(effectHook)) {
-            discardedByCoinPhysics = tickCoinThrowing(spec, owner);
+        boolean discardedByMotionProfile = false;
+        if (spec != null && "vertical-ballistic".equals(effectHook)) {
+            discardedByMotionProfile = tickVerticalBallisticMotion(spec, owner);
         }
 
-        if (!discardedByCoinPhysics && level().isClientSide() && level() instanceof ClientLevel clientLevel) {
+        if (!discardedByMotionProfile && level().isClientSide() && level() instanceof ClientLevel clientLevel) {
             ScriptedEffectHooks.resolve(effectHook).onClientTick(this, clientLevel);
         }
 
-        if (discardedByCoinPhysics) {
+        if (discardedByMotionProfile) {
             return;
         }
 

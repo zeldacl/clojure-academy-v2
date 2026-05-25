@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public final class MdBallEffectHook implements ScriptedEffectHook {
+public final class OwnerOrbitEffectHook implements ScriptedEffectHook {
     private static final double DEFAULT_RANGE_FROM = 0.8D;
     private static final double DEFAULT_RANGE_TO = 1.3D;
     private static final double DEFAULT_Y_FROM = -1.2D;
@@ -22,7 +22,7 @@ public final class MdBallEffectHook implements ScriptedEffectHook {
     private static final double DEFAULT_WOBBLE_Y_PHASE_SHIFT = Math.PI / 3.5D;
     private static final double DEFAULT_THETA_SPREAD_FACTOR = 0.45D;
 
-    private final Map<UUID, BallState> states = new ConcurrentHashMap<>();
+    private final Map<UUID, OrbitState> states = new ConcurrentHashMap<>();
 
     @Override
     public void onClientTick(ScriptedEffectEntity entity, ClientLevel level) {
@@ -36,8 +36,8 @@ public final class MdBallEffectHook implements ScriptedEffectHook {
             return;
         }
 
-        BallState state = states.computeIfAbsent(entity.getUUID(),
-        key -> BallState.create(entity, owner, entity.getEffectRandom()));
+        OrbitState state = states.computeIfAbsent(entity.getUUID(),
+        key -> OrbitState.create(entity, owner, entity.getEffectRandom()));
         ScriptedEffectSpec effectSpec = entity.getEffectSpec();
         double phaseStep = effectSpec == null
             ? DEFAULT_PHASE_STEP
@@ -70,20 +70,20 @@ public final class MdBallEffectHook implements ScriptedEffectHook {
         entity.setXRot(owner.getXRot());
     }
 
-    private static final class BallState {
+    private static final class OrbitState {
         private final double subX;
         private final double subY;
         private final double subZ;
         private double phase;
 
-        private BallState(double subX, double subY, double subZ, double phase) {
+        private OrbitState(double subX, double subY, double subZ, double phase) {
             this.subX = subX;
             this.subY = subY;
             this.subZ = subZ;
             this.phase = phase;
         }
 
-        private static BallState create(ScriptedEffectEntity entity, Player owner, RandomSource random) {
+        private static OrbitState create(ScriptedEffectEntity entity, Player owner, RandomSource random) {
             ScriptedEffectSpec effectSpec = entity.getEffectSpec();
             double baseYaw = Math.toRadians(-owner.getYRot());
             double thetaSpreadFactor = effectSpec == null
@@ -100,7 +100,7 @@ public final class MdBallEffectHook implements ScriptedEffectHook {
             double subZ = Math.cos(theta) * radialRange;
             double subY = range(random, yFrom, yTo);
             double phase = range(random, 0.0D, Math.PI * 2.0D);
-            return new BallState(subX, subY, subZ, phase);
+            return new OrbitState(subX, subY, subZ, phase);
         }
 
         private static double range(RandomSource random, double min, double max) {

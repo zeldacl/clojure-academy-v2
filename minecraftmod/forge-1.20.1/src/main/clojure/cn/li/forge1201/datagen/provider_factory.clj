@@ -12,7 +12,7 @@
            [net.minecraftforge.common.data ExistingFileHelper]))
 
 (def ^:private blockstate-provider-name
-  "AcademyCraft Forge Blockstate Provider")
+  "Forge Blockstate Provider")
 
 (def ^:private provider-factories
   {:blockstate (fn [pack-output _exfile-helper]

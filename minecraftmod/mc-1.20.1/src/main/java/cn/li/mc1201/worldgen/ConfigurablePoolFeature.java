@@ -11,15 +11,15 @@ import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 
 /**
- * Shared implementation for the phase liquid pool feature.
+ * Shared implementation for a small configurable underground pool feature.
  */
-public class PhaseLiquidPoolFeature extends Feature<NoneFeatureConfiguration> {
+public class ConfigurablePoolFeature extends Feature<NoneFeatureConfiguration> {
 
-    private final BlockState phaseLiquidBlock;
+    private final BlockState fillBlock;
 
-    public PhaseLiquidPoolFeature(Codec<NoneFeatureConfiguration> codec, BlockState phaseLiquidBlock) {
+    public ConfigurablePoolFeature(Codec<NoneFeatureConfiguration> codec, BlockState fillBlock) {
         super(codec);
-        this.phaseLiquidBlock = phaseLiquidBlock;
+        this.fillBlock = fillBlock;
     }
 
     @Override
@@ -93,7 +93,7 @@ public class PhaseLiquidPoolFeature extends Feature<NoneFeatureConfiguration> {
                             return false;
                         }
 
-                        if (by < 4 && !state.isSolidRender(level, checkPos) && !state.is(phaseLiquidBlock.getBlock())) {
+                        if (by < 4 && !state.isSolidRender(level, checkPos) && !state.is(fillBlock.getBlock())) {
                             return false;
                         }
                     }
@@ -106,7 +106,7 @@ public class PhaseLiquidPoolFeature extends Feature<NoneFeatureConfiguration> {
                 for (int by = 0; by < 8; ++by) {
                     if (buffer[(bx * 16 + bz) * 8 + by]) {
                         BlockPos placePos = new BlockPos(x + bx, y + by, z + bz);
-                        BlockState toPlace = by >= 4 ? Blocks.AIR.defaultBlockState() : phaseLiquidBlock;
+                        BlockState toPlace = by >= 4 ? Blocks.AIR.defaultBlockState() : fillBlock;
                         level.setBlock(placePos, toPlace, 2);
                     }
                 }
@@ -134,7 +134,7 @@ public class PhaseLiquidPoolFeature extends Feature<NoneFeatureConfiguration> {
                 BlockPos surfacePos = new BlockPos(x + bx, y + 4, z + bz);
                 if (level.getBiome(surfacePos).value().coldEnoughToSnow(surfacePos)) {
                     BlockState surfaceState = level.getBlockState(surfacePos);
-                    if (surfaceState.is(phaseLiquidBlock.getBlock())) {
+                    if (surfaceState.is(fillBlock.getBlock())) {
                         level.setBlock(surfacePos, Blocks.ICE.defaultBlockState(), 2);
                     }
                 }

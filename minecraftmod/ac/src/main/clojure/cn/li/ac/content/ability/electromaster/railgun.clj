@@ -122,7 +122,7 @@
 (defn- coin-candidates [entities]
   (->> entities
        (filter #(= "entity_coin_throwing" (:type %)))
-       (sort-by (fn [ent] (double (or (:coin-progress ent) 0.0))) >)))
+      (sort-by (fn [ent] (double (or (:motion-progress ent) 0.0))) >)))
 
 (defn- coin-judged-uuid [player-id]
   (skill-effects/player-path player-id [:runtime :railgun :coin-judged-uuid]))
@@ -146,7 +146,7 @@
                        (when (not= judged-uuid (:uuid ent)) ent))
                      candidates)]
       (if coin
-        (assoc (qte-status (double (or (:coin-progress coin) 0.0)))
+        (assoc (qte-status (double (or (:motion-progress coin) 0.0)))
                :coin-uuid (:uuid coin))
         (do
           ;; Clear stale lock when all coins are gone.

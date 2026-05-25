@@ -19,6 +19,7 @@
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]))
 
@@ -29,6 +30,31 @@
 ;; Per-slot last key-tick send timestamp (ms). Limits key-tick messages to ~10/s.
 (defonce ^:private slot-key-tick-ms (atom {}))
 (defonce ^:private charge-coin-state (atom {}))
+
+(def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
+(def ^:private cycle-selection-input-id :content/cycle-selection)
+
+(defn- handle-toggle-primary-state-input!
+  [{:keys [player-uuid]} _payload]
+  (when player-uuid
+    (client-keybinds/trigger-mode-switch! player-uuid)))
+
+(defn- handle-cycle-selection-input!
+  [{:keys [player-uuid]} _payload]
+  (when player-uuid
+    (client-keybinds/switch-preset! player-uuid)))
+
+(defn install-client-input-descriptors!
+  []
+  (runtime-hooks/register-client-input-descriptor!
+   {:id toggle-primary-state-input-id
+    :content-id "ac"
+    :handler handle-toggle-primary-state-input!})
+  (runtime-hooks/register-client-input-descriptor!
+   {:id cycle-selection-input-id
+    :content-id "ac"
+    :handler handle-cycle-selection-input!})
+  nil)
 
 (defn- now-ms [] (System/currentTimeMillis))
 
@@ -323,10 +349,17 @@
       combat-notice (some-> (:combat-notice hud-render-data)
             (assoc :kind :text)
             (dissoc :type))
-        skill-slots (mapv (fn [slot] (-> slot (assoc :kind :skill-slot) (dissoc :type)))
+         skill-slots (mapv (fn [slot]
+              (-> slot
+                  (assoc :kind :content-slot
+                    :content-icon (:skill-icon slot)
+                    :content-label (:skill-name slot)
+                    :disabled? (:in-cooldown slot)
+                    :status-seconds (:cooldown-seconds slot))
+                  (dissoc :type :skill-icon :skill-name :in-cooldown :cooldown-seconds)))
                           (or (:skill-slots hud-render-data) []))
         preset-indicator (some-> (:preset-indicator hud-render-data)
-                                 (assoc :kind :preset-indicator
+                   (assoc :kind :selection-indicator
                                         :x (int (/ screen-width 2))
                                         :y (- screen-height 60))
                                  (dissoc :type))
@@ -363,7 +396,7 @@
         _ (update-vm-wave-circles! vm-wave-active? screen-width screen-height now-ms)
         vm-wave (vm-wave-elements now-ms)
         crosshair (when reflection-active?
-                    {:kind :vec-reflection-crosshair
+              {:kind :content-crosshair
                      :x (int (/ screen-width 2))
                      :y (int (/ screen-height 2))
                      :phase phase

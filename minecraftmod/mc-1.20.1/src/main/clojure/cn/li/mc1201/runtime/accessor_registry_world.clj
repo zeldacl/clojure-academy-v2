@@ -5,7 +5,7 @@
    - Block queries and manipulation
    - World state access
    - Raycast operations
-   - Saved locations"
+  - Content-named world positions"
   (:require [cn.li.mc1201.runtime.accessor-registry-core :as core]))
 
 (defn- register-world-accessors-impl!
@@ -62,7 +62,7 @@
       (fn [_ _ _ _ _] nil)
       "Cast ray for entity collision. Returns matching entities.")
 
-    ;; Saved locations
+    ;; Content-named world positions
     (core/register-accessor! :world :save-location
       (fn [_ _ _] nil)
       "Save a world location with identifier.")
@@ -71,9 +71,9 @@
       (fn [_ _] nil)
       "Load saved location by identifier. Returns world-pos or nil.")
 
-    (core/register-accessor! :world :list-saved-locations
+    (core/register-accessor! :world :list-named-positions
       (fn [_] nil)
-      "List all saved location identifiers in this world.")
+      "List all named position identifiers in this world.")
 
     (core/register-accessor! :world :delete-location
       (fn [_ _] nil)

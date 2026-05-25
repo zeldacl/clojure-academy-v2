@@ -9,7 +9,7 @@ import net.minecraft.util.RandomSource;
 import java.util.Iterator;
 import java.util.List;
 
-public final class IntensifyArcsEffectHook implements ScriptedEffectHook {
+public final class TieredArcsEffectHook implements ScriptedEffectHook {
     private static final int DEFAULT_ARC_LIFE_TICKS = 3;
     private static final int DEFAULT_TIER_BATCH_BASE = 3;
     private static final int DEFAULT_TIER_BATCH_RANDOM = 2;
@@ -44,7 +44,6 @@ public final class IntensifyArcsEffectHook implements ScriptedEffectHook {
     private static final int DEFAULT_BRANCH_ATTACH_START = 2;
     private static final int DEFAULT_BRANCH_ATTACH_RANDOM_SPAN_SUB = 3;
 
-    // Original-like tier sequence from 1.12 EntityIntensifyEffect#initEvents.
     private static final double[] DEFAULT_TIER_HEIGHTS = {2.0D, 1.8D, 1.5D, 1.0D, 0.5D, 0.0D, -0.1D};
     private static final int[] DEFAULT_TIER_DELAYS = {0, 1, 3, 4, 6, 7, 8};
 
@@ -158,7 +157,6 @@ public final class IntensifyArcsEffectHook implements ScriptedEffectHook {
             : spec.getIntParam("main-points", DEFAULT_MAIN_POINTS);
         mainPoints = Math.max(2, mainPoints);
 
-        // Main SubArc-like trunk: fast rise + rebound and damped side oscillation.
         float[][] main = new float[mainPoints][3];
         float baseTheta = (float) Math.atan2(ox, oz);
         float sideAmpRandomPart = sideAmpRandom <= 0.0F ? 0.0F : random.nextFloat() * sideAmpRandom;
@@ -175,7 +173,6 @@ public final class IntensifyArcsEffectHook implements ScriptedEffectHook {
             float reboundCurve = (float) Math.sin(t * Math.PI) * rebound;
             float y = (float) (oy + (rise * t) - (reboundCurve * t));
 
-            // Use local radial tangent to make the arc bend around the player body.
             float radialX = (float) Math.sin(baseTheta);
             float radialZ = (float) Math.cos(baseTheta);
             float tangentX = radialZ;
@@ -276,7 +273,6 @@ public final class IntensifyArcsEffectHook implements ScriptedEffectHook {
             double pz = entity.getZ() + p0[2];
             level.addParticle(ParticleTypes.ELECTRIC_SPARK, px, py, pz, 0.0, 0.0, 0.0);
 
-            // Brief sparks at branch tips improve SubArc fork readability.
             for (int i = 1; i < arc.strands.length; i++) {
                 float[][] branch = arc.strands[i];
                 float[] tip = branch[branch.length - 1];
