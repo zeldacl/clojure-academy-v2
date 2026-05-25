@@ -65,7 +65,9 @@ tasks.register('runAcClojureTestsFast', JavaExec) {
     description = 'Run ac clojure.test suites directly from source classpath (bypasses compileTestClojure lock hotpath).'
     dependsOn compileClojure, classes
     workingDir = project.projectDir
-    classpath = sourceSets.main.runtimeClasspath + sourceSets.test.runtimeClasspath + files(sourceSets.test.allSource.srcDirs)
+    // Do not use sourceSets.test.runtimeClasspath here: it carries test output build deps
+    // and pulls compileTestClojure back into the supposedly fast path.
+    classpath = sourceSets.main.runtimeClasspath + configurations.testRuntimeClasspath + files(sourceSets.test.resources.srcDirs) + files(sourceSets.test.allSource.srcDirs)
     mainClass = 'clojure.main'
     if (System.getProperty('ac.test.only') != null) {
         systemProperty 'ac.test.only', System.getProperty('ac.test.only')

@@ -55,6 +55,7 @@
   [registry-name]
   (let [block-spec (registry-name->block-spec registry-name)]
     (or (get-in block-spec [:rendering :item-texture])
+        (get-in block-spec [:rendering :textures :all])
         (get-in block-spec [:rendering :texture])
         (str modid/*mod-id* ":block/" registry-name))))
 

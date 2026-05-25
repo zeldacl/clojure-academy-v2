@@ -27,7 +27,7 @@
                     :harvest-level 2
                     :sounds :stone}
          :rendering {:model-parent "minecraft:block/cube_all"
-                     :textures {:all (modid/asset-path "block" "constrained_ore")}
+                     :textures {:all (modid/asset-path "block" "constraint_metal")}
                      :flat-item-icon? true}}))
     (bdsl/register-block!
       (bdsl/create-block-spec
@@ -41,7 +41,7 @@
                     :harvest-level 2
                     :sounds :stone}
          :rendering {:model-parent "minecraft:block/cube_all"
-                     :textures {:all (modid/asset-path "block" "imaginary_ore")}
+                     :textures {:all (modid/asset-path "block" "imagsil_ore")}
                      :flat-item-icon? true}}))
     (bdsl/register-block!
       (bdsl/create-block-spec

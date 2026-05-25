@@ -18,9 +18,35 @@
                 "ac/src/main/clojure"
                 "ac/src/main/java"
                 "forge-1.20.1/src/main/clojure"
-                "forge-1.20.1/src/main/java"]
+                "forge-1.20.1/src/main/java"
+                "fabric-1.20.1/src/main/clojure"
+                "fabric-1.20.1/src/main/java"]
 
- :linters {   ;; 【增强】增加排除范围，防止扫描编译产物
-           :exclude-files ["build/.*" "bin/.*" "\\.gradle/.*" "out/.*" "target/.*"]
-           :clj-kondo {:config {       ;; 告诉内核忽略对外部未定义符号的深度检索
+ ;; 顶层排除才会阻止 clojure-lsp 建索引；放在 :linters 下只影响/可能只影响 clj-kondo。
+ :exclude-files ["build/.*"
+                 ".*[/\\\\]build[/\\\\].*"
+                 "bin/.*"
+                 ".*[/\\\\]bin[/\\\\].*"
+                 "out/.*"
+                 "target/.*"
+                 "classes/.*"
+                 "\\.gradle/.*"
+                 ".*[/\\\\]\\.gradle[/\\\\].*"
+                 ".*[/\\\\]src[/\\\\]generated[/\\\\].*"
+                 ".*[/\\\\]run[/\\\\].*"
+                 ".*[/\\\\]run-data[/\\\\].*"
+                 ".*[/\\\\]run-gametest[/\\\\].*"
+                 "\\.lsp[/\\\\]\\.cache[/\\\\].*"
+                 "\\.clj-kondo[/\\\\]\\.cache[/\\\\].*"
+                 "hs_err_pid.*\\.log"
+                 "replay_pid.*\\.log"
+                 ".*\\.jfr"
+                 ".*\\.log"
+                 ".*\\.log\\.gz"
+                 "build-.+\\.txt"
+                 "compile-.+\\.txt"
+                 ".*-verify.*\\.log"
+                 ".*-bisect.*\\.txt"]
+
+ :linters {:clj-kondo {:config {       ;; 告诉内核忽略对外部未定义符号的深度检索
                                 :lint-as {core.async/go clojure.core/let}}}}}

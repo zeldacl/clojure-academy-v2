@@ -118,10 +118,28 @@ tasks.register('runMcmodUnitTests') {
     dependsOn ':mcmod:runMcmodClojureTests'
 }
 
+tasks.register('runAcUnitTestsFast') {
+    group = 'verification'
+    description = 'Execute ac Clojure unit tests directly from source classpath.'
+    dependsOn ':ac:runAcClojureTestsFast'
+}
+
+tasks.register('runMcmodUnitTestsFast') {
+    group = 'verification'
+    description = 'Execute mcmod Clojure unit tests directly from source classpath.'
+    dependsOn ':mcmod:runMcmodClojureTestsFast'
+}
+
 tasks.register('quickUnitTests') {
     group = 'verification'
     description = 'Execute platform-neutral ac and mcmod Clojure unit tests in one Gradle invocation.'
     dependsOn 'runAcUnitTests', 'runMcmodUnitTests'
+}
+
+tasks.register('quickUnitTestsFast') {
+    group = 'verification'
+    description = 'Execute platform-neutral ac and mcmod Clojure unit tests from source classpaths.'
+    dependsOn 'runAcUnitTestsFast', 'runMcmodUnitTestsFast'
 }
 
 tasks.register('verifyLocalPrGate') {
@@ -381,9 +399,21 @@ tasks.register('verifyForgeHookCoverage') {
     group = 'verification'
     description = 'Verify hook implementation keys cover AC hook catalog declarations (Phase C: mc1201 is shared source).'
 
+    def hookCatalog = file('ac/src/main/clojure/cn/li/ac/entity/hook_catalog.clj')
+    def sharedHookCore = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/entity/hook_registry_core.clj')
+    def passMarker = layout.buildDirectory.file('verification/verifyForgeHookCoverage/passed.txt')
+
+    inputs.files(hookCatalog, sharedHookCore)
+        .withPropertyName('forgeHookCoverageSources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    outputs.file(passMarker)
+    outputs.cacheIf { true }
+
     doLast {
-        def hookCatalog = file('ac/src/main/clojure/cn/li/ac/entity/hook_catalog.clj')
-        def sharedHookCore = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/entity/hook_registry_core.clj')
+        def markerFile = passMarker.get().asFile
+        if (markerFile.exists()) {
+            markerFile.delete()
+        }
 
         [hookCatalog, sharedHookCore].each { f ->
             if (!f.exists()) {
@@ -407,6 +437,8 @@ tasks.register('verifyForgeHookCoverage') {
             throw new GradleException("Hook coverage missing impl keys in mc1201 (Phase C shared layer). effect=${missingEffect} ray=${missingRay} marker=${missingMarker}")
         }
 
+        markerFile.parentFile.mkdirs()
+        markerFile.text = "passed effect=${effectCatalogImpls.size()} ray=${rayCatalogImpls.size()} marker=${markerCatalogImpls.size()}${System.lineSeparator()}"
         logger.lifecycle('[verifyForgeHookCoverage] passed (mc1201 shared). effect={} ray={} marker={}', effectCatalogImpls.size(), rayCatalogImpls.size(), markerCatalogImpls.size())
     }
 }
@@ -415,9 +447,21 @@ tasks.register('verifyFabricHookManifest') {
     group = 'verification'
     description = 'Verify Fabric unsupported hook manifest explicitly tracks AC hook catalog declarations.'
 
+    def hookCatalog = file('ac/src/main/clojure/cn/li/ac/entity/hook_catalog.clj')
+    def manifestFile = file('docs/dev/fabric-hook-support.properties')
+    def passMarker = layout.buildDirectory.file('verification/verifyFabricHookManifest/passed.txt')
+
+    inputs.files(hookCatalog, manifestFile)
+        .withPropertyName('fabricHookManifestSources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    outputs.file(passMarker)
+    outputs.cacheIf { true }
+
     doLast {
-        def hookCatalog = file('ac/src/main/clojure/cn/li/ac/entity/hook_catalog.clj')
-        def manifestFile = file('docs/dev/fabric-hook-support.properties')
+        def markerFile = passMarker.get().asFile
+        if (markerFile.exists()) {
+            markerFile.delete()
+        }
 
         [hookCatalog, manifestFile].each { f ->
             if (!f.exists()) {
@@ -470,6 +514,8 @@ tasks.register('verifyFabricHookManifest') {
             throw new GradleException("Fabric hook manifest missing impl keys. effect=${missingEffectDecl} ray=${missingRayDecl} marker=${missingMarkerDecl}")
         }
 
+        markerFile.parentFile.mkdirs()
+        markerFile.text = "passed supportedEffect=${supportedEffects.size()} supportedRay=${supportedRays.size()} supportedMarker=${supportedMarkers.size()} unsupportedEffect=${unsupportedEffects.size()} unsupportedRay=${unsupportedRays.size()} unsupportedMarker=${unsupportedMarkers.size()}${System.lineSeparator()}"
         logger.lifecycle('[verifyFabricHookManifest] passed. supported effect={} ray={} marker={}, unsupported effect={} ray={} marker={}',
             supportedEffects.size(), supportedRays.size(), supportedMarkers.size(), unsupportedEffects.size(), unsupportedRays.size(), unsupportedMarkers.size())
     }
@@ -3084,10 +3130,22 @@ tasks.register('verifyFabricSmoke') {
     dependsOn 'runFabricSmoke', 'validateFabricSmokeLog'
 }
 
+tasks.register('verifyPlatformSmoke') {
+    group = 'verification'
+    description = 'Run explicit platform smoke checks that are intentionally excluded from compile-level verification.'
+    dependsOn 'verifyFabricSmoke'
+}
+
 tasks.register('verifyCurrentPlatforms') {
     group = 'verification'
     description = 'Run compile-level verification matrix for current maintained platforms (Forge + Fabric).'
-    dependsOn 'verifyForgeBaseline', 'verifyFabricBaseline', 'verifyFabricSmoke', 'verifyPlatformHookCoverage', 'verifyPlatformNoBusinessHookIds', 'verifyCleanupResidueGuards'
+    dependsOn 'verifyForgeBaseline', 'verifyFabricBaseline', 'verifyPlatformHookCoverage', 'verifyPlatformNoBusinessHookIds', 'verifyCleanupResidueGuards'
+}
+
+tasks.register('verifyCurrentPlatformsWithSmoke') {
+    group = 'verification'
+    description = 'Run current platform compile-level verification plus explicit smoke checks.'
+    dependsOn 'verifyCurrentPlatforms', 'verifyPlatformSmoke'
 }
 
 def collectRelativeFiles = { File rootDir, String relativeDir, Set<String> excludedRelPaths ->
@@ -3150,9 +3208,29 @@ tasks.register('verifyForgeFabricDatagenParity') {
     group = 'verification'
     description = 'Compare aligned Forge/Fabric generated resources for shared datagen outputs (recipes, blockstates, item/block models, and lang).'
 
+    def forgeGeneratedRoot = file('forge-1.20.1/src/generated/resources')
+    def fabricGeneratedRoot = file('fabric-1.20.1/src/generated/resources')
+    def passMarker = layout.buildDirectory.file('verification/verifyForgeFabricDatagenParity/passed.txt')
+
+    inputs.dir(forgeGeneratedRoot)
+        .withPropertyName('forgeGeneratedResources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+        .optional()
+    inputs.dir(fabricGeneratedRoot)
+        .withPropertyName('fabricGeneratedResources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+        .optional()
+    outputs.file(passMarker)
+    outputs.cacheIf { true }
+
     doLast {
-        def forgeRoot = file('forge-1.20.1/src/generated/resources')
-        def fabricRoot = file('fabric-1.20.1/src/generated/resources')
+        def markerFile = passMarker.get().asFile
+        if (markerFile.exists()) {
+            markerFile.delete()
+        }
+
+        def forgeRoot = forgeGeneratedRoot
+        def fabricRoot = fabricGeneratedRoot
 
         def sections = [
             'data/my_mod/recipes'               : [] as Set<String>,
@@ -3185,6 +3263,8 @@ tasks.register('verifyForgeFabricDatagenParity') {
             throw new GradleException("Forge/Fabric datagen parity check failed:\n - ${mismatches.join('\n - ')}")
         }
 
+        markerFile.parentFile.mkdirs()
+        markerFile.text = "passed sections=${sections.keySet().size()}${System.lineSeparator()}"
         logger.lifecycle('[verifyForgeFabricDatagenParity] passed. sections={}', sections.keySet().size())
     }
 }

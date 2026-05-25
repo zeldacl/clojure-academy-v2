@@ -15,8 +15,17 @@
         "**/.gradle/**",
         "**/out/**",
         "**/target/**",
+        "**/src/generated/**",
+        "**/run/**",
+        "**/run-data/**",
+        "**/run-gametest/**",
         "**/.lsp/**",
-        "**/.clj-kondo/.cache/**"
+        "**/.clj-kondo/.cache/**",
+        "**/*.log",
+        "**/*.log.gz",
+        "**/hs_err_pid*.log",
+        "**/replay_pid*.log",
+        "**/*.jfr"
       ]
     },
     {

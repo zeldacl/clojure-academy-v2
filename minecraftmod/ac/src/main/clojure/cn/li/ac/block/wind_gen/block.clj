@@ -66,11 +66,11 @@
                           :sounds :metal}}
       :controller {:registry-name "wind_gen_main"
                    :rendering {:flat-item-icon? true
-                               :textures {:all (modid/asset-path "block" "wind_gen_main")}}
+                               :textures {:all (modid/asset-path "block" "windgen_main")}}
                    :events {:on-right-click wind-logic/open-wind-main-gui!}}
       :part {:registry-name "wind_gen_main_part"
              :rendering {:model-parent "minecraft:block/cube_all"
-                         :textures {:all (modid/asset-path "block" "wind_gen_main")}}
+                         :textures {:all (modid/asset-path "block" "windgen_main")}}
              :events {:on-right-click wind-logic/open-wind-main-gui!}})
 
     (bdsl/defmultiblock 'wind-gen-base
@@ -86,11 +86,11 @@
                           :sounds :metal}}
       :controller {:registry-name "wind_gen_base"
                    :rendering {:flat-item-icon? true
-                               :textures {:all (modid/asset-path "block" "wind_gen_base")}}
+                             :textures {:all (modid/asset-path "block" "windgen_base")}}
                    :events {:on-right-click wind-logic/open-wind-base-gui!}}
       :part {:registry-name "wind_gen_base_part"
              :rendering {:model-parent "minecraft:block/cube_all"
-                         :textures {:all (modid/asset-path "block" "wind_gen_base")}}
+                           :textures {:all (modid/asset-path "block" "windgen_base")}}
              :events {:on-right-click wind-logic/open-wind-base-gui!}})
 
     (bdsl/register-block!
@@ -106,7 +106,7 @@
                     :sounds :metal}
          :events {:on-place wind-logic/on-wind-pillar-placed!}
          :rendering {:model-parent "minecraft:block/cube_all"
-                     :textures {:all (modid/asset-path "block" "wind_gen_pillar")}
+                     :textures {:all (modid/asset-path "block" "windgen_pillar")}
                      :flat-item-icon? true}}))
 
     (hooks/register-network-handler! wind-handlers/register-network-handlers!)
