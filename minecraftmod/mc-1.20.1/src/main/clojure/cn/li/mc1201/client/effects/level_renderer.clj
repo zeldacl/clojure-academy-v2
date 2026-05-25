@@ -2,11 +2,16 @@
   "Shared client level-effect rendering core (Minecraft 1.20.1)."
   (:require [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
+           [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
+           [net.minecraft.core BlockPos]
+           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource RenderType]
            [net.minecraft.client.renderer.texture OverlayTexture]
            [net.minecraft.resources ResourceLocation]
+           [net.minecraft.tags BlockTags]
            [net.minecraft.world.entity.player Abilities]
+           [net.minecraft.world.level.block Block]
            [net.minecraft.world.phys Vec3]))
 
 (def ^:private full-bright-uv2 15728880)
@@ -52,6 +57,66 @@
      :y (+ base-y -0.22 (* (.-y look) 0.06))
      :z (+ base-z (* (.-z look) 0.35) (* right-z 0.22))}))
 
+(defn- block-id-at
+  [level bx by bz]
+  (let [pos (BlockPos. (int bx) (int by) (int bz))
+        block-state (.getBlockState level pos)
+        ^Block block (.getBlock block-state)
+        key (.getKey BuiltInRegistries/BLOCK block)]
+    (when key (str key))))
+
+(defn- harvest-level-at
+  [level bx by bz]
+  (let [pos (BlockPos. (int bx) (int by) (int bz))
+        block-state (.getBlockState level pos)]
+    (cond
+      (.is block-state BlockTags/NEEDS_DIAMOND_TOOL) 3
+      (.is block-state BlockTags/NEEDS_IRON_TOOL) 2
+      (.is block-state BlockTags/NEEDS_STONE_TOOL) 1
+      :else 0)))
+
+(defn- make-nearby-block-query-fn
+  [^LocalPlayer player]
+  (fn [x y z radius block-predicate]
+    (try
+      (let [level (.level player)
+            base-x (int (Math/floor (double x)))
+            base-y (int (Math/floor (double y)))
+            base-z (int (Math/floor (double z)))
+            r (int (Math/ceil (double radius)))]
+        (if (or (nil? level) (<= r 0))
+          []
+          (loop [dx (- r)
+                 acc []]
+            (if (> dx r)
+              acc
+              (recur (inc dx)
+                     (loop [dy (- r)
+                            acc2 acc]
+                       (if (> dy r)
+                         acc2
+                         (recur (inc dy)
+                                (loop [dz (- r)
+                                       acc3 acc2]
+                                  (if (> dz r)
+                                    acc3
+                                    (let [dist (Math/sqrt (double (+ (* dx dx) (* dy dy) (* dz dz))))]
+                                      (if (> dist (double radius))
+                                        (recur (inc dz) acc3)
+                                        (let [bx (+ base-x dx)
+                                              by (+ base-y dy)
+                                              bz (+ base-z dz)
+                                              block-id (block-id-at level bx by bz)]
+                                          (if (and block-id (block-predicate block-id))
+                                            (recur (inc dz) (conj acc3 {:x bx
+                                                                        :y by
+                                                                        :z bz
+                                                                        :block-id block-id
+                                                                        :harvest-level (harvest-level-at level bx by bz)}))
+                                            (recur (inc dz) acc3)))))))))))))))
+      (catch Exception _
+        []))))
+
 (defn- emit-line-vertex!
   [^VertexConsumer vc mat x y z r g b a]
   (-> vc
@@ -94,7 +159,10 @@
            tick
            render-plasma-op!]}]
   (let [hand-pos (hand-center-pos player)
-        plan (power-runtime/client-build-level-effect-plan camera-pos hand-pos tick)]
+      frame-context {:local-player-uuid (:player-uuid hand-pos)
+             :query-nearby-blocks (make-nearby-block-query-fn player)
+             :world-id (some-> (.dimension (.level player)) (.location) str)}
+      plan (power-runtime/client-build-level-effect-plan camera-pos hand-pos tick frame-context)]
     (apply-local-walk-speed-from-plan! player plan)
     (when (seq (:ops plan))
       (let [line-ops (filter #(= (:kind %) :line) (:ops plan))

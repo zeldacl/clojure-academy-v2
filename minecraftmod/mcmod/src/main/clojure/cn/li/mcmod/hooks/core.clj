@@ -65,7 +65,7 @@
          :client-register-push-handlers! noop
          :client-notify-visual-event! noop
          :client-enqueue-level-effect! noop
-         :client-build-level-effect-plan (fn [_ _ _] nil)
+         :client-build-level-effect-plan (fn [_ _ _ & _] nil)
          :client-tick-level-effects! noop
          :client-slot-visual-state (fn [_ _] :idle)
          :client-visual-state (fn [_ _] nil)
@@ -359,8 +359,10 @@
   ((:client-enqueue-level-effect! @runtime-hooks) effect-id payload))
 
 (defn client-build-level-effect-plan
-  [camera-pos hand-center-pos tick]
-  ((:client-build-level-effect-plan @runtime-hooks) camera-pos hand-center-pos tick))
+  ([camera-pos hand-center-pos tick]
+   ((:client-build-level-effect-plan @runtime-hooks) camera-pos hand-center-pos tick))
+  ([camera-pos hand-center-pos tick frame-context]
+   ((:client-build-level-effect-plan @runtime-hooks) camera-pos hand-center-pos tick frame-context)))
 
 (defn client-tick-level-effects!
   []

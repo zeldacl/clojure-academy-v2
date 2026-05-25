@@ -95,10 +95,10 @@
    {:skill-id :mine-detect :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [15.0 30.0] :comment "MineDetect scan range lerp endpoints."}
    {:skill-id :mine-detect :id :effect.blindness-duration-ticks :path "effect.blindness-duration-ticks" :section-suffix "effect" :type :int :min 0 :default 100 :comment "MineDetect blindness duration in ticks."}
    {:skill-id :mine-detect :id :effect.blindness-amplifier :path "effect.blindness-amplifier" :section-suffix "effect" :type :int :min 0 :default 0 :comment "MineDetect blindness amplifier."}
-   {:skill-id :mine-detect :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [600.0 400.0] :comment "MineDetect down-stage CP cost lerp endpoints."}
-   {:skill-id :mine-detect :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [80.0 50.0] :comment "MineDetect down-stage overload cost lerp endpoints."}
-   {:skill-id :mine-detect :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 1.0 :list-count 2 :default [200.0 100.0] :comment "MineDetect cooldown lerp endpoints."}
-   {:skill-id :mine-detect :id :progression.exp-cast :path "progression.exp-cast" :section-suffix "progression" :type :double :min 0.0 :default 0.003 :comment "MineDetect exp gained per cast."}
+  {:skill-id :mine-detect :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [1500.0 1000.0] :comment "MineDetect down-stage CP cost lerp endpoints."}
+  {:skill-id :mine-detect :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [200.0 180.0] :comment "MineDetect down-stage overload cost lerp endpoints."}
+  {:skill-id :mine-detect :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 1.0 :list-count 2 :default [900.0 400.0] :comment "MineDetect cooldown lerp endpoints."}
+  {:skill-id :mine-detect :id :progression.exp-cast :path "progression.exp-cast" :section-suffix "progression" :type :double :min 0.0 :default 0.008 :comment "MineDetect exp gained per cast."}
 
    {:skill-id :thunder-bolt :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 20.0 :comment "ThunderBolt target raycast range."}
    {:skill-id :thunder-bolt :id :combat.direct-damage :path "combat.direct-damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [10.0 25.0] :comment "ThunderBolt direct damage lerp endpoints."}

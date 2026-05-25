@@ -10,7 +10,7 @@
    {:id :current-charging :category-id :electromaster :level 2 :controllable? true}
    {:id :mag-manip :category-id :electromaster :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
    {:id :mag-movement :category-id :electromaster :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :mine-detect :category-id :electromaster :level 2 :controllable? false}
+  {:id :mine-detect :category-id :electromaster :level 3 :controllable? false}
    {:id :railgun :category-id :electromaster :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
    {:id :thunder-bolt :category-id :electromaster :level 2 :controllable? false}
    {:id :thunder-clap :category-id :electromaster :level 1 :controllable? true}

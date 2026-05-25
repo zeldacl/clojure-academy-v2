@@ -12,7 +12,9 @@
 
 ;; effect-id 鈫?{:enqueue-fn    (fn [payload])
 ;;              :tick-fn        (fn [])
-;;              :build-plan-fn  (fn [camera-pos hand-center-pos tick]) 鈫?seq of ops | nil
+;;              :build-plan-fn  (fn [camera-pos hand-center-pos tick])
+;;                              or (fn [camera-pos hand-center-pos tick frame-context])
+;;                              鈫?seq of ops | nil
 ;;              :walk-speed-fn  (fn []) 鈫?float | nil          (optional)}
 (defonce ^:private effect-registry (atom {}))
 
@@ -26,7 +28,9 @@
   `handler-map` keys:
     :enqueue-fn    (fn [payload]) 鈥?process incoming FX data
     :tick-fn       (fn []) 鈥?advance animation state each game tick
-    :build-plan-fn (fn [camera-pos hand-center-pos tick]) 鈫?{:ops [...]} or nil
+    :build-plan-fn (fn [camera-pos hand-center-pos tick]) or
+             (fn [camera-pos hand-center-pos tick frame-context])
+             鈫?{:ops [...]} or nil
     :walk-speed-fn (fn []) 鈫?float or nil  (optional)"
   [effect-id handler-map]
   {:pre [(keyword? effect-id) (map? handler-map)
@@ -57,21 +61,34 @@
     (when-let [{:keys [tick-fn]} (get @effect-registry eid)]
       (tick-fn))))
 
+(defn- invoke-build-plan-fn
+  [build-plan-fn camera-pos hand-center-pos tick frame-context]
+  (try
+    (build-plan-fn camera-pos hand-center-pos tick frame-context)
+    (catch clojure.lang.ArityException _
+      (build-plan-fn camera-pos hand-center-pos tick))))
+
 (defn build-level-effect-plan
   "Build the combined render plan from all registered effects.
   Returns {:ops [...] :local-walk-speed float} or nil when nothing to render."
-  [camera-pos hand-center-pos tick]
-  (let [results (keep (fn [eid]
-                        (when-let [{:keys [build-plan-fn]} (get @effect-registry eid)]
-                          (build-plan-fn camera-pos hand-center-pos tick)))
-                      @effect-order)
-        all-ops (into [] (mapcat :ops) results)
-        walk-speeds (keep :local-walk-speed results)
-        local-walk-speed (when (seq walk-speeds)
-                           (float (apply min walk-speeds)))]
-    (when (or (seq all-ops) local-walk-speed)
-      {:ops all-ops
-       :local-walk-speed local-walk-speed})))
+  ([camera-pos hand-center-pos tick]
+   (build-level-effect-plan camera-pos hand-center-pos tick nil))
+  ([camera-pos hand-center-pos tick frame-context]
+   (let [results (keep (fn [eid]
+                         (when-let [{:keys [build-plan-fn]} (get @effect-registry eid)]
+                           (invoke-build-plan-fn build-plan-fn
+                                                 camera-pos
+                                                 hand-center-pos
+                                                 tick
+                                                 frame-context)))
+                       @effect-order)
+         all-ops (into [] (mapcat :ops) results)
+         walk-speeds (keep :local-walk-speed results)
+         local-walk-speed (when (seq walk-speeds)
+                            (float (apply min walk-speeds)))]
+     (when (or (seq all-ops) local-walk-speed)
+       {:ops all-ops
+        :local-walk-speed local-walk-speed}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Introspection (diagnostics)

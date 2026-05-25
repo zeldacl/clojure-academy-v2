@@ -21,8 +21,11 @@
      (level-effects/enqueue-level-effect! effect-id payload))
 
    :client-build-level-effect-plan
-   (fn [camera-pos hand-center-pos tick]
-     (level-effects/build-level-effect-plan camera-pos hand-center-pos tick))
+   (fn
+     ([camera-pos hand-center-pos tick]
+      (level-effects/build-level-effect-plan camera-pos hand-center-pos tick))
+     ([camera-pos hand-center-pos tick frame-context]
+      (level-effects/build-level-effect-plan camera-pos hand-center-pos tick frame-context)))
 
    :client-tick-level-effects!
    (fn []
