@@ -73,6 +73,55 @@ sourceSets {
      } 
 }
 
+def cleanForgeProcessResourcesOutput = tasks.register('cleanForgeProcessResourcesOutput') {
+    group = 'build'
+    description = 'Pre-clean Forge processResources output to avoid opaque Gradle stale-output cleanup failures on Windows.'
+    outputs.upToDateWhen { false }
+    doLast {
+        def outDir = layout.buildDirectory.dir('resources/main').get().asFile
+        if (!outDir.exists()) {
+            return
+        }
+        Exception lastFailure = null
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            try {
+                outDir.eachFileRecurse { File f ->
+                    f.setWritable(true, false)
+                }
+                if (delete(outDir) || !outDir.exists()) {
+                    logger.lifecycle('[cleanForgeProcessResourcesOutput] cleaned {}', project.rootDir.toPath().relativize(outDir.toPath()).toString().replace('\\', '/'))
+                    return
+                }
+            } catch (Exception ex) {
+                lastFailure = ex
+            }
+            if (attempt < 5) {
+                System.gc()
+                Thread.sleep(250L * attempt)
+            }
+        }
+
+        def remaining = []
+        if (outDir.exists()) {
+            fileTree(outDir).visit { details ->
+                if (!details.directory && remaining.size() < 20) {
+                    remaining << details.relativePath.pathString
+                }
+            }
+        }
+        throw new GradleException("Unable to pre-clean Forge processResources output: ${outDir}. Remaining files: ${remaining}. Close Java/VS Code processes holding files under forge-1.20.1/build/resources/main and retry.", lastFailure)
+    }
+}
+
+tasks.named('processResources').configure {
+    dependsOn cleanForgeProcessResourcesOutput
+    // Clojure sources are available to compile/check tasks through source sets, and
+    // runtime uses AOT classes copied into classes/java/main. Keeping copied .clj
+    // files under build/resources/main makes Windows file locks from Gradle/JDT/old
+    // Clojure processes surface as opaque "Failed to clean up stale outputs" errors.
+    exclude '**/*.clj', '**/*.cljc'
+}
+
 dependencies {
     minecraft "com.mojang:minecraft:1.20.1"
     mappings loom.officialMojangMappings()
