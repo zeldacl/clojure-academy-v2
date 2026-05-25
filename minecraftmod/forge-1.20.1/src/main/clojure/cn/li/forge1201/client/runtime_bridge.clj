@@ -7,7 +7,7 @@
             [cn.li.mcmod.hooks.core :as power-runtime]
              [cn.li.mcmod.util.log :as log]
              [cn.li.mc1201.client.player-state-core :as player-state])
-  (:import [cn.li.forge1201.client.effect IntensifyEffectSpawner]
+  (:import [cn.li.mc1201.client.effect ScriptedEffectSpawner]
             [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraftforge.eventbus.api EventPriority]))
@@ -30,8 +30,8 @@
 (defn clear-client-activated-overlay! []
   (overlay-state/clear-client-activated!))
 
-(defn play-intensify-local-effect! []
-  (IntensifyEffectSpawner/spawnLocal))
+(defn spawn-local-scripted-effect! [effect-id]
+  (ScriptedEffectSpawner/spawnLocal effect-id))
 
 (defn notify-charge-coin-throw-client! [player-uuid]
   (power-runtime/client-notify-visual-event! :ac/charge-coin-throw {:player-uuid player-uuid}))

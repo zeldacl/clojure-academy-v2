@@ -170,10 +170,10 @@
      :local-player-eye-pos runtime-bridge/local-player-eye-pos
      :local-player-look-end runtime-bridge/local-player-look-end
      :clear-client-activated-overlay runtime-bridge/clear-client-activated-overlay!
-     :run-client-effect (fn [effect-key _payload]
+     :run-client-effect (fn [effect-key payload]
                           (case effect-key
-                            :ac/body-intensify-local
-                            (runtime-bridge/play-intensify-local-effect!)
+                            :mcmod/spawn-local-scripted-effect
+                            (runtime-bridge/spawn-local-scripted-effect! (:effect-id payload))
 
                             (log/debug "Unhandled client effect key" effect-key)))}))
 

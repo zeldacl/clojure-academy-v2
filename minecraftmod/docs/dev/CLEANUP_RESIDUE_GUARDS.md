@@ -45,12 +45,17 @@ pure scan guards instead of rereading the same trees.
     storage protocol and NBT key, but must not enforce AC feature policy.
 - `mcmod` client/UI bridge surfaces must be generic keyed seams.
   - Guards: `verifyMcmodClientBridgeScreenKeysNeutral`,
-    `verifyMcmodRuntimeClientHooksNeutral`
+    `verifyMcmodRuntimeClientHooksNeutral`,
+    `verifyClientLocalScriptedEffectOwnership`
   - `mcmod.client.platform-bridge`, `mcmod.platform.ui`,
     `mcmod.hooks.core`, and shared `mc1201` hosted-screen/item seams must not
     expose AC screen/effect names such as skill tree, preset editor, location
     teleport, terminal GUI, Railgun, Body Intensify, or Current Charging. AC owns
     those keys and registers them into generic screen/widget/effect/state hooks.
+  - Local scripted-effect spawning is a generic MC/platform operation:
+    `mc1201` accepts an opaque `effectId`, Forge handles only the generic
+    `:mcmod/spawn-local-scripted-effect` bridge key, and AC owns BodyIntensify
+    data such as `"intensify_effect"`.
 - Runtime item handling uses shared event helpers, not a thin compatibility
   adapter namespace.
   - Guard: `verifyRuntimeEventNoThinItemAdapter`

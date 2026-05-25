@@ -807,6 +807,78 @@ tasks.register('verifyMcmodRuntimeClientHooksNeutral') {
     }
 }
 
+tasks.register('verifyClientLocalScriptedEffectOwnership') {
+    group = 'verification'
+    description = 'Verify AC owns local scripted-effect business ids while shared/platform code only provides a generic spawn seam.'
+
+    doLast {
+        def violations = []
+        def acFx = file('ac/src/main/clojure/cn/li/ac/content/ability/electromaster/body_intensify_fx.clj')
+        def mcSpawner = file('mc-1.20.1/src/main/java/cn/li/mc1201/client/effect/ScriptedEffectSpawner.java')
+        def forgeRuntime = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/runtime_bridge.clj')
+        def forgeInit = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/init.clj')
+        def deletedForgeSpawner = file('forge-1.20.1/src/main/java/cn/li/forge1201/client/effect/IntensifyEffectSpawner.java')
+
+        [acFx, mcSpawner, forgeRuntime, forgeInit].each { sourceFile ->
+            if (!sourceFile.exists()) {
+                violations << "Required local scripted-effect ownership file missing: ${project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')}"
+            }
+        }
+        if (deletedForgeSpawner.exists()) {
+            violations << 'forge-1.20.1/src/main/java/cn/li/forge1201/client/effect/IntensifyEffectSpawner.java must stay deleted; use generic mc1201 ScriptedEffectSpawner'
+        }
+
+        if (acFx.exists()) {
+            def text = acFx.getText('UTF-8')
+            if (!text.contains('"intensify_effect"')) {
+                violations << 'BodyIntensify local scripted effect id must be owned in AC body_intensify_fx.clj'
+            }
+            if (!text.contains(':mcmod/spawn-local-scripted-effect')) {
+                violations << 'BodyIntensify FX must request the generic local scripted-effect client bridge key'
+            }
+            ['play-intensify-local-effect', ':ac/body-intensify-local'].each { token ->
+                if (text.contains(token)) {
+                    violations << "BodyIntensify FX must not use deleted AC-specific platform effect bridge token: ${token}"
+                }
+            }
+        }
+
+        if (mcSpawner.exists()) {
+            def text = mcSpawner.getText('UTF-8')
+            if (!text.contains('spawnLocal(String effectId)') || !text.contains('ScriptedEffectEntity.create(level, player, effectId)')) {
+                violations << 'mc1201 ScriptedEffectSpawner must spawn by opaque effectId'
+            }
+            ['intensify_effect', 'body-intensify', 'body_intensify', 'IntensifyEffect'].each { token ->
+                if (text.contains(token)) {
+                    violations << "mc1201 ScriptedEffectSpawner must remain AC-effect neutral: ${token}"
+                }
+            }
+        }
+
+        [forgeRuntime, forgeInit].findAll { it.exists() }.each { sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            def text = sourceFile.getText('UTF-8')
+            ['IntensifyEffectSpawner', 'play-intensify-local-effect', ':ac/body-intensify-local', '"intensify_effect"'].each { token ->
+                if (text.contains(token)) {
+                    violations << "${rel}: platform client local-effect bridge must not hardcode AC BodyIntensify residue: ${token}"
+                }
+            }
+        }
+        if (forgeInit.exists() && !forgeInit.getText('UTF-8').contains(':mcmod/spawn-local-scripted-effect')) {
+            violations << 'Forge client bridge must handle the generic :mcmod/spawn-local-scripted-effect key'
+        }
+        if (forgeRuntime.exists() && !forgeRuntime.getText('UTF-8').contains('ScriptedEffectSpawner/spawnLocal effect-id')) {
+            violations << 'Forge runtime bridge must delegate local scripted-effect spawning to mc1201 ScriptedEffectSpawner with effect-id'
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Local scripted-effect ownership guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyClientLocalScriptedEffectOwnership] passed. AC owns local effect ids; platform/shared code uses a generic scripted-effect spawn seam.')
+    }
+}
+
 tasks.register('verifyMcmodNoSavedLocationBusinessSurface') {
     group = 'verification'
     description = 'Verify shared saved-location storage remains policy-free and AC LocationTeleport policy-owned.'
@@ -2643,6 +2715,7 @@ def cleanupResidueGuardTaskNames = [
     'verifyAcCommandActionManifestExists',
     'verifyMcmodClientBridgeScreenKeysNeutral',
     'verifyMcmodRuntimeClientHooksNeutral',
+    'verifyClientLocalScriptedEffectOwnership',
     'verifyMcmodNoSavedLocationBusinessSurface',
     'verifyTerminalBridgeInitOrchestration',
     'verifyCguiRuntimeShimBoundaries',

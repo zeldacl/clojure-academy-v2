@@ -5,6 +5,8 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private activate-sound-id "academy:ability.electromaster.body_intensify")
+(def ^:private local-scripted-effect-key :mcmod/spawn-local-scripted-effect)
+(def ^:private intensify-effect-id "intensify_effect")
 
 (defn- on-fx-end
   [_ctx-id _channel payload]
@@ -13,7 +15,8 @@
      {:sound-id activate-sound-id
       :volume 0.9
       :pitch 1.0})
-    (client-bridge/run-client-effect! :ac/body-intensify-local)))
+    (client-bridge/run-client-effect! local-scripted-effect-key
+                                      {:effect-id intensify-effect-id})))
 
 (defn init!
   []

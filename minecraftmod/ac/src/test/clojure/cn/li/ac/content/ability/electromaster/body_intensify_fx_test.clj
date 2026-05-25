@@ -18,18 +18,19 @@
 (deftest fx-handler-plays-local-effect-when-performed-test
   (let [handler* (atom nil)
         sounds* (atom [])
-        local-fx* (atom 0)]
+        local-fx* (atom [])]
     (with-redefs [fx-registry/register-fx-channel! (fn [_ handler]
                                                      (reset! handler* handler)
                                                      nil)
                   client-sounds/queue-sound-effect! (fn [payload]
                                                        (swap! sounds* conj payload)
                                                        nil)
-                  client-bridge/play-intensify-local-effect! (fn []
-                                                                (swap! local-fx* inc)
-                                                                nil)]
+                  client-bridge/run-client-effect! (fn [effect-key payload]
+                                                     (swap! local-fx* conj [effect-key payload])
+                                                     nil)]
       (body-intensify-fx/init!)
       (@handler* "ctx-1" :body-intensify/fx-end {:performed? true})
       (@handler* "ctx-2" :body-intensify/fx-end {:performed? false})
       (is (= 1 (count @sounds*)))
-      (is (= 1 @local-fx*)))))
+      (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "intensify_effect"}]]
+             @local-fx*)))))
