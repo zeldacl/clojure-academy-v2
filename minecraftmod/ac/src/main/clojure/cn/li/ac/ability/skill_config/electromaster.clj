@@ -105,6 +105,7 @@
    {:skill-id :thunder-bolt :id :combat.aoe-radius :path "combat.aoe-radius" :section-suffix "combat" :type :double :min 0.0 :default 8.0 :comment "ThunderBolt AOE damage radius."}
    {:skill-id :thunder-bolt :id :combat.aoe-damage :path "combat.aoe-damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [6.0 15.0] :comment "ThunderBolt AOE damage lerp endpoints."}
    {:skill-id :thunder-bolt :id :effect.slowness-chance :path "effect.slowness-chance" :section-suffix "effect" :type :double :min 0.0 :max 1.0 :default 0.8 :comment "ThunderBolt slowness roll chance."}
+  {:skill-id :thunder-bolt :id :effect.slowness-exp-threshold :path "effect.slowness-exp-threshold" :section-suffix "effect" :type :double :min 0.0 :max 1.0 :default 0.2 :comment "ThunderBolt minimum skill exp required before slowness can trigger."}
    {:skill-id :thunder-bolt :id :effect.slowness-duration-ticks :path "effect.slowness-duration-ticks" :section-suffix "effect" :type :int :min 0 :default 40 :comment "ThunderBolt slowness duration in ticks."}
    {:skill-id :thunder-bolt :id :effect.slowness-amplifier :path "effect.slowness-amplifier" :section-suffix "effect" :type :int :min 0 :default 3 :comment "ThunderBolt slowness amplifier."}
    {:skill-id :thunder-bolt :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [280.0 420.0] :comment "ThunderBolt down-stage CP cost lerp endpoints."}
