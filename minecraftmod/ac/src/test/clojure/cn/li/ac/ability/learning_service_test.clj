@@ -2,9 +2,11 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.model.ability :as adata]
+           [cn.li.ac.ability.domain.developer :as developer]
             [cn.li.ac.ability.registry.category :as cat]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.server.service.learning :as learning]))
 
 (deftest check-all-conditions-unknown-skill-test
@@ -25,8 +27,8 @@
                                        :developer-type :advanced
                                        :prerequisites [{:skill-id :dep :min-exp 0.9}]
                                        :conditions [{:type :any-skill-level :level 5}]}))
-                  skill/developer-type-gte? (fn [_actual _required]
-                                              false)]
+                   developer/gte? (fn [_actual _required]
+                                    false)]
       (let [{:keys [pass? failures]}
             (learning/check-all-conditions :target ability-data 2 :normal)]
         (is (false? pass?))
@@ -48,7 +50,7 @@
                                                :conditions [{:type :any-skill-level :level 3}]}
                                       :level-three-skill {:id :level-three-skill :level 3}
                                       nil))
-                  skill/developer-type-gte? (fn [_ _] true)]
+                   developer/gte? (fn [_ _] true)]
       (let [ret (learning/check-all-conditions :target ability-data 2 :portable)]
         (is (:pass? ret))
         (is (empty? (:failures ret)))
@@ -73,8 +75,8 @@
                       :level-progress 0.0
                       :skill-exps {}
                       :learned-skills #{}}]
-    (with-redefs [skill/get-controllable-skills-at-level (fn [_ _]
-                                                           [{:id :s1} {:id :s2}])
+    (with-redefs [skill-query/get-controllable-skills-at-level (fn [_ _]
+                                    [{:id :s1} {:id :s2}])
             cat/get-prog-incr-rate (fn [_] 1.5)
             cfg/prog-incr-rate (fn [] 2.0)]
       (let [unmastered (assoc ability-base :skill-exps {:s1 1.0 :s2 0.2})

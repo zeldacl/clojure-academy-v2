@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.screens.skill-tree :as screen]
             [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.ac.ability.server.service.learning :as learning]
             [cn.li.mcmod.i18n :as i18n]))
 

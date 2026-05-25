@@ -1294,7 +1294,7 @@ tasks.register('verifyAbilitySkillConfigContractSsoT') {
         def skillConfigFile = file('ac/src/main/clojure/cn/li/ac/ability/skill_config.clj')
         def commonFile = file('ac/src/main/clojure/cn/li/ac/config/common.clj')
         def registryFile = file('ac/src/main/clojure/cn/li/ac/config/registry.clj')
-        def skillRegistryFile = file('ac/src/main/clojure/cn/li/ac/ability/service/registry.clj')
+        def skillRegistryFile = file('ac/src/main/clojure/cn/li/ac/ability/registry/skill.clj')
 
         [skillConfigFile, commonFile, registryFile, skillRegistryFile].each { File f ->
             if (!f.exists()) {

@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.server.service.learning-progression
   "Progression calculations and mutations for ability leveling."
   (:require [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.registry.category :as cat]
             [cn.li.ac.ability.util.level-formula :as level-formula]
             [cn.li.ac.ability.config :as cfg]
@@ -13,7 +13,7 @@
   When all skills at the level are mastered (exp >= 1.0), threshold is halved."
   [cat-id ability-data]
   (let [level       (:level ability-data)
-        skills      (skill/get-controllable-skills-at-level cat-id level)
+      skills      (skill-query/get-controllable-skills-at-level cat-id level)
         skill-count (count skills)
         all-mastered? (and (pos? skill-count)
                           (every? #(>= (adata/get-skill-exp ability-data (:id %)) 1.0)
@@ -28,7 +28,7 @@
         cat   (:category-id ability-data)]
     (and (< level (cfg/max-level))
          (some? cat)
-         (>= (:level-progress ability-data)
+          (>= (or (:level-progress ability-data) 0.0)
              (level-up-threshold cat ability-data)))))
 
 (defn add-skill-exp

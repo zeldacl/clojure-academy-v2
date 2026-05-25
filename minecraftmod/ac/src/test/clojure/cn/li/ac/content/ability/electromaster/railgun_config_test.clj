@@ -1,8 +1,9 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-config-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.service.player-state :as player-state]
-            [cn.li.ac.ability.service.registry :as skill-registry]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.content.ability :as ability-content]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
             [cn.li.mcmod.config.registry :as config-reg]))
 
@@ -36,6 +37,7 @@
   (testing "railgun cost functions exposed through the public skill spec read action tunables"
     (with-test-state
       (fn []
+        (ability-content/init-ability-content!)
         (let [player-id "railgun-config-test-player"]
           (seed-electromaster-config!
             {(skill-config/config-key :railgun :cost.down.cp) [1000.0 2000.0]

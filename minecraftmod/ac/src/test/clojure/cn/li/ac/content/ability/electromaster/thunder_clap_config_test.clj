@@ -1,7 +1,8 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-clap-config-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.ability.service.registry :as skill-registry]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.content.ability :as ability-content]
             [cn.li.ac.content.ability.electromaster.thunder-clap]
             [cn.li.mcmod.config.registry :as config-reg]))
 
@@ -32,6 +33,7 @@
   (testing "ThunderClap cost and targeting values exposed through the public skill spec read action tunables"
     (with-test-state
       (fn []
+        (ability-content/init-ability-content!)
         (seed-electromaster-config!
           {(skill-config/config-key :thunder-clap :targeting.range) 77.0
            (skill-config/config-key :thunder-clap :charge.min-ticks) 50

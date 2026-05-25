@@ -7,7 +7,7 @@
   (:require [cn.li.ac.ability.dsl :refer [defcategory]]
             [cn.li.ac.ability.discovery :as discovery]
             [cn.li.ac.ability.registry.category :as category]
-            [cn.li.ac.ability.service.registry :as skill-registry]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]

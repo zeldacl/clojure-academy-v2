@@ -1,7 +1,8 @@
 (ns cn.li.ac.content.ability.skill-specs-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.content.ability :as ability-content]))
 
 (def ^:private configured-skill-ids
@@ -12,7 +13,7 @@
   (is (= 38 (count configured-skill-ids)))
   (is (= (set configured-skill-ids)
          (set (map :id (filter #(skill-config/skill-configured? (:id %))
-                               (skill/list-skills))))))
+             (skill-query/list-skills))))))
   (doseq [sid configured-skill-ids]
     (let [spec (skill/get-skill sid)]
       (is (some? spec) (str sid " should be registered"))

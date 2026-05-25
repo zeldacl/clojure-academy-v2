@@ -12,7 +12,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.model.preset :as preset-data]
-            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.config.gameplay :as gameplay]
@@ -487,7 +487,7 @@
   []
   {:client-get-skill-by-controllable
    (fn [cat-id ctrl-id]
-     (skill/get-skill-by-controllable cat-id ctrl-id))
+     (skill-query/get-skill-by-controllable cat-id ctrl-id))
 
    :client-new-context
    (fn [player-uuid skill-id]

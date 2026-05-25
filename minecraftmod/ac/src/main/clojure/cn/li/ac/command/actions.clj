@@ -12,7 +12,7 @@
 						[cn.li.ac.ability.model.preset :as pdata]
 						[cn.li.ac.ability.model.resource :as rdata]
 						[cn.li.ac.ability.service.player-state :as ps]
-						[cn.li.ac.ability.service.registry :as skill]
+						[cn.li.ac.ability.registry.skill-query :as skill-query]
 						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
 						[cn.li.mcmod.command.actions :as command-actions]
 						[cn.li.mcmod.util.log :as log]))
@@ -96,7 +96,7 @@
 (defn- skills-for-category
 	[category-id]
 	(when category-id
-		(->> (skill/get-skills-for-category category-id)
+		(->> (skill-query/get-skills-for-category category-id)
 				 (map :id)
 				 (filter identity)
 				 set)))

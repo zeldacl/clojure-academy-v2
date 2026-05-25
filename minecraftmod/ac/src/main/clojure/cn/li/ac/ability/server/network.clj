@@ -12,7 +12,8 @@
             [cn.li.ac.ability.service.player-state      :as ps]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.service.learning  :as lrn]
-            [cn.li.ac.ability.service.registry             :as skill]
+            [cn.li.ac.ability.registry.skill             :as skill]
+            [cn.li.ac.ability.rules.progression          :as progression]
             [cn.li.ac.ability.server.handlers.level-handler :as level-handler]
             [cn.li.ac.ability.server.handlers.preset-handler :as preset-handler]
             [cn.li.ac.ability.server.handlers.activation-handler :as activation-handler]
@@ -82,7 +83,7 @@
                 {:keys [pass? failures]} (lrn/check-all-conditions skill-id ad player-level dev-t)]
             (if pass?
               (let [sk (skill/get-skill skill-id)
-                    cost (double (skill/learning-cost (long (:level sk))))]
+                    cost (double (progression/learning-cost (long (:level sk))))]
                 (if (try-pull-developer-energy! (:tile station) cost)
                   (do-learn!)
                   (log/debug "learn-skill rejected (IF)" uuid skill-id cost)))

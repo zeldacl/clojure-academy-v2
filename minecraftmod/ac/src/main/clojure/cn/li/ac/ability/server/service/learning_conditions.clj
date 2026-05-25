@@ -1,7 +1,8 @@
 (ns cn.li.ac.ability.server.service.learning-conditions
   "Condition checks for skill learning eligibility."
   (:require [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.service.registry :as skill]))
+            [cn.li.ac.ability.domain.developer :as developer]
+            [cn.li.ac.ability.registry.skill :as skill]))
 
 (defn check-level-condition
   "Returns true if player-level ≥ min-level."
@@ -17,7 +18,7 @@
   "Returns true if provided developer-type satisfies skill's minimum requirement."
   [developer-type skill-id]
   (when-let [s (skill/get-skill skill-id)]
-    (skill/developer-type-gte? developer-type (:developer-type s))))
+    (developer/gte? developer-type (:developer-type s))))
 
 (defn- has-learned-skill-of-level?
   [ability-data target-level]
@@ -55,7 +56,7 @@
     (let [base-failures (cond-> []
                           (not (check-level-condition player-level (:level s)))
                           (conj {:type :level :required (:level s) :actual player-level})
-                          (not (skill/developer-type-gte? developer-type (:developer-type s)))
+                          (not (developer/gte? developer-type (:developer-type s)))
                           (conj {:type :developer-type
                                  :required (:developer-type s)
                                  :actual developer-type}))

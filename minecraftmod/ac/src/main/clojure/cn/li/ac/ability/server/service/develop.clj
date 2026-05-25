@@ -10,7 +10,7 @@
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.resource :as rdata]
-            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.registry.skill :as skill]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.server.service.learning :as learning]
             [cn.li.ac.ability.server.service.resource :as svc-res]

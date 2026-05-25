@@ -4,7 +4,7 @@
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.registry :as skill-reg]
+            [cn.li.ac.ability.registry.skill :as skill-reg]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]

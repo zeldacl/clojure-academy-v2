@@ -4,7 +4,7 @@
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
@@ -79,7 +79,7 @@
 
    :get-skills-for-category
    (fn [cat-id]
-     (vec (skill/get-skills-for-category cat-id)))
+     (vec (skill-query/get-skills-for-category cat-id)))
 
    :on-player-tick!
    (fn [player-uuid]

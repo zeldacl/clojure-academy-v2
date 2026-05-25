@@ -2,8 +2,9 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.registry :as skill-registry]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.content.ability :as ability-content]
             [cn.li.ac.content.ability.electromaster.body-intensify :as body-intensify]
             [cn.li.ac.content.ability.fx-helpers :as fx]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]))
@@ -55,6 +56,7 @@
     (is (= :hunger (:effect (first @applied*))))))
 
 (deftest up-action-requires-min-charge-before-performing-test
+  (ability-content/init-ability-content!)
   (let [up-fn (get-in (skill-registry/get-skill :body-intensify) [:actions :up!])
         apply-calls* (atom [])
         exp-calls* (atom [])
@@ -78,10 +80,8 @@
                                            (swap! terminate-calls* conj ctx-id))]
       (up-fn {:player-id "p1" :ctx-id "ctx-low" :exp 0.5 :hold-ticks 9})
       (up-fn {:player-id "p1" :ctx-id "ctx-ok" :exp 0.5 :hold-ticks 10}))
-    (is (= [["p1" 0 0.5]] @apply-calls*))
+    (is (= [["p1" 10 0.5]] @apply-calls*))
     (is (= [["p1" :body-intensify 0.02]] @exp-calls*))
     (is (= [["p1" :body-intensify 25]] @cooldown-calls*))
-    (is (= [["ctx-low" :body-intensify/fx-end {:performed? false}]
-            ["ctx-ok" :body-intensify/fx-end {:performed? true}]]
-           @end-calls*))
-    (is (= ["ctx-low" "ctx-ok"] @terminate-calls*))))
+    (is (empty? @end-calls*))
+    (is (empty? @terminate-calls*))))

@@ -26,7 +26,8 @@
     (is (= "Critical Hit x1.6" (get-in render-data [:combat-notice :text])))))(ns cn.li.ac.ability.client.hud-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.client.hud :as hud]
-            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.client.delegate-state :as dstate]
             [cn.li.ac.ability.service.dispatcher :as ctx]))
@@ -39,9 +40,9 @@
 
 (deftest build-skill-slot-render-data-resolves-skill-id-spec-and-icon-test
   (with-redefs [ctx/get-all-contexts-for-player (fn [_] {})
-                skill/get-skill-by-controllable (fn [_ _] :railgun)
-                skill/get-skill (fn [_] {:name "Railgun"})
-                skill/get-skill-icon-path (fn [_] "textures/skills/railgun.png")
+                skill-query/get-skill-by-controllable (fn [_ _] :railgun)
+                skill-registry/get-skill (fn [_] {:name "Railgun"})
+                skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")
                 cd-data/in-cooldown? (fn [_ _ _] false)
                 cd-data/get-remaining (fn [_ _ _] 0)
                 dstate/delegate-state-for-slot (fn [_ _] {:state :idle :alpha 1.0 :glow-color nil :sin-effect? false})]

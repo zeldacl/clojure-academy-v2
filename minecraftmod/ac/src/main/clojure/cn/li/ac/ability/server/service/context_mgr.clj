@@ -3,7 +3,6 @@
 
   Responsibilities:
   - activate-context!  : client requests to start a skill; creates and sends BEGIN-LINK
-  - establish-context! : server receives BEGIN-LINK, creates server-side context and replies ESTABLISH
   - abort-player-contexts! : terminates all of a player's live contexts (death, category change)
   - tick-context-manager! : keepalive timeout sweep
 
@@ -11,7 +10,6 @@
   Network send-fns are injected, keeping this ns free of forge deps."
   (:require [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.service.registry :as skill]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.server.service.context-transport :as transport]
             [cn.li.ac.ability.model.resource :as rdata]

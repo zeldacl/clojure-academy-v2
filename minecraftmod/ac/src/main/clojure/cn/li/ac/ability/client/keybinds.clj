@@ -12,7 +12,7 @@
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.util.resource-check :as resource-check]
-            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]))
 
@@ -95,7 +95,7 @@
         (when (and (vector? slot) (= 2 (count slot)))
           (let [[cat-id ctrl-id] slot]
             (when-let [s (skill/get-skill-by-controllable cat-id ctrl-id)]
-              (:id s))))))))
+              s)))))))
 
 (defn get-skill-id-for-slot-public
   "Public accessor for skill-id at a slot index."

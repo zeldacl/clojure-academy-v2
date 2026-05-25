@@ -1,10 +1,10 @@
 (ns cn.li.ac.ability.skill-config-test
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.ability.service.registry :as skill-registry]
+            [cn.li.ac.ability.registry.skill-query :as skill-registry]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.common :as config-common]
-            [cn.li.ac.content.ability]
+            [cn.li.ac.content.ability :as ability-content]
             [cn.li.mcmod.config.registry :as config-reg]))
 
 (def ^:private hidden-descriptor-fragments
@@ -23,10 +23,12 @@
 
 (defn- registered-content-skill-ids
   []
+  (ability-content/init-ability-content!)
   (set (map :id (skill-registry/list-skills))))
 
 (defn- player-configurable-content-skills
   []
+  (ability-content/init-ability-content!)
   (filter (comp nil? namespace :id) (skill-registry/list-skills)))
 
 (defn- player-configurable-content-skill-ids

@@ -20,7 +20,7 @@
     {:action :enable-cheats :player player-obj}
     {:action :disable-cheats :player player-obj}"
   (:require [cn.li.ac.ability.registry.category :as cat]
-            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.registry.skill :as skill]
             [clojure.string :as str]))
 
 ;; ============================================================================

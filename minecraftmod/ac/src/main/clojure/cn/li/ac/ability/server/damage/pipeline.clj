@@ -12,7 +12,7 @@
   by the Forge adapter so this namespace stays free of net.minecraft.*."
   (:require [cn.li.ac.ability.registry.event   :as evt]
             [cn.li.ac.ability.config  :as cfg]
-            [cn.li.ac.ability.service.registry   :as skill]
+            [cn.li.ac.ability.registry.skill   :as skill]
             [cn.li.mcmod.util.log     :as log]))
 
 ;; ============================================================================

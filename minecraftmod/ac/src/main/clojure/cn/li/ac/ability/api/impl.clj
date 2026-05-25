@@ -1,28 +1,30 @@
 (ns cn.li.ac.ability.api.impl
   "Default public implementation for the new ability API facade."
   (:require [cn.li.ac.ability.api.protocol :as proto]
-            [cn.li.ac.ability.service.registry :as registry]
+            [cn.li.ac.ability.registry.category :as category]
+            [cn.li.ac.ability.registry.skill :as skill]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.player-state :as player-state]
             [cn.li.ac.ability.service.dispatcher :as dispatcher]))
 
 (defrecord AbilitySystemImpl []
   proto/IAbilityRegistry
   (register-category! [_this category-spec]
-    (registry/register-category! category-spec))
+    (category/register-category! category-spec))
   (register-skill! [_this skill-spec]
-    (registry/register-skill! skill-spec))
+    (skill/register-skill! skill-spec))
   (get-category [_this category-id]
-    (registry/get-category category-id))
+    (category/get-category category-id))
   (get-skill [_this skill-id]
-    (registry/get-skill skill-id))
+    (skill/get-skill skill-id))
   (list-categories [_this]
-    (registry/list-categories))
+    (category/get-all-categories))
   (list-skills [_this]
-    (registry/list-skills))
+    (skill-query/list-skills))
   (get-skills-for-category [_this category-id]
-    (registry/get-skills-for-category category-id))
+    (skill-query/get-skills-for-category category-id))
   (get-skill-by-controllable [_this category-id ctrl-id]
-    (registry/get-skill-by-controllable category-id ctrl-id))
+    (skill-query/get-skill-by-controllable category-id ctrl-id))
 
   proto/IAbilityState
   (get-player-state [_this player-uuid]

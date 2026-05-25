@@ -14,9 +14,8 @@
      :max-stim       int     ; total stim units required
      :tick-this-stim int     ; ticks accumulated in current stim unit
      :energy-consumed float} ; total energy consumed this session"
-  (:require [cn.li.ac.ability.config :as cfg]
-            [cn.li.ac.ability.domain.developer :as developer]
-            [cn.li.ac.ability.registry.learning-cost :as learning-cost]))
+  (:require [cn.li.ac.ability.domain.developer :as developer]
+            [cn.li.ac.ability.rules.progression :as progression]))
 
 ;; ============================================================================
 ;; Developer types (mirrors original DeveloperType.java)
@@ -33,12 +32,12 @@
 (defn skill-learning-stims
   "Stim count to learn a skill: configured base + level² × configured factor."
   [skill-level]
-  (int (Math/ceil (learning-cost/learning-cost skill-level))))
+  (progression/skill-learning-stims skill-level))
 
 (defn level-up-stims
   "Stim count to level up: configured base × (current-level + 1)."
   [current-level]
-  (* (cfg/level-up-stim-base) (inc current-level)))
+  (progression/level-up-stims current-level))
 
 ;; ============================================================================
 ;; Constructors

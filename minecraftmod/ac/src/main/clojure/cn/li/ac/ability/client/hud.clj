@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.client.hud
   "HUD render data builder (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.service.registry :as skill]
+  (:require [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.client.delegate-state :as dstate]
@@ -52,8 +53,8 @@
       (fn [idx slot]
         (when (and slot (vector? slot) (= 2 (count slot)))
           (let [[cat-id ctrl-id] slot
-                skill-id (skill/get-skill-by-controllable cat-id ctrl-id)
-                skill-spec (when skill-id (skill/get-skill skill-id))
+                skill-id (skill-query/get-skill-by-controllable cat-id ctrl-id)
+                skill-spec (when skill-id (skill-registry/get-skill skill-id))
                 in-cooldown (cd-data/in-cooldown? cooldown-data ctrl-id :main)
                 remaining (when in-cooldown
                             (cd-data/get-remaining cooldown-data ctrl-id :main))
@@ -65,7 +66,7 @@
                :x (- screen-width 150)
                :y (+ (- screen-height 100) (* idx 22))
                :key-label (nth ["Z" "X" "C" "B"] idx)
-               :skill-icon (skill/get-skill-icon-path skill-id)
+               :skill-icon (skill-query/get-skill-icon-path skill-id)
                :skill-name (or (:name skill-spec) (name skill-id))
                :in-cooldown in-cooldown
                :cooldown-remaining (or remaining 0)

@@ -9,7 +9,7 @@
 
   It keeps input state transitions strict to avoid duplicated lifecycle calls."
   (:require [cn.li.ac.ability.service.dispatcher :as ctx]
-            [cn.li.ac.ability.service.registry :as skill]
+            [cn.li.ac.ability.registry.skill :as skill]
             [cn.li.ac.ability.server.dispatch :as skill-rt]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.player-state :as ps]

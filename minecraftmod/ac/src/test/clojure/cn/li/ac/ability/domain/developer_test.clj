@@ -2,13 +2,11 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.domain.developer :as developer]
             [cn.li.ac.ability.model.develop :as develop]
-            [cn.li.ac.ability.registry.developer-type :as developer-type]
             [cn.li.ac.block.developer.config :as developer-config]))
 
 (deftest developer-specs-are-single-source-test
-  (testing "legacy facades expose the centralized developer specs"
-    (is (= developer/developer-specs develop/developer-types))
-    (is (= developer/developer-order developer-type/order)))
+  (testing "model aliases expose the centralized developer specs"
+    (is (= developer/developer-specs develop/developer-types)))
   (testing "energy pacing remains aligned with classic developer constants"
     (is (= 30.0 (developer/energy-per-tick :portable)))
     (is (= 35.0 (developer/energy-per-tick :normal)))
@@ -22,10 +20,10 @@
     (is (= :portable (developer/min-for-level 2)))
     (is (= :normal (developer/min-for-level 3)))
     (is (= :advanced (developer/min-for-level 4)))
-    (is (= :advanced (developer-type/min-for-level 5))))
+    (is (= :advanced (developer/min-for-level 5))))
   (testing "tier comparison keeps the original enum ordering"
     (is (true? (developer/gte? :advanced :normal)))
-    (is (true? (developer-type/gte? :normal :portable)))
+    (is (true? (developer/gte? :normal :portable)))
     (is (false? (developer/gte? :portable :advanced)))
     (is (false? (developer/gte? :missing :portable)))))
 

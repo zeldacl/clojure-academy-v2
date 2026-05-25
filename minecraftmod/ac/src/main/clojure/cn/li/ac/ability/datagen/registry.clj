@@ -6,7 +6,7 @@
             [cn.li.ac.achievement.registry :as achievement-registry]
             [cn.li.ac.achievement.data :as achievement-data]
             [cn.li.ac.ability.registry.category :as category-registry]
-            [cn.li.ac.ability.service.registry :as skill-registry]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.recipe.crafting-recipes :as crafting-recipes]
             [cn.li.mcmod.datagen.metadata :as metadata]))
 
@@ -29,7 +29,7 @@
 (defn- ability-translation-map
   []
   (let [categories (category-registry/get-all-categories)
-        skills (skill-registry/list-skills)
+      skills (skill-query/list-skills)
       teleporter-translation-map (teleporter-translations/translation-map)
         category-name-entries
         (into {}
