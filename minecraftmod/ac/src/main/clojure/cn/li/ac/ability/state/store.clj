@@ -1,8 +1,8 @@
 (ns cn.li.ac.ability.state.store
-  "AC-owned binding for mcmod.platform.ability/*player-ability-store*.
+  "AC-owned player ability store implementation.
 
   The store operates on AC player-state/maps and is platform-neutral."
-  (:require [cn.li.mcmod.platform.ability :as pability]
+  (:require [cn.li.ac.ability.state.store-contract :as contract]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
@@ -14,7 +14,7 @@
 
 (defn ac-player-ability-store []
   (reify
-    pability/IPlayerAbilityData
+    contract/IPlayerAbilityData
     (ability-get-category [_ uuid]
       (get-in (ensure-state! uuid) [:ability-data :category-id]))
     (ability-set-category! [_ uuid cat-id]
@@ -36,7 +36,7 @@
     (ability-set-level-progress! [_ uuid amount]
       (ps/update-ability-data! uuid ad/set-level-progress amount))
 
-    pability/IResourceData
+    contract/IResourceData
     (res-get-cur-cp [_ uuid]
       (double (get-in (ensure-state! uuid) [:resource-data :cur-cp] 0.0)))
     (res-get-max-cp [_ uuid]
@@ -66,7 +66,7 @@
     (res-remove-interference! [_ uuid src-id]
       (ps/update-resource-data! uuid rd/remove-interference src-id))
 
-    pability/ICooldownData
+    contract/ICooldownData
     (cd-is-in-cooldown? [_ uuid ctrl-id sub-id]
       (cd/in-cooldown? (get-in (ensure-state! uuid) [:cooldown-data]) ctrl-id sub-id))
     (cd-set-cooldown! [_ uuid ctrl-id sub-id ticks]
@@ -76,7 +76,7 @@
     (cd-tick! [_ uuid]
       (ps/update-cooldown-data! uuid cd/tick-cooldowns))
 
-    pability/IPresetData
+    contract/IPresetData
     (preset-get-active [_ uuid]
       (int (get-in (ensure-state! uuid) [:preset-data :active-preset] 0)))
     (preset-set-active! [_ uuid idx]
@@ -89,5 +89,5 @@
       (:slots (get-in (ensure-state! uuid) [:preset-data])))))
 
 (defn install-store! []
-  (alter-var-root #'pability/*player-ability-store*
+  (alter-var-root #'contract/*player-ability-store*
                   (constantly (ac-player-ability-store))))

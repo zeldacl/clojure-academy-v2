@@ -1,19 +1,19 @@
 (ns cn.li.mcmod.platform.saved-locations
-  "Protocol for saved location storage and management.
+  "Policy-free protocol for named world-position storage and management.
 
   Platform (forge) implements this protocol and binds to *saved-locations*.
-  Game logic (ac) calls protocol methods without importing Minecraft classes.")
+  Game logic (ac) owns feature policy such as naming and max-count limits.")
 
 (defprotocol ISavedLocations
-  "Saved location storage for teleportation."
+  "Named world-position storage. Implementations should not enforce business limits."
 
   (save-location! [this player-uuid location-name world-id x y z]
     "Save a named location for a player.
     - player-uuid: string (player UUID)
-    - location-name: string (location name, max 32 chars)
+    - location-name: string (opaque content-owned location name)
     - world-id: string (dimension identifier)
     - x, y, z: double coordinates
-    Returns: true if saved successfully, false if limit reached or error")
+    Returns: true if saved successfully, false on storage error")
 
   (delete-location! [this player-uuid location-name]
     "Delete a saved location for a player.

@@ -13,6 +13,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill!]]
+            [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.model.resource :as rdata]
@@ -22,7 +23,7 @@
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.saved-locations :as saved-locations]
             [cn.li.mcmod.network.server :as net-srv]
-            [cn.li.mcmod.hooks.catalog :as catalog]
+            [cn.li.ac.ability.messages :as catalog]
             [clojure.string :as str]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]))
@@ -88,6 +89,27 @@
     (vec (saved-locations/list-locations saved-locations/*saved-locations* player-id))
     []))
 
+(defn- max-saved-location-count []
+  (long (ability-config/max-saved-locations)))
+
+(defn- location-limit-reached?
+  [player-id location-name]
+  (let [store saved-locations/*saved-locations*]
+    (and store
+         (not (saved-locations/has-location? store player-id location-name))
+         (>= (long (or (saved-locations/get-location-count store player-id) 0))
+             (max-saved-location-count)))))
+
+(defn- location-limits []
+  {:cross-dimension-exp-threshold
+   (helper/cfg-double location-teleport-skill-id
+                      :targeting.cross-dimension-exp-threshold)
+   :max-location-name-length
+   (helper/cfg-int location-teleport-skill-id
+                   :ui.max-location-name-length)
+   :max-saved-locations
+   (max-saved-location-count)})
+
 (defn- location-with-stats [player-id exp cur-pos loc]
   (let [cross-dim? (not= (:world-id cur-pos) (:world-id loc))
         dist (vec3/euclidean-distance (:x cur-pos) (:y cur-pos) (:z cur-pos)
@@ -120,24 +142,14 @@
                        locations)]
       {:success? true
        :exp exp
-       :limits {:cross-dimension-exp-threshold
-                (helper/cfg-double location-teleport-skill-id
-                                   :targeting.cross-dimension-exp-threshold)
-                :max-location-name-length
-                (helper/cfg-int location-teleport-skill-id
-                                :ui.max-location-name-length)}
+        :limits (location-limits)
        :current-pos pos
        :locations with-stats})
     (catch Exception e
       (log/warn "LocationTeleport query failed:" (ex-message e))
       {:success? false
        :error :query-failed
-       :limits {:cross-dimension-exp-threshold
-                (helper/cfg-double location-teleport-skill-id
-                                   :targeting.cross-dimension-exp-threshold)
-                :max-location-name-length
-                (helper/cfg-int location-teleport-skill-id
-                                :ui.max-location-name-length)}
+        :limits (location-limits)
        :locations []})))
 
 (defn save-current-location!
@@ -154,17 +166,21 @@
 
         :else
         (if-let [pos (current-pos player-id)]
-          (let [ok? (saved-locations/save-location!
-                      saved-locations/*saved-locations*
-                      player-id
-                      name*
-                      (:world-id pos)
-                      (:x pos)
-                      (:y pos)
-                      (:z pos))]
-            (if ok?
-              {:success? true :name name*}
-              {:success? false :error :save-failed}))
+          (if (location-limit-reached? player-id name*)
+            {:success? false
+             :error :location-limit-reached
+             :max-locations (max-saved-location-count)}
+            (let [ok? (saved-locations/save-location!
+                        saved-locations/*saved-locations*
+                        player-id
+                        name*
+                        (:world-id pos)
+                        (:x pos)
+                        (:y pos)
+                        (:z pos))]
+              (if ok?
+                {:success? true :name name*}
+                {:success? false :error :save-failed})))
           {:success? false :error :player-pos-unavailable})))
     (catch Exception e
       (log/warn "LocationTeleport save failed:" (ex-message e))

@@ -32,4 +32,4 @@
 
 (defn railgun-charge-visual-state
   [player-uuid]
-  (power-runtime/client-railgun-charge-visual-state player-uuid))
+  (power-runtime/client-visual-state :ac/charge-coin {:player-uuid player-uuid}))

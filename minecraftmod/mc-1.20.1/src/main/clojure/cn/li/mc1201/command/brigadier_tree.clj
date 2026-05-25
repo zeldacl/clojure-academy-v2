@@ -8,12 +8,31 @@
   (:require [cn.li.mcmod.command.context :as cmd-ctx]
             [cn.li.mcmod.command.actions :as cmd-actions]
             [cn.li.mc1201.command.brigadier-util :as brig-util]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.brigadier.builder ArgumentBuilder]
            [com.mojang.brigadier.builder LiteralArgumentBuilder RequiredArgumentBuilder]
            [com.mojang.brigadier.context CommandContext]
            [net.minecraft.commands CommandSourceStack]
+           [net.minecraft.network.chat Component]
            [net.minecraft.server.level ServerPlayer]))
+
+(defn- send-feedback!
+  "Shared MC feedback implementation exposed to content action executors via metadata."
+  [^CommandSourceStack source message translate? args _error?]
+  (try
+    (let [text (if translate?
+                 (i18n/translate message args)
+                 message)
+          component (Component/literal text)]
+      (.sendSuccess source component false))
+    (catch Exception e
+      (log/error "Failed to send feedback:" (ex-message e)))))
+
+(defn- player-uuid
+  [^ServerPlayer player]
+  (when player
+    (str (.getUUID player))))
 
 ;; ============================================================================
 ;; Command Execution
@@ -42,7 +61,10 @@
                  :world world
                  :source source
                  :arguments arguments
-                 :target-player target-player})
+                 :target-player target-player
+                 :metadata {:player-uuid-fn player-uuid
+                    :send-feedback-fn (fn [message translate? args error?]
+                        (send-feedback! source message translate? args error?))}})
           action-result (executor-fn ctx)]
 
       ;; Execute the action

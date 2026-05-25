@@ -7,14 +7,13 @@
 						[cn.li.mcmod.platform.be :as platform-be]
 						[cn.li.mcmod.platform.position :as pos]
 						[cn.li.mcmod.platform.entity :as entity]
-						[cn.li.mcmod.platform.ability :as platform-ability]
+						[cn.li.ac.ability.state.store-contract :as ability-store]
 						[cn.li.ac.ability.util.uuid :as uuid]
 						[cn.li.mcmod.platform.item :as pitem]
 						[cn.li.ac.block.ability-interferer.config :as interferer-config]
 						[cn.li.ac.block.ability-interferer.schema :as interferer-schema]
 						[cn.li.ac.energy.operations :as energy]
-						[cn.li.mcmod.util.log :as log]
-						[cn.li.mcmod.platform.nbt :as nbt]))
+						[cn.li.mcmod.util.log :as log]))
 
 (def interferer-state-schema
 	(state-schema/filter-server-fields interferer-schema/ability-interferer-schema))
@@ -75,8 +74,8 @@
 (defn- apply-interference-effect! [player src-id]
 	(when-let [uuid (uuid/player-uuid player)]
 		(try
-			(let [store (platform-ability/player-ability-store)]
-				(platform-ability/res-add-interference! store uuid src-id)
+			(let [store (ability-store/player-ability-store)]
+				(ability-store/res-add-interference! store uuid src-id)
 				true)
 			(catch Exception e
 				(log/warn "Failed to add interference for" uuid ":" (ex-message e))
@@ -85,8 +84,8 @@
 (defn- remove-interference-effect-by-uuid! [uuid src-id]
 	(when (and uuid src-id)
 		(try
-			(let [store (platform-ability/player-ability-store)]
-				(platform-ability/res-remove-interference! store uuid src-id)
+			(let [store (ability-store/player-ability-store)]
+				(ability-store/res-remove-interference! store uuid src-id)
 				true)
 			(catch Exception e
 				(log/warn "Failed to remove interference for" uuid ":" (ex-message e))

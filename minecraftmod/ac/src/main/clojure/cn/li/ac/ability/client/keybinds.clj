@@ -202,10 +202,10 @@
       (when (and (not was-down) is-down)
         (case gui-type
           :skill-tree
-          (client-bridge/open-skill-tree-screen! player-uuid)
+          (client-bridge/open-screen! :ac/skill-tree {:player-uuid player-uuid})
 
           :preset-editor
-          (client-bridge/open-preset-editor-screen! player-uuid)
+          (client-bridge/open-screen! :ac/preset-editor {:player-uuid player-uuid})
 
           nil)))
 

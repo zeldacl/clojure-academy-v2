@@ -7,7 +7,7 @@
   - Block Entity (Tile Entity) utilities (IBlockEntity + helpers)
   - World-level effects (lightning, explosions, particle queries)
   - Line-of-sight/block finding (IRaycast)
-  - Location storage for teleportation support (ISavedLocations)"
+  - Policy-free named world-position storage (ISavedLocations)"
   (:require
     [cn.li.mcmod.platform.world :as world]
     [cn.li.mcmod.platform.block-manipulation :as block-manipulation]

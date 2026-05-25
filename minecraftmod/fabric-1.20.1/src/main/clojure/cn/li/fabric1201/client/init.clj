@@ -81,9 +81,18 @@
 (defn- init-ac-client-bridge!
   []
   (client-bridge/install-client-bridge!
-    {:open-skill-tree-screen screen-host/open-skill-tree-screen!
-     :open-preset-editor-screen screen-host/open-preset-editor-screen!
-     :open-location-teleport-screen screen-host/open-location-teleport-screen!
+    {:open-screen (fn [screen-key payload]
+                    (case screen-key
+                      :ac/skill-tree
+                      (screen-host/open-managed-screen! screen-key payload)
+
+                      :ac/preset-editor
+                      (screen-host/open-managed-screen! screen-key payload)
+
+                      :ac/saved-position
+                      (screen-host/open-managed-screen! screen-key payload)
+
+                      (log/debug "Unhandled client screen key" screen-key payload)))
      :slot-key-down runtime-bridge/on-slot-key-down!
      :slot-key-tick runtime-bridge/on-slot-key-tick!
      :slot-key-up runtime-bridge/on-slot-key-up!

@@ -1,9 +1,8 @@
-(ns cn.li.mcmod.entity.hook-catalog
-  "Shared mapping from business hook ids to platform-neutral implementation keys.
-
-  Platform adapters should resolve business hook ids through this catalog, then
-  map implementation keys to platform classes/functions locally."
-  (:require [clojure.string :as str]))
+(ns cn.li.ac.entity.hook-catalog
+  "AC-owned scripted entity hook-id → implementation key catalog."
+  (:require [clojure.string :as str]
+            [cn.li.mcmod.entity.hook-resolver :as hook-resolver]
+            [cn.li.mcmod.util.log :as log]))
 
 (def ^:private effect-hook->impl-key
   {"intensify-arcs" :intensify-arcs
@@ -26,6 +25,10 @@
    "barrage-ray-pre" :owner-follow
    "railgun-fx" :owner-follow})
 
+(def ^:private marker-hook->impl-key
+  {"tp-marking" :owner-follow-marker
+   "marker" :owner-follow-marker})
+
 (defn normalize-hook-id
   [hook-id]
   (cond
@@ -40,3 +43,16 @@
 (defn ray-impl-key
   [hook-id]
   (some-> hook-id normalize-hook-id ray-hook->impl-key))
+
+(defn marker-impl-key
+  [hook-id]
+  (some-> hook-id normalize-hook-id marker-hook->impl-key))
+
+(defn install-resolvers!
+  "Install AC scripted entity hook resolvers into the mcmod generic resolver seam."
+  []
+  (hook-resolver/register-resolver! :effect effect-impl-key)
+  (hook-resolver/register-resolver! :ray ray-impl-key)
+  (hook-resolver/register-resolver! :marker marker-impl-key)
+  (log/info "Installed AC scripted entity hook resolvers")
+  nil)

@@ -1,19 +1,17 @@
-(ns cn.li.mcmod.platform.ability
-  "Platform-neutral ability protocols.
+(ns cn.li.ac.ability.state.store-contract
+  "AC-owned ability store contract.
 
-  These protocols define the data contracts between the platform (forge/fabric)
-  and ac game logic. ac implements business rules; platform stores and serializes.
-
-  Dependency direction: platform -> mcmod -> ac. This namespace must never import
-  net.minecraft.* or reference ac namespaces.")
+  This namespace contains AcademyCraft ability/resource/cooldown/preset data
+  protocols and the current store binding. It is intentionally owned by `ac`,
+  not `mcmod`, because the protocol methods expose AC business state shape such
+  as category, learned skills, CP, overload, cooldowns, and presets.")
 
 ;; ============================================================================
 ;; Ability Data Protocol
 ;; ============================================================================
 
 (defprotocol IPlayerAbilityData
-  "Read/write ability data for a player. Keyed by player UUID string.
-  Platform implements persistence; ac implements rules on top of returned maps."
+  "Read/write ability data for a player. Keyed by player UUID string."
 
   (ability-get-category [this uuid]
     "Returns category-id keyword or nil")
@@ -104,42 +102,17 @@
     "Returns nested map {preset-idx {key-idx controllable}} for serialization"))
 
 ;; ============================================================================
-;; Player Ability Hook Registry
+;; Store Binding
 ;; ============================================================================
 
 (def ^:dynamic *player-ability-store*
-  "Bound by platform (forge) to a reified IPlayerAbilityData / IResourceData /
-  ICooldownData / IPresetData implementation.
-  nil until platform init runs."
+  "Bound by AC runtime initialization to a reified IPlayerAbilityData /
+  IResourceData / ICooldownData / IPresetData implementation.
+  nil until AC runtime init runs."
   nil)
 
 (defn player-ability-store
   "Return the bound player ability store, or throw."
   []
   (or *player-ability-store*
-      (throw (ex-info "Player ability store not initialised by platform" {}))))
-
-;; ============================================================================
-;; Serialization Contract
-;; ============================================================================
-
-;; ac-layer produces pure maps; platform serializes them.
-;; All maps must be edn-clean (no Java objects as values).
-
-(defn ability-data->map
-  "Serialize ability data for a player to a pure map."
-  [uuid]
-  (let [s (player-ability-store)]
-    {:category-id    (ability-get-category s uuid)
-     :level          (ability-get-level s uuid)
-     :level-progress (ability-get-level-progress s uuid)}))
-
-(defn resource-data->map
-  [uuid]
-  (let [s (player-ability-store)]
-    {:cur-cp           (res-get-cur-cp s uuid)
-     :max-cp           (res-get-max-cp s uuid)
-     :cur-overload     (res-get-cur-overload s uuid)
-     :max-overload     (res-get-max-overload s uuid)
-     :activated        (res-is-activated? s uuid)
-     :until-recover    (res-get-until-recover s uuid)}))
+      (throw (ex-info "Player ability store not initialised by AC runtime" {}))))

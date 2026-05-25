@@ -1,9 +1,10 @@
 (ns cn.li.ac.content.ability.teleporter.location-teleport-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.teleporter.location-teleport :as loc-tp]
             [cn.li.ac.ability.util.uuid :as uuid]
-            [cn.li.mcmod.hooks.catalog :as catalog]
+            [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.network.server :as net-srv]
             [cn.li.mcmod.platform.saved-locations :as saved-locations]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
@@ -69,6 +70,7 @@
                 loc (first (:locations result))]
             (is (true? (:success? result)))
             (is (= current-pos (:current-pos result)))
+            (is (= 16 (get-in result [:limits :max-saved-locations])))
             (is (= "home-base-name-t" (:name loc)))
             (is (false? (:cross-dimension? loc)))
             (is (true? (:can-perform? loc))))))
@@ -76,6 +78,29 @@
         (is (= {:success? true :name "home-base-name-t"}
                (loc-tp/delete-saved-location! player-id "home-base-name-that-is-too-long")))
         (is (empty? (saved-locations/list-locations saved-locations/*saved-locations* player-id)))))))
+
+      (deftest save-current-location-enforces-ac-max-location-policy-test
+        (let [store (atom {"player-limit" {"home" {:name "home"
+                       :world-id "minecraft:overworld"
+                       :x 0.0 :y 64.0 :z 0.0}}})
+         current-pos {:world-id "minecraft:overworld" :x 10.0 :y 65.0 :z 2.0}]
+          (binding [saved-locations/*saved-locations* (memory-saved-locations store)
+          teleportation/*teleportation* (teleportation-at current-pos)]
+            (with-redefs [ability-config/max-saved-locations (fn [] 1)]
+         (testing "new names are rejected when the AC configured limit is reached"
+           (is (= {:success? false
+              :error :location-limit-reached
+              :max-locations 1}
+             (loc-tp/save-current-location! "player-limit" "mine")))
+           (is (nil? (saved-locations/get-location saved-locations/*saved-locations*
+                      "player-limit" "mine"))))
+         (testing "overwriting an existing saved location is still allowed"
+           (is (= {:success? true :name "home"}
+             (loc-tp/save-current-location! "player-limit" "home")))
+           (is (= current-pos
+             (select-keys (saved-locations/get-location saved-locations/*saved-locations*
+                          "player-limit" "home")
+                [:world-id :x :y :z]))))))))
 
 (deftest cross-dimension-location-requires-high-exp-test
   (let [store (atom {"player-b" {"nether" {:name "nether"

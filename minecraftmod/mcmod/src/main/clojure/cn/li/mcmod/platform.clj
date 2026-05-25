@@ -8,9 +8,8 @@
   - ops-foundation: Position, NBT, Item, Resource, Capability abstractions
   - ops-world: World access, block manipulation, world effects
   - ops-entity: Entity/player operations, movement, damage, teleportation
-  - ops-ability: Player ability/skill data storage
   - ops-integration: Event posting, command hooks, JEI/CraftTweaker, energy
-  - ops-ui: Terminal UI rendering
+  - ops-ui: Generic UI widget factory registry
   
   USAGE
   =====
@@ -26,6 +25,5 @@
     [cn.li.mcmod.platform.ops-foundation]
     [cn.li.mcmod.platform.ops-world]
     [cn.li.mcmod.platform.ops-entity]
-    [cn.li.mcmod.platform.ops-ability]
     [cn.li.mcmod.platform.ops-integration]
     [cn.li.mcmod.platform.ops-ui]))

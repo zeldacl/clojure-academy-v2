@@ -7,7 +7,7 @@
   All mutating calls go through player-state ns; no atom touched directly.
   No net.minecraft.* imports allowed."
   (:require [cn.li.mcmod.network.server         :as net-srv]
-            [cn.li.mcmod.hooks.catalog          :as catalog]
+            [cn.li.ac.ability.messages          :as catalog]
             [cn.li.mcmod.platform.entity        :as entity]
             [cn.li.ac.ability.service.player-state      :as ps]
             [cn.li.ac.ability.model.ability :as adata]

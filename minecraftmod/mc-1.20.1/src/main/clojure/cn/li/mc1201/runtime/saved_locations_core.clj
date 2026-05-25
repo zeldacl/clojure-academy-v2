@@ -7,7 +7,6 @@
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mc1201.reflect-util :as ru]
             [cn.li.mcmod.platform.saved-locations :as psl]
-            [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]
@@ -41,18 +40,10 @@
   [^MinecraftServer server player-uuid location-name world-id x y z]
   (try
     (when-let [^ServerPlayer player (query-core/get-player-by-uuid server player-uuid)]
-      (let [locations-tag (get-locations-tag player)
-            current-count (.size (.getAllKeys locations-tag))
-            max-locations (long (power-runtime/get-max-saved-locations))]
-        (if (and (>= current-count max-locations)
-                 (not (.contains locations-tag location-name)))
-          (do
-            (log/debug "SavedLocations: Limit reached for player" player-uuid)
-            false)
-          (do
-            (.put locations-tag location-name (location-to-nbt world-id x y z))
-            (log/debug "SavedLocations: Saved location" location-name "for player" player-uuid)
-            true))))
+      (let [locations-tag (get-locations-tag player)]
+        (.put locations-tag location-name (location-to-nbt world-id x y z))
+        (log/debug "SavedLocations: Saved location" location-name "for player" player-uuid)
+        true))
     (catch Exception e
       (log/warn "Failed to save location:" (ex-message e))
       false)))

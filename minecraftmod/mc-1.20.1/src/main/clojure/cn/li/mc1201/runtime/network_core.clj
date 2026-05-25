@@ -2,12 +2,12 @@
   "Loader-agnostic runtime network registration helpers.
 
   Platforms provide transport functions; shared core wires runtime route/send
-  integration with mcmod power-runtime and runtime-catalog." 
+  integration with mcmod power-runtime and runtime message registry." 
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mc1201.runtime.spi.network-transport :as transport-spi]
             [cn.li.mc1201.runtime.spi.server-context :as server-context-spi]
             [cn.li.mcmod.hooks.core :as network-hooks]
-            [cn.li.mcmod.hooks.catalog :as runtime-catalog]
+            [cn.li.mcmod.hooks.messages :as messages]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
@@ -16,22 +16,25 @@
 
 (def ^:private default-except-local-radius 64.0)
 
+(defn- msg-id [message-key]
+  (messages/msg-id message-key))
+
 (def ^:private sync-message-specs
-  [{:msg-id runtime-catalog/MSG-SYNC-RUNTIME
+  [{:message-key :sync-runtime
     :payload-key :ability-data}
-   {:msg-id runtime-catalog/MSG-SYNC-RESOURCE
+   {:message-key :sync-resource
     :payload-key :resource-data}
-   {:msg-id runtime-catalog/MSG-SYNC-COOLDOWN
+   {:message-key :sync-cooldown
     :payload-key :cooldown-data}
-   {:msg-id runtime-catalog/MSG-SYNC-PRESET
+   {:message-key :sync-preset
     :payload-key :preset-data}])
 
 (declare init-runtime-network!)
 
 (defn sync-message-payloads
   [uuid payload]
-  (for [{:keys [msg-id payload-key]} sync-message-specs]
-    {:msg-id msg-id
+  (for [{:keys [message-key payload-key]} sync-message-specs]
+    {:msg-id (msg-id message-key)
      :payload {:uuid uuid
                payload-key (get payload payload-key)}}))
 
@@ -100,7 +103,7 @@
     (if-let [source-player-uuid (network-hooks/get-context-player-uuid ctx-id)]
       (doseq [target-player-uuid (find-nearby-player-uuids source-player-uuid default-except-local-radius)]
         (send-to-client-fn target-player-uuid
-                           runtime-catalog/MSG-CTX-CHANNEL
+                           (msg-id :ctx-channel)
                            {:ctx-id ctx-id :channel channel :payload payload}))
       (log/debug "Skip except-local send due to missing context owner:" ctx-id))))
 
@@ -134,13 +137,13 @@
   (let [send-to-except-local-fn (or send-to-except-local-fn (fn [_ctx-id _channel _payload] nil))
         send-context-channel-to-server!
         (fn [ctx-id channel payload]
-          (send-to-server-fn runtime-catalog/MSG-CTX-CHANNEL
+          (send-to-server-fn (msg-id :ctx-channel)
                              {:ctx-id ctx-id :channel channel :payload payload}))
         send-context-channel-to-client!
         (fn [ctx-id channel payload]
           (when-let [player-uuid (network-hooks/get-context-player-uuid ctx-id)]
             (send-to-client-fn player-uuid
-                               runtime-catalog/MSG-CTX-CHANNEL
+                               (msg-id :ctx-channel)
                                {:ctx-id ctx-id :channel channel :payload payload})))]
     (network-hooks/register-network-handlers!)
     (network-hooks/register-context-route-fns! {:to-server send-context-channel-to-server!

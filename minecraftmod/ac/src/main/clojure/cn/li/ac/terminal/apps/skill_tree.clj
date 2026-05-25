@@ -19,7 +19,8 @@
   (log/info "Opening skill tree from terminal for player:" (entity/player-get-name player))
   ;; Reuse existing skill tree screen via platform bridge
   (let [uuid-str (uuid/player-uuid player)]
-    (client-bridge/open-skill-tree-screen! uuid-str learn-context))))
+    (client-bridge/open-screen! :ac/skill-tree {:player-uuid uuid-str
+                                                :learn-context learn-context}))))
 
 ;; ============================================================================
 ;; App Registration

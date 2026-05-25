@@ -190,7 +190,8 @@
       (events/on-left-click learn
         (fn [_]
           (when-let [{:keys [player-uuid learn-context]} (upgrade-context container pl)]
-            (client-bridge/open-skill-tree-screen! player-uuid learn-context)))))
+            (client-bridge/open-screen! :ac/skill-tree {:player-uuid player-uuid
+                                                        :learn-context learn-context})))))
     (when-let [wbtn (cgui-core/find-widget root "parent_left/panel_machine/button_wireless")]
       (when switch-wireless-tab!
         (events/on-left-click wbtn (fn [_] (switch-wireless-tab!)))))

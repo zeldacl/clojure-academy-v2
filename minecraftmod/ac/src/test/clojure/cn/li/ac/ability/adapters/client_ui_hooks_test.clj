@@ -9,7 +9,7 @@
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.service.player-state :as ps]
-            [cn.li.mcmod.hooks.catalog :as catalog]
+            [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.network.client :as net-client]))
 
 (defn- reset-ui-state! [f]
@@ -110,8 +110,8 @@
                                                                     [:railgun :qte.coin-active-threshold] 0.6
                                                                     0.0))
                   ctx/get-all-contexts-for-player (fn [_] [])]
-      ((:client-notify-charge-coin-throw! hooks) "p1")
-      (let [visual ((:client-charge-coin-visual-state hooks) "p1")]
+      ((:client-notify-visual-event! hooks) :ac/charge-coin-throw {:player-uuid "p1"})
+      (let [visual ((:client-visual-state hooks) :ac/charge-coin {:player-uuid "p1"})]
         (is (true? (:active? visual)))
         (is (false? (:coin-active? visual)))
         (is (number? (:coin-progress visual)))
@@ -131,7 +131,7 @@
                   ctx/get-all-contexts-for-player (fn [_]
                                                     [{:skill-id :railgun
                                                       :skill-state {:mode :item-charge :charge-ticks 10}}])]
-      (let [visual ((:client-charge-coin-visual-state hooks) "p1")]
+      (let [visual ((:client-visual-state hooks) :ac/charge-coin {:player-uuid "p1"})]
         (is (true? (:active? visual)))
         (is (= 10 (:charge-ticks visual)))
         (is (false? (:coin-active? visual)))
@@ -145,7 +145,7 @@
                                                 [:body-intensify :charge.max-time] 40
                                                 1))
                   ctx/get-all-contexts-for-player (fn [_] [])]
-      (let [visual ((:client-body-intensify-charge-visual-state hooks) "p1")]
+      (let [visual ((:client-visual-state hooks) :ac/body-intensify-charge {:player-uuid "p1"})]
         (is (false? (:active? visual)))
         (is (= 0 (:charge-ticks visual)))
         (is (= 0.0 (:charge-ratio visual)))))
@@ -156,7 +156,7 @@
                   ctx/get-all-contexts-for-player (fn [_]
                                                     [{:skill-id :body-intensify
                                                       :skill-state {:hold-ticks 20}}])]
-      (let [visual ((:client-body-intensify-charge-visual-state hooks) "p1")]
+      (let [visual ((:client-visual-state hooks) :ac/body-intensify-charge {:player-uuid "p1"})]
         (is (true? (:active? visual)))
         (is (= 20 (:charge-ticks visual)))
         (is (= 0.5 (:charge-ratio visual)))))))
@@ -170,7 +170,7 @@
                           :good? false
                           :charge-ticks 0
                           :charge-ratio 0.0})]
-      (let [visual ((:client-current-charging-visual-state hooks) "p1")]
+      (let [visual ((:client-visual-state hooks) :ac/current-charging {:player-uuid "p1"})]
         (is (false? (:active? visual)))
         (is (false? (:is-item visual)))
         (is (false? (:good? visual)))
@@ -183,7 +183,7 @@
                           :good? true
                           :charge-ticks 30
                           :charge-ratio 0.75})]
-      (let [visual ((:client-current-charging-visual-state hooks) "p1")]
+      (let [visual ((:client-visual-state hooks) :ac/current-charging {:player-uuid "p1"})]
         (is (true? (:active? visual)))
         (is (true? (:is-item visual)))
         (is (true? (:good? visual)))

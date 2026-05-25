@@ -2,26 +2,8 @@
   "Command action execution protocol.
 
   Actions are platform-agnostic descriptions of what should happen when
-  a command executes. The platform layer translates these actions into
-  actual Minecraft operations.
-
-  Action types:
-    :send-message - Send a message to the command source
-    :grant-advancement - Grant an advancement to a player
-    :switch-category - Switch player's runtime category
-    :learn-node - Learn a node
-    :unlearn-node - Unlearn a node
-    :learn-all-nodes - Learn all nodes in current category
-    :list-learned-nodes - List learned nodes
-    :list-available-nodes - List available nodes
-    :set-level - Set player runtime level
-    :set-node-exp - Set node experience
-    :restore-cp - Restore CP to full
-    :clear-cooldowns - Clear all cooldowns
-    :reset-abilities - Reset all abilities
-    :maxout-progression - Max out level progression
-    :enable-cheats - Enable cheat mode
-    :disable-cheats - Disable cheat mode"
+  a command executes. This namespace owns the generic registry/execution seam;
+  content-specific action ids and executors are registered by content modules."
   (:require [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -44,23 +26,61 @@
 ;; Action Validation
 ;; ============================================================================
 
-(def valid-action-types
+(def ^:private base-action-types
   #{:send-message
-    :grant-advancement
-    :switch-category
-    :learn-node
-    :unlearn-node
-    :learn-all-nodes
-    :list-learned-nodes
-    :list-available-nodes
-    :set-level
-    :set-node-exp
-    :restore-cp
-    :clear-cooldowns
-    :reset-abilities
-    :maxout-progression
-    :enable-cheats
-    :disable-cheats})
+    :grant-advancement})
+
+(defonce ^:private action-executors
+  (atom {}))
+
+(defn valid-action-types
+  "Return the currently registered command action ids."
+  []
+  (into base-action-types (keys @action-executors)))
+
+(defn register-action-type!
+  "Register an action id as valid without installing an executor.
+
+  Platform namespaces may still provide an `execute-action-impl` multimethod for
+  the id. Content namespaces should prefer `register-action-executor!` so their
+  business logic remains content-owned."
+  [action-type]
+  (when-not (keyword? action-type)
+    (throw (ex-info "Action type must be a keyword" {:action-type action-type})))
+  (swap! action-executors update action-type #(or % nil))
+  nil)
+
+(defn register-action-types!
+  "Register multiple action ids as valid."
+  [action-types]
+  (doseq [action-type action-types]
+    (register-action-type! action-type))
+  nil)
+
+(defn register-action-executor!
+  "Register a content-owned executor for an action id.
+
+  The executor receives `[action-map context]` and returns a command result map."
+  [action-type executor-fn]
+  (when-not (keyword? action-type)
+    (throw (ex-info "Action type must be a keyword" {:action-type action-type})))
+  (when-not (fn? executor-fn)
+    (throw (ex-info "Action executor must be a function" {:action-type action-type
+                                                           :executor executor-fn})))
+  (swap! action-executors assoc action-type executor-fn)
+  nil)
+
+(defn register-action-executors!
+  "Register a map of action id -> executor function."
+  [executor-map]
+  (doseq [[action-type executor-fn] executor-map]
+    (register-action-executor! action-type executor-fn))
+  nil)
+
+(defn get-action-executor
+  "Return the registered content executor for `action-type`, if present."
+  [action-type]
+  (get @action-executors action-type))
 
 (defn validate-action
   "Validate an action map.
@@ -81,10 +101,10 @@
     (when-not action-type
       (throw (ex-info "Action map must have :action key" {:action action-map})))
 
-    (when-not (contains? valid-action-types action-type)
+    (when-not (contains? (valid-action-types) action-type)
       (throw (ex-info "Invalid action type"
                       {:action-type action-type
-                       :valid-types valid-action-types}))))
+                       :valid-types (valid-action-types)}))))
   true)
 
 ;; ============================================================================
@@ -128,7 +148,9 @@
   [action-map context]
   (try
     (validate-action action-map)
-    (execute-action-impl action-map context)
+    (if-let [executor-fn (get-action-executor (:action action-map))]
+      (executor-fn action-map context)
+      (execute-action-impl action-map context))
     (catch Exception e
       (log/error "Error executing action:" (ex-message e))
       {:success? false

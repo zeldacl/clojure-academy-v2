@@ -19,6 +19,7 @@
                   (assoc-in [:terminal-data :installed-apps] #{:tutorial :settings}))]
     (runtime-hooks/set-player-state! uuid state)
     (is (= state (runtime-hooks/get-player-state uuid)))
+    (is (true? (runtime-hooks/runtime-activated? uuid)))
     (is (= {:uuid uuid
             :ability-data (:ability-data state)
             :resource-data (:resource-data state)
@@ -40,7 +41,7 @@
 
 (deftest runtime-client-charge-coin-visual-state-contract-test
   (runtime-bridge/install-runtime-hooks!)
-  (let [state (runtime-hooks/client-charge-coin-visual-state "client-player")]
+  (let [state (runtime-hooks/client-visual-state :ac/charge-coin {:player-uuid "client-player"})]
     (is (contains? state :active?))
     (is (contains? state :coin-active?))
     (is (contains? state :charge-ratio))

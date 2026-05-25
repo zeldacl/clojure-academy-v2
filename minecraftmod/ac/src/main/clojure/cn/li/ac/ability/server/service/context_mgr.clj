@@ -15,7 +15,7 @@
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.server.service.context-transport :as transport]
             [cn.li.ac.ability.model.resource :as rdata]
-            [cn.li.mcmod.hooks.catalog :as catalog]
+            [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.util.log :as log]))
 
 (defn register-send-fns! [{:keys [to-client to-server]}]

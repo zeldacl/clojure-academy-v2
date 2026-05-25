@@ -379,10 +379,10 @@ def extractTaggedMapBodies = { String text, String tag ->
 
 tasks.register('verifyForgeHookCoverage') {
     group = 'verification'
-    description = 'Verify hook implementation keys cover shared hook catalog declarations (Phase C: mc1201 is shared source).'
+    description = 'Verify hook implementation keys cover AC hook catalog declarations (Phase C: mc1201 is shared source).'
 
     doLast {
-        def hookCatalog = file('mcmod/src/main/clojure/cn/li/mcmod/entity/hook_catalog.clj')
+        def hookCatalog = file('ac/src/main/clojure/cn/li/ac/entity/hook_catalog.clj')
         def sharedHookCore = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/entity/hook_registry_core.clj')
 
         [hookCatalog, sharedHookCore].each { f ->
@@ -396,25 +396,27 @@ tasks.register('verifyForgeHookCoverage') {
 
         def effectCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'effect-hook->impl-key'))
         def rayCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'ray-hook->impl-key'))
+        def markerCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'marker-hook->impl-key'))
         def sharedImpls = extractKeywordSet(extractTaggedMapBodies(sharedHookText, ':impl-key->hook-class').join('\n'))
 
         def missingEffect = (effectCatalogImpls - sharedImpls)
         def missingRay = (rayCatalogImpls - sharedImpls)
+        def missingMarker = (markerCatalogImpls - sharedImpls)
 
-        if (!missingEffect.isEmpty() || !missingRay.isEmpty()) {
-            throw new GradleException("Hook coverage missing impl keys in mc1201 (Phase C shared layer). effect=${missingEffect} ray=${missingRay}")
+        if (!missingEffect.isEmpty() || !missingRay.isEmpty() || !missingMarker.isEmpty()) {
+            throw new GradleException("Hook coverage missing impl keys in mc1201 (Phase C shared layer). effect=${missingEffect} ray=${missingRay} marker=${missingMarker}")
         }
 
-        logger.lifecycle('[verifyForgeHookCoverage] passed (mc1201 shared). effect={} ray={}', effectCatalogImpls.size(), rayCatalogImpls.size())
+        logger.lifecycle('[verifyForgeHookCoverage] passed (mc1201 shared). effect={} ray={} marker={}', effectCatalogImpls.size(), rayCatalogImpls.size(), markerCatalogImpls.size())
     }
 }
 
 tasks.register('verifyFabricHookManifest') {
     group = 'verification'
-    description = 'Verify Fabric unsupported hook manifest explicitly tracks shared hook catalog declarations.'
+    description = 'Verify Fabric unsupported hook manifest explicitly tracks AC hook catalog declarations.'
 
     doLast {
-        def hookCatalog = file('mcmod/src/main/clojure/cn/li/mcmod/entity/hook_catalog.clj')
+        def hookCatalog = file('ac/src/main/clojure/cn/li/ac/entity/hook_catalog.clj')
         def manifestFile = file('docs/dev/fabric-hook-support.properties')
 
         [hookCatalog, manifestFile].each { f ->
@@ -426,6 +428,7 @@ tasks.register('verifyFabricHookManifest') {
         def catalogText = hookCatalog.getText('UTF-8')
         def effectCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'effect-hook->impl-key'))
         def rayCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'ray-hook->impl-key'))
+        def markerCatalogImpls = extractKeywordSet(extractMapBody(catalogText, 'marker-hook->impl-key'))
 
         def props = new Properties()
         manifestFile.withInputStream { props.load(it) }
@@ -446,19 +449,29 @@ tasks.register('verifyFabricHookManifest') {
             .split(',')
             .collect { it.trim() }
             .findAll { !it.isEmpty() }) as Set
+        def unsupportedMarkers = ((props.getProperty('unsupported.marker.impl.keys') ?: '')
+            .split(',')
+            .collect { it.trim() }
+            .findAll { !it.isEmpty() }) as Set
+        def supportedMarkers = ((props.getProperty('supported.marker.impl.keys') ?: '')
+            .split(',')
+            .collect { it.trim() }
+            .findAll { !it.isEmpty() }) as Set
 
         def declaredEffects = unsupportedEffects + supportedEffects
         def declaredRays = unsupportedRays + supportedRays
+        def declaredMarkers = unsupportedMarkers + supportedMarkers
 
         def missingEffectDecl = (effectCatalogImpls - declaredEffects)
         def missingRayDecl = (rayCatalogImpls - declaredRays)
+        def missingMarkerDecl = (markerCatalogImpls - declaredMarkers)
 
-        if (!missingEffectDecl.isEmpty() || !missingRayDecl.isEmpty()) {
-            throw new GradleException("Fabric hook manifest missing impl keys. effect=${missingEffectDecl} ray=${missingRayDecl}")
+        if (!missingEffectDecl.isEmpty() || !missingRayDecl.isEmpty() || !missingMarkerDecl.isEmpty()) {
+            throw new GradleException("Fabric hook manifest missing impl keys. effect=${missingEffectDecl} ray=${missingRayDecl} marker=${missingMarkerDecl}")
         }
 
-        logger.lifecycle('[verifyFabricHookManifest] passed. supported effect={} ray={}, unsupported effect={} ray={}',
-            supportedEffects.size(), supportedRays.size(), unsupportedEffects.size(), unsupportedRays.size())
+        logger.lifecycle('[verifyFabricHookManifest] passed. supported effect={} ray={} marker={}, unsupported effect={} ray={} marker={}',
+            supportedEffects.size(), supportedRays.size(), supportedMarkers.size(), unsupportedEffects.size(), unsupportedRays.size(), unsupportedMarkers.size())
     }
 }
 
@@ -470,12 +483,14 @@ tasks.register('verifyPlatformHookCoverage') {
 
 tasks.register('verifyPlatformNoBusinessHookIds') {
     group = 'verification'
-    description = 'Verify platform hook adapters do not hardcode business hook-id literals (Phase C: mc1201 is shared).'
+    description = 'Verify shared/platform hook layers do not hardcode business hook-id literals.'
 
     doLast {
         def contentFile = file('ac/src/main/clojure/cn/li/ac/content/entities/all.clj')
-        // Phase C: Forge/Fabric platform hooks have been removed; mc1201 shared layer handles mapping
-        // This verifier now ensures no remaining platform adapter files hardcode business IDs
+        // Phase C: Forge/Fabric platform hooks have been removed; AC owns
+        // business hook-id -> impl-key mapping and mc1201 consumes a generic
+        // resolver. This verifier ensures no remaining mcmod/mc1201/platform
+        // files hardcode business hook IDs.
         
         if (!contentFile.exists()) {
             throw new GradleException("Required platform no-business-id check file not found: ${contentFile}")
@@ -489,7 +504,15 @@ tasks.register('verifyPlatformNoBusinessHookIds') {
         def forgeIntegrationEvents = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/integration/events.clj')
         def fabricIntegrationEvents = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/integration/events.clj')
         
-        def platformAdapterFiles = [forgeIntegrationEvents, fabricIntegrationEvents].findAll { it.exists() }
+        def mcmodSourceFiles = fileTree('mcmod/src/main/clojure') {
+            include '**/*.clj'
+            exclude '**/build/**'
+        }.files
+        def mc1201SourceFiles = fileTree('mc-1.20.1/src/main/clojure') {
+            include '**/*.clj'
+            exclude '**/build/**'
+        }.files
+        def platformAdapterFiles = ([forgeIntegrationEvents, fabricIntegrationEvents].findAll { it.exists() } + mcmodSourceFiles + mc1201SourceFiles)
         
         def leakedHookIds = [] as Set
         platformAdapterFiles.each { adapterFile ->
@@ -505,7 +528,327 @@ tasks.register('verifyPlatformNoBusinessHookIds') {
             throw new GradleException("Platform adapter contains leaked business hook-id literals: ${leakedHookIds}")
         }
 
-        logger.lifecycle('[verifyPlatformNoBusinessHookIds] passed (Phase C mc1201 shared). scanned business hook ids={}', businessHookIds.size())
+        logger.lifecycle('[verifyPlatformNoBusinessHookIds] passed. scanned business hook ids={}', businessHookIds.size())
+    }
+}
+
+tasks.register('verifyPlatformNoAbilityMessageIds') {
+    group = 'verification'
+    description = 'Verify shared/platform layers do not hardcode AC ability runtime network message ids.'
+
+    doLast {
+        def platformSourceFiles = [] as Set
+        ['mcmod/src/main/clojure',
+         'mc-1.20.1/src/main/clojure',
+         'forge-1.20.1/src/main/clojure',
+         'fabric-1.20.1/src/main/clojure'].each { sourcePath ->
+            platformSourceFiles.addAll(fileTree(sourcePath) {
+                include '**/*.clj'
+                exclude '**/build/**'
+            }.files)
+        }
+
+        def messageIdPattern = ~/"ability:(ctx|skill|sync|req)\/[^"]+"/
+        def violations = []
+        platformSourceFiles.each { sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { line, idx ->
+                def matcher = (line =~ messageIdPattern)
+                matcher.each { match ->
+                    violations << "${rel}:${idx + 1}: ${match[0]}"
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Shared/platform layers contain AC ability message-id literals:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyPlatformNoAbilityMessageIds] passed. AC ability message ids stay in ac-owned catalogs.')
+    }
+}
+
+tasks.register('verifyMcmodHooksNoBusinessStateReads') {
+    group = 'verification'
+    description = 'Verify mcmod/mc1201 runtime hooks do not inspect AC ability resource activation state directly.'
+
+    doLast {
+        def violations = []
+        def stateReadPattern = ~/\[:resource-data\s+:activated\]/
+        def scannedFiles = [] as Set
+        ['mcmod/src/main/clojure',
+         'mc-1.20.1/src/main/clojure'].each { sourcePath ->
+            scannedFiles.addAll(fileTree(sourcePath) {
+                include '**/*.clj'
+                exclude '**/build/**'
+            }.files)
+        }
+
+        scannedFiles.each { sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            def text = sourceFile.getText('UTF-8')
+            def matcher = (text =~ stateReadPattern)
+            if (matcher.find()) {
+                violations << "${rel}: direct [:resource-data :activated] read"
+            }
+        }
+
+        def hooksCore = file('mcmod/src/main/clojure/cn/li/mcmod/hooks/core.clj')
+        if (hooksCore.exists()) {
+            def text = hooksCore.getText('UTF-8')
+            if (text.contains(':reflection-search-radius (fn [] 10.0)')) {
+                violations << 'mcmod/src/main/clojure/cn/li/mcmod/hooks/core.clj: AC reflection radius default must stay in ac config'
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Runtime hook business-state residue found:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyMcmodHooksNoBusinessStateReads] passed. Runtime activation/default policy is provided by installed AC hooks.')
+    }
+}
+
+tasks.register('verifyMcmodCommandNoAcAbilityActions') {
+    group = 'verification'
+    description = 'Verify mcmod/mc1201 command infrastructure does not hardcode AC ability command action ids or state shapes.'
+
+    doLast {
+        def forbiddenActionTokens = [
+            ':switch-category',
+            ':learn-node',
+            ':unlearn-node',
+            ':learn-all-nodes',
+            ':list-learned-nodes',
+            ':list-available-nodes',
+            ':set-level',
+            ':set-node-exp',
+            ':restore-cp',
+            ':clear-cooldowns',
+            ':reset-abilities',
+            ':maxout-progression',
+            ':enable-cheats',
+            ':disable-cheats'
+        ]
+        def forbiddenStateTokens = [
+            ':ability-data',
+            ':resource-data',
+            'default-ability-data',
+            'get-player-runtime-data',
+            'set-player-runtime-data'
+        ]
+        def violations = []
+        def scannedFiles = [] as Set
+        ['mcmod/src/main/clojure/cn/li/mcmod/command',
+         'mc-1.20.1/src/main/clojure/cn/li/mc1201/command'].each { sourcePath ->
+            scannedFiles.addAll(fileTree(sourcePath) {
+                include '**/*.clj'
+                exclude '**/build/**'
+            }.files)
+        }
+
+        scannedFiles.each { sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                (forbiddenActionTokens + forbiddenStateTokens).each { token ->
+                    if (line.contains(token)) {
+                        violations << "${rel}:${idx + 1}: ${token}"
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Shared command business-action residue found:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyMcmodCommandNoAcAbilityActions] passed. AC command action ids/executors are content-owned.')
+    }
+}
+
+tasks.register('verifyAcCommandActionManifestExists') {
+    group = 'verification'
+    description = 'Verify AC owns and installs the command action manifest.'
+
+    doLast {
+        def manifest = file('ac/src/main/clojure/cn/li/ac/command/actions.clj')
+        if (!manifest.exists()) {
+            throw new GradleException('Missing AC command action manifest: ac/src/main/clojure/cn/li/ac/command/actions.clj')
+        }
+        def text = manifest.getText('UTF-8')
+        def required = [
+            'ability-command-action-types',
+            'install-command-actions!',
+            ':switch-category',
+            ':learn-node',
+            ':set-level',
+            ':restore-cp',
+            ':clear-cooldowns'
+        ]
+        def missing = required.findAll { !text.contains(it) }
+        if (!missing.isEmpty()) {
+            throw new GradleException("AC command action manifest is incomplete:\n - ${missing.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyAcCommandActionManifestExists] passed. AC command actions have an AC-owned manifest/installer.')
+    }
+}
+
+tasks.register('verifyMcmodClientBridgeScreenKeysNeutral') {
+    group = 'verification'
+    description = 'Verify mcmod client/UI bridge files expose generic screen/widget/effect seams, not AC UI keys.'
+
+    doLast {
+        def scannedFiles = [
+            file('mcmod/src/main/clojure/cn/li/mcmod/client/platform_bridge.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ui.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ops_ui.clj')
+        ].findAll { it.exists() }
+        def forbiddenTokens = [
+            'open-skill-tree-screen',
+            'open-preset-editor-screen',
+            'open-location-teleport-screen',
+            'open-terminal-screen',
+            'play-intensify-local-effect',
+            'skill-tree',
+            'preset-editor',
+            'location-teleport',
+            'terminal-ui',
+            'create-terminal-gui',
+            'intensify'
+        ]
+        def deletedTerminalBridge = file('mcmod/src/main/clojure/cn/li/mcmod/platform/terminal_ui.clj')
+        def violations = []
+        if (deletedTerminalBridge.exists()) {
+            violations << 'mcmod/src/main/clojure/cn/li/mcmod/platform/terminal_ui.clj must stay deleted; use generic platform.ui widget factories'
+        }
+
+        scannedFiles.each { sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                forbiddenTokens.each { token ->
+                    if (line.contains(token)) {
+                        violations << "${rel}:${idx + 1}: ${token}"
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("mcmod client/UI bridge contains AC-specific screen/effect residue:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyMcmodClientBridgeScreenKeysNeutral] passed. mcmod client/UI bridges expose generic seams only.')
+    }
+}
+
+tasks.register('verifyMcmodRuntimeClientHooksNeutral') {
+    group = 'verification'
+    description = 'Verify mcmod/mc1201 runtime client seams use generic keyed hooks, not AC screen/effect hook names.'
+
+    doLast {
+        def scannedFiles = [
+            file('mcmod/src/main/clojure/cn/li/mcmod/hooks/core.clj'),
+            file('mc-1.20.1/src/main/clojure/cn/li/mc1201/client/screen/host.clj'),
+            file('mc-1.20.1/src/main/clojure/cn/li/mc1201/runtime/item_handler_core.clj')
+        ].findAll { it.exists() }
+        def forbiddenTokens = [
+            'client-open-skill-tree',
+            'client-build-skill-tree',
+            'client-handle-skill-tree',
+            'client-close-skill-tree',
+            'client-open-preset-editor',
+            'client-build-preset-editor',
+            'client-handle-preset-editor',
+            'client-close-preset-editor',
+            'client-open-location-teleport',
+            'client-build-location-teleport',
+            'client-handle-location-teleport',
+            'client-close-location-teleport',
+            'client-open-saved-position',
+            'client-build-saved-position',
+            'client-handle-saved-position',
+            'client-close-saved-position',
+            'client-notify-charge-coin',
+            'client-notify-railgun',
+            'client-charge-coin-visual-state',
+            'client-railgun-charge-visual-state',
+            'client-body-intensify-charge-visual-state',
+            'client-current-charging-visual-state',
+            'open-skill-tree-screen',
+            'open-preset-editor-screen',
+            'open-location-teleport-screen',
+            'skill-tree',
+            'preset-editor',
+            'location-teleport',
+            'railgun',
+            'body-intensify',
+            'current-charging',
+            'charge-coin'
+        ]
+        def violations = []
+
+        scannedFiles.each { sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                forbiddenTokens.each { token ->
+                    if (line.contains(token)) {
+                        violations << "${rel}:${idx + 1}: ${token}"
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("mcmod/mc1201 runtime client seams contain AC-specific hook/screen/effect residue:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyMcmodRuntimeClientHooksNeutral] passed. Runtime client hooks/screens use generic keyed seams.')
+    }
+}
+
+tasks.register('verifyMcmodNoSavedLocationBusinessSurface') {
+    group = 'verification'
+    description = 'Verify shared saved-location storage remains policy-free and AC LocationTeleport policy-owned.'
+
+    doLast {
+        def scannedFiles = [
+            file('mcmod/src/main/clojure/cn/li/mcmod/platform/saved_locations.clj'),
+            file('mcmod/src/main/clojure/cn/li/mcmod/platform/ops_world.clj'),
+            file('mc-1.20.1/src/main/clojure/cn/li/mc1201/runtime/saved_locations_core.clj'),
+            file('forge-1.20.1/src/main/clojure/cn/li/forge1201/runtime/adapters/registry.clj'),
+            file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/runtime/saved_locations.clj')
+        ].findAll { it.exists() }
+        def forbiddenTokens = [
+            'max-saved-locations',
+            'max-saved-location',
+            'get-max-saved-locations',
+            'location-limit-reached',
+            'cross-dimension-exp-threshold',
+            'ui.max-location-name-length',
+            'location-teleport',
+            'location_teleport',
+            'limit reached',
+            'max 32'
+        ]
+        def violations = []
+
+        scannedFiles.each { sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            sourceFile.readLines('UTF-8').eachWithIndex { String line, int idx ->
+                forbiddenTokens.each { token ->
+                    if (line.contains(token)) {
+                        violations << "${rel}:${idx + 1}: ${token}"
+                    }
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Shared saved-location storage contains AC LocationTeleport policy/default residue:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyMcmodNoSavedLocationBusinessSurface] passed. Saved-location storage is policy-free; AC owns feature limits.')
     }
 }
 
@@ -889,7 +1232,7 @@ tasks.register('verifyAbilitySkillConfigContractSsoT') {
 
 tasks.register('verifyAbilitySkillConfigCoverage') {
     group = 'verification'
-    description = 'Verify every current content defskill! has a per-skill config entry.'
+    description = 'Verify every current content skill id has a per-skill config entry.'
 
     doLast {
         def skillConfigFile = file('ac/src/main/clojure/cn/li/ac/ability/skill_config.clj')
@@ -916,8 +1259,8 @@ tasks.register('verifyAbilitySkillConfigCoverage') {
             exclude '**/build/**', '**/.gradle/**'
         }.files.each { File f ->
             def text = f.getText('UTF-8')
-            def matcher = (text =~ /\(defskill!\s+([A-Za-z0-9_-]+)/)
-            matcher.each { match -> discovered << match[1].replace('_', '-') }
+            def matcher = (text =~ /:id\s+:([a-z0-9-]+)/)
+            matcher.each { match -> discovered << match[1] }
         }
 
         def missing = discovered.findAll { !configured.contains(it) }
@@ -1820,17 +2163,17 @@ tasks.register('verifyTerminalMessageIdsStatic') {
 
 tasks.register('verifyTerminalBridgeInitOrchestration') {
     group = 'verification'
-    description = 'Verify terminal GUI widget hooks are installed from AC client init and consumed by the platform screen bridge.'
+    description = 'Verify terminal GUI widget factories are installed from AC client init and consumed through the generic platform UI bridge.'
 
     doLast {
         def violations = []
         def acCore = file('ac/src/main/clojure/cn/li/ac/core.clj')
         def acBridge = file('ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj')
         def terminalGui = file('ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj')
-        def mcmodBridge = file('mcmod/src/main/clojure/cn/li/mcmod/platform/terminal_ui.clj')
+        def mcmodUi = file('mcmod/src/main/clojure/cn/li/mcmod/platform/ui.clj')
         def forgeBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/terminal_screen_bridge.clj')
 
-        [acCore, acBridge, terminalGui, mcmodBridge, forgeBridge].each { f ->
+        [acCore, acBridge, terminalGui, mcmodUi, forgeBridge].each { f ->
             if (!f.exists()) {
                 violations << "Required terminal bridge file missing: ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
             }
@@ -1847,35 +2190,38 @@ tasks.register('verifyTerminalBridgeInitOrchestration') {
         }
         if (acBridge.exists()) {
             def text = acBridge.getText('UTF-8')
-            if (!text.contains('terminal-ui/register-terminal-ui-hooks!')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj: must register terminal UI hooks'
+            if (!text.contains('platform-ui/register-widget-factory!') || !text.contains(':ac/terminal-gui')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj: must register AC terminal widget through generic platform UI registry'
             }
             if (!text.contains('terminal-gui/create-terminal-gui')) {
                 violations << 'ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj: must delegate widget creation to terminal-gui'
             }
+            if (text.contains('cn.li.mcmod.platform.terminal-ui')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/platform_bridge.clj: must not depend on deleted terminal-ui bridge'
+            }
         }
         if (terminalGui.exists()) {
             def text = terminalGui.getText('UTF-8')
-            if (!text.contains('client-bridge/open-terminal-screen!')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj: must open terminal through mcmod client bridge'
+            if (!text.contains('client-bridge/open-screen!') || !text.contains(':ac/terminal')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj: must open terminal through generic mcmod client bridge'
             }
             if (text.contains('cn.li.mcmod.platform.terminal-ui')) {
                 violations << 'ac/src/main/clojure/cn/li/ac/terminal/terminal_gui.clj: must not depend on terminal-ui hook storage directly'
             }
         }
-        if (mcmodBridge.exists()) {
-            def text = mcmodBridge.getText('UTF-8')
-            if (!text.contains('defn register-terminal-ui-hooks!') || !text.contains('defn create-terminal-gui')) {
-                violations << 'mcmod/src/main/clojure/cn/li/mcmod/platform/terminal_ui.clj: must expose terminal UI hook registration and lookup'
+        if (mcmodUi.exists()) {
+            def text = mcmodUi.getText('UTF-8')
+            if (!text.contains('defn register-widget-factory!') || !text.contains('defn create-widget')) {
+                violations << 'mcmod/src/main/clojure/cn/li/mcmod/platform/ui.clj: must expose generic widget factory registration and lookup'
             }
             if (text.contains('cn.li.ac.')) {
-                violations << 'mcmod terminal UI bridge must stay platform-neutral and AC-free'
+                violations << 'mcmod platform UI bridge must stay platform-neutral and AC-free'
             }
         }
         if (forgeBridge.exists()) {
             def text = forgeBridge.getText('UTF-8')
-            if (!text.contains('terminal-ui/create-terminal-gui')) {
-                violations << 'forge terminal screen bridge must obtain the terminal widget through terminal-ui/create-terminal-gui'
+            if (!text.contains('platform-ui/create-widget') || !text.contains(':ac/terminal-gui')) {
+                violations << 'forge terminal screen bridge must obtain the terminal widget through generic platform-ui/create-widget'
             }
             if (text.contains('cn.li.ac.')) {
                 violations << 'forge terminal screen bridge must not import AC terminal internals directly'
@@ -1886,7 +2232,7 @@ tasks.register('verifyTerminalBridgeInitOrchestration') {
             throw new GradleException("Terminal bridge initialization guard failed:\n - ${violations.join('\n - ')}")
         }
 
-        logger.lifecycle('[verifyTerminalBridgeInitOrchestration] passed. Terminal widget hooks are installed by AC client init and consumed by the platform bridge.')
+        logger.lifecycle('[verifyTerminalBridgeInitOrchestration] passed. Terminal widget factories are installed by AC client init and consumed by the generic platform UI bridge.')
     }
 }
 
@@ -2291,6 +2637,13 @@ def cleanupResidueGuardTaskNames = [
     'verifyTechUiScreenBuilder',
     'verifyWirelessGuiTabApi',
     'verifyTerminalMessageIdsStatic',
+    'verifyPlatformNoAbilityMessageIds',
+    'verifyMcmodHooksNoBusinessStateReads',
+    'verifyMcmodCommandNoAcAbilityActions',
+    'verifyAcCommandActionManifestExists',
+    'verifyMcmodClientBridgeScreenKeysNeutral',
+    'verifyMcmodRuntimeClientHooksNeutral',
+    'verifyMcmodNoSavedLocationBusinessSurface',
     'verifyTerminalBridgeInitOrchestration',
     'verifyCguiRuntimeShimBoundaries',
     'verifyPlatformGuiProviderThinAdapters',

@@ -18,7 +18,8 @@
 ## 3. 平台层去业务化
 
 - [ ] 平台层无业务内容 ID 到平台类的硬编码映射
-- [ ] 业务 hook-id -> impl-key 映射位于共享层（mcmod）
+- [ ] 业务 hook-id -> impl-key 映射位于业务内容层（如 ac）
+- [ ] 共享层仅通过 mcmod 通用 resolver/provider 消费业务 hook 映射
 - [ ] 平台层仅维护 impl-key -> 平台实现映射
 
 ## 4. Hook 覆盖契约

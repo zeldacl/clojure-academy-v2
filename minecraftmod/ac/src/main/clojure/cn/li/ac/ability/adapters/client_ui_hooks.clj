@@ -17,7 +17,7 @@
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.util.toggle :as toggle]
-            [cn.li.mcmod.hooks.catalog :as catalog]
+            [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]))
@@ -374,7 +374,7 @@
   (fx-registry/dispatch-fx-channel! ctx-id channel payload)
   (when (= channel :location-teleport/ui-open)
     (location-teleport-screen/apply-server-payload! payload)
-    (client-bridge/open-location-teleport-screen! nil payload))
+    (client-bridge/open-screen! :ac/saved-position payload))
   (ctx/ctx-send-to-local! ctx-id channel payload))
 
 (defn register-client-push-handlers!
@@ -577,117 +577,97 @@
    (fn [preset-idx callback]
      (client-api/req-switch-preset! preset-idx callback))
 
-   :client-open-skill-tree-screen!
-   (fn [player-uuid learn-context]
-     (skill-tree-screen/open-screen! player-uuid learn-context))
+   :client-open-managed-screen!
+   (fn [screen-key payload]
+       (condp = screen-key
+       :ac/skill-tree
+       (assoc (skill-tree-screen/open-screen! (:player-uuid payload) (:learn-context payload))
+              :title "Node Tree")
 
-   :client-build-skill-tree-render-data
-   (fn []
-     (skill-tree-screen/build-screen-render-data))
+       :ac/preset-editor
+       (assoc (preset-editor-screen/open-screen! (:player-uuid payload))
+              :title "Preset Editor")
 
-   :client-build-skill-tree-draw-ops
-   (fn [mouse-x mouse-y]
-     (skill-tree-screen/build-draw-ops mouse-x mouse-y))
+    :ac/saved-position
+    (assoc (location-teleport-screen/open-screen! (:player-uuid payload) payload)
+      :title "Location Teleport"
+      :char-typed? true)
 
-   :client-handle-skill-tree-hover!
-   (fn [mouse-x mouse-y]
-     (skill-tree-screen/on-mouse-move mouse-x mouse-y))
+    :ac/location-teleport
+       (assoc (location-teleport-screen/open-screen! (:player-uuid payload) payload)
+              :title "Location Teleport"
+              :char-typed? true)
 
-   :client-handle-skill-tree-click!
-   (fn [mouse-x mouse-y]
-     (skill-tree-screen/handle-screen-click! mouse-x mouse-y))
+       nil))
 
-   :client-close-skill-tree-screen!
-   (fn []
-     (skill-tree-screen/close-screen!))
+   :client-build-managed-screen-render-data
+   (fn [screen-key]
+     (condp = screen-key
+       :ac/skill-tree (skill-tree-screen/build-screen-render-data)
+       :ac/preset-editor (preset-editor-screen/build-preset-editor-render-data)
+       :ac/saved-position nil
+       :ac/location-teleport nil
+       nil))
 
-   :client-open-preset-editor-screen!
-   (fn [player-uuid]
-     (preset-editor-screen/open-screen! player-uuid))
+   :client-build-managed-screen-draw-ops
+   (fn [screen-key mouse-x mouse-y]
+     (condp = screen-key
+       :ac/skill-tree (skill-tree-screen/build-draw-ops mouse-x mouse-y)
+       :ac/preset-editor (build-preset-editor-draw-ops)
+       :ac/saved-position (location-teleport-screen/build-draw-ops mouse-x mouse-y)
+       :ac/location-teleport (location-teleport-screen/build-draw-ops mouse-x mouse-y)
+       []))
 
-   :client-build-preset-editor-render-data
-   (fn []
-     (preset-editor-screen/build-preset-editor-render-data))
+   :client-handle-managed-screen-hover!
+   (fn [screen-key mouse-x mouse-y]
+     (condp = screen-key
+       :ac/skill-tree (skill-tree-screen/on-mouse-move mouse-x mouse-y)
+       :ac/saved-position (location-teleport-screen/on-mouse-move mouse-x mouse-y)
+       :ac/location-teleport (location-teleport-screen/on-mouse-move mouse-x mouse-y)
+       nil))
 
-   :client-build-preset-editor-draw-ops
-   (fn []
-     (build-preset-editor-draw-ops))
+   :client-handle-managed-screen-click!
+   (fn [screen-key mouse-x mouse-y]
+     (condp = screen-key
+       :ac/skill-tree (skill-tree-screen/handle-screen-click! mouse-x mouse-y)
+       :ac/preset-editor (preset-editor-screen/handle-screen-click! mouse-x mouse-y)
+       :ac/saved-position (location-teleport-screen/handle-screen-click! mouse-x mouse-y)
+       :ac/location-teleport (location-teleport-screen/handle-screen-click! mouse-x mouse-y)
+       false))
 
-   :client-handle-preset-editor-click!
-   (fn [mouse-x mouse-y]
-     (preset-editor-screen/handle-screen-click! mouse-x mouse-y))
+   :client-handle-managed-screen-char-typed!
+   (fn [screen-key ch]
+     (condp = screen-key
+       :ac/saved-position (location-teleport-screen/handle-char-typed! ch)
+       :ac/location-teleport (location-teleport-screen/handle-char-typed! ch)
+       nil))
 
-   :client-close-preset-editor-screen!
-   (fn []
-     (preset-editor-screen/close-screen!))
-
-   :client-open-location-teleport-screen!
-   (fn [player-uuid payload]
-     (location-teleport-screen/open-screen! player-uuid payload))
-
-   :client-build-location-teleport-draw-ops
-   (fn [mouse-x mouse-y]
-     (location-teleport-screen/build-draw-ops mouse-x mouse-y))
-
-   :client-handle-location-teleport-hover!
-   (fn [mouse-x mouse-y]
-     (location-teleport-screen/on-mouse-move mouse-x mouse-y))
-
-   :client-handle-location-teleport-click!
-   (fn [mouse-x mouse-y]
-     (location-teleport-screen/handle-screen-click! mouse-x mouse-y))
-
-   :client-handle-location-teleport-char-typed!
-   (fn [ch]
-     (location-teleport-screen/handle-char-typed! ch))
-
-   :client-close-location-teleport-screen!
-   (fn []
-     (location-teleport-screen/close-screen!))
-
-   :client-open-saved-position-screen!
-   (fn [player-uuid payload]
-     (location-teleport-screen/open-screen! player-uuid payload))
-
-   :client-build-saved-position-draw-ops
-   (fn [mouse-x mouse-y]
-     (location-teleport-screen/build-draw-ops mouse-x mouse-y))
-
-   :client-handle-saved-position-hover!
-   (fn [mouse-x mouse-y]
-     (location-teleport-screen/on-mouse-move mouse-x mouse-y))
-
-   :client-handle-saved-position-click!
-   (fn [mouse-x mouse-y]
-     (location-teleport-screen/handle-screen-click! mouse-x mouse-y))
-
-   :client-handle-saved-position-char-typed!
-   (fn [ch]
-     (location-teleport-screen/handle-char-typed! ch))
-
-   :client-close-saved-position-screen!
-   (fn []
-     (location-teleport-screen/close-screen!))
+   :client-close-managed-screen!
+   (fn [screen-key]
+     (condp = screen-key
+       :ac/skill-tree (skill-tree-screen/close-screen!)
+       :ac/preset-editor (preset-editor-screen/close-screen!)
+       :ac/saved-position (location-teleport-screen/close-screen!)
+       :ac/location-teleport (location-teleport-screen/close-screen!)
+       nil))
 
    :client-register-push-handlers!
    (fn []
      (register-client-push-handlers!))
 
-   :client-notify-charge-coin-throw!
-   (fn [player-uuid]
-     (notify-charge-coin-throw! player-uuid))
+   :client-notify-visual-event!
+   (fn [event-key payload]
+     (case event-key
+       :ac/charge-coin-throw (notify-charge-coin-throw! (:player-uuid payload))
+       nil))
 
-   :client-charge-coin-visual-state
-   (fn [player-uuid]
-     (charge-coin-visual-state player-uuid))
-
-   :client-body-intensify-charge-visual-state
-   (fn [player-uuid]
-     (body-intensify-visual-state player-uuid))
-
-   :client-current-charging-visual-state
-   (fn [player-uuid]
-     (current-charging-visual-state player-uuid))
+   :client-visual-state
+   (fn [state-key payload]
+     (case state-key
+       :ac/charge-coin (charge-coin-visual-state (:player-uuid payload))
+       :ac/body-intensify-charge (body-intensify-visual-state (:player-uuid payload))
+       :ac/current-charging (current-charging-visual-state (:player-uuid payload))
+       nil))
 
    :client-trigger-mode-switch!
    (fn [player-uuid]

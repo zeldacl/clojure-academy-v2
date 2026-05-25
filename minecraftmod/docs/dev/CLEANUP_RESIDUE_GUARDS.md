@@ -26,6 +26,31 @@ pure scan guards instead of rereading the same trees.
 - `mcmod` content SPI must remain content-agnostic.
   - Guard: `verifyMcmodNoAcSpecificBootstrap`
   - AC-owned content bootstrap providers live under `ac`, not `mcmod`.
+- AC command action semantics must be content-owned.
+  - Guards: `verifyMcmodCommandNoAcAbilityActions`,
+    `verifyAcCommandActionManifestExists`
+  - `mcmod.command.actions` only provides the generic action registry and base
+    platform actions. Ability actions such as learning, leveling, cooldown,
+    CP, category, and preset mutations live in `ac.command.actions`.
+- `mcmod` runtime policy hooks must not read AC ability state shape or carry AC
+  gameplay defaults.
+  - Guard: `verifyMcmodHooksNoBusinessStateReads`
+  - Runtime activation and reflection radius are provided by AC-installed hooks;
+    shared/platform layers must not read `:resource-data/:activated` directly or
+    define AC fallback values.
+- Shared saved-location storage is a policy-free named world-position store.
+  - Guard: `verifyMcmodNoSavedLocationBusinessSurface`
+  - AC LocationTeleport owns max count, name length, cross-dimension thresholds,
+    UI/open channels, and error semantics. `mcmod`/`mc1201` may preserve the
+    storage protocol and NBT key, but must not enforce AC feature policy.
+- `mcmod` client/UI bridge surfaces must be generic keyed seams.
+  - Guards: `verifyMcmodClientBridgeScreenKeysNeutral`,
+    `verifyMcmodRuntimeClientHooksNeutral`
+  - `mcmod.client.platform-bridge`, `mcmod.platform.ui`,
+    `mcmod.hooks.core`, and shared `mc1201` hosted-screen/item seams must not
+    expose AC screen/effect names such as skill tree, preset editor, location
+    teleport, terminal GUI, Railgun, Body Intensify, or Current Charging. AC owns
+    those keys and registers them into generic screen/widget/effect/state hooks.
 - Runtime item handling uses shared event helpers, not a thin compatibility
   adapter namespace.
   - Guard: `verifyRuntimeEventNoThinItemAdapter`

@@ -52,10 +52,11 @@
 - `runFabricSmoke`：执行 Fabric datagen 作为最小烟雾运行。
 - `validateFabricSmokeLog`：校验 Fabric datagen 日志中的致命错误模式。
 - `verifyFabricSmoke`：Fabric 最小烟雾验证入口（运行 + 日志校验）。
-- `verifyForgeHookCoverage`：校验 Forge 平台实现键覆盖共享 hook catalog。
-- `verifyFabricHookManifest`：校验 Fabric 缺口清单是否覆盖共享 hook catalog。
+- `verifyForgeHookCoverage`：校验共享 Minecraft 实现键覆盖 AC hook catalog。
+- `verifyFabricHookManifest`：校验 Fabric 支持/缺口清单是否覆盖 AC hook catalog。
 - `verifyPlatformHookCoverage`：跨平台 hook 契约覆盖校验聚合入口。
-- `verifyPlatformNoBusinessHookIds`：校验平台 hook 适配层未硬编码业务 hook-id 字面量。
+- `verifyPlatformNoBusinessHookIds`：校验 `mcmod`/`mc1201`/平台 hook 层未硬编码业务 hook-id 字面量。
+- `verifyPlatformNoAbilityMessageIds`：校验 `mcmod`/`mc1201`/平台主源码未硬编码 AC ability runtime message-id 字面量；message catalog 必须留在 `ac`。
 - `verifyCurrentPlatforms`：当前纳入平台（Forge+Fabric）矩阵基线（含 smoke + hook coverage）。
 - `verifyArchitectureBoundaries`：跨层依赖边界扫描（阻止核心层误依赖平台/Minecraft 类）；任务按文件单次扫描并声明输入/通过标记输出，源文件未变时热运行可 UP-TO-DATE。
 - `verifyCleanupResidueGuards`：聚合 cleanup/SSoT 回归守卫；子任务声明源输入与通过标记输出，源文件未变时热运行可跳过重复扫描。

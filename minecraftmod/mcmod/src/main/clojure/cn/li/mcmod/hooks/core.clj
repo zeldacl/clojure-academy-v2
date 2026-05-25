@@ -22,6 +22,7 @@
          :set-player-state! noop
          :get-or-create-player-state! (fn [_] nil)
          :fresh-player-state (fn [] nil)
+         :runtime-activated? (fn [_] false)
          :register-network-handlers! noop
          :subscribe-achievement-trigger! (fn [_] nil)
          :register-context-route-fns! noop
@@ -36,11 +37,10 @@
          :resolve-item-use-action (fn [_] nil)
          :on-runtime-item-action! noop
          :build-item-use-plan (fn [_ _ _ _] nil)
-         :max-saved-locations (fn [] 16)
          :compute-aoe-damage (fn [_ _ _ damage _] damage)
          :select-reflection-target (fn [_ _ _ _] nil)
          :compute-reflected-damage identity
-         :reflection-search-radius (fn [] 10.0)
+         :reflection-search-radius (fn [] 0.0)
          :get-skills-for-category (fn [_cat-id] [])
          :client-get-skill-by-controllable (fn [_ _] nil)
          :client-new-context (fn [_ _] nil)
@@ -60,23 +60,13 @@
          :client-req-set-activated! noop
          :client-req-set-preset-slot! noop
          :client-req-switch-preset! noop
-         :client-open-skill-tree-screen! (fn [_ _] nil)
-         :client-build-skill-tree-draw-ops (fn [_ _] [])
-         :client-build-skill-tree-render-data (fn [] nil)
-         :client-handle-skill-tree-hover! noop
-         :client-handle-skill-tree-click! (fn [_ _] false)
-         :client-close-skill-tree-screen! noop
-         :client-open-preset-editor-screen! (fn [_] nil)
-         :client-build-preset-editor-draw-ops (fn [] [])
-         :client-build-preset-editor-render-data (fn [] nil)
-         :client-handle-preset-editor-click! (fn [_ _] false)
-         :client-close-preset-editor-screen! noop
-         :client-open-location-teleport-screen! (fn [_ _] nil)
-         :client-build-location-teleport-draw-ops (fn [_ _] [])
-         :client-handle-location-teleport-hover! noop
-         :client-handle-location-teleport-click! (fn [_ _] false)
-         :client-handle-location-teleport-char-typed! noop
-         :client-close-location-teleport-screen! noop
+         :client-open-managed-screen! (fn [_ _] nil)
+         :client-build-managed-screen-draw-ops (fn [_ _ _] [])
+         :client-build-managed-screen-render-data (fn [_] nil)
+         :client-handle-managed-screen-hover! noop
+         :client-handle-managed-screen-click! (fn [_ _ _] false)
+         :client-handle-managed-screen-char-typed! noop
+         :client-close-managed-screen! noop
          :client-poll-particle-effects (fn [] [])
          :client-poll-sound-effects (fn [] [])
          :client-tick-keys! noop
@@ -85,14 +75,12 @@
          :client-active-contexts (fn [] {})
          :client-latest-sync (fn [_] nil)
          :client-register-push-handlers! noop
-         :client-notify-railgun-coin-throw! noop
+         :client-notify-visual-event! noop
          :client-enqueue-level-effect! noop
          :client-build-level-effect-plan (fn [_ _ _] nil)
          :client-tick-level-effects! noop
-         :client-railgun-charge-visual-state (fn [_] {:active? false :charge-ticks 0 :coin-active? false :charge-ratio 0.0})
          :client-slot-visual-state (fn [_ _] :idle)
-         :client-body-intensify-charge-visual-state (fn [] {:active? false :charge-ticks 0 :charge-ratio 0.0})
-         :client-current-charging-visual-state (fn [] {:active? false :blending? false :is-item false :good? false :charge-ticks 0 :charge-ratio 0.0})
+         :client-visual-state (fn [_ _] nil)
          :client-on-slot-key-down! noop
          :client-on-slot-key-tick! noop
          :client-on-slot-key-up! noop
@@ -157,9 +145,9 @@
   ((:get-player-state @runtime-hooks) player-uuid))
 
 (defn runtime-activated?
-  "Returns true if the player with the given UUID has the power runtime activated."
+  "Returns true if the installed runtime marks `player-uuid` active."
   [player-uuid]
-  (boolean (get-in (get-player-state player-uuid) [:resource-data :activated])))
+  (boolean ((:runtime-activated? @runtime-hooks) player-uuid)))
 
 (defn set-player-state!
   [player-uuid state]
@@ -228,10 +216,6 @@
 (defn build-item-use-plan
   [player-uuid item-id activated? side]
   ((:build-item-use-plan @runtime-hooks) player-uuid item-id activated? side))
-
-(defn get-max-saved-locations
-  []
-  ((:max-saved-locations @runtime-hooks)))
 
 (defn compute-aoe-damage
   [origin-pos target-pos radius damage falloff?]
@@ -327,115 +311,33 @@
   [preset-idx callback]
   ((:client-req-switch-preset! @runtime-hooks) preset-idx callback))
 
-(defn client-open-skill-tree-screen!
-  [player-uuid learn-context]
-  ((:client-open-skill-tree-screen! @runtime-hooks) player-uuid learn-context))
+(defn client-open-managed-screen!
+  [screen-key payload]
+  ((:client-open-managed-screen! @runtime-hooks) screen-key payload))
 
-(defn client-build-skill-tree-draw-ops
-  [mouse-x mouse-y]
-  ((:client-build-skill-tree-draw-ops @runtime-hooks) mouse-x mouse-y))
+(defn client-build-managed-screen-draw-ops
+  [screen-key mouse-x mouse-y]
+  ((:client-build-managed-screen-draw-ops @runtime-hooks) screen-key mouse-x mouse-y))
 
-(defn client-build-skill-tree-render-data
-  []
-  ((:client-build-skill-tree-render-data @runtime-hooks)))
+(defn client-build-managed-screen-render-data
+  [screen-key]
+  ((:client-build-managed-screen-render-data @runtime-hooks) screen-key))
 
-(defn client-handle-skill-tree-hover!
-  [mouse-x mouse-y]
-  ((:client-handle-skill-tree-hover! @runtime-hooks) mouse-x mouse-y))
+(defn client-handle-managed-screen-hover!
+  [screen-key mouse-x mouse-y]
+  ((:client-handle-managed-screen-hover! @runtime-hooks) screen-key mouse-x mouse-y))
 
-(defn client-handle-skill-tree-click!
-  [mouse-x mouse-y]
-  ((:client-handle-skill-tree-click! @runtime-hooks) mouse-x mouse-y))
+(defn client-handle-managed-screen-click!
+  [screen-key mouse-x mouse-y]
+  ((:client-handle-managed-screen-click! @runtime-hooks) screen-key mouse-x mouse-y))
 
-(defn client-close-skill-tree-screen!
-  []
-  ((:client-close-skill-tree-screen! @runtime-hooks)))
+(defn client-handle-managed-screen-char-typed!
+  [screen-key ch]
+  ((:client-handle-managed-screen-char-typed! @runtime-hooks) screen-key ch))
 
-(defn client-open-preset-editor-screen!
-  [player-uuid]
-  ((:client-open-preset-editor-screen! @runtime-hooks) player-uuid))
-
-(defn client-build-preset-editor-draw-ops
-  []
-  ((:client-build-preset-editor-draw-ops @runtime-hooks)))
-
-(defn client-build-preset-editor-render-data
-  []
-  ((:client-build-preset-editor-render-data @runtime-hooks)))
-
-(defn client-handle-preset-editor-click!
-  [mouse-x mouse-y]
-  ((:client-handle-preset-editor-click! @runtime-hooks) mouse-x mouse-y))
-
-(defn client-close-preset-editor-screen!
-  []
-  ((:client-close-preset-editor-screen! @runtime-hooks)))
-
-(defn client-open-saved-position-screen!
-  [player-uuid payload]
-  (let [hooks @runtime-hooks
-        f (or (:client-open-saved-position-screen! hooks)
-              (:client-open-location-teleport-screen! hooks))]
-    (f player-uuid payload)))
-
-(defn client-build-saved-position-draw-ops
-  [mouse-x mouse-y]
-  (let [hooks @runtime-hooks
-        f (or (:client-build-saved-position-draw-ops hooks)
-              (:client-build-location-teleport-draw-ops hooks))]
-    (f mouse-x mouse-y)))
-
-(defn client-handle-saved-position-hover!
-  [mouse-x mouse-y]
-  (let [hooks @runtime-hooks
-        f (or (:client-handle-saved-position-hover! hooks)
-              (:client-handle-location-teleport-hover! hooks))]
-    (f mouse-x mouse-y)))
-
-(defn client-handle-saved-position-click!
-  [mouse-x mouse-y]
-  (let [hooks @runtime-hooks
-        f (or (:client-handle-saved-position-click! hooks)
-              (:client-handle-location-teleport-click! hooks))]
-    (f mouse-x mouse-y)))
-
-(defn client-handle-saved-position-char-typed!
-  [ch]
-  (let [hooks @runtime-hooks
-        f (or (:client-handle-saved-position-char-typed! hooks)
-              (:client-handle-location-teleport-char-typed! hooks))]
-    (f ch)))
-
-(defn client-close-saved-position-screen!
-  []
-  (let [hooks @runtime-hooks
-        f (or (:client-close-saved-position-screen! hooks)
-              (:client-close-location-teleport-screen! hooks))]
-    (f)))
-
-(defn client-open-location-teleport-screen!
-  [player-uuid payload]
-  (client-open-saved-position-screen! player-uuid payload))
-
-(defn client-build-location-teleport-draw-ops
-  [mouse-x mouse-y]
-  (client-build-saved-position-draw-ops mouse-x mouse-y))
-
-(defn client-handle-location-teleport-hover!
-  [mouse-x mouse-y]
-  (client-handle-saved-position-hover! mouse-x mouse-y))
-
-(defn client-handle-location-teleport-click!
-  [mouse-x mouse-y]
-  (client-handle-saved-position-click! mouse-x mouse-y))
-
-(defn client-handle-location-teleport-char-typed!
-  [ch]
-  (client-handle-saved-position-char-typed! ch))
-
-(defn client-close-location-teleport-screen!
-  []
-  (client-close-saved-position-screen!))
+(defn client-close-managed-screen!
+  [screen-key]
+  ((:client-close-managed-screen! @runtime-hooks) screen-key))
 
 (defn client-poll-particle-effects
   []
@@ -469,16 +371,9 @@
   []
   ((:client-register-push-handlers! @runtime-hooks)))
 
-(defn client-notify-charge-coin-throw!
-  [player-uuid]
-  (let [hooks @runtime-hooks
-        f (or (:client-notify-charge-coin-throw! hooks)
-              (:client-notify-railgun-coin-throw! hooks))]
-    (f player-uuid)))
-
-(defn client-notify-railgun-coin-throw!
-  [player-uuid]
-  (client-notify-charge-coin-throw! player-uuid))
+(defn client-notify-visual-event!
+  [event-key payload]
+  ((:client-notify-visual-event! @runtime-hooks) event-key payload))
 
 (defn client-enqueue-level-effect!
   [effect-id payload]
@@ -492,28 +387,13 @@
   []
   ((:client-tick-level-effects! @runtime-hooks)))
 
-(defn client-charge-coin-visual-state
-  [player-uuid]
-  (let [hooks @runtime-hooks
-        f (or (:client-charge-coin-visual-state hooks)
-              (:client-railgun-charge-visual-state hooks))]
-    (f player-uuid)))
-
-(defn client-railgun-charge-visual-state
-  [player-uuid]
-  (client-charge-coin-visual-state player-uuid))
-
 (defn client-slot-visual-state
   [player-uuid key-idx]
   ((:client-slot-visual-state @runtime-hooks) player-uuid key-idx))
 
-(defn client-body-intensify-charge-visual-state
-  []
-  ((:client-body-intensify-charge-visual-state @runtime-hooks)))
-
-(defn client-current-charging-visual-state
-  []
-  ((:client-current-charging-visual-state @runtime-hooks)))
+(defn client-visual-state
+  [state-key payload]
+  ((:client-visual-state @runtime-hooks) state-key payload))
 
 (defn client-on-slot-key-down!
   [player-uuid key-idx]

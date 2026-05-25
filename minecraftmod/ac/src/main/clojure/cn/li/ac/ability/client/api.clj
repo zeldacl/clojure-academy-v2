@@ -3,7 +3,7 @@
 
   This namespace stays platform-neutral by using mcmod network client transport."
   (:require [cn.li.mcmod.network.client :as net-client]
-            [cn.li.mcmod.hooks.catalog :as catalog]))
+            [cn.li.ac.ability.messages :as catalog]))
 
 (defn req-learn-skill!
   "Send learn-skill request. Optional `extra` map may include

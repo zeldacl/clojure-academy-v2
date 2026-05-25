@@ -35,7 +35,8 @@
                             stack
                             side
                             {:open-screen-fn (fn [^Player p _player-uuid]
-                                               (client-bridge/open-skill-tree-screen! (.getUUID p)))}
+                                               (client-bridge/open-screen! :ac/skill-tree
+                                                                           {:player-uuid (str (.getUUID p))}))}
                             "Forge")]
     (when consume?
       (.setCancellationResult event InteractionResult/CONSUME)

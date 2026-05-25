@@ -13,7 +13,7 @@
      {:sound-id activate-sound-id
       :volume 0.9
       :pitch 1.0})
-    (client-bridge/play-intensify-local-effect!)))
+    (client-bridge/run-client-effect! :ac/body-intensify-local)))
 
 (defn init!
   []

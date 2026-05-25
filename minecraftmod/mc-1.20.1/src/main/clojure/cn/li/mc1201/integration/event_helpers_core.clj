@@ -15,10 +15,10 @@
 (defn runtime-activated?
   "Check if a player has runtime mode activated.
   
-  Returns true if the player's resource-data :activated flag is set."
+  Shared Minecraft code delegates the business state decision to the installed
+  runtime hook."
   [player]
-  (boolean (get-in (power-runtime/get-player-state (get-player-uuid player))
-                   [:resource-data :activated])))
+  (power-runtime/runtime-activated? (get-player-uuid player)))
 
 (defn build-block-event-data
   "Build a normalized event-data map from block interaction parameters.

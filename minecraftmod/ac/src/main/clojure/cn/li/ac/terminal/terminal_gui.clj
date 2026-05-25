@@ -368,7 +368,7 @@
       (fn [response]
         (if (:terminal-installed? response)
           ;; Terminal installed - open GUI via platform bridge
-          (client-bridge/open-terminal-screen! player)
+          (client-bridge/open-screen! :ac/terminal {:player player})
           ;; Terminal not installed - install first
           (do
             (log/info "Terminal not installed, installing...")
@@ -376,7 +376,7 @@
               (fn [install-response]
                 (if (:success install-response)
                   ;; Open GUI after installation via platform bridge
-                  (client-bridge/open-terminal-screen! player)
+                  (client-bridge/open-screen! :ac/terminal {:player player})
                   (log/error "Failed to install terminal"))))))))
     (catch Exception e
       (log/error "Error opening terminal:" (ex-message e)))))

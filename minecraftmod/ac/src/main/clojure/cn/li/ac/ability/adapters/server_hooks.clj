@@ -123,6 +123,12 @@
    (fn []
      (ps/fresh-state))
 
+   :runtime-activated?
+   (fn [player-uuid]
+     (boolean (some-> (ps/get-player-state player-uuid)
+                      :resource-data
+                      rdata/is-activated?)))
+
    :register-network-handlers!
    (fn []
      (if-let [f (requiring-resolve 'cn.li.ac.ability.server.network/register-handlers!)]
@@ -191,7 +197,8 @@
                                                   :entity-id (:entity-id entity-spawn)
                                                   :speed (double (or (:speed entity-spawn) 0.0))}))]
          {:server-actions server-actions
-          :client-actions [{:kind :notify-local-effect}]
+          :client-actions [{:kind :notify-local-effect
+                            :event-key :ac/charge-coin-throw}]
           :consume? true})))
 
    :compute-aoe-damage
@@ -208,8 +215,4 @@
 
    :compute-reflected-damage
    (fn [current-damage]
-     (entity-damage-runtime/compute-reflected-damage current-damage))
-
-   :max-saved-locations
-   (fn []
-     (ability-config/max-saved-locations))})
+     (entity-damage-runtime/compute-reflected-damage current-damage))})

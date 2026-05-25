@@ -8,9 +8,8 @@
    - Hook metadata and documentation
    - Lifecycle management (enable/disable hooks)"
   (:require [clojure.string :as str]
-            [cn.li.mc1201.entity.hook-abstraction :as hooks]
             [cn.li.mcmod.entity.dsl :as edsl]
-            [cn.li.mcmod.entity.hook-catalog :as hook-catalog]
+            [cn.li.mcmod.entity.hook-resolver :as hook-resolver]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.entity ScriptedEntitySpecAccess]))
 
@@ -310,7 +309,7 @@
   {:effect {:entity-kind :scripted-effect
             :property-key :effect
             :label "scripted-effect"
-            :catalog-impl-key-fn hook-catalog/effect-impl-key
+            :catalog-impl-key-fn #(hook-resolver/resolve-impl-key :effect %)
             :impl-key->hook-class {:intensify-arcs "cn.li.mc1201.entity.hook.effect.IntensifyArcsEffectHook"
                                    :owner-offset "cn.li.mc1201.entity.hook.effect.OwnerOffsetEffectHook"
                                    :generic-arc "cn.li.mc1201.entity.hook.effect.GenericArcEffectHook"
@@ -324,7 +323,7 @@
    :ray {:entity-kind :scripted-ray
          :property-key :ray
          :label "scripted-ray"
-         :catalog-impl-key-fn hook-catalog/ray-impl-key
+         :catalog-impl-key-fn #(hook-resolver/resolve-impl-key :ray %)
          :impl-key->hook-class {:owner-follow "cn.li.mc1201.entity.hook.ray.OwnerFollowRayHook"}
          :conflict-mode :by-hook-id
          :installed?-atom (:ray scripted-hook-install-state)
@@ -333,23 +332,22 @@
    :marker {:entity-kind :scripted-marker
             :property-key :marker
             :label "scripted-marker"
-            :hook-id->hook-class {"tp-marking" "cn.li.mc1201.entity.hook.marker.OwnerFollowMarkerHook"
-                                  "marker" "cn.li.mc1201.entity.hook.marker.OwnerFollowMarkerHook"}
+            :catalog-impl-key-fn #(hook-resolver/resolve-impl-key :marker %)
+            :impl-key->hook-class {:owner-follow-marker "cn.li.mc1201.entity.hook.marker.OwnerFollowMarkerHook"}
             :conflict-mode :allow-duplicates
             :installed?-atom (:marker scripted-hook-install-state)
             :register-fn ScriptedEntitySpecAccess/registerScriptedMarkerHookClass
             :success-label "Registered scripted marker hook"}})
 
 (defn- resolve-scripted-hook-class
-  [{:keys [catalog-impl-key-fn impl-key->hook-class hook-id->hook-class]}
+  [{:keys [catalog-impl-key-fn impl-key->hook-class]}
    {:keys [hook-props hook-id]}]
   (let [impl-key (or (some-> (:hook-impl-key hook-props) normalize-impl-key)
                      (when catalog-impl-key-fn
                        (catalog-impl-key-fn hook-id)))
         hook-class (or (some-> (:hook-class hook-props) str)
                        (when impl-key
-                         (get impl-key->hook-class impl-key))
-                       (get hook-id->hook-class hook-id))]
+                         (get impl-key->hook-class impl-key)))]
     (cond-> {:hook-class hook-class}
       impl-key (assoc :hook-impl-key impl-key))))
 

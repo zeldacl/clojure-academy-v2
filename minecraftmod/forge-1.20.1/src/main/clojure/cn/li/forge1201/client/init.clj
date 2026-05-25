@@ -143,23 +143,39 @@
 (defn- init-ac-client-bridge!
   []
   (client-bridge/install-client-bridge!
-    {:open-skill-tree-screen screen-host/open-skill-tree-screen!
-     :open-preset-editor-screen screen-host/open-preset-editor-screen!
-     :open-location-teleport-screen screen-host/open-location-teleport-screen!
-     :open-terminal-screen terminal-screen-bridge/open-terminal-screen!
+    {:open-screen (fn [screen-key payload]
+                    (case screen-key
+                      :ac/skill-tree
+                      (screen-host/open-managed-screen! screen-key payload)
+
+                      :ac/preset-editor
+                      (screen-host/open-managed-screen! screen-key payload)
+
+                      :ac/saved-position
+                      (screen-host/open-managed-screen! screen-key payload)
+
+                      :ac/terminal
+                      (terminal-screen-bridge/open-terminal-screen! (:player payload))
+
+                      (log/debug "Unhandled client screen key" screen-key payload)))
      :open-simple-gui terminal-screen-bridge/open-simple-gui!
-    :slot-key-down runtime-bridge/on-slot-key-down!
-    :slot-key-tick runtime-bridge/on-slot-key-tick!
-    :slot-key-up runtime-bridge/on-slot-key-up!
-    :movement-key-down runtime-bridge/on-movement-key-down!
-    :movement-key-tick runtime-bridge/on-movement-key-tick!
-    :movement-key-up runtime-bridge/on-movement-key-up!
+     :slot-key-down runtime-bridge/on-slot-key-down!
+     :slot-key-tick runtime-bridge/on-slot-key-tick!
+     :slot-key-up runtime-bridge/on-slot-key-up!
+     :movement-key-down runtime-bridge/on-movement-key-down!
+     :movement-key-tick runtime-bridge/on-movement-key-tick!
+     :movement-key-up runtime-bridge/on-movement-key-up!
      :local-player-item-id runtime-bridge/local-player-item-id
      :local-player-pos runtime-bridge/local-player-pos
      :local-player-eye-pos runtime-bridge/local-player-eye-pos
      :local-player-look-end runtime-bridge/local-player-look-end
      :clear-client-activated-overlay runtime-bridge/clear-client-activated-overlay!
-     :play-intensify-local-effect runtime-bridge/play-intensify-local-effect!}))
+     :run-client-effect (fn [effect-key _payload]
+                          (case effect-key
+                            :ac/body-intensify-local
+                            (runtime-bridge/play-intensify-local-effect!)
+
+                            (log/debug "Unhandled client effect key" effect-key)))}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."

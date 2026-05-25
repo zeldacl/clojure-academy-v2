@@ -1,9 +1,12 @@
 (ns cn.li.ac.core.init
   "AC core initialization orchestration extracted from cn.li.ac.core."
   (:require [cn.li.ac.ability.adapters.runtime-bridge :as ability-runtime]
+            [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.block.platform-bridge :as block-bridge]
+            [cn.li.ac.command.platform-bridge :as command-bridge]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.config.registry :as config-registry]
+            [cn.li.ac.entity.hook-catalog :as entity-hook-catalog]
             [cn.li.mcmod.util.log :as log]))
 
 (defn init
@@ -11,7 +14,10 @@
   []
   (modid/install-modid!)
   (log/info "Initializing core for mod-id=" modid/MOD-ID)
+  (ability-messages/install!)
+  (entity-hook-catalog/install-resolvers!)
   (block-bridge/install-blockstate-hooks!)
+  (command-bridge/install-command-hooks!)
   (when-let [init-wireless-world-data! (requiring-resolve 'cn.li.ac.wireless.data.world/init-world-data!)]
     (init-wireless-world-data!))
   (config-registry/init-configs!)

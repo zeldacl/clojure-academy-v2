@@ -93,49 +93,28 @@
       (when close-fn
         (close-fn))))))
 
-(defn open-skill-tree-screen!
-  ([player-uuid]
-   (open-skill-tree-screen! player-uuid nil))
-  ([player-uuid learn-context]
-   (let [result (client-ui/client-open-skill-tree-screen! player-uuid learn-context)]
-     (when (= (:command result) :open-screen)
-       (let [^Minecraft mc (Minecraft/getInstance)]
-         (.setScreen mc
-                     (create-host-screen
-                       "Node Tree"
-                       (fn [mouse-x mouse-y] (client-ui/client-build-skill-tree-draw-ops mouse-x mouse-y))
-                       client-ui/client-handle-skill-tree-click!
-                       client-ui/client-handle-skill-tree-hover!
-                       client-ui/client-close-skill-tree-screen!)))))))
-
-(defn open-preset-editor-screen! [player-uuid]
-  (let [result (client-ui/client-open-preset-editor-screen! player-uuid)]
+(defn open-managed-screen!
+  "Open a content-owned hosted screen by opaque screen key and payload."
+  [screen-key payload]
+  (let [result (client-ui/client-open-managed-screen! screen-key payload)]
     (when (= (:command result) :open-screen)
-      (let [^Minecraft mc (Minecraft/getInstance)]
+      (let [^Minecraft mc (Minecraft/getInstance)
+            title (or (:title result) "Managed Screen")
+            char-typed-fn (when (:char-typed? result)
+                            (fn [ch]
+                              (client-ui/client-handle-managed-screen-char-typed! screen-key ch)))]
         (.setScreen mc
                     (create-host-screen
-                      "Preset Editor"
-                      (fn [_ _] (client-ui/client-build-preset-editor-draw-ops))
-                      client-ui/client-handle-preset-editor-click!
-                      nil
-                      client-ui/client-close-preset-editor-screen!))))))
-
-(defn open-location-teleport-screen!
-  ([player-uuid]
-   (open-location-teleport-screen! player-uuid nil))
-  ([player-uuid payload]
-   (let [result (client-ui/client-open-saved-position-screen! player-uuid payload)]
-     (when (= (:command result) :open-screen)
-       (let [^Minecraft mc (Minecraft/getInstance)]
-         (.setScreen mc
-                     (create-host-screen
-                       "Location Teleport"
-                       (fn [mouse-x mouse-y]
-                         (client-ui/client-build-saved-position-draw-ops mouse-x mouse-y))
-                       client-ui/client-handle-saved-position-click!
-                       client-ui/client-handle-saved-position-hover!
-                       client-ui/client-close-saved-position-screen!
-                       client-ui/client-handle-saved-position-char-typed!)))))))
+                      title
+                      (fn [mouse-x mouse-y]
+                        (client-ui/client-build-managed-screen-draw-ops screen-key mouse-x mouse-y))
+                      (fn [mouse-x mouse-y]
+                        (client-ui/client-handle-managed-screen-click! screen-key mouse-x mouse-y))
+                      (fn [mouse-x mouse-y]
+                        (client-ui/client-handle-managed-screen-hover! screen-key mouse-x mouse-y))
+                      (fn []
+                        (client-ui/client-close-managed-screen! screen-key))
+                      char-typed-fn))))))
 
 (defn init! []
   (log/info "Client screen host initialized"))

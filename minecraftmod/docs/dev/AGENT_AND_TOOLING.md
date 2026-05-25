@@ -95,7 +95,7 @@
   - `forge-1.20.1` / `fabric-1.20.1` 中凡是“只依赖 Minecraft、与 Loader 无关”的逻辑，应优先迁入 `mc-1.20.1`；平台层不得长期保留纯代理 wrapper 或双端镜像实现。
   - `forge-1.20.1` 可通过受控桥接调用 `ac` 能力（例如动态 require / ns-resolve），但不得把 `ac` 实现细节固化为跨层 API。
   - 平台层只允许保留“实现适配键 -> 平台实现类/函数”映射；禁止直接硬编码业务内容 ID（技能/实体/玩法名）。
-  - 业务 hook-id 到实现键的映射必须位于共享层（`mcmod`），平台层不得承载业务语义。
+  - 业务 hook-id 到实现键的映射必须位于业务内容层（如 `ac`）；共享层/平台层只能通过 `mcmod` 的通用 resolver/provider 消费，不得承载业务语义。
   - Fabric 启动期的 `class-noinit`、ServiceLoader 外壳与事件 API 绑定属于平台语义，允许留在 `fabric-1.20.1`；但其内部对已解析 Minecraft 对象的操作逻辑应尽量迁入 `mc-1.20.1`。
   - Forge `ServerLifecycleHooks` 按需取 server 与 Fabric `server-context` 捕获 server 目前视为平台差异，不在本轮强行统一；shared core 应接收显式 server 或回调，不直接耦合 Loader 生命周期源。
   - 所有跨层调用都应通过清晰入口函数与文档记录，避免隐式耦合蔓延。
@@ -155,7 +155,8 @@
 
 ## Hook 覆盖契约（平台一致性）
 
-- 共享 hook catalog：`mcmod/src/main/clojure/cn/li/mcmod/entity/hook_catalog.clj`
+- AC hook catalog：`ac/src/main/clojure/cn/li/ac/entity/hook_catalog.clj`
+- 通用 resolver seam：`mcmod/src/main/clojure/cn/li/mcmod/entity/hook_resolver.clj`
 - Fabric 缺口清单：`docs/dev/fabric-hook-support.properties`
 - 执行：`cmd /c .\gradlew.bat verifyPlatformHookCoverage`
 - 规则：
@@ -167,4 +168,14 @@
 - 执行：`cmd /c .\gradlew.bat verifyPlatformNoBusinessHookIds`
 - 规则：
   - 平台 hook 适配文件不得出现来自业务实体定义中的 hook-id 字面量。
-  - 若任务失败，需把业务 hook-id -> impl-key 映射迁回共享层（`mcmod`）。
+  - 若任务失败，需把业务 hook-id -> impl-key 映射迁回业务内容层（如 `ac`），共享/平台层只保留通用 resolver 或 impl-key -> 实现映射。
+
+## Runtime message 边界
+
+- AC ability message catalog：`ac/src/main/clojure/cn/li/ac/ability/messages.clj`
+- 通用 message registry seam：`mcmod/src/main/clojure/cn/li/mcmod/hooks/messages.clj`
+- 规则：
+  - `ability:ctx/*`、`ability:skill/*`、`ability:sync/*`、`ability:req/*` 等 wire id 属于 AC 业务协议，必须保留在 `ac`。
+  - `mc1201` / loader 平台层通过通用 message key 解析 wire id，不硬编码 AC message 字符串，也不静态依赖 `cn.li.ac.*`。
+  - `ac.core.init/init` 负责调用 `cn.li.ac.ability.messages/install!`，在 runtime network 使用前安装业务 message id。
+- 守卫：`cmd /c .\gradlew.bat verifyPlatformNoAbilityMessageIds`

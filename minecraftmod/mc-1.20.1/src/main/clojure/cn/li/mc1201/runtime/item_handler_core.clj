@@ -71,12 +71,18 @@
     (doseq [action (:client-actions plan)]
       (case (:kind action)
         :notify-local-effect
-        (hooks-core/client-notify-charge-coin-throw! player-uuid)
+        (hooks-core/client-notify-visual-event!
+          (or (:event-key action) (:effect-key action) :local-effect)
+          (merge {:player-uuid player-uuid}
+                 (or (:payload action) {})))
 
         :open-screen
         (if open-screen-fn
           (open-screen-fn player player-uuid)
-          (hooks-core/client-open-skill-tree-screen! player-uuid nil))
+          (hooks-core/client-open-managed-screen!
+            (:screen-key action)
+            (merge {:player-uuid player-uuid}
+                   (or (:payload action) {}))))
 
         nil))
 
@@ -114,8 +120,7 @@
      :plan nil}
     (let [player-uuid (str (.getUUID player))
           item-id (get-item-id stack)
-          ability-activated? (boolean (get-in (hooks-core/get-player-state player-uuid)
-                                              [:resource-data :activated]))
+          ability-activated? (hooks-core/runtime-activated? player-uuid)
           plan (hooks-core/build-item-use-plan player-uuid item-id ability-activated? side)]
       (dispatch-dsl-item-use! player item-id hand stack side)
       (run-plan-actions! player hand stack side player-uuid plan opts)
