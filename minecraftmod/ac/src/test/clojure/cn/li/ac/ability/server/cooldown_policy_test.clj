@@ -15,6 +15,8 @@
 
 (use-fixtures :each reset-test-state!)
 
+(def ^:private test-context-owner {:session-id :test-session})
+
 (defn- seed-player!
   ([uuid]
    (seed-player! uuid (cd/new-cooldown-data)))
@@ -25,7 +27,7 @@
 (defn- active-context!
   [uuid ctx-id]
   (ctx/register-context!
-   (assoc (ctx/new-server-context uuid :arc-gen ctx-id)
+    (assoc (ctx/new-server-context uuid :arc-gen ctx-id test-context-owner)
           :input-state :active)))
 
 (deftest default-key-up-applies-main-cooldown-with-max-existing-rule-test

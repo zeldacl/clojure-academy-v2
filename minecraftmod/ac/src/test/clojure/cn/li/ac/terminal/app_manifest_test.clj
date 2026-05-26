@@ -4,9 +4,11 @@
 
 (defn- reset-manifest-fixture
   [f]
-  (manifest/reset-defaults!)
-  (f)
-  (manifest/reset-defaults!))
+  (manifest/reset-app-init-registry-for-test!)
+  (try
+    (f)
+    (finally
+      (manifest/reset-app-init-registry-for-test!))))
 
 (use-fixtures :each reset-manifest-fixture)
 
@@ -29,3 +31,12 @@
     (manifest/set-app-init-symbols! ['a/init!])
     (manifest/reset-defaults!)
     (is (= defaults (manifest/list-app-init-symbols)))))
+
+(deftest app-init-registry-freeze-policy-test
+  (manifest/freeze-app-init-registry!)
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Terminal app init registry is frozen"
+                        (manifest/register-app-init! 'custom.ns/init!)))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Terminal app init registry is frozen"
+                        (manifest/set-app-init-symbols! ['custom.ns/init!]))))

@@ -4,19 +4,46 @@
 						[cn.li.ac.ability.model.resource :as rd]
 						[cn.li.ac.ability.model.cooldown :as cd]
 						[cn.li.ac.ability.model.preset :as pd]
-						[cn.li.ac.ability.model.develop :as dev]))
+						[cn.li.ac.ability.model.develop :as dev]
+						[cn.li.mcmod.hooks.core :as runtime-hooks]))
 
-(defonce player-states
+(defonce ^:private player-states
 	(atom {}))
 
+(defn- require-session-id
+	[owner session-id]
+	(if (some? session-id)
+		session-id
+		(throw (ex-info "Player state owner requires :server-session-id/:client-session-id/:session-id"
+								{:owner owner}))))
+
+(defn- session-id
+	[]
+	(let [owner runtime-hooks/*player-state-owner*]
+		(require-session-id owner
+										(or (:server-session-id owner)
+												(:client-session-id owner)
+												(:session-id owner)))))
+
+(defn player-state-key
+	"Return the internal owner key for a player UUID in the current dynamic owner scope."
+	[uuid-str]
+	[(session-id) (str uuid-str)])
+
+(defn- normalize-state-key
+	[k]
+	(if (vector? k)
+		k
+		[(session-id) (str k)]))
+
 (defn get-player-state [uuid-str]
-	(get @player-states uuid-str))
+	(get @player-states (player-state-key uuid-str)))
 
 (defn set-player-state! [uuid-str state]
-	(swap! player-states assoc uuid-str state))
+	(swap! player-states assoc (player-state-key uuid-str) state))
 
 (defn update-player-state! [uuid-str f & args]
-	(apply swap! player-states update uuid-str f args))
+	(apply swap! player-states update (player-state-key uuid-str) f args))
 
 (defn fresh-state []
 	{:ability-data  (ad/new-ability-data)
@@ -35,7 +62,25 @@
 				s)))
 
 (defn remove-player-state! [uuid-str]
-	(swap! player-states dissoc uuid-str))
+	(swap! player-states dissoc (player-state-key uuid-str)))
 
 (defn list-player-uuids []
-	(keys @player-states))
+	(let [sid (session-id)]
+		(->> @player-states
+				 (keep (fn [[k _state]]
+							 (let [[entry-session entry-uuid] (normalize-state-key k)]
+							 (when (= sid entry-session)
+									 entry-uuid))))
+				 distinct)))
+
+(defn snapshot-player-states []
+	@player-states)
+
+(defn reset-player-states-for-test!
+	([]
+	 (reset-player-states-for-test! {}))
+	([states]
+	 (reset! player-states
+					 (into {}
+							 (map (fn [[k state]] [(normalize-state-key k) state]))
+							 states))))

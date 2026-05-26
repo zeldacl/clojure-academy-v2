@@ -14,11 +14,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- reset-fixture [f]
-  (reset! @#'cn.li.ac.content.ability.vecmanip.arbitration/projectile-locks
-          {:tick -1 :owners {}})
-  (f)
-  (reset! @#'cn.li.ac.content.ability.vecmanip.arbitration/projectile-locks
-          {:tick -1 :owners {}}))
+  (arbitration/reset-projectile-locks-for-test!)
+  (try
+    (f)
+    (finally
+      (arbitration/reset-projectile-locks-for-test!))))
 
 (use-fixtures :each reset-fixture)
 

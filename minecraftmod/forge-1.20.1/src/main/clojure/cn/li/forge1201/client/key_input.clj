@@ -120,6 +120,14 @@
     (when-let [player (.player mc)]
       (str (.getUUID player)))))
 
+(defn- client-session-id []
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    [:client (System/identityHashCode mc)]))
+
+(defn- with-client-session [f]
+  (binding [power-runtime/*client-session-id* (client-session-id)]
+    (f)))
+
 (defn- suppress-vanilla-keys!
   "When using :original key scheme and runtime mode active, consume vanilla attack/use clicks."
   []
@@ -171,40 +179,44 @@
         false))))
 
 (defn- on-mouse-scroll! [^InputEvent$MouseScrollingEvent event]
-  (let [delta (double (.getScrollDelta event))
-        scheme @key-scheme
-        activated? (boolean @overlay-state/client-activated-overlay)]
-    (when (and activated?
-               (not (current-screen-open?))
-               (not (zero? delta)))
-      (when-let [uuid (get-player-uuid)]
-        (doseq [idx (range (count @slot-keys))]
-          (when (slot-key-down? scheme idx)
-            (power-runtime/client-on-slot-wheel! uuid idx delta)))))))
+  (with-client-session
+    (fn []
+      (let [delta (double (.getScrollDelta event))
+            scheme @key-scheme
+            activated? (boolean @overlay-state/client-activated-overlay)]
+        (when (and activated?
+                   (not (current-screen-open?))
+                   (not (zero? delta)))
+          (when-let [uuid (get-player-uuid)]
+            (doseq [idx (range (count @slot-keys))]
+              (when (slot-key-down? scheme idx)
+                (power-runtime/client-on-slot-wheel! uuid idx delta)))))))))
 
 (defn tick-input! []
-  (let [scheme @key-scheme
-        activated? (boolean @overlay-state/client-activated-overlay)]
-    ;; Update control override state
-    (update-control-override! activated?)
-    ;; Suppress vanilla keys when override is active
-    (when @override-active?
-      (suppress-vanilla-keys!))
-    ;; Handle cycle-selection key
-    (when-let [^KeyMapping cycle-key (get @screen-keys :cycle-selection)]
-      (when (.consumeClick cycle-key)
-        (when-let [uuid (get-player-uuid)]
-          (emit-keyboard-input! cycle-selection-input-id uuid :press))))
-    ;; Tick content slot keys
-    (power-runtime/client-tick-keys!
-      (fn [key-id]
-        (case (first key-id)
-          :slot (let [idx (second key-id)]
-                  (slot-key-down? scheme idx))
-          :movement (movement-key-down? (second key-id))
-          :screen (when-let [^KeyMapping key (get @screen-keys (second key-id))] (.isDown key))
-          false))
-      get-player-uuid)))
+  (with-client-session
+    (fn []
+      (let [scheme @key-scheme
+            activated? (boolean @overlay-state/client-activated-overlay)]
+        ;; Update control override state
+        (update-control-override! activated?)
+        ;; Suppress vanilla keys when override is active
+        (when @override-active?
+          (suppress-vanilla-keys!))
+        ;; Handle cycle-selection key
+        (when-let [^KeyMapping cycle-key (get @screen-keys :cycle-selection)]
+          (when (.consumeClick cycle-key)
+            (when-let [uuid (get-player-uuid)]
+              (emit-keyboard-input! cycle-selection-input-id uuid :press))))
+        ;; Tick content slot keys
+        (power-runtime/client-tick-keys!
+          (fn [key-id]
+            (case (first key-id)
+              :slot (let [idx (second key-id)]
+                      (slot-key-down? scheme idx))
+              :movement (movement-key-down? (second key-id))
+              :screen (when-let [^KeyMapping key (get @screen-keys (second key-id))] (.isDown key))
+              false))
+          get-player-uuid)))))
 
 (defn init! []
   (register-keybinds!)

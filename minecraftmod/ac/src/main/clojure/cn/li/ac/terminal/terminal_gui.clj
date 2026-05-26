@@ -14,22 +14,100 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.gui.components :as comp]
             [cn.li.mcmod.gui.events :as events]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.terminal.messages :as terminal-messages]
+            [cn.li.ac.ability.util.uuid :as player-uuid]
             [cn.li.ac.terminal.app-registry :as app-reg]))
 
 ;; ============================================================================
 ;; Terminal State
 ;; ============================================================================
 
-(defonce terminal-state
-  (atom {:terminal-installed? false
-         :installed-apps #{}
-         :available-apps []
-         :loading? false
-         :page 0}))
+(def ^:private default-terminal-state
+  {:terminal-installed? false
+   :installed-apps #{}
+   :available-apps []
+   :loading? false
+   :page 0})
+
+(defonce ^:private terminal-state (atom {}))
+
+(defonce ^:private active-terminal-owners (atom #{}))
+
+(def ^:dynamic *terminal-owner* nil)
+
+(defn- require-owner-value
+  [owner label value]
+  (if (some? value)
+    value
+    (throw (ex-info (format "Terminal owner requires %s" label)
+                    {:owner owner
+                     :required label}))))
+
+(defn- client-session-id
+  [owner]
+  (require-owner-value owner ":client-session-id"
+                       (or (:client-session-id owner)
+                           (:session-id owner)
+                           runtime-hooks/*client-session-id*)))
+
+(defn- owner-player-id
+  [owner]
+  (require-owner-value owner ":player-uuid"
+                       (:player-uuid owner)))
+
+(defn terminal-owner-key
+  [owner]
+  [(client-session-id owner)
+   (or (:screen-id owner) :terminal)
+   (owner-player-id owner)])
+
+(defn- player-terminal-owner
+  [player]
+  (let [player-id (or (player-uuid/player-uuid player) (str player))]
+    {:client-session-id (or runtime-hooks/*client-session-id*
+                            [:terminal-client player-id])
+     :screen-id :terminal
+     :player-uuid player-id}))
+
+(defn terminal-state-snapshot
+  ([]
+   (terminal-state-snapshot *terminal-owner*))
+  ([owner]
+   (get @terminal-state (terminal-owner-key owner) default-terminal-state)))
+
+(defn- swap-terminal-state!
+  [owner f & args]
+  (let [owner-key (terminal-owner-key owner)]
+    (swap! terminal-state
+           (fn [states]
+             (assoc states owner-key
+                    (apply f (get states owner-key default-terminal-state) args))))))
+
+(defn- activate-terminal-owner!
+  [owner]
+  (swap! active-terminal-owners conj (terminal-owner-key owner))
+  nil)
+
+(defn- terminal-owner-active?
+  [owner]
+  (contains? @active-terminal-owners (terminal-owner-key owner)))
+
+(defn clear-terminal-state!
+  [owner]
+  (let [owner-key (terminal-owner-key owner)]
+    (swap! terminal-state dissoc owner-key)
+    (swap! active-terminal-owners disj owner-key))
+  nil)
+
+(defn reset-terminal-states-for-test!
+  []
+  (reset! terminal-state {})
+  (reset! active-terminal-owners #{})
+  nil)
 
 ;; ============================================================================
 ;; Network Communication
@@ -37,53 +115,73 @@
 
 (defn query-terminal-state!
   "Query terminal state from server."
-  [callback]
+  ([callback]
+   (query-terminal-state! *terminal-owner* callback))
+  ([owner callback]
+  (activate-terminal-owner! owner)
   (net-client/send-to-server
+    owner
     (terminal-messages/msg-id :get-state)
     {}
     (fn [response]
-      (swap! terminal-state merge
-             {:terminal-installed? (:terminal-installed? response)
-              :installed-apps (set (:installed-apps response))
-              :available-apps (:available-apps response)})
-      (when callback (callback response)))))
+      (when (terminal-owner-active? owner)
+        (swap-terminal-state! owner merge
+               {:terminal-installed? (:terminal-installed? response)
+                :installed-apps (set (:installed-apps response))
+                :available-apps (:available-apps response)})
+        (when callback (callback response)))))))
 
 (defn install-terminal!
   "Send terminal installation request to server."
-  [callback]
-  (swap! terminal-state assoc :loading? true)
+  ([callback]
+   (install-terminal! *terminal-owner* callback))
+  ([owner callback]
+  (activate-terminal-owner! owner)
+  (swap-terminal-state! owner assoc :loading? true)
   (net-client/send-to-server
+    owner
     (terminal-messages/msg-id :install-terminal)
     {}
     (fn [response]
-      (swap! terminal-state assoc :loading? false)
-      (when (:success response)
-        (swap! terminal-state assoc :terminal-installed? true))
-      (when callback (callback response)))))
+      (when (terminal-owner-active? owner)
+        (swap-terminal-state! owner assoc :loading? false)
+        (when (:success response)
+          (swap-terminal-state! owner assoc :terminal-installed? true))
+        (when callback (callback response)))))))
 
 (defn install-app!
   "Send app installation request to server."
-  [app-id callback]
-  (swap! terminal-state assoc :loading? true)
+  ([app-id callback]
+   (install-app! *terminal-owner* app-id callback))
+  ([owner app-id callback]
+  (activate-terminal-owner! owner)
+  (swap-terminal-state! owner assoc :loading? true)
   (net-client/send-to-server
+    owner
     (terminal-messages/msg-id :install-app)
     {:app-id (name app-id)}
     (fn [response]
-      (swap! terminal-state assoc :loading? false)
-      (when (:success response)
-        (swap! terminal-state update :installed-apps conj app-id))
-      (when callback (callback response)))))
+      (when (terminal-owner-active? owner)
+        (swap-terminal-state! owner assoc :loading? false)
+        (when (:success response)
+          (swap-terminal-state! owner update :installed-apps conj app-id))
+        (when callback (callback response)))))))
 
 (defn uninstall-app!
   "Send app uninstallation request to server."
-  [app-id callback]
+  ([app-id callback]
+   (uninstall-app! *terminal-owner* app-id callback))
+  ([owner app-id callback]
+  (activate-terminal-owner! owner)
   (net-client/send-to-server
+    owner
     (terminal-messages/msg-id :uninstall-app)
     {:app-id (name app-id)}
     (fn [response]
-      (when (:success response)
-        (swap! terminal-state update :installed-apps disj app-id))
-      (when callback (callback response)))))
+      (when (terminal-owner-active? owner)
+        (when (:success response)
+          (swap-terminal-state! owner update :installed-apps disj app-id))
+        (when callback (callback response)))))))
 
 ;; ============================================================================
 ;; App Grid Layout
@@ -180,10 +278,11 @@
   "Update the app count text."
   [root-widget]
   (when-let [text-widget (cgui-core/find-widget root-widget "text_appcount")]
-    (let [installed-count (count (:installed-apps @terminal-state))
-          total-count (count (:available-apps @terminal-state))
+    (let [state (terminal-state-snapshot)
+          installed-count (count (:installed-apps state))
+          total-count (count (:available-apps state))
           apps (ordered-apps)
-          page (clamp-page apps (:page @terminal-state))
+          page (clamp-page apps (:page state))
           total-pages (page-count apps)
           ;; Keep original count and add page context for terminal grid.
           text (str installed-count "/" total-count
@@ -205,7 +304,7 @@
 (defn- update-loading-indicator!
   "Update loading indicator visibility."
   [root-widget]
-  (let [loading? (:loading? @terminal-state)]
+  (let [loading? (:loading? (terminal-state-snapshot))]
     (when-let [icon-widget (cgui-core/find-widget root-widget "icon_loading")]
       (cgui-core/set-visible! icon-widget loading?))
     (when-let [text-widget (cgui-core/find-widget root-widget "text_loading")]
@@ -216,7 +315,8 @@
 (defn- handle-app-click
   "Handle app click - install if not installed, launch if installed."
   [app installed? player root-widget]
-  (let [app-id (:id app)]
+  (let [owner (player-terminal-owner player)
+        app-id (:id app)]
     (if installed?
       ;; Launch app
       (do
@@ -225,7 +325,7 @@
       ;; Install app
       (do
         (log/info "Installing app:" app-id)
-        (install-app! app-id
+        (install-app! owner app-id
                       (fn [response]
                         (if (:success response)
                           (do
@@ -237,6 +337,7 @@
 (defn- rebuild-app-grid!
   "Rebuild the app grid with current state."
   [root-widget player]
+  (binding [*terminal-owner* (player-terminal-owner player)]
   (try
     ;; Remove old app widgets
     (doseq [i (range 9)]
@@ -244,10 +345,11 @@
         (cgui-core/remove-widget! root-widget old-widget)))
 
     ;; Get all apps
-    (let [all-apps (ordered-apps)
-          page (clamp-page all-apps (:page @terminal-state))
-          installed-apps (:installed-apps @terminal-state)
-          _ (swap! terminal-state assoc :page page)
+        (let [state (terminal-state-snapshot)
+          all-apps (ordered-apps)
+          page (clamp-page all-apps (:page state))
+          installed-apps (:installed-apps state)
+          _ (swap-terminal-state! *terminal-owner* assoc :page page)
           offset (* page apps-per-page)
           page-apps (->> all-apps (drop offset) (take apps-per-page))]
 
@@ -263,19 +365,20 @@
     ;; Update counters
     (update-app-count! root-widget)
     (update-loading-indicator! root-widget)
-    (update-arrow-state! root-widget (ordered-apps) (:page @terminal-state))
+    (update-arrow-state! root-widget (ordered-apps) (:page (terminal-state-snapshot)))
 
     (catch Exception e
-      (log/error "Error rebuilding app grid:" (ex-message e)))))
+      (log/error "Error rebuilding app grid:" (ex-message e))))))
 
 (defn- change-page!
   [delta root-widget player]
+  (binding [*terminal-owner* (player-terminal-owner player)]
   (let [apps (ordered-apps)
-        current (:page @terminal-state)
+        current (:page (terminal-state-snapshot))
         next-page (clamp-page apps (+ (int (or current 0)) (int delta)))]
     (when (not= next-page current)
-      (swap! terminal-state assoc :page next-page)
-      (rebuild-app-grid! root-widget player))))
+      (swap-terminal-state! *terminal-owner* assoc :page next-page)
+      (rebuild-app-grid! root-widget player)))))
 
 (defn- bind-navigation-controls!
   [root-widget player]
@@ -302,8 +405,10 @@
     (log/info "Creating terminal GUI for player:" (entity/player-get-name player))
 
     ;; Load terminal.xml
-    (let [xml-path (modid/asset-path "guis" "terminal.xml")
+    (let [owner (player-terminal-owner player)
+          xml-path (modid/asset-path "guis" "terminal.xml")
           root-widget (cgui-doc/read-xml xml-path)]
+		(binding [*terminal-owner* owner]
 
       (if-not root-widget
         (do
@@ -318,7 +423,7 @@
           (bind-navigation-controls! root-widget player)
 
           ;; Query terminal state from server
-          (query-terminal-state!
+          (query-terminal-state! owner
             (fn [_response]
               ;; Build app grid after state is loaded
               (rebuild-app-grid! root-widget player)))
@@ -333,10 +438,11 @@
                             (fn [_]
                               (swap! counter inc)
                               (when (zero? (mod @counter 40)) ; 40 frames ≈ 2 seconds
-                                (update-loading-indicator! root-widget)))))
+                                (binding [*terminal-owner* owner]
+                                  (update-loading-indicator! root-widget))))))
 
           (log/info "Terminal GUI created successfully")
-          root-widget)))
+          root-widget))))
 
     (catch Exception e
       (log/error "Error creating terminal GUI:" (ex-message e))
@@ -364,7 +470,8 @@
   (log/info "Opening terminal for player:" (entity/player-get-name player))
   (try
     ;; Query state first, then open GUI
-    (query-terminal-state!
+    (let [owner (player-terminal-owner player)]
+    (query-terminal-state! owner
       (fn [response]
         (if (:terminal-installed? response)
           ;; Terminal installed - open GUI via platform bridge
@@ -372,12 +479,12 @@
           ;; Terminal not installed - install first
           (do
             (log/info "Terminal not installed, installing...")
-            (install-terminal!
+            (install-terminal! owner
               (fn [install-response]
                 (if (:success install-response)
                   ;; Open GUI after installation via platform bridge
                   (client-bridge/open-screen! :ac/terminal {:player player})
-                  (log/error "Failed to install terminal"))))))))
+                  (log/error "Failed to install terminal")))))))))
     (catch Exception e
       (log/error "Error opening terminal:" (ex-message e)))))
 

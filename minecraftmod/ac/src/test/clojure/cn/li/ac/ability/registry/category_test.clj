@@ -1,11 +1,13 @@
 (ns cn.li.ac.ability.registry.category-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.registry.category :as cat]))
 
 (defn- reset-cats! [f]
-  (reset! cat/category-registry {})
-  (f)
-  (reset! cat/category-registry {}))
+  (cat/reset-category-registry-for-test!)
+  (try
+    (f)
+    (finally
+      (cat/reset-category-registry-for-test!))))
 
 (use-fixtures :each reset-cats!)
 
@@ -32,3 +34,20 @@
                           :prog-incr-rate 1.0
                           :enabled false})
   (is (false? (cat/category-enabled? :off))))
+
+(deftest category-registry-duplicate-and-freeze-policy-test
+  (let [spec {:id :dup
+              :name-key "cat.dup"
+              :icon "i"
+              :color [1 1 1 1]
+              :prog-incr-rate 1.0
+              :enabled true}]
+    (cat/register-category! spec)
+    (is (= spec (cat/register-category! spec)))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Conflicting ability category id"
+                          (cat/register-category! (assoc spec :name-key "cat.changed"))))
+    (cat/freeze-category-registry!)
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Category registry is frozen"
+                          (cat/register-category! (assoc spec :id :new-cat))))))

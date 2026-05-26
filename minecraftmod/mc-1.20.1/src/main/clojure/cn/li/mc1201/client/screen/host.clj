@@ -14,6 +14,16 @@
         ^Font font (.-font mc)]
     (.drawString graphics font text (int x) (int y) (int color))))
 
+(defn- client-session-id
+  []
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    [:client (System/identityHashCode mc)]))
+
+(defn- with-client-session
+  [f]
+  (binding [client-ui/*client-session-id* (client-session-id)]
+    (f)))
+
 (defn- normalize-texture-path [path]
   (when (and path (not (str/blank? path)))
     (cond
@@ -96,24 +106,29 @@
 (defn open-managed-screen!
   "Open a content-owned hosted screen by opaque screen key and payload."
   [screen-key payload]
-  (let [result (client-ui/client-open-managed-screen! screen-key payload)]
+  (let [result (with-client-session #(client-ui/client-open-managed-screen! screen-key payload))]
     (when (= (:command result) :open-screen)
       (let [^Minecraft mc (Minecraft/getInstance)
             title (or (:title result) "Managed Screen")
             char-typed-fn (when (:char-typed? result)
                             (fn [ch]
-                              (client-ui/client-handle-managed-screen-char-typed! screen-key ch)))]
+                              (with-client-session
+                                #(client-ui/client-handle-managed-screen-char-typed! screen-key ch))))]
         (.setScreen mc
                     (create-host-screen
                       title
                       (fn [mouse-x mouse-y]
-                        (client-ui/client-build-managed-screen-draw-ops screen-key mouse-x mouse-y))
+                        (with-client-session
+                          #(client-ui/client-build-managed-screen-draw-ops screen-key mouse-x mouse-y)))
                       (fn [mouse-x mouse-y]
-                        (client-ui/client-handle-managed-screen-click! screen-key mouse-x mouse-y))
+                        (with-client-session
+                          #(client-ui/client-handle-managed-screen-click! screen-key mouse-x mouse-y)))
                       (fn [mouse-x mouse-y]
-                        (client-ui/client-handle-managed-screen-hover! screen-key mouse-x mouse-y))
+                        (with-client-session
+                          #(client-ui/client-handle-managed-screen-hover! screen-key mouse-x mouse-y)))
                       (fn []
-                        (client-ui/client-close-managed-screen! screen-key))
+                        (with-client-session
+                          #(client-ui/client-close-managed-screen! screen-key)))
                       char-typed-fn))))))
 
 (defn init! []

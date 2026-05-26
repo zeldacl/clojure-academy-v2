@@ -5,22 +5,25 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.content.ability :as ability-content]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.config.registry :as config-reg]))
 
 (defn- with-test-state
   [f]
-  (let [descriptors @config-reg/descriptor-registry
-        values @config-reg/value-registry
-        player-states @player-state/player-states]
-    (try
-      (reset! config-reg/descriptor-registry {})
-      (reset! config-reg/value-registry {})
-      (reset! player-state/player-states {})
-      (f)
-      (finally
-        (reset! config-reg/descriptor-registry descriptors)
-        (reset! config-reg/value-registry values)
-        (reset! player-state/player-states player-states)))))
+  (ps-fix/with-test-player-state-owner
+    (fn []
+      (let [descriptors @config-reg/descriptor-registry
+            values @config-reg/value-registry
+            player-states (player-state/snapshot-player-states)]
+        (try
+          (reset! config-reg/descriptor-registry {})
+          (reset! config-reg/value-registry {})
+          (player-state/reset-player-states-for-test!)
+          (f)
+          (finally
+            (reset! config-reg/descriptor-registry descriptors)
+            (reset! config-reg/value-registry values)
+            (player-state/reset-player-states-for-test! player-states)))))))
 
 (defn- seed-electromaster-config!
   [values]

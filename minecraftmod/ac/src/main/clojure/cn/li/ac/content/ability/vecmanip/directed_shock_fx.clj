@@ -8,7 +8,21 @@
 (def ^:private prepare-duration-ms 150.0)
 (def ^:private punch-duration-ms 300.0)
 
-(defonce ^:private effect-state (atom nil))
+(defonce ^:private effect-state (atom {}))
+
+(defn directed-shock-fx-snapshot
+  []
+  {:effect-state @effect-state})
+
+(defn reset-directed-shock-fx-for-test!
+  []
+  (reset! effect-state {})
+  nil)
+
+(defn clear-directed-shock-owner!
+  [owner-key]
+  (swap! effect-state dissoc owner-key)
+  nil)
 
 (defn- now-ms [] (System/currentTimeMillis))
 
@@ -37,18 +51,26 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- enqueue! [payload]
-  (let [{:keys [mode performed?]} payload]
+  (let [{:keys [mode performed? owner-key ctx-id channel source-player-id world-id]} payload
+        owner-key* (or owner-key [:ctx ctx-id])
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
-      (reset! effect-state {:stage :prepare :started-at (now-ms)})
+      (swap! effect-state assoc owner-key*
+             (merge base-meta {:stage :prepare :started-at (now-ms)}))
       :perform
       (do
-        (reset! effect-state {:stage :punch :started-at (now-ms)})
+        (swap! effect-state assoc owner-key*
+               (merge base-meta {:stage :punch :started-at (now-ms)}))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0}))
       :end
       (when-not performed?
-        (reset! effect-state nil))
+        (swap! effect-state dissoc owner-key*))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -56,17 +78,24 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- tick! []
-  (when-let [{:keys [stage started-at]} @effect-state]
-    (when (and (= stage :punch)
-               (>= (- (now-ms) (long started-at)) punch-duration-ms))
-      (reset! effect-state nil))))
+  (swap! effect-state
+         (fn [states]
+           (into {}
+                 (remove (fn [[_ {:keys [stage started-at]}]]
+                           (and (= stage :punch)
+                                (>= (- (now-ms) (long started-at)) punch-duration-ms))))
+                 states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Transform
 ;; ---------------------------------------------------------------------------
 
 (defn- transform []
-  (when-let [{:keys [stage started-at]} @effect-state]
+  (when-let [[owner-key {:keys [stage started-at]}]
+             (some (fn [[owner-key st]]
+                     (when (:stage st)
+                       [owner-key st]))
+                   @effect-state)]
     (let [elapsed (- (now-ms) (long started-at))]
       (case stage
         :prepare
@@ -74,7 +103,7 @@
         :punch
         (let [progress (/ elapsed punch-duration-ms)]
           (if (>= progress 1.0)
-            (do (reset! effect-state nil) nil)
+            (do (swap! effect-state dissoc owner-key) nil)
             (punch-transform progress)))
         nil))))
 
@@ -89,13 +118,16 @@
      :transform-fn transform})
   (fx-registry/register-fx-channels!
     [:directed-shock/fx-start :directed-shock/fx-perform :directed-shock/fx-end]
-    (fn [_ctx-id channel payload]
-      (case channel
-        :directed-shock/fx-start
-        (hand-effects/enqueue-hand-effect! :directed-shock {:mode :start})
-        :directed-shock/fx-perform
-        (hand-effects/enqueue-hand-effect! :directed-shock {:mode :perform})
-        :directed-shock/fx-end
-        (hand-effects/enqueue-hand-effect! :directed-shock
-          {:mode :end :performed? (boolean (:performed? payload))}))))
+    (fn [ctx-id channel payload]
+      (let [owner-meta {:owner-key [:ctx ctx-id]
+                        :ctx-id ctx-id
+                        :channel channel}]
+        (case channel
+          :directed-shock/fx-start
+          (hand-effects/enqueue-hand-effect! :directed-shock (merge owner-meta {:mode :start}))
+          :directed-shock/fx-perform
+          (hand-effects/enqueue-hand-effect! :directed-shock (merge owner-meta {:mode :perform}))
+          :directed-shock/fx-end
+          (hand-effects/enqueue-hand-effect! :directed-shock
+            (merge owner-meta {:mode :end :performed? (boolean (:performed? payload))}))))))
   nil)

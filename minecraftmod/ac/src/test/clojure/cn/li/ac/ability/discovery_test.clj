@@ -5,14 +5,15 @@
             [cn.li.ac.discovery.scanner :as scanner]))
 
 (defn- reset-discovery-state! [f]
-  (let [attempts* (var-get #'cn.li.ac.ability.discovery/bootstrap-attempts*)]
-    (registry/clear-providers!)
-    (reset! attempts* 0)
+  (let [providers-snapshot (registry/provider-registry-snapshot)
+        attempts (discovery/bootstrap-attempts-snapshot)]
+    (registry/reset-provider-registry-for-test!)
+    (discovery/reset-bootstrap-attempts-for-test!)
     (try
       (f)
       (finally
-        (registry/clear-providers!)
-        (reset! attempts* 0)))))
+        (registry/reset-provider-registry-for-test! providers-snapshot)
+        (discovery/reset-bootstrap-attempts-for-test! attempts)))))
 
 (use-fixtures :each reset-discovery-state!)
 
@@ -22,3 +23,12 @@
       (is (contains? fx-ns 'cn.li.ac.content.ability.electromaster.arc-gen-fx))
       (is (contains? fx-ns 'cn.li.ac.content.ability.electromaster.mag-manip-fx))
       (is (contains? fx-ns 'cn.li.ac.content.ability.electromaster.body-intensify-fx)))))
+
+(deftest discovery-provider-registry-freeze-policy-test
+  (registry/freeze-provider-registry!)
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Discovery provider registry is frozen"
+                        (registry/register-provider! {:id :demo :priority 0})))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Discovery provider registry is frozen"
+                        (registry/unregister-provider! :demo))))

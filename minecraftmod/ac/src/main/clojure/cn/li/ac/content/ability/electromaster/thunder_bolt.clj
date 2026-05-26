@@ -166,6 +166,8 @@
                              {:start eye
                               :end impact
                               :aoe-points aoe-points
+                              :source-player-id player-id
+                              :world-id world-id
                               :hit-kind hit-kind
                               :performed? true})
     (skill-effects/add-skill-exp! player-id

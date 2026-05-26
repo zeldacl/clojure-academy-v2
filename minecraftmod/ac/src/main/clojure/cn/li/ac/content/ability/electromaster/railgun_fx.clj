@@ -10,7 +10,7 @@
 ;; State
 ;; ---------------------------------------------------------------------------
 
-(defonce ^:private beam-effects (atom []))
+(defonce ^:private beam-effects (atom {}))
 (def ^:private beam-life-ticks 12)
 (def ^:private railgun-beam-style
   {:width (fn [_ life] (* 0.08 (+ 0.5 life)))
@@ -22,19 +22,44 @@
    :line-rgb {:r 165 :g 230 :b 255}
    :line-alpha (fn [_ life] (+ 40 (* 120 life)))})
 
+(defn railgun-fx-snapshot
+  []
+  {:beam-effects @beam-effects})
+
+(defn reset-railgun-fx-for-test!
+  []
+  (reset! beam-effects {})
+  nil)
+
+(defn clear-railgun-owner!
+  [owner-key]
+  (swap! beam-effects dissoc owner-key)
+  nil)
+
+(defn- all-beam-effects []
+  (mapcat val @beam-effects))
+
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode start end hit-distance]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode start end hit-distance source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (when (and start end)
-      (swap! beam-effects conj {:start start
-                                :end end
-                                :mode (or mode :block-hit)
-                                :hit-distance (double (or hit-distance 18.0))
-                                :ttl beam-life-ticks
-                                :max-ttl beam-life-ticks}))))
+      (swap! beam-effects update owner-key* (fnil conj [])
+             (merge base-meta
+                    {:start start
+                     :end end
+                     :mode (or mode :block-hit)
+                     :hit-distance (double (or hit-distance 18.0))
+                     :ttl beam-life-ticks
+                     :max-ttl beam-life-ticks})))))
 
 ;; ---------------------------------------------------------------------------
 ;; Tick
@@ -42,11 +67,16 @@
 
 (defn- tick! []
   (swap! beam-effects
-         (fn [xs]
-           (->> xs
-                (map #(update % :ttl dec))
-                (filter #(pos? (long (:ttl %))))
-                vec))))
+         (fn [by-owner]
+           (into {}
+                 (keep (fn [[owner-key xs]]
+                         (let [live (->> xs
+                                         (map #(update % :ttl dec))
+                                         (filter #(pos? (long (:ttl %))))
+                                         vec)]
+                           (when (seq live)
+                             [owner-key live]))))
+                 by-owner))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -90,7 +120,7 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [camera-pos hand-center-pos tick]
-  (let [beams @beam-effects
+  (let [beams (all-beam-effects)
         player-uuid (:player-uuid hand-center-pos)
         charge-state (when player-uuid
                        (client-runtime/railgun-charge-visual-state player-uuid))
@@ -114,11 +144,12 @@
 
 (defn init! []
   (level-effects/register-level-effect! :railgun-shot
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:railgun/fx-shot :railgun/fx-reflect]
-    (fn [_ctx-id _channel payload]
-      (level-effects/enqueue-level-effect! :railgun-shot payload)))
+    (fn [ctx-id channel payload]
+      (level-effects/enqueue-level-effect! :railgun-shot payload
+                                           {:ctx-id ctx-id :channel channel})))
   nil)

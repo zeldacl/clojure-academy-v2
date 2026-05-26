@@ -23,6 +23,7 @@
   - `cmd /c .\gradlew.bat verifyNonAcNoBusinessRuntimeHookApis`
   - `cmd /c .\gradlew.bat verifyNonAcNoBusinessSemanticResidue`
   - `cmd /c .\gradlew.bat verifyCleanupResidueGuards`
+  - `cmd /c .\gradlew.bat auditTopLevelMutableState`（报告型顶层可变状态审计；输出 `build/reports/top-level-state/audit.md`）
   - `cmd /c .\gradlew.bat unitTestCompile`
   - `cmd /c .\gradlew.bat runAcUnitTests`（执行 `ac` 的 `clojure.test`，入口为 `:ac:runAcClojureTests` / `cn.li.ac.test-runner`；可选 `"-Dac.test.only=cn.li.ac.foo-test,cn.li.ac.bar-test"`；输出慢测试 namespace Top 10）
   - `cmd /c .\gradlew.bat runMcmodUnitTests`（执行 `mcmod` 的 `clojure.test`，入口为 `:mcmod:runMcmodClojureTests` / `cn.li.mcmod.test-runner`；可选 `"-Dmcmod.test.only=cn.li.mcmod.foo-test,cn.li.mcmod.bar-test"`；输出慢测试 namespace Top 10）

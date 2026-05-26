@@ -9,9 +9,11 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- clean-registry [f]
-  (reg/clear-registry!)
-  (f)
-  (reg/clear-registry!))
+  (reg/reset-app-registry-for-test!)
+  (try
+    (f)
+    (finally
+      (reg/reset-app-registry-for-test!))))
 
 (use-fixtures :each clean-registry)
 
@@ -48,3 +50,26 @@
            :payload {:player-uuid "player-uuid-1"
                          :learn-context nil}}]
              @launches)))))
+
+(deftest app-registry-duplicate-and-freeze-policy-test
+  (let [first-app {:id :dup
+                   :name "First"
+                   :icon "first.png"
+                   :gui-fn 'clojure.core/identity}
+        second-app {:id :dup
+                    :name "Second"
+                    :icon "second.png"
+                    :gui-fn 'clojure.core/identity}]
+    (is (= first-app (reg/register-app! first-app)))
+    (is (= first-app (select-keys (reg/register-app! second-app)
+                                  [:id :name :icon :gui-fn])))
+    (reg/freeze-app-registry!)
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Terminal app registry is frozen"
+                          (reg/register-app! {:id :new
+                                              :name "New"
+                                              :icon "new.png"
+                                              :gui-fn 'clojure.core/identity})))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Terminal app registry is frozen"
+                          (reg/unregister-app! :dup)))))

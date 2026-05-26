@@ -5,8 +5,22 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
+(defonce ^:private effect-state (atom {}))
 (def ^:private loop-sound "my_mod:em.move_loop")
+
+(defn mag-movement-fx-snapshot
+  []
+  {:effect-state @effect-state})
+
+(defn reset-mag-movement-fx-for-test!
+  []
+  (reset! effect-state {})
+  nil)
+
+(defn clear-mag-movement-owner!
+  [owner-key]
+  (swap! effect-state dissoc owner-key)
+  nil)
 
 (defn- magnetic-beam-style [tick]
   (let [phase (* 0.9 (double tick))
@@ -31,22 +45,29 @@
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode target]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode target source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
       (do
-        (reset! effect-state {:active? true :target target :ticks 0})
+        (swap! effect-state assoc owner-key*
+               (merge base-meta {:active? true :target target :ticks 0}))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id loop-sound :volume 0.58 :pitch 1.0}))
       :update
-      (swap! effect-state
+      (swap! effect-state update owner-key*
              (fn [st]
                (if (:active? st)
-                 (assoc st :target target)
-                 {:active? true :target target :ticks 0})))
+                 (merge st base-meta {:target target})
+                 (merge base-meta {:active? true :target target :ticks 0}))))
       :end
-      (reset! effect-state nil)
+      (swap! effect-state dissoc owner-key*)
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -55,20 +76,30 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when (:active? st)
-             (let [ticks (inc (long (or (:ticks st) 0)))]
-               (when (zero? (mod ticks 10))
-                 (client-sounds/queue-sound-effect!
-                   {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
-               (assoc st :ticks ticks))))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           (let [ticks (inc (long (or (:ticks st) 0)))]
+                             (when (zero? (mod ticks 10))
+                               (client-sounds/queue-sound-effect!
+                                 {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
+                             [owner-key (assoc st :ticks ticks)]))))
+                 states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [camera-pos hand-center-pos tick]
-  (let [mag-move @effect-state]
+  (let [mag-move (some (fn [st]
+                         (when (and (:active? st)
+                                    (or (nil? (:source-player-id st))
+                                        (nil? (:player-uuid hand-center-pos))
+                                        (= (str (:source-player-id st))
+                                           (str (:player-uuid hand-center-pos)))))
+                           st))
+                       (vals @effect-state))]
     (when (and hand-center-pos
                (:active? mag-move)
                (map? (:target mag-move)))
@@ -83,17 +114,18 @@
 
 (defn init! []
   (level-effects/register-level-effect! :mag-movement
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:mag-movement/fx-start :mag-movement/fx-update :mag-movement/fx-end]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
       (let [mode (case channel
                    :mag-movement/fx-start :start
                    :mag-movement/fx-update :update
                    :mag-movement/fx-end :end)]
         (level-effects/enqueue-level-effect!
           :mag-movement
-          (assoc payload :mode mode)))))
+          (assoc payload :mode mode)
+          {:ctx-id ctx-id :channel channel}))))
   nil)

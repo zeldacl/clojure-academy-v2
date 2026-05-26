@@ -1,11 +1,13 @@
 (ns cn.li.ac.ability.registry.event-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.registry.event :as evt]))
 
 (defn- reset-subs! [f]
-  (reset! @#'cn.li.ac.ability.registry.event/subscribers {})
-  (f)
-  (reset! @#'cn.li.ac.ability.registry.event/subscribers {}))
+  (evt/reset-ability-event-subscribers-for-test!)
+  (try
+    (f)
+    (finally
+      (evt/reset-ability-event-subscribers-for-test!))))
 
 (use-fixtures :each reset-subs!)
 
@@ -29,5 +31,13 @@
   (is (= 7.0 (evt/fire-calc-event! evt/CALC-SKILL-ATTACK 3.0 {:player-id "p"}))))
 
 (deftest fire-calc-event-ignores-non-number-test
-  (evt/subscribe-ability-event! evt/CALC-MAX-CP (fn [m] :not-a-number))
+  (evt/subscribe-ability-event! evt/CALC-MAX-CP (fn [_m] :not-a-number))
   (is (= 50.0 (evt/fire-calc-event! evt/CALC-MAX-CP 50.0 {:uuid "u"}))))
+
+(deftest subscriber-registry-freeze-policy-test
+  (evt/subscribe-ability-event! :ability/demo (fn [_] nil))
+  (is (= [:ability/demo] (keys (evt/subscriber-registry-snapshot))))
+  (evt/freeze-ability-event-subscribers!)
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Ability event subscriber registry is frozen"
+                        (evt/subscribe-ability-event! :ability/other (fn [_] nil)))))

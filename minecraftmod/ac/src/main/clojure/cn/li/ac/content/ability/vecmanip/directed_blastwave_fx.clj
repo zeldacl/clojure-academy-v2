@@ -5,24 +5,56 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
-(defonce ^:private waves (atom []))
+(defonce ^:private effect-state (atom {}))
+(defonce ^:private waves (atom {}))
 (def ^:private sound-id "my_mod:vecmanip.directed_blast")
 (def ^:private wave-life 15)
+
+(defn directed-blastwave-fx-snapshot
+  []
+  {:effect-state @effect-state
+   :waves @waves})
+
+(defn reset-directed-blastwave-fx-for-test!
+  []
+  (reset! effect-state {})
+  (reset! waves {})
+  nil)
+
+(defn clear-directed-blastwave-owner!
+  [owner-key]
+  (swap! effect-state dissoc owner-key)
+  (swap! waves dissoc owner-key)
+  nil)
+
+(defn- all-waves []
+  (mapcat val @waves))
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode charge-ticks punched? pos look-dir performed?]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode charge-ticks punched? pos look-dir performed? source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
-      (reset! effect-state {:active? true :charge-ticks 0 :punched? false :performed? false})
+      (swap! effect-state assoc owner-key*
+             (merge base-meta {:active? true :charge-ticks 0 :punched? false :performed? false}))
       :update
-      (swap! effect-state
+      (swap! effect-state update owner-key*
              (fn [st]
-               (assoc (or st {})
+               (assoc (merge base-meta (or st {}))
+                      :owner-key owner-key*
+                      :ctx-id ctx-id
+                      :channel channel
+                      :source-player-id source-player-id
+                      :world-id world-id
                       :active? true
                       :charge-ticks (long (or charge-ticks 0))
                       :punched? (boolean punched?)
@@ -39,24 +71,26 @@
                        :y (* (double (:y d)) inv)
                        :z (* (double (:z d)) inv)})
                 rings (+ 2 (rand-int 2))]
-            (swap! waves conj
-                   {:pos {:x (double (:x pos)) :y (double (:y pos)) :z (double (:z pos))}
-                    :dir dir
-                    :ttl wave-life :max-ttl wave-life
-                    :rings (vec (map (fn [idx]
-                                       {:life (+ 8 (rand-int 5))
-                                        :offset (+ (* idx 1.5) (- (* (rand) 0.6) 0.3))
-                                        :size (* 1.0 (+ 0.8 (* (rand) 0.4)))
-                                        :time-offset (+ (* idx 2) (- (rand-int 3) 1))})
-                                     (range rings)))})))
+                 (swap! waves update owner-key* (fnil conj [])
+                   (merge base-meta
+                     {:pos {:x (double (:x pos)) :y (double (:y pos)) :z (double (:z pos))}
+                      :dir dir
+                      :ttl wave-life :max-ttl wave-life
+                      :rings (vec (map (fn [idx]
+                          {:life (+ 8 (rand-int 5))
+                           :offset (+ (* idx 1.5) (- (* (rand) 0.6) 0.3))
+                           :size (* 1.0 (+ 0.8 (* (rand) 0.4)))
+                           :time-offset (+ (* idx 2) (- (rand-int 3) 1))})
+                        (range rings)))}))))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
            :x (double (or (:x pos) 0.0))
            :y (double (or (:y pos) 0.0))
            :z (double (or (:z pos) 0.0))}))
       :end
-      (reset! effect-state {:active? false :charge-ticks 0 :punched? false
-                            :performed? (boolean performed?)})
+                (swap! effect-state assoc owner-key*
+                  (merge base-meta {:active? false :charge-ticks 0 :punched? false
+                      :performed? (boolean performed?)}))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -65,11 +99,23 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when st
-             (if (:active? st) st nil))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           [owner-key st])))
+                 states)))
   (swap! waves
-         (fn [xs] (->> xs (map #(update % :ttl dec)) (filter #(pos? (long (:ttl %)))) vec))))
+         (fn [by-owner]
+           (into {}
+                 (keep (fn [[owner-key xs]]
+                         (let [live (->> xs
+                                         (map #(update % :ttl dec))
+                                         (filter #(pos? (long (:ttl %))))
+                                         vec)]
+                           (when (seq live)
+                             [owner-key live]))))
+                 by-owner))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -155,8 +201,16 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [_camera-pos hand-center-pos _tick]
-  (let [db @effect-state
-        current-waves @waves
+  (let [states @effect-state
+        db (some (fn [st]
+                   (when (and (:active? st)
+                              (or (nil? (:source-player-id st))
+                                  (nil? (:player-uuid hand-center-pos))
+                                  (= (str (:source-player-id st))
+                                     (str (:player-uuid hand-center-pos)))))
+                     st))
+                 (vals states))
+        current-waves (all-waves)
         charge-plan (if (and hand-center-pos db (:active? db))
                       (charge-ops (dissoc hand-center-pos :player-uuid)
                                   (long (or (:charge-ticks db) 0))
@@ -172,27 +226,31 @@
 
 (defn init! []
   (level-effects/register-level-effect! :directed-blastwave
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:directed-blastwave/fx-start :directed-blastwave/fx-update
      :directed-blastwave/fx-perform :directed-blastwave/fx-end]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
       (case channel
         :directed-blastwave/fx-start
-        (level-effects/enqueue-level-effect! :directed-blastwave {:mode :start})
+        (level-effects/enqueue-level-effect! :directed-blastwave {:mode :start}
+                                             {:ctx-id ctx-id :channel channel})
         :directed-blastwave/fx-update
         (level-effects/enqueue-level-effect! :directed-blastwave
           {:mode :update
            :charge-ticks (long (or (:charge-ticks payload) 0))
-           :punched? (boolean (:punched? payload))})
+           :punched? (boolean (:punched? payload))}
+          {:ctx-id ctx-id :channel channel})
         :directed-blastwave/fx-perform
         (level-effects/enqueue-level-effect! :directed-blastwave
           {:mode :perform
            :pos (:pos payload) :look-dir (:look-dir payload)
-           :charge-ticks (long (or (:charge-ticks payload) 0))})
+           :charge-ticks (long (or (:charge-ticks payload) 0))}
+          {:ctx-id ctx-id :channel channel})
         :directed-blastwave/fx-end
         (level-effects/enqueue-level-effect! :directed-blastwave
-          {:mode :end :performed? (boolean (:performed? payload))}))))
+          {:mode :end :performed? (boolean (:performed? payload))}
+          {:ctx-id ctx-id :channel channel}))))
   nil)

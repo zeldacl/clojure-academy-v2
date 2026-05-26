@@ -6,6 +6,11 @@
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.data.world :as wdata]))
 
+(defn- test-world
+  [world-id]
+  {:server-session-id :test-session
+   :world-id world-id})
+
 (deftest create-node-conn-defaults-test
   (let [wd {:world :w :node-lookup (atom {})}
         node {:x 1 :y 2 :z 3}
@@ -15,7 +20,7 @@
     (is (false? (node-conn/is-disposed? conn)))))
 
 (deftest add-device-capacity-and-range-gates-test
-  (let [wd (wdata/create-world-data :wc-gates)
+  (let [wd (wdata/create-world-data (test-world :wc-gates))
         node-t (stubs/mutable-node {:capacity 1 :range 10.0})
         g1 (stubs/generator-stub {})
         g2 (stubs/generator-stub {})
@@ -30,7 +35,7 @@
         (is (false? (node-conn/add-generator! conn (vb/->VBlock 100 0 0 :generator true))))))))
 
 (deftest tick-pulls-from-generator-test
-  (let [wd (wdata/create-world-data :wc-gen)
+  (let [wd (wdata/create-world-data (test-world :wc-gen))
         node-t (stubs/mutable-node {:energy 0.0 :max-energy 1000.0 :bandwidth 500.0})
         gen (stubs/generator-stub {:provided-fn identity})
         tiles (atom {[0 0 0] node-t [8 0 0] gen})
@@ -44,7 +49,7 @@
         (is (pos? (.getEnergy node-t)))))))
 
 (deftest tick-pushes-to-receiver-test
-  (let [wd (wdata/create-world-data :wc-rec)
+  (let [wd (wdata/create-world-data (test-world :wc-rec))
         node-t (stubs/mutable-node {:energy 800.0 :max-energy 1000.0 :bandwidth 500.0})
         rec (stubs/receiver-stub {:required 100.0 :leftover-fn (constantly 0.0)})
         tiles (atom {[0 0 0] node-t [4 0 0] rec})
@@ -58,7 +63,7 @@
         (is (< (.getEnergy node-t) 800.0))))))
 
 (deftest generator-overflow-uses-required-cap-test
-  (let [wd (wdata/create-world-data :wc-ov)
+  (let [wd (wdata/create-world-data (test-world :wc-ov))
         node-t (stubs/mutable-node {:energy 0.0 :max-energy 1000.0 :bandwidth 500.0})
         gen (stubs/generator-stub {:provided-fn (fn [req] (* 2.0 req))})
         tiles (atom {[0 0 0] node-t [2 0 0] gen})
@@ -72,7 +77,7 @@
         (is (<= (.getEnergy node-t) 500.0))))))
 
 (deftest remove-and-transfer-device-cleans-lookup-immediately-test
-  (let [wd (wdata/create-world-data :wc-remove)
+  (let [wd (wdata/create-world-data (test-world :wc-remove))
         node-a (stubs/mutable-node {:capacity 4 :range 20.0})
         node-b (stubs/mutable-node {:capacity 4 :range 20.0})
         gen (stubs/generator-stub {})
@@ -98,7 +103,7 @@
         (is (identical? conn-b (get (world-registry/node-lookup wd) gen-vb)))))))
 
 (deftest node-conn-nbt-round-trip-test
-  (let [wd (wdata/create-world-data :wc-nbt)
+  (let [wd (wdata/create-world-data (test-world :wc-nbt))
         node-t (stubs/mutable-node {})
         gen (stubs/generator-stub {})
         tiles (atom {[5 0 0] node-t [9 0 0] gen})

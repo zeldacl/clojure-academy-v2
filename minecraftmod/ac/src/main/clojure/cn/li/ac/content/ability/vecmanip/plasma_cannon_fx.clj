@@ -5,30 +5,57 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
+(defonce ^:private effect-state (atom {}))
 (def ^:private loop-sound "my_mod:vecmanip.plasma_cannon")
 (def ^:private charged-sound "my_mod:vecmanip.plasma_cannon_t")
+
+(defn plasma-cannon-fx-snapshot
+  []
+  {:effect-state @effect-state})
+
+(defn reset-plasma-cannon-fx-for-test!
+  []
+  (reset! effect-state {})
+  nil)
+
+(defn clear-plasma-cannon-owner!
+  [owner-key]
+  (swap! effect-state dissoc owner-key)
+  nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode charge-ticks fully-charged? charge-pos flight-ticks
-                state destination pos performed?]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode charge-ticks fully-charged? charge-pos flight-ticks
+                state destination pos performed? source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
       (do
-        (reset! effect-state {:active? true :charge-ticks 0 :charge-pos (:charge-pos payload)
-                              :flight-ticks 0 :state :charging :destination nil
-                              :performed? false})
+        (swap! effect-state assoc owner-key*
+               (merge base-meta
+                      {:active? true :charge-ticks 0 :charge-pos (:charge-pos payload)
+                       :flight-ticks 0 :state :charging :destination nil
+                       :performed? false}))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id loop-sound :volume 0.5 :pitch 1.0}))
       :update
       (do
-        (swap! effect-state
+        (swap! effect-state update owner-key*
                (fn [st]
-                 (assoc (or st {})
+                 (assoc (merge base-meta (or st {}))
+                        :owner-key owner-key*
+                        :ctx-id ctx-id
+                        :channel channel
+                        :source-player-id source-player-id
+                        :world-id world-id
                         :active? true
                         :charge-ticks (long (or charge-ticks 0))
                         :flight-ticks (long (or flight-ticks 0))
@@ -57,7 +84,7 @@
             {:type :sound :sound-id "minecraft:entity.generic.explode"
              :volume 3.0 :pitch 0.8 :x tx :y ty :z tz})))
       :end
-      (reset! effect-state {:active? false :performed? (boolean performed?)})
+      (swap! effect-state assoc owner-key* (merge base-meta {:active? false :performed? (boolean performed?)}))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -66,22 +93,23 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when st
-             (if (:active? st)
-               (let [ticks (inc (long (or (:ticks st) 0)))]
-                 (when (and (pos? ticks) (zero? (mod ticks 10)))
-                   (client-sounds/queue-sound-effect!
-                     {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
-                 (let [cp (:charge-pos st)]
-                   (when (and cp (= :go (:state st)))
-                     (client-particles/queue-particle-effect!
-                       {:type :particle :particle-type :flame
-                        :x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
-                        :count 4 :speed 0.2
-                        :offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
-                 (assoc st :ticks ticks))
-               nil)))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           (let [ticks (inc (long (or (:ticks st) 0)))]
+                             (when (and (pos? ticks) (zero? (mod ticks 10)))
+                               (client-sounds/queue-sound-effect!
+                                 {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
+                             (let [cp (:charge-pos st)]
+                               (when (and cp (= :go (:state st)))
+                                 (client-particles/queue-particle-effect!
+                                   {:type :particle :particle-type :flame
+                                    :x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
+                                    :count 4 :speed 0.2
+                                    :offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
+                             [owner-key (assoc st :ticks ticks)]))))
+                 states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Build plan (plasma cannon has no render ops, only particles/sounds)
@@ -119,24 +147,28 @@
       :z (+ z (* 0.3 (Math/sin (+ (* 0.53 t) 1.3))))
       :size 0.4}]))
 
+(defn- plasma-state-ops [st]
+  (when (and (:active? st) (map? (:charge-pos st)))
+    (let [cp (:charge-pos st)
+          ticks (long (or (:ticks st) 0))
+          state (:state st)
+          charge-ticks (long (or (:charge-ticks st) 0))
+          ramp (min 1.0 (/ charge-ticks 24.0))
+          alpha (double (* (if (= state :go) 1.0 0.85) (+ 0.2 (* 0.8 ramp))))
+          radius (+ 0.95 (* 0.35 ramp) (* 0.08 (Math/sin (* 0.21 ticks))))
+          balls (plasma-balls cp ticks state)]
+      [{:kind :plasma-body
+        :center {:x (double (:x cp))
+                 :y (double (:y cp))
+                 :z (double (:z cp))}
+        :radius (double radius)
+        :alpha (double alpha)
+        :balls balls}])))
+
 (defn- build-plan [_camera-pos _hand-center-pos _tick]
-  (when-let [st @effect-state]
-    (when (and (:active? st) (map? (:charge-pos st)))
-      (let [cp (:charge-pos st)
-            ticks (long (or (:ticks st) 0))
-            state (:state st)
-            charge-ticks (long (or (:charge-ticks st) 0))
-            ramp (min 1.0 (/ charge-ticks 24.0))
-            alpha (double (* (if (= state :go) 1.0 0.85) (+ 0.2 (* 0.8 ramp))))
-            radius (+ 0.95 (* 0.35 ramp) (* 0.08 (Math/sin (* 0.21 ticks))))
-            balls (plasma-balls cp ticks state)]
-        {:ops [{:kind :plasma-body
-                :center {:x (double (:x cp))
-                         :y (double (:y cp))
-                         :z (double (:z cp))}
-                :radius (double radius)
-                :alpha (double alpha)
-                :balls balls}]}))))
+  (let [ops (mapcat plasma-state-ops (vals @effect-state))]
+    (when (seq ops)
+      {:ops (vec ops)})))
 
 ;; ---------------------------------------------------------------------------
 ;; Registration
@@ -144,29 +176,38 @@
 
 (defn init! []
   (level-effects/register-level-effect! :plasma-cannon
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:plasma-cannon/fx-start :plasma-cannon/fx-update
      :plasma-cannon/fx-perform :plasma-cannon/fx-end]
-    (fn [_ctx-id channel payload]
+        (fn [ctx-id channel payload]
       (case channel
         :plasma-cannon/fx-start
-        (level-effects/enqueue-level-effect! :plasma-cannon {:mode :start :charge-pos (:charge-pos payload)})
+       (level-effects/enqueue-level-effect! :plasma-cannon
+                   (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+                     {:mode :start :charge-pos (:charge-pos payload)})
+                   {:ctx-id ctx-id :channel channel})
         :plasma-cannon/fx-update
         (level-effects/enqueue-level-effect! :plasma-cannon
-          {:mode :update
-           :charge-ticks (long (or (:charge-ticks payload) 0))
-           :fully-charged? (boolean (:fully-charged? payload))
-           :charge-pos (:charge-pos payload)
-           :flight-ticks (long (or (:flight-ticks payload) 0))
-           :state (or (:state payload) :charging)
-           :destination (:destination payload)})
+         (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+           {:mode :update
+            :charge-ticks (long (or (:charge-ticks payload) 0))
+            :fully-charged? (boolean (:fully-charged? payload))
+            :charge-pos (:charge-pos payload)
+            :flight-ticks (long (or (:flight-ticks payload) 0))
+            :state (or (:state payload) :charging)
+            :destination (:destination payload)})
+         {:ctx-id ctx-id :channel channel})
         :plasma-cannon/fx-perform
         (level-effects/enqueue-level-effect! :plasma-cannon
-          {:mode :perform :pos (:pos payload)})
+         (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+           {:mode :perform :pos (:pos payload)})
+         {:ctx-id ctx-id :channel channel})
         :plasma-cannon/fx-end
         (level-effects/enqueue-level-effect! :plasma-cannon
-          {:mode :end :performed? (boolean (:performed? payload))}))))
+         (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+           {:mode :end :performed? (boolean (:performed? payload))})
+         {:ctx-id ctx-id :channel channel}))))
   nil)

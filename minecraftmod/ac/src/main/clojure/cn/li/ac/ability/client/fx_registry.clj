@@ -9,6 +9,12 @@
 ;; channel-key → handler-fn
 ;; handler-fn signature: (fn [ctx-id channel payload])
 (defonce ^:private fx-handlers (atom {}))
+(defonce ^:private fx-handlers-frozen? (atom false))
+
+(defn- assert-registry-open!
+  []
+  (when @fx-handlers-frozen?
+    (throw (ex-info "FX channel registry is frozen" {}))))
 
 (defn register-fx-channel!
   "Register a handler for a context-channel key.
@@ -17,16 +23,36 @@
   Multiple channels may share the same handler-fn."
   [channel-key handler-fn]
   {:pre [(keyword? channel-key) (fn? handler-fn)]}
-  (swap! fx-handlers assoc channel-key handler-fn)
+  (assert-registry-open!)
+  (swap! fx-handlers
+         (fn [handlers]
+           (if (contains? handlers channel-key)
+             handlers
+             (assoc handlers channel-key handler-fn))))
   nil)
 
 (defn register-fx-channels!
   "Convenience — register the same handler for multiple channel keys."
   [channel-keys handler-fn]
   {:pre [(every? keyword? channel-keys) (fn? handler-fn)]}
-  (swap! fx-handlers (fn [m]
-                       (reduce (fn [acc k] (assoc acc k handler-fn))
-                               m channel-keys)))
+  (doseq [channel-key channel-keys]
+    (register-fx-channel! channel-key handler-fn))
+  nil)
+
+(defn freeze-fx-registry!
+  []
+  (reset! fx-handlers-frozen? true)
+  nil)
+
+(defn fx-registry-snapshot
+  []
+  {:handlers @fx-handlers
+   :frozen? @fx-handlers-frozen?})
+
+(defn reset-fx-registry-for-test!
+  []
+  (reset! fx-handlers {})
+  (reset! fx-handlers-frozen? false)
   nil)
 
 (defn dispatch-fx-channel!

@@ -4,14 +4,85 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.service.player-state :as ps]))
+            [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 ;; Editor state
+(def ^:private default-editor-state
+  {:selected-preset 0
+   :selected-skill nil
+   :pending-changes {}
+   :player-uuid nil})
+
 (defonce ^:private editor-state
-  (atom {:selected-preset 0
-         :selected-skill nil
-         :pending-changes {}
-         :player-uuid nil}))
+  (atom {:current-owner nil
+         :states {}}))
+
+(defn- require-editor-owner-value
+  [owner label value]
+  (if (some? value)
+    value
+    (throw (ex-info (format "Preset editor owner requires %s" label)
+                    {:owner owner
+                     :required label}))))
+
+(defn editor-owner-key
+  [owner]
+  (let [owner-map (cond
+                    (vector? owner) owner
+                    (map? owner) owner
+                    (some? owner) {:player-uuid owner}
+                    :else {})]
+    (if (vector? owner-map)
+      owner-map
+      [(require-editor-owner-value owner ":client-session-id"
+                                   (or (:client-session-id owner-map)
+                                       (:session-id owner-map)
+                                       runtime-hooks/*client-session-id*))
+       :preset-editor
+       (require-editor-owner-value owner ":player-uuid"
+                                   (or (:player-uuid owner-map)
+                                       (:uuid owner-map)))])))
+
+(defn- normalized-store
+  [store]
+  (if (and (map? store) (contains? store :states))
+    store
+    (let [owner-key (when (:player-uuid store) (editor-owner-key store))]
+      {:current-owner owner-key
+       :states (if owner-key {owner-key (merge default-editor-state store)} {})})))
+
+(defn- current-owner-key
+  []
+  (:current-owner (normalized-store @editor-state)))
+
+(defn editor-state-snapshot
+  ([]
+   (if-let [owner-key (current-owner-key)]
+     (editor-state-snapshot owner-key)
+     default-editor-state))
+  ([owner]
+   (get-in (normalized-store @editor-state) [:states (editor-owner-key owner)] default-editor-state)))
+
+(defn- swap-editor-state!
+  [owner f & args]
+  (let [owner-key (editor-owner-key owner)]
+    (swap! editor-state
+           (fn [store]
+             (let [store (normalized-store store)]
+               (assoc-in store [:states owner-key]
+                         (apply f (get-in store [:states owner-key] default-editor-state) args)))))))
+
+(defn- set-current-owner!
+  [owner]
+  (let [owner-key (editor-owner-key owner)]
+    (swap! editor-state #(assoc (normalized-store %) :current-owner owner-key))
+    owner-key))
+
+(defn reset-editor-states-for-test!
+  []
+  (reset! editor-state {:current-owner nil :states {}})
+  nil)
 
 ;; ============================================================================
 ;; Render Data Builders
@@ -24,7 +95,8 @@
 (defn build-preset-editor-render-data
   "Build complete preset editor render data."
   []
-  (when-let [player-uuid (:player-uuid @editor-state)]
+  (let [state (editor-state-snapshot)]
+  (when-let [player-uuid (:player-uuid state)]
     (when-let [player-state (ps/get-player-state player-uuid)]
       (let [ability-data (:ability-data player-state)
             preset-data (:preset-data player-state)
@@ -33,7 +105,7 @@
                      (filter #(adata/is-learned? ability-data (spec-skill-id %))
                        (skill-query/get-skills-for-category category-id)))
                 controllable-skills (filter #(and (:enabled %) (:controllable? %)) learned-skills)
-            current-preset (:selected-preset @editor-state)
+            current-preset (:selected-preset state)
             active-preset (:active-preset preset-data)
             slots (:slots preset-data)]
         {:presets (range 4)
@@ -58,8 +130,8 @@
                                 :cat-id (:category-id s)
                                 :ctrl-id (or (:ctrl-id s) (spec-skill-id s))})
                              controllable-skills)
-         :selected-skill (:selected-skill @editor-state)
-         :has-changes (not (empty? (:pending-changes @editor-state)))}))))
+         :selected-skill (:selected-skill state)
+         :has-changes (not (empty? (:pending-changes state)))})))))
 
 ;; ============================================================================
 ;; Event Handlers
@@ -68,38 +140,45 @@
 (defn on-preset-tab-click
   "Handle preset tab click."
   [preset-idx]
-  (swap! editor-state assoc :selected-preset preset-idx))
+  (when-let [owner-key (current-owner-key)]
+    (swap-editor-state! owner-key assoc :selected-preset preset-idx)))
 
 (defn on-skill-select
   "Handle skill selection from available skills list."
   [skill-id]
-  (swap! editor-state assoc :selected-skill skill-id))
+  (when-let [owner-key (current-owner-key)]
+    (swap-editor-state! owner-key assoc :selected-skill skill-id)))
 
 (defn on-slot-click
   "Handle slot click. Assigns selected skill to slot."
   [slot-idx]
-  (when-let [skill-id (:selected-skill @editor-state)]
-    (let [preset-idx (:selected-preset @editor-state)]
-      (swap! editor-state assoc-in [:pending-changes preset-idx slot-idx] skill-id))))
+  (when-let [owner-key (current-owner-key)]
+    (let [state (editor-state-snapshot owner-key)]
+      (when-let [skill-id (:selected-skill state)]
+        (let [preset-idx (:selected-preset state)]
+          (swap-editor-state! owner-key assoc-in [:pending-changes preset-idx slot-idx] skill-id))))))
 
 (defn on-save-click
   "Handle save button click. Sends all pending changes to server."
   []
-  (let [render-data (build-preset-editor-render-data)
+  (let [owner-key (current-owner-key)
+        state (editor-state-snapshot owner-key)
+        render-data (build-preset-editor-render-data)
         available-skills (:available-skills render-data)]
-    (doseq [[preset-idx slots] (:pending-changes @editor-state)]
+    (doseq [[preset-idx slots] (:pending-changes state)]
       (doseq [[slot-idx skill-id] slots]
         (when-let [skill-info (first (filter #(= (:skill-id %) skill-id) available-skills))]
           (api/req-set-preset-slot! preset-idx slot-idx
                                    (:cat-id skill-info)
                                    (:ctrl-id skill-info)
                                    nil)))))
-  (swap! editor-state assoc :pending-changes {}))
+  (when-let [owner-key (current-owner-key)]
+    (swap-editor-state! owner-key assoc :pending-changes {})))
 
 (defn on-set-active-click
   "Handle set active button click."
   []
-  (api/req-switch-preset! (:selected-preset @editor-state) nil))
+  (api/req-switch-preset! (:selected-preset (editor-state-snapshot)) nil))
 
 (defn handle-screen-click!
   "Handle clicks inside the preset editor screen using current render data."
@@ -148,11 +227,21 @@
 (defn open-screen!
   "Open preset editor screen."
   [player-uuid]
-  (swap! editor-state assoc :player-uuid player-uuid)
+  (let [owner {:player-uuid player-uuid}]
+    (set-current-owner! owner)
+    (swap-editor-state! owner merge default-editor-state {:player-uuid player-uuid}))
   {:command :open-screen
    :screen-type :preset-editor})
 
 (defn close-screen!
   "Close preset editor screen."
-  []
-  (swap! editor-state assoc :player-uuid nil :selected-skill nil :pending-changes {}))
+  ([]
+   (when-let [owner-key (current-owner-key)]
+     (close-screen! owner-key)))
+  ([owner]
+   (swap! editor-state
+          (fn [store]
+            (let [store (normalized-store store)
+                  owner-key (editor-owner-key owner)]
+              (cond-> (update store :states dissoc owner-key)
+                (= owner-key (:current-owner store)) (assoc :current-owner nil)))))))

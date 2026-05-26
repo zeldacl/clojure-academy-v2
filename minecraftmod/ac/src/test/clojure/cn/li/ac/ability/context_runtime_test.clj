@@ -20,6 +20,8 @@
 
 (use-fixtures :each reset-test-state!)
 
+(def ^:private test-context-owner {:session-id :test-session})
+
 (defn- seed-player-state!
   [uuid]
   (let [ability-data (-> (ad/new-ability-data)
@@ -37,7 +39,7 @@
   (let [uuid "test-player-cooldown"
         _ (seed-player-state! uuid)
         _ (ps/update-cooldown-data! uuid cd-svc/set-main-cooldown :arc-gen 10)
-        c (ctx/new-server-context uuid :arc-gen "ctx-cd")]
+        c (ctx/new-server-context uuid :arc-gen "ctx-cd" test-context-owner)]
     (ctx/register-context! c)
     (is (false? (rt/handle-key-down! "ctx-cd" {:ctx-id "ctx-cd" :skill-id :arc-gen}))
         "key-down should be rejected while main cooldown is active")
@@ -47,7 +49,7 @@
 (deftest key-tick-dispatches-while-active-test
   (let [uuid "test-player-resource"
         _ (seed-player-state! uuid)
-        c (-> (ctx/new-server-context uuid :arc-gen "ctx-res")
+        c (-> (ctx/new-server-context uuid :arc-gen "ctx-res" test-context-owner)
               (assoc :input-state :active))]
     (ctx/register-context! c)
     (is (true? (rt/handle-key-tick! "ctx-res" {:ctx-id "ctx-res" :skill-id :arc-gen}))
@@ -74,7 +76,7 @@
 (deftest key-up-can-keep-context-alive-when-policy-disables-termination-test
   (let [uuid "test-player-sticky"
         _ (seed-player-state! uuid)
-        c (-> (ctx/new-server-context uuid :arc-gen "ctx-sticky")
+        c (-> (ctx/new-server-context uuid :arc-gen "ctx-sticky" test-context-owner)
               (assoc :input-state :active))]
     (ctx/register-context! c)
     (with-redefs [skill-reg/get-skill (fn [_]
@@ -94,7 +96,7 @@
   (let [uuid "test-player-callbacks"
         _ (seed-player-state! uuid)
         ctx-id "ctx-callbacks"
-        c (ctx/new-server-context uuid :arc-gen ctx-id)
+        c (ctx/new-server-context uuid :arc-gen ctx-id test-context-owner)
         callback-keys (atom [])
         terminated (atom [])]
     (ctx/register-context! c)

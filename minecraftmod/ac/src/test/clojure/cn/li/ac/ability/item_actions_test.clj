@@ -1,11 +1,13 @@
 (ns cn.li.ac.ability.item-actions-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.item-actions :as ia]))
 
 (defn- reset-registries! [f]
-  (ia/reset-item-action-registries!)
-  (f)
-  (ia/reset-item-action-registries!))
+  (ia/reset-item-action-registries-for-test!)
+  (try
+    (f)
+    (finally
+      (ia/reset-item-action-registries-for-test!))))
 
 (use-fixtures :each reset-registries!)
 
@@ -33,3 +35,30 @@
   (is (= {:entity-id "my_mod:sfx_ball" :speed 1.5}
          (ia/get-item-entity-spawn "my_mod:ball")))
   (is (nil? (ia/get-item-entity-spawn "nope"))))
+
+(deftest item-action-registry-duplicate-and-freeze-policy-test
+  (ia/register-item-action! "my_mod:coin" :coin-toss)
+  (is (nil? (ia/register-item-action! "my_mod:coin" :coin-toss)))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Conflicting item action id"
+                        (ia/register-item-action! "my_mod:coin" :other-action)))
+  (let [seen (atom [])]
+    (ia/register-action-handler! :dup (fn [_ _] (swap! seen conj :first)))
+    (ia/register-action-handler! :dup (fn [_ _] (swap! seen conj :second)))
+    (ia/on-item-action! :dup "p" {})
+    (is (= [:first] @seen)))
+  (ia/register-item-entity-spawn! "my_mod:ball" {:entity-id "my_mod:sfx_ball" :speed 1.5})
+  (is (nil? (ia/register-item-entity-spawn! "my_mod:ball" {:entity-id "my_mod:sfx_ball" :speed 1.5})))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Conflicting item entity spawn id"
+                        (ia/register-item-entity-spawn! "my_mod:ball" {:entity-id "other"})))
+  (ia/freeze-item-action-registries!)
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Item action registries are frozen"
+                        (ia/register-item-action! "my_mod:new" :new-action)))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Item action registries are frozen"
+                        (ia/register-action-handler! :new-action (fn [_ _] nil))))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Item action registries are frozen"
+                        (ia/register-item-entity-spawn! "my_mod:new" {:entity-id "e"}))))

@@ -203,6 +203,11 @@
     (when-let [player (.player mc)]
       (str (.getUUID player)))))
 
+(defn- client-session-id
+  []
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    [:client (System/identityHashCode mc)]))
+
 (defn render-overlay!
   [^GuiGraphics graphics]
   (try
@@ -211,14 +216,15 @@
             window (.getWindow mc)
             screen-width (.getGuiScaledWidth window)
             screen-height (.getGuiScaledHeight window)
-            overlay-plan (client-ui/client-build-overlay-plan
-                           player-uuid
-                           screen-width
-                           screen-height
-                           {:activated-override @overlay-state/client-activated-overlay
-                            :showing-numbers? @showing-numbers?
-                            :last-show-value-change-ms @last-show-value-change-ms
-                            :now-ms (now-ms)})]
+            overlay-plan (binding [client-ui/*client-session-id* (client-session-id)]
+                           (client-ui/client-build-overlay-plan
+                             player-uuid
+                             screen-width
+                             screen-height
+                             {:activated-override @overlay-state/client-activated-overlay
+                              :showing-numbers? @showing-numbers?
+                              :last-show-value-change-ms @last-show-value-change-ms
+                              :now-ms (now-ms)}))]
         (doseq [element (:elements overlay-plan)]
           (render-element! graphics element screen-width screen-height))))
     (catch Exception e

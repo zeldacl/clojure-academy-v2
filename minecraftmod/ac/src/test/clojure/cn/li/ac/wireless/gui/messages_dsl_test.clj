@@ -81,3 +81,19 @@
     )
   )
 )
+
+(deftest wireless-message-registry-duplicate-and-freeze-policy-test
+  (let [snapshot (msg-registry/registry-snapshot)]
+    (try
+      (msg-registry/reset-registry-for-test!)
+      (let [spec (msg-registry/register-block-messages! :demo [:alpha])]
+        (is (= spec (msg-registry/register-block-messages! :demo [:alpha])))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"Conflicting wireless GUI message domain"
+                              (msg-registry/register-block-messages! :demo [:beta])))
+        (msg-registry/freeze-registry!)
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"Wireless GUI message registry is frozen"
+                              (msg-registry/register-block-messages! :new-domain [:x]))))
+      (finally
+        (msg-registry/reset-registry-for-test! snapshot)))))

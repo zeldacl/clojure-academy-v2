@@ -24,12 +24,127 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private client-push-handlers-registered? (atom false))
-(defonce ^:private vm-wave-circles (atom []))
-(defonce ^:private vm-wave-last-spawn-ms (atom 0))
+(defonce ^:private vm-wave-circles (atom {}))
+(defonce ^:private vm-wave-last-spawn-ms (atom {}))
 (defonce ^:private slot-context-ids (atom {}))
 ;; Per-slot last key-tick send timestamp (ms). Limits key-tick messages to ~10/s.
 (defonce ^:private slot-key-tick-ms (atom {}))
 (defonce ^:private charge-coin-state (atom {}))
+
+(defn- current-client-session-id
+  []
+  (or client-keybinds/*client-session-id* runtime-hooks/*client-session-id*))
+
+(defn- require-client-owner-value
+  [owner label value]
+  (if (some? value)
+    value
+    (throw (ex-info (format "Client UI owner requires %s" label)
+                    {:owner owner
+                     :required label}))))
+
+(defn client-ui-owner-key
+  [owner]
+  (let [owner-map (cond
+                    (vector? owner) owner
+                    (map? owner) owner
+                    (some? owner) {:player-uuid owner}
+                    :else {})]
+    (if (vector? owner-map)
+      owner-map
+       (let [session-id (or (:client-session-id owner-map)
+                (:session-id owner-map)
+                (current-client-session-id))
+          player-uuid (or (:player-uuid owner-map) (:uuid owner-map))]
+         [(require-client-owner-value owner ":client-session-id" session-id)
+          (require-client-owner-value owner ":player-uuid" player-uuid)]))))
+
+(defn- current-session-id
+  []
+  (require-client-owner-value {} ":client-session-id" (current-client-session-id)))
+
+(defn- client-context-owner
+  [player-uuid]
+  {:logical-side :client
+   :session-id (client-ui-owner-key player-uuid)})
+
+(defn- with-client-context-owner
+  [player-uuid f]
+  (binding [ctx/*context-owner* (client-context-owner player-uuid)]
+    (f)))
+
+(defn- slot-context-key [player-uuid key-idx]
+  (conj (client-ui-owner-key player-uuid) key-idx))
+
+(defn- slot-key-owner
+  [slot-key]
+  (subvec (vec slot-key) 0 2))
+
+(defn client-ui-state-snapshot
+  ([]
+   {:vm-wave-circles @vm-wave-circles
+    :vm-wave-last-spawn-ms @vm-wave-last-spawn-ms
+    :slot-context-ids @slot-context-ids
+    :slot-key-tick-ms @slot-key-tick-ms
+    :charge-coin-state @charge-coin-state
+    :push-handlers-registered? @client-push-handlers-registered?})
+  ([owner]
+   (let [owner-key (client-ui-owner-key owner)]
+     {:vm-wave-circles (get @vm-wave-circles owner-key [])
+      :vm-wave-last-spawn-ms (get @vm-wave-last-spawn-ms owner-key 0)
+      :slot-context-ids (into {}
+                              (filter (fn [[slot-key _ctx-id]]
+                                        (= owner-key (slot-key-owner slot-key))))
+                              @slot-context-ids)
+      :slot-key-tick-ms (into {}
+                              (filter (fn [[slot-key _last-ms]]
+                                        (= owner-key (slot-key-owner slot-key))))
+                              @slot-key-tick-ms)
+      :charge-coin-state (get @charge-coin-state owner-key)})))
+
+(defn clear-client-ui-state!
+  [owner]
+  (let [owner-key (client-ui-owner-key owner)]
+    (swap! vm-wave-circles dissoc owner-key)
+    (swap! vm-wave-last-spawn-ms dissoc owner-key)
+    (swap! slot-context-ids
+           (fn [m]
+             (into {}
+                   (remove (fn [[slot-key _ctx-id]]
+                             (= owner-key (slot-key-owner slot-key)))
+                           m))))
+    (swap! slot-key-tick-ms
+           (fn [m]
+             (into {}
+                   (remove (fn [[slot-key _last-ms]]
+                             (= owner-key (slot-key-owner slot-key)))
+                           m))))
+    (swap! charge-coin-state dissoc owner-key))
+  nil)
+
+(defn reset-client-ui-state-for-test!
+  []
+  (reset! client-push-handlers-registered? false)
+  (reset! vm-wave-circles {})
+  (reset! vm-wave-last-spawn-ms {})
+  (reset! slot-context-ids {})
+  (reset! slot-key-tick-ms {})
+  (reset! charge-coin-state {})
+  nil)
+
+(defn set-slot-context-for-test!
+  [player-uuid key-idx ctx-id]
+  (swap! slot-context-ids assoc (slot-context-key player-uuid key-idx) ctx-id)
+  nil)
+
+(defn seed-vm-wave-state-for-test!
+  ([owner circles]
+   (seed-vm-wave-state-for-test! owner circles 0))
+  ([owner circles last-spawn-ms]
+   (let [owner-key (client-ui-owner-key owner)]
+     (swap! vm-wave-circles assoc owner-key (vec circles))
+     (swap! vm-wave-last-spawn-ms assoc owner-key (long last-spawn-ms))
+     nil)))
 
 (def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
 (def ^:private cycle-selection-input-id :content/cycle-selection)
@@ -69,7 +184,7 @@
 
 (defn- notify-charge-coin-throw!
   [player-uuid]
-  (swap! charge-coin-state assoc player-uuid
+  (swap! charge-coin-state assoc (client-ui-owner-key player-uuid)
          {:start-ms (now-ms)
           :window-ms (max 1 (long (railgun-coin-window-ms)))}))
 
@@ -91,7 +206,8 @@
        :coin-active? false
        :coin-progress 0.0
        :charge-ratio (max 0.0 (min 1.0 (- 1.0 (/ (double charge-ticks) max-charge-ticks))))}
-      (let [{:keys [start-ms window-ms]} (get @charge-coin-state player-uuid)
+      (let [owner-key (client-ui-owner-key player-uuid)
+        {:keys [start-ms window-ms]} (get @charge-coin-state owner-key)
             has-window? (and start-ms window-ms)
             elapsed (if has-window? (- (long (now-ms)) (long start-ms)) 0)
             progress (if has-window?
@@ -101,7 +217,7 @@
             ratio (max 0.0 (min 1.0 progress))
             coin-active? (and active-window? (>= ratio (railgun-coin-active-threshold)))]
         (when (and has-window? (not active-window?))
-          (swap! charge-coin-state dissoc player-uuid))
+          (swap! charge-coin-state dissoc owner-key))
         {:active? (boolean active-window?)
          :charge-ticks 0
          :coin-active? (boolean coin-active?)
@@ -175,8 +291,13 @@
           :w 16 :h 4
           :color {:r 120 :g 220 :b 255 :a (if active? 200 120)}}]))))
 
-(defn- slot-context-key [player-uuid key-idx]
-  [player-uuid key-idx])
+(defn- preset-switch-state-for-overlay
+  [player-uuid]
+  (try
+    (client-keybinds/get-preset-switch-state player-uuid)
+    (catch clojure.lang.ArityException _
+      ;; Some tests and legacy adapters rebind this hook with the old zero-arity shape.
+      (client-keybinds/get-preset-switch-state))))
 
 (defn- remove-slot-context! [ctx-id]
   (swap! slot-context-ids
@@ -190,7 +311,9 @@
   [player-uuid key-idx skill-id]
   (let [slot-key (slot-context-key player-uuid key-idx)]
     (or (get @slot-context-ids slot-key)
-        (let [ctx-map (ctx-mgr/activate-context! player-uuid skill-id)
+        (let [ctx-map (with-client-context-owner
+                        player-uuid
+                        #(ctx-mgr/activate-context! player-uuid skill-id))
               ctx-id (:id ctx-map)]
           (swap! slot-context-ids assoc slot-key ctx-id)
           ctx-id))))
@@ -235,15 +358,18 @@
 
 (defn- active-flashing-context-ids
   [player-uuid]
-  (->> @slot-context-ids
-       (keep (fn [[[slot-player-uuid _] ctx-id]]
-               (when (= slot-player-uuid player-uuid)
-                 (let [ctx-data (ctx/get-context ctx-id)]
+  (let [owner-key (client-ui-owner-key player-uuid)]
+    (->> @slot-context-ids
+       (keep (fn [[slot-key ctx-id]]
+               (when (= owner-key (slot-key-owner slot-key))
+                 (let [ctx-data (with-client-context-owner
+                                  player-uuid
+                                  #(ctx/get-context ctx-id))]
                    (when (and (= :flashing (:skill-id ctx-data))
                               (ctx/active-context? ctx-data))
                      ctx-id)))))
        distinct
-       vec))
+       vec)))
 
 (defn- send-flashing-movement-message!
   [player-uuid channel movement-key]
@@ -292,24 +418,29 @@
      :end-size end-size
      :seed (rand)}))
 
-(defn- update-vm-wave-circles! [active? screen-width screen-height now-ms]
-  (swap! vm-wave-circles
-         (fn [circles]
-           (let [alive (->> circles
-                            (filter (fn [{:keys [born-ms life-ms]}]
-                                      (< (- now-ms (long born-ms)) (long life-ms))))
-                            vec)
-                 needs-spawn? (and active?
-                                   (>= (- now-ms (long @vm-wave-last-spawn-ms)) 90))
-                 spawned (if needs-spawn?
-                           (conj alive (spawn-vm-wave-circle screen-width screen-height now-ms))
-                           alive)]
-             (when needs-spawn?
-               (reset! vm-wave-last-spawn-ms now-ms))
-             (if active? spawned (if (seq spawned) spawned []))))))
+(defn- update-vm-wave-circles! [player-uuid active? screen-width screen-height now-ms]
+  (let [owner-key (client-ui-owner-key player-uuid)
+        last-spawn-ms (long (get @vm-wave-last-spawn-ms owner-key 0))
+        needs-spawn? (and active? (>= (- now-ms last-spawn-ms) 90))]
+    (when needs-spawn?
+      (swap! vm-wave-last-spawn-ms assoc owner-key now-ms))
+    (swap! vm-wave-circles
+           (fn [owner-circles]
+             (let [circles (get owner-circles owner-key [])
+                   alive (->> circles
+                              (filter (fn [{:keys [born-ms life-ms]}]
+                                        (< (- now-ms (long born-ms)) (long life-ms))))
+                              vec)
+                   spawned (if needs-spawn?
+                             (conj alive (spawn-vm-wave-circle screen-width screen-height now-ms))
+                             alive)
+                   next-circles (if active? spawned (if (seq spawned) spawned []))]
+               (if (seq next-circles)
+                 (assoc owner-circles owner-key next-circles)
+                 (dissoc owner-circles owner-key)))))))
 
-(defn- vm-wave-elements [now-ms]
-  (->> @vm-wave-circles
+(defn- vm-wave-elements [player-uuid now-ms]
+  (->> (get @vm-wave-circles (client-ui-owner-key player-uuid) [])
        (map (fn [{:keys [x y born-ms life-ms start-size end-size seed]}]
               (let [elapsed (double (max 0 (- now-ms (long born-ms))))
                     life (double (max 1 life-ms))
@@ -384,7 +515,7 @@
         hud-model (build-hud-model-from-state player-state activated-override)
         cooldown-data (:cooldown-data player-state)
         activate-hint (client-keybinds/get-activate-hint player-uuid)
-        preset-state (client-keybinds/get-preset-switch-state)
+        preset-state (preset-switch-state-for-overlay player-uuid)
         hud-render-data (hud-renderer/build-hud-render-data
                          hud-model screen-width screen-height cooldown-data
                          :player-uuid player-uuid
@@ -398,8 +529,8 @@
         vm-wave-active? (or reflection-active? deviation-active?)
         now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))
         phase (double (/ (mod now-ms 1200) 1200.0))
-        _ (update-vm-wave-circles! vm-wave-active? screen-width screen-height now-ms)
-        vm-wave (vm-wave-elements now-ms)
+        _ (update-vm-wave-circles! player-uuid vm-wave-active? screen-width screen-height now-ms)
+        vm-wave (vm-wave-elements player-uuid now-ms)
         crosshair (when reflection-active?
               {:kind :content-crosshair
                      :x (int (/ screen-width 2))
@@ -496,7 +627,7 @@
 
    :client-new-context
    (fn [player-uuid skill-id]
-     (ctx/new-context player-uuid skill-id))
+     (with-client-context-owner player-uuid #(ctx/new-context player-uuid skill-id)))
 
    :client-register-context!
    (fn [ctx-map]
@@ -522,12 +653,12 @@
    :client-on-slot-key-down!
    (fn [player-uuid key-idx]
      ;; Reset tick throttle so the first key-tick after a key-down is never suppressed.
-     (swap! slot-key-tick-ms dissoc [player-uuid key-idx])
+     (swap! slot-key-tick-ms dissoc (slot-context-key player-uuid key-idx))
      (send-slot-key-message! catalog/MSG-SLOT-KEY-DOWN player-uuid key-idx))
 
    :client-on-slot-key-tick!
    (fn [player-uuid key-idx]
-     (let [slot-key [player-uuid key-idx]
+     (let [slot-key (slot-context-key player-uuid key-idx)
            now-ms   (System/currentTimeMillis)
            last-ms  (get @slot-key-tick-ms slot-key 0)]
        (when (>= (- now-ms last-ms) 100)
@@ -536,7 +667,7 @@
 
    :client-on-slot-key-up!
    (fn [player-uuid key-idx]
-     (swap! slot-key-tick-ms dissoc [player-uuid key-idx])
+     (swap! slot-key-tick-ms dissoc (slot-context-key player-uuid key-idx))
      (send-slot-key-up-message! player-uuid key-idx))
 
    :client-on-movement-key-down!
@@ -557,9 +688,26 @@
 
    :client-abort-all!
    (fn []
-     (doseq [ctx-id (vals @slot-context-ids)]
-       (ctx/terminate-context! ctx-id nil))
-     (reset! slot-context-ids {}))
+     (let [session-id (current-session-id)
+           current-session-entry? (fn [[slot-key _ctx-id]]
+                                    (= session-id (first slot-key)))
+           abort-contexts (->> @slot-context-ids
+                               (filter current-session-entry?)
+                               (map second)
+                               distinct
+                               vec)]
+       (doseq [ctx-id abort-contexts]
+         (ctx/terminate-context! ctx-id nil))
+       (swap! slot-context-ids
+              (fn [m]
+                (into {}
+                      (remove current-session-entry? m))))
+       (swap! slot-key-tick-ms
+              (fn [m]
+                (into {}
+                      (remove (fn [[slot-key _last-ms]]
+                                (= session-id (first slot-key)))
+                              m))))))
 
    :client-update-ability-data!
    (fn [player-uuid ability-data]

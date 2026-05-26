@@ -10,7 +10,7 @@
 ;; Camera pitch delta accumulator (shared across all hand effects)
 ;; ---------------------------------------------------------------------------
 
-(defonce camera-pitch-deltas (atom []))
+(defonce ^:private camera-pitch-deltas (atom []))
 
 (defn add-camera-pitch-delta!
   "Queue a camera pitch delta (float degrees) to be consumed by the platform
@@ -61,6 +61,12 @@
 ;;              :transform-fn   (fn []) → transform-map or nil  (optional)}
 (defonce ^:private effect-registry (atom {}))
 (defonce ^:private effect-order (atom []))
+(defonce ^:private effect-registry-frozen? (atom false))
+
+(defn- assert-registry-open!
+  []
+  (when @effect-registry-frozen?
+    (throw (ex-info "Hand effect registry is frozen" {}))))
 
 (defn register-hand-effect!
   "Register a hand effect handler.  `effect-id` is a keyword.
@@ -74,10 +80,31 @@
   {:pre [(keyword? effect-id) (map? handler-map)
          (fn? (:enqueue-fn handler-map))
          (fn? (:tick-fn handler-map))]}
+  (assert-registry-open!)
   (when-not (get @effect-registry effect-id)
-    (swap! effect-order conj effect-id))
-  (swap! effect-registry assoc effect-id handler-map)
+    (swap! effect-order conj effect-id)
+    (swap! effect-registry assoc effect-id handler-map))
   (log/debug "Registered hand effect:" effect-id)
+  nil)
+
+(defn freeze-hand-effect-registry!
+  []
+  (reset! effect-registry-frozen? true)
+  nil)
+
+(defn hand-effect-registry-snapshot
+  []
+  {:registry @effect-registry
+   :order @effect-order
+   :camera-pitch-deltas @camera-pitch-deltas
+   :frozen? @effect-registry-frozen?})
+
+(defn reset-hand-effect-registry-for-test!
+  []
+  (reset! camera-pitch-deltas [])
+  (reset! effect-registry {})
+  (reset! effect-order [])
+  (reset! effect-registry-frozen? false)
   nil)
 
 ;; ---------------------------------------------------------------------------

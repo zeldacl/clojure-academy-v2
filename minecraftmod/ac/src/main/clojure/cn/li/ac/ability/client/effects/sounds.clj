@@ -70,6 +70,15 @@
     (reset! sound-queue [])
     sounds))
 
+(defn sound-queue-snapshot
+  []
+  (vec @sound-queue))
+
+(defn reset-sound-queue-for-test!
+  []
+  (reset! sound-queue [])
+  nil)
+
 ;; Event listeners for automatic sound playing
 (defn on-skill-activation
   "Handle skill activation event."

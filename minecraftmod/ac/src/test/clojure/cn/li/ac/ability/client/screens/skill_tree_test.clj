@@ -4,18 +4,17 @@
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.ac.ability.server.service.learning :as learning]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n :as i18n]))
 
 (defn- reset-screen-fixture [f]
-  (reset! (var-get #'cn.li.ac.ability.client.screens.skill-tree/screen-state)
-          {:hover-skill nil
-           :player-uuid nil
-           :learn-context nil})
-  (f)
-  (reset! (var-get #'cn.li.ac.ability.client.screens.skill-tree/screen-state)
-          {:hover-skill nil
-           :player-uuid nil
-           :learn-context nil}))
+  (screen/reset-screen-states-for-test!)
+  (try
+    (binding [runtime-hooks/*client-session-id* :test-session
+              runtime-hooks/*player-state-owner* {:client-session-id :test-session}]
+      (f))
+    (finally
+      (screen/reset-screen-states-for-test!))))
 
 (use-fixtures :each reset-screen-fixture)
 
@@ -55,6 +54,15 @@
         (is (= "Undergo focused neural training to raise your maximum CP by 1000."
            (:skill-description node)))))))
 
+(deftest screen-owner-requires-explicit-session-and-player-test
+  (binding [runtime-hooks/*client-session-id* nil]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Skill tree screen owner requires :client-session-id"
+                          (screen/screen-state-snapshot "player-1"))))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Skill tree screen owner requires :player-uuid"
+                        (screen/screen-state-snapshot {:client-session-id :session-a}))))
+
 (deftest build-draw-ops-includes-hover-description-tooltip-test
   (let [player-state {:ability-data {:category-id :generic
                                      :category {:category-id :generic
@@ -84,11 +92,21 @@
                   learning/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
                   i18n/*translate-fn* (fn [k] (get translate-map (str k) (str k)))]
             (screen/open-screen! "player-1")
-            (swap! (var-get #'cn.li.ac.ability.client.screens.skill-tree/screen-state)
-              assoc :hover-skill :generic/brain-course)
+            (screen/on-mouse-move 30 110)
       (let [texts (->> (screen/build-draw-ops 0 0)
                        (filter #(= :text (:kind %)))
                        (map :text)
                        set)]
         (is (contains? texts "Brain Course"))
         (is (contains? texts "Undergo focused neural training to raise your maximum CP by 1000."))))))
+
+      (deftest screen-state-isolated-by-player-owner-test
+        (screen/open-screen! "player-1" {:developer-type :portable})
+        (screen/open-screen! "player-2" {:developer-type :normal})
+        (is (= {:developer-type :portable}
+          (:learn-context (screen/screen-state-snapshot "player-1"))))
+        (is (= {:developer-type :normal}
+          (:learn-context (screen/screen-state-snapshot "player-2"))))
+        (screen/close-screen! "player-1")
+        (is (nil? (:player-uuid (screen/screen-state-snapshot "player-1"))))
+        (is (= "player-2" (:player-uuid (screen/screen-state-snapshot "player-2")))))

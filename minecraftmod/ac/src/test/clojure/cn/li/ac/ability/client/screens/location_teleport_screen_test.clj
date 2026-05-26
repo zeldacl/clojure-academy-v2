@@ -2,36 +2,16 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.screens.location-teleport :as screen]))
+            [cn.li.ac.ability.client.screens.location-teleport :as screen]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-screen-fixture [f]
-  (reset! (var-get #'cn.li.ac.ability.client.screens.location-teleport/screen-state)
-          {:open? false
-           :player-uuid nil
-           :locations []
-           :selected nil
-           :add-mode? false
-           :add-text ""
-           :pending-op nil
-           :last-error nil
-           :exp 0.0
-           :limits {:cross-dimension-exp-threshold 0.8
-                    :max-location-name-length 16}
-           :current-pos nil})
-  (f)
-  (reset! (var-get #'cn.li.ac.ability.client.screens.location-teleport/screen-state)
-          {:open? false
-           :player-uuid nil
-           :locations []
-           :selected nil
-           :add-mode? false
-           :add-text ""
-           :pending-op nil
-           :last-error nil
-           :exp 0.0
-           :limits {:cross-dimension-exp-threshold 0.8
-                    :max-location-name-length 16}
-           :current-pos nil}))
+  (screen/reset-screen-states-for-test!)
+  (try
+    (binding [runtime-hooks/*client-session-id* :test-session]
+      (f))
+    (finally
+      (screen/reset-screen-states-for-test!))))
 
 (use-fixtures :each reset-screen-fixture)
 
@@ -64,8 +44,8 @@
                      (swap! fx-dispatch* conj [ctx-id channel payload])
                      true)]
       (is (true? (screen/handle-screen-click! mx my)))
-      (is (= :perform (:pending-op @(var-get #'cn.li.ac.ability.client.screens.location-teleport/screen-state))))
-      (is (true? (:open? @(var-get #'cn.li.ac.ability.client.screens.location-teleport/screen-state))))
+        (is (= :perform (:pending-op (screen/screen-state-snapshot))))
+        (is (true? (:open? (screen/screen-state-snapshot))))
   (is (empty? @fx-dispatch*))
       (@perform-cb* {:action {:success? false :op :perform :error :err-cp}
                      :snapshot {:locations []
@@ -73,9 +53,9 @@
                                 :limits {:cross-dimension-exp-threshold 0.83
                                          :max-location-name-length 8}
                                 :current-pos nil}})
-      (is (true? (:open? @(var-get #'cn.li.ac.ability.client.screens.location-teleport/screen-state))))
-      (is (nil? (:pending-op @(var-get #'cn.li.ac.ability.client.screens.location-teleport/screen-state))))
-      (is (= :err-cp (:last-error @(var-get #'cn.li.ac.ability.client.screens.location-teleport/screen-state))))
+        (is (true? (:open? (screen/screen-state-snapshot))))
+        (is (nil? (:pending-op (screen/screen-state-snapshot))))
+        (is (= :err-cp (:last-error (screen/screen-state-snapshot))))
   (is (empty? @fx-dispatch*)))))
 
 (deftest perform-success-closes-screen-and-dispatches-success-fx-test
@@ -96,14 +76,13 @@
                                 :limits {:cross-dimension-exp-threshold 0.83
                                          :max-location-name-length 8}
                                 :current-pos {:world-id "minecraft:overworld" :x 10.0 :y 64.0 :z 10.0}}})
-      (is (false? (:open? @(var-get #'cn.li.ac.ability.client.screens.location-teleport/screen-state))))
+        (is (false? (:open? (screen/screen-state-snapshot))))
   (is (= [[nil :location-teleport/fx-perform-success {:success? true :op :perform}]]
      @fx-dispatch*)))))
 
 (deftest add-input-respects-server-limit-test
   (screen/open-screen! "p1" (sample-open-payload))
-  (swap! (var-get #'cn.li.ac.ability.client.screens.location-teleport/screen-state)
-         assoc :add-mode? true :add-text "")
+      (is (true? (screen/handle-screen-click! 11 39)))
   (screen/handle-char-typed! \a)
   (screen/handle-char-typed! \b)
   (screen/handle-char-typed! \c)
@@ -114,4 +93,51 @@
   (screen/handle-char-typed! \h)
   (screen/handle-char-typed! \i)
   (is (= "abcdefgh"
-         (:add-text @(var-get #'cn.li.ac.ability.client.screens.location-teleport/screen-state)))))
+      (:add-text (screen/screen-state-snapshot)))))
+
+(deftest screen-state-isolated-by-player-owner-test
+  (screen/open-screen! "p1" (sample-open-payload))
+  (screen/on-mouse-move 11 14)
+  (screen/open-screen! "p2" {:snapshot {:locations [{:name "Mine"
+                                                      :position {:x 4 :y 5 :z 6 :dimension :overworld}
+                                                      :can-perform? true}]
+                                         :exp 0.5
+                                         :limits {:cross-dimension-exp-threshold 0.75
+                                                  :max-location-name-length 4}
+                                         :current-pos {:x 7 :y 8 :z 9 :dimension :overworld}}})
+  (is (= "home" (-> (screen/screen-state-snapshot "p1") :locations first :name)))
+  (is (= 0 (:selected (screen/screen-state-snapshot "p1"))))
+  (is (= "Mine" (-> (screen/screen-state-snapshot "p2") :locations first :name)))
+  (is (nil? (:selected (screen/screen-state-snapshot "p2")))))
+
+(deftest screen-owner-requires-explicit-session-and-player-test
+  (binding [runtime-hooks/*client-session-id* nil]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Location teleport screen owner requires :client-session-id"
+                          (screen/screen-state-snapshot "p1"))))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Location teleport screen owner requires :player-uuid"
+                        (screen/screen-state-snapshot {:client-session-id :session-a}))))
+
+(deftest stale-callback-updates-original-owner-only-test
+  (let [perform-cb* (atom nil)]
+    (with-redefs [api/req-location-teleport-perform! (fn [_ cb]
+                                                       (reset! perform-cb* cb))
+                  fx-registry/dispatch-fx-channel! (fn [& _] nil)]
+      (screen/open-screen! "p1" (sample-open-payload))
+      (let [[mx my] (tp-button-point)]
+        (is (true? (screen/handle-screen-click! mx my))))
+      (screen/open-screen! "p2" {:snapshot {:locations [{:name "Mine"
+                                                         :position {:x 4 :y 5 :z 6 :dimension :overworld}
+                                                         :can-perform? true}]
+                                            :exp 0.5
+                                            :current-pos {:x 7 :y 8 :z 9 :dimension :overworld}}})
+      (@perform-cb* {:action {:success? false :error :err-cp}
+                     :snapshot {:locations [{:name "Home"
+                                             :position {:x 1 :y 2 :z 3 :dimension :overworld}
+                                             :can-perform? false}]
+                                :exp 0.1
+                                :current-pos {:x 1 :y 2 :z 3 :dimension :overworld}}})
+      (is (= :err-cp (:last-error (screen/screen-state-snapshot "p1"))))
+      (is (nil? (:last-error (screen/screen-state-snapshot "p2"))))
+      (is (= "Mine" (-> (screen/screen-state-snapshot "p2") :locations first :name))))))

@@ -1,15 +1,20 @@
 (ns cn.li.ac.terminal.player-data-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.terminal.player-data :as td]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- each-fixture [f]
-  (reset! ps/player-states {})
-  (with-redefs [log/info (fn [& _])
-                log/warn (fn [& _])]
-    (f))
-  (reset! ps/player-states {}))
+  (ps-fix/with-test-player-state-owner
+    (fn []
+      (ps/reset-player-states-for-test!)
+      (try
+        (with-redefs [log/info (fn [& _])
+                      log/warn (fn [& _])]
+          (f))
+        (finally
+          (ps/reset-player-states-for-test!))))))
 
 (use-fixtures :each each-fixture)
 

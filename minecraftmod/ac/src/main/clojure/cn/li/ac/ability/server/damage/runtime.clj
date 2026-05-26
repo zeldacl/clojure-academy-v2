@@ -8,6 +8,32 @@
 (defonce ^:private damage-handlers
   (atom {}))
 
+(defonce ^:private damage-handlers-frozen? (atom false))
+
+(defn- assert-registry-open!
+  []
+  (when @damage-handlers-frozen?
+    (throw (ex-info "Damage handler registry is frozen" {}))))
+
+(defn damage-handler-registry-snapshot
+  []
+  {:handlers @damage-handlers
+   :frozen? @damage-handlers-frozen?})
+
+(defn reset-damage-handler-registry-for-test!
+  ([]
+   (reset-damage-handler-registry-for-test! {}))
+  ([{:keys [handlers frozen?]
+     :or {handlers {} frozen? false}}]
+   (reset! damage-handlers handlers)
+   (reset! damage-handlers-frozen? frozen?)
+   nil))
+
+(defn freeze-damage-handler-registry!
+  []
+  (reset! damage-handlers-frozen? true)
+  nil)
+
 (defn- get-sorted-handlers []
   (->> @damage-handlers
        (sort-by (fn [[_handler-id data]] (:priority data)))
@@ -16,8 +42,14 @@
 (defn register-damage-handler!
   [handler-id handler-fn priority]
   (try
-    (swap! damage-handlers assoc handler-id {:fn handler-fn :priority priority})
-    (log/debug "Registered damage handler:" handler-id "priority:" priority)
+    (if-let [existing (get @damage-handlers handler-id)]
+      (when-not (= (:priority existing) priority)
+        (throw (ex-info "Conflicting damage handler id"
+                        {:id handler-id :existing-priority (:priority existing) :new-priority priority})))
+      (do
+        (assert-registry-open!)
+        (swap! damage-handlers assoc handler-id {:fn handler-fn :priority priority})
+        (log/debug "Registered damage handler:" handler-id "priority:" priority)))
     true
     (catch Exception e
       (log/warn "Failed to register damage handler:" (ex-message e))
@@ -26,6 +58,7 @@
 (defn unregister-damage-handler!
   [handler-id]
   (try
+    (assert-registry-open!)
     (swap! damage-handlers dissoc handler-id)
     (log/debug "Unregistered damage handler:" handler-id)
     true

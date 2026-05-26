@@ -33,29 +33,89 @@
 ;; Client-side tab index by container id so menu.clicked() can resolve tab even when container ref differs (e.g. integrated server).
 (defonce ^:private tab-index-by-container-id (atom {}))
 
+(defn- require-owner-value
+  [owner label value]
+  (if (some? value)
+    value
+    (throw (ex-info (format "Tabbed GUI owner requires %s" label)
+                    {:owner owner
+                     :required label}))))
+
+(defn- player-key
+  [player]
+  (when player
+    (some-> (entity/player-get-uuid player) str)))
+
+(defn- owner-from-container
+  [container]
+  (let [player (:player container)
+        player-id (or (:player-uuid container)
+                      (some-> player player-key))]
+    (cond-> {}
+      player (assoc :player player)
+      player-id (assoc :player-uuid player-id)
+      (:server-session-id container) (assoc :server-session-id (:server-session-id container))
+      (:client-session-id container) (assoc :client-session-id (:client-session-id container))
+      (:session-id container) (assoc :session-id (:session-id container))
+      (and (nil? (:server-session-id container))
+           (nil? (:client-session-id container))
+           (nil? (:session-id container))
+           player-id) (assoc :session-id player-id))))
+
+(defn- session-key
+  [owner]
+  (require-owner-value owner ":session-id"
+                       (or (:server-session-id owner)
+                           (:client-session-id owner)
+                           (:session-id owner))))
+
+(defn- owner-player-key
+  [owner]
+  (require-owner-value owner ":player-uuid"
+                       (or (some-> (:player-uuid owner) str)
+                           (some-> (:player owner) player-key))))
+
+(defn- tab-state-key
+  [owner container-id]
+  [(session-key owner) (owner-player-key owner) (int container-id)])
+
+(defn- legacy-tab-index
+  [container-id]
+  (throw (ex-info "Tabbed GUI container id lookup requires explicit owner"
+                  {:container-id container-id})))
+
 (defn set-tab-index-by-container-id!
   "Set current tab index for a container id (client-side). Called from on-tab-change so menu.clicked() can block slot packets."
-  [container-id tab-index]
-  (when (integer? container-id)
-    (swap! tab-index-by-container-id assoc (int container-id) (int tab-index))))
+  ([container-id _tab-index]
+  (legacy-tab-index container-id))
+  ([owner container-id tab-index]
+   (when (integer? container-id)
+     (swap! tab-index-by-container-id assoc (tab-state-key owner container-id) (int tab-index)))))
 
 (defn get-tab-index-by-container-id
   "Get tab index for container id, or nil if not set."
-  [container-id]
-  (when (integer? container-id)
-    (get @tab-index-by-container-id (int container-id))))
+  ([container-id]
+   (when (integer? container-id)
+     (legacy-tab-index container-id)))
+  ([owner container-id]
+   (when (integer? container-id)
+     (get @tab-index-by-container-id (tab-state-key owner container-id)))))
 
 (defn clear-tab-index-by-container-id!
   "Clear tab state when menu is closed."
-  [container-id]
-  (when (integer? container-id)
-    (swap! tab-index-by-container-id dissoc (int container-id))))
+  ([container-id]
+   (when (integer? container-id)
+     (legacy-tab-index container-id)))
+  ([owner container-id]
+   (when (integer? container-id)
+     (swap! tab-index-by-container-id dissoc (tab-state-key owner container-id)))))
 
 (defn slots-active-for-menu?
   "True when slot clicks should be allowed for this menu. Prefers client-set tab by container id, else container :tab-index."
   [menu container]
   (let [cid (when menu (container-state/get-menu-container-id menu))
-        tid (when cid (get-tab-index-by-container-id cid))]
+      owner (owner-from-container container)
+      tid (when cid (get-tab-index-by-container-id owner cid))]
     (if (some? tid)
       (zero? (int tid))
       (slots-active? container))))
@@ -102,12 +162,16 @@
    (so clicked/slots see it)."
   [payload player]
   (let [tab-index (int (or (:tab-index payload) 0))
+         player-id (some-> player player-key)
+         owner {:player player
+           :player-uuid player-id
+           :session-id player-id}
         menu (get-player-menu player)
         container (or (when menu (container-state/get-container-for-menu menu))
                       (when (and menu (container-state/get-menu-container-id menu))
-                        (container-state/get-container-by-id (container-state/get-menu-container-id menu)))
+                        (container-state/get-container-by-id owner (container-state/get-menu-container-id menu)))
                       (when (some? (:container-id payload))
-                        (container-state/get-container-by-id (int (:container-id payload))))
+                        (container-state/get-container-by-id owner (int (:container-id payload))))
                       (container-state/get-player-container-from-active player)
                       (container-state/get-player-container player))]
     (if (and container (tabbed-container? container))
@@ -132,6 +196,10 @@
   ([tab-index container-id]
    (net-client/send-to-server set-tab-msg-id
      (cond-> {:tab-index (int tab-index)}
+       (some? container-id) (assoc :container-id (int container-id)))))
+  ([owner tab-index container-id]
+   (net-client/send-to-server owner set-tab-msg-id
+     (cond-> {:tab-index (int tab-index)}
        (some? container-id) (assoc :container-id (int container-id))))))
 
 (defn attach-tab-sync!
@@ -142,7 +210,8 @@
    container: container map (may contain :tab-index atom)
    container-id: optional integer id from `gui/get-menu-container-id`"
   [pages tech-ui container container-id]
-  (let [current-atom (:current tech-ui)]
+    (let [current-atom (:current tech-ui)
+      owner (owner-from-container container)]
     (when (some? current-atom)
       (add-watch current-atom :tab-sync
         (fn [_ _ _ new-id]
@@ -150,8 +219,8 @@
             (when (tabbed-container? container)
               (reset! (:tab-index container) (int idx)))
             (when (integer? container-id)
-              (set-tab-index-by-container-id! container-id (int idx)))
-            (send-set-tab! idx container-id)))))
+              (set-tab-index-by-container-id! owner container-id (int idx)))
+            (send-set-tab! owner idx container-id)))))
 
     ;; initial sync of current tab
     (when-let [cur (and current-atom @current-atom)]
@@ -159,6 +228,6 @@
         (when (tabbed-container? container)
           (reset! (:tab-index container) (int idx)))
         (when (integer? container-id)
-          (set-tab-index-by-container-id! container-id (int idx)))
-        (send-set-tab! idx container-id)))))
+          (set-tab-index-by-container-id! owner container-id (int idx)))
+        (send-set-tab! owner idx container-id)))))
 

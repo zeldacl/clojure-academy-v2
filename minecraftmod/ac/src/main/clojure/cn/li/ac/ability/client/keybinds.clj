@@ -14,10 +14,13 @@
             [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
 ;; Dynamic var for getting player UUID (set by forge layer)
 (def ^:dynamic *get-player-uuid-fn* nil)
+
+(def ^:dynamic *client-session-id* nil)
 
 ;; ============================================================================
 ;; Activate Handler Registry (V key stack)
@@ -27,14 +30,36 @@
 
 (defonce ^:private activate-handlers (atom (sorted-map)))
 
+(defonce ^:private keybind-registries-frozen? (atom false))
+
+(defn- assert-keybind-registries-open!
+  []
+  (when @keybind-registries-frozen?
+    (throw (ex-info "Keybind registries are frozen" {}))))
+
+(defn- find-activate-handler-entry
+  [id]
+  (first (filter (fn [[[_ handler-id] _handler]] (= id handler-id)) @activate-handlers)))
+
 (defn add-activate-handler!
   "Register an activate handler. Higher priority = checked first."
   [{:keys [id priority] :as handler}]
-  (swap! activate-handlers assoc [priority id] handler))
+  (assert-keybind-registries-open!)
+  (when-not (keyword? id)
+    (throw (ex-info "Activate handler id must be a keyword" {:id id})))
+  (let [priority (int (or priority 0))]
+    (if-let [[[existing-priority _] _existing-handler] (find-activate-handler-entry id)]
+      (when (not= existing-priority priority)
+        (throw (ex-info "Conflicting activate handler id"
+                        {:id id
+                         :existing-priority existing-priority
+                         :new-priority priority})))
+      (swap! activate-handlers assoc [priority id] (assoc handler :priority priority)))))
 
 (defn remove-activate-handler!
   "Remove an activate handler by id."
   [id]
+  (assert-keybind-registries-open!)
   (swap! activate-handlers
          (fn [m]
            (into (sorted-map)
@@ -64,17 +89,38 @@
 (defn register-key-delegate!
   "Register a delegate for a key index in a named group."
   [group key-idx delegate-map]
+  (assert-keybind-registries-open!)
   (swap! key-groups assoc-in [group key-idx] delegate-map))
 
 (defn clear-key-group!
   "Remove all delegates in a group."
   [group]
+  (assert-keybind-registries-open!)
   (swap! key-groups dissoc group))
 
 (defn clear-all-key-groups!
   "Remove all delegates from all groups."
   []
+  (assert-keybind-registries-open!)
   (reset! key-groups {}))
+
+(defn freeze-keybind-registries!
+  []
+  (reset! keybind-registries-frozen? true)
+  nil)
+
+(defn keybind-registries-snapshot
+  []
+  {:activate-handlers @activate-handlers
+   :key-groups @key-groups
+   :frozen? @keybind-registries-frozen?})
+
+(defn reset-keybind-registries-for-test!
+  []
+  (reset! activate-handlers (sorted-map))
+  (reset! key-groups {})
+  (reset! keybind-registries-frozen? false)
+  nil)
 
 (defn get-delegate-for-key
   "Get the effective delegate for a key index. Custom groups override :default."
@@ -117,14 +163,95 @@
         :on-key-abort (fn [uuid] (runtime/on-slot-key-up! uuid idx))}))))
 
 ;; State tracking for key transitions
-(defonce ^:private key-states
-  (atom {:skill-keys [false false false false]
-         :movement-keys {:forward false
-                         :back false
-                         :left false
-                         :right false}
-         :gui-keys {:skill-tree false
-                    :preset-editor false}}))
+(def ^:private default-key-state
+  {:skill-keys [false false false false]
+   :movement-keys {:forward false
+                   :back false
+                   :left false
+                   :right false}
+   :gui-keys {:skill-tree false
+              :preset-editor false}})
+
+(defonce ^:private key-states (atom {}))
+
+(def ^:private default-preset-switch-state
+  {:current-preset 0
+   :show-until-ms  0})
+
+(defonce ^:private preset-switch-state (atom {}))
+
+(def ^:private PRESET-COUNT 4)
+(def ^:private PRESET-INDICATOR-DURATION-MS 2000)
+
+(defn- current-client-session-id
+  []
+  (or *client-session-id* runtime-hooks/*client-session-id*))
+
+(defn- require-client-owner-value
+  [owner label value]
+  (if (some? value)
+    value
+    (throw (ex-info (format "Client keybind owner requires %s" label)
+                    {:owner owner
+                     :required label}))))
+
+(defn client-owner-key
+  [owner]
+  (let [owner-map (cond
+                    (vector? owner) owner
+                    (map? owner) owner
+                    (some? owner) {:player-uuid owner}
+                    :else {})]
+    (if (vector? owner-map)
+      owner-map
+      [(require-client-owner-value owner ":client-session-id"
+                                   (or (:client-session-id owner-map)
+                                       (:session-id owner-map)
+                                       (current-client-session-id)))
+       (require-client-owner-value owner ":player-uuid"
+                                   (or (:player-uuid owner-map)
+                                       (:uuid owner-map)))])))
+
+(defn key-state-snapshot
+  ([]
+   @key-states)
+  ([owner]
+   (get @key-states (client-owner-key owner) default-key-state)))
+
+(defn preset-switch-state-snapshot
+  ([]
+   @preset-switch-state)
+  ([owner]
+   (get @preset-switch-state (client-owner-key owner) default-preset-switch-state)))
+
+(defn- swap-key-state!
+  [owner f & args]
+  (let [owner-key (client-owner-key owner)]
+    (swap! key-states
+           (fn [states]
+             (assoc states owner-key
+                    (apply f (get states owner-key default-key-state) args))))))
+
+(defn- swap-preset-switch-state!
+  [owner f & args]
+  (let [owner-key (client-owner-key owner)]
+    (swap! preset-switch-state
+           (fn [states]
+             (assoc states owner-key
+                    (apply f (get states owner-key default-preset-switch-state) args))))))
+
+(defn clear-client-keybind-state!
+  [owner]
+  (let [owner-key (client-owner-key owner)]
+    (swap! key-states dissoc owner-key)
+    (swap! preset-switch-state dissoc owner-key))
+  nil)
+
+(defn reset-client-keybind-state-for-test!
+  []
+  (reset! key-states {})
+  (reset! preset-switch-state {})
+  nil)
 
 (def ^:private movement-keys
   [:forward :back :left :right])
@@ -160,11 +287,19 @@
   (when *get-player-uuid-fn*
     (*get-player-uuid-fn*)))
 
+(defn- current-client-owner
+  [player-uuid]
+  {:client-session-id (require-client-owner-value {:player-uuid player-uuid}
+                                                  ":client-session-id"
+                                                  (current-client-session-id))
+   :player-uuid player-uuid})
+
 (defn on-skill-key-event
   "Handle skill key state change. Uses delegate system with pre-checks."
   [key-idx is-down]
-  (let [was-down (get-in @key-states [:skill-keys key-idx])]
-    (when-let [player-uuid (get-client-player-uuid)]
+  (when-let [player-uuid (get-client-player-uuid)]
+    (let [owner (current-client-owner player-uuid)
+          was-down (get-in (key-state-snapshot owner) [:skill-keys key-idx])]
       (if (activated? player-uuid)
         (when-let [delegate (get-delegate-for-key key-idx)]
           (let [abort? (should-abort-key? player-uuid delegate)]
@@ -187,17 +322,18 @@
         ;; Ability mode disabled: abort local held state cleanly.
         (when was-down
           (when-let [delegate (get-delegate-for-key key-idx)]
-            (when-let [f (:on-key-up delegate)] (f player-uuid))))))
+            (when-let [f (:on-key-up delegate)] (f player-uuid)))))
 
-    ;; Update state
-    (swap! key-states assoc-in [:skill-keys key-idx] is-down)))
+      ;; Update state
+      (swap-key-state! owner assoc-in [:skill-keys key-idx] is-down))))
 
 
 (defn on-gui-key-event
   "Handle GUI key state change. Opens screens or toggles mode on key press."
   [gui-type is-down]
-  (let [was-down (get-in @key-states [:gui-keys gui-type])]
-    (when-let [player-uuid (get-client-player-uuid)]
+  (when-let [player-uuid (get-client-player-uuid)]
+    (let [owner (current-client-owner player-uuid)
+          was-down (get-in (key-state-snapshot owner) [:gui-keys gui-type])]
       ;; GUI keys trigger on key press only.
       (when (and (not was-down) is-down)
         (case gui-type
@@ -207,16 +343,17 @@
           :preset-editor
           (client-bridge/open-screen! :ac/preset-editor {:player-uuid player-uuid})
 
-          nil)))
+          nil))
 
-    ;; Update state
-    (swap! key-states assoc-in [:gui-keys gui-type] is-down)))
+      ;; Update state
+      (swap-key-state! owner assoc-in [:gui-keys gui-type] is-down))))
 
 (defn on-movement-key-event
   "Handle movement key state transitions and forward them to runtime bridge."
   [movement-key is-down]
-  (let [was-down (get-in @key-states [:movement-keys movement-key])]
-    (when-let [player-uuid (get-client-player-uuid)]
+  (when-let [player-uuid (get-client-player-uuid)]
+    (let [owner (current-client-owner player-uuid)
+          was-down (get-in (key-state-snapshot owner) [:movement-keys movement-key])]
       (cond
         (and (not was-down) is-down)
         (runtime/on-movement-key-down! player-uuid movement-key)
@@ -227,8 +364,8 @@
         (and was-down (not is-down))
         (runtime/on-movement-key-up! player-uuid movement-key)
 
-        :else nil))
-    (swap! key-states assoc-in [:movement-keys movement-key] is-down)))
+        :else nil)
+      (swap-key-state! owner assoc-in [:movement-keys movement-key] is-down))))
 
 (defn trigger-mode-switch!
   "V key short-press handler. Delegates to the active activate handler.
@@ -270,43 +407,41 @@
 
 (defn reset-all-keys!
   "Reset all key states. Called on disconnect or dimension change."
-  []
-  (reset! key-states {:skill-keys [false false false false]
-                      :movement-keys {:forward false
-                                      :back false
-                                      :left false
-                                      :right false}
-                      :gui-keys {:skill-tree false
-                                 :preset-editor false}})
-  (clear-all-key-groups!))
+  ([]
+   (reset-client-keybind-state-for-test!)
+   (clear-all-key-groups!))
+  ([owner]
+   (clear-client-keybind-state! owner)))
 
 ;; ============================================================================
 ;; Preset Switch
 ;; ============================================================================
 
-(defonce ^:private preset-switch-state
-  (atom {:current-preset 0
-         :show-until-ms  0}))
-
-(def ^:private PRESET-COUNT 4)
-(def ^:private PRESET-INDICATOR-DURATION-MS 2000)
-
 (defn switch-preset!
   "Cycle to next preset. Called by platform key handler."
-  [player-uuid]
-  (when (activated? player-uuid)
-    (let [next-idx (mod (inc (:current-preset @preset-switch-state)) PRESET-COUNT)]
-      (swap! preset-switch-state assoc
-             :current-preset next-idx
-             :show-until-ms (+ (System/currentTimeMillis) PRESET-INDICATOR-DURATION-MS))
-      (api/req-switch-preset! next-idx nil)
-      (update-default-group! player-uuid)
-      (log/info "[PRESET-SWITCH]" {:preset next-idx}))))
+  ([]
+   (when-let [player-uuid (get-client-player-uuid)]
+     (switch-preset! player-uuid)))
+  ([player-uuid]
+   (when (activated? player-uuid)
+     (let [owner (current-client-owner player-uuid)
+           current-state (preset-switch-state-snapshot owner)
+           next-idx (mod (inc (:current-preset current-state)) PRESET-COUNT)]
+       (swap-preset-switch-state! owner assoc
+                                  :current-preset next-idx
+                                  :show-until-ms (+ (System/currentTimeMillis) PRESET-INDICATOR-DURATION-MS))
+       (api/req-switch-preset! next-idx nil)
+       (update-default-group! player-uuid)
+       (log/info "[PRESET-SWITCH]" {:preset next-idx})))))
 
 (defn get-preset-switch-state
   "Get current preset switch state for HUD rendering."
-  []
-  @preset-switch-state)
+  ([]
+   (if-let [player-uuid (get-client-player-uuid)]
+     (get-preset-switch-state player-uuid)
+     default-preset-switch-state))
+  ([owner]
+   (preset-switch-state-snapshot owner)))
 
 ;; ============================================================================
 ;; Default Activate Handlers

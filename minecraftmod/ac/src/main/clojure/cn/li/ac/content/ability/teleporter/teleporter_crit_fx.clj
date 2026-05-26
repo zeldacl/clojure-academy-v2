@@ -6,8 +6,6 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private fx-state (atom {:ttl 0}))
-
 (defn- crit-particle-config
   [crit-level]
   (case (long (or crit-level 0))
@@ -24,7 +22,6 @@
           x (double (or (:x payload) 0.0))
           y (double (or (:y payload) 0.0))
           z (double (or (:z payload) 0.0))]
-      (swap! fx-state update :ttl inc)
       (when (:message-key payload)
         (combat-notice/show-notice!
           :teleporter-crit
@@ -48,7 +45,7 @@
     nil))
 
 (defn- tick! []
-  (swap! fx-state update :ttl inc))
+  nil)
 
 (defn- build-plan [_cp _hcp _tick]
   nil)
@@ -60,7 +57,7 @@
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:teleporter/fx-crit-hit]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
       (case channel
         :teleporter/fx-crit-hit
         (level-effects/enqueue-level-effect! :teleporter-crit
@@ -73,6 +70,7 @@
             :message-key (:message-key payload)
             :message-args (:message-args payload)
            :target-uuid (:target-uuid payload)
-           :skill-id (:skill-id payload)})
+           :skill-id (:skill-id payload)}
+          {:ctx-id ctx-id :channel channel})
         nil)))
   nil)

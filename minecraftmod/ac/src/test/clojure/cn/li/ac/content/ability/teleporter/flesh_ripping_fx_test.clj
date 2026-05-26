@@ -7,11 +7,17 @@
             [cn.li.ac.content.ability.teleporter.flesh-ripping-fx :as frfx]))
 
 (defn- reset-fixture [f]
-  (reset! (var-get #'cn.li.ac.content.ability.teleporter.flesh-ripping-fx/fx-state) nil)
+  (frfx/reset-flesh-ripping-fx-for-test!)
   (f)
-  (reset! (var-get #'cn.li.ac.content.ability.teleporter.flesh-ripping-fx/fx-state) nil))
+  (frfx/reset-flesh-ripping-fx-for-test!))
 
 (use-fixtures :each reset-fixture)
+
+(defn- event [payload]
+  {:payload payload
+   :ctx-id "ctx-1"
+   :channel :flesh-ripping/fx-test
+   :owner-key [:ctx "ctx-1"]})
 
 (deftest init-registers-flesh-ripping-fx-channels-test
   (let [registered-level* (atom nil)
@@ -38,8 +44,8 @@
                   fx-registry/register-fx-channels! (fn [_ handler]
                                                       (reset! handler* handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload]
-                                                        (swap! enqueued* conj [effect-id payload])
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (frfx/init!)
       (@handler* "ctx-1" :flesh-ripping/fx-start nil)
@@ -47,20 +53,22 @@
       (@handler* "ctx-1" :flesh-ripping/fx-perform {:target-x 4.0 :target-y 5.0 :target-z 6.0 :hit? true :target-uuid "target-2"})
       (@handler* "ctx-1" :flesh-ripping/fx-end nil)
 
-      (is (= [[:flesh-ripping {:mode :start}]
+            (is (= [[:flesh-ripping {:mode :start} {:ctx-id "ctx-1" :channel :flesh-ripping/fx-start}]
               [:flesh-ripping {:mode :update
                                :target-x 1.0
                                :target-y 2.0
                                :target-z 3.0
                                :hit? true
-                               :target-uuid "target-1"}]
+                   :target-uuid "target-1"}
+               {:ctx-id "ctx-1" :channel :flesh-ripping/fx-update}]
               [:flesh-ripping {:mode :perform
                                :target-x 4.0
                                :target-y 5.0
                                :target-z 6.0
                                :hit? true
-                               :target-uuid "target-2"}]
-              [:flesh-ripping {:mode :end}]]
+                   :target-uuid "target-2"}
+               {:ctx-id "ctx-1" :channel :flesh-ripping/fx-perform}]
+              [:flesh-ripping {:mode :end} {:ctx-id "ctx-1" :channel :flesh-ripping/fx-end}]]
              @enqueued*)))))
 
 (deftest enqueue-perform-emits-particles-and-sound-test
@@ -73,18 +81,18 @@
                   client-sounds/queue-sound-effect! (fn [payload]
                                                       (swap! sounds* conj payload)
                                                       nil)]
-      (enqueue! {:mode :perform
-                 :target-x 1.0 :target-y 2.0 :target-z 3.0
-                 :hit? true
-                 :target-uuid "target-1"})
+      (enqueue! (event {:mode :perform
+                        :target-x 1.0 :target-y 2.0 :target-z 3.0
+                        :hit? true
+                        :target-uuid "target-1"}))
       (is (= 2 (count @particles*)))
       (is (= 1 (count @sounds*)))
       (is (= "my_mod:tp.flesh_ripping" (:sound-id (first @sounds*)))))))
 
 (deftest enqueue-end-clears-state-test
   (let [enqueue! (var-get #'cn.li.ac.content.ability.teleporter.flesh-ripping-fx/enqueue!)]
-    (enqueue! {:mode :start})
-    (enqueue! {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? false})
-    (is (some? @(var-get #'cn.li.ac.content.ability.teleporter.flesh-ripping-fx/fx-state)))
-    (enqueue! {:mode :end})
-    (is (nil? @(var-get #'cn.li.ac.content.ability.teleporter.flesh-ripping-fx/fx-state)))))
+    (enqueue! (event {:mode :start}))
+    (enqueue! (event {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? false}))
+    (is (some? (get (:fx-state (frfx/flesh-ripping-fx-snapshot)) [:ctx "ctx-1"])))
+    (enqueue! (event {:mode :end}))
+    (is (nil? (get (:fx-state (frfx/flesh-ripping-fx-snapshot)) [:ctx "ctx-1"])))) )

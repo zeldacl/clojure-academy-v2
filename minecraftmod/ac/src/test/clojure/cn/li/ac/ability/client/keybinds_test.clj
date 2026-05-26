@@ -1,0 +1,106 @@
+(ns cn.li.ac.ability.client.keybinds-test
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.api :as client-api]
+            [cn.li.ac.ability.client.keybinds :as keybinds]
+            [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
+
+(defn- reset-fixture [f]
+  (ps-fix/with-test-player-state-owner
+    (fn []
+      (keybinds/reset-client-keybind-state-for-test!)
+      (keybinds/reset-keybind-registries-for-test!)
+      (ps/reset-player-states-for-test!)
+      (try
+        (f)
+        (finally
+          (keybinds/reset-client-keybind-state-for-test!)
+          (keybinds/reset-keybind-registries-for-test!)
+          (ps/reset-player-states-for-test!))))))
+
+(use-fixtures :each reset-fixture)
+
+(defn- activated-state []
+  (assoc-in (ps/fresh-state) [:resource-data :activated] true))
+
+(deftest key-state-isolated-by-client-owner-test
+  (let [opened (atom [])]
+    (with-redefs [client-bridge/open-screen! (fn [screen-key payload]
+                                               (swap! opened conj [screen-key payload]))]
+      (binding [keybinds/*client-session-id* :session-a
+                keybinds/*get-player-uuid-fn* (constantly "player-a")]
+        (keybinds/on-gui-key-event :skill-tree true))
+      (binding [keybinds/*client-session-id* :session-a
+                keybinds/*get-player-uuid-fn* (constantly "player-b")]
+        (keybinds/on-gui-key-event :preset-editor true)))
+    (is (= [[:ac/skill-tree {:player-uuid "player-a"}]
+            [:ac/preset-editor {:player-uuid "player-b"}]]
+           @opened))
+    (is (= true (get-in (keybinds/key-state-snapshot {:client-session-id :session-a
+                                                       :player-uuid "player-a"})
+                        [:gui-keys :skill-tree])))
+    (is (= false (get-in (keybinds/key-state-snapshot {:client-session-id :session-a
+                                                        :player-uuid "player-a"})
+                         [:gui-keys :preset-editor])))
+    (is (= true (get-in (keybinds/key-state-snapshot {:client-session-id :session-a
+                                                       :player-uuid "player-b"})
+                        [:gui-keys :preset-editor])))))
+
+(deftest clear-client-keybind-state-clears-only-owner-test
+  (with-redefs [client-bridge/open-screen! (fn [_ _] nil)]
+    (binding [keybinds/*client-session-id* :session-a
+              keybinds/*get-player-uuid-fn* (constantly "player-a")]
+      (keybinds/on-gui-key-event :skill-tree true))
+    (binding [keybinds/*client-session-id* :session-a
+              keybinds/*get-player-uuid-fn* (constantly "player-b")]
+      (keybinds/on-gui-key-event :skill-tree true)))
+  (keybinds/clear-client-keybind-state! {:client-session-id :session-a
+                                          :player-uuid "player-a"})
+  (is (= false (get-in (keybinds/key-state-snapshot {:client-session-id :session-a
+                                                     :player-uuid "player-a"})
+                       [:gui-keys :skill-tree])))
+  (is (= true (get-in (keybinds/key-state-snapshot {:client-session-id :session-a
+                                                    :player-uuid "player-b"})
+                      [:gui-keys :skill-tree]))))
+
+(deftest client-keybind-owner-requires-explicit-session-and-player-test
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Client keybind owner requires :client-session-id"
+                        (keybinds/key-state-snapshot "player-a")))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Client keybind owner requires :player-uuid"
+                        (keybinds/key-state-snapshot {:client-session-id :session-a}))))
+
+(deftest preset-switch-state-isolated-by-player-test
+  (ps/reset-player-states-for-test! {"player-a" (activated-state)
+                                     "player-b" (activated-state)})
+  (let [requests (atom [])]
+    (with-redefs [client-api/req-switch-preset! (fn [preset-idx callback]
+                                                  (swap! requests conj preset-idx)
+                                                  (when callback (callback {:success true})))]
+      (binding [keybinds/*client-session-id* :session-a]
+        (keybinds/switch-preset! "player-a")
+        (keybinds/switch-preset! "player-a")
+        (keybinds/switch-preset! "player-b"))))
+  (is (= 2 (:current-preset (keybinds/get-preset-switch-state {:client-session-id :session-a
+                                                               :player-uuid "player-a"}))))
+  (is (= 1 (:current-preset (keybinds/get-preset-switch-state {:client-session-id :session-a
+                                                               :player-uuid "player-b"})))))
+
+(deftest activate-handler-registry-policy-test
+  (let [handler-a {:id :test/handler
+                   :priority 10
+                   :handles-fn (fn [_] true)
+                   :on-key-down-fn (fn [_] nil)}
+        handler-b (assoc handler-a :priority 20)]
+    (keybinds/add-activate-handler! handler-a)
+    (keybinds/add-activate-handler! (assoc handler-a :on-key-down-fn (fn [_] :new-function)))
+    (is (= 1 (count (:activate-handlers (keybinds/keybind-registries-snapshot)))))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Conflicting activate handler id"
+                          (keybinds/add-activate-handler! handler-b)))
+    (keybinds/freeze-keybind-registries!)
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Keybind registries are frozen"
+                          (keybinds/register-key-delegate! :default 0 {:skill-id :railgun})))))

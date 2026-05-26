@@ -3,27 +3,26 @@
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.registry.event :as evt]
+            [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.server.service.resource :as svc-res]
             [cn.li.ac.ability.service.player-state :as ps]))
 
 (defn- reset-registries! [f]
-  (let [item-action-registry-val @#'cn.li.ac.ability.item-actions/item-action-registry
-        action-handlers-val @#'cn.li.ac.ability.item-actions/action-handlers
-        item-entity-spawns-val @#'cn.li.ac.ability.item-actions/item-entity-spawns]
+  (let [item-actions-snapshot (item-actions/item-action-registries-snapshot)]
     (try
-      (item-actions/reset-item-action-registries!)
+      (item-actions/reset-item-action-registries-for-test!)
       (f)
       (finally
-        (reset! @#'cn.li.ac.ability.item-actions/item-action-registry item-action-registry-val)
-        (reset! @#'cn.li.ac.ability.item-actions/action-handlers action-handlers-val)
-        (reset! @#'cn.li.ac.ability.item-actions/item-entity-spawns item-entity-spawns-val)))))
+        (item-actions/reset-item-action-registries-for-test! item-actions-snapshot)))))
 
 (defn- reset-lifecycle-subs! [f]
-  (reset! @#'cn.li.ac.ability.registry.event/subscribers {})
-  (reset! @#'cn.li.ac.ability.adapters.server-hooks/lifecycle-subscriptions-registered? false)
-  (f)
-  (reset! @#'cn.li.ac.ability.registry.event/subscribers {})
-  (reset! @#'cn.li.ac.ability.adapters.server-hooks/lifecycle-subscriptions-registered? false))
+  (evt/reset-ability-event-subscribers-for-test!)
+  (server-hooks/reset-lifecycle-subscriptions-registered-for-test!)
+  (try
+    (f)
+    (finally
+      (evt/reset-ability-event-subscribers-for-test!)
+      (server-hooks/reset-lifecycle-subscriptions-registered-for-test!))))
 
 (use-fixtures :each reset-registries!)
 (use-fixtures :each reset-lifecycle-subs!)
@@ -69,7 +68,7 @@
 
 (deftest overload-event-aborts-player-contexts-test
   (let [aborted (atom [])]
-    (with-redefs [cn.li.ac.ability.server.service.context-mgr/abort-player-contexts!
+    (with-redefs [ctx-mgr/abort-player-contexts!
                   (fn [uuid]
                     (swap! aborted conj uuid)
                     nil)]
@@ -81,7 +80,7 @@
         (let [aborted (atom [])
          updates (atom [])
          recalc-calls (atom [])]
-          (with-redefs [cn.li.ac.ability.server.service.context-mgr/abort-player-contexts!
+          (with-redefs [ctx-mgr/abort-player-contexts!
               (fn [uuid]
                 (swap! aborted conj uuid)
                 nil)

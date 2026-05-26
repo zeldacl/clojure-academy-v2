@@ -1,18 +1,23 @@
 (ns cn.li.ac.ability.passive-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.passive :as passive]
             [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.service.player-state :as ps]))
+            [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.test.support.player-state :as ps-fix]))
 
 (defn- reset-all! [f]
-  (reset! ps/player-states {})
-  (reset! @#'cn.li.ac.ability.registry.event/subscribers {})
-  (reset! @#'cn.li.ac.ability.passive/registered-handlers #{})
-  (f)
-  (reset! ps/player-states {})
-  (reset! @#'cn.li.ac.ability.registry.event/subscribers {})
-  (reset! @#'cn.li.ac.ability.passive/registered-handlers #{}))
+  (ps-fix/with-test-player-state-owner
+    (fn []
+      (ps/reset-player-states-for-test!)
+      (evt/reset-ability-event-subscribers-for-test!)
+      (passive/reset-passive-handler-registry-for-test!)
+      (try
+        (f)
+        (finally
+          (ps/reset-player-states-for-test!)
+          (evt/reset-ability-event-subscribers-for-test!)
+          (passive/reset-passive-handler-registry-for-test!))))))
 
 (use-fixtures :each reset-all!)
 
@@ -41,3 +46,13 @@
              evt/CALC-MAX-OVERLOAD
              :s
              (fn [v _] (* v 3))))))
+
+(deftest passive-handler-registry-freeze-policy-test
+  (passive/freeze-passive-handler-registry!)
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Passive handler registry is frozen"
+                        (passive/register-passive-calc-handler!
+                         :new-passive
+                         evt/CALC-MAX-CP
+                         :s
+                         (fn [v _] v)))))

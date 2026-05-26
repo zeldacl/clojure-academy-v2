@@ -23,6 +23,32 @@
 (defonce ^:private lifecycle-registry
 	(atom {}))
 
+(defonce ^:private lifecycle-registry-frozen? (atom false))
+
+(defn- assert-registry-open!
+	[]
+	(when @lifecycle-registry-frozen?
+		(throw (ex-info "Ability lifecycle registry is frozen" {}))))
+
+(defn lifecycle-registry-snapshot
+	[]
+	{:lifecycles @lifecycle-registry
+	 :frozen? @lifecycle-registry-frozen?})
+
+(defn reset-lifecycle-registry-for-test!
+	([]
+	 (reset-lifecycle-registry-for-test! {}))
+	([{:keys [lifecycles frozen?]
+		 :or {lifecycles {} frozen? false}}]
+	 (reset! lifecycle-registry lifecycles)
+	 (reset! lifecycle-registry-frozen? frozen?)
+	 nil))
+
+(defn freeze-lifecycle-registry!
+	[]
+	(reset! lifecycle-registry-frozen? true)
+	nil)
+
 (defn register-lifecycle!
 	"Register an AbilityLifecycle implementation for a skill/category id.
    
@@ -33,12 +59,17 @@
 		(throw (ex-info "Ability lifecycle id must be a keyword" {:ability-id ability-id})))
 	(when-not lifecycle
 		(throw (ex-info "Ability lifecycle cannot be nil" {:ability-id ability-id})))
-	(swap! lifecycle-registry assoc ability-id lifecycle)
-	(log/debug "Registered ability lifecycle" ability-id)
-	lifecycle)
+	(if-let [existing (get @lifecycle-registry ability-id)]
+		existing
+		(do
+			(assert-registry-open!)
+			(swap! lifecycle-registry assoc ability-id lifecycle)
+			(log/debug "Registered ability lifecycle" ability-id)
+			lifecycle)))
 
 (defn unregister-lifecycle!
 	[ability-id]
+	(assert-registry-open!)
 	(swap! lifecycle-registry dissoc ability-id)
 	nil)
 
@@ -90,5 +121,4 @@
 (defn clear-lifecycles!
 	"Clear all registered lifecycles. Useful for tests."
 	[]
-	(reset! lifecycle-registry {})
-	nil)
+	(reset-lifecycle-registry-for-test!))

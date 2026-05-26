@@ -1,11 +1,13 @@
 (ns cn.li.ac.command.dsl-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.command.dsl :as dsl]))
 
 (defn- reset-command-registry! [f]
-  (dsl/clear-registry!)
-  (f)
-  (dsl/clear-registry!))
+  (dsl/reset-command-registry-for-test!)
+  (try
+    (f)
+    (finally
+      (dsl/reset-command-registry-for-test!))))
 
 (use-fixtures :each reset-command-registry!)
 
@@ -74,3 +76,17 @@
     (is (= 5 (dsl/get-permission-level spec ["admin" "grant"])))
     (is (= nil (dsl/find-subcommand spec ["admin" "missing"])))
     (is (= nil (dsl/get-executor spec ["admin" "missing"])))))
+
+(deftest command-registry-duplicate-and-freeze-policy-test
+  (let [first-spec (dsl/create-command-spec "dup" {:executor-fn (fn [_] :first)})
+        second-spec (dsl/create-command-spec "dup" {:executor-fn (fn [_] :second)})]
+    (is (= first-spec (dsl/register-command! first-spec)))
+    (is (= first-spec (dsl/register-command! second-spec)))
+    (dsl/freeze-command-registry!)
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Command registry is frozen"
+                          (dsl/register-command!
+                           (dsl/create-command-spec "new" {:executor-fn identity}))))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Command registry is frozen"
+                          (dsl/unregister-command! "dup")))))

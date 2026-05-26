@@ -5,6 +5,8 @@
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 
+(def ^:private test-context-owner {:session-id :test-session})
+
 (defn- with-system-property
   [k v f]
   (let [old-v (System/getProperty k)]
@@ -19,7 +21,7 @@
 (defn- register-alive-context!
   [ctx-id last-keepalive-ms]
   (ctx/register-context!
-   (assoc (ctx/new-server-context "p-keepalive" :arc-gen ctx-id)
+    (assoc (ctx/new-server-context "p-keepalive" :arc-gen ctx-id test-context-owner)
           :last-keepalive-ms last-keepalive-ms)))
 
 (deftest keepalive-timeout-threshold-behavior-test

@@ -15,19 +15,49 @@
 ;; Registry
 ;; ============================================================================
 
-(defonce category-registry (atom {}))
+(defonce ^:private category-registry (atom {}))
+(defonce ^:private category-registry-frozen? (atom false))
+
+(defn- assert-registry-open!
+  []
+  (when @category-registry-frozen?
+    (throw (ex-info "Category registry is frozen" {}))))
+
+(defn category-registry-snapshot
+  []
+  @category-registry)
+
+(defn reset-category-registry-for-test!
+  ([]
+   (reset-category-registry-for-test! {}))
+  ([snapshot]
+   (reset! category-registry (or snapshot {}))
+   (reset! category-registry-frozen? false)
+   nil))
+
+(defn freeze-category-registry!
+  []
+  (reset! category-registry-frozen? true)
+  nil)
 
 ;; ============================================================================
 ;; Registration
 ;; ============================================================================
 
 (defn register-category!
-  "Register a category spec. Silently overwrites on hot-reload."
+  "Register a category spec with idempotent duplicate handling."
   [{:keys [id] :as spec}]
   {:pre [(keyword? id) (string? (:name-key spec))]}
-  (swap! category-registry assoc id spec)
-  (log/info "Registered ability category" id)
-  spec)
+  (if-let [existing (get @category-registry id)]
+    (if (= existing spec)
+      existing
+      (throw (ex-info "Conflicting ability category id"
+                      {:id id :existing existing :new spec})))
+    (do
+      (assert-registry-open!)
+      (swap! category-registry assoc id spec)
+      (log/info "Registered ability category" id)
+      spec)))
 
 ;; ============================================================================
 ;; Query

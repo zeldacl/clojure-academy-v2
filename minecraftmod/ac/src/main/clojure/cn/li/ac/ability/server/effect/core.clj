@@ -3,10 +3,42 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private op-registry (atom {}))
+(defonce ^:private op-registry-frozen? (atom false))
+
+(defn- assert-op-registry-open!
+  []
+  (when @op-registry-frozen?
+    (throw (ex-info "Effect op registry is frozen" {}))))
+
+(declare default-ops-installed?)
+
+(defn effect-op-registry-snapshot
+  []
+  {:registry @op-registry
+   :default-ops-installed? @default-ops-installed?
+   :frozen? @op-registry-frozen?})
+
+(defn reset-effect-op-registry-for-test!
+  ([]
+   (reset-effect-op-registry-for-test! {}))
+  ([{:keys [registry frozen?]
+     default-ops-installed-value :default-ops-installed?
+     :or {registry {} default-ops-installed-value false frozen? false}}]
+   (reset! op-registry registry)
+   (reset! default-ops-installed? default-ops-installed-value)
+   (reset! op-registry-frozen? frozen?)
+   nil))
+
+(defn freeze-effect-op-registry!
+  []
+  (reset! op-registry-frozen? true)
+  nil)
 
 (defn register-op!
   [op-kw f]
-  (swap! op-registry assoc op-kw f)
+  (when-not (contains? @op-registry op-kw)
+    (assert-op-registry-open!)
+    (swap! op-registry assoc op-kw f))
   op-kw)
 
 (def ^:private default-op-namespaces

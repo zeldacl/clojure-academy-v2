@@ -9,6 +9,17 @@
 
 (defonce ^:private bootstrap-attempts* (atom 0))
 
+(defn bootstrap-attempts-snapshot
+	[]
+	@bootstrap-attempts*)
+
+(defn reset-bootstrap-attempts-for-test!
+	([]
+	 (reset-bootstrap-attempts-for-test! 0))
+	([attempts]
+	 (reset! bootstrap-attempts* (long (or attempts 0)))
+	 nil))
+
 (declare register-provider! registered-providers)
 
 (def ^:private fallback-providers

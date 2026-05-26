@@ -25,6 +25,11 @@
 	[ctx-id]
 	(and (string? ctx-id) (not (str/blank? ctx-id))))
 
+(defn- server-context-owner
+	[player-uuid]
+	{:logical-side :server
+	 :session-id player-uuid})
+
 (defn handle-begin-link-context
 	[{:keys [ctx-id skill-id]} player]
 	(cond
@@ -36,74 +41,86 @@
 
 		:else
 		(let [player-uuid (uuid/player-uuid player)
-				existing (ctx/get-context ctx-id)]
-			(if (or (nil? existing)
-						(= player-uuid (:player-uuid existing)))
-				(ctx-mgr/establish-context! player-uuid ctx-id skill-id)
-				(record-rejection! :ctx-not-owner)))))
+				owner (server-context-owner player-uuid)]
+			(binding [ctx/*context-owner* owner]
+				(let [existing (ctx/get-context ctx-id)]
+					(if (or (nil? existing)
+								(= player-uuid (:player-uuid existing)))
+						(ctx-mgr/establish-context! player-uuid ctx-id skill-id)
+						(record-rejection! :ctx-not-owner)))))))
 
 (defn- resolve-owned-context
 	[ctx-id player]
-	(let [ctx-map (when (valid-ctx-id? ctx-id) (ctx/get-context ctx-id))]
+	(let [player-uuid (uuid/player-uuid player)
+			owner (when player-uuid (server-context-owner player-uuid))
+			ctx-map (when (and owner (valid-ctx-id? ctx-id))
+								(binding [ctx/*context-owner* owner]
+									(ctx/get-context ctx-id)))]
 		(cond
 			(not (valid-ctx-id? ctx-id))
 			{:ok? false :reason :payload-invalid}
 
+			(nil? player-uuid)
+			{:ok? false :reason :player-uuid-missing}
+
 			(nil? ctx-map)
 			{:ok? false :reason :ctx-not-found}
 
-			(nil? (uuid/player-uuid player))
-			{:ok? false :reason :player-uuid-missing}
-
-			(not (ctx/context-owned-by? ctx-id (uuid/player-uuid player)))
+			(not= player-uuid (:player-uuid ctx-map))
 			{:ok? false :reason :ctx-not-owner}
 
 			:else
-			{:ok? true :ctx ctx-map})))
+			{:ok? true :ctx ctx-map :owner owner})))
 
 (defn- resolve-owned-alive-context
 	[ctx-id player]
-	(let [ctx-map (when (valid-ctx-id? ctx-id) (ctx/get-context ctx-id))]
+	(let [player-uuid (uuid/player-uuid player)
+			owner (when player-uuid (server-context-owner player-uuid))
+			ctx-map (when (and owner (valid-ctx-id? ctx-id))
+								(binding [ctx/*context-owner* owner]
+									(ctx/get-context ctx-id)))]
 		(cond
 			(not (valid-ctx-id? ctx-id))
 			{:ok? false :reason :payload-invalid}
 
+			(nil? player-uuid)
+			{:ok? false :reason :player-uuid-missing}
+
 			(nil? ctx-map)
 			{:ok? false :reason :ctx-not-found}
 
-			(nil? (uuid/player-uuid player))
-			{:ok? false :reason :player-uuid-missing}
-
-			(not (ctx/context-owned-by? ctx-id (uuid/player-uuid player)))
+			(not= player-uuid (:player-uuid ctx-map))
 			{:ok? false :reason :ctx-not-owner}
 
 			(not= (:status ctx-map) ctx/STATUS-ALIVE)
 			{:ok? false :reason :ctx-not-alive}
 
 			:else
-			{:ok? true :ctx ctx-map})))
+			{:ok? true :ctx ctx-map :owner owner})))
 
 (defn handle-keepalive-context
 	[{:keys [ctx-id]} player]
-	(let [{:keys [ok? reason]} (resolve-owned-alive-context ctx-id player)]
+	(let [{:keys [ok? reason owner]} (resolve-owned-alive-context ctx-id player)]
 		(if ok?
-			(ctx/update-keepalive! ctx-id)
+			(binding [ctx/*context-owner* owner]
+				(ctx/update-keepalive! ctx-id))
 			(record-rejection! reason))))
 
 (defn handle-terminate-context
 	[{:keys [ctx-id]} player]
-	(let [{:keys [ok? reason]} (resolve-owned-context ctx-id player)]
+	(let [{:keys [ok? reason owner]} (resolve-owned-context ctx-id player)]
 		(if ok?
-			(ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!)
+			(binding [ctx/*context-owner* owner]
+				(ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
 			(record-rejection! reason))))
 
 (defn handle-channel-context
 	[{:keys [ctx-id channel payload]} player]
-	(let [{:keys [ok? reason]} (if (keyword? channel)
+	(let [{:keys [ok? reason owner]} (if (keyword? channel)
 													(resolve-owned-alive-context ctx-id player)
 													{:ok? false :reason :payload-invalid})]
 		(if ok?
-			(do
+			(binding [ctx/*context-owner* owner]
 				(ctx/update-keepalive! ctx-id)
 				(ctx/ctx-send-to-local! ctx-id channel payload))
 			(record-rejection! reason))))

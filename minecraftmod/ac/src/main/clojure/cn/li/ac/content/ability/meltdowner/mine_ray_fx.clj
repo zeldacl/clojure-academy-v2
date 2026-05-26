@@ -6,30 +6,53 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
+(defonce ^:private effect-state (atom {}))
+
+(defn mine-ray-fx-snapshot []
+  {:effect-state @effect-state})
+
+(defn reset-mine-ray-fx-for-test! []
+  (reset! effect-state {})
+  nil)
+
+(defn clear-mine-ray-owner! [owner-key]
+  (swap! effect-state dissoc owner-key)
+  nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode variant x y z progress]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode variant x y z progress source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
       (do
-        (reset! effect-state {:active? true :ticks 0 :variant (or variant :basic)
-                              :target nil :progress 0.0})
+        (swap! effect-state assoc owner-key*
+               (merge base-meta {:active? true :ticks 0 :variant (or variant :basic)
+                                 :target nil :progress 0.0}))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id "my_mod:md.mine_ray_start" :volume 0.5 :pitch 1.0}))
       :progress
-      (swap! effect-state
+      (swap! effect-state update owner-key*
              (fn [st]
                (when st
-                 (assoc st
+                 (assoc (merge base-meta st)
+                        :owner-key owner-key*
+                        :ctx-id ctx-id
+                        :channel channel
+                        :source-player-id source-player-id
+                        :world-id world-id
                         :target {:x (int (or x 0)) :y (int (or y 0)) :z (int (or z 0))}
                         :progress (double (or progress 0.0))))))
       :end
-      (reset! effect-state nil)
+      (clear-mine-ray-owner! owner-key*)
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -38,19 +61,22 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when (and st (:active? st))
-             (let [ticks (inc (long (or (:ticks st) 0)))]
-               (when (zero? (mod ticks 8))
-                 (when-let [target (:target st)]
-                   (client-particles/queue-particle-effect!
-                     {:type :particle :particle-type :electric-spark
-                      :x (+ (double (:x target)) 0.5)
-                      :y (+ (double (:y target)) 0.5)
-                      :z (+ (double (:z target)) 0.5)
-                      :count 2 :speed 0.1
-                      :offset-x 0.3 :offset-y 0.3 :offset-z 0.3})))
-               (assoc st :ticks ticks))))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           (let [ticks (inc (long (or (:ticks st) 0)))]
+                             (when (zero? (mod ticks 8))
+                               (when-let [target (:target st)]
+                                 (client-particles/queue-particle-effect!
+                                   {:type :particle :particle-type :electric-spark
+                                    :x (+ (double (:x target)) 0.5)
+                                    :y (+ (double (:y target)) 0.5)
+                                    :z (+ (double (:z target)) 0.5)
+                                    :count 2 :speed 0.1
+                                    :offset-x 0.3 :offset-y 0.3 :offset-z 0.3})))
+                             [owner-key (assoc st :ticks ticks)]))))
+                 states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops  
@@ -85,12 +111,15 @@
      (ru/line-op {:x x0 :y y0 :z z1} {:x x0 :y y1 :z z1} col)]))
 
 (defn- build-plan [_camera-pos _hand-center-pos _tick]
-  (let [st @effect-state]
-    (when (and st (:active? st) (:target st))
-      {:ops (progress-box-ops (:target st)
-                              (double (or (:progress st) 0.0))
-                              (long (or (:ticks st) 0))
-                              (or (:variant st) :basic))})))
+  (let [ops (mapcat (fn [st]
+                      (when (and (:active? st) (:target st))
+                        (progress-box-ops (:target st)
+                                          (double (or (:progress st) 0.0))
+                                          (long (or (:ticks st) 0))
+                                          (or (:variant st) :basic))))
+                    (vals @effect-state))]
+    (when (seq ops)
+      {:ops (vec ops)})))
 
 ;; ---------------------------------------------------------------------------
 ;; Registration
@@ -98,22 +127,27 @@
 
 (defn init! []
   (level-effects/register-level-effect! :mine-ray
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:mine-ray/fx-start :mine-ray/fx-progress :mine-ray/fx-end]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
+      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
       (case channel
         :mine-ray/fx-start
         (level-effects/enqueue-level-effect! :mine-ray
-          {:mode :start :variant (:variant payload)})
+          (merge meta-payload {:mode :start :variant (:variant payload)})
+          {:ctx-id ctx-id :channel channel})
         :mine-ray/fx-progress
         (level-effects/enqueue-level-effect! :mine-ray
-          {:mode :progress
-           :x (:x payload) :y (:y payload) :z (:z payload)
-           :progress (:progress payload)})
+          (merge meta-payload
+                 {:mode :progress
+                  :x (:x payload) :y (:y payload) :z (:z payload)
+                  :progress (:progress payload)})
+          {:ctx-id ctx-id :channel channel})
         :mine-ray/fx-end
-        (level-effects/enqueue-level-effect! :mine-ray {:mode :end})
-        nil)))
+        (level-effects/enqueue-level-effect! :mine-ray (merge meta-payload {:mode :end})
+                                             {:ctx-id ctx-id :channel channel})
+        nil))))
   nil)

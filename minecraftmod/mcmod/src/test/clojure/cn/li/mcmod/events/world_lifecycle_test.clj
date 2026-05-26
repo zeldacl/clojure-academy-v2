@@ -3,10 +3,7 @@
             [cn.li.mcmod.events.world-lifecycle :as lifecycle]))
 
 (defn- clear-handlers! []
-  (reset! @#'lifecycle/world-load-handlers [])
-  (reset! @#'lifecycle/world-unload-handlers [])
-  (reset! @#'lifecycle/world-save-handlers [])
-  (reset! @#'lifecycle/world-tick-handlers []))
+  (lifecycle/reset-world-lifecycle-handlers-for-test!))
 
 (deftest register-and-dispatch-load-unload-test
   (clear-handlers!)
@@ -59,4 +56,48 @@
       (testing "tick continues after faulty handlers"
         (is (nil? (lifecycle/dispatch-world-tick :w))))
       (is (= [:load-ok :unload-ok :save-ok :tick-ok] @seen)))))
+
+(deftest duplicate-handler-id-is-idempotent-for-same-functions-test
+  (clear-handlers!)
+  (let [calls (atom [])
+        on-load (fn [world data] (swap! calls conj [:load world data]))
+        on-save (fn [world] (swap! calls conj [:save world]) {:saved true})]
+    (lifecycle/register-world-lifecycle-handler!
+      {:id :same
+       :on-load on-load
+       :on-save on-save})
+    (lifecycle/register-world-lifecycle-handler!
+      {:id :same
+       :on-load on-load
+       :on-save on-save})
+
+    (is (= 1 (count (:load (lifecycle/lifecycle-handlers-snapshot)))))
+    (is (= 1 (count (:save (lifecycle/lifecycle-handlers-snapshot)))))
+    (lifecycle/dispatch-world-load :world nil)
+    (is (= [{:saved true}] (lifecycle/dispatch-world-save :world)))
+    (is (= [[:load :world nil] [:save :world]] @calls))))
+
+(deftest duplicate-handler-id-with-different-function-fails-test
+  (clear-handlers!)
+  (lifecycle/register-world-lifecycle-handler!
+    {:id :conflict
+     :on-tick (fn [_] :a)})
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo
+       #"Conflicting world lifecycle handler id"
+       (lifecycle/register-world-lifecycle-handler!
+        {:id :conflict
+         :on-tick (fn [_] :b)}))))
+
+(deftest freeze-rejects-new-handler-registration-test
+  (clear-handlers!)
+  (lifecycle/freeze-world-lifecycle-handlers!)
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo
+       #"World lifecycle handlers are frozen"
+       (lifecycle/register-world-lifecycle-handler!
+        {:id :late
+         :on-load (fn [_ _] nil)})))
+  (clear-handlers!)
+  (is (false? (:frozen? (lifecycle/lifecycle-handlers-snapshot)))))
 

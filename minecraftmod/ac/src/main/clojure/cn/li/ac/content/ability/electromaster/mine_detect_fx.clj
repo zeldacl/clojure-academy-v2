@@ -6,7 +6,21 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
-(defonce ^:private effect-state (atom nil))
+(defonce ^:private effect-state (atom {}))
+
+(defn mine-detect-fx-snapshot
+  []
+  {:effect-state @effect-state})
+
+(defn reset-mine-detect-fx-for-test!
+  []
+  (reset! effect-state {})
+  nil)
+
+(defn clear-mine-detect-owner!
+  [owner-key]
+  (swap! effect-state dissoc owner-key)
+  nil)
 
 (def ^:private mineview-texture
   "my_mod:textures/effects/mineview.png")
@@ -111,54 +125,68 @@
       [])))
 
 (defn- apply-perform!
-  [{:keys [range advanced? life-ticks rescan-interval]}]
+  [owner-key ctx-id channel {:keys [range advanced? life-ticks rescan-interval source-player-id world-id]}]
   (client-sounds/queue-sound-effect!
     {:type :sound
      :sound-id "my_mod:em.minedetect"
      :volume 0.8
      :pitch 1.0})
-  (reset! effect-state
-          {:active? true
-           :ticks 0
-           :life-ticks (long (max 1 (or life-ticks default-life-ticks)))
-           :rescan-interval (long (max 1 (or rescan-interval default-rescan-interval)))
-           :last-rescan-tick nil
-           :range (clamped-range range)
-           :advanced? (boolean advanced?)
-           :ores []}))
+  (swap! effect-state assoc owner-key
+         {:owner-key owner-key
+          :ctx-id ctx-id
+          :channel channel
+          :source-player-id source-player-id
+          :world-id world-id
+          :active? true
+          :ticks 0
+          :life-ticks (long (max 1 (or life-ticks default-life-ticks)))
+          :rescan-interval (long (max 1 (or rescan-interval default-rescan-interval)))
+          :last-rescan-tick nil
+          :range (clamped-range range)
+          :advanced? (boolean advanced?)
+          :ores []}))
 
 (defn- enqueue!
-  [payload]
-  (case (:mode payload)
-    :perform (apply-perform! payload)
-    :end (reset! effect-state nil)
-    nil))
+  [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])]
+    (case (:mode payload)
+      :perform (apply-perform! owner-key* ctx-id channel payload)
+      :end (swap! effect-state dissoc owner-key*)
+      nil)))
 
 (defn- tick!
   []
   (swap! effect-state
-         (fn [st]
-           (when (and st (:active? st))
-             (let [next-ticks (inc (long (:ticks st)))
-                   life-ticks (long (:life-ticks st))]
-               (when (< next-ticks life-ticks)
-                 (assoc st :ticks next-ticks)))))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           (let [next-ticks (inc (long (:ticks st)))
+                                 life-ticks (long (:life-ticks st))]
+                             (when (< next-ticks life-ticks)
+                               [owner-key (assoc st :ticks next-ticks)])))))
+                 states))))
 
 (defn- maybe-refresh-ores!
-  [hand-center-pos frame-context]
+  [owner-key hand-center-pos frame-context]
   (swap! effect-state
-         (fn [st]
-           (if (and st (should-rescan? st))
-             (assoc st
-                    :ores (rescan-ores st hand-center-pos frame-context)
-                    :last-rescan-tick (:ticks st))
-             st))))
+         (fn [states]
+           (update states owner-key
+                   (fn [st]
+                     (if (and st (should-rescan? st))
+                       (assoc st
+                              :ores (rescan-ores st hand-center-pos frame-context)
+                              :last-rescan-tick (:ticks st))
+                       st))))))
 
 (defn- build-plan
   [_camera-pos hand-center-pos _tick frame-context]
-  (when @effect-state
-    (maybe-refresh-ores! hand-center-pos frame-context)
-    (let [{:keys [ticks life-ticks ores advanced?]} @effect-state
+  (when-let [[owner-key _] (some (fn [[owner-key st]]
+                                   (when (:active? st)
+                                     [owner-key st]))
+                                 @effect-state)]
+    (maybe-refresh-ores! owner-key hand-center-pos frame-context)
+    (let [{:keys [ticks life-ticks ores advanced?]} (get @effect-state owner-key)
           ops (into []
                     (mapcat (fn [{:keys [x y z] :as ore}]
                           (let [base-color (ore-color ore advanced?)
@@ -171,12 +199,12 @@
 (defn init!
   []
   (level-effects/register-level-effect! :mine-detect
-                                        {:enqueue-fn enqueue!
+                                        {:enqueue-event-fn enqueue!
                                          :tick-fn tick!
                                          :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:mine-detect/fx-perform :mine-detect/fx-end]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
       (case channel
         :mine-detect/fx-perform
         (level-effects/enqueue-level-effect! :mine-detect
@@ -184,8 +212,10 @@
                                               :range (:range payload)
                                               :advanced? (:advanced? payload)
                                               :life-ticks (:life-ticks payload)
-                                              :rescan-interval (:rescan-interval payload)})
+                                              :rescan-interval (:rescan-interval payload)}
+                                             {:ctx-id ctx-id :channel channel})
         :mine-detect/fx-end
-        (level-effects/enqueue-level-effect! :mine-detect {:mode :end})
+        (level-effects/enqueue-level-effect! :mine-detect {:mode :end}
+                                             {:ctx-id ctx-id :channel channel})
         nil)))
   nil)

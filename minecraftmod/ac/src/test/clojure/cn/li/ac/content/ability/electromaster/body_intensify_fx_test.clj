@@ -32,5 +32,7 @@
       (@handler* "ctx-1" :body-intensify/fx-end {:performed? true})
       (@handler* "ctx-2" :body-intensify/fx-end {:performed? false})
       (is (= 1 (count @sounds*)))
-      (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "intensify_effect"}]]
+      (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "intensify_effect"
+                       :ctx-id "ctx-1"
+                       :channel :body-intensify/fx-end}]]
              @local-fx*)))))

@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.server.service.context-mgr-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as test-player]
             [cn.li.ac.ability.server.service.context-mgr :as cm]
@@ -11,7 +11,7 @@
             [cn.li.ac.ability.messages :as catalog]))
 
 (defn- reset-fixture [f]
-  (let [saved-skills @skill-registry/skill-registry]
+  (let [saved-skills (skill-registry/skill-registry-snapshot)]
     (test-contexts/clean-contexts-fixture
      #(test-player/clean-player-states-fixture
        (fn []
@@ -19,16 +19,19 @@
          (try
            (f)
            (finally
-             (reset! skill-registry/skill-registry saved-skills)
+             (skill-registry/reset-skill-registry-for-test! saved-skills)
              (cm/register-send-fns! {:to-client nil :to-server nil}))))))))
 
 (use-fixtures :each reset-fixture)
 
+(def ^:private test-context-owner {:session-id :test-session})
+
 (defn- seed-player! [uuid skill-kw]
-  (skill-registry/register-skill! {:id skill-kw
-                                   :category-id :electromaster
-                                   :level 1
-                                   :pattern :passive})
+  (when-not (skill-registry/get-skill skill-kw)
+    (skill-registry/register-skill! {:id skill-kw
+                                     :category-id :electromaster
+                                     :level 1
+                                     :pattern :passive}))
   (let [ability-data (-> (ad/new-ability-data)
                          (ad/learn-skill skill-kw))
         resource-data (assoc (rd/new-resource-data) :activated true)]
@@ -40,7 +43,8 @@
     (cm/register-send-fns! {:to-server (fn [msg-id payload]
                                           (swap! out conj [msg-id payload]))
                             :to-client nil})
-    (let [c (cm/activate-context! "player-1" :arc-gen)]
+    (let [c (binding [ctx/*context-owner* test-context-owner]
+          (cm/activate-context! "player-1" :arc-gen))]
       (is (= 1 (count @out)))
       (is (= catalog/MSG-CTX-BEGIN-LINK (first (first @out))))
       (is (= :arc-gen (:skill-id (second (first @out)))))
@@ -52,7 +56,8 @@
     (cm/register-send-fns! {:to-client (fn [uuid msg-id payload]
                                          (swap! out conj [uuid msg-id payload]))
                             :to-server nil})
-    (let [res (cm/establish-context! "p2" "cid-1" :arc-gen)]
+    (let [res (binding [ctx/*context-owner* test-context-owner]
+          (cm/establish-context! "p2" "cid-1" :arc-gen))]
       (is (some? res))
       (is (= 1 (count (filter #(= catalog/MSG-CTX-ESTABLISH (second %)) @out)))))))
 
@@ -62,7 +67,8 @@
     (cm/register-send-fns! {:to-client (fn [uuid msg-id payload]
                                          (swap! out conj [uuid msg-id payload]))
                             :to-server nil})
-    (cm/establish-context! "p3" "cid-x" :other-skill)
+    (binding [ctx/*context-owner* test-context-owner]
+      (cm/establish-context! "p3" "cid-x" :other-skill))
     (is (some #(= catalog/MSG-CTX-TERMINATE (second %)) @out))))
 
 (deftest push-channel-forwards-to-client-test
@@ -84,10 +90,10 @@
         fresh-ts (System/currentTimeMillis)
         old-ctx-id "ctx-old-terminated"
         fresh-ctx-id "ctx-fresh-terminated"]
-    (ctx/register-context! (assoc (ctx/new-server-context "p-old" :arc-gen old-ctx-id)
+    (ctx/register-context! (assoc (ctx/new-server-context "p-old" :arc-gen old-ctx-id test-context-owner)
                                   :status ctx/STATUS-TERMINATED
                                   :terminated-at-ms old-ts))
-    (ctx/register-context! (assoc (ctx/new-server-context "p-fresh" :arc-gen fresh-ctx-id)
+    (ctx/register-context! (assoc (ctx/new-server-context "p-fresh" :arc-gen fresh-ctx-id test-context-owner)
                                   :status ctx/STATUS-TERMINATED
                                   :terminated-at-ms fresh-ts))
     (cm/tick-context-manager!)
@@ -97,7 +103,7 @@
 (deftest tick-context-manager-terminates-expired-alive-context-test
   (let [ctx-id "ctx-timeout"
         terminated (atom [])]
-    (ctx/register-context! (assoc (ctx/new-server-context "p-timeout" :arc-gen ctx-id)
+    (ctx/register-context! (assoc (ctx/new-server-context "p-timeout" :arc-gen ctx-id test-context-owner)
                                   :last-keepalive-ms (- (System/currentTimeMillis) 5000)))
     (cm/register-send-fns! {:to-client (fn [_uuid msg-id payload]
                                          (when (= catalog/MSG-CTX-TERMINATE msg-id)

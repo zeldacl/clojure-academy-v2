@@ -3,6 +3,12 @@
   (:require [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private handlers (atom {}))
+(defonce ^:private handlers-frozen? (atom false))
+
+(defn- assert-not-frozen!
+  []
+  (when @handlers-frozen?
+    (throw (ex-info "Network server handlers are frozen" {}))))
 
 (defn register-handler
   "Register a request handler.
@@ -11,8 +17,32 @@
   - msg-id: string message identifier
   - handler-fn: (fn [payload player] response-map)"
   [msg-id handler-fn]
-  (swap! handlers assoc msg-id handler-fn)
-  (log/info "Registered network handler for" msg-id))
+  (assert-not-frozen!)
+  (swap! handlers
+         (fn [registry]
+           (if-let [existing (get registry msg-id)]
+             (if (identical? existing handler-fn)
+               registry
+               (throw (ex-info "Conflicting network handler id" {:msg-id msg-id})))
+             (assoc registry msg-id handler-fn))))
+  (log/info "Registered network handler for" msg-id)
+  nil)
+
+(defn freeze-handlers!
+  []
+  (reset! handlers-frozen? true)
+  nil)
+
+(defn reset-handlers-for-test!
+  []
+  (reset! handlers {})
+  (reset! handlers-frozen? false)
+  nil)
+
+(defn handlers-snapshot
+  []
+  {:handlers @handlers
+   :frozen? @handlers-frozen?})
 
 (defn handle-request
   "Handle an incoming request and send a response if needed.

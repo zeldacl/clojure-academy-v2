@@ -10,22 +10,16 @@
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.messages :as catalog]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]))
 
 (defn- reset-ui-state! [f]
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/client-push-handlers-registered? false)
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles [])
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0)
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/charge-coin-state {})
-  (f)
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles [])
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0)
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/charge-coin-state {})
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/client-push-handlers-registered? false))
+  (client-ui-hooks/reset-client-ui-state-for-test!)
+  (try
+    (binding [client-keybinds/*client-session-id* :test-session]
+      (f))
+    (finally
+      (client-ui-hooks/reset-client-ui-state-for-test!))))
 
 (use-fixtures :each reset-ui-state!)
 
@@ -61,6 +55,34 @@
               {:ctx-id "ctx-client-1" :skill-id :railgun :key-idx 0}
               {:ctx-id "ctx-client-1" :key-idx 0}]
              (mapv :payload @sent))))))
+
+(deftest slot-context-state-isolated-by-client-session-test
+  (let [ctx-counter (atom 0)
+        hooks (client-ui-hooks/runtime-client-ui-hooks)]
+    (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :railgun)
+                  ctx-mgr/activate-context! (fn [_ _]
+                                              {:id (str "ctx-" (swap! ctx-counter inc))})
+                  net-client/send-to-server (fn [& _] nil)]
+      (binding [client-keybinds/*client-session-id* :session-a]
+        ((:client-on-slot-key-down! hooks) "p1" 0))
+      (binding [client-keybinds/*client-session-id* :session-b]
+        ((:client-on-slot-key-down! hooks) "p1" 0))
+      (is (= {[:session-a "p1" 0] "ctx-1"}
+             (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot
+                                 {:client-session-id :session-a :player-uuid "p1"}))))
+      (is (= {[:session-b "p1" 0] "ctx-2"}
+             (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot
+                                 {:client-session-id :session-b :player-uuid "p1"})))))))
+
+(deftest client-ui-owner-requires-explicit-session-and-player-test
+  (binding [client-keybinds/*client-session-id* nil
+            runtime-hooks/*client-session-id* nil]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Client UI owner requires :client-session-id"
+                          (client-ui-hooks/client-ui-state-snapshot "p1"))))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Client UI owner requires :player-uuid"
+                        (client-ui-hooks/client-ui-state-snapshot {:client-session-id :session-a}))))
 
 (deftest hud-render-data-hidden-when-not-activated-test
   (let [model {:cp {:cur 50.0 :max 100.0}
@@ -103,8 +125,7 @@
           (deftest client-terminated-push-clears-slot-context-and-terminates-local-context-test
             (let [handlers (atom {})
             terminated (atom [])]
-              (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids
-                {[(str "p1") 0] "ctx-dead"})
+              (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-dead")
               (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
                             (swap! handlers assoc msg-id handler-fn)
                             nil)
@@ -113,7 +134,7 @@
                        nil)]
                 (client-ui-hooks/register-client-push-handlers!)
                 ((get @handlers catalog/MSG-CTX-TERMINATED) {:ctx-id "ctx-dead"})
-                (is (empty? @@#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids))
+                (is (empty? (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot "p1"))))
                 (is (= [["ctx-dead" nil]] @terminated)))))
 
 (deftest charge-coin-hooks-notify-and-visual-state-test
@@ -134,6 +155,22 @@
         (is (false? (:coin-active? visual)))
         (is (number? (:coin-progress visual)))
         (is (number? (:charge-ratio visual)))))))
+
+(deftest charge-coin-state-isolated-by-client-session-test
+  (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
+    (with-redefs [skill-config/tunable-int (fn [skill-id field-id]
+                                             (case [skill-id field-id]
+                                               [:railgun :qte.coin-window-ms] 1000
+                                               [:railgun :charge.item-charge-ticks] 20
+                                               1))
+                  skill-config/tunable-double (fn [_ _] 0.6)
+                  ctx/get-all-contexts-for-player (fn [_] [])]
+      (binding [client-keybinds/*client-session-id* :session-a]
+        ((:client-notify-visual-event! hooks) :ac/charge-coin-throw {:player-uuid "p1"}))
+      (is (some? (:charge-coin-state (client-ui-hooks/client-ui-state-snapshot
+                                      {:client-session-id :session-a :player-uuid "p1"}))))
+      (is (nil? (:charge-coin-state (client-ui-hooks/client-ui-state-snapshot
+                                     {:client-session-id :session-b :player-uuid "p1"})))))))
 
 (deftest charge-coin-visual-state-prefers-item-charge-context-test
   (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
@@ -255,9 +292,10 @@
                 client-keybinds/get-preset-switch-state (fn [] nil)]
       (do
         ;; Pre-seed a wave circle born 100ms ago so alpha>0 at now-ms=1000
-        (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles
-                [{:x 160.0 :y 90.0 :born-ms 900 :life-ms 600
-                  :start-size 10.0 :end-size 50.0 :seed 0.0}])
+        (client-ui-hooks/seed-vm-wave-state-for-test!
+         "p1"
+         [{:x 160.0 :y 90.0 :born-ms 900 :life-ms 600
+           :start-size 10.0 :end-size 50.0 :seed 0.0}])
         (let [plan (client-ui-hooks/build-client-overlay-plan
                 "p1" 320 180 {:now-ms 1000})
           kinds (mapv :kind (:elements plan))]

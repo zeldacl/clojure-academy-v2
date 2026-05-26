@@ -8,18 +8,45 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private providers* (atom {}))
+(defonce ^:private providers-frozen? (atom false))
+
+(defn- assert-registry-open!
+  []
+  (when @providers-frozen?
+    (throw (ex-info "Content discovery provider registry is frozen" {}))))
+
+(defn provider-registry-snapshot
+  []
+  {:providers @providers*
+   :frozen? @providers-frozen?})
+
+(defn reset-provider-registry-for-test!
+  ([]
+   (reset-provider-registry-for-test! {}))
+  ([{:keys [providers frozen?]
+     :or {providers {} frozen? false}}]
+   (reset! providers* providers)
+   (reset! providers-frozen? frozen?)
+   nil))
+
+(defn freeze-provider-registry!
+  []
+  (reset! providers-frozen? true)
+  nil)
 
 (defn register-provider!
   "Register or replace a content provider by id."
   [provider]
   (let [provider* (core/normalize-provider provider)
   id (core/provider-id* provider*)]
+    (assert-registry-open!)
     (swap! providers* assoc id provider*)
     (log/debug "Registered content provider" id)
     provider*))
 
 (defn unregister-provider!
   [provider-id]
+  (assert-registry-open!)
   (swap! providers* dissoc provider-id)
   nil)
 

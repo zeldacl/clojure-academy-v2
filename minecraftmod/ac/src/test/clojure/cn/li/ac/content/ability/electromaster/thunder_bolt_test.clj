@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-bolt-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.content.ability.electromaster.thunder-bolt :as thunder-bolt]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.server.effect.geom :as geom]
@@ -79,7 +79,9 @@
       (is (= 1 (count @fx*)))
       (let [[_ _ payload] (first @fx*)]
         (is (= :miss (:hit-kind payload)))
-        (is (= {:x 0.0 :y 64.0 :z 20.0} (:end payload))))
+        (is (= {:x 0.0 :y 64.0 :z 20.0} (:end payload)))
+        (is (= "p1" (:source-player-id payload)))
+        (is (= "w" (:world-id payload))))
       (is (= [["p1" :thunder-bolt 0.003]] @exp*))
       (is (= [["p1" :thunder-bolt 85]] @cooldown*)))))
 

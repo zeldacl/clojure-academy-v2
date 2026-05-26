@@ -4,9 +4,11 @@
 
 (defn- clean-hooks-fixture
   [f]
-  (hooks/reset-registries!)
-  (f)
-  (hooks/reset-registries!))
+  (hooks/reset-hook-registry-for-test!)
+  (try
+    (f)
+    (finally
+      (hooks/reset-hook-registry-for-test!))))
 
 (use-fixtures :each clean-hooks-fixture)
 
@@ -59,3 +61,12 @@
   (hooks/reset-registries!)
   (is (empty? (hooks/get-network-handlers)))
   (is (empty? (hooks/get-client-renderers))))
+
+(deftest hook-registry-freeze-policy-test
+  (hooks/freeze-hook-registry!)
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"AC hook registry is frozen"
+                        (hooks/register-network-handler! (fn [] :noop))))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"AC hook registry is frozen"
+                        (hooks/register-client-renderer! 'a.b/init!))))

@@ -1,8 +1,8 @@
 (ns cn.li.ac.energy.api.impl
   "Default Phase C energy API implementation.
 
-  This namespace bridges the new protocol layer to the concrete item/node
-  service implementations while keeping migration friction low."
+  This namespace bridges the protocol layer to the concrete item/node service
+  implementations. Runtime stores require an explicit server/world owner."
   (:require [cn.li.ac.energy.api.protocol :as proto]
             [cn.li.ac.energy.service.provider-registry :as provider-registry]
             [cn.li.ac.energy.service.subscription :as subscription]
@@ -11,6 +11,24 @@
             [cn.li.ac.energy.service.node-manager :as node-manager]
             [cn.li.ac.energy.domain.container :as container]
             [cn.li.mcmod.util.log :as log]))
+
+(def ^:private WORLD-PROVIDER-OWNER :world)
+
+(defn- require-owner-value
+  [owner label value]
+  (when-not value
+    (throw (ex-info (str "Energy owner requires " label)
+                    {:owner owner})))
+  value)
+
+(defn energy-owner-key
+  "Return the owner key for an energy system instance."
+  [owner]
+  (let [server-session-id (or (:server-session-id owner) (:session-id owner))
+        world-id (or (:world-id owner) (:dimension-id owner))]
+    [(require-owner-value owner ":server-session-id" server-session-id)
+     (require-owner-value owner ":world-id" world-id)
+     (or (:provider-owner owner) (:owner-id owner) WORLD-PROVIDER-OWNER)]))
 
 (defrecord EnergySystemImpl [providers subscriptions scheduled-transfers]
   proto/IEnergyManager
@@ -138,13 +156,30 @@
     (log/warn (str "Simulated energy loss: " amount-lost " because " reason))
     {:lost amount-lost}))
 
+(defn- new-energy-system []
+  (->EnergySystemImpl (atom {}) (atom {}) (atom {})))
+
 (defonce ^:private default-energy-system*
-  (delay (->EnergySystemImpl (atom {}) (atom {}) (atom {}))))
+  (delay (atom {})))
 
 (defn energy-system
   "Return the default energy system implementation."
+  [owner]
+  (let [key (energy-owner-key owner)
+        systems @default-energy-system*]
+    (or (get @systems key)
+        (do
+          (swap! systems #(if (contains? % key) % (assoc % key (new-energy-system))))
+          (get @systems key)))))
+
+(defn energy-systems-snapshot
   []
-  @default-energy-system*)
+  (deref @default-energy-system*))
+
+(defn reset-energy-systems-for-test!
+  []
+  (reset! @default-energy-system* {})
+  nil)
 
 (defn register-provider!
   "Register a provider under a stable id.
@@ -154,10 +189,10 @@
   - a wireless node tile entity
   - an EnergyContainer
   - an atom holding an EnergyContainer"
-  [id value]
-  (provider-registry/register-provider! (:providers (energy-system)) id value))
+  [owner id value]
+  (provider-registry/register-provider! (:providers (energy-system owner)) id value))
 
 (defn unregister-provider!
   "Unregister a previously registered provider id."
-  [id]
-  (provider-registry/unregister-provider! (:providers (energy-system)) id))
+  [owner id]
+  (provider-registry/unregister-provider! (:providers (energy-system owner)) id))

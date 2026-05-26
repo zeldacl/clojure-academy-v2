@@ -5,14 +5,13 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.content.ability.teleporter.teleporter-crit-fx :as crit-fx]))
+            [cn.li.ac.content.ability.teleporter.teleporter-crit-fx :as crit-fx]
+            [cn.li.mcmod.i18n]))
 
 (defn- reset-fixture [f]
-  (reset! @#'cn.li.ac.content.ability.teleporter.teleporter-crit-fx/fx-state {:ttl 0})
   (combat-notice/reset-notices!)
   (f)
-  (combat-notice/reset-notices!)
-  (reset! @#'cn.li.ac.content.ability.teleporter.teleporter-crit-fx/fx-state {:ttl 0}))
+  (combat-notice/reset-notices!))
 
 (use-fixtures :each reset-fixture)
 
@@ -38,8 +37,8 @@
                   fx-registry/register-fx-channels! (fn [_ handler]
                                                       (reset! handler* handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload]
-                                                        (swap! enqueued* conj [effect-id payload])
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (crit-fx/init!)
       (@handler* "ctx-1" :teleporter/fx-crit-hit {:x 1.0 :y 2.0 :z 3.0 :crit-level 2 :crit-rate 2.6 :message-key "ability.teleporter.critical_hit" :message-args ["x2.6"] :target-uuid "t" :skill-id :flesh-ripping})
@@ -52,7 +51,8 @@
                  :message-key "ability.teleporter.critical_hit"
                  :message-args ["x2.6"]
                                  :target-uuid "t"
-                                 :skill-id :flesh-ripping}]]
+                                 :skill-id :flesh-ripping}
+                {:ctx-id "ctx-1" :channel :teleporter/fx-crit-hit}]]
              @enqueued*)))))
 
     (deftest enqueue-crit-hit-emits-level-scaled-effects-and-notice-test

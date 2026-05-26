@@ -3,9 +3,11 @@
             [cn.li.mcmod.network.server :as server]))
 
 (defn- reset-handlers! [f]
-  (reset! (var-get #'server/handlers) {})
-  (f)
-  (reset! (var-get #'server/handlers) {}))
+  (server/reset-handlers-for-test!)
+  (try
+    (f)
+    (finally
+      (server/reset-handlers-for-test!))))
 
 (use-fixtures :each reset-handlers!)
 
@@ -44,3 +46,21 @@
       (is (= 6 (ffirst @responses)))
       (is (= false (get-in @responses [0 1 :success])))
       (is (= "broken" (get-in @responses [0 1 :error]))))))
+
+(deftest handler-registration-policy-test
+  (let [handler (fn [payload _player] payload)]
+    (server/register-handler "same" handler)
+    (server/register-handler "same" handler)
+    (is (= #{"same"} (set (keys (:handlers (server/handlers-snapshot))))))
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Conflicting network handler id"
+         (server/register-handler "same" (fn [_ _] {:other true}))))))
+
+(deftest frozen-handlers-reject-registration-test
+  (server/freeze-handlers!)
+  (is (true? (:frozen? (server/handlers-snapshot))))
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo
+       #"Network server handlers are frozen"
+       (server/register-handler "late" (fn [_ _] nil)))))

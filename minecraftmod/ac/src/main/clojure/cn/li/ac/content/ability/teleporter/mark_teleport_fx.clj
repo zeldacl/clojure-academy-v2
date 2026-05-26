@@ -6,21 +6,43 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
+(defonce ^:private effect-state (atom {}))
+
+(defn mark-teleport-fx-snapshot []
+  {:effect-state @effect-state})
+
+(defn reset-mark-teleport-fx-for-test! []
+  (reset! effect-state {})
+  nil)
+
+(defn clear-mark-teleport-owner! [owner-key]
+  (swap! effect-state dissoc owner-key)
+  nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode target distance]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode target distance source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
-      (reset! effect-state {:active? true :target nil :distance 0.0 :ticks 0})
+      (swap! effect-state assoc owner-key* (merge base-meta {:active? true :target nil :distance 0.0 :ticks 0}))
       :update
-      (swap! effect-state
+      (swap! effect-state update owner-key*
              (fn [st]
-               (assoc (or st {})
+               (assoc (merge base-meta (or st {}))
+                      :owner-key owner-key*
+                      :ctx-id ctx-id
+                      :channel channel
+                      :source-player-id source-player-id
+                      :world-id world-id
                       :active? true
                       :target target
                       :distance (double (or distance 0.0))
@@ -35,7 +57,7 @@
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id "my_mod:tp.tp" :volume 0.5 :pitch 1.0}))
       :end
-      (reset! effect-state nil)
+      (clear-mark-teleport-owner! owner-key*)
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -44,19 +66,22 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when (:active? st)
-             (let [ticks (inc (long (or (:ticks st) 0)))
-                   target (:target st)]
-               (when (and target (zero? (mod ticks 3)))
-                 (client-particles/queue-particle-effect!
-                   {:type :particle :particle-type :portal
-                    :x (:x target)
-                    :y (- (double (or (:y target) 0.0)) 0.5)
-                    :z (:z target)
-                    :count 2 :speed 0.03
-                    :offset-x 0.9 :offset-y 0.7 :offset-z 0.9}))
-               (assoc st :ticks ticks))))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           (let [ticks (inc (long (or (:ticks st) 0)))
+                                 target (:target st)]
+                             (when (and target (zero? (mod ticks 3)))
+                               (client-particles/queue-particle-effect!
+                                 {:type :particle :particle-type :portal
+                                  :x (:x target)
+                                  :y (- (double (or (:y target) 0.0)) 0.5)
+                                  :z (:z target)
+                                  :count 2 :speed 0.03
+                                  :offset-x 0.9 :offset-y 0.7 :offset-z 0.9}))
+                             [owner-key (assoc st :ticks ticks)]))))
+                 states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -110,12 +135,14 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
-  (let [mk @effect-state]
-    (when (and mk (:active? mk) (map? (:target mk)))
-      (let [{:keys [target ticks distance]} mk]
-        {:ops (vec (concat
-                     (ground-ring-ops target ticks distance)
-                     (billboard-ops camera-pos target ticks)))}))))
+  (let [ops (mapcat (fn [mk]
+                      (when (and (:active? mk) (map? (:target mk)))
+                        (let [{:keys [target ticks distance]} mk]
+                          (concat (ground-ring-ops target ticks distance)
+                                  (billboard-ops camera-pos target ticks)))))
+                    (vals @effect-state))]
+    (when (seq ops)
+      {:ops (vec ops)})))
 
 ;; ---------------------------------------------------------------------------
 ;; Registration
@@ -123,23 +150,30 @@
 
 (defn init! []
   (level-effects/register-level-effect! :mark-teleport
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:mark-teleport/fx-start :mark-teleport/fx-update :mark-teleport/fx-end :mark-teleport/fx-perform]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
+      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
       (case channel
         :mark-teleport/fx-start
-        (level-effects/enqueue-level-effect! :mark-teleport {:mode :start})
+        (level-effects/enqueue-level-effect! :mark-teleport (merge meta-payload {:mode :start})
+                                             {:ctx-id ctx-id :channel channel})
         :mark-teleport/fx-update
         (level-effects/enqueue-level-effect! :mark-teleport
-          {:mode :update :target (:target payload)
-           :distance (double (or (:distance payload) 0.0))})
+          (merge meta-payload
+                 {:mode :update :target (:target payload)
+                  :distance (double (or (:distance payload) 0.0))})
+          {:ctx-id ctx-id :channel channel})
         :mark-teleport/fx-end
-        (level-effects/enqueue-level-effect! :mark-teleport {:mode :end})
+        (level-effects/enqueue-level-effect! :mark-teleport (merge meta-payload {:mode :end})
+                                             {:ctx-id ctx-id :channel channel})
         :mark-teleport/fx-perform
         (level-effects/enqueue-level-effect! :mark-teleport
-          {:mode :perform :target (:target payload)
-           :distance (double (or (:distance payload) 0.0))}))))
+          (merge meta-payload
+                 {:mode :perform :target (:target payload)
+                  :distance (double (or (:distance payload) 0.0))})
+          {:ctx-id ctx-id :channel channel})))))
   nil)

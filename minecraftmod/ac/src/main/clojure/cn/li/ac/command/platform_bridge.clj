@@ -16,6 +16,6 @@
 		(command-actions/install-command-actions!)
 		(command-runtime/register-command-hooks!
 			{:init-commands! commands/init-commands!})
-		(command-metadata/register-command-registry! @command-dsl/command-registry)
+		(command-metadata/register-command-registry! (:commands (command-dsl/command-registry-snapshot)))
 		(log/info "AC command hooks installed"))
 	nil)

@@ -4,16 +4,21 @@
                                           [cn.li.ac.ability.passive :as passive]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.player-state :as ps]
+                                          [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.generic.course-chain :as courses]))
 
 (defn- reset-runtime-fixture [f]
-  (reset! ps/player-states {})
-  (reset! @#'cn.li.ac.ability.registry.event/subscribers {})
-       (reset! @#'passive/registered-handlers #{})
-  (f)
-  (reset! ps/player-states {})
-  (reset! @#'cn.li.ac.ability.registry.event/subscribers {})
-       (reset! @#'passive/registered-handlers #{}))
+       (ps-fix/with-test-player-state-owner
+              (fn []
+                     (ps/reset-player-states-for-test!)
+                     (evt/reset-ability-event-subscribers-for-test!)
+                     (passive/reset-passive-handler-registry-for-test!)
+                     (try
+                            (f)
+                            (finally
+                                   (ps/reset-player-states-for-test!)
+                                   (evt/reset-ability-event-subscribers-for-test!)
+                                   (passive/reset-passive-handler-registry-for-test!))))))
 
 (use-fixtures :each reset-runtime-fixture)
 

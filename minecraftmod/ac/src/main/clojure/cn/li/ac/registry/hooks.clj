@@ -6,9 +6,35 @@
   (:require [cn.li.mcmod.util.log :as log]))
 
 ;; Unified hook registry state.
-(defonce hook-registry
+(defonce ^:private hook-registry
   (atom {:network-handlers []
          :client-renderers []}))
+
+(defonce ^:private hook-registry-frozen? (atom false))
+
+(defn- assert-registry-open!
+  []
+  (when @hook-registry-frozen?
+    (throw (ex-info "AC hook registry is frozen" {}))))
+
+(defn hook-registry-snapshot
+  []
+  (assoc @hook-registry :frozen? @hook-registry-frozen?))
+
+(defn reset-hook-registry-for-test!
+  ([]
+   (reset-hook-registry-for-test! {}))
+  ([{:keys [network-handlers client-renderers frozen?]
+     :or {network-handlers [] client-renderers [] frozen? false}}]
+   (reset! hook-registry {:network-handlers (vec network-handlers)
+                          :client-renderers (vec client-renderers)})
+   (reset! hook-registry-frozen? frozen?)
+   nil))
+
+(defn freeze-hook-registry!
+  []
+  (reset! hook-registry-frozen? true)
+  nil)
 
 (defn- dedupe-conj
   [items item]
@@ -30,19 +56,20 @@
   "Reset both registries to an empty state.
   Primarily used by tests and REPL workflows."
   []
-  (reset! hook-registry {:network-handlers []
-                         :client-renderers []}))
+  (reset-hook-registry-for-test!))
 
 (defn register-network-handler!
   "Register a network handler registration function.
   Called by block/GUI init functions to register their handlers."
   [handler-fn]
+  (assert-registry-open!)
   (swap! hook-registry update :network-handlers dedupe-conj handler-fn))
 
 (defn register-client-renderer!
   "Register a client renderer namespace symbol.
   Called by block init functions to register their renderers."
   [renderer-ns-sym]
+  (assert-registry-open!)
   (swap! hook-registry update :client-renderers dedupe-conj renderer-ns-sym))
 
 (defn call-all-network-handlers-with-report!

@@ -1,11 +1,13 @@
 (ns cn.li.ac.ability.server.damage.runtime-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.server.damage.runtime :as rt]))
 
 (defn- reset-handlers! [f]
-  (reset! @#'cn.li.ac.ability.server.damage.runtime/damage-handlers {})
-  (f)
-  (reset! @#'cn.li.ac.ability.server.damage.runtime/damage-handlers {}))
+  (rt/reset-damage-handler-registry-for-test!)
+  (try
+    (f)
+    (finally
+      (rt/reset-damage-handler-registry-for-test!))))
 
 (use-fixtures :each reset-handlers!)
 
@@ -36,3 +38,13 @@
 (deftest handler-valid-vector-metadata-test
   (rt/register-damage-handler! :ok (fn [_ _ d _] [(* d 2) {:meta true}]) 0)
   (is (= 10.0 (rt/process-damage! "p" "a" 5.0 :src))))
+
+(deftest damage-handler-registry-duplicate-and-freeze-policy-test
+  (is (true? (rt/register-damage-handler! :dup (fn [_ _ d _] (+ d 1)) 0)))
+  (is (true? (rt/register-damage-handler! :dup (fn [_ _ d _] (* d 10)) 0)))
+  (is (= 3.0 (rt/process-damage! "p" "a" 2.0 :src))
+      "duplicate handler id with same priority preserves the first handler")
+  (is (false? (rt/register-damage-handler! :dup (fn [_ _ d _] d) 99)))
+  (rt/freeze-damage-handler-registry!)
+  (is (false? (rt/register-damage-handler! :new-handler (fn [_ _ d _] d) 0)))
+  (is (false? (rt/unregister-damage-handler! :dup))))

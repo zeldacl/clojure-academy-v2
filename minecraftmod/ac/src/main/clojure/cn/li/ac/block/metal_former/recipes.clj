@@ -206,12 +206,64 @@
       :input {:item "minecraft:deepslate_copper_ore" :count 1}
       :output {:item "minecraft:copper_ingot" :count 2}}]))
 
-(defonce recipes
+(defonce ^:private recipes
   (atom (vec (default-recipes))))
+
+(defn- validate-recipe!
+  [recipe]
+  (when-not (map? recipe)
+    (throw (ex-info "Metal Former recipe must be a map" {:recipe recipe})))
+  (when-not (and (string? (:id recipe)) (not (str/blank? (:id recipe))))
+    (throw (ex-info "Metal Former recipe id must be a non-empty string" {:recipe recipe})))
+  recipe)
+
+(defn- assert-no-conflicting-duplicates!
+  [recipe-list]
+  (doseq [[recipe-id entries] (group-by :id recipe-list)
+          :when (> (count entries) 1)]
+    (when (> (count (distinct entries)) 1)
+      (throw (ex-info "Conflicting Metal Former recipe id"
+                      {:id recipe-id
+                       :recipes entries}))))
+  recipe-list)
+
+(defn recipes-snapshot
+  []
+  (vec @recipes))
+
+(defn replace-recipes!
+  [recipe-list]
+  (let [validated (->> recipe-list
+                       (map validate-recipe!)
+                       assert-no-conflicting-duplicates!
+                       distinct
+                       vec)]
+    (reset! recipes validated))
+  nil)
+
+(defn register-recipe!
+  [recipe]
+  (let [recipe (validate-recipe! recipe)]
+    (swap! recipes
+           (fn [current]
+             (if-let [existing (first (filter #(= (:id %) (:id recipe)) current))]
+               (if (= existing recipe)
+                 current
+                 (throw (ex-info "Conflicting Metal Former recipe id"
+                                 {:id (:id recipe)
+                                  :existing existing
+                                  :new recipe})))
+               (conj (vec current) recipe)))))
+  nil)
+
+(defn reset-recipes-for-test!
+  []
+  (reset! recipes (vec (default-recipes)))
+  nil)
 
 (defn get-recipe-by-id
   [recipe-id]
-  (first (filter #(= (:id %) recipe-id) @recipes)))
+  (first (filter #(= (:id %) recipe-id) (recipes-snapshot))))
 
 (defn find-recipe
   "Find recipe by input stack and machine mode."
@@ -222,7 +274,7 @@
         (fn [recipe]
           (and (= mk (normalize-mode (:mode recipe)))
                (stack-matches-item? input-item (:input recipe))))
-        @recipes))))
+        (recipes-snapshot)))))
 
 (defn can-accept-input?
   [recipe input-item mode]

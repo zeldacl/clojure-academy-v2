@@ -3,11 +3,11 @@
             [cn.li.ac.ability.server.damage.handler :as h]))
 
 (defn- reset-registries! [f]
-  (reset! @#'cn.li.ac.ability.server.damage.handler/attack-cancel-checks {})
-  (reset! @#'cn.li.ac.ability.server.damage.handler/attack-precheck-side-effects {})
-  (f)
-  (reset! @#'cn.li.ac.ability.server.damage.handler/attack-cancel-checks {})
-  (reset! @#'cn.li.ac.ability.server.damage.handler/attack-precheck-side-effects {}))
+  (h/reset-attack-check-registries-for-test!)
+  (try
+    (f)
+    (finally
+      (h/reset-attack-check-registries-for-test!))))
 
 (use-fixtures :each reset-registries!)
 
@@ -41,3 +41,20 @@
       (fn [_ _ _ _] (swap! calls inc) true))
     (is (true? (h/run-attack-precheck-side-effects! "p" "a" 8.0 :magic)))
     (is (= 1 @calls))))
+
+(deftest attack-check-registry-duplicate-and-freeze-policy-test
+  (h/register-attack-cancel-check! :dup (fn [_ _ _] false))
+  (h/register-attack-cancel-check! :dup (fn [_ _ _] true))
+  (is (false? (h/should-cancel-attack? "p" "a" 1.0 :src))
+      "duplicate check id preserves the first registered predicate")
+  (h/register-attack-precheck-side-effect! :fx (fn [_ _ _ _] false))
+  (h/register-attack-precheck-side-effect! :fx (fn [_ _ _ _] true))
+  (is (false? (h/run-attack-precheck-side-effects! "p" "a" 1.0 :src))
+      "duplicate side-effect id preserves the first registered callback")
+  (h/freeze-attack-check-registries!)
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Attack check registries are frozen"
+                        (h/register-attack-cancel-check! :new-check (fn [_ _ _] false))))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Attack check registries are frozen"
+                        (h/register-attack-precheck-side-effect! :new-fx (fn [_ _ _ _] true)))))

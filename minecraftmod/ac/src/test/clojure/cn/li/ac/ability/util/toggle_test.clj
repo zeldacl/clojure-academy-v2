@@ -6,6 +6,8 @@
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 
+(def ^:private test-context-owner {:session-id :test-session})
+
 (deftest init-and-query-toggle-test
   (let [m (tg/init-toggle-state :my-skill)]
     (is (true? (:active m)))
@@ -18,7 +20,7 @@
   (is (= {:active true} (tg/get-toggle-state {:skill-state {:toggle {:s {:active true}}}} :s))))
 
 (deftest toggle-mutations-via-context-test
-  (let [c (ctx/new-server-context "p" :skill "ctx-toggle")]
+  (let [c (ctx/new-server-context "p" :skill "ctx-toggle" test-context-owner)]
     (ctx/register-context! c)
     (tg/activate-toggle! "ctx-toggle" :s)
     (is (tg/is-toggle-active? (ctx/get-context "ctx-toggle") :s))

@@ -1,8 +1,11 @@
 (ns cn.li.ac.ability.server.service.skill-effects-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.service.player-state :as ps]))
+            [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.test.support.player-state :as ps-fix]))
+
+(use-fixtures :each ps-fix/clean-player-states-fixture)
 
 (deftest scale-damage-default-and-custom-test
   (with-redefs [ability-config/damage-scale (fn [] 2.0)]
@@ -29,6 +32,6 @@
         (is (false? (:creative? @seen)))))))
 
 (deftest perform-resource-state-missing-test
-  (reset! ps/player-states {})
+  (ps/reset-player-states-for-test!)
   (is (= {:success? false :events [] :data nil}
          (skill-effects/perform-resource! "missing" 1.0 1.0 false))))

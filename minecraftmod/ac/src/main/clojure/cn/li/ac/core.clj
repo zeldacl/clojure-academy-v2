@@ -7,6 +7,17 @@
 (defonce ^:private lifecycle-hooks-registered?
   (atom false))
 
+(defn lifecycle-hooks-guard-snapshot
+  []
+  @lifecycle-hooks-registered?)
+
+(defn reset-lifecycle-hooks-guard-for-test!
+  ([]
+   (reset-lifecycle-hooks-guard-for-test! false))
+  ([registered?]
+   (reset! lifecycle-hooks-registered? (boolean registered?))
+   nil))
+
 (defn- resolve-required
   [var-sym]
   (or (requiring-resolve var-sym)

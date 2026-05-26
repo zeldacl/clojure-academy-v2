@@ -6,16 +6,39 @@
   (:require [cn.li.mc1201.gui.network.packet :as packet-base]
             [cn.li.mc1201.reflect-util :as ru]
             [cn.li.mcmod.config :as mod-config]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log])
   (:import [clojure.lang Reflector]
            [io.netty.buffer Unpooled]
            [net.fabricmc.fabric.api.networking.v1 ServerPlayNetworking]
+           [net.minecraft.client Minecraft]
            [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]))
+
+(defn- client-session-id
+  []
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    [:client (System/identityHashCode mc)]))
+
+(defn- with-client-session
+  [f]
+  (binding [runtime-hooks/*client-session-id* (client-session-id)]
+    (f)))
+
+(defn- server-player-owner
+  [^ServerPlayer player]
+  {:server-session-id (when-let [server (.getServer player)]
+                        [:server (System/identityHashCode server)])
+   :player-uuid (str (.getUUID player))})
+
+(defn- with-server-player-owner
+  [^ServerPlayer player f]
+  (binding [runtime-hooks/*player-state-owner* (server-player-owner player)]
+    (f)))
 
 (defonce ^:private server-initialized? (atom false))
 (defonce ^:private client-initialized? (atom false))
@@ -82,20 +105,22 @@
                          (let [^MinecraftServer server (aget args 0)
                                ^ServerPlayer player (aget args 1)
                                ^FriendlyByteBuf buf (aget args 3)
-                           {:keys [msg-id request-id payload]} (packet-base/normalize-request (read-buf-map buf))]
+                               {:keys [msg-id request-id payload]} (packet-base/normalize-request (read-buf-map buf))]
                            (.execute server
                                      (reify Runnable
                                        (run [_]
-                                         (net-server/handle-request
-                                           (str msg-id)
-                                           request-id
-                                           payload
+                                         (with-server-player-owner
                                            player
-                                           (fn [rid response]
-                                             (send-response-to-client!
-                                               player
-                                               (int rid)
-                                               (or response {})))))))))
+                                           #(net-server/handle-request
+                                              (str msg-id)
+                                              request-id
+                                              payload
+                                              player
+                                              (fn [rid response]
+                                                (send-response-to-client!
+                                                  player
+                                                  (int rid)
+                                                  (or response {}))))))))))
                        nil))]
       (Reflector/invokeStaticMethod ServerPlayNetworking "registerGlobalReceiver"
                                     (to-array [c2s-channel receiver]))
@@ -119,7 +144,8 @@
                              (to-array
                                [(reify Runnable
                                   (run [_]
-                                    (packet-base/dispatch-client-response! request-id payload)))]))))
+                                    (with-client-session
+                                      #(packet-base/dispatch-client-response! request-id payload))))]))))
                         nil))]
       (Reflector/invokeStaticMethod client-networking "registerGlobalReceiver"
                                     (to-array [s2c-channel receiver]))

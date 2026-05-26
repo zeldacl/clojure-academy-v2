@@ -17,19 +17,49 @@
 	(discharge-item*! [this item-stack amount ignore-bandwidth] "Return extracted energy"))
 
 (defonce ^:private energy-types* (atom {}))
+(defonce ^:private energy-types-frozen? (atom false))
+
+(defn- assert-not-frozen!
+	[]
+	(when @energy-types-frozen?
+		(throw (ex-info "Energy type registry is frozen" {}))))
 
 (defn register-energy-type!
 	[energy-type]
+	(assert-not-frozen!)
 	(let [type-id (energy-type-id energy-type)]
 		(when-not (keyword? type-id)
 			(throw (ex-info "Energy type id must be a keyword" {:type-id type-id})))
-		(swap! energy-types* assoc type-id energy-type)
+		(swap! energy-types*
+					 (fn [registry]
+						 (if-let [existing (get registry type-id)]
+							 (if (= existing energy-type)
+								 registry
+								 (throw (ex-info "Conflicting energy type id" {:type-id type-id})))
+							 (assoc registry type-id energy-type))))
 		(log/debug "Registered energy type" type-id)
 		energy-type))
 
 (defn unregister-energy-type!
 	[type-id]
+	(assert-not-frozen!)
 	(swap! energy-types* dissoc type-id)
+	nil)
+
+(defn freeze-energy-types!
+	[]
+	(reset! energy-types-frozen? true)
+	nil)
+
+(defn energy-types-snapshot
+	[]
+	{:types @energy-types*
+	 :frozen? @energy-types-frozen?})
+
+(defn reset-energy-types-for-test!
+	[]
+	(reset! energy-types* {})
+	(reset! energy-types-frozen? false)
 	nil)
 
 (defn get-energy-type

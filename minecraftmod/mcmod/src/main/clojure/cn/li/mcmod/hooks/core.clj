@@ -8,6 +8,18 @@
 (def ^:private noop
   (fn [& _] nil))
 
+(def ^:dynamic *client-session-id*
+  "Client runtime session id bound by platform client adapters while invoking
+  client-side hooks. Content code must fail fast when this is not available
+  instead of falling back to a process-global default owner."
+  nil)
+
+(def ^:dynamic *player-state-owner*
+  "Runtime owner bound by platform server/client entry points while accessing
+  content-owned player state. Expected server shape: {:server-session-id ...}.
+  Content storage combines this owner with the requested player UUID."
+  nil)
+
 (defonce ^:private runtime-hooks
   (atom {:on-player-login! noop
          :on-player-logout! noop

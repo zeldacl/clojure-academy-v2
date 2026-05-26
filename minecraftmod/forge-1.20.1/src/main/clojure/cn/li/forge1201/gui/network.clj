@@ -12,12 +12,35 @@
   Also extends the cn.li.mcmod.network.client/send-request multimethod for the
   :forge-1.20.1 dispatch value so the GUI's send-to-server calls work."
   (:require [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.gui.network.packet :as packet-base])
   (:import [cn.li.forge1201.network ClojureNetwork]
+           [net.minecraft.client Minecraft]
            [net.minecraft.server.level ServerPlayer]
            [clojure.lang IFn]))
+
+(defn- client-session-id
+  []
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    [:client (System/identityHashCode mc)]))
+
+(defn- with-client-session
+  [f]
+  (binding [runtime-hooks/*client-session-id* (client-session-id)]
+    (f)))
+
+(defn- server-player-owner
+  [^ServerPlayer player]
+  {:server-session-id (when-let [server (.getServer player)]
+                        [:server (System/identityHashCode server)])
+   :player-uuid (str (.getUUID player))})
+
+(defn- with-server-player-owner
+  [^ServerPlayer player f]
+  (binding [runtime-hooks/*player-state-owner* (server-player-owner player)]
+    (f)))
 
 ;; ---------------------------------------------------------------------------
 ;; Platform multimethod implementation
@@ -63,19 +86,22 @@
                                player
                                (int req-id)
                                (packet-base/encode-payload-bytes response)))]
-            (net-server/handle-request
-              msg-id
-              (int request-id)
-              payload
+            (with-server-player-owner
               player
-              respond-fn)))
+              #(net-server/handle-request
+                 msg-id
+                 (int request-id)
+                 payload
+                 player
+                 respond-fn))))
 
         resp-handler
         (fn [request-id response-bytes]
           (let [payload (packet-base/decode-payload-bytes
                           response-bytes
                           #(log/error "Failed to deserialize Forge response payload:" (ex-message %)))]
-            (packet-base/dispatch-client-response! request-id payload)))]
+            (with-client-session
+              #(packet-base/dispatch-client-response! request-id payload))))]
 
     (invoke-network-static "init" req-handler resp-handler))
   (log/info "Forge 1.20.1 GUI network system initialized"))

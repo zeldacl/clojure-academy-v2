@@ -1,26 +1,29 @@
 (ns cn.li.ac.content.ability.teleporter.tp-skill-helper-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as ad]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as h]
             [cn.li.mcmod.platform.player-feedback :as player-feedback]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
 
+(use-fixtures :each ps-fix/clean-player-states-fixture)
+
 (deftest skill-exp-test
   (testing "missing player state yields 0.0"
     (is (= 0.0 (h/skill-exp "no-one" :any))))
   (testing "reads exp from ability data"
-    (reset! ps/player-states {})
+    (ps/reset-player-states-for-test!)
     (let [ad (-> (ad/new-ability-data)
                  (ad/learn-skill :foo)
                  (ad/set-skill-exp :foo 0.42))]
       (ps/set-player-state! "p1" {:ability-data ad})
       (is (= 0.42 (h/skill-exp "p1" :foo)))
-      (reset! ps/player-states {}))))
+      (ps/reset-player-states-for-test!))))
 
 (deftest player-look-and-position-nil-without-bindings-test
   (is (nil? (binding [raycast/*raycast* nil]
@@ -122,7 +125,7 @@
                  true)
                (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] ())
                (apply-reflection-damage! [_ _ _ _ _ _ _] ()))]
-    (reset! ps/player-states {})
+    (ps/reset-player-states-for-test!)
     (try
       (ps/set-player-state! attacker {:ability-data attacker-ad})
       (binding [entity-damage/*entity-damage* stub]
@@ -155,7 +158,7 @@
       (is (= [["att" "teleporter.critical_attack"]]
              @events))
       (finally
-        (reset! ps/player-states {})))))
+        (ps/reset-player-states-for-test!)))))
 
 (deftest deal-magic-damage-non-crit-branch-test
   (let [last-damage (atom nil)
@@ -171,7 +174,7 @@
                  true)
                (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] ())
                (apply-reflection-damage! [_ _ _ _ _ _ _] ()))]
-    (reset! ps/player-states {})
+    (ps/reset-player-states-for-test!)
     (try
       (ps/set-player-state! attacker {:ability-data attacker-ad})
       (binding [entity-damage/*entity-damage* stub]
@@ -188,7 +191,7 @@
             (is (= [] (:events result))))))
       (is (= 10.0 (double @last-damage)))
       (finally
-        (reset! ps/player-states {})))))
+        (ps/reset-player-states-for-test!)))))
 
 (deftest deal-magic-damage-level2-crit-branch-test
   (let [last-damage (atom nil)
@@ -206,7 +209,7 @@
                  true)
                (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] ())
                (apply-reflection-damage! [_ _ _ _ _ _ _] ()))]
-    (reset! ps/player-states {})
+    (ps/reset-player-states-for-test!)
     (try
       (ps/set-player-state! attacker {:ability-data attacker-ad})
       (binding [entity-damage/*entity-damage* stub]
@@ -239,7 +242,7 @@
               ["att" "teleporter.mastery"]]
              @events))
       (finally
-        (reset! ps/player-states {})))))
+        (ps/reset-player-states-for-test!)))))
 
 (deftest deal-magic-damage-unlearned-passives-never-crit-test
   (let [last-damage (atom nil)
@@ -251,7 +254,7 @@
                  true)
                (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] ())
                (apply-reflection-damage! [_ _ _ _ _ _ _] ()))]
-    (reset! ps/player-states {})
+    (ps/reset-player-states-for-test!)
     (try
       (ps/set-player-state! attacker {:ability-data attacker-ad})
       (binding [entity-damage/*entity-damage* stub]
@@ -265,7 +268,7 @@
             (is (= 1.0 (double (:crit-rate result)))))))
       (is (= 10.0 (double @last-damage)))
       (finally
-        (reset! ps/player-states {})))))
+        (ps/reset-player-states-for-test!)))))
 
 (deftest deal-magic-damage-critical-not-applied-has-no-side-effects-test
   (let [exp-calls (atom [])
@@ -281,7 +284,7 @@
                (apply-direct-damage! [_ _ _ _ _] false)
                (apply-aoe-damage! [_ _ _ _ _ _ _ _ _] ())
                (apply-reflection-damage! [_ _ _ _ _ _ _] ()))]
-    (reset! ps/player-states {})
+    (ps/reset-player-states-for-test!)
     (try
       (ps/set-player-state! attacker {:ability-data attacker-ad})
       (binding [entity-damage/*entity-damage* stub]
@@ -302,4 +305,4 @@
       (is (empty? @feedback-calls))
       (is (empty? @events))
       (finally
-        (reset! ps/player-states {})))))
+        (ps/reset-player-states-for-test!)))))

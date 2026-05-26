@@ -2,9 +2,19 @@
   (:require [clojure.edn :as edn]
             [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.player-state :as ps-fix]
-            [cn.li.ac.ability.service.player-state :as ps]))
+            [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (use-fixtures :each ps-fix/clean-player-states-fixture)
+
+(deftest player-state-access-requires-explicit-owner-test
+  (binding [runtime-hooks/*player-state-owner* nil]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Player state owner requires"
+                          (ps/get-player-state "ownerless")))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Player state owner requires"
+                          (ps/set-player-state! "ownerless" (ps/fresh-state))))))
 
 (deftest fresh-state-shape-test
   (let [s (ps/fresh-state)]
@@ -40,6 +50,19 @@
   (is (some? (ps/get-player-state "u4")))
   (ps/remove-player-state! "u4")
   (is (nil? (ps/get-player-state "u4"))))
+
+(deftest player-state-isolated-by-dynamic-owner-test
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
+    (ps/set-player-state! "same-uuid" (assoc (ps/fresh-state) :marker :a)))
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-b}]
+    (ps/set-player-state! "same-uuid" (assoc (ps/fresh-state) :marker :b)))
+  (is (= :a (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
+              (:marker (ps/get-player-state "same-uuid")))))
+  (is (= :b (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-b}]
+              (:marker (ps/get-player-state "same-uuid")))))
+  (is (= ["same-uuid"]
+         (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
+           (vec (ps/list-player-uuids))))))
 
 (deftest persisted-state-edn-roundtrip-keeps-core-data-test
   (let [state (-> (ps/fresh-state)

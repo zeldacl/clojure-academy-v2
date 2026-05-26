@@ -13,6 +13,22 @@
 (defonce ^:private pending-tasks
 	(atom {}))
 
+(defn pending-tasks-snapshot
+	[]
+	@pending-tasks)
+
+(defn reset-pending-tasks-for-test!
+	([]
+	 (reset-pending-tasks-for-test! {}))
+	([snapshot]
+	 (reset! pending-tasks (or snapshot {}))
+	 nil))
+
+(defn clear-player-tasks!
+	[player-uuid]
+	(swap! pending-tasks dissoc (str player-uuid))
+	nil)
+
 (def ^:private mdball-default-life-ticks 50)
 (def ^:private mdball-settle-offset-ticks 2)
 

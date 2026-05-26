@@ -1,11 +1,14 @@
 (ns cn.li.ac.content.ability.teleporter.mark-teleport-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.teleporter.mark-teleport :as mark]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
+
+(use-fixtures :each ps-fix/clean-player-states-fixture)
 
 (defn- make-context-mocks [initial]
   (let [ctx* (atom initial)]

@@ -4,11 +4,11 @@
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]))
 
 (defn- reset-fixture [f]
-  (reset! @#'cn.li.ac.content.ability.vecmanip.arbitration/projectile-locks
-          {:tick -1 :owners {}})
-  (f)
-  (reset! @#'cn.li.ac.content.ability.vecmanip.arbitration/projectile-locks
-          {:tick -1 :owners {}}))
+  (arbitration/reset-projectile-locks-for-test!)
+  (try
+    (f)
+    (finally
+      (arbitration/reset-projectile-locks-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -40,3 +40,12 @@
       (is (false? (arbitration/claim-projectile! "p1" :vec-deviation "arrow-1")))
       (swap! tick* inc)
       (is (true? (arbitration/claim-projectile! "p1" :vec-deviation "arrow-1"))))))
+
+(deftest projectile-locks-can-clear-one-player-test
+  (with-redefs [cn.li.ac.content.ability.vecmanip.arbitration/current-tick (fn [] 50)]
+    (arbitration/claim-projectile! "p1" :vec-reflection "arrow-1")
+    (arbitration/claim-projectile! "p2" :vec-reflection "arrow-1")
+    (arbitration/clear-player-projectile-locks! "p1")
+    (is (nil? (get-in (arbitration/projectile-locks-snapshot) [:owners ["p1" "arrow-1"]])))
+    (is (= :vec-reflection
+           (get-in (arbitration/projectile-locks-snapshot) [:owners ["p2" "arrow-1"]])))))

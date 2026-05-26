@@ -5,9 +5,9 @@
             [cn.li.ac.content.ability.teleporter.penetrate-teleport-fx :as pfx]))
 
 (defn- reset-fixture [f]
-  (reset! (var-get #'cn.li.ac.content.ability.teleporter.penetrate-teleport-fx/fx-state) nil)
+  (pfx/reset-penetrate-teleport-fx-for-test!)
   (f)
-  (reset! (var-get #'cn.li.ac.content.ability.teleporter.penetrate-teleport-fx/fx-state) nil))
+  (pfx/reset-penetrate-teleport-fx-for-test!))
 
 (use-fixtures :each reset-fixture)
 
@@ -36,8 +36,8 @@
                   fx-registry/register-fx-channels! (fn [_ handler]
                                                       (reset! handler* handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload]
-                                                        (swap! enqueued* conj [effect-id payload])
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (pfx/init!)
       (@handler* "ctx-1" :penetrate-tp/fx-start nil)
@@ -45,8 +45,10 @@
       (@handler* "ctx-1" :penetrate-tp/fx-perform {:x 4.0 :y 5.0 :z 6.0})
       (@handler* "ctx-1" :penetrate-tp/fx-end nil)
 
-      (is (= [[:penetrate-teleport {:mode :start}]
-              [:penetrate-teleport {:mode :update :distance 12.0 :available? true :x 1.0 :y 2.0 :z 3.0}]
-              [:penetrate-teleport {:mode :perform :x 4.0 :y 5.0 :z 6.0}]
-              [:penetrate-teleport {:mode :end}]]
+            (is (= [[:penetrate-teleport {:mode :start} {:ctx-id "ctx-1" :channel :penetrate-tp/fx-start}]
+              [:penetrate-teleport {:mode :update :distance 12.0 :available? true :x 1.0 :y 2.0 :z 3.0}
+               {:ctx-id "ctx-1" :channel :penetrate-tp/fx-update}]
+              [:penetrate-teleport {:mode :perform :x 4.0 :y 5.0 :z 6.0}
+               {:ctx-id "ctx-1" :channel :penetrate-tp/fx-perform}]
+              [:penetrate-teleport {:mode :end} {:ctx-id "ctx-1" :channel :penetrate-tp/fx-end}]]
              @enqueued*)))))

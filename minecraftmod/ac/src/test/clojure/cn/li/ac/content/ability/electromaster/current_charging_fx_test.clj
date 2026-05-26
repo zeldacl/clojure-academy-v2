@@ -20,18 +20,7 @@
 (deftest fx-handler-updates-state-and-queues-loop-sound-test
   (let [queued* (atom [])
         handler* (atom nil)]
-  (reset! (var-get #'cn.li.ac.content.ability.electromaster.current-charging-fx/current-state*)
-            {:active? false
-             :blending? false
-             :is-item false
-             :good? false
-             :charge-ticks 0
-             :charge-ratio 0.0
-             :target nil
-             :block-pos nil
-             :charged 0.0
-             :started-at-ms 0
-             :ending-at-ms 0})
+    (current-charging-fx/reset-current-charging-fx-for-test!)
     (with-redefs [fx-registry/register-fx-channels! (fn [_ handler]
                                                       (reset! handler* handler)
                                                       nil)
@@ -41,6 +30,7 @@
       (current-charging-fx/init!)
       (@handler* "ctx-1" :current-charging/fx-start {:is-item true})
       (is (true? (:active? (current-charging-fx/current-state))))
+      (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (is (true? (:is-item (current-charging-fx/current-state))))
       (is (= 1 (count @queued*)))
       (@handler* "ctx-1" :current-charging/fx-update {:is-item true
@@ -56,3 +46,37 @@
       (@handler* "ctx-1" :current-charging/fx-end {:is-item true})
       (is (false? (:active? (current-charging-fx/current-state))))
       (is (true? (:blending? (current-charging-fx/current-state)))))))
+
+(deftest two-owners-keep-current-charging-state-independent-test
+  (let [queued* (atom [])
+        handler* (atom nil)]
+    (current-charging-fx/reset-current-charging-fx-for-test!)
+    (with-redefs [fx-registry/register-fx-channels! (fn [_ handler]
+                                                      (reset! handler* handler)
+                                                      nil)
+                  client-sounds/queue-sound-effect! (fn [payload]
+                                                       (swap! queued* conj payload)
+                                                       nil)]
+      (current-charging-fx/init!)
+      (@handler* "ctx-a" :current-charging/fx-start {:is-item false})
+      (@handler* "ctx-b" :current-charging/fx-start {:is-item true})
+      (@handler* "ctx-a" :current-charging/fx-update {:good? true :charge-ticks 10})
+      (@handler* "ctx-b" :current-charging/fx-update {:good? false :charge-ticks 30})
+      (let [snapshot (current-charging-fx/current-charging-fx-snapshot)
+            state-a (get (:states snapshot) [:ctx "ctx-a"])
+            state-b (get (:states snapshot) [:ctx "ctx-b"])]
+        (is (= #{[:ctx "ctx-a"] [:ctx "ctx-b"]}
+               (set (keys (:states snapshot)))))
+        (is (= 10 (:charge-ticks state-a)))
+        (is (= 0.25 (:charge-ratio state-a)))
+        (is (= 30 (:charge-ticks state-b)))
+        (is (= 0.75 (:charge-ratio state-b))))
+      (@handler* "ctx-a" :current-charging/fx-end {:is-item false})
+      (is (false? (:active? (current-charging-fx/current-state [:ctx "ctx-a"]))))
+      (is (true? (:blending? (current-charging-fx/current-state [:ctx "ctx-a"]))))
+      (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-b"]))))
+      (current-charging-fx/clear-current-charging-owner! [:ctx "ctx-a"])
+      (let [snapshot (current-charging-fx/current-charging-fx-snapshot)]
+        (is (nil? (get (:states snapshot) [:ctx "ctx-a"])))
+        (is (= 30 (:charge-ticks (get (:states snapshot) [:ctx "ctx-b"])))))
+      (is (= 2 (count @queued*))))))

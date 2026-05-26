@@ -5,25 +5,52 @@
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
+(defonce ^:private effect-state (atom {}))
 (def ^:private sound-id "my_mod:vecmanip.vec_accel")
+
+(defn vec-accel-fx-snapshot
+  []
+  {:effect-state @effect-state})
+
+(defn reset-vec-accel-fx-for-test!
+  []
+  (reset! effect-state {})
+  nil)
+
+(defn clear-vec-accel-owner!
+  [owner-key]
+  (swap! effect-state dissoc owner-key)
+  nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode charge-ticks can-perform? look-dir init-vel]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode charge-ticks can-perform? look-dir init-vel source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
-      (reset! effect-state {:active? true :charge-ticks 0
-                            :can-perform? false
-                            :look-dir {:x 0.0 :y 0.0 :z 1.0}
-                            :init-vel {:x 0.0 :y 0.0 :z 1.0}})
+      (swap! effect-state assoc owner-key*
+             (merge base-meta
+                    {:active? true :charge-ticks 0
+                     :can-perform? false
+                     :look-dir {:x 0.0 :y 0.0 :z 1.0}
+                     :init-vel {:x 0.0 :y 0.0 :z 1.0}}))
       :update
-      (swap! effect-state
+      (swap! effect-state update owner-key*
              (fn [st]
-               (assoc (or st {:active? true})
+               (assoc (merge base-meta (or st {:active? true}))
+                      :owner-key owner-key*
+                      :ctx-id ctx-id
+                      :channel channel
+                      :source-player-id source-player-id
+                      :world-id world-id
                       :active? true
                       :charge-ticks (long (or charge-ticks 0))
                       :can-perform? (boolean can-perform?)
@@ -33,7 +60,7 @@
       (client-sounds/queue-sound-effect!
         {:type :sound :sound-id sound-id :volume 0.35 :pitch 1.0})
       :end
-      (reset! effect-state {:active? false})
+      (swap! effect-state assoc owner-key* (merge base-meta {:active? false}))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -103,11 +130,10 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
-  (let [va @effect-state]
-    (when (and va (:active? va))
-      (let [ops (trajectory-ops camera-pos va)]
-        (when (seq ops)
-          {:ops (vec ops)})))))
+  (let [ops (mapcat #(trajectory-ops camera-pos %)
+                    (filter :active? (vals @effect-state)))]
+    (when (seq ops)
+      {:ops (vec ops)})))
 
 ;; ---------------------------------------------------------------------------
 ;; Registration
@@ -115,25 +141,35 @@
 
 (defn init! []
   (level-effects/register-level-effect! :vec-accel
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:vec-accel/fx-start :vec-accel/fx-update :vec-accel/fx-perform :vec-accel/fx-end]
-    (fn [_ctx-id channel payload]
+        (fn [ctx-id channel payload]
       (case channel
         :vec-accel/fx-start
-        (level-effects/enqueue-level-effect! :vec-accel {:mode :start})
+       (level-effects/enqueue-level-effect! :vec-accel
+                   (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+                     {:mode :start})
+                   {:ctx-id ctx-id :channel channel})
         :vec-accel/fx-update
         (level-effects/enqueue-level-effect! :vec-accel
-          {:mode :update
-           :charge-ticks (long (or (:charge-ticks payload) 0))
-           :can-perform? (boolean (:can-perform? payload))
-           :look-dir (:look-dir payload)
-           :init-vel (:init-vel payload)})
+         (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+           {:mode :update
+            :charge-ticks (long (or (:charge-ticks payload) 0))
+            :can-perform? (boolean (:can-perform? payload))
+            :look-dir (:look-dir payload)
+            :init-vel (:init-vel payload)})
+         {:ctx-id ctx-id :channel channel})
         :vec-accel/fx-perform
-        (level-effects/enqueue-level-effect! :vec-accel {:mode :perform})
+       (level-effects/enqueue-level-effect! :vec-accel
+                   (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+                     {:mode :perform})
+                   {:ctx-id ctx-id :channel channel})
         :vec-accel/fx-end
         (level-effects/enqueue-level-effect! :vec-accel
-          {:mode :end :performed? (boolean (:performed? payload))}))))
+         (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+           {:mode :end :performed? (boolean (:performed? payload))})
+         {:ctx-id ctx-id :channel channel}))))
   nil)

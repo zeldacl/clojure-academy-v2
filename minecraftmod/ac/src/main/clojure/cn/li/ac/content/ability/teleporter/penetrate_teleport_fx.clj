@@ -5,24 +5,47 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private fx-state (atom nil))
+(defonce ^:private fx-state (atom {}))
 
-(defn- enqueue! [payload]
-  (case (:mode payload)
-    :start
-    (reset! fx-state {:ttl 0 :active? true :available? false})
+(defn penetrate-teleport-fx-snapshot []
+  {:fx-state @fx-state})
 
-    :update
-    (swap! fx-state
-           (fn [st]
-             (let [base (or st {:ttl 0 :active? true})]
-               (assoc base
-                      :active? true
-                      :available? (boolean (:available? payload))
-                      :distance (double (or (:distance payload) 0.0))
-                      :x (:x payload)
-                      :y (:y payload)
-                      :z (:z payload)))))
+(defn reset-penetrate-teleport-fx-for-test! []
+  (reset! fx-state {})
+  nil)
+
+(defn clear-penetrate-teleport-owner! [owner-key]
+  (swap! fx-state dissoc owner-key)
+  nil)
+
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
+    (case (:mode payload)
+      :start
+      (swap! fx-state assoc owner-key* (merge base-meta {:ttl 0 :active? true :available? false}))
+
+      :update
+      (swap! fx-state update owner-key*
+             (fn [st]
+               (let [base (merge base-meta (or st {:ttl 0 :active? true}))]
+                 (assoc base
+                        :owner-key owner-key*
+                        :ctx-id ctx-id
+                        :channel channel
+                        :source-player-id source-player-id
+                        :world-id world-id
+                        :active? true
+                        :available? (boolean (:available? payload))
+                        :distance (double (or (:distance payload) 0.0))
+                        :x (:x payload)
+                        :y (:y payload)
+                        :z (:z payload)))))
 
     :perform
     (do
@@ -34,54 +57,62 @@
            :offset-x 0.5 :offset-y 0.8 :offset-z 0.5}))
       (client-sounds/queue-sound-effect!
         {:type :sound :sound-id "my_mod:tp.penetrate_tp" :volume 0.65 :pitch 1.15}))
-    :end
-    (reset! fx-state nil)
-    nil))
+      :end
+      (clear-penetrate-teleport-owner! owner-key*)
+      nil)))
 
 (defn- tick! []
   (swap! fx-state
-         (fn [st]
-           (when st
-             (let [next-st (update st :ttl inc)]
-               (when (and (:active? next-st)
-                          (:x next-st)
-                          (zero? (mod (:ttl next-st) 3)))
-                 (client-particles/queue-particle-effect!
-                   {:type :particle
-                    :particle-type (if (:available? next-st) :portal :smoke)
-                    :x (double (:x next-st))
-                    :y (+ (double (:y next-st)) 1.0)
-                    :z (double (:z next-st))
-                    :count (if (:available? next-st) 5 2)
-                    :speed 0.02
-                    :offset-x 0.35
-                    :offset-y 0.6
-                    :offset-z 0.35}))
-               next-st)))))
+         (fn [states]
+           (into {}
+                 (map (fn [[owner-key st]]
+                        (let [next-st (update st :ttl inc)]
+                          (when (and (:active? next-st)
+                                     (:x next-st)
+                                     (zero? (mod (:ttl next-st) 3)))
+                            (client-particles/queue-particle-effect!
+                              {:type :particle
+                               :particle-type (if (:available? next-st) :portal :smoke)
+                               :x (double (:x next-st))
+                               :y (+ (double (:y next-st)) 1.0)
+                               :z (double (:z next-st))
+                               :count (if (:available? next-st) 5 2)
+                               :speed 0.02
+                               :offset-x 0.35
+                               :offset-y 0.6
+                               :offset-z 0.35}))
+                          [owner-key next-st]))
+                 states)))))
 
 (defn- build-plan [_cp _hcp _tick] nil)
 
 (defn init! []
   (level-effects/register-level-effect! :penetrate-teleport
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:penetrate-tp/fx-start :penetrate-tp/fx-update :penetrate-tp/fx-perform :penetrate-tp/fx-end]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
+      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
       (case channel
         :penetrate-tp/fx-start
-        (level-effects/enqueue-level-effect! :penetrate-teleport {:mode :start})
+        (level-effects/enqueue-level-effect! :penetrate-teleport (merge meta-payload {:mode :start})
+                                             {:ctx-id ctx-id :channel channel})
         :penetrate-tp/fx-update
         (level-effects/enqueue-level-effect! :penetrate-teleport
-          {:mode :update
-           :distance (:distance payload)
-           :available? (:available? payload)
-           :x (:x payload) :y (:y payload) :z (:z payload)})
+          (merge meta-payload
+                 {:mode :update
+                  :distance (:distance payload)
+                  :available? (:available? payload)
+                  :x (:x payload) :y (:y payload) :z (:z payload)})
+          {:ctx-id ctx-id :channel channel})
         :penetrate-tp/fx-perform
         (level-effects/enqueue-level-effect! :penetrate-teleport
-          {:mode :perform :x (:x payload) :y (:y payload) :z (:z payload)})
+          (merge meta-payload {:mode :perform :x (:x payload) :y (:y payload) :z (:z payload)})
+          {:ctx-id ctx-id :channel channel})
         :penetrate-tp/fx-end
-        (level-effects/enqueue-level-effect! :penetrate-teleport {:mode :end})
-        nil)))
+        (level-effects/enqueue-level-effect! :penetrate-teleport (merge meta-payload {:mode :end})
+                                             {:ctx-id ctx-id :channel channel})
+        nil))))
   nil)

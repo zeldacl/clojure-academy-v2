@@ -6,9 +6,18 @@
             [cn.li.ac.content.ability.electromaster.thunder-bolt-fx :as tb-fx]))
 
 (defn- reset-fixture [f]
-  (reset! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/arcs) [])
-  (f)
-  (reset! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/arcs) []))
+  (tb-fx/reset-thunder-bolt-fx-for-test!)
+  (try
+    (f)
+    (finally
+      (tb-fx/reset-thunder-bolt-fx-for-test!))))
+
+(defn- event
+  [ctx-id payload]
+  {:payload payload
+   :ctx-id ctx-id
+   :channel :thunder-bolt/fx-perform
+   :owner-key [:ctx ctx-id]})
 
 (use-fixtures :each reset-fixture)
 
@@ -33,8 +42,8 @@
                   fx-registry/register-fx-channel! (fn [_channel handler]
                                                      (reset! handler* handler)
                                                      nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload]
-                                                        (swap! enqueued* conj [effect-id payload])
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (tb-fx/init!)
       (@handler* "ctx-1" :thunder-bolt/fx-perform {:start {:x 0.0 :y 64.0 :z 0.0}
@@ -43,7 +52,9 @@
       (is (= [[:thunder-bolt-strike
                {:start {:x 0.0 :y 64.0 :z 0.0}
                 :end {:x 1.0 :y 65.0 :z 1.0}
-                :aoe-points [{:x 2.0 :y 65.0 :z 1.0}]}]]
+                :aoe-points [{:x 2.0 :y 65.0 :z 1.0}]}
+               {:ctx-id "ctx-1"
+                :channel :thunder-bolt/fx-perform}]]
              @enqueued*)))))
 
 (deftest enqueue-main-and-aoe-arcs-tick-and-build-plan-test
@@ -55,17 +66,45 @@
                                                        (swap! sounds* conj payload)
                                                        nil)
                   rand-int (fn [_] 0)]
-      (enqueue! {:start {:x 0.0 :y 64.0 :z 0.0}
-                 :end {:x 3.0 :y 64.0 :z 3.0}
-                 :aoe-points [{:x 4.0 :y 64.0 :z 2.0}
-                              {:x 2.0 :y 64.0 :z 4.0}]})
-      (is (= 5 (count @(var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/arcs))))
+      (enqueue! (event "ctx-main"
+                       {:start {:x 0.0 :y 64.0 :z 0.0}
+                        :end {:x 3.0 :y 64.0 :z 3.0}
+                        :aoe-points [{:x 4.0 :y 64.0 :z 2.0}
+                                     {:x 2.0 :y 64.0 :z 4.0}]}))
+      (is (= 5 (count (get (:arcs (tb-fx/thunder-bolt-fx-snapshot))
+               [:ctx "ctx-main"]))))
       (is (= 1 (count @sounds*)))
       (is (= "my_mod:em.arc_strong" (:sound-id (first @sounds*))))
       (is (some? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)))
       (dotimes [_ 30]
         (tick!))
+      (is (empty? (:arcs (tb-fx/thunder-bolt-fx-snapshot))))
       (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
+
+(deftest two-owners-keep-independent-arc-queues-test
+  (let [enqueue! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/enqueue!)
+        sounds* (atom [])]
+    (with-redefs [client-sounds/queue-sound-effect! (fn [payload]
+                                                       (swap! sounds* conj payload)
+                                                       nil)]
+      (enqueue! (event "ctx-a"
+                       {:start {:x 0.0 :y 64.0 :z 0.0}
+                        :end {:x 3.0 :y 64.0 :z 3.0}
+                        :aoe-points []}))
+      (enqueue! (event "ctx-b"
+                       {:start {:x 10.0 :y 64.0 :z 0.0}
+                        :end {:x 13.0 :y 64.0 :z 3.0}
+                        :aoe-points []}))
+      (let [snapshot (tb-fx/thunder-bolt-fx-snapshot)]
+        (is (= #{[:ctx "ctx-a"] [:ctx "ctx-b"]}
+               (set (keys (:arcs snapshot)))))
+        (is (= 3 (count (get (:arcs snapshot) [:ctx "ctx-a"]))))
+        (is (= 3 (count (get (:arcs snapshot) [:ctx "ctx-b"])))))
+      (tb-fx/clear-thunder-bolt-owner! [:ctx "ctx-a"])
+      (let [snapshot (tb-fx/thunder-bolt-fx-snapshot)]
+        (is (nil? (get (:arcs snapshot) [:ctx "ctx-a"])))
+        (is (= 3 (count (get (:arcs snapshot) [:ctx "ctx-b"])))))
+      (is (= 2 (count @sounds*))))))
 
 (deftest enqueue-ignores-invalid-payload-test
   (let [enqueue! (var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/enqueue!)
@@ -74,7 +113,7 @@
     (with-redefs [client-sounds/queue-sound-effect! (fn [payload]
                                                        (swap! sounds* conj payload)
                                                        nil)]
-      (enqueue! {:start {:x 0.0 :y 64.0 :z 0.0}})
-      (is (empty? @(var-get #'cn.li.ac.content.ability.electromaster.thunder-bolt-fx/arcs)))
+      (enqueue! (event "ctx-invalid" {:start {:x 0.0 :y 64.0 :z 0.0}}))
+      (is (empty? (:arcs (tb-fx/thunder-bolt-fx-snapshot))))
       (is (empty? @sounds*))
       (is (nil? (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))))

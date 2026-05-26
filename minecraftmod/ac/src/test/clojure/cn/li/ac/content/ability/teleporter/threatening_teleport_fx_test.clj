@@ -5,9 +5,9 @@
             [cn.li.ac.content.ability.teleporter.threatening-teleport-fx :as tfx]))
 
 (defn- reset-fixture [f]
-  (reset! @#'cn.li.ac.content.ability.teleporter.threatening-teleport-fx/fx-state nil)
+  (tfx/reset-threatening-teleport-fx-for-test!)
   (f)
-  (reset! @#'cn.li.ac.content.ability.teleporter.threatening-teleport-fx/fx-state nil))
+  (tfx/reset-threatening-teleport-fx-for-test!))
 
 (use-fixtures :each reset-fixture)
 
@@ -36,8 +36,8 @@
                   fx-registry/register-fx-channels! (fn [_ handler]
                                                       (reset! handler* handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload]
-                                                        (swap! enqueued* conj [effect-id payload])
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (tfx/init!)
       (@handler* "ctx-1" :threatening-tp/fx-start nil)
@@ -47,11 +47,37 @@
                                                       :attacked? false :dropped? true})
       (@handler* "ctx-1" :threatening-tp/fx-end nil)
 
-      (is (= [[:threatening-teleport {:mode :start}]
-              [:threatening-teleport {:mode :update :drop-x 1.0 :drop-y 2.0 :drop-z 3.0 :attacked? true}]
+      (is (= [[:threatening-teleport {:mode :start}
+               {:ctx-id "ctx-1" :channel :threatening-tp/fx-start}]
+              [:threatening-teleport {:mode :update :drop-x 1.0 :drop-y 2.0 :drop-z 3.0 :attacked? true}
+               {:ctx-id "ctx-1" :channel :threatening-tp/fx-update}]
               [:threatening-teleport {:mode :perform
                                       :start-x 0.0 :start-y 1.0 :start-z 2.0
                                       :drop-x 3.0 :drop-y 4.0 :drop-z 5.0
-                                      :attacked? false :dropped? true}]
-              [:threatening-teleport {:mode :end}]]
+                                      :attacked? false :dropped? true}
+               {:ctx-id "ctx-1" :channel :threatening-tp/fx-perform}]
+              [:threatening-teleport {:mode :end}
+               {:ctx-id "ctx-1" :channel :threatening-tp/fx-end}]]
              @enqueued*)))))
+
+(deftest two-owners-keep-threatening-teleport-state-independent-test
+  (let [enqueue! @#'cn.li.ac.content.ability.teleporter.threatening-teleport-fx/enqueue!
+        event (fn [ctx-id payload]
+                {:payload payload
+                 :ctx-id ctx-id
+                 :channel :threatening-tp/fx-update
+                 :owner-key [:ctx ctx-id]})]
+    (enqueue! (event "ctx-a" {:mode :start}))
+    (enqueue! (event "ctx-b" {:mode :start}))
+    (enqueue! (event "ctx-a" {:mode :update :drop-x 1.0 :drop-y 2.0 :drop-z 3.0 :attacked? true}))
+    (enqueue! (event "ctx-b" {:mode :update :drop-x 4.0 :drop-y 5.0 :drop-z 6.0 :attacked? false}))
+    (let [snapshot (tfx/threatening-teleport-fx-snapshot)]
+      (is (true? (:attacked? (get (:fx-state snapshot) [:ctx "ctx-a"]))))
+      (is (= {:x 4.0 :y 5.0 :z 6.0}
+             (:aim (get (:fx-state snapshot) [:ctx "ctx-b"])))))
+    (enqueue! (event "ctx-a" {:mode :end}))
+    (let [snapshot (tfx/threatening-teleport-fx-snapshot)]
+      (is (nil? (get (:fx-state snapshot) [:ctx "ctx-a"])))
+      (is (some? (get (:fx-state snapshot) [:ctx "ctx-b"]))))
+    (tfx/clear-threatening-teleport-owner! [:ctx "ctx-b"])
+    (is (empty? (:fx-state (tfx/threatening-teleport-fx-snapshot))))))

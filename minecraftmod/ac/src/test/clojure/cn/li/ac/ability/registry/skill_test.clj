@@ -1,20 +1,20 @@
 (ns cn.li.ac.ability.registry.skill-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.domain.developer :as developer]
             [cn.li.ac.ability.registry.skill :as sk]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.rules.progression :as progression]))
 
 (defn- reset-skills! [f]
-  (let [saved @sk/skill-registry]
+  (let [saved (sk/skill-registry-snapshot)]
     (try
-      (reset! sk/skill-registry {})
+      (sk/reset-skill-registry-for-test!)
       (f)
       (finally
         ;; Restore so tests that rely on skill content registered at require-time
         ;; (e.g. content skill specs) don't see an empty registry just because
         ;; this namespace ran earlier in the same JVM.
-        (reset! sk/skill-registry saved)))))
+        (sk/reset-skill-registry-for-test! saved)))))
 
 (use-fixtures :each reset-skills!)
 
@@ -54,3 +54,15 @@
   (is (= 5.0 (progression/learning-cost 2))) ;; 3 + 2²×0.5
   (is (true? (developer/gte? :advanced :normal)))
   (is (false? (developer/gte? :portable :advanced))))
+
+(deftest skill-registry-duplicate-and-freeze-policy-test
+  (let [spec (minimal-skill :dup :cat-a :ctrl-a)]
+    (sk/register-skill! spec)
+    (is (= :dup (:id (sk/register-skill! spec))))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Conflicting skill id"
+                          (sk/register-skill! (minimal-skill :dup :cat-b :ctrl-a))))
+    (sk/freeze-skill-registry!)
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Skill registry is frozen"
+                          (sk/register-skill! (minimal-skill :new-skill :cat-a :ctrl-b))))))

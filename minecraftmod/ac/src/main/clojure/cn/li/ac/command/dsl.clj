@@ -1,10 +1,34 @@
 (ns cn.li.ac.command.dsl
   "Command DSL - Declarative command definition using Clojure macros"
-  (:require [clojure.string :as str]
-            [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.util.log :as log]))
 
 ;; Command Registry - stores all defined commands
-(defonce command-registry (atom {}))
+(defonce ^:private command-registry (atom {}))
+(defonce ^:private command-registry-frozen? (atom false))
+
+(defn- assert-command-registry-open!
+  []
+  (when @command-registry-frozen?
+    (throw (ex-info "Command registry is frozen" {}))))
+
+(defn command-registry-snapshot
+  []
+  {:commands @command-registry
+   :frozen? @command-registry-frozen?})
+
+(defn reset-command-registry-for-test!
+  ([]
+   (reset-command-registry-for-test! {}))
+  ([{:keys [commands frozen?]
+     :or {commands {} frozen? false}}]
+   (reset! command-registry commands)
+   (reset! command-registry-frozen? frozen?)
+   nil))
+
+(defn freeze-command-registry!
+  []
+  (reset! command-registry-frozen? true)
+  nil)
 
 ;; ============================================================================
 ;; Record Structures for Command Specifications
@@ -161,9 +185,13 @@
   (when-not (instance? CommandSpec command-spec)
     (throw (ex-info "Must register a CommandSpec" {:spec command-spec})))
 
-  (log/info "Registering command:" (:id command-spec))
-  (swap! command-registry assoc (:id command-spec) command-spec)
-  command-spec)
+  (if-let [existing (get @command-registry (:id command-spec))]
+    existing
+    (do
+      (assert-command-registry-open!)
+      (log/info "Registering command:" (:id command-spec))
+      (swap! command-registry assoc (:id command-spec) command-spec)
+      command-spec)))
 
 (defn get-command
   "Get a command from the registry by ID"
@@ -178,12 +206,13 @@
 (defn unregister-command!
   "Remove a command from the registry"
   [command-id]
+  (assert-command-registry-open!)
   (swap! command-registry dissoc command-id))
 
 (defn clear-registry!
   "Clear all commands from the registry (for testing)"
   []
-  (reset! command-registry {}))
+  (reset-command-registry-for-test!))
 
 ;; ============================================================================
 ;; DSL Macros

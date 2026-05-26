@@ -6,33 +6,60 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
+(defonce ^:private effect-state (atom {}))
 (def ^:private loop-sound "my_mod:vecmanip.storm_wing")
+
+(defn storm-wing-fx-snapshot
+  []
+  {:effect-state @effect-state})
+
+(defn reset-storm-wing-fx-for-test!
+  []
+  (reset! effect-state {})
+  nil)
+
+(defn clear-storm-wing-owner!
+  [owner-key]
+  (swap! effect-state dissoc owner-key)
+  nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode phase charge-ticks charge-ratio]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode phase charge-ticks charge-ratio source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
       (do
-        (reset! effect-state {:active? true :phase :charging :charge-ticks 0
-                              :charge-ticks-needed (long (or charge-ticks 70))
-                              :ticks 0})
+        (swap! effect-state assoc owner-key*
+               (merge base-meta
+                      {:active? true :phase :charging :charge-ticks 0
+                       :charge-ticks-needed (long (or charge-ticks 70))
+                       :ticks 0}))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id loop-sound :volume 0.8 :pitch 1.0}))
       :update
-      (swap! effect-state
+      (swap! effect-state update owner-key*
              (fn [st]
-               (assoc (or st {})
+               (assoc (merge base-meta (or st {}))
+                      :owner-key owner-key*
+                      :ctx-id ctx-id
+                      :channel channel
+                      :source-player-id source-player-id
+                      :world-id world-id
                       :active? true
                       :phase (or phase :charging)
                       :charge-ticks (long (or charge-ticks 0))
                       :charge-ratio (double (or charge-ratio 0.0)))))
       :end
-      (reset! effect-state {:active? false :ticks 0})
+      (swap! effect-state assoc owner-key* (merge base-meta {:active? false :ticks 0}))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -41,22 +68,33 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when st
-             (if (:active? st)
-               (let [ticks (inc (long (or (:ticks st) 0)))]
-                 (when (zero? (mod ticks 10))
-                   (client-sounds/queue-sound-effect!
-                     {:type :sound :sound-id loop-sound :volume 0.5 :pitch 1.0}))
-                 (assoc st :ticks ticks))
-               nil)))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           (let [ticks (inc (long (or (:ticks st) 0)))]
+                             (when (zero? (mod ticks 10))
+                               (client-sounds/queue-sound-effect!
+                                 {:type :sound :sound-id loop-sound :volume 0.5 :pitch 1.0}))
+                             [owner-key (assoc st :ticks ticks)]))))
+                 states))))
+
+(defn- matching-active-state [hand-center-pos]
+  (some (fn [st]
+          (when (and (:active? st)
+                     (or (nil? (:source-player-id st))
+                         (nil? (:player-uuid hand-center-pos))
+                         (= (str (:source-player-id st))
+                            (str (:player-uuid hand-center-pos)))))
+            st))
+        (vals @effect-state)))
 
 ;; ---------------------------------------------------------------------------
 ;; Build plan
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [_camera-pos hand-center-pos _tick]
-  (let [sw @effect-state]
+  (let [sw (matching-active-state hand-center-pos)]
     (when (and hand-center-pos sw (:active? sw))
       (let [center (dissoc hand-center-pos :player-uuid)
             sw-ticks (long (or (:ticks sw) 0))
@@ -118,22 +156,29 @@
 
 (defn init! []
   (level-effects/register-level-effect! :storm-wing
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:storm-wing/fx-start :storm-wing/fx-update :storm-wing/fx-end]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
       (case channel
         :storm-wing/fx-start
         (level-effects/enqueue-level-effect! :storm-wing
-          {:mode :start :charge-ticks (long (or (:charge-ticks payload) 70))})
+          (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+                 {:mode :start :charge-ticks (long (or (:charge-ticks payload) 70))})
+          {:ctx-id ctx-id :channel channel})
         :storm-wing/fx-update
         (level-effects/enqueue-level-effect! :storm-wing
-          {:mode :update
-           :phase (or (:phase payload) :charging)
-           :charge-ticks (long (or (:charge-ticks payload) 0))
-           :charge-ratio (double (or (:charge-ratio payload) 0.0))})
+          (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+                 {:mode :update
+                  :phase (or (:phase payload) :charging)
+                  :charge-ticks (long (or (:charge-ticks payload) 0))
+                  :charge-ratio (double (or (:charge-ratio payload) 0.0))})
+          {:ctx-id ctx-id :channel channel})
         :storm-wing/fx-end
-        (level-effects/enqueue-level-effect! :storm-wing {:mode :end}))))
+        (level-effects/enqueue-level-effect! :storm-wing
+                                             (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+                                                    {:mode :end})
+                                             {:ctx-id ctx-id :channel channel}))))
   nil)

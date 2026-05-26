@@ -4,28 +4,55 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.render-util :as ru]))
 
-(defonce ^:private effect-state (atom nil))
+(defonce ^:private effect-state (atom {}))
+
+(defn thunder-clap-fx-snapshot
+  []
+  {:effect-state @effect-state})
+
+(defn reset-thunder-clap-fx-for-test!
+  []
+  (reset! effect-state {})
+  nil)
+
+(defn clear-thunder-clap-owner!
+  [owner-key]
+  (swap! effect-state dissoc owner-key)
+  nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode ticks charge-ratio target performed?]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+   {:keys [mode ticks charge-ratio target performed? source-player-id world-id]} payload
+   base-meta {:owner-key owner-key*
+         :ctx-id ctx-id
+         :channel channel
+         :source-player-id source-player-id
+         :world-id world-id}]
     (case mode
       :start
-      (reset! effect-state {:active? true :ticks 0 :charge-ratio 0.0 :target nil :performed? false})
+      (swap! effect-state assoc owner-key*
+        (merge base-meta {:active? true :ticks 0 :charge-ratio 0.0 :target nil :performed? false}))
       :update
-      (swap! effect-state
+      (swap! effect-state update owner-key*
              (fn [st]
-               (assoc (or st {})
+     (assoc (merge base-meta (or st {}))
+       :owner-key owner-key*
+       :ctx-id ctx-id
+       :channel channel
+       :source-player-id source-player-id
+       :world-id world-id
                       :active? true
                       :ticks (long (or ticks 0))
                       :charge-ratio (double (or charge-ratio 0.0))
                       :target target)))
       :end
-      (reset! effect-state {:active? false :performed? (boolean performed?)
-                            :ticks 0 :charge-ratio 0.0 :target nil})
+      (swap! effect-state assoc owner-key*
+        (merge base-meta {:active? false :performed? (boolean performed?)
+            :ticks 0 :charge-ratio 0.0 :target nil}))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -34,11 +61,12 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when st
-             (if (:active? st)
-               (update st :ticks (fnil inc 0))
-               nil)))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           [owner-key (update st :ticks (fnil inc 0))])))
+                 states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -90,7 +118,14 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [_camera-pos hand-center-pos _tick]
-  (let [tc @effect-state]
+  (let [tc (some (fn [st]
+                   (when (and (:active? st)
+                              (or (nil? (:source-player-id st))
+                                  (nil? (:player-uuid hand-center-pos))
+                                  (= (str (:source-player-id st))
+                                     (str (:player-uuid hand-center-pos)))))
+                     st))
+                 (vals @effect-state))]
     (when (and hand-center-pos tc (:active? tc))
       (let [player-center (dissoc hand-center-pos :player-uuid)
             ticks (long (or (:ticks tc) 0))
@@ -110,23 +145,30 @@
 
 (defn init! []
   (level-effects/register-level-effect! :thunder-clap
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:thunder-clap/fx-start :thunder-clap/fx-update :thunder-clap/fx-end]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
       (case channel
         :thunder-clap/fx-start
-        (level-effects/enqueue-level-effect! :thunder-clap {:mode :start})
+        (level-effects/enqueue-level-effect! :thunder-clap
+                                             (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+                                                    {:mode :start})
+                                             {:ctx-id ctx-id :channel channel})
         :thunder-clap/fx-update
         (level-effects/enqueue-level-effect! :thunder-clap
-          {:mode :update
-           :ticks (long (or (:ticks payload) 0))
-           :charge-ratio (double (or (:charge-ratio payload) 0.0))
-           :target (get payload :target)})
+          (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+                 {:mode :update
+                  :ticks (long (or (:ticks payload) 0))
+                  :charge-ratio (double (or (:charge-ratio payload) 0.0))
+                  :target (get payload :target)})
+          {:ctx-id ctx-id :channel channel})
         :thunder-clap/fx-end
         (level-effects/enqueue-level-effect! :thunder-clap
-          {:mode :end
-           :performed? (boolean (:performed? payload))}))))
+          (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+                 {:mode :end
+                  :performed? (boolean (:performed? payload))})
+          {:ctx-id ctx-id :channel channel}))))
   nil)

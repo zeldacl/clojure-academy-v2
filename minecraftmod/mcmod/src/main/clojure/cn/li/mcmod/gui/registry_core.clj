@@ -48,17 +48,25 @@
 (defn unregister-active-container! [container] (container-state/unregister-active-container! container))
 (defn list-active-containers [] (container-state/list-active-containers))
 (defn register-player-container! [player container] (container-state/register-player-container! player container))
-(defn unregister-player-container! [player] (container-state/unregister-player-container! player))
+(defn unregister-player-container!
+  ([player] (container-state/unregister-player-container! player))
+  ([player container] (container-state/unregister-player-container! player container)))
 (defn get-player-container [player] (container-state/get-player-container player))
 (defn get-player-container-from-active [player] (container-state/get-player-container-from-active player))
 (defn get-container-for-menu [menu] (container-state/get-container-for-menu menu))
 (defn resolve-container-for-menu [menu] (container-state/resolve-container-for-menu menu))
-(defn get-container-by-id [container-id] (container-state/get-container-by-id container-id))
+(defn get-container-by-id
+  [owner container-id]
+  (container-state/get-container-by-id owner container-id))
 (defn get-menu-container-id [menu] (container-state/get-menu-container-id menu))
 (defn register-menu-container! [menu container] (container-state/register-menu-container! menu container))
 (defn unregister-menu-container! [menu] (container-state/unregister-menu-container! menu))
-(defn register-container-by-id! [container-id container] (container-state/register-container-by-id! container-id container))
-(defn unregister-container-by-id! [container-id] (container-state/unregister-container-by-id! container-id))
+(defn register-container-by-id!
+  [owner container-id container]
+  (container-state/register-container-by-id! owner container-id container))
+(defn unregister-container-by-id!
+  [owner container-id]
+  (container-state/unregister-container-by-id! owner container-id))
 (defn safe-tick! [container] (platform-registry/invoke-platform! :safe-tick! container))
 (defn safe-validate [container player] (platform-registry/invoke-platform! :safe-validate container player))
 (defn safe-sync! [container] (platform-registry/invoke-platform! :safe-sync! container))

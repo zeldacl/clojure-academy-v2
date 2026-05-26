@@ -8,12 +8,13 @@
 (def ^:private test-op-key :patterns-test/op)
 
 (defn- isolate-pattern-test-op! [f]
-  (let [reg @#'cn.li.ac.ability.server.effect.core/op-registry]
-    (swap! reg dissoc test-op-key)
+  (let [snapshot (effect/effect-op-registry-snapshot)]
+    (effect/reset-effect-op-registry-for-test!
+     (assoc snapshot :registry (dissoc (:registry snapshot) test-op-key)))
     (try
       (f)
       (finally
-        (swap! reg dissoc test-op-key)))))
+        (effect/reset-effect-op-registry-for-test! snapshot)))))
 
 (use-fixtures :each isolate-pattern-test-op!)
 

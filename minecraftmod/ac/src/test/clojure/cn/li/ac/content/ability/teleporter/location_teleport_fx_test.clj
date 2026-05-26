@@ -27,15 +27,16 @@
                   fx-registry/register-fx-channels! (fn [_channels handler]
                                                       (reset! handler* handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload]
-                                                        (swap! enqueued* conj [effect-id payload])
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (lfx/init!)
       (@handler* "ctx-1" :location-teleport/fx-perform-success {:target {:x 1.0 :y 64.0 :z 2.0}
                                                                   :distance 10.0})
       (is (= [[:location-teleport {:mode :perform-success
                                    :target {:x 1.0 :y 64.0 :z 2.0}
-                                   :distance 10.0}]]
+                                   :distance 10.0}
+               {:ctx-id "ctx-1" :channel :location-teleport/fx-perform-success}]]
              @enqueued*)))))
 
 (deftest enqueue-perform-success-plays-teleport-sound-test
@@ -44,7 +45,7 @@
     (with-redefs [client-sounds/queue-sound-effect! (fn [payload]
                                                        (swap! sounds* conj payload)
                                                        nil)]
-      (enqueue! {:mode :perform-success :target {:x 1.0 :y 2.0 :z 3.0}})
+      (enqueue! {:payload {:mode :perform-success :target {:x 1.0 :y 2.0 :z 3.0}}})
       (is (= 1 (count @sounds*)))
       (is (= "my_mod:tp.tp" (:sound-id (first @sounds*)))))))
 
@@ -52,5 +53,5 @@
   (let [sounds* (atom 0)
         enqueue! (var-get #'cn.li.ac.content.ability.teleporter.location-teleport-fx/enqueue!)]
     (with-redefs [client-sounds/queue-sound-effect! (fn [_] (swap! sounds* inc) nil)]
-      (enqueue! {:mode :ignored})
+      (enqueue! {:payload {:mode :ignored}})
       (is (= 0 @sounds*)))))

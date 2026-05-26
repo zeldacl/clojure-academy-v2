@@ -5,46 +5,85 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
-(defonce ^:private splashes (atom []))
-(defonce ^:private sprays (atom []))
+(defonce ^:private effect-state (atom {}))
+(defonce ^:private splashes (atom {}))
+(defonce ^:private sprays (atom {}))
 (def ^:private sound-id "my_mod:vecmanip.blood_retro")
 (def ^:private splash-life 10)
 (def ^:private spray-life 1200)
+
+(defn blood-retrograde-fx-snapshot
+  []
+  {:effect-state @effect-state
+   :splashes @splashes
+   :sprays @sprays})
+
+(defn reset-blood-retrograde-fx-for-test!
+  []
+  (reset! effect-state {})
+  (reset! splashes {})
+  (reset! sprays {})
+  nil)
+
+(defn clear-blood-retrograde-owner!
+  [owner-key]
+  (swap! effect-state dissoc owner-key)
+  (swap! splashes dissoc owner-key)
+  (swap! sprays dissoc owner-key)
+  nil)
+
+(defn- all-splashes []
+  (mapcat val @splashes))
+
+(defn- all-sprays []
+  (mapcat val @sprays))
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode ticks charge-ratio performed? sound-pos]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode ticks charge-ratio performed? sound-pos source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
-      (reset! effect-state {:active? true :ticks 0 :charge-ratio 0.0 :performed? false})
+      (swap! effect-state assoc owner-key*
+             (merge base-meta {:active? true :ticks 0 :charge-ratio 0.0 :performed? false}))
       :update
-      (swap! effect-state
+      (swap! effect-state update owner-key*
              (fn [st]
-               (assoc (or st {})
+               (assoc (merge base-meta (or st {}))
+                      :owner-key owner-key*
+                      :ctx-id ctx-id
+                      :channel channel
+                      :source-player-id source-player-id
+                      :world-id world-id
                       :active? true
                       :ticks (long (or ticks 0))
                       :charge-ratio (double (or charge-ratio 0.0))
                       :performed? false)))
       :perform
       (do
-        (swap! splashes into
-               (map (fn [splash]
-                      (assoc splash :ttl splash-life :max-ttl splash-life))
-                    (:splashes payload)))
-        (swap! sprays into
-               (map (fn [spray]
-                      (assoc spray :ttl spray-life :max-ttl spray-life))
-                    (:sprays payload)))
+         (swap! splashes update owner-key* (fnil into [])
+           (map (fn [splash]
+             (merge base-meta splash {:ttl splash-life :max-ttl splash-life}))
+                (:splashes payload)))
+         (swap! sprays update owner-key* (fnil into [])
+           (map (fn [spray]
+             (merge base-meta spray {:ttl spray-life :max-ttl spray-life}))
+                (:sprays payload)))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id sound-id :volume 1.0 :pitch 1.0
            :x (:x sound-pos) :y (:y sound-pos) :z (:z sound-pos)}))
       :end
-      (reset! effect-state {:active? false :ticks 0 :charge-ratio 0.0
-                            :performed? (boolean performed?)})
+            (swap! effect-state assoc owner-key*
+              (merge base-meta {:active? false :ticks 0 :charge-ratio 0.0
+                  :performed? (boolean performed?)}))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -53,15 +92,34 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when st
-             (if (:active? st)
-               (update st :ticks (fnil inc 0))
-               nil))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           [owner-key (update st :ticks (fnil inc 0))])))
+                 states)))
   (swap! splashes
-         (fn [xs] (->> xs (map #(update % :ttl dec)) (filter #(pos? (long (:ttl %)))) vec)))
+         (fn [by-owner]
+           (into {}
+                 (keep (fn [[owner-key xs]]
+                         (let [live (->> xs
+                                         (map #(update % :ttl dec))
+                                         (filter #(pos? (long (:ttl %))))
+                                         vec)]
+                           (when (seq live)
+                             [owner-key live]))))
+                 by-owner)))
   (swap! sprays
-         (fn [xs] (->> xs (map #(update % :ttl dec)) (filter #(pos? (long (:ttl %)))) vec))))
+         (fn [by-owner]
+           (into {}
+                 (keep (fn [[owner-key xs]]
+                         (let [live (->> xs
+                                         (map #(update % :ttl dec))
+                                         (filter #(pos? (long (:ttl %))))
+                                         vec)]
+                           (when (seq live)
+                             [owner-key live]))))
+                 by-owner))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -129,9 +187,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
-  (let [br @effect-state
-        current-splashes @splashes
-        current-sprays @sprays
+  (let [br (some (fn [st]
+                   (when (:active? st) st))
+                 (vals @effect-state))
+        current-splashes (all-splashes)
+        current-sprays (all-sprays)
         splash-plan (mapcat #(splash-ops camera-pos %) current-splashes)
         spray-plan (mapcat spray-ops current-sprays)
         ws (when (and br (:active? br))
@@ -146,28 +206,32 @@
 
 (defn init! []
   (level-effects/register-level-effect! :blood-retrograde
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:blood-retrograde/fx-start :blood-retrograde/fx-update
      :blood-retrograde/fx-end :blood-retrograde/fx-perform]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
       (case channel
         :blood-retrograde/fx-start
-        (level-effects/enqueue-level-effect! :blood-retrograde {:mode :start})
+        (level-effects/enqueue-level-effect! :blood-retrograde {:mode :start}
+                                             {:ctx-id ctx-id :channel channel})
         :blood-retrograde/fx-update
         (level-effects/enqueue-level-effect! :blood-retrograde
           {:mode :update
            :ticks (long (or (:ticks payload) 0))
-           :charge-ratio (double (or (:charge-ratio payload) 0.0))})
+           :charge-ratio (double (or (:charge-ratio payload) 0.0))}
+          {:ctx-id ctx-id :channel channel})
         :blood-retrograde/fx-end
         (level-effects/enqueue-level-effect! :blood-retrograde
-          {:mode :end :performed? (boolean (:performed? payload))})
+          {:mode :end :performed? (boolean (:performed? payload))}
+          {:ctx-id ctx-id :channel channel})
         :blood-retrograde/fx-perform
         (level-effects/enqueue-level-effect! :blood-retrograde
           {:mode :perform
            :sound-pos (:sound-pos payload)
            :splashes (:splashes payload)
-           :sprays (:sprays payload)}))))
+           :sprays (:sprays payload)}
+          {:ctx-id ctx-id :channel channel}))))
   nil)

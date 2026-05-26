@@ -41,7 +41,8 @@
 
 (deftest runtime-client-charge-coin-visual-state-contract-test
   (runtime-bridge/install-runtime-hooks!)
-  (let [state (runtime-hooks/client-visual-state :ac/charge-coin {:player-uuid "client-player"})]
+  (let [state (binding [runtime-hooks/*client-session-id* :test-client-session]
+                (runtime-hooks/client-visual-state :ac/charge-coin {:player-uuid "client-player"}))]
     (is (contains? state :active?))
     (is (contains? state :coin-active?))
     (is (contains? state :charge-ratio))

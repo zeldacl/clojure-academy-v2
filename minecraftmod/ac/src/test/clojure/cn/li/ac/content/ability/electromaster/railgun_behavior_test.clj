@@ -5,6 +5,7 @@
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.player-state :as player-state]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -13,24 +14,20 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defn- reset-state! [f]
-    (let [player-states-val @player-state/player-states
-      context-registry-val @@#'cn.li.ac.ability.service.dispatcher/context-registry
-      item-action-registry-val @@#'cn.li.ac.ability.item-actions/item-action-registry
-      action-handlers-val @@#'cn.li.ac.ability.item-actions/action-handlers
-      item-entity-spawns-val @@#'cn.li.ac.ability.item-actions/item-entity-spawns]
-    (try
-      (reset! player-state/player-states {})
-      (reset! @#'cn.li.ac.ability.service.dispatcher/context-registry {})
-      (reset! @#'cn.li.ac.ability.item-actions/item-action-registry {})
-      (reset! @#'cn.li.ac.ability.item-actions/action-handlers {})
-      (reset! @#'cn.li.ac.ability.item-actions/item-entity-spawns {})
-      (f)
-      (finally
-        (reset! player-state/player-states player-states-val)
-        (reset! @#'cn.li.ac.ability.service.dispatcher/context-registry context-registry-val)
-        (reset! @#'cn.li.ac.ability.item-actions/item-action-registry item-action-registry-val)
-        (reset! @#'cn.li.ac.ability.item-actions/action-handlers action-handlers-val)
-        (reset! @#'cn.li.ac.ability.item-actions/item-entity-spawns item-entity-spawns-val)))))
+  (ps-fix/with-test-player-state-owner
+    (fn []
+      (let [player-states-val (player-state/snapshot-player-states)
+            context-registry-val (ctx/snapshot-context-registry)
+            item-actions-snapshot (item-actions/item-action-registries-snapshot)]
+        (try
+          (player-state/reset-player-states-for-test!)
+          (ctx/reset-contexts-for-test!)
+          (item-actions/reset-item-action-registries-for-test!)
+          (f)
+          (finally
+            (player-state/reset-player-states-for-test! player-states-val)
+            (ctx/reset-contexts-for-test! context-registry-val)
+            (item-actions/reset-item-action-registries-for-test! item-actions-snapshot)))))))
 
 (use-fixtures :once (fn [f] (effect/init-default-ops!) (f)))
 (use-fixtures :each reset-state!)
@@ -78,6 +75,8 @@
     (ctx/register-context! {:id "ctx-1"
                             :player-uuid "p1"
                             :skill-id :railgun
+                            :logical-side :server
+                            :session-id :test-session
                             :status ctx/STATUS-ALIVE
                             :skill-state {:mode :item-charge :charge-ticks 3 :fired false}})
     (with-redefs [log/debug (fn [& _])]
@@ -105,7 +104,7 @@
 (deftest read-coin-qte-status-skips-already-judged-coin-test
   (player-state/set-player-state! "p1" (player-state/fresh-state))
   (railgun/register-coin-throw! "p1" {:timestamp-ms 42})
-  (swap! player-state/player-states assoc-in ["p1" :runtime :railgun :coin-judged-uuid] "coin-1")
+  (player-state/update-player-state! "p1" assoc-in [:runtime :railgun :coin-judged-uuid] "coin-1")
   (with-redefs [world-effects/*world-effects* :mock-world
                 world-effects/find-entities-in-radius (fn [& _]
                                                         [{:type "entity_coin_throwing" :uuid "coin-1" :motion-progress 0.95}])

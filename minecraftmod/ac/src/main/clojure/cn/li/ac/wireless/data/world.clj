@@ -146,16 +146,13 @@
   [world saved-data]
   (if saved-data
     (if-let [wi-data (get-saved-data-world-data world saved-data)]
-      (do
-        (register-world-data! world wi-data)
+      (let [registered (register-world-data! world wi-data)]
         (log/info "Restored WiWorldData for world from save")
-        wi-data)
+        registered)
       (let [fresh (create-world-data world)]
-        (register-world-data! world fresh)
-        fresh))
+        (register-world-data! world fresh)))
     (let [fresh (create-world-data world)]
-      (register-world-data! world fresh)
-      fresh)))
+      (register-world-data! world fresh))))
 
 (defn on-world-save
   "Called before world save - prepare data for serialization."
@@ -187,7 +184,8 @@
 (defn init-world-data! []
   (log/info "Registering wireless world data lifecycle handlers...")
   (world-lifecycle/register-world-lifecycle-handler!
-    {:on-load on-world-load
+    {:id :ac/wireless-world-data
+     :on-load on-world-load
      :on-unload on-world-unload
       :on-save on-world-save
       :on-tick on-world-tick})

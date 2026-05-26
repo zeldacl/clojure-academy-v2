@@ -7,11 +7,17 @@
             [cn.li.ac.content.ability.teleporter.flashing-fx :as ffx]))
 
 (defn- reset-fixture [f]
-  (reset! (var-get #'cn.li.ac.content.ability.teleporter.flashing-fx/fx-state) nil)
+  (ffx/reset-flashing-fx-for-test!)
   (f)
-  (reset! (var-get #'cn.li.ac.content.ability.teleporter.flashing-fx/fx-state) nil))
+  (ffx/reset-flashing-fx-for-test!))
 
 (use-fixtures :each reset-fixture)
+
+(defn- event [payload]
+  {:payload payload
+   :ctx-id "ctx-1"
+   :channel :flashing/fx-test
+   :owner-key [:ctx "ctx-1"]})
 
 (deftest init-registers-flashing-fx-channels-test
   (let [registered-level* (atom nil)
@@ -40,8 +46,8 @@
                   fx-registry/register-fx-channels! (fn [_ handler]
                                                       (reset! handler* handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload]
-                                                        (swap! enqueued* conj [effect-id payload])
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (ffx/init!)
       (@handler* "ctx-1" :flashing/fx-state-start nil)
@@ -51,14 +57,17 @@
                                                  :to-x 2.0 :to-y 64.0 :to-z 3.0})
       (@handler* "ctx-1" :flashing/fx-preview-end nil)
       (@handler* "ctx-1" :flashing/fx-state-end nil)
-      (is (= [[:flashing {:mode :state-start}]
-              [:flashing {:mode :preview-start :to-x 1.0 :to-y 64.0 :to-z 2.0}]
-              [:flashing {:mode :preview-update :to-x 2.0 :to-y 64.0 :to-z 3.0}]
+            (is (= [[:flashing {:mode :state-start} {:ctx-id "ctx-1" :channel :flashing/fx-state-start}]
+              [:flashing {:mode :preview-start :to-x 1.0 :to-y 64.0 :to-z 2.0}
+               {:ctx-id "ctx-1" :channel :flashing/fx-preview-start}]
+              [:flashing {:mode :preview-update :to-x 2.0 :to-y 64.0 :to-z 3.0}
+               {:ctx-id "ctx-1" :channel :flashing/fx-preview-update}]
               [:flashing {:mode :perform
                           :from-x 0.0 :from-y 64.0 :from-z 0.0
-                          :to-x 2.0 :to-y 64.0 :to-z 3.0}]
-              [:flashing {:mode :preview-end}]
-              [:flashing {:mode :state-end}]]
+              :to-x 2.0 :to-y 64.0 :to-z 3.0}
+               {:ctx-id "ctx-1" :channel :flashing/fx-perform}]
+              [:flashing {:mode :preview-end} {:ctx-id "ctx-1" :channel :flashing/fx-preview-end}]
+              [:flashing {:mode :state-end} {:ctx-id "ctx-1" :channel :flashing/fx-state-end}]]
              @enqueued*)))))
 
 (deftest enqueue-perform-emits-sound-and-particles-test
@@ -72,11 +81,11 @@
                   client-sounds/queue-sound-effect! (fn [payload]
                                                       (swap! sounds* conj payload)
                                                       nil)]
-      (enqueue! {:mode :state-start})
-      (enqueue! {:mode :preview-update :to-x 1.0 :to-y 64.0 :to-z 1.0})
-      (enqueue! {:mode :perform
-                 :from-x 0.0 :from-y 64.0 :from-z 0.0
-                 :to-x 2.0 :to-y 64.0 :to-z 2.0})
+      (enqueue! (event {:mode :state-start}))
+      (enqueue! (event {:mode :preview-update :to-x 1.0 :to-y 64.0 :to-z 1.0}))
+      (enqueue! (event {:mode :perform
+            :from-x 0.0 :from-y 64.0 :from-z 0.0
+            :to-x 2.0 :to-y 64.0 :to-z 2.0}))
       (tick!)
       (is (= 1 (count @sounds*)))
       (is (>= (count @particles*) 2))

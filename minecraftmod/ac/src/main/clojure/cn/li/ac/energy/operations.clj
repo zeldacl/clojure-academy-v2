@@ -12,13 +12,12 @@
             [cn.li.ac.energy.service.item-manager :as item-manager]
             [cn.li.ac.energy.service.node-manager :as node-manager]
             [cn.li.ac.energy.service.transfer-service :as transfer-service]
-            [cn.li.ac.wireless.api :as wireless-api])
-  (:import [cn.li.acapi.wireless IWirelessNode IWirelessReceiver]))
+            [cn.li.ac.wireless.api :as wireless-api]))
 
 (defn energy-system
-  "Return the default Phase C energy system implementation."
-  []
-  (energy-api/energy-system))
+  "Return the Phase C energy system implementation for an explicit owner."
+  [owner]
+  (energy-api/energy-system owner))
 
 ;; ============================================================================
 ;; IFItemManager Implementation

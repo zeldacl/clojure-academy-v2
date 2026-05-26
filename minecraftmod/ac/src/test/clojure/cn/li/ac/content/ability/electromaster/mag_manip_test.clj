@@ -1,11 +1,14 @@
 (ns cn.li.ac.content.ability.electromaster.mag-manip-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.mag-manip :as mag-manip]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]))
+
+(use-fixtures :each ps-fix/clean-player-states-fixture)
 
 (defn- skill-actions []
   (:actions (var-get (ns-resolve 'cn.li.ac.content.ability.electromaster.mag-manip

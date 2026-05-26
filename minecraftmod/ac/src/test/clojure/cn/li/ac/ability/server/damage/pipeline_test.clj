@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.server.damage.pipeline-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill :as sk]
@@ -23,8 +23,8 @@
     {:attack atk :attack-ignore-armor ign :nearby-players nearby}))
 
 (defn- reset-fixture [f]
-  (let [saved-skills @sk/skill-registry]
-    (reset! @#'cn.li.ac.ability.registry.event/subscribers {})
+  (let [saved-skills (sk/skill-registry-snapshot)]
+    (evt/reset-ability-event-subscribers-for-test!)
     (ability-config/init-config!)
     (config-reg/set-config-values! config-common/ability-domain ability-config/default-values)
     (try
@@ -40,7 +40,7 @@
             (restore-platform-fns! prev))))
       (finally
         (config-reg/set-config-values! config-common/ability-domain ability-config/default-values)
-        (reset! sk/skill-registry saved-skills)))))
+        (sk/reset-skill-registry-for-test! saved-skills)))))
 
 (use-fixtures :each reset-fixture)
 

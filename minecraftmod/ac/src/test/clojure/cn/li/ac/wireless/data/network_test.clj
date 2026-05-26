@@ -10,6 +10,11 @@
             [cn.li.ac.wireless.config :as ncfg]
             [cn.li.ac.wireless.data.world :as wdata]))
 
+(defn- test-world
+  [world-id]
+  {:server-session-id :test-session
+   :world-id world-id})
+
 (deftest create-and-basic-accessors-test
   (let [wd {:world :w :net-lookup (atom {}) :spatial-index (atom {})}
         matrix {:x 0 :y 0 :z 0}
@@ -36,7 +41,7 @@
     (is (false? (network-state/active? network)))))
 
 (deftest add-node-password-and-capacity-and-range-gates-test
-  (let [w :w-net
+  (let [w (test-world :w-net)
         wd (wdata/create-world-data w)
         tiles (atom {[0 0 0] (stubs/fake-matrix {:capacity 1 :matrix-range 16.0})})
         matrix-vb (vb/create-vmatrix 0 0 0)
@@ -53,7 +58,7 @@
           (is (= net (get (world-registry/net-lookup wd) near-node))))))))
 
 (deftest remove-node-cleans-up-indexes-test
-  (let [w :w-net2
+  (let [w (test-world :w-net2)
         wd (wdata/create-world-data w)
         tiles (atom {[0 0 0] (stubs/fake-matrix {:capacity 4})
                      [3 0 0] (stubs/mutable-node {})})
@@ -70,7 +75,7 @@
           (is (nil? (get (world-registry/net-lookup wd) node-vb))))))))
 
 (deftest validate-disposes-when-matrix-destroyed-test
-  (let [w :w-net3
+  (let [w (test-world :w-net3)
         wd (wdata/create-world-data w)
         tiles (atom {[0 0 0] (stubs/fake-matrix {})})
         matrix-vb (vb/create-vmatrix 0 0 0)]
@@ -84,7 +89,7 @@
           (is (true? (network-state/is-disposed? net))))))))
 
 (deftest is-in-range-without-matrix-test
-  (let [wd (wdata/create-world-data :w4)
+  (let [wd (wdata/create-world-data (test-world :w4))
         tiles (atom {})
         net (network-state/create-wireless-net wd (vb/create-vmatrix 0 0 0) "s" "p")]
     (stubs/with-tile-world tiles
@@ -92,7 +97,7 @@
         (is (false? (network-validation/is-in-range? net 0 0 0)))))))
 
 (deftest balance-energy-moves-toward-average-test
-  (let [w :w-bal
+  (let [w (test-world :w-bal)
         wd (wdata/create-world-data w)
         n1 (stubs/mutable-node {:energy 900.0 :max-energy 1000.0})
         n2 (stubs/mutable-node {:energy 100.0 :max-energy 1000.0})
@@ -117,7 +122,7 @@
                 "energies should move closer after balancing")))))))
 
 (deftest balance-energy-conserves-energy-with-different-node-capacities-test
-  (let [w :w-bal-capacity
+  (let [w (test-world :w-bal-capacity)
         wd (wdata/create-world-data w)
         small (stubs/mutable-node {:energy 0.0 :max-energy 100.0})
         large (stubs/mutable-node {:energy 1000.0 :max-energy 1000.0})

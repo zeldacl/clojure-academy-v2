@@ -5,21 +5,39 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
+(defonce ^:private effect-state (atom {}))
+
+(defn electron-bomb-fx-snapshot []
+  {:effect-state @effect-state})
+
+(defn reset-electron-bomb-fx-for-test! []
+  (reset! effect-state {})
+  nil)
+
+(defn clear-electron-bomb-owner! [owner-key]
+  (swap! effect-state dissoc owner-key)
+  nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode x y z dx dy dz start end]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode x y z dx dy dz start end source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :spawn
       (do
-        (reset! effect-state
-                {:active? true :ticks 0
-                 :x (double (or x 0.0)) :y (double (or y 0.0)) :z (double (or z 0.0))
-                 :dx (double (or dx 0.0)) :dy (double (or dy 0.0)) :dz (double (or dz 0.0))})
+        (swap! effect-state assoc owner-key*
+               (merge base-meta
+                      {:active? true :ticks 0
+                       :x (double (or x 0.0)) :y (double (or y 0.0)) :z (double (or z 0.0))
+                       :dx (double (or dx 0.0)) :dy (double (or dy 0.0)) :dz (double (or dz 0.0))}))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id "my_mod:md.eb_spawn" :volume 0.6 :pitch 1.2}))
       :beam
@@ -34,9 +52,9 @@
              :offset-x 0.5 :offset-y 0.5 :offset-z 0.5}))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id "my_mod:md.eb_explode" :volume 0.8 :pitch 1.0})
-        (reset! effect-state nil))
+        (clear-electron-bomb-owner! owner-key*))
       :end
-      (reset! effect-state nil)
+      (clear-electron-bomb-owner! owner-key*)
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -45,22 +63,23 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when (and st (:active? st))
-             (let [ticks (inc (long (or (:ticks st) 0)))]
-               ;; Spawn orbiting particles
-               (when (zero? (mod ticks 3))
-                 (let [angle (* 0.4 (double ticks))
-                       ox (* 0.9 (Math/cos angle))
-                       oz (* 0.9 (Math/sin angle))]
-                   (client-particles/queue-particle-effect!
-                     {:type :particle :particle-type :electric-spark
-                      :x (+ (:x st) ox) :y (:y st) :z (+ (:z st) oz)
-                      :count 1 :speed 0.05
-                      :offset-x 0.1 :offset-y 0.1 :offset-z 0.1})))
-               (if (> ticks 40)
-                 nil
-                 (assoc st :ticks ticks)))))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           (let [ticks (inc (long (or (:ticks st) 0)))]
+                             (when (zero? (mod ticks 3))
+                               (let [angle (* 0.4 (double ticks))
+                                     ox (* 0.9 (Math/cos angle))
+                                     oz (* 0.9 (Math/sin angle))]
+                                 (client-particles/queue-particle-effect!
+                                   {:type :particle :particle-type :electric-spark
+                                    :x (+ (:x st) ox) :y (:y st) :z (+ (:z st) oz)
+                                    :count 1 :speed 0.05
+                                    :offset-x 0.1 :offset-y 0.1 :offset-z 0.1})))
+                             (when-not (> ticks 40)
+                               [owner-key (assoc st :ticks ticks)])))))
+                 states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Build plan
@@ -75,22 +94,27 @@
 
 (defn init! []
   (level-effects/register-level-effect! :electron-bomb
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:electron-bomb/fx-spawn :electron-bomb/fx-beam :electron-bomb/fx-end]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
+      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
       (case channel
         :electron-bomb/fx-spawn
         (level-effects/enqueue-level-effect! :electron-bomb
-          {:mode :spawn
-           :x (:x payload) :y (:y payload) :z (:z payload)
-           :dx (:dx payload) :dy (:dy payload) :dz (:dz payload)})
+          (merge meta-payload
+                 {:mode :spawn
+                  :x (:x payload) :y (:y payload) :z (:z payload)
+                  :dx (:dx payload) :dy (:dy payload) :dz (:dz payload)})
+          {:ctx-id ctx-id :channel channel})
         :electron-bomb/fx-beam
         (level-effects/enqueue-level-effect! :electron-bomb
-          {:mode :beam :start (:start payload) :end (:end payload)})
+          (merge meta-payload {:mode :beam :start (:start payload) :end (:end payload)})
+          {:ctx-id ctx-id :channel channel})
         :electron-bomb/fx-end
-        (level-effects/enqueue-level-effect! :electron-bomb {:mode :end})
-        nil)))
+        (level-effects/enqueue-level-effect! :electron-bomb (merge meta-payload {:mode :end})
+                                             {:ctx-id ctx-id :channel channel})
+        nil))))
   nil)

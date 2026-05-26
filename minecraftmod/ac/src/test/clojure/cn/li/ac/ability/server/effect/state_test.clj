@@ -17,15 +17,17 @@
     (effect/init-default-ops!)
     (f)))
 
+(def ^:private test-context-owner {:session-id :test-session})
+
 (deftest assoc-state-op-test
-  (let [c (ctx/new-server-context "p" :sk "ctx-st")]
+  (let [c (ctx/new-server-context "p" :sk "ctx-st" test-context-owner)]
     (ctx/register-context! c)
     (effect/run-op! {:ctx-id "ctx-st" :player-id "p"}
                     [:assoc-state {:k :foo :v 42}])
     (is (= 42 (get-in (ctx/get-context "ctx-st") [:skill-state :foo])))))
 
 (deftest charge-tick-op-test
-  (let [c (ctx/new-server-context "p" :sk "ctx-ch")]
+  (let [c (ctx/new-server-context "p" :sk "ctx-ch" test-context-owner)]
     (ctx/register-context! c)
     (let [out (effect/run-op! {:ctx-id "ctx-ch" :player-id "p"}
                               [:charge-tick {:k :ticks :max 5}])]

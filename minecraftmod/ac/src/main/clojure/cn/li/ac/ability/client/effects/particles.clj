@@ -88,6 +88,15 @@
     (reset! particle-queue [])
     effects))
 
+(defn particle-queue-snapshot
+  []
+  (vec @particle-queue))
+
+(defn reset-particle-queue-for-test!
+  []
+  (reset! particle-queue [])
+  nil)
+
 ;; Event listeners for automatic particle spawning
 (defn on-skill-activation
   "Handle skill activation event."

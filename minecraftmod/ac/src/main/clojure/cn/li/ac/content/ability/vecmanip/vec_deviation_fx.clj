@@ -5,27 +5,54 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
-(defonce ^:private wave-effects (atom []))
+(defonce ^:private effect-state (atom {}))
+(defonce ^:private wave-effects (atom {}))
 (def ^:private sound-id "my_mod:vecmanip.vec_deviation")
+
+(defn vec-deviation-fx-snapshot
+  []
+  {:effect-state @effect-state
+   :wave-effects @wave-effects})
+
+(defn reset-vec-deviation-fx-for-test!
+  []
+  (reset! effect-state {})
+  (reset! wave-effects {})
+  nil)
+
+(defn clear-vec-deviation-owner!
+  [owner-key]
+  (swap! effect-state dissoc owner-key)
+  (swap! wave-effects dissoc owner-key)
+  nil)
+
+(defn- all-wave-effects []
+  (mapcat val @wave-effects))
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode x y z marked?]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode x y z marked? source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
-      (reset! effect-state {:active? true :ticks 0})
+      (swap! effect-state assoc owner-key* (merge base-meta {:active? true :ticks 0}))
       :end
-      (reset! effect-state {:active? false :ticks 0})
+      (swap! effect-state assoc owner-key* (merge base-meta {:active? false :ticks 0}))
       :stop-entity
       (when marked?
         (let [life (+ 10 (rand-int 6))]
-          (swap! wave-effects conj
-                 {:x (double x) :y (double y) :z (double z)
-                  :ttl life :max-ttl life})))
+          (swap! wave-effects update owner-key* (fnil conj [])
+                 (merge base-meta
+                        {:x (double x) :y (double y) :z (double z)
+                         :ttl life :max-ttl life}))))
       :play
       (client-sounds/queue-sound-effect!
         {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
@@ -38,13 +65,33 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when st
-             (if (:active? st)
-               (update st :ticks (fnil inc 0))
-               nil))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           [owner-key (update st :ticks (fnil inc 0))])))
+                 states)))
   (swap! wave-effects
-         (fn [xs] (->> xs (map #(update % :ttl dec)) (filter #(pos? (long (:ttl %)))) vec))))
+         (fn [by-owner]
+           (into {}
+                 (keep (fn [[owner-key xs]]
+                         (let [live (->> xs
+                                         (map #(update % :ttl dec))
+                                         (filter #(pos? (long (:ttl %))))
+                                         vec)]
+                           (when (seq live)
+                             [owner-key live]))))
+                 by-owner))))
+
+(defn- matching-active-state [hand-center-pos]
+  (some (fn [st]
+          (when (and (:active? st)
+                     (or (nil? (:source-player-id st))
+                         (nil? (:player-uuid hand-center-pos))
+                         (= (str (:source-player-id st))
+                            (str (:player-uuid hand-center-pos)))))
+            st))
+        (vals @effect-state)))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -96,8 +143,8 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [camera-pos hand-center-pos _tick]
-  (let [vd @effect-state
-        current-waves @wave-effects
+  (let [vd (matching-active-state hand-center-pos)
+        current-waves (all-wave-effects)
         ring-plan (if (and hand-center-pos vd (:active? vd))
                     (ring-ops (dissoc hand-center-pos :player-uuid)
                               (long (or (:ticks vd) 0)))
@@ -112,29 +159,39 @@
 
 (defn init! []
   (level-effects/register-level-effect! :vec-deviation
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:vec-deviation/fx-start :vec-deviation/fx-end
      :vec-deviation/fx-stop-entity :vec-deviation/fx-play]
-    (fn [_ctx-id channel payload]
+        (fn [ctx-id channel payload]
       (case channel
         :vec-deviation/fx-start
-        (level-effects/enqueue-level-effect! :vec-deviation {:mode :start})
+       (level-effects/enqueue-level-effect! :vec-deviation
+                   (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+                     {:mode :start})
+                   {:ctx-id ctx-id :channel channel})
         :vec-deviation/fx-end
-        (level-effects/enqueue-level-effect! :vec-deviation {:mode :end})
+       (level-effects/enqueue-level-effect! :vec-deviation
+                   (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+                     {:mode :end})
+                   {:ctx-id ctx-id :channel channel})
         :vec-deviation/fx-stop-entity
         (level-effects/enqueue-level-effect! :vec-deviation
-          {:mode :stop-entity
-           :x (double (or (:x payload) 0.0))
-           :y (double (or (:y payload) 0.0))
-           :z (double (or (:z payload) 0.0))
-           :marked? (boolean (:marked? payload))})
+         (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+           {:mode :stop-entity
+            :x (double (or (:x payload) 0.0))
+            :y (double (or (:y payload) 0.0))
+            :z (double (or (:z payload) 0.0))
+            :marked? (boolean (:marked? payload))})
+         {:ctx-id ctx-id :channel channel})
         :vec-deviation/fx-play
         (level-effects/enqueue-level-effect! :vec-deviation
-          {:mode :play
-           :x (double (or (:x payload) 0.0))
-           :y (double (or (:y payload) 0.0))
-           :z (double (or (:z payload) 0.0))}))))
+         (merge (select-keys payload [:effect-instance-id :source-player-id :world-id])
+           {:mode :play
+            :x (double (or (:x payload) 0.0))
+            :y (double (or (:y payload) 0.0))
+            :z (double (or (:z payload) 0.0))})
+          {:ctx-id ctx-id :channel channel}))))
   nil)

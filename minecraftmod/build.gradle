@@ -343,6 +343,263 @@ tasks.register('verifyArchitectureBoundaries') {
     }
 }
 
+tasks.register('auditTopLevelMutableState') {
+    group = 'verification'
+    description = 'Report top-level Clojure mutable state defs and their migration classification.'
+
+    def mutableStateSources = fileTree(project.rootDir) {
+        include 'ac/src/main/clojure/**/*.clj'
+        include 'mcmod/src/main/clojure/**/*.clj'
+        include 'mc-1.20.1/src/main/clojure/**/*.clj'
+        include 'forge-1.20.1/src/main/clojure/**/*.clj'
+        include 'fabric-1.20.1/src/main/clojure/**/*.clj'
+        exclude '**/build/**', '**/.gradle/**', '**/bin/**', '**/run/**', '**/run-data/**', '**/run-gametest/**'
+    }
+    def whitelistFile = file('docs/dev/top-level-mutable-state-whitelist.tsv')
+    def reportFile = layout.buildDirectory.file('reports/top-level-state/audit.md')
+
+    inputs.files(mutableStateSources)
+        .withPropertyName('topLevelMutableStateSources')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    inputs.file(whitelistFile)
+        .withPropertyName('topLevelMutableStateWhitelist')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    inputs.file(file('build.gradle'))
+        .withPropertyName('topLevelMutableStateAuditImplementation')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    outputs.file(reportFile)
+    outputs.cacheIf { true }
+
+    doLast {
+        def countParenDelta = { String line ->
+            int delta = 0
+            boolean inString = false
+            boolean escaped = false
+            for (int i = 0; i < line.length(); i++) {
+                def ch = line.substring(i, i + 1)
+                if (inString) {
+                    if (escaped) {
+                        escaped = false
+                    } else if (ch == '\\') {
+                        escaped = true
+                    } else if (ch == '"') {
+                        inString = false
+                    }
+                } else if (ch == ';') {
+                    break
+                } else if (ch == '"') {
+                    inString = true
+                } else if (ch == '(') {
+                    delta++
+                } else if (ch == ')') {
+                    delta--
+                }
+            }
+            delta
+        }
+
+        def parseDefHeader = { String formText ->
+            def compact = formText.replaceAll(/[\r\n]+/, ' ').trim()
+            def matcher = (compact =~ /^\((defonce|def)\s+(.*)$/)
+            if (!matcher.find()) {
+                return null
+            }
+            def rest = matcher.group(2).trim()
+            while (rest.startsWith('^')) {
+                if (rest.startsWith('^{')) {
+                    int endIdx = rest.indexOf('}')
+                    if (endIdx < 0) {
+                        break
+                    }
+                    rest = rest.substring(endIdx + 1).trim()
+                } else {
+                    int spaceIdx = rest.indexOf(' ')
+                    if (spaceIdx < 0) {
+                        break
+                    }
+                    rest = rest.substring(spaceIdx + 1).trim()
+                }
+            }
+            def symbolMatcher = (rest =~ /^([^\s\)]+)/)
+            if (!symbolMatcher.find()) {
+                return null
+            }
+            [defType: matcher.group(1), symbol: symbolMatcher.group(1)]
+        }
+
+        def mutableKinds = { String formText ->
+            def kinds = [] as LinkedHashSet<String>
+            if (formText.contains('atom-registry')) {
+                kinds << 'atom-registry'
+            }
+            if (formText.contains('(atom') || formText.contains('(clojure.core/atom')) {
+                kinds << 'atom'
+            }
+            if ((formText =~ /\(delay\b/).find()) {
+                kinds << 'delay'
+            }
+            kinds as List
+        }
+
+        def whitelist = new LinkedHashMap<String, Map>()
+        whitelistFile.readLines('UTF-8').eachWithIndex { String rawLine, int idx ->
+            def line = rawLine.trim()
+            if (line.isEmpty() || line.startsWith('#')) {
+                return
+            }
+            def parts = rawLine.split('\t', -1) as List
+            if (parts.size() < 5) {
+                throw new GradleException("Malformed top-level mutable state whitelist line ${idx + 1}: ${rawLine}")
+            }
+            def key = "${parts[0]}\t${parts[1]}".toString()
+            if (whitelist.containsKey(key)) {
+                throw new GradleException("Duplicate top-level mutable state whitelist entry for ${parts[0]} ${parts[1]}")
+            }
+            whitelist[key] = [
+                path          : parts[0],
+                symbol        : parts[1],
+                classification: parts[2],
+                owner         : parts[3],
+                notes         : parts.drop(4).join('\t')
+            ]
+        }
+
+        def findings = []
+        def processForm = { File sourceFile, String rel, int startLine, List<String> formLines ->
+            def formText = formLines.join(System.lineSeparator())
+            def kinds = mutableKinds(formText)
+            if (kinds.isEmpty()) {
+                return
+            }
+            def header = parseDefHeader(formText)
+            if (header == null) {
+                return
+            }
+            def key = "${rel}\t${header.symbol}".toString()
+            def entry = whitelist[key]
+            findings << [
+                path          : rel,
+                line          : startLine,
+                symbol        : header.symbol,
+                defType       : header.defType,
+                kinds         : kinds,
+                classification: entry?.classification ?: 'UNCLASSIFIED',
+                owner         : entry?.owner ?: '',
+                notes         : entry?.notes ?: ''
+            ]
+        }
+
+        def sourceFiles = mutableStateSources.files.sort { File a, File b -> a.path <=> b.path }
+        sourceFiles.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            def lines = sourceFile.readLines('UTF-8')
+            boolean capturing = false
+            int depth = 0
+            int startLine = 0
+            def formLines = []
+            lines.eachWithIndex { String line, int idx ->
+                if (!capturing) {
+                    def trimmed = line.trim()
+                    if ((trimmed =~ /^\((defonce|def)\b/).find()) {
+                        capturing = true
+                        depth = countParenDelta(line)
+                        startLine = idx + 1
+                        formLines = [line]
+                        if (depth <= 0) {
+                            processForm(sourceFile, rel, startLine, formLines)
+                            capturing = false
+                            depth = 0
+                            formLines = []
+                        }
+                    }
+                } else {
+                    formLines << line
+                    depth += countParenDelta(line)
+                    if (depth <= 0) {
+                        processForm(sourceFile, rel, startLine, formLines)
+                        capturing = false
+                        depth = 0
+                        formLines = []
+                    }
+                }
+            }
+        }
+
+        def findingKeys = findings.collect { "${it.path}\t${it.symbol}".toString() } as Set
+        def staleWhitelist = whitelist.findAll { String key, Map _entry -> !findingKeys.contains(key) }.collect { _key, entry -> entry }
+        def byClassification = findings.groupBy { it.classification }.collectEntries { k, v -> [k, v.size()] }.sort { a, b -> a.key <=> b.key }
+        def unclassified = findings.findAll { it.classification == 'UNCLASSIFIED' }
+
+        def md = { Object value ->
+            (value == null ? '' : value.toString())
+                .replace('|', '\\|')
+                .replace('\r', ' ')
+                .replace('\n', ' ')
+        }
+
+        def report = []
+        report << '# Top-level mutable state audit'
+        report << ''
+        report << "Generated: ${new Date().format('yyyy-MM-dd HH:mm:ss')}"
+        report << "Scanned files: ${sourceFiles.size()}"
+        report << "Findings: ${findings.size()}"
+        report << "Classified findings: ${findings.size() - unclassified.size()}"
+        report << "Unclassified findings: ${unclassified.size()}"
+        report << "Stale whitelist entries: ${staleWhitelist.size()}"
+        report << ''
+        report << '## Summary by classification'
+        report << ''
+        if (byClassification.isEmpty()) {
+            report << '- None'
+        } else {
+            byClassification.each { classification, count ->
+                report << "- `${classification}`: ${count}"
+            }
+        }
+        report << ''
+        report << '## Findings'
+        report << ''
+        report << '| classification | path | line | symbol | kind | owner | notes |'
+        report << '| --- | --- | ---: | --- | --- | --- | --- |'
+        findings.sort { a, b ->
+            (a.classification <=> b.classification) ?: (a.path <=> b.path) ?: (a.line <=> b.line) ?: (a.symbol <=> b.symbol)
+        }.each { finding ->
+            report << "| `${md(finding.classification)}` | `${md(finding.path)}` | ${finding.line} | `${md(finding.symbol)}` | `${md(finding.kinds.join(','))}` | ${md(finding.owner)} | ${md(finding.notes)} |"
+        }
+        report << ''
+        if (!staleWhitelist.isEmpty()) {
+            report << '## Stale whitelist entries'
+            report << ''
+            report << '| path | symbol | classification | owner | notes |'
+            report << '| --- | --- | --- | --- | --- |'
+            staleWhitelist.sort { a, b -> (a.path <=> b.path) ?: (a.symbol <=> b.symbol) }.each { entry ->
+                report << "| `${md(entry.path)}` | `${md(entry.symbol)}` | `${md(entry.classification)}` | ${md(entry.owner)} | ${md(entry.notes)} |"
+            }
+            report << ''
+        }
+        if (!unclassified.isEmpty()) {
+            report << '## Unclassified findings to triage'
+            report << ''
+            unclassified.sort { a, b -> (a.path <=> b.path) ?: (a.line <=> b.line) }.each { finding ->
+                report << "- `${finding.path}:${finding.line}` `${finding.symbol}` (${finding.kinds.join(',')})"
+            }
+            report << ''
+        }
+
+        def outFile = reportFile.get().asFile
+        outFile.parentFile.mkdirs()
+        outFile.setText(report.join(System.lineSeparator()) + System.lineSeparator(), 'UTF-8')
+
+        if (!unclassified.isEmpty()) {
+            logger.warn('[auditTopLevelMutableState] {} unclassified top-level mutable defs. See {}', unclassified.size(), outFile)
+        }
+        if (!staleWhitelist.isEmpty()) {
+            logger.warn('[auditTopLevelMutableState] {} stale whitelist entries. See {}', staleWhitelist.size(), outFile)
+        }
+        logger.lifecycle('[auditTopLevelMutableState] wrote {} findings to {}', findings.size(), outFile)
+    }
+}
+
 def registerBaselineVerificationTask = { String taskName, String description, List<String> dependencies ->
     tasks.register(taskName) {
         group = 'verification'

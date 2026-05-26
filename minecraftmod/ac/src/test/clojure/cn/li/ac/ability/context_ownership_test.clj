@@ -17,10 +17,17 @@
     (context-handler/reset-rejection-counters!)
     (input-handler/reset-rejection-counters!)))
 
+(defn- server-owner [player-uuid]
+  {:logical-side :server
+   :session-id player-uuid})
+
+(defn- get-owned-context [player-uuid ctx-id]
+  (ctx/get-context (server-owner player-uuid) ctx-id))
+
 (defn- seed-owned-alive-context!
   [player-uuid ctx-id]
   (ctx/register-context!
-   (assoc (ctx/new-server-context player-uuid :arc-gen ctx-id)
+   (assoc (ctx/new-server-context player-uuid :arc-gen ctx-id (server-owner player-uuid))
           :input-state :active
           :last-keepalive-ms 1)))
 
@@ -29,7 +36,8 @@
     (let [ctx-id "ctx-own-1"
           events (atom [])]
       (seed-owned-alive-context! "owner" ctx-id)
-      (ctx/ctx-on! ctx-id :fx #(swap! events conj %))
+      (binding [ctx/*context-owner* (server-owner "owner")]
+        (ctx/ctx-on! ctx-id :fx #(swap! events conj %)))
 
       (context-handler/handle-channel-context {:ctx-id ctx-id
                                                :channel :fx
@@ -38,9 +46,9 @@
       (context-handler/handle-terminate-context {:ctx-id ctx-id} "attacker")
 
       (is (empty? @events))
-      (is (= ctx/STATUS-ALIVE (:status (ctx/get-context ctx-id))))
-      (is (= 1 (:last-keepalive-ms (ctx/get-context ctx-id))))
-      (is (= 2 (get (context-handler/rejection-counters-snapshot) :ctx-not-owner 0))))))
+      (is (= ctx/STATUS-ALIVE (:status (get-owned-context "owner" ctx-id))))
+      (is (= 1 (:last-keepalive-ms (get-owned-context "owner" ctx-id))))
+      (is (= 2 (get (context-handler/rejection-counters-snapshot) :ctx-not-found 0))))))
 
 (deftest forged-player-cannot-drive-key-input-test
   (with-redefs [uuid/player-uuid identity]
@@ -53,5 +61,5 @@
         (is (nil? (input-handler/handle-key-down-skill {:ctx-id ctx-id :skill-id :arc-gen}
                                                        "attacker"))))
       (is (= 0 @down-calls))
-      (is (= 1 (:last-keepalive-ms (ctx/get-context ctx-id))))
-      (is (= 1 (get (input-handler/rejection-counters-snapshot) :ctx-not-owner 0))))))
+      (is (= 1 (:last-keepalive-ms (get-owned-context "owner" ctx-id))))
+      (is (= 1 (get (input-handler/rejection-counters-snapshot) :ctx-not-found 0))))))

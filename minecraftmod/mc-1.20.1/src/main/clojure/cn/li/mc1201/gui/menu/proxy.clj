@@ -14,6 +14,11 @@
            [net.minecraft.world.inventory AbstractContainerMenu Slot]
            [net.minecraft.world.item ItemStack]))
 
+(defn- owner-for-player
+  [player]
+  {:session-id (some-> player str)
+   :player player})
+
 (defn- remove-menu!
   [this clj-container player {:keys [on-container-id
                                      call-super-removed?
@@ -23,12 +28,12 @@
   (let [cid (gui/get-menu-container-id this)]
     (when cid
       (when on-container-id
-        (on-container-id cid))
-      (gui/unregister-container-by-id! cid)))
+        (on-container-id (owner-for-player player) cid))
+      (gui/unregister-container-by-id! (owner-for-player player) cid)))
   (gui/unregister-menu-container! this)
   (gui/safe-close! clj-container)
   (gui/unregister-active-container! clj-container)
-  (gui/unregister-player-container! player)
+  (gui/unregister-player-container! player clj-container)
   (when call-super-removed?
     (let [^CMenuBridge s this]
       (.callSuperRemoved s player)))
@@ -104,7 +109,7 @@
   (when player
     (gui/register-player-container! player clj-container))
   (gui/register-menu-container! menu clj-container)
-  (gui/register-container-by-id! window-id clj-container)
+  (gui/register-container-by-id! (owner-for-player player) window-id clj-container)
   menu)
 
 (defn platform-menu-proxy-opts

@@ -5,14 +5,14 @@
 	callers to know the internal split across core/accessor/tick namespaces."
 	(:require [cn.li.ac.ability.service.player-state :as player-state]))
 
-(def player-states player-state/player-states)
-
 (def get-player-state player-state/get-player-state)
 (def get-or-create-player-state! player-state/get-or-create-player-state!)
 (def set-player-state! player-state/set-player-state!)
 (def update-player-state! player-state/update-player-state!)
 (def remove-player-state! player-state/remove-player-state!)
 (def list-player-uuids player-state/list-player-uuids)
+(def snapshot-player-states player-state/snapshot-player-states)
+(def reset-player-states-for-test! player-state/reset-player-states-for-test!)
 
 (def mark-dirty! player-state/mark-dirty!)
 (def mark-clean! player-state/mark-clean!)

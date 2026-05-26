@@ -24,13 +24,33 @@
 (defonce ^:private events-registered? (atom false))
 (defonce ^:private pending-world-save-data (atom {}))
 
+(defn- require-world-owner-value
+  [world label value]
+  (if (some? value)
+    value
+    (throw (ex-info (format "Fabric world lifecycle owner requires %s" label)
+                    {:world world
+                     :required label}))))
+
 (defn- world-id
   [world]
-  (str (some-> world .getRegistryKey .getValue)))
+  (require-world-owner-value world ":world-id" (some-> world .getRegistryKey .getValue str)))
+
+(defn- server-session-id
+  [world]
+  (require-world-owner-value
+    world
+    ":server-session-id"
+    (when-let [server (some-> world .getServer)]
+      [:server (System/identityHashCode server)])))
+
+(defn- world-key
+  [world]
+  [(server-session-id world) (world-id world)])
 
 (defn- consume-saved-data!
   [world]
-  (let [wid (world-id world)
+  (let [wid (world-key world)
         pending (get @pending-world-save-data wid)]
     (swap! pending-world-save-data dissoc wid)
     pending))
@@ -73,7 +93,7 @@
                  (reify ServerWorldEvents$Unload
                    (onWorldUnload [_ _server world]
                      (let [saved (world-lifecycle/dispatch-world-save world)
-                           wid (world-id world)]
+                         wid (world-key world)]
                        (if (seq saved)
                          (swap! pending-world-save-data assoc wid saved)
                          (swap! pending-world-save-data dissoc wid)))

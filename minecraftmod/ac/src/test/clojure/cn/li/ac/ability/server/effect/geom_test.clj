@@ -1,6 +1,9 @@
 (ns cn.li.ac.ability.server.effect.geom-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.ability.server.effect.geom :as geom]))
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.ability.server.effect.geom :as geom]
+            [cn.li.ac.test.support.player-state :as ps-fix]))
+
+(use-fixtures :each ps-fix/clean-player-states-fixture)
 
 (defn- approx=
   [a b eps]

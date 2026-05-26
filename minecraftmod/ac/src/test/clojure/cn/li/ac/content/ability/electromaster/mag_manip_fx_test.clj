@@ -39,8 +39,8 @@
                   hand-effects/enqueue-hand-effect! (fn [effect-id payload]
                                                       (swap! hand-enqueued* conj [effect-id payload])
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload]
-                                                        (swap! level-enqueued* conj [effect-id payload])
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! level-enqueued* conj [effect-id payload fx-context])
                                                       nil)]
       (mag-manip-fx/init!)
       (@handler* "ctx-1" :mag-manip/fx-hold {:mode :hold-start :block-id "minecraft:iron_block"})
@@ -49,11 +49,43 @@
                                                :end {:x 0.0 :y 0.0 :z 5.0}})
       (@handler* "ctx-1" :mag-manip/fx-end {:mode :end :reason :performed})
 
-      (is (= [[:mag-manip {:mode :hold-start :block-id "minecraft:iron_block"}]
-              [:mag-manip {:mode :hold-loop :block-id "minecraft:iron_block"}]
-              [:mag-manip {:start {:x 0.0 :y 0.0 :z 0.0}
+      (is (= [[:mag-manip {:owner-key [:ctx "ctx-1"]
+                           :ctx-id "ctx-1"
+                           :channel :mag-manip/fx-hold
+                           :mode :hold-start
+                           :block-id "minecraft:iron_block"}]
+              [:mag-manip {:owner-key [:ctx "ctx-1"]
+                           :ctx-id "ctx-1"
+                           :channel :mag-manip/fx-hold
+                           :mode :hold-loop
+                           :block-id "minecraft:iron_block"}]
+              [:mag-manip {:owner-key [:ctx "ctx-1"]
+                           :ctx-id "ctx-1"
+                           :channel :mag-manip/fx-throw
+                           :start {:x 0.0 :y 0.0 :z 0.0}
                            :end {:x 0.0 :y 0.0 :z 5.0}
                            :mode :throw}]
-              [:mag-manip {:mode :end :reason :performed}]]
+              [:mag-manip {:owner-key [:ctx "ctx-1"]
+                           :ctx-id "ctx-1"
+                           :channel :mag-manip/fx-end
+                           :mode :end
+                           :reason :performed}]]
              @hand-enqueued*))
-            (is (= @hand-enqueued* @level-enqueued*)))))
+      (is (= (mapv (fn [[effect-id payload]]
+                     [effect-id payload {:ctx-id "ctx-1" :channel (:channel payload)}])
+                   @hand-enqueued*)
+             @level-enqueued*)))))
+
+(deftest two-owners-keep-mag-manip-state-independent-test
+  (mag-manip-fx/reset-mag-manip-fx-for-test!)
+  (let [enqueue! (var-get #'cn.li.ac.content.ability.electromaster.mag-manip-fx/enqueue!)]
+    (enqueue! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :hold-start :block-id "minecraft:iron_block"})
+    (enqueue! {:owner-key [:ctx "ctx-b"] :ctx-id "ctx-b" :mode :hold-start :block-id "minecraft:gold_block"})
+    (enqueue! {:owner-key [:ctx "ctx-a"] :ctx-id "ctx-a" :mode :hold-loop :block-id "minecraft:copper_block"})
+    (let [snapshot (mag-manip-fx/mag-manip-fx-snapshot)]
+      (is (= "minecraft:copper_block" (:block-id (get (:states snapshot) [:ctx "ctx-a"]))))
+      (is (= "minecraft:gold_block" (:block-id (get (:states snapshot) [:ctx "ctx-b"])))))
+    (mag-manip-fx/clear-mag-manip-owner! [:ctx "ctx-a"])
+    (let [snapshot (mag-manip-fx/mag-manip-fx-snapshot)]
+      (is (nil? (get (:states snapshot) [:ctx "ctx-a"])))
+      (is (some? (get (:states snapshot) [:ctx "ctx-b"]))))))

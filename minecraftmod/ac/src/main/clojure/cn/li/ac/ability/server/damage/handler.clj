@@ -77,16 +77,46 @@
   ;; keyword → (fn [player-id attacker-id damage damage-source] → any)
   (atom {}))
 
+(defonce ^:private attack-check-registries-frozen? (atom false))
+
+(defn- assert-registries-open!
+  []
+  (when @attack-check-registries-frozen?
+    (throw (ex-info "Attack check registries are frozen" {}))))
+
+(defn attack-check-registries-snapshot
+  []
+  {:cancel-checks @attack-cancel-checks
+   :precheck-side-effects @attack-precheck-side-effects
+   :frozen? @attack-check-registries-frozen?})
+
+(defn reset-attack-check-registries-for-test!
+  ([]
+   (reset-attack-check-registries-for-test! {}))
+  ([{:keys [cancel-checks precheck-side-effects frozen?]
+     :or {cancel-checks {} precheck-side-effects {} frozen? false}}]
+   (reset! attack-cancel-checks cancel-checks)
+   (reset! attack-precheck-side-effects precheck-side-effects)
+   (reset! attack-check-registries-frozen? frozen?)
+   nil))
+
+(defn freeze-attack-check-registries!
+  []
+  (reset! attack-check-registries-frozen? true)
+  nil)
+
 (defn register-attack-cancel-check!
   "Register a predicate that decides whether an attack should be cancelled.
   Content skills call this at load time."
   [check-id check-fn]
-  (swap! attack-cancel-checks assoc check-id check-fn)
+  (when-not (contains? @attack-cancel-checks check-id)
+    (assert-registries-open!)
+    (swap! attack-cancel-checks assoc check-id check-fn))
   nil)
 
 (defn should-cancel-attack?
   "Returns true if any registered check says the attack should be cancelled."
-  [player-id attacker-id damage damage-source]
+  [player-id attacker-id damage _damage-source]
   (boolean
     (some (fn [[_id check-fn]]
             (try
@@ -104,7 +134,9 @@
   (fn [player-id attacker-id damage damage-source] -> any)
   "
   [effect-id side-effect-fn]
-  (swap! attack-precheck-side-effects assoc effect-id side-effect-fn)
+  (when-not (contains? @attack-precheck-side-effects effect-id)
+    (assert-registries-open!)
+    (swap! attack-precheck-side-effects assoc effect-id side-effect-fn))
   nil)
 
 (defn run-attack-precheck-side-effects!

@@ -6,8 +6,13 @@
             [cn.li.ac.wireless.data.world :as world]
             [cn.li.ac.wireless.service.topology-service :as topology-service]))
 
+(defn- test-world
+  [world-id]
+  {:server-session-id :test-session
+   :world-id world-id})
+
 (deftest create-network-registers-through-topology-service-test
-  (let [wd (world/create-world-data :topology-service-world)
+  (let [wd (world/create-world-data (test-world :topology-service-world))
         matrix-vb (vb/create-vmatrix 0 0 0)]
     (is (true? (topology-service/create-network! wd matrix-vb "svc" "pw")))
     (is (false? (topology-service/create-network! wd matrix-vb "svc" "pw2")))
@@ -16,7 +21,7 @@
       (is (identical? network (topology-index/get-network-by-matrix wd matrix-vb))))))
 
 (deftest change-network-ssid-updates-index-test
-  (let [wd (world/create-world-data :topology-service-rename)
+  (let [wd (world/create-world-data (test-world :topology-service-rename))
         matrix-vb (vb/create-vmatrix 0 0 0)]
     (is (true? (topology-service/create-network! wd matrix-vb "old" "pw")))
     (let [network (topology-index/get-network-by-ssid wd "old")]

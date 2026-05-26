@@ -14,8 +14,6 @@
 					[cn.li.ac.ability.service.player-state-accessors :as accessors]
 					[cn.li.ac.ability.service.player-state-tick :as tick]))
 
-(def player-states core/player-states)
-
 (def get-player-state core/get-player-state)
 (def set-player-state! core/set-player-state!)
 (def update-player-state! core/update-player-state!)
@@ -23,6 +21,8 @@
 (def get-or-create-player-state! core/get-or-create-player-state!)
 (def remove-player-state! core/remove-player-state!)
 (def list-player-uuids core/list-player-uuids)
+(def snapshot-player-states core/snapshot-player-states)
+(def reset-player-states-for-test! core/reset-player-states-for-test!)
 
 (def mark-dirty! dirty/mark-dirty!)
 (def mark-clean! dirty/mark-clean!)

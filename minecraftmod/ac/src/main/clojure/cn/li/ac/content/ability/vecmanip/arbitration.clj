@@ -14,6 +14,27 @@
 	;; {:tick long :owners {[player-id projectile-id] :vec-reflection|:vec-deviation}}
 	(atom {:tick -1 :owners {}}))
 
+(defn projectile-locks-snapshot
+	[]
+	@projectile-locks)
+
+(defn reset-projectile-locks-for-test!
+	([]
+	 (reset-projectile-locks-for-test! {:tick -1 :owners {}}))
+	([snapshot]
+	 (reset! projectile-locks (or snapshot {:tick -1 :owners {}}))
+	 nil))
+
+(defn clear-player-projectile-locks!
+	[player-id]
+	(swap! projectile-locks update :owners
+			 (fn [owners]
+				 (into {}
+						 (remove (fn [[[owner-player-id _projectile-id] _skill-id]]
+									 (= owner-player-id player-id)))
+						 (or owners {}))))
+	nil)
+
 (defn- current-tick []
 	(quot (System/currentTimeMillis) 50))
 

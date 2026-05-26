@@ -6,11 +6,20 @@
             [cn.li.ac.content.ability.electromaster.mine-detect-fx :as mine-detect-fx]))
 
 (defn- reset-fixture [f]
-  (reset! @#'cn.li.ac.content.ability.electromaster.mine-detect-fx/effect-state nil)
+  (mine-detect-fx/reset-mine-detect-fx-for-test!)
   (client-sounds/poll-sound-effects!)
   (f)
-  (reset! @#'cn.li.ac.content.ability.electromaster.mine-detect-fx/effect-state nil)
+  (mine-detect-fx/reset-mine-detect-fx-for-test!)
   (client-sounds/poll-sound-effects!))
+
+(defn- event [ctx-id payload]
+  {:payload payload
+   :ctx-id ctx-id
+   :channel :mine-detect/fx-perform
+   :owner-key [:ctx ctx-id]})
+
+(defn- owner-state [ctx-id]
+  (get (:effect-state (mine-detect-fx/mine-detect-fx-snapshot)) [:ctx ctx-id]))
 
 (use-fixtures :each reset-fixture)
 
@@ -36,8 +45,8 @@
                   fx-registry/register-fx-channels! (fn [_ handler]
                                                       (reset! handler* handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload]
-                                                        (swap! enqueued* conj [effect-id payload])
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (mine-detect-fx/init!)
       (@handler* "ctx" :mine-detect/fx-perform {:range 30.0 :advanced? true :life-ticks 100 :rescan-interval 5})
@@ -46,14 +55,16 @@
                              :range 30.0
                              :advanced? true
                              :life-ticks 100
-                             :rescan-interval 5}]
-              [:mine-detect {:mode :end}]]
+                             :rescan-interval 5}
+               {:ctx-id "ctx" :channel :mine-detect/fx-perform}]
+              [:mine-detect {:mode :end}
+               {:ctx-id "ctx" :channel :mine-detect/fx-end}]]
              @enqueued*)))))
 
 (deftest enqueue-perform-queues-sound-and-initializes-state-test
   (let [enqueue! @#'cn.li.ac.content.ability.electromaster.mine-detect-fx/enqueue!]
-    (enqueue! {:mode :perform :range 31.0 :advanced? true :life-ticks 100 :rescan-interval 5})
-    (let [st @@#'cn.li.ac.content.ability.electromaster.mine-detect-fx/effect-state
+    (enqueue! (event "ctx-main" {:mode :perform :range 31.0 :advanced? true :life-ticks 100 :rescan-interval 5}))
+    (let [st (owner-state "ctx-main")
           sounds (client-sounds/poll-sound-effects!)]
       (is (= true (:active? st)))
       (is (= 28.0 (:range st)))
@@ -65,13 +76,13 @@
 (deftest tick-expires-effect-at-life-cap-test
   (let [enqueue! @#'cn.li.ac.content.ability.electromaster.mine-detect-fx/enqueue!
         tick! @#'cn.li.ac.content.ability.electromaster.mine-detect-fx/tick!]
-    (enqueue! {:mode :perform :range 20.0 :advanced? false :life-ticks 3 :rescan-interval 1})
+    (enqueue! (event "ctx-main" {:mode :perform :range 20.0 :advanced? false :life-ticks 3 :rescan-interval 1}))
     (tick!)
-    (is (some? @@#'cn.li.ac.content.ability.electromaster.mine-detect-fx/effect-state))
+    (is (some? (owner-state "ctx-main")))
     (tick!)
-  (is (some? @@#'cn.li.ac.content.ability.electromaster.mine-detect-fx/effect-state))
-  (tick!)
-    (is (nil? @@#'cn.li.ac.content.ability.electromaster.mine-detect-fx/effect-state))))
+    (is (some? (owner-state "ctx-main")))
+    (tick!)
+    (is (nil? (owner-state "ctx-main")))))
 
 (deftest build-plan-rescans-every-5-ticks-and-applies-advanced-colors-test
   (let [enqueue! @#'cn.li.ac.content.ability.electromaster.mine-detect-fx/enqueue!
@@ -83,7 +94,7 @@
                                               [{:x 1 :y 60 :z 1 :block-id "minecraft:coal_ore"}
                                                {:x 2 :y 60 :z 2 :block-id "minecraft:diamond_ore"}])}
         hand-center {:x 0.0 :y 64.0 :z 0.0}]
-    (enqueue! {:mode :perform :range 24.0 :advanced? true :life-ticks 100 :rescan-interval 5})
+    (enqueue! (event "ctx-main" {:mode :perform :range 24.0 :advanced? true :life-ticks 100 :rescan-interval 5}))
     (let [plan0 (build-plan nil hand-center 0 frame-context)
           colors (set (map :color (:ops plan0)))]
       (is (seq (:ops plan0)))
@@ -105,8 +116,18 @@
                                               [{:x 1 :y 60 :z 1 :block-id "minecraft:coal_ore"}
                                                {:x 2 :y 60 :z 2 :block-id "minecraft:diamond_ore"}])}
         hand-center {:x 0.0 :y 64.0 :z 0.0}]
-    (enqueue! {:mode :perform :range 24.0 :advanced? false :life-ticks 100 :rescan-interval 5})
+    (enqueue! (event "ctx-main" {:mode :perform :range 24.0 :advanced? false :life-ticks 100 :rescan-interval 5}))
     (let [plan (build-plan nil hand-center 0 frame-context)
           colors (set (map :color (:ops plan)))]
       (is (seq (:ops plan)))
       (is (= 1 (count colors))))))
+
+(deftest two-owners-keep-mine-detect-state-independent-test
+  (let [enqueue! @#'cn.li.ac.content.ability.electromaster.mine-detect-fx/enqueue!]
+    (enqueue! (event "ctx-a" {:mode :perform :range 8.0 :advanced? false :life-ticks 10 :rescan-interval 1}))
+    (enqueue! (event "ctx-b" {:mode :perform :range 31.0 :advanced? true :life-ticks 20 :rescan-interval 2}))
+    (is (= 8.0 (:range (owner-state "ctx-a"))))
+    (is (= 28.0 (:range (owner-state "ctx-b"))))
+    (mine-detect-fx/clear-mine-detect-owner! [:ctx "ctx-a"])
+    (is (nil? (owner-state "ctx-a")))
+    (is (some? (owner-state "ctx-b")))))

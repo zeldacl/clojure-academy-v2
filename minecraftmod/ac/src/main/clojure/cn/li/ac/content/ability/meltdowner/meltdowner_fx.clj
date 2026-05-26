@@ -6,8 +6,8 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
-(defonce ^:private rays (atom []))
+(defonce ^:private effect-state (atom {}))
+(defonce ^:private rays (atom {}))
 (def ^:private charge-loop-sound "my_mod:md.md_charge")
 (def ^:private fire-sound "my_mod:md.meltdowner")
 (def ^:private meltdowner-ray-style
@@ -23,47 +23,81 @@
    :line-rgb {:r 192 :g 255 :b 188}
    :line-alpha (fn [_ life] (int (+ 55 (* 150 life))))})
 
+(defn meltdowner-fx-snapshot []
+  {:effect-state @effect-state
+   :rays @rays})
+
+(defn reset-meltdowner-fx-for-test! []
+  (reset! effect-state {})
+  (reset! rays {})
+  nil)
+
+(defn clear-meltdowner-owner! [owner-key]
+  (swap! effect-state dissoc owner-key)
+  (swap! rays dissoc owner-key)
+  nil)
+
+(defn- all-rays []
+  (mapcat val @rays))
+
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode ticks charge-ratio performed? start end charge-ticks beam-length]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode ticks charge-ratio performed? start end charge-ticks beam-length source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
       (do
-        (reset! effect-state {:active? true :ticks 0 :charge-ratio 0.0 :performed? false})
+        (swap! effect-state assoc owner-key*
+               (merge base-meta {:active? true :ticks 0 :charge-ratio 0.0 :performed? false}))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id charge-loop-sound :volume 1.0 :pitch 1.0}))
       :update
-      (swap! effect-state
+      (swap! effect-state update owner-key*
              (fn [st]
-               (assoc (or st {})
+               (assoc (merge base-meta (or st {}))
+                      :owner-key owner-key*
+                      :ctx-id ctx-id
+                      :channel channel
+                      :source-player-id source-player-id
+                      :world-id world-id
                       :active? true
                       :ticks (long (or ticks 0))
                       :charge-ratio (double (or charge-ratio 0.0))
                       :performed? false)))
       :end
-      (reset! effect-state {:active? false :performed? (boolean performed?)
-                            :ticks 0 :charge-ratio 0.0})
+      (swap! effect-state assoc owner-key*
+             (merge base-meta {:active? false :performed? (boolean performed?)
+                                :ticks 0 :charge-ratio 0.0}))
       :perform
       (do
         (when (and start end)
           (let [life (+ 16 (rand-int 8))]
-            (swap! rays conj {:start start :end end
-                              :ttl life :max-ttl life
-                              :beam-length (double (or beam-length 30.0))
-                              :charge-ticks (int (or charge-ticks 20))
-                              :is-reflect? false})))
+            (swap! rays update owner-key* (fnil conj [])
+                   (merge base-meta
+                          {:start start :end end
+                           :ttl life :max-ttl life
+                           :beam-length (double (or beam-length 30.0))
+                           :charge-ticks (int (or charge-ticks 20))
+                           :is-reflect? false}))))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id fire-sound :volume 0.5 :pitch 1.0}))
       :reflect
       (when (and start end)
         (let [life (+ 10 (rand-int 6))]
-          (swap! rays conj {:start start :end end
-                            :ttl life :max-ttl life
-                            :beam-length 10.0 :charge-ticks 20
-                            :is-reflect? true})))
+          (swap! rays update owner-key* (fnil conj [])
+                 (merge base-meta
+                        {:start start :end end
+                         :ttl life :max-ttl life
+                         :beam-length 10.0 :charge-ticks 20
+                         :is-reflect? true}))))
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -72,21 +106,27 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when st
-             (if (:active? st)
-               (let [ticks (inc (long (or (:ticks st) 0)))]
-                 (when (zero? (mod ticks 10))
-                   (client-sounds/queue-sound-effect!
-                     {:type :sound :sound-id charge-loop-sound :volume 0.75 :pitch 1.0}))
-                 (assoc st :ticks ticks))
-               nil))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           (let [ticks (inc (long (or (:ticks st) 0)))]
+                             (when (zero? (mod ticks 10))
+                               (client-sounds/queue-sound-effect!
+                                 {:type :sound :sound-id charge-loop-sound :volume 0.75 :pitch 1.0}))
+                             [owner-key (assoc st :ticks ticks)]))))
+                 states)))
   (swap! rays
-         (fn [xs]
-           (->> xs
-                (map #(update % :ttl dec))
-                (filter #(pos? (long (:ttl %))))
-                vec))))
+         (fn [by-owner]
+           (into {}
+                 (keep (fn [[owner-key xs]]
+                         (let [live (->> xs
+                                         (map #(update % :ttl dec))
+                                         (filter #(pos? (long (:ttl %))))
+                                         vec)]
+                           (when (seq live)
+                             [owner-key live]))))
+                 by-owner))))
 
 ;; ---------------------------------------------------------------------------
 ;; Render ops
@@ -118,13 +158,23 @@
 (defn- local-walk-speed [ticks]
   (float (max 0.001 (- 0.1 (* 0.001 (double ticks))))))
 
+(defn- matching-active-state [hand-center-pos]
+  (some (fn [st]
+          (when (and (:active? st)
+                     (or (nil? (:source-player-id st))
+                         (nil? (:player-uuid hand-center-pos))
+                         (= (str (:source-player-id st))
+                            (str (:player-uuid hand-center-pos)))))
+            st))
+        (vals @effect-state)))
+
 ;; ---------------------------------------------------------------------------
 ;; Build plan
 ;; ---------------------------------------------------------------------------
 
 (defn- build-plan [camera-pos hand-center-pos _tick]
-  (let [md @effect-state
-        current-rays @rays
+  (let [md (matching-active-state hand-center-pos)
+        current-rays (all-rays)
         charge-plan (if (and hand-center-pos md (:active? md))
                       (let [center (dissoc hand-center-pos :player-uuid)
                             ticks (long (or (:ticks md) 0))
@@ -144,31 +194,39 @@
 
 (defn init! []
   (level-effects/register-level-effect! :meltdowner
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:meltdowner/fx-start :meltdowner/fx-update :meltdowner/fx-end
      :meltdowner/fx-perform :meltdowner/fx-reflect]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
+      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
       (case channel
         :meltdowner/fx-start
-        (level-effects/enqueue-level-effect! :meltdowner {:mode :start})
+        (level-effects/enqueue-level-effect! :meltdowner (merge meta-payload {:mode :start})
+                                             {:ctx-id ctx-id :channel channel})
         :meltdowner/fx-update
         (level-effects/enqueue-level-effect! :meltdowner
-          {:mode :update
-           :ticks (long (or (:ticks payload) 0))
-           :charge-ratio (double (or (:charge-ratio payload) 0.0))})
+          (merge meta-payload
+                 {:mode :update
+                  :ticks (long (or (:ticks payload) 0))
+                  :charge-ratio (double (or (:charge-ratio payload) 0.0))})
+          {:ctx-id ctx-id :channel channel})
         :meltdowner/fx-end
         (level-effects/enqueue-level-effect! :meltdowner
-          {:mode :end :performed? (boolean (:performed? payload))})
+          (merge meta-payload {:mode :end :performed? (boolean (:performed? payload))})
+          {:ctx-id ctx-id :channel channel})
         :meltdowner/fx-perform
         (level-effects/enqueue-level-effect! :meltdowner
-          {:mode :perform
-           :charge-ticks (int (or (:charge-ticks payload) 20))
-           :beam-length (double (or (:beam-length payload) 30.0))
-           :start (:start payload) :end (:end payload)})
+          (merge meta-payload
+                 {:mode :perform
+                  :charge-ticks (int (or (:charge-ticks payload) 20))
+                  :beam-length (double (or (:beam-length payload) 30.0))
+                  :start (:start payload) :end (:end payload)})
+          {:ctx-id ctx-id :channel channel})
         :meltdowner/fx-reflect
         (level-effects/enqueue-level-effect! :meltdowner
-          {:mode :reflect :start (:start payload) :end (:end payload)}))))
+          (merge meta-payload {:mode :reflect :start (:start payload) :end (:end payload)})
+          {:ctx-id ctx-id :channel channel})))))
   nil)

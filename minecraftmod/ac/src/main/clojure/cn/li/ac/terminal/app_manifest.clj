@@ -13,8 +13,34 @@
 		cn.li.ac.terminal.apps.media-player/init-media-player-app!
 		cn.li.ac.terminal.apps.about/init-about-app!])
 
-(defonce app-init-registry
+(defonce ^:private app-init-registry
 	(atom (vec default-app-init-symbols)))
+
+(defonce ^:private app-init-registry-frozen? (atom false))
+
+(defn- assert-app-init-registry-open!
+	[]
+	(when @app-init-registry-frozen?
+		(throw (ex-info "Terminal app init registry is frozen" {}))))
+
+(defn app-init-registry-snapshot
+	[]
+	{:init-symbols @app-init-registry
+	 :frozen? @app-init-registry-frozen?})
+
+(defn reset-app-init-registry-for-test!
+	([]
+	 (reset-app-init-registry-for-test! {:init-symbols (vec default-app-init-symbols)}))
+	([{:keys [init-symbols frozen?]
+		 :or {init-symbols (vec default-app-init-symbols) frozen? false}}]
+	 (reset! app-init-registry (vec init-symbols))
+	 (reset! app-init-registry-frozen? frozen?)
+	 nil))
+
+(defn freeze-app-init-registry!
+	[]
+	(reset! app-init-registry-frozen? true)
+	nil)
 
 (defn list-app-init-symbols
 	"Get terminal app init symbols in registration order."
@@ -25,6 +51,7 @@
 	"Register one terminal app init symbol if absent."
 	[init-sym]
 	{:pre [(symbol? init-sym)]}
+	(assert-app-init-registry-open!)
 	(swap! app-init-registry
 				 (fn [items]
 					 (if (some #(= % init-sym) items)
@@ -41,9 +68,10 @@
 		(when-not (every? symbol? normalized)
 			(throw (ex-info "All terminal app init entries must be symbols"
 											{:entries init-syms})))
+		(assert-app-init-registry-open!)
 		(reset! app-init-registry normalized)))
 
 (defn reset-defaults!
 	"Reset app init symbols to built-in defaults."
 	[]
-	(reset! app-init-registry (vec default-app-init-symbols)))
+	(reset-app-init-registry-for-test!))

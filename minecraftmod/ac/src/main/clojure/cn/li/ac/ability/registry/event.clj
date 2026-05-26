@@ -18,6 +18,29 @@
 ;; ============================================================================
 
 (defonce ^:private subscribers (atom {}))
+(defonce ^:private subscribers-frozen? (atom false))
+
+(defn- assert-subscribers-open!
+  []
+  (when @subscribers-frozen?
+    (throw (ex-info "Ability event subscriber registry is frozen" {}))))
+
+(defn subscriber-registry-snapshot
+  []
+  @subscribers)
+
+(defn reset-ability-event-subscribers-for-test!
+  ([]
+   (reset-ability-event-subscribers-for-test! {}))
+  ([snapshot]
+   (reset! subscribers (or snapshot {}))
+   (reset! subscribers-frozen? false)
+   nil))
+
+(defn freeze-ability-event-subscribers!
+  []
+  (reset! subscribers-frozen? true)
+  nil)
 
 (defn subscribe-ability-event!
   "Register a subscriber fn for event-type keyword.
@@ -27,6 +50,7 @@
     event-type: keyword  e.g. :ability/skill-learn
     handler-fn: (fn [event-map]) → any"
   [event-type handler-fn]
+  (assert-subscribers-open!)
   (swap! subscribers update event-type (fnil conj []) handler-fn)
   nil)
 

@@ -9,14 +9,16 @@
 (def ^:private intensify-effect-id "intensify_effect")
 
 (defn- on-fx-end
-  [_ctx-id _channel payload]
+  [ctx-id channel payload]
   (when (:performed? payload)
     (client-sounds/queue-sound-effect!
      {:sound-id activate-sound-id
       :volume 0.9
       :pitch 1.0})
     (client-bridge/run-client-effect! local-scripted-effect-key
-                                      {:effect-id intensify-effect-id})))
+                                      {:effect-id intensify-effect-id
+                                       :ctx-id ctx-id
+                                       :channel channel})))
 
 (defn init!
   []

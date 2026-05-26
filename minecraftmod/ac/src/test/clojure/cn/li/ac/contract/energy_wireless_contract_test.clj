@@ -10,6 +10,11 @@
             [cn.li.ac.wireless.data.world :as wdata]
             [cn.li.mcmod.platform.be :as platform-be]))
 
+(defn- test-world
+  [world-id]
+  {:server-session-id :test-session
+   :world-id world-id})
+
 (deftest energy-converter-capacity-contract-test
   (testing "converter energy stays within [0, capacity] and respects io direction"
     (let [state* (atom nil)
@@ -29,7 +34,7 @@
 
 (deftest wireless-network-balance-and-auth-contract-test
   (testing "wireless network keeps auth/range checks and balances node energy"
-    (let [world-key :contract-world
+    (let [world-key (test-world :contract-world)
           wd (wdata/create-world-data world-key)
           matrix-vb (vb/create-vmatrix 0 0 0)
           node-a-vb (vb/create-vnode 3 0 0)
@@ -68,7 +73,7 @@
 
 (deftest wireless-network-capacity-and-range-contract-test
   (testing "node admission enforces matrix capacity and range boundaries"
-    (let [world-key :contract-cap-range
+    (let [world-key (test-world :contract-cap-range)
           wd (wdata/create-world-data world-key)
           matrix-vb (vb/create-vmatrix 0 0 0)
           near-a (vb/create-vnode 2 0 0)

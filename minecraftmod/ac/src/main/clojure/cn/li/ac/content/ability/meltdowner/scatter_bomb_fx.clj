@@ -5,23 +5,48 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private effect-state (atom nil))
+(defonce ^:private effect-state (atom {}))
+
+(defn scatter-bomb-fx-snapshot []
+  {:effect-state @effect-state})
+
+(defn reset-scatter-bomb-fx-for-test! []
+  (reset! effect-state {})
+  nil)
+
+(defn clear-scatter-bomb-owner! [owner-key]
+  (swap! effect-state dissoc owner-key)
+  nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Enqueue
 ;; ---------------------------------------------------------------------------
 
-(defn- enqueue! [payload]
-  (let [{:keys [mode x y z count start end balls]} payload]
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode x y z count start end source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
     (case mode
       :start
       (do
-        (reset! effect-state {:active? true :ticks 0 :balls 0})
+        (swap! effect-state assoc owner-key* (merge base-meta {:active? true :ticks 0 :balls 0}))
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id "my_mod:md.sb_charge" :volume 0.5 :pitch 1.0}))
       :ball
       (do
-        (swap! effect-state assoc :balls (int (or count 0)))
+        (swap! effect-state update owner-key*
+               (fn [st]
+                 (assoc (merge base-meta (or st {:active? true :ticks 0}))
+                        :owner-key owner-key*
+                        :ctx-id ctx-id
+                        :channel channel
+                        :source-player-id source-player-id
+                        :world-id world-id
+                        :balls (int (or count 0)))))
         (client-particles/queue-particle-effect!
           {:type :particle :particle-type :electric-spark
            :x (double (or x 0.0))
@@ -42,7 +67,7 @@
         (client-sounds/queue-sound-effect!
           {:type :sound :sound-id "my_mod:md.eb_explode" :volume 0.4 :pitch 1.2}))
       :end
-      (reset! effect-state nil)
+      (clear-scatter-bomb-owner! owner-key*)
       nil)))
 
 ;; ---------------------------------------------------------------------------
@@ -51,9 +76,12 @@
 
 (defn- tick! []
   (swap! effect-state
-         (fn [st]
-           (when (and st (:active? st))
-             (assoc st :ticks (inc (long (or (:ticks st) 0))))))))
+         (fn [states]
+           (into {}
+                 (keep (fn [[owner-key st]]
+                         (when (:active? st)
+                           [owner-key (assoc st :ticks (inc (long (or (:ticks st) 0))))])))
+                 states))))
 
 ;; ---------------------------------------------------------------------------
 ;; Build plan
@@ -68,22 +96,28 @@
 
 (defn init! []
   (level-effects/register-level-effect! :scatter-bomb
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:scatter-bomb/fx-start :scatter-bomb/fx-ball :scatter-bomb/fx-beam :scatter-bomb/fx-end]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
+      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
       (case channel
         :scatter-bomb/fx-start
-        (level-effects/enqueue-level-effect! :scatter-bomb {:mode :start})
+        (level-effects/enqueue-level-effect! :scatter-bomb (merge meta-payload {:mode :start})
+                                             {:ctx-id ctx-id :channel channel})
         :scatter-bomb/fx-ball
         (level-effects/enqueue-level-effect! :scatter-bomb
-          {:mode :ball :x (:x payload) :y (:y payload) :z (:z payload) :count (:count payload)})
+          (merge meta-payload
+                 {:mode :ball :x (:x payload) :y (:y payload) :z (:z payload) :count (:count payload)})
+          {:ctx-id ctx-id :channel channel})
         :scatter-bomb/fx-beam
         (level-effects/enqueue-level-effect! :scatter-bomb
-          {:mode :beam :start (:start payload) :end (:end payload)})
+          (merge meta-payload {:mode :beam :start (:start payload) :end (:end payload)})
+          {:ctx-id ctx-id :channel channel})
         :scatter-bomb/fx-end
-        (level-effects/enqueue-level-effect! :scatter-bomb {:mode :end})
-        nil)))
+        (level-effects/enqueue-level-effect! :scatter-bomb (merge meta-payload {:mode :end})
+                                             {:ctx-id ctx-id :channel channel})
+        nil))))
   nil)

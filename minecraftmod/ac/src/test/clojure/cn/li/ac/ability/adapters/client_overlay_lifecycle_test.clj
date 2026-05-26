@@ -6,28 +6,31 @@
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]))
 
 (defn- reset-ui-state! [f]
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles [])
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0)
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles {})
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms {})
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {})
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/charge-coin-state {})
   (f)
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles [])
-  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms 0)
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-circles {})
+  (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/vm-wave-last-spawn-ms {})
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids {})
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-key-tick-ms {})
   (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/charge-coin-state {}))
 
 (use-fixtures :each reset-ui-state!)
 
+(def ^:private test-client-session :test-client-session)
+
 (deftest movement-keys-ignore-terminated-flashing-context-test
   (let [sent (atom [])
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (reset! @#'cn.li.ac.ability.adapters.client-ui-hooks/slot-context-ids
-            {["p1" 0] "ctx-flashing-dead"})
+          {[test-client-session "p1" 0] "ctx-flashing-dead"})
     (with-redefs [ctx/get-context (fn [_]
                                     {:id "ctx-flashing-dead"
                                      :player-uuid "p1"
@@ -38,9 +41,10 @@
                                                (swap! sent conj [msg-id payload]))
                                               ([msg-id payload _callback]
                                                (swap! sent conj [msg-id payload])))]
-      ((:client-on-movement-key-down! hooks) "p1" :forward)
-      ((:client-on-movement-key-tick! hooks) "p1" :forward)
-      ((:client-on-movement-key-up! hooks) "p1" :forward)
+      (binding [runtime-hooks/*client-session-id* test-client-session]
+        ((:client-on-movement-key-down! hooks) "p1" :forward)
+        ((:client-on-movement-key-tick! hooks) "p1" :forward)
+        ((:client-on-movement-key-up! hooks) "p1" :forward))
       (is (empty? @sent)))))
 
 (deftest terminated-contexts-do-not-drive-charge-or-crosshair-overlays-test
@@ -90,9 +94,10 @@
                                                 (case [skill-id field-id]
                                                   [:railgun :qte.coin-active-threshold] 0.6
                                                   0.0))]
-      (is (false? (:active? ((:client-visual-state hooks) :ac/charge-coin {:player-uuid "p1"}))))
-      (is (false? (:active? ((:client-visual-state hooks) :ac/body-intensify-charge {:player-uuid "p1"}))))
-      (let [plan (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
+        (binding [runtime-hooks/*client-session-id* test-client-session]
+        (is (false? (:active? ((:client-visual-state hooks) :ac/charge-coin {:player-uuid "p1"}))))
+        (is (false? (:active? ((:client-visual-state hooks) :ac/body-intensify-charge {:player-uuid "p1"}))))
+        (let [plan (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
             kinds (set (map :kind (:elements plan)))]
-        (is (not (contains? kinds :content-crosshair)))
-        (is (not (contains? kinds :blit-texture)))))))
+          (is (not (contains? kinds :content-crosshair)))
+          (is (not (contains? kinds :blit-texture))))))))

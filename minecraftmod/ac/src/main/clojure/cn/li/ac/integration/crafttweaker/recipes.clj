@@ -62,7 +62,7 @@
                   :time 200}]
       (if (valid-fusor-recipe? recipe)
         (do
-          (swap! (var-get #'fusor-recipes/recipes) conj recipe)
+          (fusor-recipes/register-recipe! recipe)
           (log/info (str "Added Imag Fusor recipe: " (:item input) " -> " (:item output)))
           true)
         (do
@@ -82,10 +82,11 @@
     Number of recipes removed"
   [output-item]
   (try
-    (let [before-count (count @(var-get #'fusor-recipes/recipes))
+    (let [current (fusor-recipes/recipes-snapshot)
+          before-count (count current)
           filtered (remove #(= (get-in % [:output :item]) output-item)
-                          @(var-get #'fusor-recipes/recipes))]
-      (reset! (var-get #'fusor-recipes/recipes) (vec filtered))
+                           current)]
+      (fusor-recipes/replace-recipes! filtered)
       (let [removed (- before-count (count filtered))]
         (when (pos? removed)
           (log/info (str "Removed " removed " Imag Fusor recipe(s) for " output-item)))
@@ -118,7 +119,7 @@
                   :time 200}]
       (if (valid-former-recipe? recipe)
         (do
-          (swap! (var-get #'former-recipes/recipes) conj recipe)
+          (former-recipes/register-recipe! recipe)
           (log/info (str "Added Metal Former recipe (" mode "): " (:item input) " -> " (:item output)))
           true)
         (do
@@ -139,12 +140,13 @@
     Number of recipes removed"
   [output-item & [mode]]
   (try
-    (let [before-count (count @(var-get #'former-recipes/recipes))
+    (let [current (former-recipes/recipes-snapshot)
+          before-count (count current)
           filtered (remove (fn [recipe]
                             (and (= (get-in recipe [:output :item]) output-item)
                                  (or (nil? mode) (= (:mode recipe) mode))))
-                          @(var-get #'former-recipes/recipes))]
-      (reset! (var-get #'former-recipes/recipes) (vec filtered))
+                          current)]
+      (former-recipes/replace-recipes! filtered)
       (let [removed (- before-count (count filtered))]
         (when (pos? removed)
           (log/info (str "Removed " removed " Metal Former recipe(s) for " output-item
@@ -159,27 +161,29 @@
 (defn get-fusor-recipes
   "Get all Imag Fusor recipes (including custom ones)."
   []
-  @(var-get #'fusor-recipes/recipes))
+  (fusor-recipes/recipes-snapshot))
 
 (defn get-former-recipes
   "Get all Metal Former recipes (including custom ones)."
   []
-  @(var-get #'former-recipes/recipes))
+  (former-recipes/recipes-snapshot))
 
 (defn clear-custom-recipes!
   "Clear all custom recipes added via CraftTweaker.
   This only removes recipes with IDs starting with 'crafttweaker_'."
   []
-  (let [fusor-before (count @(var-get #'fusor-recipes/recipes))
-        former-before (count @(var-get #'former-recipes/recipes))
+  (let [fusor-current (fusor-recipes/recipes-snapshot)
+        former-current (former-recipes/recipes-snapshot)
+        fusor-before (count fusor-current)
+        former-before (count former-current)
 
         fusor-filtered (remove #(str/starts-with? (:id %) "crafttweaker_")
-                              @(var-get #'fusor-recipes/recipes))
+                               fusor-current)
         former-filtered (remove #(str/starts-with? (:id %) "crafttweaker_")
-                               @(var-get #'former-recipes/recipes))]
+                                former-current)]
 
-    (reset! (var-get #'fusor-recipes/recipes) (vec fusor-filtered))
-    (reset! (var-get #'former-recipes/recipes) (vec former-filtered))
+    (fusor-recipes/replace-recipes! fusor-filtered)
+    (former-recipes/replace-recipes! former-filtered)
 
     (let [fusor-removed (- fusor-before (count fusor-filtered))
           former-removed (- former-before (count former-filtered))]

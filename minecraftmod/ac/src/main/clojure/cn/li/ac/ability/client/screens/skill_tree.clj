@@ -5,13 +5,84 @@
             [cn.li.ac.ability.server.service.learning :as learning]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n :as i18n]))
 
 ;; Screen state (no Minecraft imports)
+(def ^:private default-screen-state
+  {:hover-skill nil
+   :player-uuid nil
+   :learn-context nil})
+
 (defonce ^:private screen-state
-  (atom {:hover-skill nil
-         :player-uuid nil
-         :learn-context nil}))
+  (atom {:current-owner nil
+         :states {}}))
+
+(defn- require-screen-owner-value
+  [owner label value]
+  (if (some? value)
+    value
+    (throw (ex-info (format "Skill tree screen owner requires %s" label)
+                    {:owner owner
+                     :required label}))))
+
+(defn screen-owner-key
+  [owner]
+  (let [owner-map (cond
+                    (vector? owner) owner
+                    (map? owner) owner
+                    (some? owner) {:player-uuid owner}
+                    :else {})]
+    (if (vector? owner-map)
+      owner-map
+      [(require-screen-owner-value owner ":client-session-id"
+                                   (or (:client-session-id owner-map)
+                                       (:session-id owner-map)
+                                       runtime-hooks/*client-session-id*))
+       :skill-tree
+       (require-screen-owner-value owner ":player-uuid"
+                                   (or (:player-uuid owner-map)
+                                       (:uuid owner-map)))])))
+
+(defn- normalized-store
+  [store]
+  (if (and (map? store) (contains? store :states))
+    store
+    (let [owner-key (when (:player-uuid store) (screen-owner-key store))]
+      {:current-owner owner-key
+       :states (if owner-key {owner-key (merge default-screen-state store)} {})})))
+
+(defn- current-owner-key
+  []
+  (:current-owner (normalized-store @screen-state)))
+
+(defn screen-state-snapshot
+  ([]
+   (if-let [owner-key (current-owner-key)]
+     (screen-state-snapshot owner-key)
+     default-screen-state))
+  ([owner]
+   (get-in (normalized-store @screen-state) [:states (screen-owner-key owner)] default-screen-state)))
+
+(defn- swap-screen-state!
+  [owner f & args]
+  (let [owner-key (screen-owner-key owner)]
+    (swap! screen-state
+           (fn [store]
+             (let [store (normalized-store store)]
+               (assoc-in store [:states owner-key]
+                         (apply f (get-in store [:states owner-key] default-screen-state) args)))))))
+
+(defn- set-current-owner!
+  [owner]
+  (let [owner-key (screen-owner-key owner)]
+    (swap! screen-state #(assoc (normalized-store %) :current-owner owner-key))
+    owner-key))
+
+(defn reset-screen-states-for-test!
+  []
+  (reset! screen-state {:current-owner nil :states {}})
+  nil)
 
 (def ^:private max-progress-segments 24)
 
@@ -126,7 +197,8 @@
 (defn build-screen-render-data
   "Build complete screen render data. Called by forge layer."
   []
-  (when-let [player-uuid (:player-uuid @screen-state)]
+  (let [state (screen-state-snapshot)]
+  (when-let [player-uuid (:player-uuid state)]
     (when-let [player-state (ps/get-player-state player-uuid)]
       (let [ability-data (:ability-data player-state)
             category (:category ability-data)
@@ -134,14 +206,14 @@
                     (skill/get-skills-for-category (:category-id category)))
             positions (when skills
                        (calculate-skill-positions skills))
-            dev-type (or (:developer-type (:learn-context @screen-state)) :normal)]
+            dev-type (or (:developer-type (:learn-context state)) :normal)]
         {:ability-info (build-ability-info-render-data player-state)
          :category-color (:color category)
          :skill-nodes (when positions
                        (mapv #(build-skill-node-render-data % player-state dev-type) positions))
          :connections (when positions
             (build-skill-connections positions player-state dev-type))
-         :hover-skill (:hover-skill @screen-state)}))))
+          :hover-skill (:hover-skill state)})))))
 
 ;; ============================================================================
 ;; Event Handlers (Called by Forge Layer)
@@ -150,10 +222,11 @@
 (defn on-skill-click
   "Handle skill node click. Attempts to learn the skill if conditions are met."
   [skill-id]
-  (when-let [player-uuid (:player-uuid @screen-state)]
+  (let [state (screen-state-snapshot)]
+  (when-let [player-uuid (:player-uuid state)]
     (when-let [player-state (ps/get-player-state player-uuid)]
       (let [ability-data (:ability-data player-state)
-            ctx (:learn-context @screen-state)
+            ctx (:learn-context state)
             dev-type (or (:developer-type ctx) :normal)
             conditions (learning/check-all-conditions
                            skill-id
@@ -163,7 +236,7 @@
             pos-extra (when (every? number? [(:pos-x ctx) (:pos-y ctx) (:pos-z ctx)])
                         (select-keys ctx [:pos-x :pos-y :pos-z]))]
         (when (:pass? conditions)
-          (api/req-learn-skill! skill-id pos-extra nil))))))
+          (api/req-learn-skill! skill-id pos-extra nil)))))))
 
 (defn on-level-up-click
   "Handle level-up button click."
@@ -208,7 +281,8 @@
                              dist-sq (+ (* dx dx) (* dy dy))]
                          (< dist-sq 400))) ; 20px radius squared
                      skill-nodes)))]
-    (swap! screen-state assoc :hover-skill (:skill-id hovered))))
+    (when-let [owner-key (current-owner-key)]
+      (swap-screen-state! owner-key assoc :hover-skill (:skill-id hovered)))))
 
 (defn open-screen!
   "Open skill tree screen. Returns command for forge layer.
@@ -218,14 +292,26 @@
   ([player-uuid learn-context]
     ;; 确保player-state存在，防止UI卡死
     (ps/get-or-create-player-state! player-uuid)
-    (swap! screen-state assoc :player-uuid player-uuid :learn-context learn-context)
+    (let [owner {:player-uuid player-uuid}]
+      (set-current-owner! owner)
+      (swap-screen-state! owner merge default-screen-state
+                          {:player-uuid player-uuid
+                           :learn-context learn-context}))
     {:command :open-screen
      :screen-type :skill-tree}))
 
 (defn close-screen!
   "Close skill tree screen and clean up state."
-  []
-  (swap! screen-state assoc :player-uuid nil :hover-skill nil :learn-context nil))
+  ([]
+   (when-let [owner-key (current-owner-key)]
+     (close-screen! owner-key)))
+  ([owner]
+   (swap! screen-state
+          (fn [store]
+            (let [store (normalized-store store)
+                  owner-key (screen-owner-key owner)]
+              (cond-> (update store :states dissoc owner-key)
+                (= owner-key (:current-owner store)) (assoc :current-owner nil)))))))
 
 ;; ============================================================================
 ;; Draw Ops (for generic forge screen host)

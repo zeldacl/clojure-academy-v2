@@ -6,6 +6,22 @@
 
 (defonce ^:private notices* (atom {}))
 
+(defn notices-snapshot
+  []
+  @notices*)
+
+(defn reset-notices-for-test!
+  ([]
+   (reset-notices-for-test! {}))
+  ([snapshot]
+   (reset! notices* (or snapshot {}))
+   nil))
+
+(defn clear-notice!
+  [notice-id]
+  (swap! notices* dissoc notice-id)
+  nil)
+
 (defn- now-ms []
   (System/currentTimeMillis))
 
@@ -45,5 +61,4 @@
 
 (defn reset-notices!
   []
-  (reset! notices* {})
-  nil)
+  (reset-notices-for-test!))

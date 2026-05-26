@@ -25,6 +25,28 @@
 (defonce ^:private world-unload-handlers (atom []))
 (defonce ^:private world-save-handlers (atom []))
 (defonce ^:private world-tick-handlers (atom []))
+(defonce ^:private world-lifecycle-frozen? (atom false))
+
+(defn- assert-not-frozen!
+  []
+  (when @world-lifecycle-frozen?
+    (throw (ex-info "World lifecycle handlers are frozen" {}))))
+
+(defn- handler-id
+  [handler-map]
+  (or (:id handler-map) handler-map))
+
+(defn- register-handler-entry!
+  [handlers-atom id handler-fn]
+  (swap! handlers-atom
+         (fn [entries]
+           (if-let [existing (first (filter #(= id (:id %)) entries))]
+             (if (identical? handler-fn (:fn existing))
+               entries
+               (throw (ex-info "Conflicting world lifecycle handler id"
+                               {:id id})))
+             (conj entries {:id id :fn handler-fn}))))
+  nil)
 
 ;; ============================================================================
 ;; Registration API (called by content code)
@@ -46,15 +68,41 @@
        :on-unload my.content.world-data/on-world-unload
        :on-save   my.content.world-data/on-world-save})"
   [handler-map]
+  (assert-not-frozen!)
+  (let [id (handler-id handler-map)]
   (when-let [on-load (:on-load handler-map)]
-    (swap! world-load-handlers conj on-load))
+    (register-handler-entry! world-load-handlers id on-load))
   (when-let [on-unload (:on-unload handler-map)]
-    (swap! world-unload-handlers conj on-unload))
+    (register-handler-entry! world-unload-handlers id on-unload))
   (when-let [on-save (:on-save handler-map)]
-    (swap! world-save-handlers conj on-save))
+    (register-handler-entry! world-save-handlers id on-save))
   (when-let [on-tick (:on-tick handler-map)]
-    (swap! world-tick-handlers conj on-tick))
+    (register-handler-entry! world-tick-handlers id on-tick)))
   nil)
+
+(defn freeze-world-lifecycle-handlers!
+  "Freeze static lifecycle handler registration after bootstrap."
+  []
+  (reset! world-lifecycle-frozen? true)
+  nil)
+
+(defn reset-world-lifecycle-handlers-for-test!
+  "Reset lifecycle handler registry. Intended for tests/reloads only."
+  []
+  (reset! world-load-handlers [])
+  (reset! world-unload-handlers [])
+  (reset! world-save-handlers [])
+  (reset! world-tick-handlers [])
+  (reset! world-lifecycle-frozen? false)
+  nil)
+
+(defn lifecycle-handlers-snapshot
+  []
+  {:load @world-load-handlers
+   :unload @world-unload-handlers
+   :save @world-save-handlers
+   :tick @world-tick-handlers
+   :frozen? @world-lifecycle-frozen?})
 
 ;; ============================================================================
 ;; Dispatch API (called by platform code)
@@ -69,7 +117,7 @@
 
   Called by platform code (forge/fabric) when world loads."
   [world saved-data]
-  (doseq [handler @world-load-handlers]
+  (doseq [{handler :fn} @world-load-handlers]
     (try
       (handler world saved-data)
       (catch Throwable t
@@ -83,7 +131,7 @@
 
   Called by platform code (forge/fabric) when world unloads."
   [world]
-  (doseq [handler @world-unload-handlers]
+  (doseq [{handler :fn} @world-unload-handlers]
     (try
       (handler world)
       (catch Throwable t
@@ -100,7 +148,7 @@
   Called by platform code (forge/fabric) before world saves."
   [world]
   (reduce
-    (fn [acc handler]
+    (fn [acc {handler :fn}]
       (try
         (if-let [data (handler world)]
           (conj acc data)
@@ -119,7 +167,7 @@
 
   Called by platform code (forge/fabric) each server world tick."
   [world]
-  (doseq [handler @world-tick-handlers]
+  (doseq [{handler :fn} @world-tick-handlers]
     (try
       (handler world)
       (catch Throwable t

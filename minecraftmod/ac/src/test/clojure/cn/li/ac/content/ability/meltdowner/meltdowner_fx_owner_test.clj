@@ -1,0 +1,145 @@
+(ns cn.li.ac.content.ability.meltdowner.meltdowner-fx-owner-test
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.ac.content.ability.meltdowner.electron-bomb-fx :as electron-bomb-fx]
+            [cn.li.ac.content.ability.meltdowner.electron-missile-fx :as electron-missile-fx]
+            [cn.li.ac.content.ability.meltdowner.jet-engine-fx :as jet-engine-fx]
+            [cn.li.ac.content.ability.meltdowner.light-shield-fx :as light-shield-fx]
+            [cn.li.ac.content.ability.meltdowner.meltdowner-fx :as meltdowner-fx]
+            [cn.li.ac.content.ability.meltdowner.mine-ray-fx :as mine-ray-fx]
+            [cn.li.ac.content.ability.meltdowner.ray-barrage-fx :as ray-barrage-fx]
+            [cn.li.ac.content.ability.meltdowner.scatter-bomb-fx :as scatter-bomb-fx]))
+
+(defn- reset-fixture [f]
+  (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
+  (electron-missile-fx/reset-electron-missile-fx-for-test!)
+  (jet-engine-fx/reset-jet-engine-fx-for-test!)
+  (light-shield-fx/reset-light-shield-fx-for-test!)
+  (meltdowner-fx/reset-meltdowner-fx-for-test!)
+  (mine-ray-fx/reset-mine-ray-fx-for-test!)
+  (ray-barrage-fx/reset-ray-barrage-fx-for-test!)
+  (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!)
+  (f)
+  (electron-bomb-fx/reset-electron-bomb-fx-for-test!)
+  (electron-missile-fx/reset-electron-missile-fx-for-test!)
+  (jet-engine-fx/reset-jet-engine-fx-for-test!)
+  (light-shield-fx/reset-light-shield-fx-for-test!)
+  (meltdowner-fx/reset-meltdowner-fx-for-test!)
+  (mine-ray-fx/reset-mine-ray-fx-for-test!)
+  (ray-barrage-fx/reset-ray-barrage-fx-for-test!)
+  (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!))
+
+(use-fixtures :each reset-fixture)
+
+(defn- event [ctx-id channel payload]
+  {:payload payload
+   :ctx-id ctx-id
+   :channel channel
+   :owner-key [:ctx ctx-id]})
+
+(def ^:private p0 {:x 0.0 :y 64.0 :z 0.0})
+(def ^:private p1 {:x 1.0 :y 64.0 :z 0.0})
+(def ^:private p2 {:x 2.0 :y 64.0 :z 0.0})
+
+(deftest meltdowner-stateful-fx-keep-state-per-owner-test
+  (let [electron-bomb-enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.electron-bomb-fx/enqueue!)
+        electron-missile-enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/enqueue!)
+        jet-engine-enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.jet-engine-fx/enqueue!)
+        light-shield-enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.light-shield-fx/enqueue!)
+        meltdowner-enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.meltdowner-fx/enqueue!)
+        mine-ray-enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/enqueue!)
+        ray-barrage-enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.ray-barrage-fx/enqueue-beam!)
+        scatter-bomb-enqueue! (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/enqueue!)]
+    (with-redefs [client-particles/queue-particle-effect! (fn [_] nil)
+                  client-sounds/queue-sound-effect! (fn [_] nil)]
+      (electron-bomb-enqueue! (event "ctx-a" :electron-bomb/fx-spawn
+                                     {:mode :spawn :x 1.0 :y 64.0 :z 1.0}))
+      (electron-bomb-enqueue! (event "ctx-b" :electron-bomb/fx-spawn
+                                     {:mode :spawn :x 2.0 :y 64.0 :z 2.0}))
+
+      (electron-missile-enqueue! (event "ctx-a" :electron-missile/fx-fire
+                                        {:mode :fire :target-x 1.0 :target-y 64.0 :target-z 1.0}))
+      (electron-missile-enqueue! (event "ctx-b" :electron-missile/fx-fire
+                                        {:mode :fire :target-x 2.0 :target-y 64.0 :target-z 2.0}))
+
+      (jet-engine-enqueue! (event "ctx-a" :jet-engine/fx-launch {:mode :launch :speed 1.5}))
+      (jet-engine-enqueue! (event "ctx-b" :jet-engine/fx-launch {:mode :launch :speed 2.5}))
+
+      (light-shield-enqueue! (event "ctx-a" :light-shield/fx-start {:mode :start}))
+      (light-shield-enqueue! (event "ctx-b" :light-shield/fx-start {:mode :start}))
+
+      (meltdowner-enqueue! (event "ctx-a" :meltdowner/fx-start {:mode :start}))
+      (meltdowner-enqueue! (event "ctx-b" :meltdowner/fx-start {:mode :start}))
+      (meltdowner-enqueue! (event "ctx-a" :meltdowner/fx-update
+                                  {:mode :update :ticks 12 :charge-ratio 0.4}))
+      (meltdowner-enqueue! (event "ctx-b" :meltdowner/fx-update
+                                  {:mode :update :ticks 21 :charge-ratio 0.8}))
+      (meltdowner-enqueue! (event "ctx-a" :meltdowner/fx-perform
+                                  {:mode :perform :start p0 :end p1}))
+      (meltdowner-enqueue! (event "ctx-b" :meltdowner/fx-reflect
+                                  {:mode :reflect :start p1 :end p2}))
+
+      (mine-ray-enqueue! (event "ctx-a" :mine-ray/fx-start {:mode :start :variant :basic}))
+      (mine-ray-enqueue! (event "ctx-b" :mine-ray/fx-start {:mode :start :variant :expert}))
+      (mine-ray-enqueue! (event "ctx-a" :mine-ray/fx-progress
+                                {:mode :progress :x 1 :y 64 :z 1 :progress 0.25}))
+      (mine-ray-enqueue! (event "ctx-b" :mine-ray/fx-progress
+                                {:mode :progress :x 2 :y 64 :z 2 :progress 0.75}))
+
+      (ray-barrage-enqueue! (event "ctx-a" :ray-barrage/fx-beam
+                                   {:from-x 0.0 :from-y 64.0 :from-z 0.0 :to-x 1.0 :to-y 64.0 :to-z 0.0}))
+      (ray-barrage-enqueue! (event "ctx-b" :ray-barrage/fx-beam
+                                   {:from-x 0.0 :from-y 65.0 :from-z 0.0 :to-x 1.0 :to-y 65.0 :to-z 0.0}))
+
+      (scatter-bomb-enqueue! (event "ctx-a" :scatter-bomb/fx-start {:mode :start}))
+      (scatter-bomb-enqueue! (event "ctx-b" :scatter-bomb/fx-start {:mode :start}))
+      (scatter-bomb-enqueue! (event "ctx-a" :scatter-bomb/fx-ball
+                                    {:mode :ball :x 1.0 :y 64.0 :z 1.0 :count 3}))
+      (scatter-bomb-enqueue! (event "ctx-b" :scatter-bomb/fx-ball
+                                    {:mode :ball :x 2.0 :y 64.0 :z 2.0 :count 5}))
+
+      (is (= 1.0 (get-in (electron-bomb-fx/electron-bomb-fx-snapshot) [:effect-state [:ctx "ctx-a"] :x])))
+      (is (= 2.0 (get-in (electron-bomb-fx/electron-bomb-fx-snapshot) [:effect-state [:ctx "ctx-b"] :x])))
+      (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-a"]]))))
+      (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-b"]]))))
+      (is (= 1.5 (get-in (jet-engine-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-a"] :speed])))
+      (is (= 2.5 (get-in (jet-engine-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-b"] :speed])))
+      (is (:active? (get-in (light-shield-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
+      (is (:active? (get-in (light-shield-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-b"]])))
+      (is (= 12 (get-in (meltdowner-fx/meltdowner-fx-snapshot) [:effect-state [:ctx "ctx-a"] :ticks])))
+      (is (= 21 (get-in (meltdowner-fx/meltdowner-fx-snapshot) [:effect-state [:ctx "ctx-b"] :ticks])))
+      (is (= 1 (count (get-in (meltdowner-fx/meltdowner-fx-snapshot) [:rays [:ctx "ctx-a"]]))))
+      (is (= 1 (count (get-in (meltdowner-fx/meltdowner-fx-snapshot) [:rays [:ctx "ctx-b"]]))))
+      (is (= 0.25 (get-in (mine-ray-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-a"] :progress])))
+      (is (= 0.75 (get-in (mine-ray-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-b"] :progress])))
+      (is (= 1 (count (get-in (ray-barrage-fx/ray-barrage-fx-snapshot) [:beam-queue [:ctx "ctx-a"]]))))
+      (is (= 1 (count (get-in (ray-barrage-fx/ray-barrage-fx-snapshot) [:beam-queue [:ctx "ctx-b"]]))))
+      (is (= 3 (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-a"] :balls])))
+      (is (= 5 (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-b"] :balls])))
+
+      (electron-bomb-fx/clear-electron-bomb-owner! [:ctx "ctx-a"])
+      (electron-missile-fx/clear-electron-missile-owner! [:ctx "ctx-a"])
+      (jet-engine-fx/clear-jet-engine-owner! [:ctx "ctx-a"])
+      (light-shield-fx/clear-light-shield-owner! [:ctx "ctx-a"])
+      (meltdowner-fx/clear-meltdowner-owner! [:ctx "ctx-a"])
+      (mine-ray-fx/clear-mine-ray-owner! [:ctx "ctx-a"])
+      (ray-barrage-fx/clear-ray-barrage-owner! [:ctx "ctx-a"])
+      (scatter-bomb-fx/clear-scatter-bomb-owner! [:ctx "ctx-a"])
+
+      (is (nil? (get-in (electron-bomb-fx/electron-bomb-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
+      (is (some? (get-in (electron-bomb-fx/electron-bomb-fx-snapshot) [:effect-state [:ctx "ctx-b"]])))
+      (is (nil? (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-a"]])))
+      (is (some? (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-b"]])))
+      (is (nil? (get-in (jet-engine-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-a"]])))
+      (is (some? (get-in (jet-engine-fx/jet-engine-fx-snapshot) [:fx-state [:ctx "ctx-b"]])))
+      (is (nil? (get-in (light-shield-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
+      (is (some? (get-in (light-shield-fx/light-shield-fx-snapshot) [:effect-state [:ctx "ctx-b"]])))
+      (is (nil? (get-in (meltdowner-fx/meltdowner-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
+      (is (some? (get-in (meltdowner-fx/meltdowner-fx-snapshot) [:effect-state [:ctx "ctx-b"]])))
+      (is (nil? (get-in (mine-ray-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
+      (is (some? (get-in (mine-ray-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-b"]])))
+      (is (nil? (get-in (ray-barrage-fx/ray-barrage-fx-snapshot) [:beam-queue [:ctx "ctx-a"]])))
+      (is (some? (get-in (ray-barrage-fx/ray-barrage-fx-snapshot) [:beam-queue [:ctx "ctx-b"]])))
+      (is (nil? (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
+      (is (some? (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-b"]]))))))

@@ -1,5 +1,5 @@
 (ns cn.li.ac.wireless.data.world-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.wireless-stubs :as stubs]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.network-state :as network-state]
@@ -10,22 +10,63 @@
             [cn.li.ac.wireless.data.world :as world]
             [cn.li.mcmod.platform.nbt :as nbt]))
 
+(use-fixtures
+  :each
+  (fn [f]
+    (world-registry/reset-registry!)
+    (try
+      (f)
+      (finally
+        (world-registry/reset-registry!)))))
+
+(defn- test-world
+  [world-id]
+  {:server-session-id :test-session
+   :world-id world-id})
+
 (deftest get-world-data-caches-per-world-test
-  (let [w :world-a
+  (let [w (test-world :world-a)
         a (world/get-world-data w)
         b (world/get-world-data w)]
     (is (identical? a b))
     (is (= w (:world a)))
+    (is (= [:test-session :world-a] (:world-key a)))
     (world/remove-world-data! w)))
 
+(deftest world-key-requires-explicit-owner-test
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"requires :server-session-id"
+                        (world-registry/world-key :legacy-world)))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"requires :world-id"
+                        (world-registry/world-key {:server-session-id :test-session}))))
+
+  (deftest world-key-isolates-session-and-dimension-test
+    (let [world-a {:server-session-id :session-a :dimension-id :overworld :ref 1}
+      world-a-new-ref {:server-session-id :session-a :dimension-id :overworld :ref 2}
+      world-b {:server-session-id :session-b :dimension-id :overworld :ref 3}
+      a (world/get-world-data world-a)
+      a2 (world/get-world-data world-a-new-ref)
+      b (world/get-world-data world-b)]
+    (is (= [:session-a :overworld] (:world-key a)))
+    (is (= [:session-a :overworld] (:world-key a2)))
+    (is (= [:session-b :overworld] (:world-key b)))
+    (is (identical? (:state a) (:state a2)))
+    (is (not (identical? (:state a2) (:state b))))
+    (is (= 2 (count (world-registry/registry-snapshot))))
+
+    (world/remove-world-data! world-a-new-ref)
+    (is (nil? (world/get-world-data-non-create world-a)))
+    (is (some? (world/get-world-data-non-create world-b)))))
+
 (deftest create-network-uniqueness-test
-  (let [wd (world/create-world-data :w)
+  (let [wd (world/create-world-data (test-world :w))
         matrix (vb/create-vmatrix 0 0 0)]
     (is (true? (world/create-network-impl! wd matrix "s1" "pw")))
     (is (false? (world/create-network-impl! wd matrix "s1" "pw2")))))
 
 (deftest create-network-registers-lookups-test
-  (let [w :w-lu
+  (let [w (test-world :w-lu)
         wd (world/create-world-data w)
         tiles (atom {[0 0 0] (stubs/fake-matrix {})})
         matrix-vb (vb/create-vmatrix 0 0 0)]
@@ -37,7 +78,7 @@
         (is (pos? (count (world-registry/spatial-index wd))))))))
 
 (deftest destroy-network-clears-node-lookups-test
-  (let [w :w-dest
+  (let [w (test-world :w-dest)
         wd (world/create-world-data w)
         m (stubs/fake-matrix {:capacity 4})
         n (stubs/mutable-node {})
@@ -55,7 +96,7 @@
           (is (nil? (world/get-network-by-ssid wd "dnet"))))))))
 
 (deftest change-network-ssid-refreshes-string-lookup-test
-  (let [wd (world/create-world-data :w-rename)
+  (let [wd (world/create-world-data (test-world :w-rename))
         matrix-vb (vb/create-vmatrix 0 0 0)]
     (is (true? (world/create-network-impl! wd matrix-vb "old" "p")))
     (let [network (world/get-network-by-ssid wd "old")]
@@ -65,7 +106,7 @@
       (is (identical? network (world/get-network-by-ssid wd "new"))))))
 
 (deftest world-lifecycle-saved-data-restores-active-world-state-test
-  (let [world-id :w-lifecycle
+  (let [world-id (test-world :w-lifecycle)
         matrix-vb (vb/create-vmatrix 0 0 0)
         node-vb (vb/create-vnode 3 0 0)
         node-conn-vb (vb/->VBlock 3 0 0 :node-conn true)
@@ -94,7 +135,7 @@
                 (is (= [gen-vb] (node-conn/get-generators conn)))))))))))
 
 (deftest world-lifecycle-skips-invalid-saved-wireless-entries-test
-  (let [world-id :w-lifecycle-corrupt
+  (let [world-id (test-world :w-lifecycle-corrupt)
         tiles (atom {})]
     (stubs/with-tile-world tiles
       (fn []

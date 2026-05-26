@@ -56,28 +56,83 @@
     (when (and item-id (pos? count))
       (pitem/create-item-stack-by-id item-id count))))
 
-(defonce recipes
-  (atom
-    [{:id "if_crystal_low_to_normal"
-      :input {:item (str modid/MOD-ID ":crystal_low") :count 1}
-      :output {:item (str modid/MOD-ID ":crystal_normal") :count 1}
-      :consume-liquid 3000
-      :time cfg/craft-time-ticks}
-     {:id "if_crystal_normal_to_pure"
-      :input {:item (str modid/MOD-ID ":crystal_normal") :count 1}
-      :output {:item (str modid/MOD-ID ":crystal_pure") :count 1}
-      :consume-liquid 8000
-      :time cfg/craft-time-ticks}]))
+(defn- default-recipes
+  []
+  [{:id "if_crystal_low_to_normal"
+    :input {:item (str modid/MOD-ID ":crystal_low") :count 1}
+    :output {:item (str modid/MOD-ID ":crystal_normal") :count 1}
+    :consume-liquid 3000
+    :time cfg/craft-time-ticks}
+   {:id "if_crystal_normal_to_pure"
+    :input {:item (str modid/MOD-ID ":crystal_normal") :count 1}
+    :output {:item (str modid/MOD-ID ":crystal_pure") :count 1}
+    :consume-liquid 8000
+    :time cfg/craft-time-ticks}])
+
+(defonce ^:private recipes
+  (atom (vec (default-recipes))))
+
+(defn- validate-recipe!
+  [recipe]
+  (when-not (map? recipe)
+    (throw (ex-info "Imaginary Fusor recipe must be a map" {:recipe recipe})))
+  (when-not (and (string? (:id recipe)) (not (str/blank? (:id recipe))))
+    (throw (ex-info "Imaginary Fusor recipe id must be a non-empty string" {:recipe recipe})))
+  recipe)
+
+(defn- assert-no-conflicting-duplicates!
+  [recipe-list]
+  (doseq [[recipe-id entries] (group-by :id recipe-list)
+          :when (> (count entries) 1)]
+    (when (> (count (distinct entries)) 1)
+      (throw (ex-info "Conflicting Imaginary Fusor recipe id"
+                      {:id recipe-id
+                       :recipes entries}))))
+  recipe-list)
+
+(defn recipes-snapshot
+  []
+  (vec @recipes))
+
+(defn replace-recipes!
+  [recipe-list]
+  (let [validated (->> recipe-list
+                       (map validate-recipe!)
+                       assert-no-conflicting-duplicates!
+                       distinct
+                       vec)]
+    (reset! recipes validated))
+  nil)
+
+(defn register-recipe!
+  [recipe]
+  (let [recipe (validate-recipe! recipe)]
+    (swap! recipes
+           (fn [current]
+             (if-let [existing (first (filter #(= (:id %) (:id recipe)) current))]
+               (if (= existing recipe)
+                 current
+                 (throw (ex-info "Conflicting Imaginary Fusor recipe id"
+                                 {:id (:id recipe)
+                                  :existing existing
+                                  :new recipe})))
+               (conj (vec current) recipe)))))
+  nil)
+
+(defn reset-recipes-for-test!
+  []
+  (reset! recipes (vec (default-recipes)))
+  nil)
 
 (defn find-recipe
   "Find a recipe matching the crystal input stack."
   [input-item]
-  (first (filter #(stack-matches-item? input-item (:input %)) @recipes)))
+  (first (filter #(stack-matches-item? input-item (:input %)) (recipes-snapshot))))
 
 (defn get-recipe-by-id
   "Get a recipe by its ID"
   [recipe-id]
-  (first (filter #(= (:id %) recipe-id) @recipes)))
+  (first (filter #(= (:id %) recipe-id) (recipes-snapshot))))
 
 (defn can-output?
   "Check if recipe output can be inserted into current output slot stack."

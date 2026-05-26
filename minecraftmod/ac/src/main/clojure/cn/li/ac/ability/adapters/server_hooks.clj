@@ -19,6 +19,17 @@
 
 (defonce ^:private lifecycle-subscriptions-registered? (atom false))
 
+(defn lifecycle-subscriptions-registered-snapshot
+  []
+  @lifecycle-subscriptions-registered?)
+
+(defn reset-lifecycle-subscriptions-registered-for-test!
+  ([]
+   (reset-lifecycle-subscriptions-registered-for-test! false))
+  ([registered?]
+   (reset! lifecycle-subscriptions-registered? (boolean registered?))
+   nil))
+
 (defn install-store!
   []
   (ability-store/install-store!))

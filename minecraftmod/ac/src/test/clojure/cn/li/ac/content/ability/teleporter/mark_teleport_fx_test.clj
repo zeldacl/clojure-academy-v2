@@ -7,11 +7,17 @@
             [cn.li.ac.content.ability.teleporter.mark-teleport-fx :as mfx]))
 
 (defn- reset-fixture [f]
-  (reset! (var-get #'cn.li.ac.content.ability.teleporter.mark-teleport-fx/effect-state) nil)
+  (mfx/reset-mark-teleport-fx-for-test!)
   (f)
-  (reset! (var-get #'cn.li.ac.content.ability.teleporter.mark-teleport-fx/effect-state) nil))
+  (mfx/reset-mark-teleport-fx-for-test!))
 
 (use-fixtures :each reset-fixture)
+
+(defn- event [payload]
+  {:payload payload
+   :ctx-id "ctx-1"
+   :channel :mark-teleport/fx-test
+   :owner-key [:ctx "ctx-1"]})
 
 (deftest init-registers-mark-teleport-fx-channels-test
   (let [registered-level* (atom nil)
@@ -38,8 +44,8 @@
                   fx-registry/register-fx-channels! (fn [_ handler]
                                                       (reset! handler* handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id payload]
-                                                        (swap! enqueued* conj [effect-id payload])
+                  level-effects/enqueue-level-effect! (fn [effect-id payload fx-context]
+                                                        (swap! enqueued* conj [effect-id payload fx-context])
                                                         nil)]
       (mfx/init!)
       (@handler* "ctx-1" :mark-teleport/fx-start nil)
@@ -49,10 +55,12 @@
                                                      :distance 7.0})
       (@handler* "ctx-1" :mark-teleport/fx-end nil)
 
-      (is (= [[:mark-teleport {:mode :start}]
-              [:mark-teleport {:mode :update :target {:x 1.0 :y 2.0 :z 3.0} :distance 5.0}]
-              [:mark-teleport {:mode :perform :target {:x 4.0 :y 5.0 :z 6.0} :distance 7.0}]
-              [:mark-teleport {:mode :end}]]
+            (is (= [[:mark-teleport {:mode :start} {:ctx-id "ctx-1" :channel :mark-teleport/fx-start}]
+              [:mark-teleport {:mode :update :target {:x 1.0 :y 2.0 :z 3.0} :distance 5.0}
+               {:ctx-id "ctx-1" :channel :mark-teleport/fx-update}]
+              [:mark-teleport {:mode :perform :target {:x 4.0 :y 5.0 :z 6.0} :distance 7.0}
+               {:ctx-id "ctx-1" :channel :mark-teleport/fx-perform}]
+              [:mark-teleport {:mode :end} {:ctx-id "ctx-1" :channel :mark-teleport/fx-end}]]
              @enqueued*)))))
 
 (deftest enqueue-perform-with-target-emits-particles-and-sound-test
@@ -65,7 +73,7 @@
                   client-sounds/queue-sound-effect! (fn [payload]
                                                       (swap! sounds* conj payload)
                                                       nil)]
-      (enqueue! {:mode :perform :target {:x 2.0 :y 64.0 :z 3.0} :distance 8.0})
+      (enqueue! (event {:mode :perform :target {:x 2.0 :y 64.0 :z 3.0} :distance 8.0}))
       (is (= 1 (count @particles*)))
       (is (= 1 (count @sounds*)))
       (is (= "my_mod:tp.tp" (:sound-id (first @sounds*)))))))
@@ -76,14 +84,14 @@
         enqueue! (var-get #'cn.li.ac.content.ability.teleporter.mark-teleport-fx/enqueue!)]
     (with-redefs [client-particles/queue-particle-effect! (fn [& _] (swap! particles* inc) nil)
                   client-sounds/queue-sound-effect! (fn [& _] (swap! sounds* inc) nil)]
-      (enqueue! {:mode :perform :distance 4.0})
+      (enqueue! (event {:mode :perform :distance 4.0}))
       (is (= 0 @particles*))
       (is (= 0 @sounds*)))))
 
 (deftest enqueue-end-clears-state-test
   (let [enqueue! (var-get #'cn.li.ac.content.ability.teleporter.mark-teleport-fx/enqueue!)]
-    (enqueue! {:mode :start})
-    (enqueue! {:mode :update :target {:x 1.0 :y 2.0 :z 3.0} :distance 2.0})
-    (is (some? @(var-get #'cn.li.ac.content.ability.teleporter.mark-teleport-fx/effect-state)))
-    (enqueue! {:mode :end})
-    (is (nil? @(var-get #'cn.li.ac.content.ability.teleporter.mark-teleport-fx/effect-state)))))
+    (enqueue! (event {:mode :start}))
+    (enqueue! (event {:mode :update :target {:x 1.0 :y 2.0 :z 3.0} :distance 2.0}))
+    (is (some? (get (:effect-state (mfx/mark-teleport-fx-snapshot)) [:ctx "ctx-1"])))
+    (enqueue! (event {:mode :end}))
+    (is (nil? (get (:effect-state (mfx/mark-teleport-fx-snapshot)) [:ctx "ctx-1"])))) )

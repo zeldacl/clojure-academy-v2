@@ -5,33 +5,59 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
-(defonce ^:private impacts (atom []))
+(defonce ^:private impacts (atom {}))
 
-(defn- enqueue! [payload]
-  (case (:mode payload)
-    :start
-    (client-sounds/queue-sound-effect!
-      {:type :sound :sound-id "my_mod:md.em_start" :volume 0.5 :pitch 1.0})
-    :fire
-    (do
-      (swap! impacts
-             (fn [q]
-               (let [q2 (conj q (assoc payload :ttl 10))]
-                 (if (> (count q2) 8)
-                   (subvec q2 (- (count q2) 8))
-                   q2))))
+(defn electron-missile-fx-snapshot []
+  {:impacts @impacts})
+
+(defn reset-electron-missile-fx-for-test! []
+  (reset! impacts {})
+  nil)
+
+(defn clear-electron-missile-owner! [owner-key]
+  (swap! impacts dissoc owner-key)
+  nil)
+
+(defn- all-impacts []
+  (mapcat val @impacts))
+
+(defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
+  (let [owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [source-player-id world-id]} payload
+        base-meta {:owner-key owner-key*
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
+    (case (:mode payload)
+      :start
       (client-sounds/queue-sound-effect!
-        {:type :sound :sound-id "my_mod:md.em_fire" :volume 0.35 :pitch (+ 0.85 (rand 0.3))}))
-    nil))
+        {:type :sound :sound-id "my_mod:md.em_start" :volume 0.5 :pitch 1.0})
+      :fire
+      (do
+        (swap! impacts update owner-key*
+               (fn [q]
+                 (let [q2 (conj (vec q) (merge base-meta payload {:ttl 10}))]
+                   (if (> (count q2) 8)
+                     (subvec q2 (- (count q2) 8))
+                     q2))))
+        (client-sounds/queue-sound-effect!
+          {:type :sound :sound-id "my_mod:md.em_fire" :volume 0.35 :pitch (+ 0.85 (rand 0.3))}))
+      nil)))
 
 (defn- tick! []
   (swap! impacts
-         (fn [q]
-           (->> q
-                (map (fn [b] (update b :ttl dec)))
-                (filter (fn [b] (pos? (:ttl b))))
-                vec)))
-  (doseq [impact @impacts]
+         (fn [by-owner]
+           (into {}
+                 (keep (fn [[owner-key q]]
+                         (let [live (->> q
+                                         (map (fn [b] (update b :ttl dec)))
+                                         (filter (fn [b] (pos? (:ttl b))))
+                                         vec)]
+                           (when (seq live)
+                             [owner-key live]))))
+                 by-owner)))
+  (doseq [impact (all-impacts)]
     (when-let [tx (:target-x impact)]
       (client-particles/queue-particle-effect!
         {:type :particle :particle-type :electric-spark
@@ -46,20 +72,24 @@
 
 (defn init! []
   (level-effects/register-level-effect! :electron-missile
-    {:enqueue-fn    enqueue!
+    {:enqueue-event-fn enqueue!
      :tick-fn       tick!
      :build-plan-fn build-plan})
   (fx-registry/register-fx-channels!
     [:electron-missile/fx-start :electron-missile/fx-fire]
-    (fn [_ctx-id channel payload]
+    (fn [ctx-id channel payload]
+      (let [meta-payload (select-keys payload [:effect-instance-id :source-player-id :world-id])]
       (case channel
         :electron-missile/fx-start
-        (level-effects/enqueue-level-effect! :electron-missile {:mode :start})
+        (level-effects/enqueue-level-effect! :electron-missile (merge meta-payload {:mode :start})
+                                             {:ctx-id ctx-id :channel channel})
         :electron-missile/fx-fire
         (level-effects/enqueue-level-effect! :electron-missile
-          {:mode :fire
-           :target-x (:target-x payload)
-           :target-y (:target-y payload)
-           :target-z (:target-z payload)})
-        nil)))
+          (merge meta-payload
+                 {:mode :fire
+                  :target-x (:target-x payload)
+                  :target-y (:target-y payload)
+                  :target-z (:target-z payload)})
+          {:ctx-id ctx-id :channel channel})
+        nil))))
   nil)

@@ -3,11 +3,9 @@
 
 (defn clean-contexts-fixture
   [f]
-  (doseq [ctx-id (keys (ctx/get-all-contexts))]
-    (ctx/remove-context! ctx-id))
+  (ctx/reset-contexts-for-test!)
   (ctx/reset-lifecycle-counters!)
-  (ctx/register-route-fns! {:to-server nil :to-client nil :to-except-local nil})
+  (ctx/reset-route-fns-for-test!)
   (f)
-  (doseq [ctx-id (keys (ctx/get-all-contexts))]
-    (ctx/remove-context! ctx-id))
-  (ctx/register-route-fns! {:to-server nil :to-client nil :to-except-local nil}))
+  (ctx/reset-contexts-for-test!)
+  (ctx/reset-route-fns-for-test!))

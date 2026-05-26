@@ -16,8 +16,34 @@
 ;; Registry
 ;; ============================================================================
 
-(defonce app-registry
+(defonce ^:private app-registry
   (atom {}))
+
+(defonce ^:private app-registry-frozen? (atom false))
+
+(defn- assert-app-registry-open!
+  []
+  (when @app-registry-frozen?
+    (throw (ex-info "Terminal app registry is frozen" {}))))
+
+(defn app-registry-snapshot
+  []
+  {:apps @app-registry
+   :frozen? @app-registry-frozen?})
+
+(defn reset-app-registry-for-test!
+  ([]
+   (reset-app-registry-for-test! {}))
+  ([{:keys [apps frozen?]
+     :or {apps {} frozen? false}}]
+   (reset! app-registry apps)
+   (reset! app-registry-frozen? frozen?)
+   nil))
+
+(defn freeze-app-registry!
+  []
+  (reset! app-registry-frozen? true)
+  nil)
 
 (defn- normalize-app
   [app-spec]
@@ -54,13 +80,18 @@
     (when-not (:gui-fn app-spec)
       (throw (ex-info "App must have a :gui-fn" {:id app-id})))
 
-    (log/info "Registering terminal app:" app-id)
-    (swap! app-registry assoc app-id app-spec)
-    app-spec))
+    (if-let [existing (get @app-registry app-id)]
+      existing
+      (do
+        (assert-app-registry-open!)
+        (log/info "Registering terminal app:" app-id)
+        (swap! app-registry assoc app-id app-spec)
+        app-spec))))
 
 (defn unregister-app!
   "Unregister an app from the registry."
   [app-id]
+  (assert-app-registry-open!)
   (log/info "Unregistering terminal app:" app-id)
   (swap! app-registry dissoc app-id))
 
@@ -146,7 +177,7 @@
   "Clear all registered apps. Used for testing."
   []
   (log/warn "Clearing terminal app registry")
-  (reset! app-registry {}))
+  (reset-app-registry-for-test!))
 
 (defn get-registry-snapshot
   "Get a snapshot of the current registry state."
