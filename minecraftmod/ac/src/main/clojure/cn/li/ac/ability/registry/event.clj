@@ -152,6 +152,10 @@
   {:event/type EVT-PRESET-SWITCH :event/side :both
    :uuid uuid :old-preset old-idx :new-preset new-idx})
 
+(defn make-preset-update-event [uuid preset-idx key-idx slot]
+  {:event/type EVT-PRESET-UPDATE :event/side :both
+   :uuid uuid :preset-idx preset-idx :key-idx key-idx :slot slot})
+
 (defn make-skill-perform-event
   [uuid skill-id]
   {:event/type EVT-SKILL-PERFORM :event/side :server

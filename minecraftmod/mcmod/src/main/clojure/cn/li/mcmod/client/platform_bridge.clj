@@ -8,6 +8,7 @@
 (defonce ^:private ^:dynamic *slot-key-down-fn* nil)
 (defonce ^:private ^:dynamic *slot-key-tick-fn* nil)
 (defonce ^:private ^:dynamic *slot-key-up-fn* nil)
+(defonce ^:private ^:dynamic *slot-key-abort-fn* nil)
 (defonce ^:private ^:dynamic *movement-key-down-fn* nil)
 (defonce ^:private ^:dynamic *movement-key-tick-fn* nil)
 (defonce ^:private ^:dynamic *movement-key-up-fn* nil)
@@ -19,6 +20,7 @@
 	[{:keys [slot-key-down
 					 slot-key-tick
 					 slot-key-up
+					 slot-key-abort
 					 movement-key-down
 					 movement-key-tick
 					 movement-key-up
@@ -28,6 +30,7 @@
 	(alter-var-root #'*slot-key-down-fn* (constantly slot-key-down))
 	(alter-var-root #'*slot-key-tick-fn* (constantly slot-key-tick))
 	(alter-var-root #'*slot-key-up-fn* (constantly slot-key-up))
+	(alter-var-root #'*slot-key-abort-fn* (constantly slot-key-abort))
 	(alter-var-root #'*movement-key-down-fn* (constantly movement-key-down))
 	(alter-var-root #'*movement-key-tick-fn* (constantly movement-key-tick))
 	(alter-var-root #'*movement-key-up-fn* (constantly movement-key-up))
@@ -53,6 +56,12 @@
 	(if *slot-key-up-fn*
 		(*slot-key-up-fn* player-uuid key-idx)
 		(log/debug "Client bridge slot-key-up not available")))
+
+(defn on-slot-key-abort!
+	[player-uuid key-idx]
+	(if *slot-key-abort-fn*
+		(*slot-key-abort-fn* player-uuid key-idx)
+		(log/debug "Client bridge slot-key-abort not available")))
 
 (defn on-movement-key-down!
 	[player-uuid movement-key]

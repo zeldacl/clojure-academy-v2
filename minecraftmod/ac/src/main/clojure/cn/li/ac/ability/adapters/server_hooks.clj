@@ -2,6 +2,7 @@
   "Server/runtime hook composition for AC ability platform bridge."
   (:require [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.item-actions :as item-actions]
+            [cn.li.ac.ability.model.cooldown :as cdata]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
@@ -43,7 +44,9 @@
        (when (and uuid new-level)
          (ps/update-resource-data! uuid
                                    (fn [rd]
-                                     (svc-res/recalc-max-for-level rd new-level uuid))))))
+                                     (svc-res/recalc-max-for-level (rdata/reset-add-max rd)
+                                                                   new-level
+                                                                   uuid))))))
     (evt/subscribe-ability-event!
      evt/EVT-SKILL-LEARN
      (fn [{:keys [uuid]}]
@@ -58,6 +61,7 @@
      (fn [{:keys [uuid]}]
        (when uuid
          (ctx-mgr/abort-player-contexts! uuid)
+         (ps/update-cooldown-data! uuid (constantly (cdata/new-cooldown-data)))
          (ps/update-resource-data! uuid rdata/set-activated false)
          (when-let [state (ps/get-player-state uuid)]
            (let [level (get-in state [:ability-data :level] 1)]
@@ -102,6 +106,7 @@
    (fn [player-uuid]
      (ps/get-or-create-player-state! player-uuid)
      (ps/server-tick-player! player-uuid nil)
+     (ctx-mgr/tick-player-contexts! player-uuid)
      (delayed-projectiles/tick-player! player-uuid)
      (ctx-mgr/tick-context-manager!))
 

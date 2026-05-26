@@ -4,6 +4,7 @@
   Each handler is called server-side by cn.li.ac.ability.server.dispatch with an
   event map (from context-runtime) and the skill spec map."
   (:require [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.server.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.toggle :as toggle]
@@ -48,6 +49,15 @@
   [spec evt stage]
   (call-action! spec :cost-fail! (assoc evt :cost-stage stage)))
 
+(defn- record-performed!
+  [spec {:keys [ctx-id player-id skill-id] :as event-data}]
+  (when ctx-id
+    (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] true))
+  (when player-id
+    (evt/fire-ability-event!
+      (evt/make-skill-perform-event player-id (or skill-id (:id spec)))))
+  event-data)
+
 (defn instant-on-down!
   [spec {:keys [ctx-id] :as evt}]
   (try
@@ -57,6 +67,7 @@
         (call-action! spec :perform! evt*)
         (run-stage-ops! spec evt* :perform)
         (emit-fx! spec evt* :perform)
+        (record-performed! spec evt*)
         (skill-effects/gain-exp! spec evt*)
         (skill-effects/apply-cooldown! spec evt*))
       (when-not cost-ok?
@@ -102,6 +113,7 @@
         (call-action! spec :perform! evt*)
         (run-stage-ops! spec evt* :perform)
         (emit-fx! spec evt* :perform)
+        (record-performed! spec evt*)
         (emit-fx! spec evt* :end)
         (skill-effects/gain-exp! spec evt*)
         (skill-effects/apply-cooldown! spec evt*)))))
@@ -132,7 +144,8 @@
             (toggle/activate-toggle! ctx-id skill-id)
             (call-action! spec :activate! evt)
             (run-stage-ops! spec evt :down)
-            (emit-fx! spec evt :start)))))))
+            (emit-fx! spec evt :start)
+            (record-performed! spec evt)))))))
 
 (defn toggle-on-tick!
   [spec {:keys [ctx-id skill-id] :as evt}]
@@ -173,7 +186,8 @@
       (do
         (call-action! spec :down! evt)
         (run-stage-ops! spec evt :down)
-        (emit-fx! spec evt :start))
+        (emit-fx! spec evt :start)
+        (record-performed! spec evt))
       (cost-fail! spec evt :down))))
 
 (defn hold-channel-on-tick!
@@ -248,7 +262,7 @@
     (when (and perform? cost-ok?)
       (run-stage-ops! spec evt* :perform)
       (emit-fx! spec evt* :perform)
-      (ctx/update-context! ctx-id assoc-in [:skill-state :performed?] true))
+      (record-performed! spec evt*))
     (emit-fx! spec evt* :end)
     (when cost-ok?
       (skill-effects/gain-exp! spec evt*)

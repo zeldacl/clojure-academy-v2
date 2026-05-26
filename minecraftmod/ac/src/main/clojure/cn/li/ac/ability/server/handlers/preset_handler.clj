@@ -20,16 +20,22 @@
 		(when uuid
 			(cond
 				(and (nil? cat-id) (nil? ctrl-id))
-				(ps/update-preset-data! uuid preset-data/set-slot preset-idx key-idx nil)
+				(do
+					(ps/update-preset-data! uuid preset-data/set-slot preset-idx key-idx nil)
+					(evt/fire-ability-event!
+						(evt/make-preset-update-event uuid preset-idx key-idx nil)))
 
 				(and cat-id ctrl-id)
 				(when-let [slot (learned-controllable-slot uuid cat-id ctrl-id)]
-					(ps/update-preset-data! uuid preset-data/set-slot preset-idx key-idx slot))))))
+					(ps/update-preset-data! uuid preset-data/set-slot preset-idx key-idx slot)
+					(evt/fire-ability-event!
+						(evt/make-preset-update-event uuid preset-idx key-idx slot)))))))
 
 (defn handle-switch-preset-request
 	[{:keys [preset-idx]} player]
 	(let [uuid (uuid/player-uuid player)]
-		(ps/update-preset-data! uuid preset-data/set-active-preset preset-idx)
-		(evt/fire-ability-event! {:event/type evt/EVT-PRESET-SWITCH
-															:player-id uuid
-															:preset    preset-idx})))
+		(when uuid
+			(let [old-preset (get-in (common/get-state uuid) [:preset-data :active-preset] 0)]
+				(ps/update-preset-data! uuid preset-data/set-active-preset preset-idx)
+				(evt/fire-ability-event!
+					(evt/make-preset-switch-event uuid old-preset preset-idx))))))

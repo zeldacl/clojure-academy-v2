@@ -43,6 +43,24 @@
     (is (= 2 (count (ctx/get-all-contexts-for-player "p1"))))
     (is (= 1 (count (ctx/get-all-contexts-for-player "p2"))))))
 
+(deftest get-all-contexts-for-player-can-filter-by-owner-test
+  (let [client-a {:logical-side :client :session-id [:session-a "p1"]}
+   client-b {:logical-side :client :session-id [:session-b "p1"]}
+   server-a {:logical-side :server :session-id "p1"}
+   ctx-a (ctx/new-context "p1" :s1 client-a)
+   ctx-b (ctx/new-context "p1" :s2 client-b)
+   ctx-c (ctx/new-server-context "p1" :s3 "id-server" server-a)]
+    (ctx/register-context! ctx-a)
+    (ctx/register-context! ctx-b)
+    (ctx/register-context! ctx-c)
+    (is (= 3 (count (ctx/get-all-contexts-for-player "p1"))))
+    (is (= [:s1]
+      (mapv :skill-id (ctx/get-all-contexts-for-player client-a "p1"))))
+    (is (= [:s2]
+      (mapv :skill-id (ctx/get-all-contexts-for-player client-b "p1"))))
+    (is (= [:s3]
+      (mapv :skill-id (ctx/get-all-contexts-for-player server-a "p1"))))))
+
 (deftest transition-to-alive-flushes-buffer-test
   (let [c (ctx/new-context "p" :sk test-context-owner)
         id (:id c)

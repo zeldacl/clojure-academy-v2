@@ -228,7 +228,20 @@
 					 (into {}
 							 (remove (fn [[_key ctx]] (= ctx-id (:id ctx))))
 							 registry)))))
-(defn get-all-contexts-for-player [player-uuid] (filter #(= player-uuid (:player-uuid %)) (vals @context-registry)))
+
+(defn- owner-matches-context?
+	[owner ctx]
+	(let [[logical-side session-id] (route-owner-key owner)]
+		(and (= logical-side (context-logical-side ctx))
+			 (= session-id (context-session-id ctx)))))
+
+(defn get-all-contexts-for-player
+	([player-uuid]
+	 (filter #(= player-uuid (:player-uuid %)) (vals @context-registry)))
+	([owner player-uuid]
+	 (filter #(and (= player-uuid (:player-uuid %))
+					 (owner-matches-context? owner %))
+			 (vals @context-registry))))
 
 (defn snapshot-context-registry []
 	@context-registry)
@@ -270,9 +283,13 @@
 			(when send-terminated-fn (send-terminated-fn (:id ctx)))
 			(log/debug "Context terminated:" (:id ctx)))))
 
-(defn abort-all-contexts-for-player! [player-uuid send-terminated-fn]
-	(doseq [ctx (get-all-contexts-for-player player-uuid)]
-		(terminate-context! (:id ctx) send-terminated-fn)))
+(defn abort-all-contexts-for-player!
+	([player-uuid send-terminated-fn]
+	 (doseq [ctx (get-all-contexts-for-player player-uuid)]
+		 (terminate-context! (:id ctx) send-terminated-fn)))
+	([owner player-uuid send-terminated-fn]
+	 (doseq [ctx (get-all-contexts-for-player owner player-uuid)]
+		 (terminate-context! (:id ctx) send-terminated-fn))))
 
 (defn update-keepalive! [ctx-id]
 	(update-context! ctx-id assoc :last-keepalive-ms (System/currentTimeMillis)))
@@ -331,17 +348,17 @@
 	(ctx-buffer-or-send! ctx-id :client {:channel channel :payload msg}
 											 (fn [m] (when-let [ctx (second (preferred-context-entry ctx-id :client))]
 															 (when-let [f (:to-server (route-fns-for-context ctx))]
-																 (f ctx-id (:channel m) (:payload m)))))))
+																	 (f ctx-id (:channel m) (:payload m) ctx))))))
 (defn ctx-send-to-client! [ctx-id channel msg]
 	(ctx-buffer-or-send! ctx-id :server {:channel channel :payload msg}
 											 (fn [m] (when-let [ctx (second (preferred-context-entry ctx-id :server))]
 															 (when-let [f (:to-client (route-fns-for-context ctx))]
-																 (f ctx-id (:channel m) (:payload m)))))))
+																	 (f ctx-id (:channel m) (:payload m) ctx))))))
 (defn ctx-send-to-except-local! [ctx-id channel msg]
 	(ctx-buffer-or-send! ctx-id :server {:channel channel :payload msg}
 											 (fn [m] (when-let [ctx (second (preferred-context-entry ctx-id :server))]
 															 (when-let [f (:to-except-local (route-fns-for-context ctx))]
-																 (f ctx-id (:channel m) (:payload m)))))))
+																	 (f ctx-id (:channel m) (:payload m) ctx))))))
 (defn ctx-send-to-self! [ctx-id channel msg] (ctx-send-to-local! ctx-id channel msg))
 (defn ctx-on! [ctx-id channel handler-fn] (update-context! ctx-id update-in [:listeners channel] (fnil conj []) handler-fn))
 

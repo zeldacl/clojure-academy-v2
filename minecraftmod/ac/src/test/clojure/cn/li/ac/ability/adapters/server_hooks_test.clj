@@ -4,6 +4,7 @@
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
+            [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.server.service.resource :as svc-res]
             [cn.li.ac.ability.service.player-state :as ps]))
 
@@ -53,14 +54,23 @@
                                                  (assoc rd :recalc-level level :recalc-uuid uuid :from :svc-res))
                   ps/update-resource-data! (fn [uuid updater]
                                              (reset! updated {:uuid uuid
-                                                              :resource (updater {:cur-cp 100.0 :max-cp 200.0})})
+                                                              :resource (updater {:cur-cp 100.0
+                                                                                  :max-cp 200.0
+                                                                                  :add-max-cp 5.0
+                                                                                  :add-max-overload 7.0})})
                                              nil)]
       (server-hooks/register-lifecycle-subscriptions!)
       (evt/fire-ability-event! (evt/make-level-change-event "u-level" 2 3))
-      (is (= [[3 "u-level" {:cur-cp 100.0 :max-cp 200.0}]] @recalc-calls))
+      (is (= [[3 "u-level" {:cur-cp 100.0
+                             :max-cp 200.0
+                             :add-max-cp 0.0
+                             :add-max-overload 0.0}]]
+             @recalc-calls))
       (is (= {:uuid "u-level"
               :resource {:cur-cp 100.0
                          :max-cp 200.0
+                         :add-max-cp 0.0
+                         :add-max-overload 0.0
                          :recalc-level 3
                          :recalc-uuid "u-level"
                          :from :svc-res}}
@@ -76,9 +86,36 @@
       (evt/fire-ability-event! (evt/make-overload-event "u-overload"))
       (is (= ["u-overload"] @aborted)))))
 
+(deftest on-player-tick-drives-player-contexts-before-manager-sweep-test
+  (let [calls (atom [])
+        tick! (:on-player-tick! (server-hooks/runtime-server-hooks))]
+    (with-redefs [ps/get-or-create-player-state! (fn [uuid]
+                                                   (swap! calls conj [:ensure-state uuid])
+                                                   nil)
+                  ps/server-tick-player! (fn [uuid payload]
+                                           (swap! calls conj [:player-state-tick uuid payload])
+                                           nil)
+                  ctx-mgr/tick-player-contexts! (fn [uuid]
+                                                 (swap! calls conj [:context-tick uuid])
+                                                 nil)
+                  delayed-projectiles/tick-player! (fn [uuid]
+                                                     (swap! calls conj [:projectiles uuid])
+                                                     nil)
+                  ctx-mgr/tick-context-manager! (fn []
+                                                 (swap! calls conj [:context-manager])
+                                                 nil)]
+      (tick! "p1")
+      (is (= [[:ensure-state "p1"]
+              [:player-state-tick "p1" nil]
+              [:context-tick "p1"]
+              [:projectiles "p1"]
+              [:context-manager]]
+             @calls)))))
+
       (deftest category-change-event-aborts-deactivates-and-recalculates-test
         (let [aborted (atom [])
-         updates (atom [])
+        resource-updates (atom [])
+        cooldown-clears (atom [])
          recalc-calls (atom [])]
           (with-redefs [ctx-mgr/abort-player-contexts!
               (fn [uuid]
@@ -86,11 +123,14 @@
                 nil)
               ps/get-player-state (fn [_]
                      {:ability-data {:level 4}})
+            ps/update-cooldown-data! (fn [uuid updater]
+                     (swap! cooldown-clears conj [uuid (updater {:existing true})])
+                     nil)
                   ps/update-resource-data! (fn [uuid updater & args]
-                                             (swap! updates conj [uuid (apply updater {:activated true
-                                                                                       :cur-cp 10.0
-                                                                                       :max-cp 20.0}
-                                                                          args)])
+                     (swap! resource-updates conj [uuid (apply updater {:activated true
+                              :cur-cp 10.0
+                              :max-cp 20.0}
+                           args)])
                      nil)
               svc-res/recalc-max-for-level (fn [rd level uuid]
                     (swap! recalc-calls conj [level uuid rd])
@@ -98,9 +138,10 @@
             (server-hooks/register-lifecycle-subscriptions!)
             (evt/fire-ability-event! (evt/make-category-change-event "u-category" :old :new))
             (is (= ["u-category"] @aborted))
+            (is (= [["u-category" {}]] @cooldown-clears))
             (is (= [4 "u-category" {:activated true :cur-cp 10.0 :max-cp 20.0}]
               (first @recalc-calls)))
             (is (= ["u-category" false]
-              [(ffirst @updates) (get-in (first @updates) [1 :activated])]))
+                    [(ffirst @resource-updates) (get-in (first @resource-updates) [1 :activated])]))
             (is (= ["u-category" 4]
-              [(first (second @updates)) (get-in (second @updates) [1 :recalc-level])])))))
+                    [(first (second @resource-updates)) (get-in (second @resource-updates) [1 :recalc-level])])))))

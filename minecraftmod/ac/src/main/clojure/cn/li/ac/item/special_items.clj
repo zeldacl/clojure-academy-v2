@@ -7,6 +7,7 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
+            [cn.li.ac.ability.server.service.category-runtime :as category-rt]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.service.player-state :as ps]
             [cn.li.ac.ability.model.ability :as adata]
@@ -54,7 +55,7 @@
           (cond
             (nil? current-category)
             (do
-              (ps/update-ability-data! uuid adata/set-category target-category)
+              (category-rt/change-category! uuid target-category)
               (entity/player-consume-main-hand-item! player 1)
               (log/info "Applied induction factor for initial category" {:uuid uuid :category target-category}))
 
@@ -67,8 +68,9 @@
                   consumed-factor? (entity/player-consume-main-hand-item! player 1)
                   consumed-coil? (entity/player-consume-item-by-id! player magnetic-coil-item-id 1)]
               (when (and consumed-factor? consumed-coil?)
-                (ps/update-ability-data!
+                (category-rt/change-category!
                   uuid
+                  target-category
                   (fn [data]
                     (-> data
                         (adata/set-category target-category)

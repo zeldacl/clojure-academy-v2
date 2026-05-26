@@ -57,6 +57,16 @@
 (defn set-until-recover [d ticks]
   (assoc d :until-recover (max 0 (int ticks))))
 
+(defn recover-all
+  "Restore the player to a fully recovered runtime state without changing max values."
+  [d]
+  (assoc d
+         :cur-cp (double (:max-cp d 0.0))
+         :cur-overload 0.0
+         :overload-fine true
+         :until-recover 0
+         :until-overload-recover 0))
+
 ;; ============================================================================
 ;; Usage Guard
 ;; ============================================================================

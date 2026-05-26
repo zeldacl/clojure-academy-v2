@@ -149,6 +149,7 @@
      :slot-key-down runtime-bridge/on-slot-key-down!
      :slot-key-tick runtime-bridge/on-slot-key-tick!
      :slot-key-up runtime-bridge/on-slot-key-up!
+      :slot-key-abort runtime-bridge/on-slot-key-abort!
      :movement-key-down runtime-bridge/on-movement-key-down!
      :movement-key-tick runtime-bridge/on-movement-key-tick!
      :movement-key-up runtime-bridge/on-movement-key-up!

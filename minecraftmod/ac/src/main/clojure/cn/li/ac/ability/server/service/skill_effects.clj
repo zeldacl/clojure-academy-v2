@@ -6,6 +6,7 @@
   - player-state updates
   - firing ability events"
   (:require [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.service.resource :as res]
             [cn.li.ac.ability.server.service.learning :as learning]
             [cn.li.ac.ability.server.service.cooldown :as cd]
@@ -124,7 +125,7 @@
 
   Returns true when player state exists; false otherwise."
   [player-id floor-value]
-  (if-let [state (ps/get-player-state player-id)]
+  (if (ps/get-player-state player-id)
     (do
       (ps/update-resource-data!
         player-id
@@ -191,7 +192,7 @@
 (defn skill-exp
   "Read clamped skill exp as double from ability-data."
   [player-id skill-id]
-  (double (or (player-path player-id [:ability-data :skills skill-id :exp] 0.0) 0.0)))
+  (double (adata/get-skill-exp (:ability-data (ps/get-player-state player-id)) skill-id)))
 
 (defn current-cp
   "Read current CP from resource-data as double."

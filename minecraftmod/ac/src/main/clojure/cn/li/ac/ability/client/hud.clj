@@ -5,7 +5,16 @@
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.client.delegate-state :as dstate]
-            [cn.li.ac.ability.service.dispatcher :as ctx]))
+            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+
+(defn- player-contexts
+  [player-uuid]
+  (if-let [session-id runtime-hooks/*client-session-id*]
+    (ctx/get-all-contexts-for-player {:logical-side :client
+                                      :session-id [session-id player-uuid]}
+                                     player-uuid)
+    (ctx/get-all-contexts-for-player player-uuid)))
 
 (defn build-cp-bar-render-data
   "Build CP bar render data with color gradient and consumption hint."
@@ -47,7 +56,7 @@
   "Build skill slot render data with cooldown info and delegate visual state."
   [model screen-width screen-height cooldown-data player-uuid]
   (let [active-contexts (when player-uuid
-                          (ctx/get-all-contexts-for-player player-uuid))]
+                          (player-contexts player-uuid))]
     (vec
      (keep-indexed
       (fn [idx slot]

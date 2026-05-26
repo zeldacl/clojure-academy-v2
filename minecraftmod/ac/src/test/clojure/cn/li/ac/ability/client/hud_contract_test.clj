@@ -11,7 +11,7 @@
     (with-redefs [skill-query/get-skill-by-controllable (fn [_ _] :railgun)
                   skill-registry/get-skill (fn [_] {:name "Railgun"})
                   skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")]
-      (with-redefs [ctx/get-all-contexts-for-player (fn [_]
+      (with-redefs [ctx/get-all-contexts-for-player (fn [& _]
                                                       [{:id "ctx-dead"
                                                         :player-uuid "p1"
                                                         :skill-id :railgun
@@ -24,7 +24,7 @@
           (is (true? (:in-cooldown slot)))
           (is (= 40 (:cooldown-remaining slot)))
           (is (= 2.0 (:cooldown-seconds slot)))))
-      (with-redefs [ctx/get-all-contexts-for-player (fn [_]
+      (with-redefs [ctx/get-all-contexts-for-player (fn [& _]
                                                       [{:id "ctx-live"
                                                         :player-uuid "p1"
                                                         :skill-id :railgun

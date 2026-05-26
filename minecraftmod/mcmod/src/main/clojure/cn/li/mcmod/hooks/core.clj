@@ -84,6 +84,7 @@
          :client-on-slot-key-down! noop
          :client-on-slot-key-tick! noop
          :client-on-slot-key-up! noop
+         :client-on-slot-key-abort! noop
          :client-on-movement-key-down! noop
          :client-on-movement-key-tick! noop
          :client-on-movement-key-up! noop
@@ -399,6 +400,10 @@
 (defn client-on-slot-key-up!
   [player-uuid key-idx]
   ((:client-on-slot-key-up! @runtime-hooks) player-uuid key-idx))
+
+(defn client-on-slot-key-abort!
+  [player-uuid key-idx]
+  ((:client-on-slot-key-abort! @runtime-hooks) player-uuid key-idx))
 
 (defn client-on-movement-key-down!
   [player-uuid movement-key]

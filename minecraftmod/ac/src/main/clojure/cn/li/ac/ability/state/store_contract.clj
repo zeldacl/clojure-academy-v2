@@ -17,7 +17,7 @@
     "Returns category-id keyword or nil")
 
   (ability-set-category! [this uuid cat-id]
-    "Sets category. Triggers persistence dirty-flag.")
+    "Sets category, clears preset slots, and fires category lifecycle hooks.")
 
   (ability-is-learned? [this uuid skill-id]
     "Returns true if skill-id (keyword) is in the learned set")

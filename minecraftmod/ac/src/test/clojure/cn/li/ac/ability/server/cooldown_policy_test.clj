@@ -21,7 +21,7 @@
   ([uuid]
    (seed-player! uuid (cd/new-cooldown-data)))
   ([uuid cooldown-data]
-   (ps/set-player-state! uuid {:ability-data {:skills {:arc-gen {:exp 0.0}}}
+  (ps/set-player-state! uuid {:ability-data {:skill-exps {:arc-gen 0.0}}
                                 :cooldown-data cooldown-data})))
 
 (defn- active-context!

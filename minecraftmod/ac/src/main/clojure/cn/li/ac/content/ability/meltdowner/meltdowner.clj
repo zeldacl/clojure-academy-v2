@@ -86,7 +86,7 @@
 (defn- vec-reflection-can-reflect? [target-player-id incoming-damage]
   (when (toggle-active? target-player-id :vec-reflection)
     (when-let [state (skill-effects/get-player-state target-player-id)]
-      (let [exp        (get-in state [:ability-data :skills :vec-reflection :exp] 0.0)
+      (let [exp        (skill-effects/skill-exp target-player-id :vec-reflection)
         consumption (* (double incoming-damage) (cfg-lerp :reflection.cp-per-damage exp))
             current-cp (get-in state [:resource-data :cur-cp] 0.0)]
         (>= (double current-cp) (double consumption))))))

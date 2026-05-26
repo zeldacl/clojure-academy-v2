@@ -66,7 +66,7 @@
                                      :status ctx/STATUS-TERMINATED
                                      :skill-state {:toggle {:vec-reflection {:active true}
                                                             :vec-deviation {:active true}}}}}]
-    (with-redefs [ctx/get-all-contexts-for-player (fn [_] terminated-player-contexts)
+    (with-redefs [ctx/get-all-contexts-for-player (fn [& _] terminated-player-contexts)
                   ctx/get-all-contexts (fn [] terminated-toggle-contexts)
                   ps/get-player-state (fn [_]
                                         {:resource-data {:activated true

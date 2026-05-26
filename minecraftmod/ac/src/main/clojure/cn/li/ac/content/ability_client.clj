@@ -7,6 +7,10 @@
   This namespace must ONLY be required from client-side code paths
   (e.g. platform client entry points), never from dedicated-server code."
   (:require [cn.li.ac.ability.discovery :as discovery]
+            [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.hand-effects :as hand-effects]
+            [cn.li.ac.ability.client.keybinds :as keybinds]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
@@ -28,4 +32,8 @@
   []
   (with-init-guard fx-initialized?
     (init-discovered-fx!)
+    (fx-registry/freeze-fx-registry!)
+    (keybinds/freeze-keybind-registries!)
+    (level-effects/freeze-level-effect-registry!)
+    (hand-effects/freeze-hand-effect-registry!)
     (log/info "Ability client FX content initialized")))

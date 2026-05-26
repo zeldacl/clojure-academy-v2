@@ -6,10 +6,14 @@
   explicit ability content initialization."
   (:require [cn.li.ac.ability.dsl :refer [defcategory]]
             [cn.li.ac.ability.discovery :as discovery]
+            [cn.li.ac.ability.passive :as passive]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.ability.server.damage.handler :as damage-handler]
+            [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.server.effect.core :as effect]
             [cn.li.ac.ability.item-actions :as item-actions]
+            [cn.li.ac.ability.spi-lifecycle :as lifecycle]
             [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
@@ -105,4 +109,12 @@
         (run-namespace-init! ns-sym)))
     ;; Register generic item actions (not skill-specific)
     (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)
+    (category/freeze-category-registry!)
+    (skill-registry/freeze-skill-registry!)
+    (effect/freeze-effect-op-registry!)
+    (item-actions/freeze-item-action-registries!)
+    (damage-handler/freeze-attack-check-registries!)
+    (damage-runtime/freeze-damage-handler-registry!)
+    (passive/freeze-passive-handler-registry!)
+    (lifecycle/freeze-lifecycle-registry!)
     (log/info "Ability content initialized")))

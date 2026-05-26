@@ -37,7 +37,7 @@
     (is (nil? (:bar-color data)))))
 
 (deftest build-skill-slot-render-data-resolves-skill-id-spec-and-icon-test
-  (with-redefs [ctx/get-all-contexts-for-player (fn [_] {})
+  (with-redefs [ctx/get-all-contexts-for-player (fn [& _] {})
                 skill-query/get-skill-by-controllable (fn [_ _] :railgun)
                 skill-registry/get-skill (fn [_] {:name "Railgun"})
                 skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")

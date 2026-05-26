@@ -40,6 +40,11 @@
     (update d :slots dissoc [preset-idx key-idx])
     (assoc-in d [:slots [preset-idx key-idx]] controllable)))
 
+(defn clear-slots
+  "Remove all preset slot bindings while preserving the active preset index."
+  [d]
+  (assoc d :slots {}))
+
 (defn get-active-slots
   "Return vec of 4 controllables (or nil) for the active preset."
   [d]

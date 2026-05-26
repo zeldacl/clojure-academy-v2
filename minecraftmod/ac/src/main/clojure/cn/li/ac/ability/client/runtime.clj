@@ -18,6 +18,10 @@
   [player-uuid key-idx]
   (client-bridge/on-slot-key-up! player-uuid key-idx))
 
+(defn on-slot-key-abort!
+  [player-uuid key-idx]
+  (client-bridge/on-slot-key-abort! player-uuid key-idx))
+
 (defn on-movement-key-down!
   [player-uuid movement-key]
   (client-bridge/on-movement-key-down! player-uuid movement-key))

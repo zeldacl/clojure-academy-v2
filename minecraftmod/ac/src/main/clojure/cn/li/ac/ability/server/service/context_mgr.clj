@@ -11,6 +11,7 @@
   (:require [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.ability.server.service.context-runtime :as ctx-rt]
             [cn.li.ac.ability.server.service.context-transport :as transport]
             [cn.li.ac.ability.domain.skill :as skill-domain]
             [cn.li.ac.ability.registry.skill :as skill-registry]
@@ -26,6 +27,23 @@
   (when-let [ctx (ctx/get-context ctx-id)]
     (let [player-uuid (:player-uuid ctx)]
       (transport/send-to-client! player-uuid catalog/MSG-CTX-TERMINATE {:ctx-id ctx-id}))))
+
+(defn- server-context-owner
+  [player-uuid]
+  {:logical-side :server
+   :session-id player-uuid})
+
+(defn- active-server-contexts-for-player
+  [player-uuid]
+  (->> (ctx/snapshot-context-registry)
+       vals
+       (filter (fn [ctx-map]
+                 (and (= :server (:logical-side ctx-map))
+                      (= player-uuid (:session-id ctx-map))
+                      (= player-uuid (:player-uuid ctx-map))
+                      (= ctx/STATUS-ALIVE (:status ctx-map))
+                      (= ctx-rt/INPUT-ACTIVE (:input-state ctx-map)))))
+       (sort-by (juxt :id :server-id))))
 
 ;; ============================================================================
 ;; Client-side: request to start a skill
@@ -87,7 +105,9 @@
   "Terminate all active contexts for a player (death, category change, logoff).
   Should be called from forge player event handlers."
   [player-uuid]
-  (ctx/abort-all-contexts-for-player! player-uuid send-terminated!))
+  (ctx/abort-all-contexts-for-player! (server-context-owner player-uuid)
+                                      player-uuid
+                                      send-terminated!))
 
 (defn send-terminated-context!
   "Notify client that a specific context has terminated."
@@ -105,6 +125,15 @@
                              {:ctx-id ctx-id
                               :channel channel
                               :payload payload}))
+
+(defn tick-player-contexts!
+  "Drive all active server-owned contexts for one player once per server tick."
+  [player-uuid]
+  (doseq [{:keys [id skill-id]} (active-server-contexts-for-player player-uuid)]
+    (binding [ctx/*context-owner* (server-context-owner player-uuid)]
+      (ctx-rt/handle-key-tick! id {:ctx-id id
+                                   :skill-id skill-id}
+                              send-terminated-context!))))
 
 ;; ============================================================================
 ;; Server tick

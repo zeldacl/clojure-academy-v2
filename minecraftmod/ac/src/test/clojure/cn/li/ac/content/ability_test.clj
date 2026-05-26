@@ -1,0 +1,66 @@
+(ns cn.li.ac.content.ability-test
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.discovery :as discovery]
+            [cn.li.ac.ability.item-actions :as item-actions]
+            [cn.li.ac.ability.passive :as passive]
+            [cn.li.ac.ability.registry.category :as category]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
+            [cn.li.ac.ability.server.damage.handler :as damage-handler]
+            [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
+            [cn.li.ac.ability.server.effect.core :as effect]
+            [cn.li.ac.ability.spi-lifecycle :as lifecycle]
+            [cn.li.ac.content.ability :as ability-content]))
+
+(defn- reset-ability-init-guard-fixture [f]
+  (let [guard* (var-get #'cn.li.ac.content.ability/ability-content-installed?)
+        before @guard*]
+    (reset! guard* false)
+    (try
+      (f)
+      (finally
+        (reset! guard* before)))))
+
+(use-fixtures :each reset-ability-init-guard-fixture)
+
+(deftest init-ability-content-freezes-registries-once-test
+  (let [freeze-calls* (atom [])]
+    (with-redefs [discovery/discovered-skill-namespaces (fn [] [])
+                  effect/init-default-ops! (fn [] nil)
+                  category/register-category! (fn [_] nil)
+                  item-actions/register-item-action! (fn [& _] nil)
+                  category/freeze-category-registry! (fn []
+                                                      (swap! freeze-calls* conj :category)
+                                                      nil)
+                  skill-registry/freeze-skill-registry! (fn []
+                                                          (swap! freeze-calls* conj :skill)
+                                                          nil)
+                  effect/freeze-effect-op-registry! (fn []
+                                                      (swap! freeze-calls* conj :effect)
+                                                      nil)
+                  item-actions/freeze-item-action-registries! (fn []
+                                                                 (swap! freeze-calls* conj :item-actions)
+                                                                 nil)
+                  damage-handler/freeze-attack-check-registries! (fn []
+                                                                    (swap! freeze-calls* conj :attack-checks)
+                                                                    nil)
+                  damage-runtime/freeze-damage-handler-registry! (fn []
+                                                                    (swap! freeze-calls* conj :damage-handlers)
+                                                                    nil)
+                  passive/freeze-passive-handler-registry! (fn []
+                                                             (swap! freeze-calls* conj :passive)
+                                                             nil)
+                  lifecycle/freeze-lifecycle-registry! (fn []
+                                                         (swap! freeze-calls* conj :lifecycle)
+                                                         nil)
+                  cn.li.mcmod.util.log/info (fn [& _] nil)]
+      (ability-content/init-ability-content!)
+      (ability-content/init-ability-content!)
+      (is (= [:category
+              :skill
+              :effect
+              :item-actions
+              :attack-checks
+              :damage-handlers
+              :passive
+              :lifecycle]
+             @freeze-calls*)))))

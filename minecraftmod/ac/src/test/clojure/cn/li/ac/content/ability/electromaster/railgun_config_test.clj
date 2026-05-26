@@ -48,7 +48,7 @@
           (player-state/set-player-state!
             player-id
             (-> (player-state/fresh-state)
-                (assoc-in [:ability-data :skills :railgun :exp] 0.5)))
+                (assoc-in [:ability-data :skill-exps :railgun] 0.5)))
           (with-redefs [railgun/read-coin-qte-status (fn [_]
                                                         {:has-window? true
                                                          :active? true

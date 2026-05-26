@@ -60,14 +60,18 @@
     (contract/preset-set-active! st u 2)
     (is (= 2 (contract/preset-get-active st u)))
     (is (nil? (contract/preset-get-slot st u 0 0)))
-    (contract/preset-set-slot! st u 0 0 [:cat :skill])
-    (is (= [:cat :skill] (contract/preset-get-slot st u 0 0)))
+    (contract/preset-set-slot! st u 0 0 [:electromaster :arc-gen])
+    (is (= [:electromaster :arc-gen] (contract/preset-get-slot st u 0 0)))
+    (contract/ability-set-category! st u :meltdowner)
+    (is (= :meltdowner (contract/ability-get-category st u)))
+    (is (nil? (contract/preset-get-slot st u 0 0))
+      "category changes should clear stale preset slots")
     (is (map? (contract/preset-get-all st u)))
 
     (binding [contract/*player-ability-store* st]
-      (is (= {:category-id :electromaster
-              :level 3
-              :level-progress 0.25}
+      (is (= {:category-id :meltdowner
+            :level 1
+            :level-progress 0.0}
              (snapshot/ability-data->map u)))
       (is (= {:cur-cp 10.0
               :max-cp (double (cfg/max-cp-for-level 1))

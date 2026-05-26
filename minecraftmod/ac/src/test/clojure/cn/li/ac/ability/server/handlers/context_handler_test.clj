@@ -73,6 +73,18 @@
       (input-handler/handle-key-tick-skill {:ctx-id ctx-id} "p1")
       (is (< 1 (:last-keepalive-ms (get-owned-context "p1" ctx-id)))))))
 
+(deftest slot-key-tick-handler-refreshes-keepalive-without-dispatching-runtime-test
+  (with-redefs [uuid/player-uuid identity]
+    (let [ctx-id "ctx-keepalive-only"
+          dispatch-calls (atom [])]
+      (ctx/register-context! (owned-server-context "p1" ctx-id))
+      (with-redefs [ctx-rt/handle-key-tick! (fn [& args]
+                                              (swap! dispatch-calls conj args)
+                                              true)]
+        (input-handler/handle-key-tick-skill {:ctx-id ctx-id} "p1")
+        (is (empty? @dispatch-calls))
+        (is (< 1 (:last-keepalive-ms (get-owned-context "p1" ctx-id))))))))
+
 (deftest keepalive-and-channel-ignore-non-alive-context-test
   (with-redefs [uuid/player-uuid identity]
     (let [events (atom [])

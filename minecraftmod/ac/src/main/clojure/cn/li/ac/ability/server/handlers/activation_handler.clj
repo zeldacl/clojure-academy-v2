@@ -11,15 +11,20 @@
 	[{:keys [activated]} player]
 	(let [uuid  (uuid/player-uuid player)
 				state (common/get-state uuid)
+				ability-data (:ability-data state)
 				rd    (:resource-data state)
+				requested (boolean activated)
 				before (boolean (:activated rd))
-				{:keys [data events]} (res/set-activated rd uuid activated)
+				{:keys [data events]} (if (and requested (nil? (:category-id ability-data)))
+										 {:data rd :events []}
+										 (res/set-activated rd uuid requested))
 				after (boolean (:activated data))]
 		(log/info "[V-TRACE][AC][SERVER][REQ-SET-ACTIVATED]"
 							{:uuid uuid
-							 :requested (boolean activated)
+							 :requested requested
 							 :before before
 							 :after after
+							 :has-category? (some? (:category-id ability-data))
 							 :events (count events)})
 		(ps/update-resource-data! uuid (constantly data))
 		(doseq [e events] (evt/fire-ability-event! e))))

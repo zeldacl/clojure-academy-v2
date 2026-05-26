@@ -85,7 +85,11 @@
 
 (defn handle-key-tick-skill
 	[{:keys [ctx-id] :as payload} player]
-	(dispatch-active-input! ctx-id payload player ctx-rt/handle-key-tick!))
+	(when-let [owner (refresh-owned-alive-context! ctx-id player)]
+		(binding [ctx/*context-owner* owner]
+			(if (= ctx-rt/INPUT-ACTIVE (:input-state (ctx/get-context ctx-id)))
+				true
+				(record-rejection! :message-out-of-order)))))
 
 (defn handle-key-up-skill
 	[{:keys [ctx-id] :as payload} player]

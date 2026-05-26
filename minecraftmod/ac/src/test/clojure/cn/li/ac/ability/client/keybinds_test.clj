@@ -3,7 +3,9 @@
             [cn.li.ac.ability.client.api :as client-api]
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.test.support.player-state :as ps-fix]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
@@ -104,3 +106,13 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Keybind registries are frozen"
                           (keybinds/register-key-delegate! :default 0 {:skill-id :railgun})))))
+
+(deftest default-abort-handler-uses-client-abort-hook-test
+  (let [aborted (atom [])]
+    (keybinds/install-default-handlers!)
+    (with-redefs [ctx/get-all-contexts-for-player (fn [& _] [{:id "ctx-1" :status :alive}])
+                  runtime-hooks/client-abort-all! (fn [] (swap! aborted conj :abort-hook))
+                  ctx/abort-all-contexts-for-player! (fn [& _]
+                                                       (throw (ex-info "legacy abort path should not be used" {})))]
+      (keybinds/trigger-mode-switch! "p1"))
+    (is (= [:abort-hook] @aborted))))

@@ -160,7 +160,7 @@
         :on-key-down  (fn [uuid] (runtime/on-slot-key-down! uuid idx))
         :on-key-tick  (fn [uuid] (runtime/on-slot-key-tick! uuid idx))
         :on-key-up    (fn [uuid] (runtime/on-slot-key-up! uuid idx))
-        :on-key-abort (fn [uuid] (runtime/on-slot-key-up! uuid idx))}))))
+        :on-key-abort (fn [uuid] (runtime/on-slot-key-abort! uuid idx))}))))
 
 ;; State tracking for key transitions
 (def ^:private default-key-state
@@ -293,6 +293,18 @@
                                                   ":client-session-id"
                                                   (current-client-session-id))
    :player-uuid player-uuid})
+
+(defn- client-context-query-owner
+  [player-uuid]
+  (when-let [session-id (current-client-session-id)]
+    {:logical-side :client
+     :session-id [session-id player-uuid]}))
+
+(defn- player-contexts
+  [player-uuid]
+  (if-let [owner (client-context-query-owner player-uuid)]
+    (ctx/get-all-contexts-for-player owner player-uuid)
+    (ctx/get-all-contexts-for-player player-uuid)))
 
 (defn on-skill-key-event
   "Handle skill key state change. Uses delegate system with pre-checks."
@@ -451,7 +463,7 @@
   "Check if the player has any non-terminated contexts."
   [player-uuid]
   (seq (filter #(not= (:status %) :terminated)
-               (ctx/get-all-contexts-for-player player-uuid))))
+               (player-contexts player-uuid))))
 
 (defn install-default-handlers!
   "Register default activate handlers. Call once at init."
@@ -476,6 +488,6 @@
     :priority        10
     :handles-fn      (fn [uuid] (boolean (has-active-contexts? uuid)))
     :on-key-down-fn  (fn [uuid]
-                       (ctx/abort-all-contexts-for-player! uuid nil)
+                       (runtime-hooks/client-abort-all!)
                        (log/info "[V-TRACE] Aborted all contexts for" uuid))
     :hint-fn         (fn [_uuid] "ac.activate.hint.abort")}))

@@ -9,17 +9,22 @@
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]))
 
 (defn- reset-ui-state! [f]
-  (client-ui-hooks/reset-client-ui-state-for-test!)
-  (try
-    (binding [client-keybinds/*client-session-id* :test-session]
-      (f))
-    (finally
-      (client-ui-hooks/reset-client-ui-state-for-test!))))
+  (ps-fix/with-test-player-state-owner
+   (fn []
+     (client-ui-hooks/reset-client-ui-state-for-test!)
+     (ps/reset-player-states-for-test!)
+     (try
+       (binding [client-keybinds/*client-session-id* :test-session]
+         (f))
+       (finally
+         (client-ui-hooks/reset-client-ui-state-for-test!)
+         (ps/reset-player-states-for-test!))))))
 
 (use-fixtures :each reset-ui-state!)
 
@@ -48,13 +53,80 @@
       (is (= [{:player-uuid "p1" :skill-id :railgun}]
              @activated))
       (is (= [catalog/MSG-SLOT-KEY-DOWN
-              catalog/MSG-SLOT-KEY-TICK
+          catalog/MSG-CTX-KEEPALIVE
               catalog/MSG-SLOT-KEY-UP]
              (mapv :msg-id @sent)))
       (is (= [{:ctx-id "ctx-client-1" :skill-id :railgun :key-idx 0}
-              {:ctx-id "ctx-client-1" :skill-id :railgun :key-idx 0}
+          {:ctx-id "ctx-client-1"}
               {:ctx-id "ctx-client-1" :key-idx 0}]
              (mapv :payload @sent))))))
+
+      (deftest client-slot-key-tick-without-active-context-sends-no-message-test
+        (let [sent (atom [])
+         activated (atom [])
+         hooks (client-ui-hooks/runtime-client-ui-hooks)]
+          (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :railgun)
+              ctx-mgr/activate-context! (fn [player-uuid skill-id]
+                      (swap! activated conj {:player-uuid player-uuid
+                              :skill-id skill-id})
+                      {:id "ctx-should-not-exist"})
+              net-client/send-to-server (fn
+                      ([msg-id payload]
+                       (swap! sent conj {:msg-id msg-id :payload payload}))
+                      ([msg-id payload _callback]
+                       (swap! sent conj {:msg-id msg-id :payload payload})))]
+            ((:client-on-slot-key-tick! hooks) "p1" 0)
+            (is (empty? @activated))
+            (is (empty? @sent)))))
+
+(deftest client-slot-key-abort-sends-abort-message-and-clears-context-test
+  (let [sent (atom [])
+        terminated (atom [])
+        hooks (client-ui-hooks/runtime-client-ui-hooks)]
+    (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :railgun)
+                  ctx-mgr/activate-context! (fn [_ _] {:id "ctx-client-abort"})
+                  net-client/send-to-server
+                  (fn
+                    ([msg-id payload]
+                     (swap! sent conj {:msg-id msg-id :payload payload}))
+                    ([msg-id payload _callback]
+                     (swap! sent conj {:msg-id msg-id :payload payload})))
+                  ctx/terminate-context! (fn [ctx-id terminate-fn]
+                                           (swap! terminated conj [ctx-id terminate-fn])
+                                           nil)]
+      ((:client-on-slot-key-down! hooks) "p1" 0)
+      ((:client-on-slot-key-abort! hooks) "p1" 0)
+      (is (= [catalog/MSG-SLOT-KEY-DOWN
+              catalog/MSG-SLOT-KEY-ABORT]
+             (mapv :msg-id @sent)))
+      (is (= [{:ctx-id "ctx-client-abort" :skill-id :railgun :key-idx 0}
+              {:ctx-id "ctx-client-abort" :key-idx 0}]
+             (mapv :payload @sent)))
+      (is (= [["ctx-client-abort" nil]] @terminated))
+      (is (empty? (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot "p1")))))))
+
+(deftest client-abort-all-sends-abort-messages-for-active-slot-contexts-test
+  (let [sent (atom [])
+        terminated (atom [])
+        hooks (client-ui-hooks/runtime-client-ui-hooks)]
+    (with-redefs [client-keybinds/get-skill-id-for-slot-public (fn [_ _] :railgun)
+                  ctx-mgr/activate-context! (fn [_ _] {:id "ctx-client-abort-all"})
+                  net-client/send-to-server
+                  (fn
+                    ([msg-id payload]
+                     (swap! sent conj {:msg-id msg-id :payload payload}))
+                    ([msg-id payload _callback]
+                     (swap! sent conj {:msg-id msg-id :payload payload})))
+                  ctx/terminate-context! (fn [ctx-id terminate-fn]
+                                           (swap! terminated conj [ctx-id terminate-fn])
+                                           nil)]
+      ((:client-on-slot-key-down! hooks) "p1" 0)
+      ((:client-abort-all! hooks))
+      (is (= [catalog/MSG-SLOT-KEY-DOWN
+              catalog/MSG-SLOT-KEY-ABORT]
+             (mapv :msg-id @sent)))
+      (is (= [["ctx-client-abort-all" nil]] @terminated))
+      (is (empty? (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot "p1")))))))
 
 (deftest slot-context-state-isolated-by-client-session-test
   (let [ctx-counter (atom 0)
@@ -69,10 +141,12 @@
         ((:client-on-slot-key-down! hooks) "p1" 0))
       (is (= {[:session-a "p1" 0] "ctx-1"}
              (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot
-                                 {:client-session-id :session-a :player-uuid "p1"}))))
+                                 {:client-session-id :session-a
+                                  :player-uuid "p1"}))))
       (is (= {[:session-b "p1" 0] "ctx-2"}
              (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot
-                                 {:client-session-id :session-b :player-uuid "p1"})))))))
+                                 {:client-session-id :session-b
+                    :player-uuid "p1"})))))))
 
 (deftest client-ui-owner-requires-explicit-session-and-player-test
   (binding [client-keybinds/*client-session-id* nil
@@ -122,20 +196,105 @@
                          :payload {:delta 2.0}}}]
              @sent)))))
 
-          (deftest client-terminated-push-clears-slot-context-and-terminates-local-context-test
-            (let [handlers (atom {})
-            terminated (atom [])]
-              (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-dead")
-              (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
-                            (swap! handlers assoc msg-id handler-fn)
-                            nil)
-                ctx/terminate-context! (fn [ctx-id terminate-fn]
-                       (swap! terminated conj [ctx-id terminate-fn])
-                       nil)]
-                (client-ui-hooks/register-client-push-handlers!)
-                ((get @handlers catalog/MSG-CTX-TERMINATED) {:ctx-id "ctx-dead"})
-                (is (empty? (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot "p1"))))
-                (is (= [["ctx-dead" nil]] @terminated)))))
+
+(deftest client-terminated-push-clears-slot-context-and-terminates-local-context-test
+  (let [handlers (atom {})
+        terminated (atom [])]
+    (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-dead")
+    (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
+                                                      (swap! handlers assoc msg-id handler-fn)
+                                                      nil)
+                  ctx/terminate-context! (fn [ctx-id terminate-fn]
+                                           (swap! terminated conj [ctx-id terminate-fn])
+                                           nil)]
+      (client-ui-hooks/register-client-push-handlers!)
+      ((get @handlers catalog/MSG-CTX-TERMINATED) {:ctx-id "ctx-dead"})
+      (is (empty? (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot "p1"))))
+      (is (= [["ctx-dead" nil]] @terminated)))))
+
+(deftest sync-preset-push-rebuilds-default-key-group-test
+  (let [handlers (atom {})
+        rebuilt (atom [])]
+    (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
+                                                      (swap! handlers assoc msg-id handler-fn)
+                                                      nil)
+                  client-keybinds/update-default-group! (fn [player-uuid]
+                                                         (swap! rebuilt conj player-uuid)
+                                                         nil)]
+      (client-ui-hooks/register-client-push-handlers!)
+      ((get @handlers catalog/MSG-SYNC-PRESET) {:uuid "p1"
+                                                :preset-data {:active-preset 0
+                                                              :presets []}})
+      (is (= ["p1"] @rebuilt)))))
+
+(deftest sync-runtime-push-clears-keybind-state-and-aborts-active-slot-contexts-test
+  (let [handlers (atom {})
+        sent (atom [])
+        terminated (atom [])
+        cleared (atom [])
+        cleared-groups (atom [])]
+    (ps/set-player-state! "p1" {:ability-data {:category-id :electromaster
+                                                :learned-skills [:railgun]}})
+    (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-runtime-reset")
+    (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
+                                                      (swap! handlers assoc msg-id handler-fn)
+                                                      nil)
+                  net-client/send-to-server (fn [msg-id payload]
+                                              (swap! sent conj {:msg-id msg-id :payload payload})
+                                              nil)
+                  ctx/terminate-context! (fn [ctx-id terminate-fn]
+                                           (swap! terminated conj [ctx-id terminate-fn])
+                                           nil)
+                  client-keybinds/clear-client-keybind-state! (fn [owner]
+                                                                (swap! cleared conj owner)
+                                                                nil)
+                  client-keybinds/clear-key-group! (fn [group]
+                                                     (swap! cleared-groups conj group)
+                                                     nil)]
+      (client-ui-hooks/register-client-push-handlers!)
+      ((get @handlers catalog/MSG-SYNC-RUNTIME) {:uuid "p1"
+                                                 :ability-data {:category-id :meltdowner
+                                                                :learned-skills []}})
+      (is (= [{:msg-id catalog/MSG-SLOT-KEY-ABORT
+               :payload {:ctx-id "ctx-runtime-reset" :key-idx 0}}]
+             @sent))
+      (is (= [["ctx-runtime-reset" nil]] @terminated))
+      (is (= ["p1"] @cleared))
+      (is (= [:default] @cleared-groups))
+      (is (empty? (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot "p1")))))))
+
+(deftest sync-resource-push-disables-held-input-and-clears-keybind-state-test
+  (let [handlers (atom {})
+        sent (atom [])
+        terminated (atom [])
+        cleared (atom [])]
+    (ps/set-player-state! "p1" {:resource-data {:activated true
+                                                 :overload-fine true
+                                                 :interferences #{}}})
+    (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-resource-reset")
+    (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
+                                                      (swap! handlers assoc msg-id handler-fn)
+                                                      nil)
+                  net-client/send-to-server (fn [msg-id payload]
+                                              (swap! sent conj {:msg-id msg-id :payload payload})
+                                              nil)
+                  ctx/terminate-context! (fn [ctx-id terminate-fn]
+                                           (swap! terminated conj [ctx-id terminate-fn])
+                                           nil)
+                  client-keybinds/clear-client-keybind-state! (fn [owner]
+                                                                (swap! cleared conj owner)
+                                                                nil)]
+      (client-ui-hooks/register-client-push-handlers!)
+      ((get @handlers catalog/MSG-SYNC-RESOURCE) {:uuid "p1"
+                                                  :resource-data {:activated false
+                                                                  :overload-fine true
+                                                                  :interferences #{}}})
+      (is (= [{:msg-id catalog/MSG-SLOT-KEY-ABORT
+               :payload {:ctx-id "ctx-resource-reset" :key-idx 0}}]
+             @sent))
+      (is (= [["ctx-resource-reset" nil]] @terminated))
+      (is (= ["p1"] @cleared))
+      (is (empty? (:slot-context-ids (client-ui-hooks/client-ui-state-snapshot "p1")))))))
 
 (deftest charge-coin-hooks-notify-and-visual-state-test
   (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
@@ -148,7 +307,7 @@
                                                                   (case [skill-id field-id]
                                                                     [:railgun :qte.coin-active-threshold] 0.6
                                                                     0.0))
-                  ctx/get-all-contexts-for-player (fn [_] [])]
+                  ctx/get-all-contexts-for-player (fn [& _] [])]
       ((:client-notify-visual-event! hooks) :ac/charge-coin-throw {:player-uuid "p1"})
       (let [visual ((:client-visual-state hooks) :ac/charge-coin {:player-uuid "p1"})]
         (is (true? (:active? visual)))
@@ -164,7 +323,7 @@
                                                [:railgun :charge.item-charge-ticks] 20
                                                1))
                   skill-config/tunable-double (fn [_ _] 0.6)
-                  ctx/get-all-contexts-for-player (fn [_] [])]
+                  ctx/get-all-contexts-for-player (fn [& _] [])]
       (binding [client-keybinds/*client-session-id* :session-a]
         ((:client-notify-visual-event! hooks) :ac/charge-coin-throw {:player-uuid "p1"}))
       (is (some? (:charge-coin-state (client-ui-hooks/client-ui-state-snapshot
@@ -183,7 +342,7 @@
                                                                   (case [skill-id field-id]
                                                                     [:railgun :qte.coin-active-threshold] 0.6
                                                                     0.0))
-                  ctx/get-all-contexts-for-player (fn [_]
+                  ctx/get-all-contexts-for-player (fn [& _]
                                                     [{:skill-id :railgun
                                                       :skill-state {:mode :item-charge :charge-ticks 10}}])]
       (let [visual ((:client-visual-state hooks) :ac/charge-coin {:player-uuid "p1"})]
@@ -199,7 +358,7 @@
                                               (case [skill-id field-id]
                                                 [:body-intensify :charge.max-time] 40
                                                 1))
-                  ctx/get-all-contexts-for-player (fn [_] [])]
+                  ctx/get-all-contexts-for-player (fn [& _] [])]
       (let [visual ((:client-visual-state hooks) :ac/body-intensify-charge {:player-uuid "p1"})]
         (is (false? (:active? visual)))
         (is (= 0 (:charge-ticks visual)))
@@ -208,7 +367,7 @@
                                               (case [skill-id field-id]
                                                 [:body-intensify :charge.max-time] 40
                                                 1))
-                  ctx/get-all-contexts-for-player (fn [_]
+                  ctx/get-all-contexts-for-player (fn [& _]
                                                     [{:skill-id :body-intensify
                                                       :skill-state {:hold-ticks 20}}])]
       (let [visual ((:client-visual-state hooks) :ac/body-intensify-charge {:player-uuid "p1"})]
@@ -290,17 +449,16 @@
                                                                                   :vec-deviation {:active true}}}}})
                 client-keybinds/get-activate-hint (fn [_] nil)
                 client-keybinds/get-preset-switch-state (fn [] nil)]
-      (do
-        ;; Pre-seed a wave circle born 100ms ago so alpha>0 at now-ms=1000
-        (client-ui-hooks/seed-vm-wave-state-for-test!
-         "p1"
-         [{:x 160.0 :y 90.0 :born-ms 900 :life-ms 600
-           :start-size 10.0 :end-size 50.0 :seed 0.0}])
-        (let [plan (client-ui-hooks/build-client-overlay-plan
+    ;; Pre-seed a wave circle born 100ms ago so alpha>0 at now-ms=1000
+    (client-ui-hooks/seed-vm-wave-state-for-test!
+     "p1"
+     [{:x 160.0 :y 90.0 :born-ms 900 :life-ms 600
+       :start-size 10.0 :end-size 50.0 :seed 0.0}])
+    (let [plan (client-ui-hooks/build-client-overlay-plan
                 "p1" 320 180 {:now-ms 1000})
           kinds (mapv :kind (:elements plan))]
       (is (= 1 (count (filter #{:content-crosshair} kinds))))
-          (is (some #{:blit-texture} kinds))))))
+      (is (some #{:blit-texture} kinds)))))
 
 (deftest movement-key-hooks-route-to-flashing-channel-test
   (let [sent (atom [])

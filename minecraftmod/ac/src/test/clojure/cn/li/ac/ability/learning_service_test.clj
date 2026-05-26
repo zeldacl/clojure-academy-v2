@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.model.ability :as adata]
-           [cn.li.ac.ability.domain.developer :as developer]
+            [cn.li.ac.ability.domain.developer :as developer]
             [cn.li.ac.ability.registry.category :as cat]
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill :as skill]

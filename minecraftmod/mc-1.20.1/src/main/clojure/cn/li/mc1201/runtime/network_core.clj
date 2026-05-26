@@ -99,8 +99,9 @@
 (defn create-except-local-context-sender
   "Create a context channel sender that broadcasts to nearby players except source player."
   [find-nearby-player-uuids send-to-client-fn]
-  (fn [ctx-id channel payload]
-    (if-let [source-player-uuid (network-hooks/get-context-player-uuid ctx-id)]
+  (fn [ctx-id channel payload ctx-map]
+    (if-let [source-player-uuid (or (:player-uuid ctx-map)
+                                    (network-hooks/get-context-player-uuid ctx-id))]
       (doseq [target-player-uuid (remove #{source-player-uuid}
                                           (find-nearby-player-uuids source-player-uuid default-except-local-radius))]
         (send-to-client-fn target-player-uuid
@@ -135,14 +136,15 @@
 
 (defn init-runtime-network!
   [{:keys [send-to-server-fn send-to-client-fn send-to-except-local-fn]}]
-  (let [send-to-except-local-fn (or send-to-except-local-fn (fn [_ctx-id _channel _payload] nil))
+  (let [send-to-except-local-fn (or send-to-except-local-fn (fn [_ctx-id _channel _payload _ctx-map] nil))
         send-context-channel-to-server!
-        (fn [ctx-id channel payload]
+        (fn [ctx-id channel payload _ctx-map]
           (send-to-server-fn (msg-id :ctx-channel)
                              {:ctx-id ctx-id :channel channel :payload payload}))
         send-context-channel-to-client!
-        (fn [ctx-id channel payload]
-          (when-let [player-uuid (network-hooks/get-context-player-uuid ctx-id)]
+        (fn [ctx-id channel payload ctx-map]
+          (when-let [player-uuid (or (:player-uuid ctx-map)
+                                     (network-hooks/get-context-player-uuid ctx-id))]
             (send-to-client-fn player-uuid
                                (msg-id :ctx-channel)
                                {:ctx-id ctx-id :channel channel :payload payload})))]

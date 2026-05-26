@@ -9,6 +9,7 @@
 
   It keeps input state transitions strict to avoid duplicated lifecycle calls."
   (:require [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.registry.skill :as skill]
             [cn.li.ac.ability.server.dispatch :as skill-rt]
             [cn.li.ac.ability.registry.event :as evt]
@@ -23,9 +24,9 @@
 (defn- event-payload [ctx-map payload]
   (let [player-id (:player-uuid ctx-map)
         skill-id  (:skill-id ctx-map)
-        exp       (double (or (get-in (ps/get-player-state player-id)
-                                      [:ability-data :skills skill-id :exp])
-                              0.0))]
+        exp       (double (adata/get-skill-exp (get-in (ps/get-player-state player-id)
+                                                       [:ability-data])
+                                               skill-id))]
     {:ctx-id    (:id ctx-map)
      :server-id (:server-id ctx-map)
      :player-id player-id
@@ -115,12 +116,14 @@
                 (= (:input-state ctx-map) INPUT-ACTIVE))
        (let [released-ctx (set-input-state! ctx-id INPUT-RELEASED)]
          (dispatch-skill-callback! released-ctx :on-key-up evt/EVT-CONTEXT-KEY-UP payload)
-         (evt/fire-ability-event!
-           (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))
          (let [latest-ctx (ctx/get-context ctx-id)
-               spec (skill/get-skill (:skill-id latest-ctx))]
-           (when (should-apply-main-cooldown? spec)
-             (apply-main-cooldown! released-ctx))
+               spec (skill/get-skill (:skill-id latest-ctx))
+               pattern-handled? (boolean (and spec (skill-rt/can-handle? spec)))]
+           (when-not pattern-handled?
+             (evt/fire-ability-event!
+               (evt/make-skill-perform-event (:player-uuid released-ctx) (:skill-id released-ctx)))
+             (when (should-apply-main-cooldown? spec)
+               (apply-main-cooldown! released-ctx)))
            (if (should-terminate-context-on-key-up? spec)
              (ctx/terminate-context! ctx-id terminate-fn)
              (set-input-state! ctx-id INPUT-IDLE)))

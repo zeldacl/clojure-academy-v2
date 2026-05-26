@@ -89,6 +89,9 @@
 (defn on-slot-key-up! [player-uuid key-idx]
   (with-client-session #(power-runtime/client-on-slot-key-up! player-uuid key-idx)))
 
+(defn on-slot-key-abort! [player-uuid key-idx]
+  (with-client-session #(power-runtime/client-on-slot-key-abort! player-uuid key-idx)))
+
 (defn on-movement-key-down! [player-uuid movement-key]
   (with-client-session #(power-runtime/client-on-movement-key-down! player-uuid movement-key)))
 

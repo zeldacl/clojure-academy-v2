@@ -11,6 +11,8 @@
 						[cn.li.ac.ability.model.develop :as ddata]
 						[cn.li.ac.ability.model.preset :as pdata]
 						[cn.li.ac.ability.model.resource :as rdata]
+						[cn.li.ac.ability.server.service.category-runtime :as category-rt]
+						[cn.li.ac.ability.server.service.player-state-actions :as state-actions]
 						[cn.li.ac.ability.service.player-state :as ps]
 						[cn.li.ac.ability.registry.skill-query :as skill-query]
 						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
@@ -99,15 +101,14 @@
 		(->> (skill-query/get-skills-for-category category-id)
 				 (map :id)
 				 (filter identity)
-				 set)))
+				 sort
+				 vec)))
 
 (defn- execute-switch-category!
 	[action-map context]
 	(let [category-id (:category-id action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(update-player-runtime-data!
-			player-uuid
-			#(update % :ability-data adata/set-category category-id))
+		(category-rt/change-category! player-uuid category-id)
 		(log/info "Switching category for player" player-uuid "to" category-id)
 		(send-feedback! context "command.academy.aim.cat.success" [(name category-id)] false)
 		{:success? true}))
@@ -116,16 +117,7 @@
 	[action-map context]
 	(let [node-id (:node-id action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(update-player-runtime-data!
-			player-uuid
-			(fn [state]
-				(-> state
-						(update :ability-data adata/learn-skill node-id)
-						(update-in [:ability-data :skill-exps]
-											 (fn [exps]
-												 (if (contains? (or exps {}) node-id)
-													 exps
-													 (assoc (or exps {}) node-id 0.0)))))))
+		(state-actions/learn-skill! player-uuid node-id)
 		(log/info "Learning node" node-id "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.learn.success" [(name node-id)] false)
 		{:success? true}))
@@ -134,12 +126,7 @@
 	[action-map context]
 	(let [node-id (:node-id action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(update-player-runtime-data!
-			player-uuid
-			(fn [state]
-				(-> state
-						(update-in [:ability-data :learned-skills] disj node-id)
-						(update-in [:ability-data :skill-exps] dissoc node-id))))
+		(state-actions/unlearn-skill! player-uuid node-id)
 		(log/info "Unlearning node" node-id "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.unlearn.success" [(name node-id)] false)
 		{:success? true}))
@@ -147,20 +134,11 @@
 (defn- execute-learn-all-nodes!
 	[action-map context]
 	(let [player-uuid (action-player-uuid action-map context)]
-		(update-player-runtime-data!
-			player-uuid
-			(fn [state]
-				(let [category-id (get-in state [:ability-data :category-id])
-							skill-ids (skills-for-category category-id)]
-					(if (seq skill-ids)
-						(-> state
-								(update-in [:ability-data :learned-skills] (fnil into #{}) skill-ids)
-								(update-in [:ability-data :skill-exps]
-													 (fn [exps]
-														 (reduce (fn [m sid] (assoc m sid 1.0))
-																		 (or exps {})
-																		 skill-ids))))
-						state))))
+		(let [state (normalize-runtime-state (ps/get-or-create-player-state! player-uuid))
+					skill-ids (skills-for-category (get-in state [:ability-data :category-id]))]
+			(state-actions/learn-skills! player-uuid skill-ids)
+			(doseq [skill-id skill-ids]
+				(state-actions/set-skill-exp! player-uuid skill-id 1.0)))
 		(log/info "Learned all nodes for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.learn_all.success" [] false)
 		{:success? true}))
@@ -197,9 +175,7 @@
 	[action-map context]
 	(let [level (:level action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(update-player-runtime-data!
-			player-uuid
-			#(update % :ability-data adata/set-level (int level)))
+		(state-actions/set-level! player-uuid level)
 		(log/info "Setting level" level "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.level.success" [(str level)] false)
 		{:success? true}))
@@ -209,9 +185,7 @@
 	(let [node-id (:node-id action-map)
 				exp (:exp action-map)
 				player-uuid (action-player-uuid action-map context)]
-		(update-player-runtime-data!
-			player-uuid
-			#(update % :ability-data adata/set-skill-exp node-id exp))
+		(state-actions/set-skill-exp! player-uuid node-id exp)
 		(log/info "Setting node exp" node-id "to" exp "for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.exp.success" [(name node-id) (str exp)] false)
 		{:success? true}))
@@ -219,59 +193,30 @@
 (defn- execute-restore-cp!
 	[action-map context]
 	(let [player-uuid (action-player-uuid action-map context)]
-		(update-player-runtime-data!
-			player-uuid
-			(fn [state]
-				(update state :resource-data
-								(fn [rd]
-									(let [rd' (or rd (rdata/new-resource-data))]
-										(rdata/set-cur-cp rd' (:max-cp rd' 0.0)))))))
+		(state-actions/recover-all! player-uuid)
 		(send-feedback! context "command.academy.aim.fullcp.success" [] false)
 		{:success? true}))
 
 (defn- execute-clear-cooldowns!
 	[action-map context]
 	(let [player-uuid (action-player-uuid action-map context)]
-		(update-player-runtime-data!
-			player-uuid
-			#(assoc % :cooldown-data (cdata/new-cooldown-data)))
+		(state-actions/clear-cooldowns! player-uuid)
 		(send-feedback! context "command.academy.aim.cd_clear.success" [] false)
 		{:success? true}))
 
 (defn- execute-reset-abilities!
 	[action-map context]
 	(let [player-uuid (action-player-uuid action-map context)]
-		(update-player-runtime-data!
-			player-uuid
-			#(assoc %
-							:ability-data (adata/new-ability-data)
-							:resource-data (rdata/new-resource-data)
-							:cooldown-data (cdata/new-cooldown-data)
-							:preset-data (pdata/new-preset-data)
-							:develop-data (ddata/new-develop-data)))
+		(state-actions/reset-abilities! player-uuid)
 		(send-feedback! context "command.academy.aim.reset.success" [] false)
 		{:success? true}))
 
 (defn- execute-maxout-progression!
 	[action-map context]
 	(let [player-uuid (action-player-uuid action-map context)]
-		(update-player-runtime-data!
-			player-uuid
-			(fn [state]
-				(let [category-id (get-in state [:ability-data :category-id])
-							skill-ids (skills-for-category category-id)]
-					(cond-> (-> state
-											(assoc-in [:ability-data :level] 5)
-											(assoc-in [:ability-data :level-progress] 0.0))
-						(seq skill-ids)
-						(update-in [:ability-data :learned-skills] (fnil into #{}) skill-ids)
-
-						(seq skill-ids)
-						(update-in [:ability-data :skill-exps]
-											 (fn [exps]
-												 (reduce (fn [m sid] (assoc m sid 1.0))
-																 (or exps {})
-																 skill-ids)))))))
+		(let [state (normalize-runtime-state (ps/get-or-create-player-state! player-uuid))
+					skill-ids (skills-for-category (get-in state [:ability-data :category-id]))]
+			(state-actions/maxout-progression! player-uuid skill-ids))
 		(send-feedback! context "command.academy.aim.maxout.success" [] false)
 		{:success? true}))
 

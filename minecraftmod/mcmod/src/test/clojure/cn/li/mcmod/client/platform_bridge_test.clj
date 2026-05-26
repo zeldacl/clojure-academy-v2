@@ -6,6 +6,7 @@
   [#'cn.li.mcmod.client.platform-bridge/*slot-key-down-fn*
    #'cn.li.mcmod.client.platform-bridge/*slot-key-tick-fn*
    #'cn.li.mcmod.client.platform-bridge/*slot-key-up-fn*
+  #'cn.li.mcmod.client.platform-bridge/*slot-key-abort-fn*
    #'cn.li.mcmod.client.platform-bridge/*movement-key-down-fn*
    #'cn.li.mcmod.client.platform-bridge/*movement-key-tick-fn*
    #'cn.li.mcmod.client.platform-bridge/*movement-key-up-fn*
@@ -55,10 +56,14 @@
     (client-bridge/install-client-bridge!
       {:slot-key-down (fn [player-uuid key-idx]
                         (swap! calls conj [:slot-down player-uuid key-idx]))
+       :slot-key-abort (fn [player-uuid key-idx]
+                         (swap! calls conj [:slot-abort player-uuid key-idx]))
        :movement-key-up (fn [player-uuid movement-key]
                           (swap! calls conj [:movement-up player-uuid movement-key]))})
     (client-bridge/on-slot-key-down! "p1" 0)
+    (client-bridge/on-slot-key-abort! "p1" 0)
     (client-bridge/on-movement-key-up! "p1" :forward)
     (is (= [[:slot-down "p1" 0]
+            [:slot-abort "p1" 0]
             [:movement-up "p1" :forward]]
            @calls))))

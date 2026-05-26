@@ -12,6 +12,7 @@
             [cn.li.ac.ability.service.player-state      :as ps]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.server.service.learning  :as lrn]
+            [cn.li.ac.ability.server.service.learning-runtime :as lrn-rt]
             [cn.li.ac.ability.registry.skill             :as skill]
             [cn.li.ac.ability.rules.progression          :as progression]
             [cn.li.ac.ability.server.handlers.level-handler :as level-handler]
@@ -24,7 +25,6 @@
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.mcmod.platform.world         :as world]
             [cn.li.mcmod.platform.be            :as platform-be]
-            [cn.li.ac.ability.registry.event             :as evt]
             [cn.li.mcmod.util.log               :as log]))
 
   ;; ============================================================================
@@ -68,11 +68,7 @@
                   (not session-ok?) {:ok? false :reason :session}
                   (not (:structure-valid st)) {:ok? false :reason :structure}
                   :else {:ok? true :tile tile :developer-type (dev-validate/developer-type-for-tile tile)}))
-          do-learn!
-          (fn []
-            (let [{:keys [data event]} (lrn/learn-skill ad uuid skill-id)]
-              (ps/update-ability-data! uuid (constantly data))
-              (when event (evt/fire-ability-event! event))))]
+          do-learn! #(lrn-rt/learn-skill! uuid skill-id)]
       (when-not (adata/is-learned? ad skill-id)
         (cond
           (and all-coords? (not (:ok? station)))

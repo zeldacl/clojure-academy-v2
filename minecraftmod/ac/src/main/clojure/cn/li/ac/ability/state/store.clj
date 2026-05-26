@@ -7,7 +7,8 @@
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
             [cn.li.ac.ability.model.cooldown :as cd]
-            [cn.li.ac.ability.model.preset :as pd]))
+            [cn.li.ac.ability.model.preset :as pd]
+            [cn.li.ac.ability.server.service.category-runtime :as category-rt]))
 
 (defn- ensure-state! [uuid]
   (ps/get-or-create-player-state! uuid))
@@ -18,7 +19,7 @@
     (ability-get-category [_ uuid]
       (get-in (ensure-state! uuid) [:ability-data :category-id]))
     (ability-set-category! [_ uuid cat-id]
-      (ps/update-ability-data! uuid ad/set-category cat-id))
+      (category-rt/change-category! uuid cat-id))
     (ability-is-learned? [_ uuid skill-id]
       (boolean (get-in (ensure-state! uuid) [:ability-data :learned-skills skill-id])))
     (ability-learn-skill! [_ uuid skill-id]

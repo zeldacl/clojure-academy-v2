@@ -92,6 +92,30 @@
         (is (= :idle (:input-state updated))
             "input state resets to :idle so subsequent key-down can reactivate")))))
 
+(deftest pattern-handled-key-up-skips-generic-perform-and-cooldown-test
+  (let [uuid "test-player-pattern-key-up"
+        _ (seed-player-state! uuid)
+        ctx-id "ctx-pattern-key-up"
+        c (-> (ctx/new-server-context uuid :arc-gen ctx-id test-context-owner)
+              (assoc :input-state :active))
+        events* (atom [])]
+    (ctx/register-context! c)
+    (with-redefs [skill-reg/get-skill (fn [_]
+                                        {:id :arc-gen
+                                         :ctrl-id :arc-gen
+                                         :pattern :release-cast
+                                         :cooldown {:mode :default}
+                                         :cooldown-ticks 9})
+                  skill-rt/can-handle? (constantly true)
+                  skill-rt/dispatch! (fn [_ _ _] true)
+                  evt/fire-ability-event! (fn [event]
+                                            (swap! events* conj event))]
+      (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
+      (is (= 0 (cd/get-remaining (:cooldown-data (ps/get-player-state uuid)) :arc-gen :main))
+          "generic key-up should not apply cooldown when pattern runtime owns settlement")
+      (is (= [evt/EVT-CONTEXT-KEY-UP] (map :event/type @events*)))
+      (is (not-any? #(= evt/EVT-SKILL-PERFORM (:event/type %)) @events*)))))
+
 (deftest key-input-lifecycle-dispatches-distinct-callback-keys-test
   (let [uuid "test-player-callbacks"
         _ (seed-player-state! uuid)

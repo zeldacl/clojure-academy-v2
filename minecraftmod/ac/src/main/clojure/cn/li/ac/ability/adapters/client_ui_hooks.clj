@@ -15,6 +15,7 @@
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.ability.util.resource-check :as resource-check]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.messages :as catalog]
@@ -27,7 +28,7 @@
 (defonce ^:private vm-wave-circles (atom {}))
 (defonce ^:private vm-wave-last-spawn-ms (atom {}))
 (defonce ^:private slot-context-ids (atom {}))
-;; Per-slot last key-tick send timestamp (ms). Limits key-tick messages to ~10/s.
+;; Per-slot last keepalive send timestamp (ms). Limits keepalive messages to ~10/s.
 (defonce ^:private slot-key-tick-ms (atom {}))
 (defonce ^:private charge-coin-state (atom {}))
 
@@ -67,6 +68,14 @@
   [player-uuid]
   {:logical-side :client
    :session-id (client-ui-owner-key player-uuid)})
+
+(defn- player-contexts
+  [player-uuid]
+  (if-let [session-id (current-client-session-id)]
+    (ctx/get-all-contexts-for-player {:logical-side :client
+                                      :session-id [session-id player-uuid]}
+                                     player-uuid)
+    (ctx/get-all-contexts-for-player player-uuid)))
 
 (defn- with-client-context-owner
   [player-uuid f]
@@ -190,7 +199,7 @@
 
 (defn- charge-coin-visual-state
   [player-uuid]
-  (let [contexts (ctx/get-all-contexts-for-player player-uuid)
+  (let [contexts (player-contexts player-uuid)
         railgun-ctx (some (fn [ctx-data]
                             (when (and (= :railgun (:skill-id ctx-data))
                                        (ctx/active-context? ctx-data))
@@ -230,7 +239,7 @@
           (when (and (= skill-id (:skill-id ctx-data))
                      (ctx/active-context? ctx-data))
             ctx-data))
-        (ctx/get-all-contexts-for-player player-uuid)))
+  (player-contexts player-uuid)))
 
 (defn- hold-ticks-from-context
   [ctx-data]
@@ -327,6 +336,13 @@
                                          :key-idx key-idx})
       ctx-id)))
 
+(defn- send-slot-keepalive!
+  [player-uuid key-idx]
+  (let [slot-key (slot-context-key player-uuid key-idx)]
+    (when-let [ctx-id (get @slot-context-ids slot-key)]
+      (net-client/send-to-server catalog/MSG-CTX-KEEPALIVE {:ctx-id ctx-id})
+      ctx-id)))
+
 (defn- send-slot-key-up-message!
   [player-uuid key-idx]
   (let [slot-key (slot-context-key player-uuid key-idx)]
@@ -335,6 +351,72 @@
                                                           :key-idx key-idx})
       (swap! slot-context-ids dissoc slot-key)
       ctx-id)))
+
+(defn- abort-slot-context!
+  [player-uuid key-idx]
+  (let [slot-key (slot-context-key player-uuid key-idx)]
+    (swap! slot-key-tick-ms dissoc slot-key)
+    (when-let [ctx-id (get @slot-context-ids slot-key)]
+      (net-client/send-to-server catalog/MSG-SLOT-KEY-ABORT {:ctx-id ctx-id
+                                                             :key-idx key-idx})
+      (swap! slot-context-ids dissoc slot-key)
+      (ctx/terminate-context! ctx-id nil)
+      ctx-id)))
+
+(defn- clear-slot-key-ticks!
+  [slot-key-pred]
+  (swap! slot-key-tick-ms
+         (fn [m]
+           (into {}
+                 (remove (fn [[slot-key _last-ms]]
+                           (slot-key-pred slot-key))
+                         m)))))
+
+(defn- abort-slot-keys!
+  [slot-keys]
+  (doseq [slot-key slot-keys]
+    (let [[_session-id player-uuid key-idx] slot-key]
+      (abort-slot-context! player-uuid key-idx))))
+
+(defn- abort-all-slot-contexts-for-owner!
+  [owner]
+  (let [owner-key (client-ui-owner-key owner)
+        abort-slots (->> @slot-context-ids
+                         (filter (fn [[slot-key _ctx-id]]
+                                   (= owner-key (slot-key-owner slot-key))))
+                         (map first)
+                         vec)]
+    (abort-slot-keys! abort-slots)
+    (clear-slot-key-ticks! #(= owner-key (slot-key-owner %)))))
+
+(defn- abort-all-slot-contexts-for-session!
+  [session-id]
+  (let [abort-slots (->> @slot-context-ids
+                         (filter (fn [[slot-key _ctx-id]]
+                                   (= session-id (first slot-key))))
+                         (map first)
+                         vec)]
+    (abort-slot-keys! abort-slots)
+    (clear-slot-key-ticks! #(= session-id (first %)))))
+
+(defn- runtime-sync-resets-input?
+  [old-ability-data new-ability-data]
+  (let [old-category (:category-id old-ability-data)
+        new-category (:category-id new-ability-data)
+        old-learned (or (:learned-skills old-ability-data) [])
+        new-learned (or (:learned-skills new-ability-data) [])]
+    (or (not= old-category new-category)
+        (and (seq old-learned)
+             (empty? new-learned)))))
+
+(defn- resource-sync-disables-input?
+  [old-resource-data new-resource-data]
+  (let [old-activated (boolean (:activated old-resource-data))
+        new-activated (boolean (:activated new-resource-data))
+        old-usable (resource-check/can-use-resource-data? old-resource-data)
+        new-usable (resource-check/can-use-resource-data? new-resource-data)]
+    (or (and old-activated (not new-activated))
+        (and old-usable (not new-usable)))))
 
 (defn- flush-buffered-context-message!
   [ctx-id {:keys [channel payload]}]
@@ -552,13 +634,22 @@
     (net-client/register-push-handler! catalog/MSG-SYNC-RUNTIME
       (fn [{:keys [uuid ability-data]}]
         (when (and uuid ability-data)
+          (let [old-ability-data (get-in (ps/get-player-state uuid) [:ability-data])]
           (ps/get-or-create-player-state! uuid)
-          (ps/update-ability-data! uuid (constantly ability-data)))))
+          (ps/update-ability-data! uuid (constantly ability-data))
+          (when (runtime-sync-resets-input? old-ability-data ability-data)
+            (abort-all-slot-contexts-for-owner! uuid)
+            (client-keybinds/clear-client-keybind-state! uuid)
+            (client-keybinds/clear-key-group! :default))))))
     (net-client/register-push-handler! catalog/MSG-SYNC-RESOURCE
       (fn [{:keys [uuid resource-data]}]
         (when (and uuid resource-data)
+          (let [old-resource-data (get-in (ps/get-player-state uuid) [:resource-data])]
           (ps/get-or-create-player-state! uuid)
-          (ps/update-resource-data! uuid (constantly resource-data)))))
+          (ps/update-resource-data! uuid (constantly resource-data))
+          (when (resource-sync-disables-input? old-resource-data resource-data)
+            (abort-all-slot-contexts-for-owner! uuid)
+            (client-keybinds/clear-client-keybind-state! uuid))))))
     (net-client/register-push-handler! catalog/MSG-SYNC-COOLDOWN
       (fn [{:keys [uuid cooldown-data]}]
         (when (and uuid cooldown-data)
@@ -568,7 +659,8 @@
       (fn [{:keys [uuid preset-data]}]
         (when (and uuid preset-data)
           (ps/get-or-create-player-state! uuid)
-          (ps/update-preset-data! uuid (constantly preset-data)))))
+          (ps/update-preset-data! uuid (constantly preset-data))
+          (client-keybinds/update-default-group! uuid))))
     (net-client/register-push-handler! catalog/MSG-CTX-ESTABLISH
       (fn [{:keys [ctx-id server-id]}]
         (ctx/transition-to-alive! ctx-id server-id (partial flush-buffered-context-message! ctx-id))))
@@ -652,7 +744,7 @@
 
    :client-on-slot-key-down!
    (fn [player-uuid key-idx]
-     ;; Reset tick throttle so the first key-tick after a key-down is never suppressed.
+     ;; Reset keepalive throttle so the first hold refresh after key-down is never suppressed.
      (swap! slot-key-tick-ms dissoc (slot-context-key player-uuid key-idx))
      (send-slot-key-message! catalog/MSG-SLOT-KEY-DOWN player-uuid key-idx))
 
@@ -663,12 +755,16 @@
            last-ms  (get @slot-key-tick-ms slot-key 0)]
        (when (>= (- now-ms last-ms) 100)
          (swap! slot-key-tick-ms assoc slot-key now-ms)
-         (send-slot-key-message! catalog/MSG-SLOT-KEY-TICK player-uuid key-idx))))
+         (send-slot-keepalive! player-uuid key-idx))))
 
    :client-on-slot-key-up!
    (fn [player-uuid key-idx]
      (swap! slot-key-tick-ms dissoc (slot-context-key player-uuid key-idx))
      (send-slot-key-up-message! player-uuid key-idx))
+
+   :client-on-slot-key-abort!
+   (fn [player-uuid key-idx]
+     (abort-slot-context! player-uuid key-idx))
 
    :client-on-movement-key-down!
    (fn [player-uuid movement-key]
@@ -688,26 +784,7 @@
 
    :client-abort-all!
    (fn []
-     (let [session-id (current-session-id)
-           current-session-entry? (fn [[slot-key _ctx-id]]
-                                    (= session-id (first slot-key)))
-           abort-contexts (->> @slot-context-ids
-                               (filter current-session-entry?)
-                               (map second)
-                               distinct
-                               vec)]
-       (doseq [ctx-id abort-contexts]
-         (ctx/terminate-context! ctx-id nil))
-       (swap! slot-context-ids
-              (fn [m]
-                (into {}
-                      (remove current-session-entry? m))))
-       (swap! slot-key-tick-ms
-              (fn [m]
-                (into {}
-                      (remove (fn [[slot-key _last-ms]]
-                                (= session-id (first slot-key)))
-                              m))))))
+     (abort-all-slot-contexts-for-session! (current-session-id)))
 
    :client-update-ability-data!
    (fn [player-uuid ability-data]
@@ -735,7 +812,7 @@
 
    :client-slot-visual-state
    (fn [player-uuid key-idx]
-     (let [active-ctxs (ctx/get-all-contexts-for-player player-uuid)
+     (let [active-ctxs (player-contexts player-uuid)
            skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
        (:state (delegate-state/delegate-state-for-slot active-ctxs skill-id))))
 
