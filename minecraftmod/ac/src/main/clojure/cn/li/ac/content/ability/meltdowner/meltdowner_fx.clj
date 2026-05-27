@@ -48,6 +48,7 @@
   (let [owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode ticks charge-ratio performed? start end charge-ticks beam-length source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-sounds/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -57,7 +58,7 @@
       (do
         (swap! effect-state assoc owner-key*
                (merge base-meta {:active? true :ticks 0 :charge-ratio 0.0 :performed? false}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id charge-loop-sound :volume 1.0 :pitch 1.0}))
       :update
       (swap! effect-state update owner-key*
@@ -87,7 +88,7 @@
                            :beam-length (double (or beam-length 30.0))
                            :charge-ticks (int (or charge-ticks 20))
                            :is-reflect? false}))))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id fire-sound :volume 0.5 :pitch 1.0}))
       :reflect
       (when (and start end)
@@ -112,7 +113,7 @@
                          (when (:active? st)
                            (let [ticks (inc (long (or (:ticks st) 0)))]
                              (when (zero? (mod ticks 10))
-                               (client-sounds/queue-sound-effect!
+                               (client-sounds/queue-sound-effect! (:queue-owner st)
                                  {:type :sound :sound-id charge-loop-sound :volume 0.75 :pitch 1.0}))
                              [owner-key (assoc st :ticks ticks)]))))
                  states)))

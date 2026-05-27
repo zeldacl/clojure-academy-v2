@@ -116,14 +116,6 @@
     (when-let [player (.player mc)]
       (str (.getUUID player)))))
 
-(defn- client-session-id []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    [:client (System/identityHashCode mc)]))
-
-(defn- with-client-session [f]
-  (binding [power-runtime/*client-session-id* (client-session-id)]
-    (f)))
-
 (defn- client-owner-key
   [owner]
   (client-session/owner-key owner))
@@ -230,7 +222,7 @@
         false))))
 
 (defn- on-mouse-scroll! [^InputEvent$MouseScrollingEvent event]
-  (with-client-session
+  (client-session/with-current-client-session
     (fn []
       (let [delta (double (.getScrollDelta event))
             scheme @key-scheme
@@ -245,7 +237,7 @@
                 (power-runtime/client-on-slot-wheel! uuid idx delta)))))))))
 
 (defn tick-input! []
-  (with-client-session
+  (client-session/with-current-client-session
     (fn []
       (if-let [owner (client-session/current-local-player-owner)]
         (let [scheme @key-scheme

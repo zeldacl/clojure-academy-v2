@@ -88,9 +88,15 @@
 (defn dispatch-client-response!
   "Route GUI network payload to push/response handlers by request-id convention.
   request-id < 0 means push payload: {:msg-id ... :payload ...}."
-  [request-id payload]
-  (let [rid (int (or request-id -1))
-        p (normalize-map payload)]
-    (if (neg? rid)
-      (net-client/handle-push (:msg-id p) (:payload p))
-      (net-client/handle-response rid p))))
+  ([request-id payload]
+   (dispatch-client-response! nil request-id payload))
+  ([owner request-id payload]
+   (let [rid (int (or request-id -1))
+         p (normalize-map payload)]
+     (if (neg? rid)
+       (if (some? owner)
+         (net-client/handle-push owner (:msg-id p) (:payload p))
+         (net-client/handle-push (:msg-id p) (:payload p)))
+       (if (some? owner)
+         (net-client/handle-response owner rid p)
+         (net-client/handle-response rid p))))))

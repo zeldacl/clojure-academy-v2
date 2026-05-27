@@ -41,8 +41,29 @@
                                        runtime-hooks/*client-session-id*))
        :skill-tree
        (require-screen-owner-value owner ":player-uuid"
-                                   (or (:player-uuid owner-map)
-                                       (:uuid owner-map)))])))
+                                   (some-> (or (:player-uuid owner-map)
+                                               (:uuid owner-map))
+                           str))])))
+
+(defn- with-screen-player-state-owner
+  [owner f]
+  (let [[session-id _screen-id player-uuid] (screen-owner-key owner)]
+    (binding [runtime-hooks/*client-session-id* session-id
+              runtime-hooks/*player-state-owner* {:client-session-id session-id
+                                                  :player-uuid player-uuid}]
+      (f))))
+
+(defn- get-screen-player-state
+  [owner]
+  (let [[_session-id _screen-id player-uuid] (screen-owner-key owner)]
+    (with-screen-player-state-owner owner
+      #(ps/get-player-state player-uuid))))
+
+(defn- ensure-screen-player-state!
+  [owner]
+  (let [[_session-id _screen-id player-uuid] (screen-owner-key owner)]
+    (with-screen-player-state-owner owner
+      #(ps/get-or-create-player-state! player-uuid))))
 
 (defn- normalized-store
   [store]
@@ -197,9 +218,10 @@
 (defn build-screen-render-data
   "Build complete screen render data. Called by forge layer."
   []
-  (let [state (screen-state-snapshot)]
-  (when-let [player-uuid (:player-uuid state)]
-    (when-let [player-state (ps/get-player-state player-uuid)]
+  (let [state (screen-state-snapshot)
+        owner-key (current-owner-key)]
+  (when-let [_player-uuid (:player-uuid state)]
+    (when-let [player-state (and owner-key (get-screen-player-state owner-key))]
       (let [ability-data (:ability-data player-state)
             category (:category ability-data)
             skills (when category
@@ -222,9 +244,10 @@
 (defn on-skill-click
   "Handle skill node click. Attempts to learn the skill if conditions are met."
   [skill-id]
-  (let [state (screen-state-snapshot)]
-  (when-let [player-uuid (:player-uuid state)]
-    (when-let [player-state (ps/get-player-state player-uuid)]
+  (let [state (screen-state-snapshot)
+        owner-key (current-owner-key)]
+  (when-let [_player-uuid (:player-uuid state)]
+    (when-let [player-state (and owner-key (get-screen-player-state owner-key))]
       (let [ability-data (:ability-data player-state)
             ctx (:learn-context state)
             dev-type (or (:developer-type ctx) :normal)
@@ -291,8 +314,8 @@
    (open-screen! player-uuid nil))
   ([player-uuid learn-context]
     ;; 确保player-state存在，防止UI卡死
-    (ps/get-or-create-player-state! player-uuid)
     (let [owner {:player-uuid player-uuid}]
+      (ensure-screen-player-state! owner)
       (set-current-owner! owner)
       (swap-screen-state! owner merge default-screen-state
                           {:player-uuid player-uuid

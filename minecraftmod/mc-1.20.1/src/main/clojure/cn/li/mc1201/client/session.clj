@@ -1,12 +1,21 @@
 (ns cn.li.mc1201.client.session
   "Client-local owner/session helpers for client-owned runtime state."
+  (:require [cn.li.mcmod.hooks.core :as runtime-hooks])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.client.multiplayer ClientPacketListener]))
+
+(defn current-connection
+  []
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    (.getConnection mc)))
 
 (defn client-session-id
   []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
-    [:client (System/identityHashCode mc)]))
+    (when-let [^ClientPacketListener connection (.getConnection mc)]
+      [:client-session
+       (System/identityHashCode mc)
+       (System/identityHashCode connection)])))
 
 (defn local-player-uuid
   []
@@ -14,20 +23,60 @@
     (when-let [player (.player mc)]
       (str (.getUUID player)))))
 
+(defn owner-for-player-uuid
+  [player-uuid]
+  (when-let [session-id (client-session-id)]
+    (when player-uuid
+      {:client-session-id session-id
+       :player-uuid (str player-uuid)})))
+
 (defn current-local-player-owner
   []
-  (when-let [session-id (client-session-id)]
-    (when-let [player-uuid (local-player-uuid)]
-      {:client-session-id session-id
-       :player-uuid player-uuid})))
+  (owner-for-player-uuid (local-player-uuid)))
 
 (defn connection-key
   []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    (let [^ClientPacketListener connection (.getConnection mc)
-          player-uuid (local-player-uuid)]
-      (when (and connection player-uuid)
-        [:connection (System/identityHashCode connection) player-uuid]))))
+  (when-let [session-id (client-session-id)]
+    (if-let [player-uuid (local-player-uuid)]
+      [:connection session-id player-uuid]
+      [:connection session-id])))
+
+(defn payload-player-uuid
+  [payload]
+  (some-> (or (:uuid payload)
+              (:player-uuid payload)
+              (get-in payload [:payload :uuid])
+              (get-in payload [:payload :player-uuid]))
+          str))
+
+(defn with-current-client-session
+  [f]
+  (binding [runtime-hooks/*client-session-id* (client-session-id)]
+    (f)))
+
+(defn with-bound-client-owner
+  [owner f]
+  (let [owner* (or owner {})
+        session-id (or (:client-session-id owner*)
+                       (:session-id owner*))
+        player-uuid (some-> (:player-uuid owner*) str)]
+    (when-not session-id
+      (throw (ex-info "Client owner requires :client-session-id"
+                      {:owner owner})))
+    (binding [runtime-hooks/*client-session-id* session-id
+              runtime-hooks/*player-state-owner* (cond-> {:client-session-id session-id}
+                                                   player-uuid (assoc :player-uuid player-uuid))]
+      (f))))
+
+(defn with-current-client-owner
+  ([f]
+   (if-let [owner (current-local-player-owner)]
+     (with-bound-client-owner owner f)
+     (with-current-client-session f)))
+  ([player-uuid f]
+   (if-let [owner (owner-for-player-uuid player-uuid)]
+     (with-bound-client-owner owner f)
+     (with-current-client-session f))))
 
 (defn owner-key
   [owner]

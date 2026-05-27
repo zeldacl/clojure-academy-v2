@@ -27,6 +27,7 @@
   (let [owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode target distance source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -49,12 +50,12 @@
                       :ticks (long (or (:ticks st) 0)))))
       :perform
       (when (map? target)
-        (client-particles/queue-particle-effect!
+        (client-particles/queue-particle-effect! (:queue-owner base-meta)
           {:type :particle :particle-type :portal
            :x (:x target) :y (double (or (:y target) 0.0)) :z (:z target)
            :count 16 :speed 0.08
            :offset-x 0.9 :offset-y 0.8 :offset-z 0.9})
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:tp.tp" :volume 0.5 :pitch 1.0}))
       :end
       (clear-mark-teleport-owner! owner-key*)
@@ -73,7 +74,7 @@
                            (let [ticks (inc (long (or (:ticks st) 0)))
                                  target (:target st)]
                              (when (and target (zero? (mod ticks 3)))
-                               (client-particles/queue-particle-effect!
+                               (client-particles/queue-particle-effect! (:queue-owner st)
                                  {:type :particle :particle-type :portal
                                   :x (:x target)
                                   :y (- (double (or (:y target) 0.0)) 0.5)

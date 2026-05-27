@@ -1,0 +1,45 @@
+(ns cn.li.mc1201.gui.network.packet-test
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.mc1201.gui.network.packet :as packet]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.network.client :as client]))
+
+(defn- reset-client-state!
+  [f]
+  (client/reset-client-state-for-test!)
+  (try
+    (f)
+    (finally
+      (client/reset-client-state-for-test!))))
+
+(use-fixtures :each reset-client-state!)
+
+(deftest dispatch-client-response-respects-explicit-owner-test
+  (let [owner {:client-session-id :session-a :screen-id :screen-a}
+        calls (atom [])]
+    (with-redefs [client/send-request (fn [& _] nil)]
+      (client/send-to-server owner "req" {} (fn [resp] (swap! calls conj [:response resp])))
+      (client/register-push-handler! owner "push/state" (fn [payload] (swap! calls conj [:push payload])))
+      (packet/dispatch-client-response! owner 1 {:ok true})
+      (packet/dispatch-client-response! owner -1 {:msg-id "push/state" :payload {:x 1}}))
+    (is (= [[:response {:ok true}]
+            [:push {:x 1}]]
+           @calls))))
+
+(deftest response-dispatch-stays-bound-to-current-client-session-test
+  (let [calls (atom [])]
+    (with-redefs [client/send-request (fn [& _] nil)]
+      (binding [runtime-hooks/*client-session-id* :session-a]
+        (client/send-to-server "req" {} (fn [resp] (swap! calls conj resp))))
+      (binding [runtime-hooks/*client-session-id* :session-b]
+        (packet/dispatch-client-response! 1 {:ok :stale}))
+      (is (empty? @calls))
+      (binding [runtime-hooks/*client-session-id* :session-a]
+        (packet/dispatch-client-response! 1 {:ok :live})))
+    (is (= [{:ok :live}] @calls))))
+
+(deftest dispatch-client-response-without-owner-uses-global-push-handlers-test
+  (let [calls (atom [])]
+    (client/register-push-handler! "push/global" (fn [payload] (swap! calls conj payload)))
+    (packet/dispatch-client-response! -1 {:msg-id "push/global" :payload {:value 42}})
+    (is (= [{:value 42}] @calls))))

@@ -34,7 +34,7 @@
       :start
       (do
         (swap! effect-state assoc owner-key* (merge base-meta {:active? true :ticks 0 :balls 0}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id "my_mod:md.sb_charge" :volume 0.5 :pitch 1.0}))
       :ball
       (do
@@ -47,7 +47,7 @@
                         :source-player-id source-player-id
                         :world-id world-id
                         :balls (int (or count 0)))))
-        (client-particles/queue-particle-effect!
+        (client-particles/queue-current-particle-effect!
           {:type :particle :particle-type :electric-spark
            :x (double (or x 0.0))
            :y (double (or y 0.0))
@@ -57,14 +57,14 @@
       :beam
       (do
         (when (and start end)
-          (client-particles/queue-particle-effect!
+          (client-particles/queue-current-particle-effect!
             {:type :particle :particle-type :electric-spark
              :x (double (or (:x end) 0.0))
              :y (double (or (:y end) 0.0))
              :z (double (or (:z end) 0.0))
              :count 4 :speed 0.15
              :offset-x 0.4 :offset-y 0.4 :offset-z 0.4}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id "my_mod:md.eb_explode" :volume 0.4 :pitch 1.2}))
       :end
       (clear-scatter-bomb-owner! owner-key*)

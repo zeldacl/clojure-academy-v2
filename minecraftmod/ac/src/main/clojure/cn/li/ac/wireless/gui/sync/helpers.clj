@@ -4,35 +4,136 @@
   Provides common functions for broadcasting state and applying sync payloads
   to reduce code duplication between node and matrix sync implementations."
   (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.core.capability-resolver :as resolver]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.service.world-registry :as world-registry]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.gui.container-state :as container-state]))
 
-(defn- find-active-container-for-payload
-  "Find the active client container matching a sync payload position."
+(defn- owner-session-id
+  [owner]
+  (or (:server-session-id owner)
+      (:client-session-id owner)
+      (:session-id owner)))
+
+(defn- owner-player-uuid
+  [owner]
+  (some-> (or (:player-uuid owner)
+              (try
+                (when-let [player (:player owner)]
+                  (uuid/player-uuid player))
+                (catch Exception _
+                  nil)))
+          str))
+
+(defn- resolve-payload-owner
   [payload]
-  (let [payload-pos [(:pos-x payload) (:pos-y payload) (:pos-z payload)]
+  (let [runtime-owner (when (map? runtime-hooks/*player-state-owner*)
+                        runtime-hooks/*player-state-owner*)
+        owner (merge runtime-owner
+                     (select-keys payload [:server-session-id
+                                           :client-session-id
+                                           :session-id
+                                           :player-uuid
+                                           :player]))]
+    (cond-> owner
+      (and (nil? (owner-session-id owner))
+           runtime-hooks/*client-session-id*)
+      (assoc :client-session-id runtime-hooks/*client-session-id*))))
+
+(defn- owner-routing-clues?
+  [owner]
+  (or (owner-session-id owner)
+      (owner-player-uuid owner)))
+
+(defn- owner-container-lookup-ready?
+  [owner]
+  (and (owner-session-id owner)
+       (owner-player-uuid owner)))
+
+(defn- container-owner
+  [container]
+  (or (:owner container)
+      (select-keys container [:server-session-id
+                              :client-session-id
+                              :session-id
+                              :player-uuid
+                              :player])))
+
+(defn- owner-matches?
+  [expected-owner container]
+  (let [actual-owner (container-owner container)
+        expected-session (owner-session-id expected-owner)
+        actual-session (owner-session-id actual-owner)
+        expected-player (owner-player-uuid expected-owner)
+        actual-player (owner-player-uuid actual-owner)]
+    (and (or (nil? expected-session)
+             (= expected-session actual-session))
+         (or (nil? expected-player)
+             (= expected-player actual-player)))))
+
+(defn- normalize-container-id
+  [container-id]
+  (when (some? container-id)
+    (try
+      (int container-id)
+      (catch Exception _
+        container-id))))
+
+(defn- container-runtime-id
+  [container]
+  (normalize-container-id
+    (or (:container-id container)
+        (:window-id container)
+        (:id container))))
+
+(defn- position-match?
+  [payload-pos container]
+  (try
+    (when-let [tile (:tile-entity container)]
+      (let [tile-pos (pos/position-get-block-pos tile)]
+        (= payload-pos
+           [(pos/pos-x tile-pos)
+            (pos/pos-y tile-pos)
+            (pos/pos-z tile-pos)])))
+    (catch Exception _
+      false)))
+
+(defn- unique-match
+  [pred coll]
+  (let [matches (filter pred coll)]
+    (when (= 1 (count matches))
+      (first matches))))
+
+(defn- find-active-container-for-payload
+  "Find the active client container matching a sync payload owner/container/position."
+  [payload]
+  (let [owner (resolve-payload-owner payload)
+        payload-container-id (normalize-container-id (:container-id payload))
+        payload-pos [(:pos-x payload) (:pos-y payload) (:pos-z payload)]
         positional? (every? number? payload-pos)
-        matches? (fn [container]
-                   (try
-                     (when-let [tile (:tile-entity container)]
-                       (let [tile-pos (pos/position-get-block-pos tile)]
-                         (= payload-pos
-                            [(pos/pos-x tile-pos)
-                             (pos/pos-y tile-pos)
-                             (pos/pos-z tile-pos)])))
-                     (catch Exception _
-                       false)))]
-    (or (some (fn [container]
-                (when (and positional? (matches? container))
-                  container))
-              (container-state/list-active-containers))
-        (when-not positional?
-          (first (container-state/list-active-containers))))))
+        active-containers (vec (container-state/list-active-containers))
+        owner-containers (if (owner-routing-clues? owner)
+                           (filterv #(owner-matches? owner %) active-containers)
+                           [])]
+    (or (when (and payload-container-id (owner-container-lookup-ready? owner))
+          (container-state/get-container-by-id owner payload-container-id))
+        (when payload-container-id
+          (some (fn [container]
+                  (when (= payload-container-id (container-runtime-id container))
+                    container))
+                owner-containers))
+        (when positional?
+          (some (fn [container]
+                  (when (position-match? payload-pos container)
+                    container))
+                owner-containers))
+        (when positional?
+          (unique-match #(position-match? payload-pos %) active-containers)))))
 
 ;; ============================================================================
 ;; Universal Broadcast
@@ -156,9 +257,11 @@
   Returns: nil"
   [payload field-mappings log-prefix]
   (try
-    (when-let [container (find-active-container-for-payload payload)]
-      (apply-payload-fields! container payload field-mappings)
-      (log/debug (str "Applied " log-prefix " sync payload on client")))
+    (if-let [container (find-active-container-for-payload payload)]
+      (do
+        (apply-payload-fields! container payload field-mappings)
+        (log/debug (str "Applied " log-prefix " sync payload on client")))
+      (log/debug (str "Skipped " log-prefix " sync payload without a routed client container")))
     (catch Exception e
       (log/debug (str "Failed to apply " log-prefix " sync payload:")(ex-message e)))))
 

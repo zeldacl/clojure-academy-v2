@@ -1,7 +1,10 @@
 (ns cn.li.ac.ability.adapters.client-ui-hooks-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
+            [cn.li.ac.ability.client.effects.particles :as particles]
+            [cn.li.ac.ability.client.effects.sounds :as sounds]
             [cn.li.ac.ability.client.hud :as hud]
+            [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
@@ -22,6 +25,9 @@
    (fn []
      (client-ui-hooks/reset-client-ui-state-for-test!)
      (client-keybinds/reset-client-keybind-state-for-test!)
+    (particles/reset-particle-queue-for-test!)
+    (sounds/reset-sound-queue-for-test!)
+    (hand-effects/reset-hand-effect-registry-for-test!)
      (ps/reset-player-states-for-test!)
      (ctx/reset-contexts-for-test!)
      (try
@@ -30,10 +36,21 @@
        (finally
          (client-ui-hooks/reset-client-ui-state-for-test!)
          (client-keybinds/reset-client-keybind-state-for-test!)
+         (particles/reset-particle-queue-for-test!)
+         (sounds/reset-sound-queue-for-test!)
+         (hand-effects/reset-hand-effect-registry-for-test!)
          (ctx/reset-contexts-for-test!)
          (ps/reset-player-states-for-test!))))))
 
 (use-fixtures :each reset-ui-state!)
+
+(defn- with-client-player-state-owner
+  [player-uuid f]
+  (binding [client-keybinds/*client-session-id* :test-session
+            runtime-hooks/*client-session-id* :test-session
+            runtime-hooks/*player-state-owner* {:client-session-id :test-session
+                                                :player-uuid player-uuid}]
+    (f)))
 
 (deftest client-slot-key-hooks-create-context-once-and-send-input-messages-test
   (let [sent (atom [])
@@ -194,6 +211,9 @@
       (ps/set-player-state! "p1" {:resource-data {:activated true}}))
     (client-ui-hooks/set-slot-context-for-test! owner 0 "ctx-cleanup")
     (client-ui-hooks/seed-vm-wave-state-for-test! owner [{:radius 1.0}] 42)
+    (particles/queue-particle-effect! owner {:type :particle :particle-type :spark})
+    (sounds/queue-sound-effect! owner {:type :sound :sound-id "minecraft:test"})
+    (hand-effects/add-camera-pitch-delta! owner 1.5)
     (with-redefs [skill-tree-screen/close-screen! (fn [screen-owner]
                                                     (swap! screen-calls conj [:skill-tree screen-owner])
                                                     nil)
@@ -218,6 +238,9 @@
             :slot-key-tick-ms {}
             :charge-coin-state nil}
            (client-ui-hooks/client-ui-state-snapshot owner)))
+    (is (empty? (particles/particle-queue-snapshot (:client-session-id owner))))
+    (is (empty? (sounds/sound-queue-snapshot (:client-session-id owner))))
+    (is (empty? (hand-effects/drain-camera-pitch-deltas! owner)))
     (binding [runtime-hooks/*player-state-owner* owner]
       (is (nil? (ps/get-player-state "p1"))))
     (binding [ctx/*context-owner* context-owner]
@@ -298,8 +321,10 @@
         terminated (atom [])
         cleared (atom [])
         cleared-groups (atom [])]
-    (ps/set-player-state! "p1" {:ability-data {:category-id :electromaster
-                                                :learned-skills [:railgun]}})
+    (with-client-player-state-owner
+      "p1"
+      #(ps/set-player-state! "p1" {:ability-data {:category-id :electromaster
+                                                   :learned-skills [:railgun]}}))
     (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-runtime-reset")
     (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
                                                       (swap! handlers assoc msg-id handler-fn)
@@ -333,9 +358,11 @@
         sent (atom [])
         terminated (atom [])
         cleared (atom [])]
-    (ps/set-player-state! "p1" {:resource-data {:activated true
-                                                 :overload-fine true
-                                                 :interferences #{}}})
+    (with-client-player-state-owner
+      "p1"
+      #(ps/set-player-state! "p1" {:resource-data {:activated true
+                                                    :overload-fine true
+                                                    :interferences #{}}}))
     (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-resource-reset")
     (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
                                                       (swap! handlers assoc msg-id handler-fn)

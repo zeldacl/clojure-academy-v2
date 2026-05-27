@@ -33,10 +33,10 @@
                                  :dx (:dx payload 0.0)
                                  :dy (:dy payload 0.0)
                                  :dz (:dz payload 0.0)}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id "my_mod:md.jet_engine" :volume 0.8 :pitch 1.0}))
       :start
-      (client-sounds/queue-sound-effect!
+      (client-sounds/queue-current-sound-effect!
         {:type :sound :sound-id "my_mod:md.jet_charge" :volume 0.4 :pitch 1.0})
       nil)))
 
@@ -80,7 +80,7 @@
                   :dx (:dx payload) :dy (:dy payload) :dz (:dz payload)})
           {:ctx-id ctx-id :channel channel})
         :jet-engine/fx-charge-max
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id "my_mod:md.jet_max" :volume 0.5 :pitch 1.2})
         nil))))
   nil)

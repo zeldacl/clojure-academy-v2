@@ -2,8 +2,11 @@
   "Client HUD/screen/context hook composition for AC ability platform bridge."
   (:require [cn.li.ac.ability.client.api :as client-api]
             [cn.li.ac.ability.client.delegate-state :as delegate-state]
+            [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.hud :as hud-renderer]
+            [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
@@ -54,15 +57,64 @@
     (if (vector? owner-map)
       owner-map
        (let [session-id (or (:client-session-id owner-map)
-                (:session-id owner-map)
-                (current-client-session-id))
-          player-uuid (or (:player-uuid owner-map) (:uuid owner-map))]
+                            (:session-id owner-map)
+                            (current-client-session-id))
+             player-uuid (some-> (or (:player-uuid owner-map)
+                                     (:uuid owner-map))
+                                 str)]
          [(require-client-owner-value owner ":client-session-id" session-id)
           (require-client-owner-value owner ":player-uuid" player-uuid)]))))
 
 (defn- current-session-id
   []
   (require-client-owner-value {} ":client-session-id" (current-client-session-id)))
+
+(defn- with-client-owner-bindings
+  [owner f]
+  (let [[session-id player-uuid] (client-ui-owner-key owner)]
+    (binding [runtime-hooks/*client-session-id* session-id
+              runtime-hooks/*player-state-owner* {:client-session-id session-id
+                                                  :player-uuid player-uuid}]
+      (f))))
+
+(defn- with-client-player-state-owner
+  [player-uuid f]
+  (let [player-uuid* (require-client-owner-value {:player-uuid player-uuid}
+                                                 ":player-uuid"
+                                                 (some-> player-uuid str))]
+    (with-client-owner-bindings {:client-session-id (current-session-id)
+                                 :player-uuid player-uuid*}
+      f)))
+
+(defn- get-client-player-state
+  [player-uuid]
+  (with-client-player-state-owner player-uuid
+    #(ps/get-player-state player-uuid)))
+
+(defn- ensure-client-player-state!
+  [player-uuid]
+  (with-client-player-state-owner player-uuid
+    #(ps/get-or-create-player-state! player-uuid)))
+
+(defn- update-client-ability-data!
+  [player-uuid ability-data]
+  (with-client-player-state-owner player-uuid
+    #(ps/update-ability-data! player-uuid (constantly ability-data))))
+
+(defn- update-client-resource-data!
+  [player-uuid resource-data]
+  (with-client-player-state-owner player-uuid
+    #(ps/update-resource-data! player-uuid (constantly resource-data))))
+
+(defn- update-client-cooldown-data!
+  [player-uuid cooldown-data]
+  (with-client-player-state-owner player-uuid
+    #(ps/update-cooldown-data! player-uuid (constantly cooldown-data))))
+
+(defn- update-client-preset-data!
+  [player-uuid preset-data]
+  (with-client-player-state-owner player-uuid
+    #(ps/update-preset-data! player-uuid (constantly preset-data))))
 
 (defn- validate-managed-screen-payload
   [screen-key payload]
@@ -158,10 +210,10 @@
 
 (defn- clear-client-player-state!
   [owner]
-  (let [[session-id player-uuid] (client-ui-owner-key owner)]
-    (binding [runtime-hooks/*player-state-owner* {:client-session-id session-id
-                                                  :player-uuid player-uuid}]
-      (ps/remove-player-state! player-uuid)))
+  (with-client-owner-bindings owner
+    (fn []
+      (let [[_session-id player-uuid] (client-ui-owner-key owner)]
+        (ps/remove-player-state! player-uuid))))
   nil)
 
 (defn- clear-managed-screen-state!
@@ -177,6 +229,9 @@
   (ctx/clear-owner-contexts! (client-context-owner-from-owner owner))
   (clear-client-ui-state! owner)
   (client-keybinds/clear-client-keybind-state! owner)
+  (client-particles/clear-owner-particle-effects! owner)
+  (client-sounds/clear-owner-sound-effects! owner)
+  (hand-effects/clear-owner-camera-pitch-deltas! owner)
   (clear-client-player-state! owner)
   nil)
 
@@ -639,7 +694,7 @@
                  skill-slots))))
 
 (defn build-client-overlay-plan [player-uuid screen-width screen-height overlay-state]
-  (let [player-state (ps/get-player-state player-uuid)
+  (let [player-state (get-client-player-state player-uuid)
         activated-override {:value (if (some? (:activated-override overlay-state))
                                      (boolean (:activated-override overlay-state))
                                      (boolean (get-in player-state [:resource-data :activated] false)))}
@@ -683,32 +738,32 @@
     (net-client/register-push-handler! catalog/MSG-SYNC-RUNTIME
       (fn [{:keys [uuid ability-data]}]
         (when (and uuid ability-data)
-          (let [old-ability-data (get-in (ps/get-player-state uuid) [:ability-data])]
-          (ps/get-or-create-player-state! uuid)
-          (ps/update-ability-data! uuid (constantly ability-data))
-          (when (runtime-sync-resets-input? old-ability-data ability-data)
-            (abort-all-slot-contexts-for-owner! uuid)
-            (client-keybinds/clear-client-keybind-state! uuid)
-            (client-keybinds/clear-key-group! :default))))))
+          (let [old-ability-data (get-in (get-client-player-state uuid) [:ability-data])]
+            (ensure-client-player-state! uuid)
+            (update-client-ability-data! uuid ability-data)
+            (when (runtime-sync-resets-input? old-ability-data ability-data)
+              (abort-all-slot-contexts-for-owner! uuid)
+              (client-keybinds/clear-client-keybind-state! uuid)
+              (client-keybinds/clear-key-group! :default))))))
     (net-client/register-push-handler! catalog/MSG-SYNC-RESOURCE
       (fn [{:keys [uuid resource-data]}]
         (when (and uuid resource-data)
-          (let [old-resource-data (get-in (ps/get-player-state uuid) [:resource-data])]
-          (ps/get-or-create-player-state! uuid)
-          (ps/update-resource-data! uuid (constantly resource-data))
-          (when (resource-sync-disables-input? old-resource-data resource-data)
-            (abort-all-slot-contexts-for-owner! uuid)
-            (client-keybinds/clear-client-keybind-state! uuid))))))
+          (let [old-resource-data (get-in (get-client-player-state uuid) [:resource-data])]
+            (ensure-client-player-state! uuid)
+            (update-client-resource-data! uuid resource-data)
+            (when (resource-sync-disables-input? old-resource-data resource-data)
+              (abort-all-slot-contexts-for-owner! uuid)
+              (client-keybinds/clear-client-keybind-state! uuid))))))
     (net-client/register-push-handler! catalog/MSG-SYNC-COOLDOWN
       (fn [{:keys [uuid cooldown-data]}]
         (when (and uuid cooldown-data)
-          (ps/get-or-create-player-state! uuid)
-          (ps/update-cooldown-data! uuid (constantly cooldown-data)))))
+          (ensure-client-player-state! uuid)
+          (update-client-cooldown-data! uuid cooldown-data))))
     (net-client/register-push-handler! catalog/MSG-SYNC-PRESET
       (fn [{:keys [uuid preset-data]}]
         (when (and uuid preset-data)
-          (ps/get-or-create-player-state! uuid)
-          (ps/update-preset-data! uuid (constantly preset-data))
+          (ensure-client-player-state! uuid)
+          (update-client-preset-data! uuid preset-data)
           (client-keybinds/update-default-group! uuid))))
     (net-client/register-push-handler! catalog/MSG-CTX-ESTABLISH
       (fn [{:keys [ctx-id server-id]}]
@@ -841,23 +896,23 @@
 
    :client-update-ability-data!
    (fn [player-uuid ability-data]
-     (ps/get-or-create-player-state! player-uuid)
-     (ps/update-ability-data! player-uuid (constantly ability-data)))
+     (ensure-client-player-state! player-uuid)
+     (update-client-ability-data! player-uuid ability-data))
 
    :client-update-resource-data!
    (fn [player-uuid resource-data]
-     (ps/get-or-create-player-state! player-uuid)
-     (ps/update-resource-data! player-uuid (constantly resource-data)))
+     (ensure-client-player-state! player-uuid)
+     (update-client-resource-data! player-uuid resource-data))
 
    :client-update-cooldown-data!
    (fn [player-uuid cooldown-data]
-     (ps/get-or-create-player-state! player-uuid)
-     (ps/update-cooldown-data! player-uuid (constantly cooldown-data)))
+     (ensure-client-player-state! player-uuid)
+     (update-client-cooldown-data! player-uuid cooldown-data))
 
    :client-update-preset-data!
    (fn [player-uuid preset-data]
-     (ps/get-or-create-player-state! player-uuid)
-     (ps/update-preset-data! player-uuid (constantly preset-data)))
+     (ensure-client-player-state! player-uuid)
+     (update-client-preset-data! player-uuid preset-data))
 
    :client-build-hud-render-data
    (fn [hud-model screen-width screen-height cooldown-data]
@@ -895,27 +950,28 @@
 
    :client-open-managed-screen!
    (fn [screen-key payload]
-        (let [{:keys [player-uuid payload]} (validate-managed-screen-payload screen-key payload)]
-       (condp = screen-key
-       :ac/skill-tree
-    (assoc (skill-tree-screen/open-screen! player-uuid (:learn-context payload))
-              :title "Node Tree")
+     (let [{:keys [player-uuid client-session-id payload]} (validate-managed-screen-payload screen-key payload)]
+       (binding [runtime-hooks/*client-session-id* client-session-id]
+         (condp = screen-key
+      :ac/skill-tree
+      (assoc (skill-tree-screen/open-screen! player-uuid (:learn-context payload))
+        :title "Node Tree")
 
-       :ac/preset-editor
-    (assoc (preset-editor-screen/open-screen! player-uuid)
-              :title "Preset Editor")
+      :ac/preset-editor
+      (assoc (preset-editor-screen/open-screen! player-uuid)
+        :title "Preset Editor")
 
-    :ac/saved-position
+      :ac/saved-position
       (assoc (location-teleport-screen/open-screen! player-uuid payload)
-      :title "Location Teleport"
-      :char-typed? true)
+        :title "Location Teleport"
+        :char-typed? true)
 
-    :ac/location-teleport
-    (assoc (location-teleport-screen/open-screen! player-uuid payload)
-              :title "Location Teleport"
-              :char-typed? true)
+      :ac/location-teleport
+      (assoc (location-teleport-screen/open-screen! player-uuid payload)
+        :title "Location Teleport"
+        :char-typed? true)
 
-    nil)))
+      nil))))
 
    :client-build-managed-screen-render-data
    (fn [screen-key]

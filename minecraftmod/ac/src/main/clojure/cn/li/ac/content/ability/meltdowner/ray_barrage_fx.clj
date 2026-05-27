@@ -78,6 +78,6 @@
                      {:from-x (:x origin) :from-y (:y origin) :from-z (:z origin)
                       :to-x   (:x beam-end) :to-y (:y beam-end) :to-z (:z beam-end)})
               {:ctx-id ctx-id :channel channel})
-            (client-sounds/queue-sound-effect!
+            (client-sounds/queue-current-sound-effect!
               {:type :sound :sound-id "my_mod:md.ray_barrage" :volume 0.4 :pitch (+ 0.9 (rand 0.2))}))))))
   nil)

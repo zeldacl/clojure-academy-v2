@@ -17,17 +17,17 @@
     (case mode
       :perform
       (do
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id sound-id :volume 2.0 :pitch 1.0})
         (doseq [{:keys [x y z block-id]} affected-blocks]
-          (client-particles/queue-particle-effect!
+          (client-particles/queue-current-particle-effect!
             {:type :particle :particle-type :block-crack
              :block-id (or block-id "minecraft:stone")
              :x (+ (double x) 0.5) :y (+ (double y) 1.0) :z (+ (double z) 0.5)
              :count (+ 4 (rand-int 4)) :speed 0.2
              :offset-x 1.0 :offset-y 0.6 :offset-z 1.0})
           (when (< (rand) 0.5)
-            (client-particles/queue-particle-effect!
+            (client-particles/queue-current-particle-effect!
               {:type :particle :particle-type :smoke
                :x (+ (double x) 0.5 (- (* (rand) 0.6) 0.3))
                :y (+ (double y) 1.0 (* (rand) 0.2))
@@ -67,6 +67,7 @@
   (let [{:keys [mode charge-ticks performed? owner-key ctx-id channel source-player-id world-id]} payload
         owner-key* (or owner-key [:ctx ctx-id])
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-sounds/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -86,7 +87,7 @@
                                         (<= tick 20) 1.0
                                         (<= tick 25) (- 1.0 (/ (- tick 20) 5.0))
                                         :else 0.0)]
-                     (hand-effects/add-camera-pitch-delta! (* -0.2 pitch-factor))))
+                     (hand-effects/add-camera-pitch-delta! (:queue-owner base-meta) (* -0.2 pitch-factor))))
                  (merge base-meta
                         {:charge-ticks next-val
                          :perform-ticks (long (or (:perform-ticks state) 0))
@@ -110,7 +111,7 @@
                  (keep (fn [[owner-key state]]
                          (let [remaining (long (or (:perform-ticks state) 0))]
                            (when (pos? remaining)
-                             (hand-effects/add-camera-pitch-delta! perform-step))
+                             (hand-effects/add-camera-pitch-delta! (:queue-owner state) perform-step))
                            (let [next-state (if (> remaining 1)
                                               (assoc state :perform-ticks (dec remaining))
                                               (when (or (:active? state) (pos? remaining))

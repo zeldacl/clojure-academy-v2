@@ -22,6 +22,7 @@
   (let [owner-key* (or owner-key [:ctx ctx-id])
         {:keys [source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -47,20 +48,20 @@
     :perform
     (do
       (when-let [x (:target-x payload)]
-        (client-particles/queue-particle-effect!
+        (client-particles/queue-particle-effect! (:queue-owner base-meta)
           {:type :particle :particle-type :damage-indicator
            :x (double x) :y (+ (double (:target-y payload)) 1.0) :z (double (:target-z payload))
            :count 12 :speed 0.1
            :offset-x 0.4 :offset-y 0.6 :offset-z 0.4}))
       (when (:hit? payload)
-        (client-particles/queue-particle-effect!
+        (client-particles/queue-particle-effect! (:queue-owner base-meta)
           {:type :particle :particle-type :portal
            :x (double (or (:target-x payload) 0.0))
            :y (+ 0.4 (double (or (:target-y payload) 0.0)))
            :z (double (or (:target-z payload) 0.0))
            :count 6 :speed 0.05
            :offset-x 0.2 :offset-y 0.3 :offset-z 0.2}))
-      (client-sounds/queue-sound-effect!
+      (client-sounds/queue-sound-effect! (:queue-owner base-meta)
         {:type :sound :sound-id "my_mod:tp.flesh_ripping" :volume 0.6 :pitch 0.95}))
       :end (clear-flesh-ripping-owner! owner-key*)
       nil)))
@@ -74,7 +75,7 @@
                           (when (and (:active? next-st)
                                      (:aim next-st)
                                      (zero? (mod (long (:ttl next-st)) 3)))
-                            (client-particles/queue-particle-effect!
+                            (client-particles/queue-particle-effect! (:queue-owner next-st)
                               {:type :particle
                                :particle-type (if (:hit? next-st) :damage-indicator :portal)
                                :x (double (get-in next-st [:aim :x]))

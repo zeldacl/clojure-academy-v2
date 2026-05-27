@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.client.effects.sound
   "CLIENT-ONLY shared sound effect bridge for Minecraft 1.20.1."
-  (:require [cn.li.mcmod.hooks.core :as power-runtime]
+  (:require [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.core.registries BuiltInRegistries]
@@ -32,8 +33,9 @@
 (defn tick-sounds!
   []
   (try
-    (doseq [sound-cmd (power-runtime/client-poll-sound-effects)]
-      (play-sound-effect sound-cmd))
+    (when-let [owner (client-session/current-local-player-owner)]
+      (doseq [sound-cmd (power-runtime/client-poll-sound-effects owner)]
+        (play-sound-effect sound-cmd)))
     (catch Exception e
       (log/error "Error in sound tick" e))))
 

@@ -23,6 +23,7 @@
   (let [{:keys [mode source-player-id world-id]} payload
         owner-key* (or owner-key [:ctx ctx-id])
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -56,7 +57,7 @@
                          {:ttl 8
                           :from {:x (:from-x payload) :y (:from-y payload) :z (:from-z payload)}
                           :to {:x (:to-x payload) :y (:to-y payload) :z (:to-z payload)}})))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:tp.tp_flashing" :volume 0.45 :pitch (+ 0.95 (rand 0.2))}))
 
       :state-end
@@ -71,7 +72,7 @@
            (into {}
                  (map (fn [[owner-key state]]
                         (when-let [{:keys [x y z]} (:preview state)]
-                          (client-particles/queue-particle-effect!
+                          (client-particles/queue-particle-effect! (:queue-owner state)
                             {:type :particle :particle-type :portal
                              :x (double x) :y (double y) :z (double z)
                              :count 2 :speed 0.02
@@ -83,12 +84,12 @@
                           (doseq [b burst']
                             (let [{fx :x fy :y fz :z} (:from b)
                                   {tx :x ty :y tz :z} (:to b)]
-                              (client-particles/queue-particle-effect!
+                              (client-particles/queue-particle-effect! (:queue-owner state)
                                 {:type :particle :particle-type :portal
                                  :x (double fx) :y (double fy) :z (double fz)
                                  :count 4 :speed 0.05
                                  :offset-x 0.35 :offset-y 0.5 :offset-z 0.35})
-                              (client-particles/queue-particle-effect!
+                              (client-particles/queue-particle-effect! (:queue-owner state)
                                 {:type :particle :particle-type :portal
                                  :x (double tx) :y (double ty) :z (double tz)
                                  :count 4 :speed 0.05

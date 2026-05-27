@@ -45,7 +45,7 @@
                        :hit-type hit-type
                        :ttl arc-life
                        :max-ttl arc-life}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0}))
       :end
       (swap! arcs* dissoc owner-key*)

@@ -9,12 +9,12 @@
 (defn runtime-client-effect-hooks
   []
   {:client-poll-particle-effects
-   (fn []
-     (client-particles/poll-particle-effects!))
+   (fn [owner]
+     (client-particles/poll-particle-effects! owner))
 
    :client-poll-sound-effects
-   (fn []
-     (client-sounds/poll-sound-effects!))
+   (fn [owner]
+     (client-sounds/poll-sound-effects! owner))
 
    :client-enqueue-level-effect!
    (fn [effect-id payload]
@@ -41,8 +41,8 @@
      (hand-effects/tick-hand-effects!))
 
    :client-drain-camera-pitch-deltas!
-   (fn []
-     (hand-effects/drain-camera-pitch-deltas!))
+   (fn [owner]
+     (hand-effects/drain-camera-pitch-deltas! owner))
 
    :client-current-hand-transform
    (fn []

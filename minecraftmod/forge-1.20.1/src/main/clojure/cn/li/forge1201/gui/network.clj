@@ -28,12 +28,30 @@
                     (ru/static minecraft-cls "getInstance"))
                   (catch Throwable _
                     nil))]
-    [:client (System/identityHashCode mc)]))
+    (when-let [connection (try
+                            (ru/inst mc "getConnection")
+                            (catch Throwable _
+                              nil))]
+      [:client-session
+       (System/identityHashCode mc)
+       (System/identityHashCode connection)])))
 
-(defn- with-client-session
-  [f]
-  (binding [runtime-hooks/*client-session-id* (client-session-id)]
-    (f)))
+(defn- payload-player-uuid
+  [payload]
+  (some-> (or (:uuid payload)
+              (:player-uuid payload)
+              (get-in payload [:payload :uuid])
+              (get-in payload [:payload :player-uuid]))
+          str))
+
+(defn- with-client-response-owner
+  [payload f]
+  (let [session-id (client-session-id)
+        player-uuid (payload-player-uuid payload)]
+    (binding [runtime-hooks/*client-session-id* session-id
+              runtime-hooks/*player-state-owner* (cond-> {:client-session-id session-id}
+                                                   player-uuid (assoc :player-uuid player-uuid))]
+      (f))))
 
 (defn- server-player-owner
   [^ServerPlayer player]
@@ -104,8 +122,11 @@
           (let [payload (packet-base/decode-payload-bytes
                           response-bytes
                           #(log/error "Failed to deserialize Forge response payload:" (ex-message %)))]
-            (with-client-session
-              #(packet-base/dispatch-client-response! request-id payload))))]
+            (with-client-response-owner payload
+              #(packet-base/dispatch-client-response!
+                 runtime-hooks/*player-state-owner*
+                 request-id
+                 payload))))]
 
     (invoke-network-static "init" req-handler resp-handler))
   (log/info "Forge 1.20.1 GUI network system initialized"))

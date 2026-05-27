@@ -25,13 +25,14 @@
   (let [owner-key* (or owner-key [:ctx ctx-id])
         {:keys [source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
                    :world-id world-id}]
     (case (:mode payload)
       :start
-      (client-sounds/queue-sound-effect!
+      (client-sounds/queue-sound-effect! (:queue-owner base-meta)
         {:type :sound :sound-id "my_mod:md.em_start" :volume 0.5 :pitch 1.0})
       :fire
       (do
@@ -41,7 +42,7 @@
                    (if (> (count q2) 8)
                      (subvec q2 (- (count q2) 8))
                      q2))))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:md.em_fire" :volume 0.35 :pitch (+ 0.85 (rand 0.3))}))
       nil)))
 
@@ -59,7 +60,7 @@
                  by-owner)))
   (doseq [impact (all-impacts)]
     (when-let [tx (:target-x impact)]
-      (client-particles/queue-particle-effect!
+      (client-particles/queue-particle-effect! (:queue-owner impact)
         {:type :particle :particle-type :electric-spark
          :x (+ (double tx) 0.5)
          :y (+ (double (:target-y impact)) 0.5)

@@ -126,7 +126,7 @@
 
 (defn- apply-perform!
   [owner-key ctx-id channel {:keys [range advanced? life-ticks rescan-interval source-player-id world-id]}]
-  (client-sounds/queue-sound-effect!
+  (client-sounds/queue-current-sound-effect!
     {:type :sound
      :sound-id "my_mod:em.minedetect"
      :volume 0.8

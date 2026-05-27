@@ -26,6 +26,7 @@
   (let [owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -34,11 +35,11 @@
       :start
       (do
         (swap! effect-state assoc owner-key* (merge base-meta {:active? true :ticks 0}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:md.shield_on" :volume 0.7 :pitch 1.0}))
       :end
       (do
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:md.shield_off" :volume 0.5 :pitch 0.9})
         (clear-light-shield-owner! owner-key*))
       nil)))
@@ -55,7 +56,7 @@
                          (when (:active? st)
                            (let [ticks (inc (long (or (:ticks st) 0)))]
                              (when (zero? (mod ticks 5))
-                               (client-particles/queue-particle-effect!
+                               (client-particles/queue-particle-effect! (:queue-owner st)
                                  {:type :particle :particle-type :end-rod
                                   :x 0.0 :y 1.0 :z 0.0
                                   :count 3 :speed 0.15

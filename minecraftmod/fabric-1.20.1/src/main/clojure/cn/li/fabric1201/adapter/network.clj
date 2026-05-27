@@ -3,7 +3,7 @@
 
   Reuses existing runtime RPC handlers and Fabric GUI S2C transport.
   Keeps protocol/message IDs aligned with Forge runtime network implementation."
-  (:require [cn.li.fabric1201.gui.network :as gui-network]
+  (:require [cn.li.fabric1201.gui.network.server :as gui-network]
             [cn.li.fabric1201.adapter.server-context :as _server-context]
             [cn.li.mc1201.runtime.network-core :as network-core]))
 

@@ -25,7 +25,6 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.ac.wireless.gui.sync.handler :as net-helpers]
             [cn.li.ac.wireless.gui.tab :as wireless-tab]
-            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.energy.operations :as energy-stub]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
@@ -280,6 +279,20 @@
 (defn broadcast-node-state [world pos sync-data]
   (sync-helpers/broadcast-state world pos sync-data "node"))
 
+(defn- sync-routing-metadata
+  [source]
+  (let [owner (:owner source)
+        routing (merge (when-let [container-id (or (:container-id source)
+                                                   (:window-id source)
+                                                   (:id source))]
+                         {:container-id container-id})
+                       (select-keys owner [:server-session-id
+                                           :client-session-id
+                                           :session-id
+                                           :player-uuid]))]
+    (when (seq routing)
+      routing)))
+
 (defn make-sync-packet [source]
   (let [container? (= (:container-type source) :node)
         tile      (if container? (:tile-entity source) source)
@@ -291,6 +304,8 @@
               :pos-x  (pos/pos-x block-pos)
               :pos-y  (pos/pos-y block-pos)
               :pos-z  (pos/pos-z block-pos)}
+             (when container?
+               (sync-routing-metadata source))
              (when state
                (into {}
                  (for [field node-schema/unified-node-schema

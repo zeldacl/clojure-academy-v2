@@ -51,6 +51,7 @@
   (let [{:keys [mode focus block-id owner-key ctx-id channel source-player-id world-id]} payload
         owner-key* (or owner-key [:ctx ctx-id])
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-sounds/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -68,7 +69,7 @@
                                        :block-id block-id
                                        :ticks 0}))
                      (assoc :current-owner-key owner-key*))))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-current-sound-effect!
          {:type :sound :sound-id hold-loop-sound :volume 0.5 :pitch 1.0}))
 
       :hold-loop
@@ -88,7 +89,7 @@
         (swap! fx-state* update-in [:states owner-key*]
                (fn [state]
                  (merge default-state state base-meta {:active? false})))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-current-sound-effect!
          {:type :sound :sound-id perform-sound :volume 0.9 :pitch 1.0}))
 
       :end
@@ -107,7 +108,7 @@
                                     [owner-key state]
                                     (let [ticks (inc (long (or (:ticks state) 0)))]
                                       (when (zero? (mod ticks 12))
-                                        (client-sounds/queue-sound-effect!
+                                        (client-sounds/queue-sound-effect! (:queue-owner state)
                                          {:type :sound :sound-id hold-loop-sound :volume 0.35 :pitch 1.0}))
                                       [owner-key (assoc state :ticks ticks)]))))
                            states))))))

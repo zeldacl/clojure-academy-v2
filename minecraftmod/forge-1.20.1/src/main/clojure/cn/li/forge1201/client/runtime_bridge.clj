@@ -10,20 +10,11 @@
              [cn.li.mcmod.util.log :as log]
              [cn.li.mc1201.client.player-state-core :as player-state])
   (:import [cn.li.mc1201.client.effect ScriptedEffectSpawner]
-            [net.minecraft.client Minecraft]
             [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraftforge.eventbus.api EventPriority]))
 
 (defonce ^:private tick-listener-registered? (atom false))
-
-(defn- client-session-id []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    [:client (System/identityHashCode mc)]))
-
-(defn- with-client-session [f]
-  (binding [power-runtime/*client-session-id* (client-session-id)]
-    (f)))
 
 (defn active-contexts []
   (power-runtime/client-active-contexts))
@@ -48,31 +39,31 @@
   (ScriptedEffectSpawner/spawnLocal effect-id))
 
 (defn slot-visual-state [player-uuid key-idx]
-  (with-client-session #(power-runtime/client-slot-visual-state player-uuid key-idx)))
+  (client-session/with-current-client-session #(power-runtime/client-slot-visual-state player-uuid key-idx)))
 
 (defn on-slot-key-down! [player-uuid key-idx]
-  (with-client-session #(power-runtime/client-on-slot-key-down! player-uuid key-idx)))
+  (client-session/with-current-client-session #(power-runtime/client-on-slot-key-down! player-uuid key-idx)))
 
 (defn on-slot-key-tick! [player-uuid key-idx]
-  (with-client-session #(power-runtime/client-on-slot-key-tick! player-uuid key-idx)))
+  (client-session/with-current-client-session #(power-runtime/client-on-slot-key-tick! player-uuid key-idx)))
 
 (defn on-slot-key-up! [player-uuid key-idx]
-  (with-client-session #(power-runtime/client-on-slot-key-up! player-uuid key-idx)))
+  (client-session/with-current-client-session #(power-runtime/client-on-slot-key-up! player-uuid key-idx)))
 
 (defn on-slot-key-abort! [player-uuid key-idx]
-  (with-client-session #(power-runtime/client-on-slot-key-abort! player-uuid key-idx)))
+  (client-session/with-current-client-session #(power-runtime/client-on-slot-key-abort! player-uuid key-idx)))
 
 (defn on-movement-key-down! [player-uuid movement-key]
-  (with-client-session #(power-runtime/client-on-movement-key-down! player-uuid movement-key)))
+  (client-session/with-current-client-session #(power-runtime/client-on-movement-key-down! player-uuid movement-key)))
 
 (defn on-movement-key-tick! [player-uuid movement-key]
-  (with-client-session #(power-runtime/client-on-movement-key-tick! player-uuid movement-key)))
+  (client-session/with-current-client-session #(power-runtime/client-on-movement-key-tick! player-uuid movement-key)))
 
 (defn on-movement-key-up! [player-uuid movement-key]
-  (with-client-session #(power-runtime/client-on-movement-key-up! player-uuid movement-key)))
+  (client-session/with-current-client-session #(power-runtime/client-on-movement-key-up! player-uuid movement-key)))
 
 (defn abort-all! []
-  (with-client-session #(power-runtime/client-abort-all!)))
+  (client-session/with-current-client-session #(power-runtime/client-abort-all!)))
 
 (defn tick-client! []
   (session-cleanup/tick-connection-change!
@@ -80,7 +71,7 @@
   (key-input/tick-input!)
   (particle/tick-particles!)
   (sound/tick-sounds!)
-  (with-client-session #(power-runtime/client-tick!)))
+  (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
   (when (= TickEvent$Phase/END (.phase evt))

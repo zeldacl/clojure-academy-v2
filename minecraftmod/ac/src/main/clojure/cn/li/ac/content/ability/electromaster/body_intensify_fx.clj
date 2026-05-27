@@ -11,7 +11,7 @@
 (defn- on-fx-end
   [ctx-id channel payload]
   (when (:performed? payload)
-    (client-sounds/queue-sound-effect!
+    (client-sounds/queue-current-sound-effect!
      {:sound-id activate-sound-id
       :volume 0.9
       :pitch 1.0})

@@ -32,6 +32,7 @@
         {:keys [mode charge-ticks fully-charged? charge-pos flight-ticks
                 state destination pos performed? source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
+       :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -44,7 +45,7 @@
                       {:active? true :charge-ticks 0 :charge-pos (:charge-pos payload)
                        :flight-ticks 0 :state :charging :destination nil
                        :performed? false}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id loop-sound :volume 0.5 :pitch 1.0}))
       :update
       (do
@@ -63,24 +64,24 @@
                         :charge-pos (or charge-pos (:charge-pos st))
                         :destination (or destination (:destination st)))))
         (when (boolean fully-charged?)
-          (client-sounds/queue-sound-effect!
+          (client-sounds/queue-sound-effect! (:queue-owner base-meta)
             {:type :sound :sound-id charged-sound :volume 0.5 :pitch 1.0})))
       :perform
       (when (map? pos)
         (let [tx (double (:x pos)) ty (double (:y pos)) tz (double (:z pos))]
-          (client-particles/queue-particle-effect!
+          (client-particles/queue-particle-effect! (:queue-owner base-meta)
             {:type :particle :particle-type :explosion-large
              :x tx :y ty :z tz :count 1 :speed 0.0
              :offset-x 0.0 :offset-y 0.0 :offset-z 0.0})
           (dotimes [_ 12]
-            (client-particles/queue-particle-effect!
+            (client-particles/queue-particle-effect! (:queue-owner base-meta)
               {:type :particle :particle-type :smoke-large
                :x (+ tx (- (* (rand) 10.0) 5.0))
                :y (+ ty (- (* (rand) 5.0) 2.5))
                :z (+ tz (- (* (rand) 10.0) 5.0))
                :count 1 :speed (+ 0.1 (* (rand) 0.3))
                :offset-x 0.5 :offset-y 0.5 :offset-z 0.5}))
-          (client-sounds/queue-sound-effect!
+          (client-sounds/queue-sound-effect! (:queue-owner base-meta)
             {:type :sound :sound-id "minecraft:entity.generic.explode"
              :volume 3.0 :pitch 0.8 :x tx :y ty :z tz})))
       :end
@@ -99,11 +100,11 @@
                          (when (:active? st)
                            (let [ticks (inc (long (or (:ticks st) 0)))]
                              (when (and (pos? ticks) (zero? (mod ticks 10)))
-                               (client-sounds/queue-sound-effect!
+                                 (client-sounds/queue-sound-effect! (:queue-owner st)
                                  {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
                              (let [cp (:charge-pos st)]
                                (when (and cp (= :go (:state st)))
-                                 (client-particles/queue-particle-effect!
+                                   (client-particles/queue-particle-effect! (:queue-owner st)
                                    {:type :particle :particle-type :flame
                                     :x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
                                     :count 4 :speed 0.2

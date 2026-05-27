@@ -122,6 +122,8 @@
   (reset! keybind-registries-frozen? false)
   nil)
 
+(declare get-client-player-state)
+
 (defn get-delegate-for-key
   "Get the effective delegate for a key index. Custom groups override :default."
   [key-idx]
@@ -134,7 +136,7 @@
 (defn- get-skill-id-for-slot
   "Get the skill-id bound to a slot from the current preset."
   [player-uuid key-idx]
-  (when-let [state (ps/get-player-state player-uuid)]
+  (when-let [state (get-client-player-state player-uuid)]
     (let [pd (:preset-data state)
           slots (preset-data/get-active-slots pd)]
       (when-let [slot (nth slots key-idx nil)]
@@ -209,8 +211,22 @@
                                        (:session-id owner-map)
                                        (current-client-session-id)))
        (require-client-owner-value owner ":player-uuid"
-                                   (or (:player-uuid owner-map)
-                                       (:uuid owner-map)))])))
+                                   (some-> (or (:player-uuid owner-map)
+                                               (:uuid owner-map))
+                           str))])))
+
+(defn- with-client-player-state-owner
+  [player-uuid f]
+  (let [[session-id player-uuid*] (client-owner-key {:player-uuid player-uuid})]
+    (binding [runtime-hooks/*client-session-id* session-id
+              runtime-hooks/*player-state-owner* {:client-session-id session-id
+                                                  :player-uuid player-uuid*}]
+      (f))))
+
+(defn- get-client-player-state
+  [player-uuid]
+  (with-client-player-state-owner player-uuid
+    #(ps/get-player-state player-uuid)))
 
 (defn key-state-snapshot
   ([]
@@ -258,18 +274,18 @@
 
 (defn- activated?
   [player-uuid]
-  (boolean (get-in (ps/get-player-state player-uuid) [:resource-data :activated])))
+  (boolean (get-in (get-client-player-state player-uuid) [:resource-data :activated])))
 
 (defn- can-use-ability?
   "Check if player can use abilities (not overloaded, not interfered)."
   [player-uuid]
-  (when-let [state (ps/get-player-state player-uuid)]
+  (when-let [state (get-client-player-state player-uuid)]
     (resource-check/can-use-resource-data? (:resource-data state))))
 
 (defn- skill-on-cooldown?
   "Check if the skill bound to a delegate is on cooldown."
   [player-uuid delegate]
-  (when-let [state (ps/get-player-state player-uuid)]
+  (when-let [state (get-client-player-state player-uuid)]
     (let [cd (:cooldown-data state)
           ctrl-id (or (:ctrl-id delegate) (:skill-id delegate))]
       (when ctrl-id
@@ -393,7 +409,7 @@
                     :uuid (str player-uuid)})
          ((:on-key-down-fn handler) player-uuid))
        ;; Fallback: simple toggle
-       (let [state   (ps/get-player-state player-uuid)
+       (let [state   (get-client-player-state player-uuid)
              current (boolean (get-in state [:resource-data :activated]))
              next-state (not current)]
          (log/info "[V-TRACE][AC][CLIENT][TOGGLE]"
@@ -474,7 +490,7 @@
     :priority        0
     :handles-fn      (fn [_uuid] true)
     :on-key-down-fn  (fn [uuid]
-                       (let [state   (ps/get-player-state uuid)
+               (let [state   (get-client-player-state uuid)
                              current (boolean (get-in state [:resource-data :activated]))]
                          (api/req-set-activated! (not current) nil)))
     :hint-fn         (fn [uuid]

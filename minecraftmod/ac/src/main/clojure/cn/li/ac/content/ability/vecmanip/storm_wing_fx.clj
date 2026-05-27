@@ -31,6 +31,7 @@
   (let [owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode phase charge-ticks charge-ratio source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -43,7 +44,7 @@
                       {:active? true :phase :charging :charge-ticks 0
                        :charge-ticks-needed (long (or charge-ticks 70))
                        :ticks 0}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id loop-sound :volume 0.8 :pitch 1.0}))
       :update
       (swap! effect-state update owner-key*
@@ -74,7 +75,7 @@
                          (when (:active? st)
                            (let [ticks (inc (long (or (:ticks st) 0)))]
                              (when (zero? (mod ticks 10))
-                               (client-sounds/queue-sound-effect!
+                               (client-sounds/queue-sound-effect! (:queue-owner st)
                                  {:type :sound :sound-id loop-sound :volume 0.5 :pitch 1.0}))
                              [owner-key (assoc st :ticks ticks)]))))
                  states))))
@@ -106,7 +107,7 @@
                   (let [r  (+ 3.0 (* (rand) 5.0))
                         theta (* (rand) Math/PI)
                         phi   (* (rand) 2.0 Math/PI)]
-                    (client-particles/queue-particle-effect!
+                    (client-particles/queue-particle-effect! (:queue-owner sw)
                       {:type          :particle
                        :particle-type :block-crack
                        :block-id      "minecraft:dirt"

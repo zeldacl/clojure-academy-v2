@@ -41,8 +41,23 @@
                                        runtime-hooks/*client-session-id*))
        :preset-editor
        (require-editor-owner-value owner ":player-uuid"
-                                   (or (:player-uuid owner-map)
-                                       (:uuid owner-map)))])))
+                                   (some-> (or (:player-uuid owner-map)
+                                               (:uuid owner-map))
+                           str))])))
+
+(defn- with-editor-player-state-owner
+  [owner f]
+  (let [[session-id _screen-id player-uuid] (editor-owner-key owner)]
+    (binding [runtime-hooks/*client-session-id* session-id
+              runtime-hooks/*player-state-owner* {:client-session-id session-id
+                                                  :player-uuid player-uuid}]
+      (f))))
+
+(defn- get-editor-player-state
+  [owner]
+  (let [[_session-id _screen-id player-uuid] (editor-owner-key owner)]
+    (with-editor-player-state-owner owner
+      #(ps/get-player-state player-uuid))))
 
 (defn- normalized-store
   [store]
@@ -95,9 +110,10 @@
 (defn build-preset-editor-render-data
   "Build complete preset editor render data."
   []
-  (let [state (editor-state-snapshot)]
-  (when-let [player-uuid (:player-uuid state)]
-    (when-let [player-state (ps/get-player-state player-uuid)]
+  (let [state (editor-state-snapshot)
+        owner-key (current-owner-key)]
+  (when-let [_player-uuid (:player-uuid state)]
+    (when-let [player-state (and owner-key (get-editor-player-state owner-key))]
       (let [ability-data (:ability-data player-state)
             preset-data (:preset-data player-state)
             category-id (:category-id ability-data)

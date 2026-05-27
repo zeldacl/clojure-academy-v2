@@ -112,7 +112,7 @@
                                  :started-at-ms (now-ms)
                                  :ending-at-ms 0}))
                (assoc :current-owner-key owner-key))))
-  (client-sounds/queue-sound-effect!
+  (client-sounds/queue-current-sound-effect!
    {:type :sound
     :sound-id "my_mod:em.charge_loop"
     :volume 0.8

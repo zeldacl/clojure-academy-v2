@@ -75,8 +75,8 @@
                         (keybinds/key-state-snapshot {:client-session-id :session-a}))))
 
 (deftest preset-switch-state-isolated-by-player-test
-  (ps/reset-player-states-for-test! {"player-a" (activated-state)
-                                     "player-b" (activated-state)})
+  (ps/reset-player-states-for-test! {[:session-a "player-a"] (activated-state)
+                                     [:session-a "player-b"] (activated-state)})
   (let [requests (atom [])]
     (with-redefs [client-api/req-switch-preset! (fn [preset-idx callback]
                                                   (swap! requests conj preset-idx)

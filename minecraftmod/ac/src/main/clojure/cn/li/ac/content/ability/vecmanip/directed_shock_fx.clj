@@ -66,7 +66,7 @@
       (do
         (swap! effect-state assoc owner-key*
                (merge base-meta {:stage :punch :started-at (now-ms)}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0}))
       :end
       (when-not performed?

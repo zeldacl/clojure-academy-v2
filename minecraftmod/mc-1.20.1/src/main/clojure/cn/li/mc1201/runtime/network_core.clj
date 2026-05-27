@@ -20,6 +20,28 @@
 (defn- msg-id [message-key]
   (messages/msg-id message-key))
 
+(defn- target-player-not-found
+  [uuid extra]
+  (ex-info (str "Runtime network target player not found: " uuid)
+           (merge {:reason :target-player-not-found
+                   :target-player-uuid uuid}
+                  extra)))
+
+(defn- require-target-player!
+  [find-player-by-uuid uuid extra]
+  (or (find-player-by-uuid uuid)
+      (throw (target-player-not-found uuid extra))))
+
+(defn- normalize-direct-send-result
+  [result]
+  (cond
+    (map? result) (if (contains? result :sent)
+                    result
+                    (assoc result :sent 1))
+    (nil? result) {:sent 1}
+    :else {:sent 1
+           :transport-result result}))
+
 (declare init-runtime-network!)
 
 (defn- sync-message-descriptors
@@ -42,19 +64,40 @@
   "Create a player-targeted send fn from player lookup + push transport functions."
   [find-player-by-uuid push-to-client!]
   (fn [uuid msg-id payload]
-    (when-let [player (find-player-by-uuid uuid)]
-      (push-to-client! player msg-id payload))))
+    (let [player (require-target-player! find-player-by-uuid
+                                         uuid
+                                         {:operation :targeted-client-send
+                                          :msg-id msg-id})]
+      (push-to-client! player msg-id payload)
+      {:sent 1
+       :msg-id msg-id
+       :target-player-uuid uuid})))
 
 (defn create-sync-sender
   "Create a runtime sync sender that fans a sync payload into all sync message variants."
   [find-player-by-uuid push-to-client!]
   (fn [uuid payload]
-    (when-let [player (find-player-by-uuid uuid)]
-      (doseq [{:keys [msg-id payload]} (sync-message-payloads uuid payload)]
-        (try
-          (push-to-client! player msg-id payload)
-          (catch Exception e
-            (log/error "Failed to send runtime sync message" msg-id "for" uuid ":" (.getMessage e))))))))
+    (let [player (require-target-player! find-player-by-uuid
+                                         uuid
+                                         {:operation :runtime-sync-send})
+          payloads (vec (sync-message-payloads uuid payload))]
+      (if (empty? payloads)
+        {:sent 0
+         :reason :no-sync-message-payloads
+         :target-player-uuid uuid}
+        (reduce (fn [result {:keys [msg-id payload]}]
+                  (try
+                    (push-to-client! player msg-id payload)
+                    (-> result
+                        (update :sent inc)
+                        (update :msg-ids conj msg-id))
+                    (catch Exception e
+                      (log/error "Failed to send runtime sync message" msg-id "for" uuid ":" (.getMessage e))
+                      (update result :failed-msg-ids (fnil conj []) msg-id))))
+                {:sent 0
+                 :target-player-uuid uuid
+                 :msg-ids []}
+                payloads)))))
 
 (defn default-send-to-server!
   [msg-id payload]
@@ -102,12 +145,51 @@
   (fn [ctx-id channel payload ctx-map]
     (if-let [source-player-uuid (or (:player-uuid ctx-map)
                                     (network-hooks/get-context-player-uuid ctx-id))]
-      (doseq [target-player-uuid (remove #{source-player-uuid}
-                                          (find-nearby-player-uuids source-player-uuid default-except-local-radius))]
-        (send-to-client-fn target-player-uuid
-                           (msg-id :ctx-channel)
-                           {:ctx-id ctx-id :channel channel :payload payload}))
-      (log/debug "Skip except-local send due to missing context owner:" ctx-id))))
+      (let [target-player-uuids (vec (remove #{source-player-uuid}
+                                             (find-nearby-player-uuids source-player-uuid default-except-local-radius)))]
+        (if (empty? target-player-uuids)
+          {:sent 0
+           :reason :no-nearby-targets
+           :ctx-id ctx-id
+           :channel channel
+           :source-player-uuid source-player-uuid}
+          (let [result
+                (reduce (fn [acc target-player-uuid]
+                          (let [send-result (try
+                                              (normalize-direct-send-result
+                                                (send-to-client-fn target-player-uuid
+                                                                   (msg-id :ctx-channel)
+                                                                   {:ctx-id ctx-id :channel channel :payload payload}))
+                                              (catch clojure.lang.ExceptionInfo e
+                                                (if (= :target-player-not-found (:reason (ex-data e)))
+                                                  (do
+                                                    (log/warn "Skip except-local send due to missing target player:" target-player-uuid)
+                                                    {:sent 0
+                                                     :missing-target-player-uuid target-player-uuid})
+                                                  (throw e))))]
+                            (cond-> (update acc :sent + (long (or (:sent send-result) 0)))
+                              (pos? (long (or (:sent send-result) 0)))
+                              (update :target-player-uuids conj target-player-uuid)
+
+                              (:missing-target-player-uuid send-result)
+                              (update :missing-target-player-uuids (fnil conj []) (:missing-target-player-uuid send-result)))))
+                        {:sent 0
+                         :ctx-id ctx-id
+                         :channel channel
+                         :source-player-uuid source-player-uuid
+                         :target-player-uuids []}
+                        target-player-uuids)]
+            (cond
+              (pos? (:sent result)) result
+              (seq (:missing-target-player-uuids result))
+              (assoc result :reason :target-players-unavailable)
+              :else result))))
+      (do
+        (log/debug "Skip except-local send due to missing context owner:" ctx-id)
+        {:sent 0
+         :reason :missing-context-player-uuid
+         :ctx-id ctx-id
+         :channel channel}))))
 
 (def send-sync-to-client!
   (create-sync-sender transport-spi/find-player-by-uuid transport-spi/send-push-to-client!))
@@ -129,9 +211,9 @@
                                            :find-nearby-player-uuids find-nearby-player-uuids})
   (let [send-to-except-local-fn
         (create-except-local-context-sender find-nearby-player-uuids send-to-client!)]
-  (init-runtime-network! {:send-to-server-fn send-to-server!
-                          :send-to-client-fn send-to-client!
-                          :send-to-except-local-fn send-to-except-local-fn}))
+    (init-runtime-network! {:send-to-server-fn send-to-server!
+                            :send-to-client-fn send-to-client!
+                            :send-to-except-local-fn send-to-except-local-fn}))
   (log/info label "runtime network initialized"))
 
 (defn init-runtime-network!
@@ -140,14 +222,27 @@
         send-context-channel-to-server!
         (fn [ctx-id channel payload _ctx-map]
           (send-to-server-fn (msg-id :ctx-channel)
-                             {:ctx-id ctx-id :channel channel :payload payload}))
+                             {:ctx-id ctx-id :channel channel :payload payload})
+          {:sent 1
+           :ctx-id ctx-id
+           :channel channel
+           :msg-id (msg-id :ctx-channel)})
         send-context-channel-to-client!
         (fn [ctx-id channel payload ctx-map]
-          (when-let [player-uuid (or (:player-uuid ctx-map)
-                                     (network-hooks/get-context-player-uuid ctx-id))]
-            (send-to-client-fn player-uuid
-                               (msg-id :ctx-channel)
-                               {:ctx-id ctx-id :channel channel :payload payload})))]
+          (if-let [player-uuid (or (:player-uuid ctx-map)
+                                   (network-hooks/get-context-player-uuid ctx-id))]
+            (merge {:ctx-id ctx-id
+                    :channel channel}
+                   (normalize-direct-send-result
+                     (send-to-client-fn player-uuid
+                                        (msg-id :ctx-channel)
+                                        {:ctx-id ctx-id :channel channel :payload payload})))
+            (do
+              (log/debug "Skip context send to client due to missing context owner:" ctx-id channel)
+              {:sent 0
+               :reason :missing-context-player-uuid
+               :ctx-id ctx-id
+               :channel channel})))]
     (network-hooks/register-network-handlers!)
     (network-hooks/register-context-route-fns! {:to-server send-context-channel-to-server!
                                                 :to-client send-context-channel-to-client!

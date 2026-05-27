@@ -19,14 +19,6 @@
 (def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
 (def ^:private cycle-selection-input-id :content/cycle-selection)
 
-(defn- client-session-id []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    [:client (System/identityHashCode mc)]))
-
-(defn- with-client-session [f]
-  (binding [power-runtime/*client-session-id* (client-session-id)]
-    (f)))
-
 (defn- client-owner-key
   [owner]
   (client-session/owner-key owner))
@@ -137,25 +129,25 @@
     false))
 
 (defn on-slot-key-down! [player-uuid key-idx]
-  (with-client-session #(power-runtime/client-on-slot-key-down! player-uuid key-idx)))
+  (client-session/with-current-client-session #(power-runtime/client-on-slot-key-down! player-uuid key-idx)))
 
 (defn on-slot-key-tick! [player-uuid key-idx]
-  (with-client-session #(power-runtime/client-on-slot-key-tick! player-uuid key-idx)))
+  (client-session/with-current-client-session #(power-runtime/client-on-slot-key-tick! player-uuid key-idx)))
 
 (defn on-slot-key-up! [player-uuid key-idx]
-  (with-client-session #(power-runtime/client-on-slot-key-up! player-uuid key-idx)))
+  (client-session/with-current-client-session #(power-runtime/client-on-slot-key-up! player-uuid key-idx)))
 
 (defn on-slot-key-abort! [player-uuid key-idx]
-  (with-client-session #(power-runtime/client-on-slot-key-abort! player-uuid key-idx)))
+  (client-session/with-current-client-session #(power-runtime/client-on-slot-key-abort! player-uuid key-idx)))
 
 (defn on-movement-key-down! [player-uuid movement-key]
-  (with-client-session #(power-runtime/client-on-movement-key-down! player-uuid movement-key)))
+  (client-session/with-current-client-session #(power-runtime/client-on-movement-key-down! player-uuid movement-key)))
 
 (defn on-movement-key-tick! [player-uuid movement-key]
-  (with-client-session #(power-runtime/client-on-movement-key-tick! player-uuid movement-key)))
+  (client-session/with-current-client-session #(power-runtime/client-on-movement-key-tick! player-uuid movement-key)))
 
 (defn on-movement-key-up! [player-uuid movement-key]
-  (with-client-session #(power-runtime/client-on-movement-key-up! player-uuid movement-key)))
+  (client-session/with-current-client-session #(power-runtime/client-on-movement-key-up! player-uuid movement-key)))
 
 (defn- tick-mode-switch! []
   (let [now (System/nanoTime)
@@ -186,7 +178,7 @@
       (swap! raw-n-state assoc owner-key {:was-down is-down}))))
 
 (defn- tick-content-keys! []
-  (with-client-session
+  (client-session/with-current-client-session
     #(power-runtime/client-tick-keys!
        (fn [key-id]
          (case (first key-id)
@@ -208,7 +200,7 @@
   (tick-content-keys!)
   (particle/tick-particles!)
   (sound/tick-sounds!)
-  (with-client-session #(power-runtime/client-tick!)))
+  (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn init!
   []

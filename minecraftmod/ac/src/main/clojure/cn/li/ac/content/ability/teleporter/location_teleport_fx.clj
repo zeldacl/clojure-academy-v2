@@ -7,7 +7,7 @@
 (defn- enqueue! [{:keys [payload]}]
   (let [{:keys [mode]} payload]
   (when (= mode :perform-success)
-    (client-sounds/queue-sound-effect!
+    (client-sounds/queue-current-sound-effect!
       {:type :sound
        :sound-id "my_mod:tp.tp"
        :volume 0.5

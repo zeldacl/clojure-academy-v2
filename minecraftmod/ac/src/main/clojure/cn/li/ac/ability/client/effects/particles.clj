@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.client.effects.particles
   "Particle effect commands for ability system (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.registry.event :as evt]))
+  (:require [cn.li.ac.ability.registry.event :as evt]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 ;; Particle effect command structure
 ;; {:type :particle
@@ -73,29 +74,103 @@
    :offset-y 1.0
    :offset-z 1.0})
 
-;; Event-driven particle spawning
-(defonce ^:private particle-queue (atom []))
+;; Event-driven particle spawning (session-scoped)
+(defonce ^:private particle-queue (atom {}))
+
+(defn- require-owner-value
+  [owner label value]
+  (if (some? value)
+    value
+    (throw (ex-info (format "Particle queue requires %s" label)
+                    {:owner owner
+                     :required label}))))
+
+(defn- current-session-id
+  [owner]
+  (require-owner-value owner
+                       ":client-session-id"
+                       (or (when (map? owner) (:client-session-id owner))
+                           (when (map? owner) (:session-id owner))
+                           (:client-session-id runtime-hooks/*player-state-owner*)
+                           runtime-hooks/*client-session-id*)))
+
+(defn- normalize-session-id
+  [owner-or-session]
+  (cond
+    (map? owner-or-session)
+    (current-session-id owner-or-session)
+
+    (and (vector? owner-or-session)
+         (= 2 (count owner-or-session))
+         (vector? (first owner-or-session)))
+    (first owner-or-session)
+
+    (some? owner-or-session)
+    owner-or-session
+
+    :else
+    (current-session-id nil)))
+
+(defn current-effect-owner
+  []
+  (or runtime-hooks/*player-state-owner*
+      (when runtime-hooks/*client-session-id*
+        {:client-session-id runtime-hooks/*client-session-id*})
+      (throw (ex-info "Current particle effect owner requires :client-session-id"
+                      {:required ":client-session-id"}))))
 
 (defn queue-particle-effect!
   "Queue a particle effect to be spawned."
+  ([particle-cmd]
+   (queue-particle-effect! nil particle-cmd))
+  ([owner-or-session particle-cmd]
+   (swap! particle-queue update (normalize-session-id owner-or-session) (fnil conj []) particle-cmd)
+   nil))
+
+(defn queue-current-particle-effect!
   [particle-cmd]
-  (swap! particle-queue conj particle-cmd))
+  (queue-particle-effect! (current-effect-owner) particle-cmd))
 
 (defn poll-particle-effects!
   "Poll and clear all queued particle effects. Called by forge layer."
-  []
-  (let [effects @particle-queue]
-    (reset! particle-queue [])
-    effects))
+  ([]
+   (poll-particle-effects! nil))
+  ([owner-or-session]
+   (let [session-id (normalize-session-id owner-or-session)
+         drained (atom [])]
+     (swap! particle-queue
+            (fn [queues]
+              (reset! drained (vec (get queues session-id [])))
+              (dissoc queues session-id)))
+     @drained)))
+
+(defn clear-session-particle-effects!
+  ([]
+   (clear-session-particle-effects! nil))
+  ([owner-or-session]
+   (swap! particle-queue dissoc (normalize-session-id owner-or-session))
+   nil))
+
+(defn clear-owner-particle-effects!
+  [owner]
+  (clear-session-particle-effects! owner))
 
 (defn particle-queue-snapshot
-  []
-  (vec @particle-queue))
+  ([]
+   @particle-queue)
+  ([owner-or-session]
+   (vec (get @particle-queue (normalize-session-id owner-or-session) []))))
 
 (defn reset-particle-queue-for-test!
-  []
-  (reset! particle-queue [])
-  nil)
+  ([]
+   (reset-particle-queue-for-test! {}))
+  ([queues]
+   (reset! particle-queue
+           (into {}
+                 (map (fn [[session-id effects]]
+                        [session-id (vec effects)]))
+                 (or queues {})))
+   nil))
 
 ;; Event listeners for automatic particle spawning
 (defn on-skill-activation

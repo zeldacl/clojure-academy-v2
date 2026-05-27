@@ -82,7 +82,7 @@
                            :size (* 1.0 (+ 0.8 (* (rand) 0.4)))
                            :time-offset (+ (* idx 2) (- (rand-int 3) 1))})
                         (range rings)))}))))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
            :x (double (or (:x pos) 0.0))
            :y (double (or (:y pos) 0.0))

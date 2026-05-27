@@ -54,7 +54,7 @@
                         {:x (double x) :y (double y) :z (double z)
                          :ttl life :max-ttl life}))))
       :play
-      (client-sounds/queue-sound-effect!
+      (client-sounds/queue-current-sound-effect!
         {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
          :x (double x) :y (double y) :z (double z)})
       nil)))

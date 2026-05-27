@@ -124,7 +124,7 @@
     (play-current! *media-owner*))
   ([owner]
   (let [{:keys [track volume]} (playback-state-snapshot owner)]
-    (client-sounds/queue-sound-effect!
+    (client-sounds/queue-sound-effect! owner
       {:type :sound
        :sound-id (:sound-id track)
        :volume volume

@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.client.effects.particle
   "CLIENT-ONLY shared particle effect bridge for Minecraft 1.20.1."
-  (:require [cn.li.mcmod.hooks.core :as power-runtime]
+  (:require [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.client Minecraft]
@@ -72,8 +73,9 @@
 (defn tick-particles!
   []
   (try
-    (doseq [particle-cmd (power-runtime/client-poll-particle-effects)]
-      (spawn-particle-effect! particle-cmd))
+    (when-let [owner (client-session/current-local-player-owner)]
+      (doseq [particle-cmd (power-runtime/client-poll-particle-effects owner)]
+        (spawn-particle-effect! particle-cmd)))
     (catch Exception e
       (log/error "Error in particle tick" e))))
 

@@ -130,12 +130,56 @@ dependencies {
 
     // Compile-only integration APIs.
     compileOnly('com.blamejared.crafttweaker:CraftTweaker-common-1.20.1:14.0.60')
+    testImplementation "org.clojure:test.check:1.1.1"
 
     // compile against the JEI API but do not include it at runtime
     modCompileOnlyApi("mezz.jei:jei-${mc_version}-common-api:${jei_version}")
     modCompileOnlyApi("mezz.jei:jei-${mc_version}-forge-api:${jei_version}")
     // at runtime, use the full JEI jar for Forge
     modRuntimeOnly("mezz.jei:jei-${mc_version}-forge:${jei_version}")
+}
+
+sourceSets.test.clojure.srcDir rootProject.file('test-support/src/main/clojure')
+
+def forgeTestOnlyNamespaces = (System.getProperty('forge.test.only') ?: '')
+    .split(',')
+    .collect { it.trim() }
+    .findAll { !it.isEmpty() } as Set
+
+tasks.matching { it.name == 'compileTestClojure' }.configureEach {
+    if (!forgeTestOnlyNamespaces.isEmpty()) {
+        namespaces.set(forgeTestOnlyNamespaces)
+        inputs.property('forge.test.only', forgeTestOnlyNamespaces.join(','))
+        doFirst {
+            logger.lifecycle('[forge-1.20.1:compileTestClojure] focused namespace compile active, namespaces={}', forgeTestOnlyNamespaces.size())
+        }
+    }
+}
+
+tasks.register('runForgeClojureTests', JavaExec) {
+    group = 'verification'
+    description = 'Run Forge/shared clojure.test suites via cn.li.forge1201.test-runner.'
+    dependsOn compileTestClojure, compileClojure, classes
+    workingDir = project.projectDir
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'clojure.main'
+    if (System.getProperty('forge.test.only') != null) {
+        systemProperty 'forge.test.only', System.getProperty('forge.test.only')
+    }
+    args '-m', 'cn.li.forge1201.test-runner'
+}
+
+tasks.register('runForgeClojureTestsFast', JavaExec) {
+    group = 'verification'
+    description = 'Run Forge/shared clojure.test suites directly from source classpath (bypasses compileTestClojure lock hotpath).'
+    dependsOn compileClojure, classes
+    workingDir = project.projectDir
+    classpath = sourceSets.main.runtimeClasspath + configurations.testRuntimeClasspath + files(sourceSets.test.resources.srcDirs) + files(sourceSets.test.allSource.srcDirs)
+    mainClass = 'clojure.main'
+    if (System.getProperty('forge.test.only') != null) {
+        systemProperty 'forge.test.only', System.getProperty('forge.test.only')
+    }
+    args '-m', 'cn.li.forge1201.test-runner'
 }
 
 // Shared Clojure runtime deps for compile + Forge transformed runtime classpath.

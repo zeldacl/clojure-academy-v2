@@ -1945,6 +1945,9 @@ tasks.register('verifyGuiNetworkTransportBoundaries') {
         def deletedTopLevelPacket = file('mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/network_packet_base.clj')
         def forgeNetwork = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/gui/network.clj')
         def fabricNetwork = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/network.clj')
+        def fabricSharedNetwork = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/network/shared.clj')
+        def fabricServerNetwork = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/network/server.clj')
+        def fabricClientNetwork = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/network/client.clj')
         def forgeGuiRegistry = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/adapter/gui_registry.clj')
         def fabricGuiRegistry = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/adapter/gui_registry.clj')
         def fabricProviderBridge = file('fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui/provider_bridge.clj')
@@ -1954,7 +1957,7 @@ tasks.register('verifyGuiNetworkTransportBoundaries') {
             violations << 'Top-level GUI network packet namespace must stay deleted; use cn.li.mc1201.gui.network.packet'
         }
 
-        [sharedPacket, sharedRegistryCommon, forgeNetwork, fabricNetwork, forgeGuiRegistry, fabricGuiRegistry, fabricProviderBridge].each { File f ->
+        [sharedPacket, sharedRegistryCommon, forgeNetwork, fabricNetwork, fabricSharedNetwork, fabricServerNetwork, fabricClientNetwork, forgeGuiRegistry, fabricGuiRegistry, fabricProviderBridge].each { File f ->
             if (!f.exists()) {
                 violations << "Required GUI network file missing: ${project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')}"
             }
@@ -2016,10 +2019,62 @@ tasks.register('verifyGuiNetworkTransportBoundaries') {
             if (fabricText.contains('cn.li.mc1201.gui.network-packet-base')) {
                 violations << 'fabric1201.gui.network must require cn.li.mc1201.gui.network.packet'
             }
-            ['request-map', 'response-map', 'push-map'].each { token ->
-                if (!fabricText.contains("packet-base/${token}")) {
-                    violations << "fabric1201.gui.network must use packet-base/${token} for GUI envelope"
+            if (!fabricText.contains('cn.li.fabric1201.gui.network.server')) {
+                violations << 'fabric1201.gui.network facade must delegate server transport to cn.li.fabric1201.gui.network.server'
+            }
+            if (!fabricText.contains("requiring-resolve 'cn.li.fabric1201.gui.network.client/init-client!")) {
+                violations << 'fabric1201.gui.network facade must lazy-load cn.li.fabric1201.gui.network.client/init-client!'
+            }
+            ['net.minecraft.client.Minecraft',
+             'ClientPlayNetworking',
+             'ServerPlayNetworking',
+             'registerGlobalReceiver',
+             'packet-base/request-map',
+             'packet-base/response-map',
+             'packet-base/push-map'].each { token ->
+                if (fabricText.contains(token)) {
+                    violations << "fabric1201.gui.network facade must remain thin and side-neutral: ${token}"
                 }
+            }
+        }
+
+        if (fabricSharedNetwork.exists()) {
+            def fabricSharedText = fabricSharedNetwork.getText('UTF-8')
+            ['packet-base/encode-payload', 'packet-base/decode-payload'].each { token ->
+                if (!fabricSharedText.contains(token)) {
+                    violations << "fabric1201.gui.network.shared must centralize GUI payload codec helpers: ${token}"
+                }
+            }
+            ['ClientPlayNetworking', 'ServerPlayNetworking', 'net.minecraft.client.Minecraft'].each { token ->
+                if (fabricSharedText.contains(token)) {
+                    violations << "fabric1201.gui.network.shared must stay client/server neutral: ${token}"
+                }
+            }
+        }
+
+        if (fabricServerNetwork.exists()) {
+            def fabricServerText = fabricServerNetwork.getText('UTF-8')
+            ['packet-base/normalize-request', 'packet-base/response-map', 'packet-base/push-map'].each { token ->
+                if (!fabricServerText.contains(token)) {
+                    violations << "fabric1201.gui.network.server must use shared packet-base server envelope helper: ${token}"
+                }
+            }
+            ['ClientPlayNetworking', 'net.minecraft.client.Minecraft'].each { token ->
+                if (fabricServerText.contains(token)) {
+                    violations << "fabric1201.gui.network.server must not depend on client transport/classes: ${token}"
+                }
+            }
+        }
+
+        if (fabricClientNetwork.exists()) {
+            def fabricClientText = fabricClientNetwork.getText('UTF-8')
+            ['packet-base/request-map', 'dispatch-client-response!'].each { token ->
+                if (!fabricClientText.contains(token)) {
+                    violations << "fabric1201.gui.network.client must own client request/response dispatch helper: ${token}"
+                }
+            }
+            if (!fabricClientText.contains('net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking')) {
+                violations << 'fabric1201.gui.network.client must resolve ClientPlayNetworking from the client-only namespace'
             }
         }
 
@@ -2949,6 +3004,40 @@ tasks.register('verifyAbilityFxBeamOpsHelper') {
     }
 }
 
+tasks.register('verifyAbilityFxOwnerRoutingGuards') {
+    group = 'verification'
+    description = 'Verify ability FX files do not reintroduce ownerless client sound/particle/camera queue calls.'
+
+    doLast {
+        def fxFiles = fileTree('ac/src/main/clojure/cn/li/ac/content/ability') {
+            include '**/*_fx.clj'
+            exclude '**/build/**'
+        }.files
+        def violations = []
+        def forbiddenPatterns = [
+            [label: 'ownerless sound queue call', pattern: ~/(?s)queue-sound-effect!\s+(?!\(:queue-owner)/],
+            [label: 'ownerless particle queue call', pattern: ~/(?s)queue-particle-effect!\s+(?!\(:queue-owner)/],
+            [label: 'ownerless camera pitch delta call', pattern: ~/(?s)add-camera-pitch-delta!\s+(?!\(:queue-owner)/]
+        ]
+
+        fxFiles.each { File f ->
+            def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            def text = f.getText('UTF-8')
+            forbiddenPatterns.each { spec ->
+                if ((text =~ spec.pattern).find()) {
+                    violations << "${rel}: ${spec.label}"
+                }
+            }
+        }
+
+        if (!violations.isEmpty()) {
+            throw new GradleException("Ability FX owner-routing guard failed:\n - ${violations.join('\n - ')}")
+        }
+
+        logger.lifecycle('[verifyAbilityFxOwnerRoutingGuards] passed. Ability FX direct queue writes stay owner-scoped via :queue-owner.')
+    }
+}
+
 tasks.register('verifyDatagenProviderFactoryAdapters') {
     group = 'verification'
     description = 'Verify platform datagen setup uses shared provider registration and platform factory adapters.'
@@ -3341,6 +3430,7 @@ def cleanupResidueGuardTaskNames = [
     'verifyPlatformGuiProviderThinAdapters',
     'verifyGuiXmlResourcesSync',
     'verifyAbilityFxBeamOpsHelper',
+    'verifyAbilityFxOwnerRoutingGuards',
     'verifyDatagenProviderFactoryAdapters',
     'verifyTransientBuildArtifactsIgnored',
     'verifyLoaderEntrypointNames',

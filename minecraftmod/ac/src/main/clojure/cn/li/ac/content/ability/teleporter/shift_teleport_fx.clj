@@ -22,6 +22,7 @@
   (let [owner-key* (or owner-key [:ctx ctx-id])
         {:keys [source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -50,7 +51,7 @@
     :perform
     (do
       (when-let [x (:x payload)]
-        (client-particles/queue-particle-effect!
+        (client-particles/queue-particle-effect! (:queue-owner base-meta)
           {:type :particle :particle-type :portal
            :x (double x) :y (double (:y payload)) :z (double (:z payload))
            :count 10 :speed 0.1
@@ -68,14 +69,14 @@
             steps (max 1 (int (/ dist 0.8)))]
         (dotimes [idx steps]
           (let [t (/ (double (inc idx)) (double steps))]
-            (client-particles/queue-particle-effect!
+            (client-particles/queue-particle-effect! (:queue-owner base-meta)
               {:type :particle :particle-type :portal
                :x (+ (:x from-pos) (* dx t))
                :y (+ (:y from-pos) (* dy t))
                :z (+ (:z from-pos) (* dz t))
                :count 2 :speed 0.05
                :offset-x 0.2 :offset-y 0.2 :offset-z 0.2}))))
-      (client-sounds/queue-sound-effect!
+      (client-sounds/queue-sound-effect! (:queue-owner base-meta)
         {:type :sound :sound-id "my_mod:tp.tp" :volume 0.5 :pitch 1.1}))
       :end    (clear-shift-teleport-owner! owner-key*)
       nil)))
@@ -90,7 +91,7 @@
                                      (:target next-st)
                                      (:hand-valid? next-st)
                                      (zero? (mod (long (:ttl next-st)) 3)))
-                            (client-particles/queue-particle-effect!
+                            (client-particles/queue-particle-effect! (:queue-owner next-st)
                               {:type :particle
                                :particle-type (if (:target-hit? next-st) :electric_spark :portal)
                                :x (double (get-in next-st [:target :x]))

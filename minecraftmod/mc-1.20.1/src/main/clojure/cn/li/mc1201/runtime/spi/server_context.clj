@@ -6,9 +6,32 @@
   (atom {:available []
          :unavailable []}))
 
+(defn reset-server-context-spi-for-test!
+  []
+  (reset! server-context-impl* nil)
+  (reset! lifecycle-callbacks* {:available []
+                                :unavailable []})
+  nil)
+
+(defn- register-callback!
+  [callback-key callback-id callback]
+  (let [added? (atom false)]
+    (swap! lifecycle-callbacks*
+           update
+           callback-key
+           (fn [callbacks]
+             (let [callbacks (vec callbacks)]
+               (if (some #(= (:id %) callback-id) callbacks)
+                 callbacks
+                 (do
+                   (reset! added? true)
+                   (conj callbacks {:id callback-id
+                                    :callback callback}))))))
+    @added?))
+
 (defn- run-callbacks!
   [callback-key value]
-  (doseq [callback (get @lifecycle-callbacks* callback-key)]
+  (doseq [{:keys [callback]} (get @lifecycle-callbacks* callback-key)]
     (callback value)))
 
 (defn register-server-context-impl!
@@ -45,20 +68,24 @@
                       {:hint "Call install-server-context! during runtime init"}))))
 
 (defn on-server-available!
-  [callback]
-  (when-not (fn? callback)
-    (throw (ex-info "server-context available callback must be a function" {:callback callback})))
-  (swap! lifecycle-callbacks* update :available conj callback)
-  (when-let [server (get-current-server)]
-    (callback server))
-  nil)
+  ([callback]
+   (on-server-available! callback callback))
+  ([callback-id callback]
+   (when-not (fn? callback)
+     (throw (ex-info "server-context available callback must be a function" {:callback callback})))
+   (when (register-callback! :available callback-id callback)
+     (when-let [server (get-current-server)]
+       (callback server)))
+   nil))
 
 (defn on-server-unavailable!
-  [callback]
-  (when-not (fn? callback)
-    (throw (ex-info "server-context unavailable callback must be a function" {:callback callback})))
-  (swap! lifecycle-callbacks* update :unavailable conj callback)
-  nil)
+  ([callback]
+   (on-server-unavailable! callback callback))
+  ([callback-id callback]
+   (when-not (fn? callback)
+     (throw (ex-info "server-context unavailable callback must be a function" {:callback callback})))
+   (register-callback! :unavailable callback-id callback)
+   nil))
 
 (defn notify-server-available!
   [server]

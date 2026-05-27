@@ -24,6 +24,7 @@
 (defn- enqueue! [{:keys [payload ctx-id channel owner-key]}]
   (let [owner-key* (or owner-key [:ctx ctx-id])
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id (:source-player-id payload)
@@ -47,12 +48,12 @@
              (fn [st]
                (merge base-meta (or st {:ttl 0 :active? false}) {:perform-ttl 15})))
       (when-let [x (:drop-x payload)]
-        (client-particles/queue-particle-effect!
+        (client-particles/queue-particle-effect! (:queue-owner base-meta)
           {:type :particle :particle-type :portal
            :x (double x) :y (double (:drop-y payload)) :z (double (:drop-z payload))
            :count 20 :speed 0.12
            :offset-x 0.8 :offset-y 1.0 :offset-z 0.8}))
-      (client-sounds/queue-sound-effect!
+      (client-sounds/queue-sound-effect! (:queue-owner base-meta)
         {:type :sound :sound-id "my_mod:tp.threatening_tp" :volume 0.7 :pitch 1.0}))
     :end
     (swap! fx-state dissoc owner-key*)
@@ -67,7 +68,7 @@
                                           (update :ttl (fnil inc 0))
                                           (update :perform-ttl (fn [t] (when (and t (pos? (long t))) (dec (long t))))))]
                           (when (and (:aim next-st) (zero? (mod (long (:ttl next-st)) 3)))
-                            (client-particles/queue-particle-effect!
+                            (client-particles/queue-particle-effect! (:queue-owner next-st)
                               {:type :particle
                                :particle-type (if (:attacked? next-st) :electric_spark :portal)
                                :x (double (get-in next-st [:aim :x]))

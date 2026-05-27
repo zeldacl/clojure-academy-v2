@@ -9,6 +9,34 @@
 					 [net.minecraftforge.event.entity.living LivingDeathEvent]
 					 [net.minecraftforge.event TickEvent$PlayerTickEvent]))
 
+(defonce ^:private lifecycle-listeners-registered? (atom false))
+
+(defn reset-lifecycle-listeners-registration-for-test!
+	[]
+	(reset! lifecycle-listeners-registered? false)
+	nil)
+
+(defn add-listener!
+	[event-class handler]
+	(.addListener (MinecraftForge/EVENT_BUS)
+								EventPriority/NORMAL false event-class
+								(reify java.util.function.Consumer
+									(accept [_ evt] (handler evt)))))
+
+(defn- listener-bindings
+	[{:keys [on-player-login
+					 on-player-logout
+					 on-player-clone
+					 on-player-death
+					 on-player-dimension-change
+					 on-player-tick]}]
+	[[PlayerEvent$PlayerLoggedInEvent on-player-login]
+	 [PlayerEvent$PlayerLoggedOutEvent on-player-logout]
+	 [PlayerEvent$Clone on-player-clone]
+	 [LivingDeathEvent on-player-death]
+	 [PlayerEvent$PlayerChangedDimensionEvent on-player-dimension-change]
+	 [TickEvent$PlayerTickEvent on-player-tick]])
+
 (defn register-lifecycle-listeners!
 	[{:keys [on-player-login
 					 on-player-logout
@@ -16,28 +44,13 @@
 					 on-player-death
 					 on-player-dimension-change
 					 on-player-tick]}]
-	(.addListener (MinecraftForge/EVENT_BUS)
-								EventPriority/NORMAL false PlayerEvent$PlayerLoggedInEvent
-								(reify java.util.function.Consumer
-									(accept [_ evt] (on-player-login evt))))
-	(.addListener (MinecraftForge/EVENT_BUS)
-								EventPriority/NORMAL false PlayerEvent$PlayerLoggedOutEvent
-								(reify java.util.function.Consumer
-									(accept [_ evt] (on-player-logout evt))))
-	(.addListener (MinecraftForge/EVENT_BUS)
-								EventPriority/NORMAL false PlayerEvent$Clone
-								(reify java.util.function.Consumer
-									(accept [_ evt] (on-player-clone evt))))
-	(.addListener (MinecraftForge/EVENT_BUS)
-								EventPriority/NORMAL false LivingDeathEvent
-								(reify java.util.function.Consumer
-									(accept [_ evt] (on-player-death evt))))
-	(.addListener (MinecraftForge/EVENT_BUS)
-								EventPriority/NORMAL false PlayerEvent$PlayerChangedDimensionEvent
-								(reify java.util.function.Consumer
-									(accept [_ evt] (on-player-dimension-change evt))))
-	(.addListener (MinecraftForge/EVENT_BUS)
-								EventPriority/NORMAL false TickEvent$PlayerTickEvent
-								(reify java.util.function.Consumer
-									(accept [_ evt] (on-player-tick evt))))
+	(when (compare-and-set! lifecycle-listeners-registered? false true)
+		(doseq [[event-class handler]
+					(listener-bindings {:on-player-login on-player-login
+													 :on-player-logout on-player-logout
+													 :on-player-clone on-player-clone
+													 :on-player-death on-player-death
+													 :on-player-dimension-change on-player-dimension-change
+													 :on-player-tick on-player-tick})]
+			(add-listener! event-class handler)))
 	nil)

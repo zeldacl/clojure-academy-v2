@@ -26,6 +26,7 @@
   (let [owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode x y z dx dy dz start end source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -38,19 +39,19 @@
                       {:active? true :ticks 0
                        :x (double (or x 0.0)) :y (double (or y 0.0)) :z (double (or z 0.0))
                        :dx (double (or dx 0.0)) :dy (double (or dy 0.0)) :dz (double (or dz 0.0))}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:md.eb_spawn" :volume 0.6 :pitch 1.2}))
       :beam
       (do
         (when (and start end)
-          (client-particles/queue-particle-effect!
+          (client-particles/queue-particle-effect! (:queue-owner base-meta)
             {:type :particle :particle-type :electric-spark
              :x (double (or (:x end) 0.0))
              :y (double (or (:y end) 0.0))
              :z (double (or (:z end) 0.0))
              :count 8 :speed 0.2
              :offset-x 0.5 :offset-y 0.5 :offset-z 0.5}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id "my_mod:md.eb_explode" :volume 0.8 :pitch 1.0})
         (clear-electron-bomb-owner! owner-key*))
       :end
@@ -72,7 +73,7 @@
                                (let [angle (* 0.4 (double ticks))
                                      ox (* 0.9 (Math/cos angle))
                                      oz (* 0.9 (Math/sin angle))]
-                                 (client-particles/queue-particle-effect!
+                                 (client-particles/queue-particle-effect! (:queue-owner st)
                                    {:type :particle :particle-type :electric-spark
                                     :x (+ (:x st) ox) :y (:y st) :z (+ (:z st) oz)
                                     :count 1 :speed 0.05

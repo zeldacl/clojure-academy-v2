@@ -57,7 +57,7 @@
                       :look-dir (or look-dir {:x 0.0 :y 0.0 :z 1.0})
                       :init-vel (or init-vel {:x 0.0 :y 0.0 :z 1.0}))))
       :perform
-      (client-sounds/queue-sound-effect!
+      (client-sounds/queue-current-sound-effect!
         {:type :sound :sound-id sound-id :volume 0.35 :pitch 1.0})
       :end
       (swap! effect-state assoc owner-key* (merge base-meta {:active? false}))

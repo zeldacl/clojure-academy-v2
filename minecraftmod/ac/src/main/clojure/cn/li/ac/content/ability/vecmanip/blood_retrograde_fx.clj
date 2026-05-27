@@ -77,7 +77,7 @@
            (map (fn [spray]
              (merge base-meta spray {:ttl spray-life :max-ttl spray-life}))
                 (:sprays payload)))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-current-sound-effect!
           {:type :sound :sound-id sound-id :volume 1.0 :pitch 1.0
            :x (:x sound-pos) :y (:y sound-pos) :z (:z sound-pos)}))
       :end

@@ -45,7 +45,6 @@
             [cn.li.ac.item.mat-core :as core]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.container.move :as move-common]
-            [cn.li.ac.wireless.gui.container.schema-runtime :as schema-runtime]
             [cn.li.mcmod.gui.container.schema :as schema]
             [cn.li.ac.wireless.gui.sync.helpers :as sync-helpers]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
@@ -402,6 +401,20 @@
 (defn- matrix-source-container? [source]
   (= (:container-type source) :matrix))
 
+(defn- sync-routing-metadata
+  [source]
+  (let [owner (:owner source)
+        routing (merge (when-let [container-id (or (:container-id source)
+                                                   (:window-id source)
+                                                   (:id source))]
+                         {:container-id container-id})
+                       (select-keys owner [:server-session-id
+                                           :client-session-id
+                                           :session-id
+                                           :player-uuid]))]
+    (when (seq routing)
+      routing)))
+
 (defn make-sync-packet [source]
   (let [container? (matrix-source-container? source)
         tile       (if container? (:tile-entity source) source)
@@ -412,6 +425,8 @@
             :pos-y       (pos/pos-y block-pos)
             :pos-z       (pos/pos-z block-pos)
             :placer-name (or (:placer-name tile) "Unknown")}
+           (when container?
+             (sync-routing-metadata source))
            (schema/build-sync-packet-fields matrix-schema/gui-container-fields container))))
 
 (defn apply-matrix-sync-payload! [payload]

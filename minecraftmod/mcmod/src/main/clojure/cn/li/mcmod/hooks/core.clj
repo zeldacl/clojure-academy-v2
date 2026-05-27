@@ -70,8 +70,8 @@
          :client-handle-managed-screen-click! (fn [_ _ _] false)
          :client-handle-managed-screen-char-typed! noop
          :client-close-managed-screen! noop
-         :client-poll-particle-effects (fn [] [])
-         :client-poll-sound-effects (fn [] [])
+         :client-poll-particle-effects (fn [_owner] [])
+         :client-poll-sound-effects (fn [_owner] [])
          :client-tick-keys! noop
          :client-active-contexts (fn [] {})
          :client-latest-sync (fn [_] nil)
@@ -94,7 +94,7 @@
          :client-abort-all! noop
          :client-tick! noop
          :client-tick-hand-effects! noop
-         :client-drain-camera-pitch-deltas! (fn [] [])
+         :client-drain-camera-pitch-deltas! (fn [_owner] [])
          :client-current-hand-transform (fn [] nil)}))
 
 (defn register-power-runtime-hooks!
@@ -346,12 +346,16 @@
   ((:client-close-managed-screen! @runtime-hooks) screen-key))
 
 (defn client-poll-particle-effects
-  []
-  ((:client-poll-particle-effects @runtime-hooks)))
+  ([]
+   (client-poll-particle-effects nil))
+  ([owner]
+   ((:client-poll-particle-effects @runtime-hooks) owner)))
 
 (defn client-poll-sound-effects
-  []
-  ((:client-poll-sound-effects @runtime-hooks)))
+  ([]
+   (client-poll-sound-effects nil))
+  ([owner]
+   ((:client-poll-sound-effects @runtime-hooks) owner)))
 
 (defn client-tick-keys!
   [key-state-fn get-player-uuid-fn]
@@ -444,8 +448,10 @@
   ((:client-tick-hand-effects! @runtime-hooks)))
 
 (defn client-drain-camera-pitch-deltas!
-  []
-  ((:client-drain-camera-pitch-deltas! @runtime-hooks)))
+  ([]
+   (client-drain-camera-pitch-deltas! nil))
+  ([owner]
+   ((:client-drain-camera-pitch-deltas! @runtime-hooks) owner)))
 
 (defn client-current-hand-transform
   []

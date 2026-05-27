@@ -22,6 +22,7 @@
   (let [owner-key* (or owner-key [:ctx ctx-id])
         {:keys [source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -50,12 +51,12 @@
     :perform
     (do
       (when-let [x (:x payload)]
-        (client-particles/queue-particle-effect!
+        (client-particles/queue-particle-effect! (:queue-owner base-meta)
           {:type :particle :particle-type :enchantment-table
            :x (double x) :y (+ (double (:y payload)) 1.0) :z (double (:z payload))
            :count 12 :speed 0.06
            :offset-x 0.5 :offset-y 0.8 :offset-z 0.5}))
-      (client-sounds/queue-sound-effect!
+      (client-sounds/queue-sound-effect! (:queue-owner base-meta)
         {:type :sound :sound-id "my_mod:tp.penetrate_tp" :volume 0.65 :pitch 1.15}))
       :end
       (clear-penetrate-teleport-owner! owner-key*)
@@ -70,7 +71,7 @@
                           (when (and (:active? next-st)
                                      (:x next-st)
                                      (zero? (mod (:ttl next-st) 3)))
-                            (client-particles/queue-particle-effect!
+                            (client-particles/queue-particle-effect! (:queue-owner next-st)
                               {:type :particle
                                :particle-type (if (:available? next-st) :portal :smoke)
                                :x (double (:x next-st))

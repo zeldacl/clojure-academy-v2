@@ -22,7 +22,7 @@
                  (:id (mb/next-track! owner)))))
 
 (deftest pause-toggle-state-test
-  (with-redefs [client-sounds/queue-sound-effect! (fn [_] nil)]
+  (with-redefs [client-sounds/queue-sound-effect! (fn [& _] nil)]
     (is (= :playing (mb/toggle-pause! owner)))
     (is (= :paused (mb/toggle-pause! owner)))))
 
@@ -48,9 +48,12 @@
         queued (atom [])]
     (mb/set-volume! owner-a 0.2)
     (mb/select-track! owner-b 1)
-    (with-redefs [client-sounds/queue-sound-effect! (fn [event] (swap! queued conj event))]
+    (with-redefs [client-sounds/queue-sound-effect! (fn [owner event]
+                                                      (swap! queued conj {:owner owner
+                                                                         :event event}))]
       (is (= :sisters-noise (:id (mb/play-current! owner-a))))
       (is (= :only-my-railgun (:id (mb/play-current! owner-b)))))
-    (is (= ["my_mod:em.arc_strong" "my_mod:em.railgun"] (mapv :sound-id @queued)))
-    (is (< (Math/abs (- 0.2 (double (:volume (first @queued))))) 1.0E-6))
-    (is (< (Math/abs (- 1.0 (double (:volume (second @queued))))) 1.0E-6))))
+    (is (= [owner-a owner-b] (mapv :owner @queued)))
+    (is (= ["my_mod:em.arc_strong" "my_mod:em.railgun"] (mapv (comp :sound-id :event) @queued)))
+    (is (< (Math/abs (- 0.2 (double (get-in (first @queued) [:event :volume])))) 1.0E-6))
+    (is (< (Math/abs (- 1.0 (double (get-in (second @queued) [:event :volume])))) 1.0E-6))))

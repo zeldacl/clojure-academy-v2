@@ -29,18 +29,18 @@
            :args (:message-args payload)
            :duration-ms 1500
            :color [255 226 120]}))
-      (client-particles/queue-particle-effect!
+      (client-particles/queue-current-particle-effect!
         {:type :particle :particle-type :portal
          :x x :y (+ y 0.4) :z z
          :count primary-count :speed speed
          :offset-x 0.65 :offset-y 0.65 :offset-z 0.65})
       (when (pos? secondary-count)
-        (client-particles/queue-particle-effect!
+        (client-particles/queue-current-particle-effect!
           {:type :particle :particle-type :electric_spark
            :x x :y (+ y 0.8) :z z
            :count secondary-count :speed 0.05
            :offset-x 0.45 :offset-y 0.45 :offset-z 0.45}))
-      (client-sounds/queue-sound-effect!
+      (client-sounds/queue-current-sound-effect!
         {:type :sound :sound-id "my_mod:tp.tp" :volume volume :pitch pitch}))
     nil))
 

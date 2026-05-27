@@ -4,26 +4,93 @@
   Skills register their hand-effect handlers via `register-hand-effect!` at
   load time.  The infrastructure dispatches enqueue / tick / transform calls
   without any skill-specific knowledge."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
 ;; Camera pitch delta accumulator (shared across all hand effects)
 ;; ---------------------------------------------------------------------------
 
-(defonce ^:private camera-pitch-deltas (atom []))
+(defonce ^:private camera-pitch-deltas (atom {}))
+
+(defn- require-owner-value
+  [owner label value]
+  (if (some? value)
+    value
+    (throw (ex-info (format "Hand effects require %s" label)
+                    {:owner owner
+                     :required label}))))
+
+(defn- current-session-id
+  [owner]
+  (require-owner-value owner
+                       ":client-session-id"
+                       (or (when (map? owner) (:client-session-id owner))
+                           (when (map? owner) (:session-id owner))
+                           (:client-session-id runtime-hooks/*player-state-owner*)
+                           runtime-hooks/*client-session-id*)))
+
+(defn- normalize-session-id
+  [owner-or-session]
+  (cond
+    (map? owner-or-session)
+    (current-session-id owner-or-session)
+
+    (and (vector? owner-or-session)
+         (= 2 (count owner-or-session))
+         (vector? (first owner-or-session)))
+    (first owner-or-session)
+
+    (some? owner-or-session)
+    owner-or-session
+
+    :else
+    (current-session-id nil)))
+
+(defn current-effect-owner
+  []
+  (or runtime-hooks/*player-state-owner*
+      (when runtime-hooks/*client-session-id*
+        {:client-session-id runtime-hooks/*client-session-id*})
+      (throw (ex-info "Current hand effect owner requires :client-session-id"
+                      {:required ":client-session-id"}))))
 
 (defn add-camera-pitch-delta!
   "Queue a camera pitch delta (float degrees) to be consumed by the platform
   renderer on the next frame."
+  ([delta]
+   (add-camera-pitch-delta! nil delta))
+  ([owner-or-session delta]
+   (swap! camera-pitch-deltas update (normalize-session-id owner-or-session) (fnil conj []) (float delta))
+   nil))
+
+(defn add-current-camera-pitch-delta!
   [delta]
-  (swap! camera-pitch-deltas conj (float delta)))
+  (add-camera-pitch-delta! (current-effect-owner) delta))
 
 (defn drain-camera-pitch-deltas!
   "Atomically drain and return all queued camera pitch deltas."
-  []
-  (let [deltas @camera-pitch-deltas]
-    (reset! camera-pitch-deltas [])
-    deltas))
+  ([]
+   (drain-camera-pitch-deltas! nil))
+  ([owner-or-session]
+   (let [session-id (normalize-session-id owner-or-session)
+         drained (atom [])]
+     (swap! camera-pitch-deltas
+            (fn [deltas]
+              (reset! drained (vec (get deltas session-id [])))
+              (dissoc deltas session-id)))
+     @drained)))
+
+(defn clear-session-camera-pitch-deltas!
+  ([]
+   (clear-session-camera-pitch-deltas! nil))
+  ([owner-or-session]
+   (swap! camera-pitch-deltas dissoc (normalize-session-id owner-or-session))
+   nil))
+
+(defn clear-owner-camera-pitch-deltas!
+  [owner]
+  (clear-session-camera-pitch-deltas! owner))
 
 ;; ---------------------------------------------------------------------------
 ;; Utility functions (shared by skill hand-effect impls)
@@ -101,7 +168,7 @@
 
 (defn reset-hand-effect-registry-for-test!
   []
-  (reset! camera-pitch-deltas [])
+  (reset! camera-pitch-deltas {})
   (reset! effect-registry {})
   (reset! effect-order [])
   (reset! effect-registry-frozen? false)

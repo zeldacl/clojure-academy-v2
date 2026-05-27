@@ -1,16 +1,19 @@
 (ns cn.li.mc1201.client.effects.hand
   "Shared client hand-effect helpers for Minecraft 1.20.1."
-  (:require [cn.li.mcmod.hooks.core :as power-runtime])
+  (:require [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [net.minecraft.client.player LocalPlayer]))
 
 (defn tick-hand-effects!
   []
-  (power-runtime/client-tick-hand-effects!))
+  (client-session/with-current-client-session
+    #(power-runtime/client-tick-hand-effects!)))
 
 (defn apply-camera-pitch-deltas!
   [^LocalPlayer player]
-  (when player
-    (doseq [delta (power-runtime/client-drain-camera-pitch-deltas!)]
+  (when (and player (client-session/current-local-player-owner))
+    (doseq [delta (power-runtime/client-drain-camera-pitch-deltas!
+                    (client-session/current-local-player-owner))]
       (.setXRot player (+ (.getXRot player) (float delta))))))
 
 (defn tick-and-apply-camera!
@@ -20,4 +23,5 @@
 
 (defn current-hand-transform
   []
-  (power-runtime/client-current-hand-transform))
+  (client-session/with-current-client-session
+    #(power-runtime/client-current-hand-transform)))

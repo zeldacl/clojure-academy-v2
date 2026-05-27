@@ -55,7 +55,7 @@
                                               :is-aoe? true})))))
                           vec)]
         (swap! arcs update owner-key* (fnil into []) (into main-arcs aoe-arcs)))
-      (client-sounds/queue-sound-effect!
+      (client-sounds/queue-current-sound-effect!
         {:type :sound :sound-id "my_mod:em.arc_strong" :volume 0.6 :pitch 1.0}))))
 
 ;; ---------------------------------------------------------------------------

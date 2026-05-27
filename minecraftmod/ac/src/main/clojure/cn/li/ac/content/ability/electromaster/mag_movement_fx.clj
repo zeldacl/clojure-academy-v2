@@ -49,6 +49,7 @@
   (let [owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode target source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
+                   :queue-owner (client-sounds/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -58,7 +59,7 @@
       (do
         (swap! effect-state assoc owner-key*
                (merge base-meta {:active? true :target target :ticks 0}))
-        (client-sounds/queue-sound-effect!
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id loop-sound :volume 0.58 :pitch 1.0}))
       :update
       (swap! effect-state update owner-key*
@@ -82,7 +83,7 @@
                          (when (:active? st)
                            (let [ticks (inc (long (or (:ticks st) 0)))]
                              (when (zero? (mod ticks 10))
-                               (client-sounds/queue-sound-effect!
+                               (client-sounds/queue-sound-effect! (:queue-owner st)
                                  {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
                              [owner-key (assoc st :ticks ticks)]))))
                  states))))
