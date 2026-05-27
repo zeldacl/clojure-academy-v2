@@ -66,6 +66,8 @@
   nil)
 
 (defn notify-server-unavailable!
-  []
-  (run-callbacks! :unavailable nil)
-  nil)
+  ([]
+   (notify-server-unavailable! nil))
+  ([server]
+   (run-callbacks! :unavailable server)
+   nil))

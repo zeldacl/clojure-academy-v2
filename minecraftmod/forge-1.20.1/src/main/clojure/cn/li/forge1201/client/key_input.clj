@@ -4,6 +4,7 @@
     :original     — LMB, RMB, R, F  (requires control-override when active)
     :alternative  — Z, X, C, B      (no conflict with vanilla)"
   (:require [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.mc1201.client.session :as client-session]
             [cn.li.mc1201.client.input.mode-switch :as mode-switch]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
@@ -17,8 +18,7 @@
 
 (defonce ^:private slot-keys (atom []))
 (defonce ^:private screen-keys (atom {}))
-(defonce ^:private mode-switch-state (atom {:was-down false :down-at-ns nil :pending-clicks 0}))
-(defonce ^:private raw-v-state (atom (mode-switch/initial-state)))
+(defonce ^:private raw-v-state (atom {}))
 (defonce ^:private raw-v-listener-registered? (atom false))
 (defonce ^:private mouse-scroll-listener-registered? (atom false))
 (def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
@@ -28,9 +28,10 @@
 (defonce ^:private key-scheme (atom :alternative))
 
 ;; Track whether vanilla keys are currently overridden
-(defonce ^:private override-active? (atom false))
+(defonce ^:private override-active? (atom {}))
 
-(declare get-player-uuid)
+(declare get-player-uuid
+         update-owner-mode-switch-state!)
 
 (defn- current-screen-open? []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
@@ -48,25 +49,20 @@
         action (.getAction event)
         now (System/nanoTime)]
     (when (= key GLFW/GLFW_KEY_V)
-      (mode-switch/handle-button-state!
-       raw-v-state
-       (= action GLFW/GLFW_PRESS)
-       {:now-ns now
-        :screen-open? (current-screen-open?)
-        :on-down #(overlay-renderer/on-mode-switch-key-state! true)
-        :on-up #(overlay-renderer/on-mode-switch-key-state! false)
-        :on-short-up
-        (fn []
-          (when-let [uuid (get-player-uuid)]
-            (let [cur-activated (power-runtime/runtime-activated? uuid)]
-              (overlay-state/set-client-activated! (not cur-activated))
-              (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press))))}))))
-
-(defn- consume-click-count [^KeyMapping key]
-  (loop [n 0]
-    (if (.consumeClick key)
-      (recur (inc n))
-      n)))
+      (when-let [owner (client-session/current-local-player-owner)]
+        (update-owner-mode-switch-state!
+         owner
+         (= action GLFW/GLFW_PRESS)
+         {:now-ns now
+          :screen-open? (current-screen-open?)
+          :on-down #(overlay-renderer/on-mode-switch-key-state! owner true)
+          :on-up #(overlay-renderer/on-mode-switch-key-state! owner false)
+          :on-short-up
+          (fn []
+            (let [uuid (:player-uuid owner)
+                  cur-activated (power-runtime/runtime-activated? uuid)]
+              (overlay-state/set-client-activated! owner (not cur-activated))
+              (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press)))})))))
 
 (defn- create-key-mapping [^String translation-key key-code ^String category]
   (KeyMapping. translation-key InputConstants$Type/KEYSYM (int key-code) category))
@@ -128,6 +124,60 @@
   (binding [power-runtime/*client-session-id* (client-session-id)]
     (f)))
 
+(defn- client-owner-key
+  [owner]
+  (client-session/owner-key owner))
+
+(defn- owner-mode-switch-state
+  [owner]
+  (get @raw-v-state (client-owner-key owner) (mode-switch/initial-state)))
+
+(defn- owner-override-active?
+  [owner]
+  (boolean (get @override-active? (client-owner-key owner) false)))
+
+(defn input-state-snapshot
+  []
+  {:raw-v-state @raw-v-state
+   :override-active? @override-active?})
+
+(defn reset-input-state-for-test!
+  ([]
+   (reset-input-state-for-test! {}))
+  ([{:keys [raw-v-state-map override-active-map]
+     :or {raw-v-state-map {}
+          override-active-map {}}}]
+   (reset! raw-v-state raw-v-state-map)
+   (reset! override-active? override-active-map)
+   nil))
+
+(defn clear-owner-input-state!
+  [owner]
+  (let [owner-key (client-owner-key owner)]
+    (swap! raw-v-state dissoc owner-key)
+    (swap! override-active? dissoc owner-key))
+  nil)
+
+(defn clear-client-input-session!
+  [client-session-id]
+  (let [clear-session! (fn [state-atom]
+                         (swap! state-atom
+                                (fn [states]
+                                  (into {}
+                                        (remove (fn [[[entry-session-id _player-uuid] _value]]
+                                                  (= client-session-id entry-session-id)))
+                                        states))))]
+    (clear-session! raw-v-state)
+    (clear-session! override-active?))
+  nil)
+
+(defn- update-owner-mode-switch-state!
+  [owner is-down opts]
+  (let [state-atom (atom (owner-mode-switch-state owner))]
+    (mode-switch/handle-button-state! state-atom is-down opts)
+    (swap! raw-v-state assoc (client-owner-key owner) @state-atom)
+    nil))
+
 (defn- suppress-vanilla-keys!
   "When using :original key scheme and runtime mode active, consume vanilla attack/use clicks."
   []
@@ -142,10 +192,11 @@
 
 (defn- update-control-override!
   "Enable/disable vanilla key suppression based on activation state."
-  [activated?]
-  (let [need-override? (and (= @key-scheme :original) activated?)]
-    (when (not= @override-active? need-override?)
-      (reset! override-active? need-override?)
+  [owner activated?]
+  (let [need-override? (and (= @key-scheme :original) activated?)
+        owner-key (client-owner-key owner)]
+    (when (not= (get @override-active? owner-key false) need-override?)
+      (swap! override-active? assoc owner-key need-override?)
       (log/info "Control override" {:active need-override?}))))
 
 (defn- original-scheme-slot-down?
@@ -183,7 +234,8 @@
     (fn []
       (let [delta (double (.getScrollDelta event))
             scheme @key-scheme
-            activated? (boolean @overlay-state/client-activated-overlay)]
+            owner (client-session/current-local-player-owner)
+            activated? (boolean (and owner (overlay-state/get-client-activated owner)))]
         (when (and activated?
                    (not (current-screen-open?))
                    (not (zero? delta)))
@@ -195,28 +247,31 @@
 (defn tick-input! []
   (with-client-session
     (fn []
-      (let [scheme @key-scheme
-            activated? (boolean @overlay-state/client-activated-overlay)]
-        ;; Update control override state
-        (update-control-override! activated?)
-        ;; Suppress vanilla keys when override is active
-        (when @override-active?
-          (suppress-vanilla-keys!))
-        ;; Handle cycle-selection key
-        (when-let [^KeyMapping cycle-key (get @screen-keys :cycle-selection)]
-          (when (.consumeClick cycle-key)
-            (when-let [uuid (get-player-uuid)]
-              (emit-keyboard-input! cycle-selection-input-id uuid :press))))
-        ;; Tick content slot keys
-        (power-runtime/client-tick-keys!
-          (fn [key-id]
-            (case (first key-id)
-              :slot (let [idx (second key-id)]
-                      (slot-key-down? scheme idx))
-              :movement (movement-key-down? (second key-id))
-              :screen (when-let [^KeyMapping key (get @screen-keys (second key-id))] (.isDown key))
-              false))
-          get-player-uuid)))))
+      (if-let [owner (client-session/current-local-player-owner)]
+        (let [scheme @key-scheme
+              activated? (boolean (overlay-state/get-client-activated owner))]
+          ;; Update control override state
+          (update-control-override! owner activated?)
+          ;; Suppress vanilla keys when override is active
+          (when (owner-override-active? owner)
+            (suppress-vanilla-keys!))
+          ;; Handle cycle-selection key
+          (when-let [^KeyMapping cycle-key (get @screen-keys :cycle-selection)]
+            (when (.consumeClick cycle-key)
+              (when-let [uuid (get-player-uuid)]
+                (emit-keyboard-input! cycle-selection-input-id uuid :press))))
+          ;; Tick content slot keys
+          (power-runtime/client-tick-keys!
+            (fn [key-id]
+              (case (first key-id)
+                :slot (let [idx (second key-id)]
+                        (slot-key-down? scheme idx))
+                :movement (movement-key-down? (second key-id))
+                :screen (when-let [^KeyMapping key (get @screen-keys (second key-id))] (.isDown key))
+                false))
+            get-player-uuid))
+        (when-let [session-id (client-session/client-session-id)]
+          (clear-client-input-session! session-id))))))
 
 (defn init! []
   (register-keybinds!)

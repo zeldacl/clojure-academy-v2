@@ -4,7 +4,8 @@
 						[clojure.string :as str]
 						[cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
 						[cn.li.ac.ability.server.service.context-runtime :as ctx-rt]
-						[cn.li.ac.ability.service.dispatcher :as ctx]))
+						[cn.li.ac.ability.service.dispatcher :as ctx]
+						[cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defonce ^:private rejection-counters (atom {}))
 
@@ -28,8 +29,16 @@
 
 (defn- server-context-owner
 	[player-uuid]
-	{:logical-side :server
-	 :session-id player-uuid})
+	(let [owner runtime-hooks/*player-state-owner*
+			server-session-id (:server-session-id owner)]
+		(when-not server-session-id
+			(throw (ex-info "Server context owner requires bound :server-session-id"
+									{:player-uuid player-uuid
+									 :player-state-owner owner})))
+		{:logical-side :server
+		 :server-session-id server-session-id
+		 :session-id [server-session-id player-uuid]
+		 :player-uuid player-uuid}))
 
 (defn- resolve-owned-alive-context
 	[ctx-id player]
@@ -84,7 +93,7 @@
 			(ctx-rt/handle-key-down! ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!))))
 
 (defn handle-key-tick-skill
-	[{:keys [ctx-id] :as payload} player]
+	[{:keys [ctx-id]} player]
 	(when-let [owner (refresh-owned-alive-context! ctx-id player)]
 		(binding [ctx/*context-owner* owner]
 			(if (= ctx-rt/INPUT-ACTIVE (:input-state (ctx/get-context ctx-id)))

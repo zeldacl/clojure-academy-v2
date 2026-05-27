@@ -5,8 +5,11 @@
   (:import [net.fabricmc.fabric.api.client.rendering.v1 HudRenderCallback]))
 
 (defonce ^:private hud-listener-registered? (atom false))
-(defn on-mode-switch-key-state! [is-down]
-  (shared-overlay/on-mode-switch-key-state! is-down))
+(defn on-mode-switch-key-state!
+  ([is-down]
+   (shared-overlay/on-mode-switch-key-state! is-down))
+  ([owner is-down]
+   (shared-overlay/on-mode-switch-key-state! owner is-down)))
 
 (defn init!
   []

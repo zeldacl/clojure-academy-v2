@@ -7,11 +7,14 @@
             [cn.li.ac.ability.service.dispatcher :as ctx]))
 
 (def ^:private test-op-key :patterns-test/op)
+(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
 
 (defn- isolate-pattern-test-op! [f]
   (let [snapshot (effect/effect-op-registry-snapshot)]
     (effect/reset-effect-op-registry-for-test!
-     (assoc snapshot :registry (dissoc (:registry snapshot) test-op-key)))
+     (-> snapshot
+         (assoc :registry (dissoc (:registry snapshot) test-op-key))
+         (assoc :frozen? false)))
     (try
       (f)
       (finally
@@ -38,11 +41,12 @@
                   ctx/terminate-context! (fn [ctx-id terminate-fn]
                                            (swap! terminate-calls* conj [ctx-id terminate-fn])
                                            nil)]
-      (patterns/instant-on-down!
-        {:actions {:perform! (fn [evt] (swap! action-calls* conj evt))
-                   :cost-fail! (fn [_] (throw (ex-info "should-not-run" {})))}
-         :perform [[test-op-key {}]]}
-        {:ctx-id "ctx-success" :player-id "p1"})
+      (binding [ctx/*context-owner* test-context-owner]
+        (patterns/instant-on-down!
+         {:actions {:perform! (fn [evt] (swap! action-calls* conj evt))
+                    :cost-fail! (fn [_] (throw (ex-info "should-not-run" {})))}
+          :perform [[test-op-key {}]]}
+         {:ctx-id "ctx-success" :player-id "p1"}))
       (is (= 1 (count @action-calls*)))
       (is (= 1 @stage-calls*))
       (is (= 1 @fx-calls*))
@@ -70,11 +74,12 @@
                   ctx/terminate-context! (fn [ctx-id terminate-fn]
                                            (swap! terminate-calls* conj [ctx-id terminate-fn])
                                            nil)]
-      (patterns/instant-on-down!
-        {:actions {:perform! (fn [_] (swap! action-calls* inc))
-                   :cost-fail! (fn [evt] (swap! cost-fail-calls* conj evt))}
-         :perform [[test-op-key {}]]}
-        {:ctx-id "ctx-fail" :player-id "p2"})
+      (binding [ctx/*context-owner* test-context-owner]
+        (patterns/instant-on-down!
+         {:actions {:perform! (fn [_] (swap! action-calls* inc))
+                    :cost-fail! (fn [evt] (swap! cost-fail-calls* conj evt))}
+          :perform [[test-op-key {}]]}
+         {:ctx-id "ctx-fail" :player-id "p2"}))
       (is (= 0 @action-calls*))
       (is (= 0 @stage-calls*))
       (is (= 0 @fx-calls*))
@@ -108,10 +113,11 @@
                   ctx/terminate-context! (fn [_ctx-id _terminate-fn]
                                            (swap! order conj :terminate)
                                            nil)]
-      (patterns/instant-on-down!
-        {:actions {:perform! (fn [_] (swap! order conj :action))}
-         :perform [[test-op-key {}]]}
-        {:ctx-id "ctx-order" :player-id "p1"})
+      (binding [ctx/*context-owner* test-context-owner]
+        (patterns/instant-on-down!
+         {:actions {:perform! (fn [_] (swap! order conj :action))}
+          :perform [[test-op-key {}]]}
+         {:ctx-id "ctx-order" :player-id "p1"}))
       (is (= [:cost :action :stage :fx :perform-event :exp :cooldown :terminate] @order)))))
 
 (deftest instant-on-down-success-emits-skill-perform-event-test
@@ -127,17 +133,18 @@
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))
                   ctx/terminate-context! (fn [_ _] nil)]
-      (patterns/instant-on-down!
-        {:id :arc-gen
-         :actions {:perform! (fn [_] nil)}}
-        {:ctx-id "ctx-perform" :player-id "p1"})
+      (binding [ctx/*context-owner* test-context-owner]
+        (patterns/instant-on-down!
+         {:id :arc-gen
+          :actions {:perform! (fn [_] nil)}}
+         {:ctx-id "ctx-perform" :player-id "p1"}))
       (is (= [{:event/type evt/EVT-SKILL-PERFORM
                :uuid "p1"
                :skill-id :arc-gen}]
              @events*)))))
 
 (deftest hold-charge-release-on-up-marks-performed-and-emits-skill-perform-event-test
-  (let [ctx*    (atom {:skill-state {:charge-ticks 7 :performed? false}})
+  (let [ctx* (atom {:skill-state {:charge-ticks 7 :performed? false}})
         events* (atom [])]
     (with-redefs [skill-effects/apply-cost! (fn [_ _ _] true)
                   skill-effects/emit-fx! (fn [_ _ _] nil)
@@ -152,10 +159,11 @@
                                                   :skill-id skill-id})
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
-      (patterns/hold-charge-release-on-up!
-        {:id :vec-accel
-         :actions {:perform! (fn [_] nil)}}
-        {:ctx-id "ctx-charge" :player-id "p1"})
+      (binding [ctx/*context-owner* test-context-owner]
+        (patterns/hold-charge-release-on-up!
+         {:id :vec-accel
+          :actions {:perform! (fn [_] nil)}}
+         {:ctx-id "ctx-charge" :player-id "p1"}))
       (is (true? (get-in @ctx* [:skill-state :performed?])))
       (is (= [{:event/type evt/EVT-SKILL-PERFORM
                :uuid "p1"
@@ -174,10 +182,11 @@
                   ctx/terminate-context! (fn [ctx-id terminate-fn]
                                            (swap! calls conj [:terminate ctx-id terminate-fn])
                                            nil)]
-      (patterns/hold-channel-on-tick!
-        {:actions {:tick! (fn [_] (swap! calls conj :tick))
-                   :cost-fail! (fn [evt] (swap! calls conj [:cost-fail (:cost-stage evt)]))}}
-        {:ctx-id "ctx-channel" :player-id "p1"})
+      (binding [ctx/*context-owner* test-context-owner]
+        (patterns/hold-channel-on-tick!
+         {:actions {:tick! (fn [_] (swap! calls conj :tick))
+                    :cost-fail! (fn [evt] (swap! calls conj [:cost-fail (:cost-stage evt)]))}}
+         {:ctx-id "ctx-channel" :player-id "p1"}))
       (is (= [:cost [:cost-fail :tick] [:terminate "ctx-channel" nil]] @calls)))))
 
 (deftest release-cast-on-up-success-settles-perform-and-end-test
@@ -210,11 +219,12 @@
                                                   :skill-id skill-id})
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
-      (patterns/release-cast-on-up!
-        {:id :railgun
-         :actions {:up! (fn [_] nil)}
-         :perform [[test-op-key {}]]}
-        {:ctx-id "ctx-release" :player-id "p1"})
+      (binding [ctx/*context-owner* test-context-owner]
+        (patterns/release-cast-on-up!
+         {:id :railgun
+          :actions {:up! (fn [_] nil)}
+          :perform [[test-op-key {}]]}
+         {:ctx-id "ctx-release" :player-id "p1"}))
       (is (= 1 @stage-calls*))
       (is (= [:perform :end] @fx-stages*))
       (is (= 1 @exp-calls*))
@@ -252,13 +262,14 @@
                                         (apply swap! ctx* f args))
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
-      (patterns/charge-window-on-up!
-        {:id :groundshock
-         :actions {:up! (fn [_] nil)
-                   :cost-fail! (fn [evt]
-                                 (swap! cost-fail-calls* conj evt))}
-         :perform [[test-op-key {}]]}
-        {:ctx-id "ctx-charge-window" :player-id "p1"})
+      (binding [ctx/*context-owner* test-context-owner]
+        (patterns/charge-window-on-up!
+         {:id :groundshock
+          :actions {:up! (fn [_] nil)
+                    :cost-fail! (fn [evt]
+                                  (swap! cost-fail-calls* conj evt))}
+          :perform [[test-op-key {}]]}
+         {:ctx-id "ctx-charge-window" :player-id "p1"}))
       (is (= 0 @stage-calls*))
       (is (= [:end] @fx-stages*))
       (is (= 0 @exp-calls*))

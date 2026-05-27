@@ -29,6 +29,11 @@
 	(swap! pending-tasks dissoc (str player-uuid))
 	nil)
 
+(defn clear-all-tasks!
+	[]
+	(reset! pending-tasks {})
+	nil)
+
 (def ^:private mdball-default-life-ticks 50)
 (def ^:private mdball-settle-offset-ticks 2)
 

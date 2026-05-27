@@ -2,6 +2,8 @@
   "CLIENT-ONLY Forge adapter for runtime hooks."
   (:require [cn.li.mc1201.client.effects.particle :as particle]
             [cn.li.mc1201.client.effects.sound :as sound]
+            [cn.li.mc1201.client.session-cleanup :as session-cleanup]
+            [cn.li.mc1201.client.session :as client-session]
             [cn.li.forge1201.client.key-input :as key-input]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mcmod.hooks.core :as power-runtime]
@@ -37,7 +39,10 @@
 (defn local-player-look-end [distance] (player-state/local-player-look-end distance))
 
 (defn clear-client-activated-overlay! []
-  (overlay-state/clear-client-activated!))
+  (if-let [owner (client-session/current-local-player-owner)]
+    (overlay-state/clear-client-activated! owner)
+    (when-let [session-id (client-session/client-session-id)]
+      (overlay-state/clear-client-overlay-session! session-id))))
 
 (defn spawn-local-scripted-effect! [effect-id]
   (ScriptedEffectSpawner/spawnLocal effect-id))
@@ -70,6 +75,8 @@
   (with-client-session #(power-runtime/client-abort-all!)))
 
 (defn tick-client! []
+  (session-cleanup/tick-connection-change!
+   {:clear-owner-input-state! key-input/clear-owner-input-state!})
   (key-input/tick-input!)
   (particle/tick-particles!)
   (sound/tick-sounds!)

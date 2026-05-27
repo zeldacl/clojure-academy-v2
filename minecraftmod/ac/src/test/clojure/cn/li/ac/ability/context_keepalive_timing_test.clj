@@ -5,7 +5,7 @@
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 
-(def ^:private test-context-owner {:session-id :test-session})
+(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
 
 (defn- with-system-property
   [k v f]
@@ -38,7 +38,8 @@
          (fn [ctx-id]
            (swap! sends conj ctx-id)))
 
-        (is (= ctx/STATUS-ALIVE (:status (ctx/get-context in-window-id))))
-        (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context expired-id))))
+        (binding [ctx/*context-owner* test-context-owner]
+          (is (= ctx/STATUS-ALIVE (:status (ctx/get-context in-window-id))))
+          (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context expired-id)))))
         (is (= [expired-id] @sends))
         (is (= 1 (get (ctx/lifecycle-counters-snapshot) :timeout-terminated 0)))))))

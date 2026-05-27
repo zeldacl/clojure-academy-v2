@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.server.effect.state-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.server.effect.core :as effect]
@@ -17,22 +17,24 @@
     (effect/init-default-ops!)
     (f)))
 
-(def ^:private test-context-owner {:session-id :test-session})
+(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
 
 (deftest assoc-state-op-test
   (let [c (ctx/new-server-context "p" :sk "ctx-st" test-context-owner)]
     (ctx/register-context! c)
-    (effect/run-op! {:ctx-id "ctx-st" :player-id "p"}
-                    [:assoc-state {:k :foo :v 42}])
-    (is (= 42 (get-in (ctx/get-context "ctx-st") [:skill-state :foo])))))
+    (binding [ctx/*context-owner* test-context-owner]
+      (effect/run-op! {:ctx-id "ctx-st" :player-id "p"}
+                      [:assoc-state {:k :foo :v 42}])
+      (is (= 42 (get-in (ctx/get-context "ctx-st") [:skill-state :foo]))))))
 
 (deftest charge-tick-op-test
   (let [c (ctx/new-server-context "p" :sk "ctx-ch" test-context-owner)]
     (ctx/register-context! c)
-    (let [out (effect/run-op! {:ctx-id "ctx-ch" :player-id "p"}
-                              [:charge-tick {:k :ticks :max 5}])]
-      (is (= 1 (:ticks out)))
-      (is (= 1 (get-in (ctx/get-context "ctx-ch") [:skill-state :ticks]))))))
+    (binding [ctx/*context-owner* test-context-owner]
+      (let [out (effect/run-op! {:ctx-id "ctx-ch" :player-id "p"}
+                                [:charge-tick {:k :ticks :max 5}])]
+        (is (= 1 (:ticks out)))
+        (is (= 1 (get-in (ctx/get-context "ctx-ch") [:skill-state :ticks])))))))
 
 (deftest overload-floor-op-test
   (ps/get-or-create-player-state! "of-p")

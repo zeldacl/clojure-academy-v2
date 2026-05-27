@@ -85,6 +85,31 @@
     (swap! request-counter dissoc owner-key)
     nil))
 
+(defn clear-client-session-state!
+  [client-session-id]
+  (swap! pending-requests
+         (fn [entries]
+           (into {}
+                 (remove (fn [[[[entry-session-id _channel-id] _request-id] _entry]]
+                           (= client-session-id entry-session-id)))
+                 entries)))
+  (swap! push-handlers
+         (fn [handlers]
+           (into {}
+                 (remove (fn [[handler-key _handler]]
+                           (let [[owner-key _msg-id] handler-key]
+                             (and (vector? owner-key)
+                                  (= 2 (count owner-key))
+                                  (= client-session-id (first owner-key))))))
+                 handlers)))
+  (swap! request-counter
+         (fn [counters]
+           (into {}
+                 (remove (fn [[[entry-session-id _channel-id] _counter]]
+                           (= client-session-id entry-session-id)))
+                 counters)))
+  nil)
+
 (defn expire-pending-requests!
   ([]
    (expire-pending-requests! (now-ms)))

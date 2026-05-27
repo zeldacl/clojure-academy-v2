@@ -2,8 +2,11 @@
   "Loader-agnostic player lifecycle flow for runtime state.
 
   Platform layers provide concrete persistence/sync callbacks and event binding."
-  (:require [cn.li.mcmod.hooks.core :as player-hooks])
+  (:require [cn.li.mc1201.runtime.spi.server-context :as server-context-spi]
+            [cn.li.mcmod.hooks.core :as player-hooks])
   (:import [net.minecraft.world.entity.player Player]))
+
+(defonce ^:private server-stop-cleanup-installed? (atom false))
 
 (defn- player-uuid
   [^Player player]
@@ -23,6 +26,10 @@
                       {:opts (select-keys opts [:server-session-id :session-id :server-tick-id])})))
     (cond-> {:server-session-id session-id}
       (:server-tick-id opts) (assoc :server-tick-id (:server-tick-id opts)))))
+
+(defn- server-owner
+  [server]
+  {:server-session-id [:server (System/identityHashCode server)]})
 
 (defn- with-player-state-owner
   [owner f]
@@ -53,6 +60,26 @@
          (when save-player-state!
            (save-player-state! player))
          (player-hooks/on-player-logout! uuid)))))
+
+(defn on-server-stop!
+  [server {:keys [cleanup-session!]}]
+  (when server
+    (let [owner (server-owner server)
+          session-id (:server-session-id owner)]
+      (with-player-state-owner owner
+        #(do
+           (player-hooks/on-server-stop! session-id)
+           (when cleanup-session!
+             (cleanup-session! session-id)))))))
+
+(defn install-server-stop-cleanup!
+  [{:keys [cleanup-session!] :as opts}]
+  (server-context-spi/install-server-context!)
+  (when (compare-and-set! server-stop-cleanup-installed? false true)
+    (server-context-spi/on-server-unavailable!
+      (fn [server]
+        (on-server-stop! server (assoc opts :cleanup-session! cleanup-session!)))))
+  nil)
 
 (defn on-player-clone!
   [old-player new-player _alive {:keys [clone-player-state! mark-player-dirty! send-sync-now! clear-player-dirty!] :as opts}]

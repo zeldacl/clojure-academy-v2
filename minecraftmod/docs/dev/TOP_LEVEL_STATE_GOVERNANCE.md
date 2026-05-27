@@ -45,14 +45,21 @@ Run the report-only audit with:
 cmd /c .\gradlew.bat auditTopLevelMutableState
 ```
 
+To fail the build when multiplayer owner governance drifts, run:
+
+```powershell
+cmd /c .\gradlew.bat verifyMultiplayerOwnerGuards
+```
+
 The task writes `build/reports/top-level-state/audit.md`. It scans main Clojure
 sources for top-level `def`/`defonce` forms that contain `atom`,
 `atom-registry`, or `delay`, then cross-references
 `docs/dev/top-level-mutable-state-whitelist.tsv`.
 
-This task is intentionally report-only during the migration. Once P0/P1 runtime
-state has moved behind explicit owners, convert unclassified or forbidden S2
-entries into a failing guard and wire it into `verifyCleanupResidueGuards`.
+`auditTopLevelMutableState` remains the human-readable report, while
+`verifyMultiplayerOwnerGuards` turns it into a failing guard by requiring zero
+unclassified findings and zero stale whitelist entries. The guard is wired into
+`verifyCleanupResidueGuards`.
 
 ## Whitelist format
 

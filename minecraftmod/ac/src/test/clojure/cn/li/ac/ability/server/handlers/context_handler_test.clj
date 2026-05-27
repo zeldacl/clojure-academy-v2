@@ -6,6 +6,7 @@
             [cn.li.ac.ability.server.service.context-runtime :as ctx-rt]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.test.support.contexts :as test-contexts]))
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
@@ -18,9 +19,19 @@
     (context-handler/reset-rejection-counters!)
     (input-handler/reset-rejection-counters!)))
 
+(def ^:private test-server-session-id [:server :handler-test])
+
 (defn- server-owner [player-uuid]
   {:logical-side :server
-   :session-id player-uuid})
+   :server-session-id test-server-session-id
+   :session-id [test-server-session-id player-uuid]
+   :player-uuid player-uuid})
+
+(defn- with-server-player-owner
+  [player-uuid f]
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id test-server-session-id
+                                                :player-uuid player-uuid}]
+    (f)))
 
 (defn- owned-server-context [player-uuid ctx-id]
   (assoc (ctx/new-server-context player-uuid :test-skill ctx-id (server-owner player-uuid))
@@ -38,28 +49,34 @@
       (binding [ctx/*context-owner* (server-owner "p1")]
         (ctx/ctx-on! ctx-id :test/channel #(swap! events conj %)))
 
-      (context-handler/handle-keepalive-context {:ctx-id ctx-id} "p2")
+      (with-server-player-owner "p2"
+        #(context-handler/handle-keepalive-context {:ctx-id ctx-id} "p2"))
       (is (= 1 (:last-keepalive-ms (get-owned-context "p1" ctx-id))))
 
-      (context-handler/handle-channel-context {:ctx-id ctx-id
-                                               :channel :test/channel
-                                               :payload {:n 1}}
-                                              "p2")
+      (with-server-player-owner "p2"
+        #(context-handler/handle-channel-context {:ctx-id ctx-id
+                                                  :channel :test/channel
+                                                  :payload {:n 1}}
+                                                 "p2"))
       (is (empty? @events))
 
-      (context-handler/handle-terminate-context {:ctx-id ctx-id} "p2")
+      (with-server-player-owner "p2"
+        #(context-handler/handle-terminate-context {:ctx-id ctx-id} "p2"))
       (is (= ctx/STATUS-ALIVE (:status (get-owned-context "p1" ctx-id))))
 
-      (context-handler/handle-keepalive-context {:ctx-id ctx-id} "p1")
+      (with-server-player-owner "p1"
+        #(context-handler/handle-keepalive-context {:ctx-id ctx-id} "p1"))
       (is (< 1 (:last-keepalive-ms (get-owned-context "p1" ctx-id))))
 
-      (context-handler/handle-channel-context {:ctx-id ctx-id
-                                               :channel :test/channel
-                                               :payload {:n 2}}
-                                              "p1")
+      (with-server-player-owner "p1"
+        #(context-handler/handle-channel-context {:ctx-id ctx-id
+                                                  :channel :test/channel
+                                                  :payload {:n 2}}
+                                                 "p1"))
       (is (= [{:n 2}] @events))
 
-      (context-handler/handle-terminate-context {:ctx-id ctx-id} "p1")
+      (with-server-player-owner "p1"
+        #(context-handler/handle-terminate-context {:ctx-id ctx-id} "p1"))
       (is (= ctx/STATUS-TERMINATED (:status (get-owned-context "p1" ctx-id)))))))
 
 (deftest input-handlers-require-context-owner-and-refresh-keepalive-test
@@ -67,10 +84,12 @@
     (let [ctx-id "ctx-input"]
       (ctx/register-context! (owned-server-context "p1" ctx-id))
 
-      (input-handler/handle-key-tick-skill {:ctx-id ctx-id} "p2")
+      (with-server-player-owner "p2"
+        #(input-handler/handle-key-tick-skill {:ctx-id ctx-id} "p2"))
       (is (= 1 (:last-keepalive-ms (get-owned-context "p1" ctx-id))))
 
-      (input-handler/handle-key-tick-skill {:ctx-id ctx-id} "p1")
+      (with-server-player-owner "p1"
+        #(input-handler/handle-key-tick-skill {:ctx-id ctx-id} "p1"))
       (is (< 1 (:last-keepalive-ms (get-owned-context "p1" ctx-id)))))))
 
 (deftest slot-key-tick-handler-refreshes-keepalive-without-dispatching-runtime-test
@@ -81,7 +100,8 @@
       (with-redefs [ctx-rt/handle-key-tick! (fn [& args]
                                               (swap! dispatch-calls conj args)
                                               true)]
-        (input-handler/handle-key-tick-skill {:ctx-id ctx-id} "p1")
+        (with-server-player-owner "p1"
+          #(input-handler/handle-key-tick-skill {:ctx-id ctx-id} "p1"))
         (is (empty? @dispatch-calls))
         (is (< 1 (:last-keepalive-ms (get-owned-context "p1" ctx-id))))))))
 
@@ -94,12 +114,14 @@
       (binding [ctx/*context-owner* (server-owner "p1")]
         (ctx/ctx-on! ctx-id :test/channel #(swap! events conj %)))
 
-      (context-handler/handle-keepalive-context {:ctx-id ctx-id} "p1")
-      (context-handler/handle-channel-context {:ctx-id ctx-id
-                                               :channel :test/channel
-                                               :payload {:n 1}}
-                                              "p1")
-      (is (= 1 (:last-keepalive-ms (ctx/get-context ctx-id))))
+      (with-server-player-owner "p1"
+        #(context-handler/handle-keepalive-context {:ctx-id ctx-id} "p1"))
+      (with-server-player-owner "p1"
+        #(context-handler/handle-channel-context {:ctx-id ctx-id
+                                                  :channel :test/channel
+                                                  :payload {:n 1}}
+                                                 "p1"))
+      (is (= 1 (:last-keepalive-ms (get-owned-context "p1" ctx-id))))
       (is (empty? @events))
       (is (= 2 (get (context-handler/rejection-counters-snapshot) :ctx-not-alive 0))))))
 
@@ -110,7 +132,8 @@
                                     :input-state :idle
                                     :last-keepalive-ms 1))
 
-      (input-handler/handle-key-down-skill {:ctx-id ctx-id :skill-id :other-skill} "p2")
+      (with-server-player-owner "p2"
+        #(input-handler/handle-key-down-skill {:ctx-id ctx-id :skill-id :other-skill} "p2"))
       (is (= "p1" (:player-uuid (get-owned-context "p1" ctx-id))))
       (is (= :test-skill (:skill-id (get-owned-context "p1" ctx-id))))
       (is (= :idle (:input-state (get-owned-context "p1" ctx-id))))
@@ -128,9 +151,10 @@
                     ctx-rt/handle-key-down! (fn [ctx-id _payload _terminate-fn]
                                               (swap! rt-calls conj ctx-id)
                                               true)]
-        (is (nil? (input-handler/handle-key-down-skill {:ctx-id "ctx-missing"
-                                                        :skill-id :arc-gen}
-                                                       "p1")))
+        (is (nil? (with-server-player-owner "p1"
+               #(input-handler/handle-key-down-skill {:ctx-id "ctx-missing"
+                        :skill-id :arc-gen}
+                       "p1"))))
         (is (empty? @establish-calls))
         (is (empty? @rt-calls))
         (is (= 1 (get (input-handler/rejection-counters-snapshot) :ctx-not-found 0)))))))
@@ -145,19 +169,23 @@
       (with-redefs [ctx-rt/handle-key-down! (fn [_ctx-id _payload _terminate-fn]
                                               (swap! down-calls inc)
                                               true)]
-        (is (nil? (input-handler/handle-key-down-skill {:ctx-id ctx-id
-                                                        :skill-id :arc-gen}
-                                                       "p1")))
+        (is (nil? (with-server-player-owner "p1"
+               #(input-handler/handle-key-down-skill {:ctx-id ctx-id
+                        :skill-id :arc-gen}
+                       "p1"))))
         (is (= 0 @down-calls))))))
 
 (deftest malformed-context-and-input-payloads-record-payload-invalid-test
   (with-redefs [uuid/player-uuid identity]
-    (context-handler/handle-keepalive-context {:ctx-id nil} "p1")
-    (context-handler/handle-channel-context {:ctx-id "ctx-x"
-                                             :channel nil
-                                             :payload {}}
-                                            "p1")
-    (input-handler/handle-key-down-skill {:ctx-id "" :skill-id :arc-gen} "p1")
+    (with-server-player-owner "p1"
+      #(context-handler/handle-keepalive-context {:ctx-id nil} "p1"))
+    (with-server-player-owner "p1"
+      #(context-handler/handle-channel-context {:ctx-id "ctx-x"
+                                                :channel nil
+                                                :payload {}}
+                                               "p1"))
+    (with-server-player-owner "p1"
+      #(input-handler/handle-key-down-skill {:ctx-id "" :skill-id :arc-gen} "p1"))
     (is (= 2 (get (context-handler/rejection-counters-snapshot) :payload-invalid 0)))
     (is (= 1 (get (input-handler/rejection-counters-snapshot) :payload-invalid 0)))))
 
@@ -166,11 +194,13 @@
     (let [ctx-id "ctx-begin-owned"
           establish-calls (atom [])]
       (ctx/register-context! (assoc (owned-server-context "owner" ctx-id)
-                                    :session-id "attacker"))
+                                    :session-id [test-server-session-id "attacker"]))
       (with-redefs [ctx-mgr/establish-context! (fn [& args]
                                                  (swap! establish-calls conj args))]
-        (context-handler/handle-begin-link-context {:ctx-id nil :skill-id :arc-gen} "owner")
-        (context-handler/handle-begin-link-context {:ctx-id ctx-id :skill-id :arc-gen} "attacker")
+        (with-server-player-owner "owner"
+          #(context-handler/handle-begin-link-context {:ctx-id nil :skill-id :arc-gen} "owner"))
+        (with-server-player-owner "attacker"
+          #(context-handler/handle-begin-link-context {:ctx-id ctx-id :skill-id :arc-gen} "attacker"))
         (is (empty? @establish-calls))
         (is (= 1 (get (context-handler/rejection-counters-snapshot) :payload-invalid 0)))
         (is (= 1 (get (context-handler/rejection-counters-snapshot) :ctx-not-owner 0)))))))
@@ -184,8 +214,10 @@
                                                  (ctx/register-context!
                                                   (assoc (ctx/new-server-context player-uuid skill-id ctx-id)
                                                          :input-state :idle)))]
-        (context-handler/handle-begin-link-context {:ctx-id ctx-id :skill-id :railgun} "p1")
-        (context-handler/handle-begin-link-context {:ctx-id ctx-id :skill-id :meltdowner} "p2"))
+        (with-server-player-owner "p1"
+          #(context-handler/handle-begin-link-context {:ctx-id ctx-id :skill-id :railgun} "p1"))
+        (with-server-player-owner "p2"
+          #(context-handler/handle-begin-link-context {:ctx-id ctx-id :skill-id :meltdowner} "p2")))
       (is (= [["p1" ctx-id :railgun]
               ["p2" ctx-id :meltdowner]]
              @establish-calls))

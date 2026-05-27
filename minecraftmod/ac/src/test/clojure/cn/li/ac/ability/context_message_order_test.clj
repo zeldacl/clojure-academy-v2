@@ -6,6 +6,7 @@
             [cn.li.ac.ability.server.handlers.input-handler :as input-handler]
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.server.service.context-runtime :as ctx-rt]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.util.uuid :as uuid]))
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
@@ -18,9 +19,13 @@
     (context-handler/reset-rejection-counters!)
     (input-handler/reset-rejection-counters!)))
 
+(def ^:private test-server-session-id :test-server-session)
+
 (defn- server-owner [player-uuid]
   {:logical-side :server
-   :session-id player-uuid})
+  :server-session-id test-server-session-id
+  :session-id [test-server-session-id player-uuid]
+  :player-uuid player-uuid})
 
 (defn- get-owned-context [player-uuid ctx-id]
   (ctx/get-context (server-owner player-uuid) ctx-id))
@@ -35,18 +40,20 @@
 (deftest out-of-order-key-tick-and-key-up-before-key-down-are-ignored-test
   (let [ctx-id "ctx-order-1"]
     (seed-owned-alive-context! "p1" ctx-id)
-    (is (nil? (ctx-rt/handle-key-tick! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-    (is (nil? (ctx-rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-    (let [ctx-map (ctx/get-context ctx-id)]
-      (is (= ctx/STATUS-ALIVE (:status ctx-map)))
-      (is (= :idle (:input-state ctx-map))))))
+    (binding [ctx/*context-owner* (server-owner "p1")]
+      (is (nil? (ctx-rt/handle-key-tick! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
+      (is (nil? (ctx-rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
+      (let [ctx-map (ctx/get-context ctx-id)]
+        (is (= ctx/STATUS-ALIVE (:status ctx-map)))
+        (is (= :idle (:input-state ctx-map)))))))
 
 (deftest out-of-order-key-messages-are-counted-at-handler-boundary-test
   (with-redefs [uuid/player-uuid identity]
     (let [ctx-id "ctx-order-handler"]
       (seed-owned-alive-context! "p1" ctx-id)
-      (is (nil? (input-handler/handle-key-tick-skill {:ctx-id ctx-id :skill-id :arc-gen} "p1")))
-      (is (nil? (input-handler/handle-key-up-skill {:ctx-id ctx-id :skill-id :arc-gen} "p1")))
+      (binding [runtime-hooks/*player-state-owner* {:server-session-id test-server-session-id}]
+        (is (nil? (input-handler/handle-key-tick-skill {:ctx-id ctx-id :skill-id :arc-gen} "p1")))
+        (is (nil? (input-handler/handle-key-up-skill {:ctx-id ctx-id :skill-id :arc-gen} "p1"))))
       (is (= ctx/STATUS-ALIVE (:status (get-owned-context "p1" ctx-id))))
       (is (= :idle (:input-state (get-owned-context "p1" ctx-id))))
       (is (= 2 (get (input-handler/rejection-counters-snapshot) :message-out-of-order 0))))))
@@ -56,9 +63,10 @@
     (let [ctx-id "ctx-order-2"
           sends (atom 0)]
       (seed-owned-alive-context! "p1" ctx-id)
-      (with-redefs [ctx-mgr/send-terminated-context! (fn [_] (swap! sends inc))]
-        (context-handler/handle-terminate-context {:ctx-id ctx-id} "p1")
-        (context-handler/handle-terminate-context {:ctx-id ctx-id} "p1"))
+      (binding [runtime-hooks/*player-state-owner* {:server-session-id test-server-session-id}]
+        (with-redefs [ctx-mgr/send-terminated-context! (fn [_] (swap! sends inc))]
+          (context-handler/handle-terminate-context {:ctx-id ctx-id} "p1")
+          (context-handler/handle-terminate-context {:ctx-id ctx-id} "p1")))
       (is (= 1 @sends))
       (is (= ctx/STATUS-TERMINATED (:status (get-owned-context "p1" ctx-id)))))))
 
@@ -66,8 +74,9 @@
   (with-redefs [uuid/player-uuid identity]
     (let [ctx-id "ctx-order-3"]
       (seed-owned-alive-context! "p1" ctx-id)
-      (context-handler/handle-terminate-context {:ctx-id ctx-id} "p1")
-      (context-handler/handle-keepalive-context {:ctx-id ctx-id} "p1")
+      (binding [runtime-hooks/*player-state-owner* {:server-session-id test-server-session-id}]
+        (context-handler/handle-terminate-context {:ctx-id ctx-id} "p1")
+        (context-handler/handle-keepalive-context {:ctx-id ctx-id} "p1"))
       (let [ctx-map (get-owned-context "p1" ctx-id)]
         (is (= ctx/STATUS-TERMINATED (:status ctx-map)))
         (is (= 1 (:last-keepalive-ms ctx-map))))

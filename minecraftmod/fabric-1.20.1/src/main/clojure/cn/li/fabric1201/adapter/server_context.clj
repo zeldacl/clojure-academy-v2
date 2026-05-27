@@ -37,8 +37,8 @@
                    (server-context-spi/notify-server-available! server))))
     (.register ServerLifecycleEvents/SERVER_STOPPED
                (reify ServerLifecycleEvents$ServerStopped
-                 (onServerStopped [_ _server]
+                 (onServerStopped [_ server]
                    (reset! current-server* nil)
-                   (server-context-spi/notify-server-unavailable!))))
+                   (server-context-spi/notify-server-unavailable! server))))
     (log/info "Fabric runtime server context installed"))
   nil)

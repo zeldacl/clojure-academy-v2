@@ -11,6 +11,7 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 (def ^:private spec db/directed-blastwave)
+(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
 
 (defn- mock-cfg-int [field]
   (case field
@@ -180,7 +181,8 @@
                   ctx/terminate-context! terminate-context!
                   fx/send-end! (fn [ctx-id ch payload]
                                  (swap! end-calls* conj [ctx-id ch payload]))]
-      (tick-fn {:ctx-id "ctx-punch"}))
+      (binding [ctx/*context-owner* test-context-owner]
+        (tick-fn {:ctx-id "ctx-punch"})))
 
     (is (= [["ctx-punch" :directed-blastwave/fx-end {:performed? true}]] @end-calls*))
     (is (= ["ctx-punch"] @terminate-calls))

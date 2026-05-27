@@ -30,6 +30,13 @@
 	[uuid-str]
 	[(session-id) (str uuid-str)])
 
+(defn- owner-session-id
+	[owner]
+	(require-session-id owner
+						(or (:server-session-id owner)
+								(:client-session-id owner)
+								(:session-id owner))))
+
 (defn- normalize-state-key
 	[k]
 	(if (vector? k)
@@ -63,6 +70,20 @@
 
 (defn remove-player-state! [uuid-str]
 	(swap! player-states dissoc (player-state-key uuid-str)))
+
+(defn clear-session-player-states!
+	"Remove all player states owned by one server/client session."
+	[owner-or-session-id]
+	(let [sid (if (map? owner-or-session-id)
+					(owner-session-id owner-or-session-id)
+					owner-or-session-id)]
+		(swap! player-states
+				 (fn [states]
+					 (into {}
+							 (remove (fn [[state-key _state]]
+										 (= sid (first (normalize-state-key state-key)))))
+							 states))))
+	nil)
 
 (defn list-player-uuids []
 	(let [sid (session-id)]

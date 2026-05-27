@@ -20,7 +20,7 @@
 
 (use-fixtures :each reset-test-state!)
 
-(def ^:private test-context-owner {:session-id :test-session})
+(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
 
 (defn- seed-player-state!
   [uuid]
@@ -41,10 +41,11 @@
         _ (ps/update-cooldown-data! uuid cd-svc/set-main-cooldown :arc-gen 10)
         c (ctx/new-server-context uuid :arc-gen "ctx-cd" test-context-owner)]
     (ctx/register-context! c)
+  (binding [ctx/*context-owner* test-context-owner]
     (is (false? (rt/handle-key-down! "ctx-cd" {:ctx-id "ctx-cd" :skill-id :arc-gen}))
-        "key-down should be rejected while main cooldown is active")
+      "key-down should be rejected while main cooldown is active")
     (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context "ctx-cd")))
-        "rejected key-down should terminate context")))
+      "rejected key-down should terminate context"))))
 
 (deftest key-tick-dispatches-while-active-test
   (let [uuid "test-player-resource"
@@ -52,10 +53,11 @@
         c (-> (ctx/new-server-context uuid :arc-gen "ctx-res" test-context-owner)
               (assoc :input-state :active))]
     (ctx/register-context! c)
+  (binding [ctx/*context-owner* test-context-owner]
     (is (true? (rt/handle-key-tick! "ctx-res" {:ctx-id "ctx-res" :skill-id :arc-gen}))
-        "active context should accept key-tick")
+      "active context should accept key-tick")
     (is (= ctx/STATUS-ALIVE (:status (ctx/get-context "ctx-res")))
-        "key-tick keeps context alive")))
+      "key-tick keeps context alive"))))
 
 (deftest cooldown-policy-helper-test
   (testing "manual cooldown mode disables auto main cooldown"
@@ -84,13 +86,14 @@
                                          :ctrl-id :arc-gen
                                          :cooldown {:mode :manual}
                                          :input-policy {:terminate-on-key-up? false}})]
+      (binding [ctx/*context-owner* test-context-owner]
       (is (true? (rt/handle-key-up! "ctx-sticky" {:ctx-id "ctx-sticky" :skill-id :arc-gen}))
-          "key-up should be handled")
+        "key-up should be handled")
       (let [updated (ctx/get-context "ctx-sticky")]
         (is (= ctx/STATUS-ALIVE (:status updated))
-            "context remains alive when termination policy is disabled")
+          "context remains alive when termination policy is disabled")
         (is (= :idle (:input-state updated))
-            "input state resets to :idle so subsequent key-down can reactivate")))))
+          "input state resets to :idle so subsequent key-down can reactivate"))))))
 
 (deftest pattern-handled-key-up-skips-generic-perform-and-cooldown-test
   (let [uuid "test-player-pattern-key-up"
@@ -110,11 +113,12 @@
                   skill-rt/dispatch! (fn [_ _ _] true)
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
+      (binding [ctx/*context-owner* test-context-owner]
       (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
       (is (= 0 (cd/get-remaining (:cooldown-data (ps/get-player-state uuid)) :arc-gen :main))
-          "generic key-up should not apply cooldown when pattern runtime owns settlement")
+        "generic key-up should not apply cooldown when pattern runtime owns settlement")
       (is (= [evt/EVT-CONTEXT-KEY-UP] (map :event/type @events*)))
-      (is (not-any? #(= evt/EVT-SKILL-PERFORM (:event/type %)) @events*)))))
+      (is (not-any? #(= evt/EVT-SKILL-PERFORM (:event/type %)) @events*))))))
 
 (deftest key-input-lifecycle-dispatches-distinct-callback-keys-test
   (let [uuid "test-player-callbacks"
@@ -134,10 +138,11 @@
                                        (swap! callback-keys conj cb-key)
                                        true)
                   evt/fire-ability-event! (fn [_] nil)]
-      (is (true? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
-      (is (true? (rt/handle-key-tick! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
-      (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
-      (is (true? (rt/handle-key-abort! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
-      (is (= [:on-key-down :on-key-tick :on-key-up :on-key-abort] @callback-keys))
-      (is (= [ctx-id] @terminated))
-      (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id)))))))
+      (binding [ctx/*context-owner* test-context-owner]
+        (is (true? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
+        (is (true? (rt/handle-key-tick! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
+        (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
+        (is (true? (rt/handle-key-abort! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
+        (is (= [:on-key-down :on-key-tick :on-key-up :on-key-abort] @callback-keys))
+        (is (= [ctx-id] @terminated))
+        (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))

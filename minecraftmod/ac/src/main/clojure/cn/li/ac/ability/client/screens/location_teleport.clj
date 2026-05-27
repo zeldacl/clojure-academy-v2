@@ -173,7 +173,12 @@
    (when-let [owner-key (current-owner-key)]
      (close-screen! owner-key)))
   ([owner]
-   (swap-screen-state! owner assoc :open? false)))
+   (swap! screen-state
+          (fn [store]
+            (let [store (normalized-store store)
+                  owner-key (screen-owner-key owner)]
+              (cond-> (update store :states dissoc owner-key)
+                (= owner-key (:current-owner store)) (assoc :current-owner nil)))))))
 
 (defn apply-server-payload!
   "Apply server query payload to existing screen state (used before screen opens)."

@@ -102,6 +102,12 @@
   []
   @scheduler-states)
 
+(defn clear-session-scheduler-state!
+  "Remove all scheduler state for one server session."
+  [session-key]
+  (swap! scheduler-states dissoc session-key)
+  nil)
+
 (defn reset-scheduler-for-test!
   ([]
    (reset-scheduler-for-test! {}))

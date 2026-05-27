@@ -23,6 +23,7 @@
 (defonce ^:private runtime-hooks
   (atom {:on-player-login! noop
          :on-player-logout! noop
+      :on-server-stop! noop
          :on-player-clone! noop
          :on-player-death! noop
          :on-player-dimension-change! noop
@@ -89,6 +90,7 @@
          :client-on-movement-key-tick! noop
          :client-on-movement-key-up! noop
          :client-on-slot-wheel! noop
+         :client-clear-owner-state! noop
          :client-abort-all! noop
          :client-tick! noop
          :client-tick-hand-effects! noop
@@ -153,6 +155,10 @@
 (defn on-player-logout!
   [player-uuid]
   ((:on-player-logout! @runtime-hooks) player-uuid))
+
+(defn on-server-stop!
+  [session-id]
+  ((:on-server-stop! @runtime-hooks) session-id))
 
 (defn on-player-clone!
   [old-player-uuid new-player-uuid]
@@ -420,6 +426,10 @@
 (defn client-on-slot-wheel!
   [player-uuid key-idx delta]
   ((:client-on-slot-wheel! @runtime-hooks) player-uuid key-idx delta))
+
+(defn client-clear-owner-state!
+  [owner]
+  ((:client-clear-owner-state! @runtime-hooks) owner))
 
 (defn client-abort-all!
   []

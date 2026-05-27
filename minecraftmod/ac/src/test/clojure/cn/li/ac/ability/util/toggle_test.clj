@@ -1,12 +1,12 @@
 (ns cn.li.ac.ability.util.toggle-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.util.toggle :as tg]))
 
 (use-fixtures :each test-contexts/clean-contexts-fixture)
 
-(def ^:private test-context-owner {:session-id :test-session})
+(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
 
 (deftest init-and-query-toggle-test
   (let [m (tg/init-toggle-state :my-skill)]
@@ -22,11 +22,12 @@
 (deftest toggle-mutations-via-context-test
   (let [c (ctx/new-server-context "p" :skill "ctx-toggle" test-context-owner)]
     (ctx/register-context! c)
-    (tg/activate-toggle! "ctx-toggle" :s)
-    (is (tg/is-toggle-active? (ctx/get-context "ctx-toggle") :s))
-    (tg/update-toggle-tick! "ctx-toggle" :s)
-    (is (= 1 (:total-ticks (tg/get-toggle-state (ctx/get-context "ctx-toggle") :s))))
-    (tg/deactivate-toggle! "ctx-toggle" :s)
-    (is (false? (:active (tg/get-toggle-state (ctx/get-context "ctx-toggle") :s))))
-    (tg/remove-toggle! "ctx-toggle" :s)
-    (is (nil? (tg/get-toggle-state (ctx/get-context "ctx-toggle") :s)))))
+    (binding [ctx/*context-owner* test-context-owner]
+      (tg/activate-toggle! "ctx-toggle" :s)
+      (is (tg/is-toggle-active? (ctx/get-context "ctx-toggle") :s))
+      (tg/update-toggle-tick! "ctx-toggle" :s)
+      (is (= 1 (:total-ticks (tg/get-toggle-state (ctx/get-context "ctx-toggle") :s))))
+      (tg/deactivate-toggle! "ctx-toggle" :s)
+      (is (false? (:active (tg/get-toggle-state (ctx/get-context "ctx-toggle") :s))))
+      (tg/remove-toggle! "ctx-toggle" :s)
+      (is (nil? (tg/get-toggle-state (ctx/get-context "ctx-toggle") :s))))))

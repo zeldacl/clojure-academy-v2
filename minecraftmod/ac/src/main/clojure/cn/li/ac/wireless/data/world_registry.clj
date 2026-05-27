@@ -139,6 +139,20 @@
 	(swap! world-data-registry dissoc (world-key world))
 	(log/info (format "Removed WiWorldData for world: %s" (world-key world))))
 
+(defn clear-session-world-data!
+	"Remove all wireless world data owned by one server session."
+	[owner-or-session-id]
+	(let [session-id (if (map? owner-or-session-id)
+									(server-session-id owner-or-session-id)
+									owner-or-session-id)]
+		(swap! world-data-registry
+				 (fn [registry]
+					 (into {}
+							 (remove (fn [[[entry-session-id _world-id] _world-data]]
+									 (= session-id entry-session-id)))
+							 registry))))
+	nil)
+
 (defn registry-snapshot
 	"Return current in-memory registry snapshot. Intended for tests/diagnostics."
 	[]

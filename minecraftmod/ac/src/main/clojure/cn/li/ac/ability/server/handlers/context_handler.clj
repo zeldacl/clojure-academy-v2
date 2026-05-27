@@ -3,7 +3,8 @@
 	(:require [cn.li.ac.ability.util.uuid :as uuid]
 						[clojure.string :as str]
 						[cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
-						[cn.li.ac.ability.service.dispatcher :as ctx]))
+						[cn.li.ac.ability.service.dispatcher :as ctx]
+						[cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defonce ^:private rejection-counters (atom {}))
 
@@ -27,8 +28,16 @@
 
 (defn- server-context-owner
 	[player-uuid]
-	{:logical-side :server
-	 :session-id player-uuid})
+	(let [owner runtime-hooks/*player-state-owner*
+			server-session-id (:server-session-id owner)]
+		(when-not server-session-id
+			(throw (ex-info "Server context owner requires bound :server-session-id"
+									{:player-uuid player-uuid
+									 :player-state-owner owner})))
+		{:logical-side :server
+		 :server-session-id server-session-id
+		 :session-id [server-session-id player-uuid]
+		 :player-uuid player-uuid}))
 
 (defn handle-begin-link-context
 	[{:keys [ctx-id skill-id]} player]

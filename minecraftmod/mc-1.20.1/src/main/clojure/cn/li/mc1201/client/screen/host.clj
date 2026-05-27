@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.client.screen.host
   "CLIENT-ONLY generic screen host. AC provides draw ops and interaction handlers."
-  (:require [cn.li.mcmod.hooks.core :as client-ui]
+  (:require [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mcmod.hooks.core :as client-ui]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.client.gui.screens Screen]
@@ -14,15 +15,28 @@
         ^Font font (.-font mc)]
     (.drawString graphics font text (int x) (int y) (int color))))
 
-(defn- client-session-id
-  []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    [:client (System/identityHashCode mc)]))
-
 (defn- with-client-session
-  [f]
-  (binding [client-ui/*client-session-id* (client-session-id)]
+  [session-id f]
+  (binding [client-ui/*client-session-id* session-id]
     (f)))
+
+(defn- augment-payload-owner
+  [payload]
+  (let [payload (or payload {})
+        owner (client-session/require-local-player-owner)
+        payload-player-uuid (:player-uuid payload)
+        payload-session-id (:client-session-id payload)]
+    (when (and payload-player-uuid
+               (not= payload-player-uuid (:player-uuid owner)))
+      (throw (ex-info "Managed screen payload player UUID must match local owner"
+                      {:payload payload
+                       :owner owner})))
+    (when (and payload-session-id
+               (not= payload-session-id (:client-session-id owner)))
+      (throw (ex-info "Managed screen payload client session must match local owner"
+                      {:payload payload
+                       :owner owner})))
+    (merge payload owner {:player-uuid (:player-uuid owner)})))
 
 (defn- normalize-texture-path [path]
   (when (and path (not (str/blank? path)))
@@ -106,28 +120,31 @@
 (defn open-managed-screen!
   "Open a content-owned hosted screen by opaque screen key and payload."
   [screen-key payload]
-  (let [result (with-client-session #(client-ui/client-open-managed-screen! screen-key payload))]
+  (let [payload* (augment-payload-owner payload)
+        captured-session-id (:client-session-id payload*)
+        result (with-client-session captured-session-id
+                 #(client-ui/client-open-managed-screen! screen-key payload*))]
     (when (= (:command result) :open-screen)
       (let [^Minecraft mc (Minecraft/getInstance)
             title (or (:title result) "Managed Screen")
             char-typed-fn (when (:char-typed? result)
                             (fn [ch]
-                              (with-client-session
+                              (with-client-session captured-session-id
                                 #(client-ui/client-handle-managed-screen-char-typed! screen-key ch))))]
         (.setScreen mc
                     (create-host-screen
                       title
                       (fn [mouse-x mouse-y]
-                        (with-client-session
+                        (with-client-session captured-session-id
                           #(client-ui/client-build-managed-screen-draw-ops screen-key mouse-x mouse-y)))
                       (fn [mouse-x mouse-y]
-                        (with-client-session
+                        (with-client-session captured-session-id
                           #(client-ui/client-handle-managed-screen-click! screen-key mouse-x mouse-y)))
                       (fn [mouse-x mouse-y]
-                        (with-client-session
+                        (with-client-session captured-session-id
                           #(client-ui/client-handle-managed-screen-hover! screen-key mouse-x mouse-y)))
                       (fn []
-                        (with-client-session
+                        (with-client-session captured-session-id
                           #(client-ui/client-close-managed-screen! screen-key)))
                       char-typed-fn))))))
 

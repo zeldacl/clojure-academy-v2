@@ -600,6 +600,78 @@ tasks.register('auditTopLevelMutableState') {
     }
 }
 
+tasks.register('verifyMultiplayerOwnerGuards') {
+    group = 'verification'
+    description = 'Fail when top-level mutable runtime state is missing explicit multiplayer owner governance.'
+    dependsOn 'auditTopLevelMutableState'
+
+    def auditReportFile = layout.buildDirectory.file('reports/top-level-state/audit.md')
+
+    inputs.file(auditReportFile)
+        .withPropertyName('topLevelMutableStateAuditReport')
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+
+    doLast {
+        def reportFile = auditReportFile.get().asFile
+        if (!reportFile.exists()) {
+            throw new GradleException("Top-level mutable state audit report not found: ${reportFile}")
+        }
+
+        def reportText = reportFile.getText('UTF-8')
+        def extractCount = { String label ->
+            def matcher = (reportText =~ /(?m)^${java.util.regex.Pattern.quote(label)}:\s*(\d+)\s*$/)
+            if (!matcher.find()) {
+                throw new GradleException("Could not parse '${label}' from ${reportFile}")
+            }
+            Integer.parseInt(matcher.group(1))
+        }
+        def captureSection = { String heading ->
+            def lines = []
+            boolean capture = false
+            reportFile.readLines('UTF-8').each { String line ->
+                if (line == heading) {
+                    capture = true
+                    return
+                }
+                if (capture && line.startsWith('## ')) {
+                    capture = false
+                }
+                if (capture) {
+                    def trimmed = line.trim()
+                    if (!trimmed.isEmpty()) {
+                        lines << trimmed
+                    }
+                }
+            }
+            lines
+        }
+
+        def unclassifiedCount = extractCount('Unclassified findings')
+        def staleCount = extractCount('Stale whitelist entries')
+
+        if (unclassifiedCount > 0 || staleCount > 0) {
+            def detailLines = []
+            if (staleCount > 0) {
+                detailLines << 'stale whitelist entries:'
+                detailLines.addAll(captureSection('## Stale whitelist entries')
+                    .findAll { !it.startsWith('| ---') && !it.startsWith('| path |') }
+                    .collect { "  ${it}" })
+            }
+            if (unclassifiedCount > 0) {
+                detailLines << 'unclassified findings:'
+                detailLines.addAll(captureSection('## Unclassified findings to triage')
+                    .collect { "  ${it}" })
+            }
+            throw new GradleException(
+                "verifyMultiplayerOwnerGuards failed. Run auditTopLevelMutableState and update docs/dev/top-level-mutable-state-whitelist.tsv. " +
+                    "unclassified=${unclassifiedCount}, staleWhitelist=${staleCount}, report=${reportFile}" +
+                    (detailLines.isEmpty() ? '' : "\n - ${detailLines.join('\n - ')}"))
+        }
+
+        logger.lifecycle('[verifyMultiplayerOwnerGuards] passed. Top-level mutable state ownership audit has no unclassified or stale entries.')
+    }
+}
+
 def registerBaselineVerificationTask = { String taskName, String description, List<String> dependencies ->
     tasks.register(taskName) {
         group = 'verification'
@@ -1910,6 +1982,9 @@ tasks.register('verifyGuiNetworkTransportBoundaries') {
             def forgeText = forgeNetwork.getText('UTF-8')
             if (forgeText.contains('cn.li.mc1201.gui.network-packet-base')) {
                 violations << 'forge1201.gui.network must require cn.li.mc1201.gui.network.packet'
+            }
+            if ((forgeText =~ /(?s)\(:import.*?\[net\.minecraft\.client\s+Minecraft\]/).find()) {
+                violations << 'forge1201.gui.network must not top-level import net.minecraft.client.Minecraft; resolve it lazily inside client-only response handling'
             }
             ['defn- serialize', 'defn- deserialize'].each { token ->
                 if (forgeText.contains(token)) {
@@ -3232,6 +3307,7 @@ def cleanupResidueGuardTaskNames = [
     'verifyNoHardcodedContentBootstrap',
     'verifyNonAcNoBusinessRuntimeHookApis',
     'verifyNonAcNoBusinessSemanticResidue',
+    'verifyMultiplayerOwnerGuards',
     'verifyAcPlayerUuidSsoT',
     'verifyGameplayConfigContractSsoT',
     'verifyAbilityConfigContractSsoT',

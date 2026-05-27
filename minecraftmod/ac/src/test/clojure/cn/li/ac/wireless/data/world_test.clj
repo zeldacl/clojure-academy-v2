@@ -41,6 +41,19 @@
                         #"requires :world-id"
                         (world-registry/world-key {:server-session-id :test-session}))))
 
+(deftest clear-session-world-data-removes-only-target-session-test
+  (let [world-a {:server-session-id :session-a :world-id :overworld}
+        world-a-nether {:server-session-id :session-a :world-id :the-nether}
+        world-b {:server-session-id :session-b :world-id :overworld}]
+    (world/get-world-data world-a)
+    (world/get-world-data world-a-nether)
+    (world/get-world-data world-b)
+    (is (= 3 (count (world-registry/registry-snapshot))))
+    (world-registry/clear-session-world-data! :session-a)
+    (is (nil? (world/get-world-data-non-create world-a)))
+    (is (nil? (world/get-world-data-non-create world-a-nether)))
+    (is (some? (world/get-world-data-non-create world-b)))))
+
   (deftest world-key-isolates-session-and-dimension-test
     (let [world-a {:server-session-id :session-a :dimension-id :overworld :ref 1}
       world-a-new-ref {:server-session-id :session-a :dimension-id :overworld :ref 2}

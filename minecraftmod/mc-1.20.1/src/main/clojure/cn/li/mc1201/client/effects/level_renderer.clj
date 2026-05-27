@@ -1,8 +1,8 @@
 (ns cn.li.mc1201.client.effects.level-renderer
   "Shared client level-effect rendering core (Minecraft 1.20.1)."
-  (:require [cn.li.mcmod.hooks.core :as power-runtime])
+  (:require [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
-           [net.minecraft.client Minecraft]
            [net.minecraft.client.multiplayer ClientLevel]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.core BlockPos]
@@ -18,7 +18,22 @@
 
 (def ^:private full-bright-uv2 15728880)
 (def ^:private default-walk-speed 0.1)
-(defonce ^:private last-applied-walk-speed (atom nil))
+(defonce ^:private last-applied-walk-speed (atom {}))
+
+(defn- walk-speed-owner-key
+  [owner]
+  (client-session/owner-key owner))
+
+(defn walk-speed-snapshot
+  []
+  @last-applied-walk-speed)
+
+(defn reset-walk-speed-for-test!
+  ([]
+   (reset-walk-speed-for-test! {}))
+  ([snapshot]
+   (reset! last-applied-walk-speed (or snapshot {}))
+   nil))
 
 (defn tick-level-effects!
   []
@@ -33,17 +48,30 @@
     (catch Exception _
       nil)))
 
+(defn clear-owner-walk-speed!
+  ([owner]
+   (clear-owner-walk-speed! owner nil))
+  ([owner ^LocalPlayer player]
+   (let [owner-key (walk-speed-owner-key owner)]
+     (when (contains? @last-applied-walk-speed owner-key)
+       (when player
+         (set-local-walk-speed! player default-walk-speed))
+       (swap! last-applied-walk-speed dissoc owner-key)))
+   nil))
+
 (defn apply-local-walk-speed-from-plan!
-  [^LocalPlayer player plan]
-  (let [target-speed (:local-walk-speed plan)]
-    (if (number? target-speed)
-      (let [spd (float target-speed)]
-        (when (not= @last-applied-walk-speed spd)
-          (set-local-walk-speed! player spd)
-          (reset! last-applied-walk-speed spd)))
-      (when (some? @last-applied-walk-speed)
-        (set-local-walk-speed! player default-walk-speed)
-        (reset! last-applied-walk-speed nil)))))
+  ([^LocalPlayer player plan]
+   (when-let [owner (client-session/current-local-player-owner)]
+     (apply-local-walk-speed-from-plan! owner player plan)))
+  ([owner ^LocalPlayer player plan]
+   (let [owner-key (walk-speed-owner-key owner)
+         target-speed (:local-walk-speed plan)]
+     (if (number? target-speed)
+       (let [spd (float target-speed)]
+         (when (not= (get @last-applied-walk-speed owner-key) spd)
+           (set-local-walk-speed! player spd)
+           (swap! last-applied-walk-speed assoc owner-key spd)))
+       (clear-owner-walk-speed! owner player)))))
 
 (defn hand-center-pos
   [^LocalPlayer player]
@@ -160,12 +188,14 @@
            camera-pos
            tick
            render-plasma-op!]}]
-  (let [hand-pos (hand-center-pos player)
+  (let [owner (client-session/current-local-player-owner)
+        hand-pos (hand-center-pos player)
       frame-context {:local-player-uuid (:player-uuid hand-pos)
              :query-nearby-blocks (make-nearby-block-query-fn player)
              :world-id (some-> (.dimension (.level player)) (.location) str)}
       plan (power-runtime/client-build-level-effect-plan camera-pos hand-pos tick frame-context)]
-    (apply-local-walk-speed-from-plan! player plan)
+    (when owner
+      (apply-local-walk-speed-from-plan! owner player plan))
     (when (seq (:ops plan))
       (let [line-ops (filter #(= (:kind %) :line) (:ops plan))
             quad-ops (filter #(= (:kind %) :quad) (:ops plan))

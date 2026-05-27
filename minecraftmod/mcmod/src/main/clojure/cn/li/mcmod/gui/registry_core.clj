@@ -44,15 +44,21 @@
 
 (defn get-gui-handler [] (gui-handler/get-gui-handler))
 
-(defn register-active-container! [container] (container-state/register-active-container! container))
-(defn unregister-active-container! [container] (container-state/unregister-active-container! container))
-(defn list-active-containers [] (container-state/list-active-containers))
-(defn register-player-container! [player container] (container-state/register-player-container! player container))
+(defn register-active-container!
+  ([container] (container-state/register-active-container! container))
+  ([owner container] (container-state/register-active-container! owner container)))
+(defn unregister-active-container!
+  ([container] (container-state/unregister-active-container! container))
+  ([owner container] (container-state/unregister-active-container! owner container)))
+(defn list-active-containers
+  ([] (container-state/list-active-containers))
+  ([owner] (container-state/list-active-containers owner)))
+(defn register-player-container! [owner container] (container-state/register-player-container! owner container))
 (defn unregister-player-container!
-  ([player] (container-state/unregister-player-container! player))
-  ([player container] (container-state/unregister-player-container! player container)))
-(defn get-player-container [player] (container-state/get-player-container player))
-(defn get-player-container-from-active [player] (container-state/get-player-container-from-active player))
+  ([owner] (container-state/unregister-player-container! owner))
+  ([owner container] (container-state/unregister-player-container! owner container)))
+(defn get-player-container [owner] (container-state/get-player-container owner))
+(defn get-player-container-from-active [owner] (container-state/get-player-container-from-active owner))
 (defn get-container-for-menu [menu] (container-state/get-container-for-menu menu))
 (defn resolve-container-for-menu [menu] (container-state/resolve-container-for-menu menu))
 (defn get-container-by-id

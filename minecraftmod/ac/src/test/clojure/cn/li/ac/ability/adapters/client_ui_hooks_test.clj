@@ -3,6 +3,9 @@
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
             [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.ability.client.screens.location-teleport :as location-teleport-screen]
+            [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
+            [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.gameplay :as gameplay]
@@ -18,12 +21,16 @@
   (ps-fix/with-test-player-state-owner
    (fn []
      (client-ui-hooks/reset-client-ui-state-for-test!)
+     (client-keybinds/reset-client-keybind-state-for-test!)
      (ps/reset-player-states-for-test!)
+     (ctx/reset-contexts-for-test!)
      (try
        (binding [client-keybinds/*client-session-id* :test-session]
          (f))
        (finally
          (client-ui-hooks/reset-client-ui-state-for-test!)
+         (client-keybinds/reset-client-keybind-state-for-test!)
+         (ctx/reset-contexts-for-test!)
          (ps/reset-player-states-for-test!))))))
 
 (use-fixtures :each reset-ui-state!)
@@ -157,6 +164,64 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Client UI owner requires :player-uuid"
                         (client-ui-hooks/client-ui-state-snapshot {:client-session-id :session-a}))))
+
+(deftest client-open-managed-screen-validates-payload-owner-test
+  (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
+    (binding [client-keybinds/*client-session-id* :session-a]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"requires :player-uuid"
+                            ((:client-open-managed-screen! hooks) :ac/skill-tree {:learn-context :node-a})))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"session does not match current client session"
+                            ((:client-open-managed-screen! hooks) :ac/skill-tree {:player-uuid "p1"
+                                                                                  :client-session-id :session-b}))))))
+
+(deftest client-clear-owner-state-clears-owned-runtime-state-test
+  (let [hooks (client-ui-hooks/runtime-client-ui-hooks)
+        owner {:client-session-id :session-a
+               :player-uuid "p1"}
+        context-owner {:logical-side :client
+                       :session-id [:session-a "p1"]
+                       :player-uuid "p1"}
+        screen-calls (atom [])
+        keybind-clears (atom [])]
+    (binding [ctx/*context-owner* context-owner
+              runtime-hooks/*player-state-owner* owner]
+      (ctx/register-context! {:id "ctx-cleanup"
+                              :player-uuid "p1"
+                              :logical-side :client
+                              :session-id [:session-a "p1"]})
+      (ps/set-player-state! "p1" {:resource-data {:activated true}}))
+    (client-ui-hooks/set-slot-context-for-test! owner 0 "ctx-cleanup")
+    (client-ui-hooks/seed-vm-wave-state-for-test! owner [{:radius 1.0}] 42)
+    (with-redefs [skill-tree-screen/close-screen! (fn [screen-owner]
+                                                    (swap! screen-calls conj [:skill-tree screen-owner])
+                                                    nil)
+                  preset-editor-screen/close-screen! (fn [screen-owner]
+                                                       (swap! screen-calls conj [:preset-editor screen-owner])
+                                                       nil)
+                  location-teleport-screen/close-screen! (fn [screen-owner]
+                                                           (swap! screen-calls conj [:location-teleport screen-owner])
+                                                           nil)
+                  client-keybinds/clear-client-keybind-state! (fn [clear-owner]
+                                                                (swap! keybind-clears conj clear-owner)
+                                                                nil)]
+      ((:client-clear-owner-state! hooks) owner))
+    (is (= [[:skill-tree owner]
+            [:preset-editor owner]
+            [:location-teleport owner]]
+           @screen-calls))
+    (is (= [owner] @keybind-clears))
+    (is (= {:vm-wave-circles []
+            :vm-wave-last-spawn-ms 0
+            :slot-context-ids {}
+            :slot-key-tick-ms {}
+            :charge-coin-state nil}
+           (client-ui-hooks/client-ui-state-snapshot owner)))
+    (binding [runtime-hooks/*player-state-owner* owner]
+      (is (nil? (ps/get-player-state "p1"))))
+    (binding [ctx/*context-owner* context-owner]
+      (is (nil? (ctx/get-context "ctx-cleanup"))))))
 
 (deftest hud-render-data-hidden-when-not-activated-test
   (let [model {:cp {:cur 50.0 :max 100.0}

@@ -9,7 +9,8 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.model.ability :as ad]
             [cn.li.ac.ability.model.resource :as rd]
-            [cn.li.ac.ability.messages :as catalog]))
+            [cn.li.ac.ability.messages :as catalog]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
   (let [saved-skills (skill-registry/skill-registry-snapshot)]
@@ -25,7 +26,21 @@
 
 (use-fixtures :each reset-fixture)
 
-(def ^:private test-context-owner {:session-id :test-session})
+(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
+(def ^:private test-server-session-id :test-session)
+
+(defn- server-owner
+  [player-uuid]
+  {:logical-side :server
+   :server-session-id test-server-session-id
+   :session-id [test-server-session-id player-uuid]
+   :player-uuid player-uuid})
+
+(defn- with-server-player-owner
+  [player-uuid f]
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id test-server-session-id
+                                                :player-uuid player-uuid}]
+    (f)))
 
 (defn- seed-player! [uuid skill-kw]
   (when-not (skill-registry/get-skill skill-kw)
@@ -98,8 +113,9 @@
                                   :status ctx/STATUS-TERMINATED
                                   :terminated-at-ms fresh-ts))
     (cm/tick-context-manager!)
-    (is (nil? (ctx/get-context old-ctx-id)))
-    (is (some? (ctx/get-context fresh-ctx-id)))))
+    (binding [ctx/*context-owner* test-context-owner]
+      (is (nil? (ctx/get-context old-ctx-id)))
+      (is (some? (ctx/get-context fresh-ctx-id))))))
 
 (deftest tick-context-manager-terminates-expired-alive-context-test
   (let [ctx-id "ctx-timeout"
@@ -112,15 +128,16 @@
                             :to-server nil})
     (cm/tick-context-manager!)
     (is (= [ctx-id] @terminated))
-    (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))
+    (binding [ctx/*context-owner* test-context-owner]
+      (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id)))))))
 
 (deftest tick-player-contexts-drives-only-owned-active-server-contexts-test
   (let [calls (atom [])]
-    (ctx/register-context! (assoc (ctx/new-server-context "p1" :arc-gen "cid-1" {:logical-side :server :session-id "p1"})
+    (ctx/register-context! (assoc (ctx/new-server-context "p1" :arc-gen "cid-1" (server-owner "p1"))
                                   :input-state ctx-rt/INPUT-ACTIVE))
-    (ctx/register-context! (assoc (ctx/new-server-context "p1" :vec-accel "cid-2" {:logical-side :server :session-id "p1"})
+    (ctx/register-context! (assoc (ctx/new-server-context "p1" :vec-accel "cid-2" (server-owner "p1"))
                                   :input-state ctx-rt/INPUT-IDLE))
-    (ctx/register-context! (assoc (ctx/new-server-context "p2" :meltdowner "cid-1" {:logical-side :server :session-id "p2"})
+    (ctx/register-context! (assoc (ctx/new-server-context "p2" :meltdowner "cid-1" (server-owner "p2"))
                                   :input-state ctx-rt/INPUT-ACTIVE))
     (with-redefs [ctx-rt/handle-key-tick! (fn [ctx-id payload terminate-fn]
                                             (swap! calls conj {:ctx-id ctx-id
@@ -128,10 +145,11 @@
                                                                :owner ctx/*context-owner*
                                                                :terminate-fn (some? terminate-fn)})
                                             true)]
-      (cm/tick-player-contexts! "p1")
+      (with-server-player-owner "p1"
+        #(cm/tick-player-contexts! "p1"))
       (is (= [{:ctx-id "cid-1"
                :payload {:ctx-id "cid-1" :skill-id :arc-gen}
-               :owner {:logical-side :server :session-id "p1"}
+               :owner (server-owner "p1")
                :terminate-fn true}]
              @calls)))))
 
@@ -139,17 +157,22 @@
   (let [terminated (atom [])
         client-ctx (assoc (ctx/new-context "p1" :arc-gen {:logical-side :client :session-id [:session-a "p1"]})
                           :status ctx/STATUS-ALIVE)]
-    (ctx/register-context! (assoc (ctx/new-server-context "p1" :arc-gen "server-ctx" {:logical-side :server :session-id "p1"})
+    (ctx/register-context! (assoc (ctx/new-server-context "p1" :arc-gen "server-ctx" (server-owner "p1"))
                                   :status ctx/STATUS-ALIVE))
     (ctx/register-context! client-ctx)
     (cm/register-send-fns! {:to-client (fn [_uuid msg-id payload]
                                          (when (= catalog/MSG-CTX-TERMINATE msg-id)
                                            (swap! terminated conj (:ctx-id payload))))
                             :to-server nil})
-    (cm/abort-player-contexts! "p1")
+    (with-server-player-owner "p1"
+      #(cm/abort-player-contexts! "p1"))
     (is (= ["server-ctx"] @terminated))
-    (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context "server-ctx"))))
-    (is (= ctx/STATUS-ALIVE (:status (ctx/get-context (:id client-ctx)))))))
+    (is (= ctx/STATUS-TERMINATED
+           (:status (binding [ctx/*context-owner* (server-owner "p1")]
+                      (ctx/get-context "server-ctx")))))
+    (is (= ctx/STATUS-ALIVE
+           (:status (ctx/get-context {:logical-side :client :session-id [:session-a "p1"]}
+                                     (:id client-ctx)))))))
 
 (deftest dispatcher-timing-can-be-overridden-via-system-properties-test
   (let [keepalive-key "ac.ctx.keepalive-timeout-ms"

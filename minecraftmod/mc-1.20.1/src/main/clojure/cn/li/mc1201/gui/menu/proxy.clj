@@ -9,15 +9,50 @@
             [cn.li.mcmod.gui.container.schema :as container-schema]
             [cn.li.mc1201.gui.slots.tabbed :as tabbed-slots]
             [cn.li.mc1201.gui.slots.sync :as slots-sync]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.gui CMenuBridge]
+           [net.minecraft.server.level ServerPlayer]
+           [net.minecraft.world.entity.player Player]
            [net.minecraft.world.inventory AbstractContainerMenu Slot]
            [net.minecraft.world.item ItemStack]))
 
 (defn- owner-for-player
-  [player]
-  {:session-id (some-> player str)
-   :player player})
+  [^Player player]
+  (let [player-uuid (some-> player .getUUID str)
+        ^ServerPlayer server-player (when (instance? ServerPlayer player) player)
+        server-session-id (try
+                            (when-let [server (some-> server-player .getServer)]
+                              [:server (System/identityHashCode server)])
+                            (catch Throwable _ nil))
+        client-session-id (or runtime-hooks/*client-session-id*
+                              (when (and player (nil? server-session-id))
+                                [:client-player (System/identityHashCode player)]))]
+    (cond
+      (and server-session-id player-uuid)
+      {:server-session-id server-session-id
+       :player-uuid player-uuid
+       :player player}
+
+      (and client-session-id player-uuid)
+      {:client-session-id client-session-id
+       :player-uuid player-uuid
+       :player player}
+
+      :else
+      (throw (ex-info "GUI menu owner requires session id and player UUID"
+                      {:player player
+                       :server-session-id server-session-id
+                       :client-session-id client-session-id
+                       :player-uuid player-uuid})))))
+
+(defn- enrich-container-owner
+  [clj-container owner]
+  (cond-> (assoc clj-container :owner owner)
+    (:server-session-id owner) (assoc :server-session-id (:server-session-id owner))
+    (:client-session-id owner) (assoc :client-session-id (:client-session-id owner))
+    (:player-uuid owner) (assoc :player-uuid (:player-uuid owner))
+    (:player owner) (assoc :player (:player owner))))
 
 (defn- remove-menu!
   [this clj-container player {:keys [on-container-id
@@ -25,15 +60,17 @@
                                      log-message]
                               :or {call-super-removed? false
                                    log-message "Menu closed for player"}}]
-  (let [cid (gui/get-menu-container-id this)]
+  (let [owner (or (:owner clj-container) (owner-for-player player))
+        cid (gui/get-menu-container-id this)]
     (when cid
       (when on-container-id
-        (on-container-id (owner-for-player player) cid))
-      (gui/unregister-container-by-id! (owner-for-player player) cid)))
+        (on-container-id owner cid))
+      (gui/unregister-container-by-id! owner cid)))
   (gui/unregister-menu-container! this)
   (gui/safe-close! clj-container)
-  (gui/unregister-active-container! clj-container)
-  (gui/unregister-player-container! player clj-container)
+  (let [owner (or (:owner clj-container) (owner-for-player player))]
+    (gui/unregister-active-container! owner clj-container)
+    (gui/unregister-player-container! owner clj-container))
   (when call-super-removed?
     (let [^CMenuBridge s this]
       (.callSuperRemoved s player)))
@@ -104,12 +141,11 @@
       ItemStack/EMPTY)))
 
 (defn- finalize-menu-registration!
-  [menu window-id clj-container player]
-  (gui/register-active-container! clj-container)
-  (when player
-    (gui/register-player-container! player clj-container))
+  [menu window-id clj-container owner]
+  (gui/register-active-container! owner clj-container)
+  (gui/register-player-container! owner clj-container)
   (gui/register-menu-container! menu clj-container)
-  (gui/register-container-by-id! (owner-for-player player) window-id clj-container)
+  (gui/register-container-by-id! owner window-id clj-container)
   menu)
 
 (defn platform-menu-proxy-opts
@@ -158,7 +194,9 @@
                                            call-super-removed? false
                                            remove-log-message "Menu closed for player"
                                            quick-move-error-prefix "Error in quickMoveStack:"}}]
-  (let [tab-slot (when (tabbed/tabbed-container? clj-container)
+  (let [owner (owner-for-player player)
+        clj-container (enrich-container-owner clj-container owner)
+        tab-slot (when (tabbed/tabbed-container? clj-container)
                    (tabbed-slots/create-tab-data-slot clj-container))
         menu (proxy [CMenuBridge] [menu-type (int window-id)]
                (stillValid [player]
@@ -196,7 +234,7 @@
                (canDragTo [_slot] true))]
     (slots-sync/setup-menu-slots! menu clj-container tab-slot {:get-slot-layout get-slot-layout
                                                                :default-player-inventory-mode default-player-inventory-mode})
-    (finalize-menu-registration! menu window-id clj-container player)))
+    (finalize-menu-registration! menu window-id clj-container owner)))
 
 (defn create-platform-menu-proxy
   "Create a menu proxy with loader-specific shared options."

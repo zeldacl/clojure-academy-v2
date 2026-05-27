@@ -6,7 +6,9 @@
             [cn.li.ac.ability.server.service.context-mgr :as ctx-mgr]
             [cn.li.ac.ability.server.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.server.service.resource :as svc-res]
-            [cn.li.ac.ability.service.player-state :as ps]))
+            [cn.li.ac.ability.service.dispatcher :as ctx]
+            [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.wireless.data.world-registry :as world-registry]))
 
 (defn- reset-registries! [f]
   (let [item-actions-snapshot (item-actions/item-action-registries-snapshot)]
@@ -27,6 +29,13 @@
 
 (use-fixtures :each reset-registries!)
 (use-fixtures :each reset-lifecycle-subs!)
+(use-fixtures :each
+  (fn [f]
+    (ctx/reset-contexts-for-test!)
+    (try
+      (f)
+      (finally
+        (ctx/reset-contexts-for-test!)))))
 
 (deftest build-item-use-plan-order-test
   (testing "coin use plans consume, dispatch domain action, then spawn scripted effect"
@@ -86,6 +95,24 @@
       (evt/fire-ability-event! (evt/make-overload-event "u-overload"))
       (is (= ["u-overload"] @aborted)))))
 
+(deftest player-logout-clears-delayed-projectiles-test
+  (let [called (atom [])
+        logout! (:on-player-logout! (server-hooks/runtime-server-hooks))]
+    (with-redefs [ctx-mgr/abort-player-contexts! (fn [uuid]
+                                                   (swap! called conj [:abort uuid])
+                                                   nil)
+                  delayed-projectiles/clear-player-tasks! (fn [uuid]
+                                                            (swap! called conj [:projectiles uuid])
+                                                            nil)
+                  ps/remove-player-state! (fn [uuid]
+                                            (swap! called conj [:remove-state uuid])
+                                            nil)]
+      (logout! "player-1"))
+    (is (= [[:abort "player-1"]
+            [:projectiles "player-1"]
+            [:remove-state "player-1"]]
+           @called))))
+
 (deftest on-player-tick-drives-player-contexts-before-manager-sweep-test
   (let [calls (atom [])
         tick! (:on-player-tick! (server-hooks/runtime-server-hooks))]
@@ -111,6 +138,43 @@
               [:projectiles "p1"]
               [:context-manager]]
              @calls)))))
+
+(deftest get-context-player-uuid-requires-owner-or-unique-match-test
+  (let [get-player-uuid (:get-context-player-uuid (server-hooks/runtime-server-hooks))
+        session-a [:server-a "player-a"]
+        session-b [:server-b "player-b"]]
+    (binding [ctx/*context-owner* {:logical-side :server :session-id session-a}]
+      (ctx/register-context! {:id "dup-ctx" :player-uuid "player-a" :logical-side :server :session-id session-a})
+      (ctx/register-context! {:id "unique-ctx" :player-uuid "player-a" :logical-side :server :session-id session-a}))
+    (binding [ctx/*context-owner* {:logical-side :server :session-id session-b}]
+      (ctx/register-context! {:id "dup-ctx" :player-uuid "player-b" :logical-side :server :session-id session-b}))
+    (is (= "player-a"
+           (binding [ctx/*context-owner* {:logical-side :server :session-id session-a}]
+             (get-player-uuid "dup-ctx"))))
+    (is (= "player-a" (get-player-uuid "unique-ctx")))
+    (is (nil? (get-player-uuid "dup-ctx")))))
+
+(deftest server-stop-clears-session-state-test
+  (let [called (atom [])
+        stop! (:on-server-stop! (server-hooks/runtime-server-hooks))]
+    (with-redefs [ctx/clear-session-contexts! (fn [session-id]
+                                                (swap! called conj [:contexts session-id])
+                                                nil)
+                  ps/clear-session-player-states! (fn [session-id]
+                                                    (swap! called conj [:player-states session-id])
+                                                    nil)
+          world-registry/clear-session-world-data! (fn [session-id]
+                       (swap! called conj [:wireless session-id])
+                       nil)
+                  delayed-projectiles/clear-all-tasks! (fn []
+                                                         (swap! called conj [:projectiles])
+                                                         nil)]
+      (stop! :server-session))
+    (is (= [[:contexts :server-session]
+            [:player-states :server-session]
+          [:wireless :server-session]
+            [:projectiles]]
+           @called))))
 
       (deftest category-change-event-aborts-deactivates-and-recalculates-test
         (let [aborted (atom [])

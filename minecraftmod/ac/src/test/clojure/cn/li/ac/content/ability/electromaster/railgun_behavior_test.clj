@@ -72,16 +72,17 @@
 
 (deftest coin-throw-aborts-item-charge-and-opens-window-test
   (player-state/set-player-state! "p1" (player-state/fresh-state))
-    (ctx/register-context! {:id "ctx-1"
-                            :player-uuid "p1"
-                            :skill-id :railgun
-                            :logical-side :server
-                            :session-id :test-session
-                            :status ctx/STATUS-ALIVE
-                            :skill-state {:mode :item-charge :charge-ticks 3 :fired false}})
-    (with-redefs [log/debug (fn [& _])]
+  (ctx/register-context! {:id "ctx-1"
+                          :player-uuid "p1"
+                          :skill-id :railgun
+                          :logical-side :server
+                          :session-id :test-session
+                          :status ctx/STATUS-ALIVE
+                          :skill-state {:mode :item-charge :charge-ticks 3 :fired false}})
+  (with-redefs [log/debug (fn [& _])]
+    (binding [ctx/*context-owner* {:logical-side :server :session-id :test-session}]
       (is (true? (railgun/register-coin-throw! "p1" {:timestamp-ms 12345})))
-      (is (= :item-charge-cancelled (get-in (ctx/get-context "ctx-1") [:skill-state :mode])))))
+      (is (= :item-charge-cancelled (get-in (ctx/get-context "ctx-1") [:skill-state :mode]))))))
 
 (deftest coin-progress-threshold-status-test
   (let [below (#'railgun/qte-status 0.59)

@@ -22,6 +22,8 @@
 
 (use-fixtures :each reset-fixture)
 
+(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
+
 (deftest send-fx-reflect-entity-includes-reflected-flag-test
   (let [payload* (atom nil)]
     (with-redefs [ctx/ctx-send-to-client! (fn [_ctx-id _ch payload]
@@ -164,7 +166,8 @@
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-current")]
       (binding [vr/*reflection-chain-id* "chain-shared"]
         (vr/mark-reflecting-for-test! "p" "a" "ctx-other" "chain-shared")
-        (is (= [true 0.0] (vr/reflect-damage "p" "a" 10.0))))
+        (binding [ctx/*context-owner* test-context-owner]
+          (is (= [true 0.0] (vr/reflect-damage "p" "a" 10.0)))))
       (is (= [["w" "a" 10.0]] @applied)))))
 
 (deftest reflect-damage-recursion-state-isolated-by-chain-test
@@ -191,7 +194,8 @@
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-current")]
       (vr/mark-reflecting-for-test! "p" "a" "ctx-current" "chain-other")
       (binding [vr/*reflection-chain-id* "chain-current"]
-        (is (= [true 0.0] (vr/reflect-damage "p" "a" 10.0))))
+        (binding [ctx/*context-owner* test-context-owner]
+          (is (= [true 0.0] (vr/reflect-damage "p" "a" 10.0)))))
       (is (= [["w" "a" 10.0]] @applied)))))
 
 (deftest tick-reflect-fireball-spawn-and-discard-test

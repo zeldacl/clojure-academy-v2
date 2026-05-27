@@ -7,7 +7,9 @@
 (defn- isolate-test-ops! [f]
        (let [snapshot (effect/effect-op-registry-snapshot)]
               (effect/reset-effect-op-registry-for-test!
-               (assoc snapshot :registry (apply dissoc (:registry snapshot) test-op-keys)))
+               (-> snapshot
+                   (assoc :registry (apply dissoc (:registry snapshot) test-op-keys))
+                   (assoc :frozen? false)))
     (effect/register-op! :test-inc
                           (fn [evt {:keys [n]}]
                             (update evt :v + (double (or n 0.0)))))

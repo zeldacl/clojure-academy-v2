@@ -40,15 +40,15 @@
   (testing "runtime state registers and unregisters the full menu lifecycle"
     (let [owner {:session-id :session-a :player-uuid "player-1"}
           container {:gui-type :node :id 1}
-          player (FakePlatformObject. "player-1" nil)
           menu (FakePlatformObject. nil 17)]
-      (state/register-active-container! container)
-      (state/register-player-container! player container)
+  (state/register-active-container! owner container)
+  (state/register-player-container! owner container)
       (state/register-menu-container! menu container)
       (state/register-container-by-id! owner 17 container)
 
-      (is (= #{container} (state/list-active-containers)))
-      (is (identical? container (state/get-player-container player)))
+  (is (= #{container} (set (state/list-active-containers))))
+  (is (= [container] (vec (state/list-active-containers owner))))
+  (is (identical? container (state/get-player-container owner)))
       (is (identical? container (state/get-container-for-menu menu)))
       (is (identical? container (state/get-container-by-id owner 17)))
       (is (= 17 (state/get-menu-container-id menu)))
@@ -56,11 +56,11 @@
 
       (state/unregister-menu-container! menu)
       (state/unregister-container-by-id! owner 17)
-      (state/unregister-player-container! player)
-      (state/unregister-active-container! container)
+  (state/unregister-player-container! owner)
+  (state/unregister-active-container! owner container)
 
       (is (empty? (state/list-active-containers)))
-      (is (nil? (state/get-player-container player)))
+  (is (nil? (state/get-player-container owner)))
       (is (nil? (state/get-container-for-menu menu)))
       (is (nil? (state/get-container-by-id owner 17))))))
 
@@ -92,18 +92,38 @@
 
 (deftest player-container-stack-removes-only-closed-container-test
   (testing "closing one container does not wipe another active container for the same player"
-    (let [player (FakePlatformObject. "player-stack" nil)
+    (let [owner {:session-id :session-stack :player-uuid "player-stack"}
           c1 {:gui-type :first}
           c2 {:gui-type :second}]
-      (state/register-player-container! player c1)
-      (state/register-player-container! player c2)
+      (state/register-player-container! owner c1)
+      (state/register-player-container! owner c2)
 
-      (is (identical? c2 (state/get-player-container player)))
-      (is (= [c1 c2] (state/get-player-containers player)))
+      (is (identical? c2 (state/get-player-container owner)))
+      (is (= [c1 c2] (state/get-player-containers owner)))
 
-      (state/unregister-player-container! player c2)
-      (is (identical? c1 (state/get-player-container player)))
-      (is (= [c1] (state/get-player-containers player))))))
+      (state/unregister-player-container! owner c2)
+      (is (identical? c1 (state/get-player-container owner)))
+      (is (= [c1] (state/get-player-containers owner))))))
+
+(deftest clear-session-containers-removes-only-matching-session-test
+  (let [owner-a {:server-session-id :server-a :player-uuid "player-1"}
+        owner-b {:server-session-id :server-b :player-uuid "player-1"}
+        c1 {:gui-type :node :id :a}
+        c2 {:gui-type :node :id :b}]
+    (state/register-active-container! owner-a c1)
+    (state/register-active-container! owner-b c2)
+    (state/register-player-container! owner-a c1)
+    (state/register-player-container! owner-b c2)
+    (state/register-container-by-id! owner-a 7 c1)
+    (state/register-container-by-id! owner-b 7 c2)
+
+    (state/clear-session-containers! :server-a)
+
+    (is (nil? (state/get-player-container owner-a)))
+    (is (identical? c2 (state/get-player-container owner-b)))
+    (is (nil? (state/get-container-by-id owner-a 7)))
+    (is (identical? c2 (state/get-container-by-id owner-b 7)))
+    (is (= [c2] (vec (state/list-active-containers owner-b))))))
 
 (deftest client-container-side-channel-stays-absent-test
   (testing "the legacy global client-container API does not return"

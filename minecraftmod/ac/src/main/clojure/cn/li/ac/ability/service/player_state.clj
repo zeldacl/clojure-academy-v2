@@ -20,6 +20,7 @@
 (def fresh-state core/fresh-state)
 (def get-or-create-player-state! core/get-or-create-player-state!)
 (def remove-player-state! core/remove-player-state!)
+(def clear-session-player-states! core/clear-session-player-states!)
 (def list-player-uuids core/list-player-uuids)
 (def snapshot-player-states core/snapshot-player-states)
 (def reset-player-states-for-test! core/reset-player-states-for-test!)

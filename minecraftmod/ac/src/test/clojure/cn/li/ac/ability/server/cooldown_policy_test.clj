@@ -15,7 +15,7 @@
 
 (use-fixtures :each reset-test-state!)
 
-(def ^:private test-context-owner {:session-id :test-session})
+(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
 
 (defn- seed-player!
   ([uuid]
@@ -42,9 +42,10 @@
                                          :cooldown {:mode :default}
                                          :cooldown-ticks 7})
                   evt/fire-ability-event! (fn [_] nil)]
-      (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-      (is (= 20 (cd/get-remaining (:cooldown-data (ps/get-player-state uuid)) :arc-gen :main)))
-      (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id)))))))
+      (binding [ctx/*context-owner* test-context-owner]
+        (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
+        (is (= 20 (cd/get-remaining (:cooldown-data (ps/get-player-state uuid)) :arc-gen :main)))
+        (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
 
 (deftest manual-key-up-does-not-apply-automatic-main-cooldown-test
   (let [uuid "cooldown-player-manual"
@@ -57,6 +58,7 @@
                                          :cooldown {:mode :manual}
                                          :cooldown-ticks 9})
                   evt/fire-ability-event! (fn [_] nil)]
-      (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-      (is (= 0 (cd/get-remaining (:cooldown-data (ps/get-player-state uuid)) :arc-gen :main)))
-      (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id)))))))
+      (binding [ctx/*context-owner* test-context-owner]
+        (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
+        (is (= 0 (cd/get-remaining (:cooldown-data (ps/get-player-state uuid)) :arc-gen :main)))
+        (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))

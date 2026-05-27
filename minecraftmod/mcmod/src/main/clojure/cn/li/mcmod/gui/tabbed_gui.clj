@@ -4,6 +4,7 @@
    This is shared client/server tab switching logic used by platform GUI/menu bridges."
   (:require [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.cgui-core :as cgui-core]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.platform.entity :as entity]
@@ -48,19 +49,30 @@
 
 (defn- owner-from-container
   [container]
-  (let [player (:player container)
-        player-id (or (:player-uuid container)
+  (let [owner (or (:owner container)
+                  (select-keys container [:server-session-id :client-session-id :session-id :player-uuid :player]))
+        player (:player owner)
+        player-id (or (:player-uuid owner)
+                      (:player-uuid container)
                       (some-> player player-key))]
-    (cond-> {}
+    (cond-> owner
       player (assoc :player player)
-      player-id (assoc :player-uuid player-id)
-      (:server-session-id container) (assoc :server-session-id (:server-session-id container))
-      (:client-session-id container) (assoc :client-session-id (:client-session-id container))
-      (:session-id container) (assoc :session-id (:session-id container))
-      (and (nil? (:server-session-id container))
-           (nil? (:client-session-id container))
-           (nil? (:session-id container))
-           player-id) (assoc :session-id player-id))))
+      player-id (assoc :player-uuid player-id))))
+
+(defn- server-owner-for-player
+  [player]
+  (let [runtime-owner runtime-hooks/*player-state-owner*
+        server-session-id (require-owner-value runtime-owner
+                                               ":server-session-id"
+                                               (:server-session-id runtime-owner))
+        player-id (require-owner-value {:player player}
+                                       ":player-uuid"
+                                       (some-> player player-key))]
+    {:logical-side :server
+     :server-session-id server-session-id
+     :session-id [server-session-id player-id]
+     :player-uuid player-id
+     :player player}))
 
 (defn- session-key
   [owner]
@@ -162,18 +174,17 @@
    (so clicked/slots see it)."
   [payload player]
   (let [tab-index (int (or (:tab-index payload) 0))
-         player-id (some-> player player-key)
-         owner {:player player
-           :player-uuid player-id
-           :session-id player-id}
         menu (get-player-menu player)
-        container (or (when menu (container-state/get-container-for-menu menu))
+        menu-container (when menu (container-state/get-container-for-menu menu))
+        owner (if menu-container
+                (owner-from-container menu-container)
+                (server-owner-for-player player))
+        container (or menu-container
                       (when (and menu (container-state/get-menu-container-id menu))
                         (container-state/get-container-by-id owner (container-state/get-menu-container-id menu)))
                       (when (some? (:container-id payload))
                         (container-state/get-container-by-id owner (int (:container-id payload))))
-                      (container-state/get-player-container-from-active player)
-                      (container-state/get-player-container player))]
+                      (container-state/get-player-container owner))]
     (if (and container (tabbed-container? container))
       (do
         (reset! (:tab-index container) tab-index)

@@ -64,6 +64,21 @@
          (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
            (vec (ps/list-player-uuids))))))
 
+(deftest clear-session-player-states-removes-only-target-session-test
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
+    (ps/set-player-state! "same-uuid" (assoc (ps/fresh-state) :marker :a))
+    (ps/set-player-state! "only-a" (assoc (ps/fresh-state) :marker :only-a)))
+  (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-b}]
+    (ps/set-player-state! "same-uuid" (assoc (ps/fresh-state) :marker :b)))
+  (ps/clear-session-player-states! {:server-session-id :session-a})
+  (is (nil? (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
+              (ps/get-player-state "same-uuid"))))
+  (is (nil? (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-a}]
+              (ps/get-player-state "only-a"))))
+  (is (= :b
+         (binding [runtime-hooks/*player-state-owner* {:server-session-id :session-b}]
+           (:marker (ps/get-player-state "same-uuid"))))))
+
 (deftest persisted-state-edn-roundtrip-keeps-core-data-test
   (let [state (-> (ps/fresh-state)
                   (assoc-in [:ability-data :category-id] :electromaster)

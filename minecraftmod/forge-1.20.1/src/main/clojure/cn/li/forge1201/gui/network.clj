@@ -11,19 +11,23 @@
 
   Also extends the cn.li.mcmod.network.client/send-request multimethod for the
   :forge-1.20.1 dispatch value so the GUI's send-to-server calls work."
-  (:require [cn.li.mcmod.network.client :as net-client]
+  (:require [cn.li.mc1201.reflect-util :as ru]
+            [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.gui.network.packet :as packet-base])
   (:import [cn.li.forge1201.network ClojureNetwork]
-           [net.minecraft.client Minecraft]
            [net.minecraft.server.level ServerPlayer]
            [clojure.lang IFn]))
 
 (defn- client-session-id
   []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
+  (when-let [mc (try
+                  (let [minecraft-cls (ru/class-noinit "net.minecraft.client.Minecraft")]
+                    (ru/static minecraft-cls "getInstance"))
+                  (catch Throwable _
+                    nil))]
     [:client (System/identityHashCode mc)]))
 
 (defn- with-client-session

@@ -64,10 +64,35 @@
   []
   (require-client-owner-value {} ":client-session-id" (current-client-session-id)))
 
+(defn- validate-managed-screen-payload
+  [screen-key payload]
+  (let [payload (or payload {})
+        player-uuid (require-client-owner-value payload ":player-uuid" (:player-uuid payload))
+        session-id (require-client-owner-value payload ":client-session-id"
+                                               (or (:client-session-id payload)
+                                                   (current-client-session-id)))]
+    (when (and (:client-session-id payload)
+               (current-client-session-id)
+               (not= (:client-session-id payload) (current-client-session-id)))
+      (throw (ex-info "Managed screen payload session does not match current client session"
+                      {:screen-key screen-key
+                       :payload payload
+                       :current-client-session-id (current-client-session-id)})))
+    {:player-uuid player-uuid
+     :client-session-id session-id
+     :payload payload}))
+
 (defn- client-context-owner
   [player-uuid]
   {:logical-side :client
    :session-id (client-ui-owner-key player-uuid)})
+
+(defn- client-context-owner-from-owner
+  [owner]
+  (let [[session-id player-uuid] (client-ui-owner-key owner)]
+    {:logical-side :client
+     :session-id [session-id player-uuid]
+     :player-uuid player-uuid}))
 
 (defn- player-contexts
   [player-uuid]
@@ -129,6 +154,30 @@
                              (= owner-key (slot-key-owner slot-key)))
                            m))))
     (swap! charge-coin-state dissoc owner-key))
+  nil)
+
+(defn- clear-client-player-state!
+  [owner]
+  (let [[session-id player-uuid] (client-ui-owner-key owner)]
+    (binding [runtime-hooks/*player-state-owner* {:client-session-id session-id
+                                                  :player-uuid player-uuid}]
+      (ps/remove-player-state! player-uuid)))
+  nil)
+
+(defn- clear-managed-screen-state!
+  [owner]
+  (skill-tree-screen/close-screen! owner)
+  (preset-editor-screen/close-screen! owner)
+  (location-teleport-screen/close-screen! owner)
+  nil)
+
+(defn- clear-client-owned-runtime-state!
+  [owner]
+  (clear-managed-screen-state! owner)
+  (ctx/clear-owner-contexts! (client-context-owner-from-owner owner))
+  (clear-client-ui-state! owner)
+  (client-keybinds/clear-client-keybind-state! owner)
+  (clear-client-player-state! owner)
   nil)
 
 (defn reset-client-ui-state-for-test!
@@ -782,6 +831,10 @@
    (fn [player-uuid key-idx delta]
      (send-slot-wheel-message! player-uuid key-idx delta))
 
+   :client-clear-owner-state!
+   (fn [owner]
+     (clear-client-owned-runtime-state! owner))
+
    :client-abort-all!
    (fn []
      (abort-all-slot-contexts-for-session! (current-session-id)))
@@ -842,26 +895,27 @@
 
    :client-open-managed-screen!
    (fn [screen-key payload]
+        (let [{:keys [player-uuid payload]} (validate-managed-screen-payload screen-key payload)]
        (condp = screen-key
        :ac/skill-tree
-       (assoc (skill-tree-screen/open-screen! (:player-uuid payload) (:learn-context payload))
+    (assoc (skill-tree-screen/open-screen! player-uuid (:learn-context payload))
               :title "Node Tree")
 
        :ac/preset-editor
-       (assoc (preset-editor-screen/open-screen! (:player-uuid payload))
+    (assoc (preset-editor-screen/open-screen! player-uuid)
               :title "Preset Editor")
 
     :ac/saved-position
-    (assoc (location-teleport-screen/open-screen! (:player-uuid payload) payload)
+      (assoc (location-teleport-screen/open-screen! player-uuid payload)
       :title "Location Teleport"
       :char-typed? true)
 
     :ac/location-teleport
-       (assoc (location-teleport-screen/open-screen! (:player-uuid payload) payload)
+    (assoc (location-teleport-screen/open-screen! player-uuid payload)
               :title "Location Teleport"
               :char-typed? true)
 
-       nil))
+    nil)))
 
    :client-build-managed-screen-render-data
    (fn [screen-key]

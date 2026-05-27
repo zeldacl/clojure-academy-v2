@@ -14,11 +14,21 @@
             [cn.li.ac.ability.server.service.resource :as svc-res]
             [cn.li.ac.ability.service.dispatcher :as ctx]
             [cn.li.ac.ability.service.player-state :as ps]
+            [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.ability.state.store :as ability-store]
             [cn.li.ac.util.init-guard :refer [with-init-guard]]
             [cn.li.mcmod.util.log :as log]))
 
 (defonce ^:private lifecycle-subscriptions-registered? (atom false))
+
+(defn- unique-context-by-id
+  [ctx-id]
+  (let [matches (->> (ctx/snapshot-context-registry)
+                     vals
+                     (filter #(= ctx-id (:id %)))
+                     vec)]
+    (when (= 1 (count matches))
+      (first matches))))
 
 (defn lifecycle-subscriptions-registered-snapshot
   []
@@ -84,7 +94,15 @@
    :on-player-logout!
    (fn [player-uuid]
      (ctx-mgr/abort-player-contexts! player-uuid)
+     (delayed-projectiles/clear-player-tasks! player-uuid)
      (ps/remove-player-state! player-uuid))
+
+   :on-server-stop!
+   (fn [session-id]
+     (ctx/clear-session-contexts! session-id)
+     (ps/clear-session-player-states! session-id)
+     (world-registry/clear-session-world-data! session-id)
+     (delayed-projectiles/clear-all-tasks!))
 
    :on-player-clone!
    (fn [_old-player-uuid _new-player-uuid]
@@ -92,10 +110,12 @@
 
    :on-player-death!
    (fn [player-uuid]
+     (delayed-projectiles/clear-player-tasks! player-uuid)
      (ctx-mgr/abort-player-contexts! player-uuid))
 
    :on-player-dimension-change!
    (fn [player-uuid _from-dim _to-dim]
+     (delayed-projectiles/clear-player-tasks! player-uuid)
      (ctx-mgr/abort-player-contexts! player-uuid))
 
    :get-skills-for-category
@@ -171,7 +191,9 @@
 
    :get-context-player-uuid
    (fn [ctx-id]
-     (when-let [ctx-map (ctx/get-context ctx-id)]
+     (when-let [ctx-map (or (when ctx/*context-owner*
+                               (ctx/get-context ctx-id))
+                            (unique-context-by-id ctx-id))]
        (:player-uuid ctx-map)))
 
    :register-damage-handler!

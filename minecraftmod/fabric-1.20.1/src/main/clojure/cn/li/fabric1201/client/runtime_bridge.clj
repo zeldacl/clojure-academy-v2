@@ -3,6 +3,8 @@
   (:require [cn.li.mc1201.client.input.mode-switch :as mode-switch]
             [cn.li.mc1201.client.effects.particle :as particle]
             [cn.li.mc1201.client.effects.sound :as sound]
+            [cn.li.mc1201.client.session-cleanup :as session-cleanup]
+            [cn.li.mc1201.client.session :as client-session]
             [cn.li.fabric1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mcmod.hooks.core :as power-runtime]
@@ -12,8 +14,8 @@
            [org.lwjgl.glfw GLFW]))
 
 (defonce ^:private tick-listener-registered? (atom false))
-(defonce ^:private raw-v-state (atom (mode-switch/initial-state)))
-(defonce ^:private raw-n-state (atom {:was-down false}))
+(defonce ^:private raw-v-state (atom {}))
+(defonce ^:private raw-n-state (atom {}))
 (def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
 (def ^:private cycle-selection-input-id :content/cycle-selection)
 
@@ -24,6 +26,60 @@
 (defn- with-client-session [f]
   (binding [power-runtime/*client-session-id* (client-session-id)]
     (f)))
+
+(defn- client-owner-key
+  [owner]
+  (client-session/owner-key owner))
+
+(defn input-state-snapshot
+  []
+  {:raw-v-state @raw-v-state
+   :raw-n-state @raw-n-state})
+
+(defn reset-input-state-for-test!
+  ([]
+   (reset-input-state-for-test! {}))
+  ([{:keys [raw-v-state-map raw-n-state-map]
+     :or {raw-v-state-map {}
+          raw-n-state-map {}}}]
+   (reset! raw-v-state raw-v-state-map)
+   (reset! raw-n-state raw-n-state-map)
+   nil))
+
+(defn clear-owner-input-state!
+  [owner]
+  (let [owner-key (client-owner-key owner)]
+    (swap! raw-v-state dissoc owner-key)
+    (swap! raw-n-state dissoc owner-key))
+  nil)
+
+(defn clear-client-input-session!
+  [client-session-id]
+  (let [clear-session! (fn [state-atom]
+                         (swap! state-atom
+                                (fn [states]
+                                  (into {}
+                                        (remove (fn [[[entry-session-id _player-uuid] _value]]
+                                                  (= client-session-id entry-session-id)))
+                                        states))))]
+    (clear-session! raw-v-state)
+    (clear-session! raw-n-state))
+  nil)
+
+(defn- owner-mode-switch-state
+  [owner]
+  (get @raw-v-state (client-owner-key owner) (mode-switch/initial-state)))
+
+(defn- owner-cycle-state
+  [owner]
+  (get @raw-n-state (client-owner-key owner) {:was-down false}))
+
+(defn- update-owner-mode-switch-state!
+  [owner is-down opts]
+  (let [state-atom (atom (owner-mode-switch-state owner))]
+    (mode-switch/handle-button-state! state-atom is-down opts)
+    (swap! raw-v-state assoc (client-owner-key owner) @state-atom)
+    nil))
 
 (defn- get-player-uuid []
   (when-let [^Minecraft mc (Minecraft/getInstance)]
@@ -104,27 +160,30 @@
 (defn- tick-mode-switch! []
   (let [now (System/nanoTime)
         is-down (boolean (poll-v-key-down?))]
-    (mode-switch/handle-button-state!
-      raw-v-state
-      is-down
-      {:now-ns now
-       :screen-open? (current-screen-open?)
-       :on-down #(overlay-renderer/on-mode-switch-key-state! true)
-       :on-up #(overlay-renderer/on-mode-switch-key-state! false)
-       :on-short-up
-       (fn []
-         (when-let [uuid (get-player-uuid)]
-          (let [cur-activated (power-runtime/runtime-activated? uuid)]
-             (overlay-state/set-client-activated! (not cur-activated))
-           (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press))))})))
+    (when-let [owner (client-session/current-local-player-owner)]
+      (update-owner-mode-switch-state!
+        owner
+        is-down
+        {:now-ns now
+         :screen-open? (current-screen-open?)
+         :on-down #(overlay-renderer/on-mode-switch-key-state! owner true)
+         :on-up #(overlay-renderer/on-mode-switch-key-state! owner false)
+         :on-short-up
+         (fn []
+           (let [uuid (:player-uuid owner)
+                 cur-activated (power-runtime/runtime-activated? uuid)]
+             (overlay-state/set-client-activated! owner (not cur-activated))
+             (emit-keyboard-input! toggle-primary-state-input-id uuid :short-press)))}))))
 
 (defn- tick-cycle-selection! []
-  (let [is-down (boolean (poll-key-down? GLFW/GLFW_KEY_N))
-        was-down (boolean (:was-down @raw-n-state))]
-    (when (and (not was-down) is-down)
-      (when-let [uuid (get-player-uuid)]
-        (emit-keyboard-input! cycle-selection-input-id uuid :press)))
-    (swap! raw-n-state assoc :was-down is-down)))
+  (when-let [owner (client-session/current-local-player-owner)]
+    (let [is-down (boolean (poll-key-down? GLFW/GLFW_KEY_N))
+          owner-key (client-owner-key owner)
+          was-down (boolean (:was-down (owner-cycle-state owner)))]
+      (when (and (not was-down) is-down)
+        (when-let [uuid (get-player-uuid)]
+          (emit-keyboard-input! cycle-selection-input-id uuid :press)))
+      (swap! raw-n-state assoc owner-key {:was-down is-down}))))
 
 (defn- tick-content-keys! []
   (with-client-session
@@ -139,6 +198,11 @@
 
 (defn tick-client!
   []
+  (session-cleanup/tick-connection-change!
+   {:clear-owner-input-state! clear-owner-input-state!})
+  (when-not (client-session/current-local-player-owner)
+    (when-let [session-id (client-session/client-session-id)]
+      (clear-client-input-session! session-id)))
   (tick-mode-switch!)
   (tick-cycle-selection!)
   (tick-content-keys!)

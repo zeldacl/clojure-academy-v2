@@ -67,3 +67,10 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"requires :server-session-id"
                         (sync-core/tick-sync! (fn [_uuid _payload]) {:server-tick-id 1}))))
+
+(deftest clear-session-scheduler-state-removes-only-target-session-test
+  (sync-core/mark-player-dirty! {:server-session-id :a} "pa")
+  (sync-core/mark-player-dirty! {:server-session-id :b} "pb")
+  (sync-core/clear-session-scheduler-state! :a)
+  (is (nil? (get (sync-core/scheduler-snapshot) :a)))
+  (is (contains? (get-in (sync-core/scheduler-snapshot) [:b :dirty-players]) "pb")))

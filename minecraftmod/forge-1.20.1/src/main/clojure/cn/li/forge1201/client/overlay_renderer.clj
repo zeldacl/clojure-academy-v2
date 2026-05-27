@@ -9,8 +9,11 @@
 (defn- on-render-gui-overlay [^RenderGuiOverlayEvent$Post event]
   (shared-overlay/render-overlay! (.getGuiGraphics event)))
 
-(defn on-mode-switch-key-state! [is-down]
-  (shared-overlay/on-mode-switch-key-state! is-down))
+(defn on-mode-switch-key-state!
+  ([is-down]
+   (shared-overlay/on-mode-switch-key-state! is-down))
+  ([owner is-down]
+   (shared-overlay/on-mode-switch-key-state! owner is-down)))
 
 (defn init! []
   (.addListener (MinecraftForge/EVENT_BUS)

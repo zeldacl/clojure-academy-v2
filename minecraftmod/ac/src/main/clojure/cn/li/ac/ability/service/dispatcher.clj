@@ -103,33 +103,28 @@
 	(let [counters (swap! counter-atom update owner (fnil inc 0))]
 		(str prefix "-" (get counters owner))))
 
-(defn- matching-context-entries
-	[ctx-id]
-	(if (vector? ctx-id)
-		(when-let [ctx (get @context-registry ctx-id)]
-			[[ctx-id ctx]])
-		(->> @context-registry
-				 (filter (fn [[_key ctx]] (= ctx-id (:id ctx)))))))
+(defn- require-context-owner
+	[ctx-id preferred-side]
+	(when-not *context-owner*
+		(throw (ex-info "Opaque ctx-id resolution requires *context-owner* or an explicit owner"
+							{:ctx-id ctx-id
+							 :preferred-side preferred-side}))))
 
 (defn- preferred-context-entry
 	([ctx-id]
 	 (preferred-context-entry ctx-id nil))
 	([ctx-id preferred-side]
-	 (let [owner-entry (when (and *context-owner* (not (vector? ctx-id)))
-										(let [[side session] (route-owner-key (cond-> *context-owner*
-																								 preferred-side (assoc :logical-side preferred-side)))
-												key [side session ctx-id]]
-											(when-let [ctx (get @context-registry key)]
-												[key ctx])))
-			 entries (matching-context-entries ctx-id)
-				 preferred-side (some-> preferred-side normalize-logical-side)]
-		(if (and *context-owner* (not (vector? ctx-id)))
-			owner-entry
-			(or (when preferred-side
-					(first (filter (fn [[_key ctx]] (= preferred-side (context-logical-side ctx))) entries)))
-					(first (filter (fn [[_key ctx]] (= STATUS-CONSTRUCTED (:status ctx))) entries))
-					(first (filter (fn [[_key ctx]] (= :server (context-logical-side ctx))) entries))
-					(first entries))))))
+	 (if (vector? ctx-id)
+		 (when-let [ctx (get @context-registry ctx-id)]
+			 [ctx-id ctx])
+		 (do
+			 (require-context-owner ctx-id preferred-side)
+			 (let [owner (cond-> *context-owner*
+								 preferred-side (assoc :logical-side preferred-side))
+					 [side session] (route-owner-key owner)
+					 key [side session ctx-id]]
+				 (when-let [ctx (get @context-registry key)]
+					 [key ctx]))))))
 
 (defn- route-fns-for-context
 	[ctx]
@@ -223,11 +218,8 @@
 (defn remove-context! [ctx-id]
 	(if (vector? ctx-id)
 		(swap! context-registry dissoc ctx-id)
-		(swap! context-registry
-				 (fn [registry]
-					 (into {}
-							 (remove (fn [[_key ctx]] (= ctx-id (:id ctx))))
-							 registry)))))
+		(when-let [[key _ctx] (preferred-context-entry ctx-id)]
+			(swap! context-registry dissoc key))))
 
 (defn- owner-matches-context?
 	[owner ctx]
@@ -245,6 +237,51 @@
 
 (defn snapshot-context-registry []
 	@context-registry)
+
+(defn clear-owner-contexts!
+	"Clear all registered contexts and counters for one logical owner."
+	[owner]
+	(let [owner-key (route-owner-key owner)]
+		(swap! context-registry
+				 (fn [registry]
+					 (into {}
+							 (remove (fn [[_ctx-id ctx-map]]
+											 (= owner-key [(context-logical-side ctx-map)
+																 (context-session-id ctx-map)])))
+							 registry)))
+		(swap! client-id-counter dissoc owner-key)
+		(swap! server-id-counter dissoc owner-key)
+		(swap! lifecycle-counters dissoc owner-key))
+	nil)
+
+(defn clear-session-contexts!
+	"Clear all registered contexts and counters for one session id."
+	[session-id]
+	(swap! context-registry
+			 (fn [registry]
+				 (into {}
+						 (remove (fn [[_ctx-id ctx-map]]
+										 (= session-id (context-session-id ctx-map))))
+						 registry)))
+	(swap! client-id-counter
+			 (fn [counters]
+				 (into {}
+						 (remove (fn [[[ _side owner-session] _counter]]
+										 (= session-id owner-session)))
+						 counters)))
+	(swap! server-id-counter
+			 (fn [counters]
+				 (into {}
+						 (remove (fn [[[ _side owner-session] _counter]]
+										 (= session-id owner-session)))
+						 counters)))
+	(swap! lifecycle-counters
+			 (fn [counters]
+				 (into {}
+						 (remove (fn [[[ _side owner-session] _counter]]
+										 (= session-id owner-session)))
+						 counters)))
+	nil)
 
 (defn reset-contexts-for-test!
 	([]
@@ -280,7 +317,10 @@
 	(when-let [ctx (get-context ctx-id)]
 		(when (not= (:status ctx) STATUS-TERMINATED)
 			(update-context! ctx-id assoc :status STATUS-TERMINATED :terminated-at-ms (System/currentTimeMillis))
-			(when send-terminated-fn (send-terminated-fn (:id ctx)))
+			(when send-terminated-fn
+				(binding [*context-owner* {:logical-side (context-logical-side ctx)
+												 :session-id (context-session-id ctx)}]
+					(send-terminated-fn (:id ctx))))
 			(log/debug "Context terminated:" (:id ctx)))))
 
 (defn abort-all-contexts-for-player!
@@ -288,8 +328,9 @@
 	 (doseq [ctx (get-all-contexts-for-player player-uuid)]
 		 (terminate-context! (:id ctx) send-terminated-fn)))
 	([owner player-uuid send-terminated-fn]
-	 (doseq [ctx (get-all-contexts-for-player owner player-uuid)]
-		 (terminate-context! (:id ctx) send-terminated-fn))))
+	 (binding [*context-owner* owner]
+		 (doseq [ctx (get-all-contexts-for-player owner player-uuid)]
+			 (terminate-context! (:id ctx) send-terminated-fn)))))
 
 (defn update-keepalive! [ctx-id]
 	(update-context! ctx-id assoc :last-keepalive-ms (System/currentTimeMillis)))

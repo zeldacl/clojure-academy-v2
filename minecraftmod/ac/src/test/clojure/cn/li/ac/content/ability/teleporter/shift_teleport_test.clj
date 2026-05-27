@@ -9,6 +9,8 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
 
+(def ^:private test-context-owner {:logical-side :server :session-id :test-session})
+
 (deftest shift-tp-up-place-success-hit-critical-emits-crit-fx-test
   (let [exp-calls* (atom [])
         cooldown-calls* (atom [])
@@ -70,7 +72,8 @@
                                             (swap! fx-calls* conj [ch payload])
                                             nil)]
       (binding [raycast/*raycast* :mock
-            world-effects/*world-effects* :mock]
+            world-effects/*world-effects* :mock
+            ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-1" :player :player :cost-ok? true})))
 
     (is (= [["minecraft:overworld" "enemy-1" 20.0]
@@ -135,7 +138,8 @@
                                             (swap! fx-calls* conj [ch payload])
                                             nil)]
       (binding [raycast/*raycast* :mock
-                world-effects/*world-effects* :mock]
+            world-effects/*world-effects* :mock
+            ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-1b" :player :player :cost-ok? true})))
 
     (is (= [[:shift-tp/fx-perform {:from-x 1.0
@@ -179,7 +183,8 @@
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc))
                   ctx/ctx-send-to-client! (fn [& _] (swap! fx-calls* inc))]
       (binding [raycast/*raycast* :mock
-            world-effects/*world-effects* :mock]
+            world-effects/*world-effects* :mock
+            ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-2" :player :player :cost-ok? false})))
 
     (is (= 0 @place-calls*))
@@ -225,7 +230,8 @@
                   skill-effects/set-main-cooldown! (fn [& _] nil)
                   ctx/ctx-send-to-client! (fn [& _] nil)]
       (binding [raycast/*raycast* :mock
-            world-effects/*world-effects* :mock]
+            world-effects/*world-effects* :mock
+            ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-3" :player :player :cost-ok? true})))
 
     (is (= 1 @teleport-calls*))
@@ -246,7 +252,8 @@
                   helper/teleport-to! (fn [& _] (swap! teleport-calls* inc) true)
                   ctx/ctx-send-to-client! (fn [& _] nil)]
       (binding [raycast/*raycast* :mock
-                world-effects/*world-effects* :mock]
+            world-effects/*world-effects* :mock
+            ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-4" :player :player :cost-ok? true})))
 
     (is (= 0 @teleport-calls*))))
@@ -319,7 +326,8 @@
                   skill-effects/set-main-cooldown! (fn [& _] nil)
                   ctx/ctx-send-to-client! (fn [& _] nil)]
       (binding [raycast/*raycast* :mock
-                world-effects/*world-effects* :mock]
+            world-effects/*world-effects* :mock
+            ctx/*context-owner* test-context-owner]
         (shift/shift-tp-up! {:player-id "p1" :ctx-id "ctx-creative" :player :player :cost-ok? true})))
 
     (is (= 1 @teleport-calls*))

@@ -139,4 +139,6 @@
                    (onEndTick [_ server]
                      (lifecycle-events/handle-player-tick server))))
 
+      (lifecycle-events/install-server-stop-cleanup!)
+
       (log/info "Fabric event listeners registered"))))

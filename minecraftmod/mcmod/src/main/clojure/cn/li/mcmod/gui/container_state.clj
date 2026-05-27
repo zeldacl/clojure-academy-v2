@@ -8,7 +8,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defonce active-containers
-  (atom #{}))
+  (atom {}))
 
 (defonce player-containers
   (atom {}))
@@ -26,25 +26,6 @@
     (throw (ex-info (format "GUI container owner requires %s" label)
                     {:owner owner
                      :required label}))))
-
-(defn register-active-container!
-  "Register a Clojure container as active."
-  [container]
-  (swap! active-containers conj container)
-  (log/debug "Registered active GUI container; total=" (count @active-containers))
-  nil)
-
-(defn unregister-active-container!
-  "Unregister a Clojure container when its Minecraft menu is closed."
-  [container]
-  (swap! active-containers disj container)
-  (log/debug "Unregistered active GUI container; remaining=" (count @active-containers))
-  nil)
-
-(defn list-active-containers
-  "Return the currently active Clojure containers."
-  []
-  @active-containers)
 
 (defn- player-key
   [player]
@@ -64,63 +45,117 @@
                        (or (some-> (:player-uuid owner) str)
                            (some-> (:player owner) player-key))))
 
+(defn- owner-base-key
+  [owner]
+  [(session-key owner) (owner-player-key owner)])
+
 (defn- container-owner-key
   [owner container-id]
   [(session-key owner) (owner-player-key owner) (int container-id)])
+
+(defn- owner-key-prefix?
+  [base-key state-key]
+  (= base-key (subvec (vec state-key) 0 2)))
+
+(defn- session-key-prefix?
+  [session-id state-key]
+  (= session-id (first state-key)))
+
+(defn- container-runtime-id
+  [container]
+  (or (:container-id container)
+      (:window-id container)
+      (:id container)
+      (System/identityHashCode container)))
+
+(defn- active-container-key
+  [owner container]
+  (conj (owner-base-key owner) (container-runtime-id container)))
+
+(defn- container-owner
+  [container]
+  (or (:owner container)
+      (select-keys container [:server-session-id :client-session-id :session-id :player-uuid :player])))
 
 (defn- legacy-container-entry
   [container-id]
   (throw (ex-info "GUI container id lookup requires explicit owner"
                   {:container-id container-id})))
 
+(defn register-active-container!
+  "Register a Clojure container as active for an explicit owner."
+  ([container]
+   (throw (ex-info "Active GUI container registration requires explicit owner"
+                   {:container container})))
+  ([owner container]
+   (swap! active-containers assoc (active-container-key owner container) container)
+   (log/debug "Registered active GUI container; total=" (count @active-containers))
+   nil))
+
+(defn unregister-active-container!
+  "Unregister a Clojure container when its Minecraft menu is closed."
+  ([container]
+   (throw (ex-info "Active GUI container unregister requires explicit owner"
+                   {:container container})))
+  ([owner container]
+   (swap! active-containers dissoc (active-container-key owner container))
+   (log/debug "Unregistered active GUI container; remaining=" (count @active-containers))
+   nil))
+
+(defn list-active-containers
+  "Return active containers. Zero-arity returns a global diagnostic/tick snapshot;
+   owner arity filters to one owner."
+  ([]
+   (vals @active-containers))
+  ([owner]
+   (let [base-key (owner-base-key owner)]
+     (->> @active-containers
+          (keep (fn [[state-key container]]
+                  (when (owner-key-prefix? base-key state-key)
+                    container)))))))
+
 (defn register-player-container!
-  "Register a container for a player UUID."
-  [player container]
-  (when-let [k (player-key player)]
+  "Register a container for an explicit owner."
+  [owner container]
+  (let [k (owner-base-key owner)]
     (swap! player-containers update k (fnil conj []) container)
-    (log/debug "Registered GUI container for player" k))
+    (log/debug "Registered GUI container for owner" k))
   nil)
 
 (defn unregister-player-container!
-  "Remove a player's active GUI container mapping."
-  ([player]
-   (when-let [k (player-key player)]
+  "Remove an owner's active GUI container mapping."
+  ([owner]
+   (let [k (owner-base-key owner)]
      (swap! player-containers dissoc k)
-     (log/debug "Unregistered GUI containers for player" k))
+     (log/debug "Unregistered GUI containers for owner" k))
    nil)
-  ([player container]
-   (when-let [k (player-key player)]
+  ([owner container]
+   (let [k (owner-base-key owner)]
      (swap! player-containers
             (fn [by-player]
               (let [remaining (vec (remove #(identical? container %) (get by-player k)))]
                 (if (seq remaining)
                   (assoc by-player k remaining)
                   (dissoc by-player k)))))
-     (log/debug "Unregistered GUI container for player" k))
+     (log/debug "Unregistered GUI container for owner" k))
    nil))
 
 (defn get-player-container
-  "Get the active GUI container for a player."
-  [player]
-  (when-let [k (player-key player)]
-    (peek (get @player-containers k))))
+  "Get the active GUI container for an explicit owner."
+  [owner]
+  (peek (get @player-containers (owner-base-key owner))))
 
 (defn get-player-containers
-  "Get all active GUI containers for a player."
-  [player]
-  (when-let [k (player-key player)]
-    (get @player-containers k [])))
+  "Get all active GUI containers for an explicit owner."
+  [owner]
+  (get @player-containers (owner-base-key owner) []))
 
 (defn get-player-container-from-active
-  "Find an active tabbed container for this player by scanning active containers."
-  [player]
-  (when-let [pk (player-key player)]
-    (first
-      (filter (fn [container]
-                (and (contains? container :tab-index)
-                     (when-let [p (:player container)]
-                       (= (player-key p) pk))))
-              @active-containers))))
+  "Find an active tabbed container for an explicit owner by scanning active containers."
+  [owner]
+  (first
+    (filter #(contains? % :tab-index)
+            (list-active-containers owner))))
 
 (defn register-menu-container!
   "Register the Clojure container backing a Minecraft menu instance."
@@ -146,7 +181,7 @@
 (defn register-container-by-id!
   "Register a Clojure container by Minecraft containerId/window id."
   ([container-id _container]
-  (legacy-container-entry container-id))
+   (legacy-container-entry container-id))
   ([owner container-id container]
    (when (some? container-id)
      (swap! containers-by-id assoc (container-owner-key owner container-id) container)
@@ -195,8 +230,74 @@
 (defn clear-all!
   "Clear all GUI runtime state. Intended for tests/reloads."
   []
-  (reset! active-containers #{})
+  (reset! active-containers {})
   (reset! player-containers {})
   (reset! menu-containers {})
   (reset! containers-by-id {})
   nil)
+
+(defn clear-owner-containers!
+  "Clear GUI runtime state for one owner."
+  [owner]
+  (let [base-key (owner-base-key owner)]
+    (swap! active-containers
+           (fn [containers]
+             (into {}
+                   (remove (fn [[state-key _container]]
+                             (owner-key-prefix? base-key state-key)))
+                   containers)))
+    (swap! player-containers dissoc base-key)
+    (swap! containers-by-id
+           (fn [containers]
+             (into {}
+                   (remove (fn [[state-key _container]]
+                             (owner-key-prefix? base-key state-key)))
+                   containers)))
+    (swap! menu-containers
+           (fn [containers]
+             (into {}
+                   (remove (fn [[_menu container]]
+                             (try
+                               (= base-key (owner-base-key (container-owner container)))
+                               (catch Exception _ false))))
+                   containers))))
+  nil)
+
+(defn clear-session-containers!
+  "Clear GUI runtime state for one client/server session id."
+  [session-id]
+  (swap! active-containers
+         (fn [containers]
+           (into {}
+                 (remove (fn [[state-key _container]]
+                           (session-key-prefix? session-id state-key)))
+                 containers)))
+  (swap! player-containers
+         (fn [containers]
+           (into {}
+                 (remove (fn [[state-key _containers]]
+                           (session-key-prefix? session-id state-key)))
+                 containers)))
+  (swap! containers-by-id
+         (fn [containers]
+           (into {}
+                 (remove (fn [[state-key _container]]
+                           (session-key-prefix? session-id state-key)))
+                 containers)))
+  (swap! menu-containers
+         (fn [containers]
+           (into {}
+                 (remove (fn [[_menu container]]
+                           (try
+                             (= session-id (session-key (container-owner container)))
+                             (catch Exception _ false))))
+                 containers)))
+  nil)
+
+(defn container-state-snapshot
+  "Return raw GUI runtime state for tests/diagnostics."
+  []
+  {:active-containers @active-containers
+   :player-containers @player-containers
+   :menu-containers @menu-containers
+   :containers-by-id @containers-by-id})
